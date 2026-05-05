@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.3
+// @version      8.0.4
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -30,7 +30,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.3";
+  const SCRIPT_VERSION = "8.0.4";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -47,7 +47,15 @@
     xCleanup: "igloo_sync_x_cleanup",
   };
 
-  const DEFAULT_API_BASE = "http://127.0.0.1:5001";
+  const DEFAULT_API_BASE = "https://localhost:5001";
+  const DEFAULT_API_BASE_CANDIDATES = [
+    DEFAULT_API_BASE,
+    "https://127.0.0.1:5001",
+    "https://localhost:8443",
+    "https://127.0.0.1:8443",
+    "http://127.0.0.1:5001",
+    "http://localhost:5001",
+  ];
   const BUTTON_SCAN_DEBOUNCE_MS = 350;
   const RESERVED_PATHS = new Set([
     "home",
@@ -70,10 +78,50 @@
     "jobs",
   ]);
 
-  const getApiBase = () =>
-    (GM_getValue(SETTINGS.apiBase, DEFAULT_API_BASE) || "")
+  function normalizeApiBase(value) {
+    return String(value || "")
       .trim()
       .replace(/\/+$/, "");
+  }
+
+  const getStoredApiBase = () =>
+    normalizeApiBase(GM_getValue(SETTINGS.apiBase, ""));
+  const getApiBase = () => getStoredApiBase() || DEFAULT_API_BASE;
+
+  function isLocalApiBase(base) {
+    try {
+      const u = new URL(base);
+      const host = u.hostname.toLowerCase();
+      return (
+        (u.protocol === "http:" || u.protocol === "https:") &&
+        (host === "localhost" || host === "127.0.0.1") &&
+        (u.port === "5001" || u.port === "8443")
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function apiBaseCandidates() {
+    const configured = getApiBase();
+    const candidates = [configured];
+    if (isLocalApiBase(configured)) {
+      candidates.push(...DEFAULT_API_BASE_CANDIDATES);
+    }
+    return Array.from(
+      new Set(candidates.map(normalizeApiBase).filter(Boolean)),
+    );
+  }
+
+  function shouldTryNextApiBase(resp) {
+    return (
+      resp &&
+      (resp.error === "network_error" ||
+        resp.error === "timeout" ||
+        (resp.status === 400 &&
+          /HTTP request to an HTTPS server/i.test(resp.text || "")))
+    );
+  }
   const getToken = () => (GM_getValue(SETTINGS.authToken, "") || "").trim();
   const getRefresh = () => (GM_getValue(SETTINGS.authRefresh, "") || "").trim();
   const syncToDashboardEnabled = () =>
@@ -219,10 +267,11 @@
 
   // ── API request helper ──────────────────────────────────────────────────────
   let _refreshingToken = null;
+  let _resolvedApiBase = "";
+  let _resolvingApiBase = null;
 
-  function _rawApiRequest(method, path, body, withAuth = true) {
+  function _requestToApiBase(apiBase, method, path, body, withAuth = true) {
     return new Promise((resolve) => {
-      const apiBase = getApiBase();
       if (!apiBase) {
         resolve({ ok: false, error: "no_api_base" });
         return;
@@ -246,12 +295,54 @@
             status: resp.status,
             json,
             text: resp.responseText || "",
+            apiBase,
           });
         },
-        onerror: () => resolve({ ok: false, error: "network_error" }),
-        ontimeout: () => resolve({ ok: false, error: "timeout" }),
+        onerror: () => resolve({ ok: false, error: "network_error", apiBase }),
+        ontimeout: () => resolve({ ok: false, error: "timeout", apiBase }),
       });
     });
+  }
+
+  async function _resolveApiBase() {
+    const candidates = apiBaseCandidates();
+    if (_resolvedApiBase && candidates.includes(_resolvedApiBase)) {
+      return _resolvedApiBase;
+    }
+    if (candidates.length <= 1) return candidates[0] || "";
+
+    for (const base of candidates) {
+      const probe = await _requestToApiBase(
+        base,
+        "GET",
+        "/api/health",
+        null,
+        false,
+      );
+      if (probe.ok) {
+        _resolvedApiBase = base;
+        if (getStoredApiBase() !== base) {
+          GM_setValue(SETTINGS.apiBase, base);
+        }
+        return base;
+      }
+      if (!shouldTryNextApiBase(probe)) break;
+    }
+    return candidates[0] || "";
+  }
+
+  async function getResolvedApiBase() {
+    if (!_resolvingApiBase) {
+      _resolvingApiBase = _resolveApiBase().finally(() => {
+        _resolvingApiBase = null;
+      });
+    }
+    return _resolvingApiBase;
+  }
+
+  async function _rawApiRequest(method, path, body, withAuth = true) {
+    const apiBase = await getResolvedApiBase();
+    return _requestToApiBase(apiBase, method, path, body, withAuth);
   }
 
   async function _refreshToken() {
@@ -333,22 +424,17 @@
     const set = new Set();
     const map = {};
     for (const ch of channels) {
-      try {
-        const parts = new URL(String(ch.url || "")).pathname
-          .split("/")
-          .filter(Boolean);
-        if (parts.length > 0 && isLikelyHandle(parts[0])) {
-          const h = parts[0].toLowerCase();
-          set.add(h);
-          map[h] = String(ch.channel_id || ch.id || "");
-        }
-      } catch (_) {}
+      const channelId = String(ch.channel_id || ch.id || "");
+      for (const h of twitterChannelHandleKeys(ch)) {
+        set.add(h);
+        map[h] = channelId;
+      }
     }
     serverHandleSet = set;
     serverHandleToChannelId = map;
     console.log(`[XSync] loaded ${set.size} server handles`);
 
-    // Re-subscribe ghost-saved handles: locally saved but absent from server.
+    // Re-subscribe ghost-followed handles: local follow state absent from server.
     // These happen when syncToServer() failed (e.g. expired token) during a
     // previous session. Safe to retry — server returns 409 if already present.
     if (syncToDashboardEnabled()) {
@@ -359,7 +445,7 @@
       });
       if (ghosts.length) {
         console.log(
-          `[XSync] re-subscribing ${ghosts.length} ghost-saved handle(s)`,
+          `[XSync] re-subscribing ${ghosts.length} ghost-followed handle(s)`,
         );
         for (const item of ghosts) {
           const r = await apiRequest(
@@ -388,6 +474,31 @@
       (serverHandleSet && serverHandleSet.has(handle.toLowerCase())) ||
       isInLocalList(handle)
     );
+  }
+
+  function twitterChannelHandleKeys(ch) {
+    const keys = [];
+    const add = (value) => {
+      const h = String(value || "").trim().replace(/^@+/, "");
+      if (isLikelyHandle(h)) keys.push(h.toLowerCase());
+    };
+    const channelId = String(ch.channel_id || ch.id || "").trim();
+    const lowerChannelId = channelId.toLowerCase();
+    if (lowerChannelId.startsWith("twitter_")) {
+      add(channelId.slice("twitter_".length));
+    }
+    if (lowerChannelId.startsWith("x_")) {
+      add(channelId.slice("x_".length));
+    }
+    add(ch.handle);
+    add(ch.source_id);
+    try {
+      const parts = new URL(String(ch.url || "")).pathname
+        .split("/")
+        .filter(Boolean);
+      if (parts.length > 0) add(parts[0]);
+    } catch (_) {}
+    return Array.from(new Set(keys));
   }
 
   // ── DOM media extraction (images only) ──────────────────────────────────────
@@ -1445,7 +1556,7 @@
         true,
       );
       if (!resp.ok)
-        console.warn(`[XSync] server unsave failed handle=${handle}`, resp);
+        console.warn(`[XSync] server unfollow failed handle=${handle}`, resp);
     }
     if (serverHandleSet) serverHandleSet.delete(handle.toLowerCase());
     delete serverHandleToChannelId[handle.toLowerCase()];
@@ -1473,7 +1584,7 @@
     saveLocal(handle);
     syncToServer(handle).then((save) => {
       if (!save.ok && !save.skipped)
-        console.warn(`[XSync] server save failed handle=${handle}`);
+        console.warn(`[XSync] server follow failed handle=${handle}`);
     });
 
     showSaveToast(handle, () => {
@@ -1526,11 +1637,11 @@
 
   function setXSourceButtonState(btn, saved) {
     if (!btn) return;
-    btn.textContent = saved ? "Saved source" : "Save source";
+    btn.textContent = saved ? "Following source" : "Follow source";
     btn.dataset.saved = saved ? "1" : "0";
     btn.title = saved
       ? "Remove X source from Igloo"
-      : "Save X source to Igloo";
+      : "Follow X source in Igloo";
   }
 
   async function saveXFeedSource(info, btn) {
@@ -1556,7 +1667,7 @@
       btn.disabled = false;
       setXSourceButtonState(btn, true);
       showToast(
-        "Saved source to Igloo",
+        "Followed source in Igloo",
         "Undo",
         () => removeXFeedSource(info, btn),
         4000,
@@ -1565,7 +1676,7 @@
     }
     btn.disabled = false;
     setXSourceButtonState(btn, false);
-    showToast(`Save source failed (${resp.status || resp.error || "error"})`);
+    showToast(`Follow source failed (${resp.status || resp.error || "error"})`);
   }
 
   async function removeXFeedSource(info, btn) {
@@ -1804,30 +1915,30 @@
   }
 
   // ── Menu commands ─────────────────────────────────────────────────────────
+  function saveApiBaseSetting(value) {
+    GM_setValue(SETTINGS.apiBase, normalizeApiBase(value));
+    _resolvedApiBase = "";
+    _resolvingApiBase = null;
+  }
+
+  function promptForApiBase(notifyOnSave) {
+    const next = prompt(
+      "Dashboard API base URL",
+      getApiBase() || DEFAULT_API_BASE,
+    );
+    if (next === null) return false;
+    saveApiBaseSetting(next);
+    if (notifyOnSave) notify("Saved API URL");
+    return true;
+  }
+
   function registerMenu() {
     GM_registerMenuCommand("Set API URL", () => {
-      const next = prompt(
-        "Dashboard API base URL",
-        getApiBase() || DEFAULT_API_BASE,
-      );
-      if (next === null) return;
-      GM_setValue(SETTINGS.apiBase, next.trim().replace(/\/+$/, ""));
-      notify("Saved API URL");
-    });
-
-    GM_registerMenuCommand("Set Dashboard Bearer Token", () => {
-      const next = prompt(
-        "Paste access token (blank clears both access + refresh)",
-        getToken(),
-      );
-      if (next === null) return;
-      const trimmed = next.trim();
-      GM_setValue(SETTINGS.authToken, trimmed);
-      if (!trimmed) GM_setValue(SETTINGS.authRefresh, "");
-      notify(trimmed ? "Saved token" : "Cleared token");
+      promptForApiBase(true);
     });
 
     GM_registerMenuCommand("Login Dashboard (Store Token)", async () => {
+      if (!promptForApiBase(false)) return;
       const username = prompt(
         "Dashboard username",
         GM_getValue(SETTINGS.authUser, ""),
@@ -1886,10 +1997,10 @@
       notify(`Server sync ${next ? "enabled" : "disabled"}`);
     });
 
-    GM_registerMenuCommand("Toggle Local Save", () => {
+    GM_registerMenuCommand("Toggle Local Follow", () => {
       const next = !saveLocalEnabled();
       GM_setValue(SETTINGS.saveLocal, next);
-      notify(`Local save ${next ? "enabled" : "disabled"}`);
+      notify(`Local follow ${next ? "enabled" : "disabled"}`);
     });
 
     GM_registerMenuCommand("Toggle X Download Buttons", () => {
@@ -2281,7 +2392,7 @@
     btn.disabled = false;
     setCrossButtonState(btn, false);
     showToast(`Follow failed (${resp.status || resp.error || "error"})`);
-    console.warn("[IglooSync] save failed", resp);
+    console.warn("[IglooSync] follow failed", resp);
   }
 
   async function unsaveCrossChannel(platform, key, btn) {
