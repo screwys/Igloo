@@ -72,6 +72,38 @@ func (db *DB) GetChannelProfile(channelID string) (*model.ChannelProfile, error)
 		       fetched_at, fail_count, next_retry_at, tombstone
 		FROM channel_profiles WHERE channel_id = ?
 	`, id)
+	return scanChannelProfile(row)
+}
+
+// GetYouTubeChannelProfileByHandle returns the newest canonical YouTube
+// profile row for a known @handle, or (nil, nil).
+func (db *DB) GetYouTubeChannelProfileByHandle(handle string) (*model.ChannelProfile, error) {
+	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
+	if handle == "" {
+		return nil, nil
+	}
+	row := db.conn.QueryRow(`
+		SELECT channel_id, platform, COALESCE(handle,''),
+		       COALESCE(display_name,''), COALESCE(bio,''), COALESCE(website,''),
+		       followers, following, verified, COALESCE(verified_type,''), protected,
+		       COALESCE(avatar_url,''), COALESCE(banner_url,''),
+		       fetched_at, fail_count, next_retry_at, tombstone
+		FROM channel_profiles
+		WHERE LOWER(platform) = 'youtube'
+		  AND COALESCE(tombstone, 0) = 0
+		  AND channel_id LIKE 'youtube_UC%'
+		  AND LOWER(LTRIM(COALESCE(handle, ''), '@')) = ?
+		ORDER BY COALESCE(fetched_at, 0) DESC
+		LIMIT 1
+	`, handle)
+	return scanChannelProfile(row)
+}
+
+type channelProfileScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanChannelProfile(row channelProfileScanner) (*model.ChannelProfile, error) {
 	var p model.ChannelProfile
 	var verified, protected, tombstone int
 	var fetchedAt, nextRetryAt sql.NullInt64

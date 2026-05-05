@@ -73,7 +73,27 @@ templ TempDownloadPage(p PageProps, videoID string, youtubeURL string) {
   };
   if (requestController) requestOptions.signal = requestController.signal;
   fetch('/api/quick-download', requestOptions)
-  .then(function(r){ return r.json(); })
+  .then(function(r){
+    return r.text().then(function(text){
+      var data = {};
+      if (text) {
+        try {
+          // parse download response, but tolerate proxy/plain-text failures
+          data = JSON.parse(text);
+        } catch (parseErr) {
+          var body = text.trim();
+          data = {
+            success: false,
+            message: body.charAt(0) === '<' ? (r.statusText || statusFailed) : (body || parseErr.message)
+          };
+        }
+      }
+      if (!r.ok && !data.error && !data.message) {
+        data.message = (r.status ? r.status + ' ' : '') + (r.statusText || statusFailed);
+      }
+      return data;
+    });
+  })
   .then(function(data){
     if (cancelled) return;
     if (data.success && data.video_id) {

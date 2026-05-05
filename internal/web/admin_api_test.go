@@ -3,6 +3,7 @@ package web
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"io"
@@ -511,6 +512,45 @@ func TestSubscribeExistingUnfollowedChannelAddsFollow(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"already_existed":true`) {
 		t.Fatalf("expected already_existed response, got %s", rec.Body.String())
+	}
+}
+
+func TestSubscribeYouTubeKnownProfileHandleDoesNotRequireYtDlp(t *testing.T) {
+	srv := newTestServer(t)
+	if err := srv.db.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "youtube_UCknownprofile",
+		Platform:    "youtube",
+		Handle:      "@Known.Handle",
+		DisplayName: "Known Profile",
+	}); err != nil {
+		t.Fatalf("UpsertChannelProfile: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest("POST", "/api/subscribe", strings.NewReader(`{"url":"https://www.youtube.com/@known.handle/videos"}`)).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	srv.handleSubscribe(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !srv.db.IsChannelFollowed("youtube_UCknownprofile") {
+		t.Fatal("expected known profile channel to gain a follow row")
+	}
+	ch, err := srv.db.GetChannel("youtube_UCknownprofile")
+	if err != nil {
+		t.Fatalf("GetChannel: %v", err)
+	}
+	if ch == nil {
+		t.Fatal("expected channel row to be restored from profile")
+	}
+	if ch.SourceID != "UCknownprofile" || ch.URL != "https://www.youtube.com/channel/UCknownprofile" {
+		t.Fatalf("unexpected restored channel: %+v", ch)
+	}
+	if !strings.Contains(rec.Body.String(), `"channel_id":"youtube_UCknownprofile"`) {
+		t.Fatalf("expected response channel id, got %s", rec.Body.String())
 	}
 }
 

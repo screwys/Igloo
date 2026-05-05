@@ -6,9 +6,11 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/screwys/igloo/internal/components"
 	"github.com/screwys/igloo/internal/subscribe"
+	"github.com/screwys/igloo/internal/worker"
 )
 
 func (s *Server) registerDownloadAPIRoutes(mux *http.ServeMux) {
@@ -71,27 +73,60 @@ func (s *Server) handleQuickDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := s.workers.DownloadTemp(r.Context(), rawURL, false)
-
-	if isHTMX {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if result.Success && result.VideoID != "" {
-			fmt.Fprintf(w, `Downloaded. <a href="/player/%s?autoplay=1" style="text-decoration:underline">Watch</a>`,
-				template.HTMLEscapeString(template.URLQueryEscaper(result.VideoID)))
-		} else if result.Success {
-			fmt.Fprint(w, `Download complete`)
-		} else {
-			msg := result.Message
-			if msg == "" {
-				msg = "Download failed"
-			}
-			w.WriteHeader(422)
-			fmt.Fprint(w, template.HTMLEscapeString(msg))
-		}
+	if !isHTMX {
+		results := make(chan worker.TempDownloadResult, 1)
+		go func() {
+			results <- s.workers.DownloadTemp(r.Context(), rawURL, false)
+		}()
+		writeQuickDownloadJSONWithKeepalive(w, results, 25*time.Second)
 		return
 	}
 
-	writeJSON(w, 200, map[string]any{
+	result := s.workers.DownloadTemp(r.Context(), rawURL, false)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if result.Success && result.VideoID != "" {
+		fmt.Fprintf(w, `Downloaded. <a href="/player/%s?autoplay=1" style="text-decoration:underline">Watch</a>`,
+			template.HTMLEscapeString(template.URLQueryEscaper(result.VideoID)))
+	} else if result.Success {
+		fmt.Fprint(w, `Download complete`)
+	} else {
+		msg := result.Message
+		if msg == "" {
+			msg = "Download failed"
+		}
+		w.WriteHeader(422)
+		fmt.Fprint(w, template.HTMLEscapeString(msg))
+	}
+}
+
+func writeQuickDownloadJSONWithKeepalive(w http.ResponseWriter, results <-chan worker.TempDownloadResult, interval time.Duration) {
+	if interval <= 0 {
+		interval = 25 * time.Second
+	}
+	w.Header().Set("Content-Type", "application/json")
+	flusher, _ := w.(http.Flusher)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case result := <-results:
+			writeQuickDownloadJSONResult(w, result)
+			if flusher != nil {
+				flusher.Flush()
+			}
+			return
+		case <-ticker.C:
+			fmt.Fprint(w, "\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+	}
+}
+
+func writeQuickDownloadJSONResult(w http.ResponseWriter, result worker.TempDownloadResult) {
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success":     result.Success,
 		"message":     result.Message,
 		"video_id":    result.VideoID,

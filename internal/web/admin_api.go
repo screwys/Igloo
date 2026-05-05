@@ -905,7 +905,10 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	ch, err := subscribe.ResolveChannel(ctx, rawURL, platform, s.workers.Downloader())
+	ch, localResolved, err := s.resolveLocalYouTubeSubscribeChannel(rawURL, platform)
+	if err == nil && !localResolved {
+		ch, err = subscribe.ResolveChannel(ctx, rawURL, platform, s.workers.Downloader())
+	}
 	if err != nil {
 		slog.Error("ResolveChannel", "url", rawURL, "platform", platform, "err", err)
 		if isHTMX {
