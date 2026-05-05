@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/fetchprofile"
 	"github.com/screwys/igloo/internal/model"
 )
@@ -714,6 +715,83 @@ func TestRefreshInstagramProfileWithAvatarCreatesBannerBeforeStaleNetworkFetch(t
 	}
 	if got.NextRetryAt == nil || !got.NextRetryAt.After(time.Now()) {
 		t.Fatalf("NextRetryAt = %v, want deferred profile retry", got.NextRetryAt)
+	}
+}
+
+func TestRememberInstagramProfileFromRefsPreservesRichProfile(t *testing.T) {
+	d := newTestWorkerDB(t)
+	fullFetchedAt := time.Now().Add(-2 * time.Hour).UTC().Truncate(time.Millisecond)
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_cinema",
+		Platform:    "instagram",
+		Handle:      "cinema",
+		DisplayName: "Cinema",
+		Bio:         "full profile bio",
+		Website:     "https://example.test",
+		Followers:   123,
+		AvatarURL:   "https://cdn.example/old-avatar.jpg",
+		BannerURL:   "synth:latest-video:instagram_post_OLD",
+		FetchedAt:   &fullFetchedAt,
+	}); err != nil {
+		t.Fatalf("seed profile: %v", err)
+	}
+
+	m := &Manager{db: d, cfg: testCfg(t.TempDir())}
+	m.rememberInstagramProfileFromRefs(model.Channel{
+		ChannelID: "instagram_cinema",
+		Platform:  "instagram",
+		Name:      "Cinema",
+		URL:       "https://instagram.com/cinema",
+	}, []download.VideoRef{{
+		ChannelID:         "instagram_cinema",
+		AuthorHandle:      "cinema",
+		AuthorDisplayName: "Cinema Clips",
+		AuthorAvatarURL:   "https://cdn.example/new-avatar.jpg",
+	}})
+
+	got, err := d.GetChannelProfile("instagram_cinema")
+	if err != nil || got == nil {
+		t.Fatalf("GetChannelProfile: %v / %+v", err, got)
+	}
+	if got.Bio != "full profile bio" || got.Website != "https://example.test" || got.Followers != 123 {
+		t.Fatalf("rich profile fields were clobbered: %+v", got)
+	}
+	if got.DisplayName != "Cinema Clips" || got.AvatarURL != "https://cdn.example/new-avatar.jpg" {
+		t.Fatalf("ref metadata was not applied: %+v", got)
+	}
+	if got.FetchedAt == nil || !got.FetchedAt.Equal(fullFetchedAt) {
+		t.Fatalf("FetchedAt = %v, want preserved %v", got.FetchedAt, fullFetchedAt)
+	}
+	if got.BannerURL != "synth:latest-video:instagram_post_OLD" {
+		t.Fatalf("BannerURL = %q", got.BannerURL)
+	}
+}
+
+func TestRememberInstagramProfileFromRefsLeavesNewProfileUnfetched(t *testing.T) {
+	d := newTestWorkerDB(t)
+	m := &Manager{db: d, cfg: testCfg(t.TempDir())}
+
+	m.rememberInstagramProfileFromRefs(model.Channel{
+		ChannelID: "instagram_cinema",
+		Platform:  "instagram",
+		Name:      "Cinema",
+		URL:       "https://instagram.com/cinema",
+	}, []download.VideoRef{{
+		ChannelID:         "instagram_cinema",
+		AuthorHandle:      "cinema",
+		AuthorDisplayName: "Cinema Clips",
+		AuthorAvatarURL:   "https://cdn.example/avatar.jpg",
+	}})
+
+	got, err := d.GetChannelProfile("instagram_cinema")
+	if err != nil || got == nil {
+		t.Fatalf("GetChannelProfile: %v / %+v", err, got)
+	}
+	if got.FetchedAt != nil {
+		t.Fatalf("FetchedAt = %v, want partial ref metadata to stay unfetched", got.FetchedAt)
+	}
+	if got.DisplayName != "Cinema Clips" || got.AvatarURL != "https://cdn.example/avatar.jpg" {
+		t.Fatalf("ref metadata was not applied: %+v", got)
 	}
 }
 

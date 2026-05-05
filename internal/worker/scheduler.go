@@ -311,6 +311,23 @@ func (m *Manager) rememberInstagramProfileFromRefs(ch model.Channel, refs []down
 		Handle:      handle,
 		DisplayName: ch.Name,
 	}
+	if existing, err := m.db.GetChannelProfile(ch.ChannelID); err != nil {
+		log.Printf("[scheduler] get instagram profile %s: %v", ch.ChannelID, err)
+	} else if existing != nil {
+		profile.Bio = existing.Bio
+		profile.Website = existing.Website
+		profile.Followers = existing.Followers
+		profile.Following = existing.Following
+		profile.Verified = existing.Verified
+		profile.VerifiedType = existing.VerifiedType
+		profile.Protected = existing.Protected
+		profile.AvatarURL = existing.AvatarURL
+		profile.BannerURL = existing.BannerURL
+		profile.FetchedAt = existing.FetchedAt
+		profile.FailCount = existing.FailCount
+		profile.NextRetryAt = existing.NextRetryAt
+		profile.Tombstone = existing.Tombstone
+	}
 	for _, ref := range refs {
 		if ref.IsRepost && ref.ChannelID != "" && ref.ChannelID != ch.ChannelID {
 			continue
@@ -334,8 +351,6 @@ func (m *Manager) rememberInstagramProfileFromRefs(ch model.Channel, refs []down
 	if profile.DisplayName == "" {
 		profile.DisplayName = profile.Handle
 	}
-	now := time.Now().UTC()
-	profile.FetchedAt = &now
 	if err := m.db.UpsertChannelProfile(profile); err != nil {
 		log.Printf("[scheduler] upsert instagram profile %s: %v", ch.ChannelID, err)
 		return

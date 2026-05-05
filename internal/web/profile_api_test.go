@@ -273,6 +273,36 @@ func TestProfileCardInstagram(t *testing.T) {
 	}
 }
 
+func TestRefreshOneProfileDoesNotStampInstagramStubAsFetched(t *testing.T) {
+	srv := newTestServer(t)
+	_ = srv.db.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_kei",
+		Platform:    "instagram",
+		Handle:      "kei",
+		DisplayName: "Kei",
+		AvatarURL:   "https://cdn.example/avatar.jpg",
+	})
+	srv.profileFetch = (&fakeFetch{result: &fetchprofile.Profile{
+		ChannelID:   "instagram_kei",
+		Platform:    "instagram",
+		Handle:      "kei",
+		DisplayName: "kei",
+	}}).Fetch
+
+	srv.refreshOneProfile(context.Background(), "instagram_kei", nil)
+
+	got, err := srv.db.GetChannelProfile("instagram_kei")
+	if err != nil || got == nil {
+		t.Fatalf("GetChannelProfile: %v / %+v", err, got)
+	}
+	if got.FetchedAt != nil {
+		t.Fatalf("FetchedAt = %v, want generic Instagram stub to stay unfetched", got.FetchedAt)
+	}
+	if got.AvatarURL != "https://cdn.example/avatar.jpg" {
+		t.Fatalf("AvatarURL = %q", got.AvatarURL)
+	}
+}
+
 func TestProfileCardInflightDedup(t *testing.T) {
 	srv := newTestServer(t)
 	f := &fakeFetch{

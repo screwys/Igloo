@@ -181,7 +181,11 @@ func (s *Server) refreshOneProfile(ctx context.Context, channelID string, existi
 		}
 		return
 	}
-	if existing != nil && instagramFetchProfileIsStub(p) {
+	isInstagramStub := instagramFetchProfileIsStub(p)
+	if isInstagramStub && existing == nil {
+		existing, _ = s.db.GetChannelProfile(channelID)
+	}
+	if isInstagramStub && existing != nil {
 		mergeInstagramStubProfile(p, existing)
 	}
 	if profileUsesLatestVideoBanner(p.Platform) && p.BannerURL == "" {
@@ -203,9 +207,18 @@ func (s *Server) refreshOneProfile(ctx context.Context, channelID string, existi
 		Protected:    p.Protected,
 		AvatarURL:    p.AvatarURL,
 		BannerURL:    p.BannerURL,
-		FetchedAt:    &now,
 	}
-	if existing != nil {
+	if isInstagramStub {
+		if existing != nil {
+			row.FetchedAt = existing.FetchedAt
+			row.FailCount = existing.FailCount
+			row.NextRetryAt = existing.NextRetryAt
+			row.Tombstone = existing.Tombstone
+		}
+	} else {
+		row.FetchedAt = &now
+	}
+	if existing != nil && !isInstagramStub {
 		row.FailCount = 0
 	}
 	if err := s.db.UpsertChannelProfile(row); err == nil && s.requestAvatar != nil {
