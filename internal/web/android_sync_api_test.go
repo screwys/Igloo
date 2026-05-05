@@ -644,6 +644,58 @@ func TestAndroidSyncVideoRepostSourcesCarryAuthorLabel(t *testing.T) {
 	t.Fatalf("reposted video item missing from payloads: %+v", items)
 }
 
+func TestAndroidSyncInstagramRepostSourcesCarryAuthorLabel(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	now := time.Now().UnixMilli()
+	insertChannel(t, srv, "instagram_author", "instagram", "Author")
+	insertChannel(t, srv, "instagram_reposter", "instagram", "Reposter")
+	insertVideo(t, srv, "instagram_reposted_clip", "instagram_author")
+	if err := srv.db.ExecRaw(
+		`UPDATE videos SET duration = 45 WHERE video_id = 'instagram_reposted_clip'`,
+	); err != nil {
+		t.Fatalf("update video duration: %v", err)
+	}
+	if _, err := srv.db.UpsertVideoRepostSources([]model.VideoRepostSource{{
+		VideoID:             "instagram_reposted_clip",
+		ReposterChannelID:   "instagram_reposter",
+		ReposterHandle:      "reposter",
+		ReposterDisplayName: "Reposter",
+		FirstSeenAtMs:       now,
+		UpdatedAtMs:         now,
+	}}); err != nil {
+		t.Fatalf("upsert repost source: %v", err)
+	}
+
+	items, _, err := srv.buildAndroidSyncItems("alice", db.AndroidSyncDesiredSets{
+		Videos: map[string]struct{}{
+			"instagram_reposted_clip": {},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build items: %v", err)
+	}
+
+	for _, item := range items {
+		if item.ItemKind != "videos" || item.ItemID != "instagram_reposted_clip" {
+			continue
+		}
+		var b deltaBundle
+		if err := json.Unmarshal(item.PayloadJSON, &b); err != nil {
+			t.Fatalf("decode video payload: %v", err)
+		}
+		rows, ok := b.Attachments["video_repost_sources"].([]any)
+		if !ok || len(rows) != 1 {
+			t.Fatalf("video_repost_sources = %#v", b.Attachments["video_repost_sources"])
+		}
+		row := rows[0].(map[string]any)
+		if got := row["repost_author_label"]; got != "Reposter" {
+			t.Fatalf("repost_author_label = %#v, want Reposter; row=%#v", got, row)
+		}
+		return
+	}
+	t.Fatalf("reposted video item missing from payloads: %+v", items)
+}
+
 func TestAndroidSyncRetentionSettingsFromRequestOverridesCacheHealth(t *testing.T) {
 	fallback := db.AndroidRetentionSettings{FeedDays: 3, YoutubeDays: 2, MomentsDays: 90, StoryHours: 48}
 	req := httptest.NewRequest("GET", "/api/android/sync/generation/latest?feed_days=0&youtube_days=2&moments_days=7&story_hours=24", nil)

@@ -171,7 +171,7 @@ func (s *Server) handleShortsDelta(w http.ResponseWriter, r *http.Request) {
 			applyBookmarkBundleFields(primary, bi)
 		}
 		attachments := map[string]any{}
-		if strings.HasPrefix(v.ChannelID, "tiktok_") {
+		if isShortsChannelID(v.ChannelID) {
 			reposts := repostsByVideo[v.VideoID]
 			if reposts == nil {
 				reposts = []model.VideoRepostSource{}

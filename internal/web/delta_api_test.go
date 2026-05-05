@@ -652,6 +652,35 @@ func TestShortsDeltaCarriesBookmarkAndChannelState(t *testing.T) {
 	}
 }
 
+func TestShortsDeltaCarriesInstagramRepostSources(t *testing.T) {
+	srv := newTestServer(t)
+	now := time.Now().UnixMilli()
+	insertChannel(t, srv, "instagram_owner", "instagram", "Owner")
+	insertChannel(t, srv, "instagram_reposter", "instagram", "Reposter")
+	insertVideo(t, srv, "instagram_reel_reposted", "instagram_owner")
+	if _, err := srv.db.UpsertVideoRepostSources([]model.VideoRepostSource{{
+		VideoID:             "instagram_reel_reposted",
+		ReposterChannelID:   "instagram_reposter",
+		ReposterHandle:      "reposter",
+		ReposterDisplayName: "Reposter",
+		FirstSeenAtMs:       now,
+		UpdatedAtMs:         now,
+	}}); err != nil {
+		t.Fatalf("upsert repost source: %v", err)
+	}
+
+	body := callDelta(t, srv, "/api/shorts/delta", "alice", "")
+	b := mustOneBundle(t, body)
+	rows, ok := b.Attachments["video_repost_sources"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("video_repost_sources = %#v", b.Attachments["video_repost_sources"])
+	}
+	row := rows[0].(map[string]any)
+	if got := row["repost_author_label"]; got != "Reposter" {
+		t.Fatalf("repost_author_label = %#v, want Reposter; row=%#v", got, row)
+	}
+}
+
 // #6 — channels delta primary row carries follow + star scalars from
 // the side tables.
 func TestChannelsDeltaCarriesUserStateAttachment(t *testing.T) {

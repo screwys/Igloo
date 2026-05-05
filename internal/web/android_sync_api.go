@@ -588,7 +588,7 @@ func (s *Server) buildAndroidSyncItems(username string, sets db.AndroidSyncDesir
 				}
 			}
 		}
-		if strings.HasPrefix(video.ChannelID, "tiktok_") {
+		if isShortsChannelID(video.ChannelID) {
 			reposts := videoReposts[video.VideoID]
 			if reposts == nil {
 				reposts = []model.VideoRepostSource{}
