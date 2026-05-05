@@ -10,6 +10,22 @@ import (
 )
 
 var youtubeHandleRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+var youtubeReservedPathSegments = map[string]bool{
+	"channel":       true,
+	"clip":          true,
+	"c":             true,
+	"embed":         true,
+	"feed":          true,
+	"feeds":         true,
+	"hashtag":       true,
+	"playlist":      true,
+	"results":       true,
+	"shorts":        true,
+	"user":          true,
+	"watch":         true,
+	"youtubei":      true,
+	"youtubei_over": true,
+}
 
 func (s *Server) resolveLocalYouTubeSubscribeChannel(rawURL, platform string) (model.Channel, bool, error) {
 	if strings.ToLower(strings.TrimSpace(platform)) != "youtube" {
@@ -60,10 +76,16 @@ func parseYouTubeHandleFromURL(rawURL string) string {
 		return ""
 	}
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) == 0 || !strings.HasPrefix(parts[0], "@") {
+	if len(parts) == 0 || parts[0] == "" {
 		return ""
 	}
-	handle, err := url.PathUnescape(strings.TrimPrefix(parts[0], "@"))
+	rawHandle := strings.TrimPrefix(parts[0], "@")
+	if !strings.HasPrefix(parts[0], "@") {
+		if len(parts) != 1 || youtubeReservedPathSegments[strings.ToLower(parts[0])] {
+			return ""
+		}
+	}
+	handle, err := url.PathUnescape(rawHandle)
 	if err != nil {
 		return ""
 	}
