@@ -513,6 +513,23 @@ func TestPrefsPlatformSettingsTabOwnsPlatformDefaults(t *testing.T) {
 	}
 }
 
+func TestPrefsBodyAllowsThreeSecondFetchDelay(t *testing.T) {
+	p := newTestPageProps()
+	prefs := PrefsData{Settings: map[string]any{"x_feed_fetch_delay": "3"}}
+	var buf bytes.Buffer
+	if err := PrefsBody(p, prefs).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+
+	if !strings.Contains(html, `id="global-setting-x-feed-fetch-delay" name="x_feed_fetch_delay" class="input" min="3"`) {
+		t.Fatalf("fetch delay input should allow 3 seconds:\n%s", html)
+	}
+	if !strings.Contains(html, `name="x_feed_fetch_delay" class="input" min="3" max="300" value="3"`) {
+		t.Fatalf("fetch delay input should preserve a 3 second value:\n%s", html)
+	}
+}
+
 func TestServerDashboardLoadsRawServerLogUnderActivity(t *testing.T) {
 	p := newTestPageProps()
 	data := ServerDashboardData{
