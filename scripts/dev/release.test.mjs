@@ -60,6 +60,7 @@ test("renders exact commit release notes", () => {
   const notes = renderReleaseNotes({
     newTag: "v1.0.1",
     previousTag: "v1.0.0",
+    repository: "screwys/Igloo",
     commits: [
       {
         sha: "1111111111111111111111111111111111111111",
@@ -72,8 +73,12 @@ test("renders exact commit release notes", () => {
     ],
   });
 
-  assert.match(notes, /^## commits/m);
-  assert.match(notes, /- `1111111` fixed hover not being triggered in feed/);
-  assert.match(notes, /- `2222222` added a release helper/);
-  assert.match(notes, /since `v1\.0\.0`/);
+  assert.match(notes, /^## Release v1\.0\.1/m);
+  assert.match(notes, /^changes:$/m);
+  assert.match(
+    notes,
+    /- fixed hover not being triggered in feed \(\[1111111\]\(https:\/\/github\.com\/screwys\/Igloo\/commit\/1111111111111111111111111111111111111111\)\)/,
+  );
+  assert.doesNotMatch(notes, /^## commits/m);
+  assert.doesNotMatch(notes, /since `v1\.0\.0`/);
 });

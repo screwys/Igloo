@@ -60,19 +60,22 @@ export function updateAndroidBuildGradle(text, versionName, versionCode) {
   return updated;
 }
 
-export function renderReleaseNotes({ newTag, previousTag, commits }) {
-  const base = previousTag ? `since \`${previousTag}\`` : "from repository start";
+function commitRef(sha, repository) {
+  const short = sha.slice(0, 7);
+  if (!repository) return `\`${short}\``;
+  return `[${short}](https://github.com/${repository}/commit/${sha})`;
+}
+
+export function renderReleaseNotes({ newTag, repository, commits }) {
   const lines = [
-    `Release ${newTag}`,
+    `## Release ${newTag}`,
     "",
-    `Exact commits ${base}:`,
-    "",
-    "## commits",
+    "changes:",
     "",
   ];
 
   for (const commit of commits) {
-    lines.push(`- \`${commit.sha.slice(0, 7)}\` ${commit.subject}`);
+    lines.push(`- ${commit.subject} (${commitRef(commit.sha, repository)})`);
   }
 
   lines.push("");
@@ -206,6 +209,7 @@ function prepareRelease(argv) {
     renderReleaseNotes({
       newTag: nextTag,
       previousTag,
+      repository: process.env.GITHUB_REPOSITORY || "",
       commits,
     }),
   );
