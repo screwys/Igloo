@@ -188,6 +188,13 @@ func TestCodeIndexBuildConfigMap(t *testing.T) {
 	mustWrite(".semgrep.yml", `rules:
   - id: igloo.shell-wrapper-command
 `)
+	mustWrite(".github/dependabot.yml", `version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+  - package-ecosystem: github-actions
+    directory: /
+`)
 	mustWrite(".github/workflows/go-ci.yml", `name: Go CI
 jobs:
   test:
@@ -198,7 +205,7 @@ jobs:
 
 	idx := New(root)
 	stats := idx.Build()
-	if !strings.Contains(stats, "config_files=4") {
+	if !strings.Contains(stats, "config_files=5") {
 		t.Fatalf("expected config file count in build stats, got %s", stats)
 	}
 
@@ -209,6 +216,8 @@ jobs:
 		"compose.yaml [compose]",
 		"service: rsshub",
 		"rule: igloo.shell-wrapper-command",
+		".github/dependabot.yml [dependabot]",
+		"ecosystem: gomod",
 		"action: actions/setup-go@v6",
 	} {
 		if !strings.Contains(configMap, want) {
