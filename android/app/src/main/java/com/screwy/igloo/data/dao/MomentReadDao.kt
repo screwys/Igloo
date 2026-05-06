@@ -176,6 +176,16 @@ interface MomentReadDao {
     )
     fun playerMomentsFollowingFlow(): Flow<List<MomentItem>>
 
+    @Query(
+        """
+        SELECT COALESCE(published_at, 0)
+        FROM videos
+        WHERE video_id = :videoId
+        LIMIT 1
+        """
+    )
+    fun momentSortAtFlow(videoId: String): Flow<Long?>
+
     @RewriteQueriesToDropUnusedColumns
     @Query(
         """

@@ -209,3 +209,74 @@ func TestHandleShortsHistoryReturnsPageHint(t *testing.T) {
 		t.Fatalf("page hint = page %d index %d size %d, want page 1 index 204 size 10000", resp.Page, resp.Index, resp.PageSize)
 	}
 }
+
+func TestHandleShortsHistoryFallsBackToNearestVisibleWhenCursorHidden(t *testing.T) {
+	srv := newTestServer(t)
+
+	for _, ch := range []string{"tiktok_alpha", "tiktok_beta"} {
+		if err := srv.db.ExecRaw(
+			`INSERT INTO channels (channel_id, name, platform) VALUES (?, ?, 'tiktok')`,
+			ch, ch,
+		); err != nil {
+			t.Fatal(err)
+		}
+		if err := srv.db.ExecRaw(
+			`INSERT INTO channel_follows (user_id, channel_id, followed_at) VALUES ('', ?, 1)`,
+			ch,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, row := range []struct {
+		id        string
+		channelID string
+		published int
+	}{
+		{"alpha_old", "tiktok_alpha", 100},
+		{"beta_cursor", "tiktok_beta", 200},
+		{"alpha_new", "tiktok_alpha", 300},
+	} {
+		if err := srv.db.ExecRaw(
+			`INSERT INTO videos (video_id, channel_id, title, duration, published_at)
+			 VALUES (?, ?, ?, 0, ?)`,
+			row.id, row.channelID, row.id, row.published,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := srv.db.ApplyMomentsCursorMutation("alice", "beta_cursor", 0, 123456789, "all"); err != nil {
+		t.Fatalf("ApplyMomentsCursorMutation: %v", err)
+	}
+	if err := srv.db.ExecRaw(`DELETE FROM channel_follows WHERE channel_id = 'tiktok_beta'`); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/shorts/history?tab=all", nil)
+	req = attachTestAuth(req, "alice")
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d - %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		VideoID     string `json:"video_id"`
+		Page        int    `json:"page"`
+		Index       int    `json:"index"`
+		PageSize    int    `json:"page_size"`
+		UpdatedAtMs int64  `json:"updated_at_ms"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.VideoID != "alpha_new" {
+		t.Fatalf("fallback video_id=%q, want alpha_new", resp.VideoID)
+	}
+	if resp.Page != 1 || resp.Index != 1 || resp.PageSize != 10000 {
+		t.Fatalf("fallback page hint = page %d index %d size %d, want page 1 index 1 size 10000", resp.Page, resp.Index, resp.PageSize)
+	}
+	if resp.UpdatedAtMs != 123456789 {
+		t.Fatalf("updated_at_ms=%d, want original cursor timestamp", resp.UpdatedAtMs)
+	}
+}

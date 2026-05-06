@@ -71,3 +71,24 @@ internal fun shortsStartIndex(videoIds: List<String>, requestedVideoId: String?)
     val target = requestedVideoId?.trim()?.takeIf { it.isNotEmpty() } ?: return 0
     return videoIds.indexOf(target).takeIf { it >= 0 } ?: 0
 }
+
+internal data class ShortsStartItem(
+    val videoId: String,
+    val sortAtMs: Long,
+)
+
+internal fun shortsStartIndex(
+    items: List<ShortsStartItem>,
+    requestedVideoId: String?,
+    fallbackSortAtMs: Long? = null,
+): Int {
+    val target = requestedVideoId?.trim()?.takeIf { it.isNotEmpty() } ?: return 0
+    val exact = items.indexOfFirst { it.videoId == target }
+    if (exact >= 0) return exact
+    val sortAt = fallbackSortAtMs ?: return 0
+    if (items.isEmpty()) return 0
+    return items.withIndex()
+        .firstOrNull { it.value.sortAtMs >= sortAt }
+        ?.index
+        ?: items.lastIndex
+}

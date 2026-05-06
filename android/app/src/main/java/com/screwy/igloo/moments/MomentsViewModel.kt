@@ -279,6 +279,12 @@ class MomentsViewModel(
     private val scopedResumeVideoId: StateFlow<String?> = activeTab
         .flatMapLatest { prefs.momentsResumeVideoId(scope = it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
+    private val scopedResumeSortAtMs: StateFlow<Long?> = scopedResumeVideoId
+        .flatMapLatest { videoId ->
+            val target = videoId?.trim()?.takeIf { it.isNotEmpty() }
+            if (target == null) flowOf(null) else db.momentReadDao().momentSortAtFlow(target)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
     private val scopedResumePositionMs: StateFlow<Long> = activeTab
         .flatMapLatest { prefs.momentsResumePositionMs(scope = it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 0L)
@@ -292,11 +298,22 @@ class MomentsViewModel(
         playerRowsRaw,
         activeCursor,
         scopedResumeVideoId,
+        scopedResumeSortAtMs,
         activeTab,
-    ) { rows, active, resumeId, tab ->
-        val targetVideoId = active?.takeIf { it.scope == tab }?.videoId ?: resumeId
+    ) { rows, active, resumeId, resumeSortAtMs, tab ->
+        val activeForTab = active?.takeIf { it.scope == tab }
+        val targetVideoId = activeForTab?.videoId ?: resumeId
         if (rows == null || targetVideoId.isNullOrEmpty()) 0
-        else rows.indexOfFirst { it.video.videoId == targetVideoId }.coerceAtLeast(0)
+        else shortsStartIndex(
+            rows.map { row ->
+                ShortsStartItem(
+                    videoId = row.video.videoId,
+                    sortAtMs = row.effectiveMomentAtMs.takeIf { it > 0 } ?: row.video.publishedAt,
+                )
+            },
+            targetVideoId,
+            fallbackSortAtMs = if (activeForTab == null) resumeSortAtMs else null,
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000L),

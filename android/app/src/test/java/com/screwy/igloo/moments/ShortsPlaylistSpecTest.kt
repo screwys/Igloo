@@ -52,4 +52,15 @@ class ShortsPlaylistSpecTest {
         assertEquals(0, shortsStartIndex(listOf("a", "b", "c"), "missing"))
         assertEquals(0, shortsStartIndex(emptyList<String>(), "b"))
     }
+
+    @Test
+    fun startIndexFallsForwardToNearestTimelineItemWhenRequestedVideoIsMissing() {
+        val items = listOf(
+            ShortsStartItem(videoId = "old", sortAtMs = 100),
+            ShortsStartItem(videoId = "next", sortAtMs = 300),
+            ShortsStartItem(videoId = "newest", sortAtMs = 500),
+        )
+
+        assertEquals(1, shortsStartIndex(items, "hidden", fallbackSortAtMs = 200))
+    }
 }

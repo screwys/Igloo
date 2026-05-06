@@ -104,6 +104,7 @@ class MomentsViewModelTest {
         launch { vm.uiState.collect {} }
         launch { vm.items.collect {} }
         launch { vm.playerItems.collect {} }
+        launch { vm.startIndex.collect {} }
         launch { vm.autoplayEnabled.collect {} }
         launch { vm.muted.collect {} }
     }
@@ -204,6 +205,32 @@ class MomentsViewModelTest {
         val item = vm.playerItems.value.single()
         assertEquals("Server Label", item.repostAuthorLabel)
         assertEquals(0, item.repostOtherCount)
+    }
+
+    @Test fun startIndexFallsNearHiddenStoredCursor() = runBlocking {
+        db.channelDao().upsert(listOf(
+            ChannelEntity(channelId = "tiktok_alpha", name = "Alpha", platform = "tiktok", sourceId = "alpha"),
+            ChannelEntity(channelId = "tiktok_beta", name = "Beta", platform = "tiktok", sourceId = "beta"),
+        ))
+        db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_alpha"))
+        db.videoDao().upsert(listOf(
+            VideoEntity(videoId = "alpha_old", channelId = "tiktok_alpha", title = "Old", publishedAt = 100L),
+            VideoEntity(videoId = "beta_cursor", channelId = "tiktok_beta", title = "Hidden cursor", publishedAt = 200L),
+            VideoEntity(videoId = "alpha_new", channelId = "tiktok_alpha", title = "New", publishedAt = 300L),
+        ))
+        prefs.setMomentsResumeVideoId("beta_cursor", scope = "all")
+
+        val vm = newViewModel()
+        val sub = subscribe(vm)
+        val ok = withTimeoutOrNull(2_000L) {
+            while (vm.playerItems.value.size < 2 || vm.startIndex.value != 1) delay(10)
+            true
+        }
+        sub.cancel()
+
+        assertEquals(true, ok)
+        assertEquals(listOf("alpha_old", "alpha_new"), vm.playerItems.value.map { it.videoId })
+        assertEquals(1, vm.startIndex.value)
     }
 
     @Test fun onViewEvent_enqueuesMomentView() = runBlocking {

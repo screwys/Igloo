@@ -334,6 +334,14 @@ func (s *Server) handleShortsHistory(w http.ResponseWriter, r *http.Request) {
 			body["page"] = ((ordinal - 1) / shortsPageSize) + 1
 			body["index"] = (ordinal - 1) % shortsPageSize
 			body["page_size"] = shortsPageSize
+		} else if fallbackVideoID, fallbackOrdinal, fallbackOK, err := s.db.GetNearestShortsCursorTarget(videoID, scope, 0); err != nil {
+			slog.Error("GetNearestShortsCursorTarget", "video", videoID, "scope", scope, "err", err)
+		} else if fallbackOK {
+			body["video_id"] = fallbackVideoID
+			body["fallback_for_video_id"] = videoID
+			body["page"] = ((fallbackOrdinal - 1) / shortsPageSize) + 1
+			body["index"] = (fallbackOrdinal - 1) % shortsPageSize
+			body["page_size"] = shortsPageSize
 		}
 	}
 

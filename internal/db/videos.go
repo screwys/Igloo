@@ -673,6 +673,143 @@ func (db *DB) GetShortsOrdinal(videoID, momentsMode string) (int, bool, error) {
 	return ordinal, ordinal > 0, nil
 }
 
+// GetNearestShortsCursorTarget returns the visible Moments row closest to the
+// hidden cursor target's timeline position. Forward progress is preferred: the
+// first visible item at or after the old cursor wins, otherwise the previous
+// visible item is used. This keeps stale cursors from falling back to the oldest
+// row when an account is unfollowed or a source-window row disappears.
+func (db *DB) GetNearestShortsCursorTarget(videoID, momentsMode string, sortAtHint int64) (string, int, bool, error) {
+	sortAt := sortAtHint
+	if sortAt <= 0 {
+		var ok bool
+		var err error
+		sortAt, ok, err = db.GetShortsCursorSortAt(videoID, momentsMode)
+		if err != nil || !ok {
+			return "", 0, false, err
+		}
+	}
+	return db.GetNearestShortsOrdinal(sortAt, momentsMode)
+}
+
+func (db *DB) GetShortsCursorSortAt(videoID, momentsMode string) (int64, bool, error) {
+	momentsMode = NormalizeMomentsTab(momentsMode)
+	query := db.shortsVisibleCTE(momentsMode) + `
+		SELECT effective_moment_at_ms
+		FROM visible
+		WHERE video_id = ?
+		LIMIT 1`
+	var sortAt int64
+	err := db.conn.QueryRow(query, videoID).Scan(&sortAt)
+	if err == nil {
+		return sortAt, true, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, false, err
+	}
+	err = db.conn.QueryRow(`
+		SELECT COALESCE(v.published_at, 0)
+		FROM videos v
+		LEFT JOIN channels c ON v.channel_id = c.channel_id
+		WHERE v.video_id = ?
+		  AND COALESCE(c.platform, '') IN ('tiktok','instagram')
+		  AND COALESCE(v.source_kind, '') != 'story'
+		  AND COALESCE(v.is_temp,0) = 0
+		LIMIT 1
+	`, videoID).Scan(&sortAt)
+	if err == sql.ErrNoRows {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return sortAt, true, nil
+}
+
+func (db *DB) GetNearestShortsOrdinal(sortAt int64, momentsMode string) (string, int, bool, error) {
+	query := db.shortsVisibleCTE(momentsMode) + `
+		, candidate AS (
+			SELECT video_id, effective_moment_at_ms
+			FROM visible
+			ORDER BY CASE WHEN effective_moment_at_ms >= ? THEN 0 ELSE 1 END,
+			         CASE WHEN effective_moment_at_ms >= ? THEN effective_moment_at_ms END ASC,
+			         CASE WHEN effective_moment_at_ms < ? THEN effective_moment_at_ms END DESC,
+			         CASE WHEN effective_moment_at_ms >= ? THEN video_id END ASC,
+			         CASE WHEN effective_moment_at_ms < ? THEN video_id END DESC
+			LIMIT 1
+		)
+		SELECT c.video_id, COUNT(*)
+		FROM candidate c
+		JOIN visible v ON v.effective_moment_at_ms < c.effective_moment_at_ms
+		              OR (v.effective_moment_at_ms = c.effective_moment_at_ms AND v.video_id <= c.video_id)
+		GROUP BY c.video_id`
+	var videoID string
+	var ordinal int
+	err := db.conn.QueryRow(query, sortAt, sortAt, sortAt, sortAt, sortAt).Scan(&videoID, &ordinal)
+	if err == sql.ErrNoRows {
+		return "", 0, false, nil
+	}
+	if err != nil {
+		return "", 0, false, err
+	}
+	return videoID, ordinal, ordinal > 0, nil
+}
+
+func (db *DB) shortsVisibleCTE(momentsMode string) string {
+	momentsMode = NormalizeMomentsTab(momentsMode)
+	includeMomentReposts := momentsMode == "all" && db.MomentsIncludeRepostsEnabled()
+	includeInstagramTagged := momentsMode == "all" && db.InstagramIncludeTaggedEnabled()
+	includeSourceWindows := includeMomentReposts || includeInstagramTagged
+	if !includeSourceWindows {
+		return `
+		WITH visible AS (
+			SELECT v.video_id, COALESCE(v.published_at, 0) AS effective_moment_at_ms
+			FROM videos v
+			LEFT JOIN channels c ON v.channel_id = c.channel_id
+			LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id AND cf.user_id = ''
+			WHERE COALESCE(c.platform, '') IN ('tiktok','instagram')
+			  AND COALESCE(v.source_kind, '') != 'story'
+			  AND COALESCE(v.is_temp,0) = 0
+			  AND cf.channel_id IS NOT NULL
+		)`
+	}
+	return `
+		WITH allowed_moment_reposts AS (
+			SELECT vrs.*,
+			       COUNT(*) OVER (PARTITION BY vrs.video_id) AS repost_count,
+			       ROW_NUMBER() OVER (
+			           PARTITION BY vrs.video_id
+			           ORDER BY COALESCE(NULLIF(vrs.reposted_at_ms, 0), vrs.first_seen_at_ms) DESC,
+			                    vrs.reposter_channel_id ASC
+			       ) AS rn
+			FROM video_repost_sources vrs
+			INNER JOIN videos owner ON owner.video_id = vrs.video_id
+			INNER JOIN channel_follows rcf ON rcf.channel_id = vrs.reposter_channel_id AND rcf.user_id = ''
+			LEFT JOIN channel_settings rcs ON rcs.channel_id = vrs.reposter_channel_id
+			WHERE COALESCE(rcs.include_reposts, 1) != 0
+			  AND ` + sourceWindowPlatformEnabledClause("owner", includeMomentReposts, includeInstagramTagged) + `
+		),
+		moments_repost_heads AS (
+			SELECT *
+			FROM allowed_moment_reposts
+			WHERE rn = 1
+		),
+		visible AS (
+			SELECT v.video_id,
+			       CASE WHEN cf.channel_id IS NULL AND mr.video_id IS NOT NULL
+			            THEN COALESCE(NULLIF(mr.reposted_at_ms, 0), NULLIF(mr.first_seen_at_ms, 0), v.published_at, 0)
+			            ELSE COALESCE(v.published_at, 0)
+			        END AS effective_moment_at_ms
+			FROM videos v
+			LEFT JOIN channels c ON v.channel_id = c.channel_id
+			LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id AND cf.user_id = ''
+			LEFT JOIN moments_repost_heads mr ON mr.video_id = v.video_id
+			WHERE COALESCE(c.platform, '') IN ('tiktok','instagram')
+			  AND COALESCE(v.source_kind, '') != 'story'
+			  AND COALESCE(v.is_temp,0) = 0
+			  AND (cf.channel_id IS NOT NULL OR mr.video_id IS NOT NULL)
+		)`
+}
+
 // GetComments returns comments for a video, sorted by like count.
 func (db *DB) GetComments(videoID string, limit int) ([]model.Comment, error) {
 	if limit <= 0 {
