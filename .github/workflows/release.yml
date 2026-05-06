@@ -1,6 +1,9 @@
 name: Release
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       bump:
@@ -22,6 +25,14 @@ permissions:
 
 jobs:
   release:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'push' &&
+        github.actor != 'github-actions[bot]' &&
+        !startsWith(github.event.head_commit.message, 'release ') &&
+        !contains(github.event.head_commit.message, 'release: none')
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -34,9 +45,25 @@ jobs:
       - name: Test release helper
         run: node --test scripts/dev/release.test.mjs
 
+      - name: Choose release bump
+        id: bump
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_BUMP: ${{ inputs.bump }}
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          bump="${INPUT_BUMP:-patch}"
+          if [ "$EVENT_NAME" = "push" ]; then
+            bump="patch"
+            if printf '%s\n' "$HEAD_MESSAGE" | grep -Eiq '^release:[[:space:]]*minor$'; then
+              bump="minor"
+            fi
+          fi
+          echo "bump=$bump" >> "$GITHUB_OUTPUT"
+
       - name: Prepare release
         id: release
-        run: node scripts/dev/release.mjs prepare "${{ inputs.bump }}" --notes release-notes.md
+        run: node scripts/dev/release.mjs prepare "${{ steps.bump.outputs.bump }}" --notes release-notes.md
 
       - name: Commit and tag release
         run: |
