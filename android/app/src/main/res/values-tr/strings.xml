@@ -299,9 +299,9 @@
     <string name="logs_empty_filter">Bu filtreyle eşleşen kayıt yok.</string>
     <string name="logs_errors_warnings">Hatalar ve uyarılar</string>
     <string name="logs_events">Olaylar</string>
-    <string name="logs_filter_active">Aktif</string>
+    <string name="logs_filter_active">Etkin</string>
     <string name="logs_filter_all">Tümü</string>
-    <string name="logs_filter_completed">Tamamlandı</string>
+    <string name="logs_filter_completed">Tamamlanan</string>
     <string name="logs_filter_debug">Hata ayıklama</string>
     <string name="logs_filter_errors">Hatalar</string>
     <string name="logs_filter_info">Bilgi</string>
@@ -325,7 +325,7 @@
     <string name="logs_no_events">Olay yok.</string>
     <string name="logs_no_feed_activity">Henüz etkinlik yok — ilk akış alımı bekleniyor</string>
     <string name="logs_no_health_report">sağlık raporu yok</string>
-    <string name="logs_no_processes">İşlem yok</string>
+    <string name="logs_no_processes">Çalışan işlem yok</string>
     <string name="logs_no_sync_activity">Henüz eşitleme etkinliği yok.</string>
     <string name="logs_no_sync_data">eşitleme verisi yok</string>
     <string name="logs_no_sync_report">Rapor yok</string>
@@ -351,8 +351,8 @@
     <string name="logs_stat_last_download">Son indirme</string>
     <string name="logs_stat_last_sync">Son eşitleme</string>
     <string name="logs_stat_memory">Bellek</string>
-    <string name="logs_stat_parsed">İşlenen</string>
-    <string name="logs_stat_queue">Kuyruk</string>
+    <string name="logs_stat_parsed">Ayrıştırılan</string>
+    <string name="logs_stat_queue">Sıra</string>
     <string name="logs_stat_session">Oturum</string>
     <string name="logs_stat_sources">Kaynaklar</string>
     <string name="logs_stat_storage">Depolama</string>
@@ -372,8 +372,8 @@
     <string name="logs_status_ok_count">%d tamam</string>
     <string name="logs_status_paused">duraklatıldı</string>
     <string name="logs_status_pending">Bekliyor</string>
-    <string name="logs_status_queued">Kuyrukta</string>
-    <string name="logs_status_queued_count">%d kuyrukta</string>
+    <string name="logs_status_queued">Sırada</string>
+    <string name="logs_status_queued_count">%d sırada</string>
     <string name="logs_status_ready">Hazır</string>
     <string name="logs_status_unsupported">Desteklenmiyor</string>
     <string name="logs_status_waiting_count">%d bekliyor</string>
@@ -383,10 +383,10 @@
     <string name="logs_tab_downloads">İndirmeler</string>
     <string name="logs_tab_feed">Akış</string>
     <string name="logs_tab_server">Sunucu</string>
-    <string name="logs_table_action">Eylem</string>
+    <string name="logs_table_action">İşlem</string>
     <string name="logs_table_channel">Kanal</string>
     <string name="logs_table_handle">Kullanıcı adı</string>
-    <string name="logs_table_items">Öğeler</string>
+    <string name="logs_table_items">İçerik</string>
     <string name="logs_table_last_ok">Son başarılı</string>
     <string name="logs_table_platform">Platform</string>
     <string name="logs_table_status">Durum</string>
