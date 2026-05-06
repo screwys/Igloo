@@ -14,14 +14,19 @@
 - Do not fetch public X, YouTube, TikTok, or Instagram pages when stored identifiers or local data can answer the question.
 - Check private runtime material only for existence; mask values as `***` if a format check is unavoidable.
 
-## Changes
+## Coding Rules
 
 - Keep changes scoped. Do not mix unrelated cleanup, formatting, generated churn, or private workflow notes into product work.
 - Use generic names in tests, docs, examples, comments, and commits.
 - Do not clear local state before a network call succeeds.
 - Destructive UI actions need product confirmation: Igloo modal on web, Compose `AlertDialog` on Android.
 - One-off repair/backfill utilities must not become normal startup behavior.
-- Docs-only changes do not need tests unless they alter generated files or documented commands.
+- Fix root causes, not display-only symptoms.
+- If multiple causes are found, fix all in the same pass unless the user narrows the scope.
+- Do not invent client-side fallbacks for server-owned identity or ingest-time data before tracing why the real data is missing.
+- Keep status updates factual: what is fixed, what is still broken, and what is being worked on next.
+
+For Go code, protect the success path. Do not allocate rollback journals, diagnostic collections, or per-item bookkeeping on the happy path just to make rare failures easier to unwind. If the affected work can be enumerated again safely, let the error path recompute it and clean up there. Keep explicit rollback state only when side effects are non-idempotent, external, ordered in a way that cannot be rebuilt, or otherwise impossible to reconstruct.
 
 ## Releases
 
