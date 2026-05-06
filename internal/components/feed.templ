@@ -5,11 +5,11 @@ import (
 )
 
 // FeedPage renders the full feed page (used for /feed and individual Twitter channel pages).
-templ FeedPage(p PageProps, items []model.FeedItem, hasMore bool, nextPageURL string, showControls bool, serverReranked bool, xChannel *XChannelInfo) {
+templ FeedPage(p PageProps, items []model.FeedItem, hasMore bool, nextPageURL string, showControls bool, serverReranked bool, xChannel *XChannelInfo, feedHeadAnchor string) {
 	@Base(p) {
 		if showControls {
 			<div id="feed-toolbar" class="feed-toolbar"></div>
-			@FeedNewPostsBar(p, false, nil)
+			@FeedNewPostsBar(p, false, feedHeadAnchor, nil)
 		}
 		if xChannel != nil && xChannel.Profile != nil {
 			@ProfileCard(p, xChannel.Profile, "hero", xChannel.IsFollowing, xChannel.IsStarred)
@@ -90,21 +90,21 @@ templ RetweetersDialog(p PageProps) {
 	</dialog>
 }
 
-// FeedNewPostsBar polls /api/feed/head and shows when a new head tweet is detected.
-// Server compares `known_head` (sent each poll from DOM) against the current head;
-// a visible bar is returned only when they differ. When visible, it shows up to
-// three overlapping avatars of the highest-ranked new posters, X-style.
-templ FeedNewPostsBar(p PageProps, hasNew bool, avatars []model.NewPosterAvatar) {
+// FeedNewPostsBar polls /api/feed/head and shows when newly fetched feed rows
+// arrive after the stable page anchor. When visible, it shows up to three
+// overlapping avatars of the highest-ranked new posters, X-style.
+templ FeedNewPostsBar(p PageProps, hasNew bool, anchorTweetID string, avatars []model.NewPosterAvatar) {
 	<button
 		id="feed-new-posts-bar"
 		class={ "feed-new-posts-bar", templ.KV("hidden", !hasNew) }
 		type="button"
+		data-feed-head-anchor={ anchorTweetID }
 		aria-label={ L(p, "action_show_new_posts", "Show new posts") }
 		data-i18n-aria-label="action_show_new_posts"
 		hx-get="/api/feed/head?fmt=html"
 		hx-trigger="every 9s [!document.hidden]"
 		hx-swap="outerHTML"
-		hx-vals={ `js:{known_head: (document.querySelector("#feed-list [data-feed-item][data-tweet-id]")?.getAttribute("data-tweet-id") || "")}` }
+		hx-vals={ `js:{known_head: (document.getElementById("feed-new-posts-bar")?.getAttribute("data-feed-head-anchor") || "")}` }
 		onclick="window.location.assign('/feed')"
 	>
 		<svg class="feed-new-posts-arrow" viewBox="0 0 24 24" aria-hidden="true">

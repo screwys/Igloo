@@ -202,9 +202,8 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFeedHead(w http.ResponseWriter, r *http.Request) {
-	item, err := s.db.GetLatestFeedItem()
-
 	if r.URL.Query().Get("fmt") == "html" {
+		item, err := s.db.GetLatestFetchedFeedItem()
 		currentHead := ""
 		if err == nil && item != nil {
 			currentHead = item.TweetID
@@ -224,10 +223,11 @@ func (s *Server) handleFeedHead(w http.ResponseWriter, r *http.Request) {
 
 		p := s.pageProps(w, r)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		components.FeedNewPostsBar(p, hasNew, avatars).Render(r.Context(), w)
+		components.FeedNewPostsBar(p, hasNew, knownHead, avatars).Render(r.Context(), w)
 		return
 	}
 
+	item, err := s.db.GetLatestFeedItem()
 	if err != nil || item == nil {
 		writeJSON(w, 200, map[string]any{
 			"success":       true,

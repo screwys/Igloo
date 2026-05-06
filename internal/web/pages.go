@@ -936,7 +936,7 @@ func (s *Server) renderTwitterChannelFeed(w http.ResponseWriter, r *http.Request
 	p.Sidebar = s.mustBuildSidebar(r)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	components.FeedPage(p, items, false, "", false, false, xCh).Render(r.Context(), w)
+	components.FeedPage(p, items, false, "", false, false, xCh, "").Render(r.Context(), w)
 }
 
 func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {
@@ -1118,8 +1118,13 @@ func (s *Server) handlePageFeed(w http.ResponseWriter, r *http.Request) {
 	p.ESBundle = "js/dist/feed.js"
 	p.Sidebar = s.mustBuildSidebar(r)
 
+	feedHeadAnchor := ""
+	if head, err := s.db.GetLatestFetchedFeedItem(); err == nil && head != nil {
+		feedHeadAnchor = head.TweetID
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	components.FeedPage(p, items, hasMore, nextPageURL, true, true, nil).Render(r.Context(), w)
+	components.FeedPage(p, items, hasMore, nextPageURL, true, true, nil, feedHeadAnchor).Render(r.Context(), w)
 }
 
 func (s *Server) handlePageLiked(w http.ResponseWriter, r *http.Request) {

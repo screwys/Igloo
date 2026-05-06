@@ -13,10 +13,15 @@ import (
 // leaving it empty. published is a unix millis int.
 func seedFeedItem(t *testing.T, d *DB, tweetID, author string, published int64) {
 	t.Helper()
+	seedFeedItemFetched(t, d, tweetID, author, published, published)
+}
+
+func seedFeedItemFetched(t *testing.T, d *DB, tweetID, author string, published, fetched int64) {
+	t.Helper()
 	if _, err := d.conn.Exec(`INSERT INTO feed_items
-		(tweet_id, author_handle, author_avatar_url, body_text, published_at, algo_interest, algo_scored_at)
-		VALUES (?, ?, '', ?, ?, ?, ?)`,
-		tweetID, author, "body", published, 1.0, 0); err != nil {
+		(tweet_id, author_handle, author_avatar_url, body_text, published_at, fetched_at, algo_interest, algo_scored_at)
+		VALUES (?, ?, '', ?, ?, ?, ?, ?)`,
+		tweetID, author, "body", published, fetched, 1.0, 0); err != nil {
 		t.Fatalf("seed %s: %v", tweetID, err)
 	}
 }
@@ -99,6 +104,22 @@ func TestGetNewPosterAvatars_DedupesByAuthor(t *testing.T) {
 			t.Fatalf("duplicate author %s: %+v", a.AuthorHandle, got)
 		}
 		seen[a.AuthorHandle] = true
+	}
+}
+
+func TestGetNewPosterAvatars_UsesFetchedAtAnchor(t *testing.T) {
+	d := openWritableTestDB(t)
+	base := time.Now().UnixMilli()
+
+	seedFeedItemFetched(t, d, "t_head", "old_user", base+10_000, base)
+	seedFeedItemFetched(t, d, "t_newly_fetched", "late_arrival", base-10_000, base+1000)
+
+	got, err := d.GetNewPosterAvatars("", "t_head", 3)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(got) != 1 || got[0].AuthorHandle != "late_arrival" {
+		t.Fatalf("want newly fetched older post, got %+v", got)
 	}
 }
 

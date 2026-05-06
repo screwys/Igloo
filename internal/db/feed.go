@@ -1133,12 +1133,49 @@ func (db *DB) GetLatestFeedItem() (*model.FeedItem, error) {
 	return &items[0], nil
 }
 
+// GetLatestFetchedFeedItem returns the most recently fetched feed item, or nil if none.
+func (db *DB) GetLatestFetchedFeedItem() (*model.FeedItem, error) {
+	rows, err := db.conn.Query(`
+		SELECT tweet_id, COALESCE(source_handle,''), author_handle,
+		       COALESCE(author_display_name,''), COALESCE(author_avatar_url,''),
+		       COALESCE(body_text,''), COALESCE(lang,''),
+		       COALESCE(is_retweet,0), COALESCE(retweeted_by_handle,''),
+		       COALESCE(retweeted_by_display_name,''),
+		       COALESCE(quote_tweet_id,''), COALESCE(quote_author_handle,''),
+		       COALESCE(quote_author_display_name,''), COALESCE(quote_author_avatar_url,''),
+		       COALESCE(quote_body_text,''), COALESCE(quote_lang,''),
+		       COALESCE(quote_media_json,''), COALESCE(media_json,''),
+		       COALESCE(canonical_url,''), COALESCE(reply_to_handle,''),
+		       COALESCE(reply_to_status,''),
+		       COALESCE(is_reply,0), COALESCE(is_ghost,0),
+		       quote_published_at,
+		       COALESCE(views,0), COALESCE(likes,0), COALESCE(retweets,0),
+		       published_at, fetched_at,
+		       COALESCE(content_hash,''), COALESCE(canonical_tweet_id,'')
+		FROM feed_items
+		ORDER BY fetched_at DESC, tweet_id DESC
+		LIMIT 1
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items, err := scanFeedItems(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
+}
+
 // GetNewPosterAvatars returns up to `limit` unique new posters for the "new
 // posts" bar avatar stack. The candidate set is feed_items with
-// published_at > knownHeadTweetID.published_at, excluding muted accounts.
+// fetched_at > knownHeadTweetID.fetched_at, excluding muted accounts.
 //
 // Ranking: snapshot winners first (ordered by final_score DESC), then
-// recency-based fill (published_at DESC) for authors not yet represented.
+// newly fetched fill (fetched_at DESC) for authors not yet represented.
 // Dedupes by lower(author_handle). Avatar URLs prefer channel_profiles.avatar_url
 // (direct twimg URL) and fall back to /api/media/avatar/twitter_<handle_lower>
 // so already-cached local avatars still render through the proxy.
@@ -1149,17 +1186,17 @@ func (db *DB) GetNewPosterAvatars(username, knownHeadTweetID string, limit int) 
 		return nil, nil
 	}
 
-	var knownPubAt sql.NullInt64
+	var knownFetchedAt sql.NullInt64
 	if err := db.conn.QueryRow(
-		"SELECT published_at FROM feed_items WHERE tweet_id = ? LIMIT 1",
+		"SELECT fetched_at FROM feed_items WHERE tweet_id = ? LIMIT 1",
 		knownHeadTweetID,
-	).Scan(&knownPubAt); err != nil {
+	).Scan(&knownFetchedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
-	if !knownPubAt.Valid {
+	if !knownFetchedAt.Valid {
 		return nil, nil
 	}
 
@@ -1212,10 +1249,10 @@ func (db *DB) GetNewPosterAvatars(username, knownHeadTweetID string, limit int) 
 			JOIN feed_items fi ON fi.tweet_id = s.tweet_id
 			` + profileJoin + `
 			WHERE s.username = ?
-			  AND fi.published_at > ?` + muteSQL + `
+			  AND fi.fetched_at > ?` + muteSQL + `
 			ORDER BY s.final_score DESC
 		`
-		snapArgs := append([]any{username, knownPubAt.Int64}, muteArgs...)
+		snapArgs := append([]any{username, knownFetchedAt.Int64}, muteArgs...)
 		rows, err := db.conn.Query(snapQuery, snapArgs...)
 		if err == nil {
 			for rows.Next() && len(out) < limit {
@@ -1237,11 +1274,11 @@ func (db *DB) GetNewPosterAvatars(username, knownHeadTweetID string, limit int) 
 			       ` + avatarSelect + `
 			FROM feed_items fi
 			` + profileJoin + `
-			WHERE fi.published_at > ?` + muteSQL + `
-			ORDER BY fi.published_at DESC
+			WHERE fi.fetched_at > ?` + muteSQL + `
+			ORDER BY fi.fetched_at DESC, fi.tweet_id DESC
 			LIMIT 50
 		`
-		recentArgs := append([]any{knownPubAt.Int64}, muteArgs...)
+		recentArgs := append([]any{knownFetchedAt.Int64}, muteArgs...)
 		rows, err := db.conn.Query(recentQuery, recentArgs...)
 		if err == nil {
 			for rows.Next() && len(out) < limit {
