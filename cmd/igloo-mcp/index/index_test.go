@@ -158,3 +158,66 @@ data class FeedItemEntity(val id: String)
 		t.Fatalf("expected rewritten screen trace to include vm + dao + table, got:\n%s", trace)
 	}
 }
+
+func TestCodeIndexBuildConfigMap(t *testing.T) {
+	root := t.TempDir()
+
+	mustWrite := func(rel, body string) {
+		path := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	mustWrite(".mcp.json", `{
+  "mcpServers": {
+    "igloo": {
+      "command": "./bin/igloo-mcp"
+    }
+  }
+}`)
+	mustWrite("compose.yaml", `services:
+  igloo:
+    image: ghcr.io/screwys/igloo:latest
+  rsshub:
+    image: ghcr.io/diygod/rsshub:chromium-bundled
+`)
+	mustWrite(".semgrep.yml", `rules:
+  - id: igloo.shell-wrapper-command
+`)
+	mustWrite(".github/workflows/go-ci.yml", `name: Go CI
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+`)
+
+	idx := New(root)
+	stats := idx.Build()
+	if !strings.Contains(stats, "config_files=4") {
+		t.Fatalf("expected config file count in build stats, got %s", stats)
+	}
+
+	configMap := idx.GetConfigMap("")
+	for _, want := range []string{
+		".mcp.json [mcp]",
+		"command: ./bin/igloo-mcp",
+		"compose.yaml [compose]",
+		"service: rsshub",
+		"rule: igloo.shell-wrapper-command",
+		"action: actions/setup-go@v6",
+	} {
+		if !strings.Contains(configMap, want) {
+			t.Fatalf("expected %q in config map, got:\n%s", want, configMap)
+		}
+	}
+
+	trace := idx.TraceFile(".github/workflows/go-ci.yml")
+	if !strings.Contains(trace, "layer: config") || !strings.Contains(trace, "actions/checkout@v5") {
+		t.Fatalf("expected workflow trace to include config layer and action, got:\n%s", trace)
+	}
+}

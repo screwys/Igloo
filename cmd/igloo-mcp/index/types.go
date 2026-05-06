@@ -17,12 +17,19 @@ func (e *Endpoint) Key() string { return e.Method + " " + e.Path }
 // FileNode represents a file in the dependency graph.
 type FileNode struct {
 	Path       string
-	Layer      string // "server", "template", "js", "android", "css"
+	Layer      string // "server", "template", "js", "android", "css", "config"
 	Endpoints  []string
 	Exports    []string
 	Imports    []string
 	ImportedBy []string
 	DBTables   []TableRef
+}
+
+// ConfigFileInfo holds a compact overview of repo configuration files.
+type ConfigFileInfo struct {
+	Path    string
+	Kind    string
+	Entries []string
 }
 
 // TableRef represents a SQL table access in a file.

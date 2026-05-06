@@ -1,6 +1,7 @@
 package index
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -62,6 +63,7 @@ type CodeIndex struct {
 	androidEntities []AndroidEntityInfo
 	androidNavOrder []string
 	androidClasses  map[string]*AndroidClassInfo
+	configFiles     []ConfigFileInfo
 	debugEvents     []DebugEvent
 	buildTime       time.Duration
 }
@@ -97,11 +99,12 @@ func (idx *CodeIndex) Build() string {
 	idx.scanGoSymbols()
 	idx.scanCSSSymbols()
 	idx.scanWorkers()
+	idx.scanConfigFiles()
 	idx.buildTime = time.Since(start)
-	return fmt.Sprintf("endpoints=%d files=%d tables=%d areas=%d symbols=%d templ_components=%d workers=%d debug_events=%d time=%dms",
+	return fmt.Sprintf("endpoints=%d files=%d tables=%d areas=%d symbols=%d templ_components=%d workers=%d config_files=%d debug_events=%d time=%dms",
 		len(idx.endpoints), len(idx.files), len(idx.tables),
 		len(idx.areas), len(idx.symbols), len(idx.templComps), len(idx.workers),
-		len(idx.debugEvents), idx.buildTime.Milliseconds())
+		len(idx.configFiles), len(idx.debugEvents), idx.buildTime.Milliseconds())
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -327,6 +330,144 @@ func (idx *CodeIndex) scanCSSSymbols() {
 		idx.symbols = append(idx.symbols, ScanCSS(source, relpath)...)
 		return nil
 	})
+}
+
+func (idx *CodeIndex) scanConfigFiles() {
+	candidates := idx.configCandidates()
+	for _, relpath := range candidates {
+		source := idx.readFile(relpath)
+		if source == "" {
+			continue
+		}
+		info := ConfigFileInfo{
+			Path:    relpath,
+			Kind:    configKind(relpath),
+			Entries: configEntries(relpath, source),
+		}
+		idx.configFiles = append(idx.configFiles, info)
+		node := idx.ensureFile(relpath, "config")
+		node.Exports = append(node.Exports, info.Entries...)
+	}
+}
+
+func (idx *CodeIndex) configCandidates() []string {
+	seen := map[string]bool{}
+	var candidates []string
+	add := func(relpath string) {
+		if relpath == "" || seen[relpath] {
+			return
+		}
+		seen[relpath] = true
+		candidates = append(candidates, relpath)
+	}
+
+	for _, relpath := range []string{".mcp.json", ".semgrep.yml", "compose.yaml"} {
+		if _, err := os.Stat(filepath.Join(idx.root, relpath)); err == nil {
+			add(relpath)
+		}
+	}
+
+	workflowsDir := filepath.Join(idx.root, ".github", "workflows")
+	filepath.WalkDir(workflowsDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if strings.HasSuffix(d.Name(), ".yml") || strings.HasSuffix(d.Name(), ".yaml") {
+			add(idx.relpath(path))
+		}
+		return nil
+	})
+
+	sort.Strings(candidates)
+	return candidates
+}
+
+func configKind(path string) string {
+	switch {
+	case path == ".mcp.json":
+		return "mcp"
+	case path == "compose.yaml":
+		return "compose"
+	case path == ".semgrep.yml":
+		return "semgrep"
+	case strings.HasPrefix(path, ".github/workflows/"):
+		return "github_actions"
+	default:
+		return "config"
+	}
+}
+
+func configEntries(path, source string) []string {
+	seen := map[string]bool{}
+	var entries []string
+	add := func(entry string) {
+		entry = strings.TrimSpace(entry)
+		if entry == "" || seen[entry] {
+			return
+		}
+		seen[entry] = true
+		entries = append(entries, entry)
+	}
+
+	lines := strings.Split(source, "\n")
+	switch configKind(path) {
+	case "github_actions":
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "name:") {
+				add("workflow: " + strings.TrimSpace(strings.TrimPrefix(trimmed, "name:")))
+			}
+			if strings.HasPrefix(trimmed, "- uses:") {
+				uses := strings.TrimSpace(strings.TrimPrefix(trimmed, "- uses:"))
+				add("action: " + uses)
+			} else if strings.HasPrefix(trimmed, "uses:") {
+				uses := strings.TrimSpace(strings.TrimPrefix(trimmed, "uses:"))
+				add("action: " + uses)
+			}
+		}
+	case "compose":
+		inServices := false
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "services:" {
+				inServices = true
+				continue
+			}
+			if inServices && strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") && strings.Contains(line, ":") {
+				add("service: " + strings.TrimSuffix(strings.TrimSpace(line), ":"))
+			}
+			if strings.Contains(line, "image:") {
+				add("image: " + strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "image:")))
+			}
+		}
+	case "semgrep":
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "- id:") {
+				add("rule: " + strings.TrimSpace(strings.TrimPrefix(trimmed, "- id:")))
+			}
+		}
+	case "mcp":
+		var parsed struct {
+			MCPServers map[string]struct {
+				Command string `json:"command"`
+			} `json:"mcpServers"`
+		}
+		if err := json.Unmarshal([]byte(source), &parsed); err == nil {
+			var names []string
+			for name := range parsed.MCPServers {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+			for _, name := range names {
+				add("server: " + name)
+				if parsed.MCPServers[name].Command != "" {
+					add("command: " + parsed.MCPServers[name].Command)
+				}
+			}
+		}
+	}
+	sort.Strings(entries)
+	return entries
 }
 
 func (idx *CodeIndex) computeAreas() {
@@ -615,7 +756,7 @@ func (idx *CodeIndex) GetContext(area string) string {
 		}
 		byLayer[layer] = append(byLayer[layer], f)
 	}
-	for _, layer := range []string{"server", "template", "js", "android", "css"} {
+	for _, layer := range []string{"server", "template", "js", "android", "css", "config"} {
 		lf := byLayer[layer]
 		if len(lf) > 0 {
 			sort.Strings(lf)
@@ -624,6 +765,35 @@ func (idx *CodeIndex) GetContext(area string) string {
 				fmt.Fprintf(&sb, "  %s\n", f)
 			}
 			sb.WriteString("\n")
+		}
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+// GetConfigMap lists indexed repo configuration files and their key entries.
+func (idx *CodeIndex) GetConfigMap(filter string) string {
+	filter = strings.ToLower(strings.TrimSpace(filter))
+	var matches []ConfigFileInfo
+	for _, info := range idx.configFiles {
+		haystack := strings.ToLower(info.Path + " " + info.Kind + " " + strings.Join(info.Entries, " "))
+		if filter == "" || strings.Contains(haystack, filter) {
+			matches = append(matches, info)
+		}
+	}
+	if len(matches) == 0 {
+		if filter == "" {
+			return "No config files found in index"
+		}
+		return fmt.Sprintf("No config files found matching '%s'", filter)
+	}
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].Path < matches[j].Path
+	})
+	var sb strings.Builder
+	for _, info := range matches {
+		fmt.Fprintf(&sb, "%s [%s]\n", info.Path, info.Kind)
+		for _, entry := range info.Entries {
+			fmt.Fprintf(&sb, "  %s\n", entry)
 		}
 	}
 	return strings.TrimRight(sb.String(), "\n")

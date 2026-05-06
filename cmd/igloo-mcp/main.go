@@ -283,6 +283,13 @@ func main() {
 		return textResult(getIndex().GetJSMap(req.GetString("filter", "")))
 	})
 
+	s.AddTool(mcp.NewTool("get_config_map",
+		mcp.WithDescription("Overview of repo configuration files: MCP, GitHub Actions workflows, Compose services, and Semgrep rules."),
+		mcp.WithString("filter", mcp.Description("Optional: filter by path, kind, action, service, image, rule, or command.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return textResult(getIndex().GetConfigMap(req.GetString("filter", "")))
+	})
+
 	s.AddTool(mcp.NewTool("trace_page",
 		mcp.WithDescription("Trace a web page's full rendering chain: handler → templates → JS files → API calls → server handlers → DB tables."),
 		mcp.WithString("page", mcp.Required(), mcp.Description("Page name or path substring, e.g. 'feed', 'player', 'shorts'.")),
