@@ -245,3 +245,72 @@ func TestListPreDiversityRanked_RecencyBoostPrioritizesFreshItems(t *testing.T) 
 			rows[0].FreshnessBonus, rows[1].FreshnessBonus)
 	}
 }
+
+func TestListPreDiversityRanked_DemotesAlreadySeenUnderlyingTweet(t *testing.T) {
+	d := openWritableTestDB(t)
+	user := "alice"
+	now := time.Now()
+	publishedAt := now.Add(-time.Hour).UnixMilli()
+
+	insertItem := func(tweetID, author, quoteTweetID string, interest float64) {
+		t.Helper()
+		quoteAuthor := ""
+		if quoteTweetID != "" {
+			quoteAuthor = "base_author"
+		}
+		if _, err := d.conn.Exec(`INSERT INTO feed_items
+				(tweet_id, author_handle, source_handle, quote_tweet_id, quote_author_handle,
+				 body_text, published_at, algo_interest, algo_scored_at)
+				VALUES (?, ?, ?, ?, ?, 'body', ?, ?, 1)`,
+			tweetID, author, author, quoteTweetID, quoteAuthor, publishedAt, interest,
+		); err != nil {
+			t.Fatalf("insert %s: %v", tweetID, err)
+		}
+	}
+	markSeen := func(tweetID string) {
+		t.Helper()
+		if _, err := d.conn.Exec(
+			`INSERT INTO feed_seen (username, tweet_id, seen_at) VALUES (?, ?, ?)`,
+			user, tweetID, now.UnixMilli(),
+		); err != nil {
+			t.Fatalf("mark seen %s: %v", tweetID, err)
+		}
+	}
+
+	insertItem("plain_candidate", "plain_author", "", 30)
+	insertItem("seen_base_once", "base_author", "", 0)
+	insertItem("quote_candidate_once", "quote_author", "seen_base_once", 30)
+	markSeen("seen_base_once")
+
+	insertItem("seen_base_twice", "base_author", "", 0)
+	insertItem("seen_quote_wrapper", "prior_quote_author", "seen_base_twice", 0)
+	insertItem("quote_candidate_twice", "second_quote_author", "seen_base_twice", 30)
+	markSeen("seen_base_twice")
+	markSeen("seen_quote_wrapper")
+
+	insertItem("original_candidate_seen_via_quote", "base_author", "", 30)
+	insertItem("seen_quote_for_original", "prior_quote_author", "original_candidate_seen_via_quote", 0)
+	markSeen("seen_quote_for_original")
+
+	rows, err := d.ListPreDiversityRanked(user)
+	if err != nil {
+		t.Fatalf("ListPreDiversityRanked: %v", err)
+	}
+	baseByID := map[string]float64{}
+	for _, row := range rows {
+		baseByID[row.TweetID] = row.BaseScore
+	}
+
+	if got := baseByID["plain_candidate"]; math.Abs(got-30) > 0.1 {
+		t.Fatalf("plain candidate base = %.3f, want unchanged 30", got)
+	}
+	if got := baseByID["quote_candidate_once"]; math.Abs(got-25) > 0.1 {
+		t.Fatalf("one-seen quote base = %.3f, want 25", got)
+	}
+	if got := baseByID["quote_candidate_twice"]; math.Abs(got-18) > 0.1 {
+		t.Fatalf("twice-seen quote base = %.3f, want 18", got)
+	}
+	if got := baseByID["original_candidate_seen_via_quote"]; math.Abs(got-25) > 0.1 {
+		t.Fatalf("original seen through quote base = %.3f, want 25", got)
+	}
+}

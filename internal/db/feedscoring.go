@@ -147,8 +147,8 @@ func (db *DB) ListRankedFeedItems(username string, limit int, offset int) ([]mod
 	// Apply the shared retweet/quote filter (dedup-aware, self-pass).
 	where = append(where, retweetFilterClause("fi"))
 
-	// Skip items that can't possibly rank: zero interest/absence AND past the fresh bonus window.
-	where = append(where, fmt.Sprintf("((fi.algo_interest + fi.absence_boost) > 0 OR fi.published_at > (CAST(strftime('%%s','now') AS INTEGER) - %.1f*3600) * 1000)", feedFreshnessBonusWindowHours))
+	// Skip items that can't possibly rank: zero post-penalty interest/absence AND past the fresh bonus window.
+	where = append(where, fmt.Sprintf("(%s > 0 OR fi.published_at > (CAST(strftime('%%s','now') AS INTEGER) - %.1f*3600) * 1000)", feedRankingBaseScoreSQL("fi"), feedFreshnessBonusWindowHours))
 
 	whereClause := ""
 	if len(where) > 0 {
@@ -158,8 +158,9 @@ func (db *DB) ListRankedFeedItems(username string, limit int, offset int) ([]mod
 	capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost := db.feedAbsenceBoostConfig()
 	absenceExpr := feedAbsenceBoostSelect("fi")
 	starredAbsenceExpr := feedStarredAbsenceBoostSelect("fi")
-	fromSQL := feedRankingFromSQL(absenceExpr, starredAbsenceExpr)
-	args = append(feedAbsenceBoostArgs(username, capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost), args...)
+	relatedSeenExpr := feedRelatedSeenCountSelect("fi")
+	fromSQL := feedRankingFromSQL(relatedSeenExpr, absenceExpr, starredAbsenceExpr)
+	args = append(feedRankingArgs(username, capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost), args...)
 	decaySQL := feedDecaySQL()
 	freshnessSQL := feedFreshnessSQL()
 
@@ -180,15 +181,15 @@ func (db *DB) ListRankedFeedItems(username string, limit int, offset int) ([]mod
 		       COALESCE(fi.views,0), COALESCE(fi.likes,0), COALESCE(fi.retweets,0),
 		       fi.published_at, fi.fetched_at,
 			       COALESCE(fi.content_hash,''), COALESCE(fi.canonical_tweet_id,''),
-			       (fi.algo_interest + fi.absence_boost) * %s
-			       + %s
-			       + fi.starred_absence_boost
-			       AS final_score
+				       %s * %s
+				       + %s
+				       + fi.starred_absence_boost
+				       AS final_score
 			%s
 			%s
 			ORDER BY final_score DESC, fi.tweet_id DESC
 			LIMIT ? OFFSET ?
-		`, decaySQL, freshnessSQL, fromSQL, whereClause)
+			`, feedRankingBaseScoreSQL("fi"), decaySQL, freshnessSQL, fromSQL, whereClause)
 	args = append(args, limit, offset)
 
 	rows, err := db.conn.Query(query, args...)
