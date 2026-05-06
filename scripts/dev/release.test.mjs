@@ -3,11 +3,13 @@ import test from "node:test";
 
 import {
   bumpSemver,
+  normalizeReleaseBump,
   planAutomaticRelease,
   renderReleaseNotes,
   updateAndroidBuildGradle,
   updatePackageJsonText,
   updatePackageLockText,
+  updateReleaseBumpText,
 } from "./release.mjs";
 
 test("bumps patch and minor versions", () => {
@@ -18,6 +20,12 @@ test("bumps patch and minor versions", () => {
 test("rejects unsupported version bumps", () => {
   assert.throws(() => bumpSemver("1.0.0", "major"), /unsupported bump/);
   assert.throws(() => bumpSemver("1.0", "patch"), /invalid semver/);
+});
+
+test("normalizes tracked release bump state", () => {
+  assert.equal(normalizeReleaseBump(" minor\n"), "minor");
+  assert.equal(updateReleaseBumpText("patch"), "patch\n");
+  assert.throws(() => normalizeReleaseBump("major"), /unsupported bump/);
 });
 
 test("plans automatic releases every 10 commits", () => {
@@ -46,16 +54,30 @@ test("plans automatic releases every 10 commits", () => {
   });
 });
 
-test("uses a release minor marker for automatic minor releases", () => {
+test("plans automatic minor releases from explicit bump state", () => {
   const commits = Array.from({ length: 10 }, (_, index) => ({
     sha: `${index}`.repeat(40).slice(0, 40),
     subject: `change ${index}`,
-    body: index === 4 ? "release: minor" : "",
+    body: "",
   }));
 
-  assert.deepEqual(planAutomaticRelease(commits, 10), {
+  assert.deepEqual(planAutomaticRelease(commits, 10, "minor"), {
     shouldRelease: true,
     bump: "minor",
+    commitCount: 10,
+  });
+});
+
+test("does not use commit messages as release bump markers", () => {
+  const commits = Array.from({ length: 10 }, (_, index) => ({
+    sha: `${index}`.repeat(40).slice(0, 40),
+    subject: index === 4 ? "release: minor" : `change ${index}`,
+    body: index === 5 ? "release: minor" : "",
+  }));
+
+  assert.deepEqual(planAutomaticRelease(commits, 10, "patch"), {
+    shouldRelease: true,
+    bump: "patch",
     commitCount: 10,
   });
 });

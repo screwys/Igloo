@@ -26,7 +26,7 @@
 ## Releases
 
 - Use patch releases for small fixes and minor releases for larger user-visible changes.
-- Automatic releases batch every 10 unreleased commits; use `release: minor` in the commit body for larger user-visible batches.
+- Automatic releases batch every 10 unreleased commits; set `.github/release-bump` to `minor` for larger user-visible batches.
 - Release notes should list the exact commits since the previous tag.
 
 ## Server And Web

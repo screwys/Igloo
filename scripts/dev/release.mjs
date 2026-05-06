@@ -23,17 +23,25 @@ export function bumpSemver(version, bump) {
   }
 }
 
-export function planAutomaticRelease(commits, threshold = 10) {
+export function normalizeReleaseBump(value) {
+  const bump = String(value || "patch").trim().toLowerCase();
+  if (bump !== "patch" && bump !== "minor") {
+    throw new Error(`unsupported bump: ${value}`);
+  }
+  return bump;
+}
+
+export function updateReleaseBumpText(value) {
+  return `${normalizeReleaseBump(value)}\n`;
+}
+
+export function planAutomaticRelease(commits, threshold = 10, requestedBump = "patch") {
   const commitCount = commits.length;
   const shouldRelease = commitCount >= threshold;
-  const hasMinorMarker = commits.some((commit) => {
-    const message = `${commit.subject || ""}\n${commit.body || ""}`;
-    return /^release:\s*minor\s*$/im.test(message);
-  });
 
   return {
     shouldRelease,
-    bump: hasMinorMarker ? "minor" : "patch",
+    bump: normalizeReleaseBump(requestedBump),
     commitCount,
   };
 }
@@ -146,6 +154,7 @@ function parseArgs(argv) {
     bump: argv[1],
     notesPath: "release-notes.md",
     threshold: 10,
+    bumpFile: ".github/release-bump",
   };
 
   const optionStart = out.command === "prepare" ? 2 : 1;
@@ -160,6 +169,10 @@ function parseArgs(argv) {
       if (!Number.isFinite(out.threshold) || out.threshold < 1) {
         throw new Error("threshold must be a positive integer");
       }
+      continue;
+    }
+    if (arg === "--bump-file") {
+      out.bumpFile = argv[++i];
       continue;
     }
     throw new Error(`unknown argument: ${arg}`);
@@ -187,6 +200,7 @@ function prepareRelease(argv) {
   const packagePath = resolve("package.json");
   const packageLockPath = resolve("package-lock.json");
   const androidPath = resolve("android/app/build.gradle.kts");
+  const bumpPath = resolve(args.bumpFile);
 
   const packageText = readFileSync(packagePath, "utf8");
   const packageLockText = readFileSync(packageLockPath, "utf8");
@@ -215,7 +229,8 @@ function prepareRelease(argv) {
   let bump = args.bump;
   let shouldRelease = true;
   if (args.command === "prepare-auto") {
-    const plan = planAutomaticRelease(commits, args.threshold);
+    const bumpText = readFileSync(bumpPath, "utf8");
+    const plan = planAutomaticRelease(commits, args.threshold, bumpText);
     bump = plan.bump;
     shouldRelease = plan.shouldRelease;
     if (!shouldRelease) {
@@ -252,6 +267,9 @@ function prepareRelease(argv) {
       androidVersion.versionCode + 1,
     ),
   );
+  if (args.command === "prepare-auto") {
+    writeFileSync(bumpPath, updateReleaseBumpText("patch"));
+  }
   writeFileSync(
     resolve(args.notesPath),
     renderReleaseNotes({

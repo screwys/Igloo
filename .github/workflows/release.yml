@@ -54,7 +54,7 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             node scripts/dev/release.mjs prepare "${INPUT_BUMP:-patch}" --notes release-notes.md
           else
-            node scripts/dev/release.mjs prepare-auto --threshold 10 --notes release-notes.md
+            node scripts/dev/release.mjs prepare-auto --threshold 10 --bump-file .github/release-bump --notes release-notes.md
           fi
 
       - name: Commit and tag release
@@ -62,7 +62,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json android/app/build.gradle.kts
+          git add package.json package-lock.json android/app/build.gradle.kts .github/release-bump
           git diff --cached --quiet && exit 1
           git commit -m "release ${{ steps.release.outputs.version }}"
           git tag -a "${{ steps.release.outputs.tag }}" -m "release ${{ steps.release.outputs.version }}"
