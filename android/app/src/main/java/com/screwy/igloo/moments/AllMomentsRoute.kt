@@ -84,7 +84,7 @@ private fun AllMomentsHeader(
     onBack: () -> Unit,
 ) {
     val allLabel = stringResource(R.string.moments_label_all)
-    val followingLabel = stringResource(R.string.action_following)
+    val followingLabel = stringResource(R.string.shorts_tab_following)
     val storiesLabel = stringResource(R.string.shorts_tab_stories)
     val colors = MaterialTheme.iglooColors
     Row(
