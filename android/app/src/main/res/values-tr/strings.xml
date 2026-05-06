@@ -102,7 +102,7 @@
     <string name="action_unfollow_account">Hesabı takipten çıkar</string>
     <string name="action_unlike">Beğenmekten vazgeç</string>
     <string name="action_unmute">Sesi aç</string>
-    <string name="action_unmute_account_handle">@%1$s hesabının sesini aç</string>
+    <string name="action_unmute_account_handle">@%1$s hesabını sessizden çıkar</string>
     <string name="action_unpin_temp_video">Video sabitlemesini kaldır</string>
     <string name="action_unsave">Kaydedilenlerden çıkar</string>
     <string name="action_unstar">Favorilerden çıkar</string>
@@ -494,8 +494,8 @@
     <string name="settings_backup_help">Ayrı bir klasör seçin. Veritabanı ve ayarlar her gün yedeklenir; yalnızca son 5 yedek saklanır.</string>
     <string name="settings_bookmark_per_category">Kategoriye göre ayarlar</string>
     <string name="settings_check_interval_hours">Kontrol sıklığı (saat)</string>
-    <string name="settings_clear_muted_help">Tüm sessize alınan hesapların sesi açılacak ve gönderileri tekrar akışınızda görünebilecek.</string>
-    <string name="settings_clear_muted_title">Sessize alınan hesaplar temizlensin mi?</string>
+    <string name="settings_clear_muted_help">Tüm sessize alınan hesaplar sessizden çıkarılacak ve gönderileri tekrar akışınızda görünebilecek.</string>
+    <string name="settings_clear_muted_title">Sessize alınan hesaplar sessizden çıkarılsın mı?</string>
     <string name="settings_cookie_files">Çerez dosyaları</string>
     <string name="settings_cookie_files_help">Kimlik doğrulama isteyen platformlar için Netscape biçiminde çerez dosyaları yükleyin.</string>
     <string name="settings_dearrow_casual">Hafif</string>
@@ -627,7 +627,7 @@
     <string name="settings_ui_language">Arayüz dili</string>
     <string name="settings_ui_language_help">Çeviriler yerel Weblate kataloğundan yüklenir.</string>
     <string name="settings_unmute_help">Eşitleme tamamlandıktan sonra gönderileri akışınızda tekrar görünebilir.</string>
-    <string name="settings_unmute_title">@%1$s sesi açılsın mı?</string>
+    <string name="settings_unmute_title">@%1$s sessizden çıkarılsın mı?</string>
     <string name="settings_video_quality">Video kalitesi</string>
     <string name="settings_wifi_only">Yalnızca Wi-Fi</string>
     <string name="settings_youtube_check_interval_hours">Varsayılan YouTube kontrol sıklığı (saat)</string>
