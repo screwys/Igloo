@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/screwys/igloo/internal/db"
@@ -100,5 +101,46 @@ func TestFeedMediaJobRowsForItemsUsesQuoteMedia(t *testing.T) {
 	}
 	if jobs[0].SlideCount != 2 {
 		t.Fatalf("job slide count = %d, want 2", jobs[0].SlideCount)
+	}
+}
+
+func TestUpsertFeedItemsBatchBackfillsTruncatedQuoteText(t *testing.T) {
+	d := newTestWorkerDB(t)
+	truncated := strings.Repeat("a", truncQuoteThreshold+6)
+	fullText := truncated + " and this is the missing note tweet tail"
+	m := &Manager{
+		db:            d,
+		cfg:           testCfg(t.TempDir()),
+		avatarRequest: make(chan string, 1),
+		quoteTextFetcher: func(_ context.Context, handle, tweetID string) (string, error) {
+			if handle != "quote_author" || tweetID != "quote_1" {
+				t.Fatalf("fetch quote text for %s/%s, want quote_author/quote_1", handle, tweetID)
+			}
+			return fullText, nil
+		},
+	}
+
+	n, err := m.upsertFeedItemsBatch(context.Background(), []model.FeedItem{{
+		TweetID:           "parent_1",
+		SourceHandle:      "twitter_source",
+		AuthorHandle:      "parent_author",
+		BodyText:          "parent text",
+		QuoteTweetID:      "quote_1",
+		QuoteAuthorHandle: "quote_author",
+		QuoteBodyText:     truncated,
+	}}, "test")
+	if err != nil {
+		t.Fatalf("upsertFeedItemsBatch: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("upserted = %d, want 1", n)
+	}
+
+	var got string
+	if err := d.QueryRow(`SELECT quote_body_text FROM feed_items WHERE tweet_id = 'parent_1'`).Scan(&got); err != nil {
+		t.Fatalf("query quote text: %v", err)
+	}
+	if got != fullText {
+		t.Fatalf("quote text = %q, want %q", got, fullText)
 	}
 }

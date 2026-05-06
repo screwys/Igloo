@@ -150,6 +150,10 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 	log.Printf("[rsshub] ingest cycle start (delay %s, cycle ~%s): %d ready, %d not_due, %d cooling, %d total",
 		fetchDelay, cycleInterval.Round(time.Minute), len(fetchList), notDue, cooling, len(twitterChannels))
 
+	// Repair rows left in RSSHub's quote-text truncation window before new
+	// fetches start, so interrupted cycles do not leave old quotes stuck.
+	m.backfillTruncatedQuoteTextSweep(ctx)
+
 	if len(fetchList) == 0 && len(feedSources) == 0 {
 		return
 	}
@@ -240,16 +244,12 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 
 		// Periodic batch upsert to avoid holding too much in memory.
 		if len(pendingItems) >= batchSize {
-			n, upsertErr := m.db.UpsertFeedItems(pendingItems)
+			n, upsertErr := m.upsertFeedItemsBatch(ctx, pendingItems, "batch")
 			if upsertErr != nil {
 				log.Printf("[rsshub] UpsertFeedItems (batch): %v", upsertErr)
 			} else {
 				totalUpserted += n
-				m.primeFeedItemProfiles(ctx, pendingItems)
 			}
-			// Resolve reply chains for THIS batch so threads are joinable
-			// before the next batch becomes visible to readers.
-			m.resolveReplyChains(ctx, pendingItems)
 			pendingItems = pendingItems[:0]
 
 			if len(pendingJobs) > 0 {
@@ -280,14 +280,12 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 
 	// Final batch upsert for remaining items.
 	if len(pendingItems) > 0 {
-		n, upsertErr := m.db.UpsertFeedItems(pendingItems)
+		n, upsertErr := m.upsertFeedItemsBatch(ctx, pendingItems, "final")
 		if upsertErr != nil {
 			log.Printf("[rsshub] UpsertFeedItems (final): %v", upsertErr)
 		} else {
 			totalUpserted += n
-			m.primeFeedItemProfiles(ctx, pendingItems)
 		}
-		m.resolveReplyChains(ctx, pendingItems)
 	}
 
 	// Final batch of media jobs.
@@ -317,9 +315,6 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 	// Backfill quote data for truncated retweets ingested this cycle.
 	m.backfillTruncatedQuotes(ctx, allItems)
 
-	// Backfill truncated quote body text via fxtwitter API.
-	m.backfillTruncatedQuoteText(ctx, allItems)
-
 	// Reply chain resolution runs per-batch inside the fetch loop above so
 	// threads are joinable before items become visible to readers, instead
 	// of deferring to end-of-cycle (which can be ~3 hours).
@@ -342,6 +337,19 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 	log.Printf("[rsshub] %s", detail)
 	m.Emit("rsshub", fmt.Sprintf("Ingested %d items from %d sources", totalUpserted, len(fetchList)), "done")
 	m.setStatus("rsshub_ingest", workerStatus("rsshub_ingest", true, detail, ""))
+}
+
+func (m *Manager) upsertFeedItemsBatch(ctx context.Context, items []model.FeedItem, label string) (int, error) {
+	n, err := m.db.UpsertFeedItems(items)
+	if err != nil {
+		return 0, err
+	}
+	m.backfillTruncatedQuoteText(ctx, items, label)
+	m.primeFeedItemProfiles(ctx, items)
+	// Resolve reply chains for this batch so threads are joinable promptly,
+	// instead of waiting for the full ingest cycle to finish.
+	m.resolveReplyChains(ctx, items)
+	return n, nil
 }
 
 // httpError carries an HTTP status code alongside a fetch error.
@@ -469,15 +477,10 @@ func (m *Manager) FetchOneChannel(ctx context.Context, channelID string) (int, e
 		filtered[i].ParseMedia()
 	}
 
-	n, err := m.db.UpsertFeedItems(filtered)
+	n, err := m.upsertFeedItemsBatch(ctx, filtered, "single")
 	if err != nil {
 		return 0, fmt.Errorf("upsert: %w", err)
 	}
-	m.primeFeedItemProfiles(ctx, filtered)
-
-	// Resolve reply chains right away so the just-fetched replies are joinable
-	// before the user reloads the feed.
-	m.resolveReplyChains(ctx, filtered)
 
 	if !isStale {
 		jobs := feedMediaJobRowsForItems(filtered, settings)
@@ -526,17 +529,15 @@ func (m *Manager) upsertFeedSourceItems(ctx context.Context, source model.FeedSo
 	for i := range items {
 		items[i].ParseMedia()
 	}
-	n, err := m.db.UpsertFeedItems(items)
+	n, err := m.upsertFeedItemsBatch(ctx, items, "source")
 	if err != nil {
 		return 0, fmt.Errorf("upsert: %w", err)
 	}
-	m.primeFeedItemProfiles(ctx, items)
 	for _, item := range items {
 		if err := m.db.RecordFeedItemSources(item.TweetID, []string{source.SourceID}); err != nil {
 			return n, fmt.Errorf("record source attribution: %w", err)
 		}
 	}
-	m.resolveReplyChains(ctx, items)
 	jobs := feedMediaJobRowsForItems(items, nil)
 	if len(jobs) > 0 {
 		if err := m.db.EnqueueFeedMediaJobs(jobs); err != nil {
@@ -824,7 +825,7 @@ type quoteGroup struct {
 // backfillTruncatedQuoteText finds quote tweets from the current cycle whose
 // quote_body_text was truncated by RSSHub (~280 char limit) and fetches the
 // full text from the fxtwitter API.
-func (m *Manager) backfillTruncatedQuoteText(ctx context.Context, items []model.FeedItem) {
+func (m *Manager) backfillTruncatedQuoteText(ctx context.Context, items []model.FeedItem, label string) {
 	groups := map[string]*quoteGroup{}
 	for _, item := range items {
 		if item.QuoteTweetID == "" || item.QuoteAuthorHandle == "" || len(item.QuoteBodyText) < truncQuoteThreshold {
@@ -832,7 +833,10 @@ func (m *Manager) backfillTruncatedQuoteText(ctx context.Context, items []model.
 		}
 		addToQuoteGroup(groups, item.QuoteTweetID, item.QuoteAuthorHandle, item.TweetID)
 	}
-	m.runQuoteTextBackfill(ctx, groups, "cycle")
+	if label == "" {
+		label = "cycle"
+	}
+	m.runQuoteTextBackfill(ctx, groups, label)
 }
 
 // backfillTruncatedQuoteTextSweep retries fxtwitter for any DB rows still in
@@ -840,6 +844,9 @@ func (m *Manager) backfillTruncatedQuoteText(ctx context.Context, items []model.
 // (transient fxtwitter errors, deadline exceeded, etc.). Rate-limited to once
 // per quoteSweepMinInterval.
 func (m *Manager) backfillTruncatedQuoteTextSweep(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
 	last := time.Unix(m.lastQuoteSweepAt.Load(), 0)
 	if time.Since(last) < quoteSweepMinInterval {
 		return
@@ -954,6 +961,9 @@ var reTrailingTcoURL = regexp.MustCompile(`\s*https://t\.co/\S+$`)
 
 // fetchTweetText fetches the full tweet text from the fxtwitter API.
 func (m *Manager) fetchTweetText(ctx context.Context, handle, tweetID string) (string, error) {
+	if m.quoteTextFetcher != nil {
+		return m.quoteTextFetcher(ctx, handle, tweetID)
+	}
 	apiURL := "https://api.fxtwitter.com/" + handle + "/status/" + tweetID
 
 	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)

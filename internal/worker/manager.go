@@ -69,7 +69,8 @@ type Manager struct {
 	lastQuoteSweepAt atomic.Int64 // unix seconds; rate-limits backfillTruncatedQuoteTextSweep
 	lastReplySweepAt atomic.Int64 // unix seconds; rate-limits resolveReplyChainsSweep
 
-	replyResolver *ReplyResolver
+	replyResolver    *ReplyResolver
+	quoteTextFetcher func(context.Context, string, string) (string, error)
 
 	// dearrowFetcher is the configured DeArrow orchestrator. Nil means DeArrow
 	// fetching is disabled (e.g. unit tests that don't care about it).
