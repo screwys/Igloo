@@ -43,12 +43,24 @@ function fakeElement() {
   return element;
 }
 
-function buildHarness({ prompts = [], followHandles = [] } = {}) {
+function buildHarness({
+  prompts = [],
+  followHandles = [],
+  localList = [],
+  twitterChannels = [
+    {
+      channel_id: "twitter_alice",
+      url: "",
+    },
+  ],
+} = {}) {
   const values = new Map([
     ["igloo_sync_x_downloads", false],
     ["xsync_api_base", "http://127.0.0.1:5001"],
+    ["xsync_local_list", localList],
   ]);
   const requests = [];
+  const requestCalls = [];
   const menu = new Map();
   const promptCalls = [];
   const followButtons = followHandles.map((handle) => {
@@ -114,7 +126,12 @@ function buildHarness({ prompts = [], followHandles = [] } = {}) {
     GM_download() {},
     GM_xmlhttpRequest(options) {
       requests.push(options.url);
-      const response = responseFor(options.url);
+      requestCalls.push({
+        method: options.method,
+        url: options.url,
+        data: options.data,
+      });
+      const response = responseFor(options.url, { twitterChannels });
       queueMicrotask(() => {
         options.onload({
           status: response.status,
@@ -142,6 +159,7 @@ function buildHarness({ prompts = [], followHandles = [] } = {}) {
   return {
     context: vm.createContext(context),
     requests,
+    requestCalls,
     values,
     menu,
     promptCalls,
@@ -149,7 +167,7 @@ function buildHarness({ prompts = [], followHandles = [] } = {}) {
   };
 }
 
-function responseFor(url) {
+function responseFor(url, { twitterChannels } = {}) {
   if (url === "http://127.0.0.1:5001/api/health") {
     return {
       status: 400,
@@ -163,14 +181,21 @@ function responseFor(url) {
     return {
       status: 200,
       text: JSON.stringify({
-        channels: [
-          {
-            channel_id: "twitter_alice",
-            url: "",
-          },
-        ],
+        channels: twitterChannels,
       }),
     };
+  }
+  if (url === "https://localhost:5001/api/subscribe") {
+    return {
+      status: 201,
+      text: JSON.stringify({
+        success: true,
+        channel_id: "twitter_bob",
+      }),
+    };
+  }
+  if (url === "https://localhost:5001/api/unsubscribe/twitter_bob") {
+    return { status: 200, text: JSON.stringify({ success: true }) };
   }
   if (url === "https://localhost:5001/api/feed/sources?platform=twitter") {
     return { status: 200, text: JSON.stringify({ sources: [] }) };
@@ -193,11 +218,21 @@ async function drainMicrotasks() {
   }
 }
 
-test("uses the HTTPS localhost API when the legacy HTTP default hits a TLS listener", async () => {
-  const harness = buildHarness();
-  vm.runInContext(script, harness.context, {
+function runScript(harness, { exposeDebug = false } = {}) {
+  const source = exposeDebug
+    ? script.replace(
+        /\}\)\(\);\s*$/,
+        "globalThis.__iglooTest = { handleUnsave };\n})();",
+      )
+    : script;
+  vm.runInContext(source, harness.context, {
     filename: "igloo-site-sync.user.js",
   });
+}
+
+test("uses the HTTPS localhost API when the legacy HTTP default hits a TLS listener", async () => {
+  const harness = buildHarness();
+  runScript(harness);
 
   await drainMicrotasks();
 
@@ -215,9 +250,7 @@ test("uses the HTTPS localhost API when the legacy HTTP default hits a TLS liste
 
 test("recognizes followed X accounts from channel_id when the endpoint omits url", async () => {
   const harness = buildHarness({ followHandles: ["alice"] });
-  vm.runInContext(script, harness.context, {
-    filename: "igloo-site-sync.user.js",
-  });
+  runScript(harness);
 
   await drainMicrotasks();
 
@@ -228,9 +261,7 @@ test("login menu prompts for API URL before credentials and removes manual beare
   const harness = buildHarness({
     prompts: ["https://localhost:5001", "admin", "secret"],
   });
-  vm.runInContext(script, harness.context, {
-    filename: "igloo-site-sync.user.js",
-  });
+  runScript(harness);
 
   assert.equal(harness.menu.has("Set Dashboard Bearer Token"), false);
   const login = harness.menu.get("Login Dashboard (Store Token)");
@@ -255,5 +286,40 @@ test("uses follow wording for visible subscription labels", () => {
   assert.doesNotMatch(
     script,
     /Save source|Saved source|Toggle Local Save|Local save/,
+  );
+});
+
+test("ghost-resubscribed X handles can be unfollowed immediately", async () => {
+  const harness = buildHarness({
+    localList: [{ handle: "bob", url: "https://x.com/bob" }],
+    twitterChannels: [],
+  });
+  runScript(harness, { exposeDebug: true });
+
+  await drainMicrotasks();
+
+  assert.ok(
+    harness.requestCalls.some(
+      (call) =>
+        call.method === "POST" &&
+        call.url === "https://localhost:5001/api/subscribe",
+    ),
+    `expected ghost re-subscribe, got ${harness.requestCalls
+      .map((call) => `${call.method} ${call.url}`)
+      .join(", ")}`,
+  );
+
+  await harness.context.__iglooTest.handleUnsave("bob", null);
+  await drainMicrotasks();
+
+  assert.ok(
+    harness.requestCalls.some(
+      (call) =>
+        call.method === "DELETE" &&
+        call.url === "https://localhost:5001/api/unsubscribe/twitter_bob",
+    ),
+    `expected immediate unfollow DELETE, got ${harness.requestCalls
+      .map((call) => `${call.method} ${call.url}`)
+      .join(", ")}`,
   );
 });

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.4
+// @version      8.0.5
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -30,7 +30,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.4";
+  const SCRIPT_VERSION = "8.0.5";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -455,7 +455,10 @@
             true,
           );
           if (r.ok || r.status === 409) {
-            serverHandleSet.add(item.handle.toLowerCase());
+            const handle = item.handle.toLowerCase();
+            const channelId = String(r.json?.channel_id || r.json?.id || "");
+            serverHandleSet.add(handle);
+            if (channelId) serverHandleToChannelId[handle] = channelId;
             console.log(`[XSync] ghost synced: ${item.handle}`);
           } else {
             console.warn(
