@@ -44,6 +44,65 @@ func TestShortsPageRendersFullSkeletonListWithoutPaging(t *testing.T) {
 	}
 }
 
+func TestShortsPageRendersStoriesTabTrigger(t *testing.T) {
+	p := newTestPageProps()
+	p.ActiveNav = "shorts"
+	p.ESBundle = "js/dist/shorts.js"
+	p.PageScripts = []string{"js/infinite_page.js"}
+	pager := model.Pager{Page: 1, PerPage: 10000, Total: 0}
+
+	var buf bytes.Buffer
+	if err := ShortsPage(p, nil, nil, true, pager, "", "all", 1, 2).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+
+	if !strings.Contains(html, `href="/shorts?tab=stories"`) {
+		t.Fatalf("stories tab trigger missing: %s", html)
+	}
+	if strings.Contains(html, `shorts-tab-dot`) {
+		t.Fatalf("stories tab should not render the dot indicator: %s", html)
+	}
+}
+
+func TestShortsPlayerHeaderRendersStoriesTabTrigger(t *testing.T) {
+	srcBytes, err := os.ReadFile("../../static/js/src/shorts/items.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(srcBytes)
+
+	if !strings.Contains(src, `href="/shorts?tab=stories"`) {
+		t.Fatal("shorts player header should include the Stories tab trigger for the story tray")
+	}
+}
+
+func TestShortsStoryTrayOpensByDefaultForNormalMoments(t *testing.T) {
+	indexBytes, err := os.ReadFile("../../static/js/src/shorts/index.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlayBytes, err := os.ReadFile("../../static/js/src/shorts/overlay.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexSrc := string(indexBytes)
+	overlaySrc := string(overlayBytes)
+
+	for _, check := range []string{
+		"function openDefaultStoryTray()",
+		"if (currentTab === 'stories' || state.storyMode || !state.overlayOpen) return",
+		"afterOverlayOpen: openDefaultStoryTray",
+	} {
+		if !strings.Contains(indexSrc, check) {
+			t.Errorf("default story tray wiring missing %q", check)
+		}
+	}
+	if !strings.Contains(overlaySrc, "typeof _fns.afterOverlayOpen === 'function'") {
+		t.Fatal("overlay should call the post-open hook after Moments opens")
+	}
+}
+
 func TestShortsStoryGridButtonLabelsStoryPlaybackAsMoments(t *testing.T) {
 	srcBytes, err := os.ReadFile("../../static/js/src/shorts/index.js")
 	if err != nil {

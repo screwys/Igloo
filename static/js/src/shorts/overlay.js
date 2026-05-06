@@ -495,11 +495,13 @@ export function openOverlayAtIndex(index, immediate) {
   if (index >= total) index = total - 1
   if (index < 0) return
   if (hydrateCardAtIndex(index, { open: true, immediate: immediate !== false })) return
+  var wasOpen = _state.overlayOpen
   renderShortsWindow(index)
   setOverlayVisible(true)
   activateIndex(index, { force: true, play: false })
   ensureCurrentVisible(index, true)
   activateIndex(index, { force: true, play: true })
+  if (!wasOpen && _fns && typeof _fns.afterOverlayOpen === 'function') _fns.afterOverlayOpen()
 }
 
 export function openOverlayByVideoId(videoId, immediate) {

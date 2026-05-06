@@ -113,6 +113,9 @@ templ ShortsTabs(p PageProps, active string, hasUnseenStories bool) {
 	<div class="shorts-tabs" role="tablist" aria-label={ L(p, "shorts_timeline_tabs_aria", "Moments timeline") }>
 		<a class={ shortsTabClass(active, "all") } href="/shorts?tab=all" role="tab" aria-selected={ boolDataAttr(active == "all") }>{ L(p, "shorts_tab_all", "All") }</a>
 		<a class={ shortsTabClass(active, "following") } href="/shorts?tab=following" role="tab" aria-selected={ boolDataAttr(active == "following") }>{ L(p, "shorts_tab_following", "Following") }</a>
+		<a class={ shortsTabClass(active, "stories") } href="/shorts?tab=stories" role="tab" aria-selected={ boolDataAttr(active == "stories") }>
+			{ L(p, "shorts_tab_stories", "Stories") }
+		</a>
 	</div>
 }
 

@@ -544,6 +544,12 @@ if (layout) {
       }
     }
 
+    function openDefaultStoryTray() {
+      if (currentTab === 'stories' || state.storyMode || !state.overlayOpen) return
+      if (state.storyTray && state.storyTray.classList.contains('open')) return
+      openStoryTray()
+    }
+
     function goStoryNextManual() {
       if (!state.storyMode) {
         goNext()
@@ -1413,7 +1419,8 @@ if (layout) {
       parseCardData: parseCardData,
       iconSvg: iconSvg,
       exitStoryMode: exitStoryMode,
-      handleStoryEnd: openNextQueuedStory
+      handleStoryEnd: openNextQueuedStory,
+      afterOverlayOpen: openDefaultStoryTray
     })
 
     initItems(state, {

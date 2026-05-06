@@ -305,12 +305,13 @@ export function makeShortItem(entryData, existingEl) {
   var channelHref = entryData.channelId
     ? ('/channels/' + encodeURIComponent(entryData.channelId))
     : '#'
-  var currentTab = (_state && _state.currentTab === 'following') ? 'following' : 'all'
+  var currentTab = (_state && _state.currentTab === 'stories') ? 'stories' : ((_state && _state.currentTab === 'following') ? 'following' : 'all')
   var headerHtml = '' +
     '<div class="shorts-player-header-row">' +
     '<nav class="shorts-player-tabs" role="tablist" aria-label="' + escapeHtml(t('shorts_timeline_tabs_aria', 'Moments timeline')) + '">' +
     '<a class="shorts-player-tab' + (currentTab === 'all' ? ' active' : '') + '" href="/shorts?tab=all" role="tab" aria-selected="' + (currentTab === 'all' ? 'true' : 'false') + '">' + escapeHtml(t('shorts_tab_all', 'All')) + '</a>' +
     '<a class="shorts-player-tab' + (currentTab === 'following' ? ' active' : '') + '" href="/shorts?tab=following" role="tab" aria-selected="' + (currentTab === 'following' ? 'true' : 'false') + '">' + escapeHtml(t('shorts_tab_following', 'Following')) + '</a>' +
+    '<a class="shorts-player-tab' + (currentTab === 'stories' ? ' active' : '') + '" href="/shorts?tab=stories" role="tab" aria-selected="' + (currentTab === 'stories' ? 'true' : 'false') + '">' + escapeHtml(t('shorts_tab_stories', 'Stories')) + '</a>' +
     '</nav>' +
     '</div>'
   safeSetMarkup(header, headerHtml)
