@@ -1,6 +1,9 @@
 package db
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
 
 // MomentView records that `username` viewed shorts `videoID`.
 type MomentView struct {
@@ -12,22 +15,17 @@ type MomentView struct {
 // Returns the resulting viewed_at as stored.
 func (db *DB) UpsertMomentView(username, videoID string) (time.Time, error) {
 	nowMs := time.Now().UnixMilli()
-	if _, err := db.conn.Exec(
-		`INSERT INTO moment_views (username, video_id, viewed_at) VALUES (?, ?, ?)
-		 ON CONFLICT(username, video_id) DO UPDATE SET viewed_at = excluded.viewed_at`,
-		username, videoID, nowMs,
-	); err != nil {
+	if err := db.WithWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(
+			`INSERT INTO moment_views (username, video_id, viewed_at) VALUES (?, ?, ?)
+			 ON CONFLICT(username, video_id) DO UPDATE SET viewed_at = excluded.viewed_at`,
+			username, videoID, nowMs,
+		)
+		return err
+	}); err != nil {
 		return time.Time{}, err
 	}
-	var storedMs int64
-	err := db.conn.QueryRow(
-		`SELECT viewed_at FROM moment_views WHERE username = ? AND video_id = ?`,
-		username, videoID,
-	).Scan(&storedMs)
-	if err != nil {
-		return time.Time{}, err
-	}
-	return time.UnixMilli(storedMs), nil
+	return time.UnixMilli(nowMs), nil
 }
 
 // ListMomentViews returns moment views for a user, newest first,
