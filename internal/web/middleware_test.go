@@ -1,11 +1,14 @@
 package web
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/screwys/igloo/internal/auth"
 	"github.com/screwys/igloo/internal/config"
 )
 
@@ -36,5 +39,42 @@ func TestCSRFAllowsGet(t *testing.T) {
 
 	if rec.Code != 200 {
 		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestAuthRefreshBypassesExpiredBearerAndCSRF(t *testing.T) {
+	srv := newTestServer(t)
+	sessionID, err := srv.db.CreateAuthSession("alice")
+	if err != nil {
+		t.Fatalf("CreateAuthSession: %v", err)
+	}
+	tokenID, issuedAtMs, expiresAtMs, err := srv.db.CreateRefreshToken(sessionID, auth.RefreshTokenTTL)
+	if err != nil {
+		t.Fatalf("CreateRefreshToken: %v", err)
+	}
+	refreshToken := auth.SignRefreshToken(srv.cfg.SecretKey, "alice", "admin", nil, sessionID, tokenID, issuedAtMs, expiresAtMs)
+	expiredIssuedAtMs := time.Now().Add(-25 * time.Hour).UnixMilli()
+	expiredAccessToken := auth.SignAccessToken(srv.cfg.SecretKey, "alice", "admin", nil, sessionID, expiredIssuedAtMs)
+
+	mux := http.NewServeMux()
+	srv.registerAuthAPIRoutes(mux)
+	handler := chain(mux, srv.enforceAuth, srv.csrfProtect)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", strings.NewReader(`{"refresh_token":"`+refreshToken+`"}`))
+	req.Header.Set("Authorization", "Bearer "+expiredAccessToken)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body = %s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body["access_token"] == "" || body["refresh_token"] == "" {
+		t.Fatalf("refresh did not issue a new token pair: %v", body)
 	}
 }

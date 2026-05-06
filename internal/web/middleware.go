@@ -53,11 +53,20 @@ func recoverPanic(next http.Handler) http.Handler {
 	})
 }
 
+func openAuthAPIPath(path string) bool {
+	switch path {
+	case "/api/auth/login", "/api/auth/refresh", "/api/auth/logout":
+		return true
+	default:
+		return false
+	}
+}
+
 // enforceAuth checks session auth. Skips /login, /logout, /static/.
 func (s *Server) enforceAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if path == "/login" || path == "/setup" || path == "/logout" || path == "/api/auth/login" || path == "/api/health" ||
+		if path == "/login" || path == "/setup" || path == "/logout" || openAuthAPIPath(path) || path == "/api/health" ||
 			strings.HasPrefix(path, "/static/") ||
 			strings.HasPrefix(path, "/api/logs/android/room-query") {
 			next.ServeHTTP(w, r)
@@ -131,8 +140,9 @@ func (s *Server) csrfProtect(next http.Handler) http.Handler {
 			return
 		}
 		// Login/setup POSTs use their own CSRF via form field + session.
-		// /api/auth/login is the Android token-auth endpoint (JSON, no session).
-		if r.URL.Path == "/login" || r.URL.Path == "/setup" || r.URL.Path == "/api/auth/login" ||
+		// /api/auth/* token endpoints are JSON credential exchanges, not session
+		// cookie mutations, so Android can refresh after an access token expires.
+		if r.URL.Path == "/login" || r.URL.Path == "/setup" || openAuthAPIPath(r.URL.Path) ||
 			strings.HasPrefix(r.URL.Path, "/api/logs/android/room-query") {
 			next.ServeHTTP(w, r)
 			return
