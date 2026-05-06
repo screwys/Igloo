@@ -154,7 +154,7 @@
     <string name="bookmarks_empty">Henüz kaydedilen yok</string>
     <string name="cache_avatars">Avatarlar</string>
     <string name="cache_banners">Afişler</string>
-    <string name="cache_feed_items">Akış öğeleri</string>
+    <string name="cache_feed_items">Akış içerikleri</string>
     <string name="cache_subtitles">Altyazılar</string>
     <string name="cache_x_media">X medyası</string>
     <string name="channel_empty_videos">Kanal videosu bulunamadı.</string>
@@ -187,8 +187,8 @@
     <string name="cookie_browser_edge">Edge</string>
     <string name="cookie_browser_firefox">Firefox</string>
     <string name="cookie_browser_source">Tarayıcı çerezleri</string>
-    <string name="cookie_status_file_active">Dosya aktif</string>
-    <string name="cookie_status_file_disabled">Dosya (devre dışı)</string>
+    <string name="cookie_status_file_active">Dosya kullanılıyor</string>
+    <string name="cookie_status_file_disabled">Dosya kapalı</string>
     <string name="download_url_placeholder">İndirmek için URL yapıştırın...</string>
     <string name="drawer_accounts">Hesaplar</string>
     <string name="drawer_other">Diğer</string>
@@ -207,7 +207,7 @@
     <string name="error_unauthorized">Yetkisiz</string>
     <string name="error_unfollow_failed">Takipten çıkarılamadı</string>
     <string name="error_unknown_platform">Bilinmeyen platform: %1$s</string>
-    <string name="feed_empty_items">Akış öğesi yok.</string>
+    <string name="feed_empty_items">Akışta içerik yok.</string>
     <string name="feed_empty_liked">Henüz beğenilen gönderi yok</string>
     <string name="feed_empty_posts">Henüz gönderi yok, yenilemek için kaydırın</string>
     <string name="feed_empty_title">Gönderi yok</string>
@@ -254,8 +254,8 @@
     <string name="field_server_url">Sunucu URL\'si</string>
     <string name="field_user">Kullanıcı</string>
     <string name="field_username">Kullanıcı adı</string>
-    <string name="follow_queued_syncing">Takip isteği kuyruğa alındı. Sunucuyla eşitleniyor…</string>
-    <string name="follow_queued_waiting">Takip isteği kuyruğa alındı. Sunucu erişilebilir olduğunda eşitlenecek.</string>
+    <string name="follow_queued_syncing">Takip işlemi beklemeye alındı. Sunucuyla eşitleniyor…</string>
+    <string name="follow_queued_waiting">Takip işlemi beklemeye alındı. Sunucuya erişilince eşitlenecek.</string>
     <string name="import_config_merge_description">Yeni içerikleri ekle, mevcut verileri koru</string>
     <string name="import_config_mode_prompt">Mevcut veriler ne yapılsın?</string>
     <string name="import_config_replace_description">Mevcut verileri temizle, dosyadakileri geri yükle</string>
@@ -270,7 +270,7 @@
     <string name="language_system">Sistem varsayılanı</string>
     <string name="list_sep_and">ve</string>
     <string name="login_error_invalid_credentials">Geçersiz kullanıcı adı veya şifre</string>
-    <string name="login_error_no_users">Hiçbir kullanıcı yapılandırılmadı. İlk yöneticiyi oluşturmak için kurulumu açın.</string>
+    <string name="login_error_no_users">Henüz kullanıcı yok. İlk yöneticiyi oluşturmak için kurulumu açın.</string>
     <string name="login_error_reach_server">Sunucuya ulaşılamıyor — URL\'yi kontrol edin</string>
     <string name="login_error_server_try_again">Sunucu hatası, tekrar deneyin</string>
     <string name="login_subtitle">Masaüstü paneline erişmek için giriş yapın.</string>
@@ -285,7 +285,7 @@
     <string name="logs_android_generation">Eşitleme paketi</string>
     <string name="logs_android_generation_assets">%1$d medya · %2$d hazır</string>
     <string name="logs_android_generation_assets_missing">%1$d medya · %2$d hazır · %3$d eksik</string>
-    <string name="logs_android_generation_items">içerik öğesi</string>
+    <string name="logs_android_generation_items">içerik</string>
     <string name="logs_app_starts">Uygulama açılışları</string>
     <string name="logs_avg_latency">Ort. gecikme</string>
     <string name="logs_cache_health">Önbellek durumu</string>
@@ -330,7 +330,7 @@
     <string name="logs_no_sync_data">eşitleme verisi yok</string>
     <string name="logs_no_sync_report">Rapor yok</string>
     <string name="logs_no_warnings">Uyarı yok</string>
-    <string name="logs_no_x_sources">X kaynağı yapılandırılmamış.</string>
+    <string name="logs_no_x_sources">X kaynağı eklenmemiş.</string>
     <string name="logs_parsed_detail">%1$d medya · %2$d metin gönderi</string>
     <string name="logs_preview_queue">Önizleme kuyruğu</string>
     <string name="logs_processes">İşlemler</string>
@@ -344,7 +344,7 @@
     <string name="logs_segments">Bölümler</string>
     <string name="logs_server_log">Sunucu günlüğü</string>
     <string name="logs_since_timestamp">%s tarihinden beri</string>
-    <string name="logs_source_health">Kaynakların durumu</string>
+    <string name="logs_source_health">Kaynak durumu</string>
     <string name="logs_sponsorblock">SponsorBlock</string>
     <string name="logs_stat_database">Veritabanı</string>
     <string name="logs_stat_errors_24h">Hatalar (24 saat)</string>
@@ -361,7 +361,7 @@
     <string name="logs_status_all_done">tamamlandı</string>
     <string name="logs_status_cooling">Beklemede</string>
     <string name="logs_status_cooling_count">%d beklemede</string>
-    <string name="logs_status_disabled">devre dışı</string>
+    <string name="logs_status_disabled">kapalı</string>
     <string name="logs_status_downloading_count">%d indiriliyor</string>
     <string name="logs_status_fail_count">%d başarısız</string>
     <string name="logs_status_failed">Başarısız</string>
@@ -479,7 +479,7 @@
     <string name="search_press_enter_to_search_youtube">YouTube\'da aramak için Enter\'a basın</string>
     <string name="search_title">Arama</string>
     <string name="settings_account_credentials">Hesap bilgileri</string>
-    <string name="settings_algorithmic_feed_enabled">Algoritmik akışı etkinleştir</string>
+    <string name="settings_algorithmic_feed_enabled">Algoritmik akış</string>
     <string name="settings_algorithmic_feed_help">Gönderileri ilgi ve yakınlığa göre sıralar. Kapalıyken gönderiler kronolojik gösterilir.</string>
     <string name="settings_api_key">API anahtarı</string>
     <string name="settings_api_key_placeholder">API anahtarını gir</string>
@@ -489,9 +489,9 @@
     <string name="settings_autoplay">Otomatik oynatma</string>
     <string name="settings_background_sync">Arka planda eşitleme</string>
     <string name="settings_backup_dir_placeholder">/path/to/igloo-backups</string>
-    <string name="settings_backup_enabled">Otomatik yedeklemeleri etkinleştir</string>
+    <string name="settings_backup_enabled">Otomatik yedekleme</string>
     <string name="settings_backup_folder">Yedekleme klasörü</string>
-    <string name="settings_backup_help">Ayrı bir klasör seçin. Veritabanı ve yapılandırma her gün yedeklenir; en son 5 yedek tutulur.</string>
+    <string name="settings_backup_help">Ayrı bir klasör seçin. Veritabanı ve ayarlar her gün yedeklenir; yalnızca son 5 yedek saklanır.</string>
     <string name="settings_bookmark_per_category">Kategori bazlı ayarlar</string>
     <string name="settings_check_interval_hours">Kontrol aralığı (saat)</string>
     <string name="settings_clear_muted_help">Tüm sessize alınan hesapların sesi açılacak ve gönderileri tekrar akışınızda görünebilecek.</string>
@@ -640,7 +640,7 @@
     <string name="setup_error_save_failed">Yönetici kullanıcısı oluşturulamadı.</string>
     <string name="setup_error_username_required">Kullanıcı adı gerekli.</string>
     <string name="setup_platforms_help">Bu Igloo kurulumunun hangi platformlardan içerik alacağını seçin. Kullanıcı erişimini daha sonra değiştirebilirsiniz.</string>
-    <string name="setup_platforms_title">Platformları etkinleştir</string>
+    <string name="setup_platforms_title">Platformları seç</string>
     <string name="setup_rsshub_base_label">X için RSSHub URL\'si</string>
     <string name="setup_rsshub_help_prefix">X içerikleri şununla alınır:</string>
     <string name="setup_subtitle">Bu Igloo kurulumu için yönetici hesabını oluşturun.</string>
@@ -700,7 +700,7 @@
     <string name="state_on">Açık</string>
     <string name="status_adding_ellipsis">Ekleniyor...</string>
     <string name="status_export_failed">Dışa aktarma başarısız oldu</string>
-    <string name="status_export_saved_to">Dışa aktarma %1$s konumuna kaydedildi</string>
+    <string name="status_export_saved_to">Dışa aktarma şuraya kaydedildi: %1$s</string>
     <string name="status_export_saving">Dışa aktarma kaydediliyor...</string>
     <string name="status_loading">Yükleniyor...</string>
     <string name="status_loading_categories">Kategoriler yükleniyor...</string>
@@ -767,8 +767,8 @@
     <string name="toast_unfollowed_channel">%1$s takipten çıkarıldı</string>
     <string name="toast_unliked">Beğeni kaldırıldı</string>
     <string name="toast_unmuted">Sessizden çıkarıldı</string>
-    <string name="unfollow_queued_syncing">Takibi bırakma isteği kuyruğa alındı. Sunucuyla eşitleniyor…</string>
-    <string name="unfollow_queued_waiting">Takibi bırakma isteği kuyruğa alındı. Sunucu erişilebilir olduğunda eşitlenecek.</string>
+    <string name="unfollow_queued_syncing">Takipten çıkarma işlemi beklemeye alındı. Sunucuyla eşitleniyor…</string>
+    <string name="unfollow_queued_waiting">Takipten çıkarma işlemi beklemeye alındı. Sunucuya erişilince eşitlenecek.</string>
     <string name="users_confirm_delete_user">%1$s kullanıcısı silinsin mi? Tüm verileri kaldırılacak.</string>
     <string name="users_copy_my_subscriptions">Takip ettiklerimi kopyala</string>
     <string name="users_edit_prefix">Düzenle: %s</string>
