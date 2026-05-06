@@ -187,3 +187,79 @@ func TestFeedItemSeenTrackingIsPageGatedHTMX(t *testing.T) {
 		t.Fatalf("seen tracking should not use JS-only URL attribute: %s", html)
 	}
 }
+
+func TestFeedItemRendersIndependentBodyAndQuoteTranslatePills(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:                "tweet_with_quote_translation",
+		AuthorHandle:           "parent_author",
+		AuthorDisplayName:      "Parent Author",
+		BodyText:               "parent foreign text",
+		Lang:                   "ko",
+		QuoteTweetID:           "quoted_status",
+		QuoteAuthorHandle:      "quote_author",
+		QuoteAuthorDisplayName: "Quote Author",
+		QuoteBodyText:          "quote foreign text",
+		QuoteLang:              "fr",
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+
+	if got := strings.Count(html, `data-feed-action="translate"`); got != 2 {
+		t.Fatalf("translate pill count = %d, want body + quote; html=%s", got, html)
+	}
+	for _, field := range []string{"body", "quote"} {
+		if !strings.Contains(html, `data-translate-target-field="`+field+`"`) {
+			t.Fatalf("missing %s translate target; html=%s", field, html)
+		}
+		if !strings.Contains(html, `data-translate-field="`+field+`"`) {
+			t.Fatalf("missing %s translate container; html=%s", field, html)
+		}
+	}
+}
+
+func TestFeedItemQuoteTranslationDoesNotActivateParentTranslatePill(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:                "tweet_with_translated_quote",
+		AuthorHandle:           "parent_author",
+		AuthorDisplayName:      "Parent Author",
+		BodyText:               "parent text",
+		Lang:                   "en",
+		QuoteTweetID:           "quoted_status",
+		QuoteAuthorHandle:      "quote_author",
+		QuoteAuthorDisplayName: "Quote Author",
+		QuoteBodyText:          "texte cite",
+		QuoteLang:              "fr",
+		QuoteTranslation:       "translated quote",
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+
+	if strings.Contains(html, `data-translate-target-field="body"`) {
+		t.Fatalf("parent translate pill should not render for English body; html=%s", html)
+	}
+	if got := strings.Count(html, `data-translate-target-field="quote"`); got != 1 {
+		t.Fatalf("quote translate target count = %d, want 1; html=%s", got, html)
+	}
+	quoteTargetAt := strings.Index(html, `data-translate-target-field="quote"`)
+	quoteContainerAt := strings.Index(html, `data-translate-field="quote"`)
+	if quoteTargetAt < 0 || quoteContainerAt < 0 || quoteTargetAt > quoteContainerAt {
+		t.Fatalf("quote translate pill should render with quote metadata before quote text; html=%s", html)
+	}
+	buttonStart := strings.LastIndex(html[:quoteTargetAt], `<button`)
+	buttonEnd := strings.Index(html[quoteTargetAt:], `>`)
+	if buttonStart < 0 || buttonEnd < 0 {
+		t.Fatalf("malformed quote translate button; html=%s", html)
+	}
+	buttonTag := html[buttonStart : quoteTargetAt+buttonEnd]
+	if !strings.Contains(buttonTag, `active`) {
+		t.Fatalf("quote translate pill should be active for cached quote translation, tag=%s html=%s", buttonTag, html)
+	}
+}

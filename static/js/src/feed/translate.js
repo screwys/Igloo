@@ -44,6 +44,30 @@ function translateTextElement(container) {
   return container ? container.querySelector('.feed-body-text, .feed-quote-text') : null
 }
 
+function translateButtonFor(card, field) {
+  if (!card || !field) return null
+  var buttons = card.querySelectorAll('.feed-translate-btn[data-feed-action="translate"][data-translate-target-field]')
+  for (var i = 0; i < buttons.length; i++) {
+    if (buttons[i].getAttribute('data-translate-target-field') === field) return buttons[i]
+  }
+  return null
+}
+
+function translateLabelForButton(button) {
+  return button ? button.querySelector('[data-translate-label]') : null
+}
+
+function translateContainersForAction(card, actionBtn) {
+  var containers = card.querySelectorAll('[data-translate-field][data-lang]')
+  var field = actionBtn ? String(actionBtn.getAttribute('data-translate-target-field') || '').trim() : ''
+  if (!field) return Array.prototype.slice.call(containers)
+  var out = []
+  containers.forEach(function (container) {
+    if (container.getAttribute('data-translate-field') === field) out.push(container)
+  })
+  return out
+}
+
 function hasTranslatableText(container) {
   var textEl = translateTextElement(container)
   if (!textEl) return false
@@ -87,9 +111,9 @@ function translateBlock(card, container) {
     // langdetect runs on raw body text, kagi can be confused by mixed content
     var itemLang = (container.getAttribute('data-lang') || '').trim()
     var srcLang = (itemLang && KNOWN_LANGS[itemLang]) ? itemLang : resp.source_lang
-    var label = card.querySelector('[data-translate-label]')
+    var tBtn = translateButtonFor(card, field)
+    var label = translateLabelForButton(tBtn)
     if (label) label.textContent = srcLang ? srcLang.toUpperCase() : ''
-    var tBtn = card.querySelector('.feed-translate-btn')
     if (tBtn) tBtn.classList.add('active')
     return 'translated'
   }).catch(function () {
@@ -181,7 +205,7 @@ function translateCard(card) {
 }
 
 export function handleTranslateAction(card, actionBtn) {
-  var containers = card.querySelectorAll('[data-translate-field][data-lang]')
+  var containers = translateContainersForAction(card, actionBtn)
   if (!containers.length) return
   var anyTranslated = false
   containers.forEach(function (c) {
@@ -201,7 +225,7 @@ export function handleTranslateAction(card, actionBtn) {
       c.setAttribute('data-translated', '0')
     })
     actionBtn.classList.remove('active')
-    var label = card.querySelector('[data-translate-label]')
+    var label = translateLabelForButton(actionBtn)
     if (label) label.textContent = label.getAttribute('data-translate-default-label') || ''
   } else {
     containers.forEach(function (c) {
@@ -209,7 +233,6 @@ export function handleTranslateAction(card, actionBtn) {
       if (lang && lang === translateTarget) return
       translateBlock(card, c)
     })
-    actionBtn.classList.add('active')
   }
 }
 

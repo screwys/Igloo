@@ -348,19 +348,23 @@ func mediaGridCount(count int) int {
 
 // hasForeignLang returns true if the feed item has non-English or unknown language text.
 func hasForeignLang(item model.FeedItem) bool {
-	if item.Lang != "" && item.Lang != "en" {
-		return true
+	return hasBodyTranslatePill(item) || hasQuoteTranslatePill(item)
+}
+
+func hasBodyTranslatePill(item model.FeedItem) bool {
+	return hasTranslatableLang(item.Lang, item.BodyText)
+}
+
+func hasQuoteTranslatePill(item model.FeedItem) bool {
+	return hasTranslatableLang(item.QuoteLang, item.QuoteBodyText)
+}
+
+func hasTranslatableLang(lang string, text string) bool {
+	if strings.TrimSpace(text) == "" {
+		return false
 	}
-	if item.QuoteLang != "" && item.QuoteLang != "en" {
-		return true
-	}
-	if item.BodyText != "" && item.Lang == "" {
-		return true
-	}
-	if item.QuoteBodyText != "" && item.QuoteLang == "" {
-		return true
-	}
-	return false
+	normalized := strings.ToLower(strings.TrimSpace(lang))
+	return normalized == "" || normalized != "en"
 }
 
 // retweeterLabel returns a display label for a RetweeterInfo.
@@ -493,6 +497,14 @@ func feedPublishedAtStr(t *time.Time) string {
 // in → empty out. Used by the compact translate pill to show the source lang.
 func langCodeUpper(lang string) string {
 	return strings.ToUpper(strings.TrimSpace(lang))
+}
+
+func feedTranslateSourceCode(lang string, sourceLang string) string {
+	lang = strings.TrimSpace(lang)
+	if lang == "" {
+		lang = sourceLang
+	}
+	return langCodeUpper(lang)
 }
 
 // stripThreadNoise returns a copy of item with conversation-thread-specific

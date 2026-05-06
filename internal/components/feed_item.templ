@@ -269,9 +269,9 @@ templ feedAuthorAside(p PageProps, item model.FeedItem) {
 			title={ feedPublishedAtStr(item.PublishedAt) }
 			>&middot; { RelativeTimeText(p, item.PublishedAt) }</span>
 	}
-	if hasForeignLang(item) {
+	if hasBodyTranslatePill(item) {
 		<span class="feed-date-inline">&middot;</span>
-		@feedTranslatePill(p, item)
+		@feedTranslatePill(p, "body", item.Lang, item.BodySourceLang, item.BodyTranslation != "")
 	}
 }
 
@@ -279,12 +279,12 @@ templ feedAuthorAside(p PageProps, item model.FeedItem) {
 // timestamp. Inactive: gray icon, no text. Active: colored icon + source-lang
 // code (e.g., "KO"). JS toggles .active and rewrites the label to the lang
 // code on translate, empty on revert.
-templ feedTranslatePill(p PageProps, item model.FeedItem) {
-	{{ active := item.BodyTranslation != "" || item.QuoteTranslation != "" }}
+templ feedTranslatePill(p PageProps, field string, lang string, sourceLang string, active bool) {
 	<button
 		class={ "feed-translate-btn feed-translate-pill", templ.KV("active", active) }
 		type="button"
 		data-feed-action="translate"
+		data-translate-target-field={ field }
 		title={ L(p, "feed_toggle_translation", "Toggle translation") }
 		aria-label={ L(p, "feed_toggle_translation", "Toggle translation") }
 	>
@@ -298,11 +298,11 @@ templ feedTranslatePill(p PageProps, item model.FeedItem) {
 			class="feed-translate-label"
 			data-translate-label
 			data-translate-default-label=""
-		>
-			if active {
-				{ langCodeUpper(item.Lang) }
-			}
-		</span>
+	>
+		if active {
+			{ feedTranslateSourceCode(lang, sourceLang) }
+		}
+	</span>
 	</button>
 }
 
@@ -416,6 +416,9 @@ templ feedBodyText(p PageProps, item model.FeedItem) {
 		data-translate-field="body"
 		data-lang={ item.Lang }
 		data-target-lang="en"
+		if item.BodyTranslation != "" {
+			data-translated="1"
+		}
 	>
 		if item.BodyTranslation != "" {
 			<p
@@ -587,7 +590,11 @@ templ feedQuoteCard(p PageProps, item model.FeedItem) {
 					<span class="feed-author-handle">{ "@" + item.QuoteAuthorHandle }</span>
 				}
 				if item.QuotePublishedAt != nil {
-						<span class="feed-quote-date" data-feed-date-raw={ feedPublishedAtStr(item.QuotePublishedAt) } title={ feedPublishedAtStr(item.QuotePublishedAt) }>&middot; { RelativeTimeText(p, item.QuotePublishedAt) }</span>
+							<span class="feed-quote-date" data-feed-date-raw={ feedPublishedAtStr(item.QuotePublishedAt) } title={ feedPublishedAtStr(item.QuotePublishedAt) }>&middot; { RelativeTimeText(p, item.QuotePublishedAt) }</span>
+				}
+				if hasQuoteTranslatePill(item) {
+					<span class="feed-quote-date">&middot;</span>
+					@feedTranslatePill(p, "quote", item.QuoteLang, item.QuoteSourceLang, item.QuoteTranslation != "")
 				}
 			</span>
 			if item.QuoteChannelID != "" && item.QuoteAuthorHandle != "" && !item.QuoteChannelFollowed {
@@ -603,7 +610,15 @@ templ feedQuoteCard(p PageProps, item model.FeedItem) {
 			}
 		</div>
 		if item.QuoteBodyText != "" {
-			<div data-feed-text-container data-translate-field="quote" data-lang={ item.QuoteLang } data-target-lang="en">
+				<div
+					data-feed-text-container
+					data-translate-field="quote"
+					data-lang={ item.QuoteLang }
+					data-target-lang="en"
+					if item.QuoteTranslation != "" {
+						data-translated="1"
+					}
+				>
 				if item.QuoteTranslation != "" {
 					<div
 						class="feed-quote-text feed-text-clamp"

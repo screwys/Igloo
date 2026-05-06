@@ -161,6 +161,25 @@ class NativeMainFeedSurfaceTest {
     }
 
     @Test
+    fun nativeTranslationPillsArePerTextField() {
+        val englishBody = nativeTranslationPillForText(
+            lang = "en",
+            text = "plain parent text",
+            active = false,
+            enabled = false,
+        )
+        val translatedQuote = nativeTranslationPillForText(
+            lang = "fr",
+            text = "texte cite",
+            active = true,
+            enabled = true,
+        )
+
+        assertEquals(null, englishBody)
+        assertEquals(NativeTranslationPill(sourceLangCode = "FR", active = true, enabled = true), translatedQuote)
+    }
+
+    @Test
     fun nativeVisibleFractionUsesCurrentViewportWithoutSettleDelay() {
         assertEquals(1f, nativeVisibleHeightFraction(Rect(0, 100, 100, 300), 600), 0.0001f)
         assertEquals(0.5f, nativeVisibleHeightFraction(Rect(0, -100, 100, 100), 600), 0.0001f)
@@ -207,6 +226,8 @@ class NativeMainFeedSurfaceTest {
         assertFalse(cardViewsText.contains("root.addView(translate)"))
         assertTrue(headerViewsText.contains("val translate: LinearLayout"))
         assertTrue(headerViewsText.contains("R.drawable.ic_feed_translate_24"))
+        assertFalse(headerViewsText.contains("metaRow.addView(meta, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))"))
+        assertTrue(headerViewsText.contains("metaRow.addView(meta, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))"))
         assertTrue(text.contains("bindTranslationPill(header, translation, colors, onTranslationClick)"))
     }
 

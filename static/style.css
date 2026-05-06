@@ -7519,6 +7519,10 @@ body.shorts-mode .sidebar {
     opacity: 1;
 }
 
+.feed-quote-head-main .feed-translate-pill {
+    margin-left: 0;
+}
+
 .feed-star-btn {
     border: 1px solid var(--border-color);
     background: transparent;

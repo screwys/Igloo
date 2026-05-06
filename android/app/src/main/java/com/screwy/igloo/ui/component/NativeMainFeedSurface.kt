@@ -1124,12 +1124,14 @@ private class NativeFeedViewHolder(
     private val avatarJobs = mutableMapOf<ImageView, Job>()
     private var boundRow: NativeFeedAdapterItem.Post? = null
     private var showTranslatedBody = true
+    private var showTranslatedQuote = true
     private var bodyExpanded = false
 
     fun bind(adapterRow: NativeFeedAdapterItem.Post) {
         val previousId = boundRow?.id
         if (previousId != adapterRow.id) {
             showTranslatedBody = true
+            showTranslatedQuote = true
             bodyExpanded = false
         }
         boundRow = adapterRow
@@ -1144,16 +1146,16 @@ private class NativeFeedViewHolder(
         val shareUrl = feedShareUrl(item).trim()
         val bodyTranslation = item.bodyTranslation?.takeIf { it.isNotBlank() }
         val quoteTranslation = item.quoteTranslation?.takeIf { it.isNotBlank() }
-        val hasTranslation = bodyTranslation != null || quoteTranslation != null
         val bodyText = if (showTranslatedBody && bodyTranslation != null) {
             bodyTranslation
         } else {
             item.bodyText.orEmpty()
         }
-        val translationPill = nativeTranslationPillFor(
-            item = item,
-            active = showTranslatedBody && hasTranslation,
-            enabled = hasTranslation,
+        val translationPill = nativeTranslationPillForText(
+            lang = item.lang,
+            text = item.bodyText,
+            active = showTranslatedBody && bodyTranslation != null,
+            enabled = bodyTranslation != null,
         )
 
         views.applyColors(colors)
@@ -1191,7 +1193,7 @@ private class NativeFeedViewHolder(
                 }
             },
             onTranslationClick = {
-                if (hasTranslation) {
+                if (bodyTranslation != null) {
                     showTranslatedBody = !showTranslatedBody
                     bind(adapterRow)
                 }
@@ -1341,6 +1343,12 @@ private class NativeFeedViewHolder(
             ?.let { localizedRelativeTime(views.root.context, it) }
             .orEmpty()
         val followTarget = feedQuoteFollowTarget(row)
+        val quoteTranslationPill = nativeTranslationPillForText(
+            lang = item.quoteLang,
+            text = item.quoteBodyText,
+            active = showTranslatedQuote && quoteTranslation != null,
+            enabled = quoteTranslation != null,
+        )
 
         bindHeader(
             header = views.quoteHeader,
@@ -1352,11 +1360,18 @@ private class NativeFeedViewHolder(
             showFollow = followTarget != null,
             isFollowed = false,
             colors = colors,
+            translation = quoteTranslationPill,
             onClick = { if (quoteHandle.isNotBlank()) callbacks.onMentionClick(quoteHandle) },
             onFollowClick = { followTarget?.let { callbacks.onFollowToggle(it.channelId, true) } },
+            onTranslationClick = {
+                if (quoteTranslation != null) {
+                    showTranslatedQuote = !showTranslatedQuote
+                    boundRow?.let { bind(it) }
+                }
+            },
         )
 
-        val quoteBody = if (showTranslatedBody && quoteTranslation != null) {
+        val quoteBody = if (showTranslatedQuote && quoteTranslation != null) {
             quoteTranslation
         } else {
             item.quoteBodyText.orEmpty()
@@ -2212,10 +2227,11 @@ private class NativeIdentityHeaderViews(context: Context) {
         nameRow.addView(name, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         nameRow.addView(follow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)))
         textColumn.addView(nameRow)
-        metaRow.addView(meta, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        metaRow.addView(meta, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         translate.addView(translateIcon, LinearLayout.LayoutParams(dp(15), dp(15)))
         translate.addView(translateLabel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         metaRow.addView(translate, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        metaRow.addView(View(context), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         textColumn.addView(metaRow)
         root.addView(textColumn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
             marginStart = dp(8)
@@ -2543,6 +2559,20 @@ internal fun nativeTranslationPillFor(
     if (!enabled && !nativeHasForeignLanguage(item)) return null
     return NativeTranslationPill(
         sourceLangCode = nativeFirstForeignLanguage(item).uppercase(Locale.ROOT),
+        active = active,
+        enabled = enabled,
+    )
+}
+
+internal fun nativeTranslationPillForText(
+    lang: String?,
+    text: String?,
+    active: Boolean,
+    enabled: Boolean,
+): NativeTranslationPill? {
+    if (!enabled && !nativeIsForeignOrUnknown(lang, text)) return null
+    return NativeTranslationPill(
+        sourceLangCode = nativeForeignLanguageCode(lang, text)?.uppercase(Locale.ROOT).orEmpty(),
         active = active,
         enabled = enabled,
     )
