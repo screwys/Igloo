@@ -248,6 +248,7 @@ export function makeShortItem(entryData, existingEl) {
   var mediaKind = String(entryData.mediaKind || '').trim().toLowerCase()
   var hasSlides = mediaKind === 'slideshow' || mediaKind === 'image' || (Number(entryData.mediaSlideCount || 0) > 0)
   var slideCount = Math.max(0, parseInt(entryData.mediaSlideCount || 0, 10) || 0) || (mediaKind === 'image' ? 1 : 0)
+  var poster = null
   var video = null
   var slideshow = null
   if (hasSlides && slideCount > 0) {
@@ -286,6 +287,15 @@ export function makeShortItem(entryData, existingEl) {
       slideshow.audio = slideshowAudio
     }
   } else {
+    if (entryData.thumbUrl) {
+      poster = doc.createElement('img')
+      poster.className = 'shorts-video-poster-frame'
+      poster.alt = ''
+      poster.decoding = 'async'
+      poster.loading = 'eager'
+      poster.src = entryData.thumbUrl
+      wrapper.appendChild(poster)
+    }
     video = doc.createElement('video')
     video.className = 'native-short-video'
     video.preload = 'none'
@@ -466,6 +476,7 @@ export function makeShortItem(entryData, existingEl) {
 
   var refs = {
     video: video,
+    poster: poster,
     wrapper: wrapper,
     muteBtn: q('.shorts-mute-btn', actions),
     autoplayBtn: q('.shorts-autoplay-btn', actions),

@@ -249,3 +249,44 @@ func TestShortsItemsDoNotAnimateViewportSizeDuringScrollSnap(t *testing.T) {
 		}
 	}
 }
+
+func TestShortsVideoPlaybackWaitsForScrollSettle(t *testing.T) {
+	overlayBytes, err := os.ReadFile("../../static/js/src/shorts/overlay.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	itemsBytes, err := os.ReadFile("../../static/js/src/shorts/items.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cssBytes, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlaySrc := string(overlayBytes)
+	itemsSrc := string(itemsBytes)
+	css := string(cssBytes)
+
+	for _, check := range []string{
+		"function clearPendingShortPlayback()",
+		"function playShortVideo(entry, video)",
+		"function scheduleSettledShortPlayback(entry)",
+		"_state.pendingPlayTimer = setTimeout(function ()",
+		"entry.refs.wrapper.classList.add('is-settling-playback')",
+		"scheduleSettledShortPlayback(entry)",
+	} {
+		if !strings.Contains(overlaySrc, check) {
+			t.Errorf("shorts overlay scroll-settle playback missing %q", check)
+		}
+	}
+	if strings.Contains(overlaySrc, "var p = video.play()\n        _state.activePlayPromise") {
+		t.Error("activateIndex should not play video immediately during scroll activation")
+	}
+	if !strings.Contains(itemsSrc, "shorts-video-poster-frame") {
+		t.Fatal("shorts video items should render a poster layer for settled playback")
+	}
+	if !strings.Contains(css, ".shorts-video-wrapper.is-settling-playback video") ||
+		!strings.Contains(css, "opacity: 0;") {
+		t.Fatal("settling playback CSS should hide moving video over the stable poster")
+	}
+}

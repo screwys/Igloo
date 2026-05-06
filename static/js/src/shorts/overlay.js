@@ -95,6 +95,57 @@ function handleAutoplayRejected(video, err) {
   }
 }
 
+function clearPendingShortPlayback() {
+  if (!_state) return
+  if (_state.pendingPlayTimer) {
+    try { clearTimeout(_state.pendingPlayTimer) } catch (_) {}
+    _state.pendingPlayTimer = 0
+  }
+  var entry = _state.pendingPlayEntry
+  if (entry && entry.refs && entry.refs.wrapper) {
+    entry.refs.wrapper.classList.remove('is-settling-playback')
+  }
+  _state.pendingPlayEntry = null
+}
+
+function playShortVideo(entry, video) {
+  if (!entry || !video) return
+  if (entry.refs && entry.refs.wrapper) {
+    entry.refs.wrapper.classList.remove('is-settling-playback')
+  }
+  if (!_state.overlayOpen) return
+  var current = currentData()
+  if (!current || current.id !== entry.data.id) return
+  try {
+    var promise = video.play()
+    _state.activePlayPromise = promise || null
+    if (promise && typeof promise.catch === 'function') {
+      promise.catch(function (err) { handleAutoplayRejected(video, err) })
+    }
+  } catch (err) {
+    handleAutoplayRejected(video, err)
+  }
+}
+
+function scheduleSettledShortPlayback(entry) {
+  var video = entry && entry.refs && entry.refs.video
+  if (!video) return
+  clearPendingShortPlayback()
+  try {
+    video.pause()
+    video.currentTime = 0
+  } catch (_) {}
+  if (entry.refs.wrapper && entry.refs.poster) {
+    entry.refs.wrapper.classList.add('is-settling-playback')
+  }
+  _state.pendingPlayEntry = entry
+  _state.pendingPlayTimer = setTimeout(function () {
+    _state.pendingPlayTimer = 0
+    _state.pendingPlayEntry = null
+    playShortVideo(entry, video)
+  }, 240)
+}
+
 function warmShortVideo(entry, eager) {
   var video = entry && entry.refs && entry.refs.video
   if (!video) return
@@ -126,6 +177,7 @@ export function setOverlayVisible(visible) {
   _dom.doc.body.classList.toggle('shorts-mode', _state.overlayOpen)
   _dom.doc.body.classList.toggle('shorts-open', _state.overlayOpen)
   if (!_state.overlayOpen) {
+    clearPendingShortPlayback()
     pauseAllShorts()
     _fns.closeBookmarkMenu()
     var card = _state.cards[_state.currentIndex]
@@ -286,16 +338,20 @@ export function activateIndex(index, options) {
   if (video) {
     warmNearbyShortVideos(index)
     if (opts.play !== false) {
-      try {
-        video.currentTime = 0
-        var p = video.play()
-        _state.activePlayPromise = p || null
-        if (p && typeof p.catch === 'function') p.catch(function (err) { handleAutoplayRejected(video, err) })
-      } catch (err) { handleAutoplayRejected(video, err) }
+      if (_state.storyMode) {
+        clearPendingShortPlayback()
+        try { video.currentTime = 0 } catch (_) {}
+        playShortVideo(entry, video)
+      } else {
+        scheduleSettledShortPlayback(entry)
+      }
+    } else {
+      clearPendingShortPlayback()
     }
     return
   }
   if (entry.refs.slideshow) {
+    clearPendingShortPlayback()
     if (opts.play !== false) startSlideshowPlayback(entry)
     else setSlideshowIndex(entry, entry.refs.slideshow.index || 0)
   }
