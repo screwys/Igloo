@@ -490,10 +490,14 @@ func TestProfileHoverOwnsStaticProfileCardFollowWhenFeedBundleAbsent(t *testing.
 	src := string(srcBytes)
 	checks := []string{
 		"wireStaticProfileCards",
+		"syncProfileCardFollowState",
 		"wireProfileMenu",
 		".profile-card",
 		"data-profile-follow-wired",
 		"data-profile-card-menu-action",
+		"data-profile-card-menu-action=\"unfollow\"",
+		"data-feed-menu-action=\"unfollow\"",
+		"MpaSiteBase.syncChannelFollowState",
 		"js/dist/feed.js",
 	}
 	for _, check := range checks {

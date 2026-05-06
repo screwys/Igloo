@@ -665,26 +665,15 @@ func (db *DB) DeleteChannel(channelID string) error {
 // references protect tweets after an author/source unfollow.
 func (db *DB) PurgeUnfollowedChannelContent(channelID string, username string) ([]model.Video, error) {
 	var deletedVideos []model.Video
-	err := db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`DELETE FROM channel_follows WHERE user_id = '' AND channel_id = ?`, channelID); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(`DELETE FROM channel_stars WHERE user_id = '' AND channel_id = ?`, channelID); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(`DELETE FROM channel_settings WHERE channel_id = ?`, channelID); err != nil {
-			return err
-		}
+	platform, err := db.clearUnfollowState(channelID)
+	if err != nil {
+		return nil, err
+	}
+	if platform == "" {
+		_, _, _, platform = channelDefaultsFromID(channelID)
+	}
 
-		var platform string
-		err := tx.QueryRow(`SELECT COALESCE(platform, '') FROM channels WHERE channel_id = ?`, channelID).Scan(&platform)
-		if err == sql.ErrNoRows {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
+	err = db.WithWrite(func(tx *sql.Tx) error {
 		if strings.EqualFold(platform, "twitter") || strings.HasPrefix(strings.ToLower(channelID), "twitter_") {
 			var errTwitter error
 			deletedVideos, errTwitter = db.purgeTwitterAfterUnfollowTx(tx, channelID, username)
@@ -696,6 +685,27 @@ func (db *DB) PurgeUnfollowedChannelContent(channelID string, username string) (
 		return errVideos
 	})
 	return deletedVideos, err
+}
+
+func (db *DB) clearUnfollowState(channelID string) (string, error) {
+	var platform string
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		err := tx.QueryRow(`SELECT COALESCE(platform, '') FROM channels WHERE channel_id = ?`, channelID).Scan(&platform)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM channel_follows WHERE user_id = '' AND channel_id = ?`, channelID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM channel_stars WHERE user_id = '' AND channel_id = ?`, channelID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM channel_settings WHERE channel_id = ?`, channelID); err != nil {
+			return err
+		}
+		return nil
+	})
+	return platform, err
 }
 
 func (db *DB) purgeVideoChannelAfterUnfollowTx(tx *sql.Tx, channelID string, username string) ([]model.Video, error) {

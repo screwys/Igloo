@@ -2355,6 +2355,34 @@
     });
   }
 
+  function syncChannelFollowState(channelID, following) {
+    var cid = String(channelID || '').trim();
+    if (!cid) return;
+    var isFollowing = !!following;
+    doc.querySelectorAll('[data-feed-follow-toggle][data-feed-channel-id]').forEach(function (btn) {
+      if (String(btn.getAttribute('data-feed-channel-id') || '').trim() !== cid) return;
+      btn.setAttribute('data-following', isFollowing ? '1' : '0');
+      btn.classList.toggle('following', isFollowing);
+      btn.textContent = isFollowing ? t('action_following', 'Following') : t('action_follow', 'Follow');
+    });
+    doc.querySelectorAll('[data-feed-menu-action="unfollow"][data-feed-channel-id]').forEach(function (btn) {
+      if (String(btn.getAttribute('data-feed-channel-id') || '').trim() !== cid) return;
+      btn.style.display = isFollowing ? '' : 'none';
+    });
+    doc.querySelectorAll('[data-profile-card-menu-action="unfollow"][data-profile-card-channel-id]').forEach(function (btn) {
+      if (String(btn.getAttribute('data-profile-card-channel-id') || '').trim() !== cid) return;
+      btn.style.display = isFollowing ? '' : 'none';
+    });
+    doc.querySelectorAll('.profile-card[data-channel-id]').forEach(function (card) {
+      if (String(card.getAttribute('data-channel-id') || '').trim() !== cid) return;
+      card.setAttribute('data-profile-card-following', isFollowing ? '1' : '0');
+      card.classList.toggle('profile-card-following', isFollowing);
+      card.querySelectorAll('[data-profile-card-menu], .profile-card-top-actions .feed-star-btn').forEach(function (el) {
+        el.style.display = isFollowing ? '' : 'none';
+      });
+    });
+  }
+
   // -- Header Global Search Typeahead --
   var globalSearchInput = q('#global-search-input');
   var searchDropdown = q('#search-dropdown');
@@ -2609,6 +2637,7 @@
     t: t,
     apiJson: apiJson,
     askConfirm: askConfirm,
+    syncChannelFollowState: syncChannelFollowState,
     copyText: copyText,
     avatarLoad: avatarLoad,
     avatarError: avatarError,

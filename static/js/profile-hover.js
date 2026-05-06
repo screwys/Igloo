@@ -153,14 +153,38 @@
 		return '';
 	}
 
-	function syncCardFollowButtons(channelID, following) {
-		document.querySelectorAll('[data-feed-follow-toggle][data-feed-channel-id="' + CSS.escape(channelID) + '"]').forEach((btn) => {
+	function syncProfileCardFollowState(channelID, following) {
+		const cid = String(channelID || '').trim();
+		if (!cid) return;
+		const isFollowing = !!following;
+		document.querySelectorAll('[data-feed-follow-toggle][data-feed-channel-id="' + CSS.escape(cid) + '"]').forEach((btn) => {
 			btn.setAttribute('data-following', following ? '1' : '0');
-			btn.classList.toggle('following', !!following);
+			btn.classList.toggle('following', isFollowing);
 			btn.textContent = following
 				? i18nText('action_following', 'Following')
 				: i18nText('action_follow', 'Follow');
 		});
+		document.querySelectorAll('[data-feed-menu-action="unfollow"][data-feed-channel-id="' + CSS.escape(cid) + '"]').forEach((btn) => {
+			btn.style.display = isFollowing ? '' : 'none';
+		});
+		document.querySelectorAll('.profile-card[data-channel-id="' + CSS.escape(cid) + '"]').forEach((card) => {
+			card.setAttribute('data-profile-card-following', isFollowing ? '1' : '0');
+			card.classList.toggle('profile-card-following', isFollowing);
+			card.querySelectorAll('[data-profile-card-menu-action="unfollow"]').forEach((btn) => {
+				btn.style.display = isFollowing ? '' : 'none';
+			});
+			card.querySelectorAll('[data-profile-card-menu], .profile-card-top-actions .feed-star-btn').forEach((el) => {
+				el.style.display = isFollowing ? '' : 'none';
+			});
+		});
+	}
+
+	function syncCardFollowButtons(channelID, following) {
+		if (window.MpaSiteBase && typeof window.MpaSiteBase.syncChannelFollowState === 'function') {
+			window.MpaSiteBase.syncChannelFollowState(channelID, following);
+			return;
+		}
+		syncProfileCardFollowState(channelID, following);
 	}
 
 	function feedBundleOwnsFollowButtons() {
@@ -305,11 +329,12 @@
 						danger: true,
 					});
 					if (!ok) return;
+					syncCardFollowButtons(channelID, false);
 					try {
 						await mpa.apiJson('/api/unsubscribe/' + encodeURIComponent(channelID) + '?delete_files=true', { method: 'DELETE' });
-						syncCardFollowButtons(channelID, false);
 						mpa.showToast(i18nFormat('toast_unfollowed_channel', 'Unfollowed %1$s', label));
 					} catch (err) {
+						syncCardFollowButtons(channelID, true);
 						mpa.showToast((err && err.payload && err.payload.error) || i18nText('error_unfollow_failed', 'Failed to unfollow'));
 					}
 					return;
@@ -362,8 +387,8 @@
 						danger: true,
 					});
 					if (!ok) return;
-					await mpa.apiJson('/api/unsubscribe/' + encodeURIComponent(channelID) + '?delete_files=true', { method: 'DELETE' });
 					syncCardFollowButtons(channelID, false);
+					await mpa.apiJson('/api/unsubscribe/' + encodeURIComponent(channelID) + '?delete_files=true', { method: 'DELETE' });
 					mpa.showToast(i18nFormat('toast_unfollowed_channel', 'Unfollowed %1$s', label));
 				} else {
 					const url = subscribeURLFor(channelID, handle);
@@ -378,6 +403,7 @@
 						? i18nText('error_unfollow_failed', 'Failed to unfollow')
 						: i18nText('error_follow_failed', 'Failed to follow')
 				);
+				if (following) syncCardFollowButtons(channelID, true);
 				mpa.showToast(msg);
 			} finally {
 				btn.disabled = false;

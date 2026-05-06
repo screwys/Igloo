@@ -429,6 +429,10 @@ function applyRetweetMuteFilter(scope) {
 function syncFollowButtons(channelId, following) {
   var cid = String(channelId || '').trim()
   if (!cid) return
+  if (window.MpaSiteBase && typeof window.MpaSiteBase.syncChannelFollowState === 'function') {
+    window.MpaSiteBase.syncChannelFollowState(cid, following)
+    return
+  }
   document.querySelectorAll('[data-feed-follow-toggle][data-feed-channel-id]').forEach(function (btn) {
     if (String(btn.getAttribute('data-feed-channel-id') || '').trim() !== cid) return
     btn.setAttribute('data-following', following ? '1' : '0')
@@ -452,14 +456,15 @@ function unfollowChannel(channelId, label) {
     danger: true
   }).then(function (confirmed) {
     if (!confirmed) return false
+    syncFollowButtons(cid, false)
     return apiFetch('/api/unsubscribe/' + encodeURIComponent(cid) + '?delete_files=true', { method: 'DELETE' })
       .then(function (payload) {
-        syncFollowButtons(cid, false)
         showToast((payload && payload.message) || tf('toast_unfollowed_channel', 'Unfollowed %1$s', String(label || cid)))
         if (payload && payload.sync_version && window.SyncPoller) window.SyncPoller.advance(payload.sync_version)
         return true
       })
       .catch(function (err) {
+        syncFollowButtons(cid, true)
         showToast((err && err.payload && err.payload.error) ? err.payload.error : t('error_unfollow_failed', 'Failed to unfollow'))
         return false
       })

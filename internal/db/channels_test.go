@@ -287,6 +287,49 @@ func TestPurgeUnfollowedVideoChannelDropsProfileWhenNoBookmarkSurvives(t *testin
 	}
 }
 
+func TestPurgeUnfollowedChannelContentKeepsFollowClearedWhenPurgeFails(t *testing.T) {
+	d := openWritableTestDB(t)
+	if err := d.ExecRaw(`
+		INSERT INTO channels (channel_id, name, platform)
+		VALUES ('twitter_drop_fail', 'Drop Fail', 'twitter')
+	`); err != nil {
+		t.Fatalf("insert channel: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO channel_follows (user_id, channel_id, followed_at)
+		VALUES ('', 'twitter_drop_fail', 1)
+	`); err != nil {
+		t.Fatalf("insert follow: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, author_handle, source_handle, published_at, fetched_at)
+		VALUES ('tw_drop_fail', 'drop_fail', 'drop_fail', 1, 1)
+	`); err != nil {
+		t.Fatalf("insert feed item: %v", err)
+	}
+	if err := d.ExecRaw(`
+		CREATE TRIGGER fail_drop_fail_delete
+		BEFORE DELETE ON feed_items
+		WHEN OLD.tweet_id = 'tw_drop_fail'
+		BEGIN
+			SELECT RAISE(ABORT, 'stop purge');
+		END;
+	`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	if _, err := d.PurgeUnfollowedChannelContent("twitter_drop_fail", "alice"); err == nil {
+		t.Fatal("expected purge failure")
+	}
+	var count int
+	if err := d.QueryRow(`SELECT COUNT(*) FROM channel_follows WHERE channel_id='twitter_drop_fail'`).Scan(&count); err != nil {
+		t.Fatalf("count follow: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("follow row should stay cleared after purge failure, count=%d", count)
+	}
+}
+
 // TestChannelSettingsOverrideChain walks the full per-channel > global > default
 // resolution contract, using include_reposts — the field most
 // likely to silently flip behaviour when the chain regresses. NULL in

@@ -701,6 +701,9 @@ function syncShortAuthorFollow(channelId, following) {
     el.classList.toggle('following', !!following)
     el.textContent = following ? t('action_following', 'Following') : t('action_follow', 'Follow')
   })
+  if (window.MpaSiteBase && typeof window.MpaSiteBase.syncChannelFollowState === 'function') {
+    window.MpaSiteBase.syncChannelFollowState(cid, following)
+  }
 }
 
 function followShortAuthor(entryData, btn) {
@@ -722,10 +725,10 @@ function followShortAuthor(entryData, btn) {
       danger: true
     }).then(function (confirmed) {
       if (!confirmed) return null
+      syncShortAuthorFollow(channelId, false)
       return apiFetch('/api/unsubscribe/' + encodeURIComponent(channelId) + '?delete_files=true', { method: 'DELETE' })
     }).then(function (payload) {
       if (!payload) return false
-      syncShortAuthorFollow(channelId, false)
       showToast((payload && payload.message) || tf('toast_unfollowed_channel', 'Unfollowed %1$s', label))
       if (payload && payload.sync_version && window.SyncPoller) window.SyncPoller.advance(payload.sync_version)
       return true
@@ -749,6 +752,7 @@ function followShortAuthor(entryData, btn) {
       showToast(tf('toast_followed_channel', 'Followed %1$s', label))
       return
     }
+    if (following) syncShortAuthorFollow(channelId, true)
     showToast((err && err.payload && err.payload.error) ? err.payload.error : (following ? t('error_unfollow_failed', 'Failed to unfollow') : t('error_follow_failed', 'Failed to follow')))
   }).finally(function () {
     btn.disabled = false
