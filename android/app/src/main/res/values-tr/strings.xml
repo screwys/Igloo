@@ -332,7 +332,7 @@
     <string name="logs_no_sync_report">Rapor yok</string>
     <string name="logs_no_warnings">Uyarı yok</string>
     <string name="logs_no_x_sources">X kaynağı eklenmemiş.</string>
-    <string name="logs_parsed_detail">%1$d medya · %2$d metin gönderi</string>
+    <string name="logs_parsed_detail">%1$d medyalı · %2$d metin</string>
     <string name="logs_preview_queue">Önizleme kuyruğu</string>
     <string name="logs_processes">İşlemler</string>
     <string name="logs_recent_downloads">Son indirmeler</string>
@@ -352,7 +352,7 @@
     <string name="logs_stat_last_download">Son indirme</string>
     <string name="logs_stat_last_sync">Son eşitleme</string>
     <string name="logs_stat_memory">Bellek</string>
-    <string name="logs_stat_parsed">Ayrıştırılan</string>
+    <string name="logs_stat_parsed">Gönderiler</string>
     <string name="logs_stat_queue">Sıra</string>
     <string name="logs_stat_session">Oturum</string>
     <string name="logs_stat_sources">Kaynaklar</string>
