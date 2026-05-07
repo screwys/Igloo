@@ -283,10 +283,10 @@
     <string name="logs_android_device_assets_bytes_detail">%1$d/%2$d doğrulandı · %3$s</string>
     <string name="logs_android_device_assets_detail">%1$d/%2$d doğrulandı · %3$d bekliyor</string>
     <string name="logs_android_device_assets_problem_detail">%1$d/%2$d doğrulandı · %3$d bekliyor · %4$d başarısız · %5$d eksik</string>
-    <string name="logs_android_generation">Eşitleme paketi</string>
+    <string name="logs_android_generation">Eşitleme grubu</string>
     <string name="logs_android_generation_assets">%1$d medya · %2$d hazır</string>
     <string name="logs_android_generation_assets_missing">%1$d medya · %2$d hazır · %3$d eksik</string>
-    <string name="logs_android_generation_items">içerik</string>
+    <string name="logs_android_generation_items">gönderi</string>
     <string name="logs_app_starts">Uygulama açılışları</string>
     <string name="logs_avg_latency">Ort. gecikme</string>
     <string name="logs_cache_health">Önbellek durumu</string>
