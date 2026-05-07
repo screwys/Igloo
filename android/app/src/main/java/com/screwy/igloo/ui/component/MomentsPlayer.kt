@@ -178,7 +178,7 @@ private const val MOMENT_STILL_ADVANCE_DELAY_MS = 3_000L
 private const val MOMENTS_TRANSITION_POSTER_MIN_MS = 180L
 private const val MOMENTS_STOP_OLD_PAGE_DELAY_MS = 200L
 private const val MomentCaptionBaseBottomPaddingDp = 12
-private const val MomentVideoCaptionBaseBottomPaddingDp = 64
+private const val MomentVideoCaptionBaseBottomPaddingDp = 28
 
 private data class MomentTransitionPoster(
     val videoId: String,
