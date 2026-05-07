@@ -309,8 +309,9 @@ func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string
 
 	whereClause := "WHERE " + strings.Join(where, " AND ")
 
-	// Cap the snapshot size. Diversity MMR is O(n²), and paging realistically
-	// stays well under a few hundred items. 2000 covers ~50 pages of 40.
+	// Cap the snapshot size. The exact greedy diversity pass prunes candidates
+	// by score bounds, but the ranking query and snapshot write still do work
+	// proportional to the candidate set. 2000 covers ~50 pages of 40.
 	const snapshotMaxItems = 2000
 
 	// Recency ladder: the first two hours stay very competitive, then the
@@ -345,7 +346,7 @@ func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string
 	}
 	defer rows.Close()
 
-	var out []PreDiversitySnapshotRow
+	out := make([]PreDiversitySnapshotRow, 0, snapshotMaxItems)
 	for rows.Next() {
 		var r PreDiversitySnapshotRow
 		if err := rows.Scan(&r.TweetID, &r.AuthorHandle, &r.SourceHandle,

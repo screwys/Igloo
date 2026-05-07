@@ -1,6 +1,10 @@
 package feed
 
 import (
+	"fmt"
+	"hash/fnv"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,6 +78,24 @@ func TestJitter_RangeBounded(t *testing.T) {
 	}
 }
 
+func TestJitter_MatchesStandardFNV1a(t *testing.T) {
+	cases := []struct {
+		tweetID  string
+		hourSalt string
+	}{
+		{"tweet_a", "0"},
+		{"tweet_b", "1778191200"},
+		{"123456789", "9999999999"},
+	}
+	for _, tc := range cases {
+		got := jitterFor(tc.tweetID, tc.hourSalt)
+		want := jitterForStandardFNVForTest(tc.tweetID, tc.hourSalt)
+		if got != want {
+			t.Fatalf("jitterFor(%q, %q) = %.17g, want %.17g", tc.tweetID, tc.hourSalt, got, want)
+		}
+	}
+}
+
 func TestBuildSnapshot_RecordsBreakdown(t *testing.T) {
 	in := []db.PreDiversitySnapshotRow{
 		{TweetID: "x", AuthorHandle: "u", BaseScore: 7, DecayFactor: 0.5, FreshnessBonus: 2},
@@ -110,6 +132,139 @@ func TestBuildSnapshot_DiversityDemotedByRecorded(t *testing.T) {
 	if out[1].DiversityDemotedBy != diversityAuthorPen {
 		t.Errorf("second item demotion = %v, want %v", out[1].DiversityDemotedBy, diversityAuthorPen)
 	}
+}
+
+func TestBuildSnapshot_MatchesExhaustiveGreedySelection(t *testing.T) {
+	now := time.Unix(1778191200, 0)
+	in := syntheticSnapshotRows(240)
+	got := BuildSnapshot(in, now)
+	want := buildSnapshotExhaustiveForTest(in, now)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("optimized snapshot differs from exhaustive greedy\nfirst diff: %s", firstSnapshotDiff(got, want))
+	}
+}
+
+func BenchmarkBuildSnapshotDense2000(b *testing.B) {
+	in := syntheticSnapshotRows(2000)
+	now := time.Unix(1778191200, 0)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		out := BuildSnapshot(in, now)
+		if len(out) != len(in) {
+			b.Fatalf("snapshot rows = %d, want %d", len(out), len(in))
+		}
+	}
+}
+
+func buildSnapshotExhaustiveForTest(in []db.PreDiversitySnapshotRow, now time.Time) []db.SnapshotRow {
+	if len(in) == 0 {
+		return nil
+	}
+	hourSalt := fmt.Sprintf("%d", now.Truncate(time.Hour).Unix())
+
+	type cand struct {
+		row    db.PreDiversitySnapshotRow
+		jitter float64
+		base   float64
+		used   bool
+	}
+
+	cands := make([]cand, len(in))
+	for i, r := range in {
+		j := jitterFor(r.TweetID, hourSalt)
+		cands[i] = cand{
+			row:    r,
+			jitter: j,
+			base:   r.BaseScore*r.DecayFactor + r.FreshnessBonus + j,
+		}
+	}
+
+	out := make([]db.SnapshotRow, 0, len(cands))
+	recentAuthors := make([]string, 0, diversityWindow)
+	recentSources := make([]string, 0, diversityWindow)
+
+	for pos := 1; pos <= len(cands); pos++ {
+		bestIdx := -1
+		bestScore := -1e18
+		var bestDemoted float64
+		for i := range cands {
+			if cands[i].used {
+				continue
+			}
+			s := cands[i].base
+			demoted := 0.0
+			if cands[i].row.AuthorHandle != "" && containsLower(recentAuthors, cands[i].row.AuthorHandle) {
+				s -= diversityAuthorPen
+				demoted += diversityAuthorPen
+			}
+			if cands[i].row.SourceHandle != "" && containsLower(recentSources, cands[i].row.SourceHandle) {
+				s -= diversitySourcePen
+				demoted += diversitySourcePen
+			}
+			if s > bestScore {
+				bestScore = s
+				bestIdx = i
+				bestDemoted = demoted
+			}
+		}
+		if bestIdx < 0 {
+			break
+		}
+		c := cands[bestIdx]
+		cands[bestIdx].used = true
+
+		out = append(out, db.SnapshotRow{
+			TweetID:            c.row.TweetID,
+			RankPosition:       pos,
+			BaseScore:          c.row.BaseScore,
+			DecayFactor:        c.row.DecayFactor,
+			FreshnessBonus:     c.row.FreshnessBonus,
+			Jitter:             c.jitter,
+			DiversityDemotedBy: bestDemoted,
+			FinalScore:         bestScore,
+		})
+
+		recentAuthors = pushWindow(recentAuthors, strings.ToLower(c.row.AuthorHandle), diversityWindow)
+		recentSources = pushWindow(recentSources, strings.ToLower(c.row.SourceHandle), diversityWindow)
+	}
+	return out
+}
+
+func jitterForStandardFNVForTest(tweetID, hourSalt string) float64 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(tweetID))
+	_, _ = h.Write([]byte{'|'})
+	_, _ = h.Write([]byte(hourSalt))
+	frac := float64(h.Sum32()) / 4294967295.0
+	return (frac - 0.5) * jitterRangePerTweet
+}
+
+func syntheticSnapshotRows(n int) []db.PreDiversitySnapshotRow {
+	rows := make([]db.PreDiversitySnapshotRow, n)
+	for i := 0; i < n; i++ {
+		rows[i] = db.PreDiversitySnapshotRow{
+			TweetID:        fmt.Sprintf("tw_%04d", i),
+			AuthorHandle:   fmt.Sprintf("author_%02d", i%17),
+			SourceHandle:   fmt.Sprintf("source_%02d", (i/3)%11),
+			BaseScore:      200 - float64(i%80)*0.07 - float64(i/80)*0.5,
+			DecayFactor:    1 - float64(i%5)*0.03,
+			FreshnessBonus: float64((i*7)%13) * 0.21,
+		}
+	}
+	return rows
+}
+
+func firstSnapshotDiff(got, want []db.SnapshotRow) string {
+	if len(got) != len(want) {
+		return fmt.Sprintf("length got %d want %d", len(got), len(want))
+	}
+	for i := range got {
+		if !reflect.DeepEqual(got[i], want[i]) {
+			return fmt.Sprintf("row %d got %+v want %+v", i, got[i], want[i])
+		}
+	}
+	return "none"
 }
 
 func absFloat(x float64) float64 {

@@ -46,11 +46,11 @@ func (m *Manager) scoreFeedItems(ctx context.Context) {
 
 	// Rebuild the snapshot on every tick so time-decay drift stays fresh even
 	// when no items needed re-scoring.
-	snapCount, snapDur, snapTop := m.runSnapshotPhase(ctx, scoringUsername)
+	snap := m.runSnapshotPhaseStats(ctx, scoringUsername)
 
 	totalElapsed := time.Since(start).Round(time.Millisecond)
-	detail := fmt.Sprintf("scored=%d snap=%d/%s total=%s top=%s",
-		scored, snapCount, snapDur, totalElapsed, snapTop)
+	detail := fmt.Sprintf("scored=%d snap=%d/%s query=%s build=%s write=%s total=%s top=%s",
+		scored, snap.count, snap.totalDur, snap.queryDur, snap.buildDur, snap.writeDur, totalElapsed, snap.top)
 	log.Printf("[feed_scoring] %s", detail)
 	m.EmitFeed("feed_scoring", detail, "done")
 	m.setStatus("feed_scoring", workerStatus("feed_scoring", true, detail, ""))
@@ -141,21 +141,50 @@ func (m *Manager) runScoringPhase() int {
 // returns zero values — the prior snapshot is preserved because
 // ReplaceFeedRankSnapshot is a no-op on empty rows.
 func (m *Manager) runSnapshotPhase(ctx context.Context, username string) (int, time.Duration, string) {
+	stats := m.runSnapshotPhaseStats(ctx, username)
+	return stats.count, stats.totalDur, stats.top
+}
+
+type snapshotPhaseStats struct {
+	count    int
+	totalDur time.Duration
+	queryDur time.Duration
+	buildDur time.Duration
+	writeDur time.Duration
+	top      string
+}
+
+func (m *Manager) runSnapshotPhaseStats(ctx context.Context, username string) snapshotPhaseStats {
+	stats := snapshotPhaseStats{top: "[]"}
 	snapStart := time.Now()
 	snapCtx, cancel := context.WithTimeout(ctx, feedSnapshotBuildTimeout)
 	defer cancel()
 
+	queryStart := time.Now()
 	pre, err := m.db.ListPreDiversityRankedContext(snapCtx, username)
+	stats.queryDur = time.Since(queryStart).Round(time.Millisecond)
 	if err != nil {
 		log.Printf("[feed_scoring] ListPreDiversityRanked: %v", err)
-		return 0, 0, "[]"
+		stats.totalDur = time.Since(snapStart).Round(time.Millisecond)
+		return stats
 	}
+
+	buildStart := time.Now()
 	snapshot := feed.BuildSnapshot(pre, time.Now())
+	stats.buildDur = time.Since(buildStart).Round(time.Millisecond)
+
+	writeStart := time.Now()
 	if err := m.db.ReplaceFeedRankSnapshot(username, snapshot); err != nil {
 		log.Printf("[feed_scoring] ReplaceFeedRankSnapshot: %v", err)
-		return 0, 0, "[]"
+		stats.writeDur = time.Since(writeStart).Round(time.Millisecond)
+		stats.totalDur = time.Since(snapStart).Round(time.Millisecond)
+		return stats
 	}
-	return len(snapshot), time.Since(snapStart).Round(time.Millisecond), snapshotTop10(snapshot)
+	stats.writeDur = time.Since(writeStart).Round(time.Millisecond)
+	stats.totalDur = time.Since(snapStart).Round(time.Millisecond)
+	stats.count = len(snapshot)
+	stats.top = snapshotTop10(snapshot)
+	return stats
 }
 
 // snapshotTop10 returns a compact "tweet_id(final_score)" summary for the first
