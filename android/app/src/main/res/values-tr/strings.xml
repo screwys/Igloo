@@ -254,8 +254,8 @@
     <string name="field_server_url">Sunucu URL\'si</string>
     <string name="field_user">Kullanıcı</string>
     <string name="field_username">Kullanıcı adı</string>
-    <string name="follow_queued_syncing">Takip işlemi beklemeye alındı. Sunucuyla eşitleniyor…</string>
-    <string name="follow_queued_waiting">Takip işlemi beklemeye alındı. Sunucuya erişilince eşitlenecek.</string>
+    <string name="follow_queued_syncing">Takip beklemeye alındı. Sunucuyla eşitleniyor…</string>
+    <string name="follow_queued_waiting">Takip beklemeye alındı. Sunucuya erişilince eşitlenecek.</string>
     <string name="import_config_merge_description">Yeni içerikleri ekle, mevcut verileri koru</string>
     <string name="import_config_mode_prompt">Mevcut veriler ne yapılsın?</string>
     <string name="import_config_replace_description">Mevcut verileri temizle, dosyadakileri geri yükle</string>
@@ -767,8 +767,8 @@
     <string name="toast_unfollowed_channel">%1$s takipten çıkarıldı</string>
     <string name="toast_unliked">Beğeni kaldırıldı</string>
     <string name="toast_unmuted">Sessizden çıkarıldı</string>
-    <string name="unfollow_queued_syncing">Takipten çıkarma işlemi beklemeye alındı. Sunucuyla eşitleniyor…</string>
-    <string name="unfollow_queued_waiting">Takipten çıkarma işlemi beklemeye alındı. Sunucuya erişilince eşitlenecek.</string>
+    <string name="unfollow_queued_syncing">Takipten çıkarma beklemeye alındı. Sunucuyla eşitleniyor…</string>
+    <string name="unfollow_queued_waiting">Takipten çıkarma beklemeye alındı. Sunucuya erişilince eşitlenecek.</string>
     <string name="users_confirm_delete_user">%1$s kullanıcısı silinsin mi? Tüm verileri kaldırılır.</string>
     <string name="users_copy_my_subscriptions">Takip ettiklerimi kopyala</string>
     <string name="users_edit_prefix">Düzenle: %s</string>
