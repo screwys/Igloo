@@ -27,6 +27,10 @@ java_home_from_bin() {
 }
 
 candidate_java_homes() {
+    if [ -n "${JAVA_HOME:-}" ]; then
+        printf '%s\n' "$JAVA_HOME"
+    fi
+
     if command -v java >/dev/null 2>&1; then
         java_home_from_bin "$(command -v java)"
     fi
@@ -34,6 +38,8 @@ candidate_java_homes() {
     printf '%s\n' \
         "$HOME/.sdkman/candidates/java/current" \
         "$HOME/.sdkman/candidates/java/${required_java_major}"* \
+        "$HOME/.local/share/jdks/java-${required_java_major}-openjdk" \
+        "$HOME/.local/share/jdks/jdk-${required_java_major}" \
         "/usr/lib/jvm/java-${required_java_major}-openjdk" \
         "/usr/lib/jvm/java-latest-openjdk" \
         "/usr/lib/jvm/jdk-${required_java_major}" \
@@ -58,16 +64,7 @@ is_required_java_home() {
 
 require_java_home() {
     local candidate
-
-    if [ -n "${JAVA_HOME:-}" ]; then
-        if is_required_java_home "$JAVA_HOME"; then
-            export PATH="$JAVA_HOME/bin:$PATH"
-            return 0
-        fi
-        echo "❌ JAVA_HOME is set, but it is not a Java ${required_java_major} JDK: $JAVA_HOME"
-        echo "   Point JAVA_HOME at Java ${required_java_major}, or unset it and put Java ${required_java_major} on PATH."
-        return 1
-    fi
+    local original_java_home="${JAVA_HOME:-}"
 
     while IFS= read -r candidate; do
         [ -n "$candidate" ] || continue
@@ -78,7 +75,11 @@ require_java_home() {
         fi
     done < <(candidate_java_homes | awk 'NF && !seen[$0]++')
 
-    echo "❌ Java ${required_java_major} JDK not found."
+    if [ -n "$original_java_home" ]; then
+        echo "❌ JAVA_HOME is set, but it is not a Java ${required_java_major} JDK: $original_java_home"
+    else
+        echo "❌ Java ${required_java_major} JDK not found."
+    fi
     echo "   Set JAVA_HOME to a Java ${required_java_major} JDK, put Java ${required_java_major} on PATH,"
     echo "   or install it with your platform package manager."
     echo "   Examples:"
