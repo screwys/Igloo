@@ -24,7 +24,7 @@ class MomentsPlayerTest {
 
     @Test
     fun video_caption_base_padding_keeps_text_close_to_progress_bar() {
-        assertEquals(28, momentCaptionBaseBottomPaddingDp(MomentMediaMode.Video))
+        assertEquals(16, momentCaptionBaseBottomPaddingDp(MomentMediaMode.Video))
         assertEquals(12, momentCaptionBaseBottomPaddingDp(MomentMediaMode.Image))
         assertEquals(12, momentCaptionBaseBottomPaddingDp(MomentMediaMode.Slideshow))
     }
