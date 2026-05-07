@@ -170,7 +170,7 @@
     <string name="confirm_remove_channel_and_files">%1$s kanalı ve dosyaları kaldırılsın mı?</string>
     <string name="confirm_unfollow_account_body">Bu hesabı sunucuda takip etmeyi bırakır ve takip edilenler listenizden kaldırır. Eşitlenen videolar daha sonra Android\'den temizlenebilir.</string>
     <string name="confirm_unfollow_account_title">Takibi bırakılsın mı?</string>
-    <string name="confirm_unfollow_channel_body">%1$s takibi bırakılsın mı?</string>
+    <string name="confirm_unfollow_channel_body">%1$s artık takip edilmesin mi?</string>
     <string name="confirm_unfollow_channel_default_name">bu kanal</string>
     <string name="confirm_unfollow_channel_delete_media_body">\"%1$s\" takibi bırakılsın ve cihazdaki medyası silinsin mi? Bu işlem geri alınamaz.</string>
     <string name="confirm_unfollow_channel_title">Kanal takibi bırakılsın mı?</string>
