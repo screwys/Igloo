@@ -28,7 +28,7 @@ const (
 	androidSyncAssetPageCap        = 2000
 	androidSyncFreshGenerationTTL  = 6 * time.Hour
 	androidSyncFreshGenerationSkew = 5 * time.Minute
-	androidSyncSourceDriftReuseTTL = 30 * time.Minute
+	androidSyncSourceDriftReuseTTL = androidSyncFreshGenerationTTL
 	androidSyncFeedRankMaxRows     = 5000
 )
 

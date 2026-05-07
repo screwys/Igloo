@@ -87,6 +87,15 @@ func feedRankingFromSQL(relatedSeenExpr, absenceExpr, starredAbsenceExpr string)
 				           %s AS starred_absence_boost
 				    FROM feed_items fi
 				    LEFT JOIN (
+				        SELECT fs_related.username,
+				               %s AS related_key,
+				               COUNT(*) AS related_seen_count
+				        FROM feed_seen fs_related
+				        JOIN feed_items seen_fi ON seen_fi.tweet_id = fs_related.tweet_id
+				        GROUP BY fs_related.username, %s
+				    ) rsc ON rsc.username = NULLIF(?, '')
+				        AND rsc.related_key = %s
+				    LEFT JOIN (
 		        SELECT LOWER(LTRIM(TRIM(parent.author_handle), '@')) AS handle,
 		               MAX(fs.seen_at) AS last_seen_at
 		        FROM feed_seen fs
@@ -103,7 +112,11 @@ func feedRankingFromSQL(relatedSeenExpr, absenceExpr, starredAbsenceExpr string)
 		      ON cs_abs.user_id = ''
 		     AND cs_abs.channel_id = 'twitter_' || LOWER(LTRIM(TRIM(fi.author_handle), '@'))
 			) fi
-			`, relatedSeenExpr, absenceExpr, starredAbsenceExpr)
+			`, relatedSeenExpr, absenceExpr, starredAbsenceExpr,
+		feedRelatedContentKeySQL("seen_fi"),
+		feedRelatedContentKeySQL("seen_fi"),
+		feedRelatedContentKeySQL("fi"),
+	)
 }
 
 func feedRelatedContentKeySQL(alias string) string {
@@ -117,14 +130,8 @@ func feedRelatedContentKeySQL(alias string) string {
 }
 
 func feedRelatedSeenCountSelect(alias string) string {
-	return fmt.Sprintf(`(
-		SELECT COUNT(*)
-		FROM feed_seen fs_related
-		JOIN feed_items seen_fi ON seen_fi.tweet_id = fs_related.tweet_id
-		WHERE fs_related.username = NULLIF(?, '')
-		  AND seen_fi.tweet_id != %[1]s.tweet_id
-		  AND %[2]s = %[3]s
-	)`, alias, feedRelatedContentKeySQL("seen_fi"), feedRelatedContentKeySQL(alias))
+	_ = alias
+	return `COALESCE(rsc.related_seen_count, 0)`
 }
 
 func feedRelatedContentPenaltySQL(alias string) string {
@@ -147,13 +154,13 @@ func feedAbsenceBoostArgs(username string, capHours, seenMaxBoost, neverSeenBoos
 		seenMaxBoost, capHours, capHours,
 		username, capHours,
 		starredMaxBoost, starredMaxBoost, capHours, capHours,
-		username,
 	}
 }
 
 func feedRankingArgs(username string, capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost float64) []any {
-	args := []any{username}
-	return append(args, feedAbsenceBoostArgs(username, capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost)...)
+	args := feedAbsenceBoostArgs(username, capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost)
+	args = append(args, username, username)
+	return args
 }
 
 func safeFeedAbsenceCapHours(capHours float64) float64 {

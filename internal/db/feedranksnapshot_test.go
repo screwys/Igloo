@@ -2,6 +2,7 @@ package db
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -312,5 +313,16 @@ func TestListPreDiversityRanked_DemotesAlreadySeenUnderlyingTweet(t *testing.T) 
 	}
 	if got := baseByID["original_candidate_seen_via_quote"]; math.Abs(got-25) > 0.1 {
 		t.Fatalf("original seen through quote base = %.3f, want 25", got)
+	}
+}
+
+func TestFeedRelatedSeenCountSQLUsesPrecomputedSet(t *testing.T) {
+	relatedExpr := feedRelatedSeenCountSelect("fi")
+	if strings.Contains(strings.ToUpper(relatedExpr), "SELECT COUNT") {
+		t.Fatalf("related seen count should not run a per-row correlated count: %s", relatedExpr)
+	}
+	fromSQL := feedRankingFromSQL(relatedExpr, feedAbsenceBoostSelect("fi"), feedStarredAbsenceBoostSelect("fi"))
+	if !strings.Contains(fromSQL, "related_key") || !strings.Contains(fromSQL, "rsc.related_key") {
+		t.Fatalf("ranking SQL should precompute related seen counts once: %s", fromSQL)
 	}
 }

@@ -912,6 +912,15 @@ func TestAndroidSyncLatestReusesFreshGenerationDuringSourceDrift(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first generation: %v", err)
 	}
+	freshButPastShortDriftWindow := now - int64((45 * time.Minute).Milliseconds())
+	if err := srv.db.ExecRaw(`
+		UPDATE android_sync_generations
+		SET created_at_ms = ?
+		WHERE generation_id = ?
+	`, freshButPastShortDriftWindow, first.GenerationID); err != nil {
+		t.Fatalf("age first generation: %v", err)
+	}
+	first.CreatedAtMs = freshButPastShortDriftWindow
 
 	mustWriteFile(t, filepath.Join(dataDir, "videos", "youtube", "clip-b.mp4"), []byte("clip-b"))
 	mustWriteFile(t, filepath.Join(dataDir, "videos", "youtube", "clip-b.jpg"), []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43})
