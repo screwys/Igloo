@@ -140,6 +140,7 @@
     <string name="bookmark_no_categories_yet">No categories yet.</string>
     <string name="bookmark_pick_media_to_download">Pick # to download</string>
     <string name="bookmark_pick_media_to_download_count">Pick # to download (%1$d/%2$d)</string>
+    <string name="bookmark_platform_instagram_post">Instagram post</string>
     <string name="bookmark_platform_tiktok_post">TikTok post</string>
     <string name="bookmark_platform_x_post">X post</string>
     <string name="bookmark_platform_youtube_video">YouTube video</string>
@@ -718,7 +719,7 @@
     <string name="status_signed_in_as">Signed in as %1$s</string>
     <string name="status_up_to_date">You\'re up to date!</string>
     <string name="status_verified">Verified</string>
-    <string name="stories_count_many">%d stories</string>
+    <string name="stories_count_many">%1$d stories</string>
     <string name="stories_count_one">1 story</string>
     <string name="stories_empty">No stories</string>
     <string name="subscribe_modal_description">Paste any video URL (YouTube, TikTok, Instagram) to subscribe to that channel</string>
