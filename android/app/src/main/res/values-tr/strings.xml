@@ -155,7 +155,7 @@
     <string name="bookmarks_empty">Henüz kaydedilen yok</string>
     <string name="cache_avatars">Avatarlar</string>
     <string name="cache_banners">Kapak görselleri</string>
-    <string name="cache_feed_items">Akış içerikleri</string>
+    <string name="cache_feed_items">Gönderiler</string>
     <string name="cache_subtitles">Altyazılar</string>
     <string name="cache_x_media">X medyası</string>
     <string name="channel_empty_videos">Bu kanalda video yok.</string>
@@ -208,7 +208,7 @@
     <string name="error_unauthorized">Yetkisiz</string>
     <string name="error_unfollow_failed">Takip bırakılamadı</string>
     <string name="error_unknown_platform">Bilinmeyen platform: %1$s</string>
-    <string name="feed_empty_items">Akışta içerik yok.</string>
+    <string name="feed_empty_items">Gösterilecek gönderi yok.</string>
     <string name="feed_empty_liked">Henüz beğendiğiniz gönderi yok</string>
     <string name="feed_empty_posts">Henüz gönderi yok, yenilemek için kaydırın</string>
     <string name="feed_empty_title">Gönderi yok</string>
