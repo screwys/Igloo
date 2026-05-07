@@ -14,7 +14,7 @@
     <string name="action_clear">Temizle</string>
     <string name="action_clear_all_cache">Tüm önbelleği temizle</string>
     <string name="action_clear_moments_cache">Moments önbelleğini temizle</string>
-    <string name="action_clear_muted_accounts">Sessize alınan hesapları temizle</string>
+    <string name="action_clear_muted_accounts">Tümünü sessizden çıkar</string>
     <string name="action_clear_youtube_cache">YouTube önbelleğini temizle</string>
     <string name="action_close">Kapat</string>
     <string name="action_close_logs">Kayıtları kapat</string>
@@ -102,6 +102,7 @@
     <string name="action_unfollow_account">Takibi bırak</string>
     <string name="action_unlike">Beğeniyi geri al</string>
     <string name="action_unmute">Sesi aç</string>
+    <string name="action_unmute_account">Sessizden çıkar</string>
     <string name="action_unmute_account_handle">@%1$s hesabını sessizden çıkar</string>
     <string name="action_unpin_temp_video">Video sabitlemesini kaldır</string>
     <string name="action_unsave">Kaydedilenlerden çıkar</string>
@@ -494,13 +495,13 @@
     <string name="settings_backup_help">Ayrı bir klasör seçin. Veritabanı ve ayarlar her gün yedeklenir; yalnızca son 5 yedek saklanır.</string>
     <string name="settings_bookmark_per_category">Kategoriye göre ayarlar</string>
     <string name="settings_check_interval_hours">Kontrol sıklığı (saat)</string>
-    <string name="settings_clear_muted_help">Tüm sessize alınan hesaplar sessizden çıkarılacak ve gönderileri tekrar akışınızda görünebilecek.</string>
-    <string name="settings_clear_muted_title">Sessize alınan hesaplar sessizden çıkarılsın mı?</string>
+    <string name="settings_clear_muted_help">Sessize alınan tüm hesaplar sessizden çıkarılır. Bu hesapların gönderileri eşitlemeden sonra akışınızda tekrar görünebilir.</string>
+    <string name="settings_clear_muted_title">Tüm hesaplar sessizden çıkarılsın mı?</string>
     <string name="settings_cookie_files">Çerez dosyaları</string>
     <string name="settings_cookie_files_help">Kimlik doğrulama isteyen platformlar için Netscape biçiminde çerez dosyaları yükleyin.</string>
     <string name="settings_dearrow_casual">Hafif</string>
-    <string name="settings_dearrow_community">Topluluk katkısı</string>
-    <string name="settings_dearrow_description">YouTube videoları için topluluk oylamalı başlıklar ve küçük resimler. Kapalı, Topluluk katkısı veya Hafif.</string>
+    <string name="settings_dearrow_community">Topluluk</string>
+    <string name="settings_dearrow_description">YouTube videoları için topluluk tarafından seçilmiş başlıklar ve küçük resimler. Modlar: Kapalı, Topluluk veya Hafif.</string>
     <string name="settings_dearrow_help_prefix">YouTube başlıklarını ve küçük resimlerini topluluk oylamalı alternatiflerle değiştirir:</string>
     <string name="settings_dearrow_section">DeArrow</string>
     <string name="settings_dearrow_title">DeArrow: tıklama tuzağı olmayan başlık ve küçük resimler</string>
@@ -524,7 +525,7 @@
     <string name="settings_media_only_feed">Yalnızca medya akışı</string>
     <string name="settings_media_only_x">Yalnızca medya (X)</string>
     <string name="settings_mode_casual">Hafif</string>
-    <string name="settings_mode_community">Topluluk katkısı</string>
+    <string name="settings_mode_community">Topluluk</string>
     <string name="settings_mode_off">Kapalı</string>
     <string name="settings_moments_default_tab">Varsayılan Moments sekmesi</string>
     <string name="settings_moments_default_tab_all">Tümü</string>
@@ -626,7 +627,7 @@
     <string name="settings_translation_model_placeholder">qwen2.5:7b</string>
     <string name="settings_ui_language">Arayüz dili</string>
     <string name="settings_ui_language_help">Çeviriler yerel Weblate kataloğundan yüklenir.</string>
-    <string name="settings_unmute_help">Eşitleme tamamlandıktan sonra gönderileri akışınızda tekrar görünebilir.</string>
+    <string name="settings_unmute_help">Eşitleme tamamlandıktan sonra bu hesabın gönderileri akışınızda tekrar görünebilir.</string>
     <string name="settings_unmute_title">@%1$s sessizden çıkarılsın mı?</string>
     <string name="settings_video_quality">Video kalitesi</string>
     <string name="settings_wifi_only">Yalnızca Wi-Fi</string>

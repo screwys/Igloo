@@ -157,7 +157,7 @@ templ MutedAccountsList(p PageProps, handles []string) {
 						hx-delete={ "/api/feed/mute/" + handle }
 						hx-target="#muted-accounts-container"
 						hx-swap="innerHTML"
-						>{ L(p, "action_unmute", "Unmute") }</button>
+						>{ L(p, "action_unmute_account", "Unmute account") }</button>
 				</div>
 			}
 		</div>

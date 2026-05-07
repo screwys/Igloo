@@ -102,6 +102,7 @@
     <string name="action_unfollow_account">Unfollow account</string>
     <string name="action_unlike">Unlike</string>
     <string name="action_unmute">Unmute</string>
+    <string name="action_unmute_account">Unmute account</string>
     <string name="action_unmute_account_handle">Unmute @%1$s</string>
     <string name="action_unpin_temp_video">Unpin temp video</string>
     <string name="action_unsave">Unsave</string>

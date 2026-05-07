@@ -89,7 +89,7 @@ fun FeedRoute(
                         mutedVm.unmute(handle)
                     },
                 ) {
-                    Text(stringResource(R.string.action_unmute))
+                    Text(stringResource(R.string.action_unmute_account))
                 }
             },
             dismissButton = {

@@ -49,6 +49,7 @@ var _ = []string{
 	N("action_star_channel", "Star channel"),
 	N("action_unsubscribe_channel", "Unsubscribe channel"),
 	N("action_unmute", "Unmute"),
+	N("action_unmute_account", "Unmute account"),
 	N("bookmark_add_category", "Add category"),
 	N("bookmark_account", "Account"),
 	N("bookmark_category_default", "Category %1$s"),
