@@ -317,7 +317,7 @@
     <string name="logs_last_sync_pipeline">Son eşitleme durumu</string>
     <string name="logs_local_feed">Yerel akış</string>
     <string name="logs_media_assets_count">%d medya dosyası</string>
-    <string name="logs_media_pipeline">Medya akışı</string>
+    <string name="logs_media_pipeline">Medya durumu</string>
     <string name="logs_more_count">+%d daha</string>
     <string name="logs_never">Hiçbir zaman</string>
     <string name="logs_no_download_activity">Henüz indirme etkinliği yok.</string>
@@ -359,7 +359,7 @@
     <string name="logs_stat_storage">Depolama</string>
     <string name="logs_stat_sync_duration">Eşitleme süresi</string>
     <string name="logs_stat_uptime">Çalışma süresi</string>
-    <string name="logs_status_all_done">tamamlandı</string>
+    <string name="logs_status_all_done">hepsi tamam</string>
     <string name="logs_status_cooling">Beklemede</string>
     <string name="logs_status_cooling_count">%d beklemede</string>
     <string name="logs_status_disabled">kapalı</string>
