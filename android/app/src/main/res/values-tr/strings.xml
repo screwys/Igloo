@@ -100,7 +100,7 @@
     <string name="action_unfavourite_account">Favorilerden çıkar</string>
     <string name="action_unfollow">Takibi bırak</string>
     <string name="action_unfollow_account">Hesabı takipten çıkar</string>
-    <string name="action_unlike">Beğenmekten vazgeç</string>
+    <string name="action_unlike">Beğeniyi geri al</string>
     <string name="action_unmute">Sesi aç</string>
     <string name="action_unmute_account_handle">@%1$s hesabını sessizden çıkar</string>
     <string name="action_unpin_temp_video">Video sabitlemesini kaldır</string>
@@ -208,7 +208,7 @@
     <string name="error_unfollow_failed">Takipten çıkarılamadı</string>
     <string name="error_unknown_platform">Bilinmeyen platform: %1$s</string>
     <string name="feed_empty_items">Akışta içerik yok.</string>
-    <string name="feed_empty_liked">Henüz beğenilen gönderi yok</string>
+    <string name="feed_empty_liked">Henüz beğendiğiniz gönderi yok</string>
     <string name="feed_empty_posts">Henüz gönderi yok, yenilemek için kaydırın</string>
     <string name="feed_empty_title">Gönderi yok</string>
     <string name="feed_mute_confirm_body">Bu hesaptaki gönderiler akışınızdan gizlenecek.</string>
@@ -407,7 +407,7 @@
     <string name="nav_bookmarks">Kaydedilenler</string>
     <string name="nav_channels">Kanallar</string>
     <string name="nav_feed">Akış</string>
-    <string name="nav_liked">Beğenilenler</string>
+    <string name="nav_liked">Beğeniler</string>
     <string name="nav_moments">Moments</string>
     <string name="nav_videos">Videolar</string>
     <string name="notification_background_sync_channel_description">Igloo arka planda indirmeleri tamamlarken gösterilir</string>
@@ -765,7 +765,7 @@
     <string name="toast_server_log_copied">Sunucu günlüğü kopyalandı</string>
     <string name="toast_unfollowed">Takipten çıkıldı</string>
     <string name="toast_unfollowed_channel">%1$s takipten çıkarıldı</string>
-    <string name="toast_unliked">Beğeni kaldırıldı</string>
+    <string name="toast_unliked">Beğeni geri alındı</string>
     <string name="toast_unmuted">Sessizden çıkarıldı</string>
     <string name="unfollow_queued_syncing">Takipten çıkarma beklemeye alındı. Sunucuyla eşitleniyor…</string>
     <string name="unfollow_queued_waiting">Takipten çıkarma beklemeye alındı. Sunucuya erişilince eşitlenecek.</string>
