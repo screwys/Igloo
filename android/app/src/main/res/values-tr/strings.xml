@@ -587,7 +587,7 @@
     <string name="settings_starting_page">Başlangıç sayfası</string>
     <string name="settings_storage_sync">Depolama ve eşitleme</string>
     <string name="settings_stories_window_hours">Hikâye süresi (saat)</string>
-    <string name="settings_sync_description">Sunucudan yeni akış öğelerini, değişiklikleri ve medya kopyalarını alır. Yalnızca Wi-Fi açıksa mobil veri kullanılmaz; aralıklar otomatik eşitleme içindir.</string>
+    <string name="settings_sync_description">Sunucudan yeni gönderileri, hesap değişikliklerini ve medya dosyalarını alır. Yalnızca Wi-Fi açıksa mobil veri kullanılmaz; aralıklar otomatik eşitleme içindir.</string>
     <string name="settings_sync_hours">%1$dh</string>
     <string name="settings_sync_interval">Yenileme aralığı</string>
     <string name="settings_sync_minutes">%1$dm</string>
