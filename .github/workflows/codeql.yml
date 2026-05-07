@@ -1,0 +1,91 @@
+name: CodeQL
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "23 2 * * 2"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: ""
+          - language: go
+            build-mode: autobuild
+          - language: java-kotlin
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Java
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "26"
+          cache: gradle
+
+      - name: Initialize CodeQL
+        if: matrix.build-mode == ''
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Initialize CodeQL for compiled language
+        if: matrix.build-mode != ''
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Autobuild
+        if: matrix.build-mode == 'autobuild'
+        uses: github/codeql-action/autobuild@v4
+
+      - name: Compile Android for CodeQL
+        if: matrix.language == 'java-kotlin'
+        working-directory: android
+        env:
+          GRADLE_USER_HOME: ${{ runner.temp }}/gradle-home
+        run: |
+          ./gradlew :app:compileDebugKotlin --no-daemon \
+            -Dorg.gradle.jvmargs="-Xmx4096m -Dfile.encoding=UTF-8" \
+            -Pkotlin.daemon.jvmargs="-Xmx4096m"
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
