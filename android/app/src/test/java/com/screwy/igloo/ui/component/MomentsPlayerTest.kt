@@ -35,6 +35,12 @@ class MomentsPlayerTest {
     }
 
     @Test
+    fun caption_expansion_only_changes_description_line_limit() {
+        assertEquals(2, momentCaptionDescriptionMaxLines(expanded = false))
+        assertEquals(Int.MAX_VALUE, momentCaptionDescriptionMaxLines(expanded = true))
+    }
+
+    @Test
     fun moment_slide_count_treats_single_images_as_one_page() {
         assertEquals(0, momentSlideCount(mediaKind = null, slideCount = 0))
         assertEquals(1, momentSlideCount(mediaKind = "image", slideCount = 0))

@@ -17,7 +17,6 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,16 +26,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -174,6 +170,9 @@ internal fun momentCaptionBaseBottomPaddingDp(mediaMode: MomentMediaMode): Int =
 
 internal fun momentCollapsedCaptionStartPaddingDp(): Int = MomentCollapsedCaptionStartPaddingDp
 
+internal fun momentCaptionDescriptionMaxLines(expanded: Boolean): Int =
+    if (expanded) Int.MAX_VALUE else MomentCollapsedCaptionMaxLines
+
 private const val MOMENTS_PREPARE_RADIUS = 1
 private const val AUTO_SWIPE_SCROLL_DURATION_MS = 850
 private const val MOMENT_STILL_ADVANCE_DELAY_MS = 3_000L
@@ -182,6 +181,7 @@ private const val MOMENTS_STOP_OLD_PAGE_DELAY_MS = 200L
 private const val MomentCaptionBaseBottomPaddingDp = 12
 private const val MomentVideoCaptionBaseBottomPaddingDp = 16
 private const val MomentCollapsedCaptionStartPaddingDp = 8
+private const val MomentCollapsedCaptionMaxLines = 2
 
 private data class MomentTransitionPoster(
     val videoId: String,
@@ -989,36 +989,24 @@ private fun MomentPage(
             )
         }
 
-        // Bottom overlay — timestamp + description. When the user taps the
-        // description, we expand over ~half the screen with a translucent dark
-        // scrim (second screenshot). Collapsed state is 2 lines with "…".
+        // Bottom overlay — timestamp + description. Tapping overflowing text
+        // only changes the description line limit; the caption stays anchored.
         val captionBaseBottomPadding = momentCaptionBaseBottomPaddingDp(mediaMode).dp
         val captionBottomPadding = if (storyMode) {
             storyCaptionBottomPadding(captionBaseBottomPadding)
         } else {
             captionBaseBottomPadding
         }
-        if (expanded) {
-            ExpandedDescription(
-                item = item,
-                onMentionClick = onMentionClick,
-                onChannelClick = onChannelClick,
-                onCollapse = { expanded = false },
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(bottom = captionBottomPadding),
-            )
-        } else {
-            CollapsedDescription(
-                item = item,
-                onMentionClick = onMentionClick,
-                onChannelClick = onChannelClick,
-                onExpand = { expanded = true },
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(bottom = captionBottomPadding),
-            )
-        }
+        CollapsedDescription(
+            item = item,
+            expanded = expanded,
+            onMentionClick = onMentionClick,
+            onChannelClick = onChannelClick,
+            onExpandedChange = { expanded = it },
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(bottom = captionBottomPadding),
+        )
 
         if (!storyMode) {
             MomentDrawerGestureHandle(onOpenDrawer = onSwipeRightFromEdge)
@@ -1950,9 +1938,10 @@ private fun MomentRailAvatar(
 @Composable
 private fun CollapsedDescription(
     item: MomentItem,
+    expanded: Boolean,
     onMentionClick: (String) -> Unit,
     onChannelClick: (String) -> Unit,
-    onExpand: () -> Unit,
+    onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val linkColor = MaterialTheme.iglooColors.primary
@@ -1960,6 +1949,7 @@ private fun CollapsedDescription(
     val collapsedDescription = remember(item.description) {
         collapseMomentCaptionWhitespace(item.description)
     }
+    var descriptionCanExpand by remember(item.videoId, collapsedDescription) { mutableStateOf(false) }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -1969,7 +1959,7 @@ private fun CollapsedDescription(
                 end = 16.dp,
                 bottom = MomentCollapsedCaptionBottomPadding,
             )
-            .clickable(onClick = onExpand),
+            .clickable(enabled = expanded) { onExpandedChange(false) },
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         momentRepostLabel(item)?.let { label ->
@@ -2004,7 +1994,7 @@ private fun CollapsedDescription(
                 text = collapsedDescription,
                 onMentionClick = onMentionClick,
                 onUrlClick = uriHandler::openUri,
-                maxLines = 2,
+                maxLines = momentCaptionDescriptionMaxLines(expanded),
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     color = Color.White,
@@ -2012,7 +2002,15 @@ private fun CollapsedDescription(
                 ),
                 mentionColorOverride = linkColor,
                 urlColorOverride = linkColor,
-                onPlainTextClick = onExpand,
+                onPlainTextClick = {
+                    when {
+                        expanded -> onExpandedChange(false)
+                        descriptionCanExpand -> onExpandedChange(true)
+                    }
+                },
+                onTextLayout = { layout ->
+                    if (!expanded) descriptionCanExpand = layout.hasVisualOverflow
+                },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -2024,65 +2022,6 @@ private val MomentCollapsedCaptionBottomPadding = 4.dp
 
 private fun collapseMomentCaptionWhitespace(text: String): String =
     text.replace(MomentCaptionWhitespace, " ").trim()
-
-@Composable
-private fun ExpandedDescription(
-    item: MomentItem,
-    onMentionClick: (String) -> Unit,
-    onChannelClick: (String) -> Unit,
-    onCollapse: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val linkColor = MaterialTheme.iglooColors.primary
-    val uriHandler = LocalUriHandler.current
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = maxHeight * 0.55f)
-                .background(Color.Black.copy(alpha = 0.72f))
-                .clickable(onClick = onCollapse)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            momentRepostLabel(item)?.let { label ->
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color.White,
-                )
-            }
-            val timestamp = localizedRelativeTime(item.publishedAt)
-            if (item.publishedAt > 0L && timestamp.isNotEmpty()) {
-                Text(
-                    text = timestamp,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.70f),
-                )
-            }
-            Text(
-                text = momentAuthorLabel(item),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
-                modifier = Modifier.clickable { onChannelClick(item.channelId) },
-            )
-            if (item.description.isNotBlank()) {
-                AtMentionText(
-                    text = item.description,
-                    onMentionClick = onMentionClick,
-                    onUrlClick = uriHandler::openUri,
-                    maxLines = Int.MAX_VALUE,
-                    style = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
-                    mentionColorOverride = linkColor,
-                    urlColorOverride = linkColor,
-                    onPlainTextClick = onCollapse,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun VideoSurface(
