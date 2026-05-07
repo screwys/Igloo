@@ -257,7 +257,7 @@
     <string name="field_username">Kullanıcı adı</string>
     <string name="follow_queued_syncing">Takip işlemi sıraya alındı. Sunucuyla eşitleniyor…</string>
     <string name="follow_queued_waiting">Takip işlemi sıraya alındı. Sunucuya erişilince eşitlenecek.</string>
-    <string name="import_config_merge_description">Yeni içerikleri ekle, mevcut verileri koru</string>
+    <string name="import_config_merge_description">Yeni öğeleri ekle, mevcut verileri koru</string>
     <string name="import_config_mode_prompt">Mevcut veriler ne yapılsın?</string>
     <string name="import_config_replace_description">Mevcut verileri temizle, dosyadakileri geri yükle</string>
     <string name="import_config_title">Ayarları içe aktar</string>
