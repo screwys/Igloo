@@ -168,7 +168,7 @@
     <string name="confirm_default_title">Onayla</string>
     <string name="confirm_delete_local_media_body">Bu videonun cihazdaki indirilen medyası silinsin mi? Saklama süresindeyse eşitleme tekrar indirebilir.</string>
     <string name="confirm_remove_channel_and_files">%1$s kanalı ve dosyaları kaldırılsın mı?</string>
-    <string name="confirm_unfollow_account_body">Bu hesabın sunucudaki takibini bırakır ve hesabı takip edilenler listenizden kaldırır. Eşitlenen videolar daha sonra Android\'den temizlenebilir.</string>
+    <string name="confirm_unfollow_account_body">Bu hesabı sunucuda takip etmeyi bırakır ve takip edilenler listenizden kaldırır. Eşitlenen videolar daha sonra Android\'den temizlenebilir.</string>
     <string name="confirm_unfollow_account_title">Takibi bırakılsın mı?</string>
     <string name="confirm_unfollow_channel_body">%1$s takibi bırakılsın mı?</string>
     <string name="confirm_unfollow_channel_default_name">bu kanal</string>
