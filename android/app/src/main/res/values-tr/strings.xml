@@ -672,7 +672,7 @@
     <string name="shortcuts_share_video">Videoyu paylaş</string>
     <string name="shortcuts_show_grid_view">Izgara görünümünü göster</string>
     <string name="shortcuts_switch_logs_modal_tabs">Kayıt penceresinde sekme değiştir</string>
-    <string name="shortcuts_toggle_account_in_bookmark_menu">Kaydetme menüsünde hesabı seç veya kaldır</string>
+    <string name="shortcuts_toggle_account_in_bookmark_menu">Kaydetme menüsünde hesabı işaretle</string>
     <string name="shortcuts_toggle_auto_play_next">Sonrakini otomatik oynatmayı aç veya kapat</string>
     <string name="shortcuts_translate_post">Gönderiyi çevir</string>
     <string name="shorts_autoplay_next">Sonraki Moment\'i otomatik oynat</string>
