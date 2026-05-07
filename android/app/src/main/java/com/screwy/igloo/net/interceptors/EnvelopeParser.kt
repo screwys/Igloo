@@ -23,7 +23,7 @@ import kotlinx.serialization.json.longOrNull
  * their own envelope parsing in `IglooError.classify`.
  *
  * PreferencesRepo is passed as a lambda so pre-login HTTP calls (`/api/auth/login`,
- * `/api/health`) don't need an open per-user Room DB. The Room-backed cursor state
+ * `/api/health/live`) don't need an open per-user Room DB. The Room-backed cursor state
  * deliberately does NOT update here: inbound loops own content `next_marker`
  * cursors, and mutation ACK `sync_version` values live in a different server-side
  * version space (`sync_changes.version`) than the content-stream `sync_seq` markers.

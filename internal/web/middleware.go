@@ -66,7 +66,7 @@ func openAuthAPIPath(path string) bool {
 func (s *Server) enforceAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if path == "/login" || path == "/setup" || path == "/logout" || openAuthAPIPath(path) || path == "/api/health" ||
+		if path == "/login" || path == "/setup" || path == "/logout" || openAuthAPIPath(path) || path == "/api/health" || path == "/api/health/live" ||
 			strings.HasPrefix(path, "/static/") ||
 			strings.HasPrefix(path, "/api/logs/android/room-query") {
 			next.ServeHTTP(w, r)

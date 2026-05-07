@@ -7,7 +7,7 @@ import io.ktor.client.statement.HttpResponse
 import kotlin.time.Duration
 
 /**
- * `GET /api/health` — the 5s-budget reachability probe. Returns the standard envelope
+ * `GET /api/health/live` — the 5s-budget reachability probe. Returns the standard envelope
  * `{ok: true, server_time_ms}` with no auth required.
  */
 class HealthApi(
@@ -17,7 +17,7 @@ class HealthApi(
 ) {
 
     suspend fun health(): HttpResponse =
-        client.get(baseUrlProvider() + "/api/health") {
+        client.get(baseUrlProvider() + "/api/health/live") {
             timeout {
                 requestTimeoutMillis = probeTimeout.inWholeMilliseconds
             }

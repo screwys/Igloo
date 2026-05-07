@@ -510,6 +510,7 @@ func (s *Server) handleDownloadsStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleServerStatus(w http.ResponseWriter, r *http.Request) {
 	dbStats, _ := s.db.GetDashboardStats()
+	health := s.productHealth(time.Now()).response()
 	upSeconds := int(time.Since(serverStartTime).Seconds())
 	memMB := getMemoryRSSMB()
 
@@ -656,6 +657,7 @@ func (s *Server) handleServerStatus(w http.ResponseWriter, r *http.Request) {
 		},
 		"memory_mb":      fmt.Sprintf("%.1f", memMB),
 		"memory_history": memHistCopy,
+		"health":         health,
 		"workers":        workerStatuses,
 		"db_stats":       dbStats,
 		"db_size_mb":     dbSizeMB,

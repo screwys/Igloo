@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"math"
@@ -272,6 +273,10 @@ type PreDiversitySnapshotRow struct {
 // excluded, canonical items only, retweet/quote dedup applied, and zero-interest
 // items past the freshness window dropped.
 func (db *DB) ListPreDiversityRanked(username string) ([]PreDiversitySnapshotRow, error) {
+	return db.ListPreDiversityRankedContext(context.Background(), username)
+}
+
+func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string) ([]PreDiversitySnapshotRow, error) {
 	var where []string
 	var args []any
 
@@ -334,7 +339,7 @@ func (db *DB) ListPreDiversityRanked(username string) ([]PreDiversitySnapshotRow
 			LIMIT %d
 			`, feedRankingBaseScoreSQL("fi"), decaySQL, freshnessSQL, fromSQL, whereClause, snapshotMaxItems)
 
-	rows, err := db.conn.Query(query, args...)
+	rows, err := db.conn.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

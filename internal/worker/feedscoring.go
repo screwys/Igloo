@@ -15,7 +15,7 @@ func (m *Manager) runFeedScoringWorker(ctx context.Context) {
 	log.Printf("[feed_scoring] worker started")
 
 	// Immediate first run on startup
-	m.scoreFeedItems()
+	m.scoreFeedItems(ctx)
 
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -25,9 +25,9 @@ func (m *Manager) runFeedScoringWorker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-m.feedScoringKick:
-			m.scoreFeedItems()
+			m.scoreFeedItems(ctx)
 		case <-ticker.C:
-			m.scoreFeedItems()
+			m.scoreFeedItems(ctx)
 		}
 	}
 }
@@ -36,8 +36,9 @@ func (m *Manager) runFeedScoringWorker(ctx context.Context) {
 // The codebase is single-user today; this constant makes the assumption explicit
 // and gives future multi-user work a grep anchor.
 const scoringUsername = "admin"
+const feedSnapshotBuildTimeout = 30 * time.Second
 
-func (m *Manager) scoreFeedItems() {
+func (m *Manager) scoreFeedItems(ctx context.Context) {
 	start := time.Now()
 	m.setStatus("feed_scoring", workerStatus("feed_scoring", true, "scoring", ""))
 
@@ -45,7 +46,7 @@ func (m *Manager) scoreFeedItems() {
 
 	// Rebuild the snapshot on every tick so time-decay drift stays fresh even
 	// when no items needed re-scoring.
-	snapCount, snapDur, snapTop := m.runSnapshotPhase(scoringUsername)
+	snapCount, snapDur, snapTop := m.runSnapshotPhase(ctx, scoringUsername)
 
 	totalElapsed := time.Since(start).Round(time.Millisecond)
 	detail := fmt.Sprintf("scored=%d snap=%d/%s total=%s top=%s",
@@ -139,10 +140,12 @@ func (m *Manager) runScoringPhase() int {
 // (row_count, elapsed_rounded_ms, compact_top_10_string). On error, logs and
 // returns zero values — the prior snapshot is preserved because
 // ReplaceFeedRankSnapshot is a no-op on empty rows.
-func (m *Manager) runSnapshotPhase(username string) (int, time.Duration, string) {
+func (m *Manager) runSnapshotPhase(ctx context.Context, username string) (int, time.Duration, string) {
 	snapStart := time.Now()
+	snapCtx, cancel := context.WithTimeout(ctx, feedSnapshotBuildTimeout)
+	defer cancel()
 
-	pre, err := m.db.ListPreDiversityRanked(username)
+	pre, err := m.db.ListPreDiversityRankedContext(snapCtx, username)
 	if err != nil {
 		log.Printf("[feed_scoring] ListPreDiversityRanked: %v", err)
 		return 0, 0, "[]"

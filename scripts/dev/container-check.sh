@@ -36,13 +36,13 @@ mkdir -p "$tmp/data" "$tmp/config"
   "$image" >/dev/null
 
 for _ in $(seq 1 60); do
-  if curl -fsS "http://127.0.0.1:${port}/api/health" >/dev/null; then
+  if curl -fsS "http://127.0.0.1:${port}/api/health/live" >/dev/null; then
     break
   fi
   sleep 1
 done
 
-curl -fsS "http://127.0.0.1:${port}/api/health" >/dev/null
+curl -fsS "http://127.0.0.1:${port}/api/health/live" >/dev/null
 curl -fsS "http://127.0.0.1:${port}/static/style.css" >/dev/null
 setup_html="$("$runtime" exec "$name" curl -fsS -c /tmp/igloo-check-cookies.txt "http://127.0.0.1:5001/setup")"
 csrf="$(printf '%s\n' "$setup_html" | sed -n 's/.*name="_csrf_token" value="\([^"]*\)".*/\1/p' | head -n1)"

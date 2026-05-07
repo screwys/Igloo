@@ -315,7 +315,7 @@
       const probe = await _requestToApiBase(
         base,
         "GET",
-        "/api/health",
+        "/api/health/live",
         null,
         false,
       );

@@ -54,7 +54,7 @@ class HealthApiTest {
     @Test fun healthApi_returnsOkAndEnvelopeAdvancesOffset() = runBlocking {
         val body = """{"ok":true,"server_time_ms":5000}"""
         val engine = MockEngine { request ->
-            assertEquals("https://igloo.local:8443/api/health", request.url.toString())
+            assertEquals("https://igloo.local:8443/api/health/live", request.url.toString())
             respond(
                 content = ByteReadChannel(body),
                 status = HttpStatusCode.OK,

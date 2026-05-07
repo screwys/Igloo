@@ -168,13 +168,13 @@ function buildHarness({
 }
 
 function responseFor(url, { twitterChannels } = {}) {
-  if (url === "http://127.0.0.1:5001/api/health") {
+  if (url === "http://127.0.0.1:5001/api/health/live") {
     return {
       status: 400,
       text: "Client sent an HTTP request to an HTTPS server.",
     };
   }
-  if (url === "https://localhost:5001/api/health") {
+  if (url === "https://localhost:5001/api/health/live") {
     return { status: 200, text: JSON.stringify({ ok: true }) };
   }
   if (url === "https://localhost:5001/api/channels?platform=twitter") {
@@ -237,7 +237,7 @@ test("uses the HTTPS localhost API when the legacy HTTP default hits a TLS liste
   await drainMicrotasks();
 
   assert.ok(
-    harness.requests.includes("https://localhost:5001/api/health"),
+    harness.requests.includes("https://localhost:5001/api/health/live"),
     `expected HTTPS health probe, got ${harness.requests.join(", ")}`,
   );
   assert.ok(
