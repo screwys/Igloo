@@ -31,13 +31,21 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/igloo .
 
 FROM debian:bookworm-slim AS runtime
 ARG DEBIAN_FRONTEND=noninteractive
+# renovate: datasource=pypi packageName=pip versioning=pep440
+ARG PIP_VERSION=26.1.1
+# renovate: datasource=pypi packageName=yt-dlp versioning=pep440
+ARG YT_DLP_VERSION=2026.3.17
+# renovate: datasource=pypi packageName=gallery-dl versioning=pep440
+ARG GALLERY_DL_VERSION=1.32.1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg python3 python3-venv \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/igloo-py \
-    && /opt/igloo-py/bin/pip install --no-cache-dir --upgrade pip \
-    && /opt/igloo-py/bin/pip install --no-cache-dir yt-dlp gallery-dl
+    && /opt/igloo-py/bin/pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" \
+    && /opt/igloo-py/bin/pip install --no-cache-dir \
+        "yt-dlp==${YT_DLP_VERSION}" \
+        "gallery-dl==${GALLERY_DL_VERSION}"
 
 ENV PATH="/opt/igloo-py/bin:${PATH}" \
     IGLOO_DATA_DIR=/data \
