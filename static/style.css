@@ -4067,6 +4067,7 @@ select.input.themed-select-native {
 .player-layout:fullscreen.fullscreen-browse {
     --fullscreen-browse-main-col: 76vw;
     --fullscreen-browse-sidebar-col: max(220px, 16vw);
+    --fullscreen-browse-player-width: min(100%, 106.667vh);
     grid-template-columns: minmax(0, 1fr) 320px;
     grid-template-rows: auto;
     overflow-y: auto;
@@ -4079,6 +4080,7 @@ select.input.themed-select-native {
 .player-layout:-webkit-full-screen.fullscreen-browse {
     --fullscreen-browse-main-col: 76vw;
     --fullscreen-browse-sidebar-col: max(220px, 16vw);
+    --fullscreen-browse-player-width: min(100%, 106.667vh);
     grid-template-columns: minmax(0, 1fr) 320px;
     grid-template-rows: auto;
     overflow-y: auto;
@@ -4111,7 +4113,9 @@ select.input.themed-select-native {
     background: #000;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     align-self: start;
-    width: 100%;
+    width: var(--fullscreen-browse-player-width);
+    max-width: 100%;
+    justify-self: center;
     margin-inline: 0;
 }
 
@@ -4122,7 +4126,9 @@ select.input.themed-select-native {
     background: #000;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     align-self: start;
-    width: 100%;
+    width: var(--fullscreen-browse-player-width);
+    max-width: 100%;
+    justify-self: center;
     margin-inline: 0;
 }
 
