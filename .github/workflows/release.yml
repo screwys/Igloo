@@ -57,15 +57,36 @@ jobs:
             node scripts/dev/release.mjs prepare-auto --threshold 20 --bump-file .github/release-bump --notes release-notes.md
           fi
 
-      - name: Commit and tag release
+      - name: Commit and tag signed release
         if: steps.release.outputs.should_release == 'true'
+        env:
+          RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+          RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
+          RELEASE_GIT_USER_NAME: ${{ secrets.RELEASE_GIT_USER_NAME }}
+          RELEASE_GIT_USER_EMAIL: ${{ secrets.RELEASE_GIT_USER_EMAIL }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          test -n "$RELEASE_GPG_PRIVATE_KEY"
+          test -n "$RELEASE_GPG_PASSPHRASE"
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -p "$GNUPGHOME"
+          chmod 700 "$GNUPGHOME"
+          printf '%s' "$RELEASE_GPG_PRIVATE_KEY" > "$RUNNER_TEMP/release-signing-key.asc"
+          gpg --batch --import "$RUNNER_TEMP/release-signing-key.asc"
+          fingerprint="$(gpg --batch --list-secret-keys --with-colons | awk -F: '$1 == "fpr" { print $10; exit }')"
+          test -n "$fingerprint"
+          cat > "$RUNNER_TEMP/gpg-wrapper" <<'EOF'
+          #!/usr/bin/env bash
+          exec gpg --batch --yes --pinentry-mode loopback --passphrase "$RELEASE_GPG_PASSPHRASE" "$@"
+          EOF
+          chmod 700 "$RUNNER_TEMP/gpg-wrapper"
+          git config user.name "${RELEASE_GIT_USER_NAME:-github-actions[bot]}"
+          git config user.email "${RELEASE_GIT_USER_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
+          git config user.signingkey "$fingerprint"
+          git config gpg.program "$RUNNER_TEMP/gpg-wrapper"
           git add package.json package-lock.json android/app/build.gradle.kts .github/release-bump
           git diff --cached --quiet && exit 1
-          git commit -m "release ${{ steps.release.outputs.version }}"
-          git tag -a "${{ steps.release.outputs.tag }}" -m "release ${{ steps.release.outputs.version }}"
+          git commit -S -m "release ${{ steps.release.outputs.version }}"
+          git tag -s "${{ steps.release.outputs.tag }}" -m "release ${{ steps.release.outputs.version }}"
 
       - name: Push release commit and tag
         if: steps.release.outputs.should_release == 'true'

@@ -12,6 +12,8 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
   packages: write
 
 jobs:
@@ -37,6 +39,7 @@ jobs:
             type=raw,value=latest
 
       - uses: docker/build-push-action@v7
+        id: build
         with:
           context: .
           push: true
@@ -44,3 +47,10 @@ jobs:
           sbom: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Generate container attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/igloo
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

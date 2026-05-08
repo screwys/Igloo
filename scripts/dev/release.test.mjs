@@ -77,6 +77,46 @@ test("release workflow dispatches CodeQL for release tags", () => {
   );
 });
 
+test("release workflow signs release commits and tags", () => {
+  const workflow = readFileSync(
+    new URL("../../.github/workflows/release.yml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(workflow, /RELEASE_GPG_PRIVATE_KEY/);
+  assert.match(workflow, /RELEASE_GPG_PASSPHRASE/);
+  assert.match(workflow, /git commit -S -m "release \$\{\{ steps\.release\.outputs\.version \}\}"/);
+  assert.match(workflow, /git tag -s "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
+  assert.doesNotMatch(workflow, /git tag -a "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
+});
+
+test("container release publishes signed provenance attestation", () => {
+  const workflow = readFileSync(
+    new URL("../../.github/workflows/container-release.yml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(workflow, /\n  id-token: write\n/);
+  assert.match(workflow, /\n  attestations: write\n/);
+  assert.match(workflow, /\n        id: build\n/);
+  assert.match(workflow, /uses: actions\/attest@v4/);
+  assert.match(workflow, /subject-name: ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/igloo/);
+  assert.match(workflow, /subject-digest: \$\{\{ steps\.build\.outputs\.digest \}\}/);
+  assert.match(workflow, /push-to-registry: true/);
+});
+
+test("Android release publishes signed provenance attestation for the APK", () => {
+  const workflow = readFileSync(
+    new URL("../../.github/workflows/android-release.yml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(workflow, /\n  id-token: write\n/);
+  assert.match(workflow, /\n  attestations: write\n/);
+  assert.match(workflow, /uses: actions\/attest@v4/);
+  assert.match(workflow, /subject-path: release-artifacts\/\*\.apk/);
+});
+
 test("CodeQL runs on published releases instead of a weekly schedule", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/codeql.yml", import.meta.url),

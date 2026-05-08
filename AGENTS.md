@@ -42,6 +42,8 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 
 - Use patch releases for small fixes and minor releases for larger user-visible changes.
 - Automatic releases batch every 20 unreleased commits; set `.github/release-bump` to `minor` for larger user-visible batches.
+- Release commits and tags are GPG-signed with `RELEASE_GPG_PRIVATE_KEY` and `RELEASE_GPG_PASSPHRASE`; set `RELEASE_GIT_USER_NAME` and `RELEASE_GIT_USER_EMAIL` when the signing identity should show as verified on GitHub.
+- Release APKs and container images publish GitHub artifact attestations.
 - Release notes should list the exact commits since the previous tag.
 
 ## Server And Web
