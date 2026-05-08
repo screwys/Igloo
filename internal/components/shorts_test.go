@@ -253,6 +253,28 @@ func TestShortsItemsDoNotAnimateViewportSizeDuringScrollSnap(t *testing.T) {
 	}
 }
 
+func TestShortsActivationAlignsVerticalSnapBeforePlayback(t *testing.T) {
+	srcBytes, err := os.ReadFile("../../static/js/src/shorts/overlay.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(srcBytes)
+	for _, check := range []string{
+		"function alignVerticalActiveItem(entry)",
+		"if (_state.storyMode || !entry || !entry.el || !_dom.shortsContainer) return false",
+		"var delta = itemRect.top - containerRect.top",
+		"_dom.shortsContainer.style.scrollBehavior = 'auto'",
+		"_dom.shortsContainer.scrollTop += delta",
+		"recordShortsDebugEvent(entry, 'scroll:align-active'",
+		"var alignedToSnap = alignVerticalActiveItem(entry)",
+		"recordShortsDebugEvent(entry, 'activate', { alignedToSnap: alignedToSnap })",
+	} {
+		if !strings.Contains(src, check) {
+			t.Errorf("shorts activation snap alignment missing %q", check)
+		}
+	}
+}
+
 func TestShortsVideoPlaybackStartsImmediatelyWithPosterUntilFirstFrame(t *testing.T) {
 	overlayBytes, err := os.ReadFile("../../static/js/src/shorts/overlay.js")
 	if err != nil {
@@ -358,7 +380,7 @@ func TestShortsDebugToolsExposeOptInMediaSnapshots(t *testing.T) {
 	if !strings.Contains(string(itemsBytes), "attachShortVideoDebug(entryObj)") {
 		t.Fatal("shorts items should attach video event diagnostics")
 	}
-	if !strings.Contains(string(overlayBytes), "recordShortsDebugEvent(entry, 'activate')") ||
+	if !strings.Contains(string(overlayBytes), "recordShortsDebugEvent(entry, 'activate'") ||
 		!strings.Contains(string(overlayBytes), "recordShortsDebugEvent(entry, 'play:attempt')") {
 		t.Fatal("shorts overlay should record activation and playback attempts")
 	}

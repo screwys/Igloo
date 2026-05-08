@@ -289,6 +289,24 @@ export function updateCurrentActionButtons() {
   if (d) _fns.updateTopControls()
 }
 
+function alignVerticalActiveItem(entry) {
+  if (_state.storyMode || !entry || !entry.el || !_dom.shortsContainer) return false
+  if (typeof entry.el.getBoundingClientRect !== 'function' ||
+      typeof _dom.shortsContainer.getBoundingClientRect !== 'function') return false
+  var itemRect = entry.el.getBoundingClientRect()
+  var containerRect = _dom.shortsContainer.getBoundingClientRect()
+  var delta = itemRect.top - containerRect.top
+  if (Math.abs(delta) < 2) return false
+  var previousScrollBehavior = _dom.shortsContainer.style.scrollBehavior
+  _dom.shortsContainer.style.scrollBehavior = 'auto'
+  _dom.shortsContainer.scrollTop += delta
+  requestAnimationFrame(function () {
+    _dom.shortsContainer.style.scrollBehavior = previousScrollBehavior
+  })
+  recordShortsDebugEvent(entry, 'scroll:align-active', { delta: Math.round(delta) })
+  return true
+}
+
 export function activateIndex(index, options) {
   var opts = options || {}
   if (!Number.isFinite(index) || index < 0 || index >= _state.cards.length) return
@@ -305,7 +323,8 @@ export function activateIndex(index, options) {
   if (!entry || !entry.refs) return
   extendShortsWindow()
   entry.el.classList.add('is-active')
-  recordShortsDebugEvent(entry, 'activate')
+  var alignedToSnap = alignVerticalActiveItem(entry)
+  recordShortsDebugEvent(entry, 'activate', { alignedToSnap: alignedToSnap })
 
   pauseAllShorts(entry.data.id)
   _state.lastVisibleId = entry.data.id
