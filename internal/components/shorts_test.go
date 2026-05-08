@@ -253,24 +253,24 @@ func TestShortsItemsDoNotAnimateViewportSizeDuringScrollSnap(t *testing.T) {
 	}
 }
 
-func TestShortsActivationAlignsVerticalSnapBeforePlayback(t *testing.T) {
+func TestShortsActivationWaitsForSnapBeforePlayback(t *testing.T) {
 	srcBytes, err := os.ReadFile("../../static/js/src/shorts/overlay.js")
 	if err != nil {
 		t.Fatal(err)
 	}
 	src := string(srcBytes)
 	for _, check := range []string{
-		"function alignVerticalActiveItem(entry)",
-		"if (_state.storyMode || !entry || !entry.el || !_dom.shortsContainer) return false",
-		"var delta = itemRect.top - containerRect.top",
-		"_dom.shortsContainer.style.scrollBehavior = 'auto'",
-		"_dom.shortsContainer.scrollTop += delta",
-		"recordShortsDebugEvent(entry, 'scroll:align-active'",
-		"var alignedToSnap = alignVerticalActiveItem(entry)",
-		"recordShortsDebugEvent(entry, 'activate', { alignedToSnap: alignedToSnap })",
+		"function snapOffset(entry)",
+		"function isSnapSettled(entry)",
+		"function scheduleSnapSettledActivation(index)",
+		"_state.pendingSnapActivation = { index: index, startedAt: performance.now() }",
+		"recordShortsDebugEvent(entry, 'activate:wait-snap'",
+		"activateIndex(pending.index, { force: false })",
+		"scheduleSnapSettledActivation(index)",
+		"recordShortsDebugEvent(entry, 'activate', { snapSettled: _state.storyMode || isSnapSettled(entry) })",
 	} {
 		if !strings.Contains(src, check) {
-			t.Errorf("shorts activation snap alignment missing %q", check)
+			t.Errorf("shorts activation snap wait missing %q", check)
 		}
 	}
 }

@@ -8,6 +8,7 @@ import { recordShortsDebugEvent } from './debug.js'
 var _state = null
 var _dom = null
 var _fns = null
+var _snapActivationFrame = 0
 
 // initOverlay sets up module-level refs.
 //   dom: { shortsContainer, gridShell, layout, upToDateOverlay, sourceContainer,
@@ -289,22 +290,41 @@ export function updateCurrentActionButtons() {
   if (d) _fns.updateTopControls()
 }
 
-function alignVerticalActiveItem(entry) {
-  if (_state.storyMode || !entry || !entry.el || !_dom.shortsContainer) return false
+function snapOffset(entry) {
+  if (!entry || !entry.el || !_dom.shortsContainer) return 0
   if (typeof entry.el.getBoundingClientRect !== 'function' ||
-      typeof _dom.shortsContainer.getBoundingClientRect !== 'function') return false
+      typeof _dom.shortsContainer.getBoundingClientRect !== 'function') return 0
   var itemRect = entry.el.getBoundingClientRect()
   var containerRect = _dom.shortsContainer.getBoundingClientRect()
-  var delta = itemRect.top - containerRect.top
-  if (Math.abs(delta) < 2) return false
-  var previousScrollBehavior = _dom.shortsContainer.style.scrollBehavior
-  _dom.shortsContainer.style.scrollBehavior = 'auto'
-  _dom.shortsContainer.scrollTop += delta
-  requestAnimationFrame(function () {
-    _dom.shortsContainer.style.scrollBehavior = previousScrollBehavior
+  return itemRect.top - containerRect.top
+}
+
+function isSnapSettled(entry) {
+  return Math.abs(snapOffset(entry)) < 2
+}
+
+function scheduleSnapSettledActivation(index) {
+  if (_state.storyMode) {
+    activateIndex(index, { force: false })
+    return
+  }
+  _state.pendingSnapActivation = { index: index, startedAt: performance.now() }
+  if (_snapActivationFrame) return
+  _snapActivationFrame = requestAnimationFrame(function checkSnapSettled() {
+    _snapActivationFrame = 0
+    var pending = _state.pendingSnapActivation
+    if (!_state.overlayOpen || !pending) return
+    var entry = _state.items[pending.index]
+    if (!entry || !entry.el) return
+    var delta = snapOffset(entry)
+    if (Math.abs(delta) < 2 || performance.now() - pending.startedAt > 350) {
+      _state.pendingSnapActivation = null
+      activateIndex(pending.index, { force: false })
+      return
+    }
+    recordShortsDebugEvent(entry, 'activate:wait-snap', { delta: Math.round(delta) })
+    _snapActivationFrame = requestAnimationFrame(checkSnapSettled)
   })
-  recordShortsDebugEvent(entry, 'scroll:align-active', { delta: Math.round(delta) })
-  return true
 }
 
 export function activateIndex(index, options) {
@@ -323,8 +343,7 @@ export function activateIndex(index, options) {
   if (!entry || !entry.refs) return
   extendShortsWindow()
   entry.el.classList.add('is-active')
-  var alignedToSnap = alignVerticalActiveItem(entry)
-  recordShortsDebugEvent(entry, 'activate', { alignedToSnap: alignedToSnap })
+  recordShortsDebugEvent(entry, 'activate', { snapSettled: _state.storyMode || isSnapSettled(entry) })
 
   pauseAllShorts(entry.data.id)
   _state.lastVisibleId = entry.data.id
@@ -365,7 +384,7 @@ export function onShortIntersect(entries) {
   if (!id) return
   var index = _state.cardIndexById.get(id)
   if (index !== undefined) {
-    activateIndex(index, { force: false })
+    scheduleSnapSettledActivation(index)
   }
 }
 
