@@ -45,6 +45,9 @@ export function toFxTwitterUrl(rawUrl) {
     if (host === 'tiktok.com' || host === 'www.tiktok.com' || host.endsWith('.tiktok.com')) {
       parsed.hostname = 'tnktok.com'
     }
+    if (host === 'instagram.com' || host === 'www.instagram.com' || host.endsWith('.instagram.com')) {
+      parsed.hostname = 'vxinstagram.com'
+    }
     return parsed.toString()
   } catch (_) { return value }
 }

@@ -3,6 +3,7 @@ package com.screwy.igloo.ui.component
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import java.net.URI
 
 internal fun sharePlainText(context: Context, text: String, useEmbedFriendlySite: Boolean = false) {
     val trimmed = toShareUrl(text, useEmbedFriendlySite)
@@ -44,15 +45,31 @@ internal fun toShareUrl(url: String, useEmbedFriendlySite: Boolean = false): Str
     val trimmed = url.trim()
     if (trimmed.isBlank()) return trimmed
     if (!useEmbedFriendlySite) return trimmed
-    return trimmed
-        .replace("https://twitter.com/", "https://fxtwitter.com/")
-        .replace("http://twitter.com/", "https://fxtwitter.com/")
-        .replace("https://x.com/", "https://fxtwitter.com/")
-        .replace("http://x.com/", "https://fxtwitter.com/")
-        .replace("https://www.tiktok.com/", "https://tnktok.com/")
-        .replace("http://www.tiktok.com/", "https://tnktok.com/")
-        .replace("https://tiktok.com/", "https://tnktok.com/")
-        .replace("http://tiktok.com/", "https://tnktok.com/")
+    val parsed = runCatching { URI(trimmed) }.getOrNull() ?: return trimmed
+    val host = parsed.host?.lowercase() ?: return trimmed
+    val mappedHost = embedFriendlyHost(host) ?: return trimmed
+    return runCatching {
+        URI(
+            "https",
+            parsed.userInfo,
+            mappedHost,
+            parsed.port,
+            parsed.path,
+            parsed.query,
+            parsed.fragment,
+        ).toString()
+    }.getOrDefault(trimmed)
+}
+
+private fun embedFriendlyHost(host: String): String? = when {
+    host.matchesDomain("x.com") || host.matchesDomain("twitter.com") -> "fxtwitter.com"
+    host.matchesDomain("tiktok.com") -> "tnktok.com"
+    host.matchesDomain("instagram.com") -> "vxinstagram.com"
+    else -> null
+}
+
+private fun String.matchesDomain(domain: String): Boolean {
+    return this == domain || this == "www.$domain" || this.endsWith(".$domain")
 }
 
 private val ExternalUrlSchemeRegex = Regex("""[A-Za-z][A-Za-z0-9+.-]*""")

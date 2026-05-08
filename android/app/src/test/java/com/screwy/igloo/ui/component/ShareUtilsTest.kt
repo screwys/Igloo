@@ -15,13 +15,13 @@ class ShareUtilsTest {
         )
     }
 
-    @Test fun toShareUrl_leavesInstagramAloneWhenEnabled() {
+    @Test fun toShareUrl_rewritesInstagramWhenEnabled() {
         assertEquals(
-            "https://www.instagram.com/reel/ABC123/",
+            "https://vxinstagram.com/reel/ABC123/",
             toShareUrl("https://www.instagram.com/reel/ABC123/", useEmbedFriendlySite = true),
         )
         assertEquals(
-            "http://instagram.com/p/DEF456/",
+            "https://vxinstagram.com/p/DEF456/",
             toShareUrl("http://instagram.com/p/DEF456/", useEmbedFriendlySite = true),
         )
     }
