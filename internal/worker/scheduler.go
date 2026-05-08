@@ -294,6 +294,7 @@ func (m *Manager) ensureIntroducedOwner(ref download.VideoRef) {
 			log.Printf("[scheduler] ensure tagged owner %s: %v", ref.ChannelID, err)
 			return
 		}
+		m.RequestAvatar(ref.ChannelID)
 	}
 }
 

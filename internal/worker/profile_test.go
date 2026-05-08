@@ -1484,6 +1484,52 @@ func TestRequestAvatarSkipsUnknownInstagramProfile(t *testing.T) {
 	}
 }
 
+func TestRefreshRequestedAvatarFetchesKnownInstagramProfile(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_by.bansoi",
+		Platform:    "instagram",
+		Handle:      "by.bansoi",
+		DisplayName: "soi",
+	}); err != nil {
+		t.Fatalf("seed profile: %v", err)
+	}
+
+	fetchCalls := 0
+	m := &Manager{
+		db:  d,
+		cfg: testCfg(dir),
+		instagramProfileFetch: func(context.Context, string, string) (*model.ChannelProfile, error) {
+			fetchCalls++
+			return &model.ChannelProfile{
+				ChannelID:   "instagram_by.bansoi",
+				Platform:    "instagram",
+				Handle:      "by.bansoi",
+				DisplayName: "soi",
+				Bio:         "real profile bio",
+				AvatarURL:   "https://cdn.example/profile-avatar.jpg",
+			}, nil
+		},
+	}
+	avDir, bnDir := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	_ = os.MkdirAll(avDir, 0o755)
+	_ = os.MkdirAll(bnDir, 0o755)
+
+	m.refreshRequestedAvatar(context.Background(), newFakeFetcher().Fetch, "instagram_by.bansoi", avDir, bnDir)
+
+	if fetchCalls != 1 {
+		t.Fatalf("instagram profile fetch calls = %d, want 1", fetchCalls)
+	}
+	got, err := d.GetChannelProfile("instagram_by.bansoi")
+	if err != nil || got == nil {
+		t.Fatalf("GetChannelProfile: %v / %+v", err, got)
+	}
+	if got.Bio != "real profile bio" || got.AvatarURL != "https://cdn.example/profile-avatar.jpg" {
+		t.Fatalf("profile was not refreshed from queued background request: %+v", got)
+	}
+}
+
 func TestRequestAvatarQueuesNonInstagramWhenProfileLookupFails(t *testing.T) {
 	d := newTestWorkerDB(t)
 	if err := d.Close(); err != nil {

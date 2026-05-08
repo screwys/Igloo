@@ -65,6 +65,34 @@ func TestPrimeShortFormMentionProfilesSeedsRefTitles(t *testing.T) {
 	}
 }
 
+func TestEnsureIntroducedInstagramOwnerQueuesProfileRefresh(t *testing.T) {
+	d := newTestWorkerDB(t)
+	m := &Manager{db: d, cfg: testCfg(t.TempDir()), avatarRequest: make(chan string, 1)}
+
+	m.ensureIntroducedOwner(download.VideoRef{
+		ChannelID:         "instagram_by.bansoi",
+		AuthorHandle:      "by.bansoi",
+		AuthorDisplayName: "soi",
+		AuthorAvatarURL:   "https://cdn.example/media-avatar.jpg",
+	})
+
+	got, err := d.GetChannelProfile("instagram_by.bansoi")
+	if err != nil || got == nil {
+		t.Fatalf("GetChannelProfile: %v / %+v", err, got)
+	}
+	if got.AvatarURL != "" || got.FetchedAt != nil {
+		t.Fatalf("media-derived avatar should not be stored before profile refresh: %+v", got)
+	}
+	select {
+	case queued := <-m.avatarRequest:
+		if queued != "instagram_by.bansoi" {
+			t.Fatalf("queued profile = %q, want instagram_by.bansoi", queued)
+		}
+	default:
+		t.Fatal("expected introduced instagram owner to be queued for background profile refresh")
+	}
+}
+
 func TestInstagramUsesOwnGlobalSchedulerSettings(t *testing.T) {
 	d := newTestWorkerDB(t)
 	if err := d.SetSetting("", "shorts_check_interval", "3"); err != nil {
