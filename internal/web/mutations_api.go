@@ -456,12 +456,13 @@ func (s *Server) handleMutationMomentsCursor(w http.ResponseWriter, r *http.Requ
 		PositionMs  int64  `json:"position_ms"`
 		UpdatedAtMs int64  `json:"updated_at_ms"`
 		Scope       string `json:"scope"`
+		SortAtMs    int64  `json:"sort_at_ms"`
 	}
 	if err := decodeMutation(r, &body); err != nil {
 		writeJSONError(w, 400, "invalid_body", err.Error())
 		return
 	}
-	res, err := s.db.ApplyMomentsCursorMutation(user.Username, body.VideoID, body.PositionMs, body.UpdatedAtMs, body.Scope)
+	res, err := s.db.ApplyMomentsCursorMutationWithSortAt(user.Username, body.VideoID, body.PositionMs, body.UpdatedAtMs, body.Scope, body.SortAtMs)
 	if err != nil {
 		writeJSONError(w, 400, "invalid_body", err.Error())
 		return

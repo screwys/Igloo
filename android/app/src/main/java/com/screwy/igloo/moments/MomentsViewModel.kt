@@ -279,12 +279,21 @@ class MomentsViewModel(
     private val scopedResumeVideoId: StateFlow<String?> = activeTab
         .flatMapLatest { prefs.momentsResumeVideoId(scope = it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
-    private val scopedResumeSortAtMs: StateFlow<Long?> = scopedResumeVideoId
+    private val scopedResumeStoredSortAtMs: StateFlow<Long?> = activeTab
+        .flatMapLatest { prefs.momentsResumeSortAtMs(scope = it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
+    private val scopedResumeVideoSortAtMs: StateFlow<Long?> = scopedResumeVideoId
         .flatMapLatest { videoId ->
             val target = videoId?.trim()?.takeIf { it.isNotEmpty() }
             if (target == null) flowOf(null) else db.momentReadDao().momentSortAtFlow(target)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
+    private val scopedResumeSortAtMs: StateFlow<Long?> = combine(
+        scopedResumeStoredSortAtMs,
+        scopedResumeVideoSortAtMs,
+    ) { stored, current ->
+        stored?.takeIf { it > 0L } ?: current
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
     private val scopedResumePositionMs: StateFlow<Long> = activeTab
         .flatMapLatest { prefs.momentsResumePositionMs(scope = it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 0L)
@@ -308,7 +317,7 @@ class MomentsViewModel(
             rows.map { row ->
                 ShortsStartItem(
                     videoId = row.video.videoId,
-                    sortAtMs = row.effectiveMomentAtMs.takeIf { it > 0 } ?: row.video.publishedAt,
+                    sortAtMs = momentSortAtMs(row),
                 )
             },
             targetVideoId,
@@ -377,11 +386,17 @@ class MomentsViewModel(
         viewModelScope.launch {
             val rows = playerRowsRaw.value ?: return@launch
             if (idx !in rows.indices) return@launch
-            val videoId = rows[idx].video.videoId
+            val row = rows[idx]
+            val videoId = row.video.videoId
             val scope = activeTab.value
             activeCursor.value = ActiveCursor(videoId = videoId, positionMs = 0L, scope = scope)
             outboxWriter.enqueue(
-                OutboxKind.MomentsCursor(videoId = videoId, positionMs = 0L, scope = scope),
+                OutboxKind.MomentsCursor(
+                    videoId = videoId,
+                    positionMs = 0L,
+                    scope = scope,
+                    sortAtMs = momentSortAtMs(row),
+                ),
             )
         }
     }
@@ -401,9 +416,17 @@ class MomentsViewModel(
     fun onCursorAdvance(videoId: String, positionMs: Long) {
         viewModelScope.launch {
             val scope = activeTab.value
+            val sortAtMs = playerRowsRaw.value
+                ?.firstOrNull { it.video.videoId == videoId }
+                ?.let(::momentSortAtMs)
             activeCursor.value = ActiveCursor(videoId = videoId, positionMs = 0L, scope = scope)
             outboxWriter.enqueue(
-                OutboxKind.MomentsCursor(videoId = videoId, positionMs = 0L, scope = scope),
+                OutboxKind.MomentsCursor(
+                    videoId = videoId,
+                    positionMs = 0L,
+                    scope = scope,
+                    sortAtMs = sortAtMs,
+                ),
             )
         }
     }
@@ -520,9 +543,17 @@ class MomentsViewModel(
     fun selectResumeVideoId(videoId: String) {
         viewModelScope.launch {
             val scope = activeTab.value
+            val sortAtMs = playerRowsRaw.value
+                ?.firstOrNull { it.video.videoId == videoId }
+                ?.let(::momentSortAtMs)
             activeCursor.value = ActiveCursor(videoId = videoId, positionMs = 0L, scope = scope)
             outboxWriter.enqueue(
-                OutboxKind.MomentsCursor(videoId = videoId, positionMs = 0L, scope = scope),
+                OutboxKind.MomentsCursor(
+                    videoId = videoId,
+                    positionMs = 0L,
+                    scope = scope,
+                    sortAtMs = sortAtMs,
+                ),
             )
         }
     }
@@ -606,6 +637,9 @@ class MomentsViewModel(
 
     private fun momentHandle(channelSourceId: String?, channelId: String): String =
         channelSourceId?.takeIf { it.isNotBlank() } ?: stripPlatformPrefix(channelId)
+
+    private fun momentSortAtMs(row: DbMomentItem): Long =
+        row.effectiveMomentAtMs.takeIf { it > 0L } ?: row.video.publishedAt
 
     private fun repostMeta(row: DbMomentItem): RepostMeta? {
         if (row.repostIntroduced != 1) return null

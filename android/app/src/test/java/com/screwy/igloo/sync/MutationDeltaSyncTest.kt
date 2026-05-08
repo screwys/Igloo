@@ -72,7 +72,7 @@ class MutationDeltaSyncTest {
                       "changes":[
                         {"version":1,"type":"like","item_id":"tw1","value":{"action":"set","updated_at_ms":100}},
                         {"version":2,"type":"seen","item_id":"tw2","value":{"tweet_ids":["tw2","tw3"],"updated_at_ms":200}},
-                        {"version":3,"type":"moments_cursor","item_id":"short1","value":{"position_ms":321,"updated_at_ms":300}},
+                        {"version":3,"type":"moments_cursor","item_id":"short1","value":{"position_ms":321,"sort_at_ms":1234,"updated_at_ms":300}},
                         {"version":4,"type":"progress","item_id":"yt1","value":{"position":42.5,"duration":120.0,"updated_at_ms":400,"source":"web"}}
                       ]
                     }
@@ -90,6 +90,7 @@ class MutationDeltaSyncTest {
         assertTrue(db.feedSeenDao().exists("tw3"))
         assertEquals("short1", prefs.momentsResumeVideoId(scope = "all").first())
         assertEquals(321L, prefs.momentsResumePositionMs(scope = "all").first())
+        assertEquals(1234L, prefs.momentsResumeSortAtMs(scope = "all").first())
         assertEquals(42.5, db.watchHistoryDao().getById("yt1")!!.playbackPosition, 0.001)
         assertEquals("4", db.cursorDao().get(MutationDeltaSync.CURSOR_KEY)?.cursor)
     }

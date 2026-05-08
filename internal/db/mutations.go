@@ -436,6 +436,10 @@ func (db *DB) ApplyProgressMutation(username, videoID string, position, duration
 // ── moments_cursor (PUT — LWW) ──────────────────────────────────────
 
 func (db *DB) ApplyMomentsCursorMutation(username, videoID string, positionMs, updatedAtMs int64, scope string) (MutationResult, error) {
+	return db.ApplyMomentsCursorMutationWithSortAt(username, videoID, positionMs, updatedAtMs, scope, 0)
+}
+
+func (db *DB) ApplyMomentsCursorMutationWithSortAt(username, videoID string, positionMs, updatedAtMs int64, scope string, sortAtMs int64) (MutationResult, error) {
 	if updatedAtMs == 0 {
 		updatedAtMs = time.Now().UnixMilli()
 	}
@@ -449,7 +453,17 @@ func (db *DB) ApplyMomentsCursorMutation(username, videoID string, positionMs, u
 	}
 	scope = normalizedScope
 
+	if sortAtMs <= 0 {
+		var err error
+		sortAtMs, _, err = db.GetShortsCursorSortAt(videoID, scope)
+		if err != nil {
+			return MutationResult{}, err
+		}
+	}
 	value := map[string]any{"video_id": videoID, "position_ms": positionMs, "updated_at_ms": updatedAtMs, "scope": scope}
+	if sortAtMs > 0 {
+		value["sort_at_ms"] = sortAtMs
+	}
 
 	var version int64
 	err := db.WithWrite(func(tx *sql.Tx) error {
@@ -486,6 +500,14 @@ func (db *DB) ApplyMomentsCursorMutation(username, videoID string, positionMs, u
 			); err != nil {
 				return err
 			}
+			if sortAtMs > 0 {
+				if _, err := tx.Exec(
+					`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`,
+					"shorts_cursor_sort_at_ms", fmt.Sprintf("%d", sortAtMs),
+				); err != nil {
+					return err
+				}
+			}
 		}
 		key := "shorts_cursor_video_id_" + username + "_" + scope
 		if _, err := tx.Exec(
@@ -507,6 +529,12 @@ func (db *DB) ApplyMomentsCursorMutation(username, videoID string, positionMs, u
 		); err != nil {
 			return err
 		}
+		if sortAtMs > 0 {
+			sortKey := "shorts_cursor_sort_at_ms_" + username + "_" + scope
+			if _, err := tx.Exec(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`, sortKey, fmt.Sprintf("%d", sortAtMs)); err != nil {
+				return err
+			}
+		}
 		if scope == "all" {
 			legacyUserKey := "shorts_cursor_video_id_" + username
 			if _, err := tx.Exec(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`, legacyUserKey, videoID); err != nil {
@@ -515,6 +543,12 @@ func (db *DB) ApplyMomentsCursorMutation(username, videoID string, positionMs, u
 			legacyPosKey := "shorts_cursor_position_ms_" + username
 			if _, err := tx.Exec(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`, legacyPosKey, fmt.Sprintf("%d", positionMs)); err != nil {
 				return err
+			}
+			if sortAtMs > 0 {
+				legacySortKey := "shorts_cursor_sort_at_ms_" + username
+				if _, err := tx.Exec(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`, legacySortKey, fmt.Sprintf("%d", sortAtMs)); err != nil {
+					return err
+				}
 			}
 		}
 		valueJSON, _ := json.Marshal(value)

@@ -63,4 +63,14 @@ class ShortsPlaylistSpecTest {
 
         assertEquals(1, shortsStartIndex(items, "hidden", fallbackSortAtMs = 200))
     }
+
+    @Test
+    fun startIndexUsesStoredTimelineWhenRequestedVideoMoved() {
+        val items = listOf(
+            ShortsStartItem(videoId = "moved", sortAtMs = 100),
+            ShortsStartItem(videoId = "near", sortAtMs = 300),
+        )
+
+        assertEquals(1, shortsStartIndex(items, "moved", fallbackSortAtMs = 250))
+    }
 }

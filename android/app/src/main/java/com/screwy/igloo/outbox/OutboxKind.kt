@@ -161,6 +161,7 @@ sealed class OutboxKind {
         val videoId: String,
         val positionMs: Long,
         val scope: String = "all",
+        val sortAtMs: Long? = null,
     ) : OutboxKind() {
         override val code = CODE_MOMENTS_CURSOR
         override val itemId: String = scope

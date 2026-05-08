@@ -233,6 +233,34 @@ class MomentsViewModelTest {
         assertEquals(1, vm.startIndex.value)
     }
 
+    @Test fun startIndexUsesStoredSortWhenCursorVideoMoved() = runBlocking {
+        db.channelDao().upsert(ChannelEntity(
+            channelId = "tiktok_alpha",
+            name = "Alpha",
+            platform = "tiktok",
+            sourceId = "alpha",
+        ))
+        db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_alpha"))
+        db.videoDao().upsert(listOf(
+            VideoEntity(videoId = "moved_cursor", channelId = "tiktok_alpha", title = "Moved", publishedAt = 100L),
+            VideoEntity(videoId = "near_cursor", channelId = "tiktok_alpha", title = "Near", publishedAt = 300L),
+        ))
+        prefs.setMomentsResumeVideoId("moved_cursor", scope = "all")
+        prefs.setMomentsResumeSortAtMs(250L, scope = "all")
+
+        val vm = newViewModel()
+        val sub = subscribe(vm)
+        val ok = withTimeoutOrNull(2_000L) {
+            while (vm.playerItems.value.size < 2 || vm.startIndex.value != 1) delay(10)
+            true
+        }
+        sub.cancel()
+
+        assertEquals(true, ok)
+        assertEquals(listOf("moved_cursor", "near_cursor"), vm.playerItems.value.map { it.videoId })
+        assertEquals(1, vm.startIndex.value)
+    }
+
     @Test fun onViewEvent_enqueuesMomentView() = runBlocking {
         val vm = newViewModel()
         vm.onViewEvent("v1")

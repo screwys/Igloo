@@ -82,6 +82,7 @@ class PreferencesRepoTest {
             ).first(),
         )
         assertNull(repo.momentsResumeVideoId(scope = "all").first())
+        assertNull(repo.momentsResumeSortAtMs(scope = "all").first())
     }
 
     @Test fun typedSetters_writeBackAsStrings() = runBlocking {
@@ -98,6 +99,7 @@ class PreferencesRepoTest {
         repo.setInstagramIncludeTaggedDefault(true)
         repo.setMomentsResumeVideoId("v_1")
         repo.setMomentsResumePositionMs(30_000L)
+        repo.setMomentsResumeSortAtMs(123_456L)
 
         assertEquals("https://example.com", repo.serverUrl().first())
         assertFalse(repo.syncEnabled().first())
@@ -110,6 +112,7 @@ class PreferencesRepoTest {
         assertTrue(repo.instagramIncludeTaggedDefault().first())
         assertEquals("v_1", repo.momentsResumeVideoId(scope = "all").first())
         assertEquals(30_000L, repo.momentsResumePositionMs(scope = "all").first())
+        assertEquals(123_456L, repo.momentsResumeSortAtMs(scope = "all").first())
     }
 
     @Test fun bookmarkSheetPrefs_roundTrip() = runBlocking {

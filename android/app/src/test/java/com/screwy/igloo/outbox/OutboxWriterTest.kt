@@ -98,9 +98,10 @@ class OutboxWriterTest {
     }
 
     @Test fun enqueue_momentsCursor_writes_prefs() = runBlocking {
-        writer.enqueue(OutboxKind.MomentsCursor(videoId = "v1", positionMs = 4200L))
+        writer.enqueue(OutboxKind.MomentsCursor(videoId = "v1", positionMs = 4200L, sortAtMs = 1234L))
         assertEquals("v1", prefs.momentsResumeVideoId(scope = "all").first())
         assertEquals(4200L, prefs.momentsResumePositionMs(scope = "all").first())
+        assertEquals(1234L, prefs.momentsResumeSortAtMs(scope = "all").first())
     }
 
     // ─── Coalesce ─────────────────────────────────────────────────────────────

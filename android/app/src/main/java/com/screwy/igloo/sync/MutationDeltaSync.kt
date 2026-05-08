@@ -244,8 +244,10 @@ class MutationDeltaSync(
         val videoId = value.firstString("video_id", "VideoID") ?: itemId
         if (videoId.isBlank()) return false
         val positionMs = value.firstLong("position_ms", "PositionMs")
+        val sortAtMs = value.firstLong("sort_at_ms", "SortAtMs")
         val previousVideoId = prefs.getMomentsResumeVideoId(scope = scope)
         prefs.setMomentsResumeVideoId(videoId, scope = scope)
+        prefs.setMomentsResumeSortAtMs(sortAtMs, scope = scope)
         if (previousVideoId != videoId || (positionMs != null && positionMs > 0L)) {
             prefs.setMomentsResumePositionMs(positionMs ?: 0L, scope = scope)
         }

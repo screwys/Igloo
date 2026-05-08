@@ -201,6 +201,7 @@ data class MomentsCursorRequest(
     val position_ms: Long,
     val updated_at_ms: Long,
     val scope: String = "all",
+    val sort_at_ms: Long? = null,
 )
 
 @Serializable

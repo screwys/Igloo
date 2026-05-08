@@ -280,3 +280,99 @@ func TestHandleShortsHistoryFallsBackToNearestVisibleWhenCursorHidden(t *testing
 		t.Fatalf("updated_at_ms=%d, want original cursor timestamp", resp.UpdatedAtMs)
 	}
 }
+
+func TestHandleShortsHistoryUsesStoredSortWhenRepostCursorBecomesFollowed(t *testing.T) {
+	srv := newTestServer(t)
+	if err := srv.db.SetSetting("", "instagram_include_tagged_default", "true"); err != nil {
+		t.Fatalf("SetSetting instagram_include_tagged_default: %v", err)
+	}
+
+	for _, row := range []struct {
+		id       string
+		platform string
+		followed bool
+	}{
+		{"instagram_owner", "instagram", false},
+		{"instagram_reposter", "instagram", true},
+		{"tiktok_direct", "tiktok", true},
+	} {
+		if err := srv.db.ExecRaw(
+			`INSERT INTO channels (channel_id, name, platform) VALUES (?, ?, ?)`,
+			row.id, row.id, row.platform,
+		); err != nil {
+			t.Fatal(err)
+		}
+		if row.followed {
+			if err := srv.db.ExecRaw(
+				`INSERT INTO channel_follows (user_id, channel_id, followed_at) VALUES ('', ?, 1)`,
+				row.id,
+			); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, row := range []struct {
+		id        string
+		channelID string
+		published int
+	}{
+		{"old_tagged_cursor", "instagram_owner", 100},
+		{"direct_before", "tiktok_direct", 900},
+		{"direct_after", "tiktok_direct", 1200},
+	} {
+		if err := srv.db.ExecRaw(
+			`INSERT INTO videos (video_id, channel_id, title, duration, published_at)
+			 VALUES (?, ?, ?, 0, ?)`,
+			row.id, row.channelID, row.id, row.published,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := srv.db.ExecRaw(
+		`INSERT INTO video_repost_sources (
+			video_id, reposter_channel_id, reposter_handle, reposted_at_ms, first_seen_at_ms, updated_at_ms
+		 ) VALUES (?, ?, ?, 0, 1000, 1000)`,
+		"old_tagged_cursor", "instagram_reposter", "reposter",
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.db.ApplyMomentsCursorMutation("alice", "old_tagged_cursor", 0, 123456789, "all"); err != nil {
+		t.Fatalf("ApplyMomentsCursorMutation: %v", err)
+	}
+	if err := srv.db.ExecRaw(
+		`INSERT INTO channel_follows (user_id, channel_id, followed_at) VALUES ('', 'instagram_owner', 2)`,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/shorts/history?tab=all", nil)
+	req = attachTestAuth(req, "alice")
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d - %s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		VideoID            string `json:"video_id"`
+		FallbackForVideoID string `json:"fallback_for_video_id"`
+		Index              int    `json:"index"`
+		SortAtMs           int64  `json:"sort_at_ms"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.VideoID != "direct_after" {
+		t.Fatalf("video_id=%q, want direct_after", resp.VideoID)
+	}
+	if resp.FallbackForVideoID != "old_tagged_cursor" {
+		t.Fatalf("fallback_for_video_id=%q, want old_tagged_cursor", resp.FallbackForVideoID)
+	}
+	if resp.Index != 2 {
+		t.Fatalf("index=%d, want 2", resp.Index)
+	}
+	if resp.SortAtMs != 1000 {
+		t.Fatalf("sort_at_ms=%d, want 1000", resp.SortAtMs)
+	}
+}

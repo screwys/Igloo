@@ -85,13 +85,14 @@ func (s *Server) handleMomentsCursor(w http.ResponseWriter, r *http.Request) {
 		PositionMs  int64  `json:"position_ms"`
 		UpdatedAtMs int64  `json:"updated_at_ms"`
 		Scope       string `json:"scope"`
+		SortAtMs    int64  `json:"sort_at_ms"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.VideoID == "" {
 		writeJSON(w, 400, map[string]any{"success": false, "error": "video_id required"})
 		return
 	}
 
-	res, err := s.db.ApplyMomentsCursorMutation(user.Username, body.VideoID, body.PositionMs, body.UpdatedAtMs, body.Scope)
+	res, err := s.db.ApplyMomentsCursorMutationWithSortAt(user.Username, body.VideoID, body.PositionMs, body.UpdatedAtMs, body.Scope, body.SortAtMs)
 	if err != nil {
 		slog.Error("ApplyMomentsCursorMutation", "err", err)
 		writeJSON(w, 500, map[string]any{"success": false, "error": "db error"})

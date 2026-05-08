@@ -203,6 +203,7 @@ class OutboxDispatcher(
                 position_ms = p.long("position_ms") ?: 0,
                 updated_at_ms = p.long("updated_at_ms") ?: row.createdAtMs,
                 scope = p.string("scope") ?: row.itemId ?: "all",
+                sort_at_ms = p.long("sort_at_ms"),
             ))
         }
 

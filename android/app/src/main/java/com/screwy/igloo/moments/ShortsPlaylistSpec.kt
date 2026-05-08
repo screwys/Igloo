@@ -84,8 +84,9 @@ internal fun shortsStartIndex(
 ): Int {
     val target = requestedVideoId?.trim()?.takeIf { it.isNotEmpty() } ?: return 0
     val exact = items.indexOfFirst { it.videoId == target }
-    if (exact >= 0) return exact
+    if (exact >= 0 && fallbackSortAtMs == null) return exact
     val sortAt = fallbackSortAtMs ?: return 0
+    if (exact >= 0 && items[exact].sortAtMs == sortAt) return exact
     if (items.isEmpty()) return 0
     return items.withIndex()
         .firstOrNull { it.value.sortAtMs >= sortAt }

@@ -691,7 +691,7 @@ func (db *DB) GetNearestShortsCursorTarget(videoID, momentsMode string, sortAtHi
 	return db.GetNearestShortsOrdinal(sortAt, momentsMode)
 }
 
-func (db *DB) GetShortsCursorSortAt(videoID, momentsMode string) (int64, bool, error) {
+func (db *DB) GetShortsVisibleSortAt(videoID, momentsMode string) (int64, bool, error) {
 	momentsMode = NormalizeMomentsTab(momentsMode)
 	query := db.shortsVisibleCTE(momentsMode) + `
 		SELECT effective_moment_at_ms
@@ -705,6 +705,14 @@ func (db *DB) GetShortsCursorSortAt(videoID, momentsMode string) (int64, bool, e
 	}
 	if err != sql.ErrNoRows {
 		return 0, false, err
+	}
+	return 0, false, nil
+}
+
+func (db *DB) GetShortsCursorSortAt(videoID, momentsMode string) (int64, bool, error) {
+	sortAt, ok, err := db.GetShortsVisibleSortAt(videoID, momentsMode)
+	if err != nil || ok {
+		return sortAt, ok, err
 	}
 	err = db.conn.QueryRow(`
 		SELECT COALESCE(v.published_at, 0)

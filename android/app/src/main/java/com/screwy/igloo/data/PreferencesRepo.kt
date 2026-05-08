@@ -91,10 +91,13 @@ class PreferencesRepo(
         const val INSTAGRAM_INCLUDE_TAGGED_DEFAULT = "instagram_include_tagged_default"
         const val MOMENTS_RESUME_VIDEO_ID    = "moments_resume_video_id"
         const val MOMENTS_RESUME_POSITION_MS = "moments_resume_position_ms"
+        const val MOMENTS_RESUME_SORT_AT_MS  = "moments_resume_sort_at_ms"
         const val MOMENTS_RESUME_VIDEO_ID_ALL = "moments_resume_video_id_all"
         const val MOMENTS_RESUME_POSITION_MS_ALL = "moments_resume_position_ms_all"
+        const val MOMENTS_RESUME_SORT_AT_MS_ALL = "moments_resume_sort_at_ms_all"
         const val MOMENTS_RESUME_VIDEO_ID_FOLLOWING = "moments_resume_video_id_following"
         const val MOMENTS_RESUME_POSITION_MS_FOLLOWING = "moments_resume_position_ms_following"
+        const val MOMENTS_RESUME_SORT_AT_MS_FOLLOWING = "moments_resume_sort_at_ms_following"
         const val LAST_BOOKMARK_CATEGORY_ID  = "last_bookmark_category_id"
         const val BOOKMARK_ACCOUNT_PREFS     = "bookmark_account_prefs"
 
@@ -266,6 +269,18 @@ class PreferencesRepo(
         }
     }
 
+    fun momentsResumeSortAtMs(scope: String): Flow<Long?> {
+        val normalized = Defaults.normalizeMomentsTab(scope)
+        val key = momentsResumeSortAtMsKey(normalized)
+        if (normalized != "all") {
+            return dao.flowByKey(key).map { it?.value?.toLongOrNull() }
+        }
+        return combine(
+            dao.flowByKey(key),
+            dao.flowByKey(Keys.MOMENTS_RESUME_SORT_AT_MS),
+        ) { scoped, legacy -> scoped?.value?.toLongOrNull() ?: legacy?.value?.toLongOrNull() }
+    }
+
     // ─── Sync caches for hot paths ───────────────────────────────────────────
     //
     // Narrow by design: only the two prefs that gate high-frequency code paths
@@ -347,6 +362,11 @@ class PreferencesRepo(
         putLong(momentsResumePositionMsKey(normalized), positionMs)
         if (normalized == "all") putLong(Keys.MOMENTS_RESUME_POSITION_MS, positionMs)
     }
+    suspend fun setMomentsResumeSortAtMs(sortAtMs: Long?, scope: String = "all") {
+        val normalized = Defaults.normalizeMomentsTab(scope)
+        putString(momentsResumeSortAtMsKey(normalized), sortAtMs?.takeIf { it > 0L }?.toString())
+        if (normalized == "all") putString(Keys.MOMENTS_RESUME_SORT_AT_MS, sortAtMs?.takeIf { it > 0L }?.toString())
+    }
     suspend fun setLastBookmarkCategoryId(categoryId: Long?) =
         putString(Keys.LAST_BOOKMARK_CATEGORY_ID, categoryId?.toString())
 
@@ -417,6 +437,13 @@ class PreferencesRepo(
             Keys.MOMENTS_RESUME_POSITION_MS_FOLLOWING
         } else {
             Keys.MOMENTS_RESUME_POSITION_MS_ALL
+        }
+
+    private fun momentsResumeSortAtMsKey(scope: String): String =
+        if (Defaults.normalizeMomentsTab(scope) == "following") {
+            Keys.MOMENTS_RESUME_SORT_AT_MS_FOLLOWING
+        } else {
+            Keys.MOMENTS_RESUME_SORT_AT_MS_ALL
         }
 
     // ─── Test / dev hook ─────────────────────────────────────────────────────

@@ -189,6 +189,7 @@ class OutboxWriter(
                     put("video_id", kind.videoId)
                     put("position_ms", kind.positionMs)
                     put("scope", kind.scope)
+                    kind.sortAtMs?.takeIf { it > 0L }?.let { put("sort_at_ms", it) }
                 }
                 is OutboxKind.CreateCategory -> {
                     put("name", kind.name)
@@ -268,6 +269,7 @@ class OutboxWriter(
                 // position for a TikTok always ended up at 0.
                 val prevVideoId = prefs.getMomentsResumeVideoId(scope = kind.scope)
                 prefs.setMomentsResumeVideoId(kind.videoId, scope = kind.scope)
+                prefs.setMomentsResumeSortAtMs(kind.sortAtMs, scope = kind.scope)
                 if (prevVideoId != kind.videoId || kind.positionMs > 0L) {
                     prefs.setMomentsResumePositionMs(kind.positionMs, scope = kind.scope)
                 }

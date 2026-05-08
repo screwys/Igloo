@@ -115,6 +115,7 @@ templ VideoCard(p PageProps, v model.Video) {
 		data-bookmark-category-id={ bookmarkCategoryIDStr(v.BookmarkCategoryID) }
 		data-platform={ v.Platform }
 		data-published-at={ publishedAtStr(v.PublishedAt) }
+		data-sort-at-ms={ strconv.FormatInt(v.EffectiveMomentAtMs, 10) }
 		data-channel-followed={ boolDataAttr(v.IsSubscribed) }
 		data-repost-introduced={ boolDataAttr(v.RepostIntroduced) }
 		data-repost-label={ videoRepostLabel(v) }
