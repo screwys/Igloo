@@ -262,3 +262,60 @@ func TestImportConfigPreservesDefaultCategoryBookmarkLabel(t *testing.T) {
 		t.Fatalf("labels = %#v, want Saved Label", labels)
 	}
 }
+
+func TestImportConfigPublishesImportedRowsToDelta(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	cfg := ConfigExport{
+		Version: 1,
+		Subscriptions: []ChannelExport{{
+			ChannelID: "youtube_UCimported",
+			Name:      "Imported Channel",
+			Platform:  "youtube",
+		}},
+		BookmarkedVideos: []BookmarkedVideoExport{{
+			VideoID:     "imported_video",
+			ChannelID:   "youtube_UCimported",
+			Title:       "Imported Video",
+			Platform:    "youtube",
+			Duration:    42,
+			PublishedAt: "2026-05-01T12:00:00Z",
+		}},
+	}
+	if _, err := d.ImportConfig(cfg, "alice", false); err != nil {
+		t.Fatalf("ImportConfig: %v", err)
+	}
+
+	channels, _, err := d.ListChannelsForDelta(0, 500)
+	if err != nil {
+		t.Fatalf("ListChannelsForDelta: %v", err)
+	}
+	if !hasChannelID(channels, "youtube_UCimported") {
+		t.Fatalf("imported channel missing from delta: %#v", channels)
+	}
+	videos, _, err := d.ListVideosForDelta([]string{"youtube"}, 0, 500)
+	if err != nil {
+		t.Fatalf("ListVideosForDelta: %v", err)
+	}
+	if !hasVideoID(videos, "imported_video") {
+		t.Fatalf("imported video missing from delta: %#v", videos)
+	}
+}
+
+func hasChannelID(channels []model.Channel, id string) bool {
+	for _, ch := range channels {
+		if ch.ChannelID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasVideoID(videos []model.Video, id string) bool {
+	for _, video := range videos {
+		if video.VideoID == id {
+			return true
+		}
+	}
+	return false
+}

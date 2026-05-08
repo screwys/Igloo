@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/model"
 )
 
 func TestRunImportsCurrentFullExportZipFreshInstall(t *testing.T) {
@@ -110,6 +111,21 @@ func TestRunImportsCurrentFullExportZipFreshInstall(t *testing.T) {
 		t.Fatalf("restored media = %q", string(restored))
 	}
 
+	channels, _, err := store.ListChannelsForDelta(0, 500)
+	if err != nil {
+		t.Fatalf("ListChannelsForDelta: %v", err)
+	}
+	if !hasDeltaChannel(channels, "youtube_UCfresh") {
+		t.Fatalf("imported channel missing from fresh delta: %#v", channels)
+	}
+	videos, _, err := store.ListVideosForDelta([]string{"youtube"}, 0, 500)
+	if err != nil {
+		t.Fatalf("ListVideosForDelta: %v", err)
+	}
+	if !hasDeltaVideo(videos, "booked_video") {
+		t.Fatalf("imported video missing from fresh delta: %#v", videos)
+	}
+
 	if code := run([]string{"--replace", zipPath}, &stdout, &stderr); code != 0 {
 		t.Fatalf("second run exit = %d, stderr=%s stdout=%s", code, stderr.String(), stdout.String())
 	}
@@ -123,6 +139,24 @@ func TestRunImportsCurrentFullExportZipFreshInstall(t *testing.T) {
 	if bookmarkCount != 1 || mediaCount != 1 {
 		t.Fatalf("after rerun bookmarkCount=%d mediaCount=%d, want 1/1", bookmarkCount, mediaCount)
 	}
+}
+
+func hasDeltaChannel(channels []model.Channel, id string) bool {
+	for _, ch := range channels {
+		if ch.ChannelID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDeltaVideo(videos []model.Video, id string) bool {
+	for _, v := range videos {
+		if v.VideoID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func writeFullExportZipFixture(t *testing.T, path string) {

@@ -532,16 +532,28 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 
 		// Channels: INSERT OR IGNORE new, UPDATE settings for existing
 		for _, ch := range cfg.Subscriptions {
+			seq := db.NextSyncSeq()
 			result, err := tx.Exec(`
 				INSERT OR IGNORE INTO channels
-					(channel_id, name, url, platform, quality, check_interval)
-				VALUES (?, ?, ?, ?, ?, ?)
+					(channel_id, name, url, platform, quality, check_interval, sync_seq)
+				VALUES (?, ?, ?, ?, ?, ?, ?)
 			`,
 				ch.ChannelID, ch.Name, buildChannelURL(ch), ch.Platform,
-				nilIfEmpty(ch.Quality), ch.CheckInterval,
+				nilIfEmpty(ch.Quality), ch.CheckInterval, seq,
 			)
 			if err != nil {
 				return err
+			}
+			n, _ := result.RowsAffected()
+			if n == 0 {
+				if _, err := tx.Exec(`
+					UPDATE channels
+					SET sync_seq = ?
+					WHERE channel_id = ?
+					  AND COALESCE(sync_seq, 0) = 0
+				`, seq, ch.ChannelID); err != nil {
+					return err
+				}
 			}
 
 			// Follow + star side tables — always ensure the follow row
@@ -597,7 +609,6 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 				}
 			}
 
-			n, _ := result.RowsAffected()
 			if n > 0 {
 				res.AddedChannels++
 			} else {
@@ -628,11 +639,26 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 
 		// Import bookmarked videos if present
 		for _, bv := range cfg.BookmarkedVideos {
-			tx.Exec(`
+			seq := db.NextSyncSeq()
+			result, err := tx.Exec(`
 				INSERT OR IGNORE INTO videos
-					(video_id, channel_id, title, duration, published_at, file_path)
-				VALUES (?, ?, ?, ?, ?, '')
-			`, bv.VideoID, bv.ChannelID, bv.Title, bv.Duration, parseTimestampString(bv.PublishedAt))
+					(video_id, channel_id, title, duration, published_at, file_path, sync_seq)
+				VALUES (?, ?, ?, ?, ?, '', ?)
+			`, bv.VideoID, bv.ChannelID, bv.Title, bv.Duration, parseTimestampString(bv.PublishedAt), seq)
+			if err != nil {
+				return err
+			}
+			n, _ := result.RowsAffected()
+			if n == 0 {
+				if _, err := tx.Exec(`
+					UPDATE videos
+					SET sync_seq = ?
+					WHERE video_id = ?
+					  AND COALESCE(sync_seq, 0) = 0
+				`, seq, bv.VideoID); err != nil {
+					return err
+				}
+			}
 
 			catID := int64(0)
 			if bv.CategoryName != "" {
@@ -640,10 +666,12 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 					catID = id
 				}
 			}
-			tx.Exec(`
+			if _, err := tx.Exec(`
 				INSERT OR IGNORE INTO bookmarks (user_id, video_id, category_id)
 				VALUES (?, ?, ?)
-			`, userID, bv.VideoID, catID)
+			`, userID, bv.VideoID, catID); err != nil {
+				return err
+			}
 		}
 
 		return nil
