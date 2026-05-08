@@ -43,6 +43,93 @@ function fakeElement() {
   return element;
 }
 
+class TestElement {
+  constructor(tagName, attrs = {}, children = []) {
+    this.tagName = tagName.toUpperCase();
+    this.attrs = { ...attrs };
+    this.children = [];
+    this.parentElement = null;
+    this.dataset = {};
+    this.style = {};
+    this.textContent = attrs.textContent || "";
+    this.src = attrs.src || "";
+    for (const child of children) this.appendChild(child);
+  }
+
+  appendChild(child) {
+    child.parentElement = this;
+    this.children.push(child);
+    return child;
+  }
+
+  getAttribute(name) {
+    if (name === "src" && this.src) return this.src;
+    return this.attrs[name] || "";
+  }
+
+  contains(target) {
+    if (this === target) return true;
+    return this.children.some((child) => child.contains(target));
+  }
+
+  closest(selector) {
+    for (let node = this; node; node = node.parentElement) {
+      if (matchesSelector(node, selector)) return node;
+    }
+    return null;
+  }
+
+  querySelector(selector) {
+    return this.querySelectorAll(selector)[0] || null;
+  }
+
+  querySelectorAll(selector) {
+    const selectors = selector.split(",").map((part) => part.trim());
+    const results = [];
+    const visit = (node) => {
+      for (const child of node.children) {
+        if (selectors.some((part) => matchesSelector(child, part))) {
+          results.push(child);
+        }
+        visit(child);
+      }
+    };
+    visit(this);
+    return results;
+  }
+}
+
+function el(tagName, attrs = {}, children = []) {
+  return new TestElement(tagName, attrs, children);
+}
+
+function matchesSelector(node, selector) {
+  if (selector === "time") return node.tagName === "TIME";
+  if (selector === "video") return node.tagName === "VIDEO";
+  if (selector === '[data-testid="videoPlayer"]') {
+    return node.getAttribute("data-testid") === "videoPlayer";
+  }
+  if (selector === 'a[href*="/status/"]') {
+    return (
+      node.tagName === "A" &&
+      node.getAttribute("href").includes("/status/")
+    );
+  }
+  if (selector === 'a[href*="/status/"] time') {
+    return node.tagName === "TIME" && !!node.closest('a[href*="/status/"]');
+  }
+  if (selector === 'img[src*="pbs.twimg.com/media"]') {
+    return (
+      node.tagName === "IMG" &&
+      (node.src || node.getAttribute("src")).includes("pbs.twimg.com/media")
+    );
+  }
+  if (selector === '[role="link"]') {
+    return node.getAttribute("role") === "link";
+  }
+  return false;
+}
+
 function buildHarness({
   prompts = [],
   followHandles = [],
@@ -222,7 +309,12 @@ function runScript(harness, { exposeDebug = false } = {}) {
   const source = exposeDebug
     ? script.replace(
         /\}\)\(\);\s*$/,
-        "globalThis.__iglooTest = { handleUnsave };\n})();",
+        `globalThis.__iglooTest = {
+  handleUnsave,
+  collectTweetMediaItems: typeof collectTweetMediaItems === "function" ? collectTweetMediaItems : undefined,
+  shouldShowMediaIndexPicker: typeof shouldShowMediaIndexPicker === "function" ? shouldShowMediaIndexPicker : undefined,
+  normalizeSelectedMediaIndices: typeof normalizeSelectedMediaIndices === "function" ? normalizeSelectedMediaIndices : undefined,
+};\n})();`,
       )
     : script;
   vm.runInContext(source, harness.context, {
@@ -321,5 +413,111 @@ test("ghost-resubscribed X handles can be unfollowed immediately", async () => {
     `expected immediate unfollow DELETE, got ${harness.requestCalls
       .map((call) => `${call.method} ${call.url}`)
       .join(", ")}`,
+  );
+});
+
+test("collects parent and quote media in parent-first order", () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  const article = el("article", {}, [
+    el("a", { href: "/parent/status/111" }, [el("time")]),
+    el("a", { href: "/parent/status/111/photo/1" }, [
+      el("img", {
+        src: "https://pbs.twimg.com/media/main-one?format=jpg&name=small",
+      }),
+    ]),
+    el("a", { href: "/parent/status/111/photo/2" }, [
+      el("img", {
+        src: "https://pbs.twimg.com/media/main-two?format=jpg&name=small",
+      }),
+    ]),
+    el("div", { role: "link" }, [
+      el("a", { href: "/quote/status/222" }, [el("time")]),
+      el("a", { href: "/quote/status/222/photo/1" }, [
+        el("img", {
+          src: "https://pbs.twimg.com/media/quote-one?format=jpg&name=small",
+        }),
+      ]),
+      el("a", { href: "/quote/status/222/photo/2" }, [
+        el("img", {
+          src: "https://pbs.twimg.com/media/quote-two?format=jpg&name=small",
+        }),
+      ]),
+    ]),
+  ]);
+
+  const items = JSON.parse(
+    JSON.stringify(harness.context.__iglooTest.collectTweetMediaItems(article)),
+  );
+
+  assert.deepEqual(
+    items.map((item) => [item.kind, item.tweetId, item.url]),
+    [
+      [
+        "image",
+        "111",
+        "https://pbs.twimg.com/media/main-one?format=jpg&name=orig",
+      ],
+      [
+        "image",
+        "111",
+        "https://pbs.twimg.com/media/main-two?format=jpg&name=orig",
+      ],
+      [
+        "image",
+        "222",
+        "https://pbs.twimg.com/media/quote-one?format=jpg&name=orig",
+      ],
+      [
+        "image",
+        "222",
+        "https://pbs.twimg.com/media/quote-two?format=jpg&name=orig",
+      ],
+    ],
+  );
+});
+
+test("uses the quote tweet URL for quote-only videos", () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  const article = el("article", {}, [
+    el("a", { href: "/parent/status/111" }, [el("time")]),
+    el("div", { role: "link" }, [
+      el("a", { href: "/quote/status/222" }, [el("time")]),
+      el("div", { "data-testid": "videoPlayer" }, [el("video")]),
+    ]),
+  ]);
+
+  const items = JSON.parse(
+    JSON.stringify(harness.context.__iglooTest.collectTweetMediaItems(article)),
+  );
+
+  assert.deepEqual(items, [
+    {
+      kind: "video",
+      tweetId: "222",
+      tweetUrl: "https://x.com/quote/status/222",
+      ext: ".mp4",
+      index: 0,
+    },
+  ]);
+});
+
+test("shows the media picker even for a single media item", () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  assert.equal(harness.context.__iglooTest.shouldShowMediaIndexPicker(1), true);
+});
+
+test("treats no selected media buttons as the default all-media selection", () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  assert.equal(
+    harness.context.__iglooTest.normalizeSelectedMediaIndices([], 4),
+    null,
   );
 });

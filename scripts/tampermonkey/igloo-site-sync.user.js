@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.5
+// @version      8.0.6
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -30,7 +30,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.5";
+  const SCRIPT_VERSION = "8.0.6";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -189,6 +189,17 @@
     }
   }
 
+  function parseTweetInfoFromHref(href) {
+    if (!href) return null;
+    const m = String(href).match(/\/([A-Za-z0-9_]+)\/status\/(\d+)/);
+    if (!m) return null;
+    return {
+      url: "https://x.com/" + m[1] + "/status/" + m[2],
+      tweetId: m[2],
+      handle: m[1],
+    };
+  }
+
   function extractHandleFromArticle(article) {
     if (!article) return null;
     const unb = article.querySelector("[data-testid='User-Name']");
@@ -212,23 +223,13 @@
     if (timeLink) {
       const a = timeLink.closest("a");
       const href = (a && a.getAttribute("href")) || "";
-      const m = href.match(/\/([A-Za-z0-9_]+)\/status\/(\d+)/);
-      if (m)
-        return {
-          url: "https://x.com" + href.split("?")[0],
-          tweetId: m[2],
-          handle: m[1],
-        };
+      const info = parseTweetInfoFromHref(href);
+      if (info) return info;
     }
     for (const a of article.querySelectorAll('a[href*="/status/"]')) {
       const href = a.getAttribute("href") || "";
-      const m = href.match(/\/([A-Za-z0-9_]+)\/status\/(\d+)/);
-      if (m)
-        return {
-          url: "https://x.com" + href.split("?")[0],
-          tweetId: m[2],
-          handle: m[1],
-        };
+      const info = parseTweetInfoFromHref(href);
+      if (info) return info;
     }
     return null;
   }
@@ -504,30 +505,120 @@
     return Array.from(new Set(keys));
   }
 
-  // ── DOM media extraction (images only) ──────────────────────────────────────
-  function _extractImagesFromArticle(article) {
-    const medias = [],
-      seen = new Set();
+  // ── DOM media extraction ───────────────────────────────────────────────────
+  function findQuoteMediaScopes(article, parentTweetId) {
+    const scopes = [];
+    const seen = new Set();
+    article.querySelectorAll('a[href*="/status/"]').forEach((link) => {
+      const info = parseTweetInfoFromHref(link.getAttribute("href") || "");
+      if (!info || info.tweetId === parentTweetId || seen.has(info.tweetId))
+        return;
+      seen.add(info.tweetId);
+      const root =
+        (link.closest && link.closest('[role="link"]')) ||
+        link.parentElement ||
+        link;
+      scopes.push({ ...info, root });
+    });
+    return scopes;
+  }
+
+  function mediaOwnerForElement(node, article, parentInfo, quoteScopes) {
+    const statusLink =
+      node.closest && node.closest('a[href*="/status/"]');
+    if (statusLink) {
+      const owner = parseTweetInfoFromHref(
+        statusLink.getAttribute("href") || "",
+      );
+      if (owner) return owner;
+    }
+    for (const scope of quoteScopes) {
+      if (
+        scope.root &&
+        scope.root !== article &&
+        typeof scope.root.contains === "function" &&
+        scope.root.contains(node)
+      ) {
+        return scope;
+      }
+    }
+    return parentInfo;
+  }
+
+  function imageMediaFromElement(img) {
+    const src = img.src || img.getAttribute("src") || "";
+    if (!src.includes("pbs.twimg.com/media")) return null;
+    const base = src.split("?")[0];
+    return {
+      kind: "image",
+      url: base + "?format=jpg&name=orig",
+      ext: ".jpg",
+    };
+  }
+
+  function collectTweetMediaItems(article) {
+    const parentInfo = extractTweetUrl(article);
+    if (!parentInfo) return [];
+
+    const quoteScopes = findQuoteMediaScopes(article, parentInfo.tweetId);
+    const ownerOrder = new Map([[parentInfo.tweetId, 0]]);
+    quoteScopes.forEach((scope, i) => ownerOrder.set(scope.tweetId, i + 1));
+
+    const items = [];
+    const seenImages = new Set();
     article
       .querySelectorAll('img[src*="pbs.twimg.com/media"]')
       .forEach((img) => {
-        const base = img.src.split("?")[0];
-        if (seen.has(base)) return;
-        seen.add(base);
-        medias.push({
-          url: base + "?format=jpg&name=orig",
-          ext: ".jpg",
-          index: medias.length,
+        const media = imageMediaFromElement(img);
+        if (!media) return;
+        const owner = mediaOwnerForElement(
+          img,
+          article,
+          parentInfo,
+          quoteScopes,
+        );
+        const imageKey = owner.tweetId + "|" + media.url.split("?")[0];
+        if (seenImages.has(imageKey)) return;
+        seenImages.add(imageKey);
+        items.push({
+          ...media,
+          tweetId: owner.tweetId,
+          tweetUrl: owner.url,
+          domOrder: items.length,
         });
       });
-    return medias;
-  }
 
-  function _articleHasVideo(article) {
-    return !!(
-      article.querySelector("video") ||
-      article.querySelector('[data-testid="videoPlayer"]')
-    );
+    const seenVideos = new Set();
+    article
+      .querySelectorAll('video, [data-testid="videoPlayer"]')
+      .forEach((node) => {
+        const owner = mediaOwnerForElement(
+          node,
+          article,
+          parentInfo,
+          quoteScopes,
+        );
+        if (seenVideos.has(owner.tweetId)) return;
+        seenVideos.add(owner.tweetId);
+        items.push({
+          kind: "video",
+          tweetId: owner.tweetId,
+          tweetUrl: owner.url,
+          ext: ".mp4",
+          domOrder: items.length,
+        });
+      });
+
+    items.sort((a, b) => {
+      const ownerA = ownerOrder.has(a.tweetId)
+        ? ownerOrder.get(a.tweetId)
+        : Number.MAX_SAFE_INTEGER;
+      const ownerB = ownerOrder.has(b.tweetId)
+        ? ownerOrder.get(b.tweetId)
+        : Number.MAX_SAFE_INTEGER;
+      return ownerA - ownerB || a.domOrder - b.domOrder;
+    });
+    return items.map(({ domOrder, ...item }, index) => ({ ...item, index }));
   }
 
   // ── DL categories + labels ──────────────────────────────────────────────────
@@ -1056,7 +1147,7 @@
     popover.appendChild(dlDatalist);
 
     // Media index selector — numbered buttons, all selected by default
-    if (mediaCount > 1) {
+    if (shouldShowMediaIndexPicker(mediaCount)) {
       const mediaLbl = document.createElement("span");
       mediaLbl.className = "xdl-label-text";
       mediaLbl.textContent = "Pick # to download";
@@ -1184,7 +1275,10 @@
           if (b.dataset.selected === "1")
             selectedIndices.push(parseInt(b.dataset.mediaIdx, 10));
         });
-        if (selectedIndices.length === mediaBtns.length) selectedIndices = null; // all = no filter
+        selectedIndices = normalizeSelectedMediaIndices(
+          selectedIndices,
+          mediaBtns.length,
+        );
       }
       GM_setValue("xdl_last_category", selectedCatId);
       dismiss();
@@ -1231,6 +1325,24 @@
     }, 80);
   }
 
+  function shouldShowMediaIndexPicker(mediaCount) {
+    return mediaCount >= 1;
+  }
+
+  function normalizeSelectedMediaIndices(selectedIndices, mediaCount) {
+    if (!Array.isArray(selectedIndices) || mediaCount <= 0) return null;
+    const valid = Array.from(
+      new Set(
+        selectedIndices.filter(
+          (idx) =>
+            Number.isInteger(idx) && idx >= 0 && idx < mediaCount,
+        ),
+      ),
+    ).sort((a, b) => a - b);
+    if (!valid.length || valid.length === mediaCount) return null;
+    return valid;
+  }
+
   // ── DL button state ────────────────────────────────────────────────────────
   function setDlButtonState(btn, state) {
     if (!btn) return;
@@ -1258,23 +1370,35 @@
   }
 
   // ── Download: images via GM_download, videos via fxtwitter ──────────────
-  function downloadImages(
+  function fxtwitterDownloadUrl(tweetUrl) {
+    return tweetUrl.replace(
+      /^https?:\/\/(x\.com|twitter\.com)/,
+      "https://d.fxtwitter.com",
+    );
+  }
+
+  function downloadMediaItems(
     tweetId,
     handle,
-    images,
+    mediaItems,
     categoryId,
     label,
     onComplete,
   ) {
-    const staged = images.map((m, i) => ({
+    if (!mediaItems.length) {
+      onComplete({ ok: false });
+      return;
+    }
+    const staged = mediaItems.map((m, i) => ({
       staging_name: "tmp_" + tweetId + "_" + i + m.ext,
       ext: m.ext,
     }));
     let doneCount = 0;
-    const successfulStaged = [];
+    const successfulStaged = new Array(mediaItems.length);
 
     function finish() {
-      if (!successfulStaged.length) {
+      const completed = successfulStaged.filter(Boolean);
+      if (!completed.length) {
         onComplete({ ok: false });
         return;
       }
@@ -1285,21 +1409,24 @@
           handle,
           label,
           category_id: categoryId,
-          staged_files: successfulStaged,
+          staged_files: completed,
         },
         true,
       ).then((resp) => onComplete(resp));
     }
 
-    images.forEach((media, i) => {
-      GM_download({
-        url: media.url,
+    mediaItems.forEach((media, i) => {
+      const url =
+        media.kind === "video"
+          ? fxtwitterDownloadUrl(media.tweetUrl)
+          : media.url;
+      const downloadOptions = {
+        url,
         name: staged[i].staging_name,
-        headers: { Referer: "https://x.com/" },
         onload() {
-          successfulStaged.push(staged[i]);
+          successfulStaged[i] = staged[i];
           doneCount++;
-          if (doneCount === images.length) finish();
+          if (doneCount === mediaItems.length) finish();
         },
         onerror(err) {
           console.warn(
@@ -1308,18 +1435,19 @@
             err,
           );
           doneCount++;
-          if (doneCount === images.length) finish();
+          if (doneCount === mediaItems.length) finish();
         },
-      });
+      };
+      if (media.kind !== "video") {
+        downloadOptions.headers = { Referer: "https://x.com/" };
+      }
+      GM_download(downloadOptions);
     });
   }
 
   function downloadViaFxtwitter(tweetUrl, stagingName) {
     return new Promise((resolve) => {
-      const fxUrl = tweetUrl.replace(
-        /^https?:\/\/(x\.com|twitter\.com)/,
-        "https://d.fxtwitter.com",
-      );
+      const fxUrl = fxtwitterDownloadUrl(tweetUrl);
       console.log("[XDL] trying fxtwitter:", fxUrl);
       GM_download({
         url: fxUrl,
@@ -1346,8 +1474,7 @@
     }
 
     const handle = extractHandleFromArticle(article) || info.handle;
-    const images = _extractImagesFromArticle(article);
-    const hasVideo = _articleHasVideo(article);
+    const mediaItems = collectTweetMediaItems(article);
 
     if (dlCategories === null) {
       notify("Categories loading, try again");
@@ -1358,7 +1485,7 @@
       dlBtn,
       handle,
       info.tweetId,
-      images.length || 1,
+      mediaItems.length || 1,
       async (catId, lbl, effectiveHandle, selectedIndices) => {
         setDlButtonState(dlBtn, "loading");
 
@@ -1368,85 +1495,26 @@
           dlBtn.classList.add("downloaded");
         }
 
-        const filteredImages = selectedIndices
-          ? images.filter((_, i) => selectedIndices.includes(i))
-          : images;
-        if (filteredImages.length) {
-          // Images found in DOM — download directly via GM_download, then move
-          downloadImages(
+        const selectedMedia = selectedIndices
+          ? mediaItems.filter((_, i) => selectedIndices.includes(i))
+          : mediaItems;
+        if (selectedMedia.length) {
+          downloadMediaItems(
             info.tweetId,
             effectiveHandle,
-            filteredImages,
+            selectedMedia,
             catId,
             lbl,
             async (resp) => {
-              const imgOk = resp.ok && resp.json && resp.json.success;
-              const imgCount = resp.json?.moved?.length || 0;
-              if (imgOk && !hasVideo) {
+              const ok = resp.ok && resp.json && resp.json.success;
+              const movedCount = resp.json?.moved?.length || 0;
+              if (ok) {
                 onSuccess();
-                showToast("Downloaded " + imgCount + " image(s): " + lbl);
+                showToast("Downloaded " + movedCount + " file(s): " + lbl);
                 return;
               }
-              if (hasVideo || !imgOk) {
-                console.log(
-                  "[XDL] " +
-                    (hasVideo
-                      ? "mixed media — downloading video"
-                      : "image move failed, trying fxtwitter"),
-                );
-                const stagingName = "tmp_" + info.tweetId + "_v.mp4";
-                const fxResult = await downloadViaFxtwitter(
-                  info.url,
-                  stagingName,
-                );
-                if (fxResult.ok) {
-                  const moveResp = await apiRequest(
-                    "POST",
-                    "/api/tweet-media-move",
-                    {
-                      handle: effectiveHandle,
-                      label: lbl,
-                      category_id: catId,
-                      staged_files: [
-                        { staging_name: stagingName, ext: ".mp4" },
-                      ],
-                    },
-                    true,
-                  );
-                  if (moveResp.ok && moveResp.json && moveResp.json.success) {
-                    onSuccess();
-                    showToast(
-                      imgOk
-                        ? "Downloaded " + imgCount + " image(s) + video: " + lbl
-                        : "Downloaded via fxtwitter: " + lbl,
-                    );
-                  } else if (imgOk) {
-                    onSuccess();
-                    showToast(
-                      "Downloaded " +
-                        imgCount +
-                        " image(s) (video move failed): " +
-                        lbl,
-                    );
-                  } else {
-                    setDlButtonState(dlBtn, "error");
-                    showToast("Download failed: move error");
-                  }
-                } else if (imgOk) {
-                  onSuccess();
-                  showToast(
-                    "Downloaded " +
-                      imgCount +
-                      " image(s) (video failed): " +
-                      lbl,
-                  );
-                } else {
-                  setDlButtonState(dlBtn, "error");
-                  showToast(
-                    "Download failed: " + (fxResult.error || "unknown"),
-                  );
-                }
-              }
+              setDlButtonState(dlBtn, "error");
+              showToast("Download failed: move error");
             },
           );
         } else {
