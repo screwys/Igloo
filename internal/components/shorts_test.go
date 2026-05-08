@@ -415,8 +415,20 @@ func TestShortsDebugToolsExposeOptInMediaSnapshots(t *testing.T) {
 		"buffered: rangesOf(video.buffered)",
 		"containerRect: rectOf(container)",
 		"itemRect: rectOf(entry.el)",
+		"snapDelta: snapDeltaOf(entry)",
+		"visibleTopPx: visible.visibleTopPx",
+		"visibleBottomPx: visible.visibleBottomPx",
+		"visibleRatio: visible.visibleRatio",
+		"visible: visible",
 		"wrapperRect: rectOf(wrapper)",
 		"videoRect: rectOf(video)",
+		"infoRect: rectOf(info)",
+		"authorRect: rectOf(author)",
+		"titleRect: rectOf(title)",
+		"actionsRect: rectOf(actions)",
+		"progressRect: rectOf(progress)",
+		"chrome: chromeSnapshot(entry)",
+		"isSkeletonCard: !!(entry.data && entry.data.isSkeleton)",
 		"containerScroll: container ?",
 		"wrapperRadius: wrapperStyle && wrapperStyle.borderRadius",
 		"videoDisplay: videoStyle && videoStyle.display",
@@ -432,8 +444,16 @@ func TestShortsDebugToolsExposeOptInMediaSnapshots(t *testing.T) {
 	if !strings.Contains(string(itemsBytes), "attachShortVideoDebug(entryObj)") {
 		t.Fatal("shorts items should attach video event diagnostics")
 	}
-	if !strings.Contains(string(overlayBytes), "recordShortsDebugEvent(entry, 'activate'") ||
-		!strings.Contains(string(overlayBytes), "recordShortsDebugEvent(entry, 'play:attempt')") {
-		t.Fatal("shorts overlay should record activation and playback attempts")
+	for _, check := range []string{
+		"recordShortsDebugEvent(entry, 'intersect:candidate'",
+		"recordShortsDebugEvent(entry, 'activate:pre-snap'",
+		"recordShortsDebugEvent(entry, 'activate'",
+		"recordShortsDebugEvent(entry, 'play:attempt')",
+		"recordShortsDebugEvent(entry, 'snap:settled'",
+		"recordShortsDebugEvent(entry, 'chrome:snapshot'",
+	} {
+		if !strings.Contains(string(overlayBytes), check) {
+			t.Errorf("shorts overlay debug event missing %q", check)
+		}
 	}
 }

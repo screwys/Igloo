@@ -312,7 +312,10 @@ function activateVisibleShort(index) {
   var settled = isSnapSettled(entry)
   if (!settled) {
     recordShortsDebugEvent(entry, 'activate:pre-snap', { delta: Math.round(snapOffset(entry)) })
+  } else {
+    recordShortsDebugEvent(entry, 'snap:settled', { delta: Math.round(snapOffset(entry)) })
   }
+  recordShortsDebugEvent(entry, 'chrome:snapshot', { phase: 'visible-short', snapSettled: settled })
   activateIndex(index, { force: false, snapSettled: settled })
 }
 
@@ -335,6 +338,8 @@ export function activateIndex(index, options) {
   var snapSettled = opts.snapSettled
   if (snapSettled === undefined) snapSettled = _state.storyMode || isSnapSettled(entry)
   recordShortsDebugEvent(entry, 'activate', { snapSettled: !!snapSettled })
+  if (snapSettled) recordShortsDebugEvent(entry, 'snap:settled', { delta: Math.round(snapOffset(entry)) })
+  recordShortsDebugEvent(entry, 'chrome:snapshot', { phase: 'activate', snapSettled: !!snapSettled })
 
   pauseAllShorts(entry.data.id)
   _state.lastVisibleId = entry.data.id
@@ -375,6 +380,13 @@ export function onShortIntersect(entries) {
   if (!id) return
   var index = _state.cardIndexById.get(id)
   if (index !== undefined) {
+    var entry = _state.items[index]
+    if (entry) {
+      recordShortsDebugEvent(entry, 'intersect:candidate', {
+        ratio: Number((best.intersectionRatio || 0).toFixed(3)),
+        delta: Math.round(snapOffset(entry))
+      })
+    }
     activateVisibleShort(index)
   }
 }

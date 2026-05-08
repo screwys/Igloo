@@ -52,6 +52,68 @@ function rectOf(el) {
   }
 }
 
+function q(sel, root) {
+  return (root || document).querySelector(sel)
+}
+
+function styleOf(el) {
+  if (!el || typeof getComputedStyle !== 'function') return null
+  try {
+    var s = getComputedStyle(el)
+    return {
+      display: s.display,
+      visibility: s.visibility,
+      opacity: s.opacity,
+      pointerEvents: s.pointerEvents
+    }
+  } catch (_) {
+    return null
+  }
+}
+
+function elementSnapshot(el) {
+  if (!el) return { exists: false }
+  return {
+    exists: true,
+    className: String(el.className || ''),
+    rect: rectOf(el),
+    style: styleOf(el),
+    textLen: String(el.textContent || '').trim().length
+  }
+}
+
+function snapDeltaOf(entry) {
+  var container = document.getElementById('shorts-container')
+  if (!entry || !entry.el || !container) return null
+  if (typeof entry.el.getBoundingClientRect !== 'function' ||
+      typeof container.getBoundingClientRect !== 'function') return null
+  var itemRect = entry.el.getBoundingClientRect()
+  var containerRect = container.getBoundingClientRect()
+  return Math.round(itemRect.top - containerRect.top)
+}
+
+function visibleGeometry(entry) {
+  var container = document.getElementById('shorts-container')
+  if (!entry || !entry.el || !container) return null
+  if (typeof entry.el.getBoundingClientRect !== 'function' ||
+      typeof container.getBoundingClientRect !== 'function') return null
+  var itemRect = entry.el.getBoundingClientRect()
+  var containerRect = container.getBoundingClientRect()
+  var top = Math.max(itemRect.top, containerRect.top)
+  var bottom = Math.min(itemRect.bottom, containerRect.bottom)
+  var visibleHeight = Math.max(0, bottom - top)
+  var itemHeight = Math.max(1, itemRect.height || 0)
+  var visibleTopPx = Math.max(0, containerRect.top - itemRect.top)
+  var visibleBottomPx = Math.max(0, itemRect.bottom - containerRect.bottom)
+  return {
+    visibleTopPx: Math.round(visibleTopPx),
+    visibleBottomPx: Math.round(visibleBottomPx),
+    visibleHeight: Math.round(visibleHeight),
+    visibleRatio: Number(Math.min(1, visibleHeight / itemHeight).toFixed(3)),
+    missingEdge: visibleTopPx > 2 ? 'top' : (visibleBottomPx > 2 ? 'bottom' : '')
+  }
+}
+
 function rangesOf(ranges) {
   var out = []
   if (!ranges) return out
@@ -99,6 +161,23 @@ function band(ctx, width, startY, endY) {
   return { avg: Math.round(total / Math.max(1, count)), darkPct: Math.round((dark / Math.max(1, count)) * 100) }
 }
 
+function chromeSnapshot(entry) {
+  var refs = entry && entry.refs
+  var root = refs && refs.wrapper ? refs.wrapper : (entry && entry.el)
+  var info = refs && refs.info ? refs.info : q('.shorts-info-overlay', root)
+  var author = refs && refs.author ? refs.author : q('.shorts-author-name', root)
+  var title = refs && refs.title ? refs.title : q('.shorts-video-title', root)
+  var actions = refs && refs.actions ? refs.actions : q('.shorts-actions', root)
+  var progress = refs && refs.progressContainer ? refs.progressContainer : q('.val-progress-container', root)
+  return {
+    info: elementSnapshot(info),
+    author: elementSnapshot(author),
+    title: elementSnapshot(title),
+    actions: elementSnapshot(actions),
+    progress: elementSnapshot(progress)
+  }
+}
+
 function currentEntry() {
   if (!_state || _state.currentIndex < 0) return null
   return _state.items && _state.items[_state.currentIndex]
@@ -111,15 +190,23 @@ function snapshot(entry, eventName, extra) {
   var wrapper = entry.refs.wrapper
   var poster = entry.refs.poster
   var container = document.getElementById('shorts-container')
+  var info = entry.refs.info || q('.shorts-info-overlay', wrapper || entry.el)
+  var author = entry.refs.author || q('.shorts-author-name', wrapper || entry.el)
+  var title = entry.refs.title || q('.shorts-video-title', wrapper || entry.el)
+  var actions = entry.refs.actions || q('.shorts-actions', wrapper || entry.el)
+  var progress = entry.refs.progressContainer || q('.val-progress-container', wrapper || entry.el)
   var videoStyle = video ? getComputedStyle(video) : null
   var wrapperStyle = wrapper ? getComputedStyle(wrapper) : null
   var posterStyle = poster ? getComputedStyle(poster) : null
+  var visible = visibleGeometry(entry) || {}
+  var videoFrameBands = sampleBands(video)
   return {
     t: Math.round(performance.now()),
     timestampMs: Date.now(),
     sessionId: _sessionID,
     event: eventName || 'snapshot',
     id: entry.data && entry.data.id,
+    isSkeletonCard: !!(entry.data && entry.data.isSkeleton),
     index: _state ? _state.items.indexOf(entry) : -1,
     currentIndex: _state ? _state.currentIndex : -1,
     isCurrent: _state ? _state.items[_state.currentIndex] === entry : false,
@@ -128,9 +215,20 @@ function snapshot(entry, eventName, extra) {
     itemClass: entry.el && entry.el.className,
     containerRect: rectOf(container),
     itemRect: rectOf(entry.el),
+    snapDelta: snapDeltaOf(entry),
+    visibleTopPx: visible.visibleTopPx,
+    visibleBottomPx: visible.visibleBottomPx,
+    visibleRatio: visible.visibleRatio,
+    visible: visible,
     wrapperRect: rectOf(wrapper),
     videoRect: rectOf(video),
     posterRect: rectOf(poster),
+    infoRect: rectOf(info),
+    authorRect: rectOf(author),
+    titleRect: rectOf(title),
+    actionsRect: rectOf(actions),
+    progressRect: rectOf(progress),
+    chrome: chromeSnapshot(entry),
     containerScroll: container ? {
       top: Math.round(container.scrollTop || 0),
       height: Math.round(container.scrollHeight || 0),
@@ -158,7 +256,8 @@ function snapshot(entry, eventName, extra) {
       src: shortUrl(video.currentSrc || video.src),
       poster: shortUrl(video.poster)
     } : null,
-    bands: sampleBands(video),
+    videoFrameBands: videoFrameBands,
+    bands: videoFrameBands,
     extra: extra || null
   }
 }
@@ -278,7 +377,7 @@ export function initShortsDebug(stateRef) {
     flush: flush,
     download: function () { return flush().then(downloadPayload) },
     clear: function () { _events = []; return true },
-    mark: function (label) { recordShortsDebugEvent(currentEntry(), 'mark:' + String(label || 'manual')); return this.current() },
+    mark: function (label) { recordShortsDebugEvent(currentEntry(), 'debug:marker', { label: String(label || 'manual') }); return this.current() },
     copy: function () {
       var body = JSON.stringify(payload(), null, 2)
       if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(body)
