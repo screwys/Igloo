@@ -253,7 +253,7 @@ func TestShortsItemsDoNotAnimateViewportSizeDuringScrollSnap(t *testing.T) {
 	}
 }
 
-func TestShortsActivationWaitsForSnapBeforePlayback(t *testing.T) {
+func TestShortsActivationDoesNotWaitForSnapBeforePlayback(t *testing.T) {
 	srcBytes, err := os.ReadFile("../../static/js/src/shorts/overlay.js")
 	if err != nil {
 		t.Fatal(err)
@@ -262,15 +262,25 @@ func TestShortsActivationWaitsForSnapBeforePlayback(t *testing.T) {
 	for _, check := range []string{
 		"function snapOffset(entry)",
 		"function isSnapSettled(entry)",
-		"function scheduleSnapSettledActivation(index)",
-		"_state.pendingSnapActivation = { index: index, startedAt: performance.now() }",
-		"recordShortsDebugEvent(entry, 'activate:wait-snap'",
-		"activateIndex(pending.index, { force: false })",
-		"scheduleSnapSettledActivation(index)",
-		"recordShortsDebugEvent(entry, 'activate', { snapSettled: _state.storyMode || isSnapSettled(entry) })",
+		"function activateVisibleShort(index)",
+		"recordShortsDebugEvent(entry, 'activate:pre-snap'",
+		"activateIndex(index, { force: false, snapSettled: settled })",
+		"activateVisibleShort(index)",
+		"recordShortsDebugEvent(entry, 'activate', { snapSettled: !!snapSettled })",
 	} {
 		if !strings.Contains(src, check) {
-			t.Errorf("shorts activation snap wait missing %q", check)
+			t.Errorf("shorts activation immediate snap reporting missing %q", check)
+		}
+	}
+	for _, forbidden := range []string{
+		"_snapActivationFrame",
+		"pendingSnapActivation",
+		"activate:wait-snap",
+		"scheduleSnapSettledActivation",
+		"performance.now() - pending.startedAt > 350",
+	} {
+		if strings.Contains(src, forbidden) {
+			t.Errorf("shorts activation should not wait for snap before playback; found %q", forbidden)
 		}
 	}
 }
