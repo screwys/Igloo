@@ -4,12 +4,21 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 func (db *DB) cleanupRetiredReadingFeature() error {
+	return db.runStartupMigrationOnce(
+		"cleanup_retired_reading_feature",
+		db.cleanupRetiredReadingFeatureNow,
+		db.warnRetiredReadingFeatureReappeared,
+	)
+}
+
+func (db *DB) cleanupRetiredReadingFeatureNow() error {
 	if err := db.WithWrite(func(tx *sql.Tx) error {
 		stmts := []string{
 			`DROP INDEX IF EXISTS idx_reading_cache_cat_pub`,
@@ -34,6 +43,22 @@ func (db *DB) cleanupRetiredReadingFeature() error {
 		if err := os.RemoveAll(dir); err != nil {
 			return fmt.Errorf("remove articles directory: %w", err)
 		}
+	}
+	return nil
+}
+
+func (db *DB) warnRetiredReadingFeatureReappeared() error {
+	var count int
+	if err := db.conn.QueryRow(`
+		SELECT COUNT(*)
+		FROM sqlite_master
+		WHERE type = 'table'
+		  AND name IN ('reading_preferences', 'saved_articles', 'reading_articles_cache')
+	`).Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		log.Printf("schema migration cleanup_retired_reading_feature already applied, but retired reading tables exist; leaving them for investigation")
 	}
 	return nil
 }

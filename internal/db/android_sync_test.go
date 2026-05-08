@@ -6,45 +6,17 @@ import (
 	"testing"
 )
 
-func TestEnsureSchemaDropsLegacyAndroidSyncGenerations(t *testing.T) {
+func TestEnsureSchemaLedgerRunsLegacyAndroidSyncCleanupOnce(t *testing.T) {
 	d := openWritableTestDB(t)
-	for _, generationID := range []string{"android-v3-old", "android-sync-new"} {
-		if err := d.ExecRaw(`
-			INSERT INTO android_sync_generations (
-				generation_id, created_at_ms, status, source_version, retention_json,
-				item_count, asset_count, ready_asset_count, server_missing_asset_count,
-				total_bytes, content_counts_json, asset_counts_json
-			) VALUES (?, 1, 'ready', ?, '{}', 1, 1, 1, 0, 1, '{}', '{}')
-		`, generationID, generationID+"-source"); err != nil {
-			t.Fatalf("insert generation %s: %v", generationID, err)
-		}
-		if err := d.ExecRaw(`
-			INSERT INTO android_sync_items (generation_id, seq, item_kind, item_id, payload_json)
-			VALUES (?, 1, 'videos', ?, '{}')
-		`, generationID, generationID+"-video"); err != nil {
-			t.Fatalf("insert item %s: %v", generationID, err)
-		}
-		if err := d.ExecRaw(`
-			INSERT INTO android_sync_assets (
-				generation_id, seq, asset_id, asset_kind, owner_id, owner_kind,
-				bucket, server_url, content_type, size_bytes, sha256, state,
-				required_reason, effective_recency_ms
-			) VALUES (?, 1, ?, 'video_stream', ?, 'video', 'videos', '/asset', 'video/mp4', 1, 'sha', 'ready', 'retention', 1)
-		`, generationID, generationID+"-asset", generationID+"-video"); err != nil {
-			t.Fatalf("insert asset %s: %v", generationID, err)
-		}
-		if err := d.ExecRaw(`
-			INSERT INTO android_sync_health_reports (
-				generation_id, reported_at_ms, payload_json, verified_assets,
-				pending_assets, failed_assets, missing_assets, total_assets, verified_bytes
-			) VALUES (?, 1, '{}', 1, 0, 0, 0, 1, 1)
-		`, generationID); err != nil {
-			t.Fatalf("insert health %s: %v", generationID, err)
-		}
+	if err := d.ExecRaw("DELETE FROM schema_migrations WHERE name = ?", "legacy_android_v3_generation_cleanup"); err != nil {
+		t.Fatalf("reset migration ledger: %v", err)
 	}
 
+	insertAndroidSyncGenerationFixture(t, d, "android-v3-old", 1)
+	insertAndroidSyncGenerationFixture(t, d, "android-sync-new", 2)
+
 	if err := EnsureSchema(d.conn); err != nil {
-		t.Fatalf("EnsureSchema: %v", err)
+		t.Fatalf("EnsureSchema first run: %v", err)
 	}
 
 	for table, want := range map[string]int{
@@ -55,16 +27,89 @@ func TestEnsureSchemaDropsLegacyAndroidSyncGenerations(t *testing.T) {
 	} {
 		var got int
 		if err := d.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&got); err != nil {
-			t.Fatalf("count %s: %v", table, err)
+			t.Fatalf("count %s after first run: %v", table, err)
 		}
 		if got != want {
-			t.Fatalf("%s count = %d, want %d", table, got, want)
+			t.Fatalf("%s count after first run = %d, want %d", table, got, want)
+		}
+	}
+	assertSchemaMigrationRecorded(t, d, "legacy_android_v3_generation_cleanup")
+
+	if err := EnsureSchema(d.conn); err != nil {
+		t.Fatalf("EnsureSchema second run: %v", err)
+	}
+	assertSchemaMigrationRecorded(t, d, "legacy_android_v3_generation_cleanup")
+
+	insertAndroidSyncGenerationFixture(t, d, "android-v3-reintroduced", 3)
+	if err := EnsureSchema(d.conn); err != nil {
+		t.Fatalf("EnsureSchema after reintroduced legacy rows: %v", err)
+	}
+
+	for table, want := range map[string]int{
+		"android_sync_generations":    2,
+		"android_sync_items":          2,
+		"android_sync_assets":         2,
+		"android_sync_health_reports": 2,
+	} {
+		var got int
+		if err := d.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&got); err != nil {
+			t.Fatalf("count %s after reintroduce: %v", table, err)
+		}
+		if got != want {
+			t.Fatalf("%s count after reintroduce = %d, want %d", table, got, want)
 		}
 	}
 	if gen, err := d.GetLatestAndroidSyncGeneration(); err != nil {
 		t.Fatalf("latest generation: %v", err)
-	} else if gen == nil || gen.GenerationID != "android-sync-new" {
-		t.Fatalf("latest generation = %+v, want android-sync-new", gen)
+	} else if gen == nil || gen.GenerationID != "android-v3-reintroduced" {
+		t.Fatalf("latest generation = %+v, want android-v3-reintroduced", gen)
+	}
+}
+
+func insertAndroidSyncGenerationFixture(t *testing.T, d *DB, generationID string, createdAtMs int64) {
+	t.Helper()
+	if err := d.ExecRaw(`
+			INSERT INTO android_sync_generations (
+				generation_id, created_at_ms, status, source_version, retention_json,
+				item_count, asset_count, ready_asset_count, server_missing_asset_count,
+				total_bytes, content_counts_json, asset_counts_json
+			) VALUES (?, ?, 'ready', ?, '{}', 1, 1, 1, 0, 1, '{}', '{}')
+		`, generationID, createdAtMs, generationID+"-source"); err != nil {
+		t.Fatalf("insert generation %s: %v", generationID, err)
+	}
+	if err := d.ExecRaw(`
+			INSERT INTO android_sync_items (generation_id, seq, item_kind, item_id, payload_json)
+			VALUES (?, 1, 'videos', ?, '{}')
+		`, generationID, generationID+"-video"); err != nil {
+		t.Fatalf("insert item %s: %v", generationID, err)
+	}
+	if err := d.ExecRaw(`
+			INSERT INTO android_sync_assets (
+				generation_id, seq, asset_id, asset_kind, owner_id, owner_kind,
+				bucket, server_url, content_type, size_bytes, sha256, state,
+				required_reason, effective_recency_ms
+			) VALUES (?, 1, ?, 'video_stream', ?, 'video', 'videos', '/asset', 'video/mp4', 1, 'sha', 'ready', 'retention', 1)
+		`, generationID, generationID+"-asset", generationID+"-video"); err != nil {
+		t.Fatalf("insert asset %s: %v", generationID, err)
+	}
+	if err := d.ExecRaw(`
+			INSERT INTO android_sync_health_reports (
+				generation_id, reported_at_ms, payload_json, verified_assets,
+				pending_assets, failed_assets, missing_assets, total_assets, verified_bytes
+			) VALUES (?, 1, '{}', 1, 0, 0, 0, 1, 1)
+		`, generationID); err != nil {
+		t.Fatalf("insert health %s: %v", generationID, err)
+	}
+}
+
+func assertSchemaMigrationRecorded(t *testing.T, d *DB, name string) {
+	t.Helper()
+	var got int
+	if err := d.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, name).Scan(&got); err != nil {
+		t.Fatalf("lookup migration %s: %v", name, err)
+	}
+	if got != 1 {
+		t.Fatalf("migration %s row count = %d, want 1", name, got)
 	}
 }
 

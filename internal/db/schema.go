@@ -1,11 +1,22 @@
 package db
 
-import "database/sql"
+import (
+	"database/sql"
+	"log"
+	"time"
+)
 
 // EnsureSchema creates all tables the server needs.
 // Called from Open() only (not OpenReadOnly).
 // All statements use IF NOT EXISTS, so they are safe to re-run on every start.
 func EnsureSchema(conn *sql.DB) error {
+	return EnsureSchemaWithOptions(conn, EnsureSchemaOptions{})
+}
+
+func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
+	totalStart := time.Now()
+	phaseStart := time.Now()
+
 	stmts := []string{
 		// ── Legacy tables (originally created by Python server) ──
 
@@ -138,6 +149,11 @@ func EnsureSchema(conn *sql.DB) error {
 			key TEXT NOT NULL,
 			value TEXT,
 			PRIMARY KEY (user_id, key)
+		)`,
+
+		`CREATE TABLE IF NOT EXISTS schema_migrations (
+			name TEXT PRIMARY KEY,
+			applied_at_ms INTEGER NOT NULL
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS video_comments (
@@ -517,10 +533,12 @@ func EnsureSchema(conn *sql.DB) error {
 			return err
 		}
 	}
+	reportPhase(opts.Phase, "schema.create_tables", phaseStart)
 
 	// Migrations: add columns to pre-existing tables (idempotent — duplicate column errors are expected).
 	// These handle DBs created by the Python server before the Go rewrite owned these tables.
 	// SQLite does not allow ADD COLUMN with CURRENT_TIMESTAMP default, so nullable columns are used.
+	phaseStart = time.Now()
 	migrations := []string{
 		"ALTER TABLE download_queue ADD COLUMN error TEXT DEFAULT ''",
 		"ALTER TABLE download_queue ADD COLUMN published_at_ms INTEGER NOT NULL DEFAULT 0",
@@ -548,42 +566,10 @@ func EnsureSchema(conn *sql.DB) error {
 	for _, m := range migrations {
 		conn.Exec(m) // errors are expected when column already exists
 	}
-
-	if err := cleanupLegacyAndroidSyncGenerations(conn); err != nil {
-		return err
-	}
-
-	// Drop the legacy Python-era channel_avatars table. It has been empty in
-	// the Go rewrite; avatar metadata lives in channel_profiles and the cached
-	// files live at conventional disk paths under thumbnails/.
-	conn.Exec("DROP TABLE IF EXISTS channel_avatars")
-
-	// One-shot migration: copy legacy twitter_profiles into channel_profiles,
-	// then drop the old table. Safe to re-run — the INSERT uses OR IGNORE and
-	// the DROP is idempotent.
-	var hasLegacyTwitterProfiles int
-	if err := conn.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='twitter_profiles'").Scan(&hasLegacyTwitterProfiles); err == nil && hasLegacyTwitterProfiles > 0 {
-		if _, err := conn.Exec(`
-			INSERT OR IGNORE INTO channel_profiles (
-				channel_id, platform, handle, display_name, bio, website,
-				followers, following, verified, verified_type, protected,
-				banner_url, fetched_at, fail_count, next_retry_at, tombstone
-			)
-			SELECT 'twitter_' || handle, 'twitter', handle, display_name, bio, website,
-			       followers, following, verified, verified_type, protected,
-			       banner_url, fetched_at, fail_count, next_retry_at, tombstone
-			FROM twitter_profiles
-		`); err == nil {
-			conn.Exec(`DROP TABLE twitter_profiles`)
-		}
-	}
-
-	// media_files avatar/banner rows are redundant with the on-disk files at
-	// conventional paths. Drop them; the profile worker no longer writes new
-	// ones and resolveAvatarPath/resolveBannerPath are pure disk scans.
-	conn.Exec(`DELETE FROM media_files WHERE owner_type IN ('avatar', 'banner')`)
+	reportPhase(opts.Phase, "schema.add_columns", phaseStart)
 
 	// Create indexes for sync_seq delta-sync queries.
+	phaseStart = time.Now()
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_feed_items_sync_seq ON feed_items(sync_seq)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_videos_sync_seq ON videos(sync_seq)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_channels_sync_seq ON channels(sync_seq)")
@@ -591,6 +577,7 @@ func EnsureSchema(conn *sql.DB) error {
 	// Performance indexes for page load queries.
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_videos_channel_published ON videos(channel_id, published_at DESC)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_videos_source_kind ON videos(source_kind, published_at DESC)")
+	conn.Exec("CREATE INDEX IF NOT EXISTS idx_videos_media_shape ON videos(media_kind, slide_count)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_media_files_owner ON media_files(owner_id, media_index)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_media_files_type_id ON media_files(owner_type, id)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_media_files_type_owner ON media_files(owner_type, owner_id, media_index)")
@@ -613,19 +600,46 @@ func EnsureSchema(conn *sql.DB) error {
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_video_repost_sources_video ON video_repost_sources(video_id)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_video_repost_sources_reposter ON video_repost_sources(reposter_channel_id)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_video_repost_sources_time ON video_repost_sources(reposted_at_ms DESC, first_seen_at_ms DESC)")
+	reportPhase(opts.Phase, "schema.indexes", phaseStart)
+
+	phaseStart = time.Now()
+	if err := cleanupLegacyAndroidSyncGenerations(conn); err != nil {
+		return err
+	}
+	reportPhase(opts.Phase, "schema.android_sync_cleanup", phaseStart)
+
+	phaseStart = time.Now()
+	if err := runLegacyTableRepairs(conn); err != nil {
+		return err
+	}
+	reportPhase(opts.Phase, "schema.legacy_table_repairs", phaseStart)
 
 	// Backfill: seed sync_seq for existing rows that have no value yet.
-	conn.Exec("UPDATE feed_items SET sync_seq = rowid WHERE sync_seq = 0 OR sync_seq IS NULL")
-	conn.Exec("UPDATE videos SET sync_seq = id WHERE sync_seq = 0 OR sync_seq IS NULL")
-	conn.Exec("UPDATE channels SET sync_seq = id WHERE sync_seq = 0 OR sync_seq IS NULL")
+	phaseStart = time.Now()
+	if err := backfillSyncSeqOnce(conn); err != nil {
+		return err
+	}
+	reportPhase(opts.Phase, "schema.sync_seq_backfill", phaseStart)
 
 	// Normalize Python-era data: fix 1-based media indices and legacy statuses.
 	// These run before status migration because 'ready' identifies Python-era rows.
-	pythonMigrations := []string{
-		// Fix 1-based media_index → 0-based for Python-era feed media.
-		// Python stored indices as 1,2,3; Go uses 0,1,2. Only touch entries whose
-		// parent job is still 'ready' (Python era) and whose minimum index > 0.
-		`UPDATE media_files SET media_index = media_index - 1
+	phaseStart = time.Now()
+	if err := runFeedMediaLegacyFixes(conn); err != nil {
+		return err
+	}
+	reportPhase(opts.Phase, "schema.feed_media_legacy_fixes", phaseStart)
+
+	reportPhase(opts.Phase, "schema.total", totalStart)
+	return nil
+}
+
+func runFeedMediaLegacyFixes(conn *sql.DB) error {
+	ran, err := runSchemaMigrationOnce(conn, "python_feed_media_legacy_fixes", func(tx *sql.Tx) error {
+		pythonMigrations := []string{
+			// Fix 1-based media_index → 0-based for Python-era feed media.
+			// Python stored indices as 1,2,3; Go uses 0,1,2. Only touch entries whose
+			// parent job is still 'ready' (Python era) and whose minimum index > 0.
+			`UPDATE media_files SET media_index = media_index - 1
 		 WHERE owner_type = 'feed_media'
 		 AND owner_id IN (
 			SELECT tweet_id FROM feed_media_jobs WHERE status = 'ready'
@@ -634,73 +648,225 @@ func EnsureSchema(conn *sql.DB) error {
 			SELECT owner_id FROM media_files WHERE owner_type = 'feed_media' AND media_index = 0
 		 )`,
 
-		// Incomplete slideshows: fewer media_files than expected slides → re-queue
-		`UPDATE feed_media_jobs SET status='queued', updated_at=CAST(strftime('%s','now') AS INTEGER) * 1000
+			// Incomplete slideshows: fewer media_files than expected slides → re-queue
+			`UPDATE feed_media_jobs SET status='queued', updated_at=CAST(strftime('%s','now') AS INTEGER) * 1000
 		 WHERE status='ready' AND slide_count > 0
 		 AND (SELECT COUNT(*) FROM media_files WHERE owner_type='feed_media' AND owner_id=feed_media_jobs.tweet_id) < slide_count`,
-	}
-	for _, m := range pythonMigrations {
-		if _, err := conn.Exec(m); err != nil {
+		}
+		for _, m := range pythonMigrations {
+			if _, err := tx.Exec(m); err != nil {
+				return err
+			}
+		}
+
+		// Re-queue 'ready' video jobs without a downloaded file.
+		// Tolerant of missing 'videos' table (only exists in production DBs from Python era).
+		if _, err := tx.Exec(`UPDATE feed_media_jobs SET status='queued', updated_at=CAST(strftime('%s','now') AS INTEGER) * 1000
+			WHERE status='ready' AND media_kind='video' AND slide_count = 0
+			AND NOT EXISTS (SELECT 1 FROM videos WHERE video_id=feed_media_jobs.tweet_id AND file_path != '')`); err != nil {
 			return err
 		}
-	}
 
-	// Re-queue 'ready' video jobs without a downloaded file.
-	// Tolerant of missing 'videos' table (only exists in production DBs from Python era).
-	conn.Exec(`UPDATE feed_media_jobs SET status='queued', updated_at=CAST(strftime('%s','now') AS INTEGER) * 1000
-		WHERE status='ready' AND media_kind='video' AND slide_count = 0
-		AND NOT EXISTS (SELECT 1 FROM videos WHERE video_id=feed_media_jobs.tweet_id AND file_path != '')`)
+		// Finalize: remaining 'ready' (complete) → 'completed', stuck 'downloading' → re-queue
+		finalMigrations := []string{
+			`UPDATE feed_media_jobs SET status='completed' WHERE status='ready'`,
+			`UPDATE feed_media_jobs SET status='queued', updated_at=CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE status='downloading'`,
+		}
+		for _, m := range finalMigrations {
+			if _, err := tx.Exec(m); err != nil {
+				return err
+			}
+		}
 
-	// Finalize: remaining 'ready' (complete) → 'completed', stuck 'downloading' → re-queue
-	finalMigrations := []string{
-		`UPDATE feed_media_jobs SET status='completed' WHERE status='ready'`,
-		`UPDATE feed_media_jobs SET status='queued', updated_at=CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE status='downloading'`,
-	}
-	for _, m := range finalMigrations {
-		if _, err := conn.Exec(m); err != nil {
+		// Create jobs for tweets with quote media but no parent media (and no existing job).
+		// These were missed because classifyMediaKind only checked parent MediaJSON.
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO feed_media_jobs (tweet_id, tweet_url, source_handle, status, media_kind, slide_count)
+			SELECT fi.tweet_id, fi.canonical_url, fi.source_handle, 'queued',
+				CASE WHEN fi.quote_media_json LIKE '%"video"%' OR fi.quote_media_json LIKE '%"gif"%' THEN 'video' ELSE 'image' END,
+				0
+			FROM feed_items fi
+			WHERE (fi.media_json IS NULL OR fi.media_json = '' OR fi.media_json = '[]')
+			AND fi.quote_media_json IS NOT NULL AND fi.quote_media_json != '' AND fi.quote_media_json != '[]'
+			AND NOT EXISTS (SELECT 1 FROM feed_media_jobs fmj WHERE fmj.tweet_id = fi.tweet_id)`); err != nil {
 			return err
 		}
+
+		// Fix slide_count=0 for completed jobs that actually have multiple media_files.
+		// This was caused by rsshub.go not calling ParseMedia() before using len(item.Media).
+		_, err := tx.Exec(`UPDATE feed_media_jobs
+			SET slide_count = (
+				SELECT COUNT(*) FROM media_files
+				WHERE owner_type='feed_media' AND owner_id=feed_media_jobs.tweet_id
+			),
+			media_kind = CASE
+				WHEN (SELECT COUNT(*) FROM media_files WHERE owner_type='feed_media' AND owner_id=feed_media_jobs.tweet_id) > 1
+				THEN 'slideshow'
+				ELSE media_kind
+			END
+			WHERE status='completed' AND slide_count=0
+			AND (SELECT COUNT(*) FROM media_files WHERE owner_type='feed_media' AND owner_id=feed_media_jobs.tweet_id) > 0`)
+		return err
+	})
+	if err != nil {
+		return err
 	}
-
-	// Create jobs for tweets with quote media but no parent media (and no existing job).
-	// These were missed because classifyMediaKind only checked parent MediaJSON.
-	conn.Exec(`INSERT OR IGNORE INTO feed_media_jobs (tweet_id, tweet_url, source_handle, status, media_kind, slide_count)
-		SELECT fi.tweet_id, fi.canonical_url, fi.source_handle, 'queued',
-			CASE WHEN fi.quote_media_json LIKE '%"video"%' OR fi.quote_media_json LIKE '%"gif"%' THEN 'video' ELSE 'image' END,
-			0
-		FROM feed_items fi
-		WHERE (fi.media_json IS NULL OR fi.media_json = '' OR fi.media_json = '[]')
-		AND fi.quote_media_json IS NOT NULL AND fi.quote_media_json != '' AND fi.quote_media_json != '[]'
-		AND NOT EXISTS (SELECT 1 FROM feed_media_jobs fmj WHERE fmj.tweet_id = fi.tweet_id)`)
-
-	// Fix slide_count=0 for completed jobs that actually have multiple media_files.
-	// This was caused by rsshub.go not calling ParseMedia() before using len(item.Media).
-	conn.Exec(`UPDATE feed_media_jobs
-		SET slide_count = (
-			SELECT COUNT(*) FROM media_files
-			WHERE owner_type='feed_media' AND owner_id=feed_media_jobs.tweet_id
-		),
-		media_kind = CASE
-			WHEN (SELECT COUNT(*) FROM media_files WHERE owner_type='feed_media' AND owner_id=feed_media_jobs.tweet_id) > 1
-			THEN 'slideshow'
-			ELSE media_kind
-		END
-		WHERE status='completed' AND slide_count=0
-		AND (SELECT COUNT(*) FROM media_files WHERE owner_type='feed_media' AND owner_id=feed_media_jobs.tweet_id) > 0`)
+	if !ran {
+		warnIfRows(conn, "python_feed_media_legacy_fixes", `
+			SELECT COUNT(*)
+			FROM feed_media_jobs
+			WHERE status IN ('ready', 'downloading')
+		`)
+	}
 
 	return nil
 }
 
 func cleanupLegacyAndroidSyncGenerations(conn *sql.DB) error {
-	for _, stmt := range []string{
-		"DELETE FROM android_sync_health_reports WHERE generation_id LIKE 'android-v3-%'",
-		"DELETE FROM android_sync_assets WHERE generation_id LIKE 'android-v3-%'",
-		"DELETE FROM android_sync_items WHERE generation_id LIKE 'android-v3-%'",
-		"DELETE FROM android_sync_generations WHERE generation_id LIKE 'android-v3-%'",
-	} {
-		if _, err := conn.Exec(stmt); err != nil {
-			return err
+	ran, err := runSchemaMigrationOnce(conn, "legacy_android_v3_generation_cleanup", func(tx *sql.Tx) error {
+		for _, stmt := range []string{
+			"DELETE FROM android_sync_health_reports WHERE generation_id LIKE 'android-v3-%'",
+			"DELETE FROM android_sync_assets WHERE generation_id LIKE 'android-v3-%'",
+			"DELETE FROM android_sync_items WHERE generation_id LIKE 'android-v3-%'",
+			"DELETE FROM android_sync_generations WHERE generation_id LIKE 'android-v3-%'",
+		} {
+			if _, err := tx.Exec(stmt); err != nil {
+				return err
+			}
 		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if !ran {
+		warnIfRows(conn, "legacy_android_v3_generation_cleanup", `
+			SELECT COUNT(*)
+			FROM android_sync_generations
+			WHERE generation_id LIKE 'android-v3-%'
+		`)
 	}
 	return nil
+}
+
+func runLegacyTableRepairs(conn *sql.DB) error {
+	if err := dropLegacyChannelAvatarsOnce(conn); err != nil {
+		return err
+	}
+	if err := importLegacyTwitterProfilesOnce(conn); err != nil {
+		return err
+	}
+	return cleanupLegacyAvatarBannerMediaOnce(conn)
+}
+
+func dropLegacyChannelAvatarsOnce(conn *sql.DB) error {
+	ran, err := runSchemaMigrationOnce(conn, "drop_legacy_channel_avatars", func(tx *sql.Tx) error {
+		_, err := tx.Exec("DROP TABLE IF EXISTS channel_avatars")
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	if !ran {
+		warnIfTableExists(conn, "drop_legacy_channel_avatars", "channel_avatars")
+	}
+	return nil
+}
+
+func importLegacyTwitterProfilesOnce(conn *sql.DB) error {
+	ran, err := runSchemaMigrationOnce(conn, "legacy_twitter_profiles_import", func(tx *sql.Tx) error {
+		var hasLegacyTwitterProfiles int
+		if err := tx.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='twitter_profiles'").Scan(&hasLegacyTwitterProfiles); err != nil {
+			return err
+		}
+		if hasLegacyTwitterProfiles == 0 {
+			return nil
+		}
+		if _, err := tx.Exec(`
+			INSERT OR IGNORE INTO channel_profiles (
+				channel_id, platform, handle, display_name, bio, website,
+				followers, following, verified, verified_type, protected,
+				banner_url, fetched_at, fail_count, next_retry_at, tombstone
+			)
+			SELECT 'twitter_' || handle, 'twitter', handle, display_name, bio, website,
+			       followers, following, verified, verified_type, protected,
+			       banner_url, fetched_at, fail_count, next_retry_at, tombstone
+			FROM twitter_profiles
+		`); err != nil {
+			return err
+		}
+		_, err := tx.Exec(`DROP TABLE twitter_profiles`)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	if !ran {
+		warnIfTableExists(conn, "legacy_twitter_profiles_import", "twitter_profiles")
+	}
+	return nil
+}
+
+func cleanupLegacyAvatarBannerMediaOnce(conn *sql.DB) error {
+	ran, err := runSchemaMigrationOnce(conn, "legacy_avatar_banner_media_cleanup", func(tx *sql.Tx) error {
+		_, err := tx.Exec(`DELETE FROM media_files WHERE owner_type IN ('avatar', 'banner')`)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	if !ran {
+		warnIfRows(conn, "legacy_avatar_banner_media_cleanup", `
+			SELECT COUNT(*)
+			FROM media_files
+			WHERE owner_type IN ('avatar', 'banner')
+		`)
+	}
+	return nil
+}
+
+func backfillSyncSeqOnce(conn *sql.DB) error {
+	ran, err := runSchemaMigrationOnce(conn, "sync_seq_backfill", func(tx *sql.Tx) error {
+		for _, stmt := range []string{
+			"UPDATE feed_items SET sync_seq = rowid WHERE sync_seq = 0 OR sync_seq IS NULL",
+			"UPDATE videos SET sync_seq = id WHERE sync_seq = 0 OR sync_seq IS NULL",
+			"UPDATE channels SET sync_seq = id WHERE sync_seq = 0 OR sync_seq IS NULL",
+		} {
+			if _, err := tx.Exec(stmt); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if !ran {
+		warnIfRows(conn, "sync_seq_backfill", `
+			SELECT COUNT(*) FROM (
+				SELECT sync_seq FROM feed_items WHERE sync_seq = 0 OR sync_seq IS NULL
+				UNION ALL SELECT sync_seq FROM videos WHERE sync_seq = 0 OR sync_seq IS NULL
+				UNION ALL SELECT sync_seq FROM channels WHERE sync_seq = 0 OR sync_seq IS NULL
+			)
+		`)
+	}
+	return nil
+}
+
+func warnIfTableExists(conn *sql.DB, migrationName, tableName string) {
+	var count int
+	if err := conn.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`,
+		tableName,
+	).Scan(&count); err != nil || count == 0 {
+		return
+	}
+	log.Printf("schema migration %s already applied, but legacy table %s exists; leaving it for investigation", migrationName, tableName)
+}
+
+func warnIfRows(conn *sql.DB, migrationName, countQuery string) {
+	var count int
+	if err := conn.QueryRow(countQuery).Scan(&count); err != nil || count == 0 {
+		return
+	}
+	log.Printf("schema migration %s already applied, but %d legacy rows match its repair condition; leaving them for investigation", migrationName, count)
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,42 +25,42 @@ import (
 )
 
 func main() {
+	startupStart := time.Now()
 	cfg := config.Load()
 	if cfg.ConfigError != nil {
 		slog.Error("invalid configuration", "err", cfg.ConfigError)
 		os.Exit(1)
 	}
-	auth.InitCache(cfg.AuthUsersPath)
-
-	// Tee all log output to logs/server/server.log
-	logDir := filepath.Join(cfg.DataDir, "logs", "server")
-	if err := os.MkdirAll(logDir, 0o755); err == nil {
-		logPath := filepath.Join(logDir, "server.log")
-		if fi, err := os.Stat(logPath); err == nil && fi.Size() > 5*1024*1024 {
-			_ = os.Rename(logPath, logPath+".1")
-		}
-		if lf, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
-			defer lf.Close()
-			w := io.MultiWriter(os.Stderr, lf)
-			log.SetOutput(w)
-			slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelInfo})))
-		}
+	if logFile := setupServerLogging(cfg); logFile != nil {
+		defer logFile.Close()
 	}
 
+	auth.InitCache(cfg.AuthUsersPath)
+	logStartupPhase("config_auth", time.Since(startupStart))
+
+	phaseStart := time.Now()
 	if err := restore.ApplyPending(cfg); err != nil {
 		slog.Error("restore: apply failed", "err", err)
 		os.Exit(1)
 	}
+	logStartupPhase("restore", time.Since(phaseStart))
 
-	database, err := db.Open(cfg.DatabasePath, cfg.DataDir)
+	phaseStart = time.Now()
+	database, err := db.OpenWithOptions(cfg.DatabasePath, cfg.DataDir, db.OpenOptions{
+		Phase: func(name string, elapsed time.Duration) {
+			logStartupPhase(name, elapsed)
+		},
+	})
 	if err != nil {
 		slog.Error("failed to open database", "path", cfg.DatabasePath, "err", err)
 		os.Exit(1)
 	}
 	defer database.Close()
 	slog.Info("database opened", "path", cfg.DatabasePath)
+	logStartupPhase("db_open", time.Since(phaseStart))
 
 	// Build static version cache
+	phaseStart = time.Now()
 	staticVersions := buildStaticVersionCache(cfg.StaticDir)
 	staticV := func(path string) string {
 		if v, ok := staticVersions[path]; ok {
@@ -67,13 +68,16 @@ func main() {
 		}
 		return "/static/" + path
 	}
+	logStartupPhase("static_version_cache", time.Since(phaseStart))
 
 	appCtx, cancelApp := context.WithCancel(context.Background())
 	defer cancelApp()
 
+	phaseStart = time.Now()
 	workers := worker.NewManager(database, cfg)
 	go workers.StartAll()
 	go translate.RunBackground(appCtx, database)
+	logStartupPhase("worker_launch", time.Since(phaseStart))
 
 	handler := web.NewServer(database, cfg, workers, staticV)
 	srv := &http.Server{
@@ -93,20 +97,51 @@ func main() {
 		_ = srv.Shutdown(context.Background())
 	}()
 
+	phaseStart = time.Now()
+	listener, err := net.Listen("tcp", cfg.ListenAddr)
+	if err != nil {
+		slog.Error("listener bind failed", "addr", cfg.ListenAddr, "err", err)
+		os.Exit(1)
+	}
+	logStartupPhase("listener_bind", time.Since(phaseStart))
+
 	// Use TLS if cert/key exist, otherwise plain HTTP
 	if _, err := os.Stat(cfg.TLSCert); err == nil {
 		slog.Info("listening (TLS)", "addr", cfg.ListenAddr)
-		if err := srv.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey); err != http.ErrServerClosed {
+		if err := srv.ServeTLS(listener, cfg.TLSCert, cfg.TLSKey); err != http.ErrServerClosed {
 			slog.Error("server error", "err", err)
 			os.Exit(1)
 		}
 	} else {
 		slog.Info("listening", "addr", cfg.ListenAddr)
-		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		if err := srv.Serve(listener); err != http.ErrServerClosed {
 			slog.Error("server error", "err", err)
 			os.Exit(1)
 		}
 	}
+}
+
+func setupServerLogging(cfg *config.Config) io.Closer {
+	logDir := filepath.Join(cfg.DataDir, "logs", "server")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		return nil
+	}
+	logPath := filepath.Join(logDir, "server.log")
+	if fi, err := os.Stat(logPath); err == nil && fi.Size() > 5*1024*1024 {
+		_ = os.Rename(logPath, logPath+".1")
+	}
+	lf, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil
+	}
+	w := io.MultiWriter(os.Stderr, lf)
+	log.SetOutput(w)
+	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	return lf
+}
+
+func logStartupPhase(name string, elapsed time.Duration) {
+	slog.Info("startup phase complete", "phase", name, "dur", elapsed.String(), "dur_ms", elapsed.Milliseconds())
 }
 
 func buildStaticVersionCache(staticDir string) map[string]string {

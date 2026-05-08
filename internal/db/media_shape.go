@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"log"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -211,4 +212,36 @@ func (db *DB) RepairVideoMediaShapes() error {
 		return err
 	}
 	return db.repairVideoMediaShapesForIDs(videoIDs)
+}
+
+func (db *DB) RepairVideoMediaShapesOnce() error {
+	return db.runStartupMigrationOnce(
+		"repair_video_media_shapes",
+		db.RepairVideoMediaShapes,
+		db.warnVideoMediaShapesNeedRepair,
+	)
+}
+
+func (db *DB) warnVideoMediaShapesNeedRepair() error {
+	var count int
+	if err := db.conn.QueryRow(`
+		SELECT COUNT(*)
+		FROM videos
+		WHERE EXISTS (
+			SELECT 1
+			FROM media_files mf
+			WHERE mf.owner_type = 'feed_media' AND mf.owner_id = videos.video_id
+		)
+		  AND (
+			media_kind IS NULL
+			OR media_kind = ''
+			OR (media_kind IN ('image', 'slideshow') AND (slide_count IS NULL OR slide_count = 0))
+		  )
+	`).Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		log.Printf("schema migration repair_video_media_shapes already applied, but %d videos still match the repair condition; leaving them for investigation", count)
+	}
+	return nil
 }

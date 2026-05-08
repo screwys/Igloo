@@ -5,9 +5,20 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
+
+type PhaseFunc func(name string, elapsed time.Duration)
+
+type OpenOptions struct {
+	Phase PhaseFunc
+}
+
+type EnsureSchemaOptions struct {
+	Phase PhaseFunc
+}
 
 type DB struct {
 	conn    *sql.DB
@@ -18,32 +29,63 @@ type DB struct {
 
 // Open opens the database for read-write with WAL mode.
 func Open(path, dataDir string) (*DB, error) {
+	return OpenWithOptions(path, dataDir, OpenOptions{})
+}
+
+// OpenWithOptions opens the database for read-write with WAL mode and optional
+// startup phase reporting.
+func OpenWithOptions(path, dataDir string, opts OpenOptions) (*DB, error) {
+	totalStart := time.Now()
+
+	phaseStart := time.Now()
 	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(wal)&_pragma=busy_timeout(30000)&_pragma=foreign_keys(on)", path)
 	conn, err := sql.Open("sqlite", dsn)
+	reportPhase(opts.Phase, "db.sql_open", phaseStart)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
+
+	phaseStart = time.Now()
 	if err := conn.Ping(); err != nil {
 		conn.Close()
+		reportPhase(opts.Phase, "db.ping", phaseStart)
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
+	reportPhase(opts.Phase, "db.ping", phaseStart)
+
 	d := &DB{conn: conn, dataDir: dataDir}
-	if err := EnsureSchema(conn); err != nil {
+	phaseStart = time.Now()
+	if err := EnsureSchemaWithOptions(conn, EnsureSchemaOptions{Phase: opts.Phase}); err != nil {
 		conn.Close()
+		reportPhase(opts.Phase, "db.ensure_schema", phaseStart)
 		return nil, fmt.Errorf("ensure schema: %w", err)
 	}
+	reportPhase(opts.Phase, "db.ensure_schema", phaseStart)
+
+	phaseStart = time.Now()
 	if err := d.cleanupRetiredReadingFeature(); err != nil {
 		conn.Close()
+		reportPhase(opts.Phase, "db.cleanup_retired_reading", phaseStart)
 		return nil, fmt.Errorf("cleanup retired reading feature: %w", err)
 	}
+	reportPhase(opts.Phase, "db.cleanup_retired_reading", phaseStart)
+
+	phaseStart = time.Now()
 	if err := d.initSyncSeq(); err != nil {
 		conn.Close()
+		reportPhase(opts.Phase, "db.init_sync_seq", phaseStart)
 		return nil, fmt.Errorf("init sync_seq: %w", err)
 	}
-	if err := d.RepairVideoMediaShapes(); err != nil {
+	reportPhase(opts.Phase, "db.init_sync_seq", phaseStart)
+
+	phaseStart = time.Now()
+	if err := d.RepairVideoMediaShapesOnce(); err != nil {
 		conn.Close()
+		reportPhase(opts.Phase, "db.repair_video_media_shapes", phaseStart)
 		return nil, fmt.Errorf("repair video media shapes: %w", err)
 	}
+	reportPhase(opts.Phase, "db.repair_video_media_shapes", phaseStart)
+	reportPhase(opts.Phase, "db.open_total", totalStart)
 	return d, nil
 }
 
@@ -126,4 +168,10 @@ func (db *DB) WithWrite(fn func(tx *sql.Tx) error) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+func reportPhase(cb PhaseFunc, name string, started time.Time) {
+	if cb != nil {
+		cb(name, time.Since(started))
+	}
 }
