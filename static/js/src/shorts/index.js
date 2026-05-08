@@ -23,6 +23,7 @@ import {
   parseCardData,
   makeShortItem
 } from './items.js'
+import { initShortsDebug } from './debug.js'
 
 var doc = document
 var layout = doc.getElementById('shorts-layout')
@@ -144,7 +145,7 @@ if (layout) {
       } catch (_) { return null }
     }
 
-    function setLastViewedShortResume(videoId, index, page) {
+    function setLastViewedShortResume(videoId, index, page, sortAtMs) {
       if (!state.persistLastViewed) return
       if (currentTab === 'stories') return
       var clean = String(videoId || '').trim()
@@ -159,13 +160,18 @@ if (layout) {
         pg = state.initialPage + Math.floor(idx / Math.max(1, state.pageSizeHint))
       }
       pg = Math.max(1, pg)
+      var sortAt = Math.max(0, parseInt(sortAtMs, 10) || 0)
       try {
         var nowMs = Date.now()
-        localStorage.setItem(shortsResumeStorageKey(), JSON.stringify({ videoId: clean, page: pg, index: idx, ts: nowMs, scope: currentTab }))
-        if (currentTab === 'all') localStorage.setItem('shortsLastResumeV2', JSON.stringify({ videoId: clean, page: pg, index: idx, ts: nowMs }))
+        var resume = { videoId: clean, page: pg, index: idx, ts: nowMs, scope: currentTab }
+        if (sortAt > 0) resume.sortAtMs = sortAt
+        localStorage.setItem(shortsResumeStorageKey(), JSON.stringify(resume))
+        if (currentTab === 'all') localStorage.setItem('shortsLastResumeV2', JSON.stringify(resume))
+        var body = { video_id: clean, scope: currentTab }
+        if (sortAt > 0) body.sort_at_ms = sortAt
         apiFetch('/api/sync/moments-cursor', {
           method: 'POST',
-          body: JSON.stringify({ video_id: clean, scope: currentTab })
+          body: JSON.stringify(body)
         }).then(function (data) {
           if (data && data.sync_version && window.SyncPoller) {
             window.SyncPoller.advance(data.sync_version)
@@ -206,14 +212,17 @@ if (layout) {
         var serverTs = Number(serverCursor.updated_at_ms || 0)
         var serverPage = parseInt(serverCursor.page, 10) || 0
         var serverIndex = Math.max(0, parseInt(serverCursor.index, 10) || 0)
+        var serverSortAt = Math.max(0, parseInt(serverCursor.sort_at_ms, 10) || 0)
         if (serverPage <= 0) return
         var localPage = Math.max(1, parseInt(local && local.page, 10) || 1)
         var sameVideo = local && String(local.videoId || '') === String(serverCursor.video_id)
-        if (serverTs > localTs || (sameVideo && localPage !== serverPage)) {
+        var serverRebased = serverCursor.fallback_for_video_id && local && String(local.videoId || '') === String(serverCursor.fallback_for_video_id)
+        if (serverTs > localTs || serverRebased || (sameVideo && localPage !== serverPage)) {
           var merged = {
             videoId: String(serverCursor.video_id),
             page: serverPage, index: serverIndex, ts: Math.max(serverTs, localTs), scope: currentTab
           }
+          if (serverSortAt > 0) merged.sortAtMs = serverSortAt
           localStorage.setItem(shortsResumeStorageKey(), JSON.stringify(merged))
           if (currentTab === 'all') localStorage.setItem('shortsLastResumeV2', JSON.stringify(merged))
         }
@@ -1397,6 +1406,7 @@ if (layout) {
 
     // ── Init modules ──
 
+    initShortsDebug(state)
     initPlayback(state, goNext)
 
     initOverlay(state, {

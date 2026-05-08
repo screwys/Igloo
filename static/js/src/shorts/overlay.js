@@ -3,6 +3,7 @@
 import { pauseAllShorts } from './playback.js'
 import { setSlideshowIndex, startSlideshowPlayback } from './playback.js'
 import { t, tf } from '../utils.js'
+import { recordShortsDebugEvent } from './debug.js'
 
 var _state = null
 var _dom = null
@@ -105,6 +106,7 @@ function playShortVideo(entry, video) {
   if (!_state.overlayOpen) return
   var current = currentData()
   if (!current || current.id !== entry.data.id) return
+  recordShortsDebugEvent(entry, 'play:attempt')
   revealShortVideoIfReady(entry, video)
   try {
     var promise = video.play()
@@ -303,12 +305,13 @@ export function activateIndex(index, options) {
   if (!entry || !entry.refs) return
   extendShortsWindow()
   entry.el.classList.add('is-active')
+  recordShortsDebugEvent(entry, 'activate')
 
   pauseAllShorts(entry.data.id)
   _state.lastVisibleId = entry.data.id
   if (typeof _fns.markShortViewed === 'function') _fns.markShortViewed(entry.data.id)
   _fns.setLastViewedShortId(entry.data.id)
-  _fns.setLastViewedShortResume(entry.data.id, index, entry.data.page)
+  _fns.setLastViewedShortResume(entry.data.id, index, entry.data.page, entry.data.sortAtMs)
   updateUrlForCurrent()
   requestMoreIfNeeded()
   updateCurrentActionButtons()

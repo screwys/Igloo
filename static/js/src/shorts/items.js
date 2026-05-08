@@ -3,6 +3,7 @@
 import { apiFetch, askConfirm, cssEscape, escapeHtml, showToast, copyText, makeDraggableSeekbar, attachSeekTooltip, formatRelative, t, tf, toFxTwitterUrl } from '../utils.js'
 import { openBookmarkMenu } from '../bookmark-menu.js'
 import { maybeMarkAspect, handleVideoTimeUpdate, toggleShortPlayback, setSlideshowIndex } from './playback.js'
+import { attachShortVideoDebug } from './debug.js'
 
 var _state = null
 var _fns = null
@@ -70,10 +71,11 @@ export function iconSvg(kind, active) {
 export function parseCardData(card) {
   if (!(card instanceof HTMLAnchorElement)) return null
   if (String(card.getAttribute('data-shorts-card-skeleton') || '') === '1') return null
-  var id = String(card.getAttribute('data-video-id') || '').trim()
-  if (!id) return null
-  var rawPage = parseInt(card.getAttribute('data-card-page') || '', 10)
-  return {
+	  var id = String(card.getAttribute('data-video-id') || '').trim()
+	  if (!id) return null
+	  var rawPage = parseInt(card.getAttribute('data-card-page') || '', 10)
+	  var sortAtMs = parseInt(card.getAttribute('data-sort-at-ms') || '', 10)
+	  return {
     id: id,
     title: String(card.getAttribute('data-video-title') || id),
     description: String(card.getAttribute('data-video-description') || ''),
@@ -86,9 +88,10 @@ export function parseCardData(card) {
     href: String(card.getAttribute('href') || '/shorts?video=' + encodeURIComponent(id)),
     bookmarked: String(card.getAttribute('data-bookmarked') || '') === '1',
     bookmarkCategoryId: String(card.getAttribute('data-bookmark-category-id') || '').trim() || null,
-    platform: String(card.getAttribute('data-platform') || ''),
-    publishedAt: String(card.getAttribute('data-published-at') || ''),
-    mediaKind: String(card.getAttribute('data-media-kind') || '').trim().toLowerCase(),
+	    platform: String(card.getAttribute('data-platform') || ''),
+	    publishedAt: String(card.getAttribute('data-published-at') || ''),
+	    sortAtMs: Number.isFinite(sortAtMs) && sortAtMs > 0 ? sortAtMs : null,
+	    mediaKind: String(card.getAttribute('data-media-kind') || '').trim().toLowerCase(),
     mediaSlideCount: Math.max(0, parseInt(card.getAttribute('data-media-slide-count') || '0', 10) || 0),
     originalUrl: String(card.getAttribute('data-original-url') || '').trim(),
     channelFollowed: String(card.getAttribute('data-channel-followed') || '') === '1',
@@ -533,6 +536,7 @@ export function makeShortItem(entryData, existingEl) {
         setTimeout(_fns.goNext, 120)
       }
     })
+    attachShortVideoDebug(entryObj)
   } else if (slideshow && slideshow.images && slideshow.images.length) {
     var firstImg = slideshow.images[0]
     if (firstImg) {

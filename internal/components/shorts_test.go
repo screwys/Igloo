@@ -309,3 +309,50 @@ func TestShortsVideoPlaybackStartsImmediatelyWithPosterUntilFirstFrame(t *testin
 		t.Fatal("first-frame fallback CSS should hide video over the stable poster")
 	}
 }
+
+func TestShortsDebugToolsExposeOptInMediaSnapshots(t *testing.T) {
+	debugBytes, err := os.ReadFile("../../static/js/src/shorts/debug.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexBytes, err := os.ReadFile("../../static/js/src/shorts/index.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	itemsBytes, err := os.ReadFile("../../static/js/src/shorts/items.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	overlayBytes, err := os.ReadFile("../../static/js/src/shorts/overlay.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	debugSrc := string(debugBytes)
+	for _, check := range []string{
+		"window.MpaShortsDebug",
+		"shorts_debug=1",
+		"localStorage.getItem('shortsDebug')",
+		"current: function ()",
+		"recent: function ()",
+		"copy: function ()",
+		"function sampleBands(video)",
+		"buffered: rangesOf(video.buffered)",
+		"wrapperRect: rectOf(wrapper)",
+		"videoRect: rectOf(video)",
+		"requestVideoFrameCallback",
+	} {
+		if !strings.Contains(debugSrc, check) {
+			t.Errorf("shorts debug tool missing %q", check)
+		}
+	}
+	if !strings.Contains(string(indexBytes), "initShortsDebug(state)") {
+		t.Fatal("shorts debug should initialize with player state")
+	}
+	if !strings.Contains(string(itemsBytes), "attachShortVideoDebug(entryObj)") {
+		t.Fatal("shorts items should attach video event diagnostics")
+	}
+	if !strings.Contains(string(overlayBytes), "recordShortsDebugEvent(entry, 'activate')") ||
+		!strings.Contains(string(overlayBytes), "recordShortsDebugEvent(entry, 'play:attempt')") {
+		t.Fatal("shorts overlay should record activation and playback attempts")
+	}
+}
