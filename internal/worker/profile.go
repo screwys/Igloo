@@ -27,14 +27,15 @@ var lookupStoredMediaHost storedMediaHostLookup = func(host string) ([]netip.Add
 }
 
 const (
-	profileActiveTick        = 5 * time.Second
-	profileIdleTick          = 5 * time.Minute
-	profileTTL               = 24 * time.Hour
-	instagramProfileBackoff  = 15 * time.Minute
-	profileMaxBackoff        = 6 * time.Hour
-	profileBatchPerTick      = 5
-	feedProfileBatchPerTick  = 10
-	feedAvatarSeedMinSpacing = time.Minute
+	profileActiveTick         = 5 * time.Second
+	profileIdleTick           = 5 * time.Minute
+	profileTTL                = 24 * time.Hour
+	instagramProfileBackoff   = 15 * time.Minute
+	profileMaxBackoff         = 6 * time.Hour
+	profileBatchPerTick       = 5
+	feedProfileBatchPerTick   = 10
+	feedAvatarSeedMinSpacing  = time.Minute
+	profileRequestConcurrency = 4
 )
 
 var profileRefreshPlatforms = []string{"twitter", "youtube", "tiktok", "instagram"}
@@ -350,12 +351,49 @@ func (m *Manager) refreshStaleProfilesBatch(ctx context.Context, fetch fetchFn, 
 }
 
 func (m *Manager) runOnDemandProfileRequestLoop(ctx context.Context, avDir, bnDir string) {
+	sem := make(chan struct{}, profileRequestConcurrency)
+	var wg sync.WaitGroup
+	var inFlightMu sync.Mutex
+	inFlight := make(map[string]bool)
+	defer wg.Wait()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case channelID := <-m.avatarRequest:
-			m.refreshRequestedAvatar(ctx, fetchprofile.Fetch, channelID, avDir, bnDir)
+			channelID = strings.TrimSpace(channelID)
+			if channelID == "" {
+				continue
+			}
+			inFlightMu.Lock()
+			if inFlight[channelID] {
+				inFlightMu.Unlock()
+				continue
+			}
+			inFlight[channelID] = true
+			inFlightMu.Unlock()
+
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				inFlightMu.Lock()
+				delete(inFlight, channelID)
+				inFlightMu.Unlock()
+				return
+			}
+
+			wg.Add(1)
+			go func(channelID string) {
+				defer wg.Done()
+				defer func() {
+					<-sem
+					inFlightMu.Lock()
+					delete(inFlight, channelID)
+					inFlightMu.Unlock()
+				}()
+				m.refreshRequestedAvatar(ctx, fetchprofile.Fetch, channelID, avDir, bnDir)
+			}(channelID)
 		}
 	}
 }

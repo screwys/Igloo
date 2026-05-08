@@ -26,6 +26,11 @@ func (s *Server) handleChannelAvatar(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	channelID = normalizeAvatarRecoveryChannelID(channelID)
+	if channelID == "" {
+		http.NotFound(w, r)
+		return
+	}
 
 	avatarPath := s.resolveAvatarPath(channelID)
 	if avatarPath == "" {
@@ -72,6 +77,11 @@ func (s *Server) resolveAvatarPath(channelID string) string {
 
 func (s *Server) handleChannelBanner(w http.ResponseWriter, r *http.Request) {
 	channelID := r.PathValue("channelID")
+	if channelID == "" {
+		http.NotFound(w, r)
+		return
+	}
+	channelID = normalizeAvatarRecoveryChannelID(channelID)
 	if channelID == "" {
 		http.NotFound(w, r)
 		return

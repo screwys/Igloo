@@ -48,6 +48,23 @@ func TestHandleChannelAvatar_QueuesTwitterAvatarRecoveryOnMiss(t *testing.T) {
 	}
 }
 
+func TestHandleChannelAvatarServesCanonicalTwitterPath(t *testing.T) {
+	srv := newTestServer(t)
+	dir := filepath.Join(srv.cfg.DataDir, "thumbnails", "avatars")
+	_ = os.MkdirAll(dir, 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "twitter_milkshake06.jpg"), []byte("canonical"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "twitter_MilkShake06.jpg"), []byte("stale"), 0o644)
+
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, httptest.NewRequest("GET", "/api/media/avatar/twitter_MilkShake06", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200", rr.Code)
+	}
+	if body := strings.TrimSpace(rr.Body.String()); body != "canonical" {
+		t.Fatalf("avatar body = %q, want canonical lowercase file", body)
+	}
+}
+
 func TestHandleChannelAvatar_QueuesYouTubeAvatarRecoveryWithCasePreserved(t *testing.T) {
 	srv := newTestServer(t)
 	var got string

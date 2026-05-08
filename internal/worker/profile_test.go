@@ -2019,6 +2019,80 @@ func TestOnDemandProfileRequestLoopDownloadsStoredTwitterAvatar(t *testing.T) {
 	}
 }
 
+func TestOnDemandProfileRequestLoopDoesNotStarveStoredAvatarBehindSlowFetch(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	avatarServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(testProfilePNGBytes())
+	}))
+	defer avatarServer.Close()
+
+	now := time.Now().UTC()
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_slow.profile",
+		Platform:    "instagram",
+		Handle:      "slow.profile",
+		DisplayName: "Slow",
+		FetchedAt:   &now,
+	}); err != nil {
+		t.Fatalf("seed slow profile: %v", err)
+	}
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "twitter_hokutonokeninfo",
+		Platform:    "twitter",
+		Handle:      "hokutonokeninfo",
+		DisplayName: "Quote Author",
+		AvatarURL:   "https://pbs.twimg.com/profile_images/1465265701716111360/PeQwzKZv_normal.jpg",
+		FetchedAt:   &now,
+	}); err != nil {
+		t.Fatalf("seed twitter profile: %v", err)
+	}
+
+	m := &Manager{
+		db:         d,
+		cfg:        testCfg(dir),
+		downloader: testTwimgAvatarDownloader(avatarServer),
+		instagramProfileFetch: func(ctx context.Context, channelID, handle string) (*model.ChannelProfile, error) {
+			if channelID == "instagram_slow.profile" {
+				<-ctx.Done()
+				return nil, ctx.Err()
+			}
+			return nil, nil
+		},
+		avatarRequest: make(chan string, 2),
+	}
+	avDir, bnDir := filepath.Join(dir, "avatars"), filepath.Join(dir, "banners")
+	_ = os.MkdirAll(avDir, 0o755)
+	_ = os.MkdirAll(bnDir, 0o755)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		m.runOnDemandProfileRequestLoop(ctx, avDir, bnDir)
+	}()
+
+	m.avatarRequest <- "instagram_slow.profile"
+	m.avatarRequest <- "twitter_hokutonokeninfo"
+
+	deadline := time.After(time.Second)
+	for !hasConventionalMediaFile(avDir, "twitter_hokutonokeninfo") {
+		select {
+		case <-deadline:
+			t.Fatal("stored quote avatar was starved behind slow profile fetch")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("on-demand profile request loop did not stop")
+	}
+}
+
 func TestRequestAvatarQueuesNonInstagramWhenProfileLookupFails(t *testing.T) {
 	d := newTestWorkerDB(t)
 	if err := d.Close(); err != nil {
