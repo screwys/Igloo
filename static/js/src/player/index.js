@@ -685,7 +685,7 @@ if (root && video) {
               try {
                 cue.snapToLines = false
                 cue.lineAlign = 'end'
-                cue.line = liftUp ? 90 : 96
+                cue.line = liftUp ? 88 : 96
               } catch (_) {}
             }
           }
