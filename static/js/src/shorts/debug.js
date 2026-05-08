@@ -110,6 +110,7 @@ function snapshot(entry, eventName, extra) {
   var video = entry.refs.video
   var wrapper = entry.refs.wrapper
   var poster = entry.refs.poster
+  var container = document.getElementById('shorts-container')
   var videoStyle = video ? getComputedStyle(video) : null
   var wrapperStyle = wrapper ? getComputedStyle(wrapper) : null
   var posterStyle = poster ? getComputedStyle(poster) : null
@@ -125,10 +126,20 @@ function snapshot(entry, eventName, extra) {
     tab: _state && _state.currentTab,
     wrapperClass: wrapper && wrapper.className,
     itemClass: entry.el && entry.el.className,
+    containerRect: rectOf(container),
+    itemRect: rectOf(entry.el),
     wrapperRect: rectOf(wrapper),
     videoRect: rectOf(video),
     posterRect: rectOf(poster),
+    containerScroll: container ? {
+      top: Math.round(container.scrollTop || 0),
+      height: Math.round(container.scrollHeight || 0),
+      clientHeight: Math.round(container.clientHeight || 0)
+    } : null,
+    wrapperOverflow: wrapperStyle && wrapperStyle.overflow,
+    wrapperRadius: wrapperStyle && wrapperStyle.borderRadius,
     wrapperFit: wrapperStyle && wrapperStyle.objectFit,
+    videoDisplay: videoStyle && videoStyle.display,
     videoFit: videoStyle && videoStyle.objectFit,
     videoOpacity: videoStyle && videoStyle.opacity,
     posterDisplay: posterStyle && posterStyle.display,

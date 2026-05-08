@@ -253,6 +253,43 @@ func TestShortsItemsDoNotAnimateViewportSizeDuringScrollSnap(t *testing.T) {
 	}
 }
 
+func TestShortsMediaEdgesDoNotExposeWrapperBackgroundDuringScrollSnap(t *testing.T) {
+	cssBytes, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssBytes)
+	wrapperBody := cssRuleBody(t, css, ".shorts-video-wrapper")
+	videoBody := cssRuleBody(t, css, ".shorts-video-wrapper video")
+	nativeVideoBody := cssRuleBody(t, css, ".native-short-video")
+	slideImageBody := cssRuleBody(t, css, ".slide-image")
+
+	for _, check := range []string{
+		"overflow: hidden",
+		"border-radius: 0",
+		"background: #000",
+	} {
+		if !strings.Contains(wrapperBody, check) {
+			t.Errorf(".shorts-video-wrapper should avoid visible clipped edges; missing %q in %s", check, wrapperBody)
+		}
+	}
+	for _, check := range []string{
+		"display: block",
+		"width: 100%",
+		"height: 100%",
+	} {
+		if !strings.Contains(videoBody, check) {
+			t.Errorf(".shorts-video-wrapper video should fill without inline baseline gaps; missing %q in %s", check, videoBody)
+		}
+		if !strings.Contains(nativeVideoBody, check) {
+			t.Errorf(".native-short-video should fill without inline baseline gaps; missing %q in %s", check, nativeVideoBody)
+		}
+		if !strings.Contains(slideImageBody, check) {
+			t.Errorf(".slide-image should fill without inline baseline gaps; missing %q in %s", check, slideImageBody)
+		}
+	}
+}
+
 func TestShortsActivationDoesNotWaitForSnapBeforePlayback(t *testing.T) {
 	srcBytes, err := os.ReadFile("../../static/js/src/shorts/overlay.js")
 	if err != nil {
@@ -376,8 +413,13 @@ func TestShortsDebugToolsExposeOptInMediaSnapshots(t *testing.T) {
 		"copy: function ()",
 		"function sampleBands(video)",
 		"buffered: rangesOf(video.buffered)",
+		"containerRect: rectOf(container)",
+		"itemRect: rectOf(entry.el)",
 		"wrapperRect: rectOf(wrapper)",
 		"videoRect: rectOf(video)",
+		"containerScroll: container ?",
+		"wrapperRadius: wrapperStyle && wrapperStyle.borderRadius",
+		"videoDisplay: videoStyle && videoStyle.display",
 		"requestVideoFrameCallback",
 	} {
 		if !strings.Contains(debugSrc, check) {
