@@ -50,3 +50,33 @@ func TestPlayerCommentsKeepsRawAvatarWhenAuthorIDIsNotCanonical(t *testing.T) {
 		t.Fatalf("expected raw avatar fallback for non-canonical author id, got %s", html)
 	}
 }
+
+func TestRenderCommentRichTextLinksURLsWithThemeClass(t *testing.T) {
+	got := RenderCommentRichText("watch https://example.com?a=1&b=2 and www.example.org/path.")
+
+	if !strings.Contains(got, `href="https://example.com?a=1&amp;b=2" class="inline-rich-link"`) {
+		t.Fatalf("expected absolute URL to use themed link class, got %s", got)
+	}
+	if !strings.Contains(got, `href="https://www.example.org/path" class="inline-rich-link" target="_blank" rel="noopener noreferrer">www.example.org/path</a>.`) {
+		t.Fatalf("expected scheme-less URL to be linked without trailing punctuation, got %s", got)
+	}
+}
+
+func TestRenderCommentRichTextLinksCommonBareDomains(t *testing.T) {
+	got := RenderCommentRichText("support me at patreon.com/example")
+
+	if !strings.Contains(got, `href="https://patreon.com/example" class="inline-rich-link"`) {
+		t.Fatalf("expected bare domain URL to be linked with https href, got %s", got)
+	}
+}
+
+func TestRenderCommentRichTextDoesNotLinkEmailDomains(t *testing.T) {
+	got := RenderCommentRichText("mail support@example.com about 1:05")
+
+	if strings.Contains(got, `href="https://example.com"`) {
+		t.Fatalf("email domain should not be linked, got %s", got)
+	}
+	if !strings.Contains(got, `class="inline-seek-link" data-seek-seconds="65"`) {
+		t.Fatalf("timestamp seek link was lost, got %s", got)
+	}
+}

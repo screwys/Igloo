@@ -15,14 +15,18 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import com.screwy.igloo.ui.theme.iglooColors
 
 internal const val TAG_MENTION = "mention"
 internal const val TAG_URL = "url"
 internal const val TAG_TIMESTAMP = "timestamp"
 
-internal val PLAYER_URL_REGEX = Regex("""https?://\S+""")
+internal val PLAYER_URL_REGEX = Regex(
+    """(?i)\b(?:(?:https?://|www\.)[^\s<>"']+|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.(?:com|org|net|io|gg|tv|me|dev|app|co|ai|edu|gov)(?:/[^\s<>"']*)?)""",
+)
 internal val PLAYER_TIMESTAMP_REGEX = Regex("""\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b""")
 internal val PLAYER_MENTION_REGEX = Regex("""@[A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_])?""")
 
@@ -36,7 +40,7 @@ fun PlayerLinkedText(
     maxLines: Int = Int.MAX_VALUE,
     style: TextStyle = LocalTextStyle.current,
 ) {
-    val linkColor = MaterialTheme.colorScheme.primary
+    val linkColor = MaterialTheme.iglooColors.primary
     val annotated = remember(text, linkColor) {
         annotatePlayerLinkedText(text, linkColor)
     }
@@ -69,11 +73,14 @@ internal fun annotatePlayerLinkedText(
     val spans = mutableListOf<PlayerTextSpan>()
 
     PLAYER_URL_REGEX.findAll(text).forEach { match ->
+        if (match.range.first > 0 && text[match.range.first - 1] == '@') return@forEach
+        val token = trimPlayerUrlToken(match.value)
+        if (token.isBlank()) return@forEach
         spans += PlayerTextSpan(
             start = match.range.first,
-            end = match.range.last + 1,
+            end = match.range.first + token.length,
             tag = TAG_URL,
-            item = match.value,
+            item = playerUrlHref(token),
         )
     }
 
@@ -117,13 +124,43 @@ internal fun annotatePlayerLinkedText(
         for (span in spans) {
             if (span.start > cursor) append(text.substring(cursor, span.start))
             pushStringAnnotation(tag = span.tag, annotation = span.item)
-            withStyle(SpanStyle(color = linkColor)) {
+            withStyle(
+                SpanStyle(
+                    color = linkColor,
+                    textDecoration = if (span.tag == TAG_URL) TextDecoration.Underline else null,
+                ),
+            ) {
                 append(text.substring(span.start, span.end))
             }
             pop()
             cursor = span.end
         }
         if (cursor < text.length) append(text.substring(cursor))
+    }
+}
+
+internal fun trimPlayerUrlToken(raw: String): String {
+    var trimmed = raw.trimEnd('.', ',', '!', '?', ';', ':')
+    while (trimmed.isNotEmpty()) {
+        trimmed = when {
+            trimmed.endsWith(")") && trimmed.count { it == ')' } > trimmed.count { it == '(' } ->
+                trimmed.dropLast(1)
+            trimmed.endsWith("]") && trimmed.count { it == ']' } > trimmed.count { it == '[' } ->
+                trimmed.dropLast(1)
+            trimmed.endsWith("}") && trimmed.count { it == '}' } > trimmed.count { it == '{' } ->
+                trimmed.dropLast(1)
+            else -> return trimmed
+        }
+    }
+    return trimmed
+}
+
+internal fun playerUrlHref(raw: String): String {
+    val lower = raw.lowercase()
+    return if (lower.startsWith("http://") || lower.startsWith("https://")) {
+        raw
+    } else {
+        "https://$raw"
     }
 }
 

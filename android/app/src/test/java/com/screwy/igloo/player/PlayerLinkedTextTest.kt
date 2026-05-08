@@ -1,6 +1,7 @@
 package com.screwy.igloo.player
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextDecoration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -34,6 +35,44 @@ class PlayerLinkedTextTest {
         val annotations = annotated.getStringAnnotations(0, annotated.length)
         assertEquals(1, annotations.size)
         assertEquals(TAG_URL, annotations.single().tag)
+    }
+
+    @Test
+    fun youtube_comment_patreon_link_is_clickable_and_themed() {
+        val annotated = annotatePlayerLinkedText(
+            text = "If it matters to you: https://www.patreon.com/c/thehatedone",
+            linkColor = Color.Red,
+        )
+
+        val url = annotated.getStringAnnotations(0, annotated.length).single { it.tag == TAG_URL }
+        assertEquals("https://www.patreon.com/c/thehatedone", url.item)
+        val style = annotated.spanStyles.single {
+            it.start == "If it matters to you: ".length && it.end == annotated.length
+        }.item
+        assertEquals(Color.Red, style.color)
+        assertEquals(TextDecoration.Underline, style.textDecoration)
+    }
+
+    @Test
+    fun scheme_less_comment_links_get_https_without_trailing_punctuation() {
+        val annotated = annotatePlayerLinkedText(
+            text = "support me at patreon.com/example.",
+            linkColor = Color.Red,
+        )
+
+        val url = annotated.getStringAnnotations(0, annotated.length).single { it.tag == TAG_URL }
+        assertEquals("https://patreon.com/example", url.item)
+        assertEquals("patreon.com/example", annotated.text.substring(url.start, url.end))
+    }
+
+    @Test
+    fun email_domains_are_not_annotated_as_urls() {
+        val annotated = annotatePlayerLinkedText(
+            text = "mail support@example.com",
+            linkColor = Color.Red,
+        )
+
+        assertTrue(annotated.getStringAnnotations(0, annotated.length).none { it.tag == TAG_URL })
     }
 
     @Test

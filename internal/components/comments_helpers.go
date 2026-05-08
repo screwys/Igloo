@@ -124,7 +124,7 @@ func CommentIsCreator(c model.Comment, creatorAuthorID string) bool {
 
 var (
 	commentTimestampRe = regexp.MustCompile(`\b(?:\d{1,2}:)?\d{1,2}:\d{2}\b`)
-	commentURLRe       = regexp.MustCompile(`\bhttps?://[^\s<]+`)
+	commentURLRe       = regexp.MustCompile(`(?i)\b(?:(?:https?://|www\.)[^\s<>"']+|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\.(?:com|org|net|io|gg|tv|me|dev|app|co|ai|edu|gov)(?:/[^\s<>"']*)?)`)
 )
 
 type textMatch struct {
@@ -144,12 +144,18 @@ func RenderCommentRichText(text string) string {
 
 	// Collect URL matches first so they win on overlap.
 	for _, loc := range commentURLRe.FindAllStringIndex(text, -1) {
-		raw := text[loc[0]:loc[1]]
-		escaped := html.EscapeString(raw)
+		if loc[0] > 0 && text[loc[0]-1] == '@' {
+			continue
+		}
+		raw := trimCommentURLMatch(text[loc[0]:loc[1]])
+		if raw == "" {
+			continue
+		}
+		href := commentURLHref(raw)
 		matches = append(matches, textMatch{
 			start: loc[0],
-			end:   loc[1],
-			html:  fmt.Sprintf(`<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>`, escaped, escaped),
+			end:   loc[0] + len(raw),
+			html:  fmt.Sprintf(`<a href="%s" class="inline-rich-link" target="_blank" rel="noopener noreferrer">%s</a>`, html.EscapeString(href), html.EscapeString(raw)),
 		})
 	}
 
@@ -191,6 +197,33 @@ func RenderCommentRichText(text string) string {
 	}
 	b.WriteString(escapeWithBreaks(text[pos:]))
 	return b.String()
+}
+
+func trimCommentURLMatch(raw string) string {
+	trimmed := strings.TrimRight(raw, ".,!?;:")
+	for {
+		if strings.HasSuffix(trimmed, ")") && strings.Count(trimmed, ")") > strings.Count(trimmed, "(") {
+			trimmed = strings.TrimSuffix(trimmed, ")")
+			continue
+		}
+		if strings.HasSuffix(trimmed, "]") && strings.Count(trimmed, "]") > strings.Count(trimmed, "[") {
+			trimmed = strings.TrimSuffix(trimmed, "]")
+			continue
+		}
+		if strings.HasSuffix(trimmed, "}") && strings.Count(trimmed, "}") > strings.Count(trimmed, "{") {
+			trimmed = strings.TrimSuffix(trimmed, "}")
+			continue
+		}
+		return trimmed
+	}
+}
+
+func commentURLHref(raw string) string {
+	lower := strings.ToLower(raw)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return raw
+	}
+	return "https://" + raw
 }
 
 func escapeWithBreaks(s string) string {
