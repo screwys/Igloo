@@ -46,6 +46,20 @@ internal data class PeriodicSyncDrainResult(
     val runnerWork: Boolean,
 )
 
+internal suspend fun preparePeriodicSyncSession(
+    databaseHolder: DatabaseHolder,
+    authRepo: AuthRepo,
+): Boolean {
+    if (databaseHolder.current == null) {
+        if (!authRepo.canOpenLocalSessionSync()) return false
+        val username = authRepo.usernameSync()?.takeIf { it.isNotBlank() } ?: return false
+        databaseHolder.openForUser(username)
+    }
+
+    authRepo.onAppStart()
+    return databaseHolder.current != null && authRepo.canOpenLocalSessionSync()
+}
+
 internal suspend fun awaitSyncDrainOrCap(
     maxRunDurationMs: Long,
     pollIntervalMs: Long,
@@ -118,17 +132,8 @@ class PeriodicSyncWorker(
             AppRuntime.ensureStarted(applicationContext as Application)
             val koin = GlobalContext.get()
             val databaseHolder: DatabaseHolder = koin.get()
-            if (databaseHolder.current == null) {
-                runCatching {
-                    val authRepo: AuthRepo = koin.get()
-                    if (authRepo.isLoggedInSync()) {
-                        authRepo.usernameSync()?.takeIf { it.isNotBlank() }?.let { username ->
-                            databaseHolder.openForUser(username)
-                        }
-                    }
-                }
-            }
-            if (databaseHolder.current == null) {
+            val authRepo: AuthRepo = koin.get()
+            if (!preparePeriodicSyncSession(databaseHolder, authRepo)) {
                 return ListenableWorker.Result.success()
             }
 
