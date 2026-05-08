@@ -373,6 +373,13 @@ func TestSeedChannelProfileRowsSeedsShortVideoOwners(t *testing.T) {
 	); err != nil {
 		t.Fatalf("insert instagram video: %v", err)
 	}
+	if err := d.InsertVideo(
+		"twitter_video_owner", "twitter_OwnerThree", "post", "",
+		0, "", "media/twitter/owner/post.mp4", 0,
+		now, "", "video", 0, false,
+	); err != nil {
+		t.Fatalf("insert twitter video: %v", err)
+	}
 	if err := d.AddToDownloadQueueWithPublishedAt("queued_short", "tiktok_queue.owner", "queued", now+100); err != nil {
 		t.Fatalf("queue short: %v", err)
 	}
@@ -384,8 +391,8 @@ func TestSeedChannelProfileRowsSeedsShortVideoOwners(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SeedChannelProfileRows: %v", err)
 	}
-	if n != 3 {
-		t.Fatalf("seeded rows = %d, want 3", n)
+	if n != 4 {
+		t.Fatalf("seeded rows = %d, want 4", n)
 	}
 
 	for _, tc := range []struct {
@@ -395,6 +402,7 @@ func TestSeedChannelProfileRowsSeedsShortVideoOwners(t *testing.T) {
 	}{
 		{channelID: "tiktok_creator.one", platform: "tiktok", handle: "creator.one"},
 		{channelID: "instagram_owner.two", platform: "instagram", handle: "owner.two"},
+		{channelID: "twitter_ownerthree", platform: "twitter", handle: "ownerthree"},
 		{channelID: "tiktok_queue.owner", platform: "tiktok", handle: "queue.owner"},
 	} {
 		got, err := d.GetChannelProfile(tc.channelID)
@@ -463,13 +471,20 @@ func TestSeedChannelProfileRowsSeedsShortDescriptionMentions(t *testing.T) {
 	); err != nil {
 		t.Fatalf("insert instagram video: %v", err)
 	}
+	if err := d.InsertVideo(
+		"twitter_video_mention", "twitter_owner", "post", "with @Guest_User plus domain @skip.com",
+		0, "", "media/twitter/owner/post.mp4", 0,
+		now, "", "video", 0, false,
+	); err != nil {
+		t.Fatalf("insert twitter video: %v", err)
+	}
 
 	n, err := d.SeedChannelProfileRows()
 	if err != nil {
 		t.Fatalf("SeedChannelProfileRows: %v", err)
 	}
-	if n != 5 {
-		t.Fatalf("seeded rows = %d, want 5", n)
+	if n != 7 {
+		t.Fatalf("seeded rows = %d, want 7", n)
 	}
 
 	for _, tc := range []struct {
@@ -482,6 +497,8 @@ func TestSeedChannelProfileRowsSeedsShortDescriptionMentions(t *testing.T) {
 		{channelID: "instagram_owner", platform: "instagram", handle: "owner"},
 		{channelID: "instagram_sample.creator", platform: "instagram", handle: "sample.creator"},
 		{channelID: "instagram_bad", platform: "instagram", handle: "bad"},
+		{channelID: "twitter_owner", platform: "twitter", handle: "owner"},
+		{channelID: "twitter_guest_user", platform: "twitter", handle: "guest_user"},
 	} {
 		got, err := d.GetChannelProfile(tc.channelID)
 		if err != nil || got == nil {
@@ -501,6 +518,9 @@ func TestSeedChannelProfileRowsSeedsShortDescriptionMentions(t *testing.T) {
 	if skipped, _ := d.GetChannelProfile("instagram_bad."); skipped != nil {
 		t.Fatalf("trailing punctuation should not be part of the seeded handle: %+v", skipped)
 	}
+	if skipped, _ := d.GetChannelProfile("twitter_skip.com"); skipped != nil {
+		t.Fatalf("domain-looking twitter mention should not be seeded: %+v", skipped)
+	}
 
 	candidate, err := d.NextChannelProfileRefreshCandidate(24 * time.Hour)
 	if err != nil {
@@ -512,9 +532,68 @@ func TestSeedChannelProfileRowsSeedsShortDescriptionMentions(t *testing.T) {
 		"instagram_owner":          true,
 		"instagram_sample.creator": true,
 		"instagram_bad":            true,
+		"twitter_owner":            true,
+		"twitter_guest_user":       true,
 	}
 	if !wantCandidates[candidate] {
 		t.Fatalf("refresh candidate = %q, want seeded short-form profile row", candidate)
+	}
+}
+
+func TestSeedChannelProfileRowsSeedsProfileBioMentionsByPlatform(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UTC()
+
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_source",
+		Platform:    "instagram",
+		Handle:      "source",
+		DisplayName: "Source",
+		Bio:         "team @Sample.Creator and @Other_User, email a@b.com",
+		FetchedAt:   &now,
+	}); err != nil {
+		t.Fatalf("seed instagram profile: %v", err)
+	}
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "twitter_source",
+		Platform:    "twitter",
+		Handle:      "source",
+		DisplayName: "Source",
+		Bio:         "with @Twitter_User and domain @skip.com",
+		FetchedAt:   &now,
+	}); err != nil {
+		t.Fatalf("seed twitter profile: %v", err)
+	}
+
+	n, err := d.SeedChannelProfileRows()
+	if err != nil {
+		t.Fatalf("SeedChannelProfileRows: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("seeded rows = %d, want 3", n)
+	}
+
+	for _, tc := range []struct {
+		channelID string
+		platform  string
+		handle    string
+	}{
+		{channelID: "instagram_sample.creator", platform: "instagram", handle: "sample.creator"},
+		{channelID: "instagram_other_user", platform: "instagram", handle: "other_user"},
+		{channelID: "twitter_twitter_user", platform: "twitter", handle: "twitter_user"},
+	} {
+		got, err := d.GetChannelProfile(tc.channelID)
+		if err != nil || got == nil {
+			t.Fatalf("GetChannelProfile(%s): %v / %+v", tc.channelID, err, got)
+		}
+		if got.Platform != tc.platform || got.Handle != tc.handle {
+			t.Fatalf("profile row mismatch for %s: %+v", tc.channelID, got)
+		}
+	}
+	for _, channelID := range []string{"twitter_sample.creator", "twitter_skip.com", "instagram_b"} {
+		if skipped, _ := d.GetChannelProfile(channelID); skipped != nil {
+			t.Fatalf("non-matching profile bio mention should not be seeded as %s: %+v", channelID, skipped)
+		}
 	}
 }
 
@@ -813,8 +892,18 @@ func TestListFeedAvatarProfileIDsIncludesShortFormSourceWindowOwners(t *testing.
 	); err != nil {
 		t.Fatalf("insert instagram video: %v", err)
 	}
+	if err := d.InsertVideo(
+		"twitter_clip_video", "twitter_clip_owner", "clip", "",
+		0, "", "media/twitter/clip/video.mp4", 0,
+		now+15, "", "video", 0, false,
+	); err != nil {
+		t.Fatalf("insert twitter video: %v", err)
+	}
 	if err := d.AddToDownloadQueueWithPublishedAt("queued_owner_video", "tiktok_queued.owner", "queued", now+20); err != nil {
 		t.Fatalf("queue short owner: %v", err)
+	}
+	if err := d.AddToDownloadQueueWithPublishedAt("queued_twitter_video", "twitter_queued_owner", "queued", now+25); err != nil {
+		t.Fatalf("queue twitter owner: %v", err)
 	}
 	if _, err := d.UpsertVideoRepostSources([]model.VideoRepostSource{
 		{VideoID: "tiktok_repost_video", ReposterChannelID: "tiktok_followed", ReposterHandle: "followed", FirstSeenAtMs: now + 30},
@@ -833,7 +922,9 @@ func TestListFeedAvatarProfileIDsIncludesShortFormSourceWindowOwners(t *testing.
 	want := map[string]bool{
 		"tiktok_repost.owner":    true,
 		"instagram_tagged.owner": true,
+		"twitter_clip_owner":     true,
 		"tiktok_queued.owner":    true,
+		"twitter_queued_owner":   true,
 	}
 	for id := range want {
 		want[id] = false

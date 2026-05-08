@@ -188,6 +188,19 @@ func TestLinkify(t *testing.T) {
 	}
 }
 
+func TestLinkifyForPlatformUsesProfileNamespace(t *testing.T) {
+	got := LinkifyForPlatform("with @sample.creator and @Other_User", "instagram")
+	if !strings.Contains(got, `href="/channels/instagram_sample.creator"`) {
+		t.Fatalf("instagram dotted mention not linked to instagram namespace: %s", got)
+	}
+	if !strings.Contains(got, `href="/channels/instagram_other_user"`) {
+		t.Fatalf("instagram mention not lowercased in channel id: %s", got)
+	}
+	if strings.Contains(got, `/channels/twitter_sample`) {
+		t.Fatalf("profile mention should not fall back to twitter namespace: %s", got)
+	}
+}
+
 func TestCsrfInputHTML(t *testing.T) {
 	got := CsrfInputHTML("abc123")
 	if !strings.Contains(got, `value="abc123"`) {

@@ -255,7 +255,7 @@ func ProfileCard(props PageProps, p *model.ChannelProfile, size string, isFollow
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templ.Raw(Linkify(p.Bio)).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = templ.Raw(LinkifyForPlatform(p.Bio, p.Platform)).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

@@ -38,7 +38,7 @@ templ ProfileCard(props PageProps, p *model.ChannelProfile, size string, isFollo
 				}
 				if !p.Protected {
 					if p.Bio != "" {
-						<div class="profile-card-bio">@templ.Raw(Linkify(p.Bio))</div>
+						<div class="profile-card-bio">@templ.Raw(LinkifyForPlatform(p.Bio, p.Platform))</div>
 					}
 					if p.Website != "" {
 						<div class="profile-card-website"><a href={ templ.SafeURL(p.Website) } target="_blank" rel="noopener noreferrer">{ p.Website }</a></div>

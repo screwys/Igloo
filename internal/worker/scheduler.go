@@ -538,10 +538,14 @@ func (m *Manager) primeShortFormMentionProfiles(platform string, refs []download
 	if len(texts) == 0 {
 		return
 	}
-	if n, err := m.db.SeedShortFormMentionProfileRowsForTexts(platform, texts); err != nil {
+	channelIDs, n, err := m.db.SeedShortFormMentionProfileRowsForTextsWithIDs(platform, texts)
+	if err != nil {
 		log.Printf("[scheduler] seed %s mention profiles: %v", platform, err)
 	} else if n > 0 {
 		log.Printf("[scheduler] seeded %d %s mention profile rows", n, platform)
+	}
+	for _, channelID := range channelIDs {
+		m.RequestAvatar(channelID)
 	}
 }
 

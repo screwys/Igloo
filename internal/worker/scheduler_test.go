@@ -41,7 +41,7 @@ func TestMergeVideoRefsSortsRepostsIntoSourceWindow(t *testing.T) {
 
 func TestPrimeShortFormMentionProfilesSeedsRefTitles(t *testing.T) {
 	d := newTestWorkerDB(t)
-	m := &Manager{db: d, cfg: testCfg(t.TempDir())}
+	m := &Manager{db: d, cfg: testCfg(t.TempDir()), avatarRequest: make(chan string, 1)}
 
 	m.primeShortFormMentionProfiles("instagram", []download.VideoRef{{
 		VideoID: "instagram_reel_sample",
@@ -54,6 +54,14 @@ func TestPrimeShortFormMentionProfilesSeedsRefTitles(t *testing.T) {
 	}
 	if got.Platform != "instagram" || got.Handle != "sample.artist" {
 		t.Fatalf("profile row mismatch: %+v", got)
+	}
+	select {
+	case queued := <-m.avatarRequest:
+		if queued != "instagram_sample.artist" {
+			t.Fatalf("queued profile = %q, want instagram_sample.artist", queued)
+		}
+	default:
+		t.Fatal("expected mention profile to be queued for refresh")
 	}
 }
 

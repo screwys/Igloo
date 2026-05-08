@@ -429,7 +429,7 @@ func (db *DB) ListFeedAvatarProfileIDs() ([]string, error) {
 			SELECT v.channel_id,
 			       MAX(COALESCE(v.published_at, 0), COALESCE(v.downloaded_at, 0)) AS seen_at
 			FROM videos v
-			WHERE (v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
+			WHERE (v.channel_id LIKE 'twitter_%' OR v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
 			  AND COALESCE(v.channel_id, '') != ''
 
 			UNION
@@ -439,7 +439,7 @@ func (db *DB) ListFeedAvatarProfileIDs() ([]string, error) {
 			           COALESCE(v.published_at, 0), COALESCE(v.downloaded_at, 0)) AS seen_at
 			FROM video_repost_sources vrs
 			INNER JOIN videos v ON v.video_id = vrs.video_id
-			WHERE (v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
+			WHERE (v.channel_id LIKE 'twitter_%' OR v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
 			  AND COALESCE(v.channel_id, '') != ''
 
 			UNION
@@ -447,7 +447,7 @@ func (db *DB) ListFeedAvatarProfileIDs() ([]string, error) {
 			SELECT dq.channel_id,
 			       MAX(COALESCE(dq.published_at_ms, 0), COALESCE(dq.added_at, 0)) AS seen_at
 			FROM download_queue dq
-			WHERE (dq.channel_id LIKE 'tiktok_%' OR dq.channel_id LIKE 'instagram_%')
+			WHERE (dq.channel_id LIKE 'twitter_%' OR dq.channel_id LIKE 'tiktok_%' OR dq.channel_id LIKE 'instagram_%')
 			  AND COALESCE(dq.status, 'pending') IN ('pending', 'processing')
 		),
 		feed_profiles AS (
@@ -835,6 +835,11 @@ func (db *DB) SeedChannelProfileRows() (int, error) {
 			return err
 		}
 		inserted += twitterMentionRows
+		profileBioMentionRows, err := seedProfileBioMentionProfileRows(tx)
+		if err != nil {
+			return err
+		}
+		inserted += profileBioMentionRows
 		return nil
 	})
 	return inserted, err
@@ -849,13 +854,13 @@ func seedShortVideoOwnerProfileRows(tx *sql.Tx) (int, error) {
 	rows, err := tx.Query(`
 		SELECT channel_id
 		FROM videos
-		WHERE channel_id LIKE 'tiktok_%' OR channel_id LIKE 'instagram_%'
+		WHERE channel_id LIKE 'twitter_%' OR channel_id LIKE 'tiktok_%' OR channel_id LIKE 'instagram_%'
 
 		UNION
 
 		SELECT channel_id
 		FROM download_queue
-		WHERE channel_id LIKE 'tiktok_%' OR channel_id LIKE 'instagram_%'
+		WHERE channel_id LIKE 'twitter_%' OR channel_id LIKE 'tiktok_%' OR channel_id LIKE 'instagram_%'
 	`)
 	if err != nil {
 		return 0, err
@@ -884,6 +889,12 @@ func seedShortVideoOwnerProfileRows(tx *sql.Tx) (int, error) {
 }
 
 func shortOwnerProfileSeedFromChannelID(raw string) (channelID, platform, handle string) {
+	if handle, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(raw)), "twitter_"); ok {
+		handle = model.NormalizeTwitterHandle(handle)
+		if handle != "" {
+			return "twitter_" + handle, "twitter", handle
+		}
+	}
 	if handle := model.TikTokHandleFromChannelID(raw); handle != "" {
 		channelID := model.TikTokChannelIDFromHandle(handle)
 		if channelID != "" {
@@ -903,14 +914,14 @@ func seedShortDescriptionMentionProfileRows(tx *sql.Tx) (int, error) {
 	rows, err := tx.Query(`
 		SELECT channel_id, COALESCE(title, ''), COALESCE(description, '')
 		FROM videos
-		WHERE (channel_id LIKE 'tiktok_%' OR channel_id LIKE 'instagram_%')
+		WHERE (channel_id LIKE 'twitter_%' OR channel_id LIKE 'tiktok_%' OR channel_id LIKE 'instagram_%')
 		  AND (title LIKE '%@%' OR description LIKE '%@%')
 
 		UNION ALL
 
 		SELECT channel_id, COALESCE(title, ''), ''
 		FROM download_queue
-		WHERE (channel_id LIKE 'tiktok_%' OR channel_id LIKE 'instagram_%')
+		WHERE (channel_id LIKE 'twitter_%' OR channel_id LIKE 'tiktok_%' OR channel_id LIKE 'instagram_%')
 		  AND title LIKE '%@%'
 	`)
 	if err != nil {
@@ -944,16 +955,96 @@ func seedShortDescriptionMentionProfileRows(tx *sql.Tx) (int, error) {
 }
 
 func (db *DB) SeedShortFormMentionProfileRowsForTexts(platform string, texts []string) (int, error) {
+	_, inserted, err := db.SeedShortFormMentionProfileRowsForTextsWithIDs(platform, texts)
+	return inserted, err
+}
+
+func (db *DB) SeedShortFormMentionProfileRowsForTextsWithIDs(platform string, texts []string) ([]string, int, error) {
 	platform = strings.ToLower(strings.TrimSpace(platform))
-	if platform != "tiktok" && platform != "instagram" {
-		return 0, nil
+	if platform != "twitter" && platform != "tiktok" && platform != "instagram" {
+		return nil, 0, nil
 	}
 	byChannelID := map[string]mentionSeedRow{}
 	addShortFormMentionSeedRows(byChannelID, platform, texts...)
 	if len(byChannelID) == 0 {
+		return nil, 0, nil
+	}
+	ids := make([]string, 0, len(byChannelID))
+	for channelID := range byChannelID {
+		ids = append(ids, channelID)
+	}
+	inserted, err := db.seedMentionProfileRows(byChannelID)
+	return ids, inserted, err
+}
+
+// SeedProfileBioMentionProfileRows inserts lightweight profile rows for
+// @mentions discovered inside an already-fetched profile bio.
+func (db *DB) SeedProfileBioMentionProfileRows(p model.ChannelProfile) ([]string, error) {
+	byChannelID := profileBioMentionSeedRows(p)
+	if len(byChannelID) == 0 {
+		return nil, nil
+	}
+	ids := make([]string, 0, len(byChannelID))
+	for channelID := range byChannelID {
+		ids = append(ids, channelID)
+	}
+	_, err := db.seedMentionProfileRows(byChannelID)
+	return ids, err
+}
+
+func seedProfileBioMentionProfileRows(tx *sql.Tx) (int, error) {
+	rows, err := tx.Query(`
+		SELECT channel_id, platform, COALESCE(bio, '')
+		FROM channel_profiles
+		WHERE platform IN ('twitter', 'tiktok', 'instagram')
+		  AND bio LIKE '%@%'
+		  AND COALESCE(tombstone, 0) = 0
+	`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	byChannelID := map[string]mentionSeedRow{}
+	for rows.Next() {
+		var p model.ChannelProfile
+		if err := rows.Scan(&p.ChannelID, &p.Platform, &p.Bio); err != nil {
+			return 0, err
+		}
+		for channelID, seed := range profileBioMentionSeedRows(p) {
+			byChannelID[channelID] = seed
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(byChannelID) == 0 {
 		return 0, nil
 	}
-	return db.seedMentionProfileRows(byChannelID)
+	return upsertMentionSeedRows(tx, byChannelID)
+}
+
+func profileBioMentionSeedRows(p model.ChannelProfile) map[string]mentionSeedRow {
+	platform := profileBioMentionPlatform(p.Platform)
+	if platform == "" || strings.TrimSpace(p.Bio) == "" {
+		return nil
+	}
+	byChannelID := map[string]mentionSeedRow{}
+	addShortFormMentionSeedRows(byChannelID, platform, p.Bio)
+	return byChannelID
+}
+
+func profileBioMentionPlatform(platform string) string {
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "twitter", "x":
+		return "twitter"
+	case "tiktok":
+		return "tiktok"
+	case "instagram":
+		return "instagram"
+	default:
+		return ""
+	}
 }
 
 func addShortFormMentionSeedRows(byChannelID map[string]mentionSeedRow, platform string, texts ...string) {
@@ -1040,6 +1131,8 @@ func upsertMentionSeedRows(tx *sql.Tx, byChannelID map[string]mentionSeedRow) (i
 
 func shortMentionPlatformFromChannelID(channelID string) string {
 	switch {
+	case strings.HasPrefix(channelID, "twitter_"):
+		return "twitter"
 	case strings.HasPrefix(channelID, "tiktok_"):
 		return "tiktok"
 	case strings.HasPrefix(channelID, "instagram_"):

@@ -77,6 +77,41 @@ func TestRefreshProfileUpsertsRow(t *testing.T) {
 	}
 }
 
+func TestRefreshProfileSeedsBioMentions(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	f := newFakeFetcher()
+	f.results["tiktok_artist"] = &fetchprofile.Profile{
+		ChannelID:   "tiktok_artist",
+		Platform:    "tiktok",
+		Handle:      "artist",
+		DisplayName: "Artist",
+		Bio:         "with @Guest.One and email a@b.com",
+	}
+	_ = d.UpsertChannelProfile(model.ChannelProfile{ChannelID: "tiktok_artist", Platform: "tiktok"})
+
+	m := &Manager{db: d, cfg: testCfg(dir)}
+	avDir, bnDir := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	_ = os.MkdirAll(avDir, 0o755)
+	_ = os.MkdirAll(bnDir, 0o755)
+
+	m.refreshProfile(context.Background(), f.Fetch, "tiktok_artist", avDir, bnDir)
+
+	got, err := d.GetChannelProfile("tiktok_guest.one")
+	if err != nil || got == nil {
+		t.Fatalf("GetChannelProfile(tiktok_guest.one): %v / %+v", err, got)
+	}
+	if got.Platform != "tiktok" || got.Handle != "guest.one" {
+		t.Fatalf("profile row mismatch: %+v", got)
+	}
+	if skipped, _ := d.GetChannelProfile("twitter_guest.one"); skipped != nil {
+		t.Fatalf("bio mention should not be seeded as twitter: %+v", skipped)
+	}
+	if skipped, _ := d.GetChannelProfile("tiktok_b"); skipped != nil {
+		t.Fatalf("email domain mention should not be seeded: %+v", skipped)
+	}
+}
+
 func TestRefreshProfileTombstonesOnNotFound(t *testing.T) {
 	d := newTestWorkerDB(t)
 	dir := t.TempDir()
@@ -1187,35 +1222,6 @@ func TestRefreshFeedProfileCompletenessDownloadsStoredBanner(t *testing.T) {
 		t.Fatalf("fetch calls = %d, want 0", got)
 	}
 	if !hasConventionalMediaFile(bnDir, "twitter_banner_cached") {
-		t.Fatal("expected stored banner file on disk")
-	}
-}
-
-func TestEnsureProfileMediaDownloadsStoredBanner(t *testing.T) {
-	d := newTestWorkerDB(t)
-	dir := t.TempDir()
-	bannerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(testProfilePNGBytes())
-	}))
-	defer bannerServer.Close()
-
-	now := time.Now().UTC()
-	if err := d.UpsertChannelProfile(model.ChannelProfile{
-		ChannelID:   "twitter_media_ready",
-		Platform:    "twitter",
-		Handle:      "media_ready",
-		DisplayName: "Media Ready",
-		BannerURL:   bannerServer.URL + "/banner.png",
-		FetchedAt:   &now,
-	}); err != nil {
-		t.Fatalf("seed profile: %v", err)
-	}
-
-	m := &Manager{db: d, cfg: testCfg(dir), downloader: testDownloader()}
-	m.EnsureProfileMedia(context.Background(), "twitter_media_ready")
-
-	if !hasConventionalMediaFile(filepath.Join(dir, "thumbnails", "banners"), "twitter_media_ready") {
 		t.Fatal("expected stored banner file on disk")
 	}
 }

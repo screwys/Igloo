@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"encoding/gob"
 	"net/http"
 	"path/filepath"
@@ -33,14 +32,13 @@ func init() {
 }
 
 type Server struct {
-	db                 *db.DB
-	cfg                *config.Config
-	store              sessions.Store
-	workers            *worker.Manager
-	requestAvatar      func(string)
-	ensureProfileMedia func(context.Context, string)
-	staticV            func(string) string
-	i18n               *i18n.Catalog
+	db            *db.DB
+	cfg           *config.Config
+	store         sessions.Store
+	workers       *worker.Manager
+	requestAvatar func(string)
+	staticV       func(string) string
+	i18n          *i18n.Catalog
 
 	// Channel preview cache — populated in background on first page load
 	channelPreviewMu   sync.Mutex
@@ -61,15 +59,14 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 		catalog = i18n.NewCatalog()
 	}
 	s := &Server{
-		db:                 database,
-		cfg:                cfg,
-		store:              sessions.NewCookieStore([]byte(cfg.SecretKey)),
-		workers:            workers,
-		requestAvatar:      workers.RequestAvatar,
-		ensureProfileMedia: workers.EnsureProfileMedia,
-		staticV:            staticV,
-		i18n:               catalog,
-		profileFlight:      newProfileFlight(),
+		db:            database,
+		cfg:           cfg,
+		store:         sessions.NewCookieStore([]byte(cfg.SecretKey)),
+		workers:       workers,
+		requestAvatar: workers.RequestAvatar,
+		staticV:       staticV,
+		i18n:          catalog,
+		profileFlight: newProfileFlight(),
 	}
 
 	mux := http.NewServeMux()

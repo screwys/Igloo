@@ -325,26 +325,34 @@ func RelativeTimeText(p PageProps, t *time.Time) string {
 }
 
 var (
-	urlRe     = regexp.MustCompile(`(https?://[^\s<>"']+)`)
-	mentionRe = regexp.MustCompile(`@[A-Za-z0-9_]+`)
-	emailTLD  = regexp.MustCompile(`^\.[A-Za-z]{2,12}\b`)
+	urlRe              = regexp.MustCompile(`(https?://[^\s<>"']+)`)
+	twitterMentionRe   = regexp.MustCompile(`@[A-Za-z0-9_]+`)
+	shortFormMentionRe = regexp.MustCompile(`@[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,30}[A-Za-z0-9_])?`)
+	emailTLD           = regexp.MustCompile(`^\.[A-Za-z]{2,12}\b`)
 )
 
 // Linkify escapes text and converts URLs and @mentions to HTML links.
 // Skips @mentions that look like email addresses (e.g., `user@outlook.com`)
 // by checking surrounding characters.
 func Linkify(s string) string {
+	return LinkifyForPlatform(s, "twitter")
+}
+
+// LinkifyForPlatform escapes text and converts URLs plus @mentions to links for
+// the account namespace that owns the text.
+func LinkifyForPlatform(s, platform string) string {
 	escaped := html.EscapeString(s)
 	escaped = urlRe.ReplaceAllString(escaped, `<a href="$1" class="feed-inline-link" target="_blank" rel="noopener">$1</a>`)
-	escaped = linkifyMentions(escaped)
+	escaped = linkifyMentionsForPlatform(escaped, platform)
 	escaped = strings.ReplaceAll(escaped, "\n", "<br>\n")
 	return escaped
 }
 
 // linkifyMentions replaces @handles with profile links, skipping matches that
 // look like parts of an email address.
-func linkifyMentions(s string) string {
-	matches := mentionRe.FindAllStringIndex(s, -1)
+func linkifyMentionsForPlatform(s, platform string) string {
+	prefix, re := mentionLinkPrefixAndPattern(platform)
+	matches := re.FindAllStringIndex(s, -1)
 	if len(matches) == 0 {
 		return s
 	}
@@ -371,17 +379,29 @@ func linkifyMentions(s string) string {
 		if skip {
 			b.WriteString(s[start:end])
 		} else {
-			handle := s[start+1 : end]
-			b.WriteString(`<a href="/channels/twitter_`)
+			handle := strings.ToLower(s[start+1 : end])
+			b.WriteString(`<a href="/channels/`)
+			b.WriteString(prefix)
 			b.WriteString(handle)
 			b.WriteString(`" class="feed-inline-link">@`)
-			b.WriteString(handle)
+			b.WriteString(s[start+1 : end])
 			b.WriteString(`</a>`)
 		}
 		last = end
 	}
 	b.WriteString(s[last:])
 	return b.String()
+}
+
+func mentionLinkPrefixAndPattern(platform string) (string, *regexp.Regexp) {
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "tiktok":
+		return "tiktok_", shortFormMentionRe
+	case "instagram":
+		return "instagram_", shortFormMentionRe
+	default:
+		return "twitter_", twitterMentionRe
+	}
 }
 
 func isMentionWordByte(b byte) bool {
