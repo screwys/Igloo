@@ -72,6 +72,7 @@ class MomentsViewModel(
     private data class ActiveCursor(
         val videoId: String,
         val positionMs: Long,
+        val sortAtMs: Long?,
         val scope: String,
     )
 
@@ -321,7 +322,7 @@ class MomentsViewModel(
                 )
             },
             targetVideoId,
-            fallbackSortAtMs = if (activeForTab == null) resumeSortAtMs else null,
+            fallbackSortAtMs = activeForTab?.sortAtMs ?: resumeSortAtMs,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -389,13 +390,14 @@ class MomentsViewModel(
             val row = rows[idx]
             val videoId = row.video.videoId
             val scope = activeTab.value
-            activeCursor.value = ActiveCursor(videoId = videoId, positionMs = 0L, scope = scope)
+            val sortAtMs = momentSortAtMs(row)
+            activeCursor.value = ActiveCursor(videoId = videoId, positionMs = 0L, sortAtMs = sortAtMs, scope = scope)
             outboxWriter.enqueue(
                 OutboxKind.MomentsCursor(
                     videoId = videoId,
                     positionMs = 0L,
                     scope = scope,
-                    sortAtMs = momentSortAtMs(row),
+                    sortAtMs = sortAtMs,
                 ),
             )
         }
@@ -419,7 +421,7 @@ class MomentsViewModel(
             val sortAtMs = playerRowsRaw.value
                 ?.firstOrNull { it.video.videoId == videoId }
                 ?.let(::momentSortAtMs)
-            activeCursor.value = ActiveCursor(videoId = videoId, positionMs = 0L, scope = scope)
+            activeCursor.value = ActiveCursor(videoId = videoId, positionMs = 0L, sortAtMs = sortAtMs, scope = scope)
             outboxWriter.enqueue(
                 OutboxKind.MomentsCursor(
                     videoId = videoId,
@@ -546,7 +548,7 @@ class MomentsViewModel(
             val sortAtMs = playerRowsRaw.value
                 ?.firstOrNull { it.video.videoId == videoId }
                 ?.let(::momentSortAtMs)
-            activeCursor.value = ActiveCursor(videoId = videoId, positionMs = 0L, scope = scope)
+            activeCursor.value = ActiveCursor(videoId = videoId, positionMs = 0L, sortAtMs = sortAtMs, scope = scope)
             outboxWriter.enqueue(
                 OutboxKind.MomentsCursor(
                     videoId = videoId,

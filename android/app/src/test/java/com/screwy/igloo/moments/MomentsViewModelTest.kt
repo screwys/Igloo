@@ -233,6 +233,46 @@ class MomentsViewModelTest {
         assertEquals(1, vm.startIndex.value)
     }
 
+    @Test fun startIndexFallsToNextVisibleVideoWhenActiveCursorIsUnfollowed() = runBlocking {
+        db.channelDao().upsert(listOf(
+            ChannelEntity(channelId = "tiktok_alpha", name = "Alpha", platform = "tiktok", sourceId = "alpha"),
+            ChannelEntity(channelId = "tiktok_beta", name = "Beta", platform = "tiktok", sourceId = "beta"),
+        ))
+        db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_alpha"))
+        db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_beta"))
+        db.videoDao().upsert(listOf(
+            VideoEntity(videoId = "alpha_old", channelId = "tiktok_alpha", title = "Old", publishedAt = 100L),
+            VideoEntity(videoId = "beta_current", channelId = "tiktok_beta", title = "Current", publishedAt = 200L),
+            VideoEntity(videoId = "alpha_next", channelId = "tiktok_alpha", title = "Next", publishedAt = 300L),
+        ))
+
+        val vm = newViewModel()
+        val sub = subscribe(vm)
+        val loaded = withTimeoutOrNull(2_000L) {
+            while (vm.playerItems.value.size < 3) delay(10)
+            true
+        }
+        assertEquals(true, loaded)
+
+        vm.onIndexChange(1)
+        val cursorSaved = withTimeoutOrNull(2_000L) {
+            while (prefs.momentsResumeVideoId(scope = "all").first() != "beta_current") delay(10)
+            true
+        }
+        assertEquals(true, cursorSaved)
+
+        vm.unfollowChannel("tiktok_beta")
+        val advanced = withTimeoutOrNull(2_000L) {
+            while (vm.playerItems.value.size != 2 || vm.startIndex.value != 1) delay(10)
+            true
+        }
+        sub.cancel()
+
+        assertEquals(true, advanced)
+        assertEquals(listOf("alpha_old", "alpha_next"), vm.playerItems.value.map { it.videoId })
+        assertEquals(1, vm.startIndex.value)
+    }
+
     @Test fun startIndexUsesStoredSortWhenCursorVideoMoved() = runBlocking {
         db.channelDao().upsert(ChannelEntity(
             channelId = "tiktok_alpha",
