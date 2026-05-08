@@ -271,6 +271,49 @@ func TestNextChannelProfileRefreshCandidatePrioritizesCachedShortBannerBeforeUnf
 	}
 }
 
+func TestNextChannelProfileRefreshCandidatePrioritizesUnfetchedSourceWindowOwner(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	now := time.Now().UTC()
+	_ = d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "tiktok_missing",
+		Platform:    "tiktok",
+		Handle:      "missing",
+		DisplayName: "Missing Banner",
+		FetchedAt:   &now,
+	})
+	seedCachedProfileVideo(t, d, "tiktok_missing", "tiktok_video_2")
+	_ = d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_by.bansoi",
+		Platform:    "instagram",
+		Handle:      "by.bansoi",
+		DisplayName: "soi",
+	})
+	publishedAt := now.UnixMilli()
+	if err := d.InsertVideo(
+		"instagram_post_bansoi", "instagram_by.bansoi", "Dear Father", "",
+		0, "", "", 0, publishedAt, "", "video", 0, false,
+	); err != nil {
+		t.Fatalf("InsertVideo: %v", err)
+	}
+	if _, err := d.UpsertVideoRepostSources([]model.VideoRepostSource{{
+		VideoID:           "instagram_post_bansoi",
+		ReposterChannelID: "instagram_asiancinemaarchive",
+		ReposterHandle:    "asiancinemaarchive",
+		FirstSeenAtMs:     publishedAt + 1000,
+	}}); err != nil {
+		t.Fatalf("UpsertVideoRepostSources: %v", err)
+	}
+
+	got, err := d.NextChannelProfileRefreshCandidate(24 * time.Hour)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got != "instagram_by.bansoi" {
+		t.Fatalf("expected source-window owner first, got %q", got)
+	}
+}
+
 func TestNextChannelProfileRefreshCandidatePrioritizesSubscribedUnfetchedRows(t *testing.T) {
 	d := openWritableTestDB(t)
 

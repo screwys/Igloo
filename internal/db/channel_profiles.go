@@ -302,6 +302,13 @@ func (db *DB) nextChannelProfileRefreshCandidate(ttl time.Duration, platform str
 			  )
 			ORDER BY
 				CASE
+					WHEN fetched_at = 0
+					     AND EXISTS (
+					         SELECT 1
+					         FROM videos v
+					         INNER JOIN video_repost_sources vrs ON vrs.video_id = v.video_id
+					         WHERE v.channel_id = channel_profiles.channel_id
+					     ) THEN 0
 					WHEN platform IN ('tiktok', 'instagram')
 					     AND COALESCE(banner_url, '') = ''
 					     AND EXISTS (
@@ -310,13 +317,26 @@ func (db *DB) nextChannelProfileRefreshCandidate(ttl time.Duration, platform str
 					         WHERE v.channel_id = channel_profiles.channel_id
 					           AND COALESCE(v.file_path, '') != ''
 					           AND COALESCE(v.is_temp, 0) = 0
-					     ) THEN 0
+					     ) THEN 1
 					WHEN fetched_at = 0 AND EXISTS (
 						SELECT 1 FROM channels c WHERE c.channel_id = channel_profiles.channel_id
-					) THEN 1
-					WHEN fetched_at = 0 THEN 2
-					ELSE 3
+					) THEN 2
+					WHEN fetched_at = 0 THEN 3
+					ELSE 4
 				END,
+				COALESCE((
+					SELECT MAX(
+						CASE
+							WHEN COALESCE(vrs.reposted_at_ms, 0) > 0 THEN vrs.reposted_at_ms
+							WHEN COALESCE(vrs.first_seen_at_ms, 0) > 0 THEN vrs.first_seen_at_ms
+							WHEN COALESCE(v.published_at, 0) > 0 THEN v.published_at
+							ELSE COALESCE(v.downloaded_at, 0)
+						END
+					)
+					FROM videos v
+					INNER JOIN video_repost_sources vrs ON vrs.video_id = v.video_id
+					WHERE v.channel_id = channel_profiles.channel_id
+				), 0) DESC,
 				fetched_at ASC
 			LIMIT 1
 		`, platform, platform, nowMs, cutoffMs, nowMs).Scan(&channelID)
