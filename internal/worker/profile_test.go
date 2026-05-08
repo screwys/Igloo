@@ -162,6 +162,28 @@ func TestRefreshProfileBackoffOnTransientError(t *testing.T) {
 	}
 }
 
+func TestRefreshProfileDoesNotBackoffOnCanceledContext(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	f := newFakeFetcher()
+	f.errs["twitter_cancelled"] = context.Canceled
+	_ = d.UpsertChannelProfile(model.ChannelProfile{ChannelID: "twitter_cancelled", Platform: "twitter"})
+
+	m := &Manager{db: d, cfg: testCfg(dir)}
+	avDir, bnDir := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	_ = os.MkdirAll(avDir, 0o755)
+	_ = os.MkdirAll(bnDir, 0o755)
+
+	m.refreshProfile(context.Background(), f.Fetch, "twitter_cancelled", avDir, bnDir)
+	got, _ := d.GetChannelProfile("twitter_cancelled")
+	if got == nil {
+		t.Fatalf("row missing")
+	}
+	if got.FailCount != 0 || got.NextRetryAt != nil || got.Tombstone {
+		t.Fatalf("canceled fetch should not back off profile row: %+v", got)
+	}
+}
+
 func TestCanDownloadStoredAvatarRejectsUnsafeNonTwitterURLs(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -1167,6 +1189,83 @@ func TestRefreshFeedProfileCompletenessFetchesReplyParent(t *testing.T) {
 	}
 }
 
+func TestRefreshFeedProfileCompletenessFetchesInstagramSourceWindowProfile(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	avatarServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(testProfilePNGBytes())
+	}))
+	defer avatarServer.Close()
+	installGalleryDLAvatarStub(t, dir)
+
+	now := time.Now().UnixMilli()
+	if err := d.InsertVideo(
+		"instagram_source_video", "instagram_source.owner", "source window", "",
+		0, "", "media/instagram/source/post.mp4", 0,
+		now, "", "video", 0, false,
+	); err != nil {
+		t.Fatalf("insert instagram video: %v", err)
+	}
+	if _, err := d.UpsertVideoRepostSources([]model.VideoRepostSource{{
+		VideoID:           "instagram_source_video",
+		ReposterChannelID: "instagram_followed",
+		ReposterHandle:    "followed",
+		FirstSeenAtMs:     now,
+	}}); err != nil {
+		t.Fatalf("UpsertVideoRepostSources: %v", err)
+	}
+	if _, err := d.SeedChannelProfileRows(); err != nil {
+		t.Fatalf("SeedChannelProfileRows: %v", err)
+	}
+
+	calls := make(chan string, 1)
+	m := &Manager{
+		db:         d,
+		cfg:        testCfg(dir),
+		downloader: testDownloader(),
+		instagramProfileFetch: func(ctx context.Context, channelID, handle string) (*model.ChannelProfile, error) {
+			calls <- channelID
+			if channelID != "instagram_source.owner" || handle != "source.owner" {
+				t.Fatalf("unexpected instagram profile request: %s/%s", channelID, handle)
+			}
+			return &model.ChannelProfile{
+				ChannelID:   channelID,
+				Platform:    "instagram",
+				Handle:      handle,
+				DisplayName: "Source Owner",
+				Bio:         "real bio",
+				AvatarURL:   avatarServer.URL + "/avatar.png",
+			}, nil
+		},
+	}
+	avDir, bnDir := filepath.Join(dir, "avatars"), filepath.Join(dir, "banners")
+	_ = os.MkdirAll(avDir, 0o755)
+	_ = os.MkdirAll(bnDir, 0o755)
+
+	if worked := m.refreshFeedProfileCompletenessBatch(context.Background(), newFakeFetcher().Fetch, avDir, bnDir, 1); !worked {
+		t.Fatal("expected feed profile completeness batch to work")
+	}
+	select {
+	case got := <-calls:
+		if got != "instagram_source.owner" {
+			t.Fatalf("profile fetch = %q, want instagram_source.owner", got)
+		}
+	default:
+		t.Fatal("expected instagram source-window profile fetch")
+	}
+	profile, err := d.GetChannelProfile("instagram_source.owner")
+	if err != nil {
+		t.Fatalf("GetChannelProfile: %v", err)
+	}
+	if profile == nil || profile.FetchedAt == nil || profile.AvatarURL != avatarServer.URL+"/avatar.png" || profile.Bio != "real bio" {
+		t.Fatalf("source-window profile was not fetched: %+v", profile)
+	}
+	if !hasConventionalMediaFile(avDir, "instagram_source.owner") {
+		t.Fatal("expected instagram source-window avatar file on disk")
+	}
+}
+
 func TestRefreshFeedProfileCompletenessFetchesRichProfileEvenWhenAvatarCached(t *testing.T) {
 	d := newTestWorkerDB(t)
 	dir := t.TempDir()
@@ -1338,6 +1437,124 @@ func TestDownloadProfileMediaFallsBackWhenUpgradedTwitterAvatar404s(t *testing.T
 	if !hasConventionalMediaFile(avDir, "twitter_quote_a") {
 		t.Fatal("expected avatar file downloaded from original URL fallback")
 	}
+}
+
+func TestDownloadProfileMediaUsesGalleryDLForInstagramAvatarFirst(t *testing.T) {
+	dir := t.TempDir()
+	var (
+		mu   sync.Mutex
+		hits int
+	)
+	avatarServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(testProfilePNGBytes())
+	}))
+	defer avatarServer.Close()
+	installGalleryDLAvatarStub(t, dir)
+
+	m := &Manager{cfg: testCfg(dir), downloader: testDownloader()}
+	avDir := filepath.Join(dir, "avatars")
+	if !m.downloadProfileMedia(
+		context.Background(),
+		"instagram_source.owner",
+		"avatar",
+		avatarServer.URL+"/avatar.jpg",
+		avDir,
+	) {
+		t.Fatal("expected instagram avatar download to work")
+	}
+	mu.Lock()
+	gotHits := hits
+	mu.Unlock()
+	if gotHits != 0 {
+		t.Fatalf("direct avatar HTTP hits = %d, want gallery-dl first", gotHits)
+	}
+	if !hasConventionalMediaFile(avDir, "instagram_source.owner") {
+		t.Fatal("expected instagram avatar file from gallery-dl")
+	}
+}
+
+func TestRefreshFeedProfileCompletenessDownloadsInstagramAvatarWithoutStoredURL(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	installGalleryDLAvatarStub(t, dir)
+
+	nowMs := time.Now().UnixMilli()
+	if err := d.InsertVideo(
+		"instagram_empty_avatar_video", "instagram_empty.avatar", "source window", "",
+		0, "", "media/instagram/source/post.mp4", 0,
+		nowMs, "", "video", 0, false,
+	); err != nil {
+		t.Fatalf("insert instagram video: %v", err)
+	}
+	if _, err := d.UpsertVideoRepostSources([]model.VideoRepostSource{{
+		VideoID:           "instagram_empty_avatar_video",
+		ReposterChannelID: "instagram_followed",
+		ReposterHandle:    "followed",
+		FirstSeenAtMs:     nowMs,
+	}}); err != nil {
+		t.Fatalf("UpsertVideoRepostSources: %v", err)
+	}
+	if _, err := d.SeedChannelProfileRows(); err != nil {
+		t.Fatalf("SeedChannelProfileRows: %v", err)
+	}
+	now := time.Now().UTC()
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_empty.avatar",
+		Platform:    "instagram",
+		Handle:      "empty.avatar",
+		DisplayName: "Empty Avatar",
+		FetchedAt:   &now,
+	}); err != nil {
+		t.Fatalf("seed profile: %v", err)
+	}
+
+	m := &Manager{db: d, cfg: testCfg(dir), downloader: testDownloader()}
+	avDir, bnDir := filepath.Join(dir, "avatars"), filepath.Join(dir, "banners")
+	_ = os.MkdirAll(avDir, 0o755)
+	_ = os.MkdirAll(bnDir, 0o755)
+
+	if worked := m.refreshFeedProfileCompletenessBatch(context.Background(), newFakeFetcher().Fetch, avDir, bnDir, 1); !worked {
+		t.Fatal("expected feed profile completeness batch to work")
+	}
+	if !hasConventionalMediaFile(avDir, "instagram_empty.avatar") {
+		t.Fatal("expected instagram avatar file from gallery-dl fallback")
+	}
+}
+
+func installGalleryDLAvatarStub(t *testing.T, dir string) {
+	t.Helper()
+	binDir := filepath.Join(dir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	sourceAvatar := filepath.Join(dir, "source.png")
+	if err := os.WriteFile(sourceAvatar, testProfilePNGBytes(), 0o644); err != nil {
+		t.Fatalf("write source avatar: %v", err)
+	}
+	script := `#!/bin/sh
+set -eu
+out=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -D)
+      shift
+      out="$1"
+      ;;
+  esac
+  shift || true
+done
+mkdir -p "$out"
+cp "$IGLOO_TEST_AVATAR" "$out/avatar.png"
+`
+	if err := os.WriteFile(filepath.Join(binDir, "gallery-dl"), []byte(script), 0o755); err != nil {
+		t.Fatalf("write gallery-dl stub: %v", err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("IGLOO_TEST_AVATAR", sourceAvatar)
 }
 
 func TestRequestAvatarSeedsProfileWhenQueueFull(t *testing.T) {

@@ -192,6 +192,15 @@ func (m *Manager) refreshFeedProfileCompletenessIDs(ctx context.Context, fetch f
 			attempts++
 			continue
 		}
+		if strings.HasPrefix(channelID, "instagram_") &&
+			existing.AvatarURL == "" &&
+			!profileFetchDue(existing, now) &&
+			!hasConventionalMediaFile(avDir, channelID) &&
+			m.downloadInstagramProfileAvatar(ctx, channelID, avDir) {
+			worked = true
+			attempts++
+			continue
+		}
 		if attempted || profileFetchDue(existing, now) {
 			m.refreshProfile(ctx, fetch, channelID, avDir, bnDir)
 		} else {
@@ -594,6 +603,8 @@ func (m *Manager) refreshInstagramStoredProfile(ctx context.Context, channelID, 
 	m.primeProfileBioMentions(row)
 	if row.AvatarURL != "" && !hasConventionalMediaFile(avDir, channelID) {
 		m.downloadProfileMedia(ctx, channelID, "avatar", row.AvatarURL, avDir)
+	} else if row.AvatarURL == "" && !hasConventionalMediaFile(avDir, channelID) {
+		m.downloadInstagramProfileAvatar(ctx, channelID, avDir)
 	}
 }
 
@@ -698,7 +709,13 @@ func (m *Manager) instagramSourceBacklogExists() bool {
 }
 
 func (m *Manager) downloadProfileMedia(ctx context.Context, channelID, kind, url, dir string) bool {
-	if m == nil || m.downloader == nil || m.downloader.HTTP == nil {
+	if m == nil || m.downloader == nil {
+		return false
+	}
+	if kind == "avatar" && strings.HasPrefix(channelID, "instagram_") && m.downloadInstagramProfileAvatar(ctx, channelID, dir) {
+		return true
+	}
+	if m.downloader.HTTP == nil {
 		return false
 	}
 	dlURL := url
@@ -728,6 +745,55 @@ func (m *Manager) downloadProfileMedia(ctx context.Context, channelID, kind, url
 	return true
 }
 
+func (m *Manager) downloadInstagramProfileAvatar(ctx context.Context, channelID, dir string) bool {
+	if m == nil || m.downloader == nil || m.downloader.GalleryDL == nil {
+		return false
+	}
+	handle := strings.TrimPrefix(channelID, "instagram_")
+	if handle == "" || handle == channelID {
+		return false
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		log.Printf("[profile] instagram avatar mkdir %s: %v", channelID, err)
+		return false
+	}
+	tmpDir, err := os.MkdirTemp(dir, ".igloo-instagram-avatar-*")
+	if err != nil {
+		log.Printf("[profile] instagram avatar tmpdir %s: %v", channelID, err)
+		return false
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cookiesFile := ""
+	if m.db != nil {
+		cookiesFile, _ = m.cookiesFor("instagram")
+	} else if m.cfg != nil && m.cfg.CookiesDir != "" {
+		for _, path := range cookieFileCandidates(m.cfg.CookiesDir, "instagram") {
+			if _, err := os.Stat(path); err == nil {
+				cookiesFile = path
+				break
+			}
+		}
+	}
+	paths, err := m.downloader.GalleryDL.Download(ctx, "https://www.instagram.com/"+handle+"/avatar", tmpDir, channelID, cookiesFile)
+	if err != nil {
+		log.Printf("[profile] instagram avatar gallery-dl %s: %v", channelID, err)
+		return false
+	}
+	var lastErr error
+	for _, path := range paths {
+		if _, err := normalizeDownloadedImage(path, dir, channelID); err == nil {
+			return true
+		} else {
+			lastErr = err
+		}
+	}
+	if lastErr != nil {
+		log.Printf("[profile] instagram avatar normalize %s: %v", channelID, lastErr)
+	}
+	return false
+}
+
 // maybePromoteChannelName updates channels.name to displayName when the
 // existing name is still the raw @handle form — i.e., TikTok channels added
 // before the profile worker filled in nicknames.
@@ -749,6 +815,10 @@ func (m *Manager) maybePromoteChannelName(channelID, displayName string) {
 }
 
 func (m *Manager) recordProfileFetchError(channelID string, existing *model.ChannelProfile, err error, now time.Time) {
+	if errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		log.Printf("[profile] canceled %s: %v", channelID, err)
+		return
+	}
 	tombstone := errors.Is(err, fetchprofile.ErrNotFound)
 	failCount := 1
 	if existing != nil {

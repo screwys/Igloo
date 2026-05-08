@@ -488,12 +488,24 @@ func (db *DB) ListFeedAvatarProfileIDs() ([]string, error) {
 			FROM feed_profile_ids
 			WHERE channel_id != ''
 			GROUP BY channel_id
+		),
+		instagram_source_window_profiles AS (
+			SELECT DISTINCT v.channel_id
+			FROM videos v
+			INNER JOIN video_repost_sources vrs ON vrs.video_id = v.video_id
+			WHERE v.channel_id LIKE 'instagram_%'
+			  AND COALESCE(v.channel_id, '') != ''
 		)
 		SELECT cp.channel_id
 		FROM channel_profiles cp
 		INNER JOIN feed_profiles f ON f.channel_id = cp.channel_id
+		LEFT JOIN instagram_source_window_profiles isw ON isw.channel_id = cp.channel_id
 		WHERE cp.tombstone = 0
 		ORDER BY
+			CASE
+				WHEN isw.channel_id IS NOT NULL THEN 0
+				ELSE 1
+			END,
 			f.last_seen_at DESC,
 			CASE WHEN COALESCE(cp.fetched_at, 0) = 0 THEN 0 ELSE 1 END,
 			CASE WHEN COALESCE(cp.avatar_url, '') = '' THEN 0 ELSE 1 END,

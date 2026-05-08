@@ -984,6 +984,101 @@ func TestListFeedAvatarProfileIDsIncludesShortFormSourceWindowOwners(t *testing.
 	}
 }
 
+func TestListFeedAvatarProfileIDsPrioritizesUnfetchedInstagramSourceWindowOwners(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UnixMilli()
+
+	if err := d.InsertVideo(
+		"instagram_source_video", "instagram_source.owner", "source window", "",
+		0, "", "media/instagram/source/post.mp4", 0,
+		now, "", "video", 0, false,
+	); err != nil {
+		t.Fatalf("insert instagram video: %v", err)
+	}
+	if _, err := d.UpsertVideoRepostSources([]model.VideoRepostSource{{
+		VideoID:           "instagram_source_video",
+		ReposterChannelID: "instagram_followed",
+		ReposterHandle:    "followed",
+		FirstSeenAtMs:     now,
+	}}); err != nil {
+		t.Fatalf("UpsertVideoRepostSources: %v", err)
+	}
+	if _, err := d.conn.Exec(`
+		INSERT INTO feed_items (
+			tweet_id, author_handle, published_at, fetched_at
+		) VALUES ('tweet_new', 'new_author', ?, ?)
+	`, now+10000, now+10000); err != nil {
+		t.Fatalf("seed feed item: %v", err)
+	}
+	if _, err := d.SeedChannelProfileRows(); err != nil {
+		t.Fatalf("SeedChannelProfileRows: %v", err)
+	}
+
+	got, err := d.ListFeedAvatarProfileIDs()
+	if err != nil {
+		t.Fatalf("ListFeedAvatarProfileIDs: %v", err)
+	}
+	if len(got) < 2 {
+		t.Fatalf("profile ids = %v, want at least two", got)
+	}
+	if got[0] != "instagram_source.owner" {
+		t.Fatalf("first profile id = %q, want instagram_source.owner (got %v)", got[0], got)
+	}
+}
+
+func TestListFeedAvatarProfileIDsPrioritizesInstagramSourceWindowAvatarCaching(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := time.Now().UnixMilli()
+
+	if err := d.InsertVideo(
+		"instagram_cached_source_video", "instagram_cached.source", "source window", "",
+		0, "", "media/instagram/source/post.mp4", 0,
+		nowMs, "", "video", 0, false,
+	); err != nil {
+		t.Fatalf("insert instagram video: %v", err)
+	}
+	if _, err := d.UpsertVideoRepostSources([]model.VideoRepostSource{{
+		VideoID:           "instagram_cached_source_video",
+		ReposterChannelID: "instagram_followed",
+		ReposterHandle:    "followed",
+		FirstSeenAtMs:     nowMs,
+	}}); err != nil {
+		t.Fatalf("UpsertVideoRepostSources: %v", err)
+	}
+	if _, err := d.conn.Exec(`
+		INSERT INTO feed_items (
+			tweet_id, author_handle, published_at, fetched_at
+		) VALUES ('tweet_new', 'new_author', ?, ?)
+	`, nowMs+10000, nowMs+10000); err != nil {
+		t.Fatalf("seed feed item: %v", err)
+	}
+	if _, err := d.SeedChannelProfileRows(); err != nil {
+		t.Fatalf("SeedChannelProfileRows: %v", err)
+	}
+	now := time.Now().UTC()
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_cached.source",
+		Platform:    "instagram",
+		Handle:      "cached.source",
+		DisplayName: "Cached Source",
+		AvatarURL:   "https://cdn.example/avatar.jpg",
+		FetchedAt:   &now,
+	}); err != nil {
+		t.Fatalf("seed fetched profile: %v", err)
+	}
+
+	got, err := d.ListFeedAvatarProfileIDs()
+	if err != nil {
+		t.Fatalf("ListFeedAvatarProfileIDs: %v", err)
+	}
+	if len(got) < 2 {
+		t.Fatalf("profile ids = %v, want at least two", got)
+	}
+	if got[0] != "instagram_cached.source" {
+		t.Fatalf("first profile id = %q, want instagram_cached.source (got %v)", got[0], got)
+	}
+}
+
 func TestListFeedAvatarProfileIDsPrioritizesRecentUnfetchedRows(t *testing.T) {
 	d := openWritableTestDB(t)
 	if _, err := d.conn.Exec(`

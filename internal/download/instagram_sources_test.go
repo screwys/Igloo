@@ -111,6 +111,19 @@ func TestInstagramTaggedArgsUseConfiguredLimit(t *testing.T) {
 	}
 }
 
+func TestInstagramProfileCookieAttemptsPreferConfiguredCookies(t *testing.T) {
+	got := instagramProfileCookieAttempts("/tmp/instagram-cookies.txt")
+	want := []string{"/tmp/instagram-cookies.txt", ""}
+	if len(got) != len(want) {
+		t.Fatalf("cookie attempts = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("cookie attempts = %#v, want %#v", got, want)
+		}
+	}
+}
+
 func TestParseInstagramProfileDump(t *testing.T) {
 	dump := []byte(`
 [2, {"subcategory":"posts","type":"post","user":{"username":"cinema","full_name":"Cinema Page","profile_pic_url_hd":"https://cdn.example/avatar-hd.jpg","edge_followed_by":{"count":42},"is_verified":true},"post_shortcode":"POST123"}]
@@ -147,8 +160,8 @@ func TestParseInstagramProfileDumpDoesNotUsePostCaptionAsBio(t *testing.T) {
 	if profile.Website != "" {
 		t.Fatalf("Website = %q, want empty because media URLs are not profile websites", profile.Website)
 	}
-	if profile.AvatarURL != "" {
-		t.Fatalf("AvatarURL = %q, want empty because media profile pictures are not trusted profile data", profile.AvatarURL)
+	if profile.AvatarURL != "https://cdn.example/avatar.jpg" {
+		t.Fatalf("AvatarURL = %q, want matching owner avatar", profile.AvatarURL)
 	}
 }
 

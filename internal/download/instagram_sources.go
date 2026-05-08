@@ -112,34 +112,35 @@ func (g *GalleryDLWrapper) InstagramProfile(ctx context.Context, handle string, 
 	}
 	var firstErr error
 	anySuccess := false
+	cookieAttempts := instagramProfileCookieAttempts(cookiesFile)
 	for _, suffix := range instagramSourceSuffixes {
 		rawURL := "https://www.instagram.com/" + handle + "/" + suffix + "/"
-		output, err := g.instagramDumpOutput(ctx, rawURL, 1, "")
-		profile := ParseInstagramProfileDump(output, handle)
-		if (err != nil || profile == nil || profile.AvatarURL == "") && cookiesFile != "" {
-			cookieOutput, cookieErr := g.instagramDumpOutput(ctx, rawURL, 1, cookiesFile)
-			cookieProfile := ParseInstagramProfileDump(cookieOutput, handle)
-			if cookieErr == nil && cookieProfile != nil && (profile == nil || (profile.AvatarURL == "" && cookieProfile.AvatarURL != "")) {
-				output, err, profile = cookieOutput, nil, cookieProfile
-			} else if err == nil {
-				err = cookieErr
+		for _, cookieFile := range cookieAttempts {
+			output, err := g.instagramDumpOutput(ctx, rawURL, 1, cookieFile)
+			profile := ParseInstagramProfileDump(output, handle)
+			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
 			}
-		}
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
+			anySuccess = true
+			if profile != nil {
+				return profile, nil
 			}
-			continue
-		}
-		anySuccess = true
-		if profile != nil {
-			return profile, nil
 		}
 	}
 	if firstErr != nil && !anySuccess {
 		return nil, firstErr
 	}
 	return &InstagramProfile{Handle: handle, DisplayName: handle}, nil
+}
+
+func instagramProfileCookieAttempts(cookiesFile string) []string {
+	if strings.TrimSpace(cookiesFile) == "" {
+		return []string{""}
+	}
+	return []string{cookiesFile, ""}
 }
 
 func (g *GalleryDLWrapper) instagramDump(ctx context.Context, rawURL string, limit int, cookiesFile string, sourceHandle string) ([]VideoRef, error) {
@@ -335,6 +336,10 @@ func instagramProfileFromGalleryDLObject(obj map[string]any, fallbackHandle stri
 			return InstagramProfile{}
 		}
 		mediaObject := instagramObjectLooksLikeMedia(obj)
+		avatarURL := firstDirectProfileString(obj, mediaObject, "profile_pic_url_hd", "profile_pic_url", "avatar_url", "profile_image_url")
+		if mediaObject {
+			avatarURL = firstDirectExactString(obj, "profile_pic_url_hd", "profile_pic_url", "avatar_url", "profile_image_url")
+		}
 		return InstagramProfile{
 			Handle:      fallbackHandle,
 			DisplayName: firstDirectExactString(obj, "fullname", "full_name", "name"),
@@ -343,7 +348,7 @@ func instagramProfileFromGalleryDLObject(obj map[string]any, fallbackHandle stri
 			Followers:   firstDirectProfileInt(obj, mediaObject, "edge_followed_by", "followers", "follower_count"),
 			Following:   firstDirectProfileInt(obj, mediaObject, "edge_follow", "following", "following_count"),
 			Verified:    firstDirectProfileBool(obj, mediaObject, "is_verified", "verified"),
-			AvatarURL:   firstDirectProfileString(obj, mediaObject, "profile_pic_url_hd", "profile_pic_url", "avatar_url", "profile_image_url"),
+			AvatarURL:   avatarURL,
 		}
 	}
 	handle := normalizeInstagramHandle(firstExactString(obj, "username", "owner_username", "uploader_id"))
