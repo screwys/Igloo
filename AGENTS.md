@@ -65,5 +65,5 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 - Retention widening triggers replay/backfill; narrowing prunes; bookmarks and likes survive prune.
 - Use project scripts: `android/build.sh`, `android/test.sh`, `scripts/dev/build.sh android`, `scripts/dev/build.sh all`.
 - Before committing Android changes, run the focused `android/test.sh <ClassFilter>` proof for the touched area.
-- Before pushing Android changes, run full `android/test.sh` and a separate APK build proof. Use `android/build.sh` when installing/relaunching on the device is appropriate; use `android/build.sh apk` when only APK compilation is needed or when device install is not available. Do not treat `android/test.sh` compilation as a substitute for the build lane unless the user explicitly narrows verification or says they are building it.
+- Before pushing Android changes, run full `android/test.sh` and `android/build.sh` so the APK is built, installed, and relaunched on the device. If device install is not available, report that blocker plainly instead of falling back to an APK-only proof unless the user explicitly narrows verification or says they are building it.
 - Do not reset Android app data or preferences as a debugging shortcut.
