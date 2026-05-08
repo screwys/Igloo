@@ -69,6 +69,21 @@
 		if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
 	}
 
+	function pointInsideElement(el, e) {
+		if (!el || !e) return false;
+		const x = e.clientX;
+		const y = e.clientY;
+		if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+		const rect = el.getBoundingClientRect();
+		return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+	}
+
+	function eventIsOnCurrentCard(e) {
+		if (!currentCard) return false;
+		if (currentCard.contains(e.target)) return true;
+		return pointInsideElement(currentCard, e);
+	}
+
 	function dismiss() {
 		++openGen;
 		clearTimers();
@@ -441,7 +456,7 @@
 	}
 
 	document.addEventListener('mouseover', (e) => {
-		if (currentCard && currentCard.contains(e.target)) { clearTimers(); return; }
+		if (eventIsOnCurrentCard(e)) { clearTimers(); return; }
 		const anchor = e.target.closest(TRIGGER_SEL);
 		if (!anchor) return;
 		const cid = channelIDFor(anchor);
@@ -451,7 +466,7 @@
 	});
 
 	document.addEventListener('mouseout', (e) => {
-		if (currentCard && currentCard.contains(e.target)) return;
+		if (eventIsOnCurrentCard(e)) { clearTimers(); return; }
 		const anchor = e.target.closest(TRIGGER_SEL);
 		if (!anchor) return;
 		const related = e.relatedTarget;
