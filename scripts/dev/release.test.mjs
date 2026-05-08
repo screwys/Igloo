@@ -127,6 +127,8 @@ test("CodeQL runs on published releases instead of a weekly schedule", () => {
     workflow,
     /\n  release:\n    types:\n      - published\n/,
   );
+  assert.doesNotMatch(workflow, /\n  push:\n/);
+  assert.doesNotMatch(workflow, /\n  pull_request:\n/);
   assert.doesNotMatch(workflow, /\n  schedule:\n/);
   assert.doesNotMatch(workflow, /cron:/);
 });
