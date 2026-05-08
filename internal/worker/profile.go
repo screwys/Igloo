@@ -239,6 +239,38 @@ func (m *Manager) downloadStoredProfileMedia(ctx context.Context, channelID stri
 	return downloaded, attempted
 }
 
+// EnsureProfileMedia synchronously materializes cached avatar/banner files for
+// a stored profile row. It is used by server-side profile-card rendering after
+// metadata has already been fetched, so the media endpoints remain disk-only.
+func (m *Manager) EnsureProfileMedia(ctx context.Context, channelID string) {
+	if m == nil || m.db == nil || m.cfg == nil {
+		return
+	}
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return
+	}
+	p, err := m.db.GetChannelProfile(channelID)
+	if err != nil {
+		log.Printf("[profile] GetChannelProfile %s: %v", channelID, err)
+		return
+	}
+	if p == nil || p.Tombstone {
+		return
+	}
+	avDir := filepath.Join(m.cfg.DataDir, "thumbnails", "avatars")
+	bnDir := filepath.Join(m.cfg.DataDir, "thumbnails", "banners")
+	if err := os.MkdirAll(avDir, 0o755); err != nil {
+		log.Printf("[profile] mkdir %s: %v", avDir, err)
+		return
+	}
+	if err := os.MkdirAll(bnDir, 0o755); err != nil {
+		log.Printf("[profile] mkdir %s: %v", bnDir, err)
+		return
+	}
+	m.downloadStoredProfileMedia(ctx, channelID, p, avDir, bnDir)
+}
+
 func canDownloadStoredAvatar(channelID, avatarURL string) bool {
 	avatarURL = strings.TrimSpace(avatarURL)
 	if avatarURL == "" {

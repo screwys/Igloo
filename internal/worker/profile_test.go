@@ -1146,6 +1146,35 @@ func TestRefreshFeedProfileCompletenessDownloadsStoredBanner(t *testing.T) {
 	}
 }
 
+func TestEnsureProfileMediaDownloadsStoredBanner(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	bannerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(testProfilePNGBytes())
+	}))
+	defer bannerServer.Close()
+
+	now := time.Now().UTC()
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "twitter_media_ready",
+		Platform:    "twitter",
+		Handle:      "media_ready",
+		DisplayName: "Media Ready",
+		BannerURL:   bannerServer.URL + "/banner.png",
+		FetchedAt:   &now,
+	}); err != nil {
+		t.Fatalf("seed profile: %v", err)
+	}
+
+	m := &Manager{db: d, cfg: testCfg(dir), downloader: testDownloader()}
+	m.EnsureProfileMedia(context.Background(), "twitter_media_ready")
+
+	if !hasConventionalMediaFile(filepath.Join(dir, "thumbnails", "banners"), "twitter_media_ready") {
+		t.Fatal("expected stored banner file on disk")
+	}
+}
+
 func TestRefreshFeedProfileCompletenessHonorsLimit(t *testing.T) {
 	d := newTestWorkerDB(t)
 	dir := t.TempDir()

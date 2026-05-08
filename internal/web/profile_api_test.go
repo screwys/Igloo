@@ -183,6 +183,56 @@ func TestProfileCardLazyFetchQueuesProfileMedia(t *testing.T) {
 	}
 }
 
+func TestProfileCardLazyFetchEnsuresMediaBeforeRender(t *testing.T) {
+	srv := newTestServer(t)
+	f := &fakeFetch{result: &fetchprofile.Profile{
+		ChannelID:   "twitter_mediaready",
+		Platform:    "twitter",
+		Handle:      "mediaready",
+		DisplayName: "Media Ready",
+		AvatarURL:   "https://pbs.twimg.com/profile_images/111/avatar_normal.jpg",
+		BannerURL:   "https://pbs.twimg.com/profile_banners/111/1/1500x500",
+	}}
+	srv.profileFetch = f.Fetch
+	var ensured string
+	srv.ensureProfileMedia = func(ctx context.Context, channelID string) {
+		ensured = channelID
+		p, err := srv.db.GetChannelProfile(channelID)
+		if err != nil {
+			t.Fatalf("GetChannelProfile: %v", err)
+		}
+		if p == nil || p.AvatarURL == "" || p.BannerURL == "" {
+			t.Fatalf("profile media URLs not stored before ensure: %+v", p)
+		}
+		avDir := filepath.Join(srv.cfg.DataDir, "thumbnails", "avatars")
+		bnDir := filepath.Join(srv.cfg.DataDir, "thumbnails", "banners")
+		if err := os.MkdirAll(avDir, 0o755); err != nil {
+			t.Fatalf("mkdir avatar dir: %v", err)
+		}
+		if err := os.MkdirAll(bnDir, 0o755); err != nil {
+			t.Fatalf("mkdir banner dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(avDir, channelID+".png"), testPNGBytes(), 0o644); err != nil {
+			t.Fatalf("write avatar: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(bnDir, channelID+".png"), testPNGBytes(), 0o644); err != nil {
+			t.Fatalf("write banner: %v", err)
+		}
+	}
+
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, httptest.NewRequest("GET", "/api/profile-card/twitter_mediaready", nil))
+	if rr.Code != 200 {
+		t.Fatalf("bad resp: %d body=%s", rr.Code, rr.Body.String())
+	}
+	if ensured != "twitter_mediaready" {
+		t.Fatalf("ensureProfileMedia called with %q, want twitter_mediaready", ensured)
+	}
+	if srv.resolveAvatarPath("twitter_mediaready") == "" || srv.resolveBannerPath("twitter_mediaready") == "" {
+		t.Fatal("expected profile media files to exist before render returns")
+	}
+}
+
 func TestProfileCardTombstoned404(t *testing.T) {
 	srv := newTestServer(t)
 	_ = srv.db.UpsertChannelProfile(model.ChannelProfile{

@@ -26,6 +26,7 @@ var channelIDRe = regexp.MustCompile(`^(twitter|youtube|tiktok|instagram)_[A-Za-
 const (
 	profileCardStaleAfter = 24 * time.Hour
 	profileCardFetchTO    = 1500 * time.Millisecond
+	profileCardMediaTO    = 2 * time.Second
 	tiktokBannerSentinel  = "synth:latest-video:"
 )
 
@@ -95,6 +96,7 @@ func (s *Server) handleProfileCard(w http.ResponseWriter, r *http.Request) {
 			s.refreshProfileCardAsync(channelID, p)
 			w.Header().Set("X-Igloo-Profile-Refreshing", "1")
 		}
+		s.ensureProfileCardMedia(r.Context(), p)
 		s.writeProfileCard(w, r, p, s.isChannelFollowed(channelID))
 		return
 	}
@@ -111,6 +113,7 @@ func (s *Server) handleProfileCard(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	s.ensureProfileCardMedia(r.Context(), p)
 	s.writeProfileCard(w, r, p, s.isChannelFollowed(channelID))
 }
 
@@ -159,6 +162,29 @@ func profileNeedsRenderRefresh(p *model.ChannelProfile) bool {
 		return true
 	}
 	if profileTriggersMissingBannerRefresh(p.Platform) && strings.TrimSpace(p.BannerURL) == "" {
+		return true
+	}
+	return false
+}
+
+func (s *Server) ensureProfileCardMedia(ctx context.Context, p *model.ChannelProfile) {
+	if s.ensureProfileMedia == nil || !profileCardMediaMissing(s, p) {
+		return
+	}
+	mediaCtx, cancel := context.WithTimeout(ctx, profileCardMediaTO)
+	defer cancel()
+	s.ensureProfileMedia(mediaCtx, p.ChannelID)
+}
+
+func profileCardMediaMissing(s *Server, p *model.ChannelProfile) bool {
+	if s == nil || p == nil || p.ChannelID == "" {
+		return false
+	}
+	if strings.TrimSpace(p.AvatarURL) != "" && s.resolveAvatarPath(p.ChannelID) == "" {
+		return true
+	}
+	bannerURL := strings.TrimSpace(p.BannerURL)
+	if bannerURL != "" && !strings.HasPrefix(bannerURL, "synth:") && s.resolveBannerPath(p.ChannelID) == "" {
 		return true
 	}
 	return false
