@@ -115,7 +115,7 @@ func TestParseInstagramProfileDump(t *testing.T) {
 	dump := []byte(`
 [2, {"subcategory":"posts","type":"post","user":{"username":"cinema","full_name":"Cinema Page","profile_pic_url_hd":"https://cdn.example/avatar-hd.jpg","edge_followed_by":{"count":42},"is_verified":true},"post_shortcode":"POST123"}]
 `)
-	profile := ParseInstagramProfileDump(dump, "fallback")
+	profile := ParseInstagramProfileDump(dump, "cinema")
 	if profile == nil {
 		t.Fatal("profile missing")
 	}
@@ -127,6 +127,57 @@ func TestParseInstagramProfileDump(t *testing.T) {
 	}
 	if profile.Followers != 42 || !profile.Verified {
 		t.Fatalf("counts/verified = %#v", profile)
+	}
+}
+
+func TestParseInstagramProfileDumpDoesNotUsePostCaptionAsBio(t *testing.T) {
+	dump := []byte(`
+[2, {"subcategory":"posts","type":"post","username":"cinema","fullname":"Cinema Page","profile_pic_url":"https://cdn.example/avatar.jpg","post_shortcode":"POST123","post_url":"https://www.instagram.com/p/POST123/","description":"This is a post caption, not a profile bio.","url":"https://www.instagram.com/p/POST123/"}]
+`)
+	profile := ParseInstagramProfileDump(dump, "cinema")
+	if profile == nil {
+		t.Fatal("profile missing")
+	}
+	if profile.Handle != "cinema" || profile.DisplayName != "Cinema Page" {
+		t.Fatalf("profile identity = %#v", profile)
+	}
+	if profile.Bio != "" {
+		t.Fatalf("Bio = %q, want empty because media descriptions are captions", profile.Bio)
+	}
+	if profile.Website != "" {
+		t.Fatalf("Website = %q, want empty because media URLs are not profile websites", profile.Website)
+	}
+}
+
+func TestParseInstagramProfileDumpSkipsMismatchedPostOwner(t *testing.T) {
+	dump := []byte(`
+[2, {"subcategory":"posts","type":"post","username":"reposter","fullname":"Reposter","profile_pic_url":"https://cdn.example/reposter.jpg","post_shortcode":"POST123","description":"A repost caption"}]
+`)
+	profile := ParseInstagramProfileDump(dump, "cinema")
+	if profile == nil {
+		t.Fatal("profile missing")
+	}
+	if profile.Handle != "cinema" || profile.DisplayName != "cinema" {
+		t.Fatalf("profile should fall back to the requested handle, got %#v", profile)
+	}
+	if profile.AvatarURL != "" || profile.Bio != "" {
+		t.Fatalf("mismatched post owner leaked into profile: %#v", profile)
+	}
+}
+
+func TestParseInstagramProfileDumpSkipsMismatchedNestedOwner(t *testing.T) {
+	dump := []byte(`
+[2, {"subcategory":"posts","type":"post","user":{"username":"reposter","full_name":"Reposter","profile_pic_url":"https://cdn.example/reposter.jpg"},"post_shortcode":"POST123","description":"A repost caption"}]
+`)
+	profile := ParseInstagramProfileDump(dump, "cinema")
+	if profile == nil {
+		t.Fatal("profile missing")
+	}
+	if profile.Handle != "cinema" || profile.DisplayName != "cinema" {
+		t.Fatalf("profile should fall back to the requested handle, got %#v", profile)
+	}
+	if profile.AvatarURL != "" || profile.Bio != "" {
+		t.Fatalf("mismatched nested owner leaked into profile: %#v", profile)
 	}
 }
 

@@ -306,36 +306,66 @@ func instagramSourceObjects(value any) []map[string]any {
 }
 
 func instagramProfileFromGalleryDLObject(obj map[string]any, fallbackHandle string) InstagramProfile {
-	if displayName, ok := instagramCoauthorDisplayName(obj, fallbackHandle); ok {
+	fallbackHandle = normalizeInstagramHandle(fallbackHandle)
+	if fallbackHandle != "" {
 		nested := instagramNestedProfileForHandle(obj, fallbackHandle)
-		if nested.DisplayName != "" {
-			displayName = nested.DisplayName
+		if instagramProfileHasData(nested) {
+			if nested.DisplayName == "" {
+				if displayName, ok := instagramCoauthorDisplayName(obj, fallbackHandle); ok {
+					nested.DisplayName = displayName
+				}
+			}
+			if nested.DisplayName == "" {
+				nested.DisplayName = fallbackHandle
+			}
+			nested.Handle = fallbackHandle
+			return nested
+		}
+		if displayName, ok := instagramCoauthorDisplayName(obj, fallbackHandle); ok {
+			return InstagramProfile{
+				Handle:      fallbackHandle,
+				DisplayName: displayName,
+			}
+		}
+		topHandle := normalizeInstagramHandle(firstDirectExactString(obj, "username", "owner_username", "uploader_id"))
+		if topHandle != "" && topHandle != fallbackHandle {
+			return InstagramProfile{}
+		}
+		if topHandle == "" {
+			return InstagramProfile{}
 		}
 		return InstagramProfile{
 			Handle:      fallbackHandle,
-			DisplayName: displayName,
-			Bio:         firstExactString(obj, "biography", "bio", "description"),
-			Website:     firstExactString(obj, "external_url", "website", "url"),
-			Followers:   firstInt(obj, "edge_followed_by", "followers", "follower_count"),
-			Following:   firstInt(obj, "edge_follow", "following", "following_count"),
-			Verified:    firstBool(obj, "is_verified", "verified"),
-			AvatarURL:   nested.AvatarURL,
+			DisplayName: firstDirectExactString(obj, "fullname", "full_name", "name"),
+			Bio:         firstDirectExactString(obj, "biography", "bio"),
+			Website:     firstDirectExactString(obj, "external_url", "website"),
+			Followers:   firstDirectInt(obj, "edge_followed_by", "followers", "follower_count"),
+			Following:   firstDirectInt(obj, "edge_follow", "following", "following_count"),
+			Verified:    firstDirectBool(obj, "is_verified", "verified"),
+			AvatarURL:   firstDirectExactString(obj, "profile_pic_url_hd", "profile_pic_url", "avatar_url", "profile_image_url"),
 		}
 	}
 	handle := normalizeInstagramHandle(firstExactString(obj, "username", "owner_username", "uploader_id"))
-	if handle == "" {
-		handle = fallbackHandle
-	}
 	return InstagramProfile{
 		Handle:      handle,
 		DisplayName: firstExactString(obj, "fullname", "full_name", "name"),
-		Bio:         firstExactString(obj, "biography", "bio", "description"),
-		Website:     firstExactString(obj, "external_url", "website", "url"),
+		Bio:         firstExactString(obj, "biography", "bio"),
+		Website:     firstExactString(obj, "external_url", "website"),
 		Followers:   firstInt(obj, "edge_followed_by", "followers", "follower_count"),
 		Following:   firstInt(obj, "edge_follow", "following", "following_count"),
 		Verified:    firstBool(obj, "is_verified", "verified"),
 		AvatarURL:   firstExactString(obj, "profile_pic_url_hd", "profile_pic_url", "avatar_url", "profile_image_url"),
 	}
+}
+
+func instagramProfileHasData(profile InstagramProfile) bool {
+	return profile.DisplayName != "" ||
+		profile.Bio != "" ||
+		profile.Website != "" ||
+		profile.Followers > 0 ||
+		profile.Following > 0 ||
+		profile.Verified ||
+		profile.AvatarURL != ""
 }
 
 func instagramVideoRefFromGalleryDLObject(obj map[string]any, sourceHandle string) VideoRef {
@@ -420,6 +450,8 @@ func instagramNestedProfileForHandle(obj map[string]any, handle string) Instagra
 		return InstagramProfile{
 			Handle:      username,
 			DisplayName: firstExactString(nested, "full_name", "fullname", "name"),
+			Bio:         firstExactString(nested, "biography", "bio"),
+			Website:     firstExactString(nested, "external_url", "website"),
 			AvatarURL:   firstExactString(nested, "profile_pic_url_hd", "profile_pic_url", "avatar_url", "profile_image_url"),
 			Followers:   firstInt(nested, "edge_followed_by", "followers", "follower_count", "count_followed"),
 			Following:   firstInt(nested, "edge_follow", "following", "following_count", "count_follow"),
@@ -512,6 +544,31 @@ func firstExactString(item map[string]any, keys ...string) string {
 	return ""
 }
 
+func firstDirectExactString(item map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if v, ok := item[key]; ok {
+			if s := stringFromAny(v); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+func firstDirectInt(item map[string]any, keys ...string) int {
+	for _, key := range keys {
+		if n := intFromAny(item[key]); n > 0 {
+			return n
+		}
+		if nested, ok := item[key].(map[string]any); ok {
+			if n := intFromAny(nested["count"]); n > 0 {
+				return n
+			}
+		}
+	}
+	return 0
+}
+
 func firstInt(item map[string]any, keys ...string) int {
 	for _, key := range keys {
 		if n := intFromAny(item[key]); n > 0 {
@@ -569,6 +626,15 @@ func firstBool(item map[string]any, keys ...string) bool {
 					return true
 				}
 			}
+		}
+	}
+	return false
+}
+
+func firstDirectBool(item map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		if b, ok := item[key].(bool); ok && b {
+			return true
 		}
 	}
 	return false

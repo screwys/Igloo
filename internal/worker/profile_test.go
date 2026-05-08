@@ -718,6 +718,51 @@ func TestRefreshInstagramProfileWithAvatarCreatesBannerBeforeStaleNetworkFetch(t
 	}
 }
 
+func TestRefreshInstagramProfileClearsCaptionDerivedBio(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_cinema",
+		Platform:    "instagram",
+		Handle:      "cinema",
+		DisplayName: "Cinema",
+		Bio:         "This is a post caption, not a profile bio.",
+		AvatarURL:   "https://example.test/old-avatar.jpg",
+	}); err != nil {
+		t.Fatalf("seed profile: %v", err)
+	}
+
+	m := &Manager{
+		db:  d,
+		cfg: testCfg(dir),
+		instagramProfileFetch: func(context.Context, string, string) (*model.ChannelProfile, error) {
+			return &model.ChannelProfile{
+				ChannelID:   "instagram_cinema",
+				Platform:    "instagram",
+				Handle:      "cinema",
+				DisplayName: "Cinema",
+				AvatarURL:   "https://example.test/new-avatar.jpg",
+			}, nil
+		},
+	}
+	avDir, bnDir := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	_ = os.MkdirAll(avDir, 0o755)
+	_ = os.MkdirAll(bnDir, 0o755)
+
+	m.refreshProfile(context.Background(), newFakeFetcher().Fetch, "instagram_cinema", avDir, bnDir)
+
+	got, err := d.GetChannelProfile("instagram_cinema")
+	if err != nil || got == nil {
+		t.Fatalf("GetChannelProfile: %v / %+v", err, got)
+	}
+	if got.Bio != "" {
+		t.Fatalf("Bio = %q, want cleared when safe profile has no bio", got.Bio)
+	}
+	if got.AvatarURL != "https://example.test/new-avatar.jpg" {
+		t.Fatalf("AvatarURL = %q", got.AvatarURL)
+	}
+}
+
 func TestRememberInstagramProfileFromRefsPreservesRichProfile(t *testing.T) {
 	d := newTestWorkerDB(t)
 	fullFetchedAt := time.Now().Add(-2 * time.Hour).UTC().Truncate(time.Millisecond)
