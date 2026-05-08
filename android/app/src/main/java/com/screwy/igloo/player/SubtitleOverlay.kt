@@ -106,14 +106,39 @@ fun SubtitleOverlay(
 internal fun parseVtt(content: String): List<SubtitleCue> {
     return parseVttCueBlocks(content)
         .mapNotNull { cue ->
-            if (cue.lines.isEmpty()) {
+            val text = sanitizeVttCueText(cue.lines.joinToString("\n"))
+            if (text.isEmpty()) {
                 null
             } else {
                 SubtitleCue(
                     startMs = cue.startMs,
                     endMs = cue.endMs,
-                    text = cue.lines.joinToString("\n"),
+                    text = text,
                 )
             }
         }
+}
+
+internal fun sanitizeVttCueText(text: String): String {
+    return decodeVttEntities(
+        text
+            .replace(WebVttTimestampTagRegex, "")
+            .replace(WebVttCueTagRegex, ""),
+    ).trim()
+}
+
+private val WebVttTimestampTagRegex =
+    Regex("<(?:\\d{1,2}:)?\\d{2}:\\d{2}[.,]\\d{3}>")
+
+private val WebVttCueTagRegex =
+    Regex("</?(?:c(?:\\.[^>\\s]+)*|v(?:\\s+[^>]*)?|lang(?:\\s+[^>]*)?|b|i|u|ruby|rt)>")
+
+private fun decodeVttEntities(text: String): String {
+    return text
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", " ")
 }

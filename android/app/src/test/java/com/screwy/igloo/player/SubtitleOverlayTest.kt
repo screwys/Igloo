@@ -95,6 +95,24 @@ class SubtitleOverlayTest {
     }
 
     @Test
+    fun youtube_inline_timestamps_and_cue_tags_are_not_rendered() {
+        val vtt = """
+            WEBVTT
+
+            00:01:04.879 --> 00:01:06.320 align:start position:0%
+            Think user bin Sue, think uh Etsy
+            password <00:01:05.040><c>right?</c><00:01:05.439><c> this</c><00:01:05.680><c>ability</c><00:01:06.080><c> for</c><00:01:06.320><c> you,</c>
+        """.trimIndent()
+
+        val cues = parseVtt(vtt)
+        assertEquals(1, cues.size)
+        assertEquals(
+            "Think user bin Sue, think uh Etsy\npassword right? thisability for you,",
+            cues[0].text,
+        )
+    }
+
+    @Test
     fun cue_with_inline_settings_after_end_time_still_parses() {
         val vtt = """
             WEBVTT
