@@ -2,7 +2,6 @@
 bin/
 /igloo
 /igloo-mcp
-*.exe
 *.test
 
 # Android
@@ -12,22 +11,11 @@ android/.kotlin/
 android/build/
 android/app/build/
 android/local.properties
-*.apk
 
 # IDE
 .idea/
 .vscode/
 *.iml
-
-# Runtime
-*.db
-*.db-wal
-*.db-shm
-*.log
-
-# OS
-.DS_Store
-Thumbs.db
 
 # JS
 node_modules/
@@ -36,7 +24,6 @@ static/js/dist/
 # MCP cache
 .igloo_mcp_cache/
 __pycache__/
-
 *.info.json
 
 # Worktrees
@@ -44,7 +31,4 @@ __pycache__/
 
 # Local tool state
 .codex
-.claude
-.playwright-cli
-.superpowers/
 .mcp.local.json
