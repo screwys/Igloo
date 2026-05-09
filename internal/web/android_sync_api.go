@@ -28,7 +28,6 @@ const (
 	androidSyncAssetPageCap        = 2000
 	androidSyncFreshGenerationTTL  = 6 * time.Hour
 	androidSyncFreshGenerationSkew = 5 * time.Minute
-	androidSyncSourceDriftReuseTTL = androidSyncFreshGenerationTTL
 	androidSyncFeedRankMaxRows     = 5000
 )
 
@@ -282,13 +281,7 @@ func androidSyncPageCursor[T any](rows []T, pageCap int, seq func(T) int64) (str
 
 func (s *Server) ensureAndroidSyncGeneration(username string, retention db.AndroidRetentionSettings) (*model.AndroidSyncGeneration, error) {
 	nowMs := time.Now().UnixMilli()
-	if latest, err := s.db.GetLatestAndroidSyncGeneration(); err != nil {
-		return nil, err
-	} else if androidSyncGenerationReusableDuringSourceDrift(latest, retention, nowMs) {
-		return latest, nil
-	}
-
-	sourceVersion, err := s.db.AndroidSyncSourceVersion(retention)
+	sourceVersion, err := s.db.AndroidSyncSourceVersion(username, retention)
 	if err != nil {
 		return nil, err
 	}
@@ -308,13 +301,7 @@ func (s *Server) ensureAndroidSyncGeneration(username string, retention db.Andro
 	defer s.androidSyncGenerationMu.Unlock()
 
 	nowMs = time.Now().UnixMilli()
-	if latest, err := s.db.GetLatestAndroidSyncGeneration(); err != nil {
-		return nil, err
-	} else if androidSyncGenerationReusableDuringSourceDrift(latest, retention, nowMs) {
-		return latest, nil
-	}
-
-	sourceVersion, err = s.db.AndroidSyncSourceVersion(retention)
+	sourceVersion, err = s.db.AndroidSyncSourceVersion(username, retention)
 	if err != nil {
 		return nil, err
 	}
@@ -427,14 +414,6 @@ func androidSyncGenerationFreshForRetention(gen *model.AndroidSyncGeneration, re
 	return age <= androidSyncFreshGenerationTTL
 }
 
-func androidSyncGenerationReusableDuringSourceDrift(gen *model.AndroidSyncGeneration, retention db.AndroidRetentionSettings, nowMs int64) bool {
-	if !androidSyncGenerationFreshForRetention(gen, retention, nowMs) {
-		return false
-	}
-	age := time.Duration(nowMs-gen.CreatedAtMs) * time.Millisecond
-	return age <= androidSyncSourceDriftReuseTTL
-}
-
 func androidSyncGenerationRetentionMatches(raw map[string]int, retention db.AndroidRetentionSettings) bool {
 	if raw == nil {
 		return false
@@ -449,6 +428,13 @@ func androidSyncGenerationRetentionMatches(raw map[string]int, retention db.Andr
 func (s *Server) buildAndroidSyncItems(username string, sets db.AndroidSyncDesiredSets) ([]model.AndroidSyncItem, map[string]int, error) {
 	var out []model.AndroidSyncItem
 	counts := map[string]int{}
+
+	bookmarkMetadata, err := s.androidSyncBookmarkMetadataItem(username)
+	if err != nil {
+		return nil, counts, err
+	}
+	out = append(out, bookmarkMetadata)
+	counts["bookmark_metadata"]++
 
 	for _, channelID := range sets.SortedChannels() {
 		ch, err := s.db.GetChannel(channelID)
@@ -609,6 +595,45 @@ func (s *Server) buildAndroidSyncItems(username string, sets db.AndroidSyncDesir
 	}
 
 	return out, counts, nil
+}
+
+func (s *Server) androidSyncBookmarkMetadataItem(username string) (model.AndroidSyncItem, error) {
+	categories, err := s.db.GetBookmarkCategories(username)
+	if err != nil {
+		return model.AndroidSyncItem{}, err
+	}
+	labels, err := s.db.GetBookmarkLabels(username, "")
+	if err != nil {
+		return model.AndroidSyncItem{}, err
+	}
+
+	categoryRows := make([]map[string]any, 0, len(categories))
+	for _, category := range categories {
+		categoryRows = append(categoryRows, map[string]any{
+			"category_id":  category.ID,
+			"name":         category.Name,
+			"archive_path": category.ArchivePath,
+			"created_at":   category.CreatedAtMs,
+		})
+	}
+	labelRows := make([]map[string]any, 0, len(labels))
+	for _, label := range labels {
+		label = strings.TrimSpace(label)
+		if label == "" {
+			continue
+		}
+		labelRows = append(labelRows, map[string]any{"label": label})
+	}
+
+	return marshalAndroidSyncItem("bookmark_metadata", "snapshot", deltaBundle{
+		PrimaryKind: "bookmark_metadata",
+		Primary: map[string]any{
+			"version":     1,
+			"snapshot_at": time.Now().UnixMilli(),
+			"categories":  categoryRows,
+			"labels":      labelRows,
+		},
+	})
 }
 
 func (s *Server) androidSyncFeedRankItem(username string, desiredTweets map[string]struct{}) (model.AndroidSyncItem, bool, error) {

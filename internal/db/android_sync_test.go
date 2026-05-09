@@ -125,7 +125,7 @@ func TestAndroidSyncSourceVersionChangesWhenMediaFileAppears(t *testing.T) {
 		t.Fatalf("insert media file row: %v", err)
 	}
 
-	before, err := d.AndroidSyncSourceVersion(settings)
+	before, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version before file exists: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestAndroidSyncSourceVersionChangesWhenMediaFileAppears(t *testing.T) {
 		t.Fatalf("write media file: %v", err)
 	}
 
-	after, err := d.AndroidSyncSourceVersion(settings)
+	after, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version after file exists: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestAndroidSyncSourceVersionChangesWhenUserStateRowsChange(t *testing.T) {
 	d := openWritableTestDB(t)
 	settings := AndroidRetentionSettings{FeedDays: 3, YoutubeDays: 2, MomentsDays: 90}
 
-	current, err := d.AndroidSyncSourceVersion(settings)
+	current, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version before user state: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestAndroidSyncSourceVersionChangesWhenUserStateRowsChange(t *testing.T) {
 			t.Fatalf("insert %s: %v", step.name, err)
 		}
 
-		next, err := d.AndroidSyncSourceVersion(settings)
+		next, err := d.AndroidSyncSourceVersion("alice", settings)
 		if err != nil {
 			t.Fatalf("source version after %s: %v", step.name, err)
 		}
@@ -194,11 +194,36 @@ func TestAndroidSyncSourceVersionChangesWhenUserStateRowsChange(t *testing.T) {
 	}
 }
 
+func TestAndroidSyncSourceVersionIsUsernameScoped(t *testing.T) {
+	d := openWritableTestDB(t)
+	settings := AndroidRetentionSettings{FeedDays: 3, YoutubeDays: 2, MomentsDays: 90}
+
+	alice, err := d.AndroidSyncSourceVersion("alice", settings)
+	if err != nil {
+		t.Fatalf("alice source version: %v", err)
+	}
+	bob, err := d.AndroidSyncSourceVersion("bob", settings)
+	if err != nil {
+		t.Fatalf("bob source version: %v", err)
+	}
+	if alice == bob {
+		t.Fatalf("source version should differ across usernames: %s", alice)
+	}
+
+	aliceAgain, err := d.AndroidSyncSourceVersion("alice", settings)
+	if err != nil {
+		t.Fatalf("alice source version again: %v", err)
+	}
+	if aliceAgain != alice {
+		t.Fatalf("source version for same username changed: before=%s after=%s", alice, aliceAgain)
+	}
+}
+
 func TestAndroidSyncSourceVersionChangesWhenBookmarkMetadataChanges(t *testing.T) {
 	d := openWritableTestDB(t)
 	settings := AndroidRetentionSettings{FeedDays: 3, YoutubeDays: 2, MomentsDays: 90}
 
-	current, err := d.AndroidSyncSourceVersion(settings)
+	current, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version before bookmark metadata: %v", err)
 	}
@@ -207,7 +232,7 @@ func TestAndroidSyncSourceVersionChangesWhenBookmarkMetadataChanges(t *testing.T
 	if err != nil {
 		t.Fatalf("create category: %v", err)
 	}
-	next, err := d.AndroidSyncSourceVersion(settings)
+	next, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version after category create: %v", err)
 	}
@@ -219,7 +244,7 @@ func TestAndroidSyncSourceVersionChangesWhenBookmarkMetadataChanges(t *testing.T
 	if err := d.UpdateBookmarkCategory("alice", catID, "Updated", "/tmp/updated"); err != nil {
 		t.Fatalf("update category: %v", err)
 	}
-	next, err = d.AndroidSyncSourceVersion(settings)
+	next, err = d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version after category update: %v", err)
 	}
@@ -234,7 +259,7 @@ func TestAndroidSyncSourceVersionChangesWhenBookmarkMetadataChanges(t *testing.T
 	`, catID); err != nil {
 		t.Fatalf("insert bookmark label: %v", err)
 	}
-	next, err = d.AndroidSyncSourceVersion(settings)
+	next, err = d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version after bookmark label: %v", err)
 	}
@@ -246,7 +271,7 @@ func TestAndroidSyncSourceVersionChangesWhenBookmarkMetadataChanges(t *testing.T
 	if err := d.ClearBookmarkLabel("alice", "label"); err != nil {
 		t.Fatalf("clear bookmark label: %v", err)
 	}
-	next, err = d.AndroidSyncSourceVersion(settings)
+	next, err = d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version after label clear: %v", err)
 	}
@@ -265,7 +290,7 @@ func TestAndroidSyncSourceVersionChangesWhenProfileMetadataChanges(t *testing.T)
 	`); err != nil {
 		t.Fatalf("insert profile: %v", err)
 	}
-	before, err := d.AndroidSyncSourceVersion(settings)
+	before, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version before profile update: %v", err)
 	}
@@ -276,7 +301,7 @@ func TestAndroidSyncSourceVersionChangesWhenProfileMetadataChanges(t *testing.T)
 	`); err != nil {
 		t.Fatalf("update profile: %v", err)
 	}
-	after, err := d.AndroidSyncSourceVersion(settings)
+	after, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version after profile update: %v", err)
 	}
@@ -308,14 +333,14 @@ func TestAndroidSyncSourceVersionChangesWhenFollowStateChanges(t *testing.T) {
 		t.Fatalf("insert video: %v", err)
 	}
 
-	before, err := d.AndroidSyncSourceVersion(settings)
+	before, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version before unfollow: %v", err)
 	}
 	if err := d.ExecRaw(`DELETE FROM channel_follows WHERE channel_id = 'tiktok_followed'`); err != nil {
 		t.Fatalf("delete follow: %v", err)
 	}
-	after, err := d.AndroidSyncSourceVersion(settings)
+	after, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version after unfollow: %v", err)
 	}
@@ -328,7 +353,7 @@ func TestAndroidSyncSourceVersionChangesWhenRankSnapshotOrSeenStateChanges(t *te
 	d := openWritableTestDB(t)
 	settings := AndroidRetentionSettings{FeedDays: 3, YoutubeDays: 2, MomentsDays: 90}
 
-	before, err := d.AndroidSyncSourceVersion(settings)
+	before, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version before rank: %v", err)
 	}
@@ -337,7 +362,7 @@ func TestAndroidSyncSourceVersionChangesWhenRankSnapshotOrSeenStateChanges(t *te
 	}); err != nil {
 		t.Fatalf("replace rank snapshot: %v", err)
 	}
-	afterRank, err := d.AndroidSyncSourceVersion(settings)
+	afterRank, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version after rank: %v", err)
 	}
@@ -350,7 +375,7 @@ func TestAndroidSyncSourceVersionChangesWhenRankSnapshotOrSeenStateChanges(t *te
 	`); err != nil {
 		t.Fatalf("insert seen: %v", err)
 	}
-	afterSeen, err := d.AndroidSyncSourceVersion(settings)
+	afterSeen, err := d.AndroidSyncSourceVersion("alice", settings)
 	if err != nil {
 		t.Fatalf("source version after seen: %v", err)
 	}

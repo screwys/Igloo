@@ -513,8 +513,9 @@ func stringChunks(values []string, size int) [][]string {
 }
 
 // AndroidSyncSourceVersion returns a stable fingerprint of the rows/settings
-// that can change generation membership or asset bytes.
-func (db *DB) AndroidSyncSourceVersion(settings AndroidRetentionSettings) (string, error) {
+// that can change one user's generation membership or asset bytes.
+func (db *DB) AndroidSyncSourceVersion(username string, settings AndroidRetentionSettings) (string, error) {
+	username = strings.TrimSpace(username)
 	type stat struct {
 		Name  string
 		Count int64
@@ -568,6 +569,7 @@ func (db *DB) AndroidSyncSourceVersion(settings AndroidRetentionSettings) (strin
 	}
 	payload := map[string]any{
 		"materializer_version":   AndroidSyncMaterializerVersion,
+		"username":               username,
 		"settings":               settings,
 		"moments_reposts":        db.MomentsIncludeRepostsEnabled(),
 		"instagram_tagged":       db.InstagramIncludeTaggedEnabled(),

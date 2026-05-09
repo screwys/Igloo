@@ -264,6 +264,73 @@ func TestAndroidSyncItemsEmitsEmptyFreshFeedRankSnapshot(t *testing.T) {
 	t.Fatalf("feed_rank item missing from payloads: %+v", items)
 }
 
+func TestAndroidSyncItemsIncludesBookmarkMetadataSnapshot(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	now := time.Now().UnixMilli()
+	catID, err := srv.db.CreateBookmarkCategory("alice", "Archive", "/archive/alice")
+	if err != nil {
+		t.Fatalf("create alice category: %v", err)
+	}
+	if _, err := srv.db.CreateBookmarkCategory("bob", "Bob Private", "/archive/bob"); err != nil {
+		t.Fatalf("create bob category: %v", err)
+	}
+	if err := srv.db.ExecRaw(`
+		INSERT INTO bookmarks (user_id, video_id, category_id, custom_title, bookmarked_at)
+		VALUES
+			('alice', 'alice_saved', ?, 'Saved Label', ?),
+			('bob', 'bob_saved', 0, 'Bob Label', ?)
+	`, catID, now, now); err != nil {
+		t.Fatalf("insert bookmark labels: %v", err)
+	}
+
+	items, counts, err := srv.buildAndroidSyncItems("alice", db.AndroidSyncDesiredSets{})
+	if err != nil {
+		t.Fatalf("build items: %v", err)
+	}
+	if counts["bookmark_metadata"] != 1 {
+		t.Fatalf("bookmark_metadata count = %d, want 1", counts["bookmark_metadata"])
+	}
+
+	var snapshots []deltaBundle
+	for _, item := range items {
+		if item.ItemKind != "bookmark_metadata" {
+			continue
+		}
+		if item.ItemID != "snapshot" {
+			t.Fatalf("bookmark metadata item id = %q, want snapshot", item.ItemID)
+		}
+		var bundle deltaBundle
+		if err := json.Unmarshal(item.PayloadJSON, &bundle); err != nil {
+			t.Fatalf("decode bookmark metadata: %v", err)
+		}
+		snapshots = append(snapshots, bundle)
+	}
+	if len(snapshots) != 1 {
+		t.Fatalf("bookmark_metadata snapshots = %d, want 1; items=%+v", len(snapshots), items)
+	}
+	snapshot := snapshots[0]
+	if snapshot.PrimaryKind != "bookmark_metadata" {
+		t.Fatalf("primary_kind = %q, want bookmark_metadata", snapshot.PrimaryKind)
+	}
+	categories, ok := snapshot.Primary["categories"].([]any)
+	if !ok || len(categories) != 1 {
+		t.Fatalf("categories = %#v, want one alice category", snapshot.Primary["categories"])
+	}
+	category := categories[0].(map[string]any)
+	if category["category_id"] != float64(catID) ||
+		category["name"] != "Archive" ||
+		category["archive_path"] != "/archive/alice" {
+		t.Fatalf("category = %#v, want alice category only", category)
+	}
+	labels, ok := snapshot.Primary["labels"].([]any)
+	if !ok || len(labels) != 1 {
+		t.Fatalf("labels = %#v, want one alice label", snapshot.Primary["labels"])
+	}
+	if label := labels[0].(map[string]any)["label"]; label != "Saved Label" {
+		t.Fatalf("label = %#v, want Saved Label", label)
+	}
+}
+
 func TestAndroidSyncItemsCapsFeedRankSnapshotRows(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	now := time.Now().UnixMilli()
@@ -879,7 +946,7 @@ func TestAndroidSyncPublishesYouTubeCommentAuthorAvatar(t *testing.T) {
 	t.Fatalf("comment author avatar asset missing from %+v", assets)
 }
 
-func TestAndroidSyncLatestReusesFreshGenerationDuringSourceDrift(t *testing.T) {
+func TestAndroidSyncLatestCreatesGenerationDuringFreshSourceDrift(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	dataDir := srv.cfg.DataDir
 	now := time.Now().UnixMilli()
@@ -896,7 +963,7 @@ func TestAndroidSyncLatestReusesFreshGenerationDuringSourceDrift(t *testing.T) {
 	}
 	if err := srv.db.ExecRaw(`
 		INSERT INTO channel_follows (user_id, channel_id, followed_at)
-		VALUES ('alice', 'youtube_chan', ?)
+		VALUES ('', 'youtube_chan', ?)
 	`, now); err != nil {
 		t.Fatalf("insert follow: %v", err)
 	}
@@ -935,11 +1002,11 @@ func TestAndroidSyncLatestReusesFreshGenerationDuringSourceDrift(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second generation: %v", err)
 	}
-	if second.GenerationID != first.GenerationID {
-		t.Fatalf("fresh source drift created new generation: first=%s second=%s", first.GenerationID, second.GenerationID)
+	if second.GenerationID == first.GenerationID {
+		t.Fatalf("fresh source drift reused generation %s", first.GenerationID)
 	}
-	if second.AssetCount != first.AssetCount {
-		t.Fatalf("reused generation asset count changed: first=%d second=%d", first.AssetCount, second.AssetCount)
+	if second.AssetCount <= first.AssetCount {
+		t.Fatalf("new generation asset count = %d, want more than first %d", second.AssetCount, first.AssetCount)
 	}
 }
 
