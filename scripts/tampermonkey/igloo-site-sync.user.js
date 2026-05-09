@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.10
+// @version      8.0.11
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -30,7 +30,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.10";
+  const SCRIPT_VERSION = "8.0.11";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -1555,16 +1555,23 @@
             media,
             staged.staging_name,
           );
+          let directMoved = false;
           if (directResp.ok) {
             const moveResp = await moveStagedMedia(handle, label, categoryId, [
               staged,
             ]);
             if (moveResp.ok && moveResp.json && moveResp.json.success) {
               moved.push(...(moveResp.json.moved || []));
-            } else {
-              moved.push(staged.staging_name);
+              directMoved = true;
             }
-            continue;
+          }
+          if (directMoved) continue;
+
+          if (directResp.ok) {
+            console.warn(
+              "[XDL] direct video staging rejected; using server fallback:",
+              staged.staging_name,
+            );
           }
 
           const resp = await downloadVideoViaServer(

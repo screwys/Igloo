@@ -163,6 +163,13 @@ func (s *Server) handleTweetMediaMove(w http.ResponseWriter, r *http.Request) {
 			ext = ".bin"
 		}
 
+		if err := validateTweetMediaStagingFile(src, ext); err != nil {
+			slog.Warn("[TweetMediaMove] rejected staged file", "src", src, "err", err)
+			failed = append(failed, name)
+			_ = os.Remove(src)
+			continue
+		}
+
 		fileNum := startNum + i + 1
 		destFile := filepath.Join(archivePath, fmt.Sprintf("%s %03d%s", safeName, fileNum, ext))
 		if err := moveFile(src, destFile); err != nil {
@@ -318,6 +325,34 @@ func tweetMediaExtFromURL(rawURL string) string {
 		return ".webp"
 	}
 	return ".jpg"
+}
+
+func validateTweetMediaStagingFile(path, ext string) error {
+	if strings.ToLower(ext) != ".mp4" {
+		return nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	buf := make([]byte, 512)
+	n, err := f.Read(buf)
+	if err != nil && err != io.EOF {
+		return err
+	}
+	if n >= 12 && string(buf[4:8]) == "ftyp" {
+		return nil
+	}
+
+	prefix := strings.ToLower(strings.TrimSpace(string(buf[:n])))
+	if strings.HasPrefix(prefix, "<!doctype html") ||
+		strings.HasPrefix(prefix, "<html") ||
+		strings.Contains(prefix, "<html") {
+		return fmt.Errorf("staged mp4 is HTML")
+	}
+	return fmt.Errorf("staged mp4 does not have an MP4 ftyp header")
 }
 
 func isAllowedTweetMediaURL(rawURL string) bool {

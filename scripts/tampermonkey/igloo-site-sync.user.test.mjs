@@ -327,6 +327,16 @@ function responseFor(url, { data, twitterChannels } = {}) {
     };
   }
   if (url === "https://localhost:5001/api/tweet-media-move") {
+    if (String(data || "").includes("force-move-fail")) {
+      return {
+        status: 200,
+        text: JSON.stringify({
+          success: false,
+          moved: [],
+          failed: ["tmp_111_0.mp4"],
+        }),
+      };
+    }
     const ext = String(data || "").includes(".mp4") ? ".mp4" : ".jpg";
     return {
       status: 200,
@@ -705,6 +715,49 @@ test("falls back to server video download when direct video download fails", asy
   assert.equal(
     JSON.parse(mediaDlCall.data).tweet_url,
     "https://x.com/i/status/222",
+  );
+});
+
+test("falls back to server video download when direct staging move fails", async () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  let result = null;
+  harness.context.__iglooTest.downloadMediaItems(
+    "111",
+    "alice",
+    [
+      {
+        kind: "video",
+        tweetId: "222",
+        tweetUrl: "https://x.com/quote/status/222",
+        ext: ".mp4",
+        index: 0,
+      },
+    ],
+    1,
+    "force-move-fail",
+    (resp) => {
+      result = JSON.parse(JSON.stringify(resp));
+    },
+  );
+
+  await drainMicrotasks();
+
+  assert.deepEqual(result?.json?.moved, ["alice label 001.mp4"]);
+  assert.ok(
+    harness.requestCalls.some(
+      (call) =>
+        call.method === "POST" &&
+        call.url === "https://localhost:5001/api/tweet-media-move",
+    ),
+    "expected browser staging move before fallback",
+  );
+  assert.ok(
+    harness.requestCalls.some(
+      (call) => call.url === "https://localhost:5001/api/tweet-media-dl",
+    ),
+    "expected server fallback after staging move rejection",
   );
 });
 
