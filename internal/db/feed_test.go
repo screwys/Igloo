@@ -338,6 +338,57 @@ func TestSyncSeqAssignment(t *testing.T) {
 	}
 }
 
+func TestUpsertFeedItemsPreservesFetchedAtOnRefetch(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	publishedAt := time.Now().Add(-48 * time.Hour)
+	if _, err := d.UpsertFeedItems([]model.FeedItem{{
+		TweetID:      "stable_fetched_at",
+		AuthorHandle: "user_a",
+		BodyText:     "first copy",
+		PublishedAt:  &publishedAt,
+	}}); err != nil {
+		t.Fatalf("initial upsert: %v", err)
+	}
+
+	var firstFetchedAt int64
+	if err := d.QueryRow(
+		"SELECT fetched_at FROM feed_items WHERE tweet_id = ?",
+		"stable_fetched_at",
+	).Scan(&firstFetchedAt); err != nil {
+		t.Fatalf("read initial fetched_at: %v", err)
+	}
+	if firstFetchedAt == 0 {
+		t.Fatal("initial fetched_at should be set")
+	}
+
+	time.Sleep(2 * time.Millisecond)
+
+	if _, err := d.UpsertFeedItems([]model.FeedItem{{
+		TweetID:      "stable_fetched_at",
+		AuthorHandle: "user_a",
+		BodyText:     "refetched copy",
+		PublishedAt:  &publishedAt,
+	}}); err != nil {
+		t.Fatalf("refetch upsert: %v", err)
+	}
+
+	var secondFetchedAt int64
+	var bodyText string
+	if err := d.QueryRow(
+		"SELECT fetched_at, body_text FROM feed_items WHERE tweet_id = ?",
+		"stable_fetched_at",
+	).Scan(&secondFetchedAt, &bodyText); err != nil {
+		t.Fatalf("read refetched row: %v", err)
+	}
+	if secondFetchedAt != firstFetchedAt {
+		t.Fatalf("fetched_at changed on refetch: first=%d second=%d", firstFetchedAt, secondFetchedAt)
+	}
+	if bodyText != "refetched copy" {
+		t.Fatalf("body_text was not refreshed: %q", bodyText)
+	}
+}
+
 func TestUpsertFeedItemsRejectsStatusUndefinedAvatarURLs(t *testing.T) {
 	d := openWritableTestDB(t)
 	now := time.Now()

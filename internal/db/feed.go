@@ -950,7 +950,10 @@ func (db *DB) UpsertFeedItems(items []model.FeedItem) (int, error) {
 				views = COALESCE(excluded.views, feed_items.views),
 				likes = COALESCE(excluded.likes, feed_items.likes),
 				retweets = COALESCE(excluded.retweets, feed_items.retweets),
-				fetched_at = excluded.fetched_at,
+				fetched_at = CASE
+					WHEN COALESCE(feed_items.fetched_at, 0) > 0 THEN feed_items.fetched_at
+					ELSE excluded.fetched_at
+				END,
 				content_hash = COALESCE(excluded.content_hash, feed_items.content_hash),
 				canonical_tweet_id = CASE
 					WHEN feed_items.canonical_tweet_id IS NULL THEN excluded.canonical_tweet_id
