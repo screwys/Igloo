@@ -66,16 +66,19 @@ func feedAbsenceBoostSelect(alias string) string {
 
 func feedStarredAbsenceBoostSelect(alias string) string {
 	return fmt.Sprintf(`CASE
-				WHEN ? != ''
-				 AND cs_abs.channel_id IS NOT NULL
-				 AND NULLIF(TRIM(COALESCE(%[1]s.author_handle, '')), '') IS NOT NULL
-				 AND (((CAST(strftime('%%s','now') AS INTEGER) * 1000) - %[1]s.published_at) / 3600000.0) <= ?
-				THEN CASE
-					WHEN lps.last_seen_at IS NULL THEN ?
-					ELSE ? * MIN(?, MAX(0, ((CAST(strftime('%%s','now') AS INTEGER) * 1000) - lps.last_seen_at) / 3600000.0)) / ?
-				END
-				ELSE 0
-		END`, alias)
+					WHEN ? != ''
+					 AND cs_abs.channel_id IS NOT NULL
+					 AND NULLIF(TRIM(COALESCE(%[1]s.author_handle, '')), '') IS NOT NULL
+					 AND (((CAST(strftime('%%s','now') AS INTEGER) * 1000) - %[1]s.published_at) / 3600000.0) <= ?
+					THEN CASE
+						WHEN lps.last_seen_at IS NULL THEN ?
+						ELSE MAX(
+							? * MIN(?, MAX(0, ((CAST(strftime('%%s','now') AS INTEGER) * 1000) - lps.last_seen_at) / 3600000.0)) / ?,
+							? * MAX(0, 1.0 - ((((CAST(strftime('%%s','now') AS INTEGER) * 1000) - %[1]s.published_at) / 3600000.0) / ?))
+						)
+					END
+					ELSE 0
+			END`, alias)
 }
 
 func feedRankingFromSQL(relatedSeenExpr, absenceExpr, starredAbsenceExpr string) string {
@@ -154,7 +157,7 @@ func feedAbsenceBoostArgs(username string, capHours, seenMaxBoost, neverSeenBoos
 		neverSeenBoost,
 		seenMaxBoost, capHours, capHours,
 		username, capHours,
-		starredMaxBoost, starredMaxBoost, capHours, capHours,
+		starredMaxBoost, starredMaxBoost, capHours, capHours, starredMaxBoost, capHours,
 	}
 }
 

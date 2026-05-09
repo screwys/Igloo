@@ -234,8 +234,8 @@ func TestListPreDiversityRanked_AppliesParentSeenAbsenceBoost(t *testing.T) {
 	if got := baseByID["starred_candidate"]; math.Abs(got-25.0) > 0.1 {
 		t.Fatalf("starred candidate base = %.3f, want star score without decayed absence", got)
 	}
-	if got := freshnessByID["starred_candidate"]; math.Abs(got-3.75) > 0.2 {
-		t.Fatalf("starred candidate freshness = %.3f, want direct 0.3x absence scaled to 36/72h", got)
+	if got := freshnessByID["starred_candidate"]; math.Abs(got-6.25) > 0.2 {
+		t.Fatalf("starred candidate freshness = %.3f, want direct starred freshness scaled to 12/72h", got)
 	}
 	if got := freshnessByID["starred_old_candidate"]; got != 0 {
 		t.Fatalf("old starred candidate freshness = %.3f, want no starred absence outside cap window", got)
@@ -244,6 +244,60 @@ func TestListPreDiversityRanked_AppliesParentSeenAbsenceBoost(t *testing.T) {
 		t.Fatalf("fresh blood should outrank capped absence: fresh=%.3f capped=%.3f",
 			baseByID["fresh_candidate"], baseByID["capped_candidate"])
 	}
+}
+
+func TestListPreDiversityRanked_StarredFreshnessSurvivesRecentAuthorSeen(t *testing.T) {
+	d := openWritableTestDB(t)
+	user := "alice"
+	now := time.Now()
+
+	if _, err := d.conn.Exec(
+		`INSERT INTO channel_follows (user_id, channel_id, followed_at) VALUES ('', 'twitter_starred', ?)`,
+		now.UnixMilli(),
+	); err != nil {
+		t.Fatalf("follow starred: %v", err)
+	}
+	if _, err := d.conn.Exec(
+		`INSERT INTO channel_stars (user_id, channel_id, starred_at) VALUES ('', 'twitter_starred', ?)`,
+		now.UnixMilli(),
+	); err != nil {
+		t.Fatalf("star channel: %v", err)
+	}
+	if _, err := d.conn.Exec(`INSERT INTO feed_items
+			(tweet_id, author_handle, source_handle, body_text, published_at, algo_interest, algo_scored_at)
+			VALUES ('recent_seen', 'starred', 'starred', 'body', ?, 25, 1)`,
+		now.Add(-12*time.Hour).UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert seen parent: %v", err)
+	}
+	if _, err := d.conn.Exec(
+		`INSERT INTO feed_seen (username, tweet_id, seen_at) VALUES (?, 'recent_seen', ?)`,
+		user, now.Add(-30*time.Minute).UnixMilli(),
+	); err != nil {
+		t.Fatalf("mark seen parent: %v", err)
+	}
+	if _, err := d.conn.Exec(`INSERT INTO feed_items
+			(tweet_id, author_handle, source_handle, body_text, published_at, algo_interest, algo_scored_at)
+			VALUES ('fresh_starred', 'starred', 'starred', 'body', ?, 25, 1)`,
+		now.Add(-10*time.Hour).UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert fresh starred: %v", err)
+	}
+
+	rows, err := d.ListPreDiversityRanked(user)
+	if err != nil {
+		t.Fatalf("ListPreDiversityRanked: %v", err)
+	}
+	for _, row := range rows {
+		if row.TweetID != "fresh_starred" {
+			continue
+		}
+		if row.FreshnessBonus < 6.0 {
+			t.Fatalf("fresh starred freshness = %.3f, want age-based starred freshness despite recent author seen", row.FreshnessBonus)
+		}
+		return
+	}
+	t.Fatal("fresh_starred missing from ranked rows")
 }
 
 func TestListPreDiversityRanked_RecencyBoostPrioritizesFreshItems(t *testing.T) {

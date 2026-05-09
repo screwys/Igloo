@@ -53,7 +53,7 @@ func (db *DB) UpdateAlgoInterest(scores map[string]float64) error {
 	if len(scores) == 0 {
 		return nil
 	}
-	now := time.Now().Unix()
+	now := time.Now().UnixMilli()
 	return db.WithWrite(func(tx *sql.Tx) error {
 		stmt, err := tx.Prepare("UPDATE feed_items SET algo_interest = ?, algo_scored_at = ? WHERE tweet_id = ?")
 		if err != nil {
