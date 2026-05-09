@@ -3292,7 +3292,7 @@ select.input.themed-select-native {
     -webkit-backdrop-filter: none !important;
 }
 
-.player-wrapper:not(:hover) #main-media-controller[mediapaused] media-control-bar.dashboard-media-control-bar {
+.player-wrapper:not(:hover):not(:focus-within) #main-media-controller[mediapaused] media-control-bar.dashboard-media-control-bar {
     opacity: 0;
     pointer-events: none;
 }
