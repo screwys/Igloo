@@ -4069,7 +4069,7 @@ select.input.themed-select-native {
     --fullscreen-browse-sidebar-gap: 1.25rem;
     --fullscreen-browse-sidebar-padding: 1.5rem;
     --fullscreen-browse-sidebar-min: calc(var(--fullscreen-browse-sidebar-card-min) + var(--fullscreen-browse-sidebar-card-min) + var(--fullscreen-browse-sidebar-gap) + var(--fullscreen-browse-sidebar-padding) + var(--fullscreen-browse-sidebar-padding));
-    --fullscreen-browse-sidebar-col: clamp(var(--fullscreen-browse-sidebar-min), 38vw, 960px);
+    --fullscreen-browse-sidebar-col: minmax(var(--fullscreen-browse-sidebar-min), 42vw);
     grid-template-columns: minmax(0, 1fr) var(--fullscreen-browse-sidebar-col);
     grid-template-rows: auto;
     overflow-y: auto;
@@ -4084,7 +4084,7 @@ select.input.themed-select-native {
     --fullscreen-browse-sidebar-gap: 1.25rem;
     --fullscreen-browse-sidebar-padding: 1.5rem;
     --fullscreen-browse-sidebar-min: calc(var(--fullscreen-browse-sidebar-card-min) + var(--fullscreen-browse-sidebar-card-min) + var(--fullscreen-browse-sidebar-gap) + var(--fullscreen-browse-sidebar-padding) + var(--fullscreen-browse-sidebar-padding));
-    --fullscreen-browse-sidebar-col: clamp(var(--fullscreen-browse-sidebar-min), 38vw, 960px);
+    --fullscreen-browse-sidebar-col: minmax(var(--fullscreen-browse-sidebar-min), 42vw);
     grid-template-columns: minmax(0, 1fr) var(--fullscreen-browse-sidebar-col);
     grid-template-rows: auto;
     overflow-y: auto;
@@ -4183,11 +4183,13 @@ select.input.themed-select-native {
 .player-layout:fullscreen.fullscreen-browse .player-sidebar {
     display: block;
     width: 100%;
+    min-width: var(--fullscreen-browse-sidebar-min);
     position: sticky;
     top: 0;
     align-self: start;
     max-height: 100vh;
     overflow-y: auto;
+    box-sizing: border-box;
     padding: var(--fullscreen-browse-sidebar-padding);
     border-radius: 12px;
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
@@ -4196,11 +4198,13 @@ select.input.themed-select-native {
 .player-layout:-webkit-full-screen.fullscreen-browse .player-sidebar {
     display: block;
     width: 100%;
+    min-width: var(--fullscreen-browse-sidebar-min);
     position: sticky;
     top: 0;
     align-self: start;
     max-height: 100vh;
     overflow-y: auto;
+    box-sizing: border-box;
     padding: var(--fullscreen-browse-sidebar-padding);
     border-radius: 12px;
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
@@ -4209,8 +4213,13 @@ select.input.themed-select-native {
 .player-layout:fullscreen.fullscreen-browse .more-videos-list,
 .player-layout:-webkit-full-screen.fullscreen-browse .more-videos-list {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(var(--fullscreen-browse-sidebar-card-min), 1fr));
     gap: var(--fullscreen-browse-sidebar-gap);
+}
+
+.player-layout:fullscreen.fullscreen-browse .player-sidebar .video-card,
+.player-layout:-webkit-full-screen.fullscreen-browse .player-sidebar .video-card {
+    min-width: 0;
 }
 
 .player-layout:fullscreen.fullscreen-immersive {
