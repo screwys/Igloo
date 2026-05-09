@@ -336,7 +336,7 @@ function responseFor(url, { data, twitterChannels } = {}) {
       }),
     };
   }
-  if (/^https:\/\/(d\.)?(fxtwitter|fixupx)\.com\/i\/status\/\d+\.mp4$/.test(url)) {
+  if (/^https:\/\/d\.fxtwitter\.com\/i\/status\/\d+\.mp4$/.test(url)) {
     return {
       status: 200,
       text: "",
@@ -344,7 +344,7 @@ function responseFor(url, { data, twitterChannels } = {}) {
     };
   }
   if (
-    /^https:\/\/(d\.)?(fxtwitter|fixupx)\.com\/[^/]+\/status\/\d+\.mp4$/.test(
+    /^https:\/\/d\.fxtwitter\.com\/[^/]+\/status\/\d+\.mp4$/.test(
       url,
     )
   ) {
@@ -612,6 +612,22 @@ test("treats no selected media buttons as the default all-media selection", () =
   );
 });
 
+test("uses only the existing fxtwitter direct-video domain", () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(
+        harness.context.__iglooTest.directVideoDownloadCandidates(
+          "https://x.com/quote/status/222",
+        ),
+      ),
+    ),
+    ["https://d.fxtwitter.com/quote/status/222.mp4"],
+  );
+});
+
 test("downloads quote videos directly before server fallback", async () => {
   const harness = buildHarness();
   runScript(harness, { exposeDebug: true });
@@ -655,7 +671,7 @@ test("downloads quote videos directly before server fallback", async () => {
 
 test("falls back to server video download when direct video download fails", async () => {
   const harness = buildHarness({
-    failDownloads: ["fxtwitter.com", "fixupx.com"],
+    failDownloads: ["fxtwitter.com"],
   });
   runScript(harness, { exposeDebug: true });
 
