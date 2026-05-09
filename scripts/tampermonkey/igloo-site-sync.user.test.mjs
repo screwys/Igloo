@@ -148,6 +148,7 @@ function buildHarness({
   ]);
   const requests = [];
   const requestCalls = [];
+  const downloadCalls = [];
   const menu = new Map();
   const promptCalls = [];
   const followButtons = followHandles.map((handle) => {
@@ -210,7 +211,16 @@ function buildHarness({
     },
     GM_notification() {},
     GM_setClipboard() {},
-    GM_download() {},
+    GM_download(options) {
+      downloadCalls.push({
+        url: options.url,
+        name: options.name,
+        headers: options.headers,
+      });
+      queueMicrotask(() => {
+        options.onload?.();
+      });
+    },
     GM_xmlhttpRequest(options) {
       requests.push(options.url);
       requestCalls.push({
@@ -251,6 +261,7 @@ function buildHarness({
     menu,
     promptCalls,
     followButtons,
+    downloadCalls,
   };
 }
 
@@ -296,6 +307,24 @@ function responseFor(url, { twitterChannels } = {}) {
       }),
     };
   }
+  if (url === "https://localhost:5001/api/tweet-media-dl") {
+    return {
+      status: 200,
+      text: JSON.stringify({
+        success: true,
+        moved: ["alice label 001.mp4"],
+      }),
+    };
+  }
+  if (url === "https://localhost:5001/api/tweet-media-move") {
+    return {
+      status: 200,
+      text: JSON.stringify({
+        success: true,
+        moved: ["alice label 001.jpg"],
+      }),
+    };
+  }
   return { status: 500, text: JSON.stringify({ error: "unexpected url" }) };
 }
 
@@ -312,6 +341,7 @@ function runScript(harness, { exposeDebug = false } = {}) {
         `globalThis.__iglooTest = {
   handleUnsave,
   collectTweetMediaItems: typeof collectTweetMediaItems === "function" ? collectTweetMediaItems : undefined,
+  downloadMediaItems: typeof downloadMediaItems === "function" ? downloadMediaItems : undefined,
   shouldShowMediaIndexPicker: typeof shouldShowMediaIndexPicker === "function" ? shouldShowMediaIndexPicker : undefined,
   normalizeSelectedMediaIndices: typeof normalizeSelectedMediaIndices === "function" ? normalizeSelectedMediaIndices : undefined,
 };\n})();`,
@@ -519,5 +549,100 @@ test("treats no selected media buttons as the default all-media selection", () =
   assert.equal(
     harness.context.__iglooTest.normalizeSelectedMediaIndices([], 4),
     null,
+  );
+});
+
+test("downloads quote videos through the server downloader with the quote URL", async () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  let result = null;
+  harness.context.__iglooTest.downloadMediaItems(
+    "111",
+    "alice",
+    [
+      {
+        kind: "video",
+        tweetId: "222",
+        tweetUrl: "https://x.com/quote/status/222",
+        ext: ".mp4",
+        index: 0,
+      },
+    ],
+    1,
+    "label",
+    (resp) => {
+      result = JSON.parse(JSON.stringify(resp));
+    },
+  );
+
+  await drainMicrotasks();
+
+  assert.deepEqual(result?.json?.moved, ["alice label 001.mp4"]);
+  assert.deepEqual(harness.downloadCalls, []);
+  const mediaDlCall = harness.requestCalls.find(
+    (call) =>
+      call.method === "POST" &&
+      call.url === "https://localhost:5001/api/tweet-media-dl",
+  );
+  assert.ok(
+    mediaDlCall,
+    `expected /api/tweet-media-dl call, got ${harness.requestCalls
+      .map((call) => `${call.method} ${call.url}`)
+      .join(", ")}`,
+  );
+  assert.equal(
+    JSON.parse(mediaDlCall.data).tweet_url,
+    "https://x.com/quote/status/222",
+  );
+});
+
+test("keeps images on the browser staging download path", async () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  let result = null;
+  harness.context.__iglooTest.downloadMediaItems(
+    "111",
+    "alice",
+    [
+      {
+        kind: "image",
+        tweetId: "111",
+        tweetUrl: "https://x.com/alice/status/111",
+        url: "https://pbs.twimg.com/media/main-one?format=jpg&name=orig",
+        ext: ".jpg",
+        index: 0,
+      },
+    ],
+    1,
+    "label",
+    (resp) => {
+      result = JSON.parse(JSON.stringify(resp));
+    },
+  );
+
+  await drainMicrotasks();
+
+  assert.deepEqual(result?.json?.moved, ["alice label 001.jpg"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.downloadCalls)), [
+    {
+      url: "https://pbs.twimg.com/media/main-one?format=jpg&name=orig",
+      name: "tmp_111_0.jpg",
+      headers: { Referer: "https://x.com/" },
+    },
+  ]);
+  assert.ok(
+    harness.requestCalls.some(
+      (call) =>
+        call.method === "POST" &&
+        call.url === "https://localhost:5001/api/tweet-media-move",
+    ),
+  );
+  assert.equal(
+    harness.requestCalls.some(
+      (call) => call.url === "https://localhost:5001/api/tweet-media-dl",
+    ),
+    false,
   );
 });

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.6
+// @version      8.0.7
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -30,7 +30,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.6";
+  const SCRIPT_VERSION = "8.0.7";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -1369,12 +1369,65 @@
     }
   }
 
-  // ── Download: images via GM_download, videos via fxtwitter ──────────────
-  function fxtwitterDownloadUrl(tweetUrl) {
-    return tweetUrl.replace(
-      /^https?:\/\/(x\.com|twitter\.com)/,
-      "https://d.fxtwitter.com",
+  // ── Download: images via GM_download, videos via server yt-dlp ─────────────
+  function downloadImageToStaging(media, stagingName) {
+    return new Promise((resolve) => {
+      GM_download({
+        url: media.url,
+        name: stagingName,
+        headers: { Referer: "https://x.com/" },
+        onload() {
+          resolve({ ok: true });
+        },
+        onerror(err) {
+          console.warn("[XDL] GM_download failed:", stagingName, err);
+          resolve({ ok: false, error: err });
+        },
+        ontimeout() {
+          resolve({ ok: false, error: "timeout" });
+        },
+      });
+    });
+  }
+
+  function moveStagedMedia(handle, label, categoryId, stagedFiles) {
+    return apiRequest(
+      "POST",
+      "/api/tweet-media-move",
+      {
+        handle,
+        label,
+        category_id: categoryId,
+        staged_files: stagedFiles,
+      },
+      true,
     );
+  }
+
+  function downloadVideoViaServer(tweetUrl, handle, label, categoryId) {
+    return apiRequest(
+      "POST",
+      "/api/tweet-media-dl",
+      {
+        tweet_url: tweetUrl,
+        handle,
+        label,
+        category_id: categoryId,
+      },
+      true,
+    );
+  }
+
+  function mediaDownloadResult(moved, failed) {
+    const success = moved.length > 0 && failed.length === 0;
+    return {
+      ok: success,
+      json: {
+        success,
+        moved,
+        failed,
+      },
+    };
   }
 
   function downloadMediaItems(
@@ -1389,81 +1442,47 @@
       onComplete({ ok: false });
       return;
     }
-    const staged = mediaItems.map((m, i) => ({
-      staging_name: "tmp_" + tweetId + "_" + i + m.ext,
-      ext: m.ext,
-    }));
-    let doneCount = 0;
-    const successfulStaged = new Array(mediaItems.length);
 
-    function finish() {
-      const completed = successfulStaged.filter(Boolean);
-      if (!completed.length) {
-        onComplete({ ok: false });
-        return;
-      }
-      apiRequest(
-        "POST",
-        "/api/tweet-media-move",
-        {
-          handle,
-          label,
-          category_id: categoryId,
-          staged_files: completed,
-        },
-        true,
-      ).then((resp) => onComplete(resp));
-    }
-
-    mediaItems.forEach((media, i) => {
-      const url =
-        media.kind === "video"
-          ? fxtwitterDownloadUrl(media.tweetUrl)
-          : media.url;
-      const downloadOptions = {
-        url,
-        name: staged[i].staging_name,
-        onload() {
-          successfulStaged[i] = staged[i];
-          doneCount++;
-          if (doneCount === mediaItems.length) finish();
-        },
-        onerror(err) {
-          console.warn(
-            "[XDL] GM_download failed:",
-            staged[i].staging_name,
-            err,
+    (async () => {
+      const moved = [];
+      const failed = [];
+      for (let i = 0; i < mediaItems.length; i++) {
+        const media = mediaItems[i];
+        if (media.kind === "video") {
+          const resp = await downloadVideoViaServer(
+            media.tweetUrl,
+            handle,
+            label,
+            categoryId,
           );
-          doneCount++;
-          if (doneCount === mediaItems.length) finish();
-        },
-      };
-      if (media.kind !== "video") {
-        downloadOptions.headers = { Referer: "https://x.com/" };
-      }
-      GM_download(downloadOptions);
-    });
-  }
+          if (resp.ok && resp.json && resp.json.success) {
+            moved.push(...(resp.json.moved || []));
+          } else {
+            failed.push(media.tweetId || String(i));
+          }
+          continue;
+        }
 
-  function downloadViaFxtwitter(tweetUrl, stagingName) {
-    return new Promise((resolve) => {
-      const fxUrl = fxtwitterDownloadUrl(tweetUrl);
-      console.log("[XDL] trying fxtwitter:", fxUrl);
-      GM_download({
-        url: fxUrl,
-        name: stagingName,
-        onload() {
-          resolve({ ok: true });
-        },
-        onerror(err) {
-          console.warn("[XDL] fxtwitter download failed:", err);
-          resolve({ ok: false, error: err });
-        },
-        ontimeout() {
-          resolve({ ok: false, error: "timeout" });
-        },
-      });
-    });
+        const staged = {
+          staging_name: "tmp_" + tweetId + "_" + i + media.ext,
+          ext: media.ext,
+        };
+        const dlResp = await downloadImageToStaging(media, staged.staging_name);
+        if (!dlResp.ok) {
+          failed.push(staged.staging_name);
+          continue;
+        }
+        const moveResp = await moveStagedMedia(handle, label, categoryId, [
+          staged,
+        ]);
+        if (moveResp.ok && moveResp.json && moveResp.json.success) {
+          moved.push(...(moveResp.json.moved || []));
+        } else {
+          failed.push(staged.staging_name);
+        }
+      }
+      onComplete(mediaDownloadResult(moved, failed));
+    })();
   }
 
   async function handleDlClick(dlBtn, article) {
@@ -1518,36 +1537,23 @@
             },
           );
         } else {
-          // No images in DOM — try fxtwitter direct download
-          const stagingName = "tmp_" + info.tweetId + "_0.mp4";
-          const fxResult = await downloadViaFxtwitter(info.url, stagingName);
-          if (fxResult.ok) {
-            const moveResp = await apiRequest(
-              "POST",
-              "/api/tweet-media-move",
-              {
-                handle: effectiveHandle,
-                label: lbl,
-                category_id: catId,
-                staged_files: [{ staging_name: stagingName, ext: ".mp4" }],
-              },
-              true,
+          const fallbackResp = await downloadVideoViaServer(
+            info.url,
+            effectiveHandle,
+            lbl,
+            catId,
+          );
+          if (fallbackResp.ok && fallbackResp.json?.success) {
+            onSuccess();
+            showToast(
+              "Downloaded " +
+                (fallbackResp.json.moved?.length || 0) +
+                " file(s): " +
+                lbl,
             );
-            if (moveResp.ok && moveResp.json && moveResp.json.success) {
-              onSuccess();
-              showToast(
-                "Downloaded " +
-                  (moveResp.json.moved?.length || 0) +
-                  " file(s): " +
-                  lbl,
-              );
-            } else {
-              setDlButtonState(dlBtn, "error");
-              showToast("Move failed after download");
-            }
           } else {
             setDlButtonState(dlBtn, "error");
-            showToast("Download failed: no media found");
+            showToast(fallbackResp.json?.error || "Download failed");
           }
         }
       },
