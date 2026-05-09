@@ -213,6 +213,16 @@ func (db *DB) ReplaceFeedRankSnapshot(username string, rows []SnapshotRow) error
 	}
 	now := time.Now().UnixMilli()
 	return db.WithWrite(func(tx *sql.Tx) error {
+		var previous sql.NullInt64
+		if err := tx.QueryRow(
+			"SELECT MAX(computed_at) FROM feed_rank_snapshot WHERE username = ?",
+			username,
+		).Scan(&previous); err != nil {
+			return fmt.Errorf("read previous snapshot time: %w", err)
+		}
+		if previous.Valid && now <= previous.Int64 {
+			now = previous.Int64 + 1
+		}
 		if _, err := tx.Exec("DELETE FROM feed_rank_snapshot WHERE username = ?", username); err != nil {
 			return fmt.Errorf("delete old snapshot: %w", err)
 		}

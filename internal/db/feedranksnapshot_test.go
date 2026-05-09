@@ -74,6 +74,37 @@ func TestSnapshotComputedAt_EmptyAndAfterReplace(t *testing.T) {
 	}
 }
 
+func TestReplaceFeedRankSnapshot_ComputedAtIsMonotonic(t *testing.T) {
+	d := openWritableTestDB(t)
+	user := "alice"
+
+	if err := d.ReplaceFeedRankSnapshot(user, []SnapshotRow{
+		{TweetID: "first", RankPosition: 1, FinalScore: 1},
+	}); err != nil {
+		t.Fatalf("first replace: %v", err)
+	}
+	previous := time.Now().UnixMilli() + 10_000
+	if _, err := d.conn.Exec(
+		"UPDATE feed_rank_snapshot SET computed_at = ? WHERE username = ?",
+		previous, user,
+	); err != nil {
+		t.Fatalf("force previous computed_at: %v", err)
+	}
+
+	if err := d.ReplaceFeedRankSnapshot(user, []SnapshotRow{
+		{TweetID: "second", RankPosition: 1, FinalScore: 2},
+	}); err != nil {
+		t.Fatalf("second replace: %v", err)
+	}
+	got, err := d.SnapshotComputedAt(user)
+	if err != nil {
+		t.Fatalf("computed_at: %v", err)
+	}
+	if got != previous+1 {
+		t.Fatalf("computed_at = %d, want %d", got, previous+1)
+	}
+}
+
 func TestReplaceFeedRankSnapshot_RejectsEmptyUsername(t *testing.T) {
 	d := openWritableTestDB(t)
 	if err := d.ReplaceFeedRankSnapshot("", nil); err == nil {
