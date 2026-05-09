@@ -2,11 +2,13 @@ package web
 
 import (
 	"net/http"
+	"sort"
 	"time"
+
+	"github.com/screwys/igloo/internal/auth"
 )
 
 const (
-	productHealthUsername            = "admin"
 	feedSnapshotHealthGrace          = 15 * time.Minute
 	androidSyncHealthReportGrace     = 15 * time.Minute
 	androidSyncHealthReportMaxAge    = 6 * time.Hour
@@ -96,32 +98,94 @@ func (s *Server) feedSnapshotProductHealth(now time.Time) (string, map[string]an
 		return productHealthStatusUnhealthy, check
 	}
 
-	snapshot, err := s.db.GetFeedSnapshotHealth(productHealthUsername)
-	if err != nil {
-		check["status"] = productHealthStatusUnhealthy
-		check["reason"] = err.Error()
-		return productHealthStatusUnhealthy, check
-	}
-
-	check["snapshot_at_ms"] = snapshot.SnapshotAtMs
-	check["candidate_count"] = snapshot.CandidateCount
-	check["latest_candidate_fetched_at_ms"] = snapshot.LatestCandidateFetchedAtMs
-	check["latest_candidate_published_at_ms"] = snapshot.LatestCandidatePublishedAtMs
-	check["fresh_items_since_snapshot"] = snapshot.FreshItemsSinceSnapshot
-	if snapshot.SnapshotAtMs > 0 {
-		check["snapshot_age_ms"] = now.UnixMilli() - snapshot.SnapshotAtMs
-	}
-	if snapshot.LatestCandidateFetchedAtMs > snapshot.SnapshotAtMs {
-		check["snapshot_lag_ms"] = snapshot.LatestCandidateFetchedAtMs - snapshot.SnapshotAtMs
-	}
-
-	if snapshot.CandidateCount == 0 {
+	usernames := productHealthUsernames()
+	check["users_checked"] = len(usernames)
+	check["users_with_data"] = 0
+	check["stale_users"] = 0
+	if len(usernames) == 0 {
+		check["snapshot_at_ms"] = int64(0)
+		check["candidate_count"] = 0
+		check["latest_candidate_fetched_at_ms"] = int64(0)
+		check["latest_candidate_published_at_ms"] = int64(0)
+		check["fresh_items_since_snapshot"] = 0
 		check["reason"] = productHealthReasonNoData
 		return productHealthStatusHealthy, check
 	}
 
-	latestAge := time.Duration(now.UnixMilli()-snapshot.LatestCandidateFetchedAtMs) * time.Millisecond
-	if snapshot.FreshItemsSinceSnapshot > 0 && latestAge >= feedSnapshotHealthGrace {
+	var candidateCount int
+	var usersWithData int
+	var staleUsers int
+	var freshItemsSinceSnapshot int
+	var latestCandidateFetchedAtMs int64
+	var latestCandidatePublishedAtMs int64
+	var snapshotAtMs int64
+	var hasSnapshot bool
+	var missingSnapshotForData bool
+	var snapshotAgeMs int64
+	var snapshotLagMs int64
+
+	for _, username := range usernames {
+		snapshot, err := s.db.GetFeedSnapshotHealth(username)
+		if err != nil {
+			check["status"] = productHealthStatusUnhealthy
+			check["reason"] = err.Error()
+			return productHealthStatusUnhealthy, check
+		}
+
+		candidateCount += snapshot.CandidateCount
+		freshItemsSinceSnapshot += snapshot.FreshItemsSinceSnapshot
+		if snapshot.LatestCandidateFetchedAtMs > latestCandidateFetchedAtMs {
+			latestCandidateFetchedAtMs = snapshot.LatestCandidateFetchedAtMs
+		}
+		if snapshot.LatestCandidatePublishedAtMs > latestCandidatePublishedAtMs {
+			latestCandidatePublishedAtMs = snapshot.LatestCandidatePublishedAtMs
+		}
+		if snapshot.CandidateCount > 0 {
+			usersWithData++
+			if snapshot.SnapshotAtMs == 0 {
+				missingSnapshotForData = true
+			} else if !hasSnapshot || snapshot.SnapshotAtMs < snapshotAtMs {
+				snapshotAtMs = snapshot.SnapshotAtMs
+				hasSnapshot = true
+			}
+			if age := now.UnixMilli() - snapshot.SnapshotAtMs; snapshot.SnapshotAtMs > 0 && age > snapshotAgeMs {
+				snapshotAgeMs = age
+			}
+		}
+		if lag := snapshot.LatestCandidateFetchedAtMs - snapshot.SnapshotAtMs; lag > snapshotLagMs {
+			snapshotLagMs = lag
+		}
+
+		latestAge := time.Duration(now.UnixMilli()-snapshot.LatestCandidateFetchedAtMs) * time.Millisecond
+		if snapshot.CandidateCount > 0 && snapshot.FreshItemsSinceSnapshot > 0 && latestAge >= feedSnapshotHealthGrace {
+			staleUsers++
+		}
+	}
+
+	if missingSnapshotForData {
+		check["snapshot_at_ms"] = int64(0)
+	} else {
+		check["snapshot_at_ms"] = snapshotAtMs
+	}
+	check["candidate_count"] = candidateCount
+	check["latest_candidate_fetched_at_ms"] = latestCandidateFetchedAtMs
+	check["latest_candidate_published_at_ms"] = latestCandidatePublishedAtMs
+	check["fresh_items_since_snapshot"] = freshItemsSinceSnapshot
+	check["users_with_data"] = usersWithData
+	check["stale_users"] = staleUsers
+	if snapshotAgeMs > 0 {
+		check["snapshot_age_ms"] = snapshotAgeMs
+	}
+	if snapshotLagMs > 0 {
+		check["snapshot_lag_ms"] = snapshotLagMs
+	}
+
+	if candidateCount == 0 {
+		check["reason"] = productHealthReasonNoData
+		return productHealthStatusHealthy, check
+	}
+
+	if staleUsers > 0 {
 		check["status"] = productHealthStatusUnhealthy
 		check["reason"] = productHealthReasonStale
 		check["stale_after_ms"] = feedSnapshotHealthGrace.Milliseconds()
@@ -129,6 +193,21 @@ func (s *Server) feedSnapshotProductHealth(now time.Time) (string, map[string]an
 	}
 
 	return productHealthStatusHealthy, check
+}
+
+func productHealthUsernames() []string {
+	users := auth.GetCachedUsers()
+	if len(users) == 0 {
+		return nil
+	}
+	usernames := make([]string, 0, len(users))
+	for username := range users {
+		if username != "" {
+			usernames = append(usernames, username)
+		}
+	}
+	sort.Strings(usernames)
+	return usernames
 }
 
 func (s *Server) androidSyncProductHealth(now time.Time) (string, map[string]any) {
