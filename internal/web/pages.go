@@ -1034,11 +1034,9 @@ func (s *Server) handlePageFeed(w http.ResponseWriter, r *http.Request) {
 		username = user.Username
 	}
 
-	// `offset` is a rank_position cursor — ListSnapshotPage returns rows with
-	// rank_position > offset. Because it also filters feed_seen at query time,
-	// cursor advance must use the last returned rank_position (not
-	// offset+pageSize arithmetic) to avoid skipping or duplicating items when
-	// seen rows intersperse the snapshot.
+	// `offset` is a rank_position cursor within one snapshot. If the snapshot
+	// changes between page requests, reset to the top of the new unseen
+	// snapshot; otherwise compacted rank positions can skip rows.
 	offset := 0
 	if v := r.URL.Query().Get("offset"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -1054,6 +1052,10 @@ func (s *Server) handlePageFeed(w http.ResponseWriter, r *http.Request) {
 	// Primary path: read from the pre-built rank snapshot (same data Android uses).
 	snapAt, _ := s.db.SnapshotComputedAt(username)
 	if snapAt > 0 {
+		cursorSnapAt, _ := strconv.ParseInt(r.URL.Query().Get("snapshot_at"), 10, 64)
+		if offset > 0 && cursorSnapAt != snapAt {
+			offset = 0
+		}
 		page, snapErr := s.db.ListSnapshotPage(username, offset, pageSize+1)
 		if snapErr != nil {
 			slog.Error("ListSnapshotPage", "err", snapErr)
@@ -1068,7 +1070,7 @@ func (s *Server) handlePageFeed(w http.ResponseWriter, r *http.Request) {
 			}
 			items = feed.EnrichFeedItems(s.db, items, username)
 			if hasMore && len(page) > 0 {
-				nextPageURL = "/feed?offset=" + strconv.Itoa(page[len(page)-1].RankPosition)
+				nextPageURL = fmt.Sprintf("/feed?offset=%d&snapshot_at=%d", page[len(page)-1].RankPosition, snapAt)
 			}
 		}
 	}
