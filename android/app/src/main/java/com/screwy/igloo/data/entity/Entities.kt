@@ -72,7 +72,9 @@ data class FeedItemEntity(
     @ColumnInfo(name = "content_hash") val contentHash: String? = null,
 
     @ColumnInfo(name = "body_translation") val bodyTranslation: String? = null,
+    @ColumnInfo(name = "body_source_lang") val bodySourceLang: String? = null,
     @ColumnInfo(name = "quote_translation") val quoteTranslation: String? = null,
+    @ColumnInfo(name = "quote_source_lang") val quoteSourceLang: String? = null,
 
     @ColumnInfo(name = "published_at") val publishedAt: Long = 0,
     @ColumnInfo(name = "sync_seq") val syncSeq: Long = 0,

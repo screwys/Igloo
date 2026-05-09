@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/language"
 	"github.com/screwys/igloo/internal/model"
 )
 
@@ -295,8 +296,7 @@ func splitTranslateSkipSet(raw string) map[string]bool {
 }
 
 func translationSourceAllowed(sourceLang string, skipSet map[string]bool) bool {
-	sourceLang = strings.ToLower(strings.TrimSpace(sourceLang))
-	return sourceLang == "" || !skipSet[sourceLang]
+	return strings.TrimSpace(sourceLang) == "" || !language.InSet(sourceLang, skipSet)
 }
 
 // attachThreadChains populates ThreadChain on reply items by walking up via

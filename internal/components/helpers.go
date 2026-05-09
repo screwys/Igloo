@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/screwys/igloo/internal/language"
 	"github.com/screwys/igloo/internal/model"
 	"github.com/screwys/igloo/internal/settings"
 )
@@ -493,18 +494,8 @@ func feedPublishedAtStr(t *time.Time) string {
 	return strconv.FormatInt(t.UnixMilli(), 10)
 }
 
-// langCodeUpper returns the language code uppercased, e.g. "ko" → "KO". Empty
-// in → empty out. Used by the compact translate pill to show the source lang.
-func langCodeUpper(lang string) string {
-	return strings.ToUpper(strings.TrimSpace(lang))
-}
-
-func feedTranslateSourceCode(lang string, sourceLang string) string {
-	lang = strings.TrimSpace(lang)
-	if lang == "" {
-		lang = sourceLang
-	}
-	return langCodeUpper(lang)
+func feedTranslateSourceLabel(sourceLang string) string {
+	return language.DisplayName(sourceLang)
 }
 
 // stripThreadNoise returns a copy of item with conversation-thread-specific
@@ -534,32 +525,24 @@ func stripThreadNoise(item model.FeedItem) model.FeedItem {
 }
 
 // feedTranslateLabel returns the translate label for a feed item.
-// Prefers the feed item's lang (from langdetect at ingest) over the cached
-// translation source_lang (from kagi), since langdetect runs on the raw body
-// text while kagi can be confused by mixed-language content like JP hashtags.
+// Cached translation source labels come from the translator, not ingest-time
+// language detection.
 func feedTranslateLabel(item model.FeedItem) string {
 	if item.BodyTranslation != "" {
-		lang := item.Lang
-		if lang == "" {
-			lang = item.BodySourceLang
-		}
-		return translateLabelFromLang(lang)
+		return translateLabelFromLang(item.BodySourceLang)
 	}
 	if item.QuoteTranslation != "" {
-		lang := item.QuoteLang
-		if lang == "" {
-			lang = item.QuoteSourceLang
-		}
-		return translateLabelFromLang(lang)
+		return translateLabelFromLang(item.QuoteSourceLang)
 	}
 	return "Show translation"
 }
 
 func translateLabelFromLang(lang string) string {
-	if lang == "" || lang == "und" {
+	label := language.DisplayName(lang)
+	if label == "" {
 		return "Translated"
 	}
-	return "Translated from " + strings.ToUpper(lang)
+	return "Translated from " + label
 }
 
 // feedQuoteLabel returns the display label for a quoted post author.

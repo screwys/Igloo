@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/language"
 	"github.com/screwys/igloo/internal/settings"
 )
 
@@ -265,18 +266,18 @@ func translateAndCacheBackgroundCandidate(ctx context.Context, database *db.DB, 
 		return false, nil
 	}
 
-	srcLang := strings.ToLower(strings.TrimSpace(result.SourceLang))
-	if srcLang != "" && srcLang == cfg.target {
+	srcLang := language.DisplayName(result.SourceLang)
+	if sourceLanguageMatchesTarget(srcLang, cfg.target) {
 		return false, nil
 	}
-	if srcLang != "" && cfg.skipSet[srcLang] {
+	if language.InSet(srcLang, cfg.skipSet) {
 		return false, nil
 	}
 
 	translatedText = restoredText
 	cacheLang := srcLang
 	if cacheLang == "" {
-		cacheLang = strings.ToLower(strings.TrimSpace(candidate.SourceLang))
+		cacheLang = language.DisplayName(candidate.SourceLang)
 	}
 	if cacheLang == "" {
 		cacheLang = "und"
@@ -288,15 +289,12 @@ func translateAndCacheBackgroundCandidate(ctx context.Context, database *db.DB, 
 }
 
 func shouldAutoTranslateCandidate(sourceLang, sourceText, targetLang string, skipSet map[string]bool) bool {
-	sourceLang = strings.ToLower(strings.TrimSpace(sourceLang))
 	targetLang = strings.ToLower(strings.TrimSpace(targetLang))
 	if targetLang == "" {
 		targetLang = "en"
 	}
-	if sourceLang != "" {
-		sourceBase := normalizeBackgroundLanguageCode(sourceLang)
-		targetBase := normalizeBackgroundLanguageCode(targetLang)
-		if sourceBase == targetBase || skipSet[sourceLang] || skipSet[sourceBase] {
+	if strings.TrimSpace(sourceLang) != "" {
+		if sourceLanguageMatchesTarget(sourceLang, targetLang) || language.InSet(sourceLang, skipSet) {
 			return false
 		}
 		cleanSource, _ := protectForTranslate(sourceText)
@@ -314,14 +312,6 @@ func shouldAutoTranslateCandidate(sourceLang, sourceText, targetLang string, ski
 		return false
 	}
 	return hasTranslatableContent(cleanSource)
-}
-
-func normalizeBackgroundLanguageCode(lang string) string {
-	lang = strings.ToLower(strings.TrimSpace(lang))
-	if idx := strings.IndexAny(lang, "-_"); idx >= 0 {
-		lang = lang[:idx]
-	}
-	return lang
 }
 
 func hasSkippedLanguageScript(sourceText string, skipSet map[string]bool) bool {

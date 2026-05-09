@@ -59,6 +59,10 @@ class BundleIngestTest {
             put("author_handle", "@alice")
             put("canonical_url", "https://x.com/alice/status/t1")
             put("quote_canonical_url", "https://x.com/bob/status/q1")
+            put("body_translation", "hello")
+            put("body_source_lang", "Korean")
+            put("quote_translation", "quoted hello")
+            put("quote_source_lang", "Japanese")
             put("published_at", 12345L)
             put("sync_seq", 10L)
         })
@@ -69,6 +73,8 @@ class BundleIngestTest {
         assertEquals("@alice", row!!.authorHandle)
         assertEquals("https://x.com/alice/status/t1", row.canonicalUrl)
         assertEquals("https://x.com/bob/status/q1", row.quoteCanonicalUrl)
+        assertEquals("Korean", row.bodySourceLang)
+        assertEquals("Japanese", row.quoteSourceLang)
         assertEquals(10L, row.syncSeq)
     }
 

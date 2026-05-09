@@ -577,7 +577,7 @@ private data class NativeFeedCallbacks(
 )
 
 internal data class NativeTranslationPill(
-    val sourceLangCode: String,
+    val sourceLangLabel: String,
     val active: Boolean,
     val enabled: Boolean,
 )
@@ -1153,6 +1153,7 @@ private class NativeFeedViewHolder(
         }
         val translationPill = nativeTranslationPillForText(
             lang = item.lang,
+            sourceLang = item.bodySourceLang,
             text = item.bodyText,
             active = showTranslatedBody && bodyTranslation != null,
             enabled = bodyTranslation != null,
@@ -1345,6 +1346,7 @@ private class NativeFeedViewHolder(
         val followTarget = feedQuoteFollowTarget(row)
         val quoteTranslationPill = nativeTranslationPillForText(
             lang = item.quoteLang,
+            sourceLang = item.quoteSourceLang,
             text = item.quoteBodyText,
             active = showTranslatedQuote && quoteTranslation != null,
             enabled = quoteTranslation != null,
@@ -1558,8 +1560,8 @@ private class NativeFeedViewHolder(
         header.translate.alpha = if (translation.enabled) 1f else 0.65f
         header.translate.contentDescription = header.root.context.getString(R.string.settings_auto_translate)
         header.translateIcon.setColorFilter(if (translation.active) colors.primary else colors.onSurfaceMuted)
-        header.translateLabel.text = if (translation.active) translation.sourceLangCode else ""
-        header.translateLabel.visibility = if (translation.active && translation.sourceLangCode.isNotBlank()) {
+        header.translateLabel.text = if (translation.active) translation.sourceLangLabel else ""
+        header.translateLabel.visibility = if (translation.active && translation.sourceLangLabel.isNotBlank()) {
             View.VISIBLE
         } else {
             View.GONE
@@ -2558,7 +2560,7 @@ internal fun nativeTranslationPillFor(
 ): NativeTranslationPill? {
     if (!enabled && !nativeHasForeignLanguage(item)) return null
     return NativeTranslationPill(
-        sourceLangCode = nativeFirstForeignLanguage(item).uppercase(Locale.ROOT),
+        sourceLangLabel = nativeFirstSourceLanguageLabel(item),
         active = active,
         enabled = enabled,
     )
@@ -2566,13 +2568,14 @@ internal fun nativeTranslationPillFor(
 
 internal fun nativeTranslationPillForText(
     lang: String?,
+    sourceLang: String?,
     text: String?,
     active: Boolean,
     enabled: Boolean,
 ): NativeTranslationPill? {
     if (!enabled && !nativeIsForeignOrUnknown(lang, text)) return null
     return NativeTranslationPill(
-        sourceLangCode = nativeForeignLanguageCode(lang, text)?.uppercase(Locale.ROOT).orEmpty(),
+        sourceLangLabel = nativeSourceLanguageLabel(sourceLang),
         active = active,
         enabled = enabled,
     )
@@ -2582,19 +2585,26 @@ private fun nativeHasForeignLanguage(item: FeedItemEntity): Boolean =
     nativeIsForeignOrUnknown(item.lang, item.bodyText) ||
         nativeIsForeignOrUnknown(item.quoteLang, item.quoteBodyText)
 
-private fun nativeFirstForeignLanguage(item: FeedItemEntity): String =
-    nativeForeignLanguageCode(item.lang, item.bodyText)
-        ?: nativeForeignLanguageCode(item.quoteLang, item.quoteBodyText)
-        ?: ""
+private fun nativeFirstSourceLanguageLabel(item: FeedItemEntity): String =
+    nativeSourceLanguageLabel(item.bodySourceLang).ifBlank {
+        nativeSourceLanguageLabel(item.quoteSourceLang)
+    }
 
 private fun nativeIsForeignOrUnknown(lang: String?, text: String?): Boolean =
     !text.isNullOrBlank() && lang?.trim()?.lowercase(Locale.ROOT).let { it.isNullOrBlank() || it != "en" }
 
-private fun nativeForeignLanguageCode(lang: String?, text: String?): String? {
-    if (text.isNullOrBlank()) return null
-    val normalized = lang?.trim()?.lowercase(Locale.ROOT).orEmpty()
-    return normalized.takeIf { it.isNotBlank() && it != "en" }
+private fun nativeSourceLanguageLabel(sourceLang: String?): String {
+    val raw = sourceLang?.trim().orEmpty()
+    if (raw.isBlank() || raw.equals("und", ignoreCase = true) || raw.equals("unknown", ignoreCase = true)) return ""
+    if (!nativeLooksLikeLanguageTag(raw)) return raw
+    val tag = raw.trim().replace('_', '-')
+    val display = Locale.forLanguageTag(tag).getDisplayName(Locale.ENGLISH).trim()
+    if (display.isNotBlank() && !display.equals(tag, ignoreCase = true)) return display
+    return raw
 }
+
+private fun nativeLooksLikeLanguageTag(value: String): Boolean =
+    value.replace('_', '-').matches(Regex("^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"))
 
 internal fun nativeShouldClampBody(text: String): Boolean =
     text.length > 420 || text.count { it == '\n' } + 1 > NativeFeedBodyCollapsedLines

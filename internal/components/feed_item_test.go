@@ -263,3 +263,28 @@ func TestFeedItemQuoteTranslationDoesNotActivateParentTranslatePill(t *testing.T
 		t.Fatalf("quote translate pill should be active for cached quote translation, tag=%s html=%s", buttonTag, html)
 	}
 }
+
+func TestFeedItemTranslatedPillUsesTranslatorSourceLabel(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:           "tweet_with_korean_translation",
+		AuthorHandle:      "author",
+		AuthorDisplayName: "Author",
+		BodyText:          "안녕하세요",
+		Lang:              "kr",
+		BodyTranslation:   "hello",
+		BodySourceLang:    "Korean",
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+
+	if strings.Contains(html, `>KR<`) {
+		t.Fatalf("translated pill should not render langdetect shorthand; html=%s", html)
+	}
+	if !strings.Contains(html, `>Korean<`) {
+		t.Fatalf("translated pill should render translator source label; html=%s", html)
+	}
+}

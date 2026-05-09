@@ -130,6 +130,7 @@ class NativeMainFeedSurfaceTest {
                 bodyText = "サンプル本文",
                 lang = "ja",
                 bodyTranslation = "hello",
+                bodySourceLang = "Japanese",
             ),
             active = true,
             enabled = true,
@@ -140,6 +141,7 @@ class NativeMainFeedSurfaceTest {
                 authorHandle = "alice",
                 bodyText = "hola",
                 lang = "es",
+                bodySourceLang = "Spanish",
             ),
             active = false,
             enabled = false,
@@ -155,8 +157,8 @@ class NativeMainFeedSurfaceTest {
             enabled = false,
         )
 
-        assertEquals(NativeTranslationPill(sourceLangCode = "JA", active = true, enabled = true), active)
-        assertEquals(NativeTranslationPill(sourceLangCode = "ES", active = false, enabled = false), inactive)
+        assertEquals(NativeTranslationPill(sourceLangLabel = "Japanese", active = true, enabled = true), active)
+        assertEquals(NativeTranslationPill(sourceLangLabel = "Spanish", active = false, enabled = false), inactive)
         assertEquals(null, english)
     }
 
@@ -164,19 +166,34 @@ class NativeMainFeedSurfaceTest {
     fun nativeTranslationPillsArePerTextField() {
         val englishBody = nativeTranslationPillForText(
             lang = "en",
+            sourceLang = null,
             text = "plain parent text",
             active = false,
             enabled = false,
         )
         val translatedQuote = nativeTranslationPillForText(
             lang = "fr",
+            sourceLang = "French",
             text = "texte cite",
             active = true,
             enabled = true,
         )
 
         assertEquals(null, englishBody)
-        assertEquals(NativeTranslationPill(sourceLangCode = "FR", active = true, enabled = true), translatedQuote)
+        assertEquals(NativeTranslationPill(sourceLangLabel = "French", active = true, enabled = true), translatedQuote)
+    }
+
+    @Test
+    fun nativeTranslationPillUsesTranslatorLanguageLabel() {
+        val translatedBody = nativeTranslationPillForText(
+            lang = "kr",
+            sourceLang = "Korean",
+            text = "안녕하세요",
+            active = true,
+            enabled = true,
+        )
+
+        assertEquals(NativeTranslationPill(sourceLangLabel = "Korean", active = true, enabled = true), translatedBody)
     }
 
     @Test

@@ -2,13 +2,6 @@
 
 import { apiFetch, jsLinkify } from '../utils.js'
 
-var KNOWN_LANGS = {
-  zh: true, ja: true, ko: true, ar: true,
-  ru: true, tr: true, fr: true, de: true,
-  es: true, pt: true, hi: true, en: true,
-  id: true, vi: true, th: true, tl: true,
-  ms: true, my: true
-}
 var reTranslateToken = /https?:\/\/\S+|@\S+|#\S+/g
 var translateSkipScriptPatterns = {
   ja: /[\u3040-\u30FF\uFF66-\uFF9F]/
@@ -107,13 +100,10 @@ function translateBlock(card, container) {
     }
     setHtmlContent(textEl, jsLinkify(resp.translated_text))
     container.setAttribute('data-translated', '1')
-    // Prefer feed item's detected lang (data-lang) over kagi's source_lang —
-    // langdetect runs on raw body text, kagi can be confused by mixed content
-    var itemLang = (container.getAttribute('data-lang') || '').trim()
-    var srcLang = (itemLang && KNOWN_LANGS[itemLang]) ? itemLang : resp.source_lang
+    var srcLang = (resp.source_lang || '').trim()
     var tBtn = translateButtonFor(card, field)
     var label = translateLabelForButton(tBtn)
-    if (label) label.textContent = srcLang ? srcLang.toUpperCase() : ''
+    if (label) label.textContent = srcLang
     if (tBtn) tBtn.classList.add('active')
     return 'translated'
   }).catch(function () {

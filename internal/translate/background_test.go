@@ -243,8 +243,8 @@ func TestTranslateBackgroundContinuesAfterCandidateProviderError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTranslation success: %v", err)
 	}
-	if got != "good text" || src != "zh" {
-		t.Fatalf("success translation = (%q, %q), want (good text, zh)", got, src)
+	if got != "good text" || src != "Chinese" {
+		t.Fatalf("success translation = (%q, %q), want (good text, Chinese)", got, src)
 	}
 	if _, _, err := d.GetTranslation("tweet-provider-error", "body", "en"); err != sql.ErrNoRows {
 		t.Fatalf("GetTranslation error candidate err = %v, want sql.ErrNoRows", err)
@@ -275,8 +275,8 @@ func TestTranslateBackgroundContinuesAfterCandidateProviderError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTranslation recovered candidate: %v", err)
 	}
-	if got != "recovered text" || src != "zh" {
-		t.Fatalf("recovered translation = (%q, %q), want (recovered text, zh)", got, src)
+	if got != "recovered text" || src != "Chinese" {
+		t.Fatalf("recovered translation = (%q, %q), want (recovered text, Chinese)", got, src)
 	}
 }
 

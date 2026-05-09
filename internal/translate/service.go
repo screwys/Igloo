@@ -19,6 +19,7 @@ import (
 	"unicode"
 
 	"github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/language"
 	"github.com/screwys/igloo/internal/settings"
 )
 
@@ -74,7 +75,7 @@ func FeedText(ctx context.Context, database *db.DB, tweetID, field, targetLang s
 	if err == nil {
 		return &Result{
 			TranslatedText: cached,
-			SourceLang:     cachedLang,
+			SourceLang:     language.DisplayName(cachedLang),
 			TargetLang:     targetLang,
 			Provider:       "cache",
 		}, nil
@@ -110,7 +111,7 @@ func FeedText(ctx context.Context, database *db.DB, tweetID, field, targetLang s
 		return nil, ErrNoText
 	}
 	if sourceLanguageMatchesTarget(detectedLang, targetLang) {
-		return nil, AlreadyTargetLanguageError{SourceLang: strings.ToLower(strings.TrimSpace(detectedLang))}
+		return nil, AlreadyTargetLanguageError{SourceLang: language.DisplayName(detectedLang)}
 	}
 
 	contextHint := stripForTranslateContext(buildContext(fi.BodyText, fi.QuoteBodyText, field))
@@ -125,8 +126,8 @@ func FeedText(ctx context.Context, database *db.DB, tweetID, field, targetLang s
 		return nil, ErrTranslationFailed
 	}
 
-	srcLang := strings.ToLower(strings.TrimSpace(translated.SourceLang))
-	if srcLang != "" && srcLang == targetLang {
+	srcLang := language.DisplayName(translated.SourceLang)
+	if sourceLanguageMatchesTarget(srcLang, targetLang) {
 		return nil, AlreadyTargetLanguageError{SourceLang: srcLang}
 	}
 
@@ -136,7 +137,7 @@ func FeedText(ctx context.Context, database *db.DB, tweetID, field, targetLang s
 	}
 	cacheLang := srcLang
 	if cacheLang == "" {
-		cacheLang = strings.ToLower(strings.TrimSpace(detectedLang))
+		cacheLang = language.DisplayName(detectedLang)
 	}
 	if cacheLang == "" {
 		cacheLang = "und"
@@ -250,17 +251,7 @@ func looksAlreadyReadableInTarget(protected, targetLang string) bool {
 }
 
 func sourceLanguageMatchesTarget(sourceLang, targetLang string) bool {
-	src := normalizeLanguageCode(sourceLang)
-	dst := normalizeLanguageCode(targetLang)
-	return src != "" && dst != "" && src == dst
-}
-
-func normalizeLanguageCode(lang string) string {
-	lang = strings.ToLower(strings.TrimSpace(lang))
-	if idx := strings.IndexAny(lang, "-_"); idx >= 0 {
-		lang = lang[:idx]
-	}
-	return lang
+	return language.Matches(sourceLang, targetLang)
 }
 
 // buildContext builds context for quote tweet translations.
@@ -352,13 +343,10 @@ func kagiTranslate(ctx context.Context, text, targetLang, contextHint string) (*
 		return nil, nil
 	}
 
-	sourceLang := data.DetectedLanguage.ISO
+	sourceLang := language.DisplayName(data.Translation.SourceLanguage)
 	if sourceLang == "" {
-		sourceLang = data.Translation.SourceLanguage
+		sourceLang = language.DisplayName(data.DetectedLanguage.ISO)
 	}
-	sourceLang = strings.ToLower(sourceLang)
-	sourceLang = strings.ReplaceAll(sourceLang, "zh_cn", "zh")
-	sourceLang = strings.ReplaceAll(sourceLang, "zh_tw", "zh-tw")
 
 	return &Result{
 		TranslatedText: data.Translation.Translation,
@@ -420,7 +408,7 @@ func googleTranslate(ctx context.Context, endpoint, apiKey, text, targetLang str
 	tr := data.Data.Translations[0]
 	return &Result{
 		TranslatedText: html.UnescapeString(tr.TranslatedText),
-		SourceLang:     strings.ToLower(tr.DetectedSourceLanguage),
+		SourceLang:     language.DisplayName(tr.DetectedSourceLanguage),
 	}, nil
 }
 
@@ -468,7 +456,7 @@ func deeplTranslate(ctx context.Context, endpoint, apiKey, text, targetLang stri
 	tr := data.Translations[0]
 	return &Result{
 		TranslatedText: tr.Text,
-		SourceLang:     strings.ToLower(tr.DetectedSourceLanguage),
+		SourceLang:     language.DisplayName(tr.DetectedSourceLanguage),
 	}, nil
 }
 
@@ -497,7 +485,7 @@ func openAICompatTranslate(ctx context.Context, endpoint, apiKey, model, text, t
 		return nil, err
 	}
 
-	prompt := "Translate the provided social-media text. Preserve every placeholder like {{0}} exactly. Return only JSON with keys translated_text and source_lang."
+	prompt := "Translate the provided social-media text. Preserve every placeholder like {{0}} exactly. Return only JSON with keys translated_text and source_language. source_language must be the full English name of the source language, for example Korean, not an ISO code."
 	user := "Target language: " + strings.ToLower(strings.TrimSpace(targetLang)) + "\n"
 	if strings.TrimSpace(contextHint) != "" {
 		user += "Context: " + strings.TrimSpace(contextHint) + "\n"
@@ -595,12 +583,10 @@ func parseOpenAICompatTranslation(content string) (*Result, error) {
 	if text == "" {
 		return nil, nil
 	}
-	sourceLang := strings.ToLower(strings.TrimSpace(data.SourceLang))
+	sourceLang := language.DisplayName(data.SourceLanguage)
 	if sourceLang == "" {
-		sourceLang = strings.ToLower(strings.TrimSpace(data.SourceLanguage))
+		sourceLang = language.DisplayName(data.SourceLang)
 	}
-	sourceLang = strings.ReplaceAll(sourceLang, "zh_cn", "zh")
-	sourceLang = strings.ReplaceAll(sourceLang, "zh_tw", "zh-tw")
 	return &Result{
 		TranslatedText: text,
 		SourceLang:     sourceLang,

@@ -318,6 +318,13 @@ object IglooMigrations {
         }
     }
 
+    val MIGRATION_29_30 = object : Migration(29, 30) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE feed_items ADD COLUMN body_source_lang TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE feed_items ADD COLUMN quote_source_lang TEXT DEFAULT NULL")
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_7_8,
         MIGRATION_8_9,
@@ -341,5 +348,6 @@ object IglooMigrations {
         MIGRATION_26_27,
         MIGRATION_27_28,
         MIGRATION_28_29,
+        MIGRATION_29_30,
     )
 }

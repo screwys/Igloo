@@ -160,6 +160,8 @@ func TestSourceLanguageMatchesTargetNormalizesLanguageTags(t *testing.T) {
 	}{
 		{source: "en-US", target: "en", want: true},
 		{source: "pt_BR", target: "pt", want: true},
+		{source: "Korean", target: "ko", want: true},
+		{source: "kr", target: "ko", want: false},
 		{source: "es", target: "en", want: false},
 		{source: "", target: "en", want: false},
 	}
@@ -205,7 +207,7 @@ func TestGoogleTranslateUsesConfiguredEndpointAndKey(t *testing.T) {
 	if gotBody["target"] != "en" || gotBody["format"] != "text" {
 		t.Fatalf("request body = %#v", gotBody)
 	}
-	if result.TranslatedText != "Hello & welcome" || result.SourceLang != "ja" {
+	if result.TranslatedText != "Hello & welcome" || result.SourceLang != "Japanese" {
 		t.Fatalf("result = %#v", result)
 	}
 }
@@ -233,7 +235,7 @@ func TestDeepLTranslateUsesAuthorizationHeader(t *testing.T) {
 	if gotBody["target_lang"] != "EN" {
 		t.Fatalf("target_lang = %v, want EN", gotBody["target_lang"])
 	}
-	if result.TranslatedText != "Hello" || result.SourceLang != "ja" {
+	if result.TranslatedText != "Hello" || result.SourceLang != "Japanese" {
 		t.Fatalf("result = %#v", result)
 	}
 }
@@ -249,7 +251,7 @@ func TestOpenAICompatTranslateUsesBareEndpointAndModelWithoutKey(t *testing.T) {
 			t.Fatalf("decode request: %v", err)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"translated_text\":\"Hello {{0}}\",\"source_lang\":\"ja\"}"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"translated_text\":\"Hello {{0}}\",\"source_language\":\"Korean\"}"}}]}`))
 	}))
 	defer srv.Close()
 
@@ -270,7 +272,7 @@ func TestOpenAICompatTranslateUsesBareEndpointAndModelWithoutKey(t *testing.T) {
 	if !ok || len(messages) == 0 {
 		t.Fatalf("messages missing from request: %#v", gotBody)
 	}
-	if result.TranslatedText != "Hello {{0}}" || result.SourceLang != "ja" {
+	if result.TranslatedText != "Hello {{0}}" || result.SourceLang != "Korean" {
 		t.Fatalf("result = %#v", result)
 	}
 }

@@ -122,7 +122,7 @@ import com.screwy.igloo.data.entity.WatchHistoryEntity
         AndroidSyncItemEntity::class,
         AndroidSyncAssetEntity::class,
     ],
-    version = 29,
+    version = 30,
     exportSchema = true,
 )
 abstract class IglooDatabase : RoomDatabase() {

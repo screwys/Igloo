@@ -271,15 +271,15 @@ templ feedAuthorAside(p PageProps, item model.FeedItem) {
 	}
 	if hasBodyTranslatePill(item) {
 		<span class="feed-date-inline">&middot;</span>
-		@feedTranslatePill(p, "body", item.Lang, item.BodySourceLang, item.BodyTranslation != "")
+		@feedTranslatePill(p, "body", item.BodySourceLang, item.BodyTranslation != "")
 	}
 }
 
 // feedTranslatePill is the compact translate toggle that lives next to the
-// timestamp. Inactive: gray icon, no text. Active: colored icon + source-lang
-// code (e.g., "KO"). JS toggles .active and rewrites the label to the lang
-// code on translate, empty on revert.
-templ feedTranslatePill(p PageProps, field string, lang string, sourceLang string, active bool) {
+// timestamp. Inactive: gray icon, no text. Active: colored icon + translator
+// source-language label. JS toggles .active and rewrites the label on
+// translate, empty on revert.
+templ feedTranslatePill(p PageProps, field string, sourceLang string, active bool) {
 	<button
 		class={ "feed-translate-btn feed-translate-pill", templ.KV("active", active) }
 		type="button"
@@ -300,7 +300,7 @@ templ feedTranslatePill(p PageProps, field string, lang string, sourceLang strin
 			data-translate-default-label=""
 	>
 		if active {
-			{ feedTranslateSourceCode(lang, sourceLang) }
+			{ feedTranslateSourceLabel(sourceLang) }
 		}
 	</span>
 	</button>
@@ -594,7 +594,7 @@ templ feedQuoteCard(p PageProps, item model.FeedItem) {
 				}
 				if hasQuoteTranslatePill(item) {
 					<span class="feed-quote-date">&middot;</span>
-					@feedTranslatePill(p, "quote", item.QuoteLang, item.QuoteSourceLang, item.QuoteTranslation != "")
+					@feedTranslatePill(p, "quote", item.QuoteSourceLang, item.QuoteTranslation != "")
 				}
 			</span>
 			if item.QuoteChannelID != "" && item.QuoteAuthorHandle != "" && !item.QuoteChannelFollowed {

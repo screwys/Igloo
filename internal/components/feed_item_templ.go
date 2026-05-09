@@ -1522,7 +1522,7 @@ func feedAuthorAside(p PageProps, item model.FeedItem) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = feedTranslatePill(p, "body", item.Lang, item.BodySourceLang, item.BodyTranslation != "").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = feedTranslatePill(p, "body", item.BodySourceLang, item.BodyTranslation != "").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1532,10 +1532,10 @@ func feedAuthorAside(p PageProps, item model.FeedItem) templ.Component {
 }
 
 // feedTranslatePill is the compact translate toggle that lives next to the
-// timestamp. Inactive: gray icon, no text. Active: colored icon + source-lang
-// code (e.g., "KO"). JS toggles .active and rewrites the label to the lang
-// code on translate, empty on revert.
-func feedTranslatePill(p PageProps, field string, lang string, sourceLang string, active bool) templ.Component {
+// timestamp. Inactive: gray icon, no text. Active: colored icon + translator
+// source-language label. JS toggles .active and rewrites the label on
+// translate, empty on revert.
+func feedTranslatePill(p PageProps, field string, sourceLang string, active bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -1632,9 +1632,9 @@ func feedTranslatePill(p PageProps, field string, lang string, sourceLang string
 		}
 		if active {
 			var templ_7745c5c3_Var87 string
-			templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(feedTranslateSourceCode(lang, sourceLang))
+			templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(feedTranslateSourceLabel(sourceLang))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed_item.templ`, Line: 303, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed_item.templ`, Line: 303, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
 			if templ_7745c5c3_Err != nil {
@@ -3108,7 +3108,7 @@ func feedQuoteCard(p PageProps, item model.FeedItem) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = feedTranslatePill(p, "quote", item.QuoteLang, item.QuoteSourceLang, item.QuoteTranslation != "").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = feedTranslatePill(p, "quote", item.QuoteSourceLang, item.QuoteTranslation != "").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

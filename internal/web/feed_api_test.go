@@ -89,6 +89,25 @@ func TestFeedItemPrimaryPreservesStoredCanonicalURLs(t *testing.T) {
 	}
 }
 
+func TestFeedItemPrimaryIncludesTranslationSourceLabels(t *testing.T) {
+	primary := feedItemToBundlePrimary(model.FeedItem{
+		TweetID:          "tw_translated",
+		AuthorHandle:     "alice",
+		BodyTranslation:  "hello",
+		BodySourceLang:   "Korean",
+		QuoteTweetID:     "quote_1",
+		QuoteTranslation: "quoted hello",
+		QuoteSourceLang:  "Japanese",
+	}, nil, nil, nil)
+
+	if got := primary["body_source_lang"]; got != "Korean" {
+		t.Fatalf("body_source_lang = %#v, want Korean", got)
+	}
+	if got := primary["quote_source_lang"]; got != "Japanese" {
+		t.Fatalf("quote_source_lang = %#v, want Japanese", got)
+	}
+}
+
 func TestHandleFeedBookmarked_RequiresAuth(t *testing.T) {
 	srv := newTestServer(t)
 
