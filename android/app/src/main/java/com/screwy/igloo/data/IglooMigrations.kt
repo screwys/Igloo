@@ -8,8 +8,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * here — destructive fallback drops the cache and orphans cached media on
  * disk (files stay; inventory rows go), so trivial column adds must use a
  * proper `ALTER TABLE` migration instead.
+ *
+ * Committed Room schema JSON starts at [SUPPORTED_SCHEMA_BASELINE_VERSION].
+ * Older migration objects stay here for installed databases that still need
+ * them, but tests and architecture checks should not expect pruned internal
+ * snapshots before that baseline.
  */
 object IglooMigrations {
+    const val SUPPORTED_SCHEMA_BASELINE_VERSION = 29
+    const val CURRENT_SCHEMA_VERSION = 30
 
     /** Adds `media_inventory.audio_language` for the subtitle auto-on rule. */
     val MIGRATION_7_8 = object : Migration(7, 8) {

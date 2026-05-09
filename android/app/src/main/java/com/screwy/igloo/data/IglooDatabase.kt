@@ -78,14 +78,17 @@ import com.screwy.igloo.data.entity.WatchHistoryEntity
  *
  * ### Migrations
  *
- * Every schema bump MUST add an explicit `Migration` in `IglooMigrations`. Destructive
- * fallback exists only as a backstop for upgrade paths that predate the migration ladder
- * (any version pair without a registered migration will still drop all tables). It is
- * NOT a license to skip writing a real migration: dropping the cache leaves orphan media
- * files on disk (the inventory rows are wiped, but the underlying files aren't), so the
- * app reports 0 MB cached while still using GBs of storage and re-sync may not redownload
- * everything that was lost. Add an `ALTER TABLE` migration for any column add — Room's
- * SQLite layer handles trivial column adds without rewriting the table.
+ * Every schema bump MUST add an explicit `Migration` in `IglooMigrations`. Committed
+ * Room schema JSON intentionally starts at `SUPPORTED_SCHEMA_BASELINE_VERSION`; older
+ * migration objects may stay in code for installed databases, but snapshots before that
+ * baseline are not required evidence. Destructive fallback exists only as a backstop for
+ * upgrade paths that predate the migration ladder (any version pair without a registered
+ * migration will still drop all tables). It is NOT a license to skip writing a real
+ * migration: dropping the cache leaves orphan media files on disk (the inventory rows are
+ * wiped, but the underlying files aren't), so the app reports 0 MB cached while still
+ * using GBs of storage and re-sync may not redownload everything that was lost. Add an
+ * `ALTER TABLE` migration for any column add — Room's SQLite layer handles trivial column
+ * adds without rewriting the table.
  */
 @Database(
     entities = [
@@ -122,7 +125,7 @@ import com.screwy.igloo.data.entity.WatchHistoryEntity
         AndroidSyncItemEntity::class,
         AndroidSyncAssetEntity::class,
     ],
-    version = 30,
+    version = IglooMigrations.CURRENT_SCHEMA_VERSION,
     exportSchema = true,
 )
 abstract class IglooDatabase : RoomDatabase() {
