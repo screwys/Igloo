@@ -13,10 +13,27 @@ var _flushing = false
 var _sessionID = 'moments-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
 var _logEndpoint = '/api/logs/moments'
 var _serverLog = '~/.local/share/igloo/logs/moments/debug.jsonl'
+var _debugTTL = 30 * 60 * 1000
+var _bandSampleInterval = 1500
+var _lastEventByKey = {}
+
+function debugUntil() {
+  try {
+    return parseInt(localStorage.getItem('shortsDebugUntil') || '0', 10) || 0
+  } catch (_) {
+    return 0
+  }
+}
 
 function wantsDebug() {
   try {
-    return localStorage.getItem('shortsDebug') === '1'
+    if (localStorage.getItem('shortsDebug') !== '1') return false
+    var until = debugUntil()
+    if (!until || until <= Date.now()) {
+      setEnabled(false)
+      return false
+    }
+    return true
   } catch (_) {
     return false
   }
@@ -31,8 +48,13 @@ function syncDebugFlagFromURL() {
 
 function setEnabled(enabled) {
   try {
-    if (enabled) localStorage.setItem('shortsDebug', '1')
-    else localStorage.removeItem('shortsDebug')
+    if (enabled) {
+      localStorage.setItem('shortsDebug', '1')
+      localStorage.setItem('shortsDebugUntil', String(Date.now() + _debugTTL))
+    } else {
+      localStorage.removeItem('shortsDebug')
+      localStorage.removeItem('shortsDebugUntil')
+    }
   } catch (_) {}
 }
 
@@ -133,6 +155,9 @@ function shortUrl(url) {
 
 function sampleBands(video) {
   if (!video || !video.videoWidth || !video.videoHeight) return null
+  var now = Date.now()
+  var cached = video._shortsDebugBandsCache
+  if (cached && now - cached.at < _bandSampleInterval) return cached.bands
   try {
     var canvas = document.createElement('canvas')
     var w = 24
@@ -142,9 +167,12 @@ function sampleBands(video) {
     var ctx = canvas.getContext('2d', { willReadFrequently: true })
     ctx.drawImage(video, 0, 0, w, h)
     var bands = { top: band(ctx, w, 0, 8), middle: band(ctx, w, 8, 16), bottom: band(ctx, w, 16, 24) }
+    video._shortsDebugBandsCache = { at: now, bands: bands }
     return bands
   } catch (err) {
-    return { error: String(err && err.name || err || 'sample_failed') }
+    var errorBands = { error: String(err && err.name || err || 'sample_failed') }
+    video._shortsDebugBandsCache = { at: now, bands: errorBands }
+    return errorBands
   }
 }
 
@@ -264,6 +292,7 @@ function snapshot(entry, eventName, extra) {
 
 export function recordShortsDebugEvent(entry, eventName, extra) {
   if (!enabled()) return
+  if (!eventAllowed(entry, eventName, extra)) return
   var row = snapshot(entry, eventName, extra)
   if (!row) return
   _events.push(row)
@@ -271,6 +300,33 @@ export function recordShortsDebugEvent(entry, eventName, extra) {
   _pending.push(row)
   if (_pending.length > _maxEvents) _pending = _pending.slice(-_maxEvents)
   scheduleFlush()
+}
+
+function eventAllowed(entry, eventName, extra) {
+  var interval = eventMinInterval(eventName)
+  if (!interval) return true
+  var id = entry && entry.data && entry.data.id
+  var phase = extra && extra.phase ? ':' + extra.phase : ''
+  var key = [id || 'current', eventName || 'snapshot', phase].join('|')
+  var now = Date.now()
+  var last = _lastEventByKey[key] || 0
+  if (now - last < interval) return false
+  _lastEventByKey[key] = now
+  return true
+}
+
+function eventMinInterval(eventName) {
+  switch (eventName) {
+    case 'chrome:snapshot':
+      return 1000
+    case 'video:timeupdate':
+      return 1000
+    case 'intersect:candidate':
+    case 'activate:pre-snap':
+      return 500
+    default:
+      return 0
+  }
 }
 
 function scheduleFlush() {
@@ -362,13 +418,17 @@ export function initShortsDebug(stateRef) {
     disable: function () { setEnabled(false); return flush() },
     enabled: enabled,
     status: function () {
+      var isEnabled = enabled()
+      var until = debugUntil()
       return {
-        enabled: enabled(),
+        enabled: isEnabled,
         sessionId: _sessionID,
         events: _events.length,
         pending: _pending.length,
         endpoint: _logEndpoint,
-        serverLog: _serverLog
+        serverLog: _serverLog,
+        expiresAtMs: until || 0,
+        expiresInMs: until ? Math.max(0, until - Date.now()) : 0
       }
     },
     current: function () { return snapshot(currentEntry(), 'manual:current') },

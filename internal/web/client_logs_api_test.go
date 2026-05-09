@@ -116,6 +116,41 @@ func TestClientLogMomentsWritesPersistentJSONL(t *testing.T) {
 	}
 }
 
+func TestClientLogMomentsRotatesBeforeAppend(t *testing.T) {
+	srv := newTestServer(t)
+	dataDir := t.TempDir()
+	srv.cfg.DataDir = dataDir
+
+	logPath := filepath.Join(dataDir, "logs", "moments", "debug.jsonl")
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(logPath, bytes.Repeat([]byte("x"), int(momentsLogRotateByte)+1), 0o644); err != nil {
+		t.Fatalf("seed log: %v", err)
+	}
+
+	body := `{"device_id":"web-moments","entries":[{"event":"moments_video_debug","level":"debug","timestamp_ms":1745100000000}]}`
+	rec := httptest.NewRecorder()
+	srv.handleClientLogMoments(rec, httptest.NewRequest("POST", "/api/logs/moments", strings.NewReader(body)))
+
+	if rec.Code != 200 {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(logPath + ".1"); err != nil {
+		t.Fatalf("rotated log missing: %v", err)
+	}
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read new log: %v", err)
+	}
+	if bytes.Contains(raw, []byte("xxxxx")) {
+		t.Fatalf("new log kept old oversized content")
+	}
+	if !bytes.Contains(raw, []byte("moments_video_debug")) {
+		t.Fatalf("new log missing appended event: %s", string(raw))
+	}
+}
+
 func TestClientLogCapsBatchSize(t *testing.T) {
 	srv := newTestServer(t)
 	dataDir := t.TempDir()

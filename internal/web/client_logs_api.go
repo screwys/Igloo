@@ -38,6 +38,8 @@ type clientLogBatch struct {
 const (
 	clientLogMaxEntries  = 100
 	clientLogMaxBodyByte = 256 * 1024 // 256 KB / batch
+	clientLogRotateByte  = 10 * 1024 * 1024
+	momentsLogRotateByte = 5 * 1024 * 1024
 )
 
 var clientLogMu sync.Mutex
@@ -91,6 +93,11 @@ func (s *Server) appendClientLog(w http.ResponseWriter, r *http.Request, logRelP
 	clientLogMu.Lock()
 	defer clientLogMu.Unlock()
 
+	if err := rotateClientLogIfNeeded(path, clientLogRotateLimit(logRelPath)); err != nil {
+		writeJSONError(w, 500, "log_write_failed", fmt.Sprintf("rotate: %v", err))
+		return
+	}
+
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		writeJSONError(w, 500, "log_write_failed", fmt.Sprintf("open: %v", err))
@@ -135,4 +142,32 @@ func (s *Server) appendClientLog(w http.ResponseWriter, r *http.Request, logRelP
 	}
 
 	writeJSON(w, 200, map[string]any{"written": written})
+}
+
+func clientLogRotateLimit(logRelPath string) int64 {
+	switch filepath.ToSlash(logRelPath) {
+	case "moments/debug.jsonl":
+		return momentsLogRotateByte
+	default:
+		return clientLogRotateByte
+	}
+}
+
+func rotateClientLogIfNeeded(path string, maxBytes int64) error {
+	if maxBytes <= 0 {
+		return nil
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if fi.Size() <= maxBytes {
+		return nil
+	}
+	rotated := path + ".1"
+	_ = os.Remove(rotated)
+	return os.Rename(path, rotated)
 }
