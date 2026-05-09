@@ -141,8 +141,8 @@ func (s *Server) handleFeedSeen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.db.InvalidateAlgoScore(tweetIDs...)
-	s.workers.KickFeedScoring()
+	// Seen state is filtered at read time. Rebuilding the rank snapshot for
+	// every visible card churns snapshot cursors while the user is scrolling.
 	syncVersion, _ := s.db.GetCurrentSyncVersion()
 	writeJSON(w, 200, map[string]any{
 		"success":      true,

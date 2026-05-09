@@ -209,3 +209,28 @@ func TestHandleFeedSeenAndMuteReturnSyncVersion(t *testing.T) {
 		t.Fatalf("mute response missing sync_version: %v", muteBody)
 	}
 }
+
+func TestHandleFeedSeenDoesNotInvalidateFeedRanking(t *testing.T) {
+	srv := newTestServer(t)
+	if err := srv.db.ExecRaw(`INSERT INTO feed_items
+		(tweet_id, author_handle, body_text, published_at, algo_interest, algo_scored_at)
+		VALUES ('tw_seen_ranked', 'alice', 'body', 1000, 1.0, 12345)`); err != nil {
+		t.Fatal(err)
+	}
+
+	seenReq := httptest.NewRequest("POST", "/api/feed/seen?tweet_id=tw_seen_ranked", nil)
+	seenReq = attachTestAuth(seenReq, "alice")
+	seenRec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(seenRec, seenReq)
+	if seenRec.Code != http.StatusOK {
+		t.Fatalf("seen status: got %d - %s", seenRec.Code, seenRec.Body.String())
+	}
+
+	var scoredAt int64
+	if err := srv.db.QueryRow(`SELECT algo_scored_at FROM feed_items WHERE tweet_id='tw_seen_ranked'`).Scan(&scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if scoredAt != 12345 {
+		t.Fatalf("algo_scored_at after seen = %d, want unchanged 12345", scoredAt)
+	}
+}

@@ -1033,10 +1033,12 @@ func (s *Server) handlePageFeed(w http.ResponseWriter, r *http.Request) {
 	if user != nil {
 		username = user.Username
 	}
+	isHTMX := r.Header.Get("HX-Request") != ""
 
-	// `offset` is a rank_position cursor within one snapshot. If the snapshot
-	// changes between page requests, reset to the top of the new unseen
-	// snapshot; otherwise compacted rank positions can skip rows.
+	// `offset` is a rank_position cursor within one snapshot. Full page loads
+	// can reset stale cursors to the top of the new unseen snapshot. HTMX
+	// append requests keep the old rank cursor because re-sending the top of a
+	// new snapshot would append cards that may already exist in the DOM.
 	offset := 0
 	if v := r.URL.Query().Get("offset"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -1053,7 +1055,7 @@ func (s *Server) handlePageFeed(w http.ResponseWriter, r *http.Request) {
 	snapAt, _ := s.db.SnapshotComputedAt(username)
 	if snapAt > 0 {
 		cursorSnapAt, _ := strconv.ParseInt(r.URL.Query().Get("snapshot_at"), 10, 64)
-		if offset > 0 && cursorSnapAt != snapAt {
+		if offset > 0 && cursorSnapAt != snapAt && !isHTMX {
 			offset = 0
 		}
 		page, snapErr := s.db.ListSnapshotPage(username, offset, pageSize+1)
@@ -1113,7 +1115,7 @@ func (s *Server) handlePageFeed(w http.ResponseWriter, r *http.Request) {
 	p.TrackFeedSeen = true
 
 	// HTMX infinite scroll — return just items + next sentinel
-	if r.Header.Get("HX-Request") != "" {
+	if isHTMX {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		components.FeedItemsPartial(p, items).Render(r.Context(), w)
 		components.FeedScrollSentinel(nextPageURL).Render(r.Context(), w)

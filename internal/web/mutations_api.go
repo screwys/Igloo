@@ -343,7 +343,6 @@ func (s *Server) handleMutationSeen(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, 400, "invalid_body", err.Error())
 		return
 	}
-	s.kickFeedOrderForTweetIDs(body.TweetIDs...)
 	writeMutation(w, 200, "seen", res.SyncVersion, map[string]any{"marked": len(body.TweetIDs)})
 }
 

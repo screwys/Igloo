@@ -109,6 +109,13 @@ func TestMutationCreateCategoryEchoesProvisionalID(t *testing.T) {
 func TestMutationSeenBatched(t *testing.T) {
 	srv := newTestServer(t)
 	ids := []string{"tw_a", "tw_b", "tw_c"}
+	for _, id := range ids {
+		if err := srv.db.ExecRaw(`INSERT INTO feed_items
+			(tweet_id, author_handle, body_text, published_at, algo_interest, algo_scored_at)
+			VALUES (?, 'alice', 'body', 1000, 1.0, 12345)`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
 	body := fmt.Sprintf(`{"tweet_ids":["%s"],"updated_at_ms":%d}`,
 		strings.Join(ids, `","`), time.Now().UnixMilli())
 	resp := postMutation(t, srv, "POST", "/api/mutations/seen", "alice", body)
@@ -120,6 +127,10 @@ func TestMutationSeenBatched(t *testing.T) {
 	srv.db.QueryRow(`SELECT COUNT(*) FROM feed_seen WHERE username='alice'`).Scan(&count)
 	if count != 3 {
 		t.Errorf("feed_seen rows = %d, want 3", count)
+	}
+	srv.db.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id IN ('tw_a','tw_b','tw_c') AND algo_scored_at = 0`).Scan(&count)
+	if count != 0 {
+		t.Errorf("seen mutation invalidated %d feed item scores, want 0", count)
 	}
 }
 
