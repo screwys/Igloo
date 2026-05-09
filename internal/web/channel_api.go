@@ -18,6 +18,7 @@ import (
 func (s *Server) registerChannelAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/channels", s.handleChannelsList)
 	mux.HandleFunc("POST /api/channels/{channelID}/star", s.handleChannelStar)
+	mux.HandleFunc("POST /api/channels/{channelID}/subscribe", s.handleChannelSubscribe)
 	mux.HandleFunc("GET /api/channels/{channelID}/settings", s.handleChannelSettingsGet)
 	mux.HandleFunc("POST /api/channels/{channelID}/settings", s.handleChannelSettingsPost)
 	mux.HandleFunc("POST /api/channels/{channelID}/refresh", s.handleChannelRefresh)
@@ -107,8 +108,8 @@ func (s *Server) handleChannelStar(w http.ResponseWriter, r *http.Request) {
 			components.ProfileCardStarButton(p, channelID, isStarred).Render(r.Context(), w)
 		case "sidebar":
 			components.SidebarStarButton(p, channelID, isStarred).Render(r.Context(), w)
-			case "player":
-				components.PlayerStarButton(p, channelID, isStarred).Render(r.Context(), w)
+		case "player":
+			components.PlayerStarButton(p, channelID, isStarred).Render(r.Context(), w)
 		default:
 			components.ChannelStarButton(p, channelID, isStarred).Render(r.Context(), w)
 		}
@@ -120,6 +121,43 @@ func (s *Server) handleChannelStar(w http.ResponseWriter, r *http.Request) {
 		"success":      true,
 		"is_starred":   isStarred,
 		"sync_version": syncVersion,
+	})
+}
+
+func (s *Server) handleChannelSubscribe(w http.ResponseWriter, r *http.Request) {
+	channelID := r.PathValue("channelID")
+	ch, err := s.db.GetChannelByID(channelID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "error": "channel not found"})
+		return
+	}
+
+	alreadyFollowed := ch.IsSubscribed || s.db.IsChannelFollowed(channelID)
+	if !alreadyFollowed {
+		if err := s.db.FollowChannel(channelID); err != nil {
+			slog.Error("FollowChannel", "channel", channelID, "err", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "error": "db error"})
+			return
+		}
+		valueJSON := fmt.Sprintf(`{"channel_id":%q,"platform":%q}`, ch.ChannelID, ch.Platform)
+		if err := s.db.RecordSyncChange("subscribe", ch.ChannelID, valueJSON); err != nil {
+			slog.Warn("RecordSyncChange subscribe", "channel", ch.ChannelID, "err", err)
+		}
+		if s.requestAvatar != nil {
+			s.requestAvatar(ch.ChannelID)
+		}
+		if s.workers != nil {
+			s.workers.Emit("system", fmt.Sprintf("Subscribed: %s (%s)", ch.Name, ch.Platform), "done")
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":         true,
+		"channel_id":      ch.ChannelID,
+		"name":            ch.Name,
+		"platform":        ch.Platform,
+		"subscribed":      true,
+		"already_existed": alreadyFollowed,
 	})
 }
 
@@ -305,7 +343,7 @@ func (s *Server) handleChannelSettingsPost(w http.ResponseWriter, r *http.Reques
 			}
 		}
 		w.Header().Set("Content-Type", "text/html")
-	components.ChannelSettingsForm(s.pageProps(w, r), channelID, platform, cs).Render(r.Context(), w)
+		components.ChannelSettingsForm(s.pageProps(w, r), channelID, platform, cs).Render(r.Context(), w)
 	} else {
 		writeJSON(w, 200, map[string]any{
 			"success": true,
