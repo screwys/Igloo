@@ -134,6 +134,7 @@ function buildHarness({
   prompts = [],
   followHandles = [],
   localList = [],
+  failDownloads = [],
   twitterChannels = [
     {
       channel_id: "twitter_alice",
@@ -218,7 +219,11 @@ function buildHarness({
         headers: options.headers,
       });
       queueMicrotask(() => {
-        options.onload?.();
+        if (failDownloads.some((pattern) => options.url.includes(pattern))) {
+          options.onerror?.({ error: "forced failure" });
+        } else {
+          options.onload?.();
+        }
       });
     },
     GM_xmlhttpRequest(options) {
@@ -228,11 +233,16 @@ function buildHarness({
         url: options.url,
         data: options.data,
       });
-      const response = responseFor(options.url, { twitterChannels });
+      const response = responseFor(options.url, {
+        data: options.data,
+        twitterChannels,
+      });
       queueMicrotask(() => {
         options.onload({
           status: response.status,
           responseText: response.text,
+          responseHeaders: response.headers || "",
+          finalUrl: response.finalUrl || options.url,
         });
       });
     },
@@ -265,7 +275,7 @@ function buildHarness({
   };
 }
 
-function responseFor(url, { twitterChannels } = {}) {
+function responseFor(url, { data, twitterChannels } = {}) {
   if (url === "http://127.0.0.1:5001/api/health/live") {
     return {
       status: 400,
@@ -317,12 +327,31 @@ function responseFor(url, { twitterChannels } = {}) {
     };
   }
   if (url === "https://localhost:5001/api/tweet-media-move") {
+    const ext = String(data || "").includes(".mp4") ? ".mp4" : ".jpg";
     return {
       status: 200,
       text: JSON.stringify({
         success: true,
-        moved: ["alice label 001.jpg"],
+        moved: ["alice label 001" + ext],
       }),
+    };
+  }
+  if (/^https:\/\/(d\.)?(fxtwitter|fixupx)\.com\/i\/status\/\d+\.mp4$/.test(url)) {
+    return {
+      status: 200,
+      text: "",
+      headers: "content-type: text/html; charset=UTF-8\r\n",
+    };
+  }
+  if (
+    /^https:\/\/(d\.)?(fxtwitter|fixupx)\.com\/[^/]+\/status\/\d+\.mp4$/.test(
+      url,
+    )
+  ) {
+    return {
+      status: 200,
+      text: "",
+      headers: "content-type: video/mp4\r\n",
     };
   }
   return { status: 500, text: JSON.stringify({ error: "unexpected url" }) };
@@ -342,6 +371,8 @@ function runScript(harness, { exposeDebug = false } = {}) {
   handleUnsave,
   collectTweetMediaItems: typeof collectTweetMediaItems === "function" ? collectTweetMediaItems : undefined,
   downloadMediaItems: typeof downloadMediaItems === "function" ? downloadMediaItems : undefined,
+  directVideoDownloadCandidates: typeof directVideoDownloadCandidates === "function" ? directVideoDownloadCandidates : undefined,
+  probeDirectMediaUrl: typeof probeDirectMediaUrl === "function" ? probeDirectMediaUrl : undefined,
   shouldShowMediaIndexPicker: typeof shouldShowMediaIndexPicker === "function" ? shouldShowMediaIndexPicker : undefined,
   normalizeSelectedMediaIndices: typeof normalizeSelectedMediaIndices === "function" ? normalizeSelectedMediaIndices : undefined,
 };\n})();`,
@@ -535,6 +566,35 @@ test("uses the quote tweet URL for quote-only videos", () => {
   ]);
 });
 
+test("prefers the quote author permalink over X generic i-status video links", () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  const article = el("article", {}, [
+    el("a", { href: "/parent/status/111" }, [el("time")]),
+    el("div", { role: "link" }, [
+      el("a", { href: "/quote/status/222" }, [el("time")]),
+      el("a", { href: "/i/status/222" }, [
+        el("div", { "data-testid": "videoPlayer" }, [el("video")]),
+      ]),
+    ]),
+  ]);
+
+  const items = JSON.parse(
+    JSON.stringify(harness.context.__iglooTest.collectTweetMediaItems(article)),
+  );
+
+  assert.deepEqual(items, [
+    {
+      kind: "video",
+      tweetId: "222",
+      tweetUrl: "https://x.com/quote/status/222",
+      ext: ".mp4",
+      index: 0,
+    },
+  ]);
+});
+
 test("shows the media picker even for a single media item", () => {
   const harness = buildHarness();
   runScript(harness, { exposeDebug: true });
@@ -552,7 +612,7 @@ test("treats no selected media buttons as the default all-media selection", () =
   );
 });
 
-test("downloads quote videos through the server downloader with the quote URL", async () => {
+test("downloads quote videos directly before server fallback", async () => {
   const harness = buildHarness();
   runScript(harness, { exposeDebug: true });
 
@@ -579,21 +639,98 @@ test("downloads quote videos through the server downloader with the quote URL", 
   await drainMicrotasks();
 
   assert.deepEqual(result?.json?.moved, ["alice label 001.mp4"]);
-  assert.deepEqual(harness.downloadCalls, []);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.downloadCalls)), [
+    {
+      url: "https://d.fxtwitter.com/quote/status/222.mp4",
+      name: "tmp_111_0.mp4",
+    },
+  ]);
+  assert.equal(
+    harness.requestCalls.some(
+      (call) => call.url === "https://localhost:5001/api/tweet-media-dl",
+    ),
+    false,
+  );
+});
+
+test("falls back to server video download when direct video download fails", async () => {
+  const harness = buildHarness({
+    failDownloads: ["fxtwitter.com", "fixupx.com"],
+  });
+  runScript(harness, { exposeDebug: true });
+
+  let result = null;
+  harness.context.__iglooTest.downloadMediaItems(
+    "111",
+    "alice",
+    [
+      {
+        kind: "video",
+        tweetId: "222",
+        tweetUrl: "https://x.com/i/status/222",
+        ext: ".mp4",
+        index: 0,
+      },
+    ],
+    1,
+    "label",
+    (resp) => {
+      result = JSON.parse(JSON.stringify(resp));
+    },
+  );
+
+  await drainMicrotasks();
+
+  assert.deepEqual(result?.json?.moved, ["alice label 001.mp4"]);
   const mediaDlCall = harness.requestCalls.find(
-    (call) =>
-      call.method === "POST" &&
-      call.url === "https://localhost:5001/api/tweet-media-dl",
+    (call) => call.url === "https://localhost:5001/api/tweet-media-dl",
   );
-  assert.ok(
-    mediaDlCall,
-    `expected /api/tweet-media-dl call, got ${harness.requestCalls
-      .map((call) => `${call.method} ${call.url}`)
-      .join(", ")}`,
-  );
+  assert.ok(mediaDlCall, "expected server fallback after direct failure");
   assert.equal(
     JSON.parse(mediaDlCall.data).tweet_url,
-    "https://x.com/quote/status/222",
+    "https://x.com/i/status/222",
+  );
+});
+
+test("skips generic i-status direct video links when they are html", async () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  let result = null;
+  harness.context.__iglooTest.downloadMediaItems(
+    "111",
+    "alice",
+    [
+      {
+        kind: "video",
+        tweetId: "222",
+        tweetUrl: "https://x.com/i/status/222",
+        ext: ".mp4",
+        index: 0,
+      },
+    ],
+    1,
+    "label",
+    (resp) => {
+      result = JSON.parse(JSON.stringify(resp));
+    },
+  );
+
+  await drainMicrotasks();
+
+  assert.deepEqual(result?.json?.moved, ["alice label 001.mp4"]);
+  assert.deepEqual(harness.downloadCalls, []);
+  assert.ok(
+    harness.requestCalls.some(
+      (call) => call.url === "https://d.fxtwitter.com/i/status/222.mp4",
+    ),
+    "expected direct i-status probe before fallback",
+  );
+  assert.ok(
+    harness.requestCalls.some(
+      (call) => call.url === "https://localhost:5001/api/tweet-media-dl",
+    ),
+    "expected server fallback after html direct probes",
   );
 });
 

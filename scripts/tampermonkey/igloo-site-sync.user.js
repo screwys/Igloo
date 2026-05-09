@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.7
+// @version      8.0.9
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -30,7 +30,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.7";
+  const SCRIPT_VERSION = "8.0.9";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -526,11 +526,13 @@
   function mediaOwnerForElement(node, article, parentInfo, quoteScopes) {
     const statusLink =
       node.closest && node.closest('a[href*="/status/"]');
+    let genericStatusOwner = null;
     if (statusLink) {
       const owner = parseTweetInfoFromHref(
         statusLink.getAttribute("href") || "",
       );
-      if (owner) return owner;
+      if (owner && owner.handle !== "i") return owner;
+      genericStatusOwner = owner;
     }
     for (const scope of quoteScopes) {
       if (
@@ -542,7 +544,7 @@
         return scope;
       }
     }
-    return parentInfo;
+    return genericStatusOwner || parentInfo;
   }
 
   function imageMediaFromElement(img) {
@@ -1369,7 +1371,7 @@
     }
   }
 
-  // ── Download: images via GM_download, videos via server yt-dlp ─────────────
+  // ── Download: direct browser first, server fallback for videos ─────────────
   function downloadImageToStaging(media, stagingName) {
     return new Promise((resolve) => {
       GM_download({
@@ -1387,6 +1389,105 @@
           resolve({ ok: false, error: "timeout" });
         },
       });
+    });
+  }
+
+  function directVideoDownloadCandidates(tweetUrl) {
+    let path = "";
+    try {
+      path = new URL(tweetUrl).pathname.replace(/\/+$/, "");
+    } catch (_) {
+      return [];
+    }
+    if (!/\/status\/\d+/.test(path)) return [];
+    return [
+      "https://d.fxtwitter.com" + path + ".mp4",
+      "https://d.fixupx.com" + path + ".mp4",
+      "https://fxtwitter.com" + path + ".mp4",
+      "https://fixupx.com" + path + ".mp4",
+    ];
+  }
+
+  function parseResponseHeaders(rawHeaders) {
+    const headers = {};
+    String(rawHeaders || "")
+      .split(/\r?\n/)
+      .forEach((line) => {
+        const idx = line.indexOf(":");
+        if (idx <= 0) return;
+        headers[line.slice(0, idx).trim().toLowerCase()] = line
+          .slice(idx + 1)
+          .trim();
+      });
+    return headers;
+  }
+
+  function probeDirectMediaUrl(url) {
+    return new Promise((resolve) => {
+      GM_xmlhttpRequest({
+        method: "HEAD",
+        url,
+        timeout: 15000,
+        onload(resp) {
+          const headers = parseResponseHeaders(resp.responseHeaders || "");
+          const contentType = String(headers["content-type"] || "")
+            .toLowerCase();
+          const finalUrl = String(resp.finalUrl || url);
+          const mediaURL = /(^|\/\/)video\.twimg\.com\//i.test(finalUrl);
+          const mp4URL = /\.mp4(?:$|[?#])/i.test(finalUrl);
+          const ok =
+            resp.status >= 200 &&
+            resp.status < 400 &&
+            !contentType.includes("text/html") &&
+            (contentType.startsWith("video/") ||
+              mediaURL ||
+              ((contentType === "application/octet-stream" || !contentType) &&
+                mp4URL));
+          resolve({ ok, status: resp.status, contentType, finalUrl });
+        },
+        onerror() {
+          resolve({ ok: false, error: "network_error" });
+        },
+        ontimeout() {
+          resolve({ ok: false, error: "timeout" });
+        },
+      });
+    });
+  }
+
+  function downloadVideoToStaging(media, stagingName) {
+    const candidates = directVideoDownloadCandidates(media.tweetUrl);
+    return new Promise((resolve) => {
+      let index = 0;
+      async function tryNext() {
+        const url = candidates[index++];
+        if (!url) {
+          resolve({ ok: false, error: "direct_video_failed" });
+          return;
+        }
+        const probe = await probeDirectMediaUrl(url);
+        if (!probe.ok) {
+          console.warn("[XDL] direct video probe rejected:", url, probe);
+          tryNext();
+          return;
+        }
+        GM_download({
+          url,
+          name: stagingName,
+          onload() {
+            resolve({ ok: true, url });
+          },
+          onerror(err) {
+            console.warn("[XDL] direct video download failed:", url, err);
+            tryNext();
+          },
+          ontimeout() {
+            console.warn("[XDL] direct video download timed out:", url);
+            tryNext();
+          },
+        });
+      }
+      tryNext();
     });
   }
 
@@ -1448,7 +1549,27 @@
       const failed = [];
       for (let i = 0; i < mediaItems.length; i++) {
         const media = mediaItems[i];
+        const staged = {
+          staging_name: "tmp_" + tweetId + "_" + i + media.ext,
+          ext: media.ext,
+        };
         if (media.kind === "video") {
+          const directResp = await downloadVideoToStaging(
+            media,
+            staged.staging_name,
+          );
+          if (directResp.ok) {
+            const moveResp = await moveStagedMedia(handle, label, categoryId, [
+              staged,
+            ]);
+            if (moveResp.ok && moveResp.json && moveResp.json.success) {
+              moved.push(...(moveResp.json.moved || []));
+            } else {
+              moved.push(staged.staging_name);
+            }
+            continue;
+          }
+
           const resp = await downloadVideoViaServer(
             media.tweetUrl,
             handle,
@@ -1463,10 +1584,6 @@
           continue;
         }
 
-        const staged = {
-          staging_name: "tmp_" + tweetId + "_" + i + media.ext,
-          ext: media.ext,
-        };
         const dlResp = await downloadImageToStaging(media, staged.staging_name);
         if (!dlResp.ok) {
           failed.push(staged.staging_name);
