@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.11
+// @version      8.0.12
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -22,15 +22,14 @@
 // @connect      127.0.0.1:8443
 // @connect      *
 // @connect      pbs.twimg.com
-// @connect      d.fxtwitter.com
 // @connect      video.twimg.com
 // @connect      *.twimg.com
-// @run-at       document-idle
+// @run-at       document-start
 // ==/UserScript==
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.11";
+  const SCRIPT_VERSION = "8.0.12";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -133,6 +132,10 @@
   const xCleanupEnabled = () => !!GM_getValue(SETTINGS.xCleanup, true);
   const pageWindow =
     typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
+  const X_MEDIA_CACHE_LIMIT = 500;
+  const X_MEDIA_GRAPHQL_PATH_RE =
+    /^(?:\/i\/api)?\/graphql\/[^/]+\/(TweetDetail|TweetResultByRestId|UserTweets|UserMedia|HomeTimeline|HomeLatestTimeline|UserTweetsAndReplies|UserHighlightsTweets|UserArticlesTweets|Bookmarks|Likes|CommunitiesExploreTimeline|ListLatestTweetsTimeline|SearchTimeline)$/;
+  const cachedXVideoUrlsByTweetId = new Map();
 
   function currentPlatform() {
     const host = location.hostname.toLowerCase();
@@ -198,6 +201,196 @@
       tweetId: m[2],
       handle: m[1],
     };
+  }
+
+  function isVideoTwimgMp4Url(url) {
+    return /^https:\/\/video\.twimg\.com\/.+\.mp4(?:$|[?#])/i.test(
+      String(url || ""),
+    );
+  }
+
+  function cachedVideoUrlsForTweet(tweetId) {
+    return cachedXVideoUrlsByTweetId.get(String(tweetId || "")) || [];
+  }
+
+  function rememberCachedVideoUrls(tweetId, urls) {
+    const id = String(tweetId || "");
+    const nextUrls = Array.from(
+      new Set((urls || []).filter(isVideoTwimgMp4Url)),
+    );
+    if (!id || !nextUrls.length) return false;
+
+    const existing = cachedVideoUrlsForTweet(id);
+    const merged = Array.from(new Set([...nextUrls, ...existing]));
+    const changed =
+      merged.length !== existing.length ||
+      merged.some((url, i) => url !== existing[i]);
+    cachedXVideoUrlsByTweetId.delete(id);
+    cachedXVideoUrlsByTweetId.set(id, merged);
+    while (cachedXVideoUrlsByTweetId.size > X_MEDIA_CACHE_LIMIT) {
+      const oldest = cachedXVideoUrlsByTweetId.keys().next().value;
+      cachedXVideoUrlsByTweetId.delete(oldest);
+    }
+    return changed;
+  }
+
+  function bestMp4VariantUrls(media) {
+    const variants = media?.video_info?.variants;
+    if (!Array.isArray(variants)) return [];
+    return variants
+      .filter(
+        (variant) =>
+          variant &&
+          String(variant.content_type || "").toLowerCase() === "video/mp4" &&
+          isVideoTwimgMp4Url(variant.url),
+      )
+      .slice()
+      .sort((a, b) => Number(b.bitrate || 0) - Number(a.bitrate || 0))
+      .map((variant) => variant.url);
+  }
+
+  function cacheTweetVideoUrls(tweet) {
+    const legacy = tweet?.legacy;
+    const tweetId = String(tweet?.rest_id || legacy?.id_str || "");
+    const media =
+      legacy?.extended_entities?.media || legacy?.entities?.media || [];
+    if (!tweetId || !Array.isArray(media)) return false;
+
+    const urls = [];
+    media.forEach((item) => {
+      const mediaType = String(item?.type || "");
+      const unavailable =
+        String(item?.ext_media_availability?.status || "") === "Unavailable";
+      if (
+        unavailable ||
+        (mediaType !== "video" && mediaType !== "animated_gif")
+      ) {
+        return;
+      }
+      urls.push(...bestMp4VariantUrls(item));
+    });
+    return rememberCachedVideoUrls(tweetId, urls);
+  }
+
+  function cacheTweetMediaFromApiResponse(body) {
+    let json = body;
+    if (typeof body === "string") {
+      if (!body.trim()) return 0;
+      try {
+        json = JSON.parse(body);
+      } catch (_) {
+        return 0;
+      }
+    }
+
+    let cached = 0;
+    const seen = new Set();
+    function visit(value) {
+      if (!value || typeof value !== "object" || seen.has(value)) return;
+      seen.add(value);
+      if (value.legacy && cacheTweetVideoUrls(value)) cached += 1;
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      Object.keys(value).forEach((key) => visit(value[key]));
+    }
+    visit(json);
+    return cached;
+  }
+
+  function shouldCaptureXApiMediaUrl(url) {
+    try {
+      const parsed = new URL(url, location.origin);
+      return X_MEDIA_GRAPHQL_PATH_RE.test(parsed.pathname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function fetchInputUrl(input) {
+    if (typeof input === "string") return input;
+    if (input instanceof URL) return input.href;
+    if (input && typeof input.href === "string") return input.href;
+    if (input && typeof input.url === "string") return input.url;
+    return "";
+  }
+
+  function captureXhrMediaResponse(xhr) {
+    try {
+      if (xhr.status !== 200) return;
+      const body =
+        typeof xhr.responseText === "string"
+          ? xhr.responseText
+          : xhr.response;
+      cacheTweetMediaFromApiResponse(body);
+    } catch (_) {}
+  }
+
+  function captureFetchMediaResponse(resp) {
+    try {
+      const ok =
+        typeof resp.ok === "boolean"
+          ? resp.ok
+          : resp.status >= 200 && resp.status < 300;
+      if (!ok || typeof resp.clone !== "function") return;
+      resp
+        .clone()
+        .text()
+        .then(cacheTweetMediaFromApiResponse)
+        .catch(() => {});
+    } catch (_) {}
+  }
+
+  function installXApiMediaCapture() {
+    if (!isXSite() || !pageWindow || pageWindow.__iglooXMediaCaptureInstalled)
+      return;
+    try {
+      pageWindow.__iglooXMediaCaptureInstalled = true;
+    } catch (_) {}
+
+    try {
+      const XHR = pageWindow.XMLHttpRequest;
+      if (XHR?.prototype?.open && !XHR.prototype.open.__iglooPatched) {
+        const nativeOpen = XHR.prototype.open;
+        const patchedOpen = function (...args) {
+          const url = args[1];
+          try {
+            if (
+              shouldCaptureXApiMediaUrl(url) &&
+              typeof this.addEventListener === "function"
+            ) {
+              this.addEventListener("load", () => captureXhrMediaResponse(this));
+            }
+          } catch (_) {}
+          return nativeOpen.apply(this, args);
+        };
+        patchedOpen.__iglooPatched = true;
+        XHR.prototype.open = patchedOpen;
+      }
+    } catch (err) {
+      console.warn("[XDL] could not install XHR media capture:", err);
+    }
+
+    try {
+      const nativeFetch = pageWindow.fetch;
+      if (typeof nativeFetch === "function" && !nativeFetch.__iglooPatched) {
+        const patchedFetch = function (...args) {
+          const shouldCapture = shouldCaptureXApiMediaUrl(fetchInputUrl(args[0]));
+          const promise = nativeFetch.apply(this, args);
+          if (!shouldCapture || !promise || typeof promise.then !== "function")
+            return promise;
+          return promise.then((resp) => {
+            captureFetchMediaResponse(resp);
+            return resp;
+          });
+        };
+        patchedFetch.__iglooPatched = true;
+        pageWindow.fetch = patchedFetch;
+      }
+    } catch (err) {
+      console.warn("[XDL] could not install fetch media capture:", err);
+    }
   }
 
   function extractHandleFromArticle(article) {
@@ -602,13 +795,16 @@
         );
         if (seenVideos.has(owner.tweetId)) return;
         seenVideos.add(owner.tweetId);
-        items.push({
+        const item = {
           kind: "video",
           tweetId: owner.tweetId,
           tweetUrl: owner.url,
           ext: ".mp4",
           domOrder: items.length,
-        });
+        };
+        const cachedUrl = cachedVideoUrlsForTweet(owner.tweetId)[0];
+        if (cachedUrl) item.url = cachedUrl;
+        items.push(item);
       });
 
     items.sort((a, b) => {
@@ -1371,7 +1567,7 @@
     }
   }
 
-  // ── Download: direct browser first, server fallback for videos ─────────────
+  // ── Download: direct browser staging ───────────────────────────────────────
   function downloadImageToStaging(media, stagingName) {
     return new Promise((resolve) => {
       GM_download({
@@ -1392,17 +1588,14 @@
     });
   }
 
-  function directVideoDownloadCandidates(tweetUrl) {
-    let path = "";
-    try {
-      path = new URL(tweetUrl).pathname.replace(/\/+$/, "");
-    } catch (_) {
-      return [];
-    }
-    if (!/\/status\/\d+/.test(path)) return [];
-    return [
-      "https://d.fxtwitter.com" + path + ".mp4",
-    ];
+  function directVideoDownloadCandidates(media) {
+    if (!media || typeof media !== "object") return [];
+    return Array.from(
+      new Set([
+        ...(isVideoTwimgMp4Url(media.url) ? [media.url] : []),
+        ...cachedVideoUrlsForTweet(media.tweetId),
+      ]),
+    );
   }
 
   function parseResponseHeaders(rawHeaders) {
@@ -1453,13 +1646,13 @@
   }
 
   function downloadVideoToStaging(media, stagingName) {
-    const candidates = directVideoDownloadCandidates(media.tweetUrl);
+    const candidates = directVideoDownloadCandidates(media);
     return new Promise((resolve) => {
       let index = 0;
       async function tryNext() {
         const url = candidates[index++];
         if (!url) {
-          resolve({ ok: false, error: "direct_video_failed" });
+          resolve({ ok: false, error: "no_cached_video_url" });
           return;
         }
         const probe = await probeDirectMediaUrl(url);
@@ -1497,20 +1690,6 @@
         label,
         category_id: categoryId,
         staged_files: stagedFiles,
-      },
-      true,
-    );
-  }
-
-  function downloadVideoViaServer(tweetUrl, handle, label, categoryId) {
-    return apiRequest(
-      "POST",
-      "/api/tweet-media-dl",
-      {
-        tweet_url: tweetUrl,
-        handle,
-        label,
-        category_id: categoryId,
       },
       true,
     );
@@ -1555,35 +1734,17 @@
             media,
             staged.staging_name,
           );
-          let directMoved = false;
-          if (directResp.ok) {
-            const moveResp = await moveStagedMedia(handle, label, categoryId, [
-              staged,
-            ]);
-            if (moveResp.ok && moveResp.json && moveResp.json.success) {
-              moved.push(...(moveResp.json.moved || []));
-              directMoved = true;
-            }
+          if (!directResp.ok) {
+            failed.push(media.tweetId || staged.staging_name);
+            continue;
           }
-          if (directMoved) continue;
-
-          if (directResp.ok) {
-            console.warn(
-              "[XDL] direct video staging rejected; using server fallback:",
-              staged.staging_name,
-            );
-          }
-
-          const resp = await downloadVideoViaServer(
-            media.tweetUrl,
-            handle,
-            label,
-            categoryId,
-          );
-          if (resp.ok && resp.json && resp.json.success) {
-            moved.push(...(resp.json.moved || []));
+          const moveResp = await moveStagedMedia(handle, label, categoryId, [
+            staged,
+          ]);
+          if (moveResp.ok && moveResp.json && moveResp.json.success) {
+            moved.push(...(moveResp.json.moved || []));
           } else {
-            failed.push(media.tweetId || String(i));
+            failed.push(media.tweetId || staged.staging_name);
           }
           continue;
         }
@@ -1658,24 +1819,8 @@
             },
           );
         } else {
-          const fallbackResp = await downloadVideoViaServer(
-            info.url,
-            effectiveHandle,
-            lbl,
-            catId,
-          );
-          if (fallbackResp.ok && fallbackResp.json?.success) {
-            onSuccess();
-            showToast(
-              "Downloaded " +
-                (fallbackResp.json.moved?.length || 0) +
-                " file(s): " +
-                lbl,
-            );
-          } else {
-            setDlButtonState(dlBtn, "error");
-            showToast(fallbackResp.json?.error || "Download failed");
-          }
+          setDlButtonState(dlBtn, "error");
+          showToast("No media found or cached for this post");
         }
       },
       article,
@@ -3008,31 +3153,45 @@
     scanTimer = setTimeout(runCurrentPlatformScan, BUTTON_SCAN_DEBOUNCE_MS);
   });
 
-  registerMenu();
-  runCurrentPlatformScan();
-  if (isXSite()) {
-    fetchServerHandles();
-    fetchXFeedSources();
-    if (xDownloadsEnabled()) {
-      fetchDlCategories();
-      fetchDlLabels();
-      loadHandleAliasesFromApi();
+  function startIglooSync() {
+    registerMenu();
+    runCurrentPlatformScan();
+    if (isXSite()) {
+      fetchServerHandles();
+      fetchXFeedSources();
+      if (xDownloadsEnabled()) {
+        fetchDlCategories();
+        fetchDlLabels();
+        loadHandleAliasesFromApi();
+      }
+    } else if (currentPlatform() === "tiktok") {
+      fetchPlatformChannels("tiktok");
+    } else if (currentPlatform() === "instagram") {
+      fetchPlatformChannels("instagram");
+    } else if (currentPlatform() === "youtube") {
+      fetchPlatformChannels("youtube");
+      window.addEventListener("yt-navigate-finish", () => {
+        currentYouTubeKey = "";
+        runCurrentPlatformScan();
+      });
     }
-  } else if (currentPlatform() === "tiktok") {
-    fetchPlatformChannels("tiktok");
-  } else if (currentPlatform() === "instagram") {
-    fetchPlatformChannels("instagram");
-  } else if (currentPlatform() === "youtube") {
-    fetchPlatformChannels("youtube");
-    window.addEventListener("yt-navigate-finish", () => {
-      currentYouTubeKey = "";
-      runCurrentPlatformScan();
-    });
+    const observeRoot = document.documentElement || document.body;
+    if (observeRoot) {
+      observer.observe(observeRoot, {
+        childList: true,
+        subtree: true,
+      });
+    }
+    setInterval(runCurrentPlatformScan, 1000);
+    console.log(`[IglooSync] loaded v${SCRIPT_VERSION}`);
   }
-  observer.observe(document.documentElement || document.body, {
-    childList: true,
-    subtree: true,
-  });
-  setInterval(runCurrentPlatformScan, 1000);
-  console.log(`[IglooSync] loaded v${SCRIPT_VERSION}`);
+
+  installXApiMediaCapture();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startIglooSync, {
+      once: true,
+    });
+  } else {
+    startIglooSync();
+  }
 })();

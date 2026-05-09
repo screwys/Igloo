@@ -346,18 +346,7 @@ function responseFor(url, { data, twitterChannels } = {}) {
       }),
     };
   }
-  if (/^https:\/\/d\.fxtwitter\.com\/i\/status\/\d+\.mp4$/.test(url)) {
-    return {
-      status: 200,
-      text: "",
-      headers: "content-type: text/html; charset=UTF-8\r\n",
-    };
-  }
-  if (
-    /^https:\/\/d\.fxtwitter\.com\/[^/]+\/status\/\d+\.mp4$/.test(
-      url,
-    )
-  ) {
+  if (/^https:\/\/video\.twimg\.com\/.*\.mp4(?:$|[?#])/.test(url)) {
     return {
       status: 200,
       text: "",
@@ -373,6 +362,56 @@ async function drainMicrotasks() {
   }
 }
 
+function tweetApiBodyWithQuoteVideo() {
+  return {
+    data: {
+      tweetResult: {
+        result: {
+          __typename: "Tweet",
+          rest_id: "111",
+          legacy: {
+            id_str: "111",
+            quoted_status_result: {
+              result: {
+                __typename: "Tweet",
+                rest_id: "222",
+                legacy: {
+                  id_str: "222",
+                  extended_entities: {
+                    media: [
+                      {
+                        type: "video",
+                        video_info: {
+                          variants: [
+                            {
+                              content_type: "application/x-mpegURL",
+                              url: "https://video.twimg.com/quote/master.m3u8",
+                            },
+                            {
+                              bitrate: 256000,
+                              content_type: "video/mp4",
+                              url: "https://video.twimg.com/quote-low.mp4?tag=1",
+                            },
+                            {
+                              bitrate: 2176000,
+                              content_type: "video/mp4",
+                              url: "https://video.twimg.com/quote-high.mp4?tag=1",
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 function runScript(harness, { exposeDebug = false } = {}) {
   const source = exposeDebug
     ? script.replace(
@@ -382,6 +421,8 @@ function runScript(harness, { exposeDebug = false } = {}) {
   collectTweetMediaItems: typeof collectTweetMediaItems === "function" ? collectTweetMediaItems : undefined,
   downloadMediaItems: typeof downloadMediaItems === "function" ? downloadMediaItems : undefined,
   directVideoDownloadCandidates: typeof directVideoDownloadCandidates === "function" ? directVideoDownloadCandidates : undefined,
+  cacheTweetMediaFromApiResponse: typeof cacheTweetMediaFromApiResponse === "function" ? cacheTweetMediaFromApiResponse : undefined,
+  cachedVideoUrlsForTweet: typeof cachedVideoUrlsForTweet === "function" ? cachedVideoUrlsForTweet : undefined,
   probeDirectMediaUrl: typeof probeDirectMediaUrl === "function" ? probeDirectMediaUrl : undefined,
   shouldShowMediaIndexPicker: typeof shouldShowMediaIndexPicker === "function" ? shouldShowMediaIndexPicker : undefined,
   normalizeSelectedMediaIndices: typeof normalizeSelectedMediaIndices === "function" ? normalizeSelectedMediaIndices : undefined,
@@ -622,10 +663,32 @@ test("treats no selected media buttons as the default all-media selection", () =
   );
 });
 
-test("uses only the existing fxtwitter direct-video domain", () => {
+test("uses cached X API mp4 variants for direct video downloads", () => {
   const harness = buildHarness();
   runScript(harness, { exposeDebug: true });
 
+  const cached = harness.context.__iglooTest.cacheTweetMediaFromApiResponse(
+    tweetApiBodyWithQuoteVideo(),
+  );
+
+  assert.equal(cached, 1);
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(
+        harness.context.__iglooTest.directVideoDownloadCandidates(
+          {
+            kind: "video",
+            tweetId: "222",
+            tweetUrl: "https://x.com/quote/status/222",
+          },
+        ),
+      ),
+    ),
+    [
+      "https://video.twimg.com/quote-high.mp4?tag=1",
+      "https://video.twimg.com/quote-low.mp4?tag=1",
+    ],
+  );
   assert.deepEqual(
     JSON.parse(
       JSON.stringify(
@@ -634,13 +697,16 @@ test("uses only the existing fxtwitter direct-video domain", () => {
         ),
       ),
     ),
-    ["https://d.fxtwitter.com/quote/status/222.mp4"],
+    [],
   );
 });
 
-test("downloads quote videos directly before server fallback", async () => {
+test("downloads quote videos directly from cached X API variants", async () => {
   const harness = buildHarness();
   runScript(harness, { exposeDebug: true });
+  harness.context.__iglooTest.cacheTweetMediaFromApiResponse(
+    tweetApiBodyWithQuoteVideo(),
+  );
 
   let result = null;
   harness.context.__iglooTest.downloadMediaItems(
@@ -667,7 +733,7 @@ test("downloads quote videos directly before server fallback", async () => {
   assert.deepEqual(result?.json?.moved, ["alice label 001.mp4"]);
   assert.deepEqual(JSON.parse(JSON.stringify(harness.downloadCalls)), [
     {
-      url: "https://d.fxtwitter.com/quote/status/222.mp4",
+      url: "https://video.twimg.com/quote-high.mp4?tag=1",
       name: "tmp_111_0.mp4",
     },
   ]);
@@ -679,11 +745,14 @@ test("downloads quote videos directly before server fallback", async () => {
   );
 });
 
-test("falls back to server video download when direct video download fails", async () => {
+test("does not fall back to server when direct video download fails", async () => {
   const harness = buildHarness({
-    failDownloads: ["fxtwitter.com"],
+    failDownloads: ["video.twimg.com"],
   });
   runScript(harness, { exposeDebug: true });
+  harness.context.__iglooTest.cacheTweetMediaFromApiResponse(
+    tweetApiBodyWithQuoteVideo(),
+  );
 
   let result = null;
   harness.context.__iglooTest.downloadMediaItems(
@@ -707,20 +776,23 @@ test("falls back to server video download when direct video download fails", asy
 
   await drainMicrotasks();
 
-  assert.deepEqual(result?.json?.moved, ["alice label 001.mp4"]);
-  const mediaDlCall = harness.requestCalls.find(
-    (call) => call.url === "https://localhost:5001/api/tweet-media-dl",
-  );
-  assert.ok(mediaDlCall, "expected server fallback after direct failure");
+  assert.equal(result?.json?.success, false);
+  assert.deepEqual(result?.json?.moved, []);
+  assert.deepEqual(result?.json?.failed, ["222"]);
   assert.equal(
-    JSON.parse(mediaDlCall.data).tweet_url,
-    "https://x.com/i/status/222",
+    harness.requestCalls.some(
+      (call) => call.url === "https://localhost:5001/api/tweet-media-dl",
+    ),
+    false,
   );
 });
 
-test("falls back to server video download when direct staging move fails", async () => {
+test("does not fall back to server when direct staging move fails", async () => {
   const harness = buildHarness();
   runScript(harness, { exposeDebug: true });
+  harness.context.__iglooTest.cacheTweetMediaFromApiResponse(
+    tweetApiBodyWithQuoteVideo(),
+  );
 
   let result = null;
   harness.context.__iglooTest.downloadMediaItems(
@@ -744,24 +816,26 @@ test("falls back to server video download when direct staging move fails", async
 
   await drainMicrotasks();
 
-  assert.deepEqual(result?.json?.moved, ["alice label 001.mp4"]);
+  assert.equal(result?.json?.success, false);
+  assert.deepEqual(result?.json?.moved, []);
+  assert.deepEqual(result?.json?.failed, ["222"]);
   assert.ok(
     harness.requestCalls.some(
       (call) =>
         call.method === "POST" &&
         call.url === "https://localhost:5001/api/tweet-media-move",
     ),
-    "expected browser staging move before fallback",
+    "expected browser staging move",
   );
-  assert.ok(
+  assert.equal(
     harness.requestCalls.some(
       (call) => call.url === "https://localhost:5001/api/tweet-media-dl",
     ),
-    "expected server fallback after staging move rejection",
+    false,
   );
 });
 
-test("skips generic i-status direct video links when they are html", async () => {
+test("fails video downloads without cached X API media instead of using fallback", async () => {
   const harness = buildHarness();
   runScript(harness, { exposeDebug: true });
 
@@ -787,19 +861,21 @@ test("skips generic i-status direct video links when they are html", async () =>
 
   await drainMicrotasks();
 
-  assert.deepEqual(result?.json?.moved, ["alice label 001.mp4"]);
+  assert.equal(result?.json?.success, false);
+  assert.deepEqual(result?.json?.moved, []);
+  assert.deepEqual(result?.json?.failed, ["222"]);
   assert.deepEqual(harness.downloadCalls, []);
-  assert.ok(
+  assert.equal(
     harness.requestCalls.some(
       (call) => call.url === "https://d.fxtwitter.com/i/status/222.mp4",
     ),
-    "expected direct i-status probe before fallback",
+    false,
   );
-  assert.ok(
+  assert.equal(
     harness.requestCalls.some(
       (call) => call.url === "https://localhost:5001/api/tweet-media-dl",
     ),
-    "expected server fallback after html direct probes",
+    false,
   );
 });
 
