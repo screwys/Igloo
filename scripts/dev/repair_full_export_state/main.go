@@ -25,7 +25,9 @@ type counters struct {
 	likePublishedUpdated     int
 	likeMetadataUpdated      int
 	feedItemPublishedUpdated int
+	feedItemContentResynced  int
 	likeSnowflakeUpdated     int
+	videoContentResynced     int
 	videoSnowflakeUpdated    int
 	videoPublishedUpdated    int
 }
@@ -39,8 +41,10 @@ func run(args []string) int {
 	exportPath := fs.String("export", "", "path to the igloo-full-*.zip used for import; optional for local published-at repair")
 	userID := fs.String("user", "", "user-owned rows to repair; defaults to exported user_id")
 	dbPath := fs.String("db", "", "database path; defaults to configured Igloo database")
+	sourceDB := fs.String("source-db", "", "path to an older Igloo SQLite database to restore bookmark dates from")
 	apply := fs.Bool("apply", false, "write changes; without this flag the command only reports")
 	overwrite := fs.Bool("overwrite", false, "replace non-empty current values with export values")
+	resyncBookmarkContent := fs.Bool("resync-bookmark-content", false, "bump sync_seq for bookmarked content rows that already have fallback timestamps")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -94,7 +98,7 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "begin transaction: %v\n", err)
 		return 1
 	}
-	stats, err := repair(tx, exportCfg, owner, *overwrite)
+	stats, err := repair(tx, exportCfg, owner, *overwrite, *resyncBookmarkContent, strings.TrimSpace(*sourceDB))
 	if err != nil {
 		tx.Rollback()
 		fmt.Fprintf(os.Stderr, "repair: %v\n", err)
@@ -119,8 +123,10 @@ func run(args []string) int {
 	fmt.Printf("like_metadata_updated=%d\n", stats.likeMetadataUpdated)
 	fmt.Printf("like_snowflake_published_updated=%d\n", stats.likeSnowflakeUpdated)
 	fmt.Printf("feed_item_snowflake_published_updated=%d\n", stats.feedItemPublishedUpdated)
+	fmt.Printf("feed_item_bookmark_content_resynced=%d\n", stats.feedItemContentResynced)
 	fmt.Printf("video_snowflake_published_updated=%d\n", stats.videoSnowflakeUpdated)
 	fmt.Printf("video_published_updated=%d\n", stats.videoPublishedUpdated)
+	fmt.Printf("video_bookmark_content_resynced=%d\n", stats.videoContentResynced)
 	if stats.bookmarkDatesUnavailable > 0 || stats.likeDatesUnavailable > 0 {
 		fmt.Printf("bookmark_dates_unavailable_in_export=%d\n", stats.bookmarkDatesUnavailable)
 		fmt.Printf("like_dates_unavailable_in_export=%d\n", stats.likeDatesUnavailable)
@@ -128,11 +134,22 @@ func run(args []string) int {
 	return 0
 }
 
-func repair(tx *sql.Tx, cfg *db.ConfigExport, owner string, overwrite bool) (counters, error) {
+func repair(tx *sql.Tx, cfg *db.ConfigExport, owner string, overwrite bool, resyncBookmarkContent bool, sourceDB string) (counters, error) {
 	var stats counters
+	seqs, err := newSyncSeqAllocator(tx)
+	if err != nil {
+		return stats, err
+	}
+	if sourceDB != "" {
+		n, err := repairBookmarkDatesFromSourceDB(tx, sourceDB, owner, overwrite)
+		if err != nil {
+			return stats, err
+		}
+		stats.bookmarkDatesUpdated += n
+	}
 
 	if cfg == nil {
-		return repairLocalPublishedAt(tx, owner, overwrite, stats)
+		return repairLocalPublishedAt(tx, seqs, owner, overwrite, resyncBookmarkContent, stats)
 	}
 
 	for _, bm := range cfg.Bookmarks {
@@ -199,7 +216,7 @@ func repair(tx *sql.Tx, cfg *db.ConfigExport, owner string, overwrite bool) (cou
 		}
 		publishedAt := timestampMillis(bv.PublishedAtMs, bv.PublishedAt)
 		if publishedAt > 0 {
-			n, err := updateVideoPublishedAt(tx, videoID, publishedAt, overwrite)
+			n, err := updateVideoPublishedAt(tx, seqs, videoID, publishedAt, overwrite)
 			if err != nil {
 				return stats, err
 			}
@@ -207,7 +224,7 @@ func repair(tx *sql.Tx, cfg *db.ConfigExport, owner string, overwrite bool) (cou
 		}
 	}
 
-	return repairLocalPublishedAt(tx, owner, overwrite, stats)
+	return repairLocalPublishedAt(tx, seqs, owner, overwrite, resyncBookmarkContent, stats)
 }
 
 func updateBookmarkDate(tx *sql.Tx, owner, videoID string, at int64, overwrite bool) (int, error) {
@@ -217,6 +234,94 @@ func updateBookmarkDate(tx *sql.Tx, owner, videoID string, at int64, overwrite b
 	}
 	res, err := tx.Exec("UPDATE bookmarks SET bookmarked_at = ? WHERE "+where, at, owner, videoID)
 	return rowsAffected(res, err)
+}
+
+func repairBookmarkDatesFromSourceDB(tx *sql.Tx, sourceDB, owner string, overwrite bool) (int, error) {
+	if _, err := os.Stat(sourceDB); err != nil {
+		return 0, fmt.Errorf("source db: %w", err)
+	}
+	if _, err := tx.Exec(`ATTACH DATABASE ? AS source_db`, sourceDB); err != nil {
+		return 0, fmt.Errorf("attach source db: %w", err)
+	}
+	defer tx.Exec(`DETACH DATABASE source_db`)
+
+	if _, err := tx.Exec(`DROP TABLE IF EXISTS temp.repair_bookmark_dates`); err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(`
+		CREATE TEMP TABLE repair_bookmark_dates (
+			user_id TEXT NOT NULL,
+			video_id TEXT NOT NULL,
+			bookmarked_at INTEGER NOT NULL,
+			PRIMARY KEY (user_id, video_id)
+		)
+	`); err != nil {
+		return 0, err
+	}
+
+	currentWhere := "COALESCE(b.bookmarked_at, 0) <= 0"
+	if overwrite {
+		currentWhere = "1 = 1"
+	}
+	args := []any{}
+	ownerWhere := ""
+	if owner != "" {
+		ownerWhere = " AND b.user_id = ?"
+		args = append(args, owner)
+	}
+	if _, err := tx.Exec(`
+		INSERT OR IGNORE INTO temp.repair_bookmark_dates (user_id, video_id, bookmarked_at)
+		SELECT b.user_id, b.video_id, source_b.bookmarked_at
+		FROM bookmarks b
+		JOIN source_db.bookmarks source_b
+		  ON source_b.user_id = b.user_id
+		 AND source_b.video_id = b.video_id
+		WHERE `+currentWhere+ownerWhere+`
+		  AND COALESCE(source_b.bookmarked_at, 0) > 0
+		  AND COALESCE(b.bookmarked_at, 0) != source_b.bookmarked_at
+	`, args...); err != nil {
+		return 0, err
+	}
+
+	var n int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM temp.repair_bookmark_dates`).Scan(&n); err != nil {
+		return 0, err
+	}
+	if n == 0 {
+		return 0, nil
+	}
+	if _, err := tx.Exec(`
+		UPDATE bookmarks
+		SET bookmarked_at = (
+			SELECT r.bookmarked_at
+			FROM temp.repair_bookmark_dates r
+			WHERE r.user_id = bookmarks.user_id
+			  AND r.video_id = bookmarks.video_id
+		)
+		WHERE EXISTS (
+			SELECT 1
+			FROM temp.repair_bookmark_dates r
+			WHERE r.user_id = bookmarks.user_id
+			  AND r.video_id = bookmarks.video_id
+		)
+	`); err != nil {
+		return 0, err
+	}
+
+	nowMs := time.Now().UnixMilli()
+	if _, err := tx.Exec(`
+		INSERT INTO sync_changes (type, item_id, value, created_at)
+		SELECT
+			'bookmark',
+			video_id,
+			'{"action":"set","bookmarked":true,"bookmarked_at":' || bookmarked_at || '}',
+			?
+		FROM temp.repair_bookmark_dates
+		ORDER BY bookmarked_at ASC, video_id ASC
+	`, nowMs); err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 func updateBookmarkMetadata(tx *sql.Tx, owner string, bm db.BookmarkExport, overwrite bool) (int, error) {
@@ -302,16 +407,16 @@ func updateLikeMetadata(tx *sql.Tx, owner string, lp db.LikedPostExport, overwri
 	return total, nil
 }
 
-func updateVideoPublishedAt(tx *sql.Tx, videoID string, publishedAt int64, overwrite bool) (int, error) {
+func updateVideoPublishedAt(tx *sql.Tx, seqs *syncSeqAllocator, videoID string, publishedAt int64, overwrite bool) (int, error) {
 	where := "video_id = ? AND published_at = 0"
 	if overwrite {
 		where = "video_id = ?"
 	}
-	res, err := tx.Exec("UPDATE videos SET published_at = ? WHERE "+where, publishedAt, videoID)
+	res, err := tx.Exec("UPDATE videos SET published_at = ?, sync_seq = ? WHERE "+where, publishedAt, seqs.Next(), videoID)
 	return rowsAffected(res, err)
 }
 
-func repairLocalPublishedAt(tx *sql.Tx, owner string, overwrite bool, stats counters) (counters, error) {
+func repairLocalPublishedAt(tx *sql.Tx, seqs *syncSeqAllocator, owner string, overwrite bool, resyncBookmarkContent bool, stats counters) (counters, error) {
 	likeWhere := "(platform IS NULL OR platform = '' OR platform IN ('twitter', 'x'))"
 	likeArgs := []any{}
 	if owner != "" {
@@ -386,7 +491,10 @@ func repairLocalPublishedAt(tx *sql.Tx, owner string, overwrite bool, stats coun
 		if publishedAt == 0 {
 			continue
 		}
-		res, err := tx.Exec(`UPDATE feed_items SET published_at = ? WHERE tweet_id = ?`, publishedAt, tweetID)
+		res, err := tx.Exec(
+			`UPDATE feed_items SET published_at = ?, sync_seq = ? WHERE tweet_id = ?`,
+			publishedAt, seqs.Next(), tweetID,
+		)
 		n, err := rowsAffected(res, err)
 		if err != nil {
 			feedRows.Close()
@@ -398,25 +506,28 @@ func repairLocalPublishedAt(tx *sql.Tx, owner string, overwrite bool, stats coun
 		return stats, err
 	}
 
-	videoWhere := "video_id GLOB '[0-9]*' AND (channel_id LIKE 'twitter_%' OR channel_id LIKE 'x_%')"
+	videoWhere := "video_id GLOB '[0-9]*' AND (channel_id LIKE 'twitter_%' OR channel_id LIKE 'x_%' OR channel_id LIKE 'tiktok_%')"
 	if !overwrite {
 		videoWhere += " AND published_at = 0"
 	}
-	videoRows, err := tx.Query("SELECT video_id FROM videos WHERE " + videoWhere)
+	videoRows, err := tx.Query("SELECT video_id, channel_id FROM videos WHERE " + videoWhere)
 	if err != nil {
 		return stats, err
 	}
 	for videoRows.Next() {
-		var videoID string
-		if err := videoRows.Scan(&videoID); err != nil {
+		var videoID, channelID string
+		if err := videoRows.Scan(&videoID, &channelID); err != nil {
 			videoRows.Close()
 			return stats, err
 		}
-		publishedAt := twitterSnowflakeMillis(videoID)
+		publishedAt := platformSnowflakeMillis(videoID, channelID)
 		if publishedAt == 0 {
 			continue
 		}
-		res, err := tx.Exec(`UPDATE videos SET published_at = ? WHERE video_id = ?`, publishedAt, videoID)
+		res, err := tx.Exec(
+			`UPDATE videos SET published_at = ?, sync_seq = ? WHERE video_id = ?`,
+			publishedAt, seqs.Next(), videoID,
+		)
 		n, err := rowsAffected(res, err)
 		if err != nil {
 			videoRows.Close()
@@ -424,7 +535,19 @@ func repairLocalPublishedAt(tx *sql.Tx, owner string, overwrite bool, stats coun
 		}
 		stats.videoSnowflakeUpdated += n
 	}
-	return stats, videoRows.Close()
+	if err := videoRows.Close(); err != nil {
+		return stats, err
+	}
+
+	if resyncBookmarkContent {
+		videos, feedItems, err := resyncBookmarkedFallbackContent(tx, seqs, owner)
+		if err != nil {
+			return stats, err
+		}
+		stats.videoContentResynced += videos
+		stats.feedItemContentResynced += feedItems
+	}
+	return stats, nil
 }
 
 func rowsAffected(res sql.Result, err error) (int, error) {
@@ -483,4 +606,129 @@ func twitterSnowflakeMillis(id string) int64 {
 		return 0
 	}
 	return ms
+}
+
+func platformSnowflakeMillis(id, channelID string) int64 {
+	channelID = strings.TrimSpace(strings.ToLower(channelID))
+	switch {
+	case strings.HasPrefix(channelID, "twitter_"), strings.HasPrefix(channelID, "x_"):
+		return twitterSnowflakeMillis(id)
+	case strings.HasPrefix(channelID, "tiktok_"):
+		return tiktokSnowflakeMillis(id)
+	default:
+		return 0
+	}
+}
+
+func tiktokSnowflakeMillis(id string) int64 {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return 0
+	}
+	n, err := strconv.ParseUint(id, 10, 64)
+	if err != nil || n == 0 {
+		return 0
+	}
+	seconds := int64(n >> 32)
+	if seconds <= 0 {
+		return 0
+	}
+	ms := seconds * 1000
+	if ms < time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC).UnixMilli() {
+		return 0
+	}
+	if ms > time.Now().Add(24*time.Hour).UnixMilli() {
+		return 0
+	}
+	return ms
+}
+
+type syncSeqAllocator struct {
+	next int64
+}
+
+func newSyncSeqAllocator(tx *sql.Tx) (*syncSeqAllocator, error) {
+	var maxSeq int64
+	if err := tx.QueryRow(`
+		SELECT MAX(seq) FROM (
+			SELECT COALESCE(MAX(sync_seq), 0) AS seq FROM feed_items
+			UNION ALL SELECT COALESCE(MAX(sync_seq), 0) FROM videos
+			UNION ALL SELECT COALESCE(MAX(sync_seq), 0) FROM channels
+		)
+	`).Scan(&maxSeq); err != nil {
+		return nil, err
+	}
+	return &syncSeqAllocator{next: maxSeq}, nil
+}
+
+func (a *syncSeqAllocator) Next() int64 {
+	a.next++
+	return a.next
+}
+
+func resyncBookmarkedFallbackContent(tx *sql.Tx, seqs *syncSeqAllocator, owner string) (int, int, error) {
+	ownerWhere := ""
+	args := []any{}
+	if owner != "" {
+		ownerWhere = " AND b.user_id = ?"
+		args = append(args, owner)
+	}
+
+	videoRows, err := tx.Query(`
+		SELECT DISTINCT v.video_id
+		FROM bookmarks b
+		JOIN videos v ON v.video_id = b.video_id
+		WHERE COALESCE(v.published_at, 0) > 0
+	`+ownerWhere, args...)
+	if err != nil {
+		return 0, 0, err
+	}
+	videoCount := 0
+	for videoRows.Next() {
+		var videoID string
+		if err := videoRows.Scan(&videoID); err != nil {
+			videoRows.Close()
+			return 0, 0, err
+		}
+		res, err := tx.Exec(`UPDATE videos SET sync_seq = ? WHERE video_id = ?`, seqs.Next(), videoID)
+		n, err := rowsAffected(res, err)
+		if err != nil {
+			videoRows.Close()
+			return 0, 0, err
+		}
+		videoCount += n
+	}
+	if err := videoRows.Close(); err != nil {
+		return 0, 0, err
+	}
+
+	feedRows, err := tx.Query(`
+		SELECT DISTINCT fi.tweet_id
+		FROM bookmarks b
+		JOIN feed_items fi ON fi.tweet_id = b.video_id
+		WHERE COALESCE(fi.published_at, 0) > 0
+	`+ownerWhere, args...)
+	if err != nil {
+		return 0, 0, err
+	}
+	feedCount := 0
+	for feedRows.Next() {
+		var tweetID string
+		if err := feedRows.Scan(&tweetID); err != nil {
+			feedRows.Close()
+			return 0, 0, err
+		}
+		res, err := tx.Exec(`UPDATE feed_items SET sync_seq = ? WHERE tweet_id = ?`, seqs.Next(), tweetID)
+		n, err := rowsAffected(res, err)
+		if err != nil {
+			feedRows.Close()
+			return 0, 0, err
+		}
+		feedCount += n
+	}
+	if err := feedRows.Close(); err != nil {
+		return 0, 0, err
+	}
+
+	return videoCount, feedCount, nil
 }

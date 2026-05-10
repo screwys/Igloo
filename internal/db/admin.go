@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -685,7 +686,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 			defer stmt.Close()
 			for _, lp := range cfg.LikedPosts {
 				publishedAt := exportTimestampMillis(lp.PublishedAtMs, lp.PublishedAt)
-				if publishedAt == 0 && isTwitterExportPlatform(lp.Platform) {
+				if publishedAt == 0 && isTwitterExportPlatform(lp.Platform, "") {
 					publishedAt = twitterSnowflakeMillis(lp.TweetID)
 				}
 				updatedAt := lp.UpdatedAt
@@ -705,25 +706,27 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 		// Import bookmarked videos if present
 		for _, bv := range cfg.BookmarkedVideos {
 			seq := db.NextSyncSeq()
-			result, err := tx.Exec(`
-				INSERT OR IGNORE INTO videos
+			publishedAt := exportVideoPublishedAt(bv)
+			if _, err := tx.Exec(`
+				INSERT INTO videos
 					(video_id, channel_id, title, duration, published_at, file_path, sync_seq)
 				VALUES (?, ?, ?, ?, ?, '', ?)
-			`, bv.VideoID, bv.ChannelID, bv.Title, bv.Duration,
-				exportVideoPublishedAt(bv), seq)
-			if err != nil {
+				ON CONFLICT(video_id) DO UPDATE SET
+					published_at = CASE
+						WHEN COALESCE(videos.published_at, 0) <= 0
+						 AND excluded.published_at > 0
+						THEN excluded.published_at
+						ELSE videos.published_at
+					END,
+					sync_seq = CASE
+						WHEN COALESCE(videos.sync_seq, 0) = 0
+						  OR (COALESCE(videos.published_at, 0) <= 0
+						      AND excluded.published_at > 0)
+						THEN excluded.sync_seq
+						ELSE videos.sync_seq
+					END
+			`, bv.VideoID, bv.ChannelID, bv.Title, bv.Duration, publishedAt, seq); err != nil {
 				return err
-			}
-			n, _ := result.RowsAffected()
-			if n == 0 {
-				if _, err := tx.Exec(`
-					UPDATE videos
-					SET sync_seq = ?
-					WHERE video_id = ?
-					  AND COALESCE(sync_seq, 0) = 0
-				`, seq, bv.VideoID); err != nil {
-					return err
-				}
 			}
 
 			catID := int64(0)
@@ -817,13 +820,44 @@ func exportTimestampString(ms int64) string {
 
 func exportVideoPublishedAt(bv BookmarkedVideoExport) int64 {
 	publishedAt := exportTimestampMillis(bv.PublishedAtMs, bv.PublishedAt)
-	if publishedAt == 0 && isTwitterExportPlatform(bv.Platform) {
-		publishedAt = twitterSnowflakeMillis(bv.VideoID)
+	if publishedAt != 0 {
+		return publishedAt
 	}
-	return publishedAt
+	if isTwitterExportPlatform(bv.Platform, bv.ChannelID) {
+		return twitterSnowflakeMillis(bv.VideoID)
+	}
+	if isTikTokExportPlatform(bv.Platform, bv.ChannelID) {
+		return tiktokSnowflakeMillis(bv.VideoID)
+	}
+	return 0
 }
 
-func isTwitterExportPlatform(platform string) bool {
+func isTwitterExportPlatform(platform, channelID string) bool {
 	platform = strings.TrimSpace(strings.ToLower(platform))
-	return platform == "twitter" || platform == "x"
+	channelID = strings.TrimSpace(strings.ToLower(channelID))
+	return platform == "twitter" || platform == "x" ||
+		strings.HasPrefix(channelID, "twitter_") ||
+		strings.HasPrefix(channelID, "x_")
+}
+
+func isTikTokExportPlatform(platform, channelID string) bool {
+	platform = strings.TrimSpace(strings.ToLower(platform))
+	channelID = strings.TrimSpace(strings.ToLower(channelID))
+	return platform == "tiktok" || strings.HasPrefix(channelID, "tiktok_")
+}
+
+func tiktokSnowflakeMillis(id string) int64 {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return 0
+	}
+	n, err := strconv.ParseUint(id, 10, 64)
+	if err != nil || n == 0 {
+		return 0
+	}
+	seconds := int64(n >> 32)
+	if seconds <= 0 {
+		return 0
+	}
+	return seconds * 1000
 }

@@ -432,6 +432,45 @@ func TestImportConfigRepairsExistingZeroBookmarkTimestamps(t *testing.T) {
 	}
 }
 
+func TestImportConfigRepairsExistingBookmarkedTikTokPublishDate(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	if err := d.ExecRaw(`
+		INSERT INTO videos (video_id, channel_id, title, duration, published_at, sync_seq)
+		VALUES ('7447476403618024737', 'tiktok_awesome0day', 'Old title', 0, 0, 0)
+	`); err != nil {
+		t.Fatalf("seed video: %v", err)
+	}
+
+	cfg := ConfigExport{
+		Version: 1,
+		BookmarkedVideos: []BookmarkedVideoExport{{
+			VideoID:      "7447476403618024737",
+			ChannelID:    "tiktok_awesome0day",
+			Title:        "Restored title",
+			BookmarkedAt: 1710000000000,
+		}},
+	}
+	if _, err := d.ImportConfig(cfg, "alice", false); err != nil {
+		t.Fatalf("ImportConfig: %v", err)
+	}
+
+	var publishedAt, syncSeq int64
+	if err := d.QueryRow(`
+		SELECT published_at, sync_seq
+		FROM videos
+		WHERE video_id = '7447476403618024737'
+	`).Scan(&publishedAt, &syncSeq); err != nil {
+		t.Fatalf("read video: %v", err)
+	}
+	if publishedAt != 1734000724000 {
+		t.Fatalf("published_at = %d, want 1734000724000", publishedAt)
+	}
+	if syncSeq <= 0 {
+		t.Fatalf("sync_seq = %d, want bumped", syncSeq)
+	}
+}
+
 func TestExportFullDataCarriesStateTimestampsAndMetadata(t *testing.T) {
 	d := openWritableTestDB(t)
 
