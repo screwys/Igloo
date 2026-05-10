@@ -104,6 +104,9 @@ func (db *DB) ensureFeedItemStubFromLikeTx(tx *sql.Tx, tweetID string, fields ma
 	authorHandle := nonEmpty(fields["author_handle"], fields["source_handle"])
 	publishedAtMs := parseTimestampString(fields["published_at"])
 	if publishedAtMs == 0 {
+		publishedAtMs = twitterSnowflakeMillis(tweetID)
+	}
+	if publishedAtMs == 0 {
 		publishedAtMs = time.Now().UnixMilli()
 	}
 	_, err := tx.Exec(`
@@ -162,6 +165,9 @@ func (db *DB) ensureFeedItemStubFromBookmarkTx(tx *sql.Tx, videoID string) error
 	}
 	if authorHandle == "" {
 		authorHandle = "unknown"
+	}
+	if publishedAt == 0 {
+		publishedAt = twitterSnowflakeMillis(videoID)
 	}
 	if publishedAt == 0 {
 		publishedAt = time.Now().UnixMilli()
@@ -247,6 +253,9 @@ func (db *DB) EnsureProtectedFeedItemStubs() (int, error) {
 				authorHandle = nonEmpty(sourceHandle, "unknown")
 			}
 			if publishedAt == 0 {
+				publishedAt = twitterSnowflakeMillis(tweetID)
+			}
+			if publishedAt == 0 {
 				publishedAt = nowMs
 			}
 			res, err := tx.Exec(`
@@ -304,6 +313,9 @@ func (db *DB) EnsureProtectedFeedItemStubs() (int, error) {
 			}
 			if authorHandle == "" {
 				authorHandle = "unknown"
+			}
+			if publishedAt == 0 {
+				publishedAt = twitterSnowflakeMillis(videoID)
 			}
 			if publishedAt == 0 {
 				publishedAt = nowMs

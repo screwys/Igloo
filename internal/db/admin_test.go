@@ -263,6 +263,159 @@ func TestImportConfigPreservesDefaultCategoryBookmarkLabel(t *testing.T) {
 	}
 }
 
+func TestImportConfigPreservesFullExportStateTimestamps(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	cfg := ConfigExport{
+		Version: 1,
+		BookmarkCategories: []BookmarkCatExport{{
+			Name: "Saved",
+		}},
+		Bookmarks: []BookmarkExport{{
+			VideoID:        "stateful_bookmark",
+			CategoryName:   "Saved",
+			CustomTitle:    "clips",
+			AccountHandles: "@author",
+			MediaIndices:   "0,2",
+			BookmarkedAt:   1710000000000,
+		}},
+		LikedPosts: []LikedPostExport{{
+			TweetID:          "stateful_like",
+			SourceHandle:     "source",
+			AuthorHandle:     "author",
+			BodyText:         "liked text",
+			Platform:         "twitter",
+			PublishedAtMs:    1709000000000,
+			CanonicalXLink:   "https://x.com/author/status/stateful_like",
+			MediaJSON:        `[{"type":"photo"}]`,
+			QuotePayloadJSON: `{"tweet_id":"quote"}`,
+			LikedAt:          1710000001000,
+			UpdatedAt:        1710000002000,
+		}},
+		BookmarkedVideos: []BookmarkedVideoExport{{
+			VideoID:       "stateful_video",
+			ChannelID:     "youtube_UCstateful",
+			Title:         "Stateful Video",
+			PublishedAtMs: 1708000000000,
+			BookmarkedAt:  1710000003000,
+		}},
+	}
+	if _, err := d.ImportConfig(cfg, "alice", false); err != nil {
+		t.Fatalf("ImportConfig: %v", err)
+	}
+
+	var bookmarkedAt int64
+	var accountHandles, mediaIndices string
+	if err := d.QueryRow(`
+		SELECT bookmarked_at, COALESCE(account_handles,''), COALESCE(media_indices,'')
+		FROM bookmarks WHERE user_id = 'alice' AND video_id = 'stateful_bookmark'
+	`).Scan(&bookmarkedAt, &accountHandles, &mediaIndices); err != nil {
+		t.Fatalf("read bookmark: %v", err)
+	}
+	if bookmarkedAt != 1710000000000 || accountHandles != "@author" || mediaIndices != "0,2" {
+		t.Fatalf("bookmark state = %d %q %q", bookmarkedAt, accountHandles, mediaIndices)
+	}
+
+	var likedAt, updatedAt, likePublishedAt int64
+	var sourceHandle, canonicalLink, mediaJSON, quoteJSON string
+	if err := d.QueryRow(`
+		SELECT liked_at, updated_at, published_at, COALESCE(source_handle,''),
+		       COALESCE(canonical_x_link,''), COALESCE(media_json,''),
+		       COALESCE(quote_payload_json,'')
+		FROM feed_likes WHERE username = 'alice' AND tweet_id = 'stateful_like'
+	`).Scan(&likedAt, &updatedAt, &likePublishedAt, &sourceHandle, &canonicalLink, &mediaJSON, &quoteJSON); err != nil {
+		t.Fatalf("read like: %v", err)
+	}
+	if likedAt != 1710000001000 || updatedAt != 1710000002000 || likePublishedAt != 1709000000000 {
+		t.Fatalf("like timestamps = liked:%d updated:%d published:%d", likedAt, updatedAt, likePublishedAt)
+	}
+	if sourceHandle != "source" || canonicalLink == "" || mediaJSON == "" || quoteJSON == "" {
+		t.Fatalf("like metadata = source:%q canonical:%q media:%q quote:%q", sourceHandle, canonicalLink, mediaJSON, quoteJSON)
+	}
+
+	var videoPublishedAt, videoBookmarkedAt int64
+	if err := d.QueryRow(`
+		SELECT v.published_at, b.bookmarked_at
+		FROM videos v
+		JOIN bookmarks b ON b.video_id = v.video_id
+		WHERE b.user_id = 'alice' AND v.video_id = 'stateful_video'
+	`).Scan(&videoPublishedAt, &videoBookmarkedAt); err != nil {
+		t.Fatalf("read bookmarked video: %v", err)
+	}
+	if videoPublishedAt != 1708000000000 || videoBookmarkedAt != 1710000003000 {
+		t.Fatalf("bookmarked video timestamps = published:%d bookmarked:%d", videoPublishedAt, videoBookmarkedAt)
+	}
+}
+
+func TestExportFullDataCarriesStateTimestampsAndMetadata(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	if err := d.ExecRaw(`
+		INSERT INTO bookmark_categories (id, user_id, name) VALUES (70, 'alice', 'Saved')
+	`); err != nil {
+		t.Fatalf("seed category: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO channels (channel_id, name, platform) VALUES ('youtube_UCexport', 'Export Channel', 'youtube')
+	`); err != nil {
+		t.Fatalf("seed channel: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO videos (video_id, channel_id, title, duration, published_at)
+		VALUES ('export_video', 'youtube_UCexport', 'Export Video', 12, 1707000000000)
+	`); err != nil {
+		t.Fatalf("seed video: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO bookmarks
+			(user_id, video_id, category_id, custom_title, account_handles, media_indices, bookmarked_at)
+		VALUES ('alice', 'export_video', 70, 'clips', '@author', '1', 1711000000000)
+	`); err != nil {
+		t.Fatalf("seed bookmark: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO feed_likes
+			(username, tweet_id, source_handle, author_handle, author_display_name,
+			 body_text, canonical_x_link, published_at, media_json, platform,
+			 quote_payload_json, liked_at, updated_at)
+		VALUES
+			('alice', 'export_like', 'source', 'author', 'Author',
+			 'liked text', 'https://x.com/author/status/export_like', 1706000000000,
+			 '[{"type":"photo"}]', 'twitter', '{"tweet_id":"quote"}', 1712000000000, 1712000001000)
+	`); err != nil {
+		t.Fatalf("seed like: %v", err)
+	}
+
+	cfg, err := d.ExportFullData("alice")
+	if err != nil {
+		t.Fatalf("ExportFullData: %v", err)
+	}
+	if len(cfg.Bookmarks) != 1 {
+		t.Fatalf("bookmarks = %d, want 1", len(cfg.Bookmarks))
+	}
+	bm := cfg.Bookmarks[0]
+	if bm.BookmarkedAt != 1711000000000 || bm.AccountHandles != "@author" || bm.MediaIndices != "1" {
+		t.Fatalf("exported bookmark = %#v", bm)
+	}
+	if len(cfg.LikedPosts) != 1 {
+		t.Fatalf("liked posts = %d, want 1", len(cfg.LikedPosts))
+	}
+	lp := cfg.LikedPosts[0]
+	if lp.LikedAt != 1712000000000 || lp.UpdatedAt != 1712000001000 || lp.PublishedAtMs != 1706000000000 {
+		t.Fatalf("exported like timestamps = %#v", lp)
+	}
+	if lp.SourceHandle != "source" || lp.CanonicalXLink == "" || lp.MediaJSON == "" || lp.QuotePayloadJSON == "" {
+		t.Fatalf("exported like metadata = %#v", lp)
+	}
+	if len(cfg.BookmarkedVideos) != 1 {
+		t.Fatalf("bookmarked videos = %d, want 1", len(cfg.BookmarkedVideos))
+	}
+	bv := cfg.BookmarkedVideos[0]
+	if bv.PublishedAtMs != 1707000000000 || bv.BookmarkedAt != 1711000000000 {
+		t.Fatalf("exported video timestamps = %#v", bv)
+	}
+}
+
 func TestImportConfigPublishesImportedRowsToDelta(t *testing.T) {
 	d := openWritableTestDB(t)
 

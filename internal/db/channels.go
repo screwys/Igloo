@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -251,7 +252,17 @@ func timePtrToMillis(t *time.Time) int64 {
 // Python-era exports) to unix-millis. Returns 0 for empty/unparsable
 // input. Supports the common SQLite + RFC3339 + Twitter formats.
 func parseTimestampString(s string) int64 {
+	s = strings.TrimSpace(s)
 	if s == "" {
+		return 0
+	}
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+		if n > 1_000_000_000_000 {
+			return n
+		}
+		if n > 0 {
+			return n * 1000
+		}
 		return 0
 	}
 	for _, layout := range []string{

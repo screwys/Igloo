@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -76,9 +77,12 @@ type BookmarkCatExport struct {
 
 // BookmarkExport represents a single bookmark item for export.
 type BookmarkExport struct {
-	VideoID      string `json:"video_id"`
-	CategoryName string `json:"category_name"`
-	CustomTitle  string `json:"custom_title,omitempty"`
+	VideoID        string `json:"video_id"`
+	CategoryName   string `json:"category_name"`
+	CustomTitle    string `json:"custom_title,omitempty"`
+	AccountHandles string `json:"account_handles,omitempty"`
+	MediaIndices   string `json:"media_indices,omitempty"`
+	BookmarkedAt   int64  `json:"bookmarked_at,omitempty"`
 }
 
 // exportedChannelSettings is the subset of channel_settings fields the export
@@ -152,24 +156,34 @@ type ChannelExport struct {
 // LikedPostExport is a compact liked post for full data export.
 type LikedPostExport struct {
 	TweetID           string `json:"tweet_id"`
+	SourceHandle      string `json:"source_handle,omitempty"`
 	AuthorHandle      string `json:"author_handle"`
 	AuthorDisplayName string `json:"author_display_name,omitempty"`
 	BodyText          string `json:"body_text,omitempty"`
 	Platform          string `json:"platform,omitempty"`
 	PublishedAt       string `json:"published_at,omitempty"`
+	PublishedAtMs     int64  `json:"published_at_ms,omitempty"`
 	Link              string `json:"link,omitempty"`
+	CanonicalXLink    string `json:"canonical_x_link,omitempty"`
 	MediaURL          string `json:"media_url,omitempty"`
+	AvatarURL         string `json:"avatar_url,omitempty"`
+	MediaJSON         string `json:"media_json,omitempty"`
+	QuotePayloadJSON  string `json:"quote_payload_json,omitempty"`
+	LikedAt           int64  `json:"liked_at,omitempty"`
+	UpdatedAt         int64  `json:"updated_at,omitempty"`
 }
 
 // BookmarkedVideoExport is a compact bookmarked video for full data export.
 type BookmarkedVideoExport struct {
-	VideoID      string `json:"video_id"`
-	ChannelID    string `json:"channel_id"`
-	Title        string `json:"title"`
-	Platform     string `json:"platform,omitempty"`
-	Duration     int    `json:"duration,omitempty"`
-	PublishedAt  string `json:"published_at,omitempty"`
-	CategoryName string `json:"category_name,omitempty"`
+	VideoID       string `json:"video_id"`
+	ChannelID     string `json:"channel_id"`
+	Title         string `json:"title"`
+	Platform      string `json:"platform,omitempty"`
+	Duration      int    `json:"duration,omitempty"`
+	PublishedAt   string `json:"published_at,omitempty"`
+	PublishedAtMs int64  `json:"published_at_ms,omitempty"`
+	CategoryName  string `json:"category_name,omitempty"`
+	BookmarkedAt  int64  `json:"bookmarked_at,omitempty"`
 }
 
 // ConfigExport is the config snapshot for export/import.
@@ -289,7 +303,9 @@ func (db *DB) ExportConfig(userID string) (ConfigExport, error) {
 	// Bookmarks: join category name
 	bmUID := db.resolveBookmarkUserID(userID)
 	bRows, err := db.conn.Query(`
-		SELECT b.video_id, COALESCE(bc.name,''), COALESCE(b.custom_title,'')
+		SELECT b.video_id, COALESCE(bc.name,''), COALESCE(b.custom_title,''),
+		       COALESCE(b.account_handles,''), COALESCE(b.media_indices,''),
+		       COALESCE(b.bookmarked_at, 0)
 		FROM bookmarks b
 		LEFT JOIN bookmark_categories bc ON bc.id = b.category_id AND bc.user_id = ?
 		WHERE b.user_id = ?
@@ -301,7 +317,8 @@ func (db *DB) ExportConfig(userID string) (ConfigExport, error) {
 	defer bRows.Close()
 	for bRows.Next() {
 		var bm BookmarkExport
-		if err := bRows.Scan(&bm.VideoID, &bm.CategoryName, &bm.CustomTitle); err != nil {
+		if err := bRows.Scan(&bm.VideoID, &bm.CategoryName, &bm.CustomTitle,
+			&bm.AccountHandles, &bm.MediaIndices, &bm.BookmarkedAt); err != nil {
 			return cfg, err
 		}
 		cfg.Bookmarks = append(cfg.Bookmarks, bm)
@@ -323,9 +340,12 @@ func (db *DB) ExportFullData(userID string) (ConfigExport, error) {
 	// Liked posts
 	likeUID := db.resolveLikeUsername(userID)
 	likeRows, err := db.conn.Query(`
-		SELECT tweet_id, COALESCE(author_handle,''), COALESCE(author_display_name,''),
-		       COALESCE(body_text,''), COALESCE(platform,''), COALESCE(published_at,''),
-		       COALESCE(link,''), COALESCE(media_url,'')
+		SELECT tweet_id, COALESCE(source_handle,''), COALESCE(author_handle,''),
+		       COALESCE(author_display_name,''), COALESCE(body_text,''),
+		       COALESCE(platform,''), COALESCE(published_at,0),
+		       COALESCE(link,''), COALESCE(canonical_x_link,''), COALESCE(media_url,''),
+		       COALESCE(avatar_url,''), COALESCE(media_json,''), COALESCE(quote_payload_json,''),
+		       COALESCE(liked_at,0), COALESCE(updated_at,0)
 		FROM feed_likes WHERE username = ?
 		ORDER BY liked_at DESC
 	`, likeUID)
@@ -335,10 +355,13 @@ func (db *DB) ExportFullData(userID string) (ConfigExport, error) {
 	defer likeRows.Close()
 	for likeRows.Next() {
 		var lp LikedPostExport
-		if err := likeRows.Scan(&lp.TweetID, &lp.AuthorHandle, &lp.AuthorDisplayName,
-			&lp.BodyText, &lp.Platform, &lp.PublishedAt, &lp.Link, &lp.MediaURL); err != nil {
+		if err := likeRows.Scan(&lp.TweetID, &lp.SourceHandle, &lp.AuthorHandle,
+			&lp.AuthorDisplayName, &lp.BodyText, &lp.Platform, &lp.PublishedAtMs,
+			&lp.Link, &lp.CanonicalXLink, &lp.MediaURL, &lp.AvatarURL, &lp.MediaJSON,
+			&lp.QuotePayloadJSON, &lp.LikedAt, &lp.UpdatedAt); err != nil {
 			return cfg, err
 		}
+		lp.PublishedAt = exportTimestampString(lp.PublishedAtMs)
 		cfg.LikedPosts = append(cfg.LikedPosts, lp)
 	}
 	if err := likeRows.Err(); err != nil {
@@ -351,7 +374,8 @@ func (db *DB) ExportFullData(userID string) (ConfigExport, error) {
 	vidRows, err := db.conn.Query(`
 		SELECT v.video_id, v.channel_id, COALESCE(v.title,''),
 		       COALESCE(c.platform,''), COALESCE(v.duration,0),
-		       COALESCE(v.published_at,''), COALESCE(bc.name,'')
+		       COALESCE(v.published_at,0), COALESCE(bc.name,''),
+		       COALESCE(b.bookmarked_at,0)
 		FROM bookmarks b
 		JOIN videos v ON b.video_id = v.video_id
 		LEFT JOIN channels c ON v.channel_id = c.channel_id
@@ -366,9 +390,11 @@ func (db *DB) ExportFullData(userID string) (ConfigExport, error) {
 	for vidRows.Next() {
 		var bv BookmarkedVideoExport
 		if err := vidRows.Scan(&bv.VideoID, &bv.ChannelID, &bv.Title,
-			&bv.Platform, &bv.Duration, &bv.PublishedAt, &bv.CategoryName); err != nil {
+			&bv.Platform, &bv.Duration, &bv.PublishedAtMs, &bv.CategoryName,
+			&bv.BookmarkedAt); err != nil {
 			return cfg, err
 		}
+		bv.PublishedAt = exportTimestampString(bv.PublishedAtMs)
 		cfg.BookmarkedVideos = append(cfg.BookmarkedVideos, bv)
 	}
 	if err := vidRows.Err(); err != nil {
@@ -517,9 +543,11 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 				customTitle = bm.CustomTitle
 			}
 			result, err := tx.Exec(`
-				INSERT OR IGNORE INTO bookmarks (user_id, video_id, category_id, custom_title)
-				VALUES (?, ?, ?, ?)
-			`, userID, bm.VideoID, catID, customTitle)
+				INSERT OR IGNORE INTO bookmarks
+					(user_id, video_id, category_id, custom_title, account_handles, media_indices, bookmarked_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?)
+			`, userID, bm.VideoID, catID, customTitle, nilIfEmpty(bm.AccountHandles),
+				nilIfEmpty(bm.MediaIndices), bm.BookmarkedAt)
 			if err != nil {
 				return err
 			}
@@ -620,20 +648,31 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 		if len(cfg.LikedPosts) > 0 {
 			stmt, err := tx.Prepare(`
 				INSERT OR IGNORE INTO feed_likes
-					(username, tweet_id, author_handle, author_display_name,
-					 body_text, platform, published_at, link, media_url,
-					 liked_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					(username, tweet_id, source_handle, author_handle, author_display_name,
+					 body_text, link, canonical_x_link, published_at, media_url, avatar_url,
+					 media_json, platform, quote_payload_json, liked_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`)
 			if err != nil {
 				return err
 			}
 			defer stmt.Close()
-			nowMs := time.Now().UnixMilli()
 			for _, lp := range cfg.LikedPosts {
-				stmt.Exec(userID, lp.TweetID, lp.AuthorHandle, lp.AuthorDisplayName,
-					lp.BodyText, lp.Platform, parseTimestampString(lp.PublishedAt),
-					lp.Link, lp.MediaURL, nowMs, nowMs)
+				publishedAt := exportTimestampMillis(lp.PublishedAtMs, lp.PublishedAt)
+				if publishedAt == 0 && isTwitterExportPlatform(lp.Platform) {
+					publishedAt = twitterSnowflakeMillis(lp.TweetID)
+				}
+				updatedAt := lp.UpdatedAt
+				if updatedAt == 0 && lp.LikedAt > 0 {
+					updatedAt = lp.LikedAt
+				}
+				if _, err := stmt.Exec(userID, lp.TweetID, nilIfEmpty(lp.SourceHandle),
+					lp.AuthorHandle, lp.AuthorDisplayName, lp.BodyText, lp.Link,
+					nilIfEmpty(lp.CanonicalXLink), publishedAt, nilIfEmpty(lp.MediaURL),
+					nilIfEmpty(lp.AvatarURL), nilIfEmpty(lp.MediaJSON), lp.Platform,
+					nilIfEmpty(lp.QuotePayloadJSON), lp.LikedAt, updatedAt); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -644,7 +683,8 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 				INSERT OR IGNORE INTO videos
 					(video_id, channel_id, title, duration, published_at, file_path, sync_seq)
 				VALUES (?, ?, ?, ?, ?, '', ?)
-			`, bv.VideoID, bv.ChannelID, bv.Title, bv.Duration, parseTimestampString(bv.PublishedAt), seq)
+			`, bv.VideoID, bv.ChannelID, bv.Title, bv.Duration,
+				exportVideoPublishedAt(bv), seq)
 			if err != nil {
 				return err
 			}
@@ -667,9 +707,9 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 				}
 			}
 			if _, err := tx.Exec(`
-				INSERT OR IGNORE INTO bookmarks (user_id, video_id, category_id)
-				VALUES (?, ?, ?)
-			`, userID, bv.VideoID, catID); err != nil {
+				INSERT OR IGNORE INTO bookmarks (user_id, video_id, category_id, bookmarked_at)
+				VALUES (?, ?, ?, ?)
+			`, userID, bv.VideoID, catID, bv.BookmarkedAt); err != nil {
 				return err
 			}
 		}
@@ -724,4 +764,31 @@ func intToNullInt(n int) any {
 		return nil
 	}
 	return n
+}
+
+func exportTimestampMillis(ms int64, legacy string) int64 {
+	if ms > 0 {
+		return ms
+	}
+	return parseTimestampString(legacy)
+}
+
+func exportTimestampString(ms int64) string {
+	if ms <= 0 {
+		return ""
+	}
+	return time.UnixMilli(ms).UTC().Format(time.RFC3339)
+}
+
+func exportVideoPublishedAt(bv BookmarkedVideoExport) int64 {
+	publishedAt := exportTimestampMillis(bv.PublishedAtMs, bv.PublishedAt)
+	if publishedAt == 0 && isTwitterExportPlatform(bv.Platform) {
+		publishedAt = twitterSnowflakeMillis(bv.VideoID)
+	}
+	return publishedAt
+}
+
+func isTwitterExportPlatform(platform string) bool {
+	platform = strings.TrimSpace(strings.ToLower(platform))
+	return platform == "twitter" || platform == "x"
 }
