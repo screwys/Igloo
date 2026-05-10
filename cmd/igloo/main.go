@@ -19,6 +19,7 @@ import (
 	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/restore"
+	"github.com/screwys/igloo/internal/toolenv"
 	"github.com/screwys/igloo/internal/translate"
 	"github.com/screwys/igloo/internal/web"
 	"github.com/screwys/igloo/internal/worker"
@@ -26,6 +27,7 @@ import (
 
 func main() {
 	startupStart := time.Now()
+	toolenv.ApplyCommonToolPaths()
 	cfg := config.Load()
 	if cfg.ConfigError != nil {
 		slog.Error("invalid configuration", "err", cfg.ConfigError)

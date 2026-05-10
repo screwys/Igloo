@@ -45,8 +45,57 @@ RSSHUB_CONTAINER="${RSSHUB_CONTAINER:-rsshub}"
 RSSHUB_ENV_FILE="${RSSHUB_ENV_FILE:-$CONFIG_DIR/rsshub.env}"
 PODMAN_BIN="$(command -v podman 2>/dev/null || echo /usr/bin/podman)"
 
-# Add Go bin to PATH for templ and other Go-installed tools
-export PATH="$HOME_DIR/go/bin:$HOME_DIR/.local/bin:$PATH"
+# Add user tool directories to PATH for templ, Homebrew packages, and yt-dlp's
+# recommended JavaScript runtime. systemd user services do not inherit the
+# interactive shell PATH, so keep this list explicit and reuse it below.
+path_prepend_if_dir() {
+    if [ -d "$1" ]; then
+        case ":$PATH:" in
+            *":$1:"*) ;;
+            *) PATH="$1:$PATH" ;;
+        esac
+    fi
+}
+
+BREW_PREFIX="${HOMEBREW_PREFIX:-}"
+if [ -z "$BREW_PREFIX" ] && command -v brew >/dev/null 2>&1; then
+    BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
+fi
+
+path_prepend_if_dir "$HOME_DIR/.deno/bin"
+if [ -n "$BREW_PREFIX" ]; then
+    path_prepend_if_dir "$BREW_PREFIX/sbin"
+    path_prepend_if_dir "$BREW_PREFIX/bin"
+fi
+path_prepend_if_dir /home/linuxbrew/.linuxbrew/sbin
+path_prepend_if_dir /home/linuxbrew/.linuxbrew/bin
+path_prepend_if_dir /opt/homebrew/sbin
+path_prepend_if_dir /opt/homebrew/bin
+path_prepend_if_dir "$HOME_DIR/go/bin"
+path_prepend_if_dir "$HOME_DIR/.local/bin"
+export PATH
+
+SERVICE_PATH=""
+service_path_append() {
+    case ":$SERVICE_PATH:" in
+        *":$1:"*) ;;
+        *) SERVICE_PATH="${SERVICE_PATH:+$SERVICE_PATH:}$1" ;;
+    esac
+}
+service_path_append "$HOME_DIR/.local/bin"
+service_path_append "$HOME_DIR/go/bin"
+service_path_append "$HOME_DIR/.deno/bin"
+if [ -n "$BREW_PREFIX" ]; then
+    service_path_append "$BREW_PREFIX/bin"
+    service_path_append "$BREW_PREFIX/sbin"
+fi
+service_path_append /home/linuxbrew/.linuxbrew/bin
+service_path_append /home/linuxbrew/.linuxbrew/sbin
+service_path_append /opt/homebrew/bin
+service_path_append /opt/homebrew/sbin
+service_path_append /usr/local/bin
+service_path_append /usr/bin
+service_path_append /bin
 
 CHECK_ONLY=false
 SKIP_BUILD=false
@@ -100,14 +149,15 @@ if [ "$CHECK_ONLY" = false ] && command -v go >/dev/null 2>&1 && ! command -v te
 fi
 check_required templ     "templ code generator — go install github.com/a-h/templ/cmd/templ@latest"
 check_required npm       "Node package manager — install nodejs/npm"
-check_required yt-dlp    "video downloader — pip install yt-dlp or pacman -S yt-dlp"
-check_required gallery-dl "image downloader — pip install gallery-dl or pacman -S gallery-dl"
-check_required ffmpeg    "media processing — pacman -S ffmpeg"
-check_required nginx     "reverse proxy — pacman -S nginx"
-check_required podman    "container runtime (for RSSHub) — pacman -S podman"
-check_required sqlite3   "database CLI — pacman -S sqlite"
-check_required ss        "socket statistics — pacman -S iproute2"
+check_required yt-dlp    "video downloader — brew install yt-dlp, pip install yt-dlp, or install your distro package"
+check_required gallery-dl "image downloader — brew install gallery-dl, pip install gallery-dl, or install your distro package"
+check_required ffmpeg    "media processing — brew install ffmpeg or install your distro package"
+check_required nginx     "reverse proxy — install nginx with brew or your distro package manager"
+check_required podman    "container runtime (for RSSHub) — install podman with your distro package manager"
+check_required sqlite3   "database CLI — brew install sqlite or install your distro package"
+check_required ss        "socket statistics — install iproute/iproute2 with your distro package manager"
 check_required git       "version control"
+check_required deno      "JavaScript runtime for yt-dlp YouTube challenge solving — brew install deno or install your distro package"
 
 # Optional
 check_optional kagi      "kagi-cli for translate/search — install from https://github.com/nicholasgasior/kagi-cli"
@@ -227,7 +277,7 @@ Environment=IGLOO_DATA_DIR=$DATA_DIR
 Environment=IGLOO_REPO_DIR=$REPO_DIR
 Environment=IGLOO_PORT=$SERVER_PORT
 Environment=RSSHUB_BASE=$RSSHUB_BASE
-Environment=PATH=$HOME_DIR/.local/bin:$HOME_DIR/go/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=$SERVICE_PATH
 
 ExecStart=$REPO_DIR/bin/igloo
 

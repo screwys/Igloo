@@ -8,7 +8,32 @@
 #   build.sh full         — build Go + daemon-reload + rsshub + restart
 set -eu
 
-export PATH="$HOME/go/bin:$PATH"
+path_prepend_if_dir() {
+  if [ -d "$1" ]; then
+    case ":$PATH:" in
+      *":$1:"*) ;;
+      *) PATH="$1:$PATH" ;;
+    esac
+  fi
+}
+
+BREW_PREFIX="${HOMEBREW_PREFIX:-}"
+if [ -z "$BREW_PREFIX" ] && command -v brew >/dev/null 2>&1; then
+  BREW_PREFIX="$(brew --prefix 2>/dev/null || true)"
+fi
+
+path_prepend_if_dir "$HOME/.deno/bin"
+if [ -n "$BREW_PREFIX" ]; then
+  path_prepend_if_dir "$BREW_PREFIX/sbin"
+  path_prepend_if_dir "$BREW_PREFIX/bin"
+fi
+path_prepend_if_dir /home/linuxbrew/.linuxbrew/sbin
+path_prepend_if_dir /home/linuxbrew/.linuxbrew/bin
+path_prepend_if_dir /opt/homebrew/sbin
+path_prepend_if_dir /opt/homebrew/bin
+path_prepend_if_dir "$HOME/go/bin"
+path_prepend_if_dir "$HOME/.local/bin"
+export PATH
 
 cd "$(dirname "$0")/../.."
 
