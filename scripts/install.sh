@@ -43,6 +43,7 @@ RSSHUB_BASE="${RSSHUB_BASE:-http://127.0.0.1:$RSSHUB_PORT}"
 RSSHUB_IMAGE="${RSSHUB_IMAGE:-ghcr.io/diygod/rsshub:chromium-bundled}"
 RSSHUB_CONTAINER="${RSSHUB_CONTAINER:-rsshub}"
 RSSHUB_ENV_FILE="${RSSHUB_ENV_FILE:-$CONFIG_DIR/rsshub.env}"
+KAGI_ENV_FILE="${KAGI_ENV_FILE:-$CONFIG_DIR/kagi.env}"
 PODMAN_BIN="$(command -v podman 2>/dev/null || echo /usr/bin/podman)"
 
 # Add user tool directories to PATH for templ, Homebrew packages, and yt-dlp's
@@ -222,6 +223,54 @@ create_dir "$REPO_DIR/bin"
 create_dir "$HOME_DIR/.local/state/igloo-nginx"
 create_dir "$HOME_DIR/.local/state/igloo-nginx/logs"
 
+# ── Optional Kagi auth for systemd ─────────────────────────────────
+extract_kagi_session_token() {
+    kagi_config="$HOME_DIR/.kagi.toml"
+    [ -f "$kagi_config" ] || return 1
+    awk '
+        /^[[:space:]]*\[auth\][[:space:]]*$/ { in_auth=1; next }
+        /^[[:space:]]*\[/ { in_auth=0 }
+        in_auth && $0 ~ /^[[:space:]]*session_token[[:space:]]*=/ {
+            val=$0
+            sub(/^[^=]*=/, "", val)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+            if (substr(val, 1, 1) == "\"" && substr(val, length(val), 1) == "\"") {
+                val=substr(val, 2, length(val)-2)
+            }
+            print val
+            exit
+        }
+    ' "$kagi_config"
+}
+
+write_kagi_env_file() {
+    command -v kagi >/dev/null 2>&1 || return 0
+    if [ -f "$KAGI_ENV_FILE" ]; then
+        chmod 600 "$KAGI_ENV_FILE" 2>/dev/null || warn "could not chmod 600 $KAGI_ENV_FILE"
+        ok "$KAGI_ENV_FILE (exists)"
+        return 0
+    fi
+
+    token="${KAGI_SESSION_TOKEN:-}"
+    source="environment"
+    if [ -z "$token" ]; then
+        token="$(extract_kagi_session_token || true)"
+        source="$HOME_DIR/.kagi.toml"
+    fi
+
+    if [ -n "$token" ]; then
+        old_umask="$(umask)"
+        umask 077
+        printf "KAGI_SESSION_TOKEN=%s\n" "$token" > "$KAGI_ENV_FILE"
+        umask "$old_umask"
+        ok "$KAGI_ENV_FILE (created from $source)"
+    else
+        warn "Kagi CLI found, but no session token was found; create $KAGI_ENV_FILE with KAGI_SESSION_TOKEN=..."
+    fi
+}
+
+write_kagi_env_file
+
 # ── Build Go binaries ──────────────────────────────────────────────
 if [ "$SKIP_BUILD" = false ]; then
     step "Building Go binaries"
@@ -261,8 +310,27 @@ fi
 # ── Install systemd services ──────────────────────────────────────
 step "Installing systemd services"
 
+prepare_service_file() {
+    UNIT_FILE="$SYSTEMD_DIR/$1"
+    if [ ! -L "$UNIT_FILE" ]; then
+        return 0
+    fi
+
+    target="$(readlink "$UNIT_FILE")"
+    case "$target" in
+        /*) target_path="$target" ;;
+        *)  target_path="$(dirname "$UNIT_FILE")/$target" ;;
+    esac
+    target_dir="$(dirname "$target_path")"
+    if [ ! -d "$target_dir" ]; then
+        warn "$UNIT_FILE points to missing $target_dir; replacing symlink"
+        rm "$UNIT_FILE"
+    fi
+}
+
 # igloo.service
-cat > "$SYSTEMD_DIR/igloo.service" <<EOF
+prepare_service_file igloo.service
+cat > "$UNIT_FILE" <<EOF
 [Unit]
 Description=Igloo server
 Wants=network-online.target
@@ -277,6 +345,7 @@ Environment=IGLOO_DATA_DIR=$DATA_DIR
 Environment=IGLOO_REPO_DIR=$REPO_DIR
 Environment=IGLOO_PORT=$SERVER_PORT
 Environment=RSSHUB_BASE=$RSSHUB_BASE
+EnvironmentFile=-$KAGI_ENV_FILE
 Environment=PATH=$SERVICE_PATH
 
 ExecStart=$REPO_DIR/bin/igloo
@@ -288,10 +357,11 @@ TimeoutStopSec=15
 [Install]
 WantedBy=default.target
 EOF
-ok "igloo.service"
+ok "$UNIT_FILE"
 
 # rsshub.service
-cat > "$SYSTEMD_DIR/rsshub.service" <<EOF
+prepare_service_file rsshub.service
+cat > "$UNIT_FILE" <<EOF
 [Unit]
 Description=RSSHub feed service
 Wants=network-online.target
@@ -310,10 +380,11 @@ RestartSec=5
 [Install]
 WantedBy=default.target
 EOF
-ok "rsshub.service"
+ok "$UNIT_FILE"
 
 # igloo-nginx.service
-cat > "$SYSTEMD_DIR/igloo-nginx.service" <<EOF
+prepare_service_file igloo-nginx.service
+cat > "$UNIT_FILE" <<EOF
 [Unit]
 Description=Igloo nginx reverse proxy
 After=igloo.service
@@ -333,7 +404,7 @@ RestartSec=5
 [Install]
 WantedBy=default.target
 EOF
-ok "igloo-nginx.service"
+ok "$UNIT_FILE"
 
 # ── Enable services ────────────────────────────────────────────────
 step "Enabling systemd services"
@@ -387,6 +458,7 @@ info "repo:     $REPO_DIR"
 info "data:     $DATA_DIR"
 info "config:   $CONFIG_DIR"
 info "services: $SYSTEMD_DIR/{igloo,rsshub,igloo-nginx}.service"
+info "kagi env: $KAGI_ENV_FILE"
 printf "\n"
 info "start everything:"
 printf "  systemctl --user start rsshub igloo igloo-nginx\n"
