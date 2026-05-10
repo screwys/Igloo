@@ -1,7 +1,7 @@
 # Igloo
 
 <p align="center">
-  <img alt="Igloo" src="static/logo.svg" width="220">
+  <img alt="Igloo" src="static/logo.svg" width="320">
 </p>
 
 <p align="center">
