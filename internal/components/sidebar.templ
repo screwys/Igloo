@@ -13,6 +13,7 @@ templ Sidebar(p PageProps) {
 		<div class="sidebar-header">
 			<a href="/videos" class="logo" aria-label={ L(p, "app_name", "Igloo") } data-i18n-aria-label="app_name">
 				<img class="logo-icon" src={ p.StaticV("favicon.svg") } alt="" aria-hidden="true"/>
+				<span data-i18n="app_name">{ L(p, "app_name", "Igloo") }</span>
 			</a>
 		</div>
 		<nav class="nav">
