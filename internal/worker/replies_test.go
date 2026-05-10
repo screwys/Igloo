@@ -27,21 +27,25 @@ func fxtMockHandler(_ *testing.T, fixtures map[string]string) http.Handler {
 }
 
 func tweetFixture(id, author, text, replyToHandle, replyToStatus string) string {
+	return tweetFixtureWithMedia(id, author, text, replyToHandle, replyToStatus, nil)
+}
+
+func tweetFixtureWithMedia(id, author, text, replyToHandle, replyToStatus string, media []map[string]any) string {
+	tweet := map[string]any{
+		"id":                 id,
+		"text":               text,
+		"lang":               "en",
+		"replying_to":        replyToHandle,
+		"replying_to_status": replyToStatus,
+		"created_at":         "Mon Apr 21 10:00:00 +0000 2026",
+		"author":             map[string]any{"screen_name": author, "name": author, "avatar_url": "https://example/" + author + ".jpg"},
+	}
+	if len(media) > 0 {
+		tweet["media"] = map[string]any{"all": media}
+	}
 	m := map[string]any{
 		"code": 200, "message": "OK",
-		"tweet": map[string]any{
-			"id":   id,
-			"text": text,
-			"lang": "en",
-			"author": map[string]any{
-				"screen_name": author,
-				"name":        author,
-				"avatar_url":  "https://example/" + author + ".jpg",
-			},
-			"replying_to":        replyToHandle,
-			"replying_to_status": replyToStatus,
-			"created_at":         "Mon Apr 21 10:00:00 +0000 2026",
-		},
+		"tweet": tweet,
 	}
 	b, _ := json.Marshal(m)
 	return string(b)
@@ -112,6 +116,44 @@ func TestResolveReplyChainExternalParent(t *testing.T) {
 	}
 	if parent.AuthorHandle != "user_beta" {
 		t.Errorf("parent AuthorHandle: got %q", parent.AuthorHandle)
+	}
+}
+
+func TestResolveReplyChainQueuesMediaForGhostParent(t *testing.T) {
+	d := newTestWorkerDB(t)
+	now := time.Now().UTC()
+	_, _ = d.UpsertFeedItems([]model.FeedItem{
+		{TweetID: "1000000000000000011", AuthorHandle: "user_alpha", BodyText: "external reply", IsReply: true, ReplyToHandle: "user_beta", PublishedAt: &now, FetchedAt: now, ContentHash: "x2"},
+	})
+
+	fixtures := map[string]string{
+		"/user_alpha/status/1000000000000000011": tweetFixture("1000000000000000011", "user_alpha", "external reply", "user_beta", "1000000000000000012"),
+		"/user_beta/status/1000000000000000012": tweetFixtureWithMedia("1000000000000000012", "user_beta", "parent with video", "", "", []map[string]any{{
+			"type": "video",
+			"url":  "https://video.example/parent.mp4",
+		}}),
+	}
+	srv := httptest.NewServer(fxtMockHandler(t, fixtures))
+	defer srv.Close()
+	fx := &fxtwitter.Client{BaseURL: srv.URL, HTTP: srv.Client(), Timeout: 2 * time.Second}
+
+	r := NewReplyResolver(d, fx)
+	leaf := model.FeedItem{TweetID: "1000000000000000011", AuthorHandle: "user_alpha", IsReply: true, ReplyToHandle: "user_beta"}
+	if err := r.ResolveCycle(context.Background(), []model.FeedItem{leaf}); err != nil {
+		t.Fatal(err)
+	}
+
+	var status, kind string
+	var slideCount int
+	if err := d.QueryRow(`
+		SELECT COALESCE(status,''), COALESCE(media_kind,''), COALESCE(slide_count,0)
+		FROM feed_media_jobs
+		WHERE tweet_id = '1000000000000000012'
+	`).Scan(&status, &kind, &slideCount); err != nil {
+		t.Fatalf("missing feed media job: %v", err)
+	}
+	if status != "queued" || kind != "video" || slideCount != 1 {
+		t.Fatalf("job = status %q kind %q slide_count %d, want queued video 1", status, kind, slideCount)
 	}
 }
 

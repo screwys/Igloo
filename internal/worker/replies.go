@@ -125,11 +125,28 @@ func (r *ReplyResolver) resolveOne(ctx context.Context, leaf model.FeedItem, cac
 		if err := r.d.UpsertGhostFeedItem(ghost); err != nil {
 			return err
 		}
+		if err := r.enqueueGhostMediaJob(ghost); err != nil {
+			return err
+		}
 
 		currentID = parent.ReplyToStatus
 		currentHandle = parent.ReplyToHandle
 	}
 	return nil
+}
+
+func (r *ReplyResolver) enqueueGhostMediaJob(item model.FeedItem) error {
+	item.ParseMedia()
+	kind := classifyMediaKind(item.MediaJSON)
+	if kind == "unknown" {
+		return nil
+	}
+	return r.d.EnqueueFeedMediaJobs([]db.FeedMediaJobRow{{
+		TweetID:      item.TweetID,
+		SourceHandle: item.AuthorHandle,
+		MediaKind:    kind,
+		SlideCount:   len(item.Media),
+	}})
 }
 
 // tweetToGhostFeedItem converts an fxtwitter Tweet into a feed_items row.
