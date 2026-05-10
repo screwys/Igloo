@@ -23,8 +23,9 @@ internal fun bookmarkMediaType(item: BookmarkItem) = when (val video = item.vide
 }
 
 internal fun bookmarkPublishedAt(item: BookmarkItem): Long =
-    item.video?.publishedAt
-        ?: item.feedItem?.publishedAt
+    item.bookmark.bookmarkedAt.takeIf { it > 0L }
+        ?: item.video?.publishedAt?.takeIf { it > 0L }
+        ?: item.feedItem?.publishedAt?.takeIf { it > 0L }
         ?: 0L
 
 internal fun opensBookmarkInMomentsOverlay(item: BookmarkItem): Boolean =
@@ -46,6 +47,7 @@ internal fun toBookmarkMomentItem(item: BookmarkItem, baseUrl: String = ""): Mom
 
     return MomentItem(
         videoId = item.bookmark.videoId,
+        mediaOwnerId = bookmarkMediaOwnerId(item),
         channelId = channelId,
         canonicalUrl = item.video?.canonicalUrl?.takeIf { it.isNotBlank() }
             ?: item.feedItem?.canonicalUrl.orEmpty(),
@@ -57,7 +59,7 @@ internal fun toBookmarkMomentItem(item: BookmarkItem, baseUrl: String = ""): Mom
         isBookmarked = true,
         mediaKind = item.video?.mediaMode?.takeIf { it.isNotBlank() } ?: item.video?.mediaKind ?: feedMediaKind,
         slideCount = item.video?.slideCount ?: feedSlideCount,
-        publishedAt = item.video?.publishedAt ?: item.feedItem?.publishedAt ?: 0L,
+        publishedAt = bookmarkPublishedAt(item),
         ownerKind = bookmarkOwnerKind(item),
         fallbackThumbnailUri = item.initialThumbnailUri(baseUrl),
         isAuthorFollowed = item.resolvedChannelIsFollowed == 1,
@@ -79,6 +81,18 @@ internal fun bookmarkOwnerKind(item: BookmarkItem): OwnerKind {
         "instagram" -> OwnerKind.InstagramReel
         "twitter", "x" -> OwnerKind.Tweet
         else -> OwnerKind.YouTubeVideo
+    }
+}
+
+internal fun bookmarkMediaOwnerId(item: BookmarkItem): String {
+    val feedItem = item.feedItem ?: return item.bookmark.videoId
+    val hasParentMedia = parseFeedMediaDescriptors(feedItem.mediaJson).isNotEmpty()
+    val hasQuoteMedia = parseFeedMediaDescriptors(feedItem.quoteMediaJson).isNotEmpty()
+    val quoteTweetId = feedItem.quoteTweetId?.trim().orEmpty()
+    return if (!hasParentMedia && hasQuoteMedia && quoteTweetId.isNotBlank()) {
+        quoteTweetId
+    } else {
+        item.bookmark.videoId
     }
 }
 
@@ -153,7 +167,7 @@ private fun preferredBookmarkDisplayName(
 internal fun BookmarkItem.initialThumbnailUri(baseUrl: String): MediaUri {
     val ownerKind = bookmarkOwnerKind(this)
     return MediaCellModel(
-        mediaId = bookmark.videoId,
+        mediaId = bookmarkMediaOwnerId(this),
         ownerKind = ownerKind,
         thumbnailPath = video?.thumbnailPath,
         mediaKind = video?.mediaMode?.takeIf { it.isNotBlank() } ?: video?.mediaKind ?: bookmarkFeedMediaKind(this),

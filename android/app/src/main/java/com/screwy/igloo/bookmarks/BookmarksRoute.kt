@@ -263,12 +263,13 @@ private fun BookmarkTile(
     val baseUrlProvider: ServerBaseUrlProvider = koinInject()
 
     val ownerKind = bookmarkOwnerKind(item)
+    val mediaOwnerId = bookmarkMediaOwnerId(item)
     val channelId = item.resolvedChannelId
-    val fallbackThumbUri = remember(item, ownerKind) {
+    val fallbackThumbUri = remember(item, ownerKind, mediaOwnerId) {
         item.initialThumbnailUri(baseUrlProvider.baseUrl())
     }
 
-    val thumbUri by resolvers.thumbnailForPostFlow(item.bookmark.videoId, ownerKind)
+    val thumbUri by resolvers.thumbnailForPostFlow(mediaOwnerId, ownerKind)
         .collectAsState(initial = fallbackThumbUri)
     val displayThumbUri = displayMediaCellThumbnail(thumbUri, fallbackThumbUri)
 

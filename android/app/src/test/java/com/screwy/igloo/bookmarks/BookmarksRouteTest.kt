@@ -70,13 +70,30 @@ class BookmarksRouteTest {
     fun tweet_mapping_uses_quote_media_when_parent_has_no_media() {
         val playerItem = toBookmarkMomentItem(
             tweetBookmark(
+                tweetId = "parent_tweet",
                 mediaJson = null,
+                quoteTweetId = "quoted_tweet",
                 quoteMediaJson = """[{"type":"image"}]""",
             ),
         )
 
         assertEquals("image", playerItem.mediaKind)
         assertEquals(1, playerItem.slideCount)
+        assertEquals("parent_tweet", playerItem.videoId)
+        assertEquals("quoted_tweet", playerItem.mediaOwnerId)
+    }
+
+    @Test
+    fun bookmark_timestamp_prefers_saved_date_and_falls_back_to_content_date() {
+        val savedAt = 1710000000000L
+        assertEquals(
+            savedAt,
+            bookmarkPublishedAt(tweetBookmark(bookmarkedAt = savedAt, publishedAt = 123L)),
+        )
+        assertEquals(
+            456L,
+            bookmarkPublishedAt(tweetBookmark(bookmarkedAt = 0L, publishedAt = 456L)),
+        )
     }
 
     @Test
@@ -201,21 +218,26 @@ class BookmarksRouteTest {
         authorHandle: String = "author1",
         channelId: String? = "twitter_author1",
         mediaJson: String? = null,
+        quoteTweetId: String? = null,
         quoteMediaJson: String? = null,
         bodyText: String = "Tweet body",
         likes: Long? = null,
         authorDisplayName: String? = "Author 42",
         isFollowed: Boolean = false,
+        bookmarkedAt: Long = 20L,
+        publishedAt: Long = 0L,
     ): BookmarkItem = BookmarkItem(
-        bookmark = BookmarkEntity(videoId = tweetId, categoryId = 2L, bookmarkedAt = 20L),
+        bookmark = BookmarkEntity(videoId = tweetId, categoryId = 2L, bookmarkedAt = bookmarkedAt),
         feedItem = FeedItemEntity(
             tweetId = tweetId,
             authorHandle = authorHandle,
             authorDisplayName = authorDisplayName,
             bodyText = bodyText,
             mediaJson = mediaJson,
+            quoteTweetId = quoteTweetId,
             quoteMediaJson = quoteMediaJson,
             likes = likes,
+            publishedAt = publishedAt,
             channelId = channelId,
         ),
         video = null,

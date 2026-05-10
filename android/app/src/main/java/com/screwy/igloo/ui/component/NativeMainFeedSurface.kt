@@ -2431,7 +2431,11 @@ internal fun nativeVisibleHeightFraction(bounds: Rect, viewportHeight: Int): Flo
 }
 
 internal fun nativeStableSingleMediaAspectRatio(cell: com.screwy.igloo.feed.FeedMediaCellDescriptor): Float =
-    if (cell.aspectRatioKnown) cell.aspectRatio.coerceIn(0.55f, 2.4f) else 1f
+    when {
+        cell.aspectRatioKnown -> cell.aspectRatio.coerceIn(0.55f, 2.4f)
+        cell.isVideo -> 16f / 9f
+        else -> 1f
+    }
 
 internal fun nativeStableSingleMediaAspectRatio(cell: FeedMediaCellModel): Float =
     when {
@@ -2484,7 +2488,7 @@ internal fun nativeMediaScaleTypeFor(
     cell: com.screwy.igloo.feed.FeedMediaCellDescriptor,
     isSingle: Boolean = false,
 ): ImageView.ScaleType =
-    if (isSingle) ImageView.ScaleType.FIT_START else ImageView.ScaleType.CENTER_CROP
+    if (isSingle && cell.aspectRatioKnown) ImageView.ScaleType.FIT_START else ImageView.ScaleType.CENTER_CROP
 
 private fun FeedMediaCellModel.artworkUri(): MediaUri {
     when (val item = previewItem) {

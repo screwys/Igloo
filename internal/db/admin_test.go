@@ -382,6 +382,56 @@ func TestImportConfigPreservesFullExportStateTimestamps(t *testing.T) {
 	}
 }
 
+func TestImportConfigRepairsExistingZeroBookmarkTimestamps(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	if err := d.ExecRaw(`
+		INSERT INTO bookmark_categories (id, user_id, name) VALUES (7, 'alice', 'Saved')
+	`); err != nil {
+		t.Fatalf("seed category: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO bookmarks (user_id, video_id, category_id, bookmarked_at)
+		VALUES ('alice', 'existing_bookmark', 0, 0)
+	`); err != nil {
+		t.Fatalf("seed bookmark: %v", err)
+	}
+
+	cfg := ConfigExport{
+		Version: 1,
+		BookmarkCategories: []BookmarkCatExport{{
+			Name: "Saved",
+		}},
+		Bookmarks: []BookmarkExport{{
+			VideoID:      "existing_bookmark",
+			CategoryName: "Saved",
+			CustomTitle:  "Recovered title",
+			BookmarkedAt: 1710000000000,
+		}},
+		BookmarkedVideos: []BookmarkedVideoExport{{
+			VideoID:      "existing_bookmark",
+			CategoryName: "Saved",
+			BookmarkedAt: 1710000001000,
+		}},
+	}
+	if _, err := d.ImportConfig(cfg, "alice", false); err != nil {
+		t.Fatalf("ImportConfig: %v", err)
+	}
+
+	var categoryID, bookmarkedAt int64
+	var customTitle string
+	if err := d.QueryRow(`
+		SELECT category_id, COALESCE(custom_title, ''), bookmarked_at
+		FROM bookmarks
+		WHERE user_id = 'alice' AND video_id = 'existing_bookmark'
+	`).Scan(&categoryID, &customTitle, &bookmarkedAt); err != nil {
+		t.Fatalf("read bookmark: %v", err)
+	}
+	if categoryID <= 0 || customTitle != "Recovered title" || bookmarkedAt != 1710000000000 {
+		t.Fatalf("bookmark after import = category:%d title:%q at:%d", categoryID, customTitle, bookmarkedAt)
+	}
+}
+
 func TestExportFullDataCarriesStateTimestampsAndMetadata(t *testing.T) {
 	d := openWritableTestDB(t)
 

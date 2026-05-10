@@ -127,7 +127,11 @@ type BookmarkMutation struct {
 }
 
 func (db *DB) ApplyBookmarkMutation(userID string, m BookmarkMutation) (MutationResult, error) {
-	return db.applyMutation("bookmark", m.VideoID, map[string]any{
+	bookmarkedAt := m.UpdatedAtMs
+	if bookmarkedAt <= 0 {
+		bookmarkedAt = time.Now().UnixMilli()
+	}
+	value := map[string]any{
 		"video_id":        m.VideoID,
 		"action":          m.Action,
 		"bookmarked":      m.Action == "set",
@@ -135,8 +139,12 @@ func (db *DB) ApplyBookmarkMutation(userID string, m BookmarkMutation) (Mutation
 		"custom_title":    m.CustomTitle,
 		"account_handles": m.AccountHandles,
 		"media_indices":   m.MediaIndices,
-		"updated_at_ms":   m.UpdatedAtMs,
-	}, func(tx *sql.Tx) error {
+		"updated_at_ms":   bookmarkedAt,
+	}
+	if m.Action == "set" {
+		value["bookmarked_at"] = bookmarkedAt
+	}
+	return db.applyMutation("bookmark", m.VideoID, value, func(tx *sql.Tx) error {
 		switch m.Action {
 		case "set":
 			var catID int64
@@ -152,7 +160,7 @@ func (db *DB) ApplyBookmarkMutation(userID string, m BookmarkMutation) (Mutation
 				  custom_title = excluded.custom_title,
 				  account_handles = excluded.account_handles,
 				  media_indices = excluded.media_indices`,
-				userID, m.VideoID, catID, m.CustomTitle, m.AccountHandles, m.MediaIndices, m.UpdatedAtMs,
+				userID, m.VideoID, catID, m.CustomTitle, m.AccountHandles, m.MediaIndices, bookmarkedAt,
 			)
 			if err != nil {
 				return err

@@ -81,6 +81,7 @@ class NativeMainFeedSurfaceTest {
         assertEquals(1.25f, nativeStableSingleMediaAspectRatio(cell(1.25f)), 0.0001f)
         assertEquals(2.4f, nativeStableSingleMediaAspectRatio(cell(9f)), 0.0001f)
         assertEquals(1f, nativeStableSingleMediaAspectRatio(cell(1.7f, known = false)), 0.0001f)
+        assertEquals(16f / 9f, nativeStableSingleMediaAspectRatio(cell(1f, known = false, isVideo = true)), 0.0001f)
     }
 
     @Test
@@ -105,6 +106,7 @@ class NativeMainFeedSurfaceTest {
         assertEquals(ImageView.ScaleType.FIT_START, nativeMediaScaleTypeFor(cell(0.7f), isSingle = true))
         assertEquals(ImageView.ScaleType.CENTER_CROP, nativeMediaScaleTypeFor(cell(1.25f)))
         assertEquals(ImageView.ScaleType.CENTER_CROP, nativeMediaScaleTypeFor(cell(1.25f, isVideo = true)))
+        assertEquals(ImageView.ScaleType.CENTER_CROP, nativeMediaScaleTypeFor(cell(1f, known = false), isSingle = true))
     }
 
     @Test

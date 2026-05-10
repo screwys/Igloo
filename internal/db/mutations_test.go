@@ -1,6 +1,9 @@
 package db
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestBookmarkMutationBumpsContentHashSiblings(t *testing.T) {
 	d := openWritableTestDB(t)
@@ -66,5 +69,43 @@ func TestBookmarkMutationBumpsContentHashSiblings(t *testing.T) {
 	}
 	if seqs["tw_c_unrelated"] != 12 {
 		t.Fatalf("unrelated row should not be bumped: got %d", seqs["tw_c_unrelated"])
+	}
+}
+
+func TestBookmarkMutationUsesCurrentTimeWhenUpdatedAtMissing(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	if _, err := d.ApplyBookmarkMutation("admin", BookmarkMutation{
+		VideoID:     "missing_timestamp_bookmark",
+		Action:      "set",
+		UpdatedAtMs: 0,
+	}); err != nil {
+		t.Fatalf("ApplyBookmarkMutation: %v", err)
+	}
+
+	var bookmarkedAt int64
+	if err := d.QueryRow(`
+		SELECT bookmarked_at
+		FROM bookmarks
+		WHERE user_id = 'admin' AND video_id = 'missing_timestamp_bookmark'
+	`).Scan(&bookmarkedAt); err != nil {
+		t.Fatalf("read bookmark: %v", err)
+	}
+	if bookmarkedAt <= 0 {
+		t.Fatalf("bookmarked_at = %d, want positive timestamp", bookmarkedAt)
+	}
+
+	var value string
+	if err := d.QueryRow(`
+		SELECT value
+		FROM sync_changes
+		WHERE type = 'bookmark' AND item_id = 'missing_timestamp_bookmark'
+		ORDER BY version DESC
+		LIMIT 1
+	`).Scan(&value); err != nil {
+		t.Fatalf("read sync change: %v", err)
+	}
+	if !strings.Contains(value, `"bookmarked_at":`) || strings.Contains(value, `"updated_at_ms":0`) {
+		t.Fatalf("sync value did not carry repaired timestamp: %s", value)
 	}
 }

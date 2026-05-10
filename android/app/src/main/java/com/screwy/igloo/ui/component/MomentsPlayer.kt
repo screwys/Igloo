@@ -131,6 +131,7 @@ import org.koin.compose.koinInject
  */
 data class MomentItem(
     val videoId: String,
+    val mediaOwnerId: String = videoId,
     val channelId: String,
     val canonicalUrl: String = "",
     val authorDisplayName: String? = null,
@@ -822,6 +823,7 @@ private fun MomentPage(
     val baseUrl = baseUrlProvider.baseUrl()
     val initialThumbnailUri = remember(
         item.videoId,
+        item.mediaOwnerId,
         item.fallbackThumbnailPath,
         item.fallbackThumbnailUri,
         item.mediaKind,
@@ -830,7 +832,7 @@ private fun MomentPage(
         baseUrl,
     ) {
         resolveInitialMomentThumbnailUri(
-            videoId = item.videoId,
+            videoId = item.mediaOwnerId,
             thumbnailPath = item.fallbackThumbnailPath,
             mediaKind = item.mediaKind,
             slideCount = item.slideCount,
@@ -839,7 +841,7 @@ private fun MomentPage(
             fallbackThumbnailUri = item.fallbackThumbnailUri,
         )
     }
-    val resolvedThumbnailUri by resolvers.thumbnailForPostFlow(item.videoId, ownerKind)
+    val resolvedThumbnailUri by resolvers.thumbnailForPostFlow(item.mediaOwnerId, ownerKind)
         .collectAsState(initial = initialThumbnailUri)
     val thumbnailUri = if (resolvedThumbnailUri is MediaUri.Missing) initialThumbnailUri else resolvedThumbnailUri
     val bookmarkRow by bookmarkDao.getByIdFlow(item.videoId).collectAsState(initial = null)
@@ -873,7 +875,7 @@ private fun MomentPage(
     ) {
         when (mediaMode) {
             MomentMediaMode.Image -> MomentImageSurface(
-                videoId = item.videoId,
+                videoId = item.mediaOwnerId,
                 thumbnailUri = thumbnailUri,
                 isActive = isActive,
                 autoSwipe = autoSwipe,
@@ -881,7 +883,7 @@ private fun MomentPage(
                 modifier = Modifier.fillMaxSize(),
             )
             MomentMediaMode.Slideshow -> MomentSlideshowSurface(
-                videoId = item.videoId,
+                videoId = item.mediaOwnerId,
                 slideCount = momentSlideCount(item.mediaKind, item.slideCount),
                 thumbnailUri = thumbnailUri,
                 isActive = isActive,
@@ -1042,12 +1044,12 @@ private fun BoxScope.MomentVideoLayer(
     val resolvers: MediaResolvers = koinInject()
     val baseUrlProvider: ServerBaseUrlProvider = koinInject()
     val baseUrl = baseUrlProvider.baseUrl()
-    val initialStreamUri = remember(baseUrl, item.videoId) {
-        momentStreamUrl(baseUrl, item.videoId)
+    val initialStreamUri = remember(baseUrl, item.mediaOwnerId) {
+        momentStreamUrl(baseUrl, item.mediaOwnerId)
             ?.let(MediaUri::Remote)
             ?: MediaUri.Missing
     }
-    val resolvedStreamUri by resolvers.videoStreamFlow(item.videoId)
+    val resolvedStreamUri by resolvers.videoStreamFlow(item.mediaOwnerId)
         .collectAsState(initial = initialStreamUri)
     val candidateStreamUri = if (resolvedStreamUri is MediaUri.Missing) {
         initialStreamUri

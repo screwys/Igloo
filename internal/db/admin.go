@@ -557,9 +557,21 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 				customTitle = bm.CustomTitle
 			}
 			result, err := tx.Exec(`
-				INSERT OR IGNORE INTO bookmarks
+				INSERT INTO bookmarks
 					(user_id, video_id, category_id, custom_title, account_handles, media_indices, bookmarked_at)
 				VALUES (?, ?, ?, ?, ?, ?, ?)
+				ON CONFLICT(user_id, video_id) DO UPDATE SET
+					category_id = CASE
+						WHEN excluded.category_id != 0 AND bookmarks.category_id = 0 THEN excluded.category_id
+						ELSE bookmarks.category_id
+					END,
+					custom_title = COALESCE(NULLIF(bookmarks.custom_title, ''), excluded.custom_title),
+					account_handles = COALESCE(NULLIF(bookmarks.account_handles, ''), excluded.account_handles),
+					media_indices = COALESCE(NULLIF(bookmarks.media_indices, ''), excluded.media_indices),
+					bookmarked_at = CASE
+						WHEN bookmarks.bookmarked_at <= 0 AND excluded.bookmarked_at > 0 THEN excluded.bookmarked_at
+						ELSE bookmarks.bookmarked_at
+					END
 			`, userID, bm.VideoID, catID, customTitle, nilIfEmpty(bm.AccountHandles),
 				nilIfEmpty(bm.MediaIndices), bm.BookmarkedAt)
 			if err != nil {
@@ -721,8 +733,17 @@ func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (Impor
 				}
 			}
 			if _, err := tx.Exec(`
-				INSERT OR IGNORE INTO bookmarks (user_id, video_id, category_id, bookmarked_at)
+				INSERT INTO bookmarks (user_id, video_id, category_id, bookmarked_at)
 				VALUES (?, ?, ?, ?)
+				ON CONFLICT(user_id, video_id) DO UPDATE SET
+					category_id = CASE
+						WHEN excluded.category_id != 0 AND bookmarks.category_id = 0 THEN excluded.category_id
+						ELSE bookmarks.category_id
+					END,
+					bookmarked_at = CASE
+						WHEN bookmarks.bookmarked_at <= 0 AND excluded.bookmarked_at > 0 THEN excluded.bookmarked_at
+						ELSE bookmarks.bookmarked_at
+					END
 			`, userID, bv.VideoID, catID, bv.BookmarkedAt); err != nil {
 				return err
 			}
