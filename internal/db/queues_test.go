@@ -85,6 +85,28 @@ func TestUpdateFeedMediaJobStatus(t *testing.T) {
 	}
 }
 
+func TestClaimFeedMediaBatchPrefersNewestWithinPriority(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	if err := d.ExecRaw(`
+		INSERT INTO feed_media_jobs
+			(tweet_id, status, media_kind, retry_count, priority, created_at, updated_at)
+		VALUES
+			('claim_old_high_priority', 'queued', 'image', 0, 9999, 1000, 1000),
+			('claim_new_high_priority', 'queued', 'image', 0, 9999, 2000, 2000)
+	`); err != nil {
+		t.Fatalf("insert feed media jobs: %v", err)
+	}
+
+	claimed, err := d.ClaimFeedMediaBatch(1)
+	if err != nil {
+		t.Fatalf("ClaimFeedMediaBatch: %v", err)
+	}
+	if len(claimed) != 1 || claimed[0].TweetID != "claim_new_high_priority" {
+		t.Fatalf("claimed %+v, want newest high-priority job", claimed)
+	}
+}
+
 func TestPromoteFeedMediaJobForTweetQueuesExistingJob(t *testing.T) {
 	d := openWritableTestDB(t)
 

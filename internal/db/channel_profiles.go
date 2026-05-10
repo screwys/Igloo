@@ -518,11 +518,11 @@ func (db *DB) ListFeedAvatarProfileIDs() ([]string, error) {
 			GROUP BY channel_id
 		)
 		SELECT cp.channel_id
-		FROM channel_profiles cp
-		INNER JOIN feed_profiles f ON f.channel_id = cp.channel_id
-		WHERE cp.tombstone = 0
-		ORDER BY cp.channel_id ASC
-	`)
+			FROM channel_profiles cp
+			INNER JOIN feed_profiles f ON f.channel_id = cp.channel_id
+			WHERE cp.tombstone = 0
+			ORDER BY f.last_seen_at DESC, cp.channel_id ASC
+		`)
 	if err != nil {
 		return nil, err
 	}

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	feedMediaBatchSize = 10
+	feedMediaBatchSize = 25
 	// maxRetries404 is the retry cap for jobs where every media URL returns 404.
 	// After quality fallback is exhausted, a 404 means the content is deleted
 	// from the CDN and won't come back.
@@ -52,46 +52,51 @@ func (m *Manager) runFeedMediaWorker(ctx context.Context) {
 // processFeedMediaBatch claims up to feedMediaBatchSize queued jobs and
 // processes each one sequentially.
 func (m *Manager) processFeedMediaBatch(ctx context.Context) {
-	jobs, err := m.db.ClaimFeedMediaBatch(feedMediaBatchSize)
-	if err != nil {
-		log.Printf("[feedmedia] ClaimFeedMediaBatch: %v", err)
-		return
-	}
-	if len(jobs) == 0 {
-		return
-	}
-
-	log.Printf("[feedmedia] processing %d jobs", len(jobs))
-
-	for _, job := range jobs {
-		select {
-		case <-ctx.Done():
+	for {
+		jobs, err := m.db.ClaimFeedMediaBatch(feedMediaBatchSize)
+		if err != nil {
+			log.Printf("[feedmedia] ClaimFeedMediaBatch: %v", err)
 			return
-		default:
 		}
-		platform := "twitter"
-		handle := job.SourceHandle
-		if strings.HasPrefix(handle, "tiktok_") {
-			platform = "tiktok"
-			handle = strings.TrimPrefix(handle, "tiktok_")
-		} else {
-			handle = strings.TrimPrefix(handle, "twitter_")
+		if len(jobs) == 0 {
+			return
 		}
-		if m.cfg != nil && !m.cfg.PlatformEnabled(platform) {
-			reason := fmt.Sprintf("platform disabled: %s", platform)
-			log.Printf("[feedmedia] skip %s: %s", job.TweetID, reason)
-			if err := m.db.UpdateFeedMediaJobStatus(job.TweetID, "failed", reason, job.RetryCount); err != nil {
-				log.Printf("[feedmedia] UpdateFeedMediaJobStatus %s: %v", job.TweetID, err)
+
+		log.Printf("[feedmedia] processing %d jobs", len(jobs))
+
+		for _, job := range jobs {
+			select {
+			case <-ctx.Done():
+				return
+			default:
 			}
-			continue
+			platform := "twitter"
+			handle := job.SourceHandle
+			if strings.HasPrefix(handle, "tiktok_") {
+				platform = "tiktok"
+				handle = strings.TrimPrefix(handle, "tiktok_")
+			} else {
+				handle = strings.TrimPrefix(handle, "twitter_")
+			}
+			if m.cfg != nil && !m.cfg.PlatformEnabled(platform) {
+				reason := fmt.Sprintf("platform disabled: %s", platform)
+				log.Printf("[feedmedia] skip %s: %s", job.TweetID, reason)
+				if err := m.db.UpdateFeedMediaJobStatus(job.TweetID, "failed", reason, job.RetryCount); err != nil {
+					log.Printf("[feedmedia] UpdateFeedMediaJobStatus %s: %v", job.TweetID, err)
+				}
+				continue
+			}
+			jobDir := filepath.Join(m.cfg.DataDir, "media", platform, handle)
+			if err := os.MkdirAll(jobDir, 0o755); err != nil {
+				log.Printf("[feedmedia] mkdir %s: %v", jobDir, err)
+				m.failJob(job, fmt.Sprintf("mkdir: %v", err))
+				continue
+			}
+			m.processOneMediaJob(ctx, job, jobDir)
 		}
-		jobDir := filepath.Join(m.cfg.DataDir, "media", platform, handle)
-		if err := os.MkdirAll(jobDir, 0o755); err != nil {
-			log.Printf("[feedmedia] mkdir %s: %v", jobDir, err)
-			m.failJob(job, fmt.Sprintf("mkdir: %v", err))
-			continue
+		if len(jobs) < feedMediaBatchSize {
+			return
 		}
-		m.processOneMediaJob(ctx, job, jobDir)
 	}
 }
 

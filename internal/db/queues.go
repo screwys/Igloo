@@ -62,9 +62,9 @@ func (db *DB) ClaimFeedMediaBatch(limit int) ([]FeedMediaJobRow, error) {
 			FROM feed_media_jobs
 			WHERE status = 'queued'
 			  AND (retry_count = 0 OR updated_at + (30 * (1 << MIN(retry_count, 10)) * 1000) < CAST(strftime('%s','now') AS INTEGER) * 1000)
-			ORDER BY priority DESC, updated_at ASC
+			ORDER BY priority DESC, retry_count ASC, updated_at DESC
 			LIMIT ?
-		`, limit)
+	`, limit)
 		if err != nil {
 			return err
 		}

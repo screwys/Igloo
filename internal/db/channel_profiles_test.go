@@ -1239,9 +1239,15 @@ func TestListFeedAvatarProfileIDsIncludesRecentRowsAndOldBacklog(t *testing.T) {
 	}
 }
 
-func TestListFeedAvatarProfileIDsUsesStableChannelOrder(t *testing.T) {
+func TestListFeedAvatarProfileIDsPrioritizesRecentVisibleRows(t *testing.T) {
 	d := openWritableTestDB(t)
-	now := time.Now().UTC()
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID: "twitter_alpha",
+		Platform:  "twitter",
+		Handle:    "alpha",
+	}); err != nil {
+		t.Fatalf("seed alpha profile: %v", err)
+	}
 	if err := d.UpsertChannelProfile(model.ChannelProfile{
 		ChannelID: "twitter_zed",
 		Platform:  "twitter",
@@ -1249,22 +1255,23 @@ func TestListFeedAvatarProfileIDsUsesStableChannelOrder(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed zed profile: %v", err)
 	}
-	if err := d.UpsertChannelProfile(model.ChannelProfile{
-		ChannelID: "twitter_alpha",
-		Platform:  "twitter",
-		Handle:    "alpha",
-		FetchedAt: &now,
-	}); err != nil {
-		t.Fatalf("seed alpha profile: %v", err)
+	if _, err := d.conn.Exec(`
+		INSERT INTO feed_items (
+			tweet_id, author_handle, published_at, fetched_at
+		) VALUES
+			('tweet_old_alpha', 'alpha', 100, 100),
+			('tweet_new_zed', 'zed', 500, 500)
+	`); err != nil {
+		t.Fatalf("seed feed_items: %v", err)
 	}
 
 	got, err := d.ListFeedAvatarProfileIDs()
 	if err != nil {
 		t.Fatalf("ListFeedAvatarProfileIDs: %v", err)
 	}
-	want := []string{"twitter_alpha", "twitter_zed"}
+	want := []string{"twitter_zed", "twitter_alpha"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("profile ids = %v, want stable channel-id order %v", got, want)
+		t.Fatalf("profile ids = %v, want recent visible order %v", got, want)
 	}
 }
 

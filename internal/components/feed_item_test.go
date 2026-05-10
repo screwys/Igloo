@@ -94,6 +94,61 @@ func TestFeedItemThreadRowsRenderBottomActions(t *testing.T) {
 	}
 }
 
+func TestFeedItemRendersSingleVideoFromSlideEndpointWhenStreamMissing(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:      "video_1",
+		AuthorHandle: "author_a",
+		BodyText:     "video body",
+		Media: []model.MediaRef{{
+			Type: "video",
+			URL:  "https://cdn.example/video.mp4",
+		}},
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+	for _, want := range []string{
+		`data-feed-media-kind="video"`,
+		`data-feed-media-stream="/api/media/slide/video_1/0"`,
+		`<source src="/api/media/slide/video_1/0" type="video/mp4">`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing %q in html: %s", want, html)
+		}
+	}
+}
+
+func TestFeedItemQuoteVideoTileUsesItsOwnSlideEndpoint(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:           "parent_1",
+		AuthorHandle:      "author_a",
+		BodyText:          "parent body",
+		QuoteTweetID:      "quote_1",
+		QuoteAuthorHandle: "quote_author",
+		QuoteBodyText:     "quote body",
+		QuoteMedia: []model.MediaRef{
+			{Type: "photo", URL: "https://cdn.example/photo.jpg"},
+			{Type: "video", URL: "https://cdn.example/video.mp4"},
+		},
+		QuoteMediaStreamURL: "/api/media/slide/quote_1/0",
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+	if !strings.Contains(html, `data-feed-media-stream="/api/media/slide/quote_1/1"`) {
+		t.Fatalf("quote video tile should use its own slide endpoint: %s", html)
+	}
+	if strings.Contains(html, `<source src="/api/media/slide/quote_1/0" type="video/mp4">`) {
+		t.Fatalf("quote video tile reused the first slide stream: %s", html)
+	}
+}
+
 func TestFeedExternalURLFallsBackToUniversalStatusPath(t *testing.T) {
 	got := feedExternalURL(model.FeedItem{TweetID: "status_1"})
 	want := "https://x.com/i/status/status_1"

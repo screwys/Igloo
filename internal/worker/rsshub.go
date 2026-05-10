@@ -252,13 +252,17 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 			}
 			pendingItems = pendingItems[:0]
 
-			if len(pendingJobs) > 0 {
+			if len(pendingJobs) > 0 && upsertErr == nil {
 				if jErr := m.db.EnqueueFeedMediaJobs(pendingJobs); jErr != nil {
 					log.Printf("[rsshub] EnqueueFeedMediaJobs (batch): %v", jErr)
 				} else {
 					totalJobs += len(pendingJobs)
 					m.KickFeedMedia()
 				}
+			} else if len(pendingJobs) > 0 {
+				log.Printf("[rsshub] skipping %d media jobs after failed batch upsert", len(pendingJobs))
+			}
+			if len(pendingJobs) > 0 {
 				pendingJobs = pendingJobs[:0]
 			}
 		}
@@ -279,23 +283,27 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 	}
 
 	// Final batch upsert for remaining items.
+	finalUpsertOK := true
 	if len(pendingItems) > 0 {
 		n, upsertErr := m.upsertFeedItemsBatch(ctx, pendingItems, "final")
 		if upsertErr != nil {
 			log.Printf("[rsshub] UpsertFeedItems (final): %v", upsertErr)
+			finalUpsertOK = false
 		} else {
 			totalUpserted += n
 		}
 	}
 
 	// Final batch of media jobs.
-	if len(pendingJobs) > 0 {
+	if len(pendingJobs) > 0 && finalUpsertOK {
 		if jErr := m.db.EnqueueFeedMediaJobs(pendingJobs); jErr != nil {
 			log.Printf("[rsshub] EnqueueFeedMediaJobs (final): %v", jErr)
 		} else {
 			totalJobs += len(pendingJobs)
 			m.KickFeedMedia()
 		}
+	} else if len(pendingJobs) > 0 {
+		log.Printf("[rsshub] skipping %d media jobs after failed final upsert", len(pendingJobs))
 	}
 
 	m.lastCycleMu.Lock()
