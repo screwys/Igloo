@@ -65,7 +65,11 @@ func ImportFullExportZip(store *db.DB, dataDir, configDir, repoDir string, data 
 		return result, 0, restoredConfig, err
 	}
 	restoredMedia, err := RestoreFullExportBookmarkMedia(store, dataDir, zr)
-	return result, restoredMedia, restoredConfig, err
+	if err != nil {
+		return result, restoredMedia, restoredConfig, err
+	}
+	restoredAvatars, err := RestoreFullExportAvatarMedia(dataDir, zr)
+	return result, restoredMedia + restoredAvatars, restoredConfig, err
 }
 
 func readExportConfig(zr *zip.Reader) (db.ConfigExport, error) {
@@ -247,6 +251,38 @@ func RestoreFullExportBookmarkMedia(store *db.DB, dataDir string, zr *zip.Reader
 	return restored, nil
 }
 
+func RestoreFullExportAvatarMedia(dataDir string, zr *zip.Reader) (int, error) {
+	restored := 0
+	for _, f := range zr.File {
+		fileName, ok := avatarMediaEntry(f.Name)
+		if !ok || f.FileInfo().IsDir() {
+			continue
+		}
+		destRel := filepath.Join("thumbnails", "avatars", fileName)
+		destAbs := filepath.Join(dataDir, destRel)
+		if !pathWithinDir(dataDir, destAbs) {
+			return restored, fmt.Errorf("unsafe avatar path: %s", f.Name)
+		}
+		if err := os.MkdirAll(filepath.Dir(destAbs), 0o755); err != nil {
+			return restored, fmt.Errorf("create avatar dir: %w", err)
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return restored, fmt.Errorf("open avatar entry %s: %w", f.Name, err)
+		}
+		_, err = writeZipEntryFile(destAbs, rc)
+		closeErr := rc.Close()
+		if err != nil {
+			return restored, err
+		}
+		if closeErr != nil {
+			return restored, closeErr
+		}
+		restored++
+	}
+	return restored, nil
+}
+
 func bookmarkMediaEntry(name string) (string, string, bool) {
 	clean := filepath.ToSlash(filepath.Clean(name))
 	if strings.HasPrefix(clean, "../") || clean == ".." || strings.HasPrefix(clean, "/") {
@@ -265,6 +301,27 @@ func bookmarkMediaEntry(name string) (string, string, bool) {
 		return "", "", false
 	}
 	return bookmarkID, fileName, true
+}
+
+func avatarMediaEntry(name string) (string, bool) {
+	clean := filepath.ToSlash(filepath.Clean(name))
+	if strings.HasPrefix(clean, "../") || clean == ".." || strings.HasPrefix(clean, "/") {
+		return "", false
+	}
+	parts := strings.Split(clean, "/")
+	if len(parts) != 3 || parts[0] != "media" || parts[1] != "avatars" {
+		return "", false
+	}
+	fileName := filepath.Base(parts[2])
+	if fileName == "." || fileName == ".." || fileName == "" || strings.ContainsAny(fileName, `/\`) {
+		return "", false
+	}
+	switch strings.ToLower(filepath.Ext(fileName)) {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif":
+		return fileName, true
+	default:
+		return "", false
+	}
 }
 
 func pathWithinDir(dir, path string) bool {

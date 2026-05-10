@@ -185,8 +185,17 @@ func TestHandleThemeCSSServesPersistedThemeAsNoStoreCSS(t *testing.T) {
 	}
 }
 
-func TestHandleConfigExportFullIncludesBookmarkedMediaFiles(t *testing.T) {
+func TestHandleConfigExportFullIncludesBookmarkedMediaAndAvatars(t *testing.T) {
 	srv := newTestServer(t)
+
+	avatarRelPath := filepath.Join("thumbnails", "avatars", "channel_alpha.jpg")
+	avatarAbsPath := filepath.Join(srv.cfg.DataDir, avatarRelPath)
+	if err := os.MkdirAll(filepath.Dir(avatarAbsPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll avatar: %v", err)
+	}
+	if err := os.WriteFile(avatarAbsPath, []byte("avatar-bytes"), 0o644); err != nil {
+		t.Fatalf("WriteFile avatar: %v", err)
+	}
 
 	mediaRelPath := filepath.Join("media", "youtube", "channel_alpha", "booked_video.mp4")
 	mediaAbsPath := filepath.Join(srv.cfg.DataDir, mediaRelPath)
@@ -264,6 +273,7 @@ func TestHandleConfigExportFullIncludesBookmarkedMediaFiles(t *testing.T) {
 	}
 
 	wantMedia := map[string]string{
+		"media/avatars/channel_alpha.jpg":      "avatar-bytes",
 		"media/bookmarks/booked_video/000.mp4": "bookmarked-video-bytes",
 		"media/bookmarks/post_1/000.jpg":       "bookmarked-feed-image",
 	}
@@ -453,7 +463,7 @@ func TestHandleConfigExportFullSavesZipToBackupDirWhenConfigured(t *testing.T) {
 	}
 }
 
-func TestHandleConfigImportFullZipRestoresMetadataAndBookmarkedMedia(t *testing.T) {
+func TestHandleConfigImportFullZipRestoresMetadataBookmarkedMediaAndAvatars(t *testing.T) {
 	src := newTestServer(t)
 	dst := newTestServer(t)
 
@@ -464,6 +474,13 @@ func TestHandleConfigImportFullZipRestoresMetadataAndBookmarkedMedia(t *testing.
 	}
 	if err := os.WriteFile(mediaAbsPath, []byte("bookmarked-video-bytes"), 0o644); err != nil {
 		t.Fatalf("WriteFile media: %v", err)
+	}
+	avatarPath := filepath.Join(src.cfg.DataDir, "thumbnails", "avatars", "channel_alpha.jpg")
+	if err := os.MkdirAll(filepath.Dir(avatarPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll avatar: %v", err)
+	}
+	if err := os.WriteFile(avatarPath, []byte("avatar-bytes"), 0o644); err != nil {
+		t.Fatalf("WriteFile avatar: %v", err)
 	}
 	if err := src.db.WithWrite(func(tx *sql.Tx) error {
 		for _, stmt := range []struct {
@@ -514,8 +531,8 @@ func TestHandleConfigImportFullZipRestoresMetadataAndBookmarkedMedia(t *testing.
 	if response["format"] != "full_export_zip" {
 		t.Fatalf("format = %v, want full_export_zip; response=%#v", response["format"], response)
 	}
-	if got := int(response["restored_media"].(float64)); got != 1 {
-		t.Fatalf("restored_media = %d, want 1; response=%#v", got, response)
+	if got := int(response["restored_media"].(float64)); got != 2 {
+		t.Fatalf("restored_media = %d, want 2; response=%#v", got, response)
 	}
 
 	video, err := dst.db.GetVideo("booked_video")
@@ -534,6 +551,13 @@ func TestHandleConfigImportFullZipRestoresMetadataAndBookmarkedMedia(t *testing.
 	}
 	if got, err := dst.db.GetMediaFilePath("feed_media", "booked_video", 0); err != nil || got == "" {
 		t.Fatalf("feed_media row missing: path=%q err=%v", got, err)
+	}
+	restoredAvatar, err := os.ReadFile(filepath.Join(dst.cfg.DataDir, "thumbnails", "avatars", "channel_alpha.jpg"))
+	if err != nil {
+		t.Fatalf("read restored avatar: %v", err)
+	}
+	if string(restoredAvatar) != "avatar-bytes" {
+		t.Fatalf("restored avatar = %q", string(restoredAvatar))
 	}
 	labels, err := dst.db.GetBookmarkLabels("admin", "")
 	if err != nil {

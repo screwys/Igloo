@@ -1083,6 +1083,7 @@ func (s *Server) handleConfigExportFull(w http.ResponseWriter, r *http.Request) 
 	}
 
 	mediaFiles := s.collectFullExportBookmarkMedia(cfg.Bookmarks)
+	mediaFiles = append(mediaFiles, s.collectFullExportAvatarMedia()...)
 	runtimeFiles := s.collectFullExportRuntimeConfigFiles()
 	runtimeManifest := s.fullExportRuntimeManifest()
 
@@ -1411,6 +1412,52 @@ func (s *Server) collectFullExportBookmarkMedia(bookmarks []db.BookmarkExport) [
 		}
 	}
 	return files
+}
+
+func (s *Server) collectFullExportAvatarMedia() []fullExportMediaFile {
+	if s == nil || s.cfg == nil || strings.TrimSpace(s.cfg.DataDir) == "" {
+		return nil
+	}
+	root := filepath.Join(s.cfg.DataDir, "thumbnails", "avatars")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	files := make([]fullExportMediaFile, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		name := entry.Name()
+		if !fullExportAvatarMediaName(name) {
+			continue
+		}
+		sourcePath := filepath.Join(root, name)
+		info, err := entry.Info()
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		files = append(files, fullExportMediaFile{
+			SourcePath:  sourcePath,
+			ArchivePath: filepath.ToSlash(filepath.Join("media", "avatars", name)),
+		})
+	}
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ArchivePath < files[j].ArchivePath
+	})
+	return files
+}
+
+func fullExportAvatarMediaName(name string) bool {
+	if strings.TrimSpace(name) == "" || name != filepath.Base(name) {
+		return false
+	}
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {

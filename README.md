@@ -187,7 +187,7 @@ Default folders in case installed natively:
 
 For a native fresh install, a full export zip can be imported before the first
 browser login. The current full export zip includes `export.json`, bookmarked
-media, and runtime files from `~/.config/igloo/` such as `nginx.conf`,
+media, cached avatars, and runtime files from `~/.config/igloo/` such as `nginx.conf`,
 `rsshub.env`, `auth_users.json`, `auth_secret`, and `cookies/`.
 
 ```bash

@@ -110,6 +110,13 @@ func TestRunImportsCurrentFullExportZipFreshInstall(t *testing.T) {
 	if string(restored) != "bookmarked-video-bytes" {
 		t.Fatalf("restored media = %q", string(restored))
 	}
+	restoredAvatar, err := os.ReadFile(filepath.Join(dataDir, "thumbnails", "avatars", "youtube_UCfresh.jpg"))
+	if err != nil {
+		t.Fatalf("read restored avatar: %v", err)
+	}
+	if string(restoredAvatar) != "avatar-bytes" {
+		t.Fatalf("restored avatar = %q", string(restoredAvatar))
+	}
 
 	channels, _, err := store.ListChannelsForDelta(0, 500)
 	if err != nil {
@@ -243,6 +250,13 @@ func writeFullExportZipFixture(t *testing.T, path string) {
 	}
 	if _, err := mediaFile.Write([]byte("bookmarked-video-bytes")); err != nil {
 		t.Fatalf("write media entry: %v", err)
+	}
+	avatarFile, err := zw.Create("media/avatars/youtube_UCfresh.jpg")
+	if err != nil {
+		t.Fatalf("create avatar entry: %v", err)
+	}
+	if _, err := avatarFile.Write([]byte("avatar-bytes")); err != nil {
+		t.Fatalf("write avatar entry: %v", err)
 	}
 	if err := zw.Close(); err != nil {
 		t.Fatalf("close zip: %v", err)
