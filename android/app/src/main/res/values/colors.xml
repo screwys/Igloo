@@ -7,8 +7,6 @@
     <color name="accent_red">#EB7072</color>
 
     <!-- Launcher-icon palette (aligns with ic_launcher_background) -->
-    <color name="ic_launcher_concrete">#585B70</color>
-    <color name="ic_launcher_surface">#45475A</color>
-    <color name="ic_launcher_light">#CDD6F4</color>
-    <color name="ic_launcher_accent">#F38BA8</color>
+    <color name="ic_launcher_mark_dark">#1B2232</color>
+    <color name="ic_launcher_mark_accent">#F287A1</color>
 </resources>

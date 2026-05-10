@@ -1,0 +1,16 @@
+<svg viewBox="0 0 256 236" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Igloo">
+  <title>Igloo</title>
+  <defs>
+    <linearGradient id="igloo-mark-gradient" x1="54" y1="26" x2="202" y2="144" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a883e6"/>
+      <stop offset="0.52" stop-color="#c783d6"/>
+      <stop offset="1" stop-color="#f287a1"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="236" rx="28" fill="#1e1e2e"/>
+  <path d="M54 150v-41.2C54 58.6 86.4 19 128 19s74 39.6 74 89.8V150h-42v-38.6c0-18.8-14.3-34-32-34s-32 15.2-32 34V150Z" fill="url(#igloo-mark-gradient)"/>
+  <path d="M96 150v-38.6c0-18.8 14.3-34 32-34s32 15.2 32 34V150Z" fill="#1b2232"/>
+  <path d="M54 111.4c22.9-12.3 47.5-18.5 74-18.5s51.1 6.2 74 18.5M74.2 72c34.6 12 73 12 107.6 0M128 19c-13.8 22-20.8 51.8-20.8 89.1M128 19c13.8 22 20.8 51.8 20.8 89.1" fill="none" stroke="#1b2232" stroke-width="8" stroke-linecap="round"/>
+  <path d="M118 83.4 148.3 100.5 118 117.6Z" fill="#f287a1"/>
+  <text x="128" y="215" fill="#f4f6fb" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="58" font-weight="700" letter-spacing="0" text-anchor="middle">Igloo</text>
+</svg>

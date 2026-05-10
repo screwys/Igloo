@@ -1,6 +1,10 @@
 # Igloo
 
 <p align="center">
+  <img alt="Igloo" src="static/logo.svg" width="220">
+</p>
+
+<p align="center">
   <img alt="License: GPLv3" src="https://img.shields.io/badge/license-GPLv3-blue">
   <img alt="Go: 1.26+" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
   <img alt="Kotlin: 2.2.21+" src="https://img.shields.io/badge/Kotlin-2.2.21-7F52FF?logo=kotlin&logoColor=white">

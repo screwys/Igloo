@@ -7,12 +7,14 @@ templ LoginPage(p PageProps, csrfToken string, errorMsg string, next string) {
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ L(p, "login_title", "Igloo Login") }</title>
+			<link rel="icon" type="image/svg+xml" href={ p.StaticV("favicon.svg") }/>
 			<link rel="stylesheet" href="/static/theme.css"/>
 			@authPageStyles()
 		</head>
 		<body>
 			<div class="card">
-				<h1>{ L(p, "app_name", "Igloo") }</h1>
+				<img class="auth-logo" src={ p.StaticV("favicon.svg") } alt={ L(p, "app_name", "Igloo") }/>
+				<h1 class="sr-only">{ L(p, "app_name", "Igloo") }</h1>
 				<p>{ L(p, "login_subtitle", "Sign in to access the desktop dashboard.") }</p>
 				<form method="POST" action="/login">
 					if next != "" {
@@ -42,11 +44,13 @@ templ SetupPage(p PageProps, csrfToken string, errorMsg string, platforms []Plat
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ L(p, "setup_title", "Create First Admin") }</title>
+			<link rel="icon" type="image/svg+xml" href={ p.StaticV("favicon.svg") }/>
 			<link rel="stylesheet" href="/static/theme.css"/>
 			@authPageStyles()
 		</head>
 		<body>
 			<div class="card">
+				<img class="auth-logo" src={ p.StaticV("favicon.svg") } alt="" aria-hidden="true"/>
 				<h1>{ L(p, "setup_title", "Create First Admin") }</h1>
 				<p>{ L(p, "setup_subtitle", "Create the admin account for this Igloo instance.") }</p>
 				<form method="POST" action="/setup">
@@ -130,6 +134,23 @@ templ authPageStyles() {
 			margin: 0 0 8px;
 			font-size: 1.4rem;
 			color: var(--accent-primary);
+		}
+		.auth-logo {
+			display: block;
+			width: 78px;
+			height: 78px;
+			margin: 0 0 16px;
+		}
+		.sr-only {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			padding: 0;
+			margin: -1px;
+			overflow: hidden;
+			clip: rect(0, 0, 0, 0);
+			white-space: nowrap;
+			border: 0;
 		}
 		p {
 			margin: 0 0 18px;
