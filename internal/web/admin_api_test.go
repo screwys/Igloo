@@ -127,6 +127,25 @@ func TestHandleUpdateSettingsStoresNormalizedWebThemeSettings(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateSettingsRejectsRelativeBackupDir(t *testing.T) {
+	srv := newTestServer(t)
+	form := url.Values{}
+	form.Set("backup_dir", filepath.Join("var", "mnt", "external_drive"))
+	req := httptest.NewRequest("POST", "/api/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(contextWithUser(req, "admin", "admin"))
+	rec := httptest.NewRecorder()
+
+	srv.handleUpdateSettings(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got, _ := srv.db.GetSetting("backup_dir", ""); got != "" {
+		t.Fatalf("stored backup_dir = %q, want empty", got)
+	}
+}
+
 func TestHandleUpdateSettingsRejectsNonAdmin(t *testing.T) {
 	srv := newTestServer(t)
 	if err := srv.db.SetSetting("", "web_theme_id", "dracula"); err != nil {
@@ -402,6 +421,19 @@ func TestHandleConfigExportSavesToBackupDirWhenConfigured(t *testing.T) {
 	}
 	if body["saved"] != true || body["path"] == "" {
 		t.Fatalf("saved response = %#v, want saved path", body)
+	}
+}
+
+func TestWriteExportFileRejectsRelativeDir(t *testing.T) {
+	_, err := writeExportFile(filepath.Join("var", "mnt", "external_drive"), "igloo-config", ".json", func(dst io.Writer) error {
+		_, err := dst.Write([]byte("{}"))
+		return err
+	})
+	if err == nil {
+		t.Fatal("writeExportFile accepted a relative dir")
+	}
+	if _, err := os.Stat(filepath.Join("var", "mnt", "external_drive")); !os.IsNotExist(err) {
+		t.Fatalf("relative export dir was created or stat failed: %v", err)
 	}
 }
 

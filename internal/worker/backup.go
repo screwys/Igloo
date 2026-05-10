@@ -43,7 +43,15 @@ func (m *Manager) tryBackup() {
 		return
 	}
 	dir, _ := m.db.GetSetting("backup_dir", "")
+	dir = strings.TrimSpace(dir)
 	if dir == "" {
+		return
+	}
+	if !filepath.IsAbs(dir) {
+		err := fmt.Errorf("backup dir must be absolute: %s", dir)
+		slog.Error("backup: invalid dir", "err", err)
+		m.setStatus("backup", WorkerStatus{Name: "backup", Running: true, LastRunAt: time.Now(), Error: err.Error()})
+		m.Emit("backup", "backup failed: "+err.Error(), "error")
 		return
 	}
 
@@ -91,6 +99,13 @@ func (m *Manager) backupDue(dir string) bool {
 }
 
 func (m *Manager) createBackup(dir string) error {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return fmt.Errorf("backup dir is required")
+	}
+	if !filepath.IsAbs(dir) {
+		return fmt.Errorf("backup dir must be absolute: %s", dir)
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create backup dir: %w", err)
 	}

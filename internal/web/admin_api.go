@@ -217,6 +217,14 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	normalizeSettingsUpdate(body)
+	if err := validateSettingsUpdate(body); err != nil {
+		if isHTMX {
+			http.Error(w, err.Error(), 400)
+		} else {
+			writeJSON(w, 400, map[string]any{"error": err.Error()})
+		}
+		return
+	}
 	if err := s.db.UpdateSettings(body); err != nil {
 		slog.Error("UpdateSettings", "err", err)
 		if isHTMX {
@@ -271,6 +279,17 @@ func normalizeSettingsUpdate(body map[string]string) {
 		}
 		body["stories_window_hours"] = strconv.Itoa(db.NormalizeStoriesWindowHours(n))
 	}
+}
+
+func validateSettingsUpdate(body map[string]string) error {
+	if v, ok := body["backup_dir"]; ok {
+		dir := strings.TrimSpace(v)
+		body["backup_dir"] = dir
+		if dir != "" && !filepath.IsAbs(dir) {
+			return fmt.Errorf("backup_dir must be an absolute path")
+		}
+	}
+	return nil
 }
 
 // normalizeSkipLangs trims, lowercases, de-duplicates, and drops empties
@@ -1146,10 +1165,22 @@ func writeFullExportZip(w io.Writer, cfg db.ConfigExport, mediaFiles []fullExpor
 
 func (s *Server) configuredExportDir() string {
 	dir, _ := s.db.GetSetting("backup_dir", "")
-	return strings.TrimSpace(dir)
+	dir = strings.TrimSpace(dir)
+	if dir != "" && !filepath.IsAbs(dir) {
+		slog.Error("configured export dir is not absolute", "dir", dir)
+		return ""
+	}
+	return dir
 }
 
 func writeExportFile(dir, prefix, ext string, write func(io.Writer) error) (string, error) {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return "", fmt.Errorf("export dir is required")
+	}
+	if !filepath.IsAbs(dir) {
+		return "", fmt.Errorf("export dir must be absolute: %s", dir)
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create export dir: %w", err)
 	}

@@ -54,6 +54,23 @@ func TestCreateBackupWritesIglooDBAndSkipsStaleSnapshotName(t *testing.T) {
 	}
 }
 
+func TestCreateBackupRejectsRelativeDir(t *testing.T) {
+	dataDir := t.TempDir()
+	database, err := db.Open(config.DefaultDatabasePath(dataDir), dataDir)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+
+	m := NewManager(database, &config.Config{DataDir: dataDir})
+	if err := m.createBackup(filepath.Join("var", "mnt", "external_drive")); err == nil {
+		t.Fatal("createBackup accepted a relative backup dir")
+	}
+	if _, err := os.Stat(filepath.Join("var", "mnt", "external_drive")); !os.IsNotExist(err) {
+		t.Fatalf("relative backup dir was created or stat failed: %v", err)
+	}
+}
+
 func tarEntryNames(t *testing.T, path string) map[string]bool {
 	t.Helper()
 	f, err := os.Open(path)
