@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/screwys/igloo/internal/components"
 )
@@ -110,6 +111,11 @@ func (s *Server) handleBookmarkAdd(w http.ResponseWriter, r *http.Request) {
 		_ = s.db.InvalidateAlgoScore(videoID)
 		s.workers.KickFeedScoring()
 		if !alreadyCurrent {
+			if promoted, err := s.db.PromoteFeedMediaJobForTweet(videoID, 20); err != nil {
+				slog.Warn("[Bookmark] feed media promote failed", "tweet", videoID, "err", err)
+			} else if promoted {
+				s.workers.KickFeedMedia()
+			}
 			s.startBookmarkArchive(videoID, archivePath, body.CustomTitle, accountHandlesJSON, body.MediaIndices)
 		}
 	}()
@@ -467,6 +473,10 @@ func (s *Server) archiveBookmarkCombined(tweetID, archivePath, customTitle, acco
 	}
 
 	if len(allSlides) == 0 {
+		allSlides = s.waitForBookmarkArchiveSlides(tweetID, 15*time.Second)
+	}
+
+	if len(allSlides) == 0 {
 		slog.Warn("[Bookmark] no slides found", "tweet", tweetID)
 		return
 	}
@@ -541,6 +551,23 @@ func (s *Server) archiveBookmarkCombined(tweetID, archivePath, customTitle, acco
 		src.Close()
 	}
 	slog.Info("[Bookmark] archived", "tweet", tweetID, "slides", len(allSlides), "dest", archivePath)
+}
+
+func (s *Server) waitForBookmarkArchiveSlides(tweetID string, timeout time.Duration) []string {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		time.Sleep(500 * time.Millisecond)
+		var slides []string
+		slides = append(slides, s.collectSlides(tweetID)...)
+		items, _ := s.db.GetFeedItemsForTweetIDs([]string{tweetID})
+		if fi, ok := items[tweetID]; ok && fi.QuoteTweetID != "" {
+			slides = append(slides, s.collectSlides(fi.QuoteTweetID)...)
+		}
+		if len(slides) > 0 {
+			return slides
+		}
+	}
+	return nil
 }
 
 // collectSlides gathers all local media file paths for a tweet ID.

@@ -119,6 +119,37 @@ func (db *DB) UpdateFeedMediaJobStatus(tweetID, status, lastError string, retryC
 	})
 }
 
+// PromoteFeedMediaJobForTweet makes an existing feed media job urgent.
+func (db *DB) PromoteFeedMediaJobForTweet(tweetID string, priority int) (bool, error) {
+	if tweetID == "" {
+		return false, nil
+	}
+	var changed bool
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		now := time.Now().UnixMilli()
+		res, err := tx.Exec(`
+			UPDATE feed_media_jobs
+			   SET status = 'queued',
+			       priority = MAX(COALESCE(priority, 0), ?),
+			       retry_count = 0,
+			       last_error = NULL,
+			       updated_at = ?
+			 WHERE tweet_id = ?
+			   AND status IN ('queued', 'failed', 'pruned')
+		`, priority, now, tweetID)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		changed = n > 0
+		return nil
+	})
+	return changed, err
+}
+
 // ResetStaleFeedMediaJobs resets feed_media_jobs left in processing state back to queued.
 // Returns the number of rows updated.
 func (db *DB) ResetStaleFeedMediaJobs() (int, error) {

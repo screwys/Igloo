@@ -85,6 +85,57 @@ func TestUpdateFeedMediaJobStatus(t *testing.T) {
 	}
 }
 
+func TestPromoteFeedMediaJobForTweetQueuesExistingJob(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	if err := d.ExecRaw(`
+		INSERT INTO feed_media_jobs (tweet_id, status, media_kind, retry_count, priority, last_error, created_at, updated_at)
+		VALUES ('promote_test_001', 'failed', 'image', 3, 0, 'old error', 1, 1)
+	`); err != nil {
+		t.Fatalf("insert feed media job: %v", err)
+	}
+
+	changed, err := d.PromoteFeedMediaJobForTweet("promote_test_001", 20)
+	if err != nil {
+		t.Fatalf("PromoteFeedMediaJobForTweet: %v", err)
+	}
+	if !changed {
+		t.Fatal("expected promotion to update the existing job")
+	}
+
+	var status, lastError string
+	var retryCount, priority int
+	if err := d.QueryRow(`
+		SELECT status, retry_count, priority, COALESCE(last_error, '')
+		FROM feed_media_jobs
+		WHERE tweet_id = 'promote_test_001'
+	`).Scan(&status, &retryCount, &priority, &lastError); err != nil {
+		t.Fatalf("query promoted job: %v", err)
+	}
+	if status != "queued" || retryCount != 0 || priority != 20 || lastError != "" {
+		t.Fatalf("promoted job = status %q retry %d priority %d error %q", status, retryCount, priority, lastError)
+	}
+}
+
+func TestPromoteFeedMediaJobForTweetIgnoresCompletedJob(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	if err := d.ExecRaw(`
+		INSERT INTO feed_media_jobs (tweet_id, status, media_kind, retry_count, priority, last_error, created_at, updated_at)
+		VALUES ('promote_test_002', 'completed', 'image', 0, 0, NULL, 1, 1)
+	`); err != nil {
+		t.Fatalf("insert feed media job: %v", err)
+	}
+
+	changed, err := d.PromoteFeedMediaJobForTweet("promote_test_002", 20)
+	if err != nil {
+		t.Fatalf("PromoteFeedMediaJobForTweet: %v", err)
+	}
+	if changed {
+		t.Fatal("completed job should not be promoted")
+	}
+}
+
 func TestEnqueueDuplicateIgnored(t *testing.T) {
 	d := openWritableTestDB(t)
 
