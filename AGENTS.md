@@ -38,6 +38,17 @@ If profile media only becomes ready after hover/page render, treat that as a pip
 
 For Go code, protect the success path. Do not allocate rollback journals, diagnostic collections, or per-item bookkeeping on the happy path just to make rare failures easier to unwind. If the affected work can be enumerated again safely, let the error path recompute it and clean up there. Keep explicit rollback state only when side effects are non-idempotent, external, ordered in a way that cannot be rebuilt, or otherwise impossible to reconstruct.
 
+## Git
+
+- Every completed focused change must be committed before the final response.
+- Do not wait for an explicit commit request. The expected default is: fix,
+  verify as far as practical, stage only the files touched for this task, and
+  commit.
+- A dirty worktree is not a reason to skip the commit. Leave unrelated files
+  alone and commit only the current task's scoped changes.
+- If the work is exploratory, incomplete, or blocked, say that plainly instead
+  of presenting it as done.
+
 ## Releases
 
 - Use patch releases for small fixes and minor releases for larger user-visible changes.
