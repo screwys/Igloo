@@ -583,6 +583,7 @@ test("themes current X composer toolbar buttons", () => {
   assert.match(script, /svg \*/);
   assert.match(script, /applyXComposerToolbarTheme/);
   assert.match(script, /setProperty\(property, value, "important"\)/);
+  assert.match(script, /setImportantStyle\(node, "filter", "none"\)/);
   assert.match(script, /border-bottom-color:\s*#f38ba8\s*!important/);
 });
 
