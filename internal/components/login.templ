@@ -13,8 +13,10 @@ templ LoginPage(p PageProps, csrfToken string, errorMsg string, next string) {
 		</head>
 		<body>
 			<div class="card">
-				<img class="auth-logo" src={ p.StaticV("favicon.svg") } alt={ L(p, "app_name", "Igloo") }/>
-				<h1 class="sr-only">{ L(p, "app_name", "Igloo") }</h1>
+				<div class="auth-brand">
+					<img class="auth-logo" src={ p.StaticV("favicon.svg") } alt="" aria-hidden="true"/>
+					<h1>{ L(p, "app_name", "Igloo") }</h1>
+				</div>
 				<p>{ L(p, "login_subtitle", "Sign in to access the desktop dashboard.") }</p>
 				<form method="POST" action="/login">
 					if next != "" {
@@ -141,16 +143,22 @@ templ authPageStyles() {
 			height: 78px;
 			margin: 0 0 16px;
 		}
-		.sr-only {
-			position: absolute;
-			width: 1px;
-			height: 1px;
-			padding: 0;
-			margin: -1px;
-			overflow: hidden;
-			clip: rect(0, 0, 0, 0);
-			white-space: nowrap;
-			border: 0;
+		.auth-brand {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			margin: 0 0 18px;
+		}
+		.auth-brand .auth-logo {
+			width: 52px;
+			height: 52px;
+			margin: 0;
+		}
+		.auth-brand h1 {
+			margin: 0;
+			color: var(--text-primary);
+			font-size: 1.125rem;
+			line-height: 1;
 		}
 		p {
 			margin: 0 0 18px;

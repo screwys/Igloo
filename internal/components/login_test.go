@@ -20,6 +20,8 @@ func TestLoginPageRender(t *testing.T) {
 		`name="_csrf_token"`,
 		`action="/login"`,
 		`name="next" value="/feed"`,
+		`class="auth-brand"`,
+		`<h1>Igloo</h1>`,
 		`id="username"`,
 		`id="password"`,
 	}
