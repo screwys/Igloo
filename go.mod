@@ -4,6 +4,7 @@ go 1.26.1
 
 require (
 	github.com/a-h/templ v0.3.1001
+	github.com/evanw/esbuild v0.28.0
 	github.com/gorilla/sessions v1.4.0
 	github.com/lrstanley/go-ytdlp v1.3.5
 	github.com/mark3labs/mcp-go v0.52.0

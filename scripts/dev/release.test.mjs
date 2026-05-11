@@ -5,11 +5,10 @@ import test from "node:test";
 import {
   bumpSemver,
   normalizeReleaseBump,
+  parseAndroidVersion,
   planAutomaticRelease,
   renderReleaseNotes,
   updateAndroidBuildGradle,
-  updatePackageJsonText,
-  updatePackageLockText,
   updateReleaseBumpText,
 } from "./release.mjs";
 
@@ -87,6 +86,9 @@ test("release workflow signs release commits and tags", () => {
   assert.match(workflow, /RELEASE_GPG_PASSPHRASE/);
   assert.match(workflow, /git commit -S -m "release \$\{\{ steps\.release\.outputs\.version \}\}"/);
   assert.match(workflow, /git tag -s "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
+  assert.match(workflow, /git add android\/app\/build\.gradle\.kts \.github\/release-bump/);
+  assert.doesNotMatch(workflow, /package\.json/);
+  assert.doesNotMatch(workflow, /package-lock\.json/);
   assert.doesNotMatch(workflow, /git tag -a "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
 });
 
@@ -161,29 +163,6 @@ test("does not use commit messages as release bump markers", () => {
   });
 });
 
-test("updates package metadata versions", () => {
-  const packageJson = updatePackageJsonText(
-    JSON.stringify({ name: "igloo", version: "1.0.0" }, null, 2) + "\n",
-    "1.0.1",
-  );
-  assert.equal(JSON.parse(packageJson).version, "1.0.1");
-  assert.match(packageJson, /\n$/);
-
-  const lockJson = updatePackageLockText(
-    JSON.stringify({
-      name: "igloo",
-      version: "1.0.0",
-      packages: {
-        "": { name: "igloo", version: "1.0.0" },
-      },
-    }),
-    "1.0.1",
-  );
-  const parsed = JSON.parse(lockJson);
-  assert.equal(parsed.version, "1.0.1");
-  assert.equal(parsed.packages[""].version, "1.0.1");
-});
-
 test("updates android release version fields", () => {
   const source = `
 android {
@@ -196,6 +175,21 @@ android {
   const updated = updateAndroidBuildGradle(source, "1.0.1", 4);
   assert.match(updated, /versionCode = 4/);
   assert.match(updated, /versionName = "1.0.1"/);
+});
+
+test("reads android release version fields", () => {
+  const parsed = parseAndroidVersion(`
+android {
+    defaultConfig {
+        versionCode = 3
+        versionName = "1.0.0"
+    }
+}
+`);
+  assert.deepEqual(parsed, {
+    versionCode: 3,
+    versionName: "1.0.0",
+  });
 });
 
 test("renders exact commit release notes", () => {

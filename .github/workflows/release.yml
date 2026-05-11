@@ -83,7 +83,7 @@ jobs:
           git config user.email "${RELEASE_GIT_USER_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
           git config user.signingkey "$fingerprint"
           git config gpg.program "$RUNNER_TEMP/gpg-wrapper"
-          git add package.json package-lock.json android/app/build.gradle.kts .github/release-bump
+          git add android/app/build.gradle.kts .github/release-bump
           git diff --cached --quiet && exit 1
           git commit -S -m "release ${{ steps.release.outputs.version }}"
           git tag -s "${{ steps.release.outputs.tag }}" -m "release ${{ steps.release.outputs.version }}"

@@ -46,21 +46,6 @@ export function planAutomaticRelease(commits, threshold = 10, requestedBump = "p
   };
 }
 
-export function updatePackageJsonText(text, version) {
-  const pkg = JSON.parse(text);
-  pkg.version = version;
-  return `${JSON.stringify(pkg, null, 2)}\n`;
-}
-
-export function updatePackageLockText(text, version) {
-  const lock = JSON.parse(text);
-  lock.version = version;
-  if (lock.packages && lock.packages[""]) {
-    lock.packages[""].version = version;
-  }
-  return `${JSON.stringify(lock, null, 2)}\n`;
-}
-
 export function updateAndroidBuildGradle(text, versionName, versionCode) {
   let updated = text.replace(
     /versionCode\s*=\s*\d+/,
@@ -120,7 +105,7 @@ function gitMaybe(args) {
   }
 }
 
-function parseAndroidVersion(text) {
+export function parseAndroidVersion(text) {
   const codeMatch = /versionCode\s*=\s*(\d+)/.exec(text);
   const nameMatch = /versionName\s*=\s*"([^"]+)"/.exec(text);
   if (!codeMatch || !nameMatch) {
@@ -197,22 +182,13 @@ function prepareRelease(argv) {
     );
   }
 
-  const packagePath = resolve("package.json");
-  const packageLockPath = resolve("package-lock.json");
   const androidPath = resolve("android/app/build.gradle.kts");
   const bumpPath = resolve(args.bumpFile);
 
-  const packageText = readFileSync(packagePath, "utf8");
-  const packageLockText = readFileSync(packageLockPath, "utf8");
   const androidText = readFileSync(androidPath, "utf8");
 
-  const currentVersion = JSON.parse(packageText).version;
   const androidVersion = parseAndroidVersion(androidText);
-  if (androidVersion.versionName !== currentVersion) {
-    throw new Error(
-      `package.json version ${currentVersion} does not match Android version ${androidVersion.versionName}`,
-    );
-  }
+  const currentVersion = androidVersion.versionName;
 
   const previousTag = gitMaybe([
     "describe",
@@ -254,11 +230,6 @@ function prepareRelease(argv) {
     throw new Error(`tag already exists: ${nextTag}`);
   }
 
-  writeFileSync(packagePath, updatePackageJsonText(packageText, nextVersion));
-  writeFileSync(
-    packageLockPath,
-    updatePackageLockText(packageLockText, nextVersion),
-  );
   writeFileSync(
     androidPath,
     updateAndroidBuildGradle(

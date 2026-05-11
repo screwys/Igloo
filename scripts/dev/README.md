@@ -3,10 +3,10 @@
 `scripts/dev/` contains maintainer and local-development tools. It is not the
 public runtime surface for a normal container install.
 
-The container build copies only the JavaScript bundler helper it needs:
+Web assets are bundled by the Go asset builder:
 
 ```text
-scripts/dev/esbuild.mjs
+cmd/igloo-assets
 ```
 
 ## Common Commands

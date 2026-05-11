@@ -44,7 +44,7 @@ echo "[templ] ok"
 
 # ── JS ──
 echo "[esbuild] bundling..."
-node scripts/dev/esbuild.mjs
+go run ./cmd/igloo-assets
 echo "[esbuild] ok"
 
 # ── Go ──

@@ -8,21 +8,19 @@ ARG DEBIAN_FRONTEND=noninteractive
 WORKDIR /src
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates nodejs npm \
+    && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY go.mod go.sum package.json package-lock.json ./
+COPY go.mod go.sum ./
 RUN go mod download
-RUN npm ci
 RUN go install github.com/a-h/templ/cmd/templ@v0.3.1001
 
 COPY cmd ./cmd
 COPY internal ./internal
 COPY locales ./locales
 COPY static ./static
-COPY scripts/dev/esbuild.mjs ./scripts/dev/esbuild.mjs
 RUN templ generate
-RUN node scripts/dev/esbuild.mjs
+RUN go run ./cmd/igloo-assets
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/igloo ./cmd/igloo \
     && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/igloo-adduser ./cmd/adduser \
     && mkdir -p /out/static /out/locales \

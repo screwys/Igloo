@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Renovate owns Docker/runtime dependency updates; Dependabot owns Go, npm, Gradle, and GitHub Actions.",
+  "description": "Renovate owns Docker/runtime dependency updates; Dependabot owns Go, Gradle, and GitHub Actions.",
   "extends": ["config:recommended"],
   "enabledManagers": ["dockerfile", "custom.regex"],
   "dependencyDashboard": true,

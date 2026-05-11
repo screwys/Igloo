@@ -149,7 +149,6 @@ if [ "$CHECK_ONLY" = false ] && command -v go >/dev/null 2>&1 && ! command -v te
     go install github.com/a-h/templ/cmd/templ@latest
 fi
 check_required templ     "templ code generator — go install github.com/a-h/templ/cmd/templ@latest"
-check_required npm       "Node package manager — install nodejs/npm"
 check_required yt-dlp    "video downloader — brew install yt-dlp, pip install yt-dlp, or install your distro package"
 check_required gallery-dl "image downloader — brew install gallery-dl, pip install gallery-dl, or install your distro package"
 check_required ffmpeg    "media processing — brew install ffmpeg or install your distro package"
@@ -278,12 +277,12 @@ if [ "$SKIP_BUILD" = false ]; then
     export PATH="$HOME_DIR/go/bin:$PATH"
     cd "$REPO_DIR"
 
-    info "npm ci..."
-    npm ci --include=dev
-    ok "node_modules"
-
     info "templ generate..."
     templ generate
+
+    info "bundling web assets..."
+    go run ./cmd/igloo-assets
+    ok "static/js/dist"
 
     info "go build bin/igloo..."
     go build -o bin/igloo ./cmd/igloo/
