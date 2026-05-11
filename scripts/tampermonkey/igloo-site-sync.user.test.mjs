@@ -553,6 +553,22 @@ test("uses follow wording for visible subscription labels", () => {
   );
 });
 
+test("themes current X composer toolbar buttons", () => {
+  for (const selector of [
+    'button[role="button"][aria-label="Add photos or video"]',
+    'button[role="button"][data-testid="gifSearchButton"]',
+    'button[role="button"][data-testid="grokImgGen"]',
+    'button[role="button"][data-testid="createPollButton"]',
+    'button[role="button"][aria-label="Add emoji"]',
+    'button[role="button"][data-testid="scheduleOption"]',
+    'button[role="button"][data-testid="geoButton"]',
+    'button[role="button"][data-testid="contentDisclosureButton"]',
+  ]) {
+    assert.ok(script.includes(selector), `missing selector ${selector}`);
+  }
+  assert.match(script, /border-bottom-color:\s*#f38ba8\s*!important/);
+});
+
 test("ghost-resubscribed X handles can be unfollowed immediately", async () => {
   const harness = buildHarness({
     localList: [{ handle: "bob", url: "https://x.com/bob" }],

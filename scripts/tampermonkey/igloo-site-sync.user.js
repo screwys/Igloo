@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.13
+// @version      8.0.14
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -29,7 +29,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.13";
+  const SCRIPT_VERSION = "8.0.14";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -1157,6 +1157,62 @@
     body.igloo-x-cleanup [data-testid="unretweet"]:hover .r-1niwhzg,
     body.igloo-x-cleanup [aria-label="Share post"]:hover .r-1niwhzg,
     body.igloo-x-cleanup [aria-label="Share"]:hover .r-1niwhzg { background-color: rgba(243,139,168,0.1) !important; }
+
+    /* Composer toolbar buttons */
+    body.igloo-x-cleanup button[role="button"][aria-label="Add photos or video"],
+    body.igloo-x-cleanup button[role="button"][data-testid="gifSearchButton"],
+    body.igloo-x-cleanup button[role="button"][data-testid="grokImgGen"],
+    body.igloo-x-cleanup button[role="button"][data-testid="createPollButton"],
+    body.igloo-x-cleanup button[role="button"][aria-label="Add emoji"],
+    body.igloo-x-cleanup button[role="button"][data-testid="scheduleOption"],
+    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"],
+    body.igloo-x-cleanup button[role="button"][data-testid="contentDisclosureButton"] {
+      border-color: transparent !important;
+      background-color: transparent !important;
+      border-radius: 9999px !important;
+    }
+
+    body.igloo-x-cleanup button[role="button"][aria-label="Add photos or video"] div,
+    body.igloo-x-cleanup button[role="button"][data-testid="gifSearchButton"] div,
+    body.igloo-x-cleanup button[role="button"][data-testid="grokImgGen"] div,
+    body.igloo-x-cleanup button[role="button"][data-testid="createPollButton"] div,
+    body.igloo-x-cleanup button[role="button"][aria-label="Add emoji"] div,
+    body.igloo-x-cleanup button[role="button"][data-testid="scheduleOption"] div,
+    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"] div,
+    body.igloo-x-cleanup button[role="button"][data-testid="contentDisclosureButton"] div,
+    body.igloo-x-cleanup button[role="button"][aria-label="Add photos or video"] svg,
+    body.igloo-x-cleanup button[role="button"][data-testid="gifSearchButton"] svg,
+    body.igloo-x-cleanup button[role="button"][data-testid="grokImgGen"] svg,
+    body.igloo-x-cleanup button[role="button"][data-testid="createPollButton"] svg,
+    body.igloo-x-cleanup button[role="button"][aria-label="Add emoji"] svg,
+    body.igloo-x-cleanup button[role="button"][data-testid="scheduleOption"] svg,
+    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"] svg,
+    body.igloo-x-cleanup button[role="button"][data-testid="contentDisclosureButton"] svg {
+      color: #f38ba8 !important;
+      fill: #f38ba8 !important;
+    }
+
+    body.igloo-x-cleanup button[role="button"][aria-label="Add photos or video"] span,
+    body.igloo-x-cleanup button[role="button"][data-testid="gifSearchButton"] span,
+    body.igloo-x-cleanup button[role="button"][data-testid="grokImgGen"] span,
+    body.igloo-x-cleanup button[role="button"][data-testid="createPollButton"] span,
+    body.igloo-x-cleanup button[role="button"][aria-label="Add emoji"] span,
+    body.igloo-x-cleanup button[role="button"][data-testid="scheduleOption"] span,
+    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"] span,
+    body.igloo-x-cleanup button[role="button"][data-testid="contentDisclosureButton"] span {
+      border-bottom-color: #f38ba8 !important;
+    }
+
+    body.igloo-x-cleanup button[role="button"][aria-label="Add photos or video"]:hover,
+    body.igloo-x-cleanup button[role="button"][data-testid="gifSearchButton"]:hover,
+    body.igloo-x-cleanup button[role="button"][data-testid="grokImgGen"]:hover,
+    body.igloo-x-cleanup button[role="button"][data-testid="createPollButton"]:hover,
+    body.igloo-x-cleanup button[role="button"][aria-label="Add emoji"]:hover,
+    body.igloo-x-cleanup button[role="button"][data-testid="scheduleOption"]:hover,
+    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"]:hover,
+    body.igloo-x-cleanup button[role="button"][data-testid="contentDisclosureButton"]:hover {
+      background-color: rgba(243,139,168,0.1) !important;
+    }
 
     /* Even spacing for action bar with 6 buttons */
     body.igloo-x-cleanup [role="group"] { justify-content: space-between !important; }
