@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.12
+// @version      8.0.13
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -29,7 +29,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.12";
+  const SCRIPT_VERSION = "8.0.13";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -135,6 +135,7 @@
   const X_MEDIA_CACHE_LIMIT = 500;
   const X_MEDIA_GRAPHQL_PATH_RE =
     /^(?:\/i\/api)?\/graphql\/[^/]+\/(TweetDetail|TweetResultByRestId|UserTweets|UserMedia|HomeTimeline|HomeLatestTimeline|UserTweetsAndReplies|UserHighlightsTweets|UserArticlesTweets|Bookmarks|Likes|CommunitiesExploreTimeline|ListLatestTweetsTimeline|SearchTimeline)$/;
+  const cachedXImageMediaByTweetId = new Map();
   const cachedXVideoUrlsByTweetId = new Map();
 
   function currentPlatform() {
@@ -209,6 +210,45 @@
     );
   }
 
+  function trimCacheMap(map) {
+    while (map.size > X_MEDIA_CACHE_LIMIT) {
+      const oldest = map.keys().next().value;
+      map.delete(oldest);
+    }
+  }
+
+  function imageExtFromUrl(rawUrl) {
+    try {
+      const url = new URL(rawUrl, location.origin);
+      const format = String(url.searchParams.get("format") || "")
+        .trim()
+        .toLowerCase();
+      if (/^[a-z0-9]+$/.test(format)) return "." + format;
+      const pathExt = (url.pathname.match(/\.([A-Za-z0-9]+)$/) || [])[1];
+      if (pathExt) return "." + pathExt.toLowerCase();
+    } catch (_) {}
+    return ".jpg";
+  }
+
+  function imageMediaFromXUrl(rawUrl) {
+    const src = String(rawUrl || "");
+    if (!src.includes("pbs.twimg.com/media")) return null;
+    let url;
+    try {
+      url = new URL(src, location.origin);
+    } catch (_) {
+      return null;
+    }
+    const ext = imageExtFromUrl(url.href);
+    const format = ext.slice(1) || "jpg";
+    const base = url.origin + url.pathname.replace(/\.[A-Za-z0-9]+$/, "");
+    return {
+      kind: "image",
+      url: base + "?format=" + format + "&name=orig",
+      ext,
+    };
+  }
+
   function cachedVideoUrlsForTweet(tweetId) {
     return cachedXVideoUrlsByTweetId.get(String(tweetId || "")) || [];
   }
@@ -227,10 +267,37 @@
       merged.some((url, i) => url !== existing[i]);
     cachedXVideoUrlsByTweetId.delete(id);
     cachedXVideoUrlsByTweetId.set(id, merged);
-    while (cachedXVideoUrlsByTweetId.size > X_MEDIA_CACHE_LIMIT) {
-      const oldest = cachedXVideoUrlsByTweetId.keys().next().value;
-      cachedXVideoUrlsByTweetId.delete(oldest);
-    }
+    trimCacheMap(cachedXVideoUrlsByTweetId);
+    return changed;
+  }
+
+  function cachedImageMediaForTweet(tweetId) {
+    return cachedXImageMediaByTweetId.get(String(tweetId || "")) || [];
+  }
+
+  function rememberCachedImageMedia(tweetId, media) {
+    const id = String(tweetId || "");
+    const next = [];
+    const seen = new Set();
+    (media || []).forEach((item) => {
+      if (!item || item.kind !== "image" || !item.url) return;
+      const key = item.url.split("?")[0];
+      if (seen.has(key)) return;
+      seen.add(key);
+      next.push(item);
+    });
+    if (!id || !next.length) return false;
+
+    const existing = cachedImageMediaForTweet(id);
+    const changed =
+      next.length !== existing.length ||
+      next.some(
+        (item, i) =>
+          item.url !== existing[i]?.url || item.ext !== existing[i]?.ext,
+      );
+    cachedXImageMediaByTweetId.delete(id);
+    cachedXImageMediaByTweetId.set(id, next);
+    trimCacheMap(cachedXImageMediaByTweetId);
     return changed;
   }
 
@@ -272,6 +339,25 @@
     return rememberCachedVideoUrls(tweetId, urls);
   }
 
+  function cacheTweetImageMedia(tweet) {
+    const legacy = tweet?.legacy;
+    const tweetId = String(tweet?.rest_id || legacy?.id_str || "");
+    const media =
+      legacy?.extended_entities?.media || legacy?.entities?.media || [];
+    if (!tweetId || !Array.isArray(media)) return false;
+
+    const images = [];
+    media.forEach((item) => {
+      const mediaType = String(item?.type || "");
+      const unavailable =
+        String(item?.ext_media_availability?.status || "") === "Unavailable";
+      if (unavailable || mediaType !== "photo") return;
+      const image = imageMediaFromXUrl(item?.media_url_https);
+      if (image) images.push(image);
+    });
+    return rememberCachedImageMedia(tweetId, images);
+  }
+
   function cacheTweetMediaFromApiResponse(body) {
     let json = body;
     if (typeof body === "string") {
@@ -288,7 +374,11 @@
     function visit(value) {
       if (!value || typeof value !== "object" || seen.has(value)) return;
       seen.add(value);
-      if (value.legacy && cacheTweetVideoUrls(value)) cached += 1;
+      if (value.legacy) {
+        const cachedImages = cacheTweetImageMedia(value);
+        const cachedVideos = cacheTweetVideoUrls(value);
+        if (cachedImages || cachedVideos) cached += 1;
+      }
       if (Array.isArray(value)) {
         value.forEach(visit);
         return;
@@ -424,7 +514,7 @@
       const info = parseTweetInfoFromHref(href);
       if (info) return info;
     }
-    return null;
+    return parseTweetInfoFromHref(location.href);
   }
 
   // ── Local list helpers ──────────────────────────────────────────────────────
@@ -742,13 +832,30 @@
 
   function imageMediaFromElement(img) {
     const src = img.src || img.getAttribute("src") || "";
-    if (!src.includes("pbs.twimg.com/media")) return null;
-    const base = src.split("?")[0];
-    return {
-      kind: "image",
-      url: base + "?format=jpg&name=orig",
-      ext: ".jpg",
-    };
+    return imageMediaFromXUrl(src);
+  }
+
+  function cachedMediaItemsForTweet(owner) {
+    if (!owner || !owner.tweetId) return [];
+    const tweetId = String(owner.tweetId);
+    const images = cachedImageMediaForTweet(tweetId).map((media) => ({
+      ...media,
+      tweetId,
+      tweetUrl: owner.url,
+    }));
+    const videoUrl = cachedVideoUrlsForTweet(tweetId)[0];
+    const videos = videoUrl
+      ? [
+          {
+            kind: "video",
+            url: videoUrl,
+            tweetId,
+            tweetUrl: owner.url,
+            ext: ".mp4",
+          },
+        ]
+      : [];
+    return [...images, ...videos];
   }
 
   function collectTweetMediaItems(article) {
@@ -806,6 +913,24 @@
         if (cachedUrl) item.url = cachedUrl;
         items.push(item);
       });
+
+    function appendCachedMedia(owner) {
+      cachedMediaItemsForTweet(owner).forEach((media) => {
+        if (media.kind === "image") {
+          const imageKey = owner.tweetId + "|" + media.url.split("?")[0];
+          if (seenImages.has(imageKey)) return;
+          seenImages.add(imageKey);
+        } else if (media.kind === "video") {
+          if (seenVideos.has(owner.tweetId)) return;
+          seenVideos.add(owner.tweetId);
+        } else {
+          return;
+        }
+        items.push({ ...media, domOrder: items.length });
+      });
+    }
+    appendCachedMedia(parentInfo);
+    quoteScopes.forEach(appendCachedMedia);
 
     items.sort((a, b) => {
       const ownerA = ownerOrder.has(a.tweetId)
@@ -1698,13 +1823,22 @@
   function mediaDownloadResult(moved, failed) {
     const success = moved.length > 0 && failed.length === 0;
     return {
-      ok: success,
+      ok: moved.length > 0,
       json: {
         success,
+        partial: moved.length > 0 && failed.length > 0,
         moved,
         failed,
       },
     };
+  }
+
+  function makeDownloadRunId() {
+    return (
+      Date.now().toString(36) +
+      "_" +
+      Math.random().toString(36).slice(2, 8)
+    );
   }
 
   function downloadMediaItems(
@@ -1723,10 +1857,11 @@
     (async () => {
       const moved = [];
       const failed = [];
+      const runId = makeDownloadRunId();
       for (let i = 0; i < mediaItems.length; i++) {
         const media = mediaItems[i];
         const staged = {
-          staging_name: "tmp_" + tweetId + "_" + i + media.ext,
+          staging_name: "tmp_" + tweetId + "_" + runId + "_" + i + media.ext,
           ext: media.ext,
         };
         if (media.kind === "video") {
@@ -1808,10 +1943,23 @@
             lbl,
             async (resp) => {
               const ok = resp.ok && resp.json && resp.json.success;
+              const partial = resp.ok && resp.json && resp.json.partial;
               const movedCount = resp.json?.moved?.length || 0;
               if (ok) {
                 onSuccess();
                 showToast("Downloaded " + movedCount + " file(s): " + lbl);
+                return;
+              }
+              if (partial) {
+                onSuccess();
+                showToast(
+                  "Downloaded " +
+                    movedCount +
+                    " file(s), " +
+                    (resp.json?.failed?.length || 0) +
+                    " failed: " +
+                    lbl,
+                );
                 return;
               }
               setDlButtonState(dlBtn, "error");

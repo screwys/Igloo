@@ -412,6 +412,65 @@ function tweetApiBodyWithQuoteVideo() {
   };
 }
 
+function tweetApiBodyWithImage() {
+  return {
+    data: {
+      tweetResult: {
+        result: {
+          __typename: "Tweet",
+          rest_id: "333",
+          legacy: {
+            id_str: "333",
+            extended_entities: {
+              media: [
+                {
+                  type: "photo",
+                  media_url_https:
+                    "https://pbs.twimg.com/media/detail-photo.png",
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+function tweetApiBodyWithQuoteImage() {
+  return {
+    data: {
+      tweetResult: {
+        result: {
+          __typename: "Tweet",
+          rest_id: "111",
+          legacy: {
+            id_str: "111",
+            quoted_status_result: {
+              result: {
+                __typename: "Tweet",
+                rest_id: "222",
+                legacy: {
+                  id_str: "222",
+                  extended_entities: {
+                    media: [
+                      {
+                        type: "photo",
+                        media_url_https:
+                          "https://pbs.twimg.com/media/quote-api.jpg",
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 function runScript(harness, { exposeDebug = false } = {}) {
   const source = exposeDebug
     ? script.replace(
@@ -422,6 +481,7 @@ function runScript(harness, { exposeDebug = false } = {}) {
   downloadMediaItems: typeof downloadMediaItems === "function" ? downloadMediaItems : undefined,
   directVideoDownloadCandidates: typeof directVideoDownloadCandidates === "function" ? directVideoDownloadCandidates : undefined,
   cacheTweetMediaFromApiResponse: typeof cacheTweetMediaFromApiResponse === "function" ? cacheTweetMediaFromApiResponse : undefined,
+  cachedMediaItemsForTweet: typeof cachedMediaItemsForTweet === "function" ? cachedMediaItemsForTweet : undefined,
   cachedVideoUrlsForTweet: typeof cachedVideoUrlsForTweet === "function" ? cachedVideoUrlsForTweet : undefined,
   probeDirectMediaUrl: typeof probeDirectMediaUrl === "function" ? probeDirectMediaUrl : undefined,
   shouldShowMediaIndexPicker: typeof shouldShowMediaIndexPicker === "function" ? shouldShowMediaIndexPicker : undefined,
@@ -590,6 +650,64 @@ test("collects parent and quote media in parent-first order", () => {
   );
 });
 
+test("uses cached X API image media when the overlay article has no rendered image", () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  const cached = harness.context.__iglooTest.cacheTweetMediaFromApiResponse(
+    tweetApiBodyWithImage(),
+  );
+  const article = el("article", {}, [
+    el("a", { href: "/alice/status/333" }, [el("time")]),
+  ]);
+
+  const items = JSON.parse(
+    JSON.stringify(harness.context.__iglooTest.collectTweetMediaItems(article)),
+  );
+
+  assert.equal(cached, 1);
+  assert.deepEqual(items, [
+    {
+      kind: "image",
+      url: "https://pbs.twimg.com/media/detail-photo?format=png&name=orig",
+      ext: ".png",
+      tweetId: "333",
+      tweetUrl: "https://x.com/alice/status/333",
+      index: 0,
+    },
+  ]);
+});
+
+test("uses cached X API quote image media when the quote card image is absent", () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  harness.context.__iglooTest.cacheTweetMediaFromApiResponse(
+    tweetApiBodyWithQuoteImage(),
+  );
+  const article = el("article", {}, [
+    el("a", { href: "/parent/status/111" }, [el("time")]),
+    el("div", { role: "link" }, [
+      el("a", { href: "/quote/status/222" }, [el("time")]),
+    ]),
+  ]);
+
+  const items = JSON.parse(
+    JSON.stringify(harness.context.__iglooTest.collectTweetMediaItems(article)),
+  );
+
+  assert.deepEqual(items, [
+    {
+      kind: "image",
+      url: "https://pbs.twimg.com/media/quote-api?format=jpg&name=orig",
+      ext: ".jpg",
+      tweetId: "222",
+      tweetUrl: "https://x.com/quote/status/222",
+      index: 0,
+    },
+  ]);
+});
+
 test("uses the quote tweet URL for quote-only videos", () => {
   const harness = buildHarness();
   runScript(harness, { exposeDebug: true });
@@ -731,12 +849,15 @@ test("downloads quote videos directly from cached X API variants", async () => {
   await drainMicrotasks();
 
   assert.deepEqual(result?.json?.moved, ["alice label 001.mp4"]);
-  assert.deepEqual(JSON.parse(JSON.stringify(harness.downloadCalls)), [
-    {
-      url: "https://video.twimg.com/quote-high.mp4?tag=1",
-      name: "tmp_111_0.mp4",
-    },
-  ]);
+  assert.equal(harness.downloadCalls.length, 1);
+  assert.equal(
+    harness.downloadCalls[0].url,
+    "https://video.twimg.com/quote-high.mp4?tag=1",
+  );
+  assert.match(
+    harness.downloadCalls[0].name,
+    /^tmp_111_[a-z0-9]+_[a-z0-9]+_0\.mp4$/,
+  );
   assert.equal(
     harness.requestCalls.some(
       (call) => call.url === "https://localhost:5001/api/tweet-media-dl",
@@ -907,13 +1028,21 @@ test("keeps images on the browser staging download path", async () => {
   await drainMicrotasks();
 
   assert.deepEqual(result?.json?.moved, ["alice label 001.jpg"]);
-  assert.deepEqual(JSON.parse(JSON.stringify(harness.downloadCalls)), [
+  assert.equal(harness.downloadCalls.length, 1);
+  assert.equal(
+    harness.downloadCalls[0].url,
+    "https://pbs.twimg.com/media/main-one?format=jpg&name=orig",
+  );
+  assert.match(
+    harness.downloadCalls[0].name,
+    /^tmp_111_[a-z0-9]+_[a-z0-9]+_0\.jpg$/,
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(harness.downloadCalls[0].headers)),
     {
-      url: "https://pbs.twimg.com/media/main-one?format=jpg&name=orig",
-      name: "tmp_111_0.jpg",
-      headers: { Referer: "https://x.com/" },
+      Referer: "https://x.com/",
     },
-  ]);
+  );
   assert.ok(
     harness.requestCalls.some(
       (call) =>
