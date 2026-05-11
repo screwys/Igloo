@@ -88,6 +88,29 @@ func TestHTTPDownloadFileBadStatus(t *testing.T) {
 	}
 }
 
+func TestHTTPDownloadFileRejectsOversizedResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "4")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("test"))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	dl := &HTTPDownloader{Client: srv.Client(), AllowPrivateHosts: true}
+
+	_, err := dl.DownloadFileWithOptions(
+		context.Background(),
+		srv.URL+"/test.jpg",
+		dir,
+		"test.jpg",
+		HTTPDownloadOptions{MaxBytes: 3},
+	)
+	if err == nil {
+		t.Fatal("expected oversized response to fail")
+	}
+}
+
 func TestHTTPStatusError(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)

@@ -15,7 +15,7 @@ import (
 )
 
 const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-const maxHTTPDownloadBytes = 512 << 20
+const maxHTTPDownloadBytes int64 = 512 << 20
 const defaultHTTPDownloadTimeout = 30 * time.Second
 
 // HTTPStatusError is returned when an HTTP request receives a non-200 status code.
@@ -39,6 +39,12 @@ type HTTPDownloader struct {
 	AllowPrivateHosts bool
 }
 
+// HTTPDownloadOptions tunes the guardrails for one HTTP media download.
+type HTTPDownloadOptions struct {
+	MaxBytes int64
+	Timeout  time.Duration
+}
+
 // NewHTTPDownloader returns an HTTPDownloader with a default http.Client.
 func NewHTTPDownloader() *HTTPDownloader {
 	return &HTTPDownloader{Client: newHTTPDownloadClient()}
@@ -47,6 +53,28 @@ func NewHTTPDownloader() *HTTPDownloader {
 // DownloadFile downloads url to destDir/filename using a temp file + atomic rename.
 // Returns the final file path on success.
 func (h *HTTPDownloader) DownloadFile(ctx context.Context, url, destDir, filename string) (string, error) {
+	return h.DownloadFileWithOptions(ctx, url, destDir, filename, HTTPDownloadOptions{})
+}
+
+// DownloadFileWithOptions downloads url to destDir/filename using per-call
+// limits. Zero option values preserve the default image-sized budget.
+func (h *HTTPDownloader) DownloadFileWithOptions(ctx context.Context, url, destDir, filename string, opts HTTPDownloadOptions) (string, error) {
+	maxBytes := opts.MaxBytes
+	if maxBytes <= 0 {
+		maxBytes = maxHTTPDownloadBytes
+	}
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = defaultHTTPDownloadTimeout
+	}
+	if timeout > 0 {
+		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > timeout {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
+	}
+
 	url = strings.TrimSpace(url)
 	if _, _, ok := httpURLParts(url); !ok {
 		return "", fmt.Errorf("unsupported URL")
@@ -72,7 +100,7 @@ func (h *HTTPDownloader) DownloadFile(ctx context.Context, url, destDir, filenam
 	if resp.StatusCode != http.StatusOK {
 		return "", &HTTPStatusError{StatusCode: resp.StatusCode, URL: url}
 	}
-	if resp.ContentLength > maxHTTPDownloadBytes {
+	if resp.ContentLength > maxBytes {
 		return "", fmt.Errorf("response too large: %d bytes", resp.ContentLength)
 	}
 
@@ -95,13 +123,13 @@ func (h *HTTPDownloader) DownloadFile(ctx context.Context, url, destDir, filenam
 		}
 	}()
 
-	limited := &io.LimitedReader{R: resp.Body, N: maxHTTPDownloadBytes + 1}
+	limited := &io.LimitedReader{R: resp.Body, N: maxBytes + 1}
 	written, err := io.Copy(f, limited)
 	if err != nil {
 		f.Close()
 		return "", fmt.Errorf("write body: %w", err)
 	}
-	if written > maxHTTPDownloadBytes {
+	if written > maxBytes {
 		f.Close()
 		return "", fmt.Errorf("response too large")
 	}
@@ -126,7 +154,6 @@ func (h *HTTPDownloader) httpClient() *http.Client {
 
 func newHTTPDownloadClient() *http.Client {
 	return &http.Client{
-		Timeout: defaultHTTPDownloadTimeout,
 		Transport: &http.Transport{
 			Proxy:       http.ProxyFromEnvironment,
 			DialContext: publicDownloadDialContext,

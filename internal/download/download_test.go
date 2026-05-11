@@ -1,7 +1,9 @@
 package download
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -158,5 +160,46 @@ func TestDownloadTwimgAllQualitiesFail(t *testing.T) {
 		Opts{OutputDir: dir, ID: "test_0"})
 	if err == nil {
 		t.Fatal("expected error when all qualities fail")
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestDownloadDirectTwitterVideoUsesLargeHTTPBudget(t *testing.T) {
+	const body = "video data"
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode:    http.StatusOK,
+			Status:        "200 OK",
+			Header:        make(http.Header),
+			ContentLength: maxHTTPDownloadBytes + 1,
+			Body:          io.NopCloser(bytes.NewBufferString(body)),
+			Request:       req,
+		}, nil
+	})}
+	d := &Downloader{
+		HTTP: &HTTPDownloader{Client: client, AllowPrivateHosts: true},
+	}
+	dir := t.TempDir()
+
+	paths, err := d.Download(context.Background(),
+		"https://video.twimg.com/amplify_video/123/vid/avc1/3840x2160/video.mp4?tag=27", "video",
+		Opts{OutputDir: dir, ID: "tweet_0"})
+	if err != nil {
+		t.Fatalf("expected direct video download to allow large response, got: %v", err)
+	}
+	if len(paths) != 1 {
+		t.Fatalf("expected 1 path, got %d", len(paths))
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "tweet_0.mp4"))
+	if err != nil {
+		t.Fatalf("read video: %v", err)
+	}
+	if string(data) != body {
+		t.Errorf("unexpected content: %q", data)
 	}
 }

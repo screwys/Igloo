@@ -7,6 +7,12 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
+)
+
+const (
+	maxHTTPVideoDownloadBytes       int64 = 4 << 30
+	defaultHTTPVideoDownloadTimeout       = 2 * time.Hour
 )
 
 // Opts configures a Download call.
@@ -53,7 +59,8 @@ func (d *Downloader) Download(ctx context.Context, rawURL string, mediaType stri
 	}
 	if isDirectMedia(rawURL, mediaType) {
 		filename := opts.ID + mediaExtFromURL(rawURL)
-		p, err := d.HTTP.DownloadFile(ctx, rawURL, opts.OutputDir, filename)
+		httpOpts := directMediaHTTPOptions(rawURL, mediaType)
+		p, err := d.HTTP.DownloadFileWithOptions(ctx, rawURL, opts.OutputDir, filename, httpOpts)
 		if err != nil {
 			// Try lower quality variants for twimg photos that 403/404 on orig/large/etc.
 			var httpErr *HTTPStatusError
@@ -65,7 +72,7 @@ func (d *Downloader) Download(ctx context.Context, rawURL string, mediaType stri
 				}
 				log.Printf("[download] twimg 404 on %s, trying %s", tryURL, fallbackURL)
 				tryURL = fallbackURL
-				p, err = d.HTTP.DownloadFile(ctx, fallbackURL, opts.OutputDir, filename)
+				p, err = d.HTTP.DownloadFileWithOptions(ctx, fallbackURL, opts.OutputDir, filename, httpOpts)
 			}
 			if err != nil {
 				return nil, err
@@ -74,6 +81,16 @@ func (d *Downloader) Download(ctx context.Context, rawURL string, mediaType stri
 		return []string{p}, nil
 	}
 	return d.YtDlp.Download(ctx, rawURL, opts)
+}
+
+func directMediaHTTPOptions(rawURL, mediaType string) HTTPDownloadOptions {
+	if !isDirectVideoMedia(rawURL, mediaType) {
+		return HTTPDownloadOptions{}
+	}
+	return HTTPDownloadOptions{
+		MaxBytes: maxHTTPVideoDownloadBytes,
+		Timeout:  defaultHTTPVideoDownloadTimeout,
+	}
 }
 
 // downloadTikTok handles TikTok URLs with slideshow detection.
@@ -132,6 +149,15 @@ func isDirectMedia(rawURL, mediaType string) bool {
 		return true
 	}
 	return false
+}
+
+func isDirectVideoMedia(rawURL, mediaType string) bool {
+	mt := strings.ToLower(mediaType)
+	if mt == "video" || mt == "gif" || mt == "animated_gif" {
+		return true
+	}
+	host, _, ok := httpURLParts(rawURL)
+	return ok && hostMatches(host, "video.twimg.com")
 }
 
 // mediaExtFromURL returns the file extension for the given media URL.
