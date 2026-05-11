@@ -3432,7 +3432,7 @@ select.input.themed-select-native {
 /* Keep subtitles above the floating Media Chrome controls when they appear. */
 .player-wrapper {
     --player-subtitles-offset-idle: 14px;
-    --player-subtitles-offset-controls: 120px;
+    --player-subtitles-offset-controls: 46px;
 }
 
 /* Native browser subtitles (used by videojs_compat/native <video>). */
