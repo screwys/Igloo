@@ -445,7 +445,7 @@ func MediaMode(mediaKind string, slideCount int) string {
 	}
 }
 
-// FeedItem represents an X/Twitter post from RSSHub ingest.
+// FeedItem represents an X/Twitter post from X ingest.
 type FeedItem struct {
 	TweetID                string
 	SourceHandle           string
@@ -579,7 +579,7 @@ type MediaFile struct {
 	CreatedAt  time.Time
 }
 
-// IngestState tracks per-handle RSSHub fetch health.
+// IngestState tracks per-handle X fetch health.
 type IngestState struct {
 	Handle         string
 	FailCount      int

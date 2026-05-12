@@ -88,7 +88,6 @@ func TestFirstInstallSetupCreatesAdminAndLogsIn(t *testing.T) {
 		"password":         {"correct-horse-battery-staple"},
 		"password_confirm": {"correct-horse-battery-staple"},
 		"platforms":        {"youtube", "twitter"},
-		"rsshub_base":      {"http://rsshub:1200"},
 	}
 	req := newLocalRequest("POST", "/setup", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -206,7 +205,7 @@ func TestFirstInstallSetupClaimsBootstrapImportedUserData(t *testing.T) {
 	}
 }
 
-func TestFirstInstallSetupRendersOptInPlatformsAndRSSHubLink(t *testing.T) {
+func TestFirstInstallSetupRendersOptInPlatforms(t *testing.T) {
 	handler, _ := newFirstInstallTestHandler(t)
 
 	setupRec := httptest.NewRecorder()
@@ -220,7 +219,6 @@ func TestFirstInstallSetupRendersOptInPlatformsAndRSSHubLink(t *testing.T) {
 		`name="platforms" value="twitter"`,
 		`name="platforms" value="tiktok"`,
 		`name="platforms" value="instagram"`,
-		`href="https://github.com/DIYgod/RSSHub"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("setup page missing %q: %s", want, body)
@@ -257,36 +255,6 @@ func TestFirstInstallSetupRejectsNoPlatforms(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Select at least one platform.") {
 		t.Fatalf("expected platform validation error, got %s", rec.Body.String())
-	}
-}
-
-func TestFirstInstallSetupRequiresRSSHubWhenXEnabled(t *testing.T) {
-	handler, _ := newFirstInstallTestHandler(t)
-
-	setupRec := httptest.NewRecorder()
-	handler.ServeHTTP(setupRec, newLocalRequest("GET", "/setup", nil))
-	csrfToken := setupCSRFToken(t, setupRec.Body.String())
-
-	form := url.Values{
-		"_csrf_token":      {csrfToken},
-		"username":         {"admin"},
-		"password":         {"correct-horse-battery-staple"},
-		"password_confirm": {"correct-horse-battery-staple"},
-		"platforms":        {"twitter"},
-	}
-	req := newLocalRequest("POST", "/setup", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	for _, cookie := range setupRec.Result().Cookies() {
-		req.AddCookie(cookie)
-	}
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("POST /setup status = %d, body = %s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "RSSHub URL is required when X is enabled.") {
-		t.Fatalf("expected rsshub validation error, got %s", rec.Body.String())
 	}
 }
 

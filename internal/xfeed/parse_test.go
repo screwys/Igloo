@@ -1,0 +1,235 @@
+package xfeed
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/screwys/igloo/internal/fxtwitter"
+	"github.com/screwys/igloo/internal/model"
+)
+
+type fakeTweetFallback struct {
+	fetch func(context.Context, string, string) (*fxtwitter.Tweet, error)
+}
+
+func (f fakeTweetFallback) FetchTweet(ctx context.Context, handle, tweetID string) (*fxtwitter.Tweet, error) {
+	return f.fetch(ctx, handle, tweetID)
+}
+
+func TestParseDumpFoldsParentAndQuoteMedia(t *testing.T) {
+	output := []byte(`[
+		[2, {"tweet_id":"1000000000000000100","content":"parent text","date":"2026-05-09 10:27:49","lang":"en","favorite_count":3,"retweet_count":4,"view_count":5,"author":{"name":"parent_author","nick":"Parent Author","profile_image":"https://pbs.twimg.com/profile_images/a_normal.jpg"},"user":{"name":"source_user","nick":"Source User"},"quote_id":0,"reply_id":0,"retweet_id":0}],
+		[3, "https://pbs.twimg.com/media/parent.jpg?format=jpg&name=orig", {"tweet_id":"1000000000000000100","type":"photo","width":1200,"height":800}],
+		[2, {"tweet_id":"1000000000000000200","content":"quoted text","date":"2026-05-09 09:00:00","lang":"en","author":{"name":"quote_author","nick":"Quote Author","profile_image":"https://pbs.twimg.com/profile_images/q_normal.jpg"},"user":{"name":"source_user","nick":"Source User"},"quote_id":"1000000000000000100","reply_id":0,"retweet_id":0}],
+		[3, "https://video.twimg.com/ext_tw_video/quote.mp4", {"tweet_id":"1000000000000000200","type":"video","width":640,"height":360}]
+	]`)
+
+	result := ParseDump(output, "source_user")
+	if len(result.Items) != 1 {
+		t.Fatalf("items = %d, want 1", len(result.Items))
+	}
+	item := result.Items[0]
+	if item.TweetID != "1000000000000000100" || item.SourceHandle != "source_user" || item.AuthorHandle != "parent_author" {
+		t.Fatalf("identity = %#v", item)
+	}
+	if item.QuoteTweetID != "1000000000000000200" || item.QuoteAuthorHandle != "quote_author" || item.QuoteBodyText != "quoted text" {
+		t.Fatalf("quote fields = %#v", item)
+	}
+	if len(item.Media) != 1 || item.Media[0].URL == "" {
+		t.Fatalf("parent media = %#v", item.Media)
+	}
+	if len(item.QuoteMedia) != 1 || item.QuoteMedia[0].Type != "video" {
+		t.Fatalf("quote media = %#v", item.QuoteMedia)
+	}
+}
+
+func TestParseDumpRetweetKeepsWrapperAndStripsPrefix(t *testing.T) {
+	output := []byte(`[
+		[2, {"tweet_id":"1000000000000000300","retweet_id":"1000000000000000200","content":"RT @original_author: original text","date":"2026-05-09 10:00:00","lang":"en","author":{"name":"original_author","nick":"Original Author","profile_image":"https://pbs.twimg.com/profile_images/o_normal.jpg"},"user":{"name":"reposter","nick":"Reposter"},"quote_id":0,"reply_id":0}]
+	]`)
+
+	result := ParseDump(output, "reposter")
+	if len(result.Items) != 1 {
+		t.Fatalf("items = %d, want 1", len(result.Items))
+	}
+	item := result.Items[0]
+	if !item.IsRetweet || item.TweetID != "1000000000000000300" || item.CanonicalTweetID != "1000000000000000200" {
+		t.Fatalf("retweet identity = %#v", item)
+	}
+	if item.BodyText != "original text" {
+		t.Fatalf("body = %q", item.BodyText)
+	}
+	if item.RetweetedByHandle != "reposter" || item.CanonicalURL != "https://x.com/original_author/status/1000000000000000200" {
+		t.Fatalf("retweet metadata = %#v", item)
+	}
+}
+
+func TestParseDumpRequestsMissingQuoteParentStatus(t *testing.T) {
+	output := []byte(`[
+		[2, {"tweet_id":"1000000000000000200","content":"quoted text","date":"2026-05-09 09:00:00","quote_by":"source_user","quote_id":"1000000000000000100","author":{"name":"quote_author","nick":"Quote Author"},"user":{"name":"source_user","nick":"Source User"},"retweet_id":0}]
+	]`)
+
+	result := ParseDump(output, "source_user")
+	if len(result.Items) != 0 {
+		t.Fatalf("items = %d, want 0", len(result.Items))
+	}
+	if len(result.MissingQuoteParents) != 1 {
+		t.Fatalf("missing parents = %#v", result.MissingQuoteParents)
+	}
+	if result.MissingQuoteParents[0] != (StatusRef{Handle: "source_user", TweetID: "1000000000000000100"}) {
+		t.Fatalf("missing parent = %#v", result.MissingQuoteParents[0])
+	}
+}
+
+func TestParseDumpRejectsUntrustedMediaAndInvalidIDs(t *testing.T) {
+	output := []byte(`[
+		[2, {"tweet_id":"1000000000000000100","content":"safe text","date":"2026-05-09 10:00:00","author":{"name":"safe_author","nick":"Safe Author"},"user":{"name":"source_user"},"quote_id":0,"reply_id":0,"retweet_id":0}],
+		[3, "http://127.0.0.1:8080/internal.jpg", {"tweet_id":"1000000000000000100","type":"photo"}],
+		[2, {"tweet_id":"../bad","content":"bad","author":{"name":"safe_author"},"quote_id":0}]
+	]`)
+
+	result := ParseDump(output, "source_user")
+	if len(result.Items) != 1 {
+		t.Fatalf("items = %d, want 1", len(result.Items))
+	}
+	if result.Items[0].MediaJSON != "" {
+		t.Fatalf("media json = %q", result.Items[0].MediaJSON)
+	}
+}
+
+func TestClientFetchTimelineRetriesAllCookies(t *testing.T) {
+	var used []string
+	runner := func(_ context.Context, args []string) ([]byte, error) {
+		for i, arg := range args {
+			if arg == "--cookies" && i+1 < len(args) {
+				used = append(used, args[i+1])
+				break
+			}
+		}
+		if len(used) < 3 {
+			return nil, errors.New("HTTP 429: Too Many Requests")
+		}
+		return []byte(`[
+			[2, {"tweet_id":"1000000000000000100","content":"cookie retry ok","author":{"name":"source_user","nick":"Source User"},"user":{"name":"source_user"},"quote_id":0,"reply_id":0,"retweet_id":0}]
+		]`), nil
+	}
+
+	client := &Client{
+		Runner:     runner,
+		CookiePool: &CookiePool{paths: []string{"/tmp/cookie-a.txt", "/tmp/cookie-b.txt", "/tmp/cookie-c.txt"}},
+	}
+	items, err := client.FetchTimeline(context.Background(), "source_user", 1)
+	if err != nil {
+		t.Fatalf("FetchTimeline: %v", err)
+	}
+	if len(items) != 1 || items[0].BodyText != "cookie retry ok" {
+		t.Fatalf("items = %#v", items)
+	}
+	if strings.Join(used, ",") != "/tmp/cookie-a.txt,/tmp/cookie-b.txt,/tmp/cookie-c.txt" {
+		t.Fatalf("cookie attempts = %#v", used)
+	}
+}
+
+func TestClientFetchTimelineEnrichesMissingQuoteParentAndRetweetQuote(t *testing.T) {
+	runner := func(_ context.Context, args []string) ([]byte, error) {
+		joined := strings.Join(args, " ")
+		switch {
+		case strings.Contains(joined, "/source_user/with_replies"):
+			return []byte(`[
+				[2, {"tweet_id":"1000000000000000200","content":"quoted text","date":"2026-05-09 09:00:00","quote_by":"source_user","quote_id":"1000000000000000100","author":{"name":"quote_author","nick":"Quote Author"},"user":{"name":"source_user","nick":"Source User"},"retweet_id":0}],
+				[2, {"tweet_id":"1000000000000000400","retweet_id":"1000000000000000300","content":"RT @original_author: original quote parent","date":"2026-05-09 11:00:00","author":{"name":"original_author","nick":"Original Author"},"user":{"name":"source_user","nick":"Source User"},"quote_id":0,"reply_id":0}]
+			]`), nil
+		case strings.Contains(joined, "/source_user/status/1000000000000000100"):
+			return []byte(`[
+				[2, {"tweet_id":"1000000000000000100","content":"parent quote text","date":"2026-05-09 10:00:00","author":{"name":"source_user","nick":"Source User"},"user":{"name":"source_user","nick":"Source User"},"quote_id":0,"reply_id":0,"retweet_id":0}],
+				[2, {"tweet_id":"1000000000000000200","content":"quoted text","date":"2026-05-09 09:00:00","author":{"name":"quote_author","nick":"Quote Author"},"user":{"name":"source_user"},"quote_id":"1000000000000000100","retweet_id":0}]
+			]`), nil
+		case strings.Contains(joined, "/original_author/status/1000000000000000300"):
+			return []byte(`[
+				[2, {"tweet_id":"1000000000000000300","content":"original quote parent","date":"2026-05-09 10:30:00","author":{"name":"original_author","nick":"Original Author"},"user":{"name":"original_author","nick":"Original Author"},"quote_id":0,"reply_id":0,"retweet_id":0}],
+				[2, {"tweet_id":"1000000000000000500","content":"nested quoted text","date":"2026-05-09 10:00:00","author":{"name":"nested_quote","nick":"Nested Quote"},"user":{"name":"original_author"},"quote_id":"1000000000000000300","retweet_id":0}],
+				[3, "https://pbs.twimg.com/media/nested.jpg?format=jpg&name=orig", {"tweet_id":"1000000000000000500","type":"photo"}]
+			]`), nil
+		default:
+			t.Fatalf("unexpected gallery-dl args: %v", args)
+			return nil, nil
+		}
+	}
+
+	client := &Client{Runner: runner}
+	items, err := client.FetchTimeline(context.Background(), "source_user", 2)
+	if err != nil {
+		t.Fatalf("FetchTimeline: %v", err)
+	}
+	byID := map[string]model.FeedItem{}
+	for _, item := range items {
+		byID[item.TweetID] = item
+	}
+	parent := byID["1000000000000000100"]
+	if parent.QuoteTweetID != "1000000000000000200" || parent.QuoteBodyText != "quoted text" {
+		b, _ := json.MarshalIndent(parent, "", "  ")
+		t.Fatalf("missing quote parent not enriched: %s", b)
+	}
+	rt := byID["1000000000000000400"]
+	if rt.QuoteTweetID != "1000000000000000500" || len(rt.QuoteMedia) != 1 {
+		b, _ := json.MarshalIndent(rt, "", "  ")
+		t.Fatalf("retweet quote not enriched: %s", b)
+	}
+}
+
+func TestClientFetchTimelineUsesFXTwitterAfterGalleryDLMissesRetweetQuote(t *testing.T) {
+	runner := func(_ context.Context, args []string) ([]byte, error) {
+		joined := strings.Join(args, " ")
+		switch {
+		case strings.Contains(joined, "/source_user/with_replies"):
+			return []byte(`[
+				[2, {"tweet_id":"1000000000000000400","retweet_id":"1000000000000000300","content":"RT @original_author: original parent text","author":{"name":"original_author","nick":"Original Author"},"user":{"name":"source_user","nick":"Source User"},"quote_id":0,"reply_id":0}]
+			]`), nil
+		case strings.Contains(joined, "/original_author/status/1000000000000000300"):
+			return []byte(`[
+				[2, {"tweet_id":"1000000000000000300","content":"original parent text","author":{"name":"original_author","nick":"Original Author"},"user":{"name":"original_author"},"quote_id":0,"reply_id":0,"retweet_id":0}]
+			]`), nil
+		default:
+			t.Fatalf("unexpected gallery-dl args: %v", args)
+			return nil, nil
+		}
+	}
+	fallback := fakeTweetFallback{fetch: func(_ context.Context, handle, tweetID string) (*fxtwitter.Tweet, error) {
+		if handle != "original_author" || tweetID != "1000000000000000300" {
+			t.Fatalf("fallback fetch = %s/%s", handle, tweetID)
+		}
+		return &fxtwitter.Tweet{
+			ID:                "1000000000000000300",
+			AuthorHandle:      "original_author",
+			AuthorDisplayName: "Original Author",
+			Text:              "original parent text",
+			Quote: &fxtwitter.Tweet{
+				ID:                "1000000000000000500",
+				AuthorHandle:      "quote_author",
+				AuthorDisplayName: "Quote Author",
+				Text:              "quote fallback text",
+				MediaJSON:         `[{"url":"https://pbs.twimg.com/media/fallback.jpg?name=orig","type":"photo"}]`,
+			},
+		}, nil
+	}}
+
+	client := &Client{Runner: runner, TweetFallback: fallback}
+	items, err := client.FetchTimeline(context.Background(), "source_user", 1)
+	if err != nil {
+		t.Fatalf("FetchTimeline: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %#v", items)
+	}
+	item := items[0]
+	if item.QuoteTweetID != "1000000000000000500" || item.QuoteBodyText != "quote fallback text" {
+		b, _ := json.MarshalIndent(item, "", "  ")
+		t.Fatalf("quote fallback missing: %s", b)
+	}
+	if len(item.QuoteMedia) != 1 || item.QuoteMedia[0].URL == "" {
+		t.Fatalf("quote media = %#v", item.QuoteMedia)
+	}
+}

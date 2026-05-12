@@ -56,7 +56,7 @@ func TestRunImportsCurrentFullExportZipFreshInstall(t *testing.T) {
 	}
 
 	restoredConfig := map[string]string{
-		"rsshub.env":                  "RSSHUB_SECRET=example\n",
+		"custom.env":                  "CUSTOM_SECRET=example\n",
 		"auth_users.json":             `{"admin":{"role":"admin"}}` + "\n",
 		"auth_secret":                 "secret-key",
 		"cookies/twitter_cookies.txt": "cookie-data",
@@ -230,7 +230,7 @@ func writeFullExportZipFixture(t *testing.T, path string) {
 	}
 	configEntries := map[string]string{
 		"config/nginx.conf":                  "pid /old/data/nginx.pid;\nssl_certificate /old/config/server.crt;\nroot /old/repo/static;\n",
-		"config/rsshub.env":                  "RSSHUB_SECRET=example\n",
+		"config/custom.env":                  "CUSTOM_SECRET=example\n",
 		"config/auth_users.json":             `{"admin":{"role":"admin"}}` + "\n",
 		"config/auth_secret":                 "secret-key",
 		"config/cookies/twitter_cookies.txt": "cookie-data",

@@ -12,9 +12,7 @@ import (
 // TestManagerStartAndShutdown verifies that a worker can be launched,
 // reaches the Running state, and stops cleanly on Shutdown.
 func TestManagerStartAndShutdown(t *testing.T) {
-	cfg := &config.Config{
-		RSSHubBase: "", // disable real workers
-	}
+	cfg := &config.Config{}
 	m := NewManager(nil, cfg)
 
 	// Override downloader to nil — we won't use it.

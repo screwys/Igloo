@@ -5,7 +5,7 @@ import "testing"
 func TestScanJSSymbols(t *testing.T) {
 	src := `
 function loadFeed(cursor) {
-  return apiJson('/api/feed/rsshub');
+  return apiJson('/api/feed/x');
 }
 
 class FeedManager {
@@ -73,7 +73,7 @@ export class FeedManager {}
 func TestScanJS(t *testing.T) {
 	src := `
 function loadFeed() {
-  apiJson('/api/feed/rsshub', { method: 'GET' });
+  apiJson('/api/feed/x', { method: 'GET' });
   apiFetch('/api/feed/like/' + id, { method: 'POST' });
   fetch('/api/video/status');
 }
@@ -82,7 +82,7 @@ function loadFeed() {
 	if len(calls) < 3 {
 		t.Fatalf("expected at least 3 api calls, got %d", len(calls))
 	}
-	if calls[0].URL != "/api/feed/rsshub" {
+	if calls[0].URL != "/api/feed/x" {
 		t.Errorf("unexpected url: %s", calls[0].URL)
 	}
 	if calls[1].Method != "POST" {

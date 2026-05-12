@@ -4,10 +4,6 @@ set -eu
 echo "[igloo-full] daemon-reload..."
 systemctl --user daemon-reload
 
-echo "[igloo-full] restarting rsshub..."
-systemctl --user restart rsshub.service 2>/dev/null || true
-sleep 2
-
 echo "[igloo-full] stopping igloo..."
 systemctl --user stop igloo.service 2>/dev/null || true
 

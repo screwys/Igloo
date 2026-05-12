@@ -91,19 +91,15 @@ func TestPlatformEnabledNormalizesAliases(t *testing.T) {
 	}
 }
 
-func TestLoadRSSHubBlankDisablesIngestConfig(t *testing.T) {
+func TestLoadEnabledPlatformsCanDisableTwitter(t *testing.T) {
 	t.Setenv("IGLOO_DATA_DIR", t.TempDir())
 	t.Setenv("IGLOO_CONFIG_DIR", t.TempDir())
 	t.Setenv("IGLOO_REPO_DIR", t.TempDir())
 	t.Setenv("IGLOO_ENABLED_PLATFORMS", "youtube,tiktok")
-	t.Setenv("RSSHUB_BASE", "")
 
 	cfg := Load()
 	if cfg.ConfigError != nil {
 		t.Fatal(cfg.ConfigError)
-	}
-	if cfg.RSSHubBase != "" {
-		t.Fatalf("RSSHubBase = %q, want blank", cfg.RSSHubBase)
 	}
 	if cfg.PlatformEnabled("twitter") {
 		t.Fatal("twitter should be disabled by IGLOO_ENABLED_PLATFORMS")
@@ -115,7 +111,6 @@ func TestLoadFreshInstallDefaultsToNoPlatforms(t *testing.T) {
 	t.Setenv("IGLOO_DATA_DIR", dataDir)
 	t.Setenv("IGLOO_CONFIG_DIR", t.TempDir())
 	t.Setenv("IGLOO_REPO_DIR", t.TempDir())
-	t.Setenv("RSSHUB_BASE", "")
 
 	cfg := Load()
 	if cfg.ConfigError != nil {
@@ -138,7 +133,6 @@ func TestLoadRespectsExplicitDBPath(t *testing.T) {
 	t.Setenv("IGLOO_CONFIG_DIR", t.TempDir())
 	t.Setenv("IGLOO_REPO_DIR", t.TempDir())
 	t.Setenv("IGLOO_DB_PATH", custom)
-	t.Setenv("RSSHUB_BASE", "")
 
 	cfg := Load()
 	if cfg.ConfigError != nil {
@@ -154,7 +148,6 @@ func TestLoadKeepsExistingInstallPlatformsWhenNoRuntimeConfig(t *testing.T) {
 	t.Setenv("IGLOO_DATA_DIR", t.TempDir())
 	t.Setenv("IGLOO_CONFIG_DIR", configDir)
 	t.Setenv("IGLOO_REPO_DIR", t.TempDir())
-	t.Setenv("RSSHUB_BASE", "")
 	if err := os.WriteFile(filepath.Join(configDir, "auth_users.json"), []byte("{}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -173,8 +166,7 @@ func TestLoadRuntimeConfig(t *testing.T) {
 	t.Setenv("IGLOO_DATA_DIR", t.TempDir())
 	t.Setenv("IGLOO_CONFIG_DIR", configDir)
 	t.Setenv("IGLOO_REPO_DIR", t.TempDir())
-	t.Setenv("RSSHUB_BASE", "")
-	if err := os.WriteFile(filepath.Join(configDir, "config.json"), []byte(`{"enabled_platforms":["youtube","twitter"],"rsshub_base":"http://rsshub:1200"}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(configDir, "config.json"), []byte(`{"enabled_platforms":["youtube","twitter"]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -184,8 +176,5 @@ func TestLoadRuntimeConfig(t *testing.T) {
 	}
 	if got := strings.Join(cfg.EnabledPlatforms, ","); got != "youtube,twitter" {
 		t.Fatalf("EnabledPlatforms = %q", got)
-	}
-	if cfg.RSSHubBase != "http://rsshub:1200" {
-		t.Fatalf("RSSHubBase = %q", cfg.RSSHubBase)
 	}
 }

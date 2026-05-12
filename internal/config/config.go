@@ -35,9 +35,6 @@ type Config struct {
 	EnabledPlatforms   []string
 	EnabledPlatformSet map[string]bool
 	ConfigError        error
-
-	RSSHubBase    string
-	RSSHubTimeout time.Duration
 }
 
 func Load() *Config {
@@ -48,10 +45,6 @@ func Load() *Config {
 	runtimePath := filepath.Join(configDir, "config.json")
 	runtimeConfig, runtimeErr := loadRuntimeConfig(runtimePath)
 	enabledPlatforms, platformErr := resolveEnabledPlatforms(configDir, runtimeConfig)
-	rsshubBase := strings.TrimSpace(runtimeConfig.RSSHubBase)
-	if v := os.Getenv("RSSHUB_BASE"); v != "" {
-		rsshubBase = v
-	}
 
 	return &Config{
 		DatabasePath:      databasePath,
@@ -71,9 +64,6 @@ func Load() *Config {
 		EnabledPlatforms:   enabledPlatforms,
 		EnabledPlatformSet: platformSet(enabledPlatforms),
 		ConfigError:        firstErr(runtimeErr, platformErr),
-
-		RSSHubBase:    rsshubBase,
-		RSSHubTimeout: parseDuration(envOr("RSSHUB_TIMEOUT", "15s")),
 	}
 }
 
@@ -83,7 +73,6 @@ func DefaultDatabasePath(dataDir string) string {
 
 type RuntimeConfig struct {
 	EnabledPlatforms []string `json:"enabled_platforms"`
-	RSSHubBase       string   `json:"rsshub_base,omitempty"`
 }
 
 func ParseEnabledPlatforms(raw string) ([]string, error) {
@@ -116,22 +105,21 @@ func NormalizeEnabledPlatforms(platforms []string) ([]string, error) {
 	return out, nil
 }
 
-func (c *Config) ApplyRuntimeConfig(platforms []string, rsshubBase string) error {
+func (c *Config) ApplyRuntimeConfig(platforms []string) error {
 	normalized, err := NormalizeEnabledPlatforms(platforms)
 	if err != nil {
 		return err
 	}
 	c.EnabledPlatforms = normalized
 	c.EnabledPlatformSet = platformSet(normalized)
-	c.RSSHubBase = strings.TrimSpace(rsshubBase)
 	return nil
 }
 
-func (c *Config) SaveRuntimeConfig(platforms []string, rsshubBase string) error {
+func (c *Config) SaveRuntimeConfig(platforms []string) error {
 	if c == nil {
 		return fmt.Errorf("config is nil")
 	}
-	if err := c.ApplyRuntimeConfig(platforms, rsshubBase); err != nil {
+	if err := c.ApplyRuntimeConfig(platforms); err != nil {
 		return err
 	}
 	path := c.RuntimeConfigPath
@@ -144,7 +132,6 @@ func (c *Config) SaveRuntimeConfig(platforms []string, rsshubBase string) error 
 	}
 	data, err := json.MarshalIndent(RuntimeConfig{
 		EnabledPlatforms: c.EnabledPlatforms,
-		RSSHubBase:       c.RSSHubBase,
 	}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal runtime config: %w", err)

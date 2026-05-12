@@ -189,6 +189,47 @@ func TestFetchTweetWithMedia(t *testing.T) {
 	}
 }
 
+func TestFetchTweetWithQuote(t *testing.T) {
+	const fixture = `{
+		"code": 200, "message": "OK",
+		"tweet": {
+			"id": "4000000000000000001",
+			"text": "parent quote text",
+			"author": {"screen_name": "parent_author", "name": "Parent Author", "avatar_url": "https://pbs.twimg.com/profile_images/p.jpg"},
+			"quote": {
+				"id": "4000000000000000000",
+				"text": "quoted text",
+				"lang": "en",
+				"author": {"screen_name": "quote_author", "name": "Quote Author", "avatar_url": "https://pbs.twimg.com/profile_images/q.jpg"},
+				"created_at": "Mon Apr 21 09:00:00 +0000 2026",
+				"media": {
+					"all": [
+						{"type": "photo", "url": "https://pbs.twimg.com/media/QUOTE.jpg?name=orig", "width": 1200, "height": 800}
+					]
+				}
+			}
+		}
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(fixture))
+	}))
+	defer srv.Close()
+	c := &Client{BaseURL: srv.URL, HTTP: srv.Client(), Timeout: 2 * time.Second}
+	tw, err := c.FetchTweet(context.Background(), "parent_author", "4000000000000000001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tw.Quote == nil {
+		t.Fatal("Quote should be populated")
+	}
+	if tw.Quote.ID != "4000000000000000000" || tw.Quote.AuthorHandle != "quote_author" || tw.Quote.Text != "quoted text" {
+		t.Fatalf("quote = %+v", tw.Quote)
+	}
+	if !strings.Contains(tw.Quote.MediaJSON, "QUOTE.jpg") || !strings.Contains(tw.Quote.MediaJSON, `"width":1200`) {
+		t.Fatalf("quote media = %q", tw.Quote.MediaJSON)
+	}
+}
+
 func TestFetchTweetNotFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

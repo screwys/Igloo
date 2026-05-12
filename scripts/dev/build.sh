@@ -5,7 +5,7 @@
 #   build.sh restart      — build Go + restart server
 #   build.sh android      — build Go + build/install Android APK
 #   build.sh all          — build Go + restart + Android
-#   build.sh full         — build Go + daemon-reload + rsshub + restart
+#   build.sh full         — build Go + daemon-reload + restart
 set -eu
 
 path_prepend_if_dir() {

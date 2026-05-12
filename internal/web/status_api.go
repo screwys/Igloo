@@ -297,7 +297,7 @@ func (s *Server) handleFeedStatus(w http.ResponseWriter, r *http.Request) {
 			filter = "all"
 		}
 		d := components.FeedDashboardData{
-			IngestEnabled: s.cfg.RSSHubBase != "",
+			IngestEnabled: s.cfg == nil || s.cfg.PlatformEnabled("twitter"),
 			IngestRunning: s.workers.IsIngestRunning(),
 			IngestPaused:  s.workers.IsIngestPaused(),
 			ParsedTotal:   count,
@@ -367,7 +367,7 @@ func (s *Server) handleFeedStatus(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Sources from diagnostics
-		d.Sources, d.RSSHubStatus = s.buildFeedSources()
+		d.Sources, d.XIngestStatus = s.buildFeedSources()
 
 		w.Header().Set("Content-Type", "text/html")
 		components.FeedDashboard(s.pageProps(w, r), d).Render(r.Context(), w)
@@ -413,7 +413,7 @@ func (s *Server) handleFeedStatus(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, 200, map[string]any{
 		"success":               true,
-		"ingest_enabled":        s.cfg.RSSHubBase != "",
+		"ingest_enabled":        s.cfg == nil || s.cfg.PlatformEnabled("twitter"),
 		"ingest_running":        s.workers.IsIngestRunning(),
 		"ingest_paused":         s.workers.IsIngestPaused(),
 		"ready_posts":           count,

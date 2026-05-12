@@ -38,13 +38,7 @@ DATA_DIR="${IGLOO_DATA_DIR:-$HOME_DIR/.local/share/igloo}"
 CONFIG_DIR="${IGLOO_CONFIG_DIR:-$HOME_DIR/.config/igloo}"
 SYSTEMD_DIR="$HOME_DIR/.config/systemd/user"
 SERVER_PORT="${IGLOO_PORT:-5001}"
-RSSHUB_PORT="${RSSHUB_PORT:-1200}"
-RSSHUB_BASE="${RSSHUB_BASE:-http://127.0.0.1:$RSSHUB_PORT}"
-RSSHUB_IMAGE="${RSSHUB_IMAGE:-ghcr.io/diygod/rsshub:chromium-bundled}"
-RSSHUB_CONTAINER="${RSSHUB_CONTAINER:-rsshub}"
-RSSHUB_ENV_FILE="${RSSHUB_ENV_FILE:-$CONFIG_DIR/rsshub.env}"
 KAGI_ENV_FILE="${KAGI_ENV_FILE:-$CONFIG_DIR/kagi.env}"
-PODMAN_BIN="$(command -v podman 2>/dev/null || echo /usr/bin/podman)"
 
 # Add user tool directories to PATH for templ, Homebrew packages, and yt-dlp's
 # recommended JavaScript runtime. systemd user services do not inherit the
@@ -153,7 +147,6 @@ check_required yt-dlp    "video downloader — brew install yt-dlp, pip install 
 check_required gallery-dl "image downloader — brew install gallery-dl, pip install gallery-dl, or install your distro package"
 check_required ffmpeg    "media processing — brew install ffmpeg or install your distro package"
 check_required nginx     "reverse proxy — install nginx with brew or your distro package manager"
-check_required podman    "container runtime (for RSSHub) — install podman with your distro package manager"
 check_required sqlite3   "database CLI — brew install sqlite or install your distro package"
 check_required ss        "socket statistics — install iproute/iproute2 with your distro package manager"
 check_required git       "version control"
@@ -343,7 +336,6 @@ Environment=IGLOO_CONFIG_DIR=$CONFIG_DIR
 Environment=IGLOO_DATA_DIR=$DATA_DIR
 Environment=IGLOO_REPO_DIR=$REPO_DIR
 Environment=IGLOO_PORT=$SERVER_PORT
-Environment=RSSHUB_BASE=$RSSHUB_BASE
 EnvironmentFile=-$KAGI_ENV_FILE
 Environment=PATH=$SERVICE_PATH
 
@@ -352,29 +344,6 @@ ExecStart=$REPO_DIR/bin/igloo
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=15
-
-[Install]
-WantedBy=default.target
-EOF
-ok "$UNIT_FILE"
-
-# rsshub.service
-prepare_service_file rsshub.service
-cat > "$UNIT_FILE" <<EOF
-[Unit]
-Description=RSSHub feed service
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-Type=simple
-Environment=PORT=$RSSHUB_PORT
-EnvironmentFile=-$RSSHUB_ENV_FILE
-ExecStartPre=-$PODMAN_BIN rm -f $RSSHUB_CONTAINER
-ExecStart=$PODMAN_BIN run --name $RSSHUB_CONTAINER --replace --pull=always --env-file $RSSHUB_ENV_FILE -p 127.0.0.1:$RSSHUB_PORT:1200 $RSSHUB_IMAGE
-ExecStop=$PODMAN_BIN stop -t 10 $RSSHUB_CONTAINER
-Restart=always
-RestartSec=5
 
 [Install]
 WantedBy=default.target
@@ -414,9 +383,6 @@ ok "daemon-reload"
 systemctl --user enable igloo.service
 ok "igloo.service enabled"
 
-systemctl --user enable rsshub.service
-ok "rsshub.service enabled"
-
 systemctl --user enable igloo-nginx.service
 ok "igloo-nginx.service enabled"
 
@@ -438,13 +404,6 @@ if [ ! -f "$CONFIG_DIR/auth_users.json" ]; then
     warn "auth_users.json not found — open Igloo setup to create the first admin"
 fi
 
-if [ ! -f "$RSSHUB_ENV_FILE" ]; then
-    warn "rsshub.env not found at $RSSHUB_ENV_FILE"
-    info "  create it with RSSHub environment variables (can be empty)"
-    touch "$RSSHUB_ENV_FILE"
-    ok "created empty $RSSHUB_ENV_FILE"
-fi
-
 if [ ! -f "$CONFIG_DIR/server.crt" ] || [ ! -f "$CONFIG_DIR/server.key" ]; then
     info "no TLS certs found — igloo will run HTTP-only on :$SERVER_PORT"
     info "  place server.crt + server.key in $CONFIG_DIR for HTTPS"
@@ -456,11 +415,11 @@ printf "\n"
 info "repo:     $REPO_DIR"
 info "data:     $DATA_DIR"
 info "config:   $CONFIG_DIR"
-info "services: $SYSTEMD_DIR/{igloo,rsshub,igloo-nginx}.service"
+info "services: $SYSTEMD_DIR/{igloo,igloo-nginx}.service"
 info "kagi env: $KAGI_ENV_FILE"
 printf "\n"
 info "start everything:"
-printf "  systemctl --user start rsshub igloo igloo-nginx\n"
+printf "  systemctl --user start igloo igloo-nginx\n"
 printf "\n"
 info "or use the build script:"
 printf "  scripts/dev/build.sh full\n"

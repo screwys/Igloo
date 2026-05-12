@@ -1781,8 +1781,8 @@ templ logsFeedPanel(p PageProps) {
 
 // FeedDashboard renders the full feed dashboard content (HTMX fragment).
 templ FeedDashboard(p PageProps, d FeedDashboardData) {
-	if d.RSSHubStatus != "" && d.RSSHubStatus != "healthy" {
-		<div class="glass feed-warning">{ fmt.Sprintf(L(p, "logs_rsshub_status", "RSSHub: %s"), d.RSSHubStatus) }</div>
+	if d.XIngestStatus != "" && d.XIngestStatus != "healthy" {
+		<div class="glass feed-warning">{ fmt.Sprintf(L(p, "logs_x_ingest_status", "X ingest: %s"), d.XIngestStatus) }</div>
 	}
 	<!-- Stat strip -->
 	<div class="stat-strip" style="grid-template-columns: repeat(3, 1fr);">
@@ -1946,7 +1946,7 @@ templ FeedDashboard(p PageProps, d FeedDashboardData) {
 										<td>
 											if s.DisplayStatus != "ok" {
 												<button class="feed-probe-link" type="button"
-													hx-get={ "/api/rsshub/probe?handle=" + s.Handle }
+													hx-get={ "/api/x/probe?handle=" + s.Handle }
 													hx-swap="none"
 													hx-on::before-request="this.textContent='...';this.disabled=true"
 													hx-on::after-request="this.textContent=(window.IglooI18n&&window.IglooI18n.t?window.IglooI18n.t('action_probe','Probe'):'Probe');this.disabled=false;if(event.detail.successful&&window.MpaSiteBase)MpaSiteBase.showToast(window.IglooI18n&&window.IglooI18n.t?window.IglooI18n.t('toast_probe_done','Probe done'):'Probe done')"

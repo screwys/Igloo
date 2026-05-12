@@ -15,7 +15,7 @@
 Igloo is an opinionated self-hosted personal social inbox for X, YouTube, TikTok and Instagram written in [Go](https://go.dev/). It pulls content from imported creators, and syncs it to an offline-first Android app. It is not meant to be a complete front-end replacement for these services, it intentionally stays out of any interaction with these platforms, such as posting or commenting. [Jump to installation](#install)
 
 
-Any interaction you do on the client, stays in your machine which includes likes, follows or bookmarks. You don't need to log in to your accounts on these platforms, but that can also affect what media the server can fetch, since it uses [yt-dlp](https://github.com/yt-dlp/yt-dlp), [gallery-dl](https://github.com/mikf/gallery-dl) and [RSSHub](https://github.com/diygod/rsshub) (only for X, optional) to download media, you can only go as far as these packages let you go without cookies. On the web UI, you can upload a cookie file or set the browser with cookies to automatically enable cookies.
+Any interaction you do on the client, stays in your machine which includes likes, follows or bookmarks. You don't need to log in to your accounts on these platforms, but that can also affect what media the server can fetch, since it uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [gallery-dl](https://github.com/mikf/gallery-dl) to download media, you can only go as far as these packages let you go without cookies. On the web UI, you can upload a cookie file or set the browser with cookies to automatically enable cookies.
 
 ![Cookie settings](static/screenshots/cookies.png)
 
@@ -155,12 +155,6 @@ the setup choices before first start, add this to the `docker run` command:
 -e IGLOO_ENABLED_PLATFORMS=youtube,tiktok,instagram,twitter
 ```
 
-RSSHub is optional. Set `RSSHUB_BASE` only if you want X integration:
-
-```bash
--e RSSHUB_BASE=http://rsshub:1200
-```
-
 ## Browser Userscript
 
 The supported
@@ -192,7 +186,7 @@ Default folders in case installed natively:
 For a native fresh install, a full export zip can be imported before the first
 browser login. The current full export zip includes `export.json`, bookmarked
 media, cached avatars, and runtime files from `~/.config/igloo/` such as `nginx.conf`,
-`rsshub.env`, `auth_users.json`, `auth_secret`, and `cookies/`.
+`auth_users.json`, `auth_secret`, and `cookies/`.
 
 ```bash
 IGLOO_DATA_DIR="$HOME/.local/share/igloo" \
@@ -230,8 +224,6 @@ Sync is still required to receive new server data and upload queued local action
 | `IGLOO_CONFIG_DIR` | Config directory override |
 | `IGLOO_REPO_DIR` | Repo/static root override for native installs |
 | `IGLOO_ENABLED_PLATFORMS` | Enabled platforms, such as `youtube,tiktok,instagram,twitter`, or `all` |
-| `RSSHUB_BASE` | Optional RSSHub base URL for X ingest |
-| `RSSHUB_TIMEOUT` | Optional RSSHub request timeout |
 
 ## Privacy
 
@@ -242,7 +234,7 @@ See [PRIVACY.md](PRIVACY.md).
 - Server: Go and SQLite.
 - Web: templ, HTMX, CSS, and bundled ES modules.
 - Android: Kotlin, Jetpack Compose, Room, WorkManager, ExoPlayer, and Ktor.
-- Media downloaders: RSSHub when configured, plus
+- Media downloaders:
   [yt-dlp](https://github.com/yt-dlp/yt-dlp) and
   [gallery-dl](https://github.com/mikf/gallery-dl).
 

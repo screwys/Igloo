@@ -286,7 +286,7 @@ func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	p := s.pageProps(w, r)
 	p.PageTitle = p.T("setup_title", "Create First Admin")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	components.SetupPage(p, csrfToken, "", s.setupPlatformChoices(), nil, "").Render(r.Context(), w)
+	components.SetupPage(p, csrfToken, "", s.setupPlatformChoices(), nil).Render(r.Context(), w)
 }
 
 func (s *Server) handleSetupSubmit(w http.ResponseWriter, r *http.Request) {
@@ -328,20 +328,6 @@ func (s *Server) handleSetupSubmit(w http.ResponseWriter, r *http.Request) {
 		s.renderSetupError(w, r, sess, "setup_error_platform_required", "Select at least one platform.")
 		return
 	}
-	rsshubBase := strings.TrimSpace(r.FormValue("rsshub_base"))
-	if hasPlatform(platforms, "twitter") {
-		if rsshubBase == "" {
-			s.renderSetupError(w, r, sess, "setup_error_rsshub_required", "RSSHub URL is required when X is enabled.")
-			return
-		}
-		if err := validateRSSHubBase(rsshubBase); err != nil {
-			s.renderSetupError(w, r, sess, "setup_error_rsshub_invalid", "Enter a valid HTTP or HTTPS RSSHub URL.")
-			return
-		}
-	} else {
-		rsshubBase = ""
-	}
-
 	auth.LockUsers()
 	defer auth.UnlockUsers()
 	users, err := auth.LoadUsers(s.cfg.AuthUsersPath)
@@ -354,7 +340,7 @@ func (s *Server) handleSetupSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	if err := s.cfg.SaveRuntimeConfig(platforms, rsshubBase); err != nil {
+	if err := s.cfg.SaveRuntimeConfig(platforms); err != nil {
 		slog.Error("setup SaveRuntimeConfig", "err", err)
 		s.renderSetupError(w, r, sess, "setup_error_save_failed", "Could not create the admin user.")
 		return
@@ -387,7 +373,7 @@ func (s *Server) renderSetupError(w http.ResponseWriter, r *http.Request, sess *
 	p.PageTitle = p.T("setup_title", "Create First Admin")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusUnprocessableEntity)
-	components.SetupPage(p, csrfToken, p.T(key, fallback), s.setupPlatformChoices(), r.Form["platforms"], strings.TrimSpace(r.FormValue("rsshub_base"))).Render(r.Context(), w)
+	components.SetupPage(p, csrfToken, p.T(key, fallback), s.setupPlatformChoices(), r.Form["platforms"]).Render(r.Context(), w)
 }
 
 func (s *Server) setupPlatformChoices() []components.PlatformChoice {
@@ -425,15 +411,6 @@ func (s *Server) normalizeSetupPlatforms(raw []string) ([]string, error) {
 		return nil, fmt.Errorf("no platforms selected")
 	}
 	return out, nil
-}
-
-func hasPlatform(platforms []string, platform string) bool {
-	for _, p := range platforms {
-		if p == platform {
-			return true
-		}
-	}
-	return false
 }
 
 func isLoopbackRequest(r *http.Request) bool {
@@ -546,20 +523,6 @@ func hostOnly(raw string) string {
 		return strings.Trim(host, "[]")
 	}
 	return strings.Trim(raw, "[]")
-}
-
-func validateRSSHubBase(raw string) error {
-	u, err := url.ParseRequestURI(raw)
-	if err != nil {
-		return err
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("unsupported scheme")
-	}
-	if u.Host == "" {
-		return fmt.Errorf("missing host")
-	}
-	return nil
 }
 
 func (s *Server) usersConfigured() bool {

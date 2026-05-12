@@ -182,8 +182,6 @@ func TestCodeIndexBuildConfigMap(t *testing.T) {
 	mustWrite("compose.yaml", `services:
   igloo:
     image: ghcr.io/screwys/igloo:latest
-  rsshub:
-    image: ghcr.io/diygod/rsshub:chromium-bundled
 `)
 	mustWrite(".semgrep.yml", `rules:
   - id: igloo.shell-wrapper-command
@@ -214,7 +212,7 @@ jobs:
 		".mcp.json [mcp]",
 		"command: ./bin/igloo-mcp",
 		"compose.yaml [compose]",
-		"service: rsshub",
+		"service: igloo",
 		"rule: igloo.shell-wrapper-command",
 		".github/dependabot.yml [dependabot]",
 		"ecosystem: gomod",

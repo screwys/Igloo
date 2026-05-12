@@ -60,7 +60,7 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, username string, d
 		channelMap[ch.ChannelID] = ch
 	}
 
-	// When RSSHub misses a quote-author handle but still carries a raw avatar URL,
+	// When ingest misses a quote-author handle but still carries a raw avatar URL,
 	// map that URL back to a known profile row so the server can emit the normal
 	// avatar proxy path instead of leaking a raw twimg URL to Android.
 	rawQuoteAvatarURLs := make([]string, 0, len(items))

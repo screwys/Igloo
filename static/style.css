@@ -3129,38 +3129,6 @@ select.input.themed-select-native {
     border-color: rgba(var(--accent-primary-rgb), 0.3);
 }
 
-.rsshub-diag-probe-options input[type="checkbox"] {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.15);
-    border-radius: 3px;
-    background: transparent;
-    cursor: pointer;
-    position: relative;
-    vertical-align: middle;
-    transition: all var(--transition-fast);
-}
-
-.rsshub-diag-probe-options input[type="checkbox"]:checked {
-    background: var(--accent-primary);
-    border-color: var(--accent-primary);
-}
-
-.rsshub-diag-probe-options input[type="checkbox"]:checked::after {
-    content: '';
-    position: absolute;
-    left: 4px;
-    top: 0px;
-    width: 5px;
-    height: 9px;
-    border: solid var(--text-primary);
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-}
-
 .status-message {
     margin-top: 0.75rem;
     padding: 0.625rem 0.875rem;

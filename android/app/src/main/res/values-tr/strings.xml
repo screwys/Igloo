@@ -342,7 +342,7 @@
     <string name="logs_ring_fail">başarısız</string>
     <string name="logs_ring_ok">tamam</string>
     <string name="logs_ring_watched">izlendi</string>
-    <string name="logs_rsshub_status">RSSHub: %s</string>
+    <string name="logs_x_ingest_status">X alımı: %s</string>
     <string name="logs_segments">Bölümler</string>
     <string name="logs_server_log">Sunucu kayıtları</string>
     <string name="logs_since_timestamp">%s tarihinden beri</string>
@@ -641,8 +641,6 @@
     <string name="setup_error_username_required">Kullanıcı adı gerekli.</string>
     <string name="setup_platforms_help">Bu Igloo kurulumunun hangi platformlardan gönderi ve video alacağını seçin. Kullanıcı erişimini daha sonra değiştirebilirsiniz.</string>
     <string name="setup_platforms_title">Platformları seç</string>
-    <string name="setup_rsshub_base_label">X için RSSHub URL\'si</string>
-    <string name="setup_rsshub_help_prefix">X gönderileri şununla alınır:</string>
     <string name="setup_subtitle">Bu Igloo kurulumu için yönetici hesabını oluşturun.</string>
     <string name="setup_title">İlk yöneticiyi oluştur</string>
     <string name="shortcuts_bookmark_video">Videoyu kaydet</string>

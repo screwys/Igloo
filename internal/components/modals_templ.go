@@ -9032,15 +9032,15 @@ func FeedDashboard(p PageProps, d FeedDashboardData) templ.Component {
 			templ_7745c5c3_Var539 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		if d.RSSHubStatus != "" && d.RSSHubStatus != "healthy" {
+		if d.XIngestStatus != "" && d.XIngestStatus != "healthy" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 769, "<div class=\"glass feed-warning\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var540 string
-			templ_7745c5c3_Var540, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_rsshub_status", "RSSHub: %s"), d.RSSHubStatus))
+			templ_7745c5c3_Var540, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_x_ingest_status", "X ingest: %s"), d.XIngestStatus))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1785, Col: 105}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1785, Col: 110}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var540))
 			if templ_7745c5c3_Err != nil {
@@ -9927,9 +9927,9 @@ func FeedDashboard(p PageProps, d FeedDashboardData) templ.Component {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var600 string
-						templ_7745c5c3_Var600, templ_7745c5c3_Err = templ.JoinStringErrs("/api/rsshub/probe?handle=" + s.Handle)
+						templ_7745c5c3_Var600, templ_7745c5c3_Err = templ.JoinStringErrs("/api/x/probe?handle=" + s.Handle)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1949, Col: 60}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1949, Col: 55}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var600))
 						if templ_7745c5c3_Err != nil {

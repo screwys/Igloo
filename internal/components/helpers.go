@@ -1266,7 +1266,7 @@ type FeedDashboardData struct {
 	Sources        []FeedSourceEntry
 	Filter         string
 	TzOffsetSec    int
-	RSSHubStatus   string // "healthy", "failing", etc.
+	XIngestStatus  string // "healthy", "failing", etc.
 }
 
 // FeedActivityEntry is a single feed activity log line.

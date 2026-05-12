@@ -177,7 +177,7 @@ func (idx *CodeIndex) scanGoHandlers() {
 
 func (idx *CodeIndex) scanGoDBTables() {
 	dirs := []string{
-		"internal/db", "internal/feed", "internal/rsshub",
+		"internal/db", "internal/feed", "internal/xfeed",
 		"internal/download", "internal/worker", "internal/subscribe",
 		"internal/settings", "internal/fxtwitter",
 	}
@@ -300,7 +300,7 @@ func (idx *CodeIndex) scanGoSymbols() {
 	goDirs := []string{
 		"cmd/igloo", "internal/auth", "internal/config", "internal/db",
 		"internal/download", "internal/feed", "internal/model",
-		"internal/rsshub", "internal/subscribe",
+		"internal/xfeed", "internal/subscribe",
 		"internal/web", "internal/worker",
 		"internal/settings", "internal/fxtwitter",
 	}
@@ -919,7 +919,7 @@ func (idx *CodeIndex) TraceDataFlow(entity, fromLayer, toLayer string) string {
 		}
 	}
 	// Also find refs via symbol call graph
-	candidatePrefixes := []string{"internal/web/", "internal/feed/", "internal/worker/", "internal/rsshub/"}
+	candidatePrefixes := []string{"internal/web/", "internal/feed/", "internal/worker/", "internal/xfeed/"}
 	for _, ref := range idx.refs {
 		if !dbMethodSet[ref.SymbolName] {
 			continue

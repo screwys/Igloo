@@ -697,7 +697,7 @@ func runFeedMediaLegacyFixes(conn *sql.DB) error {
 		}
 
 		// Fix slide_count=0 for completed jobs that actually have multiple media_files.
-		// This was caused by rsshub.go not calling ParseMedia() before using len(item.Media).
+		// This was caused by older ingest code not calling ParseMedia() before using len(item.Media).
 		_, err := tx.Exec(`UPDATE feed_media_jobs
 			SET slide_count = (
 				SELECT COUNT(*) FROM media_files

@@ -120,7 +120,7 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 	s.registerTranslateAPIRoutes(mux)
 	s.registerI18NAPIRoutes(mux)
 	s.registerLogsAPIRoutes(mux)
-	s.registerRSSHubAPIRoutes(mux)
+	s.registerXAPIRoutes(mux)
 	s.registerPreviewAPIRoutes(mux)
 	s.registerDownloadAPIRoutes(mux)
 	s.registerTweetMediaAPIRoutes(mux)

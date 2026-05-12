@@ -41,7 +41,7 @@ func ScanWorkerManager(source string) []WorkerInfo {
 
 // workerDescriptions provides human-readable descriptions for known workers.
 var workerDescriptions = map[string]string{
-	"rsshub_ingest":       "Fetches Twitter/X posts via RSSHub, stores in feed_items, creates feed_media_jobs",
+	"x_ingest":            "Fetches X posts via gallery-dl, stores in feed_items, creates feed_media_jobs",
 	"feed_media":          "Downloads images/videos/GIFs for feed items, stores in media_files",
 	"avatar_refresh":      "Fetches and caches channel avatars via unavatar.io and yt-dlp",
 	"scheduler":           "Periodic channel refresh scheduler — queues channels for download check",

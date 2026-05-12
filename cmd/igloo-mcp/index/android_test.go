@@ -21,7 +21,7 @@ interface FeedDao {
 
 class FeedRepository(private val client: HttpClient) {
     suspend fun loadFeed() {
-        client.get("$baseUrl/api/feed/rsshub")
+        client.get("$baseUrl/api/feed/x")
         client.post("$baseUrl/api/feed/like/$id")
     }
 }
@@ -37,7 +37,7 @@ class FeedRepository(private val client: HttpClient) {
 	if len(result.APICalls) < 2 {
 		t.Errorf("expected 2 api calls, got %d", len(result.APICalls))
 	}
-	if result.APICalls[0].Path != "/api/feed/rsshub" {
+	if result.APICalls[0].Path != "/api/feed/x" {
 		t.Errorf("unexpected path: %s", result.APICalls[0].Path)
 	}
 

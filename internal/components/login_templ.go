@@ -217,7 +217,7 @@ func LoginPage(p PageProps, csrfToken string, errorMsg string, next string) temp
 	})
 }
 
-func SetupPage(p PageProps, csrfToken string, errorMsg string, platforms []PlatformChoice, selectedPlatforms []string, rssHubBase string) templ.Component {
+func SetupPage(p PageProps, csrfToken string, errorMsg string, platforms []PlatformChoice, selectedPlatforms []string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -487,82 +487,43 @@ func SetupPage(p PageProps, csrfToken string, errorMsg string, platforms []Platf
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</div></div><div class=\"setup-section setup-rsshub-section\" data-rsshub-section><label for=\"rsshub_base\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</div></div><button type=\"submit\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var30 string
-		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "setup_rsshub_base_label", "RSSHub URL for X"))
+		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_create_admin", "Create Admin"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/login.templ`, Line: 83, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/login.templ`, Line: 82, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</label> <input id=\"rsshub_base\" type=\"url\" name=\"rsshub_base\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var31 string
-		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(rssHubBase)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/login.templ`, Line: 84, Col: 78}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "\" placeholder=\"http://rsshub:1200\"><p>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var32 string
-		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "setup_rsshub_help_prefix", "X ingest uses"))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/login.templ`, Line: 86, Col: 58}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, " <a href=\"https://github.com/DIYgod/RSSHub\" target=\"_blank\" rel=\"noopener\">RSSHub</a>.</p></div><button type=\"submit\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var33 string
-		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_create_admin", "Create Admin"))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/login.templ`, Line: 90, Col: 72}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</button></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</button></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if errorMsg != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<div class=\"error\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<div class=\"error\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var34 string
-			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(errorMsg)
+			var templ_7745c5c3_Var31 string
+			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(errorMsg)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/login.templ`, Line: 93, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/login.templ`, Line: 85, Col: 34}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</div><script>\n\t\t\t\tconst rsshubSection = document.querySelector(\"[data-rsshub-section]\");\n\t\t\t\tconst xCheckbox = document.querySelector('input[name=\"platforms\"][value=\"twitter\"]');\n\t\t\t\tfunction syncRSSHubSection() {\n\t\t\t\t\tif (!rsshubSection || !xCheckbox) return;\n\t\t\t\t\trsshubSection.hidden = !xCheckbox.checked;\n\t\t\t\t}\n\t\t\t\tif (xCheckbox) {\n\t\t\t\t\txCheckbox.addEventListener(\"change\", syncRSSHubSection);\n\t\t\t\t\tsyncRSSHubSection();\n\t\t\t\t}\n\t\t\t</script></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</div></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -586,12 +547,12 @@ func authPageStyles() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var35 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var35 == nil {
-			templ_7745c5c3_Var35 = templ.NopComponent
+		templ_7745c5c3_Var32 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var32 == nil {
+			templ_7745c5c3_Var32 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<style>\n\t\t* { box-sizing: border-box; }\n\t\tbody {\n\t\t\tmargin: 0;\n\t\t\tfont-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;\n\t\t\tbackground: radial-gradient(circle at 20% 10%, var(--bg-primary), var(--bg-tertiary) 60%);\n\t\t\tcolor: var(--text-primary);\n\t\t\tmin-height: 100vh;\n\t\t\tdisplay: flex;\n\t\t\talign-items: center;\n\t\t\tjustify-content: center;\n\t\t\tpadding: 24px;\n\t\t}\n\t\t.card {\n\t\t\twidth: 100%;\n\t\t\tmax-width: 420px;\n\t\t\tbackground: var(--bg-primary);\n\t\t\tborder: 1px solid var(--bg-secondary);\n\t\t\tborder-radius: 16px;\n\t\t\tpadding: 28px;\n\t\t\tbox-shadow: var(--shadow);\n\t\t}\n\t\th1 {\n\t\t\tmargin: 0 0 8px;\n\t\t\tfont-size: 1.4rem;\n\t\t\tcolor: var(--accent-primary);\n\t\t}\n\t\t.auth-logo {\n\t\t\tdisplay: block;\n\t\t\twidth: 78px;\n\t\t\theight: 78px;\n\t\t\tmargin: 0 0 16px;\n\t\t}\n\t\t.auth-brand {\n\t\t\tdisplay: flex;\n\t\t\talign-items: center;\n\t\t\tgap: 12px;\n\t\t\tmargin: 0 0 18px;\n\t\t}\n\t\t.auth-brand .auth-logo {\n\t\t\twidth: 52px;\n\t\t\theight: 52px;\n\t\t\tmargin: 0;\n\t\t}\n\t\t.auth-brand h1 {\n\t\t\tmargin: 0;\n\t\t\tcolor: var(--text-primary);\n\t\t\tfont-size: 1.125rem;\n\t\t\tline-height: 1;\n\t\t}\n\t\tp {\n\t\t\tmargin: 0 0 18px;\n\t\t\tcolor: var(--text-muted);\n\t\t\tfont-size: 0.95rem;\n\t\t}\n\t\tlabel {\n\t\t\tdisplay: block;\n\t\t\tfont-size: 0.85rem;\n\t\t\tcolor: var(--text-muted);\n\t\t\tmargin-bottom: 6px;\n\t\t}\n\t\tinput {\n\t\t\twidth: 100%;\n\t\t\tpadding: 12px;\n\t\t\tborder-radius: 10px;\n\t\t\tborder: 1px solid var(--bg-secondary);\n\t\t\tbackground: var(--bg-tertiary);\n\t\t\tcolor: var(--text-primary);\n\t\t\tmargin-bottom: 14px;\n\t\t\toutline: none;\n\t\t}\n\t\t.setup-section {\n\t\t\tmargin: 4px 0 14px;\n\t\t}\n\t\th2 {\n\t\t\tmargin: 0 0 8px;\n\t\t\tfont-size: 1rem;\n\t\t\tcolor: var(--text-primary);\n\t\t}\n\t\t.setup-platform-list {\n\t\t\tdisplay: grid;\n\t\t\tgap: 8px;\n\t\t\tmargin: 10px 0 14px;\n\t\t}\n\t\t.setup-platform-row {\n\t\t\tdisplay: flex;\n\t\t\talign-items: center;\n\t\t\tgap: 10px;\n\t\t\tpadding: 10px 12px;\n\t\t\tborder: 1px solid var(--bg-secondary);\n\t\t\tborder-radius: 8px;\n\t\t\tbackground: var(--bg-tertiary);\n\t\t\tcolor: var(--text-primary);\n\t\t\tmargin: 0;\n\t\t\tcursor: pointer;\n\t\t}\n\t\t.setup-platform-row input {\n\t\t\twidth: auto;\n\t\t\tmargin: 0;\n\t\t}\n\t\t.setup-rsshub-section[hidden] {\n\t\t\tdisplay: none;\n\t\t}\n\t\t.setup-rsshub-section a {\n\t\t\tcolor: var(--accent-primary);\n\t\t}\n\t\tbutton {\n\t\t\twidth: 100%;\n\t\t\tpadding: 12px;\n\t\t\tborder: none;\n\t\t\tborder-radius: 10px;\n\t\t\tbackground: var(--accent-gradient);\n\t\t\tcolor: var(--on-accent);\n\t\t\tfont-weight: 700;\n\t\t\tcursor: pointer;\n\t\t}\n\t\t.error {\n\t\t\tcolor: var(--error);\n\t\t\tmargin-top: 12px;\n\t\t\tfont-size: 0.9rem;\n\t\t}\n\t</style>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<style>\n\t\t* { box-sizing: border-box; }\n\t\tbody {\n\t\t\tmargin: 0;\n\t\t\tfont-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;\n\t\t\tbackground: radial-gradient(circle at 20% 10%, var(--bg-primary), var(--bg-tertiary) 60%);\n\t\t\tcolor: var(--text-primary);\n\t\t\tmin-height: 100vh;\n\t\t\tdisplay: flex;\n\t\t\talign-items: center;\n\t\t\tjustify-content: center;\n\t\t\tpadding: 24px;\n\t\t}\n\t\t.card {\n\t\t\twidth: 100%;\n\t\t\tmax-width: 420px;\n\t\t\tbackground: var(--bg-primary);\n\t\t\tborder: 1px solid var(--bg-secondary);\n\t\t\tborder-radius: 16px;\n\t\t\tpadding: 28px;\n\t\t\tbox-shadow: var(--shadow);\n\t\t}\n\t\th1 {\n\t\t\tmargin: 0 0 8px;\n\t\t\tfont-size: 1.4rem;\n\t\t\tcolor: var(--accent-primary);\n\t\t}\n\t\t.auth-logo {\n\t\t\tdisplay: block;\n\t\t\twidth: 78px;\n\t\t\theight: 78px;\n\t\t\tmargin: 0 0 16px;\n\t\t}\n\t\t.auth-brand {\n\t\t\tdisplay: flex;\n\t\t\talign-items: center;\n\t\t\tgap: 12px;\n\t\t\tmargin: 0 0 18px;\n\t\t}\n\t\t.auth-brand .auth-logo {\n\t\t\twidth: 52px;\n\t\t\theight: 52px;\n\t\t\tmargin: 0;\n\t\t}\n\t\t.auth-brand h1 {\n\t\t\tmargin: 0;\n\t\t\tcolor: var(--text-primary);\n\t\t\tfont-size: 1.125rem;\n\t\t\tline-height: 1;\n\t\t}\n\t\tp {\n\t\t\tmargin: 0 0 18px;\n\t\t\tcolor: var(--text-muted);\n\t\t\tfont-size: 0.95rem;\n\t\t}\n\t\tlabel {\n\t\t\tdisplay: block;\n\t\t\tfont-size: 0.85rem;\n\t\t\tcolor: var(--text-muted);\n\t\t\tmargin-bottom: 6px;\n\t\t}\n\t\tinput {\n\t\t\twidth: 100%;\n\t\t\tpadding: 12px;\n\t\t\tborder-radius: 10px;\n\t\t\tborder: 1px solid var(--bg-secondary);\n\t\t\tbackground: var(--bg-tertiary);\n\t\t\tcolor: var(--text-primary);\n\t\t\tmargin-bottom: 14px;\n\t\t\toutline: none;\n\t\t}\n\t\t.setup-section {\n\t\t\tmargin: 4px 0 14px;\n\t\t}\n\t\th2 {\n\t\t\tmargin: 0 0 8px;\n\t\t\tfont-size: 1rem;\n\t\t\tcolor: var(--text-primary);\n\t\t}\n\t\t.setup-platform-list {\n\t\t\tdisplay: grid;\n\t\t\tgap: 8px;\n\t\t\tmargin: 10px 0 14px;\n\t\t}\n\t\t.setup-platform-row {\n\t\t\tdisplay: flex;\n\t\t\talign-items: center;\n\t\t\tgap: 10px;\n\t\t\tpadding: 10px 12px;\n\t\t\tborder: 1px solid var(--bg-secondary);\n\t\t\tborder-radius: 8px;\n\t\t\tbackground: var(--bg-tertiary);\n\t\t\tcolor: var(--text-primary);\n\t\t\tmargin: 0;\n\t\t\tcursor: pointer;\n\t\t}\n\t\t.setup-platform-row input {\n\t\t\twidth: auto;\n\t\t\tmargin: 0;\n\t\t}\n\t\tbutton {\n\t\t\twidth: 100%;\n\t\t\tpadding: 12px;\n\t\t\tborder: none;\n\t\t\tborder-radius: 10px;\n\t\t\tbackground: var(--accent-gradient);\n\t\t\tcolor: var(--on-accent);\n\t\t\tfont-weight: 700;\n\t\t\tcursor: pointer;\n\t\t}\n\t\t.error {\n\t\t\tcolor: var(--error);\n\t\t\tmargin-top: 12px;\n\t\t\tfont-size: 0.9rem;\n\t\t}\n\t</style>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

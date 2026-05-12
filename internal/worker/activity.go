@@ -9,7 +9,7 @@ import (
 type ActivityEvent struct {
 	Time      string `json:"time"`      // HH:MM:SS
 	Timestamp int64  `json:"timestamp"` // unix seconds
-	Source    string `json:"source"`    // e.g. "rsshub", "download", "feed_media", "scheduler"
+	Source    string `json:"source"`    // e.g. "x_ingest", "download", "feed_media", "scheduler"
 	Message   string `json:"message"`
 	Status    string `json:"status"` // "info", "done", "error", "warning", "start", "skipped"
 	// Download-specific fields (for the downloads table)

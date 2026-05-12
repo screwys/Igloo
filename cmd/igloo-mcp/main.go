@@ -46,7 +46,7 @@ func main() {
 
 	s.AddTool(mcp.NewTool("trace_endpoint",
 		mcp.WithDescription("Trace the full dependency chain for an API endpoint: handler, templates, DB tables, JS/Android callers."),
-		mcp.WithString("path", mcp.Required(), mcp.Description("Endpoint path, e.g. /api/feed/rsshub")),
+		mcp.WithString("path", mcp.Required(), mcp.Description("Endpoint path, e.g. /api/feed/x")),
 		mcp.WithString("method", mcp.Description("HTTP method (GET, POST, DELETE). Empty = all methods.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return textResult(getIndex().TraceEndpoint(req.GetString("path", ""), req.GetString("method", "")))
@@ -234,7 +234,7 @@ func main() {
 	// ── Operational tools ────────────────────────────────────────────────
 
 	s.AddTool(mcp.NewTool("system_status",
-		mcp.WithDescription("Check health of all Igloo services: igloo.service, nginx, RSSHub, port binding, disk space, DB size."),
+		mcp.WithDescription("Check health of all Igloo services: igloo.service, nginx, port binding, disk space, DB size."),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		result, err := systemStatus()
 		if err != nil {

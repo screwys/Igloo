@@ -8,12 +8,12 @@ func TestScanGoHandlers(t *testing.T) {
 	src := `package web
 
 func (s *Server) setupRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/feed/rsshub", s.GetRsshub)
+	mux.HandleFunc("GET /api/feed/x", s.GetXFeed)
 	mux.HandleFunc("POST /api/feed/like/{id}", s.LikeFeed)
 }
 
-func (s *Server) GetRsshub(w http.ResponseWriter, r *http.Request) {
-	rows, _ := s.db.QueryContext(r.Context(), ` + "`" + `SELECT id FROM feed_items WHERE platform = 'rsshub'` + "`" + `)
+func (s *Server) GetXFeed(w http.ResponseWriter, r *http.Request) {
+	rows, _ := s.db.QueryContext(r.Context(), ` + "`" + `SELECT id FROM feed_items WHERE source_handle = 'x_source'` + "`" + `)
 	s.render(w, r, "feed.html", data)
 }
 `
@@ -21,7 +21,7 @@ func (s *Server) GetRsshub(w http.ResponseWriter, r *http.Request) {
 	if len(result.Endpoints) != 2 {
 		t.Fatalf("expected 2 endpoints, got %d", len(result.Endpoints))
 	}
-	if result.Endpoints[0].Method != "GET" || result.Endpoints[0].Path != "/api/feed/rsshub" {
+	if result.Endpoints[0].Method != "GET" || result.Endpoints[0].Path != "/api/feed/x" {
 		t.Errorf("unexpected endpoint: %+v", result.Endpoints[0])
 	}
 	if result.Endpoints[0].Area != "feed" {

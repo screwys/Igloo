@@ -156,7 +156,7 @@ func (s *Server) logPathForType(logType string) string {
 
 // knownLogTypes lists all recognized log file names (for summary).
 var knownLogTypes = []string{
-	"server", "api", "download", "scheduler", "rsshub", "error",
+	"server", "api", "download", "scheduler", "x_ingest", "error",
 	"android", "android-stats",
 }
 

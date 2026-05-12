@@ -90,11 +90,11 @@ func assertEnrichedItem(t *testing.T, item map[string]any) {
 	}
 }
 
-func TestFeedRSSHubEnrichmentContract(t *testing.T) {
+func TestFeedXEnrichmentContract(t *testing.T) {
 	srv := newTestServer(t)
 	seedEnrichmentFixture(t, srv)
 
-	req := httptest.NewRequest("GET", "/api/feed/rsshub", nil)
+	req := httptest.NewRequest("GET", "/api/feed/x", nil)
 	req = attachTestAuth(req, "alice")
 	rr := httptest.NewRecorder()
 	srv.mux.ServeHTTP(rr, req)

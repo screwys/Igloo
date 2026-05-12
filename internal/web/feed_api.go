@@ -28,7 +28,7 @@ func (s *Server) registerFeedAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/feed/ingest/trigger", s.handleFeedIngestTrigger)
 	mux.HandleFunc("POST /api/feed/media/retry", s.handleFeedMediaRetry)
 	mux.HandleFunc("POST /api/feed/interaction", s.handleFeedInteraction)
-	mux.HandleFunc("GET /api/feed/rsshub", s.handleFeedRSSHub)
+	mux.HandleFunc("GET /api/feed/x", s.handleFeedX)
 	mux.HandleFunc("GET /api/feed/liked", s.handleFeedLikedList)
 	mux.HandleFunc("GET /api/feed/bookmarked", s.handleFeedBookmarkedList)
 	mux.HandleFunc("GET /api/feed/shorts", s.handleFeedShorts)
@@ -549,7 +549,7 @@ func (s *Server) writeFeedResponse(w http.ResponseWriter, items []model.FeedItem
 	})
 }
 
-func (s *Server) handleFeedRSSHub(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleFeedX(w http.ResponseWriter, r *http.Request) {
 	user := userFromContext(r.Context())
 	username := ""
 	if user != nil {

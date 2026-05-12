@@ -331,7 +331,7 @@ func TestHandleConfigExportFullIncludesRuntimeConfigFiles(t *testing.T) {
 
 	files := map[string]string{
 		"nginx.conf":                  "pid /old/state/nginx.pid;\nssl_certificate /old/config/server.crt;\n",
-		"rsshub.env":                  "RSSHUB_SECRET=example\n",
+		"custom.env":                  "CUSTOM_SECRET=example\n",
 		"auth_users.json":             `{"admin":{"role":"admin"}}` + "\n",
 		"auth_secret":                 "secret-key",
 		"cookies/twitter_cookies.txt": "cookie-data",

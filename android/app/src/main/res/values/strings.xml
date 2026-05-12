@@ -343,7 +343,7 @@
     <string name="logs_ring_fail">fail</string>
     <string name="logs_ring_ok">ok</string>
     <string name="logs_ring_watched">watched</string>
-    <string name="logs_rsshub_status">RSSHub: %s</string>
+    <string name="logs_x_ingest_status">X ingest: %s</string>
     <string name="logs_segments">Segments</string>
     <string name="logs_server_log">Server Log</string>
     <string name="logs_since_timestamp">since %s</string>
@@ -642,8 +642,6 @@
     <string name="setup_error_username_required">Username is required.</string>
     <string name="setup_platforms_help">Choose the platforms this instance should fetch from. You can change user access later.</string>
     <string name="setup_platforms_title">Enable platforms</string>
-    <string name="setup_rsshub_base_label">RSSHub URL for X</string>
-    <string name="setup_rsshub_help_prefix">X ingest uses</string>
     <string name="setup_subtitle">Create the admin account for this Igloo instance.</string>
     <string name="setup_title">Create First Admin</string>
     <string name="shortcuts_bookmark_video">Bookmark video</string>

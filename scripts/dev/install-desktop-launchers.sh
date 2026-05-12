@@ -32,7 +32,7 @@ EOF
 }
 
 write_launcher "Igloo Restart" "Build Go + restart server" "system-restart" "restart" "igloo-restart.desktop"
-write_launcher "Igloo Full Restart" "Build Go + daemon-reload + rsshub + restart" "system-restart" "full" "igloo-full.desktop"
+write_launcher "Igloo Full Restart" "Build Go + daemon-reload + restart" "system-restart" "full" "igloo-full.desktop"
 write_launcher "Igloo Android Build" "Build Go + build/install Android APK" "phone" "android" "igloo-android.desktop"
 
 if command -v update-desktop-database >/dev/null 2>&1; then

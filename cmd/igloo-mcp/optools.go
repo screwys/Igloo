@@ -40,21 +40,6 @@ func systemStatus() (string, error) {
 	}
 	sb.WriteString("\n")
 
-	// RSSHub (podman quadlet)
-	sb.WriteString("rsshub:\n")
-	out, err = exec.Command("podman", "ps", "--filter", "name=rsshub", "--format", "{{.Names}} {{.Status}}").CombinedOutput()
-	if err != nil {
-		sb.WriteString("  error: " + strings.TrimSpace(string(out)) + "\n")
-	} else {
-		status := strings.TrimSpace(string(out))
-		if status == "" {
-			sb.WriteString("  not running\n")
-		} else {
-			sb.WriteString("  " + status + "\n")
-		}
-	}
-	sb.WriteString("\n")
-
 	// Port binding
 	port := os.Getenv("IGLOO_PORT")
 	if port == "" {

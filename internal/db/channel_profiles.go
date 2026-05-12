@@ -368,7 +368,7 @@ func (db *DB) nextChannelProfileRefreshCandidate(ttl time.Duration, platform str
 
 // ListQuoteAvatarProfileIDs returns every profile row that owns a quote avatar
 // the server should keep available on disk. This includes normal quote authors
-// with handles plus synthetic rows created for quote avatars where RSSHub did
+// with handles plus synthetic rows created for quote avatars where ingest did
 // not parse a handle.
 func (db *DB) ListQuoteAvatarProfileIDs() ([]string, error) {
 	rows, err := db.conn.Query(`

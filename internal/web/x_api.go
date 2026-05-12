@@ -2,20 +2,19 @@ package web
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/screwys/igloo/internal/rsshub"
+	"github.com/screwys/igloo/internal/xfeed"
 )
 
-func (s *Server) registerRSSHubAPIRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/rsshub/diagnostics", s.handleRSSHubDiagnostics)
-	mux.HandleFunc("GET /api/rsshub/probe", s.handleRSSHubProbe)
+func (s *Server) registerXAPIRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/x/diagnostics", s.handleXDiagnostics)
+	mux.HandleFunc("GET /api/x/probe", s.handleXProbe)
 }
 
-func (s *Server) handleRSSHubDiagnostics(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleXDiagnostics(w http.ResponseWriter, r *http.Request) {
 	channels, err := s.db.GetSubscribedChannels()
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"error": "db error"})
@@ -98,52 +97,58 @@ func (s *Server) handleRSSHubDiagnostics(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-func (s *Server) handleRSSHubProbe(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleXProbe(w http.ResponseWriter, r *http.Request) {
 	handle := r.URL.Query().Get("handle")
 	if handle == "" {
 		writeJSON(w, 400, map[string]any{"success": false, "error": "handle required"})
 		return
 	}
 
-	if s.cfg.RSSHubBase == "" {
-		writeJSON(w, 400, map[string]any{"success": false, "error": "RSSHUB_BASE not configured"})
-		return
-	}
-
-	url := rsshub.BuildEnrichedURL(s.cfg.RSSHubBase, handle)
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		writeJSON(w, 500, map[string]any{"success": false, "error": err.Error()})
-		return
+	cookiesDir := ""
+	if s.cfg != nil {
+		cookiesDir = s.cfg.CookiesDir
 	}
-	req.Header.Set("User-Agent", "Igloo/1.0")
-	req.Header.Set("Accept", "application/rss+xml, application/xml, text/xml")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		writeJSON(w, 200, map[string]any{"success": false, "error": err.Error()})
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		writeJSON(w, 200, map[string]any{"success": false, "error": fmt.Sprintf("HTTP %d", resp.StatusCode)})
-		return
-	}
-
-	feed, err := rsshub.Parse(resp.Body)
+	items, err := xfeed.NewClient(cookiesDir).FetchTimeline(ctx, handle, 5)
 	if err != nil {
 		writeJSON(w, 200, map[string]any{"success": false, "error": err.Error()})
 		return
 	}
 
-	items := rsshub.ToFeedItems(feed, handle)
+	parentMedia := 0
+	quoteMedia := 0
+	quotes := 0
+	retweets := 0
+	replies := 0
+	for _, item := range items {
+		if item.MediaJSON != "" {
+			parentMedia++
+		}
+		if item.QuoteTweetID != "" {
+			quotes++
+		}
+		if item.QuoteMediaJSON != "" {
+			quoteMedia++
+		}
+		if item.IsRetweet {
+			retweets++
+		}
+		if item.IsReply {
+			replies++
+		}
+	}
 	writeJSON(w, 200, map[string]any{
-		"success":      true,
-		"parsed_items": len(items),
-		"handle":       handle,
+		"success":       true,
+		"parsed_items":  len(items),
+		"handle":        handle,
+		"parent_media":  parentMedia,
+		"quotes":        quotes,
+		"quote_media":   quoteMedia,
+		"retweets":      retweets,
+		"replies":       replies,
+		"cookie_files":  len(xfeed.DiscoverCookieFiles(cookiesDir)),
+		"gallery_limit": 5,
 	})
 }

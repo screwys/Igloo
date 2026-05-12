@@ -55,6 +55,7 @@ type Tweet struct {
 	ReplyToStatus     string // "" if not a reply
 	CreatedAt         time.Time
 	MediaJSON         string // serialized []model.MediaRef, "" if no media
+	Quote             *Tweet
 }
 
 // Client wraps HTTP + base URL for easy testing.
@@ -191,27 +192,9 @@ func (c *Client) FetchTweet(ctx context.Context, handle, tweetID string) (*Tweet
 	}
 
 	var raw struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Tweet   *struct {
-			ID     string `json:"id"`
-			Text   string `json:"text"`
-			Lang   string `json:"lang"`
-			Author struct {
-				ScreenName string `json:"screen_name"`
-				Name       string `json:"name"`
-				AvatarURL  string `json:"avatar_url"`
-			} `json:"author"`
-			ReplyingTo       string `json:"replying_to"`
-			ReplyingToStatus string `json:"replying_to_status"`
-			CreatedAt        string `json:"created_at"`
-			Media            *struct {
-				All []struct {
-					Type string `json:"type"`
-					URL  string `json:"url"`
-				} `json:"all"`
-			} `json:"media"`
-		} `json:"tweet"`
+		Code    int       `json:"code"`
+		Message string    `json:"message"`
+		Tweet   *rawTweet `json:"tweet"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("decode: %w", err)
@@ -220,28 +203,62 @@ func (c *Client) FetchTweet(ctx context.Context, handle, tweetID string) (*Tweet
 		return nil, ErrNotFound
 	}
 
-	out := &Tweet{
-		ID:                raw.Tweet.ID,
-		AuthorHandle:      raw.Tweet.Author.ScreenName,
-		AuthorDisplayName: raw.Tweet.Author.Name,
-		AuthorAvatarURL:   raw.Tweet.Author.AvatarURL,
-		Text:              raw.Tweet.Text,
-		Lang:              raw.Tweet.Lang,
-		ReplyToHandle:     raw.Tweet.ReplyingTo,
-		ReplyToStatus:     raw.Tweet.ReplyingToStatus,
+	return tweetFromRaw(raw.Tweet), nil
+}
+
+type rawTweet struct {
+	ID     string `json:"id"`
+	Text   string `json:"text"`
+	Lang   string `json:"lang"`
+	Author struct {
+		ScreenName string `json:"screen_name"`
+		Name       string `json:"name"`
+		AvatarURL  string `json:"avatar_url"`
+	} `json:"author"`
+	ReplyingTo       string    `json:"replying_to"`
+	ReplyingToStatus string    `json:"replying_to_status"`
+	CreatedAt        string    `json:"created_at"`
+	Media            *rawMedia `json:"media"`
+	Quote            *rawTweet `json:"quote"`
+}
+
+type rawMedia struct {
+	All []struct {
+		Type   string `json:"type"`
+		URL    string `json:"url"`
+		Width  int    `json:"width"`
+		Height int    `json:"height"`
+	} `json:"all"`
+}
+
+func tweetFromRaw(raw *rawTweet) *Tweet {
+	if raw == nil {
+		return nil
 	}
-	if t, err := time.Parse("Mon Jan 02 15:04:05 -0700 2006", raw.Tweet.CreatedAt); err == nil {
+	out := &Tweet{
+		ID:                raw.ID,
+		AuthorHandle:      raw.Author.ScreenName,
+		AuthorDisplayName: raw.Author.Name,
+		AuthorAvatarURL:   raw.Author.AvatarURL,
+		Text:              raw.Text,
+		Lang:              raw.Lang,
+		ReplyToHandle:     raw.ReplyingTo,
+		ReplyToStatus:     raw.ReplyingToStatus,
+	}
+	if t, err := time.Parse("Mon Jan 02 15:04:05 -0700 2006", raw.CreatedAt); err == nil {
 		out.CreatedAt = t.UTC()
 	}
 
 	// Map media.all[] into the same JSON shape feed_items.media_json uses.
-	if raw.Tweet.Media != nil && len(raw.Tweet.Media.All) > 0 {
+	if raw.Media != nil && len(raw.Media.All) > 0 {
 		type mediaRef struct {
-			URL  string `json:"url"`
-			Type string `json:"type"`
+			URL    string `json:"url"`
+			Type   string `json:"type"`
+			Width  int    `json:"width,omitempty"`
+			Height int    `json:"height,omitempty"`
 		}
-		refs := make([]mediaRef, 0, len(raw.Tweet.Media.All))
-		for _, m := range raw.Tweet.Media.All {
+		refs := make([]mediaRef, 0, len(raw.Media.All))
+		for _, m := range raw.Media.All {
 			if m.URL == "" {
 				continue
 			}
@@ -249,15 +266,16 @@ func (c *Client) FetchTweet(ctx context.Context, handle, tweetID string) (*Tweet
 			if t == "gif" {
 				t = "video"
 			}
-			refs = append(refs, mediaRef{URL: m.URL, Type: t})
+			refs = append(refs, mediaRef{URL: m.URL, Type: t, Width: m.Width, Height: m.Height})
 		}
 		if len(refs) > 0 {
 			b, _ := json.Marshal(refs)
 			out.MediaJSON = string(b)
 		}
 	}
+	out.Quote = tweetFromRaw(raw.Quote)
 
-	return out, nil
+	return out
 }
 
 // UpgradeBannerURL appends the 1500x500 size suffix that twimg banner URLs

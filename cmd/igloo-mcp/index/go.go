@@ -51,7 +51,7 @@ var sqlKeywords = map[string]bool{
 }
 
 var areaRules = []struct{ prefix, area string }{
-	{"/api/feed/", "feed"}, {"/api/rsshub/", "feed"},
+	{"/api/feed/", "feed"}, {"/api/x/", "feed"},
 	{"/api/thumbnail", "media"}, {"/api/preview", "media"},
 	{"/api/stream/", "media"}, {"/api/slide/", "media"},
 	{"/api/video", "videos"}, {"/api/channel", "channels"},

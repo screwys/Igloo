@@ -1,4 +1,4 @@
-// Package worker provides background workers for RSSHub ingest and feed media download.
+// Package worker provides background workers for feed ingest and media download.
 package worker
 
 import (
@@ -53,7 +53,7 @@ type Manager struct {
 	statusMu         sync.RWMutex
 	activity         *ActivityRing // general server activity (200 items)
 	dlActivity       *ActivityRing // download-specific activity (100 items)
-	feedActivity     *ActivityRing // rsshub/feed_media per-item activity (200 items)
+	feedActivity     *ActivityRing // x_ingest/feed_media per-item activity (200 items)
 
 	dlSessionCompleted int32        // atomic
 	dlSessionFailed    int32        // atomic
@@ -66,11 +66,10 @@ type Manager struct {
 	lastCycleReady    int
 	lastCycleMu       sync.RWMutex
 
-	lastQuoteSweepAt atomic.Int64 // unix seconds; rate-limits backfillTruncatedQuoteTextSweep
 	lastReplySweepAt atomic.Int64 // unix seconds; rate-limits resolveReplyChainsSweep
 
-	replyResolver    *ReplyResolver
-	quoteTextFetcher func(context.Context, string, string) (string, error)
+	replyResolver *ReplyResolver
+	xFeedFetcher  xFeedFetcher
 
 	// dearrowFetcher is the configured DeArrow orchestrator. Nil means DeArrow
 	// fetching is disabled (e.g. unit tests that don't care about it).
@@ -129,7 +128,7 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 //  2. [async] buildSearchIndex  — FTS5 rebuild
 //  3. [async] runFeedBootstrap  — immediate ingest if sparse
 //  4. [async] runRankedQueueWarmup — pre-score feed
-//  5. [async] runRSSHubIngestLoop  — long-running ingest
+//  5. [async] runXIngestLoop       — long-running X ingest
 //  6. [async] runFeedMediaWorker   — long-running download
 //  7. [async] runProfileRefreshLoop — unified profile/avatar/banner refresh for all platforms
 func (m *Manager) StartAll() {
@@ -185,7 +184,7 @@ func (m *Manager) StartAll() {
 	m.startOnce("search_index", m.buildSearchIndex)
 	m.startOnce("feed_bootstrap", m.runFeedBootstrap)
 	m.startOnce("ranked_queue_warmup", m.runRankedQueueWarmup)
-	m.launch("rsshub_ingest", m.runRSSHubIngestLoop)
+	m.launch(xIngestWorkerName, m.runXIngestLoop)
 	m.launch("feed_media", m.runFeedMediaWorker)
 	m.launch("profile_refresh", m.runProfileRefreshLoop)
 	m.launch("dearrow", m.runDearrowWorker)
@@ -442,7 +441,7 @@ func (m *Manager) PreviewChan() <-chan PreviewRequest { return m.previewChan }
 // PreviewQueueLen returns the number of preview requests currently queued.
 func (m *Manager) PreviewQueueLen() int { return len(m.previewChan) }
 
-// Emit records an activity event. Source identifies the worker (e.g. "rsshub", "download").
+// Emit records an activity event. Source identifies the worker (e.g. "x_ingest", "download").
 func (m *Manager) Emit(source, message, status string) {
 	m.activity.Push(makeEvent(source, message, status))
 }
@@ -457,7 +456,7 @@ func (m *Manager) EmitDownload(message, status, channelID, platform string) {
 	m.dlActivity.Push(e)
 }
 
-// EmitFeed records a feed-specific event (rsshub/feed_media per-item).
+// EmitFeed records a feed-specific event (x_ingest/feed_media per-item).
 // Always goes to the feed activity ring; errors and warnings also surface in the main ring.
 func (m *Manager) EmitFeed(source, message, status string) {
 	e := makeEvent(source, message, status)

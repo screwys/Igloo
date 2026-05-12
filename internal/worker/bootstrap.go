@@ -22,9 +22,9 @@ func (m *Manager) runFeedBootstrap(ctx context.Context) {
 	}
 
 	log.Printf("[feed_bootstrap] only %d feed items — running initial ingest", count)
-	if m.cfg.RSSHubBase != "" {
+	if m.cfg == nil || m.cfg.PlatformEnabled("twitter") {
 		m.runIngestCycle(ctx)
 	} else {
-		log.Printf("[feed_bootstrap] RSSHUB_BASE not set, cannot bootstrap")
+		log.Printf("[feed_bootstrap] twitter platform disabled, cannot bootstrap")
 	}
 }

@@ -4,9 +4,6 @@ ConditionPathExists=!/run/.containerenv
 Wants=network-online.target
 After=network-online.target
 
-Wants=rsshub.service
-After=rsshub.service
-
 [Service]
 Type=simple
 WorkingDirectory={{REPO_PATH}}
@@ -15,7 +12,6 @@ Environment=IGLOO_CONFIG_DIR={{CONFIG_DIR}}
 Environment=IGLOO_DATA_DIR={{DATA_DIR}}
 Environment=IGLOO_REPO_DIR={{REPO_PATH}}
 Environment=IGLOO_PORT={{SERVER_PORT}}
-Environment=RSSHUB_BASE={{RSSHUB_BASE_URL}}
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
 ExecStart={{REPO_PATH}}/bin/igloo

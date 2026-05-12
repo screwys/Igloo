@@ -19,7 +19,7 @@ const youtubeEnrichTickInterval = 15 * time.Minute
 var dearrowPerFetchSleep = 750 * time.Millisecond
 
 // youtubeEnrichInitialDelay is the wait after StartAll before the first scan.
-// Spreads out startup load with other workers (rsshub, download pool, etc).
+// Spreads out startup load with other workers (X ingest, download pool, etc).
 const youtubeEnrichInitialDelay = 30 * time.Second
 
 // youtubeEnrichOnce runs a single YouTube enrichment pass: for every video
