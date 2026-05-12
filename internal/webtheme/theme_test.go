@@ -18,6 +18,7 @@ func TestBuiltInThemeCatalogAndAccentNormalization(t *testing.T) {
 		"dracula",
 		"github-dark",
 		"github-light",
+		"green-eyes",
 		"gruvbox-dark",
 		"nord",
 		"solarized-dark",

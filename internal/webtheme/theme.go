@@ -110,6 +110,15 @@ var themes = []Theme{
 		Surface0: "#f6f8fa", Base: "#ffffff", Mantle: "#f6f8fa", Crust: "#f0f3f6",
 	},
 	{
+		ID: "green-eyes", Label: "Green Eyes", Dark: true, DefaultAccent: "#a0d57a", Secondary: "#a0cfce",
+		Red: "#ffb4ab", Maroon: "#ffdad6", Peach: "#d9e7ca", Yellow: "#bdcbaf", Green: "#a0d57a",
+		Teal: "#a0cfce", Sky: "#bbecea", Sapphire: "#a0cfce", Blue: "#a0cfce", Mauve: "#bdcbaf",
+		Pink: "#d9e7ca", Lavender: "#bdcbaf", Rosewater: "#d9e7ca", Flamingo: "#ffdad6",
+		Text: "#e3e3dc", Subtext1: "#c4c8bb", Subtext0: "#a7ab9f", Overlay2: "#8e9286",
+		Overlay1: "#6a6e63", Overlay0: "#44483e", Surface2: "#343531", Surface1: "#292b26",
+		Surface0: "#1e201c", Base: "#121410", Mantle: "#1a1c18", Crust: "#0b0d09",
+	},
+	{
 		ID: "nord", Label: "Nord", Dark: true, DefaultAccent: "#88c0d0", Secondary: "#8fbcbb",
 		Red: "#bf616a", Maroon: "#d08770", Peach: "#d08770", Yellow: "#ebcb8b", Green: "#a3be8c",
 		Teal: "#8fbcbb", Sky: "#88c0d0", Sapphire: "#81a1c1", Blue: "#5e81ac", Mauve: "#b48ead",
