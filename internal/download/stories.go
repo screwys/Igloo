@@ -40,6 +40,9 @@ func (g *GalleryDLWrapper) TikTokStories(ctx context.Context, handle string, lim
 	output := result.CombinedOutput()
 	err := result.Err
 	if err != nil {
+		if isEmptyTikTokStoryResult(output) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("gallery-dl TikTok stories: %w: %s", err, RedactText(string(output)))
 	}
 	return parseTikTokStoryDump(output, handle), nil
@@ -77,6 +80,11 @@ func storyDumpArgs(limit int, cookiesFile, rawURL string) []string {
 	}
 	args = append(args, rawURL)
 	return args
+}
+
+func isEmptyTikTokStoryResult(output []byte) bool {
+	text := strings.ToLower(string(output))
+	return strings.Contains(text, "story/item_list") && strings.Contains(text, "(0 items)")
 }
 
 func parseTikTokStoryDump(output []byte, fallbackHandle string) []StoryRef {

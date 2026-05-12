@@ -24,6 +24,17 @@ func TestParseTikTokStoryDump(t *testing.T) {
 	}
 }
 
+func TestEmptyTikTokStoryResult(t *testing.T) {
+	output := []byte(`[tiktok][info] https://www.tiktok.com/@sample: retrieving story/item_list page 1 (0 items)
+[tiktok][warning] https://www.tiktok.com/@sample: failed to retrieve story/item_list page 1`)
+	if !isEmptyTikTokStoryResult(output) {
+		t.Fatal("expected 0-item TikTok story output to be treated as empty")
+	}
+	if isEmptyTikTokStoryResult([]byte(`[tiktok][error] HTTP Error 429: Too Many Requests`)) {
+		t.Fatal("rate limit output should not be treated as empty")
+	}
+}
+
 func TestParseInstagramStoryDump(t *testing.T) {
 	output := []byte(`
 [2, {"subcategory":"stories","type":"story","username":"cinema","fullname":"Cinema","post_shortcode":"REEL123","media_id":"987654321","post_url":"https://www.instagram.com/stories/cinema/","description":"story","date":"2026-05-01 10:00:00"}]
