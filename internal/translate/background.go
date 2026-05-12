@@ -18,7 +18,7 @@ const (
 	translateBackgroundActiveDelay    = 2 * time.Second
 	translateBackgroundIdleDelay      = 30 * time.Second
 	translateBackgroundErrorDelay     = time.Minute
-	translateBackgroundRateLimitDelay = 5 * time.Minute
+	translateBackgroundRateLimitDelay = kagiProviderCooldownDuration
 	translateBackgroundScanLimit      = 500
 	translateBackgroundBatchSize      = 10
 	translateBackgroundMaxErrors      = translateBackgroundBatchSize

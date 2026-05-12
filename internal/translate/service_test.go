@@ -3,10 +3,14 @@ package translate
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/screwys/igloo/internal/settings"
 )
 
 func TestProtectForTranslateReplacesTokens(t *testing.T) {
@@ -194,13 +198,52 @@ func TestKagiTranslateArgsUseKnownSourceLanguage(t *testing.T) {
 	}
 }
 
-func TestKagiMessageIsRateLimited(t *testing.T) {
+func TestKagiMessageNeedsCooldown(t *testing.T) {
 	msg := `configuration error: Kagi Translate language detection request rejected: HTTP 429 Too Many Requests`
-	if !kagiMessageIsRateLimited(msg) {
+	if !kagiMessageNeedsCooldown(msg) {
 		t.Fatalf("expected Kagi 429 message to be rate limited")
 	}
-	if kagiMessageIsRateLimited("HTTP 500 Internal Server Error") {
-		t.Fatalf("expected generic provider failure not to be rate limited")
+	msg = `authentication error: translate bootstrap did not mint a translate_session cookie`
+	if !kagiMessageNeedsCooldown(msg) {
+		t.Fatalf("expected Kagi bootstrap failure to trigger cooldown")
+	}
+	if kagiMessageNeedsCooldown("HTTP 500 Internal Server Error") {
+		t.Fatalf("expected generic provider failure not to trigger cooldown")
+	}
+}
+
+func TestKagiCooldownShortCircuitsAfterRateLimit(t *testing.T) {
+	kagiProviderClearCooldownForTest()
+	t.Cleanup(kagiProviderClearCooldownForTest)
+
+	dir := t.TempDir()
+	countPath := dir + "/count"
+	kagiPath := dir + "/kagi"
+	script := "#!/bin/sh\nprintf x >> \"$KAGI_COUNT_FILE\"\necho 'configuration error: Kagi Translate language detection request rejected: HTTP 429 Too Many Requests' >&2\nexit 1\n"
+	if err := os.WriteFile(kagiPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write kagi stub: %v", err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	t.Setenv("KAGI_COUNT_FILE", countPath)
+
+	d := openTranslateTestDB(t)
+	if err := d.SetSetting("", "translate_backend", settings.TranslateBackendKagiCLI); err != nil {
+		t.Fatalf("SetSetting translate_backend: %v", err)
+	}
+
+	if _, _, err := translateTextWithDB(context.Background(), d, "안녕하세요", "en", "", "ko"); !errors.Is(err, ErrProviderRateLimited) {
+		t.Fatalf("first translateTextWithDB err = %v, want ErrProviderRateLimited", err)
+	}
+	if _, _, err := translateTextWithDB(context.Background(), d, "你好", "en", "", "zh"); !errors.Is(err, ErrProviderRateLimited) {
+		t.Fatalf("second translateTextWithDB err = %v, want ErrProviderRateLimited", err)
+	}
+
+	count, readErr := os.ReadFile(countPath)
+	if readErr != nil {
+		t.Fatalf("read kagi count: %v", readErr)
+	}
+	if len(count) != 1 {
+		t.Fatalf("kagi requests = %d, want 1", len(count))
 	}
 }
 

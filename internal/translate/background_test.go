@@ -282,6 +282,9 @@ func TestTranslateBackgroundContinuesAfterCandidateProviderError(t *testing.T) {
 }
 
 func TestTranslateBackgroundStopsBatchOnKagiRateLimit(t *testing.T) {
+	kagiProviderClearCooldownForTest()
+	t.Cleanup(kagiProviderClearCooldownForTest)
+
 	dir := t.TempDir()
 	countPath := dir + "/count"
 	kagiPath := dir + "/kagi"

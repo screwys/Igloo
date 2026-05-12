@@ -16,12 +16,16 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 	"unicode"
 
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/language"
 	"github.com/screwys/igloo/internal/settings"
 )
+
+const kagiProviderCooldownDuration = 5 * time.Minute
 
 var (
 	// Combined token regex: URL first (most specific), then mention, then hashtag.
@@ -37,6 +41,11 @@ var (
 	ErrTranslationFailed     = errors.New("translation failed")
 	ErrAlreadyTargetLanguage = errors.New("already in target language")
 	ErrProviderRateLimited   = errors.New("translation provider rate limited")
+)
+
+var (
+	kagiCooldownMu    sync.Mutex
+	kagiCooldownUntil time.Time
 )
 
 type Result struct {
@@ -292,7 +301,16 @@ func translateTextWithDB(ctx context.Context, database *db.DB, text, targetLang,
 
 	switch backend {
 	case settings.TranslateBackendKagiCLI:
+		if remaining := kagiProviderCooldownRemaining(time.Now()); remaining > 0 {
+			return nil, backend, ProviderRateLimitedError{
+				Provider: backend,
+				Err:      fmt.Errorf("provider cooldown active for %s", remaining.Round(time.Second)),
+			}
+		}
 		result, err := kagiTranslate(ctx, text, targetLang, contextHint, sourceLangHint)
+		if errors.Is(err, ErrProviderRateLimited) {
+			kagiProviderStartCooldown(time.Now())
+		}
 		return result, backend, err
 	case settings.TranslateBackendGoogle:
 		apiKey, _ := database.GetSetting("translate_api_key", "")
@@ -342,7 +360,7 @@ func kagiTranslate(ctx context.Context, text, targetLang, contextHint, sourceLan
 		if msg != "" {
 			wrapped = fmt.Errorf("kagi translate: %w: %s", err, msg)
 		}
-		if kagiMessageIsRateLimited(msg) {
+		if kagiMessageNeedsCooldown(msg) {
 			return nil, ProviderRateLimitedError{Provider: settings.TranslateBackendKagiCLI, Err: wrapped}
 		}
 		return nil, wrapped
@@ -411,11 +429,36 @@ func kagiSourceLanguage(sourceLangHint string) string {
 	return sourceLang
 }
 
-func kagiMessageIsRateLimited(msg string) bool {
+func kagiMessageNeedsCooldown(msg string) bool {
 	msg = strings.ToLower(msg)
 	return strings.Contains(msg, "http 429") ||
 		strings.Contains(msg, "too many requests") ||
-		strings.Contains(msg, "rate limit")
+		strings.Contains(msg, "rate limit") ||
+		strings.Contains(msg, "translate bootstrap did not mint a translate_session cookie")
+}
+
+func kagiProviderCooldownRemaining(now time.Time) time.Duration {
+	kagiCooldownMu.Lock()
+	defer kagiCooldownMu.Unlock()
+	if kagiCooldownUntil.IsZero() || !now.Before(kagiCooldownUntil) {
+		return 0
+	}
+	return kagiCooldownUntil.Sub(now)
+}
+
+func kagiProviderStartCooldown(now time.Time) {
+	kagiCooldownMu.Lock()
+	defer kagiCooldownMu.Unlock()
+	until := now.Add(kagiProviderCooldownDuration)
+	if until.After(kagiCooldownUntil) {
+		kagiCooldownUntil = until
+	}
+}
+
+func kagiProviderClearCooldownForTest() {
+	kagiCooldownMu.Lock()
+	defer kagiCooldownMu.Unlock()
+	kagiCooldownUntil = time.Time{}
 }
 
 func googleTranslate(ctx context.Context, endpoint, apiKey, text, targetLang string) (*Result, error) {

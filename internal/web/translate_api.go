@@ -71,6 +71,9 @@ func (s *Server) writeTranslateError(w http.ResponseWriter, tweetID, field strin
 	case errors.Is(err, translate.ErrNotConfigured):
 		slog.Error("translate", "tweet_id", tweetID, "field", field, "err", err)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "translation provider not configured"})
+	case errors.Is(err, translate.ErrProviderRateLimited):
+		slog.Warn("translate provider limited", "tweet_id", tweetID, "field", field, "err", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "translation provider temporarily unavailable"})
 	case errors.Is(err, translate.ErrTranslationFailed):
 		slog.Error("translate", "tweet_id", tweetID, "field", field, "err", err)
 		writeJSON(w, http.StatusBadGateway, map[string]any{"error": "translation failed"})
