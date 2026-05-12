@@ -13,7 +13,7 @@ RUN apt-get update \
 
 COPY go.mod go.sum ./
 RUN go mod download
-RUN go install github.com/a-h/templ/cmd/templ@v0.3.1001
+RUN go install github.com/a-h/templ/cmd/templ@v0.3.1020
 
 COPY cmd ./cmd
 COPY internal ./internal
