@@ -11,11 +11,19 @@ function cssVar(name) {
   return Number(match[1]);
 }
 
-test("player subtitles use separate offsets for normal and fullscreen states", () => {
-  assert.equal(cssVar("--player-subtitles-offset-idle"), 36);
+function cssLength(name) {
+  const match = css.match(new RegExp(`${name}:\\s*(-?[0-9]+(?:\\.[0-9]+)?)(px|%);`));
+  assert.ok(match, `missing ${name}`);
+  return { value: Number(match[1]), unit: match[2] };
+}
+
+test("player subtitles define idle offsets and control gaps for normal and fullscreen states", () => {
+  assert.deepEqual(cssLength("--player-subtitles-offset-idle"), { value: 2, unit: "%" });
   assert.equal(cssVar("--player-subtitles-offset-controls"), 72);
-  assert.equal(cssVar("--player-subtitles-offset-fullscreen-idle"), 52);
+  assert.deepEqual(cssLength("--player-subtitles-offset-fullscreen-idle"), { value: 2, unit: "%" });
   assert.equal(cssVar("--player-subtitles-offset-fullscreen-controls"), 104);
+  assert.equal(cssVar("--player-subtitles-controls-gap"), 6);
+  assert.equal(cssVar("--player-subtitles-controls-gap-fullscreen"), 12);
   assert.match(css, /--player-subtitles-font-size:\s*clamp\(22px,\s*1\.6vw,\s*34px\);/);
   assert.match(css, /--player-subtitles-font-size-fullscreen:\s*clamp\(28px,\s*2vw,\s*52px\);/);
 });
@@ -35,9 +43,21 @@ test("player subtitle overlay is defined for shared browser rendering", () => {
   );
 });
 
-test("control-visible subtitles use the app-owned controller state", () => {
-  assert.ok(cssVar("--player-subtitles-offset-controls") > cssVar("--player-subtitles-offset-idle"));
-  assert.ok(cssVar("--player-subtitles-offset-fullscreen-controls") > cssVar("--player-subtitles-offset-fullscreen-idle"));
+test("control-visible subtitles use the app-owned controller state and measured bar", () => {
+  assert.match(playerJs, /function controlsSubtitleOffsetPx\(isFs\)/);
+  assert.match(playerJs, /querySelector\('media-control-bar\.dashboard-media-control-bar, media-control-bar, \.dashboard-media-control-bar'\)/);
+  assert.match(playerJs, /playerWrapper\.getBoundingClientRect\(\)/);
+  assert.match(playerJs, /bar\.getBoundingClientRect\(\)/);
+  assert.match(playerJs, /wrapperRect\.bottom - barRect\.top \+ gap/);
+  assert.match(playerJs, /--player-subtitles-controls-gap-fullscreen/);
+});
+
+test("idle subtitles can use percentage offsets from the player edge", () => {
+  assert.match(playerJs, /function readSubtitleOffset\(name, fallback\)/);
+  assert.match(playerJs, /raw\.endsWith\('%'\)/);
+  assert.match(playerJs, /rect\.height \* value \/ 100/);
+  assert.match(playerJs, /readSubtitleOffset\('--player-subtitles-offset-fullscreen-idle', 52\)/);
+  assert.match(playerJs, /readSubtitleOffset\('--player-subtitles-offset-idle', 36\)/);
 });
 
 test("player controls hide from app-owned visibility state, not lingering focus", () => {

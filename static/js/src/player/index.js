@@ -777,13 +777,36 @@ if (root && video) {
             var value = parseFloat(raw)
             return Number.isFinite(value) ? value : fallback
           }
+          function readSubtitleOffset(name, fallback) {
+            if (!playerWrapper) return fallback
+            var raw = window.getComputedStyle(playerWrapper).getPropertyValue(name).trim()
+            var value = parseFloat(raw)
+            if (!Number.isFinite(value)) return fallback
+            if (raw.endsWith('%')) {
+              var rect = playerWrapper.getBoundingClientRect()
+              return rect && rect.height > 0 ? rect.height * value / 100 : fallback
+            }
+            return value
+          }
+          function controlsSubtitleOffsetPx(isFs) {
+            var fallback = readSubtitleOffset(isFs ? '--player-subtitles-offset-fullscreen-controls' : '--player-subtitles-offset-controls', isFs ? 104 : 72)
+            if (!controller || !playerWrapper) return fallback
+            var bar = controller.querySelector('media-control-bar.dashboard-media-control-bar, media-control-bar, .dashboard-media-control-bar')
+            if (!bar || typeof bar.getBoundingClientRect !== 'function') return fallback
+            var wrapperRect = playerWrapper.getBoundingClientRect()
+            var barRect = bar.getBoundingClientRect()
+            if (!(wrapperRect && wrapperRect.height > 0 && barRect && barRect.height > 0)) return fallback
+            var gap = readSubtitleOffsetPx(isFs ? '--player-subtitles-controls-gap-fullscreen' : '--player-subtitles-controls-gap', isFs ? 12 : 6)
+            var measured = wrapperRect.bottom - barRect.top + gap
+            if (!Number.isFinite(measured) || measured <= 0) return fallback
+            return Math.max(0, Math.min(wrapperRect.height, measured))
+          }
           function subtitleOffsetPx() {
             var isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement)
             var controlsVisible = controllerControlsVisible(controller)
-            if (isFs && controlsVisible) return readSubtitleOffsetPx('--player-subtitles-offset-fullscreen-controls', 104)
-            if (isFs) return readSubtitleOffsetPx('--player-subtitles-offset-fullscreen-idle', 52)
-            if (controlsVisible) return readSubtitleOffsetPx('--player-subtitles-offset-controls', 72)
-            return readSubtitleOffsetPx('--player-subtitles-offset-idle', 36)
+            if (controlsVisible) return controlsSubtitleOffsetPx(isFs)
+            if (isFs) return readSubtitleOffset('--player-subtitles-offset-fullscreen-idle', 52)
+            return readSubtitleOffset('--player-subtitles-offset-idle', 36)
           }
           function ensureSubtitleOverlay() {
             if (subtitleOverlay) return subtitleOverlay
@@ -876,6 +899,9 @@ if (root && video) {
           window.addEventListener('resize', function () { renderSubtitleOverlay() }, { passive: true })
           doc.addEventListener('fullscreenchange', function () { requestAnimationFrame(renderSubtitleOverlay) })
           doc.addEventListener('webkitfullscreenchange', function () { requestAnimationFrame(renderSubtitleOverlay) })
+          if (playerLayout) {
+            playerLayout.addEventListener('scroll', function () { requestAnimationFrame(renderSubtitleOverlay) }, { passive: true })
+          }
 
           ccBtn.classList.remove('hidden')
 
