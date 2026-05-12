@@ -42,6 +42,16 @@ func textResult(s string) (*mcp.CallToolResult, error) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "doctor" {
+		result, err := doctorStatus()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "doctor:", err)
+			os.Exit(1)
+		}
+		fmt.Println(result)
+		return
+	}
+
 	s := server.NewMCPServer("igloo", "2.0.0")
 
 	s.AddTool(mcp.NewTool("trace_endpoint",
@@ -247,6 +257,16 @@ func main() {
 		mcp.WithDescription("Queue health for download, feed media, and channel pipelines: counts, oldest pending, stuck jobs, recent errors."),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		result, err := pipelineStatus()
+		if err != nil {
+			return mcp.NewToolResultText("Error: " + err.Error()), nil
+		}
+		return mcp.NewToolResultText(result), nil
+	})
+
+	s.AddTool(mcp.NewTool("doctor_status",
+		mcp.WithDescription("Read-only local doctor report: DB/WAL size, dbstat, Android sync age, queue counts, profile/media readiness, downloader failures, masked recent errors."),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		result, err := doctorStatus()
 		if err != nil {
 			return mcp.NewToolResultText("Error: " + err.Error()), nil
 		}
