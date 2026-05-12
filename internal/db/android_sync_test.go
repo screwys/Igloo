@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -157,6 +158,43 @@ func TestAndroidSyncPruneKeepsNewestReadyGenerations(t *testing.T) {
 	}
 }
 
+func TestAndroidSyncPruneDeletesEligibleGenerationsInBatches(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := time.Now().UnixMilli()
+	oldBaseMs := nowMs - int64(48*time.Hour/time.Millisecond)
+	const generationCount = 55
+	for i := 0; i < generationCount; i++ {
+		insertAndroidSyncGenerationFixture(t, d, fmt.Sprintf("android-sync-batch-prune-%02d", i+1), oldBaseMs+int64(i))
+	}
+
+	policy := AndroidSyncPrunePolicy{
+		KeepReadyGenerations: 1,
+		KeepMinAge:           6 * time.Hour,
+		KeepHealthReports:    1000,
+	}
+	result, err := d.PruneAndroidSyncState(nowMs, policy)
+	if err != nil {
+		t.Fatalf("PruneAndroidSyncState: %v", err)
+	}
+	if result.GenerationsDeleted >= generationCount-1 {
+		t.Fatalf("first prune deleted %d generations, want bounded batch below all %d eligible rows", result.GenerationsDeleted, generationCount-1)
+	}
+	remaining := countAndroidSyncGenerations(t, d, "android-sync-batch-prune-%")
+	if remaining <= 1 {
+		t.Fatalf("remaining old generations after first prune = %d, want batch remainder", remaining)
+	}
+
+	for i := 0; i < 10 && remaining > 1; i++ {
+		if _, err := d.PruneAndroidSyncState(nowMs, policy); err != nil {
+			t.Fatalf("follow-up prune %d: %v", i+1, err)
+		}
+		remaining = countAndroidSyncGenerations(t, d, "android-sync-batch-prune-%")
+	}
+	if remaining != 1 {
+		t.Fatalf("remaining old generations after follow-up prunes = %d, want only newest retained generation", remaining)
+	}
+}
+
 func TestAndroidSyncPruneKeepsYoungOlderGeneration(t *testing.T) {
 	d := openWritableTestDB(t)
 	nowMs := time.Now().UnixMilli()
@@ -238,6 +276,19 @@ func assertAndroidSyncGenerationExists(t *testing.T, d *DB, generationID string,
 	if (got > 0) != want {
 		t.Fatalf("generation %s exists = %t, want %t", generationID, got > 0, want)
 	}
+}
+
+func countAndroidSyncGenerations(t *testing.T, d *DB, likePattern string) int {
+	t.Helper()
+	var count int
+	if err := d.QueryRow(`
+		SELECT COUNT(*)
+		FROM android_sync_generations
+		WHERE generation_id LIKE ?
+	`, likePattern).Scan(&count); err != nil {
+		t.Fatalf("count generations like %s: %v", likePattern, err)
+	}
+	return count
 }
 
 func assertAndroidSyncChildRows(t *testing.T, d *DB, generationID string, wantItems, wantAssets, wantHealth int) {
