@@ -3431,9 +3431,10 @@ select.input.themed-select-native {
 
 /* Keep subtitles above the floating Media Chrome controls when they appear. */
 .player-wrapper {
-    --player-subtitles-offset-idle: 14px;
-    --player-subtitles-offset-controls: 68px;
-    --player-subtitles-offset-fullscreen-controls: 54px;
+    --player-subtitles-offset-idle: 10px;
+    --player-subtitles-offset-controls: 26px;
+    --player-subtitles-offset-fullscreen-idle: 42px;
+    --player-subtitles-offset-fullscreen-controls: 48px;
 }
 
 /* Native browser subtitles (used by videojs_compat/native <video>). */
@@ -3456,6 +3457,15 @@ select.input.themed-select-native {
     transform: translateY(calc(-1 * var(--player-subtitles-offset-controls))) !important;
 }
 
+.player-layout:fullscreen .player-wrapper .vjs-tech::-webkit-media-text-track-display,
+.player-layout:fullscreen .player-wrapper video::-webkit-media-text-track-display,
+.player-layout:-webkit-full-screen .player-wrapper .vjs-tech::-webkit-media-text-track-display,
+.player-layout:-webkit-full-screen .player-wrapper video::-webkit-media-text-track-display,
+.player-wrapper video:fullscreen::-webkit-media-text-track-display,
+.player-wrapper video:-webkit-full-screen::-webkit-media-text-track-display {
+    transform: translateY(calc(-1 * var(--player-subtitles-offset-fullscreen-idle))) !important;
+}
+
 .player-layout:fullscreen .player-wrapper:hover video::-webkit-media-text-track-display,
 .player-layout:fullscreen .player-wrapper:focus-within video::-webkit-media-text-track-display,
 .player-layout:fullscreen .player-wrapper:has(#main-player-time-range:hover) video::-webkit-media-text-track-display,
@@ -3469,15 +3479,18 @@ select.input.themed-select-native {
 .player-layout:-webkit-full-screen .player-wrapper .dashboard-media-controller:hover video::-webkit-media-text-track-display,
 .player-layout:-webkit-full-screen .player-wrapper .dashboard-media-controller:focus-within video::-webkit-media-text-track-display,
 .player-layout:-webkit-full-screen .player-wrapper .dashboard-media-controller:not([userinactive]) video::-webkit-media-text-track-display,
-.player-layout:-webkit-full-screen .player-wrapper .dashboard-media-controller[userinactive="false"] video::-webkit-media-text-track-display,
-.player-wrapper video:fullscreen::-webkit-media-text-track-display,
-.player-wrapper video:-webkit-full-screen::-webkit-media-text-track-display {
+.player-layout:-webkit-full-screen .player-wrapper .dashboard-media-controller[userinactive="false"] video::-webkit-media-text-track-display {
     transform: translateY(calc(-1 * var(--player-subtitles-offset-fullscreen-controls))) !important;
 }
 
 /* Emulated Video.js captions fallback (if real Video.js is used in future). */
 .player-wrapper #video-player.video-js .vjs-text-track-display {
     bottom: var(--player-subtitles-offset-idle) !important;
+}
+
+.player-layout:fullscreen .player-wrapper #video-player.video-js .vjs-text-track-display,
+.player-layout:-webkit-full-screen .player-wrapper #video-player.video-js .vjs-text-track-display {
+    bottom: var(--player-subtitles-offset-fullscreen-idle) !important;
 }
 
 .player-wrapper:hover #video-player.video-js .vjs-text-track-display,
