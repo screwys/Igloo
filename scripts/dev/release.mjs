@@ -18,6 +18,8 @@ export function bumpSemver(version, bump) {
       return `${major}.${minor}.${patch + 1}`;
     case "minor":
       return `${major}.${minor + 1}.0`;
+    case "major":
+      return `${major + 1}.0.0`;
     default:
       throw new Error(`unsupported bump: ${bump}`);
   }
@@ -25,7 +27,7 @@ export function bumpSemver(version, bump) {
 
 export function normalizeReleaseBump(value) {
   const bump = String(value || "patch").trim().toLowerCase();
-  if (bump !== "patch" && bump !== "minor") {
+  if (bump !== "patch" && bump !== "minor" && bump !== "major") {
     throw new Error(`unsupported bump: ${value}`);
   }
   return bump;
@@ -74,13 +76,17 @@ function commitRef(sha, repository) {
   return `[${short}](https://github.com/${repository}/commit/${sha})`;
 }
 
-export function renderReleaseNotes({ newTag, repository, commits }) {
+export function renderReleaseNotes({ newTag, repository, commits, description = "" }) {
   const lines = [
     `## Release ${newTag}`,
     "",
-    "changes:",
-    "",
   ];
+
+  description = String(description || "").trim();
+  if (description !== "") {
+    lines.push(description, "");
+  }
+  lines.push("changes:", "");
 
   for (const commit of commits) {
     lines.push(`- ${commit.subject} (${commitRef(commit.sha, repository)})`);
@@ -140,6 +146,7 @@ function parseArgs(argv) {
     notesPath: "release-notes.md",
     threshold: 10,
     bumpFile: ".github/release-bump",
+    descriptionFile: ".github/release-description.md",
   };
 
   const optionStart = out.command === "prepare" ? 2 : 1;
@@ -160,6 +167,10 @@ function parseArgs(argv) {
       out.bumpFile = argv[++i];
       continue;
     }
+    if (arg === "--description-file") {
+      out.descriptionFile = argv[++i];
+      continue;
+    }
     throw new Error(`unknown argument: ${arg}`);
   }
   return out;
@@ -178,14 +189,16 @@ function prepareRelease(argv) {
   const args = parseArgs(argv);
   if (args.command !== "prepare" && args.command !== "prepare-auto") {
     throw new Error(
-      "usage: release.mjs prepare <patch|minor> [--notes path] | prepare-auto [--threshold n] [--notes path]",
+      "usage: release.mjs prepare <patch|minor|major> [--notes path] | prepare-auto [--threshold n] [--notes path]",
     );
   }
 
   const androidPath = resolve("android/app/build.gradle.kts");
   const bumpPath = resolve(args.bumpFile);
+  const descriptionPath = resolve(args.descriptionFile);
 
   const androidText = readFileSync(androidPath, "utf8");
+  const description = readFileSync(descriptionPath, "utf8");
 
   const androidVersion = parseAndroidVersion(androidText);
   const currentVersion = androidVersion.versionName;
@@ -241,6 +254,9 @@ function prepareRelease(argv) {
   if (args.command === "prepare-auto") {
     writeFileSync(bumpPath, updateReleaseBumpText("patch"));
   }
+  if (description.trim() !== "") {
+    writeFileSync(descriptionPath, "");
+  }
   writeFileSync(
     resolve(args.notesPath),
     renderReleaseNotes({
@@ -248,6 +264,7 @@ function prepareRelease(argv) {
       previousTag,
       repository: process.env.GITHUB_REPOSITORY || "",
       commits,
+      description,
     }),
   );
 

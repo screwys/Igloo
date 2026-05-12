@@ -1,0 +1,1 @@
+This is the first major release of Igloo since initial release, as I could finally replace RSSHub with gallery-dl! This repo is new, but I have been working on this for 3 months, so this gets its deserved major release tag. The downloader behavior is now unified between platforms, with platform specific extras separated.

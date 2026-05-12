@@ -14,6 +14,7 @@ on:
         options:
           - patch
           - minor
+          - major
 
 concurrency:
   group: release
@@ -52,9 +53,9 @@ jobs:
           INPUT_BUMP: ${{ inputs.bump }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            node scripts/dev/release.mjs prepare "${INPUT_BUMP:-patch}" --notes release-notes.md
+            node scripts/dev/release.mjs prepare "${INPUT_BUMP:-patch}" --notes release-notes.md --description-file .github/release-description.md
           else
-            node scripts/dev/release.mjs prepare-auto --threshold 30 --bump-file .github/release-bump --notes release-notes.md
+            node scripts/dev/release.mjs prepare-auto --threshold 30 --bump-file .github/release-bump --notes release-notes.md --description-file .github/release-description.md
           fi
 
       - name: Commit and tag signed release
@@ -83,7 +84,7 @@ jobs:
           git config user.email "${RELEASE_GIT_USER_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
           git config user.signingkey "$fingerprint"
           git config gpg.program "$RUNNER_TEMP/gpg-wrapper"
-          git add android/app/build.gradle.kts .github/release-bump
+          git add android/app/build.gradle.kts .github/release-bump .github/release-description.md
           git diff --cached --quiet && exit 1
           git commit -S -m "release ${{ steps.release.outputs.version }}"
           git tag -s "${{ steps.release.outputs.tag }}" -m "release ${{ steps.release.outputs.version }}"

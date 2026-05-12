@@ -12,20 +12,22 @@ import {
   updateReleaseBumpText,
 } from "./release.mjs";
 
-test("bumps patch and minor versions", () => {
+test("bumps patch, minor, and major versions", () => {
   assert.equal(bumpSemver("1.0.0", "patch"), "1.0.1");
   assert.equal(bumpSemver("1.0.9", "minor"), "1.1.0");
+  assert.equal(bumpSemver("1.9.9", "major"), "2.0.0");
 });
 
 test("rejects unsupported version bumps", () => {
-  assert.throws(() => bumpSemver("1.0.0", "major"), /unsupported bump/);
+  assert.throws(() => bumpSemver("1.0.0", "weird"), /unsupported bump/);
   assert.throws(() => bumpSemver("1.0", "patch"), /invalid semver/);
 });
 
 test("normalizes tracked release bump state", () => {
   assert.equal(normalizeReleaseBump(" minor\n"), "minor");
+  assert.equal(normalizeReleaseBump(" major\n"), "major");
   assert.equal(updateReleaseBumpText("patch"), "patch\n");
-  assert.throws(() => normalizeReleaseBump("major"), /unsupported bump/);
+  assert.throws(() => normalizeReleaseBump("weird"), /unsupported bump/);
 });
 
 test("plans automatic releases every 30 commits", () => {
@@ -77,6 +79,16 @@ test("release workflow dispatches CodeQL for release tags", () => {
   );
 });
 
+test("release workflow allows manual major releases", () => {
+  const workflow = readFileSync(
+    new URL("../../.github/workflows/release.yml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(workflow, /\n          - major\n/);
+  assert.match(workflow, /--description-file \.github\/release-description\.md/);
+});
+
 test("release workflow signs release commits and tags", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/release.yml", import.meta.url),
@@ -87,7 +99,7 @@ test("release workflow signs release commits and tags", () => {
   assert.match(workflow, /RELEASE_GPG_PASSPHRASE/);
   assert.match(workflow, /git commit -S -m "release \$\{\{ steps\.release\.outputs\.version \}\}"/);
   assert.match(workflow, /git tag -s "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
-  assert.match(workflow, /git add android\/app\/build\.gradle\.kts \.github\/release-bump/);
+  assert.match(workflow, /git add android\/app\/build\.gradle\.kts \.github\/release-bump \.github\/release-description\.md/);
   assert.doesNotMatch(workflow, /package\.json/);
   assert.doesNotMatch(workflow, /package-lock\.json/);
   assert.doesNotMatch(workflow, /git tag -a "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
@@ -147,6 +159,20 @@ test("plans automatic minor releases from explicit bump state", () => {
     shouldRelease: true,
     bump: "minor",
     commitCount: 10,
+  });
+});
+
+test("plans automatic major releases from explicit bump state", () => {
+  const commits = Array.from({ length: 30 }, (_, index) => ({
+    sha: `${index}`.repeat(40).slice(0, 40),
+    subject: `change ${index}`,
+    body: "",
+  }));
+
+  assert.deepEqual(planAutomaticRelease(commits, 30, "major"), {
+    shouldRelease: true,
+    bump: "major",
+    commitCount: 30,
   });
 });
 
@@ -218,4 +244,20 @@ test("renders exact commit release notes", () => {
   );
   assert.doesNotMatch(notes, /^## commits/m);
   assert.doesNotMatch(notes, /since `v1\.0\.0`/);
+});
+
+test("renders release description before commit list", () => {
+  const notes = renderReleaseNotes({
+    newTag: "v2.0.0",
+    repository: "screwys/Igloo",
+    description: "Igloo no longer depends on RSSHub.",
+    commits: [
+      {
+        sha: "1111111111111111111111111111111111111111",
+        subject: "replace rsshub ingest",
+      },
+    ],
+  });
+
+  assert.match(notes, /^## Release v2\.0\.0\n\nIgloo no longer depends on RSSHub\.\n\nchanges:/m);
 });
