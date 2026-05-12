@@ -84,7 +84,7 @@ func (d *Downloader) Download(ctx context.Context, rawURL string, mediaType stri
 			StartedAtMs: start.UnixMilli(),
 			EndedAtMs:   time.Now().UnixMilli(),
 			Status:      statusForError(err),
-			ErrorKind:   ClassifyError(err, nil),
+			ErrorKind:   ClassifyFailure(err, nil, 0).Kind,
 			Error:       errorString(err, nil),
 			CookieLabel: CookieLabel(opts.Cookies, opts.CookiesFromBrowser),
 			FileCount:   files,

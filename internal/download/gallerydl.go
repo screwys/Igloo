@@ -31,7 +31,7 @@ func (g *GalleryDLWrapper) Run(ctx context.Context, operation, platform, subject
 	errorKind := ""
 	errorText := ""
 	if result.Err != nil {
-		errorKind = ClassifyError(result.Err, result.CombinedOutput())
+		errorKind = ClassifyFailure(result.Err, result.CombinedOutput(), 0).Kind
 		errorText = errorString(result.Err, result.CombinedOutput())
 	}
 	recordOperation(ctx, g.OperationSink, model.DownloaderOperation{

@@ -1,6 +1,9 @@
 package db
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestChannelQueueAddAndGet(t *testing.T) {
 	d := openWritableTestDB(t)
@@ -355,7 +358,11 @@ func TestResetStaleDownloadQueueItems(t *testing.T) {
 		t.Skip("stale test video not claimed (unexpected DB state)")
 	}
 
-	// Reset stale items
+	if err := d.ExecRaw(`UPDATE download_queue SET lease_until_ms=? WHERE video_id=?`, time.Now().UnixMilli()-1, videoID); err != nil {
+		t.Fatalf("expire lease: %v", err)
+	}
+
+	// Reset expired leased items
 	n, err := d.ResetStaleDownloadQueueItems()
 	if err != nil {
 		t.Fatalf("ResetStaleDownloadQueueItems: %v", err)
@@ -377,6 +384,75 @@ func TestResetStaleDownloadQueueItems(t *testing.T) {
 	}
 	if !reclaimed {
 		t.Errorf("video %q should be claimable after stale reset", videoID)
+	}
+}
+
+func TestClaimDownloadBatchWithLeaseExcludesActiveLease(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UnixMilli()
+	if err := d.ExecRaw(`
+		INSERT INTO download_queue
+			(video_id, channel_id, title, status, next_attempt_at_ms, added_at)
+		VALUES ('dlq_lease_001', 'youtube_test_channel', 'Lease Proof', 'pending', 0, ?)
+	`, now); err != nil {
+		t.Fatalf("insert download queue row: %v", err)
+	}
+
+	first, err := d.ClaimDownloadBatchWithLease(LeaseOptions{
+		Owner:      "download-a",
+		NowMs:      now,
+		LeaseMs:    int64(time.Minute / time.Millisecond),
+		Limit:      1,
+		StatusFrom: "pending",
+		StatusTo:   "processing",
+	})
+	if err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	if len(first) != 1 || first[0].VideoID != "dlq_lease_001" {
+		t.Fatalf("first claim = %+v, want dlq_lease_001", first)
+	}
+
+	second, err := d.ClaimDownloadBatchWithLease(LeaseOptions{
+		Owner:      "download-b",
+		NowMs:      now + 1,
+		LeaseMs:    int64(time.Minute / time.Millisecond),
+		Limit:      1,
+		StatusFrom: "pending",
+		StatusTo:   "processing",
+	})
+	if err != nil {
+		t.Fatalf("second claim: %v", err)
+	}
+	if len(second) != 0 {
+		t.Fatalf("active lease was claimed by another worker: %+v", second)
+	}
+}
+
+func TestClaimDownloadBatchWithLeaseAllowsExpiredLease(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UnixMilli()
+	if err := d.ExecRaw(`
+		INSERT INTO download_queue
+			(video_id, channel_id, title, status, lease_owner, lease_until_ms, next_attempt_at_ms, added_at)
+		VALUES ('dlq_lease_expired', 'youtube_test_channel', 'Expired Lease', 'processing', 'download-a', ?, 0, ?)
+	`, now-1, now); err != nil {
+		t.Fatalf("insert download queue row: %v", err)
+	}
+
+	claimed, err := d.ClaimDownloadBatchWithLease(LeaseOptions{
+		Owner:      "download-b",
+		NowMs:      now,
+		LeaseMs:    int64(time.Minute / time.Millisecond),
+		Limit:      1,
+		StatusFrom: "pending",
+		StatusTo:   "processing",
+	})
+	if err != nil {
+		t.Fatalf("claim expired: %v", err)
+	}
+	if len(claimed) != 1 || claimed[0].VideoID != "dlq_lease_expired" {
+		t.Fatalf("claim expired = %+v, want dlq_lease_expired", claimed)
 	}
 }
 

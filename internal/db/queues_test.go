@@ -1,6 +1,9 @@
 package db
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestEnqueueAndClaimFeedMediaJobs(t *testing.T) {
 	d := openWritableTestDB(t)
@@ -182,5 +185,111 @@ func TestEnqueueDuplicateIgnored(t *testing.T) {
 	// Just verify the count is a non-negative integer; exact count depends on DB state
 	if q < 0 {
 		t.Error("negative queued count")
+	}
+}
+
+func TestClaimFeedMediaBatchWithLeaseExcludesActiveLease(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UnixMilli()
+	if err := d.ExecRaw(`
+		INSERT INTO feed_media_jobs
+			(tweet_id, status, media_kind, retry_count, priority, next_attempt_at_ms, created_at, updated_at)
+		VALUES
+			('lease_feed_001', 'queued', 'image', 0, 10, 0, ?, ?)
+	`, now, now); err != nil {
+		t.Fatalf("insert feed media job: %v", err)
+	}
+
+	first, err := d.ClaimFeedMediaBatchWithLease(LeaseOptions{
+		Owner:      "worker-a",
+		NowMs:      now,
+		LeaseMs:    int64(time.Minute / time.Millisecond),
+		Limit:      1,
+		StatusFrom: "queued",
+		StatusTo:   "processing",
+	})
+	if err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	if len(first) != 1 || first[0].TweetID != "lease_feed_001" {
+		t.Fatalf("first claim = %+v, want lease_feed_001", first)
+	}
+
+	second, err := d.ClaimFeedMediaBatchWithLease(LeaseOptions{
+		Owner:      "worker-b",
+		NowMs:      now + 1,
+		LeaseMs:    int64(time.Minute / time.Millisecond),
+		Limit:      1,
+		StatusFrom: "queued",
+		StatusTo:   "processing",
+	})
+	if err != nil {
+		t.Fatalf("second claim: %v", err)
+	}
+	if len(second) != 0 {
+		t.Fatalf("active lease was claimed by another worker: %+v", second)
+	}
+}
+
+func TestResetStaleFeedMediaJobsOnlyReleasesExpiredLeases(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UnixMilli()
+	if err := d.ExecRaw(`
+		INSERT INTO feed_media_jobs
+			(tweet_id, status, media_kind, lease_owner, lease_until_ms, created_at, updated_at)
+		VALUES
+			('lease_feed_active', 'processing', 'image', 'worker-a', ?, ?, ?),
+			('lease_feed_expired', 'processing', 'image', 'worker-b', ?, ?, ?)
+	`, now+60000, now, now, now-1, now, now); err != nil {
+		t.Fatalf("insert feed media jobs: %v", err)
+	}
+
+	n, err := d.ResetStaleFeedMediaJobsAt(now)
+	if err != nil {
+		t.Fatalf("ResetStaleFeedMediaJobsAt: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("reset count = %d, want 1", n)
+	}
+
+	var activeStatus, expiredStatus, expiredOwner string
+	var expiredLease int64
+	if err := d.QueryRow(`SELECT status FROM feed_media_jobs WHERE tweet_id='lease_feed_active'`).Scan(&activeStatus); err != nil {
+		t.Fatalf("query active: %v", err)
+	}
+	if err := d.QueryRow(`SELECT status, COALESCE(lease_owner,''), COALESCE(lease_until_ms,0) FROM feed_media_jobs WHERE tweet_id='lease_feed_expired'`).Scan(&expiredStatus, &expiredOwner, &expiredLease); err != nil {
+		t.Fatalf("query expired: %v", err)
+	}
+	if activeStatus != "processing" || expiredStatus != "queued" || expiredOwner != "" || expiredLease != 0 {
+		t.Fatalf("statuses active=%q expired=%q owner=%q lease=%d", activeStatus, expiredStatus, expiredOwner, expiredLease)
+	}
+}
+
+func TestRetryFeedMediaJobStoresNextAttemptAndErrorKind(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UnixMilli()
+	if err := d.ExecRaw(`
+		INSERT INTO feed_media_jobs
+			(tweet_id, status, media_kind, retry_count, lease_owner, lease_until_ms, created_at, updated_at)
+		VALUES ('lease_feed_retry', 'processing', 'image', 2, 'worker-a', ?, ?, ?)
+	`, now+60000, now, now); err != nil {
+		t.Fatalf("insert feed media job: %v", err)
+	}
+
+	if err := d.RetryFeedMediaJob("lease_feed_retry", "temporary", "network timeout", 5*time.Minute, now); err != nil {
+		t.Fatalf("RetryFeedMediaJob: %v", err)
+	}
+
+	var status, kind, msg, owner string
+	var retries int
+	var nextAttempt, leaseUntil int64
+	if err := d.QueryRow(`
+		SELECT status, retry_count, next_attempt_at_ms, last_error_kind, COALESCE(last_error,''), COALESCE(lease_owner,''), COALESCE(lease_until_ms,0)
+		FROM feed_media_jobs WHERE tweet_id='lease_feed_retry'
+	`).Scan(&status, &retries, &nextAttempt, &kind, &msg, &owner, &leaseUntil); err != nil {
+		t.Fatalf("query retry job: %v", err)
+	}
+	if status != "queued" || retries != 3 || nextAttempt != now+int64((5*time.Minute)/time.Millisecond) || kind != "temporary" || msg != "network timeout" || owner != "" || leaseUntil != 0 {
+		t.Fatalf("retry row = status=%q retries=%d next=%d kind=%q msg=%q owner=%q lease=%d", status, retries, nextAttempt, kind, msg, owner, leaseUntil)
 	}
 }

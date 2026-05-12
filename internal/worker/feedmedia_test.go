@@ -1,8 +1,12 @@
 package worker
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/model"
@@ -146,4 +150,128 @@ func TestParseMediaIncludesQuoteMedia(t *testing.T) {
 	if len(item.QuoteMedia) > 0 && item.QuoteMedia[0].Type != "photo" {
 		t.Errorf("expected quote media type 'photo', got %q", item.QuoteMedia[0].Type)
 	}
+}
+
+func TestProcessOneMediaJobStoresTransientRetryDelay(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "temporary upstream failure", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	d := newFeedMediaWorkerTestDB(t, "feed_retry_transient", server.URL+"/media.jpg", "photo")
+	if err := d.ExecRaw(`UPDATE feed_media_jobs SET retry_count=1 WHERE tweet_id='feed_retry_transient'`); err != nil {
+		t.Fatalf("set retry count: %v", err)
+	}
+	m := newFeedMediaTestManager(d, t.TempDir())
+	job := db.FeedMediaJobRow{TweetID: "feed_retry_transient", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: 1}
+
+	before := time.Now().UnixMilli()
+	m.processOneMediaJob(t.Context(), job, t.TempDir())
+
+	status, retryCount, nextAttempt, kind := readFeedMediaJobState(t, d, job.TweetID)
+	if status != "queued" || retryCount != 2 || kind != "temporary" || nextAttempt <= before {
+		t.Fatalf("job state = status=%q retry=%d next=%d kind=%q, want queued retry=2 delayed temporary", status, retryCount, nextAttempt, kind)
+	}
+}
+
+func TestProcessOneMediaJobMarksPermanentFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	defer server.Close()
+	d := newFeedMediaWorkerTestDB(t, "feed_retry_permanent", server.URL+"/media.jpg", "photo")
+	m := newFeedMediaTestManager(d, t.TempDir())
+	job := db.FeedMediaJobRow{TweetID: "feed_retry_permanent", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: 0}
+
+	m.processOneMediaJob(t.Context(), job, t.TempDir())
+
+	status, retryCount, nextAttempt, kind := readFeedMediaJobState(t, d, job.TweetID)
+	if status != "failed" || retryCount != 1 || kind != "permanent_http" || nextAttempt != 0 {
+		t.Fatalf("job state = status=%q retry=%d next=%d kind=%q, want failed retry=1 permanent_http", status, retryCount, nextAttempt, kind)
+	}
+}
+
+func TestProcessOneMediaJobPrunesNotFoundAfterCap(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+	d := newFeedMediaWorkerTestDB(t, "feed_retry_not_found", server.URL+"/media.jpg", "photo")
+	m := newFeedMediaTestManager(d, t.TempDir())
+	job := db.FeedMediaJobRow{TweetID: "feed_retry_not_found", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: maxRetries404}
+
+	m.processOneMediaJob(t.Context(), job, t.TempDir())
+
+	status, retryCount, nextAttempt, kind := readFeedMediaJobState(t, d, job.TweetID)
+	if status != "pruned" || retryCount != maxRetries404+1 || kind != "not_found" || nextAttempt != 0 {
+		t.Fatalf("job state = status=%q retry=%d next=%d kind=%q, want pruned retry=%d not_found", status, retryCount, nextAttempt, kind, maxRetries404+1)
+	}
+}
+
+func TestProcessOneMediaJobCompletionClearsLease(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = fmt.Fprint(w, "image-bytes")
+	}))
+	defer server.Close()
+	d := newFeedMediaWorkerTestDB(t, "feed_retry_complete", server.URL+"/media.jpg", "photo")
+	now := time.Now().UnixMilli()
+	if err := d.ExecRaw(`UPDATE feed_media_jobs SET lease_owner='worker-a', lease_until_ms=? WHERE tweet_id='feed_retry_complete'`, now+60000); err != nil {
+		t.Fatalf("set lease: %v", err)
+	}
+	m := newFeedMediaTestManager(d, t.TempDir())
+	job := db.FeedMediaJobRow{TweetID: "feed_retry_complete", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: 0}
+
+	m.processOneMediaJob(t.Context(), job, t.TempDir())
+
+	status, retryCount, nextAttempt, kind := readFeedMediaJobState(t, d, job.TweetID)
+	var owner string
+	var leaseUntil int64
+	if err := d.QueryRow(`SELECT COALESCE(lease_owner,''), COALESCE(lease_until_ms,0) FROM feed_media_jobs WHERE tweet_id=?`, job.TweetID).Scan(&owner, &leaseUntil); err != nil {
+		t.Fatalf("query lease: %v", err)
+	}
+	if status != "completed" || retryCount != 0 || nextAttempt != 0 || kind != "" || owner != "" || leaseUntil != 0 {
+		t.Fatalf("job state = status=%q retry=%d next=%d kind=%q owner=%q lease=%d, want completed cleared", status, retryCount, nextAttempt, kind, owner, leaseUntil)
+	}
+}
+
+func newFeedMediaWorkerTestDB(t *testing.T, tweetID, mediaURL, mediaKind string) *db.DB {
+	t.Helper()
+	d := newTestWorkerDB(t)
+	mediaJSON := fmt.Sprintf(`[{"url":%q,"type":%q}]`, mediaURL, mediaKind)
+	if err := d.ExecRaw(`
+		INSERT INTO feed_items
+			(tweet_id, source_handle, author_handle, media_json, canonical_url, published_at, fetched_at)
+		VALUES (?, 'twitter_sample', 'sample', ?, 'https://x.com/sample/status/1', 1, 1)
+	`, tweetID, mediaJSON); err != nil {
+		t.Fatalf("insert feed item: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO feed_media_jobs
+			(tweet_id, source_handle, status, media_kind, retry_count, created_at, updated_at)
+		VALUES (?, 'twitter_sample', 'processing', ?, 0, 1, 1)
+	`, tweetID, mediaKind); err != nil {
+		t.Fatalf("insert feed media job: %v", err)
+	}
+	return d
+}
+
+func newFeedMediaTestManager(d *db.DB, dataDir string) *Manager {
+	return &Manager{
+		db:           d,
+		cfg:          testCfg(dataDir),
+		downloader:   testDownloader(),
+		activity:     NewActivityRing(10),
+		feedActivity: NewActivityRing(10),
+	}
+}
+
+func readFeedMediaJobState(t *testing.T, d *db.DB, tweetID string) (status string, retryCount int, nextAttempt int64, kind string) {
+	t.Helper()
+	if err := d.QueryRow(`
+		SELECT status, retry_count, COALESCE(next_attempt_at_ms,0), COALESCE(last_error_kind,'')
+		FROM feed_media_jobs WHERE tweet_id=?
+	`, tweetID).Scan(&status, &retryCount, &nextAttempt, &kind); err != nil {
+		t.Fatalf("query feed media job: %v", err)
+	}
+	return status, retryCount, nextAttempt, kind
 }

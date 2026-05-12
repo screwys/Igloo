@@ -7,17 +7,25 @@ import (
 
 // FeedMediaJobRow is the DB-level representation of a feed media download job.
 type FeedMediaJobRow struct {
-	TweetID      string
-	TweetURL     string
-	SourceHandle string
-	Status       string // queued|processing|completed|failed|pruned
-	MediaKind    string // video|image|unknown
-	SlideCount   int
-	RetryCount   int
-	Priority     int
-	LastError    string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	TweetID         string
+	TweetURL        string
+	SourceHandle    string
+	Status          string // queued|processing|completed|failed|pruned
+	MediaKind       string // video|image|unknown
+	SlideCount      int
+	RetryCount      int
+	Priority        int
+	LastError       string
+	LastErrorKind   string
+	LeaseOwner      string
+	LeaseUntilMs    int64
+	NextAttemptAtMs int64
+	Tool            string
+	CookieLabel     string
+	StartedAtMs     int64
+	CompletedAtMs   int64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // EnqueueFeedMediaJobs inserts jobs with status='queued', ignoring duplicates.
@@ -51,70 +59,208 @@ func (db *DB) EnqueueFeedMediaJobs(jobs []FeedMediaJobRow) error {
 // ClaimFeedMediaBatch atomically selects up to limit queued jobs and marks them processing.
 // Returns the claimed jobs.
 func (db *DB) ClaimFeedMediaBatch(limit int) ([]FeedMediaJobRow, error) {
-	var claimed []FeedMediaJobRow
+	return db.ClaimFeedMediaBatchWithLease(LeaseOptions{
+		Owner: "feedmedia:legacy",
+		Limit: limit,
+	})
+}
 
+// ClaimFeedMediaBatchWithLease claims queued or expired processing jobs with a durable lease.
+func (db *DB) ClaimFeedMediaBatchWithLease(opts LeaseOptions) ([]FeedMediaJobRow, error) {
+	opts = normalizeLeaseOptions(opts, "queued", "processing")
+	var claimed []FeedMediaJobRow
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		rows, err := tx.Query(`
-			SELECT tweet_id, COALESCE(tweet_url,''), COALESCE(source_handle,''),
-			       COALESCE(status,''), COALESCE(media_kind,'unknown'),
-			       COALESCE(slide_count,0), COALESCE(retry_count,0),
-			       COALESCE(priority,0), COALESCE(last_error,'')
+		query := `
+			SELECT tweet_id
 			FROM feed_media_jobs
-			WHERE status = 'queued'
-			  AND (retry_count = 0 OR updated_at + (30 * (1 << MIN(retry_count, 10)) * 1000) < CAST(strftime('%s','now') AS INTEGER) * 1000)
+			WHERE ` + leaseEligibleSQL() + `
 			ORDER BY priority DESC, retry_count ASC, updated_at DESC
-			LIMIT ?
-	`, limit)
+			LIMIT ?`
+		ids, err := claimLeasedIDs(tx, "feed_media_jobs", "tweet_id", query, []any{
+			opts.NowMs, opts.StatusFrom, opts.NowMs, opts.StatusTo, opts.NowMs, opts.Limit,
+		}, opts)
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var j FeedMediaJobRow
-			if err := rows.Scan(
-				&j.TweetID, &j.TweetURL, &j.SourceHandle,
-				&j.Status, &j.MediaKind,
-				&j.SlideCount, &j.RetryCount,
-				&j.Priority, &j.LastError,
-			); err != nil {
-				return err
-			}
-			claimed = append(claimed, j)
-		}
-		if err := rows.Err(); err != nil {
-			return err
-		}
-
-		if len(claimed) == 0 {
-			return nil
-		}
-
-		// Mark all claimed rows as processing
-		now := time.Now().UnixMilli()
-		for _, j := range claimed {
+		for _, id := range ids {
 			if _, err := tx.Exec(
-				"UPDATE feed_media_jobs SET status='processing', updated_at=? WHERE tweet_id=?",
-				now, j.TweetID,
+				`UPDATE feed_media_jobs SET started_at_ms=?, updated_at=? WHERE tweet_id=?`,
+				opts.NowMs, opts.NowMs, id,
 			); err != nil {
 				return err
 			}
+			job, err := readFeedMediaJobTx(tx, id)
+			if err != nil {
+				return err
+			}
+			claimed = append(claimed, job)
 		}
 		return nil
 	})
-
 	return claimed, err
+}
+
+func readFeedMediaJobTx(tx *sql.Tx, tweetID string) (FeedMediaJobRow, error) {
+	var j FeedMediaJobRow
+	err := tx.QueryRow(`
+		SELECT tweet_id, COALESCE(tweet_url,''), COALESCE(source_handle,''),
+		       COALESCE(status,''), COALESCE(media_kind,'unknown'),
+		       COALESCE(slide_count,0), COALESCE(retry_count,0),
+		       COALESCE(priority,0), COALESCE(last_error,''),
+		       COALESCE(last_error_kind,''), COALESCE(lease_owner,''),
+		       COALESCE(lease_until_ms,0), COALESCE(next_attempt_at_ms,0),
+		       COALESCE(tool,''), COALESCE(cookie_label,''),
+		       COALESCE(started_at_ms,0), COALESCE(completed_at_ms,0)
+		FROM feed_media_jobs
+		WHERE tweet_id=?
+	`, tweetID).Scan(
+		&j.TweetID, &j.TweetURL, &j.SourceHandle,
+		&j.Status, &j.MediaKind,
+		&j.SlideCount, &j.RetryCount,
+		&j.Priority, &j.LastError,
+		&j.LastErrorKind, &j.LeaseOwner,
+		&j.LeaseUntilMs, &j.NextAttemptAtMs,
+		&j.Tool, &j.CookieLabel,
+		&j.StartedAtMs, &j.CompletedAtMs,
+	)
+	return j, err
 }
 
 // UpdateFeedMediaJobStatus updates the status, last_error, and retry_count for a job.
 func (db *DB) UpdateFeedMediaJobStatus(tweetID, status, lastError string, retryCount int) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		now := time.Now().UnixMilli()
+		completedAt := int64(0)
+		if status == "completed" || status == "failed" || status == "pruned" {
+			completedAt = now
+		}
 		_, err := tx.Exec(`
 			UPDATE feed_media_jobs
-			SET status=?, last_error=?, retry_count=?, updated_at=?
+			SET status=?,
+			    last_error=?,
+			    retry_count=?,
+			    next_attempt_at_ms=0,
+			    last_error_kind='',
+			    lease_owner='',
+			    lease_until_ms=0,
+			    completed_at_ms=?,
+			    updated_at=?
 			WHERE tweet_id=?
-		`, status, nilIfEmpty(lastError), retryCount, now, tweetID)
+		`, status, nilIfEmpty(lastError), retryCount, completedAt, now, tweetID)
+		return err
+	})
+}
+
+func (db *DB) CompleteFeedMediaJob(tweetID string, nowMs int64) error {
+	if nowMs == 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	return db.WithWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			UPDATE feed_media_jobs
+			   SET status='completed',
+			       retry_count=0,
+			       next_attempt_at_ms=0,
+			       last_error_kind='',
+			       last_error=NULL,
+			       lease_owner='',
+			       lease_until_ms=0,
+			       completed_at_ms=?,
+			       updated_at=?
+			 WHERE tweet_id=?
+		`, nowMs, nowMs, tweetID)
+		return err
+	})
+}
+
+func (db *DB) RetryFeedMediaJob(tweetID, kind, message string, delay time.Duration, nowMs int64) error {
+	if nowMs == 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	nextMs := nowMs + delay.Milliseconds()
+	if delay < 0 {
+		nextMs = nowMs
+	}
+	return db.WithWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			UPDATE feed_media_jobs
+			   SET status='queued',
+			       retry_count=retry_count+1,
+			       next_attempt_at_ms=?,
+			       last_error_kind=?,
+			       last_error=?,
+			       lease_owner='',
+			       lease_until_ms=0,
+			       completed_at_ms=0,
+			       updated_at=?
+			 WHERE tweet_id=?
+		`, nextMs, trimJobError(kind), trimJobError(message), nowMs, tweetID)
+		return err
+	})
+}
+
+func (db *DB) FailFeedMediaJob(tweetID, kind, message string, nowMs int64) error {
+	if nowMs == 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	return db.WithWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			UPDATE feed_media_jobs
+			   SET status='failed',
+			       retry_count=retry_count+1,
+			       next_attempt_at_ms=0,
+			       last_error_kind=?,
+			       last_error=?,
+			       lease_owner='',
+			       lease_until_ms=0,
+			       completed_at_ms=?,
+			       updated_at=?
+			 WHERE tweet_id=?
+		`, trimJobError(kind), trimJobError(message), nowMs, nowMs, tweetID)
+		return err
+	})
+}
+
+func (db *DB) PruneFeedMediaJob(tweetID, kind, message string, retryCount int, nowMs int64) error {
+	if nowMs == 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	return db.WithWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			UPDATE feed_media_jobs
+			   SET status='pruned',
+			       retry_count=?,
+			       next_attempt_at_ms=0,
+			       last_error_kind=?,
+			       last_error=?,
+			       lease_owner='',
+			       lease_until_ms=0,
+			       completed_at_ms=?,
+			       updated_at=?
+			 WHERE tweet_id=?
+		`, retryCount, trimJobError(kind), trimJobError(message), nowMs, nowMs, tweetID)
+		return err
+	})
+}
+
+func (db *DB) RenewFeedMediaJobLease(tweetID, owner string, nowMs int64, lease time.Duration) error {
+	if tweetID == "" || owner == "" {
+		return nil
+	}
+	if nowMs == 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	if lease <= 0 {
+		lease = defaultQueueLease
+	}
+	return db.WithWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			UPDATE feed_media_jobs
+			   SET lease_until_ms=?, updated_at=?
+			 WHERE tweet_id=?
+			   AND status='processing'
+			   AND lease_owner=?
+		`, nowMs+lease.Milliseconds(), nowMs, tweetID, owner)
 		return err
 	})
 }
@@ -133,6 +279,11 @@ func (db *DB) PromoteFeedMediaJobForTweet(tweetID string, priority int) (bool, e
 			       priority = MAX(COALESCE(priority, 0), ?),
 			       retry_count = 0,
 			       last_error = NULL,
+			       last_error_kind = '',
+			       next_attempt_at_ms = 0,
+			       lease_owner = '',
+			       lease_until_ms = 0,
+			       completed_at_ms = 0,
 			       updated_at = ?
 			 WHERE tweet_id = ?
 			   AND status IN ('queued', 'failed', 'pruned')
@@ -153,11 +304,22 @@ func (db *DB) PromoteFeedMediaJobForTweet(tweetID string, priority int) (bool, e
 // ResetStaleFeedMediaJobs resets feed_media_jobs left in processing state back to queued.
 // Returns the number of rows updated.
 func (db *DB) ResetStaleFeedMediaJobs() (int, error) {
+	return db.ResetStaleFeedMediaJobsAt(time.Now().UnixMilli())
+}
+
+func (db *DB) ResetStaleFeedMediaJobsAt(nowMs int64) (int, error) {
 	var affected int
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		res, err := tx.Exec(
-			"UPDATE feed_media_jobs SET status='queued', updated_at=? WHERE status='processing'",
-			time.Now().UnixMilli(),
+			`UPDATE feed_media_jobs
+			    SET status='queued',
+			        lease_owner='',
+			        lease_until_ms=0,
+			        updated_at=?
+			  WHERE status='processing'
+			    AND COALESCE(lease_until_ms,0) > 0
+			    AND lease_until_ms <= ?`,
+			nowMs, nowMs,
 		)
 		if err != nil {
 			return err
