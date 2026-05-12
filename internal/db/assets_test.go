@@ -12,12 +12,12 @@ func TestAssetInventoryUpsertIsIdempotent(t *testing.T) {
 	d := openWritableTestDB(t)
 
 	asset := Asset{
-		AssetID:        BuildManifestAssetID("twitter", "tweet", "tweet_asset_a", "post_media", 0),
+		AssetID:        BuildManifestAssetID("twitter", "tweet", "sample_tweet_asset_a", "post_media", 0),
 		AssetKind:      "post_media",
 		OwnerKind:      "tweet",
-		OwnerID:        "tweet_asset_a",
+		OwnerID:        "sample_tweet_asset_a",
 		MediaIndex:     0,
-		FilePath:       "media/twitter/sample/tweet_asset_a_0.jpg",
+		FilePath:       "media/twitter/sample/sample_tweet_asset_a_0.jpg",
 		ContentType:    "image/jpeg",
 		SizeBytes:      123,
 		State:          AssetStateReady,
@@ -27,7 +27,7 @@ func TestAssetInventoryUpsertIsIdempotent(t *testing.T) {
 		t.Fatalf("first UpsertAsset: %v", err)
 	}
 	asset.SizeBytes = 456
-	asset.FilePath = "media/twitter/sample/tweet_asset_a_0_new.jpg"
+	asset.FilePath = "media/twitter/sample/sample_tweet_asset_a_0_new.jpg"
 	if err := d.UpsertAsset(asset, 2000); err != nil {
 		t.Fatalf("second UpsertAsset: %v", err)
 	}
@@ -61,10 +61,10 @@ func TestRefreshAssetFileStateMarksReadyAndServerMissing(t *testing.T) {
 	writeDBTestFile(t, filepath.Join(d.dataDir, relPath), []byte("ready-image"))
 
 	ready := Asset{
-		AssetID:    BuildManifestAssetID("twitter", "tweet", "tweet_ready", "post_media", 0),
+		AssetID:    BuildManifestAssetID("twitter", "tweet", "sample_tweet_ready", "post_media", 0),
 		AssetKind:  "post_media",
 		OwnerKind:  "tweet",
-		OwnerID:    "tweet_ready",
+		OwnerID:    "sample_tweet_ready",
 		FilePath:   relPath,
 		MediaIndex: 0,
 		State:      AssetStateQueued,
@@ -84,10 +84,10 @@ func TestRefreshAssetFileStateMarksReadyAndServerMissing(t *testing.T) {
 	}
 
 	missing := Asset{
-		AssetID:    BuildManifestAssetID("twitter", "tweet", "tweet_missing", "post_media", 0),
+		AssetID:    BuildManifestAssetID("twitter", "tweet", "sample_tweet_missing", "post_media", 0),
 		AssetKind:  "post_media",
 		OwnerKind:  "tweet",
-		OwnerID:    "tweet_missing",
+		OwnerID:    "sample_tweet_missing",
 		FilePath:   filepath.Join("media", "twitter", "sample", "missing.jpg"),
 		MediaIndex: 0,
 		State:      AssetStateQueued,
@@ -119,8 +119,8 @@ func TestBackfillAssetsFromExistingPaths(t *testing.T) {
 	writeDBTestFile(t, filepath.Join(d.dataDir, "thumbnails", "dearrow", "youtube_vid.jpg"), []byte("dearrow-thumb"))
 	writeDBTestFile(t, filepath.Join(d.dataDir, "thumbnails", "previews", "youtube_vid", "track.json"), []byte(`{"frames":[]}`))
 	writeDBTestFile(t, filepath.Join(d.dataDir, "thumbnails", "previews", "youtube_vid", "sprite.jpg"), []byte("sprite"))
-	writeDBTestFile(t, filepath.Join(d.dataDir, "thumbnails", "avatars", "youtube_chan.jpg"), []byte("avatar"))
-	writeDBTestFile(t, filepath.Join(d.dataDir, "thumbnails", "banners", "youtube_chan.jpg"), []byte("banner"))
+	writeDBTestFile(t, filepath.Join(d.dataDir, "thumbnails", "avatars", "youtube_sample.jpg"), []byte("avatar"))
+	writeDBTestFile(t, filepath.Join(d.dataDir, "thumbnails", "banners", "youtube_sample.jpg"), []byte("banner"))
 
 	if err := d.ExecRaw(`
 		INSERT INTO media_files (owner_type, owner_id, media_index, file_path, media_type, source_url, file_size)
@@ -135,7 +135,7 @@ func TestBackfillAssetsFromExistingPaths(t *testing.T) {
 			video_id, channel_id, title, thumbnail_path, file_path, file_size,
 			published_at, dearrow_thumb_path
 		) VALUES (
-			'youtube_vid', 'youtube_chan', 'Video',
+			'youtube_vid', 'youtube_sample', 'Video',
 			'videos/youtube/vid.jpg', 'videos/youtube/vid.mp4', 12,
 			1234, 'thumbnails/dearrow/youtube_vid.jpg'
 		)
@@ -144,7 +144,7 @@ func TestBackfillAssetsFromExistingPaths(t *testing.T) {
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO channel_profiles (channel_id, platform, handle, avatar_url, banner_url, fetched_at)
-		VALUES ('youtube_chan', 'youtube', 'chan', 'https://example.test/avatar.jpg', 'https://example.test/banner.jpg', 1234)
+		VALUES ('youtube_sample', 'youtube', 'chan', 'https://example.test/avatar.jpg', 'https://example.test/banner.jpg', 1234)
 	`); err != nil {
 		t.Fatalf("insert profile: %v", err)
 	}
@@ -170,8 +170,8 @@ func TestBackfillAssetsFromExistingPaths(t *testing.T) {
 		{BuildManifestAssetID("youtube", "youtube_video", "youtube_vid", "subtitle", 0), "subtitle"},
 		{BuildManifestAssetID("youtube", "youtube_video", "youtube_vid", "preview_track_json", 0), "preview_track_json"},
 		{BuildManifestAssetID("youtube", "youtube_video", "youtube_vid", "preview_sprite", 0), "preview_sprite"},
-		{BuildManifestAssetID("youtube", "channel", "youtube_chan", "avatar", 0), "avatar"},
-		{BuildManifestAssetID("youtube", "channel", "youtube_chan", "banner", 0), "banner"},
+		{BuildManifestAssetID("youtube", "channel", "youtube_sample", "avatar", 0), "avatar"},
+		{BuildManifestAssetID("youtube", "channel", "youtube_sample", "banner", 0), "banner"},
 	}
 	for _, tt := range want {
 		got, err := d.GetAsset(tt.id, tt.kind)
@@ -187,14 +187,150 @@ func TestBackfillAssetsFromExistingPaths(t *testing.T) {
 	}
 }
 
+func TestBackfillAssetsFromExistingPathsPreservesRetryStateUntilFileReady(t *testing.T) {
+	d := openWritableTestDB(t)
+	missingRelPath := filepath.Join("media", "twitter", "sample", "retry_missing.jpg")
+	if err := d.ExecRaw(`
+		INSERT INTO media_files (owner_type, owner_id, media_index, file_path, media_type, source_url, file_size)
+		VALUES ('feed_media', 'sample_tweet_retry_missing', 0, ?, 'photo', 'https://example.test/missing.jpg', 25)
+	`, missingRelPath); err != nil {
+		t.Fatalf("insert missing media_files: %v", err)
+	}
+	missingID := BuildManifestAssetID("twitter", "tweet", "sample_tweet_retry_missing", "post_media", 0)
+	if err := d.UpsertAsset(Asset{
+		AssetID:         missingID,
+		AssetKind:       "post_media",
+		OwnerKind:       "tweet",
+		OwnerID:         "sample_tweet_retry_missing",
+		MediaIndex:      0,
+		FilePath:        missingRelPath,
+		State:           AssetStateFailed,
+		LastErrorKind:   "transient_http",
+		LastError:       "temporary fetch failure",
+		Attempts:        3,
+		NextAttemptAtMs: 9000,
+	}, 1000); err != nil {
+		t.Fatalf("seed failed asset: %v", err)
+	}
+
+	if _, err := d.BackfillAssetsFromExistingPaths(2000); err != nil {
+		t.Fatalf("BackfillAssetsFromExistingPaths missing: %v", err)
+	}
+	gotMissing, err := d.GetAsset(missingID, "post_media")
+	if err != nil {
+		t.Fatalf("GetAsset missing: %v", err)
+	}
+	if gotMissing.State != AssetStateFailed ||
+		gotMissing.LastErrorKind != "transient_http" ||
+		gotMissing.LastError != "temporary fetch failure" ||
+		gotMissing.Attempts != 3 ||
+		gotMissing.NextAttemptAtMs != 9000 {
+		t.Fatalf("backfill clobbered failed retry state: %+v", *gotMissing)
+	}
+
+	readyRelPath := filepath.Join("media", "twitter", "sample", "retry_ready.jpg")
+	writeDBTestFile(t, filepath.Join(d.dataDir, readyRelPath), []byte("ready after retry"))
+	if err := d.ExecRaw(`
+		INSERT INTO media_files (owner_type, owner_id, media_index, file_path, media_type, source_url, file_size)
+		VALUES ('feed_media', 'sample_tweet_retry_ready', 0, ?, 'photo', 'https://example.test/ready.jpg', 16)
+	`, readyRelPath); err != nil {
+		t.Fatalf("insert ready media_files: %v", err)
+	}
+	readyID := BuildManifestAssetID("twitter", "tweet", "sample_tweet_retry_ready", "post_media", 0)
+	if err := d.UpsertAsset(Asset{
+		AssetID:         readyID,
+		AssetKind:       "post_media",
+		OwnerKind:       "tweet",
+		OwnerID:         "sample_tweet_retry_ready",
+		MediaIndex:      0,
+		FilePath:        readyRelPath,
+		State:           AssetStatePermanentMissing,
+		LastErrorKind:   "permanent_http",
+		LastError:       "gone",
+		Attempts:        5,
+		NextAttemptAtMs: 12000,
+	}, 1000); err != nil {
+		t.Fatalf("seed permanent asset: %v", err)
+	}
+
+	if _, err := d.BackfillAssetsFromExistingPaths(3000); err != nil {
+		t.Fatalf("BackfillAssetsFromExistingPaths ready: %v", err)
+	}
+	gotReady, err := d.GetAsset(readyID, "post_media")
+	if err != nil {
+		t.Fatalf("GetAsset ready: %v", err)
+	}
+	if gotReady.State != AssetStateReady ||
+		gotReady.LastErrorKind != "" ||
+		gotReady.LastError != "" ||
+		gotReady.Attempts != 0 ||
+		gotReady.NextAttemptAtMs != 0 {
+		t.Fatalf("ready backfill did not clear retry state: %+v", *gotReady)
+	}
+}
+
+func TestListAndroidSyncAssetInventoryRowsFiltersOwnerKind(t *testing.T) {
+	d := openWritableTestDB(t)
+	sharedID := "shared_owner"
+	rows := []Asset{
+		{
+			AssetID:    BuildManifestAssetID("twitter", "tweet", sharedID, "post_media", 0),
+			AssetKind:  "post_media",
+			OwnerKind:  "tweet",
+			OwnerID:    sharedID,
+			MediaIndex: 0,
+			State:      AssetStateReady,
+		},
+		{
+			AssetID:    BuildManifestAssetID("twitter", "channel", sharedID, "avatar", 0),
+			AssetKind:  "avatar",
+			OwnerKind:  "channel",
+			OwnerID:    sharedID,
+			MediaIndex: 0,
+			State:      AssetStateReady,
+		},
+	}
+	for _, row := range rows {
+		if err := d.UpsertAsset(row, 1000); err != nil {
+			t.Fatalf("UpsertAsset %s: %v", row.AssetKind, err)
+		}
+	}
+
+	tweetRows, err := d.ListAndroidSyncAssetInventoryRows(AndroidSyncDesiredSets{
+		Tweets:      map[string]struct{}{sharedID: {}},
+		Videos:      map[string]struct{}{},
+		MediaVideos: map[string]struct{}{},
+		Channels:    map[string]struct{}{},
+	})
+	if err != nil {
+		t.Fatalf("ListAndroidSyncAssetInventoryRows tweets: %v", err)
+	}
+	if len(tweetRows) != 1 || tweetRows[0].OwnerKind != "tweet" || tweetRows[0].AssetKind != "post_media" {
+		t.Fatalf("tweet desired set returned wrong-domain rows: %+v", tweetRows)
+	}
+
+	channelRows, err := d.ListAndroidSyncAssetInventoryRows(AndroidSyncDesiredSets{
+		Tweets:      map[string]struct{}{},
+		Videos:      map[string]struct{}{},
+		MediaVideos: map[string]struct{}{},
+		Channels:    map[string]struct{}{sharedID: {}},
+	})
+	if err != nil {
+		t.Fatalf("ListAndroidSyncAssetInventoryRows channels: %v", err)
+	}
+	if len(channelRows) != 1 || channelRows[0].OwnerKind != "channel" || channelRows[0].AssetKind != "avatar" {
+		t.Fatalf("channel desired set returned wrong-domain rows: %+v", channelRows)
+	}
+}
+
 func TestInsertMediaFileMaintainsAssetInventory(t *testing.T) {
 	d := openWritableTestDB(t)
-	relPath := filepath.Join("media", "twitter", "sample", "tweet_insert_0.jpg")
+	relPath := filepath.Join("media", "twitter", "sample", "sample_tweet_insert_0.jpg")
 	writeDBTestFile(t, filepath.Join(d.dataDir, relPath), []byte("inserted-media"))
 
 	if err := d.InsertMediaFile(model.MediaFile{
 		OwnerType:  "feed_media",
-		OwnerID:    "tweet_insert",
+		OwnerID:    "sample_tweet_insert",
 		MediaIndex: 0,
 		FilePath:   relPath,
 		MediaType:  "photo",
@@ -204,7 +340,7 @@ func TestInsertMediaFileMaintainsAssetInventory(t *testing.T) {
 		t.Fatalf("InsertMediaFile: %v", err)
 	}
 
-	got, err := d.GetAsset(BuildManifestAssetID("twitter", "tweet", "tweet_insert", "post_media", 0), "post_media")
+	got, err := d.GetAsset(BuildManifestAssetID("twitter", "tweet", "sample_tweet_insert", "post_media", 0), "post_media")
 	if err != nil {
 		t.Fatalf("GetAsset: %v", err)
 	}
@@ -213,6 +349,82 @@ func TestInsertMediaFileMaintainsAssetInventory(t *testing.T) {
 	}
 	if got.State != AssetStateReady || got.FilePath != relPath || got.SourceURL != "https://example.test/insert.jpg" {
 		t.Fatalf("inserted media asset mismatch: %+v", *got)
+	}
+}
+
+func TestInsertMediaFileDuplicateKeepsAssetInventoryOnPersistedRow(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	firstRelPath := filepath.Join("media", "twitter", "sample", "tweet_duplicate_0.jpg")
+	secondRelPath := filepath.Join("media", "twitter", "sample", "tweet_duplicate_ignored_0.jpg")
+	writeDBTestFile(t, filepath.Join(d.dataDir, firstRelPath), []byte("first persisted media"))
+	writeDBTestFile(t, filepath.Join(d.dataDir, secondRelPath), []byte("ignored duplicate media"))
+
+	first := model.MediaFile{
+		OwnerType:  "feed_media",
+		OwnerID:    "sample_tweet_duplicate_asset",
+		MediaIndex: 0,
+		FilePath:   firstRelPath,
+		MediaType:  "photo",
+		SourceURL:  "https://example.test/first.jpg",
+		FileSize:   21,
+	}
+	duplicate := model.MediaFile{
+		OwnerType:  "feed_media",
+		OwnerID:    first.OwnerID,
+		MediaIndex: first.MediaIndex,
+		FilePath:   secondRelPath,
+		MediaType:  "photo",
+		SourceURL:  "https://example.test/second.jpg",
+		FileSize:   23,
+	}
+	if err := d.InsertMediaFile(first); err != nil {
+		t.Fatalf("first InsertMediaFile: %v", err)
+	}
+	if err := d.InsertMediaFile(duplicate); err != nil {
+		t.Fatalf("duplicate InsertMediaFile: %v", err)
+	}
+
+	assetID := BuildManifestAssetID("twitter", "tweet", first.OwnerID, "post_media", 0)
+	got, err := d.GetAsset(assetID, "post_media")
+	if err != nil {
+		t.Fatalf("GetAsset after single duplicate: %v", err)
+	}
+	if got == nil || got.FilePath != firstRelPath || got.SourceURL != first.SourceURL || got.SizeBytes != int64(len("first persisted media")) {
+		t.Fatalf("single duplicate asset diverged from persisted media_files row: %+v", got)
+	}
+
+	batchFirst := model.MediaFile{
+		OwnerType:  "feed_media",
+		OwnerID:    "sample_tweet_duplicate_batch_asset",
+		MediaIndex: 0,
+		FilePath:   firstRelPath,
+		MediaType:  "photo",
+		SourceURL:  "https://example.test/batch-first.jpg",
+		FileSize:   21,
+	}
+	batchDuplicate := model.MediaFile{
+		OwnerType:  "feed_media",
+		OwnerID:    batchFirst.OwnerID,
+		MediaIndex: batchFirst.MediaIndex,
+		FilePath:   secondRelPath,
+		MediaType:  "photo",
+		SourceURL:  "https://example.test/batch-second.jpg",
+		FileSize:   23,
+	}
+	if err := d.InsertMediaFileBatch([]model.MediaFile{batchFirst}); err != nil {
+		t.Fatalf("first InsertMediaFileBatch: %v", err)
+	}
+	if err := d.InsertMediaFileBatch([]model.MediaFile{batchDuplicate}); err != nil {
+		t.Fatalf("duplicate InsertMediaFileBatch: %v", err)
+	}
+	batchAssetID := BuildManifestAssetID("twitter", "tweet", batchFirst.OwnerID, "post_media", 0)
+	gotBatch, err := d.GetAsset(batchAssetID, "post_media")
+	if err != nil {
+		t.Fatalf("GetAsset after batch duplicate: %v", err)
+	}
+	if gotBatch == nil || gotBatch.FilePath != firstRelPath || gotBatch.SourceURL != batchFirst.SourceURL || gotBatch.SizeBytes != int64(len("first persisted media")) {
+		t.Fatalf("batch duplicate asset diverged from persisted media_files row: %+v", gotBatch)
 	}
 }
 

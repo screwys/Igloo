@@ -11,8 +11,9 @@ import (
 
 // InsertMediaFile inserts a single media file record, ignoring duplicates.
 func (db *DB) InsertMediaFile(mf model.MediaFile) error {
+	inserted := false
 	if err := db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+		res, err := tx.Exec(`
 			INSERT OR IGNORE INTO media_files
 				(owner_type, owner_id, media_index, file_path, media_type, source_url, file_size)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -20,11 +21,27 @@ func (db *DB) InsertMediaFile(mf model.MediaFile) error {
 			nilIfEmpty(mf.MediaType), nilIfEmpty(mf.SourceURL),
 			nilIfZero(mf.FileSize),
 		)
-		return err
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		inserted = n > 0
+		return nil
 	}); err != nil {
 		return err
 	}
-	return db.upsertMediaFileAsset(mf, time.Now().UnixMilli())
+	persisted := mf
+	if !inserted {
+		got, err := db.getMediaFileByIdentity(mf.OwnerType, mf.OwnerID, mf.MediaIndex)
+		if err != nil {
+			return err
+		}
+		persisted = got
+	}
+	return db.upsertMediaFileAsset(persisted, time.Now().UnixMilli())
 }
 
 // InsertMediaFileBatch inserts multiple media file records in a single transaction, ignoring duplicates.
@@ -33,6 +50,8 @@ func (db *DB) InsertMediaFileBatch(files []model.MediaFile) error {
 		return nil
 	}
 	repairOwners := make([]string, 0, len(files))
+	assetRows := make([]model.MediaFile, 0, len(files))
+	var ignored []mediaFileIdentity
 	if err := db.WithWrite(func(tx *sql.Tx) error {
 		stmt, err := tx.Prepare(`
 			INSERT OR IGNORE INTO media_files
@@ -47,25 +66,74 @@ func (db *DB) InsertMediaFileBatch(files []model.MediaFile) error {
 			if mf.OwnerType == "feed_media" && strings.TrimSpace(mf.OwnerID) != "" {
 				repairOwners = append(repairOwners, mf.OwnerID)
 			}
-			if _, err := stmt.Exec(
+			res, err := stmt.Exec(
 				mf.OwnerType, mf.OwnerID, mf.MediaIndex, mf.FilePath,
 				nilIfEmpty(mf.MediaType), nilIfEmpty(mf.SourceURL),
 				nilIfZero(mf.FileSize),
-			); err != nil {
+			)
+			if err != nil {
 				return err
+			}
+			n, err := res.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				assetRows = append(assetRows, mf)
+			} else {
+				ignored = append(ignored, mediaFileIdentity{
+					ownerType:  mf.OwnerType,
+					ownerID:    mf.OwnerID,
+					mediaIndex: mf.MediaIndex,
+				})
 			}
 		}
 		return nil
 	}); err != nil {
 		return err
 	}
+	for _, key := range ignored {
+		mf, err := db.getMediaFileByIdentity(key.ownerType, key.ownerID, key.mediaIndex)
+		if err != nil {
+			return err
+		}
+		assetRows = append(assetRows, mf)
+	}
 	nowMs := time.Now().UnixMilli()
-	for _, mf := range files {
+	for _, mf := range assetRows {
 		if err := db.upsertMediaFileAsset(mf, nowMs); err != nil {
 			return err
 		}
 	}
 	return db.repairVideoMediaShapesForIDs(repairOwners)
+}
+
+type mediaFileIdentity struct {
+	ownerType  string
+	ownerID    string
+	mediaIndex int
+}
+
+func (db *DB) getMediaFileByIdentity(ownerType, ownerID string, mediaIndex int) (model.MediaFile, error) {
+	var mf model.MediaFile
+	err := db.conn.QueryRow(`
+		SELECT owner_type, owner_id, media_index, file_path,
+		       COALESCE(media_type,''), COALESCE(source_url,''), COALESCE(file_size,0)
+		FROM media_files
+		WHERE owner_type = ? AND owner_id = ? AND media_index = ?
+	`, ownerType, ownerID, mediaIndex).Scan(
+		&mf.OwnerType,
+		&mf.OwnerID,
+		&mf.MediaIndex,
+		&mf.FilePath,
+		&mf.MediaType,
+		&mf.SourceURL,
+		&mf.FileSize,
+	)
+	if err == sql.ErrNoRows {
+		return mf, fmt.Errorf("media file not found after insert ignore: %s/%s[%d]", ownerType, ownerID, mediaIndex)
+	}
+	return mf, err
 }
 
 func (db *DB) upsertMediaFileAsset(mf model.MediaFile, nowMs int64) error {

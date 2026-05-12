@@ -1346,20 +1346,20 @@ func TestAndroidSyncMaterializesReadyAssetInventoryRows(t *testing.T) {
 	dataDir := srv.cfg.DataDir
 	now := time.Now().UnixMilli()
 
-	inventoryRel := filepath.Join("media", "twitter", "sample", "tweet_inventory_0.jpg")
+	inventoryRel := filepath.Join("media", "twitter", "sample", "sample_tweet_inventory_0.jpg")
 	mustWriteFile(t, filepath.Join(dataDir, inventoryRel), []byte("inventory-image"))
 	if err := srv.db.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, source_handle, author_handle, media_json, published_at, sync_seq)
-		VALUES ('tweet_inventory', 'sample', 'sample', '[{"type":"photo"}]', ?, 1)
+		VALUES ('sample_tweet_inventory', 'sample', 'sample', '[{"type":"photo"}]', ?, 1)
 	`, now); err != nil {
 		t.Fatalf("insert feed item: %v", err)
 	}
-	assetID := db.BuildManifestAssetID("twitter", "tweet", "tweet_inventory", "post_media", 0)
+	assetID := db.BuildManifestAssetID("twitter", "tweet", "sample_tweet_inventory", "post_media", 0)
 	if err := srv.db.UpsertAsset(db.Asset{
 		AssetID:        assetID,
 		AssetKind:      "post_media",
 		OwnerKind:      "tweet",
-		OwnerID:        "tweet_inventory",
+		OwnerID:        "sample_tweet_inventory",
 		MediaIndex:     0,
 		FilePath:       inventoryRel,
 		ContentType:    "image/jpeg",
@@ -1371,7 +1371,7 @@ func TestAndroidSyncMaterializesReadyAssetInventoryRows(t *testing.T) {
 
 	assets, _, err := srv.buildAndroidSyncAssets("", db.AndroidSyncDesiredSets{
 		Tweets: map[string]struct{}{
-			"tweet_inventory": {},
+			"sample_tweet_inventory": {},
 		},
 		Videos:      map[string]struct{}{},
 		MediaVideos: map[string]struct{}{},
@@ -1384,7 +1384,7 @@ func TestAndroidSyncMaterializesReadyAssetInventoryRows(t *testing.T) {
 		if asset.AssetID != assetID || asset.AssetKind != "post_media" {
 			continue
 		}
-		if asset.ServerURL != "/api/media/slide/tweet_inventory/0" || asset.Bucket != "twitter_media" || asset.OwnerKind != "tweet" {
+		if asset.ServerURL != "/api/media/slide/sample_tweet_inventory/0" || asset.Bucket != "twitter_media" || asset.OwnerKind != "tweet" {
 			t.Fatalf("inventory asset wire shape mismatch: %+v", asset)
 		}
 		if asset.State != "ready" || asset.SizeBytes != int64(len("inventory-image")) || asset.SHA256 == "" {
@@ -1393,6 +1393,69 @@ func TestAndroidSyncMaterializesReadyAssetInventoryRows(t *testing.T) {
 		return
 	}
 	t.Fatalf("inventory post_media asset missing: %+v", assets)
+}
+
+func TestAndroidSyncReadyLegacyMediaOverridesStaleMissingInventory(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	dataDir := srv.cfg.DataDir
+	now := time.Now().UnixMilli()
+
+	legacyRel := filepath.Join("media", "twitter", "sample", "sample_tweet_stale_inventory_0.jpg")
+	mustWriteFile(t, filepath.Join(dataDir, legacyRel), []byte("legacy-ready-image"))
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, source_handle, author_handle, media_json, published_at, sync_seq)
+		VALUES ('sample_tweet_stale_inventory', 'sample', 'sample', '[{"type":"photo"}]', ?, 1)
+	`, now); err != nil {
+		t.Fatalf("insert feed item: %v", err)
+	}
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_media_jobs (tweet_id, status, media_kind)
+		VALUES ('sample_tweet_stale_inventory', 'completed', 'image')
+	`); err != nil {
+		t.Fatalf("insert media job: %v", err)
+	}
+	if err := srv.db.ExecRaw(`
+		INSERT INTO media_files (owner_type, owner_id, media_index, file_path, media_type, source_url, file_size)
+		VALUES ('feed_media', 'sample_tweet_stale_inventory', 0, ?, 'photo', 'https://example.test/legacy.jpg', 18)
+	`, legacyRel); err != nil {
+		t.Fatalf("insert media file: %v", err)
+	}
+	assetID := db.BuildManifestAssetID("twitter", "tweet", "sample_tweet_stale_inventory", "post_media", 0)
+	if err := srv.db.UpsertAsset(db.Asset{
+		AssetID:        assetID,
+		AssetKind:      "post_media",
+		OwnerKind:      "tweet",
+		OwnerID:        "sample_tweet_stale_inventory",
+		MediaIndex:     0,
+		FilePath:       filepath.Join("media", "twitter", "sample", "missing_inventory_0.jpg"),
+		ContentType:    "image/jpeg",
+		State:          db.AssetStateServerMissing,
+		RequiredReason: "retention",
+	}, now-1000); err != nil {
+		t.Fatalf("upsert stale inventory asset: %v", err)
+	}
+
+	assets, _, err := srv.buildAndroidSyncAssets("", db.AndroidSyncDesiredSets{
+		Tweets: map[string]struct{}{
+			"sample_tweet_stale_inventory": {},
+		},
+		Videos:      map[string]struct{}{},
+		MediaVideos: map[string]struct{}{},
+		Channels:    map[string]struct{}{},
+	})
+	if err != nil {
+		t.Fatalf("build assets: %v", err)
+	}
+	for _, asset := range assets {
+		if asset.AssetID != assetID || asset.AssetKind != "post_media" {
+			continue
+		}
+		if asset.State != "ready" || asset.SizeBytes != int64(len("legacy-ready-image")) || asset.SHA256 == "" {
+			t.Fatalf("stale missing inventory overrode ready legacy media: %+v", asset)
+		}
+		return
+	}
+	t.Fatalf("post_media asset missing: %+v", assets)
 }
 
 func TestAndroidSyncPublishesProfileChannelAssetsOutsideRetentionSets(t *testing.T) {

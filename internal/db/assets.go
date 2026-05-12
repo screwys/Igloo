@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -127,21 +128,94 @@ func (db *DB) GetAsset(assetID, assetKind string) (*Asset, error) {
 // ListAndroidSyncAssetInventoryRows returns inventory rows that can contribute
 // directly to Android sync generation for the desired owner sets.
 func (db *DB) ListAndroidSyncAssetInventoryRows(sets AndroidSyncDesiredSets) ([]Asset, error) {
-	ownerIDs := map[string]struct{}{}
-	for _, id := range sets.SortedTweets() {
-		ownerIDs[id] = struct{}{}
+	ownerIDsByKind := map[string]map[string]struct{}{}
+	addOwner := func(ownerKind, ownerID string) {
+		ownerKind = strings.TrimSpace(ownerKind)
+		ownerID = strings.TrimSpace(ownerID)
+		if ownerKind == "" || ownerID == "" {
+			return
+		}
+		if ownerIDsByKind[ownerKind] == nil {
+			ownerIDsByKind[ownerKind] = map[string]struct{}{}
+		}
+		ownerIDsByKind[ownerKind][ownerID] = struct{}{}
 	}
+	for _, id := range sets.SortedTweets() {
+		addOwner("tweet", id)
+	}
+	videoIDs := map[string]struct{}{}
 	for _, id := range sets.SortedVideos() {
-		ownerIDs[id] = struct{}{}
+		videoIDs[id] = struct{}{}
 	}
 	for _, id := range sets.SortedMediaVideos() {
-		ownerIDs[id] = struct{}{}
+		videoIDs[id] = struct{}{}
+	}
+	videoOwnerKinds, err := db.androidSyncInventoryVideoOwnerKinds(sortedKeys(videoIDs))
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range sortedKeys(videoIDs) {
+		ownerKind := videoOwnerKinds[id]
+		if ownerKind == "" {
+			ownerKind = videoOwnerKind(id)
+		}
+		addOwner(ownerKind, id)
 	}
 	for _, id := range sets.SortedChannels() {
-		ownerIDs[id] = struct{}{}
+		addOwner("channel", id)
 	}
 	var out []Asset
-	for _, chunk := range stringChunks(sortedKeys(ownerIDs), 400) {
+	ownerKinds := make([]string, 0, len(ownerIDsByKind))
+	for ownerKind := range ownerIDsByKind {
+		ownerKinds = append(ownerKinds, ownerKind)
+	}
+	sort.Strings(ownerKinds)
+	for _, ownerKind := range ownerKinds {
+		for _, chunk := range stringChunks(sortedKeys(ownerIDsByKind[ownerKind]), 400) {
+			if len(chunk) == 0 {
+				continue
+			}
+			args := make([]any, 0, len(chunk)+1)
+			args = append(args, ownerKind)
+			for _, id := range chunk {
+				args = append(args, id)
+			}
+			rows, err := db.conn.Query(`
+				SELECT id, asset_id, asset_kind, owner_kind, owner_id, media_index,
+				       source_url, file_path, content_type, size_bytes, sha256, state,
+				       required_reason, last_error_kind, last_error, attempts,
+				       next_attempt_at_ms, created_at_ms, updated_at_ms
+				FROM assets
+				WHERE owner_kind = ?
+				  AND owner_id IN (`+placeholders(len(chunk))+`)
+				  AND state IN ('ready', 'server_missing')
+				ORDER BY id ASC
+			`, args...)
+			if err != nil {
+				return nil, err
+			}
+			for rows.Next() {
+				asset, err := scanAsset(rows)
+				if err != nil {
+					rows.Close()
+					return nil, err
+				}
+				out = append(out, asset)
+			}
+			if err := rows.Err(); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			rows.Close()
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+func (db *DB) androidSyncInventoryVideoOwnerKinds(videoIDs []string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, chunk := range stringChunks(videoIDs, 400) {
 		if len(chunk) == 0 {
 			continue
 		}
@@ -150,25 +224,24 @@ func (db *DB) ListAndroidSyncAssetInventoryRows(sets AndroidSyncDesiredSets) ([]
 			args[i] = id
 		}
 		rows, err := db.conn.Query(`
-			SELECT id, asset_id, asset_kind, owner_kind, owner_id, media_index,
-			       source_url, file_path, content_type, size_bytes, sha256, state,
-			       required_reason, last_error_kind, last_error, attempts,
-			       next_attempt_at_ms, created_at_ms, updated_at_ms
-			FROM assets
-			WHERE owner_id IN (`+placeholders(len(chunk))+`)
-			  AND state IN ('ready', 'server_missing')
-			ORDER BY id ASC
+			SELECT video_id, COALESCE(channel_id, '')
+			FROM videos
+			WHERE video_id IN (`+placeholders(len(chunk))+`)
 		`, args...)
 		if err != nil {
 			return nil, err
 		}
 		for rows.Next() {
-			asset, err := scanAsset(rows)
-			if err != nil {
+			var videoID, channelID string
+			if err := rows.Scan(&videoID, &channelID); err != nil {
 				rows.Close()
 				return nil, err
 			}
-			out = append(out, asset)
+			platform := videoPlatformFromChannelID(channelID)
+			if platform == "" {
+				platform = videoPlatform(videoID)
+			}
+			out[videoID] = videoOwnerKindForPlatform(platform)
 		}
 		if err := rows.Err(); err != nil {
 			rows.Close()
@@ -300,7 +373,7 @@ func (db *DB) backfillMediaFileAssets(nowMs int64) (int, error) {
 			State:          AssetStateQueued,
 			RequiredReason: "backfill",
 		})
-		if err := db.UpsertAsset(asset, nowMs); err != nil {
+		if err := db.upsertBackfilledAsset(asset, nowMs); err != nil {
 			return count, err
 		}
 		count++
@@ -317,7 +390,7 @@ func (db *DB) backfillMediaFileAssets(nowMs int64) (int, error) {
 				State:          AssetStateQueued,
 				RequiredReason: "backfill",
 			})
-			if err := db.UpsertAsset(thumb, nowMs); err != nil {
+			if err := db.upsertBackfilledAsset(thumb, nowMs); err != nil {
 				return count, err
 			}
 			count++
@@ -387,7 +460,7 @@ func (db *DB) backfillVideoAssets(nowMs int64) (int, error) {
 				continue
 			}
 			asset = db.assetFromLegacyPath(asset)
-			if err := db.UpsertAsset(asset, nowMs); err != nil {
+			if err := db.upsertBackfilledAsset(asset, nowMs); err != nil {
 				return count, err
 			}
 			count++
@@ -403,7 +476,7 @@ func (db *DB) backfillVideoAssets(nowMs int64) (int, error) {
 				State:          AssetStateQueued,
 				RequiredReason: "backfill",
 			})
-			if err := db.UpsertAsset(asset, nowMs); err != nil {
+			if err := db.upsertBackfilledAsset(asset, nowMs); err != nil {
 				return count, err
 			}
 			count++
@@ -430,7 +503,7 @@ func (db *DB) backfillVideoAssets(nowMs int64) (int, error) {
 				State:          AssetStateQueued,
 				RequiredReason: "backfill",
 			})
-			if err := db.UpsertAsset(asset, nowMs); err != nil {
+			if err := db.upsertBackfilledAsset(asset, nowMs); err != nil {
 				return count, err
 			}
 			count++
@@ -491,13 +564,61 @@ func (db *DB) backfillProfileAssets(nowMs int64) (int, error) {
 				continue
 			}
 			asset = db.assetFromLegacyPath(asset)
-			if err := db.UpsertAsset(asset, nowMs); err != nil {
+			if err := db.upsertBackfilledAsset(asset, nowMs); err != nil {
 				return count, err
 			}
 			count++
 		}
 	}
 	return count, rows.Err()
+}
+
+func (db *DB) upsertBackfilledAsset(asset Asset, nowMs int64) error {
+	asset = normalizeAsset(asset, nowMs)
+	if asset.State != AssetStateReady {
+		existing, err := db.getAssetByOwnerIdentity(asset.AssetKind, asset.OwnerKind, asset.OwnerID, asset.MediaIndex)
+		if err != nil {
+			return err
+		}
+		if existing != nil && preservesAssetRetryState(*existing) {
+			asset.State = existing.State
+			asset.LastErrorKind = existing.LastErrorKind
+			asset.LastError = existing.LastError
+			asset.Attempts = existing.Attempts
+			asset.NextAttemptAtMs = existing.NextAttemptAtMs
+		}
+	}
+	return db.UpsertAsset(asset, nowMs)
+}
+
+func (db *DB) getAssetByOwnerIdentity(assetKind, ownerKind, ownerID string, mediaIndex int) (*Asset, error) {
+	row := db.conn.QueryRow(`
+		SELECT id, asset_id, asset_kind, owner_kind, owner_id, media_index,
+		       source_url, file_path, content_type, size_bytes, sha256, state,
+		       required_reason, last_error_kind, last_error, attempts,
+		       next_attempt_at_ms, created_at_ms, updated_at_ms
+		FROM assets
+		WHERE asset_kind = ? AND owner_kind = ? AND owner_id = ? AND media_index = ?
+	`, strings.TrimSpace(assetKind), strings.TrimSpace(ownerKind), strings.TrimSpace(ownerID), mediaIndex)
+	asset, err := scanAsset(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &asset, nil
+}
+
+func preservesAssetRetryState(asset Asset) bool {
+	switch asset.State {
+	case AssetStateFailed, AssetStatePermanentMissing:
+		return true
+	}
+	return asset.Attempts > 0 ||
+		asset.NextAttemptAtMs > 0 ||
+		strings.TrimSpace(asset.LastErrorKind) != "" ||
+		strings.TrimSpace(asset.LastError) != ""
 }
 
 func (db *DB) assetFromLegacyPath(asset Asset) Asset {

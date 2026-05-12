@@ -1045,7 +1045,10 @@ func addAndroidSyncAsset(byKey map[string]model.AndroidSyncAsset, asset model.An
 		return
 	}
 	key := asset.AssetID + "\x00" + asset.AssetKind
-	if _, exists := byKey[key]; exists {
+	if existing, exists := byKey[key]; exists {
+		if existing.State == "server_missing" && asset.State != "server_missing" {
+			byKey[key] = asset
+		}
 		return
 	}
 	byKey[key] = asset
@@ -1531,12 +1534,16 @@ func (s *Server) androidSyncInventoryAssetPath(asset model.AndroidSyncAsset) (st
 		return "", false
 	}
 	if row.State != db.AssetStateReady {
-		return "", true
+		return "", false
 	}
 	if strings.TrimSpace(row.FilePath) == "" {
-		return "", true
+		return "", false
 	}
-	return resolveDataPath(s.cfg.DataDir, row.FilePath), true
+	path := resolveDataPath(s.cfg.DataDir, row.FilePath)
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
 }
 
 func (s *Server) ensureAndroidSyncPreviewTrackJSON(video model.Video) bool {
