@@ -3401,38 +3401,51 @@ select.input.themed-select-native {
 /* Keep subtitles above the floating Media Chrome controls when they appear. */
 .player-wrapper {
     --player-subtitles-offset-idle: 36px;
-    --player-subtitles-offset-controls: 96px;
+    --player-subtitles-offset-controls: 176px;
     --player-subtitles-offset-fullscreen-idle: 52px;
     --player-subtitles-offset-fullscreen-controls: 104px;
+    --player-subtitles-font-size: clamp(22px, 1.6vw, 34px);
     --player-subtitles-font-size-fullscreen: clamp(28px, 2vw, 52px);
 }
 
-/* Native browser subtitles (used by videojs_compat/native <video>). */
-.player-layout:fullscreen .player-wrapper video::cue,
-.player-layout:-webkit-full-screen .player-wrapper video::cue,
-.player-wrapper video:fullscreen::cue,
-.player-wrapper video:-webkit-full-screen::cue {
+/* App-rendered subtitles: shared layout across Firefox and Chromium. */
+.player-subtitle-overlay {
+    position: absolute;
+    left: 50%;
+    bottom: var(--player-subtitles-offset-idle);
+    transform: translateX(-50%);
+    width: min(92%, 980px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.28rem;
+    pointer-events: none;
+    z-index: 35;
+    text-align: center;
+}
+
+.player-subtitle-overlay.hidden {
+    display: none;
+}
+
+.player-subtitle-cue {
+    max-width: 100%;
+    padding: 0.1em 0.34em;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.78);
+    color: #fff;
+    font-size: var(--player-subtitles-font-size);
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: pre-wrap;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+
+.player-layout:fullscreen .player-wrapper .player-subtitle-cue,
+.player-layout:-webkit-full-screen .player-wrapper .player-subtitle-cue {
     font-size: var(--player-subtitles-font-size-fullscreen);
-}
-
-/* Emulated Video.js captions fallback (if real Video.js is used in future). */
-.player-wrapper #video-player.video-js .vjs-text-track-display {
-    bottom: var(--player-subtitles-offset-idle) !important;
-}
-
-.player-layout:fullscreen .player-wrapper #video-player.video-js .vjs-text-track-display,
-.player-layout:-webkit-full-screen .player-wrapper #video-player.video-js .vjs-text-track-display {
-    bottom: var(--player-subtitles-offset-fullscreen-idle) !important;
-}
-
-.player-wrapper .dashboard-media-controller[data-player-controls-visible="1"] #video-player.video-js .vjs-text-track-display,
-.player-wrapper #video-player.video-js:not(.vjs-user-inactive) .vjs-text-track-display {
-    bottom: var(--player-subtitles-offset-controls) !important;
-}
-
-.player-layout:fullscreen .player-wrapper .dashboard-media-controller[data-player-controls-visible="1"] #video-player.video-js .vjs-text-track-display,
-.player-layout:-webkit-full-screen .player-wrapper .dashboard-media-controller[data-player-controls-visible="1"] #video-player.video-js .vjs-text-track-display {
-    bottom: var(--player-subtitles-offset-fullscreen-controls) !important;
 }
 
 .dashboard-media-controller:not(.dashboard-media-controller-mini) media-play-button,

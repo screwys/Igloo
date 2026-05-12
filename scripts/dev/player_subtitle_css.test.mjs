@@ -13,31 +13,31 @@ function cssVar(name) {
 
 test("player subtitles use separate offsets for normal and fullscreen states", () => {
   assert.equal(cssVar("--player-subtitles-offset-idle"), 36);
-  assert.equal(cssVar("--player-subtitles-offset-controls"), 96);
+  assert.equal(cssVar("--player-subtitles-offset-controls"), 176);
   assert.equal(cssVar("--player-subtitles-offset-fullscreen-idle"), 52);
   assert.equal(cssVar("--player-subtitles-offset-fullscreen-controls"), 104);
+  assert.match(css, /--player-subtitles-font-size:\s*clamp\(22px,\s*1\.6vw,\s*34px\);/);
   assert.match(css, /--player-subtitles-font-size-fullscreen:\s*clamp\(28px,\s*2vw,\s*52px\);/);
 });
 
-test("fullscreen subtitles keep browser-native cue styling only", () => {
+test("player subtitle overlay is defined for shared browser rendering", () => {
   assert.match(
     css,
-    /\.player-layout:fullscreen \.player-wrapper #video-player\.video-js \.vjs-text-track-display[\s\S]*?--player-subtitles-offset-fullscreen-idle/,
+    /\.player-subtitle-overlay\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?width:\s*min\(92%,\s*980px\);/,
   );
   assert.match(
     css,
-    /\.player-layout:fullscreen \.player-wrapper video::cue[\s\S]*?--player-subtitles-font-size-fullscreen/,
+    /\.player-subtitle-cue\s*\{[\s\S]*?white-space:\s*pre-wrap;[\s\S]*?box-decoration-break:\s*clone;/,
   );
-  assert.doesNotMatch(css, /video::-webkit-media-text-track-display[\s\S]*?transform:/);
+  assert.match(
+    css,
+    /\.player-layout:fullscreen \.player-wrapper \.player-subtitle-cue[\s\S]*?--player-subtitles-font-size-fullscreen/,
+  );
 });
 
 test("control-visible subtitles use the app-owned controller state", () => {
   assert.ok(cssVar("--player-subtitles-offset-controls") > cssVar("--player-subtitles-offset-idle"));
   assert.ok(cssVar("--player-subtitles-offset-fullscreen-controls") > cssVar("--player-subtitles-offset-fullscreen-idle"));
-  assert.match(
-    css,
-    /\.player-layout:fullscreen \.player-wrapper \.dashboard-media-controller\[data-player-controls-visible="1"\] #video-player\.video-js \.vjs-text-track-display[\s\S]*?--player-subtitles-offset-fullscreen-controls/,
-  );
 });
 
 test("player controls hide from app-owned visibility state, not lingering focus", () => {
@@ -49,12 +49,18 @@ test("player controls hide from app-owned visibility state, not lingering focus"
   assert.doesNotMatch(css, /\.player-wrapper:not\(:hover\):not\(:focus-within\) #main-media-controller\[mediapaused\]/);
 });
 
-test("player JavaScript converts subtitle pixel offsets to cue line percentages", () => {
+test("player JavaScript renders subtitles in app-owned overlay", () => {
   assert.match(playerJs, /function subtitleOffsetPx\(\)/);
   assert.match(playerJs, /function setupPlayerControlsVisibility\(\)/);
   assert.match(playerJs, /data-player-controls-visible/);
+  assert.match(playerJs, /function ensureSubtitleOverlay\(\)/);
+  assert.match(playerJs, /function renderSubtitleOverlay\(\)/);
+  assert.match(playerJs, /function parseVtt\(/);
+  assert.match(playerJs, /fetch\(subtitleTrackUrl,\s*\{ credentials: 'same-origin' \}\)/);
+  assert.match(playerJs, /video\.addEventListener\('timeupdate', renderSubtitleOverlay/);
+  assert.match(playerJs, /player-subtitle-cue/);
   assert.match(playerJs, /--player-subtitles-offset-fullscreen-controls/);
-  assert.match(playerJs, /video\.getBoundingClientRect\(\)/);
-  assert.match(playerJs, /100 - \(baseOffset \/ height \* 100\)/);
-  assert.doesNotMatch(playerJs, /cue\.line = liftUp \? 88 : 96/);
+  assert.match(playerJs, /overlay\.style\.bottom = subtitleOffsetPx\(\) \+ 'px'/);
+  assert.doesNotMatch(playerJs, /cue\.line =/);
+  assert.doesNotMatch(playerJs, /textTracks && video\.textTracks\[0\]/);
 });

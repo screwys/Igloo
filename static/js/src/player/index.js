@@ -767,15 +767,10 @@ if (root && video) {
           var tracks = Array.isArray(payload && payload.tracks) ? payload.tracks : []
           if (!tracks.length) return
           var track = tracks.find(function (candidate) { return !(candidate && candidate.is_auto) }) || tracks[0]
-          var trackEl = doc.createElement('track')
-          trackEl.kind = 'subtitles'
-          trackEl.label = track.label || 'En'
-          trackEl.srclang = track.srclang || 'en'
-          trackEl.src = '/api/media/subtitle/' + encodeURIComponent(videoId) + '?track=' + encodeURIComponent(track.track_id || '')
-          video.appendChild(trackEl)
-
           var controller = doc.getElementById('main-media-controller')
-          var cueChangeBound = false
+          var subtitleOverlay = null
+          var subtitleCues = []
+          var subtitleTrackUrl = '/api/media/subtitle/' + encodeURIComponent(videoId) + '?track=' + encodeURIComponent(track.track_id || '')
           function readSubtitleOffsetPx(name, fallback) {
             if (!playerWrapper) return fallback
             var raw = window.getComputedStyle(playerWrapper).getPropertyValue(name)
@@ -787,48 +782,100 @@ if (root && video) {
             var controlsVisible = controllerControlsVisible(controller)
             if (isFs && controlsVisible) return readSubtitleOffsetPx('--player-subtitles-offset-fullscreen-controls', 104)
             if (isFs) return readSubtitleOffsetPx('--player-subtitles-offset-fullscreen-idle', 52)
-            if (controlsVisible) return readSubtitleOffsetPx('--player-subtitles-offset-controls', 96)
+            if (controlsVisible) return readSubtitleOffsetPx('--player-subtitles-offset-controls', 176)
             return readSubtitleOffsetPx('--player-subtitles-offset-idle', 36)
           }
-          function setCueLines() {
-            var tt = video.textTracks && video.textTracks[0]
-            if (!tt || !tt.cues) return
-            var rect = video.getBoundingClientRect()
-            var height = rect && rect.height > 0 ? rect.height : Number(video.clientHeight || 0)
-            if (!(height > 0)) return
-            var baseOffset = subtitleOffsetPx()
-            var line = Math.max(0, Math.min(100, 100 - (baseOffset / height * 100)))
-            for (var i = 0; i < tt.cues.length; i++) {
-              var cue = tt.cues[i]
-              try {
-                cue.snapToLines = false
-                cue.lineAlign = 'end'
-                cue.line = line
-              } catch (_) {}
-            }
+          function ensureSubtitleOverlay() {
+            if (subtitleOverlay) return subtitleOverlay
+            subtitleOverlay = doc.createElement('div')
+            subtitleOverlay.className = 'player-subtitle-overlay hidden'
+            subtitleOverlay.setAttribute('aria-hidden', 'true')
+            playerWrapper.appendChild(subtitleOverlay)
+            return subtitleOverlay
           }
-          function bindCueChange() {
-            if (cueChangeBound) return
-            var tt = video.textTracks && video.textTracks[0]
-            if (!tt || typeof tt.addEventListener !== 'function') return
-            cueChangeBound = true
-            tt.addEventListener('cuechange', function () {
-              if (ccOn) setCueLines()
+          function parseVttTimestamp(raw) {
+            var value = String(raw || '').trim()
+            if (!value) return Number.NaN
+            var parts = value.split(':')
+            if (parts.length < 2 || parts.length > 3) return Number.NaN
+            var secondsPart = parts.pop().replace(',', '.')
+            var minutesPart = parts.pop()
+            var hoursPart = parts.length ? parts.pop() : '0'
+            var hours = Number(hoursPart)
+            var minutes = Number(minutesPart)
+            var seconds = Number(secondsPart)
+            if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) return Number.NaN
+            return hours * 3600 + minutes * 60 + seconds
+          }
+          function parseVtt(text) {
+            var lines = String(text || '').replace(/\r/g, '').split('\n')
+            var cues = []
+            for (var i = 0; i < lines.length; i++) {
+              var line = lines[i].trim()
+              if (!line) continue
+              if (line === 'WEBVTT' || line.indexOf('Kind:') === 0 || line.indexOf('Language:') === 0) continue
+              if (line.indexOf('-->') < 0) continue
+              var parts = line.split('-->')
+              var start = parseVttTimestamp(parts[0])
+              var end = parseVttTimestamp(parts[1])
+              if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue
+              var cueLines = []
+              for (i = i + 1; i < lines.length; i++) {
+                var cueLine = lines[i]
+                if (!cueLine.trim()) break
+                cueLines.push(cueLine)
+              }
+              if (cueLines.length) cues.push({ start: start, end: end, text: cueLines.join('\n') })
+            }
+            return cues
+          }
+          function subtitleTextHtml(text) {
+            return escapeHtml(String(text || '').replace(/<[^>]+>/g, '')).replace(/\r?\n/g, '<br>')
+          }
+          function updateSubtitleOverlayPosition() {
+            var overlay = ensureSubtitleOverlay()
+            overlay.style.bottom = subtitleOffsetPx() + 'px'
+          }
+          function activeSubtitleCues() {
+            var time = Number(video.currentTime || 0)
+            if (!Number.isFinite(time)) return []
+            return subtitleCues.filter(function (cue) {
+              return time >= cue.start && time < cue.end
             })
+          }
+          function renderSubtitleOverlay() {
+            var overlay = ensureSubtitleOverlay()
+            updateSubtitleOverlayPosition()
+            var activeCues = ccOn ? activeSubtitleCues() : []
+            if (!activeCues.length) {
+              overlay.classList.add('hidden')
+              overlay.replaceChildren()
+              return
+            }
+            var html = []
+            for (var i = 0; i < activeCues.length; i++) {
+              var cue = activeCues[i]
+              html.push('<div class="player-subtitle-cue">' + subtitleTextHtml(cue && cue.text) + '</div>')
+            }
+            overlay.innerHTML = html.join('')
+            overlay.classList.remove('hidden')
           }
           if (controller) {
             new MutationObserver(function () {
-              if (ccOn) setCueLines()
+              renderSubtitleOverlay()
             }).observe(controller, { attributes: true, attributeFilter: ['userinactive', 'data-player-controls-visible'] })
             controller.addEventListener('playercontrolsvisibilitychange', function () {
-              if (ccOn) requestAnimationFrame(setCueLines)
+              requestAnimationFrame(renderSubtitleOverlay)
             })
           }
-          trackEl.addEventListener('load', function () { bindCueChange(); if (ccOn) setCueLines() })
-          video.addEventListener('loadedmetadata', function () { bindCueChange(); if (ccOn) setCueLines() })
-          window.addEventListener('resize', function () { if (ccOn) setCueLines() }, { passive: true })
-          doc.addEventListener('fullscreenchange', function () { if (ccOn) requestAnimationFrame(setCueLines) })
-          doc.addEventListener('webkitfullscreenchange', function () { if (ccOn) requestAnimationFrame(setCueLines) })
+          video.addEventListener('timeupdate', renderSubtitleOverlay, { passive: true })
+          video.addEventListener('seeked', renderSubtitleOverlay)
+          video.addEventListener('play', renderSubtitleOverlay)
+          video.addEventListener('pause', renderSubtitleOverlay)
+          video.addEventListener('loadedmetadata', renderSubtitleOverlay)
+          window.addEventListener('resize', function () { renderSubtitleOverlay() }, { passive: true })
+          doc.addEventListener('fullscreenchange', function () { requestAnimationFrame(renderSubtitleOverlay) })
+          doc.addEventListener('webkitfullscreenchange', function () { requestAnimationFrame(renderSubtitleOverlay) })
 
           ccBtn.classList.remove('hidden')
 
@@ -836,25 +883,29 @@ if (root && video) {
           // available through the CC button but do not appear by default.
           if (!(track && track.is_auto)) {
             ccOn = true
-            var ttInit = video.textTracks && video.textTracks[0]
-            if (ttInit) {
-              try { ttInit.mode = 'showing' } catch (_) {}
-            }
             ccBtn.classList.add('active')
             ccBtn.title = t('player_subtitles_on', 'Subtitles (On)')
-            bindCueChange()
-            setCueLines()
           }
+
+          fetch(subtitleTrackUrl, { credentials: 'same-origin' })
+            .then(function (resp) {
+              if (!resp.ok) throw new Error('subtitle fetch failed')
+              return resp.text()
+            })
+            .then(function (text) {
+              subtitleCues = parseVtt(text)
+              renderSubtitleOverlay()
+            })
+            .catch(function () {
+              subtitleCues = []
+              renderSubtitleOverlay()
+            })
 
           ccBtn.addEventListener('click', function () {
             ccOn = !ccOn
-            var tt = video.textTracks && video.textTracks[0]
-            if (tt) {
-              try { tt.mode = ccOn ? 'showing' : 'disabled' } catch (_) {}
-            }
             ccBtn.classList.toggle('active', ccOn)
             ccBtn.title = ccOn ? t('player_subtitles_on', 'Subtitles (On)') : t('player_subtitles', 'Subtitles')
-            if (ccOn) { bindCueChange(); setCueLines() }
+            renderSubtitleOverlay()
           })
         })
         .catch(function () {})
