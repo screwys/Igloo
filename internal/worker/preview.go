@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -60,6 +61,10 @@ func (m *Manager) runPreviewWorker(ctx context.Context) {
 // EnqueuePreview sends a non-blocking preview request.
 // If the channel is full the request is dropped and a warning is logged.
 func (m *Manager) EnqueuePreview(req PreviewRequest) {
+	if req.Duration <= 0 || !previewPathLooksVideo(req.FilePath) {
+		log.Printf("[preview] skipping preview for non-video media %s", req.VideoID)
+		return
+	}
 	select {
 	case m.previewChan <- req:
 	default:
@@ -71,6 +76,9 @@ func (m *Manager) EnqueuePreview(req PreviewRequest) {
 // Output goes to {DataDir}/thumbnails/previews/{videoID}/.
 // If the output files already exist the call is a no-op.
 func (m *Manager) generatePreview(ctx context.Context, req PreviewRequest) error {
+	if req.Duration <= 0 || !previewPathLooksVideo(req.FilePath) {
+		return nil
+	}
 	outDir := filepath.Join(m.cfg.DataDir, "thumbnails", "previews", req.VideoID)
 
 	spriteDst := filepath.Join(outDir, "sprite.jpg")
@@ -124,6 +132,7 @@ func (m *Manager) generatePreview(ctx context.Context, req PreviewRequest) error
 			"-frames:v", "1",
 			"-vf", "scale=160:90:force_original_aspect_ratio=decrease,pad=160:90:(ow-iw)/2:(oh-ih)/2:black",
 			"-q:v", "5",
+			"-strict", "unofficial",
 			outFrame,
 		}
 		cmd := exec.CommandContext(ctx, "ffmpeg", args...)
@@ -141,6 +150,7 @@ func (m *Manager) generatePreview(ctx context.Context, req PreviewRequest) error
 		"-i", filepath.Join(tmpDir, "frame_%03d.jpg"),
 		"-vf", fmt.Sprintf("tile=%dx%d", previewTileColumns, rows),
 		"-q:v", "4",
+		"-strict", "unofficial",
 		tmpSprite,
 	}
 	cmd := exec.CommandContext(ctx, "ffmpeg", stitchArgs...)
@@ -175,6 +185,9 @@ func (m *Manager) backfillPreviews(ctx context.Context) {
 	previewDir := filepath.Join(m.cfg.DataDir, "thumbnails", "previews")
 	var queued int
 	for _, c := range candidates {
+		if !previewPathLooksVideo(c.FilePath) {
+			continue
+		}
 		sprite := filepath.Join(previewDir, c.VideoID, "sprite.jpg")
 		track := filepath.Join(previewDir, c.VideoID, "track.json")
 		if fileExists(sprite) && fileExists(track) {
@@ -196,6 +209,15 @@ func (m *Manager) backfillPreviews(ctx context.Context) {
 	}
 	if queued > 0 {
 		log.Printf("[preview] backfill: enqueued %d videos missing previews", queued)
+	}
+}
+
+func previewPathLooksVideo(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".mp4", ".webm", ".mkv", ".mov", ".m4v":
+		return true
+	default:
+		return false
 	}
 }
 

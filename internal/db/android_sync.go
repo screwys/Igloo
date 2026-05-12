@@ -17,7 +17,7 @@ import (
 // AndroidSyncMaterializerVersion is part of the generation source hash. Bump
 // it when server-side asset materialization semantics change and Android needs
 // a fresh immutable generation even if the source rows did not change.
-const AndroidSyncMaterializerVersion = 30
+const AndroidSyncMaterializerVersion = 31
 
 // AndroidSyncDesiredSets is the server-owned content boundary for one
 // Android generation. The web materializer uses it to filter assets and build
