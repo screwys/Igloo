@@ -2,11 +2,14 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
 
 const defaultQueueLease = 5 * time.Minute
+
+var ErrQueueLeaseNotHeld = errors.New("queue lease not held")
 
 // LeaseOptions describes an atomic queue claim from one status into another.
 type LeaseOptions struct {
@@ -95,6 +98,17 @@ func claimLeasedIDs(tx *sql.Tx, table, keyColumn string, candidateQuery string, 
 		}
 	}
 	return claimed, nil
+}
+
+func requireQueueLeaseUpdate(res sql.Result, table, key, owner string) error {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("%w: %s %s owner %q", ErrQueueLeaseNotHeld, table, key, owner)
+	}
+	return nil
 }
 
 func jobRetryDelay(attempt int) time.Duration {

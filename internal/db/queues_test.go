@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -276,7 +277,7 @@ func TestRetryFeedMediaJobStoresNextAttemptAndErrorKind(t *testing.T) {
 		t.Fatalf("insert feed media job: %v", err)
 	}
 
-	if err := d.RetryFeedMediaJob("lease_feed_retry", "temporary", "network timeout", 5*time.Minute, now); err != nil {
+	if err := d.RetryFeedMediaJob("lease_feed_retry", "worker-a", "temporary", "network timeout", 5*time.Minute, now); err != nil {
 		t.Fatalf("RetryFeedMediaJob: %v", err)
 	}
 
@@ -291,5 +292,74 @@ func TestRetryFeedMediaJobStoresNextAttemptAndErrorKind(t *testing.T) {
 	}
 	if status != "queued" || retries != 3 || nextAttempt != now+int64((5*time.Minute)/time.Millisecond) || kind != "temporary" || msg != "network timeout" || owner != "" || leaseUntil != 0 {
 		t.Fatalf("retry row = status=%q retries=%d next=%d kind=%q msg=%q owner=%q lease=%d", status, retries, nextAttempt, kind, msg, owner, leaseUntil)
+	}
+}
+
+func TestFeedMediaTerminalUpdatesRequireCurrentLeaseOwner(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(*DB, string, int64) error
+	}{
+		{
+			name: "complete",
+			run: func(d *DB, tweetID string, now int64) error {
+				return d.CompleteFeedMediaJob(tweetID, "worker-stale", now)
+			},
+		},
+		{
+			name: "retry",
+			run: func(d *DB, tweetID string, now int64) error {
+				return d.RetryFeedMediaJob(tweetID, "worker-stale", "temporary", "network timeout", time.Minute, now)
+			},
+		},
+		{
+			name: "fail",
+			run: func(d *DB, tweetID string, now int64) error {
+				return d.FailFeedMediaJob(tweetID, "worker-stale", "auth", "login required", now)
+			},
+		},
+		{
+			name: "prune",
+			run: func(d *DB, tweetID string, now int64) error {
+				return d.PruneFeedMediaJob(tweetID, "worker-stale", "not_found", "gone", 4, now)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := openWritableTestDB(t)
+			now := time.Now().UnixMilli()
+			tweetID := "lease_terminal_" + tt.name
+			if err := d.ExecRaw(`
+				INSERT INTO feed_media_jobs
+					(tweet_id, status, media_kind, retry_count, lease_owner, lease_until_ms, created_at, updated_at)
+				VALUES (?, 'processing', 'image', 2, 'worker-current', ?, ?, ?)
+			`, tweetID, now+60000, now, now); err != nil {
+				t.Fatalf("insert feed media job: %v", err)
+			}
+
+			err := tt.run(d, tweetID, now)
+			if !errors.Is(err, ErrQueueLeaseNotHeld) {
+				t.Fatalf("%s stale owner error = %v, want ErrQueueLeaseNotHeld", tt.name, err)
+			}
+
+			var status, owner, kind, msg string
+			var retries int
+			var leaseUntil, nextAttempt, completedAt int64
+			if err := d.QueryRow(`
+				SELECT status, retry_count, COALESCE(next_attempt_at_ms,0),
+				       COALESCE(last_error_kind,''), COALESCE(last_error,''),
+				       COALESCE(lease_owner,''), COALESCE(lease_until_ms,0),
+				       COALESCE(completed_at_ms,0)
+				FROM feed_media_jobs WHERE tweet_id=?
+			`, tweetID).Scan(&status, &retries, &nextAttempt, &kind, &msg, &owner, &leaseUntil, &completedAt); err != nil {
+				t.Fatalf("query feed media job: %v", err)
+			}
+			if status != "processing" || retries != 2 || nextAttempt != 0 || kind != "" || msg != "" || owner != "worker-current" || leaseUntil == 0 || completedAt != 0 {
+				t.Fatalf("stale %s changed row: status=%q retries=%d next=%d kind=%q msg=%q owner=%q lease=%d completed=%d",
+					tt.name, status, retries, nextAttempt, kind, msg, owner, leaseUntil, completedAt)
+			}
+		})
 	}
 }

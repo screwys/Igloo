@@ -21,6 +21,11 @@ import (
 
 const downloadBatchSize = 10
 
+var (
+	downloadPoolLeaseDuration      = 5 * time.Minute
+	downloadPoolLeaseRenewInterval = downloadPoolLeaseDuration / 2
+)
+
 // platformSem limits concurrent downloads per platform. YouTube tolerates
 // parallel yt-dlp sessions; short-form platforms stay at 1 because we rely on
 // the pacing below to dodge per-IP/session rate limits.
@@ -75,9 +80,14 @@ func (m *Manager) runDownloadPool(ctx context.Context) {
 // processDownloadBatch claims pending download jobs and processes them
 // concurrently with per-platform semaphores.
 func (m *Manager) processDownloadBatch(ctx context.Context) {
-	jobs, err := m.db.ClaimDownloadBatch(downloadBatchSize)
+	owner := downloadPoolLeaseOwner()
+	jobs, err := m.db.ClaimDownloadBatchWithLease(db.LeaseOptions{
+		Owner:   owner,
+		LeaseMs: downloadPoolLeaseDuration.Milliseconds(),
+		Limit:   downloadBatchSize,
+	})
 	if err != nil {
-		log.Printf("[downloadpool] ClaimDownloadBatch: %v", err)
+		log.Printf("[downloadpool] ClaimDownloadBatchWithLease: %v", err)
 		return
 	}
 	if len(jobs) == 0 {
@@ -97,13 +107,13 @@ func (m *Manager) processDownloadBatch(ctx context.Context) {
 		ch, err := m.db.GetChannel(job.ChannelID)
 		if err != nil || ch == nil {
 			log.Printf("[downloadpool] GetChannel %s: %v", job.ChannelID, err)
-			m.failDownloadJob(job, "channel not found")
+			m.failDownloadJob(job, fmt.Errorf("channel not found"))
 			continue
 		}
 		if m.cfg != nil && !m.cfg.PlatformEnabled(ch.Platform) {
 			reason := fmt.Sprintf("platform disabled: %s", ch.Platform)
 			log.Printf("[downloadpool] skip %s: %s", job.VideoID, reason)
-			if err := m.db.UpdateDownloadQueueStatus(job.VideoID, "failed", reason, job.RetryCount); err != nil {
+			if err := m.db.UpdateDownloadQueueStatus(job.VideoID, job.LeaseOwner, "failed", reason, job.RetryCount+1, download.ErrorKindPermanentHTTP, download.ErrorStrategyPermanent, 0, time.Now().UnixMilli()); err != nil {
 				log.Printf("[downloadpool] UpdateDownloadQueueStatus %s: %v", job.VideoID, err)
 			}
 			continue
@@ -139,6 +149,10 @@ func (m *Manager) processDownloadBatch(ctx context.Context) {
 
 // downloadVideo handles a single video download job.
 func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadQueueRow, platform, sourceID, quality string, subtitles bool) {
+	if stopRenew := m.startDownloadQueueLeaseRenewal(ctx, job); stopRenew != nil {
+		defer stopRenew()
+	}
+
 	// Short-form rate-limit pacing: enforce minimum gap between downloads,
 	// measured from the END of the previous download attempt.
 	if platform == "tiktok" || platform == "instagram" {
@@ -167,7 +181,7 @@ func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadQueueRow, pl
 	videoDir := filepath.Join(m.cfg.DataDir, "media", platform, safeSourceID)
 	if err := os.MkdirAll(videoDir, 0o755); err != nil {
 		log.Printf("[downloadpool] mkdir %s: %v", videoDir, err)
-		m.failDownloadJob(job, fmt.Sprintf("mkdir: %v", err))
+		m.failDownloadJob(job, fmt.Errorf("mkdir: %w", err))
 		return
 	}
 
@@ -196,14 +210,14 @@ func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadQueueRow, pl
 	if dlErr != nil {
 		log.Printf("[downloadpool] download %s: %v", job.VideoID, dlErr)
 		m.EmitDownload(fmt.Sprintf("Failed: %s — %v", job.Title, dlErr), "error", job.ChannelID, platform)
-		m.failDownloadJob(job, fmt.Sprintf("download: %v", dlErr))
+		m.failDownloadJob(job, fmt.Errorf("download: %w", dlErr))
 		return
 	}
 
 	if len(paths) == 0 {
 		log.Printf("[downloadpool] no files returned for %s", job.VideoID)
 		m.EmitDownload(fmt.Sprintf("Failed: %s — no files returned", job.Title), "error", job.ChannelID, platform)
-		m.failDownloadJob(job, "no files returned")
+		m.failDownloadJob(job, fmt.Errorf("no files returned"))
 		return
 	}
 
@@ -295,12 +309,12 @@ func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadQueueRow, pl
 		publishedAt, metadataJSON, mediaKind, slideCount, false,
 	); err != nil {
 		log.Printf("[downloadpool] InsertVideo %s: %v", job.VideoID, err)
-		m.failDownloadJob(job, fmt.Sprintf("db insert: %v", err))
+		m.failDownloadJob(job, fmt.Errorf("db insert: %w", err))
 		return
 	}
 
 	// Remove from download queue.
-	if err := m.db.RemoveFromDownloadQueue(job.VideoID); err != nil {
+	if err := m.db.RemoveFromDownloadQueue(job.VideoID, job.LeaseOwner); err != nil {
 		log.Printf("[downloadpool] RemoveFromDownloadQueue %s: %v", job.VideoID, err)
 	}
 
@@ -362,19 +376,65 @@ func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadQueueRow, pl
 }
 
 // failDownloadJob increments retry count and either re-queues or fails permanently.
-func (m *Manager) failDownloadJob(job db.DownloadQueueRow, reason string) {
+func (m *Manager) failDownloadJob(job db.DownloadQueueRow, err error) {
+	if err == nil {
+		err = fmt.Errorf("unknown download error")
+	}
 	newRetry := job.RetryCount + 1
-	if newRetry >= 5 {
-		log.Printf("[downloadpool] job %s failed permanently after %d retries: %s", job.VideoID, newRetry, reason)
-		if err := m.db.UpdateDownloadQueueStatus(job.VideoID, "failed", reason, newRetry); err != nil {
+	classification := download.ClassifyFailure(err, nil, newRetry)
+	strategy := classification.Strategy
+	if classification.Permanent || newRetry >= 5 {
+		if strategy == "" {
+			strategy = download.ErrorStrategyPermanent
+		}
+		log.Printf("[downloadpool] job %s failed permanently after %d retries: %v", job.VideoID, newRetry, err)
+		if err := m.db.UpdateDownloadQueueStatus(job.VideoID, job.LeaseOwner, "failed", err.Error(), newRetry, classification.Kind, strategy, 0, time.Now().UnixMilli()); err != nil {
 			log.Printf("[downloadpool] UpdateDownloadQueueStatus %s: %v", job.VideoID, err)
 		}
 		atomic.AddInt32(&m.dlSessionFailed, 1)
 		return
 	}
-	log.Printf("[downloadpool] job %s queued for retry %d: %s", job.VideoID, newRetry, reason)
-	if err := m.db.UpdateDownloadQueueStatus(job.VideoID, "pending", reason, newRetry); err != nil {
+	if strategy == "" {
+		strategy = download.ErrorStrategyRetry
+	}
+	log.Printf("[downloadpool] job %s queued for retry %d: %v", job.VideoID, newRetry, err)
+	if err := m.db.UpdateDownloadQueueStatus(job.VideoID, job.LeaseOwner, "pending", err.Error(), newRetry, classification.Kind, strategy, classification.RetryDelay, time.Now().UnixMilli()); err != nil {
 		log.Printf("[downloadpool] UpdateDownloadQueueStatus %s: %v", job.VideoID, err)
+	}
+}
+
+func downloadPoolLeaseOwner() string {
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "unknown"
+	}
+	return fmt.Sprintf("downloadpool:%s:%d", host, os.Getpid())
+}
+
+func (m *Manager) startDownloadQueueLeaseRenewal(ctx context.Context, job db.DownloadQueueRow) func() {
+	if m == nil || m.db == nil || job.VideoID == "" || job.LeaseOwner == "" {
+		return nil
+	}
+	renewCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(downloadPoolLeaseRenewInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-renewCtx.Done():
+				return
+			case <-ticker.C:
+				if err := m.db.RenewDownloadQueueLease(job.VideoID, job.LeaseOwner, time.Now().UnixMilli(), downloadPoolLeaseDuration); err != nil {
+					log.Printf("[downloadpool] RenewDownloadQueueLease %s: %v", job.VideoID, err)
+				}
+			}
+		}
+	}()
+	return func() {
+		cancel()
+		<-done
 	}
 }
 

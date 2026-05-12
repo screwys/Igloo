@@ -10,6 +10,7 @@ import (
 
 type FailureClassification struct {
 	Kind       string
+	Strategy   string
 	Permanent  bool
 	RetryDelay time.Duration
 }
@@ -78,11 +79,14 @@ func ClassifyFailure(err error, output []byte, attempt int) FailureClassificatio
 	case ErrorKindAuth, ErrorKindPermanentHTTP, ErrorKindEmptyResult:
 		permanent = true
 	}
-	if err == nil || permanent {
-		return FailureClassification{Kind: kind, Permanent: permanent}
+	if err == nil {
+		return FailureClassification{Kind: kind}
+	}
+	if permanent {
+		return FailureClassification{Kind: kind, Strategy: ErrorStrategyPermanent, Permanent: true}
 	}
 	delay := retryDelayForKind(kind, attempt)
-	return FailureClassification{Kind: kind, RetryDelay: delay}
+	return FailureClassification{Kind: kind, Strategy: ErrorStrategyRetry, RetryDelay: delay}
 }
 
 func retryDelayForKind(kind string, attempt int) time.Duration {

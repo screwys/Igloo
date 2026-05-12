@@ -151,12 +151,12 @@ func (db *DB) UpdateFeedMediaJobStatus(tweetID, status, lastError string, retryC
 	})
 }
 
-func (db *DB) CompleteFeedMediaJob(tweetID string, nowMs int64) error {
+func (db *DB) CompleteFeedMediaJob(tweetID, owner string, nowMs int64) error {
 	if nowMs == 0 {
 		nowMs = time.Now().UnixMilli()
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+		res, err := tx.Exec(`
 			UPDATE feed_media_jobs
 			   SET status='completed',
 			       retry_count=0,
@@ -168,12 +168,17 @@ func (db *DB) CompleteFeedMediaJob(tweetID string, nowMs int64) error {
 			       completed_at_ms=?,
 			       updated_at=?
 			 WHERE tweet_id=?
-		`, nowMs, nowMs, tweetID)
-		return err
+			   AND status='processing'
+			   AND lease_owner=?
+		`, nowMs, nowMs, tweetID, owner)
+		if err != nil {
+			return err
+		}
+		return requireQueueLeaseUpdate(res, "feed_media_jobs", tweetID, owner)
 	})
 }
 
-func (db *DB) RetryFeedMediaJob(tweetID, kind, message string, delay time.Duration, nowMs int64) error {
+func (db *DB) RetryFeedMediaJob(tweetID, owner, kind, message string, delay time.Duration, nowMs int64) error {
 	if nowMs == 0 {
 		nowMs = time.Now().UnixMilli()
 	}
@@ -182,7 +187,7 @@ func (db *DB) RetryFeedMediaJob(tweetID, kind, message string, delay time.Durati
 		nextMs = nowMs
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+		res, err := tx.Exec(`
 			UPDATE feed_media_jobs
 			   SET status='queued',
 			       retry_count=retry_count+1,
@@ -194,17 +199,22 @@ func (db *DB) RetryFeedMediaJob(tweetID, kind, message string, delay time.Durati
 			       completed_at_ms=0,
 			       updated_at=?
 			 WHERE tweet_id=?
-		`, nextMs, trimJobError(kind), trimJobError(message), nowMs, tweetID)
-		return err
+			   AND status='processing'
+			   AND lease_owner=?
+		`, nextMs, trimJobError(kind), trimJobError(message), nowMs, tweetID, owner)
+		if err != nil {
+			return err
+		}
+		return requireQueueLeaseUpdate(res, "feed_media_jobs", tweetID, owner)
 	})
 }
 
-func (db *DB) FailFeedMediaJob(tweetID, kind, message string, nowMs int64) error {
+func (db *DB) FailFeedMediaJob(tweetID, owner, kind, message string, nowMs int64) error {
 	if nowMs == 0 {
 		nowMs = time.Now().UnixMilli()
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+		res, err := tx.Exec(`
 			UPDATE feed_media_jobs
 			   SET status='failed',
 			       retry_count=retry_count+1,
@@ -216,17 +226,22 @@ func (db *DB) FailFeedMediaJob(tweetID, kind, message string, nowMs int64) error
 			       completed_at_ms=?,
 			       updated_at=?
 			 WHERE tweet_id=?
-		`, trimJobError(kind), trimJobError(message), nowMs, nowMs, tweetID)
-		return err
+			   AND status='processing'
+			   AND lease_owner=?
+		`, trimJobError(kind), trimJobError(message), nowMs, nowMs, tweetID, owner)
+		if err != nil {
+			return err
+		}
+		return requireQueueLeaseUpdate(res, "feed_media_jobs", tweetID, owner)
 	})
 }
 
-func (db *DB) PruneFeedMediaJob(tweetID, kind, message string, retryCount int, nowMs int64) error {
+func (db *DB) PruneFeedMediaJob(tweetID, owner, kind, message string, retryCount int, nowMs int64) error {
 	if nowMs == 0 {
 		nowMs = time.Now().UnixMilli()
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+		res, err := tx.Exec(`
 			UPDATE feed_media_jobs
 			   SET status='pruned',
 			       retry_count=?,
@@ -238,8 +253,13 @@ func (db *DB) PruneFeedMediaJob(tweetID, kind, message string, retryCount int, n
 			       completed_at_ms=?,
 			       updated_at=?
 			 WHERE tweet_id=?
-		`, retryCount, trimJobError(kind), trimJobError(message), nowMs, nowMs, tweetID)
-		return err
+			   AND status='processing'
+			   AND lease_owner=?
+		`, retryCount, trimJobError(kind), trimJobError(message), nowMs, nowMs, tweetID, owner)
+		if err != nil {
+			return err
+		}
+		return requireQueueLeaseUpdate(res, "feed_media_jobs", tweetID, owner)
 	})
 }
 

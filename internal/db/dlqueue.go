@@ -20,20 +20,21 @@ type ChannelQueueRow struct {
 
 // DownloadQueueRow is the DB-level representation of a video download queue entry.
 type DownloadQueueRow struct {
-	VideoID         string
-	ChannelID       string
-	Title           string
-	Status          string
-	Priority        int
-	Error           string
-	RetryCount      int
-	PublishedAtMs   int64
-	LastErrorKind   string
-	LeaseOwner      string
-	LeaseUntilMs    int64
-	NextAttemptAtMs int64
-	Tool            string
-	CookieLabel     string
+	VideoID           string
+	ChannelID         string
+	Title             string
+	Status            string
+	Priority          int
+	Error             string
+	RetryCount        int
+	PublishedAtMs     int64
+	LastErrorKind     string
+	LastErrorStrategy string
+	LeaseOwner        string
+	LeaseUntilMs      int64
+	NextAttemptAtMs   int64
+	Tool              string
+	CookieLabel       string
 }
 
 // AddChannelToQueue inserts or updates a channel in the channel_queue with status='pending'.
@@ -181,7 +182,7 @@ func readDownloadQueueRowTx(tx *sql.Tx, videoID string) (DownloadQueueRow, error
 		SELECT video_id, channel_id, COALESCE(title,''), COALESCE(status,''),
 		       COALESCE(priority,0), COALESCE(error,''), COALESCE(retry_count,0),
 		       COALESCE(published_at_ms,0), COALESCE(last_error_kind,''),
-		       COALESCE(lease_owner,''), COALESCE(lease_until_ms,0),
+		       COALESCE(last_error_strategy,''), COALESCE(lease_owner,''), COALESCE(lease_until_ms,0),
 		       COALESCE(next_attempt_at_ms,0), COALESCE(tool,''),
 		       COALESCE(cookie_label,'')
 		FROM download_queue
@@ -190,7 +191,7 @@ func readDownloadQueueRowTx(tx *sql.Tx, videoID string) (DownloadQueueRow, error
 		&r.VideoID, &r.ChannelID, &r.Title, &r.Status,
 		&r.Priority, &r.Error, &r.RetryCount,
 		&r.PublishedAtMs, &r.LastErrorKind,
-		&r.LeaseOwner, &r.LeaseUntilMs,
+		&r.LastErrorStrategy, &r.LeaseOwner, &r.LeaseUntilMs,
 		&r.NextAttemptAtMs, &r.Tool,
 		&r.CookieLabel,
 	)
@@ -198,34 +199,86 @@ func readDownloadQueueRowTx(tx *sql.Tx, videoID string) (DownloadQueueRow, error
 }
 
 // UpdateDownloadQueueStatus updates the status, error message, and retry count for a download job.
-func (db *DB) UpdateDownloadQueueStatus(videoID, status, errMsg string, retryCount int) error {
+func (db *DB) UpdateDownloadQueueStatus(videoID, owner, status, errMsg string, retryCount int, errorKind, errorStrategy string, retryDelay time.Duration, nowMs int64) error {
+	if nowMs == 0 {
+		nowMs = time.Now().UnixMilli()
+	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		now := time.Now().UnixMilli()
 		nextAttempt := int64(0)
 		if status == "pending" && retryCount > 0 {
-			nextAttempt = now + jobRetryDelay(retryCount).Milliseconds()
+			if retryDelay <= 0 {
+				retryDelay = jobRetryDelay(retryCount)
+			}
+			nextAttempt = nowMs + retryDelay.Milliseconds()
 		}
-		_, err := tx.Exec(`
+		completedAt := int64(0)
+		if status == "completed" || status == "failed" {
+			completedAt = nowMs
+		}
+		if status == "completed" {
+			errMsg = ""
+			errorKind = ""
+			errorStrategy = ""
+		}
+		res, err := tx.Exec(`
 			UPDATE download_queue
 			SET status=?,
 			    error=?,
 			    retry_count=?,
 			    started_at=?,
+			    completed_at=?,
 			    next_attempt_at_ms=?,
-			    last_error_kind='',
+			    last_error_kind=?,
+			    last_error_strategy=?,
 			    lease_owner='',
 			    lease_until_ms=0
 			WHERE video_id=?
-		`, status, nilIfEmpty(errMsg), retryCount, now, nextAttempt, videoID)
-		return err
+			  AND status='processing'
+			  AND lease_owner=?
+		`, status, nilIfEmpty(errMsg), retryCount, nowMs, completedAt, nextAttempt, trimJobError(errorKind), trimJobError(errorStrategy), videoID, owner)
+		if err != nil {
+			return err
+		}
+		return requireQueueLeaseUpdate(res, "download_queue", videoID, owner)
 	})
 }
 
 // RemoveFromDownloadQueue deletes a video from the download_queue.
-func (db *DB) RemoveFromDownloadQueue(videoID string) error {
+func (db *DB) RemoveFromDownloadQueue(videoID, owner string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec("DELETE FROM download_queue WHERE video_id=?", videoID)
-		return err
+		res, err := tx.Exec(
+			"DELETE FROM download_queue WHERE video_id=? AND status='processing' AND lease_owner=?",
+			videoID, owner,
+		)
+		if err != nil {
+			return err
+		}
+		return requireQueueLeaseUpdate(res, "download_queue", videoID, owner)
+	})
+}
+
+func (db *DB) RenewDownloadQueueLease(videoID, owner string, nowMs int64, lease time.Duration) error {
+	if videoID == "" || owner == "" {
+		return nil
+	}
+	if nowMs == 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	if lease <= 0 {
+		lease = defaultQueueLease
+	}
+	return db.WithWrite(func(tx *sql.Tx) error {
+		res, err := tx.Exec(`
+			UPDATE download_queue
+			   SET lease_until_ms=?
+			 WHERE video_id=?
+			   AND status='processing'
+			   AND lease_owner=?
+		`, nowMs+lease.Milliseconds(), videoID, owner)
+		if err != nil {
+			return err
+		}
+		return requireQueueLeaseUpdate(res, "download_queue", videoID, owner)
 	})
 }
 

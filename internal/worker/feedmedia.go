@@ -86,7 +86,7 @@ func (m *Manager) processFeedMediaBatch(ctx context.Context) {
 			if m.cfg != nil && !m.cfg.PlatformEnabled(platform) {
 				reason := fmt.Sprintf("platform disabled: %s", platform)
 				log.Printf("[feedmedia] skip %s: %s", job.TweetID, reason)
-				if err := m.db.FailFeedMediaJob(job.TweetID, download.ErrorKindPermanentHTTP, reason, time.Now().UnixMilli()); err != nil {
+				if err := m.db.FailFeedMediaJob(job.TweetID, job.LeaseOwner, download.ErrorKindPermanentHTTP, reason, time.Now().UnixMilli()); err != nil {
 					log.Printf("[feedmedia] FailFeedMediaJob %s: %v", job.TweetID, err)
 				}
 				continue
@@ -125,7 +125,7 @@ func (m *Manager) processOneMediaJob(ctx context.Context, job db.FeedMediaJobRow
 	if !ok {
 		// Feed item was deleted — this is an orphaned job. Prune immediately.
 		log.Printf("[feedmedia] feed item not found, pruning job: %s", job.TweetID)
-		if err := m.db.PruneFeedMediaJob(job.TweetID, download.ErrorKindNotFound, "feed item not found", job.RetryCount, time.Now().UnixMilli()); err != nil {
+		if err := m.db.PruneFeedMediaJob(job.TweetID, job.LeaseOwner, download.ErrorKindNotFound, "feed item not found", job.RetryCount, time.Now().UnixMilli()); err != nil {
 			log.Printf("[feedmedia] PruneFeedMediaJob %s: %v", job.TweetID, err)
 		}
 		return
@@ -135,7 +135,7 @@ func (m *Manager) processOneMediaJob(ctx context.Context, job db.FeedMediaJobRow
 
 	if len(feedItem.Media) == 0 && len(feedItem.QuoteMedia) == 0 {
 		// Nothing to download — mark completed.
-		if err := m.db.CompleteFeedMediaJob(job.TweetID, time.Now().UnixMilli()); err != nil {
+		if err := m.db.CompleteFeedMediaJob(job.TweetID, job.LeaseOwner, time.Now().UnixMilli()); err != nil {
 			log.Printf("[feedmedia] CompleteFeedMediaJob %s: %v", job.TweetID, err)
 		}
 		return
@@ -145,7 +145,7 @@ func (m *Manager) processOneMediaJob(ctx context.Context, job db.FeedMediaJobRow
 	// of CDN URLs — original URLs were lost, nothing to download.
 	if allLocalProxyURLs(feedItem.Media) && allLocalProxyURLs(feedItem.QuoteMedia) {
 		log.Printf("[feedmedia] skipping %s: only local proxy URLs", job.TweetID)
-		if err := m.db.PruneFeedMediaJob(job.TweetID, download.ErrorKindPermanentHTTP, "local proxy URLs only", 0, time.Now().UnixMilli()); err != nil {
+		if err := m.db.PruneFeedMediaJob(job.TweetID, job.LeaseOwner, download.ErrorKindPermanentHTTP, "local proxy URLs only", 0, time.Now().UnixMilli()); err != nil {
 			log.Printf("[feedmedia] PruneFeedMediaJob %s: %v", job.TweetID, err)
 		}
 		return
@@ -271,7 +271,7 @@ func (m *Manager) processOneMediaJob(ctx context.Context, job db.FeedMediaJobRow
 		if allErrorsNotFound && newRetry > maxRetries404 {
 			log.Printf("[feedmedia] job %s pruned after %d retries (all 404): %v", job.TweetID, newRetry, lastErr)
 			m.EmitFeed("feed_media", fmt.Sprintf("Media pruned for %s (deleted from CDN)", job.TweetID), "warn")
-			if err := m.db.PruneFeedMediaJob(job.TweetID, download.ErrorKindNotFound, lastErr.Error(), newRetry, time.Now().UnixMilli()); err != nil {
+			if err := m.db.PruneFeedMediaJob(job.TweetID, job.LeaseOwner, download.ErrorKindNotFound, lastErr.Error(), newRetry, time.Now().UnixMilli()); err != nil {
 				log.Printf("[feedmedia] PruneFeedMediaJob %s: %v", job.TweetID, err)
 			}
 			return
@@ -280,7 +280,7 @@ func (m *Manager) processOneMediaJob(ctx context.Context, job db.FeedMediaJobRow
 		if classification.Permanent {
 			log.Printf("[feedmedia] job %s failed permanently after retry %d: %v", job.TweetID, newRetry, lastErr)
 			m.EmitFeed("feed_media", fmt.Sprintf("Media failed permanently for %s: %v", job.TweetID, lastErr), "error")
-			if err := m.db.FailFeedMediaJob(job.TweetID, classification.Kind, lastErr.Error(), time.Now().UnixMilli()); err != nil {
+			if err := m.db.FailFeedMediaJob(job.TweetID, job.LeaseOwner, classification.Kind, lastErr.Error(), time.Now().UnixMilli()); err != nil {
 				log.Printf("[feedmedia] FailFeedMediaJob %s: %v", job.TweetID, err)
 			}
 			return
@@ -288,7 +288,7 @@ func (m *Manager) processOneMediaJob(ctx context.Context, job db.FeedMediaJobRow
 
 		log.Printf("[feedmedia] job %s queued for retry %d: %v", job.TweetID, newRetry, lastErr)
 		m.EmitFeed("feed_media", fmt.Sprintf("Media failed for %s: %v", job.TweetID, lastErr), "error")
-		if err := m.db.RetryFeedMediaJob(job.TweetID, classification.Kind, lastErr.Error(), classification.RetryDelay, time.Now().UnixMilli()); err != nil {
+		if err := m.db.RetryFeedMediaJob(job.TweetID, job.LeaseOwner, classification.Kind, lastErr.Error(), classification.RetryDelay, time.Now().UnixMilli()); err != nil {
 			log.Printf("[feedmedia] RetryFeedMediaJob %s: %v", job.TweetID, err)
 		}
 		return
@@ -296,7 +296,7 @@ func (m *Manager) processOneMediaJob(ctx context.Context, job db.FeedMediaJobRow
 
 	log.Printf("[feedmedia] completed job %s (%d files, %s)", job.TweetID, len(mediaFiles), elapsed)
 	m.EmitFeed("feed_media", fmt.Sprintf("Downloaded media for %s (%s)", job.TweetID, job.MediaKind), "done")
-	if err := m.db.CompleteFeedMediaJob(job.TweetID, time.Now().UnixMilli()); err != nil {
+	if err := m.db.CompleteFeedMediaJob(job.TweetID, job.LeaseOwner, time.Now().UnixMilli()); err != nil {
 		log.Printf("[feedmedia] CompleteFeedMediaJob %s: %v", job.TweetID, err)
 	}
 	_ = m.db.RecordSyncChange("media_ready", job.TweetID,
@@ -309,7 +309,7 @@ func (m *Manager) processOneMediaJob(ctx context.Context, job db.FeedMediaJobRow
 func (m *Manager) failJob(job db.FeedMediaJobRow, reason string) {
 	newRetry := job.RetryCount + 1
 	log.Printf("[feedmedia] failJob %s queued for retry %d: %s", job.TweetID, newRetry, reason)
-	if err := m.db.RetryFeedMediaJob(job.TweetID, download.ErrorKindTemporary, reason, download.ClassifyFailure(fmt.Errorf("%s", reason), nil, newRetry).RetryDelay, time.Now().UnixMilli()); err != nil {
+	if err := m.db.RetryFeedMediaJob(job.TweetID, job.LeaseOwner, download.ErrorKindTemporary, reason, download.ClassifyFailure(fmt.Errorf("%s", reason), nil, newRetry).RetryDelay, time.Now().UnixMilli()); err != nil {
 		log.Printf("[feedmedia] failJob RetryFeedMediaJob %s: %v", job.TweetID, err)
 	}
 }

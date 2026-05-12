@@ -162,7 +162,7 @@ func TestProcessOneMediaJobStoresTransientRetryDelay(t *testing.T) {
 		t.Fatalf("set retry count: %v", err)
 	}
 	m := newFeedMediaTestManager(d, t.TempDir())
-	job := db.FeedMediaJobRow{TweetID: "feed_retry_transient", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: 1}
+	job := db.FeedMediaJobRow{TweetID: "feed_retry_transient", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: 1, LeaseOwner: "worker-a"}
 
 	before := time.Now().UnixMilli()
 	m.processOneMediaJob(t.Context(), job, t.TempDir())
@@ -180,7 +180,7 @@ func TestProcessOneMediaJobMarksPermanentFailure(t *testing.T) {
 	defer server.Close()
 	d := newFeedMediaWorkerTestDB(t, "feed_retry_permanent", server.URL+"/media.jpg", "photo")
 	m := newFeedMediaTestManager(d, t.TempDir())
-	job := db.FeedMediaJobRow{TweetID: "feed_retry_permanent", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: 0}
+	job := db.FeedMediaJobRow{TweetID: "feed_retry_permanent", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: 0, LeaseOwner: "worker-a"}
 
 	m.processOneMediaJob(t.Context(), job, t.TempDir())
 
@@ -197,7 +197,7 @@ func TestProcessOneMediaJobPrunesNotFoundAfterCap(t *testing.T) {
 	defer server.Close()
 	d := newFeedMediaWorkerTestDB(t, "feed_retry_not_found", server.URL+"/media.jpg", "photo")
 	m := newFeedMediaTestManager(d, t.TempDir())
-	job := db.FeedMediaJobRow{TweetID: "feed_retry_not_found", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: maxRetries404}
+	job := db.FeedMediaJobRow{TweetID: "feed_retry_not_found", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: maxRetries404, LeaseOwner: "worker-a"}
 
 	m.processOneMediaJob(t.Context(), job, t.TempDir())
 
@@ -219,7 +219,7 @@ func TestProcessOneMediaJobCompletionClearsLease(t *testing.T) {
 		t.Fatalf("set lease: %v", err)
 	}
 	m := newFeedMediaTestManager(d, t.TempDir())
-	job := db.FeedMediaJobRow{TweetID: "feed_retry_complete", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: 0}
+	job := db.FeedMediaJobRow{TweetID: "feed_retry_complete", SourceHandle: "twitter_sample", MediaKind: "image", RetryCount: 0, LeaseOwner: "worker-a"}
 
 	m.processOneMediaJob(t.Context(), job, t.TempDir())
 
@@ -245,11 +245,12 @@ func newFeedMediaWorkerTestDB(t *testing.T, tweetID, mediaURL, mediaKind string)
 	`, tweetID, mediaJSON); err != nil {
 		t.Fatalf("insert feed item: %v", err)
 	}
+	now := time.Now().UnixMilli()
 	if err := d.ExecRaw(`
 		INSERT INTO feed_media_jobs
-			(tweet_id, source_handle, status, media_kind, retry_count, created_at, updated_at)
-		VALUES (?, 'twitter_sample', 'processing', ?, 0, 1, 1)
-	`, tweetID, mediaKind); err != nil {
+			(tweet_id, source_handle, status, media_kind, retry_count, lease_owner, lease_until_ms, created_at, updated_at)
+		VALUES (?, 'twitter_sample', 'processing', ?, 0, 'worker-a', ?, 1, 1)
+	`, tweetID, mediaKind, now+60000); err != nil {
 		t.Fatalf("insert feed media job: %v", err)
 	}
 	return d
