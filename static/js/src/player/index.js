@@ -167,6 +167,109 @@ if (root && video) {
     if (speedMenu && speedMenu !== except) closePopupMenu(speedMenu, speedMenuBtn)
   }
 
+  function setupPlayerControlsVisibility() {
+    var controller = doc.getElementById('main-media-controller')
+    if (!controller || !playerWrapper) return null
+
+    var pointerInside = false
+    var keyboardNavigation = false
+    var hideTimer = 0
+    var readyAttr = 'data-player-controls-ready'
+    var visibleAttr = 'data-player-controls-visible'
+
+    function menuOpen() {
+      return !!(speedMenu && !speedMenu.classList.contains('hidden'))
+    }
+
+    function dispatchVisibilityChange(visible) {
+      controller.dispatchEvent(new CustomEvent('playercontrolsvisibilitychange', {
+        bubbles: true,
+        detail: { visible: visible },
+      }))
+    }
+
+    function setVisible(visible) {
+      var current = controller.getAttribute(visibleAttr) === '1'
+      if (current === visible && controller.hasAttribute(readyAttr)) return
+      controller.setAttribute(readyAttr, '1')
+      if (visible) {
+        controller.setAttribute(visibleAttr, '1')
+        controller.removeAttribute('userinactive')
+      } else {
+        controller.setAttribute(visibleAttr, '0')
+        controller.setAttribute('userinactive', '')
+      }
+      dispatchVisibilityChange(visible)
+    }
+
+    function clearHideTimer() {
+      if (!hideTimer) return
+      window.clearTimeout(hideTimer)
+      hideTimer = 0
+    }
+
+    function scheduleHide() {
+      clearHideTimer()
+      hideTimer = window.setTimeout(function () {
+        hideTimer = 0
+        if (!pointerInside && !menuOpen()) setVisible(false)
+      }, 80)
+    }
+
+    playerWrapper.addEventListener('pointerenter', function () {
+      pointerInside = true
+      keyboardNavigation = false
+      clearHideTimer()
+      setVisible(true)
+    })
+    playerWrapper.addEventListener('pointermove', function () {
+      pointerInside = true
+      keyboardNavigation = false
+      clearHideTimer()
+      setVisible(true)
+    }, { passive: true })
+    playerWrapper.addEventListener('pointerleave', function () {
+      pointerInside = false
+      scheduleHide()
+    })
+    playerWrapper.addEventListener('pointerdown', function () {
+      keyboardNavigation = false
+    }, true)
+    playerWrapper.addEventListener('focusin', function () {
+      if (keyboardNavigation) setVisible(true)
+    })
+    playerWrapper.addEventListener('focusout', function () {
+      if (!pointerInside) scheduleHide()
+    })
+    if (speedMenu) {
+      speedMenu.addEventListener('pointerenter', function () {
+        pointerInside = true
+        clearHideTimer()
+        setVisible(true)
+      })
+      speedMenu.addEventListener('pointerleave', function () {
+        pointerInside = false
+        scheduleHide()
+      })
+    }
+    doc.addEventListener('keydown', function (event) {
+      if (event.key === 'Tab') keyboardNavigation = true
+    }, true)
+
+    setVisible(false)
+    return {
+      isVisible: function () { return controller.getAttribute(visibleAttr) === '1' },
+    }
+  }
+
+  function controllerControlsVisible(controller) {
+    if (!controller) return false
+    if (controller.hasAttribute('data-player-controls-ready')) {
+      return controller.getAttribute('data-player-controls-visible') === '1'
+    }
+    return !controller.hasAttribute('userinactive')
+  }
+
   // --- Bookmark button state ---
 
   function updateBookmarkBtn(bookmarked) {
@@ -642,6 +745,7 @@ if (root && video) {
     setupSeekButtons()
     setupFullscreenButton()
     setupSpeedMenu()
+    setupPlayerControlsVisibility()
     setupChannelInlineActions()
     setupPlayerDateHover()
 
@@ -670,29 +774,61 @@ if (root && video) {
           trackEl.src = '/api/media/subtitle/' + encodeURIComponent(videoId) + '?track=' + encodeURIComponent(track.track_id || '')
           video.appendChild(trackEl)
 
-          // Shift cues above control bar when controls are visible.
-          // Use percentage + lineAlign='end' so the BOTTOM of the cue box
-          // lands at the target position — this way multi-line cues
-          // (YouTube auto-captions are often two lines) also clear the
-          // seekbar, instead of only lifting by one line-height.
           var controller = doc.getElementById('main-media-controller')
-          function setCueLines(liftUp) {
+          var cueChangeBound = false
+          function readSubtitleOffsetPx(name, fallback) {
+            if (!playerWrapper) return fallback
+            var raw = window.getComputedStyle(playerWrapper).getPropertyValue(name)
+            var value = parseFloat(raw)
+            return Number.isFinite(value) ? value : fallback
+          }
+          function subtitleOffsetPx() {
+            var isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement)
+            var controlsVisible = controllerControlsVisible(controller)
+            if (isFs && controlsVisible) return readSubtitleOffsetPx('--player-subtitles-offset-fullscreen-controls', 104)
+            if (isFs) return readSubtitleOffsetPx('--player-subtitles-offset-fullscreen-idle', 52)
+            if (controlsVisible) return readSubtitleOffsetPx('--player-subtitles-offset-controls', 96)
+            return readSubtitleOffsetPx('--player-subtitles-offset-idle', 36)
+          }
+          function setCueLines() {
             var tt = video.textTracks && video.textTracks[0]
             if (!tt || !tt.cues) return
+            var rect = video.getBoundingClientRect()
+            var height = rect && rect.height > 0 ? rect.height : Number(video.clientHeight || 0)
+            if (!(height > 0)) return
+            var baseOffset = subtitleOffsetPx()
+            var line = Math.max(0, Math.min(100, 100 - (baseOffset / height * 100)))
             for (var i = 0; i < tt.cues.length; i++) {
               var cue = tt.cues[i]
               try {
                 cue.snapToLines = false
                 cue.lineAlign = 'end'
-                cue.line = liftUp ? 88 : 96
+                cue.line = line
               } catch (_) {}
             }
           }
+          function bindCueChange() {
+            if (cueChangeBound) return
+            var tt = video.textTracks && video.textTracks[0]
+            if (!tt || typeof tt.addEventListener !== 'function') return
+            cueChangeBound = true
+            tt.addEventListener('cuechange', function () {
+              if (ccOn) setCueLines()
+            })
+          }
           if (controller) {
             new MutationObserver(function () {
-              if (ccOn) setCueLines(!controller.hasAttribute('userinactive'))
-            }).observe(controller, { attributes: true, attributeFilter: ['userinactive'] })
+              if (ccOn) setCueLines()
+            }).observe(controller, { attributes: true, attributeFilter: ['userinactive', 'data-player-controls-visible'] })
+            controller.addEventListener('playercontrolsvisibilitychange', function () {
+              if (ccOn) requestAnimationFrame(setCueLines)
+            })
           }
+          trackEl.addEventListener('load', function () { bindCueChange(); if (ccOn) setCueLines() })
+          video.addEventListener('loadedmetadata', function () { bindCueChange(); if (ccOn) setCueLines() })
+          window.addEventListener('resize', function () { if (ccOn) setCueLines() }, { passive: true })
+          doc.addEventListener('fullscreenchange', function () { if (ccOn) requestAnimationFrame(setCueLines) })
+          doc.addEventListener('webkitfullscreenchange', function () { if (ccOn) requestAnimationFrame(setCueLines) })
 
           ccBtn.classList.remove('hidden')
 
@@ -706,7 +842,8 @@ if (root && video) {
             }
             ccBtn.classList.add('active')
             ccBtn.title = t('player_subtitles_on', 'Subtitles (On)')
-            if (controller) setCueLines(!controller.hasAttribute('userinactive'))
+            bindCueChange()
+            setCueLines()
           }
 
           ccBtn.addEventListener('click', function () {
@@ -717,7 +854,7 @@ if (root && video) {
             }
             ccBtn.classList.toggle('active', ccOn)
             ccBtn.title = ccOn ? t('player_subtitles_on', 'Subtitles (On)') : t('player_subtitles', 'Subtitles')
-            if (ccOn && controller) setCueLines(!controller.hasAttribute('userinactive'))
+            if (ccOn) { bindCueChange(); setCueLines() }
           })
         })
         .catch(function () {})
