@@ -267,4 +267,3 @@ CREATE TABLE videos ( id INTEGER PRIMARY KEY AUTOINCREMENT, video_id TEXT UNIQUE
 
 -- table: watch_history on watch_history
 CREATE TABLE watch_history ( user_id TEXT NOT NULL, video_id TEXT NOT NULL, playback_position REAL DEFAULT 0, duration REAL, progress_updated_at_ms INTEGER, progress_source TEXT, last_watched INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, video_id) );
-
