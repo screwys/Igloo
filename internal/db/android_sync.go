@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/screwys/igloo/internal/model"
 )
@@ -18,6 +19,45 @@ import (
 // it when server-side asset materialization semantics change and Android needs
 // a fresh immutable generation even if the source rows did not change.
 const AndroidSyncMaterializerVersion = 30
+
+const (
+	defaultAndroidSyncKeepReadyGenerations = 2
+	defaultAndroidSyncKeepMinAge           = 6 * time.Hour
+	defaultAndroidSyncKeepHealthReports    = 200
+	defaultAndroidSyncPruneGenerationBatch = 50
+	defaultAndroidSyncPruneRowBatch        = 2000
+	defaultAndroidSyncPruneHealthBatch     = 2000
+)
+
+type AndroidSyncPrunePolicy struct {
+	KeepReadyGenerations int
+	KeepMinAge           time.Duration
+	KeepHealthReports    int
+	ProtectGenerationID  string
+	MaxGenerationDeletes int
+	MaxItemDeletes       int
+	MaxAssetDeletes      int
+	MaxHealthDeletes     int
+}
+
+type AndroidSyncPruneResult struct {
+	GenerationsDeleted   int
+	ItemsDeleted         int
+	AssetsDeleted        int
+	HealthReportsDeleted int
+}
+
+func DefaultAndroidSyncPrunePolicy() AndroidSyncPrunePolicy {
+	return AndroidSyncPrunePolicy{
+		KeepReadyGenerations: defaultAndroidSyncKeepReadyGenerations,
+		KeepMinAge:           defaultAndroidSyncKeepMinAge,
+		KeepHealthReports:    defaultAndroidSyncKeepHealthReports,
+		MaxGenerationDeletes: defaultAndroidSyncPruneGenerationBatch,
+		MaxItemDeletes:       defaultAndroidSyncPruneRowBatch,
+		MaxAssetDeletes:      defaultAndroidSyncPruneRowBatch,
+		MaxHealthDeletes:     defaultAndroidSyncPruneHealthBatch,
+	}
+}
 
 // AndroidSyncDesiredSets is the server-owned content boundary for one
 // Android generation. The web materializer uses it to filter assets and build
@@ -842,7 +882,7 @@ func (db *DB) GetLatestAndroidSyncGeneration() (*model.AndroidSyncGeneration, er
 		       total_bytes, content_counts_json, asset_counts_json
 		FROM android_sync_generations
 		WHERE status = 'ready'
-		ORDER BY created_at_ms DESC
+		ORDER BY created_at_ms DESC, generation_id DESC
 		LIMIT 1
 	`)
 }
@@ -964,6 +1004,179 @@ func (db *DB) StoreAndroidSyncGeneration(gen model.AndroidSyncGeneration, items 
 		}
 		return nil
 	})
+}
+
+func (db *DB) PruneAndroidSyncState(nowMs int64, policy AndroidSyncPrunePolicy) (AndroidSyncPruneResult, error) {
+	policy = normalizeAndroidSyncPrunePolicy(policy)
+	cutoffMs := nowMs - int64(policy.KeepMinAge/time.Millisecond)
+	var result AndroidSyncPruneResult
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		itemsDeleted, err := execRowsAffected(tx, `
+			DELETE FROM android_sync_items
+			WHERE rowid IN (
+				SELECT i.rowid
+				FROM android_sync_items i
+				INNER JOIN android_sync_generations g ON g.generation_id = i.generation_id
+				WHERE g.status = 'ready'
+				  AND g.created_at_ms < ?
+				  AND g.generation_id != ?
+				  AND g.generation_id NOT IN (
+					SELECT generation_id
+					FROM android_sync_generations
+					WHERE status = 'ready'
+					ORDER BY created_at_ms DESC, generation_id DESC
+					LIMIT ?
+				  )
+				ORDER BY g.created_at_ms ASC, g.generation_id ASC, i.seq ASC
+				LIMIT ?
+			)
+		`, cutoffMs, policy.ProtectGenerationID, policy.KeepReadyGenerations, policy.MaxItemDeletes)
+		if err != nil {
+			return err
+		}
+		result.ItemsDeleted = itemsDeleted
+
+		assetsDeleted, err := execRowsAffected(tx, `
+			DELETE FROM android_sync_assets
+			WHERE rowid IN (
+				SELECT a.rowid
+				FROM android_sync_assets a
+				INNER JOIN android_sync_generations g ON g.generation_id = a.generation_id
+				WHERE g.status = 'ready'
+				  AND g.created_at_ms < ?
+				  AND g.generation_id != ?
+				  AND g.generation_id NOT IN (
+					SELECT generation_id
+					FROM android_sync_generations
+					WHERE status = 'ready'
+					ORDER BY created_at_ms DESC, generation_id DESC
+					LIMIT ?
+				  )
+				ORDER BY g.created_at_ms ASC, g.generation_id ASC, a.seq ASC
+				LIMIT ?
+			)
+		`, cutoffMs, policy.ProtectGenerationID, policy.KeepReadyGenerations, policy.MaxAssetDeletes)
+		if err != nil {
+			return err
+		}
+		result.AssetsDeleted = assetsDeleted
+
+		healthForGenerationsDeleted, err := execRowsAffected(tx, `
+			DELETE FROM android_sync_health_reports
+			WHERE id IN (
+				SELECT h.id
+				FROM android_sync_health_reports h
+				INNER JOIN android_sync_generations g ON g.generation_id = h.generation_id
+				WHERE g.status = 'ready'
+				  AND g.created_at_ms < ?
+				  AND g.generation_id != ?
+				  AND g.generation_id NOT IN (
+					SELECT generation_id
+					FROM android_sync_generations
+					WHERE status = 'ready'
+					ORDER BY created_at_ms DESC, generation_id DESC
+					LIMIT ?
+				  )
+				ORDER BY g.created_at_ms ASC, g.generation_id ASC, h.reported_at_ms ASC, h.id ASC
+				LIMIT ?
+			)
+		`, cutoffMs, policy.ProtectGenerationID, policy.KeepReadyGenerations, policy.MaxHealthDeletes)
+		if err != nil {
+			return err
+		}
+		result.HealthReportsDeleted = healthForGenerationsDeleted
+
+		generationsDeleted, err := execRowsAffected(tx, `
+			DELETE FROM android_sync_generations
+			WHERE generation_id IN (
+				SELECT g.generation_id
+				FROM android_sync_generations g
+				WHERE g.status = 'ready'
+				  AND g.created_at_ms < ?
+				  AND g.generation_id != ?
+				  AND g.generation_id NOT IN (
+					SELECT generation_id
+					FROM android_sync_generations
+					WHERE status = 'ready'
+					ORDER BY created_at_ms DESC, generation_id DESC
+					LIMIT ?
+				  )
+				  AND NOT EXISTS (SELECT 1 FROM android_sync_items i WHERE i.generation_id = g.generation_id)
+				  AND NOT EXISTS (SELECT 1 FROM android_sync_assets a WHERE a.generation_id = g.generation_id)
+				  AND NOT EXISTS (SELECT 1 FROM android_sync_health_reports h WHERE h.generation_id = g.generation_id)
+				ORDER BY g.created_at_ms ASC, g.generation_id ASC
+				LIMIT ?
+			)
+		`, cutoffMs, policy.ProtectGenerationID, policy.KeepReadyGenerations, policy.MaxGenerationDeletes)
+		if err != nil {
+			return err
+		}
+		result.GenerationsDeleted = generationsDeleted
+
+		healthDeleteLimit := policy.MaxHealthDeletes - result.HealthReportsDeleted
+		if healthDeleteLimit > 0 {
+			healthOverflowDeleted, err := execRowsAffected(tx, `
+				DELETE FROM android_sync_health_reports
+				WHERE id IN (
+					SELECT id
+					FROM android_sync_health_reports
+					WHERE id NOT IN (
+						SELECT id
+						FROM android_sync_health_reports
+						ORDER BY reported_at_ms DESC, id DESC
+						LIMIT ?
+					)
+					ORDER BY reported_at_ms ASC, id ASC
+					LIMIT ?
+				)
+			`, policy.KeepHealthReports, healthDeleteLimit)
+			if err != nil {
+				return err
+			}
+			result.HealthReportsDeleted += healthOverflowDeleted
+		}
+		return nil
+	})
+	return result, err
+}
+
+func normalizeAndroidSyncPrunePolicy(policy AndroidSyncPrunePolicy) AndroidSyncPrunePolicy {
+	defaults := DefaultAndroidSyncPrunePolicy()
+	if policy.KeepReadyGenerations <= 0 {
+		policy.KeepReadyGenerations = defaults.KeepReadyGenerations
+	}
+	if policy.KeepMinAge <= 0 {
+		policy.KeepMinAge = defaults.KeepMinAge
+	}
+	if policy.KeepHealthReports <= 0 {
+		policy.KeepHealthReports = defaults.KeepHealthReports
+	}
+	policy.ProtectGenerationID = strings.TrimSpace(policy.ProtectGenerationID)
+	if policy.MaxGenerationDeletes <= 0 {
+		policy.MaxGenerationDeletes = defaults.MaxGenerationDeletes
+	}
+	if policy.MaxItemDeletes <= 0 {
+		policy.MaxItemDeletes = defaults.MaxItemDeletes
+	}
+	if policy.MaxAssetDeletes <= 0 {
+		policy.MaxAssetDeletes = defaults.MaxAssetDeletes
+	}
+	if policy.MaxHealthDeletes <= 0 {
+		policy.MaxHealthDeletes = defaults.MaxHealthDeletes
+	}
+	return policy
+}
+
+func execRowsAffected(tx *sql.Tx, query string, args ...any) (int, error) {
+	res, err := tx.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(n), nil
 }
 
 func (db *DB) ListAndroidSyncItems(generationID string, afterSeq int64, limit int) ([]model.AndroidSyncItem, error) {

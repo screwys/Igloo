@@ -1,9 +1,11 @@
 package db
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestEnsureSchemaLedgerRunsLegacyAndroidSyncCleanupOnce(t *testing.T) {
@@ -99,6 +101,213 @@ func insertAndroidSyncGenerationFixture(t *testing.T, d *DB, generationID string
 			) VALUES (?, 1, '{}', 1, 0, 0, 0, 1, 1)
 		`, generationID); err != nil {
 		t.Fatalf("insert health %s: %v", generationID, err)
+	}
+}
+
+func TestAndroidSyncPruneKeepsNewestReadyGenerations(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := time.Now().UnixMilli()
+	oldBaseMs := nowMs - int64(24*time.Hour/time.Millisecond)
+	generationIDs := []string{
+		"android-sync-prune-1",
+		"android-sync-prune-2",
+		"android-sync-prune-3",
+		"android-sync-prune-4",
+		"android-sync-prune-5",
+	}
+	for i, generationID := range generationIDs {
+		insertAndroidSyncGenerationFixture(t, d, generationID, oldBaseMs+int64(i))
+	}
+
+	result, err := d.PruneAndroidSyncState(nowMs, AndroidSyncPrunePolicy{
+		KeepReadyGenerations: 2,
+		KeepMinAge:           6 * time.Hour,
+		KeepHealthReports:    100,
+	})
+	if err != nil {
+		t.Fatalf("PruneAndroidSyncState: %v", err)
+	}
+	if result.GenerationsDeleted != 3 || result.ItemsDeleted != 3 || result.AssetsDeleted != 3 || result.HealthReportsDeleted != 3 {
+		t.Fatalf("prune result = %+v, want 3 generations/items/assets/health reports deleted", result)
+	}
+
+	assertAndroidSyncGenerationExists(t, d, "android-sync-prune-4", true)
+	assertAndroidSyncGenerationExists(t, d, "android-sync-prune-5", true)
+	for _, generationID := range generationIDs[:3] {
+		assertAndroidSyncGenerationExists(t, d, generationID, false)
+		assertAndroidSyncChildRows(t, d, generationID, 0, 0, 0)
+	}
+	assertAndroidSyncChildRows(t, d, "android-sync-prune-4", 1, 1, 1)
+	assertAndroidSyncChildRows(t, d, "android-sync-prune-5", 1, 1, 1)
+
+	for _, generationID := range generationIDs[3:] {
+		items, err := d.ListAndroidSyncItems(generationID, 0, 10)
+		if err != nil {
+			t.Fatalf("ListAndroidSyncItems %s: %v", generationID, err)
+		}
+		if len(items) != 1 {
+			t.Fatalf("items for %s = %d, want 1", generationID, len(items))
+		}
+		assets, err := d.ListAndroidSyncAssets(generationID, 0, 10)
+		if err != nil {
+			t.Fatalf("ListAndroidSyncAssets %s: %v", generationID, err)
+		}
+		if len(assets) != 1 {
+			t.Fatalf("assets for %s = %d, want 1", generationID, len(assets))
+		}
+	}
+}
+
+func TestAndroidSyncPruneDeletesEligibleGenerationsInBatches(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := time.Now().UnixMilli()
+	oldBaseMs := nowMs - int64(48*time.Hour/time.Millisecond)
+	const generationCount = 55
+	for i := 0; i < generationCount; i++ {
+		insertAndroidSyncGenerationFixture(t, d, fmt.Sprintf("android-sync-batch-prune-%02d", i+1), oldBaseMs+int64(i))
+	}
+
+	policy := AndroidSyncPrunePolicy{
+		KeepReadyGenerations: 1,
+		KeepMinAge:           6 * time.Hour,
+		KeepHealthReports:    1000,
+	}
+	result, err := d.PruneAndroidSyncState(nowMs, policy)
+	if err != nil {
+		t.Fatalf("PruneAndroidSyncState: %v", err)
+	}
+	if result.GenerationsDeleted >= generationCount-1 {
+		t.Fatalf("first prune deleted %d generations, want bounded batch below all %d eligible rows", result.GenerationsDeleted, generationCount-1)
+	}
+	remaining := countAndroidSyncGenerations(t, d, "android-sync-batch-prune-%")
+	if remaining <= 1 {
+		t.Fatalf("remaining old generations after first prune = %d, want batch remainder", remaining)
+	}
+
+	for i := 0; i < 10 && remaining > 1; i++ {
+		if _, err := d.PruneAndroidSyncState(nowMs, policy); err != nil {
+			t.Fatalf("follow-up prune %d: %v", i+1, err)
+		}
+		remaining = countAndroidSyncGenerations(t, d, "android-sync-batch-prune-%")
+	}
+	if remaining != 1 {
+		t.Fatalf("remaining old generations after follow-up prunes = %d, want only newest retained generation", remaining)
+	}
+}
+
+func TestAndroidSyncPruneKeepsYoungOlderGeneration(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := time.Now().UnixMilli()
+	rows := []struct {
+		id        string
+		createdAt int64
+	}{
+		{id: "android-sync-young-1", createdAt: nowMs - int64(12*time.Hour/time.Millisecond)},
+		{id: "android-sync-young-2", createdAt: nowMs - int64(11*time.Hour/time.Millisecond)},
+		{id: "android-sync-young-3", createdAt: nowMs - int64(3*time.Minute/time.Millisecond)},
+		{id: "android-sync-young-4", createdAt: nowMs - int64(2*time.Minute/time.Millisecond)},
+		{id: "android-sync-young-5", createdAt: nowMs - int64(1*time.Minute/time.Millisecond)},
+	}
+	for _, row := range rows {
+		insertAndroidSyncGenerationFixture(t, d, row.id, row.createdAt)
+	}
+
+	result, err := d.PruneAndroidSyncState(nowMs, AndroidSyncPrunePolicy{
+		KeepReadyGenerations: 2,
+		KeepMinAge:           6 * time.Hour,
+		KeepHealthReports:    100,
+	})
+	if err != nil {
+		t.Fatalf("PruneAndroidSyncState: %v", err)
+	}
+	if result.GenerationsDeleted != 2 {
+		t.Fatalf("generations deleted = %d, want 2 result=%+v", result.GenerationsDeleted, result)
+	}
+
+	assertAndroidSyncGenerationExists(t, d, "android-sync-young-1", false)
+	assertAndroidSyncGenerationExists(t, d, "android-sync-young-2", false)
+	assertAndroidSyncGenerationExists(t, d, "android-sync-young-3", true)
+	assertAndroidSyncGenerationExists(t, d, "android-sync-young-4", true)
+	assertAndroidSyncGenerationExists(t, d, "android-sync-young-5", true)
+}
+
+func TestAndroidSyncPruneBoundsHealthReportsIndependently(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := time.Now().UnixMilli()
+	generationID := "android-sync-health-prune"
+	insertAndroidSyncGenerationFixture(t, d, generationID, nowMs-int64(24*time.Hour/time.Millisecond))
+	for i := 1; i <= 5; i++ {
+		if err := d.RecordAndroidSyncHealth(generationID, int64(i*100), []byte(`{"retention":{"feed_days":7}}`), i, 0, 0, 0, i, int64(i)); err != nil {
+			t.Fatalf("RecordAndroidSyncHealth %d: %v", i, err)
+		}
+	}
+
+	result, err := d.PruneAndroidSyncState(nowMs, AndroidSyncPrunePolicy{
+		KeepReadyGenerations: 1,
+		KeepMinAge:           6 * time.Hour,
+		KeepHealthReports:    3,
+	})
+	if err != nil {
+		t.Fatalf("PruneAndroidSyncState: %v", err)
+	}
+	if result.GenerationsDeleted != 0 || result.ItemsDeleted != 0 || result.AssetsDeleted != 0 || result.HealthReportsDeleted != 3 {
+		t.Fatalf("prune result = %+v, want only 3 health reports deleted", result)
+	}
+	assertAndroidSyncChildRows(t, d, generationID, 1, 1, 3)
+	var oldestRemaining int64
+	if err := d.QueryRow(`
+		SELECT MIN(reported_at_ms)
+		FROM android_sync_health_reports
+		WHERE generation_id = ?
+	`, generationID).Scan(&oldestRemaining); err != nil {
+		t.Fatalf("oldest remaining health report: %v", err)
+	}
+	if oldestRemaining != 300 {
+		t.Fatalf("oldest remaining health report = %d, want 300", oldestRemaining)
+	}
+}
+
+func assertAndroidSyncGenerationExists(t *testing.T, d *DB, generationID string, want bool) {
+	t.Helper()
+	var got int
+	if err := d.QueryRow(`SELECT COUNT(*) FROM android_sync_generations WHERE generation_id = ?`, generationID).Scan(&got); err != nil {
+		t.Fatalf("count generation %s: %v", generationID, err)
+	}
+	if (got > 0) != want {
+		t.Fatalf("generation %s exists = %t, want %t", generationID, got > 0, want)
+	}
+}
+
+func countAndroidSyncGenerations(t *testing.T, d *DB, likePattern string) int {
+	t.Helper()
+	var count int
+	if err := d.QueryRow(`
+		SELECT COUNT(*)
+		FROM android_sync_generations
+		WHERE generation_id LIKE ?
+	`, likePattern).Scan(&count); err != nil {
+		t.Fatalf("count generations like %s: %v", likePattern, err)
+	}
+	return count
+}
+
+func assertAndroidSyncChildRows(t *testing.T, d *DB, generationID string, wantItems, wantAssets, wantHealth int) {
+	t.Helper()
+	for _, check := range []struct {
+		table string
+		want  int
+	}{
+		{table: "android_sync_items", want: wantItems},
+		{table: "android_sync_assets", want: wantAssets},
+		{table: "android_sync_health_reports", want: wantHealth},
+	} {
+		var got int
+		if err := d.QueryRow("SELECT COUNT(*) FROM "+check.table+" WHERE generation_id = ?", generationID).Scan(&got); err != nil {
+			t.Fatalf("count %s for %s: %v", check.table, generationID, err)
+		}
+		if got != check.want {
+			t.Fatalf("%s rows for %s = %d, want %d", check.table, generationID, got, check.want)
+		}
 	}
 }
 
