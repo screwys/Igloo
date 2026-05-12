@@ -11,7 +11,7 @@ import (
 
 // InsertMediaFile inserts a single media file record, ignoring duplicates.
 func (db *DB) InsertMediaFile(mf model.MediaFile) error {
-	return db.WithWrite(func(tx *sql.Tx) error {
+	if err := db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			INSERT OR IGNORE INTO media_files
 				(owner_type, owner_id, media_index, file_path, media_type, source_url, file_size)
@@ -21,7 +21,10 @@ func (db *DB) InsertMediaFile(mf model.MediaFile) error {
 			nilIfZero(mf.FileSize),
 		)
 		return err
-	})
+	}); err != nil {
+		return err
+	}
+	return db.upsertMediaFileAsset(mf, time.Now().UnixMilli())
 }
 
 // InsertMediaFileBatch inserts multiple media file records in a single transaction, ignoring duplicates.
@@ -56,7 +59,36 @@ func (db *DB) InsertMediaFileBatch(files []model.MediaFile) error {
 	}); err != nil {
 		return err
 	}
+	nowMs := time.Now().UnixMilli()
+	for _, mf := range files {
+		if err := db.upsertMediaFileAsset(mf, nowMs); err != nil {
+			return err
+		}
+	}
 	return db.repairVideoMediaShapesForIDs(repairOwners)
+}
+
+func (db *DB) upsertMediaFileAsset(mf model.MediaFile, nowMs int64) error {
+	if mf.OwnerType != "feed_media" && mf.OwnerType != "quote_media" {
+		return nil
+	}
+	if manifestSkipsFile(mf.FilePath) {
+		return nil
+	}
+	asset := db.assetFromLegacyPath(Asset{
+		AssetID:        BuildManifestAssetID("twitter", "tweet", mf.OwnerID, "post_media", mf.MediaIndex),
+		AssetKind:      "post_media",
+		OwnerKind:      "tweet",
+		OwnerID:        mf.OwnerID,
+		MediaIndex:     mf.MediaIndex,
+		SourceURL:      mf.SourceURL,
+		FilePath:       mf.FilePath,
+		ContentType:    contentTypeForMediaPath(mf.FilePath, mf.MediaType, "image/jpeg"),
+		SizeBytes:      mf.FileSize,
+		State:          AssetStateQueued,
+		RequiredReason: "retention",
+	})
+	return db.UpsertAsset(asset, nowMs)
 }
 
 // GetMediaFilePath returns the file_path for a single media file by (ownerType, ownerID, index).

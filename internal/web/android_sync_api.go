@@ -800,6 +800,20 @@ func (s *Server) buildAndroidSyncAssets(username string, sets db.AndroidSyncDesi
 	mediaVideoIDs := sets.SortedMediaVideos()
 	channelIDs := sets.SortedChannels()
 
+	inventoryRows, err := s.db.ListAndroidSyncAssetInventoryRows(sets)
+	if err != nil {
+		return nil, counts, err
+	}
+	s.addAndroidSyncInventoryAssets(byKey, inventoryRows)
+	slog.Info(
+		"android_sync_asset_phase",
+		"phase", "asset_inventory_rows",
+		"rows", len(inventoryRows),
+		"assets", len(byKey),
+		"duration_ms", time.Since(phaseStart).Milliseconds(),
+	)
+
+	phaseStart = time.Now()
 	feedRows, err := s.db.ListAndroidSyncMediaAssetRows("feed_media", tweetIDs)
 	if err != nil {
 		return nil, counts, err
@@ -950,6 +964,72 @@ func (s *Server) buildAndroidSyncAssets(username string, sets db.AndroidSyncDesi
 		return out[i].AssetID < out[j].AssetID
 	})
 	return out, counts, nil
+}
+
+func (s *Server) addAndroidSyncInventoryAssets(byKey map[string]model.AndroidSyncAsset, rows []db.Asset) {
+	for _, row := range rows {
+		addAndroidSyncAsset(byKey, s.androidSyncAssetFromInventory(row))
+	}
+}
+
+func (s *Server) androidSyncAssetFromInventory(row db.Asset) model.AndroidSyncAsset {
+	state := "ready"
+	if row.State == db.AssetStateServerMissing {
+		state = "server_missing"
+	}
+	contentType := row.ContentType
+	if contentType == "" && row.FilePath != "" {
+		contentType = androidSyncContentType(resolveDataPath(s.cfg.DataDir, row.FilePath))
+	}
+	if contentType == "application/octet-stream" {
+		contentType = ""
+	}
+	reason := strings.TrimSpace(row.RequiredReason)
+	if reason == "" || reason == "backfill" {
+		reason = "retention"
+	}
+	asset := model.AndroidSyncAsset{
+		AssetID:        row.AssetID,
+		AssetKind:      row.AssetKind,
+		OwnerID:        row.OwnerID,
+		OwnerKind:      row.OwnerKind,
+		Bucket:         androidSyncInventoryBucket(row),
+		ServerURL:      db.AssetServerURL(row),
+		ContentType:    contentType,
+		SizeBytes:      row.SizeBytes,
+		SHA256:         row.SHA256,
+		State:          state,
+		RequiredReason: reason,
+	}
+	if row.AssetKind == "subtitle" {
+		if video, err := s.db.GetVideo(row.OwnerID); err == nil && video != nil {
+			isAuto, audioLang := s.androidSyncSubtitleMetadata(*video)
+			asset.IsAuto = &isAuto
+			asset.AudioLanguage = audioLang
+		}
+	}
+	return asset
+}
+
+func androidSyncInventoryBucket(row db.Asset) string {
+	switch row.AssetKind {
+	case "avatar":
+		return "avatars"
+	case "banner":
+		return "banners"
+	}
+	if row.OwnerKind == "tweet" {
+		return "twitter_media"
+	}
+	platform := androidSyncInventoryPlatform(row)
+	return androidSyncVideoBucket(platform)
+}
+
+func androidSyncInventoryPlatform(row db.Asset) string {
+	if idx := strings.Index(row.AssetID, "_"); idx > 0 {
+		return row.AssetID[:idx]
+	}
+	return androidSyncPlatformFromChannelID(row.OwnerID)
 }
 
 func (s *Server) addAndroidSyncMediaAssets(byKey map[string]model.AndroidSyncAsset, rows []db.AndroidSyncMediaAssetRow) {
@@ -1406,6 +1486,9 @@ func hashFile(path string) (int64, string, error) {
 }
 
 func (s *Server) androidSyncAssetPath(asset model.AndroidSyncAsset) string {
+	if path, ok := s.androidSyncInventoryAssetPath(asset); ok {
+		return path
+	}
 	switch asset.AssetKind {
 	case "avatar":
 		return s.resolveAvatarPath(asset.OwnerID)
@@ -1440,6 +1523,20 @@ func (s *Server) androidSyncAssetPath(asset model.AndroidSyncAsset) string {
 	default:
 		return ""
 	}
+}
+
+func (s *Server) androidSyncInventoryAssetPath(asset model.AndroidSyncAsset) (string, bool) {
+	row, err := s.db.GetAsset(asset.AssetID, asset.AssetKind)
+	if err != nil || row == nil {
+		return "", false
+	}
+	if row.State != db.AssetStateReady {
+		return "", true
+	}
+	if strings.TrimSpace(row.FilePath) == "" {
+		return "", true
+	}
+	return resolveDataPath(s.cfg.DataDir, row.FilePath), true
 }
 
 func (s *Server) ensureAndroidSyncPreviewTrackJSON(video model.Video) bool {

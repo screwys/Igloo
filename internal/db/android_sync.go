@@ -17,7 +17,7 @@ import (
 // AndroidSyncMaterializerVersion is part of the generation source hash. Bump
 // it when server-side asset materialization semantics change and Android needs
 // a fresh immutable generation even if the source rows did not change.
-const AndroidSyncMaterializerVersion = 29
+const AndroidSyncMaterializerVersion = 30
 
 // AndroidSyncDesiredSets is the server-owned content boundary for one
 // Android generation. The web materializer uses it to filter assets and build
@@ -533,6 +533,7 @@ func (db *DB) AndroidSyncSourceVersion(username string, settings AndroidRetentio
 		{"channels", `SELECT COUNT(*), COALESCE(MAX(sync_seq),0) FROM channels`},
 		{"channel_settings", `SELECT COUNT(*), COALESCE(MAX(updated_at),0) FROM channel_settings`},
 		{"media_files", `SELECT COUNT(*), COALESCE(MAX(id),0) FROM media_files`},
+		{"assets", `SELECT COUNT(*), COALESCE(MAX(updated_at_ms),0) FROM assets`},
 		{"channel_profiles", `SELECT COUNT(*), COALESCE(MAX(rowid),0) FROM channel_profiles`},
 		{"channel_follows", `SELECT COUNT(*), COALESCE(MAX(followed_at),0) FROM channel_follows`},
 		{"channel_stars", `SELECT COUNT(*), COALESCE(MAX(starred_at),0) FROM channel_stars`},

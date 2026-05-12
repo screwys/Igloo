@@ -1341,6 +1341,60 @@ func TestAndroidSyncPublishesDearrowThumbnailAsset(t *testing.T) {
 	t.Fatalf("dearrow_thumbnail asset missing: %+v", assets)
 }
 
+func TestAndroidSyncMaterializesReadyAssetInventoryRows(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	dataDir := srv.cfg.DataDir
+	now := time.Now().UnixMilli()
+
+	inventoryRel := filepath.Join("media", "twitter", "sample", "tweet_inventory_0.jpg")
+	mustWriteFile(t, filepath.Join(dataDir, inventoryRel), []byte("inventory-image"))
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, source_handle, author_handle, media_json, published_at, sync_seq)
+		VALUES ('tweet_inventory', 'sample', 'sample', '[{"type":"photo"}]', ?, 1)
+	`, now); err != nil {
+		t.Fatalf("insert feed item: %v", err)
+	}
+	assetID := db.BuildManifestAssetID("twitter", "tweet", "tweet_inventory", "post_media", 0)
+	if err := srv.db.UpsertAsset(db.Asset{
+		AssetID:        assetID,
+		AssetKind:      "post_media",
+		OwnerKind:      "tweet",
+		OwnerID:        "tweet_inventory",
+		MediaIndex:     0,
+		FilePath:       inventoryRel,
+		ContentType:    "image/jpeg",
+		State:          db.AssetStateReady,
+		RequiredReason: "retention",
+	}, now); err != nil {
+		t.Fatalf("upsert inventory asset: %v", err)
+	}
+
+	assets, _, err := srv.buildAndroidSyncAssets("", db.AndroidSyncDesiredSets{
+		Tweets: map[string]struct{}{
+			"tweet_inventory": {},
+		},
+		Videos:      map[string]struct{}{},
+		MediaVideos: map[string]struct{}{},
+		Channels:    map[string]struct{}{},
+	})
+	if err != nil {
+		t.Fatalf("build assets: %v", err)
+	}
+	for _, asset := range assets {
+		if asset.AssetID != assetID || asset.AssetKind != "post_media" {
+			continue
+		}
+		if asset.ServerURL != "/api/media/slide/tweet_inventory/0" || asset.Bucket != "twitter_media" || asset.OwnerKind != "tweet" {
+			t.Fatalf("inventory asset wire shape mismatch: %+v", asset)
+		}
+		if asset.State != "ready" || asset.SizeBytes != int64(len("inventory-image")) || asset.SHA256 == "" {
+			t.Fatalf("inventory asset was not finalized from inventory file: %+v", asset)
+		}
+		return
+	}
+	t.Fatalf("inventory post_media asset missing: %+v", assets)
+}
+
 func TestAndroidSyncPublishesProfileChannelAssetsOutsideRetentionSets(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	dataDir := srv.cfg.DataDir
