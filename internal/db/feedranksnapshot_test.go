@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -316,7 +317,7 @@ func TestListPreDiversityRanked_StarredUsesSharedAbsenceAfterRecentAuthorSeen(t 
 	t.Fatal("fresh_starred missing from ranked rows")
 }
 
-func TestListPreDiversityRanked_RecencyBoostPrioritizesFreshItems(t *testing.T) {
+func TestListPreDiversityRanked_HighAffinitySurvivesRecentLowInterestItems(t *testing.T) {
 	d := openWritableTestDB(t)
 	now := time.Now()
 	insertItem := func(tweetID, author string, age time.Duration, interest float64) {
@@ -339,13 +340,86 @@ func TestListPreDiversityRanked_RecencyBoostPrioritizesFreshItems(t *testing.T) 
 	if len(rows) < 2 {
 		t.Fatalf("got %d rows, want at least 2", len(rows))
 	}
-	if rows[0].TweetID != "fresh_low" {
-		t.Fatalf("top row = %q, want fresh low-interest item ahead of older high-interest item", rows[0].TweetID)
+	if rows[0].TweetID != "older_high" {
+		t.Fatalf("top row = %q, want older high-interest item ahead of fresh low-interest item", rows[0].TweetID)
 	}
-	if rows[0].FreshnessBonus <= rows[1].FreshnessBonus {
-		t.Fatalf("freshness bonus did not favor fresh item: first=%.3f second=%.3f",
-			rows[0].FreshnessBonus, rows[1].FreshnessBonus)
+	freshnessByID := map[string]float64{}
+	for _, row := range rows {
+		freshnessByID[row.TweetID] = row.FreshnessBonus
 	}
+	if freshnessByID["fresh_low"] <= freshnessByID["older_high"] {
+		t.Fatalf("freshness bonus did not favor fresh item: fresh=%.3f older=%.3f",
+			freshnessByID["fresh_low"], freshnessByID["older_high"])
+	}
+}
+
+func TestListPreDiversityRanked_StarredHighAffinityFiveHoursOldStaysNearTop(t *testing.T) {
+	d := openWritableTestDB(t)
+	user := "alice"
+	now := time.Now()
+
+	if _, err := d.conn.Exec(
+		`INSERT INTO channel_follows (user_id, channel_id, followed_at) VALUES ('', 'twitter_takomayuyi', ?)`,
+		now.Add(-7*24*time.Hour).UnixMilli(),
+	); err != nil {
+		t.Fatalf("follow target: %v", err)
+	}
+	if _, err := d.conn.Exec(
+		`INSERT INTO channel_stars (user_id, channel_id, starred_at) VALUES ('', 'twitter_takomayuyi', ?)`,
+		now.Add(-7*24*time.Hour).UnixMilli(),
+	); err != nil {
+		t.Fatalf("star target: %v", err)
+	}
+	if _, err := d.conn.Exec(`INSERT INTO feed_items
+			(tweet_id, author_handle, source_handle, body_text, published_at, algo_interest, algo_scored_at)
+			VALUES ('prior_target_seen', 'Takomayuyi', 'Takomayuyi', 'body', ?, 37.59, 1)`,
+		now.Add(-72*time.Hour).UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert prior target: %v", err)
+	}
+	if _, err := d.conn.Exec(
+		`INSERT INTO feed_seen (username, tweet_id, seen_at) VALUES (?, 'prior_target_seen', ?)`,
+		user, now.Add(-65*time.Hour).UnixMilli(),
+	); err != nil {
+		t.Fatalf("mark prior target seen: %v", err)
+	}
+	if _, err := d.conn.Exec(`INSERT INTO feed_items
+			(tweet_id, author_handle, source_handle, body_text, published_at, algo_interest, algo_scored_at)
+			VALUES ('target_high_affinity', 'Takomayuyi', 'Takomayuyi', 'body', ?, 37.59, 1)`,
+		now.Add(-5*time.Hour).UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert target: %v", err)
+	}
+
+	for i := 0; i < 40; i++ {
+		age := time.Duration(30+i*5) * time.Minute
+		interest := float64(5 + i%10)
+		if _, err := d.conn.Exec(`INSERT INTO feed_items
+				(tweet_id, author_handle, source_handle, body_text, published_at, algo_interest, algo_scored_at)
+				VALUES (?, ?, ?, 'body', ?, ?, 1)`,
+			fmt.Sprintf("newer_low_%02d", i),
+			fmt.Sprintf("low_author_%02d", i),
+			fmt.Sprintf("low_author_%02d", i),
+			now.Add(-age).UnixMilli(),
+			interest,
+		); err != nil {
+			t.Fatalf("insert low item %d: %v", i, err)
+		}
+	}
+
+	rows, err := d.ListPreDiversityRanked(user)
+	if err != nil {
+		t.Fatalf("ListPreDiversityRanked: %v", err)
+	}
+	for i, row := range rows {
+		if row.TweetID == "target_high_affinity" {
+			if i >= 10 {
+				t.Fatalf("target rank = %d, want in first 10", i+1)
+			}
+			return
+		}
+	}
+	t.Fatal("target_high_affinity missing from ranked rows")
 }
 
 func TestListPreDiversityRanked_DemotesAlreadySeenUnderlyingTweet(t *testing.T) {

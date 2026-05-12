@@ -19,7 +19,7 @@ const (
 	defaultFeedAbsenceBoostCapHours      = 72.0
 	defaultFeedAbsenceBoostMaxStarFactor = 0.5
 	defaultFeedNeverSeenBoostStarFactor  = 1.0
-	feedFreshnessBonusPeak               = 18.0
+	feedFreshnessBonusPeak               = 8.0
 	feedFreshnessBonusWindowHours        = 6.0
 	feedSeenRelatedContentPenalty        = 5.0
 	feedRepeatedRelatedContentPenalty    = 12.0
@@ -201,12 +201,12 @@ func safeFeedAbsenceCapHours(capHours float64) float64 {
 
 func feedDecaySQL() string {
 	return `(CASE
-		           WHEN age_h <   2 THEN 1.0 - 0.5 * age_h / 2.0
-		           WHEN age_h <   6 THEN 0.5 - 0.35 * (age_h - 2.0) / 4.0
-		           WHEN age_h <  24 THEN 0.15 - 0.10 * (age_h - 6.0) / 18.0
-		           WHEN age_h <  72 THEN 0.05 - 0.03 * (age_h - 24.0) / 48.0
-		           WHEN age_h < 720 THEN 0.02 - 0.015 * (age_h - 72.0) / 648.0
-		           ELSE 0.005
+		           WHEN age_h <   2 THEN 1.0 - 0.3 * age_h / 2.0
+		           WHEN age_h <   6 THEN 0.7 - 0.25 * (age_h - 2.0) / 4.0
+		           WHEN age_h <  24 THEN 0.45 - 0.25 * (age_h - 6.0) / 18.0
+		           WHEN age_h <  72 THEN 0.20 - 0.12 * (age_h - 24.0) / 48.0
+		           WHEN age_h < 720 THEN 0.08 - 0.06 * (age_h - 72.0) / 648.0
+		           ELSE 0.02
 		       END)`
 }
 
