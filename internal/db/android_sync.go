@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/screwys/igloo/internal/model"
 )
@@ -18,6 +19,33 @@ import (
 // it when server-side asset materialization semantics change and Android needs
 // a fresh immutable generation even if the source rows did not change.
 const AndroidSyncMaterializerVersion = 29
+
+const (
+	defaultAndroidSyncKeepReadyGenerations = 2
+	defaultAndroidSyncKeepMinAge           = 6 * time.Hour
+	defaultAndroidSyncKeepHealthReports    = 200
+)
+
+type AndroidSyncPrunePolicy struct {
+	KeepReadyGenerations int
+	KeepMinAge           time.Duration
+	KeepHealthReports    int
+}
+
+type AndroidSyncPruneResult struct {
+	GenerationsDeleted   int
+	ItemsDeleted         int
+	AssetsDeleted        int
+	HealthReportsDeleted int
+}
+
+func DefaultAndroidSyncPrunePolicy() AndroidSyncPrunePolicy {
+	return AndroidSyncPrunePolicy{
+		KeepReadyGenerations: defaultAndroidSyncKeepReadyGenerations,
+		KeepMinAge:           defaultAndroidSyncKeepMinAge,
+		KeepHealthReports:    defaultAndroidSyncKeepHealthReports,
+	}
+}
 
 // AndroidSyncDesiredSets is the server-owned content boundary for one
 // Android generation. The web materializer uses it to filter assets and build
@@ -973,6 +1001,135 @@ func (db *DB) StoreAndroidSyncGeneration(gen model.AndroidSyncGeneration, items 
 		}
 		return nil
 	})
+}
+
+func (db *DB) PruneAndroidSyncState(nowMs int64, policy AndroidSyncPrunePolicy) (AndroidSyncPruneResult, error) {
+	policy = normalizeAndroidSyncPrunePolicy(policy)
+	cutoffMs := nowMs - int64(policy.KeepMinAge/time.Millisecond)
+	var result AndroidSyncPruneResult
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		itemsDeleted, err := execRowsAffected(tx, `
+			DELETE FROM android_sync_items
+			WHERE generation_id IN (
+				SELECT generation_id
+				FROM android_sync_generations
+				WHERE status = 'ready'
+				  AND created_at_ms < ?
+				  AND generation_id NOT IN (
+					SELECT generation_id
+					FROM android_sync_generations
+					WHERE status = 'ready'
+					ORDER BY created_at_ms DESC, generation_id DESC
+					LIMIT ?
+				  )
+			)
+		`, cutoffMs, policy.KeepReadyGenerations)
+		if err != nil {
+			return err
+		}
+		result.ItemsDeleted = itemsDeleted
+
+		assetsDeleted, err := execRowsAffected(tx, `
+			DELETE FROM android_sync_assets
+			WHERE generation_id IN (
+				SELECT generation_id
+				FROM android_sync_generations
+				WHERE status = 'ready'
+				  AND created_at_ms < ?
+				  AND generation_id NOT IN (
+					SELECT generation_id
+					FROM android_sync_generations
+					WHERE status = 'ready'
+					ORDER BY created_at_ms DESC, generation_id DESC
+					LIMIT ?
+				  )
+			)
+		`, cutoffMs, policy.KeepReadyGenerations)
+		if err != nil {
+			return err
+		}
+		result.AssetsDeleted = assetsDeleted
+
+		healthForGenerationsDeleted, err := execRowsAffected(tx, `
+			DELETE FROM android_sync_health_reports
+			WHERE generation_id IN (
+				SELECT generation_id
+				FROM android_sync_generations
+				WHERE status = 'ready'
+				  AND created_at_ms < ?
+				  AND generation_id NOT IN (
+					SELECT generation_id
+					FROM android_sync_generations
+					WHERE status = 'ready'
+					ORDER BY created_at_ms DESC, generation_id DESC
+					LIMIT ?
+				  )
+			)
+		`, cutoffMs, policy.KeepReadyGenerations)
+		if err != nil {
+			return err
+		}
+		result.HealthReportsDeleted = healthForGenerationsDeleted
+
+		generationsDeleted, err := execRowsAffected(tx, `
+			DELETE FROM android_sync_generations
+			WHERE status = 'ready'
+			  AND created_at_ms < ?
+			  AND generation_id NOT IN (
+				SELECT generation_id
+				FROM android_sync_generations
+				WHERE status = 'ready'
+				ORDER BY created_at_ms DESC, generation_id DESC
+				LIMIT ?
+			  )
+		`, cutoffMs, policy.KeepReadyGenerations)
+		if err != nil {
+			return err
+		}
+		result.GenerationsDeleted = generationsDeleted
+
+		healthOverflowDeleted, err := execRowsAffected(tx, `
+			DELETE FROM android_sync_health_reports
+			WHERE id NOT IN (
+				SELECT id
+				FROM android_sync_health_reports
+				ORDER BY reported_at_ms DESC, id DESC
+				LIMIT ?
+			)
+		`, policy.KeepHealthReports)
+		if err != nil {
+			return err
+		}
+		result.HealthReportsDeleted += healthOverflowDeleted
+		return nil
+	})
+	return result, err
+}
+
+func normalizeAndroidSyncPrunePolicy(policy AndroidSyncPrunePolicy) AndroidSyncPrunePolicy {
+	defaults := DefaultAndroidSyncPrunePolicy()
+	if policy.KeepReadyGenerations <= 0 {
+		policy.KeepReadyGenerations = defaults.KeepReadyGenerations
+	}
+	if policy.KeepMinAge <= 0 {
+		policy.KeepMinAge = defaults.KeepMinAge
+	}
+	if policy.KeepHealthReports <= 0 {
+		policy.KeepHealthReports = defaults.KeepHealthReports
+	}
+	return policy
+}
+
+func execRowsAffected(tx *sql.Tx, query string, args ...any) (int, error) {
+	res, err := tx.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(n), nil
 }
 
 func (db *DB) ListAndroidSyncItems(generationID string, afterSeq int64, limit int) ([]model.AndroidSyncItem, error) {
