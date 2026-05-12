@@ -33,6 +33,7 @@ __pycache__/
 .codex
 .mcp.local.json
 .agents
+tmp/
 
 # just in case
 cosign.key
