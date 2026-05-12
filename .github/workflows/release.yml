@@ -54,7 +54,7 @@ jobs:
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             node scripts/dev/release.mjs prepare "${INPUT_BUMP:-patch}" --notes release-notes.md
           else
-            node scripts/dev/release.mjs prepare-auto --threshold 20 --bump-file .github/release-bump --notes release-notes.md
+            node scripts/dev/release.mjs prepare-auto --threshold 30 --bump-file .github/release-bump --notes release-notes.md
           fi
 
       - name: Commit and tag signed release

@@ -28,39 +28,40 @@ test("normalizes tracked release bump state", () => {
   assert.throws(() => normalizeReleaseBump("major"), /unsupported bump/);
 });
 
-test("plans automatic releases every 20 commits", () => {
-  const commits = Array.from({ length: 19 }, (_, index) => ({
+test("plans automatic releases every 30 commits", () => {
+  const commits = Array.from({ length: 29 }, (_, index) => ({
     sha: `${index}`.repeat(40).slice(0, 40),
     subject: `change ${index}`,
     body: "",
   }));
 
-  assert.deepEqual(planAutomaticRelease(commits, 20), {
+  assert.deepEqual(planAutomaticRelease(commits, 30), {
     shouldRelease: false,
     bump: "patch",
-    commitCount: 19,
+    commitCount: 29,
   });
 
   commits.push({
     sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    subject: "change 19",
+    subject: "change 29",
     body: "",
   });
 
-  assert.deepEqual(planAutomaticRelease(commits, 20), {
+  assert.deepEqual(planAutomaticRelease(commits, 30), {
     shouldRelease: true,
     bump: "patch",
-    commitCount: 20,
+    commitCount: 30,
   });
 });
 
-test("release workflow uses the 20 commit automatic threshold", () => {
+test("release workflow uses the 30 commit automatic threshold", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/release.yml", import.meta.url),
     "utf8",
   );
 
-  assert.match(workflow, /prepare-auto --threshold 20\b/);
+  assert.match(workflow, /prepare-auto --threshold 30\b/);
+  assert.doesNotMatch(workflow, /prepare-auto --threshold 20\b/);
   assert.doesNotMatch(workflow, /prepare-auto --threshold 10\b/);
 });
 
