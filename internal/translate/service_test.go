@@ -174,6 +174,36 @@ func TestSourceLanguageMatchesTargetNormalizesLanguageTags(t *testing.T) {
 	}
 }
 
+func TestKagiTranslateArgsUseKnownSourceLanguage(t *testing.T) {
+	got := strings.Join(kagiTranslateArgs("안녕하세요", "en", "social media post", "ko"), "\x00")
+	if !strings.Contains(got, "\x00--from\x00ko\x00") {
+		t.Fatalf("kagi args missing source language: %q", got)
+	}
+	if !strings.Contains(got, "\x00--predicted-language\x00ko\x00") {
+		t.Fatalf("kagi args missing predicted source language: %q", got)
+	}
+
+	got = strings.Join(kagiTranslateArgs("Mimpi basah WNI", "en", "", "in"), "\x00")
+	if !strings.Contains(got, "\x00--from\x00id\x00") {
+		t.Fatalf("kagi args did not normalize Indonesian source language: %q", got)
+	}
+
+	got = strings.Join(kagiTranslateArgs("hello", "en", "", "qam"), "\x00")
+	if strings.Contains(got, "\x00--from\x00") {
+		t.Fatalf("kagi args should not pass private-use source language: %q", got)
+	}
+}
+
+func TestKagiMessageIsRateLimited(t *testing.T) {
+	msg := `configuration error: Kagi Translate language detection request rejected: HTTP 429 Too Many Requests`
+	if !kagiMessageIsRateLimited(msg) {
+		t.Fatalf("expected Kagi 429 message to be rate limited")
+	}
+	if kagiMessageIsRateLimited("HTTP 500 Internal Server Error") {
+		t.Fatalf("expected generic provider failure not to be rate limited")
+	}
+}
+
 func TestProtectOnlyTokensProducesPlaceholdersOnly(t *testing.T) {
 	protected, originals := protectForTranslate("@alice #tag")
 	if hasTranslatableContent(protected) {

@@ -14,14 +14,15 @@ import (
 )
 
 const (
-	translateBackgroundStartupDelay  = 5 * time.Second
-	translateBackgroundActiveDelay   = 2 * time.Second
-	translateBackgroundIdleDelay     = 30 * time.Second
-	translateBackgroundErrorDelay    = time.Minute
-	translateBackgroundScanLimit     = 500
-	translateBackgroundBatchSize     = 10
-	translateBackgroundMaxErrors     = translateBackgroundBatchSize
-	translateBackgroundProviderDelay = 1500 * time.Millisecond
+	translateBackgroundStartupDelay   = 5 * time.Second
+	translateBackgroundActiveDelay    = 2 * time.Second
+	translateBackgroundIdleDelay      = 30 * time.Second
+	translateBackgroundErrorDelay     = time.Minute
+	translateBackgroundRateLimitDelay = 5 * time.Minute
+	translateBackgroundScanLimit      = 500
+	translateBackgroundBatchSize      = 10
+	translateBackgroundMaxErrors      = translateBackgroundBatchSize
+	translateBackgroundProviderDelay  = 1500 * time.Millisecond
 )
 
 var translateSkipScriptPatterns = map[string]*regexp.Regexp{
@@ -79,7 +80,11 @@ func RunBackground(ctx context.Context, database *db.DB) {
 				return
 			}
 			slog.Warn("translate background batch failed", "err", err)
-			delay = translateBackgroundErrorDelay
+			if errors.Is(err, ErrProviderRateLimited) {
+				delay = translateBackgroundRateLimitDelay
+			} else {
+				delay = translateBackgroundErrorDelay
+			}
 		}
 		timer.Reset(delay)
 	}
@@ -204,6 +209,9 @@ func runTranslateBackgroundBatch(ctx context.Context, database *db.DB, cfg trans
 			if errors.Is(err, context.Canceled) || (errors.Is(err, context.DeadlineExceeded) && ctx.Err() != nil) {
 				return translated, err
 			}
+			if errors.Is(err, ErrProviderRateLimited) {
+				return translated, err
+			}
 			failures++
 			lastErr = err
 			skipped[key] = translateBackgroundSkip{sourceText: candidate.SourceText, retryable: true}
@@ -250,7 +258,7 @@ func translateAndCacheBackgroundCandidate(ctx context.Context, database *db.DB, 
 	translateCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 
-	result, provider, err := translateTextWithDB(translateCtx, database, cleanSource, cfg.target, contextHint)
+	result, provider, err := translateTextWithDB(translateCtx, database, cleanSource, cfg.target, contextHint, candidate.SourceLang)
 	if err != nil || result == nil {
 		slog.Warn("translate background candidate failed", "provider", provider, "tweet_id", candidate.TweetID, "field", candidate.Field, "err", err)
 		return false, err

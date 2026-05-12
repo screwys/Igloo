@@ -36,6 +36,7 @@ var (
 	ErrNoText                = errors.New("no text to translate")
 	ErrTranslationFailed     = errors.New("translation failed")
 	ErrAlreadyTargetLanguage = errors.New("already in target language")
+	ErrProviderRateLimited   = errors.New("translation provider rate limited")
 )
 
 type Result struct {
@@ -49,12 +50,32 @@ type AlreadyTargetLanguageError struct {
 	SourceLang string
 }
 
+type ProviderRateLimitedError struct {
+	Provider string
+	Err      error
+}
+
 func (e AlreadyTargetLanguageError) Error() string {
 	return ErrAlreadyTargetLanguage.Error()
 }
 
 func (e AlreadyTargetLanguageError) Is(target error) bool {
 	return target == ErrAlreadyTargetLanguage
+}
+
+func (e ProviderRateLimitedError) Error() string {
+	if e.Err == nil {
+		return e.Provider + ": " + ErrProviderRateLimited.Error()
+	}
+	return e.Provider + ": " + ErrProviderRateLimited.Error() + ": " + e.Err.Error()
+}
+
+func (e ProviderRateLimitedError) Unwrap() error {
+	return e.Err
+}
+
+func (e ProviderRateLimitedError) Is(target error) bool {
+	return target == ErrProviderRateLimited
 }
 
 // FeedText translates one stored feed text field and writes the cache entry.
@@ -115,7 +136,7 @@ func FeedText(ctx context.Context, database *db.DB, tweetID, field, targetLang s
 	}
 
 	contextHint := stripForTranslateContext(buildContext(fi.BodyText, fi.QuoteBodyText, field))
-	translated, provider, err := translateTextWithDB(ctx, database, cleanSource, targetLang, contextHint)
+	translated, provider, err := translateTextWithDB(ctx, database, cleanSource, targetLang, contextHint, detectedLang)
 	if err != nil {
 		return nil, err
 	}
@@ -265,13 +286,13 @@ func buildContext(bodyText, quoteBodyText, field string) string {
 	return "social media post"
 }
 
-func translateTextWithDB(ctx context.Context, database *db.DB, text, targetLang, contextHint string) (*Result, string, error) {
+func translateTextWithDB(ctx context.Context, database *db.DB, text, targetLang, contextHint, sourceLangHint string) (*Result, string, error) {
 	backendRaw, _ := database.GetSetting("translate_backend", settings.TranslateBackendNone)
 	backend := settings.NormalizeTranslateBackend(backendRaw)
 
 	switch backend {
 	case settings.TranslateBackendKagiCLI:
-		result, err := kagiTranslate(ctx, text, targetLang, contextHint)
+		result, err := kagiTranslate(ctx, text, targetLang, contextHint, sourceLangHint)
 		return result, backend, err
 	case settings.TranslateBackendGoogle:
 		apiKey, _ := database.GetSetting("translate_api_key", "")
@@ -304,12 +325,8 @@ func translateTextWithDB(ctx context.Context, database *db.DB, text, targetLang,
 }
 
 // kagiTranslate calls the kagi CLI to translate text and returns the result.
-func kagiTranslate(ctx context.Context, text, targetLang, contextHint string) (*Result, error) {
-	args := []string{"translate", "--to", targetLang, "--no-alternatives", "--no-word-insights"}
-	if contextHint != "" {
-		args = append(args, "--context", contextHint)
-	}
-	args = append(args, text)
+func kagiTranslate(ctx context.Context, text, targetLang, contextHint, sourceLangHint string) (*Result, error) {
+	args := kagiTranslateArgs(text, targetLang, contextHint, sourceLangHint)
 	cmd := exec.CommandContext(ctx, "kagi", args...)
 
 	var stdout, stderr bytes.Buffer
@@ -321,10 +338,14 @@ func kagiTranslate(ctx context.Context, text, targetLang, contextHint string) (*
 		if len(msg) > 512 {
 			msg = msg[:512] + "..."
 		}
+		wrapped := fmt.Errorf("kagi translate: %w", err)
 		if msg != "" {
-			return nil, fmt.Errorf("kagi translate: %w: %s", err, msg)
+			wrapped = fmt.Errorf("kagi translate: %w: %s", err, msg)
 		}
-		return nil, fmt.Errorf("kagi translate: %w", err)
+		if kagiMessageIsRateLimited(msg) {
+			return nil, ProviderRateLimitedError{Provider: settings.TranslateBackendKagiCLI, Err: wrapped}
+		}
+		return nil, wrapped
 	}
 
 	var data struct {
@@ -347,11 +368,54 @@ func kagiTranslate(ctx context.Context, text, targetLang, contextHint string) (*
 	if sourceLang == "" {
 		sourceLang = language.DisplayName(data.DetectedLanguage.ISO)
 	}
+	if sourceLang == "" {
+		sourceLang = language.DisplayName(sourceLangHint)
+	}
 
 	return &Result{
 		TranslatedText: data.Translation.Translation,
 		SourceLang:     sourceLang,
 	}, nil
+}
+
+func kagiTranslateArgs(text, targetLang, contextHint, sourceLangHint string) []string {
+	args := []string{"translate", "--to", targetLang, "--no-alternatives", "--no-word-insights"}
+	if sourceLang := kagiSourceLanguage(sourceLangHint); sourceLang != "" {
+		args = append(args, "--from", sourceLang, "--predicted-language", sourceLang)
+	}
+	if contextHint != "" {
+		args = append(args, "--context", contextHint)
+	}
+	return append(args, text)
+}
+
+func kagiSourceLanguage(sourceLangHint string) string {
+	sourceLang := strings.ToLower(strings.TrimSpace(sourceLangHint))
+	if sourceLang == "" {
+		return ""
+	}
+	sourceLang = strings.ReplaceAll(sourceLang, "_", "-")
+	switch sourceLang {
+	case "und", "unknown", "qam", "qct", "qht", "qme", "zxx":
+		return ""
+	case "in":
+		return "id"
+	case "iw":
+		return "he"
+	case "jw":
+		return "jv"
+	}
+	if strings.ContainsAny(sourceLang, " \t\r\n") {
+		return ""
+	}
+	return sourceLang
+}
+
+func kagiMessageIsRateLimited(msg string) bool {
+	msg = strings.ToLower(msg)
+	return strings.Contains(msg, "http 429") ||
+		strings.Contains(msg, "too many requests") ||
+		strings.Contains(msg, "rate limit")
 }
 
 func googleTranslate(ctx context.Context, endpoint, apiKey, text, targetLang string) (*Result, error) {

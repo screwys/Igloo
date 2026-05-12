@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -280,6 +281,62 @@ func TestTranslateBackgroundContinuesAfterCandidateProviderError(t *testing.T) {
 	}
 }
 
+func TestTranslateBackgroundStopsBatchOnKagiRateLimit(t *testing.T) {
+	dir := t.TempDir()
+	countPath := dir + "/count"
+	kagiPath := dir + "/kagi"
+	script := "#!/bin/sh\nprintf x >> \"$KAGI_COUNT_FILE\"\necho 'configuration error: Kagi Translate language detection request rejected: HTTP 429 Too Many Requests' >&2\nexit 1\n"
+	if err := os.WriteFile(kagiPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write kagi stub: %v", err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	t.Setenv("KAGI_COUNT_FILE", countPath)
+
+	d := openTranslateTestDB(t)
+	base := time.Unix(1_700_000_000, 0)
+	if _, err := d.UpsertFeedItems([]model.FeedItem{
+		{
+			TweetID:      "tweet-kagi-rate-limited-newer",
+			AuthorHandle: "author_newer",
+			BodyText:     "안녕하세요",
+			Lang:         "ko",
+			PublishedAt:  &base,
+		},
+		{
+			TweetID:      "tweet-kagi-rate-limited-older",
+			AuthorHandle: "author_older",
+			BodyText:     "你好",
+			Lang:         "zh",
+			PublishedAt:  ptrTime(base.Add(-time.Minute)),
+		},
+	}); err != nil {
+		t.Fatalf("UpsertFeedItems: %v", err)
+	}
+	if err := d.SetSetting("", "translate_backend", settings.TranslateBackendKagiCLI); err != nil {
+		t.Fatalf("SetSetting translate_backend: %v", err)
+	}
+
+	cfg := translateBackgroundConfig{
+		mode:    settings.TranslateAutoBackground,
+		backend: settings.TranslateBackendKagiCLI,
+		target:  "en",
+	}
+	translated, err := runTranslateBackgroundBatch(context.Background(), d, cfg, map[string]translateBackgroundSkip{})
+	if !errors.Is(err, ErrProviderRateLimited) {
+		t.Fatalf("runTranslateBackgroundBatch err = %v, want ErrProviderRateLimited", err)
+	}
+	if translated != 0 {
+		t.Fatalf("translated = %d, want 0", translated)
+	}
+	count, readErr := os.ReadFile(countPath)
+	if readErr != nil {
+		t.Fatalf("read kagi count: %v", readErr)
+	}
+	if len(count) != 1 {
+		t.Fatalf("kagi requests = %d, want 1", len(count))
+	}
+}
+
 func TestLoadTranslateBackgroundConfigDisablesAPIBackendWithoutKey(t *testing.T) {
 	d := openTranslateTestDB(t)
 	if err := d.SetSetting("", "translate_auto_mode", settings.TranslateAutoBackground); err != nil {
@@ -339,6 +396,10 @@ func TestLoadTranslateBackgroundConfigAllowsOpenAICompatWithoutKeyWhenModelSet(t
 	if cfg.backend != settings.TranslateBackendOpenAICompat {
 		t.Fatalf("backend = %q, want %q with model", cfg.backend, settings.TranslateBackendOpenAICompat)
 	}
+}
+
+func ptrTime(t time.Time) *time.Time {
+	return &t
 }
 
 func openTranslateTestDB(t *testing.T) *db.DB {
