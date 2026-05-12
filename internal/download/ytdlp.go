@@ -10,10 +10,12 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	ytdlp "github.com/lrstanley/go-ytdlp"
 
 	"github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/model"
 )
 
 const DefaultCommentFetchLimit = 500
@@ -28,6 +30,7 @@ type ChannelInfoResult struct {
 // ChannelInfo fetches channel metadata for the given URL without downloading any
 // media. It uses --flat-playlist and limits to one item to minimise latency.
 func (y *YtDlpWrapper) ChannelInfo(ctx context.Context, url string) (ChannelInfoResult, error) {
+	start := time.Now()
 	result, err := ytdlp.New().
 		FlatPlaylist().
 		PlaylistItems("1:1").
@@ -35,14 +38,17 @@ func (y *YtDlpWrapper) ChannelInfo(ctx context.Context, url string) (ChannelInfo
 		DumpJSON().
 		Run(ctx, url)
 	if err != nil {
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, err, Opts{}, 0, 0, 0)
 		return ChannelInfoResult{}, fmt.Errorf("yt-dlp channel info: %w", err)
 	}
 
 	infos, err := result.GetExtractedInfo()
 	if err != nil {
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, err, Opts{}, 0, 0, 0)
 		return ChannelInfoResult{}, fmt.Errorf("parse yt-dlp channel info: %w", err)
 	}
 	if len(infos) == 0 {
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, fmt.Errorf("yt-dlp returned no info"), Opts{}, 0, 0, 0)
 		return ChannelInfoResult{}, fmt.Errorf("yt-dlp returned no info for %s", url)
 	}
 
@@ -77,8 +83,10 @@ func (y *YtDlpWrapper) ChannelInfo(ctx context.Context, url string) (ChannelInfo
 	}
 
 	if res.ID == "" {
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, fmt.Errorf("yt-dlp did not return a channel ID"), Opts{}, 1, 0, 0)
 		return res, fmt.Errorf("yt-dlp did not return a channel ID for %s", url)
 	}
+	y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, nil, Opts{}, 1, 0, 0)
 	return res, nil
 }
 
@@ -155,6 +163,7 @@ type VideoRef struct {
 // ChannelCheck fetches recent video IDs from a channel URL.
 // Returns up to limit VideoRef entries.
 func (y *YtDlpWrapper) ChannelCheck(ctx context.Context, url string, limit int) ([]VideoRef, error) {
+	start := time.Now()
 	result, err := ytdlp.New().
 		SkipDownload().
 		NoWarnings().
@@ -164,6 +173,7 @@ func (y *YtDlpWrapper) ChannelCheck(ctx context.Context, url string, limit int) 
 	if err != nil {
 		// Try to parse partial results even on error
 		if result == nil {
+			y.recordYtDlpOperationWithCounts(ctx, "channel.check", url, start, err, Opts{}, 0, 0, 0)
 			return nil, fmt.Errorf("yt-dlp channel check: %w", err)
 		}
 	}
@@ -171,8 +181,10 @@ func (y *YtDlpWrapper) ChannelCheck(ctx context.Context, url string, limit int) 
 	infos, parseErr := result.GetExtractedInfo()
 	if parseErr != nil {
 		if err != nil {
+			y.recordYtDlpOperationWithCounts(ctx, "channel.check", url, start, err, Opts{}, 0, 0, 0)
 			return nil, fmt.Errorf("yt-dlp channel check: %w", err)
 		}
+		y.recordYtDlpOperationWithCounts(ctx, "channel.check", url, start, parseErr, Opts{}, 0, 0, 0)
 		return nil, fmt.Errorf("parse yt-dlp channel check: %w", parseErr)
 	}
 
@@ -194,7 +206,7 @@ func (y *YtDlpWrapper) ChannelCheck(ctx context.Context, url string, limit int) 
 		}
 		refs = append(refs, r)
 	}
-
+	y.recordYtDlpOperationWithCounts(ctx, "channel.check", url, start, err, Opts{}, len(refs), 0, 0)
 	return refs, nil
 }
 
@@ -246,13 +258,20 @@ func fetchCommentsCommand(maxComments int, opts Opts) *ytdlp.Command {
 
 // FetchInfo fetches metadata for a single URL without downloading.
 func (y *YtDlpWrapper) FetchInfo(ctx context.Context, url string, opts ...Opts) (map[string]any, error) {
-	result, err := fetchInfoCommand(firstOpts(opts)).Run(ctx, url)
+	start := time.Now()
+	opt := firstOpts(opts)
+	result, err := fetchInfoCommand(opt).Run(ctx, url)
 	if err != nil {
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.info", url, start, err, opt, 0, 0, 0)
 		return nil, fmt.Errorf("yt-dlp info: %w", err)
 	}
 
 	infos, err := result.GetExtractedInfo()
 	if err != nil || len(infos) == 0 {
+		if err == nil {
+			err = fmt.Errorf("yt-dlp info: no results")
+		}
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.info", url, start, err, opt, 0, 0, 0)
 		return nil, fmt.Errorf("yt-dlp info: no results")
 	}
 
@@ -263,6 +282,7 @@ func (y *YtDlpWrapper) FetchInfo(ctx context.Context, url string, opts ...Opts) 
 	}
 	var m map[string]any
 	json.Unmarshal(data, &m)
+	y.recordYtDlpOperationWithCounts(ctx, "youtube.info", url, start, nil, opt, 1, 0, 0)
 	return m, nil
 }
 
@@ -276,13 +296,20 @@ func fetchPlaylistInfoCommand(opts Opts) *ytdlp.Command {
 
 // FetchPlaylistInfo fetches playlist metadata without downloading.
 func (y *YtDlpWrapper) FetchPlaylistInfo(ctx context.Context, url string, opts ...Opts) (map[string]any, error) {
-	result, err := fetchPlaylistInfoCommand(firstOpts(opts)).Run(ctx, url)
+	start := time.Now()
+	opt := firstOpts(opts)
+	result, err := fetchPlaylistInfoCommand(opt).Run(ctx, url)
 	if err != nil {
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.playlist_info", url, start, err, opt, 0, 0, 0)
 		return nil, fmt.Errorf("yt-dlp playlist info: %w", err)
 	}
 
 	infos, err := result.GetExtractedInfo()
 	if err != nil || len(infos) == 0 {
+		if err == nil {
+			err = fmt.Errorf("yt-dlp playlist info: no results")
+		}
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.playlist_info", url, start, err, opt, 0, 0, 0)
 		return nil, fmt.Errorf("yt-dlp playlist info: no results")
 	}
 
@@ -292,6 +319,7 @@ func (y *YtDlpWrapper) FetchPlaylistInfo(ctx context.Context, url string, opts .
 	}
 	var m map[string]any
 	json.Unmarshal(data, &m)
+	y.recordYtDlpOperationWithCounts(ctx, "youtube.playlist_info", url, start, nil, opt, 1, 0, 0)
 	return m, nil
 }
 
@@ -299,12 +327,14 @@ func (y *YtDlpWrapper) FetchPlaylistInfo(ctx context.Context, url string, opts .
 type YtDlpWrapper struct {
 	// CookiesDir is a directory containing cookies files (e.g. cookies.txt).
 	// When Opts.Cookies is set, it is used as the cookies file path directly.
-	CookiesDir string
+	CookiesDir    string
+	OperationSink OperationSink
 }
 
 // Download downloads the given URL using yt-dlp into opts.OutputDir.
 // Returns the list of file paths that were written.
 func (y *YtDlpWrapper) Download(ctx context.Context, url string, opts Opts) ([]string, error) {
+	start := time.Now()
 	// Output template: {outputDir}/{id}.%(ext)s
 	// If the caller provided an ID, use it; otherwise let yt-dlp pick.
 	template := fmt.Sprintf("%s/%%(id)s.%%(ext)s", opts.OutputDir)
@@ -333,6 +363,8 @@ func (y *YtDlpWrapper) Download(ctx context.Context, url string, opts Opts) ([]s
 	cmd = applyCookieAuth(cmd, opts)
 
 	paths, err := runVideoDownload(ctx, cmd, url)
+	files, bytes := summarizePaths(paths)
+	y.recordYtDlpOperationWithCounts(ctx, "media.ytdlp", url, start, err, opts, 0, files, bytes)
 	if err != nil {
 		return nil, err
 	}
@@ -430,13 +462,19 @@ func extractFilenamesFromRaw(result *ytdlp.Result) []string {
 // FetchComments fetches comments for a URL via yt-dlp without re-downloading media.
 // Returns up to maxComments comments mapped to CommentInput for DB insertion.
 func (y *YtDlpWrapper) FetchComments(ctx context.Context, url string, maxComments int, opts Opts) ([]db.CommentInput, error) {
+	start := time.Now()
 	result, err := fetchCommentsCommand(maxComments, opts).Run(ctx, url)
 	if err != nil {
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.comments", url, start, err, opts, 0, 0, 0)
 		return nil, fmt.Errorf("yt-dlp comments: %w", err)
 	}
 
 	infos, err := result.GetExtractedInfo()
 	if err != nil || len(infos) == 0 {
+		if err == nil {
+			err = fmt.Errorf("yt-dlp comments: no results")
+		}
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.comments", url, start, err, opts, 0, 0, 0)
 		return nil, fmt.Errorf("yt-dlp comments: no results")
 	}
 
@@ -475,7 +513,27 @@ func (y *YtDlpWrapper) FetchComments(ctx context.Context, url string, maxComment
 		}
 		out = append(out, ci)
 	}
+	y.recordYtDlpOperationWithCounts(ctx, "youtube.comments", url, start, nil, opts, len(out), 0, 0)
 	return out, nil
+}
+
+func (y *YtDlpWrapper) recordYtDlpOperationWithCounts(ctx context.Context, operation, url string, start time.Time, err error, opts Opts, items, files int, bytes int64) {
+	recordOperation(ctx, y.OperationSink, model.DownloaderOperation{
+		Operation:   operation,
+		Platform:    platformFromURL(url),
+		Subject:     subjectForURL(url),
+		Tool:        "yt-dlp",
+		StartedAtMs: start.UnixMilli(),
+		EndedAtMs:   time.Now().UnixMilli(),
+		Status:      statusForError(err),
+		ErrorKind:   ClassifyError(err, nil),
+		Error:       errorString(err, nil),
+		CookieLabel: CookieLabel(opts.Cookies, opts.CookiesFromBrowser),
+		ItemCount:   items,
+		FileCount:   files,
+		MediaCount:  files,
+		Bytes:       bytes,
+	})
 }
 
 // ParseCommentsDumpJSON maps yt-dlp --dump-json output into DB comment rows.

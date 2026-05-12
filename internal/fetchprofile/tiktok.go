@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/screwys/igloo/internal/download"
 )
 
 const ttTimeout = 30 * time.Second
@@ -23,13 +24,13 @@ func FetchTikTok(ctx context.Context, handle string) (*Profile, error) {
 	cmdCtx, cancel := context.WithTimeout(ctx, ttTimeout)
 	defer cancel()
 	url := "https://www.tiktok.com/@" + h + "/avatar"
-	cmd := exec.CommandContext(cmdCtx, "gallery-dl", "--dump-json", url)
-	out, err := cmd.Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok && isTikTokNotFound(ee.Stderr) {
+	result := download.CommandRunner{}.Run(cmdCtx, "gallery-dl", []string{"--dump-json", url}, download.CommandOptions{})
+	out := result.CombinedOutput()
+	if result.Err != nil {
+		if isTikTokNotFound(out) {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("gallery-dl: %w", err)
+		return nil, fmt.Errorf("gallery-dl: %w", result.Err)
 	}
 	return parseTikTokAvatar(h, out)
 }

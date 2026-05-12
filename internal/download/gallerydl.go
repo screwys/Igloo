@@ -1,25 +1,58 @@
 package download
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/screwys/igloo/internal/model"
 )
 
+const galleryDLDefaultTimeout = 2 * time.Hour
+
 // GalleryDLWrapper wraps the gallery-dl CLI for downloading image slideshows.
-type GalleryDLWrapper struct{}
+type GalleryDLWrapper struct {
+	Runner        CommandRunner
+	OperationSink OperationSink
+}
+
+func (g *GalleryDLWrapper) Run(ctx context.Context, operation, platform, subject string, args []string, cookiesFile string, opts CommandOptions) CommandResult {
+	result := g.Runner.Run(ctx, "gallery-dl", args, opts)
+	status := statusForError(result.Err)
+	errorKind := ""
+	errorText := ""
+	if result.Err != nil {
+		errorKind = ClassifyError(result.Err, result.CombinedOutput())
+		errorText = errorString(result.Err, result.CombinedOutput())
+	}
+	recordOperation(ctx, g.OperationSink, model.DownloaderOperation{
+		Operation:   operation,
+		Platform:    platform,
+		Subject:     subjectForURL(subject),
+		Tool:        "gallery-dl",
+		StartedAtMs: result.StartedAtMs,
+		EndedAtMs:   result.EndedAtMs,
+		Status:      status,
+		ErrorKind:   errorKind,
+		Error:       errorText,
+		CookieLabel: CookieLabel(cookiesFile, ""),
+		ElapsedMs:   result.ElapsedMs,
+		SummaryJSON: operationSummaryJSON(map[string]any{
+			"args":      result.RedactedArgs,
+			"exit_code": result.ExitCode,
+		}),
+	})
+	return result
+}
 
 // Reposts fetches TikTok repost metadata from gallery-dl's /@USER/reposts
 // extractor without downloading media.
@@ -33,10 +66,11 @@ func (g *GalleryDLWrapper) Reposts(ctx context.Context, handle string, limit int
 	}
 	rawURL := "https://www.tiktok.com/@" + handle + "/reposts"
 	args := tiktokRepostArgs(limit, cookiesFile, rawURL)
-	cmd := exec.CommandContext(ctx, "gallery-dl", args...)
-	output, err := cmd.CombinedOutput()
+	result := g.Run(ctx, "tiktok.reposts", "tiktok", rawURL, args, cookiesFile, CommandOptions{Timeout: 90 * time.Second})
+	output := result.CombinedOutput()
+	err := result.Err
 	if err != nil {
-		return nil, fmt.Errorf("gallery-dl reposts: %w: %s", err, output)
+		return nil, fmt.Errorf("gallery-dl reposts: %w: %s", err, RedactText(string(output)))
 	}
 	return parseTikTokRepostDump(output, handle), nil
 }
@@ -80,68 +114,11 @@ func parseTikTokRepostDump(output []byte, reposterHandle string) []VideoRef {
 }
 
 func galleryDLJSONPayloads(output []byte) []any {
-	var payloads []any
-	for offset := 0; offset < len(output); {
-		start := nextJSONLineStart(output, offset)
-		if start < 0 {
-			break
-		}
-		dec := json.NewDecoder(bytes.NewReader(output[start:]))
-		dec.UseNumber()
-		var payload any
-		if err := dec.Decode(&payload); err != nil {
-			offset = start + 1
-			continue
-		}
-		payloads = append(payloads, payload)
-		if n := dec.InputOffset(); n > 0 {
-			offset = start + int(n)
-		} else {
-			offset = start + 1
-		}
-	}
-	return payloads
-}
-
-func nextJSONLineStart(data []byte, from int) int {
-	for i := from; i < len(data); {
-		j := i
-		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\r') {
-			j++
-		}
-		if j < len(data) && (data[j] == '{' || data[j] == '[') && !looksLikeGalleryDLLogLine(data[j:]) {
-			return j
-		}
-		if nl := bytes.IndexByte(data[i:], '\n'); nl >= 0 {
-			i += nl + 1
-		} else {
-			break
-		}
-	}
-	return -1
-}
-
-func looksLikeGalleryDLLogLine(line []byte) bool {
-	if len(line) < 3 || line[0] != '[' {
-		return false
-	}
-	c := line[1]
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+	return JSONPayloads(output)
 }
 
 func flattenJSONObjects(value any) []map[string]any {
-	switch v := value.(type) {
-	case map[string]any:
-		return []map[string]any{v}
-	case []any:
-		var out []map[string]any
-		for _, item := range v {
-			out = append(out, flattenJSONObjects(item)...)
-		}
-		return out
-	default:
-		return nil
-	}
+	return FlattenJSONObjects(value)
 }
 
 var tiktokPostPathRe = regexp.MustCompile(`/@([^/]+)/video/([0-9]+)`)
@@ -329,8 +306,9 @@ func (g *GalleryDLWrapper) Download(ctx context.Context, rawURL, destDir, id, co
 		args = append(args, "--cookies", cookiesFile)
 	}
 	args = append(args, rawURL)
-	cmd := exec.CommandContext(ctx, "gallery-dl", args...)
-	output, err := cmd.CombinedOutput()
+	result := g.Run(ctx, "media.gallerydl", platformFromURL(rawURL), rawURL, args, cookiesFile, CommandOptions{Timeout: galleryDLDefaultTimeout})
+	output := result.CombinedOutput()
+	err = result.Err
 	// TikTok posts that are deleted, private, or geo-restricted surface as
 	// "Requested post not available" (exit 0, empty tmpdir). Without this
 	// check we'd fall through to yt-dlp, which reports a misleading "IP
@@ -339,7 +317,7 @@ func (g *GalleryDLWrapper) Download(ctx context.Context, rawURL, destDir, id, co
 		return nil, &HTTPStatusError{StatusCode: 404, URL: rawURL}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("gallery-dl: %w: %s", err, output)
+		return nil, fmt.Errorf("gallery-dl: %w: %s", err, RedactText(string(output)))
 	}
 
 	// Collect downloaded files, sort for deterministic ordering

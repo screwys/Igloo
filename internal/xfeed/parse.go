@@ -1,7 +1,6 @@
 package xfeed
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/model"
 	"github.com/taruti/langdetect"
 )
@@ -160,7 +160,7 @@ type record struct {
 
 func parseRecords(output []byte) []record {
 	var records []record
-	for _, payload := range jsonPayloads(output) {
+	for _, payload := range download.JSONPayloads(output) {
 		records = append(records, recordsFromPayload(payload)...)
 	}
 	return records
@@ -658,54 +658,4 @@ func tweetIDFromURL(raw string) string {
 		}
 	}
 	return ""
-}
-
-func jsonPayloads(output []byte) []any {
-	var payloads []any
-	for offset := 0; offset < len(output); {
-		start := nextJSONStart(output, offset)
-		if start < 0 {
-			break
-		}
-		dec := json.NewDecoder(bytes.NewReader(output[start:]))
-		dec.UseNumber()
-		var payload any
-		if err := dec.Decode(&payload); err != nil {
-			offset = start + 1
-			continue
-		}
-		payloads = append(payloads, payload)
-		if n := dec.InputOffset(); n > 0 {
-			offset = start + int(n)
-		} else {
-			offset = start + 1
-		}
-	}
-	return payloads
-}
-
-func nextJSONStart(data []byte, from int) int {
-	for i := from; i < len(data); {
-		j := i
-		for j < len(data) && (data[j] == ' ' || data[j] == '\t' || data[j] == '\r') {
-			j++
-		}
-		if j < len(data) && (data[j] == '{' || data[j] == '[') && !looksLikeGalleryDLLogLine(data[j:]) {
-			return j
-		}
-		if nl := bytes.IndexByte(data[i:], '\n'); nl >= 0 {
-			i += nl + 1
-		} else {
-			break
-		}
-	}
-	return -1
-}
-
-func looksLikeGalleryDLLogLine(line []byte) bool {
-	if len(line) < 3 || line[0] != '[' {
-		return false
-	}
-	c := line[1]
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }

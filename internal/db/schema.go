@@ -155,6 +155,28 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 			applied_at_ms INTEGER NOT NULL
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS downloader_operations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			operation TEXT NOT NULL,
+			platform TEXT NOT NULL,
+			subject TEXT NOT NULL DEFAULT '',
+			tool TEXT NOT NULL,
+			started_at_ms INTEGER NOT NULL,
+			ended_at_ms INTEGER NOT NULL,
+			status TEXT NOT NULL,
+			error_kind TEXT NOT NULL DEFAULT '',
+			error TEXT NOT NULL DEFAULT '',
+			cookie_label TEXT NOT NULL DEFAULT '',
+			elapsed_ms INTEGER NOT NULL DEFAULT 0,
+			item_count INTEGER NOT NULL DEFAULT 0,
+			media_count INTEGER NOT NULL DEFAULT 0,
+			file_count INTEGER NOT NULL DEFAULT 0,
+			bytes INTEGER NOT NULL DEFAULT 0,
+			summary_json TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_downloader_operations_recent ON downloader_operations(started_at_ms DESC, id DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_downloader_operations_summary ON downloader_operations(platform, operation, status, error_kind)`,
+
 		`CREATE TABLE IF NOT EXISTS video_comments (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			video_id TEXT NOT NULL,

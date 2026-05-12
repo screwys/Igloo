@@ -3,9 +3,9 @@ package download
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
-	"os/exec"
 	"regexp"
 	"sort"
 	"strconv"
@@ -152,31 +152,29 @@ func (g *GalleryDLWrapper) instagramDump(ctx context.Context, rawURL string, lim
 }
 
 func (g *GalleryDLWrapper) instagramDumpOutput(ctx context.Context, rawURL string, limit int, cookiesFile string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, instagramGalleryDLTimeout)
-	defer cancel()
 	args := instagramDumpArgs(limit, cookiesFile, rawURL)
-	cmd := exec.CommandContext(ctx, "gallery-dl", args...)
-	output, err := cmd.CombinedOutput()
+	result := g.Run(ctx, "instagram.dump", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: instagramGalleryDLTimeout})
+	output := result.CombinedOutput()
+	err := result.Err
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(result.Err, context.DeadlineExceeded) {
 			return nil, fmt.Errorf("gallery-dl Instagram timed out after %s for %s", instagramGalleryDLTimeout, rawURL)
 		}
-		return nil, fmt.Errorf("gallery-dl Instagram: %w: %s", err, output)
+		return nil, fmt.Errorf("gallery-dl Instagram: %w: %s", err, RedactText(string(output)))
 	}
 	return output, nil
 }
 
 func (g *GalleryDLWrapper) instagramTaggedDumpOutput(ctx context.Context, rawURL string, limit int, cookiesFile string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, instagramGalleryDLTimeout)
-	defer cancel()
 	args := instagramTaggedArgs(limit, cookiesFile, rawURL)
-	cmd := exec.CommandContext(ctx, "gallery-dl", args...)
-	output, err := cmd.CombinedOutput()
+	result := g.Run(ctx, "instagram.tagged", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: instagramGalleryDLTimeout})
+	output := result.CombinedOutput()
+	err := result.Err
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(result.Err, context.DeadlineExceeded) {
 			return nil, fmt.Errorf("gallery-dl Instagram tagged timed out after %s for %s", instagramGalleryDLTimeout, rawURL)
 		}
-		return nil, fmt.Errorf("gallery-dl Instagram tagged: %w: %s", err, output)
+		return nil, fmt.Errorf("gallery-dl Instagram tagged: %w: %s", err, RedactText(string(output)))
 	}
 	return output, nil
 }

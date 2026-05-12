@@ -386,44 +386,23 @@ func (m *Manager) cookiesFor(platform string) (string, string) {
 	if m.db != nil {
 		fileEnabled, _ = m.db.GetSetting("cookies_"+platform+"_enabled", "1")
 	}
-	if fileEnabled != "0" && m.cfg.CookiesDir != "" {
-		candidates := cookieFileCandidates(m.cfg.CookiesDir, platform)
-		for _, p := range candidates {
-			if _, err := os.Stat(p); err == nil {
-				return p, ""
-			}
-		}
+	browser := ""
+	if m.db != nil {
+		browser, _ = m.db.GetSetting("cookies_"+platform+"_browser", "")
 	}
-	// No cookies file — check DB for browser cookies setting.
-	browser, _ := m.db.GetSetting("cookies_"+platform+"_browser", "")
-	if browser != "" {
-		return "", browser
+	cookiesDir := ""
+	if m.cfg != nil {
+		cookiesDir = m.cfg.CookiesDir
 	}
-	return "", ""
+	set := download.ResolveCookieSet(cookiesDir, platform, fileEnabled != "0", browser)
+	return set.File, set.Browser
 }
 
 func cookieFileCandidates(cookiesDir, platform string) []string {
-	names := []string{platform + "_cookies.txt"}
-	switch platform {
-	case "instagram":
-		names = append(names, "www.instagram.com_cookies.txt", "instagram.com_cookies.txt")
-	case "tiktok":
-		names = append(names, "www.tiktok.com_cookies.txt", "tiktok.com_cookies.txt")
-	case "youtube":
-		names = append(names, "www.youtube.com_cookies.txt", "youtube.com_cookies.txt")
-	case "twitter":
-		names = append(names, "x.com_cookies.txt", "twitter.com_cookies.txt", "www.x.com_cookies.txt", "www.twitter.com_cookies.txt")
-	}
-	names = append(names, "cookies.txt")
-	out := make([]string, 0, len(names))
-	seen := make(map[string]struct{}, len(names))
-	for _, name := range names {
-		p := filepath.Join(cookiesDir, name)
-		if _, ok := seen[p]; ok {
-			continue
-		}
-		seen[p] = struct{}{}
-		out = append(out, p)
+	candidates := download.DiscoverCookieFiles(cookiesDir, platform)
+	out := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		out = append(out, candidate.Path)
 	}
 	return out
 }

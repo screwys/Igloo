@@ -4,15 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/fxtwitter"
 	"github.com/screwys/igloo/internal/model"
 )
@@ -31,6 +28,7 @@ type Client struct {
 	Runner        Runner
 	CookiePool    *CookiePool
 	TweetFallback TweetFallback
+	OperationSink download.OperationSink
 }
 
 // NewClient returns a gallery-dl backed X feed client.
@@ -309,12 +307,12 @@ func (c *Client) dump(ctx context.Context, rawURL string, limit int) ([]byte, er
 	args := galleryDLArgs(rawURL, limit)
 	cookies := c.cookies()
 	if len(cookies) == 0 {
-		return c.run(ctx, args)
+		return c.run(ctx, rawURL, args, "")
 	}
 	var lastErr error
 	for i := 0; i < len(cookies); i++ {
 		cookie := cookies[i]
-		out, err := c.run(ctx, append([]string{"--cookies", cookie}, args...))
+		out, err := c.run(ctx, rawURL, append([]string{"--cookies", cookie}, args...), cookie)
 		if err == nil {
 			return out, nil
 		}
@@ -323,16 +321,41 @@ func (c *Client) dump(ctx context.Context, rawURL string, limit int) ([]byte, er
 	return nil, lastErr
 }
 
-func (c *Client) run(ctx context.Context, args []string) ([]byte, error) {
+func (c *Client) run(ctx context.Context, rawURL string, args []string, cookieFile string) ([]byte, error) {
+	start := time.Now()
 	runner := runGalleryDL
 	if c != nil && c.Runner != nil {
 		runner = c.Runner
 	}
 	out, err := runner(ctx, args)
+	downloadOp := model.DownloaderOperation{
+		Operation:   "x.gallerydl.dump",
+		Platform:    "twitter",
+		Subject:     rawURL,
+		Tool:        "gallery-dl",
+		StartedAtMs: start.UnixMilli(),
+		EndedAtMs:   time.Now().UnixMilli(),
+		Status:      download.OperationStatusSuccess,
+		CookieLabel: download.CookieLabel(cookieFile, ""),
+		SummaryJSON: download.RedactText(mustJSON(map[string]any{"args": download.RedactArgs(args)})),
+	}
+	if err != nil {
+		downloadOp.Status = download.OperationStatusFailure
+		downloadOp.ErrorKind = download.ClassifyError(err, out)
+		downloadOp.Error = download.RedactText(err.Error() + ": " + string(out))
+	}
+	if c != nil && c.OperationSink != nil {
+		_ = c.OperationSink.RecordDownloaderOperation(ctx, downloadOp)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("gallery-dl X feed: %w: %s", err, out)
 	}
 	return out, nil
+}
+
+func mustJSON(v any) string {
+	data, _ := json.Marshal(v)
+	return string(data)
 }
 
 func galleryDLArgs(rawURL string, limit int) []string {
@@ -352,8 +375,8 @@ func galleryDLArgs(rawURL string, limit int) []string {
 }
 
 func runGalleryDL(ctx context.Context, args []string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "gallery-dl", args...)
-	return cmd.CombinedOutput()
+	result := download.CommandRunner{}.Run(ctx, "gallery-dl", args, download.CommandOptions{Timeout: 2 * time.Minute})
+	return result.CombinedOutput(), result.Err
 }
 
 func (c *Client) cookies() []string {
@@ -386,31 +409,10 @@ func (p *CookiePool) NextBatch() []string {
 }
 
 func DiscoverCookieFiles(cookiesDir string) []string {
-	cookiesDir = strings.TrimSpace(cookiesDir)
-	if cookiesDir == "" {
-		return nil
+	candidates := download.DiscoverCookieFiles(strings.TrimSpace(cookiesDir), "twitter")
+	out := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		out = append(out, candidate.Path)
 	}
-	var out []string
-	addGlob := func(pattern string) {
-		matches, _ := filepath.Glob(filepath.Join(cookiesDir, pattern))
-		sort.Strings(matches)
-		for _, p := range matches {
-			if info, err := os.Stat(p); err == nil && !info.IsDir() {
-				out = append(out, p)
-			}
-		}
-	}
-	addGlob("x.com_cookies*.txt")
-	addGlob("twitter_cookies.txt")
-	addGlob("cookies.txt")
-	seen := make(map[string]bool, len(out))
-	deduped := out[:0]
-	for _, p := range out {
-		if seen[p] {
-			continue
-		}
-		seen[p] = true
-		deduped = append(deduped, p)
-	}
-	return deduped
+	return out
 }

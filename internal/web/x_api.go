@@ -111,7 +111,9 @@ func (s *Server) handleXProbe(w http.ResponseWriter, r *http.Request) {
 	if s.cfg != nil {
 		cookiesDir = s.cfg.CookiesDir
 	}
-	items, err := xfeed.NewClient(cookiesDir).FetchTimeline(ctx, handle, 5)
+	client := xfeed.NewClient(cookiesDir)
+	client.OperationSink = s.db
+	items, err := client.FetchTimeline(ctx, handle, 5)
 	if err != nil {
 		writeJSON(w, 200, map[string]any{"success": false, "error": err.Error()})
 		return

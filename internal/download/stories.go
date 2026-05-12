@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -36,10 +36,11 @@ func (g *GalleryDLWrapper) TikTokStories(ctx context.Context, handle string, lim
 	}
 	rawURL := "https://www.tiktok.com/@" + handle + "/stories"
 	args := storyDumpArgs(limit, cookiesFile, rawURL)
-	cmd := exec.CommandContext(ctx, "gallery-dl", args...)
-	output, err := cmd.CombinedOutput()
+	result := g.Run(ctx, "tiktok.stories", "tiktok", rawURL, args, cookiesFile, CommandOptions{Timeout: 90 * time.Second})
+	output := result.CombinedOutput()
+	err := result.Err
 	if err != nil {
-		return nil, fmt.Errorf("gallery-dl TikTok stories: %w: %s", err, output)
+		return nil, fmt.Errorf("gallery-dl TikTok stories: %w: %s", err, RedactText(string(output)))
 	}
 	return parseTikTokStoryDump(output, handle), nil
 }

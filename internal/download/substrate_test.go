@@ -1,0 +1,129 @@
+package download
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/screwys/igloo/internal/model"
+)
+
+type memoryOperationSink struct {
+	ops []model.DownloaderOperation
+}
+
+func (s *memoryOperationSink) RecordDownloaderOperation(ctx context.Context, op model.DownloaderOperation) error {
+	s.ops = append(s.ops, op)
+	return nil
+}
+
+func TestCommandRunnerCapturesExitAndRedactsArgs(t *testing.T) {
+	result := CommandRunner{}.Run(context.Background(), "sh", []string{"-c", "echo out; echo err >&2; exit 7", "--cookies", "/tmp/private-cookies.txt"}, CommandOptions{})
+	if result.ExitCode != 7 {
+		t.Fatalf("exit code = %d, want 7", result.ExitCode)
+	}
+	if result.Err == nil {
+		t.Fatal("expected non-zero command error")
+	}
+	if !strings.Contains(string(result.CombinedOutput()), "out") || !strings.Contains(string(result.CombinedOutput()), "err") {
+		t.Fatalf("combined output missing stdout/stderr: %q", string(result.CombinedOutput()))
+	}
+	redacted := strings.Join(RedactArgs([]string{"--cookies", "/tmp/private-cookies.txt", "--cookies-from-browser=firefox"}), " ")
+	if strings.Contains(redacted, "private-cookies") || strings.Contains(redacted, "firefox") {
+		t.Fatalf("args were not redacted: %s", redacted)
+	}
+}
+
+func TestJSONPayloadsHandlesMixedDownloaderOutput(t *testing.T) {
+	raw := []byte("[gallery-dl][info] log line\n{\"id\":\"one\"}\n[\n {\"id\":\"two\"},\n [{\"id\":\"three\"}]\n]\n")
+	payloads := JSONPayloads(raw)
+	if len(payloads) != 2 {
+		t.Fatalf("payload count = %d, want 2", len(payloads))
+	}
+	var ids []string
+	for _, payload := range payloads {
+		for _, obj := range FlattenJSONObjects(payload) {
+			if id, _ := obj["id"].(string); id != "" {
+				ids = append(ids, id)
+			}
+		}
+	}
+	got := strings.Join(ids, ",")
+	if got != "one,two,three" {
+		t.Fatalf("flattened ids = %s", got)
+	}
+}
+
+func TestClassifyErrorPatterns(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		out  []byte
+		want string
+	}{
+		{"auth", errors.New("login required; cookies missing"), nil, ErrorKindAuth},
+		{"rate", errors.New("HTTP Error 429: Too Many Requests"), nil, ErrorKindRateLimit},
+		{"not_found", nil, []byte("Requested post not available"), ErrorKindNotFound},
+		{"empty", errors.New("gallery-dl: no files downloaded"), nil, ErrorKindEmptyResult},
+		{"parse", errors.New("invalid character '<' looking for beginning of value"), nil, ErrorKindParse},
+		{"canceled", context.Canceled, nil, ErrorKindCanceled},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClassifyError(tt.err, tt.out); got != tt.want {
+				t.Fatalf("kind = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCookieResolverUsesPlatformSpecificFilesAndRotationCandidates(t *testing.T) {
+	dir := t.TempDir()
+	files := []string{
+		"x.com_cookies_b.txt",
+		"x.com_cookies_a.txt",
+		"www.instagram.com_cookies.txt",
+		"youtube.com_cookies.txt",
+	}
+	for _, name := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("# Netscape HTTP Cookie File\n"), 0o600); err != nil {
+			t.Fatalf("write cookie %s: %v", name, err)
+		}
+	}
+	xFiles := DiscoverCookieFiles(dir, "twitter")
+	if len(xFiles) != 2 || filepath.Base(xFiles[0].Path) != "x.com_cookies_a.txt" || filepath.Base(xFiles[1].Path) != "x.com_cookies_b.txt" {
+		t.Fatalf("twitter cookie candidates = %#v", xFiles)
+	}
+	insta := ResolveCookieSet(dir, "instagram", true, "firefox")
+	if filepath.Base(insta.File) != "www.instagram.com_cookies.txt" || insta.Browser != "" {
+		t.Fatalf("instagram cookies = %#v", insta)
+	}
+	youtube := ResolveCookieSet(dir, "youtube", false, "firefox")
+	if youtube.File != "" || youtube.Browser != "firefox" {
+		t.Fatalf("youtube browser fallback = %#v", youtube)
+	}
+}
+
+func TestDownloaderRecordsDirectHTTPFailureOperation(t *testing.T) {
+	sink := &memoryOperationSink{}
+	d := NewDownloader("")
+	d.SetOperationSink(sink)
+	_, err := d.Download(context.Background(), "http://127.0.0.1/media.jpg", "photo", Opts{OutputDir: t.TempDir(), ID: "photo"})
+	if err == nil {
+		t.Fatal("expected blocked local host error")
+	}
+	if len(sink.ops) != 1 {
+		t.Fatalf("operation count = %d, want 1", len(sink.ops))
+	}
+	op := sink.ops[0]
+	if op.Operation != "media.download" || op.Tool != "http" || op.Status != OperationStatusFailure || op.FileCount != 0 || op.Error == "" {
+		t.Fatalf("operation = %#v", op)
+	}
+	if op.ElapsedMs < 0 || op.EndedAtMs < op.StartedAtMs || time.UnixMilli(op.StartedAtMs).IsZero() {
+		t.Fatalf("invalid timing: %#v", op)
+	}
+}

@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/screwys/igloo/internal/download"
 )
 
 const ytTimeout = 30 * time.Second
@@ -29,21 +30,22 @@ func FetchYouTube(ctx context.Context, rawID string) (*Profile, error) {
 	cmdCtx, cancel := context.WithTimeout(ctx, ytTimeout)
 	defer cancel()
 	channelURL := "https://www.youtube.com/channel/" + rawID
-	cmd := exec.CommandContext(cmdCtx, "yt-dlp",
+	args := []string{
 		"--dump-single-json",
 		"--playlist-items", "0",
 		"--skip-download",
 		"--no-warnings",
 		channelURL,
-	)
-	out, err := cmd.Output()
-	if err != nil {
+	}
+	result := download.CommandRunner{}.Run(cmdCtx, "yt-dlp", args, download.CommandOptions{})
+	out := result.CombinedOutput()
+	if result.Err != nil {
 		// yt-dlp returns non-zero for "channel not found" and transient
 		// network errors alike. Map stderr signal to ErrNotFound; else bubble.
-		if ee, ok := err.(*exec.ExitError); ok && isYouTubeNotFound(ee.Stderr) {
+		if isYouTubeNotFound(out) {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("yt-dlp: %w", err)
+		return nil, fmt.Errorf("yt-dlp: %w", result.Err)
 	}
 	return parseYouTubeDump(rawID, out)
 }

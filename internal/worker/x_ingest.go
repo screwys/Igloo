@@ -71,7 +71,9 @@ func (m *Manager) xFeedClient() xFeedFetcher {
 	if m.cfg != nil {
 		cookiesDir = m.cfg.CookiesDir
 	}
-	m.xFeedFetcher = xfeed.NewClient(cookiesDir)
+	client := xfeed.NewClient(cookiesDir)
+	client.OperationSink = m.db
+	m.xFeedFetcher = client
 	return m.xFeedFetcher
 }
 

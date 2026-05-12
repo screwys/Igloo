@@ -3,6 +3,7 @@ package download
 import (
 	"context"
 	"errors"
+	"github.com/screwys/igloo/internal/model"
 	"log"
 	"net/url"
 	"path"
@@ -32,14 +33,26 @@ type Downloader struct {
 	YtDlp     *YtDlpWrapper
 	GalleryDL *GalleryDLWrapper
 	HTTP      *HTTPDownloader
+	sink      OperationSink
 }
 
 // NewDownloader returns a Downloader with default clients.
 func NewDownloader(cookiesDir string) *Downloader {
-	return &Downloader{
+	d := &Downloader{
 		YtDlp:     &YtDlpWrapper{CookiesDir: cookiesDir},
-		GalleryDL: &GalleryDLWrapper{},
+		GalleryDL: &GalleryDLWrapper{Runner: CommandRunner{}},
 		HTTP:      NewHTTPDownloader(),
+	}
+	return d
+}
+
+func (d *Downloader) SetOperationSink(sink OperationSink) {
+	d.sink = sink
+	if d.YtDlp != nil {
+		d.YtDlp.OperationSink = sink
+	}
+	if d.GalleryDL != nil {
+		d.GalleryDL.OperationSink = sink
 	}
 }
 
@@ -51,16 +64,47 @@ func NewDownloader(cookiesDir string) *Downloader {
 //  2. Direct CDN (pbs.twimg.com, video.twimg.com, photo/image) → HTTP
 //  3. Default → yt-dlp
 func (d *Downloader) Download(ctx context.Context, rawURL string, mediaType string, opts Opts) ([]string, error) {
+	start := time.Now()
+	platform := platformFromURL(rawURL)
+	tool := "yt-dlp"
+	if IsTikTokURL(rawURL) || IsInstagramURL(rawURL) {
+		tool = "gallery-dl/yt-dlp"
+	} else if isDirectMedia(rawURL, mediaType) {
+		tool = "http"
+	}
+	var paths []string
+	var err error
+	defer func() {
+		files, bytes := summarizePaths(paths)
+		recordOperation(ctx, d.sink, model.DownloaderOperation{
+			Operation:   "media.download",
+			Platform:    platform,
+			Subject:     subjectForURL(rawURL),
+			Tool:        tool,
+			StartedAtMs: start.UnixMilli(),
+			EndedAtMs:   time.Now().UnixMilli(),
+			Status:      statusForError(err),
+			ErrorKind:   ClassifyError(err, nil),
+			Error:       errorString(err, nil),
+			CookieLabel: CookieLabel(opts.Cookies, opts.CookiesFromBrowser),
+			FileCount:   files,
+			MediaCount:  files,
+			Bytes:       bytes,
+		})
+	}()
 	if IsTikTokURL(rawURL) {
-		return d.downloadTikTok(ctx, rawURL, opts)
+		paths, err = d.downloadTikTok(ctx, rawURL, opts)
+		return paths, err
 	}
 	if IsInstagramURL(rawURL) {
-		return d.downloadGalleryDLFirst(ctx, canonicalInstagramURL(rawURL), opts)
+		paths, err = d.downloadGalleryDLFirst(ctx, canonicalInstagramURL(rawURL), opts)
+		return paths, err
 	}
 	if isDirectMedia(rawURL, mediaType) {
 		filename := opts.ID + mediaExtFromURL(rawURL)
 		httpOpts := directMediaHTTPOptions(rawURL, mediaType)
-		p, err := d.HTTP.DownloadFileWithOptions(ctx, rawURL, opts.OutputDir, filename, httpOpts)
+		var p string
+		p, err = d.HTTP.DownloadFileWithOptions(ctx, rawURL, opts.OutputDir, filename, httpOpts)
 		if err != nil {
 			// Try lower quality variants for twimg photos that 403/404 on orig/large/etc.
 			var httpErr *HTTPStatusError
@@ -78,9 +122,11 @@ func (d *Downloader) Download(ctx context.Context, rawURL string, mediaType stri
 				return nil, err
 			}
 		}
-		return []string{p}, nil
+		paths = []string{p}
+		return paths, nil
 	}
-	return d.YtDlp.Download(ctx, rawURL, opts)
+	paths, err = d.YtDlp.Download(ctx, rawURL, opts)
+	return paths, err
 }
 
 func directMediaHTTPOptions(rawURL, mediaType string) HTTPDownloadOptions {

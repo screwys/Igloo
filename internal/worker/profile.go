@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/fetchprofile"
 	"github.com/screwys/igloo/internal/model"
 )
@@ -759,6 +760,7 @@ func (m *Manager) downloadProfileMedia(ctx context.Context, channelID, kind, url
 	if m.downloader.HTTP == nil {
 		return false
 	}
+	start := time.Now()
 	dlURL := url
 	// Twitter avatar URLs from fxtwitter use the _normal 48x48 variant;
 	// upgrade to 400x400 so the downloaded file exceeds the placeholder
@@ -773,17 +775,67 @@ func (m *Manager) downloadProfileMedia(ctx context.Context, channelID, kind, url
 			tmpPath, err = m.downloader.HTTP.DownloadFile(ctx, url, dir, tempName)
 		}
 		if err != nil {
+			m.recordProfileMediaOperation(ctx, channelID, kind, url, start, err, 0, 0)
 			log.Printf("[profile] %s download %s: %v", kind, channelID, err)
 			return false
 		}
 	}
 	if _, err := normalizeDownloadedImage(tmpPath, dir, channelID); err != nil {
+		m.recordProfileMediaOperation(ctx, channelID, kind, url, start, err, 0, 0)
 		log.Printf("[profile] %s normalize %s: %v", kind, channelID, err)
 		return false
 	}
+	var bytes int64
+	if fi, err := os.Stat(tmpPath); err == nil {
+		bytes = fi.Size()
+	}
+	m.recordProfileMediaOperation(ctx, channelID, kind, url, start, nil, 1, bytes)
 	// No media_files bookkeeping — the file lives at the conventional disk
 	// path and resolveAvatarPath/resolveBannerPath find it there.
 	return true
+}
+
+func (m *Manager) recordProfileMediaOperation(ctx context.Context, channelID, kind, rawURL string, start time.Time, err error, files int, bytes int64) {
+	if m == nil || m.db == nil {
+		return
+	}
+	platform := "http"
+	if strings.HasPrefix(channelID, "twitter_") {
+		platform = "twitter"
+	} else if strings.HasPrefix(channelID, "instagram_") {
+		platform = "instagram"
+	} else if strings.HasPrefix(channelID, "tiktok_") {
+		platform = "tiktok"
+	} else if strings.HasPrefix(channelID, "youtube_") {
+		platform = "youtube"
+	}
+	status := download.OperationStatusSuccess
+	if err != nil {
+		status = download.OperationStatusFailure
+	}
+	_ = m.db.RecordDownloaderOperation(ctx, model.DownloaderOperation{
+		Operation:   "profile." + kind,
+		Platform:    platform,
+		Subject:     channelID,
+		Tool:        "http",
+		StartedAtMs: start.UnixMilli(),
+		EndedAtMs:   time.Now().UnixMilli(),
+		Status:      status,
+		ErrorKind:   download.ClassifyError(err, nil),
+		Error:       download.RedactText(errorText(err)),
+		ItemCount:   1,
+		FileCount:   files,
+		MediaCount:  files,
+		Bytes:       bytes,
+		SummaryJSON: download.SummaryJSON(map[string]any{"url": rawURL}),
+	})
+}
+
+func errorText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func (m *Manager) downloadInstagramProfileAvatar(ctx context.Context, channelID, dir string) bool {

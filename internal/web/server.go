@@ -50,6 +50,9 @@ type Server struct {
 	profileFetch  fetchProfileFn
 	profileFlight *profileFlight
 
+	downloaderReportMu     sync.Mutex
+	downloaderReportLatest *downloaderReport
+
 	androidSyncGenerationMu sync.Mutex
 }
 
@@ -90,6 +93,7 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 	mux.HandleFunc("GET /bookmarks", s.handlePageBookmarks)
 	mux.HandleFunc("GET /temp/watch", s.handlePageTempWatch)
 	mux.HandleFunc("GET /temp/x-demo", s.handlePageXDemo)
+	mux.HandleFunc("GET /temp/downloader-report", s.handlePageDownloaderReport)
 	mux.HandleFunc("GET /search", s.handlePageSearch)
 	mux.HandleFunc("GET /search/youtube", s.handlePageYouTubeSearch)
 	mux.HandleFunc("GET /login", s.handleLoginPage)
@@ -123,6 +127,7 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 	s.registerXAPIRoutes(mux)
 	s.registerPreviewAPIRoutes(mux)
 	s.registerDownloadAPIRoutes(mux)
+	s.registerDownloaderReportRoutes(mux)
 	s.registerTweetMediaAPIRoutes(mux)
 	s.registerAndroidSyncAPIRoutes(mux)
 	s.registerProfileAPIRoutes(mux)

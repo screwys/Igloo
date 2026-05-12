@@ -119,6 +119,7 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 		ThumbDir: filepath.Join(cfg.DataDir, "thumbnails", "dearrow"),
 	}
 	m.sponsorblockClient = sponsorblock.NewClient(sponsorblock.DefaultBaseURL)
+	m.downloader.SetOperationSink(database)
 	return m
 }
 
@@ -191,6 +192,7 @@ func (m *Manager) StartAll() {
 	m.launch("scheduler", m.runScheduler)
 	m.launch("download_pool", m.runDownloadPool)
 	m.launch("preview", m.runPreviewWorker)
+	m.launch("downloader_operation_prune", m.runDownloaderOperationPruner)
 	m.startOnce("preview_backfill", m.backfillPreviews)
 	m.startOnce("thumbnail_backfill", m.backfillThumbnails)
 	m.launch("feed_scoring", m.runFeedScoringWorker)
@@ -202,6 +204,24 @@ func (m *Manager) StartAll() {
 func (m *Manager) Shutdown() {
 	m.cancel()
 	m.wg.Wait()
+}
+
+func (m *Manager) runDownloaderOperationPruner(ctx context.Context) {
+	if m == nil || m.db == nil {
+		return
+	}
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := m.db.PruneDownloaderOperations(db.DownloaderOperationMaxRows, db.DownloaderOperationMaxAge); err != nil {
+				log.Printf("[worker] PruneDownloaderOperations: %v", err)
+			}
+		}
+	}
 }
 
 // ShutdownTimeout cancels workers and waits up to timeout for them to exit.
