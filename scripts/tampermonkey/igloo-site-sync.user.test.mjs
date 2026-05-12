@@ -137,6 +137,7 @@ function buildHarness({
   failDownloads = [],
   pathname = "/home",
   unsafeWindow = {},
+  userAgent = "Mozilla/5.0 Chrome/120.0.0.0",
   twitterChannels = [
     {
       channel_id: "twitter_alice",
@@ -173,6 +174,9 @@ function buildHarness({
       hostname: "x.com",
       origin: "https://x.com",
       pathname,
+    },
+    navigator: {
+      userAgent,
     },
     window: {
       addEventListener() {},
@@ -572,6 +576,29 @@ test("stays idle on X auth routes", async () => {
     typeof harness.menu.get("Login Dashboard (Store Token)"),
     "function",
   );
+});
+
+test("does not patch X page globals in Firefox", async () => {
+  class FakeXMLHttpRequest {
+    open() {}
+  }
+  const nativeOpen = FakeXMLHttpRequest.prototype.open;
+  const nativeFetch = function fetch() {};
+  const unsafeWindow = {
+    XMLHttpRequest: FakeXMLHttpRequest,
+    fetch: nativeFetch,
+  };
+  const harness = buildHarness({
+    unsafeWindow,
+    userAgent: "Mozilla/5.0 Firefox/126.0",
+  });
+
+  runScript(harness);
+  await drainMicrotasks();
+
+  assert.equal(FakeXMLHttpRequest.prototype.open, nativeOpen);
+  assert.equal(unsafeWindow.fetch, nativeFetch);
+  assert.equal(unsafeWindow.__iglooXMediaCaptureInstalled, undefined);
 });
 
 test("uses follow wording for visible subscription labels", () => {
