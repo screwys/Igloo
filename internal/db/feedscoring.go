@@ -155,12 +155,11 @@ func (db *DB) ListRankedFeedItems(username string, limit int, offset int) ([]mod
 		whereClause = "WHERE " + strings.Join(where, " AND ")
 	}
 
-	capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost := db.feedAbsenceBoostConfig()
+	capHours, seenMaxBoost, neverSeenBoost := db.feedAbsenceBoostConfig()
 	absenceExpr := feedAbsenceBoostSelect("fi")
-	starredAbsenceExpr := feedStarredAbsenceBoostSelect("fi")
 	relatedSeenExpr := feedRelatedSeenCountSelect("fi")
-	fromSQL := feedRankingFromSQL(relatedSeenExpr, absenceExpr, starredAbsenceExpr)
-	args = append(feedRankingArgs(username, capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost), args...)
+	fromSQL := feedRankingFromSQL(relatedSeenExpr, absenceExpr)
+	args = append(feedRankingArgs(username, capHours, seenMaxBoost, neverSeenBoost), args...)
 	decaySQL := feedDecaySQL()
 	freshnessSQL := feedFreshnessSQL()
 
@@ -183,7 +182,6 @@ func (db *DB) ListRankedFeedItems(username string, limit int, offset int) ([]mod
 			       COALESCE(fi.content_hash,''), COALESCE(fi.canonical_tweet_id,''),
 				       %s * %s
 				       + %s
-				       + fi.starred_absence_boost
 				       AS final_score
 			%s
 			%s

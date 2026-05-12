@@ -16,18 +16,16 @@ const (
 	feedAbsenceBoostCapHoursSetting      = "feed_absence_boost_cap_hours"
 	feedAbsenceBoostMaxStarFactorSetting = "feed_absence_boost_max_star_factor"
 	feedNeverSeenBoostStarFactorSetting  = "feed_never_seen_boost_star_factor"
-	feedStarredAbsenceBoostFactorSetting = "feed_starred_absence_boost_max_star_factor"
 	defaultFeedAbsenceBoostCapHours      = 72.0
 	defaultFeedAbsenceBoostMaxStarFactor = 0.5
 	defaultFeedNeverSeenBoostStarFactor  = 1.0
-	defaultFeedStarredAbsenceBoostFactor = 0.3
 	feedFreshnessBonusPeak               = 18.0
 	feedFreshnessBonusWindowHours        = 6.0
 	feedSeenRelatedContentPenalty        = 5.0
 	feedRepeatedRelatedContentPenalty    = 12.0
 )
 
-func (db *DB) feedAbsenceBoostConfig() (capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost float64) {
+func (db *DB) feedAbsenceBoostConfig() (capHours, seenMaxBoost, neverSeenBoost float64) {
 	capHours = db.FloatSetting(feedAbsenceBoostCapHoursSetting, defaultFeedAbsenceBoostCapHours)
 	capHours = safeFeedAbsenceCapHours(capHours)
 
@@ -39,56 +37,61 @@ func (db *DB) feedAbsenceBoostConfig() (capHours, seenMaxBoost, neverSeenBoost, 
 	if neverFactor < 0 {
 		neverFactor = 0
 	}
-	starredFactor := db.FloatSetting(feedStarredAbsenceBoostFactorSetting, defaultFeedStarredAbsenceBoostFactor)
-	if starredFactor < 0 {
-		starredFactor = 0
-	}
 
 	seenMaxBoost = feedRankingStarBoost * seenFactor
 	neverSeenBoost = feedRankingStarBoost * neverFactor
-	starredMaxBoost = feedRankingStarBoost * starredFactor
-	return capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost
+	return capHours, seenMaxBoost, neverSeenBoost
+}
+
+func feedNormalizedTwitterHandleSQL(expr string) string {
+	return fmt.Sprintf("LOWER(LTRIM(TRIM(COALESCE(%s, '')), '@'))", expr)
+}
+
+func feedPrioritySourceSQL(alias string) string {
+	author := feedNormalizedTwitterHandleSQL(alias + ".author_handle")
+	source := feedNormalizedTwitterHandleSQL(alias + ".source_handle")
+	return fmt.Sprintf(`NULLIF(%[2]s, '') IS NOT NULL
+				 AND %[2]s != %[1]s
+				 AND (cf_source.channel_id IS NOT NULL OR cs_source.channel_id IS NOT NULL)`, author, source)
+}
+
+func feedRankingAccountHandleSQL(alias string) string {
+	author := feedNormalizedTwitterHandleSQL(alias + ".author_handle")
+	source := feedNormalizedTwitterHandleSQL(alias + ".source_handle")
+	return fmt.Sprintf(`CASE
+				WHEN %[3]s THEN %[2]s
+				ELSE %[1]s
+			END`, author, source, feedPrioritySourceSQL(alias))
+}
+
+func feedRankingAccountIsPrioritySQL(alias string) string {
+	return fmt.Sprintf(`CASE
+				WHEN %[1]s THEN 1
+				WHEN cf_author.channel_id IS NOT NULL OR cs_author.channel_id IS NOT NULL THEN 1
+				ELSE 0
+			END`, feedPrioritySourceSQL(alias))
 }
 
 func feedAbsenceBoostSelect(alias string) string {
 	return fmt.Sprintf(`CASE
 				WHEN ? != ''
-				 AND cf_abs.channel_id IS NOT NULL
-				 AND cs_abs.channel_id IS NULL
-				 AND NULLIF(TRIM(COALESCE(%[1]s.author_handle, '')), '') IS NOT NULL
+				 AND NULLIF(%[2]s, '') IS NOT NULL
+				 AND %[3]s = 1
 				THEN CASE
 					WHEN lps.last_seen_at IS NULL THEN ?
 					ELSE ? * MIN(?, MAX(0, ((CAST(strftime('%%s','now') AS INTEGER) * 1000) - lps.last_seen_at) / 3600000.0)) / ?
 				END
 				ELSE 0
-		END`, alias)
+		END`, alias, feedRankingAccountHandleSQL(alias), feedRankingAccountIsPrioritySQL(alias))
 }
 
-func feedStarredAbsenceBoostSelect(alias string) string {
-	return fmt.Sprintf(`CASE
-					WHEN ? != ''
-					 AND cs_abs.channel_id IS NOT NULL
-					 AND NULLIF(TRIM(COALESCE(%[1]s.author_handle, '')), '') IS NOT NULL
-					 AND (((CAST(strftime('%%s','now') AS INTEGER) * 1000) - %[1]s.published_at) / 3600000.0) <= ?
-					THEN CASE
-						WHEN lps.last_seen_at IS NULL THEN ?
-						ELSE MAX(
-							? * MIN(?, MAX(0, ((CAST(strftime('%%s','now') AS INTEGER) * 1000) - lps.last_seen_at) / 3600000.0)) / ?,
-							? * MAX(0, 1.0 - ((((CAST(strftime('%%s','now') AS INTEGER) * 1000) - %[1]s.published_at) / 3600000.0) / ?))
-						)
-					END
-					ELSE 0
-			END`, alias)
-}
-
-func feedRankingFromSQL(relatedSeenExpr, absenceExpr, starredAbsenceExpr string) string {
+func feedRankingFromSQL(relatedSeenExpr, absenceExpr string) string {
 	return fmt.Sprintf(`
 				FROM (
 				    SELECT fi.*,
 				           (CAST(strftime('%%s','now') AS INTEGER) * 1000 - fi.published_at) / 3600000.0 AS age_h,
 				           %s AS related_seen_count,
-				           %s AS absence_boost,
-				           %s AS starred_absence_boost
+				           %s AS absence_boost
 				    FROM feed_items fi
 				    LEFT JOIN (
 				        SELECT fs_related.username,
@@ -99,27 +102,51 @@ func feedRankingFromSQL(relatedSeenExpr, absenceExpr, starredAbsenceExpr string)
 				        GROUP BY fs_related.username, %s
 				    ) rsc ON rsc.username = NULLIF(?, '')
 				        AND rsc.related_key = %s
+		    LEFT JOIN channel_follows cf_author
+		      ON cf_author.user_id = ''
+		     AND cf_author.channel_id = 'twitter_' || %s
+		    LEFT JOIN channel_stars cs_author
+		      ON cs_author.user_id = ''
+		     AND cs_author.channel_id = 'twitter_' || %s
+		    LEFT JOIN channel_follows cf_source
+		      ON cf_source.user_id = ''
+		     AND cf_source.channel_id = 'twitter_' || %s
+		    LEFT JOIN channel_stars cs_source
+		      ON cs_source.user_id = ''
+		     AND cs_source.channel_id = 'twitter_' || %s
 				    LEFT JOIN (
-		        SELECT LOWER(LTRIM(TRIM(parent.author_handle), '@')) AS handle,
-		               MAX(fs.seen_at) AS last_seen_at
-		        FROM feed_seen fs
-		        JOIN feed_items parent ON parent.tweet_id = fs.tweet_id
-		        WHERE fs.username = ?
-		          AND NULLIF(TRIM(COALESCE(parent.author_handle, '')), '') IS NOT NULL
-		          AND COALESCE(parent.is_ghost, 0) = 0
-		        GROUP BY LOWER(LTRIM(TRIM(parent.author_handle), '@'))
-		    ) lps ON lps.handle = LOWER(LTRIM(TRIM(fi.author_handle), '@'))
-		    LEFT JOIN channel_follows cf_abs
-		      ON cf_abs.user_id = ''
-		     AND cf_abs.channel_id = 'twitter_' || LOWER(LTRIM(TRIM(fi.author_handle), '@'))
-		    LEFT JOIN channel_stars cs_abs
-		      ON cs_abs.user_id = ''
-		     AND cs_abs.channel_id = 'twitter_' || LOWER(LTRIM(TRIM(fi.author_handle), '@'))
+				        SELECT handle, MAX(seen_at) AS last_seen_at
+				        FROM (
+				            SELECT %s AS handle, fs.seen_at
+				            FROM feed_seen fs
+				            JOIN feed_items parent ON parent.tweet_id = fs.tweet_id
+				            WHERE fs.username = ?
+				              AND NULLIF(%s, '') IS NOT NULL
+				              AND COALESCE(parent.is_ghost, 0) = 0
+				            UNION ALL
+				            SELECT %s AS handle, fs.seen_at
+				            FROM feed_seen fs
+				            JOIN feed_items parent ON parent.tweet_id = fs.tweet_id
+				            WHERE fs.username = ?
+				              AND NULLIF(%s, '') IS NOT NULL
+				              AND COALESCE(parent.is_ghost, 0) = 0
+				        ) seen_handles
+				        GROUP BY handle
+				    ) lps ON lps.handle = %s
 			) fi
-			`, relatedSeenExpr, absenceExpr, starredAbsenceExpr,
+			`, relatedSeenExpr, absenceExpr,
 		feedRelatedContentKeySQL("seen_fi"),
 		feedRelatedContentKeySQL("seen_fi"),
 		feedRelatedContentKeySQL("fi"),
+		feedNormalizedTwitterHandleSQL("fi.author_handle"),
+		feedNormalizedTwitterHandleSQL("fi.author_handle"),
+		feedNormalizedTwitterHandleSQL("fi.source_handle"),
+		feedNormalizedTwitterHandleSQL("fi.source_handle"),
+		feedNormalizedTwitterHandleSQL("parent.author_handle"),
+		feedNormalizedTwitterHandleSQL("parent.author_handle"),
+		feedNormalizedTwitterHandleSQL("parent.source_handle"),
+		feedNormalizedTwitterHandleSQL("parent.source_handle"),
+		feedRankingAccountHandleSQL("fi"),
 	)
 }
 
@@ -151,19 +178,17 @@ func feedRankingBaseScoreSQL(alias string) string {
 		alias, feedRelatedContentPenaltySQL(alias))
 }
 
-func feedAbsenceBoostArgs(username string, capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost float64) []any {
+func feedAbsenceBoostArgs(username string, capHours, seenMaxBoost, neverSeenBoost float64) []any {
 	return []any{
 		username,
 		neverSeenBoost,
 		seenMaxBoost, capHours, capHours,
-		username, capHours,
-		starredMaxBoost, starredMaxBoost, capHours, capHours, starredMaxBoost, capHours,
 	}
 }
 
-func feedRankingArgs(username string, capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost float64) []any {
-	args := feedAbsenceBoostArgs(username, capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost)
-	args = append(args, username, username)
+func feedRankingArgs(username string, capHours, seenMaxBoost, neverSeenBoost float64) []any {
+	args := feedAbsenceBoostArgs(username, capHours, seenMaxBoost, neverSeenBoost)
+	args = append(args, username, username, username)
 	return args
 }
 
@@ -331,12 +356,11 @@ func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string
 	// multiplier falls quickly so medium-interest new posts can surface over
 	// older high-affinity items. The long tail remains non-zero for starred
 	// and high-affinity items, but should not pin the top of the feed.
-	capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost := db.feedAbsenceBoostConfig()
+	capHours, seenMaxBoost, neverSeenBoost := db.feedAbsenceBoostConfig()
 	absenceExpr := feedAbsenceBoostSelect("fi")
-	starredAbsenceExpr := feedStarredAbsenceBoostSelect("fi")
 	relatedSeenExpr := feedRelatedSeenCountSelect("fi")
-	fromSQL := feedRankingFromSQL(relatedSeenExpr, absenceExpr, starredAbsenceExpr)
-	args = append(feedRankingArgs(username, capHours, seenMaxBoost, neverSeenBoost, starredMaxBoost), args...)
+	fromSQL := feedRankingFromSQL(relatedSeenExpr, absenceExpr)
+	args = append(feedRankingArgs(username, capHours, seenMaxBoost, neverSeenBoost), args...)
 	decaySQL := feedDecaySQL()
 	freshnessSQL := feedFreshnessSQL()
 
@@ -346,7 +370,7 @@ func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string
 				       COALESCE(fi.source_handle,''),
 				       %s AS base,
 				       %s AS decay,
-				       (%s + fi.starred_absence_boost) AS freshness
+				       %s AS freshness
 				%s
 			%s
 			ORDER BY (base * decay + freshness) DESC, fi.tweet_id DESC

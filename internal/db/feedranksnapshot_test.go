@@ -151,11 +151,13 @@ func TestListPreDiversityRanked_AppliesParentSeenAbsenceBoost(t *testing.T) {
 			t.Fatalf("follow %s: %v", handle, err)
 		}
 	}
-	if _, err := d.conn.Exec(
-		`INSERT INTO channel_stars (user_id, channel_id, starred_at) VALUES ('', 'twitter_starred', ?)`,
-		now.UnixMilli(),
-	); err != nil {
-		t.Fatalf("star channel: %v", err)
+	for _, handle := range []string{"starred", "newstarred", "source_starred", "source_seen"} {
+		if _, err := d.conn.Exec(
+			`INSERT INTO channel_stars (user_id, channel_id, starred_at) VALUES ('', ?, ?)`,
+			"twitter_"+handle, now.UnixMilli(),
+		); err != nil {
+			t.Fatalf("star %s: %v", handle, err)
+		}
 	}
 
 	insertItemAtWithInterest := func(tweetID, author, source, quoteAuthor string, isRetweet bool, itemPublishedAt int64, interest float64) {
@@ -192,21 +194,23 @@ func TestListPreDiversityRanked_AppliesParentSeenAbsenceBoost(t *testing.T) {
 	insertItem("stale_candidate", "stale", "stale", "", false)
 	insertItem("capped_candidate", "capped", "capped", "", false)
 
-	// Quote appearances and retweet source appearances should not make the
-	// followed account count as parent-seen.
+	// Quote appearances should not make the quoted account count as seen.
 	insertItem("fresh_seen_as_quote", "other_quote", "other_quote", "fresh", false)
 	markSeen("fresh_seen_as_quote", now.UnixMilli())
-	insertItem("fresh_seen_as_retweet_source", "other_retweeted", "fresh", "", true)
-	markSeen("fresh_seen_as_retweet_source", now.UnixMilli())
 
 	insertItemAt("stale_seen_parent", "stale", "stale", "", false, publishedAt-2*3600000)
 	markSeen("stale_seen_parent", now.Add(-36*time.Hour).UnixMilli())
 	insertItemAt("capped_seen_parent", "capped", "capped", "", false, publishedAt-2*3600000)
 	markSeen("capped_seen_parent", now.Add(-120*time.Hour).UnixMilli())
 	insertItemAtWithInterest("starred_candidate", "starred", "starred", "", false, publishedAt, 25)
+	insertItemAtWithInterest("newstarred_candidate", "newstarred", "newstarred", "", false, publishedAt, 25)
 	insertItemAtWithInterest("starred_old_candidate", "starred", "starred", "", false, now.Add(-100*time.Hour).UnixMilli(), 25)
 	insertItemAt("starred_seen_parent", "starred", "starred", "", false, publishedAt-2*3600000)
 	markSeen("starred_seen_parent", now.Add(-36*time.Hour).UnixMilli())
+	insertItem("source_starred_candidate", "outside", "source_starred", "", true)
+	insertItemAt("source_seen_parent", "other_seen", "source_seen", "", true, publishedAt-2*3600000)
+	markSeen("source_seen_parent", now.Add(-36*time.Hour).UnixMilli())
+	insertItem("source_seen_candidate", "other_candidate", "source_seen", "", true)
 
 	rows, err := d.ListPreDiversityRanked(user)
 	if err != nil {
@@ -231,14 +235,23 @@ func TestListPreDiversityRanked_AppliesParentSeenAbsenceBoost(t *testing.T) {
 	if got := baseByID["capped_candidate"]; math.Abs(got-12.5) > 0.1 {
 		t.Fatalf("capped candidate base = %.3f, want half-star cap", got)
 	}
-	if got := baseByID["starred_candidate"]; math.Abs(got-25.0) > 0.1 {
-		t.Fatalf("starred candidate base = %.3f, want star score without decayed absence", got)
+	if got := baseByID["starred_candidate"]; math.Abs(got-31.25) > 0.2 {
+		t.Fatalf("starred candidate base = %.3f, want star score plus shared absence", got)
 	}
-	if got := freshnessByID["starred_candidate"]; math.Abs(got-6.25) > 0.2 {
-		t.Fatalf("starred candidate freshness = %.3f, want direct starred freshness scaled to 12/72h", got)
+	if got := baseByID["newstarred_candidate"]; math.Abs(got-50.0) > 0.1 {
+		t.Fatalf("never-seen starred candidate base = %.3f, want star score plus fresh-blood boost", got)
+	}
+	if got := baseByID["source_starred_candidate"]; math.Abs(got-25.0) > 0.1 {
+		t.Fatalf("source-starred candidate base = %.3f, want source-account fresh-blood boost", got)
+	}
+	if got := baseByID["source_seen_candidate"]; math.Abs(got-6.25) > 0.2 {
+		t.Fatalf("source-seen candidate base = %.3f, want source-account absence scaled to 36/72h", got)
+	}
+	if got := freshnessByID["starred_candidate"]; got != 0 {
+		t.Fatalf("starred candidate freshness = %.3f, want only regular recency freshness", got)
 	}
 	if got := freshnessByID["starred_old_candidate"]; got != 0 {
-		t.Fatalf("old starred candidate freshness = %.3f, want no starred absence outside cap window", got)
+		t.Fatalf("old starred candidate freshness = %.3f, want no starred-specific freshness", got)
 	}
 	if baseByID["fresh_candidate"] <= baseByID["capped_candidate"] {
 		t.Fatalf("fresh blood should outrank capped absence: fresh=%.3f capped=%.3f",
@@ -246,7 +259,7 @@ func TestListPreDiversityRanked_AppliesParentSeenAbsenceBoost(t *testing.T) {
 	}
 }
 
-func TestListPreDiversityRanked_StarredFreshnessSurvivesRecentAuthorSeen(t *testing.T) {
+func TestListPreDiversityRanked_StarredUsesSharedAbsenceAfterRecentAuthorSeen(t *testing.T) {
 	d := openWritableTestDB(t)
 	user := "alice"
 	now := time.Now()
@@ -292,8 +305,11 @@ func TestListPreDiversityRanked_StarredFreshnessSurvivesRecentAuthorSeen(t *test
 		if row.TweetID != "fresh_starred" {
 			continue
 		}
-		if row.FreshnessBonus < 6.0 {
-			t.Fatalf("fresh starred freshness = %.3f, want age-based starred freshness despite recent author seen", row.FreshnessBonus)
+		if row.FreshnessBonus != 0 {
+			t.Fatalf("fresh starred freshness = %.3f, want no starred-specific freshness", row.FreshnessBonus)
+		}
+		if row.BaseScore <= 25 || row.BaseScore > 25.25 {
+			t.Fatalf("fresh starred base = %.3f, want star score plus small shared absence", row.BaseScore)
 		}
 		return
 	}
@@ -406,7 +422,7 @@ func TestFeedRelatedSeenCountSQLUsesPrecomputedSet(t *testing.T) {
 	if strings.Contains(strings.ToUpper(relatedExpr), "SELECT COUNT") {
 		t.Fatalf("related seen count should not run a per-row correlated count: %s", relatedExpr)
 	}
-	fromSQL := feedRankingFromSQL(relatedExpr, feedAbsenceBoostSelect("fi"), feedStarredAbsenceBoostSelect("fi"))
+	fromSQL := feedRankingFromSQL(relatedExpr, feedAbsenceBoostSelect("fi"))
 	if !strings.Contains(fromSQL, "related_key") || !strings.Contains(fromSQL, "rsc.related_key") {
 		t.Fatalf("ranking SQL should precompute related seen counts once: %s", fromSQL)
 	}
