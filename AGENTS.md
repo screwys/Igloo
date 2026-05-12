@@ -42,6 +42,20 @@ If profile media only becomes ready after hover/page render, treat that as a pip
 
 For Go code, protect the success path. Do not allocate rollback journals, diagnostic collections, or per-item bookkeeping on the happy path just to make rare failures easier to unwind. If the affected work can be enumerated again safely, let the error path recompute it and clean up there. Keep explicit rollback state only when side effects are non-idempotent, external, ordered in a way that cannot be rebuilt, or otherwise impossible to reconstruct.
 
+## Test Gates
+
+- For full-suite verification, do not treat raw `go test ./...` or Android
+  `BUILD SUCCESSFUL` output as enough. Check for skipped tests and ignored
+  errors explicitly.
+- Run `scripts/dev/test-full.sh` for full-suite verification. It runs Go tests
+  with JSON output, fails/reports real skipped Go tests, runs
+  `go run github.com/kisielk/errcheck@latest ./...`, runs `android/test.sh`,
+  inspects Android XML for failures/errors/skips, and reports Kotlin/JVM
+  warnings from the Android test output.
+- Treat new or high-signal production `errcheck` findings as blockers. If
+  existing findings remain, report them plainly with the reason they were not
+  fixed.
+
 ## Releases
 
 - Use patch releases for small fixes and minor releases for larger user-visible changes.
@@ -57,7 +71,8 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 - For web UI bugs, inspect the live DOM before source: element HTML, computed visibility, layout box, inline style, and classes.
 - For missing avatars, banners, names, bios, or hover profile cards, separate presentation bugs from readiness bugs. A presentation fix is valid only when the DB row and cached file already existed before render; otherwise fix the source path: parser, ingest batch, identity seed, profile refresh candidate query, worker queue/backfill, or failed download retry.
 - After server, web, static, or component changes that affect the running app, run `scripts/dev/build.sh restart`.
-- For Go changes, run `go test ./...`.
+- For Go changes, run `go test ./...`; for full-suite claims, use the
+  stricter `scripts/dev/test-full.sh` gate above.
 
 ## Android
 
