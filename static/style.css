@@ -9062,6 +9062,30 @@ body.shorts-mode .sidebar {
     margin-bottom: 0;
 }
 
+.feed-thread-more-wrap {
+    padding: 0.5rem 0.7rem 0.45rem calc(0.7rem + var(--thread-gutter));
+}
+
+.feed-thread-more {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.2;
+    padding: 0.42rem 0.78rem;
+}
+
+.feed-thread-more:hover,
+.feed-thread-more:focus-visible {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
 /* Strip individual card chrome inside a thread — the wrapper provides
    one envelope for the whole chain. The avatar gutter and content
    indent come from the base .feed-card rule so we don't repeat them. */

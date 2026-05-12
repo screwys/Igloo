@@ -119,6 +119,21 @@ func TestBuildSnapshot_RecordsBreakdown(t *testing.T) {
 	}
 }
 
+func TestBuildSnapshot_AppliesReplyPenalty(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	in := []db.PreDiversitySnapshotRow{
+		{TweetID: "reply", AuthorHandle: "u", BaseScore: 10, DecayFactor: 1, FreshnessBonus: 0, ReplyPenalty: 4},
+	}
+	out := BuildSnapshot(in, now)
+	if len(out) != 1 {
+		t.Fatal("expected 1 row")
+	}
+	want := 6 + jitterFor("reply", fmt.Sprintf("%d", now.Truncate(time.Hour).Unix()))
+	if absFloat(out[0].FinalScore-want) > 1e-9 {
+		t.Errorf("final_score = %v, want %v", out[0].FinalScore, want)
+	}
+}
+
 func TestBuildSnapshot_DiversityDemotedByRecorded(t *testing.T) {
 	// Two items, same author. Second should have author penalty recorded.
 	in := []db.PreDiversitySnapshotRow{
@@ -173,10 +188,14 @@ func buildSnapshotExhaustiveForTest(in []db.PreDiversitySnapshotRow, now time.Ti
 	cands := make([]cand, len(in))
 	for i, r := range in {
 		j := jitterFor(r.TweetID, hourSalt)
+		score := r.BaseScore*r.DecayFactor + r.FreshnessBonus - r.ReplyPenalty
+		if score < 0 {
+			score = 0
+		}
 		cands[i] = cand{
 			row:    r,
 			jitter: j,
-			base:   r.BaseScore*r.DecayFactor + r.FreshnessBonus + j,
+			base:   score + j,
 		}
 	}
 

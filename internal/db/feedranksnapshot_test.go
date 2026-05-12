@@ -260,6 +260,42 @@ func TestListPreDiversityRanked_AppliesParentSeenAbsenceBoost(t *testing.T) {
 	}
 }
 
+func TestListPreDiversityRanked_SetsReplyPenalty(t *testing.T) {
+	d := openWritableTestDB(t)
+	publishedAt := time.Now().Add(-1 * time.Hour).UnixMilli()
+
+	for _, row := range []struct {
+		id      string
+		isReply int
+	}{
+		{id: "sample_reply", isReply: 1},
+		{id: "sample_post", isReply: 0},
+	} {
+		if _, err := d.conn.Exec(`INSERT INTO feed_items
+				(tweet_id, author_handle, body_text, published_at, algo_interest, algo_scored_at, is_reply)
+				VALUES (?, 'sample_author', 'body', ?, 10, 1, ?)`,
+			row.id, publishedAt, row.isReply,
+		); err != nil {
+			t.Fatalf("insert %s: %v", row.id, err)
+		}
+	}
+
+	rows, err := d.ListPreDiversityRanked("")
+	if err != nil {
+		t.Fatalf("ListPreDiversityRanked: %v", err)
+	}
+	penaltyByID := map[string]float64{}
+	for _, row := range rows {
+		penaltyByID[row.TweetID] = row.ReplyPenalty
+	}
+	if got := penaltyByID["sample_reply"]; got != feedReplyPenalty {
+		t.Fatalf("reply penalty = %.1f, want %.1f", got, feedReplyPenalty)
+	}
+	if got := penaltyByID["sample_post"]; got != 0 {
+		t.Fatalf("post penalty = %.1f, want 0", got)
+	}
+}
+
 func TestListPreDiversityRanked_StarredUsesSharedAbsenceAfterRecentAuthorSeen(t *testing.T) {
 	d := openWritableTestDB(t)
 	user := "alice"

@@ -486,6 +486,18 @@ func feedAlgoScore(score float64) string {
 	return fmt.Sprintf("%.1f", score)
 }
 
+func threadVisibleAncestorStart(chain []model.FeedItem) int {
+	total := len(chain) + 1 // ancestors plus the leaf card
+	if total <= 2 {
+		return 0
+	}
+	hidden := total - 2
+	if hidden > len(chain) {
+		return len(chain)
+	}
+	return hidden
+}
+
 // feedPublishedAtStr returns the published_at time as a string or empty.
 func feedPublishedAtStr(t *time.Time) string {
 	if t == nil || t.IsZero() {

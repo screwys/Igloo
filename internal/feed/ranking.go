@@ -17,6 +17,7 @@ const (
 	followedBoost        = 5.0
 	mediaBonus           = 3.0
 	retweetPenalty       = -4.0
+	replyPenalty         = 4.0
 	freshBonusPeak       = 18.0
 	freshBonusWindowH    = 6.0
 	maxItemBoost         = 40.0
@@ -151,6 +152,12 @@ func effectiveScore(item *model.FeedItem) float64 {
 		pubMs = item.PublishedAt.UnixMilli()
 	}
 	score := combinedScore(item.AlgoInterestScore, pubMs)
+	if item.IsReply {
+		score -= replyPenalty
+		if score < 0 {
+			score = 0
+		}
+	}
 	if item.IsSeen {
 		score *= seenDemotion
 	}

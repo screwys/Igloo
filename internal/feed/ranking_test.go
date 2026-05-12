@@ -32,6 +32,14 @@ func TestSeenDemotion(t *testing.T) {
 	}
 }
 
+func TestReplyDemotion(t *testing.T) {
+	item := model.FeedItem{AlgoInterestScore: 20.0, IsReply: true}
+	score := effectiveScore(&item)
+	if score != 16.0 {
+		t.Errorf("reply score = %f, want 16.0", score)
+	}
+}
+
 func TestRankFeedItems(t *testing.T) {
 	now := time.Now()
 	items := []model.FeedItem{

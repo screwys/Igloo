@@ -180,14 +180,15 @@ func (db *DB) ListRankedFeedItems(username string, limit int, offset int) ([]mod
 		       COALESCE(fi.views,0), COALESCE(fi.likes,0), COALESCE(fi.retweets,0),
 		       fi.published_at, fi.fetched_at,
 			       COALESCE(fi.content_hash,''), COALESCE(fi.canonical_tweet_id,''),
-				       %s * %s
+				       MAX(0, %s * %s
 				       + %s
+				       - %s)
 				       AS final_score
 			%s
 			%s
 			ORDER BY final_score DESC, fi.tweet_id DESC
 			LIMIT ? OFFSET ?
-			`, feedRankingBaseScoreSQL("fi"), decaySQL, freshnessSQL, fromSQL, whereClause)
+			`, feedRankingBaseScoreSQL("fi"), decaySQL, freshnessSQL, feedReplyPenaltySQL("fi"), fromSQL, whereClause)
 	args = append(args, limit, offset)
 
 	rows, err := db.conn.Query(query, args...)

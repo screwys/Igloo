@@ -94,6 +94,31 @@ func TestFeedItemThreadRowsRenderBottomActions(t *testing.T) {
 	}
 }
 
+func TestFeedItemThreadCollapsesOlderAncestors(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:      "leaf_1",
+		AuthorHandle: "sample_author",
+		BodyText:     "leaf body",
+		ThreadChain: []model.FeedItem{
+			{TweetID: "root_1", AuthorHandle: "sample_root", BodyText: "root body"},
+			{TweetID: "mid_1", AuthorHandle: "sample_author_older", BodyText: "mid body"},
+			{TweetID: "parent_1", AuthorHandle: "sample_parent", BodyText: "parent body"},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+	if got := strings.Count(html, `data-feed-thread-collapsed="1"`); got != 2 {
+		t.Fatalf("collapsed thread rows = %d, want 2; html=%s", got, html)
+	}
+	if !strings.Contains(html, `data-feed-thread-more`) || !strings.Contains(html, `Load more replies`) {
+		t.Fatalf("load-more replies control missing: %s", html)
+	}
+}
+
 func TestFeedItemRendersSingleVideoFromSlideEndpointWhenStreamMissing(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:      "video_1",

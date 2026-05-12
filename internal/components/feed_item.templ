@@ -10,14 +10,25 @@ import (
 templ FeedItem(p PageProps, item model.FeedItem) {
 	if len(item.ThreadChain) > 0 {
 		{{ repostList := repostEntries(item) }}
+		{{ visibleAncestorStart := threadVisibleAncestorStart(item.ThreadChain) }}
 		<div class="feed-thread" data-feed-thread data-leaf-tweet-id={ item.TweetID }>
 			if len(repostList) > 0 {
 				<div class="feed-thread-repost">
 					@feedRepostLine(p, item, repostList)
 				</div>
 			}
-			for _, ancestor := range item.ThreadChain {
-				@feedThreadCard(p, stripThreadNoise(ancestor))
+			for i, ancestor := range item.ThreadChain {
+				@feedThreadCard(p, stripThreadNoise(ancestor), i < visibleAncestorStart)
+			}
+			if visibleAncestorStart > 0 {
+				<div class="feed-thread-more-wrap" data-feed-thread-more-wrap>
+					<button
+						class="feed-thread-more"
+						type="button"
+						data-feed-thread-more
+						data-i18n="feed_thread_load_more_replies"
+					>{ L(p, "feed_thread_load_more_replies", "Load more replies") }</button>
+				</div>
 			}
 			@feedLeafCard(p, stripThreadNoise(item))
 		</div>
@@ -29,14 +40,17 @@ templ FeedItem(p PageProps, item model.FeedItem) {
 // feedThreadCard renders an ancestor in a thread chain. Same as FeedItem but
 // flagged with data-feed-thread-row so CSS can draw the connector line and
 // dim non-followed ghost rows.
-templ feedThreadCard(p PageProps, item model.FeedItem) {
+templ feedThreadCard(p PageProps, item model.FeedItem, collapsed bool) {
 	{{ authorLabel := feedAuthorLabel(item) }}
 	{{ externalURL := feedExternalURL(item) }}
 	{{ pure := isPureRepost(item) }}
 	<article
-		class={ "feed-card channel-row feed-thread-row", templ.KV("feed-thread-ghost", item.IsGhost) }
+		class={ "feed-card channel-row feed-thread-row", templ.KV("feed-thread-ghost", item.IsGhost), templ.KV("hidden", collapsed), templ.KV("feed-thread-collapsed", collapsed) }
 		data-feed-item
 		data-feed-thread-row
+		if collapsed {
+			data-feed-thread-collapsed="1"
+		}
 		data-tweet-id={ item.TweetID }
 		data-feed-link={ externalURL }
 		data-content-hash={ item.ContentHash }

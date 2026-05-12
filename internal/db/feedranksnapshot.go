@@ -23,6 +23,7 @@ const (
 	feedFreshnessBonusWindowHours        = 6.0
 	feedSeenRelatedContentPenalty        = 5.0
 	feedRepeatedRelatedContentPenalty    = 12.0
+	feedReplyPenalty                     = 4.0
 )
 
 func (db *DB) feedAbsenceBoostConfig() (capHours, seenMaxBoost, neverSeenBoost float64) {
@@ -178,6 +179,13 @@ func feedRankingBaseScoreSQL(alias string) string {
 		alias, feedRelatedContentPenaltySQL(alias))
 }
 
+func feedReplyPenaltySQL(alias string) string {
+	return fmt.Sprintf(`CASE
+		WHEN COALESCE(%s.is_reply, 0) = 1 THEN %.1f
+		ELSE 0
+	END`, alias, feedReplyPenalty)
+}
+
 func feedAbsenceBoostArgs(username string, capHours, seenMaxBoost, neverSeenBoost float64) []any {
 	return []any{
 		username,
@@ -301,6 +309,7 @@ type PreDiversitySnapshotRow struct {
 	BaseScore      float64
 	DecayFactor    float64
 	FreshnessBonus float64
+	ReplyPenalty   float64
 }
 
 // ListPreDiversityRanked returns every eligible feed item with its score
@@ -370,12 +379,13 @@ func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string
 				       COALESCE(fi.source_handle,''),
 				       %s AS base,
 				       %s AS decay,
-				       %s AS freshness
+				       %s AS freshness,
+				       %s AS reply_penalty
 				%s
 			%s
-			ORDER BY (base * decay + freshness) DESC, fi.tweet_id DESC
+			ORDER BY MAX(0, base * decay + freshness - reply_penalty) DESC, fi.tweet_id DESC
 			LIMIT %d
-			`, feedRankingBaseScoreSQL("fi"), decaySQL, freshnessSQL, fromSQL, whereClause, snapshotMaxItems)
+			`, feedRankingBaseScoreSQL("fi"), decaySQL, freshnessSQL, feedReplyPenaltySQL("fi"), fromSQL, whereClause, snapshotMaxItems)
 
 	rows, err := db.conn.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -387,7 +397,7 @@ func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string
 	for rows.Next() {
 		var r PreDiversitySnapshotRow
 		if err := rows.Scan(&r.TweetID, &r.AuthorHandle, &r.SourceHandle,
-			&r.BaseScore, &r.DecayFactor, &r.FreshnessBonus); err != nil {
+			&r.BaseScore, &r.DecayFactor, &r.FreshnessBonus, &r.ReplyPenalty); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

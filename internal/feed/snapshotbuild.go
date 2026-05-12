@@ -41,12 +41,16 @@ func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.Snapshot
 	order := make([]int, len(in))
 	for i, r := range in {
 		j := jitterFor(r.TweetID, hourSalt)
+		score := r.BaseScore*r.DecayFactor + r.FreshnessBonus - r.ReplyPenalty
+		if score < 0 {
+			score = 0
+		}
 		cands[i] = cand{
 			row:         r,
 			authorLower: strings.ToLower(r.AuthorHandle),
 			sourceLower: strings.ToLower(r.SourceHandle),
 			jitter:      j,
-			base:        r.BaseScore*r.DecayFactor + r.FreshnessBonus + j,
+			base:        score + j,
 		}
 		order[i] = i
 	}
