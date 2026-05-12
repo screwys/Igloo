@@ -3433,6 +3433,7 @@ select.input.themed-select-native {
 .player-wrapper {
     --player-subtitles-offset-idle: 14px;
     --player-subtitles-offset-controls: 68px;
+    --player-subtitles-offset-fullscreen-controls: 54px;
 }
 
 /* Native browser subtitles (used by videojs_compat/native <video>). */
@@ -3471,7 +3472,7 @@ select.input.themed-select-native {
 .player-layout:-webkit-full-screen .player-wrapper .dashboard-media-controller[userinactive="false"] video::-webkit-media-text-track-display,
 .player-wrapper video:fullscreen::-webkit-media-text-track-display,
 .player-wrapper video:-webkit-full-screen::-webkit-media-text-track-display {
-    transform: translateY(calc(-1 * var(--player-subtitles-offset-controls))) !important;
+    transform: translateY(calc(-1 * var(--player-subtitles-offset-fullscreen-controls))) !important;
 }
 
 /* Emulated Video.js captions fallback (if real Video.js is used in future). */
@@ -3504,7 +3505,7 @@ select.input.themed-select-native {
 .player-layout:-webkit-full-screen .player-wrapper .dashboard-media-controller:focus-within #video-player.video-js .vjs-text-track-display,
 .player-layout:-webkit-full-screen .player-wrapper .dashboard-media-controller:not([userinactive]) #video-player.video-js .vjs-text-track-display,
 .player-layout:-webkit-full-screen .player-wrapper .dashboard-media-controller[userinactive="false"] #video-player.video-js .vjs-text-track-display {
-    bottom: var(--player-subtitles-offset-controls) !important;
+    bottom: var(--player-subtitles-offset-fullscreen-controls) !important;
 }
 
 .dashboard-media-controller:not(.dashboard-media-controller-mini) media-play-button,
