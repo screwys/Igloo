@@ -1399,6 +1399,47 @@ func (db *DB) ListFeedItemsFiltered(limit int, cursor *model.FeedCursor, sourceH
 	return scanFeedItems(rows)
 }
 
+// ListFeedItemsBySourceID returns feed items tagged through feed_item_sources.
+// It is used by source-scoped views where source_handle cannot represent the
+// full set, such as X list/community feeds or local ingest demos.
+func (db *DB) ListFeedItemsBySourceID(sourceID string, limit int) ([]model.FeedItem, error) {
+	if sourceID == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 40
+	}
+
+	rows, err := db.conn.Query(`
+		SELECT f.tweet_id, COALESCE(f.source_handle,''), f.author_handle,
+		       COALESCE(f.author_display_name,''), COALESCE(f.author_avatar_url,''),
+		       COALESCE(f.body_text,''), COALESCE(f.lang,''),
+		       COALESCE(f.is_retweet,0), COALESCE(f.retweeted_by_handle,''),
+		       COALESCE(f.retweeted_by_display_name,''),
+		       COALESCE(f.quote_tweet_id,''), COALESCE(f.quote_author_handle,''),
+		       COALESCE(f.quote_author_display_name,''), COALESCE(f.quote_author_avatar_url,''),
+		       COALESCE(f.quote_body_text,''), COALESCE(f.quote_lang,''),
+		       COALESCE(f.quote_media_json,''), COALESCE(f.media_json,''),
+		       COALESCE(f.canonical_url,''), COALESCE(f.reply_to_handle,''),
+		       COALESCE(f.reply_to_status,''),
+		       COALESCE(f.is_reply,0), COALESCE(f.is_ghost,0),
+		       f.quote_published_at,
+		       COALESCE(f.views,0), COALESCE(f.likes,0), COALESCE(f.retweets,0),
+		       f.published_at, f.fetched_at,
+		       COALESCE(f.content_hash,''), COALESCE(f.canonical_tweet_id,'')
+		FROM feed_item_sources fis
+		JOIN feed_items f ON f.tweet_id = fis.tweet_id
+		WHERE fis.source_id = ?
+		ORDER BY f.published_at DESC, f.tweet_id DESC
+		LIMIT ?
+	`, sourceID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanFeedItems(rows)
+}
+
 // GetBookmarkedFeedItems returns feed items that are bookmarked, with cursor pagination.
 func (db *DB) GetBookmarkedFeedItems(limit int, cursor *model.FeedCursor) ([]model.FeedItem, error) {
 	if limit <= 0 {

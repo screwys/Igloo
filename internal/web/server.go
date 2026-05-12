@@ -89,6 +89,7 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 	mux.HandleFunc("GET /player/{videoID}", s.handlePagePlayer)
 	mux.HandleFunc("GET /bookmarks", s.handlePageBookmarks)
 	mux.HandleFunc("GET /temp/watch", s.handlePageTempWatch)
+	mux.HandleFunc("GET /temp/x-demo", s.handlePageXDemo)
 	mux.HandleFunc("GET /search", s.handlePageSearch)
 	mux.HandleFunc("GET /search/youtube", s.handlePageYouTubeSearch)
 	mux.HandleFunc("GET /login", s.handleLoginPage)

@@ -60,6 +60,76 @@ func TestFeedSourcesPersistAndTrackAttribution(t *testing.T) {
 	}
 }
 
+func TestListFeedItemsBySourceIDReturnsAttributedItems(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	if err := d.UpsertFeedSource(model.FeedSource{
+		SourceID:   "twitter_list_demo",
+		Platform:   "twitter",
+		SourceType: "list",
+		ExternalID: "demo",
+		Label:      "Demo List",
+		URL:        "https://x.com/i/lists/demo",
+		Enabled:    true,
+	}); err != nil {
+		t.Fatalf("UpsertFeedSource: %v", err)
+	}
+
+	first := time.Unix(100, 0)
+	second := time.Unix(200, 0)
+	items := []model.FeedItem{
+		{
+			TweetID:      "tweet_source_original",
+			SourceHandle: "source_owner",
+			AuthorHandle: "original_author",
+			BodyText:     "original item",
+			PublishedAt:  &first,
+			FetchedAt:    time.Unix(300, 0),
+		},
+		{
+			TweetID:           "tweet_source_retweet",
+			SourceHandle:      "source_owner",
+			AuthorHandle:      "retweeted_author",
+			BodyText:          "retweet wrapper",
+			IsRetweet:         true,
+			RetweetedByHandle: "source_owner",
+			CanonicalTweetID:  "tweet_original_elsewhere",
+			PublishedAt:       &second,
+			FetchedAt:         time.Unix(300, 0),
+		},
+		{
+			TweetID:      "tweet_unattributed",
+			SourceHandle: "source_owner",
+			AuthorHandle: "other_author",
+			BodyText:     "not in the source",
+			PublishedAt:  &second,
+			FetchedAt:    time.Unix(300, 0),
+		},
+	}
+	if _, err := d.UpsertFeedItems(items); err != nil {
+		t.Fatalf("UpsertFeedItems: %v", err)
+	}
+	for _, tweetID := range []string{"tweet_source_original", "tweet_source_retweet"} {
+		if err := d.RecordFeedItemSources(tweetID, []string{"twitter_list_demo"}); err != nil {
+			t.Fatalf("RecordFeedItemSources(%s): %v", tweetID, err)
+		}
+	}
+
+	got, err := d.ListFeedItemsBySourceID("twitter_list_demo", 10)
+	if err != nil {
+		t.Fatalf("ListFeedItemsBySourceID: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2", len(got))
+	}
+	if got[0].TweetID != "tweet_source_retweet" || !got[0].IsRetweet {
+		t.Fatalf("first item = %#v, want retweet wrapper first", got[0])
+	}
+	if got[1].TweetID != "tweet_source_original" {
+		t.Fatalf("second tweet_id = %q, want tweet_source_original", got[1].TweetID)
+	}
+}
+
 func feedSourceTestTime(t time.Time) *time.Time {
 	return &t
 }
