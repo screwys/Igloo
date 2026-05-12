@@ -81,6 +81,81 @@ func TestClassifyErrorPatterns(t *testing.T) {
 	}
 }
 
+func TestClassifyFailurePermanentAndRetryablePolicy(t *testing.T) {
+	tests := []struct {
+		name      string
+		err       error
+		output    []byte
+		attempt   int
+		wantKind  string
+		permanent bool
+		minDelay  time.Duration
+	}{
+		{
+			name:      "auth is permanent",
+			err:       errors.New("login required; cookies missing"),
+			wantKind:  ErrorKindAuth,
+			permanent: true,
+		},
+		{
+			name:      "empty result is permanent",
+			err:       errors.New("no files downloaded"),
+			wantKind:  ErrorKindEmptyResult,
+			permanent: true,
+		},
+		{
+			name:      "rate limit uses long retry",
+			err:       errors.New("HTTP Error 429: Too Many Requests"),
+			attempt:   1,
+			wantKind:  ErrorKindRateLimit,
+			permanent: false,
+			minDelay:  time.Hour,
+		},
+		{
+			name:      "temporary uses exponential retry",
+			err:       context.DeadlineExceeded,
+			attempt:   2,
+			wantKind:  ErrorKindTemporary,
+			permanent: false,
+			minDelay:  2 * time.Minute,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ClassifyFailure(tt.err, tt.output, tt.attempt)
+			if got.Kind != tt.wantKind || got.Permanent != tt.permanent {
+				t.Fatalf("classification = %+v, want kind=%q permanent=%v", got, tt.wantKind, tt.permanent)
+			}
+			if !got.Permanent && got.RetryDelay < tt.minDelay {
+				t.Fatalf("retry delay = %s, want at least %s", got.RetryDelay, tt.minDelay)
+			}
+			if got.Permanent && got.RetryDelay != 0 {
+				t.Fatalf("permanent retry delay = %s, want 0", got.RetryDelay)
+			}
+		})
+	}
+}
+
+func TestRecordOperationRedactsPrivatePathsInSummary(t *testing.T) {
+	sink := &memoryOperationSink{}
+	recordOperation(context.Background(), sink, model.DownloaderOperation{
+		Operation:   "media.test",
+		Platform:    "twitter",
+		Tool:        "gallery-dl",
+		Status:      OperationStatusFailure,
+		ErrorKind:   ErrorKindAuth,
+		Error:       "gallery-dl --cookies /home/sample/.config/igloo/x.com_cookies.txt auth_token=secret",
+		SummaryJSON: `{"args":["--cookies","/home/sample/.config/igloo/x.com_cookies.txt"],"token":"secret"}`,
+	})
+	if len(sink.ops) != 1 {
+		t.Fatalf("operation count = %d, want 1", len(sink.ops))
+	}
+	op := sink.ops[0]
+	if strings.Contains(op.Error, "/home/sample") || strings.Contains(op.SummaryJSON, "/home/sample") || strings.Contains(op.Error, "secret") || strings.Contains(op.SummaryJSON, "secret") {
+		t.Fatalf("operation leaked private data: error=%q summary=%q", op.Error, op.SummaryJSON)
+	}
+}
+
 func TestCookieResolverUsesPlatformSpecificFilesAndRotationCandidates(t *testing.T) {
 	dir := t.TempDir()
 	files := []string{

@@ -5,7 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
+
+type FailureClassification struct {
+	Kind       string
+	Strategy   string
+	Permanent  bool
+	RetryDelay time.Duration
+}
 
 func ClassifyError(err error, output []byte) string {
 	text := strings.ToLower(string(output))
@@ -62,6 +70,49 @@ func ClassifyError(err error, output []byte) string {
 
 func ErrorKind(err error) string {
 	return ClassifyError(err, nil)
+}
+
+func ClassifyFailure(err error, output []byte, attempt int) FailureClassification {
+	kind := ClassifyError(err, output)
+	permanent := false
+	switch kind {
+	case ErrorKindAuth, ErrorKindPermanentHTTP, ErrorKindEmptyResult:
+		permanent = true
+	}
+	if err == nil {
+		return FailureClassification{Kind: kind}
+	}
+	if permanent {
+		return FailureClassification{Kind: kind, Strategy: ErrorStrategyPermanent, Permanent: true}
+	}
+	delay := retryDelayForKind(kind, attempt)
+	return FailureClassification{Kind: kind, Strategy: ErrorStrategyRetry, RetryDelay: delay}
+}
+
+func retryDelayForKind(kind string, attempt int) time.Duration {
+	if attempt < 0 {
+		attempt = 0
+	}
+	switch kind {
+	case ErrorKindRateLimit:
+		delay := time.Hour
+		for i := 1; i < attempt && delay < 12*time.Hour; i++ {
+			delay *= 2
+		}
+		if delay > 12*time.Hour {
+			return 12 * time.Hour
+		}
+		return delay
+	default:
+		delay := 30 * time.Second
+		for i := 0; i < attempt && delay < 6*time.Hour; i++ {
+			delay *= 2
+		}
+		if delay > 6*time.Hour {
+			return 6 * time.Hour
+		}
+		return delay
+	}
 }
 
 func commandError(tool string, result CommandResult) error {

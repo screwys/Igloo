@@ -453,6 +453,14 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 			retry_count   INTEGER DEFAULT 0,
 			priority      INTEGER DEFAULT 0,
 			last_error    TEXT,
+			lease_owner   TEXT    NOT NULL DEFAULT '',
+			lease_until_ms INTEGER NOT NULL DEFAULT 0,
+			next_attempt_at_ms INTEGER NOT NULL DEFAULT 0,
+			last_error_kind TEXT NOT NULL DEFAULT '',
+			tool          TEXT    NOT NULL DEFAULT '',
+			cookie_label  TEXT    NOT NULL DEFAULT '',
+			started_at_ms INTEGER NOT NULL DEFAULT 0,
+			completed_at_ms INTEGER NOT NULL DEFAULT 0,
 			created_at    INTEGER NOT NULL DEFAULT 0,
 			updated_at    INTEGER NOT NULL DEFAULT 0
 		)`,
@@ -501,6 +509,13 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 			priority    INTEGER DEFAULT 0,
 			error       TEXT    DEFAULT '',
 			retry_count INTEGER DEFAULT 0,
+			lease_owner TEXT    NOT NULL DEFAULT '',
+			lease_until_ms INTEGER NOT NULL DEFAULT 0,
+			next_attempt_at_ms INTEGER NOT NULL DEFAULT 0,
+			last_error_kind TEXT NOT NULL DEFAULT '',
+			last_error_strategy TEXT NOT NULL DEFAULT '',
+			tool        TEXT    NOT NULL DEFAULT '',
+			cookie_label TEXT   NOT NULL DEFAULT '',
 			added_at    INTEGER NOT NULL DEFAULT 0,
 			started_at  INTEGER NOT NULL DEFAULT 0,
 			completed_at INTEGER NOT NULL DEFAULT 0
@@ -604,6 +619,21 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 	migrations := []string{
 		"ALTER TABLE download_queue ADD COLUMN error TEXT DEFAULT ''",
 		"ALTER TABLE download_queue ADD COLUMN published_at_ms INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE download_queue ADD COLUMN lease_owner TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE download_queue ADD COLUMN lease_until_ms INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE download_queue ADD COLUMN next_attempt_at_ms INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE download_queue ADD COLUMN last_error_kind TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE download_queue ADD COLUMN last_error_strategy TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE download_queue ADD COLUMN tool TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE download_queue ADD COLUMN cookie_label TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE feed_media_jobs ADD COLUMN lease_owner TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE feed_media_jobs ADD COLUMN lease_until_ms INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE feed_media_jobs ADD COLUMN next_attempt_at_ms INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE feed_media_jobs ADD COLUMN last_error_kind TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE feed_media_jobs ADD COLUMN tool TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE feed_media_jobs ADD COLUMN cookie_label TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE feed_media_jobs ADD COLUMN started_at_ms INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE feed_media_jobs ADD COLUMN completed_at_ms INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE feed_items ADD COLUMN sync_seq INTEGER DEFAULT 0",
 		"ALTER TABLE feed_items ADD COLUMN algo_interest REAL DEFAULT 0",
 		"ALTER TABLE feed_items ADD COLUMN algo_scored_at INTEGER DEFAULT 0",
@@ -650,6 +680,8 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_media_files_type_id ON media_files(owner_type, id)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_media_files_type_owner ON media_files(owner_type, owner_id, media_index)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_feed_media_jobs_status_tweet ON feed_media_jobs(status, tweet_id)")
+	conn.Exec("CREATE INDEX IF NOT EXISTS idx_feed_media_jobs_ready ON feed_media_jobs(status, next_attempt_at_ms, lease_until_ms, priority, updated_at)")
+	conn.Exec("CREATE INDEX IF NOT EXISTS idx_download_queue_ready ON download_queue(status, next_attempt_at_ms, lease_until_ms, priority, added_at)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_translation_jobs_ready ON translation_jobs(status, next_attempt_at, priority, updated_at)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_feed_items_author_lower ON feed_items(LOWER(author_handle))")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_feed_items_media_author ON feed_items(author_handle COLLATE NOCASE, published_at DESC) WHERE media_json IS NOT NULL AND media_json != '' AND media_json != '[]' AND is_retweet = 0")

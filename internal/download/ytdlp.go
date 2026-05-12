@@ -526,7 +526,7 @@ func (y *YtDlpWrapper) recordYtDlpOperationWithCounts(ctx context.Context, opera
 		StartedAtMs: start.UnixMilli(),
 		EndedAtMs:   time.Now().UnixMilli(),
 		Status:      statusForError(err),
-		ErrorKind:   ClassifyError(err, nil),
+		ErrorKind:   ClassifyFailure(err, nil, 0).Kind,
 		Error:       errorString(err, nil),
 		CookieLabel: CookieLabel(opts.Cookies, opts.CookiesFromBrowser),
 		ItemCount:   items,
