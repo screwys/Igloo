@@ -230,6 +230,7 @@
     <string name="feed_quoted_post_media_index">Quoted post media %d</string>
     <string name="feed_refresh_account">Refresh account</string>
     <string name="feed_replying_to">Replying to @%1$s</string>
+    <string name="feed_thread_load_more_replies">Load more replies</string>
     <string name="feed_repost_more">more</string>
     <string name="feed_repost_suffix">reposted</string>
     <string name="feed_reposted_by">Reposted by</string>

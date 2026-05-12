@@ -134,6 +134,37 @@ class FeedTextUtilsTest {
     }
 
     @Test
+    fun strip_reply_prefix_removes_redundant_leading_reply_handle() {
+        val item = FeedItemEntity(
+            tweetId = "sample_tweet_0",
+            authorHandle = "sample_reply_author",
+            isReply = true,
+            replyToHandle = "sample_parent_author",
+        )
+
+        assertEquals(
+            "only if it reaches 100 retweets",
+            stripReplyPrefix(item, "@sample_parent_author only if it reaches 100 retweets"),
+        )
+        assertEquals(
+            "only if it reaches 100 retweets",
+            stripReplyPrefix(item, "@sample_parent_author: only if it reaches 100 retweets"),
+        )
+        assertEquals(
+            "@sample_other_author only if it reaches 100 retweets",
+            stripReplyPrefix(item, "@sample_other_author only if it reaches 100 retweets"),
+        )
+    }
+
+    @Test
+    fun native_thread_visible_ancestor_start_matches_web_collapse_rule() {
+        assertEquals(0, nativeThreadVisibleAncestorStart(0))
+        assertEquals(0, nativeThreadVisibleAncestorStart(1))
+        assertEquals(1, nativeThreadVisibleAncestorStart(2))
+        assertEquals(2, nativeThreadVisibleAncestorStart(3))
+    }
+
+    @Test
     fun mute_menu_actions_show_retweet_author_and_quote_targets() {
         val actions = feedMuteMenuActions(
             row = feedRow(

@@ -179,3 +179,16 @@ internal fun displayNameLooksLikeHandle(raw: String?): String {
 
 internal fun feedShareUrl(item: FeedItemEntity): String =
     canonicalTweetUrl(item)
+
+internal fun stripReplyPrefix(item: FeedItemEntity, text: String): String {
+    if (!item.isReply || text.isBlank()) return text
+    val replyHandle = normalizeHandle(item.replyToHandle)
+    if (replyHandle.isBlank()) return text
+
+    val prefix = "@$replyHandle"
+    if (!text.startsWith(prefix, ignoreCase = true)) return text
+
+    val rest = text.drop(prefix.length)
+    if (rest.isNotEmpty() && rest.first() !in setOf(' ', '\n', '\t', ',', ':')) return text
+    return rest.trimStart(' ', '\n', '\t', ',', ':').trimStart()
+}

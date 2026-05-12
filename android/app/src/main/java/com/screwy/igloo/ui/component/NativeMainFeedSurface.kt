@@ -1126,6 +1126,7 @@ private class NativeFeedViewHolder(
     private var showTranslatedBody = true
     private var showTranslatedQuote = true
     private var bodyExpanded = false
+    private var threadExpanded = false
 
     fun bind(adapterRow: NativeFeedAdapterItem.Post) {
         val previousId = boundRow?.id
@@ -1133,6 +1134,7 @@ private class NativeFeedViewHolder(
             showTranslatedBody = true
             showTranslatedQuote = true
             bodyExpanded = false
+            threadExpanded = false
         }
         boundRow = adapterRow
         videoSlots.forEach { inlineVideoManager.detachSlot(it.key) }
@@ -1150,7 +1152,7 @@ private class NativeFeedViewHolder(
             bodyTranslation
         } else {
             item.bodyText.orEmpty()
-        }
+        }.let { stripReplyPrefix(item, it) }
         val translationPill = nativeTranslationPillForText(
             lang = item.lang,
             sourceLang = item.bodySourceLang,
@@ -1166,6 +1168,7 @@ private class NativeFeedViewHolder(
             true
         }
 
+        bindThread(adapterRow.threaded, colors, callbacks)
         bindRetweeter(item, callbacks, colors)
         bindHeader(
             header = views.header,
@@ -1232,6 +1235,108 @@ private class NativeFeedViewHolder(
     }
 
     fun videoSlotsForSelection(): List<NativeVideoSlot> = videoSlots
+
+    private fun bindThread(
+        threaded: ThreadedFeedRow,
+        colors: NativeFeedColors,
+        callbacks: NativeFeedCallbacks,
+    ) {
+        cancelAvatarJobsUnder(views.thread)
+        views.thread.removeAllViews()
+        val chain = threaded.chain
+        if (chain.isEmpty()) {
+            views.thread.visibility = View.GONE
+            return
+        }
+
+        views.thread.visibility = View.VISIBLE
+        val visibleStart = if (threadExpanded) 0 else nativeThreadVisibleAncestorStart(chain.size)
+        if (visibleStart > 0) {
+            views.thread.addView(threadMoreButton(colors), verticalSpacingLayoutParams())
+        }
+        chain.drop(visibleStart).forEachIndexed { index, row ->
+            val params = verticalSpacingLayoutParams().apply {
+                if (index == 0 && visibleStart == 0) topMargin = 0
+            }
+            views.thread.addView(threadAncestorView(row, colors, callbacks), params)
+        }
+    }
+
+    private fun threadMoreButton(colors: NativeFeedColors): TextView =
+        smallText(views.root.context).apply {
+            text = context.getString(R.string.feed_thread_load_more_replies)
+            gravity = Gravity.CENTER
+            setTextColor(colors.primary)
+            background = roundedStroke(Color.TRANSPARENT, colors.borderSubtle, dp(1), dp(14))
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+            setOnClickListener {
+                threadExpanded = true
+                boundRow?.let { bind(it) }
+            }
+        }
+
+    private fun threadAncestorView(
+        row: FeedRow,
+        colors: NativeFeedColors,
+        callbacks: NativeFeedCallbacks,
+    ): LinearLayout {
+        val item = row.item
+        val authorHandle = normalizeHandle(item.authorHandle)
+        val authorDisplay = displayLabel(
+            primary = item.authorDisplayName,
+            fallback = row.channelName,
+            handle = authorHandle,
+        )
+        val container = LinearLayout(views.root.context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(7), dp(8), dp(7))
+            background = roundedStroke(colors.surface, colors.borderSubtle, dp(1), dp(8))
+            setOnClickListener { callbacks.onRowClick(row) }
+        }
+        val header = NativeIdentityHeaderViews(views.root.context)
+        bindHeader(
+            header = header,
+            channelId = item.channelId.orEmpty(),
+            explicitAvatarUrl = item.authorAvatarUrl,
+            displayName = authorDisplay,
+            handle = authorHandle,
+            timestamp = localizedRelativeTime(views.root.context, item.publishedAt),
+            showFollow = false,
+            isFollowed = false,
+            colors = colors,
+            translation = null,
+            onClick = {
+                if (authorHandle.isNotBlank()) {
+                    callbacks.onMentionClick(authorHandle)
+                }
+            },
+            onFollowClick = {},
+        )
+        container.addView(header.root)
+
+        val replyHandle = normalizeHandle(item.replyToHandle)
+        if (replyHandle.isNotBlank()) {
+            container.addView(
+                smallText(views.root.context).apply {
+                    text = context.getString(R.string.feed_replying_to, replyHandle)
+                    setTextColor(colors.primary)
+                },
+            )
+        }
+
+        val body = stripReplyPrefix(item, item.bodyText.orEmpty())
+        if (body.isNotBlank()) {
+            container.addView(
+                quoteText(views.root.context).apply {
+                    setTextColor(colors.onSurface)
+                    bindMentionText(this, body, colors, callbacks)
+                    maxLines = NativeFeedQuoteCollapsedLines
+                    ellipsize = TextUtils.TruncateAt.END
+                },
+            )
+        }
+        return container
+    }
 
     private fun bindRetweeter(
         item: FeedItemEntity,
@@ -1873,6 +1978,17 @@ private class NativeFeedViewHolder(
         avatarJobs.clear()
     }
 
+    private fun cancelAvatarJobsUnder(view: View) {
+        if (view is ImageView) {
+            avatarJobs.remove(view)?.cancel()
+        }
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                cancelAvatarJobsUnder(view.getChildAt(index))
+            }
+        }
+    }
+
     private fun loadMediaImage(imageView: ImageView, uri: MediaUri, widthPx: Int, heightPx: Int) {
         val request = buildMediaImageRequest(
             context = imageView.context,
@@ -2112,6 +2228,7 @@ private class NativeFeedCardViews(context: Context) {
         }
         tag = this@NativeFeedCardViews
     }
+    val thread: LinearLayout = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     val retweeter: TextView = smallText(context)
     val header: NativeIdentityHeaderViews = NativeIdentityHeaderViews(context)
     val reply: TextView = smallText(context)
@@ -2143,6 +2260,7 @@ private class NativeFeedCardViews(context: Context) {
     }
 
     init {
+        root.addView(thread)
         root.addView(retweeter)
         root.addView(header.root)
         root.addView(reply)
@@ -2612,6 +2730,12 @@ private fun nativeLooksLikeLanguageTag(value: String): Boolean =
 
 internal fun nativeShouldClampBody(text: String): Boolean =
     text.length > 420 || text.count { it == '\n' } + 1 > NativeFeedBodyCollapsedLines
+
+internal fun nativeThreadVisibleAncestorStart(chainSize: Int): Int {
+    val total = chainSize + 1
+    if (total <= 2) return 0
+    return (total - 2).coerceAtMost(chainSize)
+}
 
 private fun remoteUriFor(url: String, baseUrl: String): MediaUri.Remote {
     val resolved = when {

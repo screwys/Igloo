@@ -263,6 +263,17 @@ class NativeMainFeedSurfaceTest {
     }
 
     @Test
+    fun nativeFeedRendersThreadChainsWithCollapsedAncestorButton() {
+        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
+        val threadText = text.substringAfter("private fun bindThread")
+            .substringBefore("private fun bindRetweeter")
+
+        assertTrue(threadText.contains("nativeThreadVisibleAncestorStart(chain.size)"))
+        assertTrue(threadText.contains("R.string.feed_thread_load_more_replies"))
+        assertTrue(threadText.contains("stripReplyPrefix(item, item.bodyText.orEmpty())"))
+    }
+
+    @Test
     fun nativeFeedMenusUseThemePopupAndVerticalOverflowIcon() {
         val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
         val cardViewsText = text.substringAfter("private class NativeFeedCardViews")

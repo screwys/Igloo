@@ -229,6 +229,7 @@
     <string name="feed_quoted_post_media_index">Alıntılanan gönderi medyası %d</string>
     <string name="feed_refresh_account">Hesabı güncelle</string>
     <string name="feed_replying_to">@%1$s kullanıcısına yanıt veriliyor</string>
+    <string name="feed_thread_load_more_replies">Daha fazla yanıt yükle</string>
     <string name="feed_repost_more">kişi daha</string>
     <string name="feed_repost_suffix">yeniden paylaştı</string>
     <string name="feed_reposted_by">Yeniden paylaşanlar</string>
