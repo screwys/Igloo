@@ -1,0 +1,12 @@
+{
+  "error": {
+    "error_code": "invalid_body",
+    "error_message": "action must be 'set' or 'clear'",
+    "ok": false
+  },
+  "success": {
+    "ok": true,
+    "sync_stream": "feed",
+    "sync_version": 1
+  }
+}

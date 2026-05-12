@@ -22,5 +22,8 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Check generated drift
+        run: scripts/dev/drift-check.sh
+
       - name: Run Go tests
         run: go test ./...

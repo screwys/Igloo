@@ -1,0 +1,14 @@
+{
+  "missing": {
+    "body_bytes": 19,
+    "cache_control": "",
+    "content_type": "text/plain; charset=utf-8",
+    "status": 404
+  },
+  "ready": {
+    "body_bytes": 6,
+    "cache_control": "public, max-age=2592000, immutable",
+    "content_type": "image/jpeg",
+    "status": 200
+  }
+}

@@ -29,6 +29,12 @@ go_json="$tmp/go-test.jsonl"
 android_log="$tmp/android-test.log"
 android_results="$ROOT/android/app/build/test-results/testDevtestUnitTest"
 
+echo "[drift] checking generated outputs..."
+if ! scripts/dev/drift-check.sh; then
+  echo "[drift] generated output check failed" >&2
+  status=1
+fi
+
 echo "[go] running tests..."
 go test -json ./... | tee "$go_json"
 go_status=${PIPESTATUS[0]}
