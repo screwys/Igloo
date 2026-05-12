@@ -188,6 +188,17 @@ func TestLinkify(t *testing.T) {
 	}
 }
 
+func TestLinkifyDoesNotLinkMentionsInsideURLs(t *testing.T) {
+	got := Linkify("hii\n\nhttps://www.tiktok.com/@nixie")
+	want := `<a href="https://www.tiktok.com/@nixie" class="feed-inline-link" target="_blank" rel="noopener">https://www.tiktok.com/@nixie</a>`
+	if !strings.Contains(got, want) {
+		t.Fatalf("URL with @handle was not preserved as one anchor: %s", got)
+	}
+	if strings.Contains(got, `/channels/twitter_nixie`) {
+		t.Fatalf("mention inside URL should not be linked: %s", got)
+	}
+}
+
 func TestLinkifyForPlatformUsesProfileNamespace(t *testing.T) {
 	got := LinkifyForPlatform("with @sample.creator and @Other_User", "instagram")
 	if !strings.Contains(got, `href="/channels/instagram_sample.creator"`) {

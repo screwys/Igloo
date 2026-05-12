@@ -326,6 +326,7 @@ func RelativeTimeText(p PageProps, t *time.Time) string {
 
 var (
 	urlRe              = regexp.MustCompile(`(https?://[^\s<>"']+)`)
+	anchorRe           = regexp.MustCompile(`(?s)<a\b[^>]*>.*?</a>`)
 	twitterMentionRe   = regexp.MustCompile(`@[A-Za-z0-9_]+`)
 	shortFormMentionRe = regexp.MustCompile(`@[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,30}[A-Za-z0-9_])?`)
 	emailTLD           = regexp.MustCompile(`^\.[A-Za-z]{2,12}\b`)
@@ -356,15 +357,23 @@ func linkifyMentionsForPlatform(s, platform string) string {
 	if len(matches) == 0 {
 		return s
 	}
+	anchors := anchorRe.FindAllStringIndex(s, -1)
 	var b strings.Builder
 	last := 0
+	anchorIdx := 0
 	for _, m := range matches {
 		start, end := m[0], m[1]
 		b.WriteString(s[last:start])
 
 		skip := false
+		for anchorIdx < len(anchors) && anchors[anchorIdx][1] <= start {
+			anchorIdx++
+		}
+		if anchorIdx < len(anchors) && start >= anchors[anchorIdx][0] && start < anchors[anchorIdx][1] {
+			skip = true
+		}
 		// Preceded by a word char → looks like `foo@bar` (email).
-		if start > 0 && isMentionWordByte(s[start-1]) {
+		if !skip && start > 0 && isMentionWordByte(s[start-1]) {
 			skip = true
 		}
 		// Followed by another `@` → looks like `@foo@bar.com`.
