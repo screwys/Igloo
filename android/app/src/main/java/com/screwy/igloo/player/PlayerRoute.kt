@@ -3,6 +3,7 @@ package com.screwy.igloo.player
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.view.OrientationEventListener
 import java.io.File
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
@@ -129,7 +130,9 @@ fun PlayerRoute(
     val playbackCoordinator = remember { PlaybackCoordinator() }
     val playbackPlayer = remember(player) { ExoPlayerPlaybackPlayer(player) }
     val activity = ctx.findActivity()
+    val devicePosture = rememberPlayerDevicePosture()
     var isFullscreen by remember { mutableStateOf(false) }
+    var autoFullscreenSuppressed by remember(videoId) { mutableStateOf(false) }
     var playerControlsVisible by remember { mutableStateOf(true) }
     var showUnfollowDialog by remember(videoId) { mutableStateOf(false) }
     var showDeleteLocalDialog by remember(videoId) { mutableStateOf(false) }
@@ -187,7 +190,17 @@ fun PlayerRoute(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    DisposableEffect(activity, isFullscreen) {
+    fun enterFullscreen() {
+        autoFullscreenSuppressed = false
+        isFullscreen = true
+    }
+
+    fun exitFullscreen() {
+        autoFullscreenSuppressed = true
+        isFullscreen = false
+    }
+
+    DisposableEffect(activity, isFullscreen, autoFullscreenSuppressed) {
         if (activity != null) {
             val controller = WindowCompat.getInsetsController(
                 activity.window,
@@ -197,7 +210,7 @@ fun PlayerRoute(
                 activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 controller.hide(WindowInsetsCompat.Type.systemBars())
             } else {
-                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+                activity.requestedOrientation = playerInlineRequestedOrientation(autoFullscreenSuppressed)
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
         }
@@ -209,10 +222,15 @@ fun PlayerRoute(
             }
         }
     }
-    BackHandler(enabled = isFullscreen) { isFullscreen = false }
-    LaunchedEffect(configuration.orientation) {
-        if (configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
-            isFullscreen = true
+    BackHandler(enabled = isFullscreen) { exitFullscreen() }
+    LaunchedEffect(configuration.orientation, autoFullscreenSuppressed) {
+        if (shouldAutoEnterPlayerFullscreen(configuration.orientation, autoFullscreenSuppressed)) {
+            enterFullscreen()
+        }
+    }
+    LaunchedEffect(autoFullscreenSuppressed, devicePosture) {
+        if (autoFullscreenSuppressed && devicePosture == PlayerDevicePosture.Portrait) {
+            autoFullscreenSuppressed = false
         }
     }
     LaunchedEffect(videoId) {
@@ -360,13 +378,13 @@ fun PlayerRoute(
             posterUri = displayPosterUri,
             streamUri = streamUri,
             title = playerTitle,
-            onBack = { isFullscreen = false },
+            onBack = { exitFullscreen() },
             onPreviousVideo = onPreviousVideo,
             onNextVideo = onNextVideo,
             segments = sponsorBlockPlayback.visibleSegments,
             showSubtitles = showSubtitles,
             onToggleSubtitles = { showSubtitles = !showSubtitles },
-            onToggleFullscreen = { isFullscreen = false },
+            onToggleFullscreen = { exitFullscreen() },
             controlsVisible = playerControlsVisible,
             onControlsVisibleChange = { playerControlsVisible = it },
             previewSpritePath = previewSpritePath,
@@ -408,7 +426,7 @@ fun PlayerRoute(
                     segments = sponsorBlockPlayback.visibleSegments,
                     showSubtitles = showSubtitles,
                     onToggleSubtitles = { showSubtitles = !showSubtitles },
-                    onToggleFullscreen = { isFullscreen = true },
+                    onToggleFullscreen = { enterFullscreen() },
                     controlsVisible = playerControlsVisible,
                     onControlsVisibleChange = { playerControlsVisible = it },
                     previewSpritePath = previewSpritePath,
@@ -568,4 +586,22 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is android.content.ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+@Composable
+private fun rememberPlayerDevicePosture(): PlayerDevicePosture {
+    val context = LocalContext.current
+    var posture by remember { mutableStateOf(PlayerDevicePosture.Unknown) }
+    DisposableEffect(context) {
+        val listener = object : OrientationEventListener(context.applicationContext) {
+            override fun onOrientationChanged(orientation: Int) {
+                posture = playerDevicePostureForDegrees(orientation)
+            }
+        }
+        if (listener.canDetectOrientation()) {
+            listener.enable()
+        }
+        onDispose { listener.disable() }
+    }
+    return posture
 }
