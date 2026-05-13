@@ -46,8 +46,8 @@ RUN apt-get update \
         "gallery-dl==${GALLERY_DL_VERSION}"
 
 ENV PATH="/opt/igloo-py/bin:${PATH}" \
-    IGLOO_DATA_DIR=/data \
-    IGLOO_CONFIG_DIR=/config \
+    IGLOO_DATA_DIR=/igloo/data \
+    IGLOO_CONFIG_DIR=/igloo/config \
     IGLOO_REPO_DIR=/app \
     IGLOO_PORT=5001 \
     IGLOO_ENABLED_PLATFORMS=all
@@ -58,9 +58,9 @@ COPY --from=build /out/igloo-adduser /usr/local/bin/igloo-adduser
 COPY --from=build /out/locales /app/locales
 COPY --from=build /out/static /app/static
 
-RUN mkdir -p /data /config
+RUN mkdir -p /igloo/data /igloo/config
 
-VOLUME ["/data", "/config"]
+VOLUME ["/igloo"]
 EXPOSE 5001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

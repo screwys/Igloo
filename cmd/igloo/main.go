@@ -33,6 +33,10 @@ func main() {
 		slog.Error("invalid configuration", "err", cfg.ConfigError)
 		os.Exit(1)
 	}
+	if err := cfg.EnsureRuntimeDirs(); err != nil {
+		slog.Error("failed to create runtime directories", "err", err)
+		os.Exit(1)
+	}
 	if logFile := setupServerLogging(cfg); logFile != nil {
 		defer logFile.Close()
 	}

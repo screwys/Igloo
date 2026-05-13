@@ -17,13 +17,12 @@ image="${IGLOO_CONTAINER_CHECK_IMAGE:-ghcr.io/screwys/igloo:container-check}"
 port="${IGLOO_CONTAINER_CHECK_PORT:-5011}"
 name="igloo-container-check-$$"
 tmp="$(mktemp -d)"
-data_volume="${name}-data"
-config_volume="${name}-config"
+state_volume="${name}-state"
 build_image="${IGLOO_CONTAINER_CHECK_BUILD:-1}"
 
 cleanup() {
   "$runtime" rm -f "$name" >/dev/null 2>&1 || true
-  "$runtime" volume rm -f "$data_volume" "$config_volume" >/dev/null 2>&1 || true
+  "$runtime" volume rm -f "$state_volume" >/dev/null 2>&1 || true
   rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -32,20 +31,17 @@ if [[ "$build_image" != "0" ]]; then
   "$runtime" build -t "$image" .
 fi
 
-"$runtime" volume create "$data_volume" >/dev/null
-"$runtime" volume create "$config_volume" >/dev/null
+"$runtime" volume create "$state_volume" >/dev/null
 
 "$runtime" run --rm \
   -e IGLOO_ENABLED_PLATFORMS=all \
-  -v "$data_volume:/data" \
-  -v "$config_volume:/config" \
+  -v "$state_volume:/igloo" \
   "$image" \
   /usr/local/bin/igloo-adduser -username check -password check-pass -platforms youtube >/dev/null
 
 "$runtime" run -d --name "$name" \
   -e IGLOO_ENABLED_PLATFORMS=all \
-  -v "$data_volume:/data" \
-  -v "$config_volume:/config" \
+  -v "$state_volume:/igloo" \
   -p "127.0.0.1:${port}:5001" \
   "$image" >/dev/null
 

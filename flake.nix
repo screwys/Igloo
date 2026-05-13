@@ -178,7 +178,7 @@
             ];
 
             extraCommands = ''
-              mkdir -p app usr/local/bin data config tmp
+              mkdir -p app usr/local/bin igloo/data igloo/config tmp
               chmod 1777 tmp
 
               ln -s ${igloo}/share/igloo/static app/static
@@ -194,8 +194,8 @@
                 "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
                 "REQUESTS_CA_BUNDLE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
                 "LANG=C.UTF-8"
-                "IGLOO_DATA_DIR=/data"
-                "IGLOO_CONFIG_DIR=/config"
+                "IGLOO_DATA_DIR=/igloo/data"
+                "IGLOO_CONFIG_DIR=/igloo/config"
                 "IGLOO_REPO_DIR=/app"
                 "IGLOO_PORT=5001"
                 "IGLOO_ENABLED_PLATFORMS=all"
@@ -204,8 +204,7 @@
                 "5001/tcp" = { };
               };
               Volumes = {
-                "/data" = { };
-                "/config" = { };
+                "/igloo" = { };
               };
               WorkingDir = "/app";
             };

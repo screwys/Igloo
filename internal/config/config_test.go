@@ -76,6 +76,37 @@ func TestConfigEffectivePlatforms(t *testing.T) {
 	}
 }
 
+func TestEnsureRuntimeDirsCreatesDataAndConfigDirs(t *testing.T) {
+	root := t.TempDir()
+	cfg := &Config{
+		DataDir: filepath.Join(root, "state", "data"),
+		ConfDir: filepath.Join(root, "state", "config"),
+	}
+
+	if err := cfg.EnsureRuntimeDirs(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{cfg.DataDir, cfg.ConfDir} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		if !info.IsDir() {
+			t.Fatalf("%s is not a directory", path)
+		}
+	}
+}
+
+func TestEnsureRuntimeDirsRejectsEmptyPaths(t *testing.T) {
+	if err := (&Config{ConfDir: t.TempDir()}).EnsureRuntimeDirs(); err == nil {
+		t.Fatal("expected empty data dir error")
+	}
+	if err := (&Config{DataDir: t.TempDir()}).EnsureRuntimeDirs(); err == nil {
+		t.Fatal("expected empty config dir error")
+	}
+}
+
 func TestPlatformEnabledNormalizesAliases(t *testing.T) {
 	platforms, err := ParseEnabledPlatforms("youtube,twitter")
 	if err != nil {

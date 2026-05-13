@@ -9,5 +9,4 @@ services:
     environment:
       IGLOO_ENABLED_PLATFORMS: ${IGLOO_ENABLED_PLATFORMS:-}
     volumes:
-      - ./igloo/data:/data
-      - ./igloo/config:/config
+      - ./igloo:/igloo

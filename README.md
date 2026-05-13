@@ -15,7 +15,7 @@
 Igloo is an opinionated self-hosted personal social inbox for X, YouTube, TikTok and Instagram written in [Go](https://go.dev/). It pulls content from imported creators, and syncs it to an offline-first Android app. It is not meant to be a complete front-end replacement for these services, it intentionally stays out of any interaction with these platforms, such as posting or commenting. The published image is built with Nix to keep it small, 200~ MB compressed and 700~ MB local image size. You can also build the image yourself. [Jump to installation](#install)
 
 
-Any interaction you do on the client, stays in your machine which includes likes, follows or bookmarks. You don't need to log in to your accounts on these platforms, but that can also affect what media the server can fetch, since it uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [gallery-dl](https://github.com/mikf/gallery-dl) to download media, you can only go as far as these packages let you go without cookies. On the web UI, you can upload one or more cookie files or set the browser with cookies to automatically enable cookies. Multiple uploaded X cookie files are all discovered and rotated across X fetches.
+Any interaction you do on the client, stays in your machine which includes likes, follows or bookmarks. You don't need to log in to your accounts on these platforms, but that can also affect what media the server can fetch, since it uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [gallery-dl](https://github.com/mikf/gallery-dl) to download media, you can only go as far as these packages let you go without cookies. On the web UI, you can upload one or more cookie files or set the browser with cookies to automatically enable cookies.
 
 ![Cookie settings](static/screenshots/cookies.png)
 
@@ -127,13 +127,11 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
 docker pull ghcr.io/screwys/igloo:latest
 docker run -d --name igloo --restart unless-stopped \
   -p 127.0.0.1:5001:5001 \
-  -v "$PWD/igloo/data:/data" \
-  -v "$PWD/igloo/config:/config" \
+  -v "YOUR_DIRECTORY:/igloo" \
   ghcr.io/screwys/igloo:latest
 ```
 
-Change the host paths before the colon if you want data or config stored
-somewhere else; keep the container paths `/data` and `/config` unchanged.
+By default, this will create `data` and `config` inside `YOUR_DIRECTORY`.
 
 To build the image locally instead:
 
@@ -149,7 +147,7 @@ Then open Igloo and create the first admin account in the setup screen:
 http://127.0.0.1:5001
 ```
 
-This stores data under:
+By default, Compose stores data under:
 
 ```text
 ./igloo/data
@@ -179,7 +177,7 @@ it at a LAN, VPN, Tailscale, or HTTPS Igloo URL.
 
 ## Native Development
 
-If you want to develop natively, clone the repo and run:
+For native development, clone the repo and run:
 
 ```bash
 scripts/dev/build.sh          # build Go server and assets
@@ -187,31 +185,18 @@ scripts/dev/build.sh restart  # build and restart the local server
 go test ./...
 ```
 
-Default folders in case installed natively:
+Then open the local server and finish setup in the browser:
+
+```text
+http://127.0.0.1:5001
+```
+
+Native installs use these folders by default:
 
 | Path | Contents |
 |---|---|
 | `~/.local/share/igloo/` | Database, media, thumbnails, logs |
 | `~/.config/igloo/` | Auth files, config, platform session files |
-
-For a native fresh install, a full export zip can be imported before the first
-browser login. The current full export zip includes `export.json`, bookmarked
-media, cached avatars, and runtime files from `~/.config/igloo/` such as `nginx.conf`,
-`auth_users.json`, `auth_secret`, and `cookies/`.
-
-```bash
-IGLOO_DATA_DIR="$HOME/.local/share/igloo" \
-IGLOO_CONFIG_DIR="$HOME/.config/igloo" \
-IGLOO_REPO_DIR="$PWD" \
-./bin/igloo-import --replace "$HOME"/Downloads/igloo-full-*.zip
-```
-
-Run the import after `scripts/install.sh` builds `bin/igloo-import` and before
-starting the user services. The import restores `nginx.conf` and rewrites path
-roots in it to the current data, config, and repo directories. User-owned rows
-use the exported `user_id`, so a fresh install does not need to guess an admin
-ID. Older zips without `user_id` still fall back to the only configured user or
-bootstrap ownership before first setup.
 
 ## Android
 
@@ -222,9 +207,6 @@ android/build.sh        # build and install debug APK on a connected device
 android/build.sh apk    # build APK without installing
 android/test.sh         # run JVM unit tests
 ```
-
-The Android app is meant to keep normal UI state available without a live server.
-Sync is still required to receive new server data and upload queued local actions.
 
 ## Translations
 

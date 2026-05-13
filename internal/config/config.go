@@ -193,6 +193,25 @@ func (c *Config) EffectivePlatforms(platforms []string) []string {
 	return out
 }
 
+func (c *Config) EnsureRuntimeDirs() error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if strings.TrimSpace(c.DataDir) == "" {
+		return fmt.Errorf("data dir is empty")
+	}
+	if strings.TrimSpace(c.ConfDir) == "" {
+		return fmt.Errorf("config dir is empty")
+	}
+	if err := os.MkdirAll(c.DataDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir data dir: %w", err)
+	}
+	if err := os.MkdirAll(c.ConfDir, 0o700); err != nil {
+		return fmt.Errorf("mkdir config dir: %w", err)
+	}
+	return nil
+}
+
 func platformSet(platforms []string) map[string]bool {
 	set := make(map[string]bool, len(platforms))
 	for _, p := range platforms {
