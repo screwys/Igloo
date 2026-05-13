@@ -148,26 +148,11 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 		return out, fmt.Errorf("android sync desired tweets: %w", err)
 	}
 
-	if err := db.collectStrings(`
-		SELECT DISTINCT v.video_id
-		FROM videos v
-		WHERE (
-		    v.channel_id LIKE 'youtube_%'
-		    OR v.channel_id LIKE 'tiktok_%'
-		    OR v.channel_id LIKE 'instagram_%'
-		  )
-		  AND (
-		    (v.channel_id LIKE 'youtube_%'
-		      AND EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.user_id = '' AND cf.channel_id = v.channel_id)
-		      AND (? = 0 OR COALESCE(v.published_at, 0) >= ?))
-		    OR ((v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
-		      AND COALESCE(v.source_kind, '') != 'story'
-		      AND EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.user_id = '' AND cf.channel_id = v.channel_id)
-		      AND (? = 0 OR COALESCE(v.published_at, 0) >= ?))
-		    OR v.video_id IN (SELECT b.video_id FROM bookmarks b WHERE b.user_id = '' OR b.user_id = ?)
-		    OR v.video_id IN (SELECT fl.tweet_id FROM feed_likes fl WHERE fl.username = ?)
-		  )
-	`, []any{youtubeCutoff, youtubeCutoff, momentsCutoff, momentsCutoff, username, username}, out.MediaVideos); err != nil {
+	if err := db.collectStrings(
+		androidSyncDesiredVideoRowsSQL("v.video_id", true),
+		androidSyncDesiredVideoRowsArgs(username, youtubeCutoff, true, momentsCutoff),
+		out.MediaVideos,
+	); err != nil {
 		return out, fmt.Errorf("android sync desired media videos: %w", err)
 	}
 	if includeSourceWindows {
@@ -189,25 +174,11 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 		return out, fmt.Errorf("android sync desired story media videos: %w", err)
 	}
 
-	if err := db.collectStrings(`
-		SELECT DISTINCT v.video_id
-		FROM videos v
-		WHERE (
-		    v.channel_id LIKE 'youtube_%'
-		    OR v.channel_id LIKE 'tiktok_%'
-		    OR v.channel_id LIKE 'instagram_%'
-		  )
-		  AND (
-		    (v.channel_id LIKE 'youtube_%'
-		      AND EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.user_id = '' AND cf.channel_id = v.channel_id))
-		    OR ((v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
-		      AND COALESCE(v.source_kind, '') != 'story'
-		      AND EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.user_id = '' AND cf.channel_id = v.channel_id)
-		      AND (? = 0 OR COALESCE(v.published_at, 0) >= ?))
-		    OR v.video_id IN (SELECT b.video_id FROM bookmarks b WHERE b.user_id = '' OR b.user_id = ?)
-		    OR v.video_id IN (SELECT fl.tweet_id FROM feed_likes fl WHERE fl.username = ?)
-		  )
-	`, []any{momentsCutoff, momentsCutoff, username, username}, out.Videos); err != nil {
+	if err := db.collectStrings(
+		androidSyncDesiredVideoRowsSQL("v.video_id", false),
+		androidSyncDesiredVideoRowsArgs(username, 0, false, momentsCutoff),
+		out.Videos,
+	); err != nil {
 		return out, fmt.Errorf("android sync desired content videos: %w", err)
 	}
 	if includeSourceWindows {
@@ -229,27 +200,12 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 		return out, fmt.Errorf("android sync desired story videos: %w", err)
 	}
 
+	contentVideoSQL := androidSyncDesiredVideoRowsSQL("v.video_id, v.channel_id", false)
+	contentVideoArgs := androidSyncDesiredVideoRowsArgs(username, 0, false, momentsCutoff)
 	channelArgs := append([]any{}, args...)
-	channelArgs = append(channelArgs,
-		momentsCutoff, momentsCutoff,
-		username, username,
-	)
+	channelArgs = append(channelArgs, contentVideoArgs...)
 	if err := db.collectStrings(cte+`
-		, content_videos(video_id, channel_id) AS (
-			SELECT DISTINCT v.video_id, v.channel_id
-			FROM videos v
-			WHERE COALESCE(v.channel_id, '') != ''
-			  AND (
-			    (v.channel_id LIKE 'youtube_%'
-			      AND EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.user_id = '' AND cf.channel_id = v.channel_id))
-			    OR ((v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
-			      AND COALESCE(v.source_kind, '') != 'story'
-			      AND EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.user_id = '' AND cf.channel_id = v.channel_id)
-			      AND (? = 0 OR COALESCE(v.published_at, 0) >= ?))
-			    OR v.video_id IN (SELECT b.video_id FROM bookmarks b WHERE b.user_id = '' OR b.user_id = ?)
-			    OR v.video_id IN (SELECT fl.tweet_id FROM feed_likes fl WHERE fl.username = ?)
-			  )
-		),
+		, content_videos(video_id, channel_id) AS (`+contentVideoSQL+`),
 		avatar_channels(channel_id) AS (
 			SELECT cf.channel_id
 			FROM channel_follows cf
@@ -314,6 +270,60 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 	}
 
 	return out, nil
+}
+
+func androidSyncDesiredVideoRowsSQL(selectExpr string, includeYouTubeCutoff bool) string {
+	youtubeCutoffSQL := ""
+	if includeYouTubeCutoff {
+		youtubeCutoffSQL = "AND (? = 0 OR COALESCE(v.published_at, 0) >= ?)"
+	}
+	return fmt.Sprintf(`
+		SELECT %s
+		FROM channel_follows cf
+		JOIN videos v ON v.channel_id = cf.channel_id
+		WHERE cf.user_id = ''
+		  AND v.channel_id LIKE 'youtube_%%'
+		  %s
+
+		UNION
+		SELECT %s
+		FROM channel_follows cf
+		JOIN videos v ON v.channel_id = cf.channel_id
+		WHERE cf.user_id = ''
+		  AND (v.channel_id LIKE 'tiktok_%%' OR v.channel_id LIKE 'instagram_%%')
+		  AND COALESCE(v.source_kind, '') != 'story'
+		  AND (? = 0 OR COALESCE(v.published_at, 0) >= ?)
+
+		UNION
+		SELECT %s
+		FROM bookmarks b
+		JOIN videos v ON v.video_id = b.video_id
+		WHERE (b.user_id = '' OR b.user_id = ?)
+		  AND (
+		    v.channel_id LIKE 'youtube_%%'
+		    OR v.channel_id LIKE 'tiktok_%%'
+		    OR v.channel_id LIKE 'instagram_%%'
+		  )
+
+		UNION
+		SELECT %s
+		FROM feed_likes fl
+		JOIN videos v ON v.video_id = fl.tweet_id
+		WHERE fl.username = ?
+		  AND (
+		    v.channel_id LIKE 'youtube_%%'
+		    OR v.channel_id LIKE 'tiktok_%%'
+		    OR v.channel_id LIKE 'instagram_%%'
+		  )
+	`, selectExpr, youtubeCutoffSQL, selectExpr, selectExpr, selectExpr)
+}
+
+func androidSyncDesiredVideoRowsArgs(username string, youtubeCutoff int64, includeYouTubeCutoff bool, momentsCutoff int64) []any {
+	var args []any
+	if includeYouTubeCutoff {
+		args = append(args, youtubeCutoff, youtubeCutoff)
+	}
+	return append(args, momentsCutoff, momentsCutoff, username, username)
 }
 
 func (db *DB) collectStoryVideoIDs(storyCutoff int64, into map[string]struct{}) error {

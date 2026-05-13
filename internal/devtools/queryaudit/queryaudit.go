@@ -329,21 +329,41 @@ func probeSpecs() []probeSpec {
 			build: func(opts Options) (string, []any) {
 				cutoff := opts.NowMs - int64(90*24*time.Hour/time.Millisecond)
 				return `
-					SELECT DISTINCT v.video_id
-					FROM videos v
-					WHERE (
+					SELECT v.video_id
+					FROM channel_follows cf
+					JOIN videos v ON v.channel_id = cf.channel_id
+					WHERE cf.user_id = ''
+					  AND (
 					    v.channel_id LIKE 'youtube_%'
 					    OR v.channel_id LIKE 'tiktok_%'
 					    OR v.channel_id LIKE 'instagram_%'
 					  )
-					  AND (
-					    EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.user_id = '' AND cf.channel_id = v.channel_id)
-					    OR v.video_id IN (SELECT b.video_id FROM bookmarks b WHERE b.user_id = '' OR b.user_id = ?)
-					    OR v.video_id IN (SELECT fl.tweet_id FROM feed_likes fl WHERE fl.username = ?)
-					  )
+					  AND COALESCE(v.source_kind, '') != 'story'
 					  AND (? = 0 OR COALESCE(v.published_at, 0) >= ?)
+
+					UNION
+					SELECT v.video_id
+					FROM bookmarks b
+					JOIN videos v ON v.video_id = b.video_id
+					WHERE (b.user_id = '' OR b.user_id = ?)
+					  AND (
+					    v.channel_id LIKE 'youtube_%'
+					    OR v.channel_id LIKE 'tiktok_%'
+					    OR v.channel_id LIKE 'instagram_%'
+					  )
+
+					UNION
+					SELECT v.video_id
+					FROM feed_likes fl
+					JOIN videos v ON v.video_id = fl.tweet_id
+					WHERE fl.username = ?
+					  AND (
+					    v.channel_id LIKE 'youtube_%'
+					    OR v.channel_id LIKE 'tiktok_%'
+					    OR v.channel_id LIKE 'instagram_%'
+					  )
 					LIMIT ?
-				`, []any{opts.Username, opts.Username, cutoff, cutoff, opts.Limit}
+				`, []any{cutoff, cutoff, opts.Username, opts.Username, opts.Limit}
 			},
 		},
 		{

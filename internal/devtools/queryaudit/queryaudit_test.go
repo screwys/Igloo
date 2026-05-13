@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	igloodb "github.com/screwys/igloo/internal/db"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -66,10 +68,72 @@ func TestReadReportCollectsPlans(t *testing.T) {
 	}
 }
 
+func TestAndroidSyncMediaVideoProbeUsesIndexedPlan(t *testing.T) {
+	dbPath := createQueryAuditProductionFixture(t)
+
+	report, err := ReadReport(dbPath, Options{
+		Limit:    5,
+		Username: "alice",
+		Probe:    "android_sync_media_videos",
+		NowMs:    2_000,
+	})
+	if err != nil {
+		t.Fatalf("ReadReport: %v", err)
+	}
+	if len(report.Probes) != 1 {
+		t.Fatalf("probe count = %d, want 1", len(report.Probes))
+	}
+	probe := report.Probes[0]
+	if probe.Error != "" {
+		t.Fatalf("probe errored: %s", probe.Error)
+	}
+	if planHas(probe.Plan, "SCAN v") {
+		t.Fatalf("android sync media-video plan scans videos table:\n%s", strings.Join(probe.Plan, "\n"))
+	}
+	if !planHas(probe.Plan, "idx_videos_channel_published") {
+		t.Fatalf("android sync media-video plan missing videos channel index:\n%s", strings.Join(probe.Plan, "\n"))
+	}
+}
+
 func TestParseOptionsRejectsUnknownProbe(t *testing.T) {
 	if _, err := parseOptions([]string{"-probe", "missing"}); err == nil {
 		t.Fatal("parseOptions accepted unknown probe")
 	}
+}
+
+func planHas(plan []string, needle string) bool {
+	for _, detail := range plan {
+		if strings.Contains(detail, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func createQueryAuditProductionFixture(t *testing.T) string {
+	t.Helper()
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "igloo.db")
+	d, err := igloodb.Open(dbPath, tmp)
+	if err != nil {
+		t.Fatalf("open production fixture db: %v", err)
+	}
+	defer d.Close()
+
+	stmts := []string{
+		`INSERT INTO channels (channel_id, source_id, name, platform)
+		 VALUES ('tiktok_sample_channel', 'sample_channel', 'Sample Channel', 'tiktok')`,
+		`INSERT INTO channel_follows (user_id, channel_id, followed_at)
+		 VALUES ('', 'tiktok_sample_channel', 1000)`,
+		`INSERT INTO videos (video_id, channel_id, title, file_path, published_at)
+		 VALUES ('sample_video_1', 'tiktok_sample_channel', 'Sample Video', 'videos/sample.mp4', 1500)`,
+	}
+	for _, stmt := range stmts {
+		if err := d.ExecRaw(stmt); err != nil {
+			t.Fatalf("exec production fixture statement %q: %v", stmt, err)
+		}
+	}
+	return dbPath
 }
 
 func createQueryAuditFixture(t *testing.T) string {
