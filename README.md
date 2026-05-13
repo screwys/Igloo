@@ -46,7 +46,7 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
   to mute accounts, turn off retweets for an account (or you can do it globally,
   as is the case for all platforms). It can also be configured to automatically
   translate tweets, either in bulk or lazily with DeepL, Google Translate,
-  kagi-cli or API/self-hosted node.
+  kagi-cli or API/self-hosted node. [langdetect](https://github.com/taruti/langdetect) is included to reduce API usage.
 
 <p align="center">
   <img src="static/screenshots/feed.webp" alt="Feed" width="760">
@@ -126,19 +126,36 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
 ```bash
 docker pull ghcr.io/screwys/igloo:latest
 docker run -d --name igloo --restart unless-stopped \
+  --user "$(id -u):$(id -g)" \
   -p 127.0.0.1:5001:5001 \
   -v "YOUR_DIRECTORY:/igloo" \
   ghcr.io/screwys/igloo:latest
 ```
 
-By default, this will create `data` and `config` inside `YOUR_DIRECTORY`.
+The `--user` flag keeps bind-mounted files owned by your host user while still
+running the server without root. By default, this will create `data` and `config` inside
+`YOUR_DIRECTORY`.
+
+If you omit `--user`, the image runs as its default unprivileged user
+`10001:10001`; make sure `YOUR_DIRECTORY` is writable by that UID, for example
+with `sudo chown -R 10001:10001 YOUR_DIRECTORY`.
+
+To archive bookmarks into a separate host folder, add:
+
+```bash
+-v "YOUR_BOOKMARKS_DIRECTORY:/bookmarks"
+```
+
+Then set the category archive path to `/bookmarks`. If you omit `--user`, make
+sure `YOUR_BOOKMARKS_DIRECTORY` is also writable by UID `10001`.
 
 To build the image locally instead:
 
 ```bash
 git clone https://github.com/screwys/igloo
 cd igloo
-docker compose up -d --build
+mkdir -p igloo
+IGLOO_UID="$(id -u)" IGLOO_GID="$(id -g)" docker compose up -d --build
 ```
 
 Then open Igloo and create the first admin account in the setup screen:

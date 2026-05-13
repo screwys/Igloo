@@ -6,10 +6,8 @@ import {
   bumpSemver,
   normalizeReleaseBump,
   parseAndroidVersion,
-  planAutomaticRelease,
   renderReleaseNotes,
   updateAndroidBuildGradle,
-  updateReleaseBumpText,
 } from "./release.mjs";
 
 test("bumps patch, minor, and major versions", () => {
@@ -23,48 +21,22 @@ test("rejects unsupported version bumps", () => {
   assert.throws(() => bumpSemver("1.0", "patch"), /invalid semver/);
 });
 
-test("normalizes tracked release bump state", () => {
+test("normalizes release bump inputs", () => {
   assert.equal(normalizeReleaseBump(" minor\n"), "minor");
   assert.equal(normalizeReleaseBump(" major\n"), "major");
-  assert.equal(updateReleaseBumpText("patch"), "patch\n");
   assert.throws(() => normalizeReleaseBump("weird"), /unsupported bump/);
 });
 
-test("plans automatic releases every 30 commits", () => {
-  const commits = Array.from({ length: 29 }, (_, index) => ({
-    sha: `${index}`.repeat(40).slice(0, 40),
-    subject: `change ${index}`,
-    body: "",
-  }));
-
-  assert.deepEqual(planAutomaticRelease(commits, 30), {
-    shouldRelease: false,
-    bump: "patch",
-    commitCount: 29,
-  });
-
-  commits.push({
-    sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    subject: "change 29",
-    body: "",
-  });
-
-  assert.deepEqual(planAutomaticRelease(commits, 30), {
-    shouldRelease: true,
-    bump: "patch",
-    commitCount: 30,
-  });
-});
-
-test("release workflow uses the 30 commit automatic threshold", () => {
+test("release workflow is manually dispatched", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/release.yml", import.meta.url),
     "utf8",
   );
 
-  assert.match(workflow, /prepare-auto --threshold 30\b/);
-  assert.doesNotMatch(workflow, /prepare-auto --threshold 20\b/);
-  assert.doesNotMatch(workflow, /prepare-auto --threshold 10\b/);
+  assert.match(workflow, /\n  workflow_dispatch:\n/);
+  assert.doesNotMatch(workflow, /\n  push:\n/);
+  assert.doesNotMatch(workflow, /prepare-auto/);
+  assert.doesNotMatch(workflow, /threshold 30/);
 });
 
 test("release workflow dispatches CodeQL for release tags", () => {
@@ -99,7 +71,8 @@ test("release workflow signs release commits and tags", () => {
   assert.match(workflow, /RELEASE_GPG_PASSPHRASE/);
   assert.match(workflow, /git commit -S -m "release \$\{\{ steps\.release\.outputs\.version \}\}"/);
   assert.match(workflow, /git tag -s "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
-  assert.match(workflow, /git add android\/app\/build\.gradle\.kts \.github\/release-bump \.github\/release-description\.md/);
+  assert.match(workflow, /git add android\/app\/build\.gradle\.kts \.github\/release-description\.md/);
+  assert.doesNotMatch(workflow, /\.github\/release-bump/);
   assert.doesNotMatch(workflow, /package\.json/);
   assert.doesNotMatch(workflow, /package-lock\.json/);
   assert.doesNotMatch(workflow, /git tag -a "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
@@ -125,6 +98,20 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /subject-digest: \$\{\{ steps\.build\.outputs\.digest \}\}/);
   assert.match(workflow, /push-to-registry: true/);
   assert.doesNotMatch(workflow, /docker\/build-push-action/);
+});
+
+test("container images run as non-root by default", () => {
+  const dockerfile = readFileSync(new URL("../../Dockerfile", import.meta.url), "utf8");
+  const flake = readFileSync(new URL("../../flake.nix", import.meta.url), "utf8");
+  const compose = readFileSync(new URL("../../compose.yaml", import.meta.url), "utf8");
+
+  assert.match(dockerfile, /^USER 10001:10001$/m);
+  assert.match(dockerfile, /HOME=\/tmp/);
+  assert.match(dockerfile, /chown -R 10001:10001 \/igloo/);
+  assert.match(flake, /User = "10001:10001";/);
+  assert.match(flake, /"HOME=\/tmp"/);
+  assert.match(flake, /chown -R 10001:10001 igloo/);
+  assert.match(compose, /user: "\$\{IGLOO_UID:-1000\}:\$\{IGLOO_GID:-1000\}"/);
 });
 
 test("Android release publishes signed provenance attestation for the APK", () => {
@@ -153,48 +140,6 @@ test("CodeQL runs on published releases instead of a weekly schedule", () => {
   assert.doesNotMatch(workflow, /\n  pull_request:\n/);
   assert.doesNotMatch(workflow, /\n  schedule:\n/);
   assert.doesNotMatch(workflow, /cron:/);
-});
-
-test("plans automatic minor releases from explicit bump state", () => {
-  const commits = Array.from({ length: 10 }, (_, index) => ({
-    sha: `${index}`.repeat(40).slice(0, 40),
-    subject: `change ${index}`,
-    body: "",
-  }));
-
-  assert.deepEqual(planAutomaticRelease(commits, 10, "minor"), {
-    shouldRelease: true,
-    bump: "minor",
-    commitCount: 10,
-  });
-});
-
-test("plans automatic major releases from explicit bump state", () => {
-  const commits = Array.from({ length: 30 }, (_, index) => ({
-    sha: `${index}`.repeat(40).slice(0, 40),
-    subject: `change ${index}`,
-    body: "",
-  }));
-
-  assert.deepEqual(planAutomaticRelease(commits, 30, "major"), {
-    shouldRelease: true,
-    bump: "major",
-    commitCount: 30,
-  });
-});
-
-test("does not use commit messages as release bump markers", () => {
-  const commits = Array.from({ length: 10 }, (_, index) => ({
-    sha: `${index}`.repeat(40).slice(0, 40),
-    subject: index === 4 ? "release: minor" : `change ${index}`,
-    body: index === 5 ? "release: minor" : "",
-  }));
-
-  assert.deepEqual(planAutomaticRelease(commits, 10, "patch"), {
-    shouldRelease: true,
-    bump: "patch",
-    commitCount: 10,
-  });
 });
 
 test("updates android release version fields", () => {

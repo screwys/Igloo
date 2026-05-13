@@ -46,6 +46,7 @@ RUN apt-get update \
         "gallery-dl==${GALLERY_DL_VERSION}"
 
 ENV PATH="/opt/igloo-py/bin:${PATH}" \
+    HOME=/tmp \
     IGLOO_DATA_DIR=/igloo/data \
     IGLOO_CONFIG_DIR=/igloo/config \
     IGLOO_REPO_DIR=/app \
@@ -58,10 +59,12 @@ COPY --from=build /out/igloo-adduser /usr/local/bin/igloo-adduser
 COPY --from=build /out/locales /app/locales
 COPY --from=build /out/static /app/static
 
-RUN mkdir -p /igloo/data /igloo/config
+RUN mkdir -p /igloo/data /igloo/config \
+    && chown -R 10001:10001 /igloo
 
 VOLUME ["/igloo"]
 EXPOSE 5001
+USER 10001:10001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD ["/usr/bin/python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/api/health/live', timeout=4).read()"]

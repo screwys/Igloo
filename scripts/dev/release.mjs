@@ -33,21 +33,6 @@ export function normalizeReleaseBump(value) {
   return bump;
 }
 
-export function updateReleaseBumpText(value) {
-  return `${normalizeReleaseBump(value)}\n`;
-}
-
-export function planAutomaticRelease(commits, threshold = 10, requestedBump = "patch") {
-  const commitCount = commits.length;
-  const shouldRelease = commitCount >= threshold;
-
-  return {
-    shouldRelease,
-    bump: normalizeReleaseBump(requestedBump),
-    commitCount,
-  };
-}
-
 export function updateAndroidBuildGradle(text, versionName, versionCode) {
   let updated = text.replace(
     /versionCode\s*=\s*\d+/,
@@ -144,8 +129,6 @@ function parseArgs(argv) {
     command: argv[0],
     bump: argv[1],
     notesPath: "release-notes.md",
-    threshold: 10,
-    bumpFile: ".github/release-bump",
     descriptionFile: ".github/release-description.md",
   };
 
@@ -154,17 +137,6 @@ function parseArgs(argv) {
     const arg = argv[i];
     if (arg === "--notes") {
       out.notesPath = argv[++i];
-      continue;
-    }
-    if (arg === "--threshold") {
-      out.threshold = Number.parseInt(argv[++i], 10);
-      if (!Number.isFinite(out.threshold) || out.threshold < 1) {
-        throw new Error("threshold must be a positive integer");
-      }
-      continue;
-    }
-    if (arg === "--bump-file") {
-      out.bumpFile = argv[++i];
       continue;
     }
     if (arg === "--description-file") {
@@ -187,14 +159,13 @@ function writeGithubOutput(values) {
 
 function prepareRelease(argv) {
   const args = parseArgs(argv);
-  if (args.command !== "prepare" && args.command !== "prepare-auto") {
+  if (args.command !== "prepare") {
     throw new Error(
-      "usage: release.mjs prepare <patch|minor|major> [--notes path] | prepare-auto [--threshold n] [--notes path]",
+      "usage: release.mjs prepare <patch|minor|major> [--notes path] [--description-file path]",
     );
   }
 
   const androidPath = resolve("android/app/build.gradle.kts");
-  const bumpPath = resolve(args.bumpFile);
   const descriptionPath = resolve(args.descriptionFile);
 
   const androidText = readFileSync(androidPath, "utf8");
@@ -215,27 +186,8 @@ function prepareRelease(argv) {
     throw new Error("no commits found since previous release tag");
   }
 
-  let bump = args.bump;
-  let shouldRelease = true;
-  if (args.command === "prepare-auto") {
-    const bumpText = readFileSync(bumpPath, "utf8");
-    const plan = planAutomaticRelease(commits, args.threshold, bumpText);
-    bump = plan.bump;
-    shouldRelease = plan.shouldRelease;
-    if (!shouldRelease) {
-      const outputs = {
-        should_release: "false",
-        commit_count: String(plan.commitCount),
-        bump,
-        previous_tag: previousTag,
-      };
-      writeGithubOutput(outputs);
-      for (const [key, value] of Object.entries(outputs)) {
-        console.log(`${key}=${value}`);
-      }
-      return;
-    }
-  }
+  const bump = normalizeReleaseBump(args.bump);
+  const shouldRelease = true;
 
   const nextVersion = bumpSemver(currentVersion, bump);
   const nextTag = `v${nextVersion}`;
@@ -251,9 +203,6 @@ function prepareRelease(argv) {
       androidVersion.versionCode + 1,
     ),
   );
-  if (args.command === "prepare-auto") {
-    writeFileSync(bumpPath, updateReleaseBumpText("patch"));
-  }
   if (description.trim() !== "") {
     writeFileSync(descriptionPath, "");
   }

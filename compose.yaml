@@ -4,6 +4,7 @@ services:
     build:
       context: .
     restart: unless-stopped
+    user: "${IGLOO_UID:-1000}:${IGLOO_GID:-1000}"
     ports:
       - "127.0.0.1:${IGLOO_PORT:-5001}:5001"
     environment:

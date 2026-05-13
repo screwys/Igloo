@@ -187,6 +187,10 @@
               ln -s ${igloo}/bin/igloo-adduser usr/local/bin/igloo-adduser
             '';
 
+            fakeRootCommands = ''
+              chown -R 10001:10001 igloo
+            '';
+
             config = {
               Cmd = [ "/usr/local/bin/igloo" ];
               Env = [
@@ -194,6 +198,7 @@
                 "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
                 "REQUESTS_CA_BUNDLE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
                 "LANG=C.UTF-8"
+                "HOME=/tmp"
                 "IGLOO_DATA_DIR=/igloo/data"
                 "IGLOO_CONFIG_DIR=/igloo/config"
                 "IGLOO_REPO_DIR=/app"
@@ -206,6 +211,7 @@
               Volumes = {
                 "/igloo" = { };
               };
+              User = "10001:10001";
               WorkingDir = "/app";
             };
           };
