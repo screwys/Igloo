@@ -4,6 +4,10 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
+while IFS= read -r git_env_var; do
+  unset "$git_env_var"
+done < <(git rev-parse --local-env-vars)
+
 if [[ "${IGLOO_PRE_PUSH_FULL:-0}" == "1" ]]; then
   echo "pre-push: running scripts/dev/test-full.sh"
   scripts/dev/test-full.sh
