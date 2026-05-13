@@ -59,6 +59,7 @@ func (s *Server) handleAndroidSyncLatestGeneration(w http.ResponseWriter, r *htt
 		writeJSONError(w, http.StatusInternalServerError, "generation_failed", err.Error())
 		return
 	}
+	s.pruneAndroidSyncState("latest_generation", gen.GenerationID)
 	slog.Info(
 		"android_sync_generation_latest",
 		"generation_id", gen.GenerationID,
@@ -242,7 +243,30 @@ func (s *Server) handleAndroidSyncHealth(w http.ResponseWriter, r *http.Request)
 	if len(retention) > 0 {
 		s.updateAndroidCacheHealthRetention(retention, reportedAt)
 	}
+	s.pruneAndroidSyncState("health_report", generationID)
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+func (s *Server) pruneAndroidSyncState(trigger string, protectedGenerationID string) {
+	policy := db.DefaultAndroidSyncPrunePolicy()
+	policy.ProtectGenerationID = protectedGenerationID
+	result, err := s.db.PruneAndroidSyncState(time.Now().UnixMilli(), policy)
+	if err != nil {
+		slog.Warn("android_sync_server_state_prune_failed", "trigger", trigger, "err", err)
+		return
+	}
+	if result.GenerationsDeleted == 0 && result.ItemsDeleted == 0 && result.AssetsDeleted == 0 && result.HealthReportsDeleted == 0 {
+		return
+	}
+	slog.Info(
+		"android_sync_server_state_pruned",
+		"trigger", trigger,
+		"generations", result.GenerationsDeleted,
+		"items", result.ItemsDeleted,
+		"assets", result.AssetsDeleted,
+		"health_reports", result.HealthReportsDeleted,
+		"protected_generation_id", protectedGenerationID,
+	)
 }
 
 func androidSyncRetentionSettingsFromRequest(r *http.Request, fallback db.AndroidRetentionSettings) (db.AndroidRetentionSettings, error) {

@@ -114,6 +114,214 @@ func TestAndroidSyncGenerationPublishesServeableAssets(t *testing.T) {
 	}
 }
 
+func TestAndroidSyncLatestPrunesOldServerState(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	nowMs := time.Now().UnixMilli()
+	oldBaseMs := nowMs - int64(24*time.Hour/time.Millisecond)
+	generationIDs := []string{
+		"android-sync-web-prune-1",
+		"android-sync-web-prune-2",
+		"android-sync-web-prune-3",
+		"android-sync-web-prune-4",
+		"android-sync-web-prune-5",
+	}
+	for i, generationID := range generationIDs {
+		storeAndroidSyncGenerationForWebTest(t, srv.db, generationID, oldBaseMs+int64(i))
+	}
+
+	req := httptest.NewRequest("GET", "/api/android/sync/generation/latest", nil)
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, attachTestAuth(req, "alice"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("latest status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var latest struct {
+		Generation model.AndroidSyncGeneration `json:"generation"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &latest); err != nil {
+		t.Fatalf("decode latest: %v", err)
+	}
+	if latest.Generation.GenerationID == "" {
+		t.Fatalf("latest generation missing id: %+v", latest.Generation)
+	}
+
+	req = httptest.NewRequest("GET", "/api/android/sync/generation/"+latest.Generation.GenerationID+"/items", nil)
+	rec = httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, attachTestAuth(req, "alice"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("items status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var page struct {
+		GenerationID string                  `json:"generation_id"`
+		Items        []model.AndroidSyncItem `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatalf("decode items: %v", err)
+	}
+	if page.GenerationID != latest.Generation.GenerationID || len(page.Items) == 0 {
+		t.Fatalf("items page = %+v, latest=%+v", page, latest.Generation)
+	}
+
+	var remainingSeedGenerations int
+	if err := srv.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM android_sync_generations
+		WHERE generation_id LIKE 'android-sync-web-prune-%'
+	`).Scan(&remainingSeedGenerations); err != nil {
+		t.Fatalf("count old generations: %v", err)
+	}
+	if remainingSeedGenerations != 1 {
+		t.Fatalf("remaining old generations = %d, want 1", remainingSeedGenerations)
+	}
+}
+
+func TestAndroidSyncLatestKeepsStaleSourceReusePageableAfterPrune(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	nowMs := time.Now().UnixMilli()
+	retention := db.AndroidRetentionSettings{FeedDays: 7, YoutubeDays: 7, MomentsDays: 7, StoryHours: 48}
+	sourceVersion, err := srv.db.AndroidSyncSourceVersion("alice", retention)
+	if err != nil {
+		t.Fatalf("source version: %v", err)
+	}
+	staleGenerationID := "android-sync-" + sourceVersion[:16]
+	staleCreatedAt := nowMs - int64(48*time.Hour/time.Millisecond)
+	storeAndroidSyncGenerationForWebTestWithSource(
+		t,
+		srv.db,
+		staleGenerationID,
+		staleCreatedAt,
+		sourceVersion,
+		map[string]int{
+			"feed_days":            retention.FeedDays,
+			"youtube_days":         retention.YoutubeDays,
+			"moments_days":         retention.MomentsDays,
+			"story_hours":          retention.StoryHours,
+			"materializer_version": db.AndroidSyncMaterializerVersion,
+		},
+	)
+	for i, generationID := range []string{
+		"android-sync-source-reuse-newer-1",
+		"android-sync-source-reuse-newer-2",
+		"android-sync-source-reuse-newer-3",
+	} {
+		storeAndroidSyncGenerationForWebTest(t, srv.db, generationID, staleCreatedAt+int64(i+1))
+	}
+
+	req := httptest.NewRequest("GET", "/api/android/sync/generation/latest?feed_days=7&youtube_days=7&moments_days=7&story_hours=48", nil)
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, attachTestAuth(req, "alice"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("latest status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var latest struct {
+		Generation model.AndroidSyncGeneration `json:"generation"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &latest); err != nil {
+		t.Fatalf("decode latest: %v", err)
+	}
+	if latest.Generation.GenerationID != staleGenerationID {
+		t.Fatalf("latest generation id = %q, want stale source reuse %q", latest.Generation.GenerationID, staleGenerationID)
+	}
+
+	req = httptest.NewRequest("GET", "/api/android/sync/generation/"+latest.Generation.GenerationID+"/items", nil)
+	rec = httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, attachTestAuth(req, "alice"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("items status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var page struct {
+		Items []model.AndroidSyncItem `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatalf("decode items: %v", err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("items after latest prune = %d, want returned stale generation to remain pageable", len(page.Items))
+	}
+}
+
+func TestAndroidSyncLatestRequestPruneLeavesBatchRemainderEligible(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	nowMs := time.Now().UnixMilli()
+	oldBaseMs := nowMs - int64(48*time.Hour/time.Millisecond)
+	const generationCount = 55
+	for i := 0; i < generationCount; i++ {
+		generationID := fmt.Sprintf("android-sync-web-batch-prune-%02d", i+1)
+		storeAndroidSyncGenerationForWebTest(t, srv.db, generationID, oldBaseMs+int64(i))
+	}
+
+	req := httptest.NewRequest("GET", "/api/android/sync/generation/latest", nil)
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, attachTestAuth(req, "alice"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("latest status = %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	remainingSeedGenerations := countAndroidSyncGenerationsForWebTest(t, srv.db, "android-sync-web-batch-prune-%")
+	if remainingSeedGenerations <= 1 {
+		t.Fatalf("request prune removed all eligible old generations in one response path; remaining=%d", remainingSeedGenerations)
+	}
+
+	for i := 0; i < 10 && remainingSeedGenerations > 1; i++ {
+		if _, err := srv.db.PruneAndroidSyncState(time.Now().UnixMilli(), db.DefaultAndroidSyncPrunePolicy()); err != nil {
+			t.Fatalf("follow-up prune %d: %v", i+1, err)
+		}
+		remainingSeedGenerations = countAndroidSyncGenerationsForWebTest(t, srv.db, "android-sync-web-batch-prune-%")
+	}
+	if remainingSeedGenerations != 1 {
+		t.Fatalf("remaining old generations after follow-up prunes = %d, want 1 newest seed generation", remainingSeedGenerations)
+	}
+}
+
+func TestAndroidSyncHealthPrunesOldReportsWithoutChangingResponse(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	nowMs := time.Now().UnixMilli()
+	generationID := "android-sync-web-health-prune"
+	storeAndroidSyncGenerationForWebTest(t, srv.db, generationID, nowMs-int64(24*time.Hour/time.Millisecond))
+	for i := 1; i <= 205; i++ {
+		if err := srv.db.RecordAndroidSyncHealth(generationID, int64(i), []byte(`{"retention":{"feed_days":7}}`), i, 0, 0, 0, i, int64(i)); err != nil {
+			t.Fatalf("RecordAndroidSyncHealth %d: %v", i, err)
+		}
+	}
+
+	req := httptest.NewRequest("POST", "/api/android/sync/health", strings.NewReader(`{
+		"generation_id":"android-sync-web-health-prune",
+		"reported_at_ms":1000,
+		"counts":{"verified":1,"pending":0,"failed":0,"missing":0,"total":1},
+		"bytes":{"verified":123},
+		"retention":{"feed_days":7,"youtube_days":7,"moments_days":7,"story_hours":48}
+	}`))
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, attachTestAuth(req, "alice"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("health status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Success bool `json:"success"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode health response: %v", err)
+	}
+	if !body.Success {
+		t.Fatalf("health response success = false body=%s", rec.Body.String())
+	}
+
+	var reports int
+	if err := srv.db.QueryRow(`SELECT COUNT(*) FROM android_sync_health_reports`).Scan(&reports); err != nil {
+		t.Fatalf("count health reports: %v", err)
+	}
+	if reports != 200 {
+		t.Fatalf("health report count = %d, want 200", reports)
+	}
+	latest, err := srv.db.GetLatestAndroidSyncHealthReport()
+	if err != nil {
+		t.Fatalf("latest health: %v", err)
+	}
+	if latest == nil || latest.GenerationID != generationID || latest.ReportedAtMs != 1000 {
+		t.Fatalf("latest health = %+v, want generation %s at 1000", latest, generationID)
+	}
+}
+
 func TestAndroidSyncAssetReturnsTooManyRequestsWhenServeSlotsFull(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	dataDir := srv.cfg.DataDir
@@ -1534,6 +1742,76 @@ func newAndroidSyncTestServer(t *testing.T) *testServer {
 	mux.HandleFunc("GET /api/media/thumbnail/{videoID}", s.handleThumbnail)
 	mux.HandleFunc("GET /api/media/avatar/{channelID}", s.handleChannelAvatar)
 	return &testServer{Server: s, mux: mux}
+}
+
+func storeAndroidSyncGenerationForWebTest(t *testing.T, d *db.DB, generationID string, createdAtMs int64) {
+	t.Helper()
+	storeAndroidSyncGenerationForWebTestWithSource(
+		t,
+		d,
+		generationID,
+		createdAtMs,
+		generationID+"-source",
+		map[string]int{"feed_days": 7, "youtube_days": 7, "moments_days": 7, "story_hours": 48},
+	)
+}
+
+func storeAndroidSyncGenerationForWebTestWithSource(t *testing.T, d *db.DB, generationID string, createdAtMs int64, sourceVersion string, retention map[string]int) {
+	t.Helper()
+	err := d.StoreAndroidSyncGeneration(
+		model.AndroidSyncGeneration{
+			GenerationID:    generationID,
+			CreatedAtMs:     createdAtMs,
+			Status:          "ready",
+			SourceVersion:   sourceVersion,
+			Retention:       retention,
+			ItemCount:       1,
+			AssetCount:      1,
+			ReadyAssetCount: 1,
+			TotalBytes:      1,
+			ContentCounts:   map[string]int{"videos": 1},
+			AssetCounts:     map[string]int{"video_stream": 1},
+		},
+		[]model.AndroidSyncItem{{
+			GenerationID: generationID,
+			Seq:          1,
+			ItemKind:     "videos",
+			ItemID:       generationID + "-video",
+			PayloadJSON:  json.RawMessage(`{}`),
+		}},
+		[]model.AndroidSyncAsset{{
+			GenerationID:       generationID,
+			Seq:                1,
+			AssetID:            generationID + "-asset",
+			AssetKind:          "video_stream",
+			OwnerID:            generationID + "-video",
+			OwnerKind:          "video",
+			Bucket:             "videos",
+			ServerURL:          "/asset",
+			ContentType:        "video/mp4",
+			SizeBytes:          1,
+			SHA256:             "sha",
+			State:              "ready",
+			RequiredReason:     "retention",
+			EffectiveRecencyMs: createdAtMs,
+		}},
+	)
+	if err != nil {
+		t.Fatalf("StoreAndroidSyncGeneration %s: %v", generationID, err)
+	}
+}
+
+func countAndroidSyncGenerationsForWebTest(t *testing.T, d *db.DB, likePattern string) int {
+	t.Helper()
+	var count int
+	if err := d.QueryRow(`
+		SELECT COUNT(*)
+		FROM android_sync_generations
+		WHERE generation_id LIKE ?
+	`, likePattern).Scan(&count); err != nil {
+		t.Fatalf("count generations like %s: %v", likePattern, err)
+	}
+	return count
 }
 
 func mustWriteFile(t *testing.T, path string, body []byte) {
