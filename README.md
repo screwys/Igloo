@@ -215,6 +215,10 @@ android/test.sh         # run JVM unit tests
 The Android app is meant to keep normal UI state available without a live server.
 Sync is still required to receive new server data and upload queued local actions.
 
+## Translations
+
+Currently there are only English and Turkish language options. To improve or add a language, copy `locales/app/en.toml` and translate values while keeping keys unchanged.
+
 ## Configuration
 
 | Variable | Purpose |
