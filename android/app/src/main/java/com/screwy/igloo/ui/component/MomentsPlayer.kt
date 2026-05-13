@@ -201,10 +201,33 @@ private data class MomentTransitionPoster(
     val uri: MediaUri,
 )
 
-private data class StoryProgressWindow(
+internal data class StoryProgressWindow(
     val index: Int,
     val count: Int,
 )
+
+internal data class StoryAdvanceTarget(
+    val nextIndex: Int?,
+    val shouldExit: Boolean,
+)
+
+internal fun storyAdvanceTarget(
+    items: List<MomentItem>,
+    currentIndex: Int,
+    crossProfile: Boolean,
+): StoryAdvanceTarget {
+    if (items.isEmpty() || currentIndex !in items.indices) {
+        return StoryAdvanceTarget(nextIndex = null, shouldExit = true)
+    }
+    val nextIndex = currentIndex + 1
+    if (nextIndex !in items.indices) {
+        return StoryAdvanceTarget(nextIndex = null, shouldExit = true)
+    }
+    if (!crossProfile && items[nextIndex].channelId != items[currentIndex].channelId) {
+        return StoryAdvanceTarget(nextIndex = null, shouldExit = true)
+    }
+    return StoryAdvanceTarget(nextIndex = nextIndex, shouldExit = false)
+}
 
 private fun momentStreamUrl(baseUrl: String, videoId: String): String? {
     val root = baseUrl.trim().trimEnd('/')
@@ -287,6 +310,7 @@ fun MomentsPlayer(
     onCursorAdvance: (videoId: String, positionMs: Long) -> Unit = { _, _ -> },
     forceAutoSwipe: Boolean = false,
     exitOnEnd: Boolean = false,
+    storyCrossProfileAdvance: Boolean = false,
     onStoryClick: (channelId: String, firstVideoId: String) -> Unit = { _, _ -> },
     initialTransitionPosterVideoId: String? = null,
     initialTransitionPosterUri: MediaUri = MediaUri.Missing,
@@ -429,15 +453,25 @@ fun MomentsPlayer(
     LaunchedEffect(advanceTick) {
         if (advanceTick == 0) return@LaunchedEffect
         val page = currentIndex
-        if (exitOnEnd && page >= items.lastIndex) {
-            onEndReached()
-            return@LaunchedEffect
+        val next = if (storyMode) {
+            val target = storyAdvanceTarget(
+                items = items,
+                currentIndex = page,
+                crossProfile = storyCrossProfileAdvance,
+            )
+            if (target.shouldExit) {
+                onEndReached()
+                return@LaunchedEffect
+            }
+            target.nextIndex
+        } else {
+            nextMomentPageForAutoSwipe(
+                currentPage = page,
+                lastIndex = items.lastIndex,
+                autoSwipeEnabled = effectiveAutoSwipe,
+            )
         }
-        val next = nextMomentPageForAutoSwipe(
-            currentPage = page,
-            lastIndex = items.lastIndex,
-            autoSwipeEnabled = effectiveAutoSwipe,
-        ) ?: return@LaunchedEffect
+        next ?: return@LaunchedEffect
         pagerState.animateScrollToPage(
             page = next,
             animationSpec = tween(
@@ -604,7 +638,7 @@ fun MomentsPlayer(
     }
 }
 
-private fun storyProgressWindow(items: List<MomentItem>, currentIndex: Int): StoryProgressWindow {
+internal fun storyProgressWindow(items: List<MomentItem>, currentIndex: Int): StoryProgressWindow {
     if (items.isEmpty() || currentIndex !in items.indices) return StoryProgressWindow(index = 0, count = 0)
     val channelId = items[currentIndex].channelId
     var start = currentIndex
@@ -831,6 +865,7 @@ private fun MomentPage(
     val mediaMode = remember(item.mediaKind, item.slideCount) {
         momentMediaMode(item.mediaKind, item.slideCount)
     }
+    var manualSlideAdvanceTick by remember(item.videoId) { mutableIntStateOf(0) }
     val ownerKind = remember(item.ownerKind, item.channelId) { item.ownerKind ?: ownerKindFromChannelId(item.channelId) }
     val baseUrl = baseUrlProvider.baseUrl()
     val initialThumbnailUri = remember(
@@ -901,6 +936,8 @@ private fun MomentPage(
                 isActive = isActive,
                 autoSwipe = autoSwipe,
                 onAutoAdvance = onAutoAdvance,
+                manualAdvanceTick = manualSlideAdvanceTick,
+                onManualAdvanceAtEnd = onAutoAdvance,
                 modifier = Modifier.fillMaxSize(),
             )
             MomentMediaMode.Video -> {
@@ -918,9 +955,23 @@ private fun MomentPage(
                     cursorTracking = cursorTracking,
                     onCursorAdvance = onCursorAdvance,
                     logger = logger,
+                    storyMode = storyMode,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
+        }
+
+        if (storyMode) {
+            StoryTapAdvanceLayer(
+                onTap = {
+                    if (mediaMode == MomentMediaMode.Slideshow) {
+                        manualSlideAdvanceTick++
+                    } else {
+                        onAutoAdvance()
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
 
         // Top dim gradient keeps the TikTok-style tab row legible against any thumbnail.
@@ -1034,6 +1085,18 @@ private fun storyCaptionBottomPadding(base: Dp): Dp = with(LocalDensity.current)
 }
 
 @Composable
+private fun StoryTapAdvanceLayer(
+    onTap: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.pointerInput(onTap) {
+            detectTapGestures(onTap = { onTap() })
+        },
+    )
+}
+
+@Composable
 private fun BoxScope.MomentVideoLayer(
     pageIndex: Int,
     item: MomentItem,
@@ -1048,6 +1111,7 @@ private fun BoxScope.MomentVideoLayer(
     cursorTracking: Boolean,
     onCursorAdvance: (videoId: String, positionMs: Long) -> Unit,
     logger: Logger,
+    storyMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -1196,7 +1260,7 @@ private fun BoxScope.MomentVideoLayer(
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        if (isActive && playbackStreamUri !is MediaUri.Missing && !remoteOffline) {
+        if (!storyMode && isActive && playbackStreamUri !is MediaUri.Missing && !remoteOffline) {
             MomentVideoGestureLayer(player = player, modifier = Modifier.fillMaxSize())
         }
         MomentBottomScrim(modifier = Modifier.align(Alignment.BottomCenter))
@@ -1399,6 +1463,8 @@ private fun MomentSlideshowSurface(
     isActive: Boolean,
     autoSwipe: Boolean,
     onAutoAdvance: () -> Unit,
+    manualAdvanceTick: Int = 0,
+    onManualAdvanceAtEnd: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val baseUrlProvider: ServerBaseUrlProvider = koinInject()
@@ -1417,6 +1483,22 @@ private fun MomentSlideshowSurface(
     }
     val effectiveSlideCount = effectiveSlideUris.size.coerceAtLeast(1)
     val pagerState = rememberPagerState(pageCount = { effectiveSlideCount })
+
+    LaunchedEffect(manualAdvanceTick, effectiveSlideCount) {
+        if (manualAdvanceTick == 0 || effectiveSlideCount <= 0) return@LaunchedEffect
+        val page = pagerState.currentPage
+        if (page < effectiveSlideCount - 1) {
+            pagerState.animateScrollToPage(
+                page = page + 1,
+                animationSpec = tween(
+                    durationMillis = AUTO_SWIPE_SCROLL_DURATION_MS,
+                    easing = FastOutSlowInEasing,
+                ),
+            )
+        } else {
+            onManualAdvanceAtEnd()
+        }
+    }
 
     Box(
         modifier = modifier

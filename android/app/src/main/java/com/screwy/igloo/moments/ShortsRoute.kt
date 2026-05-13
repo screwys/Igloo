@@ -117,6 +117,7 @@ fun ShortsRoute(
                 onCursorAdvance = vm::onCursorAdvance,
                 forceAutoSwipe = storyPlaybackMode,
                 exitOnEnd = storyPlaybackMode,
+                storyCrossProfileAdvance = spec.type == ShortsPlaylistType.StoryTray,
                 activeTab = activeMomentsTab,
                 onTabSelected = if (activeMomentsTab == null) {
                     null

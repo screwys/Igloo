@@ -62,6 +62,56 @@ class MomentsPlayerTest {
     }
 
     @Test
+    fun story_progress_window_counts_only_current_profile_group() {
+        val items = listOf(
+            storyItem("a1", "tiktok_a"),
+            storyItem("a2", "tiktok_a"),
+            storyItem("b1", "tiktok_b"),
+            storyItem("b2", "tiktok_b"),
+            storyItem("b3", "tiktok_b"),
+        )
+
+        assertEquals(StoryProgressWindow(index = 0, count = 3), storyProgressWindow(items, 2))
+        assertEquals(StoryProgressWindow(index = 2, count = 3), storyProgressWindow(items, 4))
+    }
+
+    @Test
+    fun story_tap_advance_stops_at_profile_boundary_when_scoped_from_avatar() {
+        val items = listOf(
+            storyItem("a1", "tiktok_a"),
+            storyItem("a2", "tiktok_a"),
+            storyItem("b1", "tiktok_b"),
+        )
+
+        assertEquals(
+            StoryAdvanceTarget(nextIndex = 1, shouldExit = false),
+            storyAdvanceTarget(items, currentIndex = 0, crossProfile = false),
+        )
+        assertEquals(
+            StoryAdvanceTarget(nextIndex = null, shouldExit = true),
+            storyAdvanceTarget(items, currentIndex = 1, crossProfile = false),
+        )
+    }
+
+    @Test
+    fun story_tap_advance_crosses_profile_boundary_from_stories_tab() {
+        val items = listOf(
+            storyItem("a1", "tiktok_a"),
+            storyItem("a2", "tiktok_a"),
+            storyItem("b1", "tiktok_b"),
+        )
+
+        assertEquals(
+            StoryAdvanceTarget(nextIndex = 2, shouldExit = false),
+            storyAdvanceTarget(items, currentIndex = 1, crossProfile = true),
+        )
+        assertEquals(
+            StoryAdvanceTarget(nextIndex = null, shouldExit = true),
+            storyAdvanceTarget(items, currentIndex = 2, crossProfile = true),
+        )
+    }
+
+    @Test
     fun resolve_initial_moment_thumbnail_uri_reuses_relative_thumbnail_path_before_resolver_catches_up() {
         val uri = resolveInitialMomentThumbnailUri(
             videoId = "demo",
@@ -464,4 +514,16 @@ class MomentsPlayerTest {
         effectiveRecencyMs = 1_000L,
         state = "verified",
     )
+
+    private fun storyItem(videoId: String, channelId: String): MomentItem =
+        MomentItem(
+            videoId = videoId,
+            channelId = channelId,
+            authorHandle = "@${channelId.removePrefix("tiktok_")}",
+            description = "",
+            likeCount = null,
+            isLiked = false,
+            isBookmarked = false,
+            mediaKind = "image",
+        )
 }
