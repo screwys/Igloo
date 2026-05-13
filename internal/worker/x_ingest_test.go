@@ -175,6 +175,66 @@ func TestFetchOneChannelUsesXFeedFetcherAndQueuesMedia(t *testing.T) {
 	}
 }
 
+func TestFetchOneChannelDropsDetachedForeignTimelineItems(t *testing.T) {
+	d := newTestWorkerDB(t)
+	m := &Manager{
+		db:            d,
+		cfg:           testCfg(t.TempDir()),
+		downloader:    testDownloader(),
+		avatarRequest: make(chan string, 1),
+		xFeedFetcher: fakeXFeedFetcher{
+			timeline: func(_ context.Context, handle string, limit int) ([]model.FeedItem, error) {
+				return []model.FeedItem{
+					{
+						TweetID:          "sample_source_post",
+						SourceHandle:     handle,
+						AuthorHandle:     handle,
+						BodyText:         "source post",
+						ContentHash:      "hash-source",
+						CanonicalTweetID: "sample_source_post",
+					},
+					{
+						TweetID:          "sample_post_b",
+						SourceHandle:     handle,
+						AuthorHandle:     "sample_author_b",
+						BodyText:         "unrelated timeline recommendation",
+						ContentHash:      "hash-foreign",
+						CanonicalTweetID: "sample_post_b",
+					},
+					{
+						TweetID:          "sample_reply_post",
+						SourceHandle:     handle,
+						AuthorHandle:     "sample_reply_author",
+						BodyText:         "@sample_user reply",
+						ReplyToHandle:    handle,
+						ReplyToStatus:    "sample_source_post",
+						IsReply:          true,
+						ContentHash:      "hash-reply",
+						CanonicalTweetID: "sample_reply_post",
+					},
+				}, nil
+			},
+			source: func(context.Context, string, int) ([]model.FeedItem, error) {
+				t.Fatal("source fetch should not be called")
+				return nil, nil
+			},
+		},
+	}
+
+	n, err := m.FetchOneChannel(context.Background(), "twitter_sample_user")
+	if err != nil {
+		t.Fatalf("FetchOneChannel: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("upserted = %d, want 2", n)
+	}
+	if got, err := d.GetFeedItemByTweetID("sample_post_b"); err != nil {
+		t.Fatalf("GetFeedItemByTweetID: %v", err)
+	} else if got != nil {
+		t.Fatalf("detached foreign item was stored: %+v", got)
+	}
+}
+
 func TestFetchOneChannelRecordsFailureBackoff(t *testing.T) {
 	d := newTestWorkerDB(t)
 	m := &Manager{

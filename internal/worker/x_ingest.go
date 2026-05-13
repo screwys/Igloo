@@ -219,6 +219,7 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 
 		_ = m.db.RecordIngestSuccess(ch.ChannelID, float64(time.Now().Unix()), latencyMs)
 
+		items = filterTimelineItemsForSource(handle, items)
 		filtered := applyChannelFiltersFromSettings(items, settings)
 		pendingJobs = append(pendingJobs, feedMediaJobRowsForItems(filtered, settings)...)
 
@@ -346,6 +347,25 @@ func xTimelineLimit(settings *db.ChannelSettings) int {
 	return 100
 }
 
+func filterTimelineItemsForSource(source string, items []model.FeedItem) []model.FeedItem {
+	source = strings.ToLower(xfeed.NormalizeHandle(source))
+	if source == "" {
+		return items
+	}
+	result := items[:0:0]
+	for _, item := range items {
+		author := strings.ToLower(xfeed.NormalizeHandle(item.AuthorHandle))
+		itemSource := strings.ToLower(xfeed.NormalizeHandle(item.SourceHandle))
+		if itemSource == "" {
+			itemSource = source
+		}
+		if author == source || itemSource != source || item.IsRetweet || item.IsReply {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
 // FetchOneChannel fetches a single Twitter channel out-of-band from the main
 // ingest cycle. Used by the per-channel refresh button so a click produces
 // visible results within seconds instead of waiting for the multi-hour cycle
@@ -366,6 +386,7 @@ func (m *Manager) FetchOneChannel(ctx context.Context, channelID string) (int, e
 	}
 	_ = m.db.RecordIngestSuccess(channelID, float64(time.Now().Unix()), 0)
 
+	items = filterTimelineItemsForSource(strings.TrimPrefix(channelID, "twitter_"), items)
 	filtered := applyChannelFiltersFromSettings(items, settings)
 	if len(filtered) == 0 {
 		return 0, nil
