@@ -174,6 +174,18 @@ internal fun momentCollapsedCaptionStartPaddingDp(): Int = MomentCollapsedCaptio
 internal fun momentCaptionDescriptionMaxLines(expanded: Boolean): Int =
     if (expanded) Int.MAX_VALUE else MomentCollapsedCaptionMaxLines
 
+internal fun momentCaptionExpandedAfterPlainTextClick(
+    expanded: Boolean,
+    descriptionCanExpand: Boolean,
+): Boolean = when {
+    expanded -> false
+    descriptionCanExpand -> true
+    else -> false
+}
+
+internal fun momentCaptionBackgroundColor(expanded: Boolean): Color =
+    if (expanded) Color.Black.copy(alpha = 0.28f) else Color.Transparent
+
 private const val MOMENTS_PREPARE_RADIUS = 1
 private const val AUTO_SWIPE_SCROLL_DURATION_MS = 850
 private const val MOMENT_STILL_ADVANCE_DELAY_MS = 3_000L
@@ -1952,69 +1964,83 @@ private fun CollapsedDescription(
         collapseMomentCaptionWhitespace(item.description)
     }
     var descriptionCanExpand by remember(item.videoId, collapsedDescription) { mutableStateOf(false) }
+    val expandedHorizontalPadding = if (expanded) 8.dp else 0.dp
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(
                 start = momentCollapsedCaptionStartPaddingDp().dp,
-                top = 8.dp,
                 end = 16.dp,
-                bottom = MomentCollapsedCaptionBottomPadding,
+            )
+            .background(
+                color = momentCaptionBackgroundColor(expanded),
+                shape = RoundedCornerShape(8.dp),
             )
             .clickable(enabled = expanded) { onExpandedChange(false) },
-        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        momentRepostLabel(item)?.let { label ->
+        Column(
+            modifier = Modifier.padding(
+                start = expandedHorizontalPadding,
+                top = 8.dp,
+                end = expandedHorizontalPadding,
+                bottom = MomentCollapsedCaptionBottomPadding,
+            ),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            momentRepostLabel(item)?.let { label ->
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        shadow = CaptionShadow,
+                    ),
+                    color = Color.White,
+                )
+            }
+            val timestamp = localizedRelativeTime(item.publishedAt)
+            if (item.publishedAt > 0L && timestamp.isNotEmpty()) {
+                Text(
+                    text = timestamp,
+                    style = MaterialTheme.typography.labelSmall.copy(shadow = CaptionShadow),
+                    color = Color.White.copy(alpha = 0.70f),
+                )
+            }
             Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.SemiBold,
+                text = momentAuthorLabel(item),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
                     shadow = CaptionShadow,
                 ),
                 color = Color.White,
+                modifier = Modifier.clickable { onChannelClick(item.channelId) },
             )
-        }
-        val timestamp = localizedRelativeTime(item.publishedAt)
-        if (item.publishedAt > 0L && timestamp.isNotEmpty()) {
-            Text(
-                text = timestamp,
-                style = MaterialTheme.typography.labelSmall.copy(shadow = CaptionShadow),
-                color = Color.White.copy(alpha = 0.70f),
-            )
-        }
-        Text(
-            text = momentAuthorLabel(item),
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Bold,
-                shadow = CaptionShadow,
-            ),
-            color = Color.White,
-            modifier = Modifier.clickable { onChannelClick(item.channelId) },
-        )
-        if (collapsedDescription.isNotBlank()) {
-            AtMentionText(
-                text = collapsedDescription,
-                onMentionClick = onMentionClick,
-                onUrlClick = uriHandler::openUri,
-                maxLines = momentCaptionDescriptionMaxLines(expanded),
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = Color.White,
-                    shadow = CaptionShadow,
-                ),
-                mentionColorOverride = linkColor,
-                urlColorOverride = linkColor,
-                onPlainTextClick = {
-                    when {
-                        expanded -> onExpandedChange(false)
-                        descriptionCanExpand -> onExpandedChange(true)
-                    }
-                },
-                onTextLayout = { layout ->
-                    if (!expanded) descriptionCanExpand = layout.hasVisualOverflow
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (collapsedDescription.isNotBlank()) {
+                AtMentionText(
+                    text = collapsedDescription,
+                    onMentionClick = onMentionClick,
+                    onUrlClick = uriHandler::openUri,
+                    maxLines = momentCaptionDescriptionMaxLines(expanded),
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = Color.White,
+                        shadow = CaptionShadow,
+                    ),
+                    mentionColorOverride = linkColor,
+                    urlColorOverride = linkColor,
+                    onPlainTextClick = {
+                        onExpandedChange(
+                            momentCaptionExpandedAfterPlainTextClick(
+                                expanded = expanded,
+                                descriptionCanExpand = descriptionCanExpand,
+                            ),
+                        )
+                    },
+                    onTextLayout = { layout ->
+                        if (!expanded) descriptionCanExpand = layout.hasVisualOverflow
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.screwy.igloo.ui.component
 
+import androidx.compose.ui.graphics.Color
 import androidx.media3.common.Player
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
@@ -38,6 +39,19 @@ class MomentsPlayerTest {
     fun caption_expansion_only_changes_description_line_limit() {
         assertEquals(2, momentCaptionDescriptionMaxLines(expanded = false))
         assertEquals(Int.MAX_VALUE, momentCaptionDescriptionMaxLines(expanded = true))
+    }
+
+    @Test
+    fun caption_plain_text_tap_toggles_expandable_description() {
+        assertTrue(momentCaptionExpandedAfterPlainTextClick(expanded = false, descriptionCanExpand = true))
+        assertFalse(momentCaptionExpandedAfterPlainTextClick(expanded = true, descriptionCanExpand = true))
+        assertFalse(momentCaptionExpandedAfterPlainTextClick(expanded = false, descriptionCanExpand = false))
+    }
+
+    @Test
+    fun caption_background_only_appears_while_expanded() {
+        assertEquals(Color.Transparent, momentCaptionBackgroundColor(expanded = false))
+        assertEquals(Color.Black.copy(alpha = 0.28f), momentCaptionBackgroundColor(expanded = true))
     }
 
     @Test

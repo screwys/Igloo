@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,6 +52,9 @@ fun AtMentionText(
         annotateMentionsAndUrls(text, mentionColor, urlColor)
     }
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val currentOnMentionClick by rememberUpdatedState(onMentionClick)
+    val currentOnUrlClick by rememberUpdatedState(onUrlClick)
+    val currentOnPlainTextClick by rememberUpdatedState(onPlainTextClick)
 
     Text(
         text = annotated,
@@ -62,9 +66,9 @@ fun AtMentionText(
                 val offset = l.getOffsetForPosition(pos)
                 val hit = annotatedTextLinkAt(annotated, offset)
                 when (hit?.tag) {
-                    "mention" -> onMentionClick(hit.item)
-                    "url"     -> onUrlClick(hit.item)
-                    else      -> onPlainTextClick?.invoke()
+                    "mention" -> currentOnMentionClick(hit.item)
+                    "url"     -> currentOnUrlClick(hit.item)
+                    else      -> currentOnPlainTextClick?.invoke()
                 }
             }
         },
