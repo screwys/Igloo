@@ -62,6 +62,11 @@ class MomentsPlayerTest {
     }
 
     @Test
+    fun slideshow_pages_advance_every_two_seconds() {
+        assertEquals(2_000L, momentSlideshowAdvanceDelayMs())
+    }
+
+    @Test
     fun story_progress_window_counts_only_current_profile_group() {
         val items = listOf(
             storyItem("a1", "tiktok_a"),
@@ -458,6 +463,26 @@ class MomentsPlayerTest {
         )
         assertTrue(withFrame.playerReady)
         assertFalse(shouldShowMomentThumbnailFallback(remoteOffline = false, surfaceState = withFrame))
+    }
+
+    @Test
+    fun ended_loop_keeps_rendered_frame_until_restart() {
+        assertFalse(shouldClearMomentRenderedFrame(Player.STATE_ENDED))
+        assertTrue(shouldClearMomentRenderedFrame(Player.STATE_IDLE))
+
+        val ended = momentVideoSurfaceStateFor(
+            expectedMediaId = "demo",
+            currentMediaId = "demo",
+            playbackState = Player.STATE_ENDED,
+            videoWidth = 720,
+            videoHeight = 1280,
+            renderedFrameCount = 1,
+        )
+
+        assertFalse(ended.playerReady)
+        assertTrue(ended.renderedFirstFrame)
+        assertFalse(shouldShowMomentThumbnailFallback(remoteOffline = false, surfaceState = ended))
+        assertEquals(AspectRatioFrameLayout.RESIZE_MODE_ZOOM, momentsVideoResizeMode(ended.videoWidth, ended.videoHeight))
     }
 
     private fun slideRow(index: Int): MediaInventoryEntity = MediaInventoryEntity(

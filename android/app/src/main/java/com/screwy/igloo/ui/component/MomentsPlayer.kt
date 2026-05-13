@@ -189,6 +189,7 @@ internal fun momentCaptionBackgroundColor(expanded: Boolean): Color =
 private const val MOMENTS_PREPARE_RADIUS = 1
 private const val AUTO_SWIPE_SCROLL_DURATION_MS = 850
 private const val MOMENT_STILL_ADVANCE_DELAY_MS = 3_000L
+private const val MOMENT_SLIDESHOW_ADVANCE_DELAY_MS = 2_000L
 private const val MOMENTS_TRANSITION_POSTER_MIN_MS = 180L
 private const val MOMENTS_STOP_OLD_PAGE_DELAY_MS = 200L
 private const val MomentCaptionBaseBottomPaddingDp = 12
@@ -278,6 +279,8 @@ internal fun momentStreamLoadKeyVideoId(loadKey: String?): String? {
     if (second <= first + 1) return null
     return loadKey.substring(first + 1, second)
 }
+
+internal fun momentSlideshowAdvanceDelayMs(): Long = MOMENT_SLIDESHOW_ADVANCE_DELAY_MS
 
 /**
  * TikTok-style vertical-swipe video player. Used by the moments tab, the
@@ -1548,7 +1551,7 @@ private fun MomentSlideshowSurface(
         if (!isActive || effectiveSlideCount <= 0) return@LaunchedEffect
         while (true) {
             val pageAtStart = pagerState.currentPage
-            delay(MOMENT_STILL_ADVANCE_DELAY_MS)
+            delay(MOMENT_SLIDESHOW_ADVANCE_DELAY_MS)
             if (!isActive) return@LaunchedEffect
             if (pagerState.isScrollInProgress || pagerState.currentPage != pageAtStart) {
                 continue
@@ -2187,7 +2190,7 @@ private fun VideoSurface(
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
+                if (shouldClearMomentRenderedFrame(playbackState)) {
                     renderedFrameCount = 0
                     renderedFrameMediaId = player.currentMediaItem?.mediaId
                 }
@@ -2253,6 +2256,9 @@ internal fun momentsVideoResizeMode(width: Int, height: Int): Int =
     }
 
 internal fun momentFitWidthContentScale(): ContentScale = ContentScale.Fit
+
+internal fun shouldClearMomentRenderedFrame(playbackState: Int): Boolean =
+    playbackState == Player.STATE_IDLE
 
 /**
  * Fit-width thumbnail fallback rendered in place of the PlayerView when there's
