@@ -1,1 +1,0 @@
-Reduced container image size.
