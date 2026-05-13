@@ -7,6 +7,7 @@ const (
 	schemaLifecycleUserState       schemaTableLifecycle = "user_state"
 	schemaLifecycleQueue           schemaTableLifecycle = "queue"
 	schemaLifecycleDerivedCache    schemaTableLifecycle = "derived_cache"
+	schemaLifecycleMaintainedState schemaTableLifecycle = "maintained_state"
 	schemaLifecycleDiagnostic      schemaTableLifecycle = "diagnostic"
 	schemaLifecycleLegacyMigration schemaTableLifecycle = "legacy_migration"
 	schemaLifecycleSecurityState   schemaTableLifecycle = "security_state"
@@ -19,7 +20,7 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 	"android_sync_generations":    schemaLifecycleDerivedCache,
 	"android_sync_health_reports": schemaLifecycleDiagnostic,
 	"android_sync_items":          schemaLifecycleDerivedCache,
-	"assets":                      schemaLifecycleDerivedCache,
+	"assets":                      schemaLifecycleMaintainedState,
 	"auth_refresh_tokens":         schemaLifecycleSecurityState,
 	"auth_sessions":               schemaLifecycleSecurityState,
 	"bookmark_categories":         schemaLifecycleUserState,

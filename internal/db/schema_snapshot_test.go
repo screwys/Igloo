@@ -68,6 +68,22 @@ func TestSchemaTableLifecyclesCoverFreshSchema(t *testing.T) {
 	}
 }
 
+func TestSchemaTableLifecycleClassifications(t *testing.T) {
+	want := map[string]schemaTableLifecycle{
+		"assets":              schemaLifecycleMaintainedState,
+		"android_sync_assets": schemaLifecycleDerivedCache,
+		"bookmarks":           schemaLifecycleUserState,
+		"download_queue":      schemaLifecycleQueue,
+		"feed_items":          schemaLifecycleArchive,
+		"schema_migrations":   schemaLifecycleLegacyMigration,
+	}
+	for table, lifecycle := range want {
+		if got := schemaTableLifecycles[table]; got != lifecycle {
+			t.Fatalf("schema lifecycle for %s = %q, want %q", table, got, lifecycle)
+		}
+	}
+}
+
 func openSchemaSnapshotDB(t *testing.T) *DB {
 	t.Helper()
 	tmpDir := t.TempDir()
