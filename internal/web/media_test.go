@@ -132,6 +132,32 @@ func TestHandleChannelAvatarServes(t *testing.T) {
 	}
 }
 
+func TestHandleChannelAvatarUsesXAccelBehindReverseProxy(t *testing.T) {
+	srv := newTestServer(t)
+	dir := filepath.Join(srv.cfg.DataDir, "thumbnails", "avatars")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "twitter_a.jpg"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/media/avatar/twitter_a", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200", rr.Code)
+	}
+	if got := rr.Header().Get("X-Accel-Redirect"); got != "/x-accel/igloo-data/thumbnails/avatars/twitter_a.jpg" {
+		t.Fatalf("X-Accel-Redirect = %q", got)
+	}
+	if got := rr.Body.String(); got != "" {
+		t.Fatalf("body = %q, want nginx internal redirect only", got)
+	}
+}
+
 func TestHandleChannelAvatarSniffsPNGWithWrongExtension(t *testing.T) {
 	srv := newTestServer(t)
 	dir := filepath.Join(srv.cfg.DataDir, "thumbnails", "avatars")
@@ -246,6 +272,49 @@ func TestHandleStreamResolvesQuoteVideoByParentTweetID(t *testing.T) {
 	}
 	if got := rr.Header().Get("Content-Type"); got != "video/mp4" {
 		t.Fatalf("content type: got %q, want %q", got, "video/mp4")
+	}
+}
+
+func TestHandleStreamUsesXAccelBehindReverseProxy(t *testing.T) {
+	srv := newTestServer(t)
+	const (
+		videoID = "sample_stream_xaccel"
+		handle  = "sample_author"
+	)
+	relPath := filepath.Join("media", "twitter", handle, videoID+"_0.mp4")
+	absPath := filepath.Join(srv.cfg.DataDir, relPath)
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(absPath, []byte("fake-mp4"), 0o644); err != nil {
+		t.Fatalf("write stream: %v", err)
+	}
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, source_handle, author_handle, media_json, published_at, fetched_at)
+		VALUES (?, ?, ?, '[{"type":"video","url":"https://cdn.example/test.mp4"}]', 1, 1)
+	`, videoID, handle, handle); err != nil {
+		t.Fatalf("insert feed item: %v", err)
+	}
+	if err := srv.db.ExecRaw(`
+		INSERT INTO media_files (owner_type, owner_id, media_index, file_path, media_type, source_url)
+		VALUES ('feed_media', ?, 0, ?, 'video', 'https://cdn.example/test.mp4')
+	`, videoID, relPath); err != nil {
+		t.Fatalf("insert media file: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/media/stream/"+videoID, nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200 (body: %q)", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("X-Accel-Redirect"); got != "/x-accel/igloo-data/media/twitter/sample_author/sample_stream_xaccel_0.mp4" {
+		t.Fatalf("X-Accel-Redirect = %q", got)
+	}
+	if got := rr.Body.String(); got != "" {
+		t.Fatalf("body = %q, want nginx internal redirect only", got)
 	}
 }
 

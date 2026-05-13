@@ -985,6 +985,9 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", contentType)
 	}
 	w.Header().Set("Cache-Control", "private, no-transform")
+	if s.serveDataFileViaXAccel(w, r, filePath, contentType, "private, no-transform") {
+		return
+	}
 
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -1009,7 +1012,11 @@ func (s *Server) handleAudio(w http.ResponseWriter, r *http.Request) {
 			for _, stem := range []string{videoID, videoID + "_0"} {
 				candidate := filepath.Join(dir, stem+ext)
 				if _, err := os.Stat(candidate); err == nil {
-					w.Header().Set("Cache-Control", "public, max-age=3600")
+					cacheControl := "public, max-age=3600"
+					w.Header().Set("Cache-Control", cacheControl)
+					if s.serveDataFileViaXAccel(w, r, candidate, "", cacheControl) {
+						return
+					}
 					http.ServeFile(w, r, candidate)
 					return
 				}
@@ -1018,7 +1025,11 @@ func (s *Server) handleAudio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if path := s.findFeedMediaAudioFile(videoID); path != "" {
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		cacheControl := "public, max-age=3600"
+		w.Header().Set("Cache-Control", cacheControl)
+		if s.serveDataFileViaXAccel(w, r, path, "", cacheControl) {
+			return
+		}
 		http.ServeFile(w, r, path)
 		return
 	}
@@ -1092,9 +1103,15 @@ func (s *Server) handleSlide(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveSlideFile(w http.ResponseWriter, r *http.Request, path string) {
-	w.Header().Set("Cache-Control", "public, max-age=3600")
-	if strings.HasPrefix(detectImageContentType(path), "image/") {
-		w.Header().Set("Content-Type", detectImageContentType(path))
+	cacheControl := "public, max-age=3600"
+	w.Header().Set("Cache-Control", cacheControl)
+	contentType := ""
+	if detected := detectImageContentType(path); strings.HasPrefix(detected, "image/") {
+		contentType = detected
+		w.Header().Set("Content-Type", contentType)
+	}
+	if s.serveDataFileViaXAccel(w, r, path, contentType, cacheControl) {
+		return
 	}
 	http.ServeFile(w, r, path)
 }
