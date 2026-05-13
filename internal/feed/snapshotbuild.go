@@ -16,6 +16,7 @@ const (
 	diversityAuthorPen       = 5.0  // demote if author seen in last N
 	diversitySourcePen       = 2.5  // demote if source_handle seen in last N
 	diversityConversationPen = 7.5  // demote if conversation root seen in last N
+	diversityRelatedPen      = 12.0 // demote if quoted/canonical tweet seen in last N
 	jitterRangePerTweet      = 0.38 // total spread; per-tweet jitter is centered in ±half
 )
 
@@ -34,6 +35,7 @@ func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.Snapshot
 		authorLower       string
 		sourceLower       string
 		conversationLower string
+		relatedLower      string
 		jitter            float64
 		base              float64 // base*decay + freshness + jitter (pre-diversity)
 		used              bool
@@ -52,6 +54,7 @@ func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.Snapshot
 			authorLower:       strings.ToLower(r.AuthorHandle),
 			sourceLower:       strings.ToLower(r.SourceHandle),
 			conversationLower: strings.ToLower(r.ConversationKey),
+			relatedLower:      strings.ToLower(r.RelatedContentKey),
 			jitter:            j,
 			base:              score + j,
 		}
@@ -72,6 +75,7 @@ func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.Snapshot
 	var recentAuthors recentWindow
 	var recentSources recentWindow
 	var recentConversations recentWindow
+	var recentRelated recentWindow
 
 	for pos := 1; pos <= len(cands); pos++ {
 		bestIdx := -1
@@ -97,6 +101,10 @@ func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.Snapshot
 			if cands[i].conversationLower != "" && recentConversations.contains(cands[i].conversationLower) {
 				s -= diversityConversationPen
 				demoted += diversityConversationPen
+			}
+			if cands[i].relatedLower != "" && recentRelated.contains(cands[i].relatedLower) {
+				s -= diversityRelatedPen
+				demoted += diversityRelatedPen
 			}
 			if bestIdx < 0 || s > bestScore || (s == bestScore && i < bestIdx) {
 				bestScore = s
@@ -124,6 +132,7 @@ func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.Snapshot
 		recentAuthors.push(c.authorLower)
 		recentSources.push(c.sourceLower)
 		recentConversations.push(c.conversationLower)
+		recentRelated.push(c.relatedLower)
 	}
 	return out
 }

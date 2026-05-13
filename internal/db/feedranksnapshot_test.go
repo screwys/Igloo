@@ -573,6 +573,44 @@ func TestListPreDiversityRanked_DemotesAlreadySeenUnderlyingTweet(t *testing.T) 
 	}
 }
 
+func TestListPreDiversityRankedSetsRelatedContentKey(t *testing.T) {
+	d := openWritableTestDB(t)
+	publishedAt := time.Now().Add(-time.Hour).UnixMilli()
+
+	for _, row := range []struct {
+		id        string
+		author    string
+		quoteID   string
+		canonical string
+	}{
+		{id: "sample_original", author: "base_author"},
+		{id: "sample_quote", author: "quote_author", quoteID: "sample_original"},
+	} {
+		if _, err := d.conn.Exec(`INSERT INTO feed_items
+				(tweet_id, author_handle, source_handle, quote_tweet_id, canonical_tweet_id,
+				 body_text, published_at, algo_interest, algo_scored_at)
+				VALUES (?, ?, ?, ?, ?, 'body', ?, 30, 1)`,
+			row.id, row.author, row.author, row.quoteID, row.canonical, publishedAt,
+		); err != nil {
+			t.Fatalf("insert %s: %v", row.id, err)
+		}
+	}
+
+	rows, err := d.ListPreDiversityRanked("")
+	if err != nil {
+		t.Fatalf("ListPreDiversityRanked: %v", err)
+	}
+	keyByID := map[string]string{}
+	for _, row := range rows {
+		keyByID[row.TweetID] = row.RelatedContentKey
+	}
+	for _, tweetID := range []string{"sample_original", "sample_quote"} {
+		if got := keyByID[tweetID]; got != "tweet:sample_original" {
+			t.Fatalf("%s related key = %q, want tweet:sample_original", tweetID, got)
+		}
+	}
+}
+
 func TestFeedRelatedSeenCountSQLUsesPrecomputedSet(t *testing.T) {
 	relatedExpr := feedRelatedSeenCountSelect("fi")
 	if strings.Contains(strings.ToUpper(relatedExpr), "SELECT COUNT") {
