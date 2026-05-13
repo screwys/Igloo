@@ -578,7 +578,7 @@ test("stays idle on X auth routes", async () => {
   );
 });
 
-test("does not patch X page globals in Firefox", async () => {
+test("patches X page globals in Firefox", async () => {
   class FakeXMLHttpRequest {
     open() {}
   }
@@ -596,9 +596,9 @@ test("does not patch X page globals in Firefox", async () => {
   runScript(harness);
   await drainMicrotasks();
 
-  assert.equal(FakeXMLHttpRequest.prototype.open, nativeOpen);
-  assert.equal(unsafeWindow.fetch, nativeFetch);
-  assert.equal(unsafeWindow.__iglooXMediaCaptureInstalled, undefined);
+  assert.notEqual(FakeXMLHttpRequest.prototype.open, nativeOpen);
+  assert.notEqual(unsafeWindow.fetch, nativeFetch);
+  assert.equal(unsafeWindow.__iglooXMediaCaptureInstalled, true);
 });
 
 test("uses follow wording for visible subscription labels", () => {
@@ -818,6 +818,7 @@ test("uses the quote tweet URL for quote-only videos", () => {
       kind: "video",
       tweetId: "222",
       tweetUrl: "https://x.com/quote/status/222",
+      mediaId: "",
       ext: ".mp4",
       index: 0,
     },
@@ -847,6 +848,7 @@ test("prefers the quote author permalink over X generic i-status video links", (
       kind: "video",
       tweetId: "222",
       tweetUrl: "https://x.com/quote/status/222",
+      mediaId: "",
       ext: ".mp4",
       index: 0,
     },
@@ -905,6 +907,43 @@ test("uses cached X API mp4 variants for direct video downloads", () => {
       ),
     ),
     [],
+  );
+});
+
+test("captures X API media responses on Firefox", async () => {
+  const body = JSON.stringify(tweetApiBodyWithQuoteVideo());
+  const unsafeWindow = {
+    fetch() {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        clone() {
+          return {
+            text() {
+              return Promise.resolve(body);
+            },
+          };
+        },
+      });
+    },
+  };
+  const harness = buildHarness({
+    unsafeWindow,
+    userAgent: "Mozilla/5.0 Firefox/150.0",
+  });
+  runScript(harness, { exposeDebug: true });
+
+  await harness.context.unsafeWindow.fetch("/i/api/graphql/abc/TweetDetail");
+  await drainMicrotasks();
+
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(harness.context.__iglooTest.cachedVideoUrlsForTweet("222")),
+    ),
+    [
+      "https://video.twimg.com/quote-high.mp4?tag=1",
+      "https://video.twimg.com/quote-low.mp4?tag=1",
+    ],
   );
 });
 
@@ -988,7 +1027,9 @@ test("does not fall back to server when direct video download fails", async () =
 
   assert.equal(result?.json?.success, false);
   assert.deepEqual(result?.json?.moved, []);
-  assert.deepEqual(result?.json?.failed, ["222"]);
+  assert.deepEqual(result?.json?.failed, [
+    "tweet 222: direct video URL not found",
+  ]);
   assert.equal(
     harness.requestCalls.some(
       (call) => call.url === "https://localhost:5001/api/tweet-media-dl",
@@ -1028,7 +1069,9 @@ test("does not fall back to server when direct staging move fails", async () => 
 
   assert.equal(result?.json?.success, false);
   assert.deepEqual(result?.json?.moved, []);
-  assert.deepEqual(result?.json?.failed, ["222"]);
+  assert.deepEqual(result?.json?.failed, [
+    'tweet 222: {"success":false,"moved":[],"failed":["tmp_111_0.mp4"]}',
+  ]);
   assert.ok(
     harness.requestCalls.some(
       (call) =>
@@ -1073,7 +1116,9 @@ test("fails video downloads without cached X API media instead of using fallback
 
   assert.equal(result?.json?.success, false);
   assert.deepEqual(result?.json?.moved, []);
-  assert.deepEqual(result?.json?.failed, ["222"]);
+  assert.deepEqual(result?.json?.failed, [
+    "tweet 222: direct video URL not found",
+  ]);
   assert.deepEqual(harness.downloadCalls, []);
   assert.equal(
     harness.requestCalls.some(
