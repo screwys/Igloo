@@ -8,6 +8,7 @@ import (
 
 	"github.com/screwys/igloo/internal/devtools/androidsyncmaintenance"
 	"github.com/screwys/igloo/internal/devtools/assetinventoryreconcile"
+	"github.com/screwys/igloo/internal/devtools/lifecycleaudit"
 	"github.com/screwys/igloo/internal/devtools/persistenceaudit"
 	"github.com/screwys/igloo/internal/devtools/queryaudit"
 	"github.com/screwys/igloo/internal/devtools/sqliterepack"
@@ -29,6 +30,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return androidsyncmaintenance.Run(rest, stdout, stderr)
 	case "asset-inventory-reconcile":
 		return assetinventoryreconcile.Run(rest, stdout, stderr)
+	case "lifecycle-audit":
+		return lifecycleaudit.Run(rest, stdout, stderr)
 	case "persistence-audit":
 		return persistenceaudit.Run(rest, stdout, stderr)
 	case "query-audit":
@@ -51,6 +54,7 @@ func printUsage(w io.Writer) {
 Commands:
   android-sync-maintenance    Drain bounded Android sync derived-cache debt
   asset-inventory-reconcile   Audit or repair missing asset inventory rows
+  lifecycle-audit             Scan destructive SQL and table lifecycles
   persistence-audit           Group database size and rows by schema lifecycle
   query-audit                 Time and explain SQLite hot-path reads
   sqlite-repack               Report or create a compact SQLite database copy
