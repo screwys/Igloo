@@ -1,6 +1,10 @@
 package db
 
-import "testing"
+import (
+	"errors"
+	"testing"
+	"time"
+)
 
 func TestChannelQueueAddAndGet(t *testing.T) {
 	d := openWritableTestDB(t)
@@ -316,20 +320,178 @@ func TestDownloadQueueRemove(t *testing.T) {
 	if err := d.AddToDownloadQueue(videoID, "dlq_ch_remove", "Remove Me"); err != nil {
 		t.Fatalf("AddToDownloadQueue: %v", err)
 	}
+	now := time.Now().UnixMilli()
+	claimed, err := d.ClaimDownloadBatchWithLease(LeaseOptions{
+		Owner:   "download-remove",
+		NowMs:   now,
+		LeaseMs: int64(time.Minute / time.Millisecond),
+		Limit:   1,
+	})
+	if err != nil {
+		t.Fatalf("ClaimDownloadBatchWithLease: %v", err)
+	}
+	if len(claimed) != 1 || claimed[0].VideoID != videoID {
+		t.Fatalf("claimed = %+v, want %s", claimed, videoID)
+	}
 
-	if err := d.RemoveFromDownloadQueue(videoID); err != nil {
+	if err := d.RemoveFromDownloadQueue(videoID, "download-remove"); err != nil {
 		t.Fatalf("RemoveFromDownloadQueue: %v", err)
 	}
 
 	// Should not appear in a pending claim
-	claimed, err := d.ClaimDownloadBatch(100)
+	claimedAfter, err := d.ClaimDownloadBatch(100)
 	if err != nil {
 		t.Fatalf("ClaimDownloadBatch: %v", err)
 	}
-	for _, r := range claimed {
+	for _, r := range claimedAfter {
 		if r.VideoID == videoID {
 			t.Errorf("removed video %q should not appear in queue", videoID)
 		}
+	}
+}
+
+func TestDownloadQueueTerminalUpdatesRequireCurrentLeaseOwner(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(*DB, string, int64) error
+	}{
+		{
+			name: "status",
+			run: func(d *DB, videoID string, now int64) error {
+				return d.UpdateDownloadQueueStatus(videoID, "download-stale", "failed", "login required", 3, "auth", "permanent", 0, now)
+			},
+		},
+		{
+			name: "delete",
+			run: func(d *DB, videoID string, now int64) error {
+				return d.RemoveFromDownloadQueue(videoID, "download-stale")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := openWritableTestDB(t)
+			now := time.Now().UnixMilli()
+			videoID := "dlq_terminal_" + tt.name
+			if err := d.ExecRaw(`
+				INSERT INTO download_queue
+					(video_id, channel_id, title, status, retry_count, lease_owner, lease_until_ms, next_attempt_at_ms, added_at)
+				VALUES (?, 'youtube_test_channel', 'Terminal Lease', 'processing', 2, 'download-current', ?, 0, ?)
+			`, videoID, now+60000, now); err != nil {
+				t.Fatalf("insert download queue row: %v", err)
+			}
+
+			err := tt.run(d, videoID, now)
+			if !errors.Is(err, ErrQueueLeaseNotHeld) {
+				t.Fatalf("%s stale owner error = %v, want ErrQueueLeaseNotHeld", tt.name, err)
+			}
+
+			var status, owner, kind, strategy, msg string
+			var retries int
+			var leaseUntil, nextAttempt int64
+			if err := d.QueryRow(`
+				SELECT status, retry_count, COALESCE(next_attempt_at_ms,0),
+				       COALESCE(last_error_kind,''), COALESCE(last_error_strategy,''),
+				       COALESCE(error,''), COALESCE(lease_owner,''), COALESCE(lease_until_ms,0)
+				FROM download_queue WHERE video_id=?
+			`, videoID).Scan(&status, &retries, &nextAttempt, &kind, &strategy, &msg, &owner, &leaseUntil); err != nil {
+				t.Fatalf("query download queue row: %v", err)
+			}
+			if status != "processing" || retries != 2 || nextAttempt != 0 || kind != "" || strategy != "" || msg != "" || owner != "download-current" || leaseUntil == 0 {
+				t.Fatalf("stale %s changed row: status=%q retries=%d next=%d kind=%q strategy=%q msg=%q owner=%q lease=%d",
+					tt.name, status, retries, nextAttempt, kind, strategy, msg, owner, leaseUntil)
+			}
+		})
+	}
+}
+
+func TestDownloadQueueStatusPersistsErrorKindAndStrategy(t *testing.T) {
+	tests := []struct {
+		name         string
+		status       string
+		kind         string
+		strategy     string
+		delay        time.Duration
+		wantNext     bool
+		wantCleared  bool
+		wantRetryCnt int
+	}{
+		{
+			name:         "rate limit retry",
+			status:       "pending",
+			kind:         "rate_limit",
+			strategy:     "retry",
+			delay:        time.Hour,
+			wantNext:     true,
+			wantRetryCnt: 1,
+		},
+		{
+			name:         "auth permanent",
+			status:       "failed",
+			kind:         "auth",
+			strategy:     "permanent",
+			wantRetryCnt: 1,
+		},
+		{
+			name:         "success clears stale classification",
+			status:       "completed",
+			kind:         "",
+			strategy:     "",
+			wantCleared:  true,
+			wantRetryCnt: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := openWritableTestDB(t)
+			now := time.Now().UnixMilli()
+			videoID := "dlq_classification_" + tt.name
+			if err := d.ExecRaw(`
+				INSERT INTO download_queue
+					(video_id, channel_id, title, status, retry_count, error,
+					 last_error_kind, last_error_strategy, lease_owner, lease_until_ms,
+					 next_attempt_at_ms, added_at)
+				VALUES (?, 'youtube_test_channel', 'Classification', 'processing', 0,
+				        'old error', 'temporary', 'retry', 'download-current', ?, 0, ?)
+			`, videoID, now+60000, now); err != nil {
+				t.Fatalf("insert download queue row: %v", err)
+			}
+
+			if err := d.UpdateDownloadQueueStatus(videoID, "download-current", tt.status, "classified error", tt.wantRetryCnt, tt.kind, tt.strategy, tt.delay, now); err != nil {
+				t.Fatalf("UpdateDownloadQueueStatus: %v", err)
+			}
+
+			var status, kind, strategy, msg, owner string
+			var retries int
+			var nextAttempt, leaseUntil int64
+			if err := d.QueryRow(`
+				SELECT status, retry_count, COALESCE(next_attempt_at_ms,0),
+				       COALESCE(last_error_kind,''), COALESCE(last_error_strategy,''),
+				       COALESCE(error,''), COALESCE(lease_owner,''), COALESCE(lease_until_ms,0)
+				FROM download_queue WHERE video_id=?
+			`, videoID).Scan(&status, &retries, &nextAttempt, &kind, &strategy, &msg, &owner, &leaseUntil); err != nil {
+				t.Fatalf("query download queue row: %v", err)
+			}
+			if status != tt.status || retries != tt.wantRetryCnt || kind != tt.kind || strategy != tt.strategy || owner != "" || leaseUntil != 0 {
+				t.Fatalf("row = status=%q retries=%d kind=%q strategy=%q owner=%q lease=%d, want status=%q retries=%d kind=%q strategy=%q cleared lease",
+					status, retries, kind, strategy, owner, leaseUntil, tt.status, tt.wantRetryCnt, tt.kind, tt.strategy)
+			}
+			if tt.wantNext && nextAttempt != now+tt.delay.Milliseconds() {
+				t.Fatalf("next_attempt_at_ms = %d, want %d", nextAttempt, now+tt.delay.Milliseconds())
+			}
+			if !tt.wantNext && nextAttempt != 0 {
+				t.Fatalf("next_attempt_at_ms = %d, want 0", nextAttempt)
+			}
+			if tt.wantCleared {
+				if msg != "" {
+					t.Fatalf("completed row kept error %q", msg)
+				}
+			} else if msg != "classified error" {
+				t.Fatalf("error = %q, want classified error", msg)
+			}
+		})
 	}
 }
 
@@ -355,7 +517,11 @@ func TestResetStaleDownloadQueueItems(t *testing.T) {
 		t.Skip("stale test video not claimed (unexpected DB state)")
 	}
 
-	// Reset stale items
+	if err := d.ExecRaw(`UPDATE download_queue SET lease_until_ms=? WHERE video_id=?`, time.Now().UnixMilli()-1, videoID); err != nil {
+		t.Fatalf("expire lease: %v", err)
+	}
+
+	// Reset expired leased items
 	n, err := d.ResetStaleDownloadQueueItems()
 	if err != nil {
 		t.Fatalf("ResetStaleDownloadQueueItems: %v", err)
@@ -377,6 +543,75 @@ func TestResetStaleDownloadQueueItems(t *testing.T) {
 	}
 	if !reclaimed {
 		t.Errorf("video %q should be claimable after stale reset", videoID)
+	}
+}
+
+func TestClaimDownloadBatchWithLeaseExcludesActiveLease(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UnixMilli()
+	if err := d.ExecRaw(`
+		INSERT INTO download_queue
+			(video_id, channel_id, title, status, next_attempt_at_ms, added_at)
+		VALUES ('dlq_lease_001', 'youtube_test_channel', 'Lease Proof', 'pending', 0, ?)
+	`, now); err != nil {
+		t.Fatalf("insert download queue row: %v", err)
+	}
+
+	first, err := d.ClaimDownloadBatchWithLease(LeaseOptions{
+		Owner:      "download-a",
+		NowMs:      now,
+		LeaseMs:    int64(time.Minute / time.Millisecond),
+		Limit:      1,
+		StatusFrom: "pending",
+		StatusTo:   "processing",
+	})
+	if err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	if len(first) != 1 || first[0].VideoID != "dlq_lease_001" {
+		t.Fatalf("first claim = %+v, want dlq_lease_001", first)
+	}
+
+	second, err := d.ClaimDownloadBatchWithLease(LeaseOptions{
+		Owner:      "download-b",
+		NowMs:      now + 1,
+		LeaseMs:    int64(time.Minute / time.Millisecond),
+		Limit:      1,
+		StatusFrom: "pending",
+		StatusTo:   "processing",
+	})
+	if err != nil {
+		t.Fatalf("second claim: %v", err)
+	}
+	if len(second) != 0 {
+		t.Fatalf("active lease was claimed by another worker: %+v", second)
+	}
+}
+
+func TestClaimDownloadBatchWithLeaseAllowsExpiredLease(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UnixMilli()
+	if err := d.ExecRaw(`
+		INSERT INTO download_queue
+			(video_id, channel_id, title, status, lease_owner, lease_until_ms, next_attempt_at_ms, added_at)
+		VALUES ('dlq_lease_expired', 'youtube_test_channel', 'Expired Lease', 'processing', 'download-a', ?, 0, ?)
+	`, now-1, now); err != nil {
+		t.Fatalf("insert download queue row: %v", err)
+	}
+
+	claimed, err := d.ClaimDownloadBatchWithLease(LeaseOptions{
+		Owner:      "download-b",
+		NowMs:      now,
+		LeaseMs:    int64(time.Minute / time.Millisecond),
+		Limit:      1,
+		StatusFrom: "pending",
+		StatusTo:   "processing",
+	})
+	if err != nil {
+		t.Fatalf("claim expired: %v", err)
+	}
+	if len(claimed) != 1 || claimed[0].VideoID != "dlq_lease_expired" {
+		t.Fatalf("claim expired = %+v, want dlq_lease_expired", claimed)
 	}
 }
 

@@ -24,6 +24,9 @@ const (
 	ErrorKindParse         = "parse"
 	ErrorKindCanceled      = "canceled"
 	ErrorKindUnknown       = "unknown"
+
+	ErrorStrategyRetry     = "retry"
+	ErrorStrategyPermanent = "permanent"
 )
 
 // OperationSink records downloader operation summaries.

@@ -126,11 +126,16 @@ func RedactText(s string) string {
 		{"token="},
 	}
 	for _, repl := range replacers {
+		search := 0
 		for {
-			idx := strings.Index(strings.ToLower(s), strings.ToLower(repl.prefix))
+			if search >= len(s) {
+				break
+			}
+			idx := strings.Index(strings.ToLower(s[search:]), strings.ToLower(repl.prefix))
 			if idx < 0 {
 				break
 			}
+			idx += search
 			start := idx + len(repl.prefix)
 			end := start
 			for end < len(s) {
@@ -141,6 +146,53 @@ func RedactText(s string) string {
 				end++
 			}
 			s = s[:start] + "***" + s[end:]
+			search = start + len("***")
+		}
+	}
+	jsonPrefixes := []string{
+		`"auth_token":"`,
+		`"ct0":"`,
+		`"password":"`,
+		`"token":"`,
+	}
+	for _, prefix := range jsonPrefixes {
+		search := 0
+		for {
+			if search >= len(s) {
+				break
+			}
+			idx := strings.Index(strings.ToLower(s[search:]), strings.ToLower(prefix))
+			if idx < 0 {
+				break
+			}
+			idx += search
+			start := idx + len(prefix)
+			end := start
+			for end < len(s) && s[end] != '"' {
+				end++
+			}
+			s = s[:start] + "***" + s[end:]
+			search = start + len("***")
+		}
+	}
+	for _, prefix := range []string{`"/home/`, `"/var/home/`, `"/tmp/`} {
+		search := 0
+		for {
+			if search >= len(s) {
+				break
+			}
+			idx := strings.Index(s[search:], prefix)
+			if idx < 0 {
+				break
+			}
+			idx += search
+			start := idx + 1
+			end := start
+			for end < len(s) && s[end] != '"' {
+				end++
+			}
+			s = s[:start] + "***" + s[end:]
+			search = start + len("***")
 		}
 	}
 	if len(s) > 2000 {
