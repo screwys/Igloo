@@ -9062,6 +9062,34 @@ body.shorts-mode .sidebar {
     margin-bottom: 0;
 }
 
+.thread-page-shell {
+    width: 100%;
+    max-width: calc(var(--feed-card-media-max-width, 840px) + 1.4rem + 2px);
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+.thread-back-link {
+    display: inline-flex;
+    align-items: center;
+    margin: 0 0 0.75rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 650;
+}
+
+.thread-back-link:hover,
+.thread-back-link:focus-visible {
+    color: var(--text-primary);
+}
+
+.thread-page-feed-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
 .feed-thread-capsule {
     display: flex;
     align-items: center;
