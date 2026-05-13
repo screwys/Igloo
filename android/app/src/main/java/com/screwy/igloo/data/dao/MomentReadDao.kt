@@ -303,7 +303,8 @@ interface MomentReadDao {
     /**
      * Channel-scoped moments (TikTok or Instagram channel page).
      *
-     * Keep oldest -> newest to match the main Moments scroll direction.
+     * Channel profiles show content newest -> oldest, matching Twitter and
+     * YouTube profile pages rather than the main Moments player direction.
      */
     @RewriteQueriesToDropUnusedColumns
     @Query(
@@ -327,7 +328,7 @@ interface MomentReadDao {
         LEFT JOIN channel_follows cf ON cf.channel_id = v.channel_id
         WHERE v.channel_id = :channelId
           AND COALESCE(v.source_kind, '') != 'story'
-        ORDER BY v.published_at ASC, v.video_id ASC
+        ORDER BY v.published_at DESC, v.video_id DESC
         """
     )
     fun channelMomentsFlow(channelId: String): Flow<List<MomentItem>>

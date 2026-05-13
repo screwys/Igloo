@@ -100,7 +100,7 @@ class ReadDaoTest {
         assertEquals(listOf(listOf("v_tt")), emissions)
     }
 
-    @Test fun channel_moments_oldestFirst() = runBlocking {
+    @Test fun channel_moments_newestFirst() = runBlocking {
         db.channelDao().upsert(
             ChannelEntity("tiktok_alice", name = "Alice Doe", platform = "tiktok", sourceId = "alice"),
         )
@@ -113,7 +113,7 @@ class ReadDaoTest {
 
         val rows = db.momentReadDao().channelMomentsFlow("tiktok_alice").first()
 
-        assertEquals(listOf("v_old", "v_new"), rows.map { it.video.videoId })
+        assertEquals(listOf("v_new", "v_old"), rows.map { it.video.videoId })
     }
 
     @Test fun stories_rankUnseenThenStarredThenRecent() = runBlocking {
