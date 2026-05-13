@@ -366,6 +366,50 @@ func (db *DB) ReconcileAssetInventoryFromExistingPaths(opts AssetInventoryReconc
 	return db.backfillAssetsFromExistingPaths(opts, false)
 }
 
+// MaintainVideoAssets refreshes inventory rows for the media assets implied by
+// one videos row and conventional sibling files such as subtitles/previews.
+func (db *DB) MaintainVideoAssets(videoID string, nowMs int64) error {
+	videoID = strings.TrimSpace(videoID)
+	if videoID == "" {
+		return nil
+	}
+	if nowMs <= 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	src, ok, err := db.getVideoAssetSource(videoID)
+	if err != nil || !ok {
+		return err
+	}
+	for _, asset := range db.videoAssetsFromSource(src) {
+		if err := db.upsertAssetFromLegacyPath(asset, nowMs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// MaintainChannelProfileAssets refreshes avatar/banner inventory rows for one
+// non-tombstoned channel profile.
+func (db *DB) MaintainChannelProfileAssets(channelID string, nowMs int64) error {
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return nil
+	}
+	if nowMs <= 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	src, ok, err := db.getChannelProfileAssetSource(channelID)
+	if err != nil || !ok {
+		return err
+	}
+	for _, asset := range db.profileAssetsFromSource(src) {
+		if err := db.upsertAssetFromLegacyPath(asset, nowMs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (db *DB) backfillAssetsFromExistingPaths(opts AssetInventoryReconcileOptions, includeExisting bool) (AssetInventoryReconcileResult, error) {
 	run := newAssetInventoryReconcileRun(db, opts, includeExisting)
 	for _, fn := range []func(*assetInventoryReconcileRun) error{
@@ -535,6 +579,121 @@ func (db *DB) backfillMediaFileAssets(run *assetInventoryReconcileRun) error {
 	return rows.Err()
 }
 
+type videoAssetSource struct {
+	videoID       string
+	channelID     string
+	thumbnailPath string
+	filePath      string
+	fileSize      int64
+	dearrowPath   string
+}
+
+func (db *DB) getVideoAssetSource(videoID string) (videoAssetSource, bool, error) {
+	var src videoAssetSource
+	err := db.conn.QueryRow(`
+		SELECT video_id, COALESCE(channel_id, ''), COALESCE(thumbnail_path, ''),
+		       COALESCE(file_path, ''), COALESCE(file_size, 0), COALESCE(dearrow_thumb_path, '')
+		FROM videos
+		WHERE video_id = ?
+	`, videoID).Scan(
+		&src.videoID,
+		&src.channelID,
+		&src.thumbnailPath,
+		&src.filePath,
+		&src.fileSize,
+		&src.dearrowPath,
+	)
+	if err == sql.ErrNoRows {
+		return src, false, nil
+	}
+	if err != nil {
+		return src, false, err
+	}
+	return src, true, nil
+}
+
+func (db *DB) videoAssetsFromSource(src videoAssetSource) []Asset {
+	platform := videoPlatformFromChannelID(src.channelID)
+	if platform == "" {
+		platform = videoPlatform(src.videoID)
+	}
+	ownerKind := videoOwnerKindForPlatform(platform)
+	assets := make([]Asset, 0, 8)
+	for _, asset := range []Asset{
+		{
+			AssetID:        BuildManifestAssetID(platform, ownerKind, src.videoID, "video_stream", 0),
+			AssetKind:      "video_stream",
+			OwnerKind:      ownerKind,
+			OwnerID:        src.videoID,
+			FilePath:       src.filePath,
+			ContentType:    contentTypeForMediaPath(src.filePath, "", "video/mp4"),
+			SizeBytes:      src.fileSize,
+			State:          AssetStateQueued,
+			RequiredReason: "retention",
+		},
+		{
+			AssetID:        BuildManifestAssetID(platform, ownerKind, src.videoID, "post_thumbnail", 0),
+			AssetKind:      "post_thumbnail",
+			OwnerKind:      ownerKind,
+			OwnerID:        src.videoID,
+			FilePath:       src.thumbnailPath,
+			ContentType:    contentTypeForPath(src.thumbnailPath, "image/jpeg"),
+			State:          AssetStateQueued,
+			RequiredReason: "retention",
+		},
+		{
+			AssetID:        BuildManifestAssetID(platform, ownerKind, src.videoID, "dearrow_thumbnail", 0),
+			AssetKind:      "dearrow_thumbnail",
+			OwnerKind:      ownerKind,
+			OwnerID:        src.videoID,
+			FilePath:       src.dearrowPath,
+			ContentType:    contentTypeForPath(src.dearrowPath, "image/jpeg"),
+			State:          AssetStateQueued,
+			RequiredReason: "retention",
+		},
+	} {
+		if strings.TrimSpace(asset.FilePath) != "" {
+			assets = append(assets, asset)
+		}
+	}
+	if subtitleRel := db.findSubtitleRelativePath(src.filePath); subtitleRel != "" {
+		assets = append(assets, Asset{
+			AssetID:        BuildManifestAssetID(platform, ownerKind, src.videoID, "subtitle", 0),
+			AssetKind:      "subtitle",
+			OwnerKind:      ownerKind,
+			OwnerID:        src.videoID,
+			FilePath:       subtitleRel,
+			ContentType:    "text/vtt",
+			State:          AssetStateQueued,
+			RequiredReason: "retention",
+		})
+	}
+	for _, preview := range []struct {
+		name        string
+		assetKind   string
+		contentType string
+	}{
+		{name: "track.json", assetKind: "preview_track_json", contentType: "application/json"},
+		{name: "sprite.jpg", assetKind: "preview_sprite", contentType: "image/jpeg"},
+	} {
+		rel := filepath.Join("thumbnails", "previews", src.videoID, preview.name)
+		if _, err := os.Stat(resolveManifestDataPath(db.dataDir, rel)); err != nil {
+			continue
+		}
+		assets = append(assets, Asset{
+			AssetID:        BuildManifestAssetID(platform, ownerKind, src.videoID, preview.assetKind, 0),
+			AssetKind:      preview.assetKind,
+			OwnerKind:      ownerKind,
+			OwnerID:        src.videoID,
+			FilePath:       rel,
+			ContentType:    preview.contentType,
+			State:          AssetStateQueued,
+			RequiredReason: "retention",
+		})
+	}
+	return assets
+}
+
 func (db *DB) backfillVideoAssets(run *assetInventoryReconcileRun) error {
 	rows, err := db.conn.Query(`
 		SELECT video_id, COALESCE(channel_id, ''), COALESCE(thumbnail_path, ''),
@@ -556,103 +715,89 @@ func (db *DB) backfillVideoAssets(run *assetInventoryReconcileRun) error {
 		if err := rows.Scan(&videoID, &channelID, &thumbnailPath, &filePath, &fileSize, &dearrowPath); err != nil {
 			return err
 		}
-		platform := videoPlatformFromChannelID(channelID)
-		if platform == "" {
-			platform = videoPlatform(videoID)
-		}
-		ownerKind := videoOwnerKindForPlatform(platform)
-		for _, asset := range []Asset{
-			{
-				AssetID:        BuildManifestAssetID(platform, ownerKind, videoID, "video_stream", 0),
-				AssetKind:      "video_stream",
-				OwnerKind:      ownerKind,
-				OwnerID:        videoID,
-				FilePath:       filePath,
-				ContentType:    contentTypeForMediaPath(filePath, "", "video/mp4"),
-				SizeBytes:      fileSize,
-				State:          AssetStateQueued,
-				RequiredReason: "backfill",
-			},
-			{
-				AssetID:        BuildManifestAssetID(platform, ownerKind, videoID, "post_thumbnail", 0),
-				AssetKind:      "post_thumbnail",
-				OwnerKind:      ownerKind,
-				OwnerID:        videoID,
-				FilePath:       thumbnailPath,
-				ContentType:    contentTypeForPath(thumbnailPath, "image/jpeg"),
-				State:          AssetStateQueued,
-				RequiredReason: "backfill",
-			},
-			{
-				AssetID:        BuildManifestAssetID(platform, ownerKind, videoID, "dearrow_thumbnail", 0),
-				AssetKind:      "dearrow_thumbnail",
-				OwnerKind:      ownerKind,
-				OwnerID:        videoID,
-				FilePath:       dearrowPath,
-				ContentType:    contentTypeForPath(dearrowPath, "image/jpeg"),
-				State:          AssetStateQueued,
-				RequiredReason: "backfill",
-			},
-		} {
-			if strings.TrimSpace(asset.FilePath) == "" {
-				continue
-			}
+		for _, asset := range db.videoAssetsFromSource(videoAssetSource{
+			videoID:       videoID,
+			channelID:     channelID,
+			thumbnailPath: thumbnailPath,
+			filePath:      filePath,
+			fileSize:      fileSize,
+			dearrowPath:   dearrowPath,
+		}) {
+			asset.RequiredReason = "backfill"
 			if err := run.handle(asset); err != nil {
 				return err
 			}
 			if run.exhausted() {
 				return nil
-			}
-		}
-		if subtitleRel := db.findSubtitleRelativePath(filePath); subtitleRel != "" {
-			asset := Asset{
-				AssetID:        BuildManifestAssetID(platform, ownerKind, videoID, "subtitle", 0),
-				AssetKind:      "subtitle",
-				OwnerKind:      ownerKind,
-				OwnerID:        videoID,
-				FilePath:       subtitleRel,
-				ContentType:    "text/vtt",
-				State:          AssetStateQueued,
-				RequiredReason: "backfill",
-			}
-			if err := run.handle(asset); err != nil {
-				return err
-			}
-			if run.exhausted() {
-				return nil
-			}
-		}
-		for _, preview := range []struct {
-			name        string
-			assetKind   string
-			contentType string
-		}{
-			{name: "track.json", assetKind: "preview_track_json", contentType: "application/json"},
-			{name: "sprite.jpg", assetKind: "preview_sprite", contentType: "image/jpeg"},
-		} {
-			if run.exhausted() {
-				return nil
-			}
-			rel := filepath.Join("thumbnails", "previews", videoID, preview.name)
-			if _, err := os.Stat(resolveManifestDataPath(db.dataDir, rel)); err != nil {
-				continue
-			}
-			asset := Asset{
-				AssetID:        BuildManifestAssetID(platform, ownerKind, videoID, preview.assetKind, 0),
-				AssetKind:      preview.assetKind,
-				OwnerKind:      ownerKind,
-				OwnerID:        videoID,
-				FilePath:       rel,
-				ContentType:    preview.contentType,
-				State:          AssetStateQueued,
-				RequiredReason: "backfill",
-			}
-			if err := run.handle(asset); err != nil {
-				return err
 			}
 		}
 	}
 	return rows.Err()
+}
+
+type channelProfileAssetSource struct {
+	channelID string
+	platform  string
+	avatarURL string
+	bannerURL string
+}
+
+func (db *DB) getChannelProfileAssetSource(channelID string) (channelProfileAssetSource, bool, error) {
+	var src channelProfileAssetSource
+	err := db.conn.QueryRow(`
+		SELECT channel_id, COALESCE(platform, ''), COALESCE(avatar_url, ''), COALESCE(banner_url, '')
+		FROM channel_profiles
+		WHERE channel_id = ?
+		  AND COALESCE(tombstone, 0) = 0
+	`, channelID).Scan(&src.channelID, &src.platform, &src.avatarURL, &src.bannerURL)
+	if err == sql.ErrNoRows {
+		return src, false, nil
+	}
+	if err != nil {
+		return src, false, err
+	}
+	return src, true, nil
+}
+
+func (db *DB) profileAssetsFromSource(src channelProfileAssetSource) []Asset {
+	platform := src.platform
+	if platform == "" {
+		platform = videoPlatformFromChannelID(src.channelID)
+	}
+	if platform == "" {
+		platform = strings.SplitN(src.channelID, "_", 2)[0]
+	}
+	assets := make([]Asset, 0, 2)
+	for _, asset := range []Asset{
+		{
+			AssetID:        BuildManifestAssetID(platform, "channel", src.channelID, "avatar", 0),
+			AssetKind:      "avatar",
+			OwnerKind:      "channel",
+			OwnerID:        src.channelID,
+			SourceURL:      src.avatarURL,
+			FilePath:       db.findAvatarRelativePath(src.channelID),
+			ContentType:    "image/jpeg",
+			State:          AssetStateQueued,
+			RequiredReason: "retention",
+		},
+		{
+			AssetID:        BuildManifestAssetID(platform, "channel", src.channelID, "banner", 0),
+			AssetKind:      "banner",
+			OwnerKind:      "channel",
+			OwnerID:        src.channelID,
+			SourceURL:      src.bannerURL,
+			FilePath:       db.findBannerRelativePath(src.channelID),
+			ContentType:    "image/jpeg",
+			State:          AssetStateQueued,
+			RequiredReason: "retention",
+		},
+	} {
+		if asset.FilePath == "" && asset.SourceURL == "" {
+			continue
+		}
+		assets = append(assets, asset)
+	}
+	return assets
 }
 
 func (db *DB) backfillProfileAssets(run *assetInventoryReconcileRun) error {
@@ -675,39 +820,13 @@ func (db *DB) backfillProfileAssets(run *assetInventoryReconcileRun) error {
 		if err := rows.Scan(&channelID, &platform, &avatarURL, &bannerURL); err != nil {
 			return err
 		}
-		if platform == "" {
-			platform = videoPlatformFromChannelID(channelID)
-		}
-		if platform == "" {
-			platform = strings.SplitN(channelID, "_", 2)[0]
-		}
-		for _, asset := range []Asset{
-			{
-				AssetID:        BuildManifestAssetID(platform, "channel", channelID, "avatar", 0),
-				AssetKind:      "avatar",
-				OwnerKind:      "channel",
-				OwnerID:        channelID,
-				SourceURL:      avatarURL,
-				FilePath:       db.findAvatarRelativePath(channelID),
-				ContentType:    "image/jpeg",
-				State:          AssetStateQueued,
-				RequiredReason: "backfill",
-			},
-			{
-				AssetID:        BuildManifestAssetID(platform, "channel", channelID, "banner", 0),
-				AssetKind:      "banner",
-				OwnerKind:      "channel",
-				OwnerID:        channelID,
-				SourceURL:      bannerURL,
-				FilePath:       db.findBannerRelativePath(channelID),
-				ContentType:    "image/jpeg",
-				State:          AssetStateQueued,
-				RequiredReason: "backfill",
-			},
-		} {
-			if asset.FilePath == "" && asset.SourceURL == "" {
-				continue
-			}
+		for _, asset := range db.profileAssetsFromSource(channelProfileAssetSource{
+			channelID: channelID,
+			platform:  platform,
+			avatarURL: avatarURL,
+			bannerURL: bannerURL,
+		}) {
+			asset.RequiredReason = "backfill"
 			if err := run.handle(asset); err != nil {
 				return err
 			}
@@ -717,6 +836,10 @@ func (db *DB) backfillProfileAssets(run *assetInventoryReconcileRun) error {
 		}
 	}
 	return rows.Err()
+}
+
+func (db *DB) upsertAssetFromLegacyPath(asset Asset, nowMs int64) error {
+	return db.upsertBackfilledAsset(db.assetFromLegacyPath(asset), nowMs)
 }
 
 func (db *DB) upsertBackfilledAsset(asset Asset, nowMs int64) error {

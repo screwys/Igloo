@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -86,10 +87,13 @@ func (m *Manager) generatePreview(ctx context.Context, req PreviewRequest) error
 
 	// Skip if already done.
 	if fileExists(spriteDst) && fileExists(jsonDst) {
-		return nil
+		return m.maintainPreviewAssets(req.VideoID)
 	}
 	if fileExists(spriteDst) {
-		return ensurePreviewTrackJSON(outDir, req)
+		if err := ensurePreviewTrackJSON(outDir, req); err != nil {
+			return err
+		}
+		return m.maintainPreviewAssets(req.VideoID)
 	}
 
 	frameCount := previewFrameCount(req.Duration)
@@ -169,7 +173,14 @@ func (m *Manager) generatePreview(ctx context.Context, req PreviewRequest) error
 	}
 
 	log.Printf("[preview] generated preview for %s (%d frames, %dx%d tile)", req.VideoID, frameCount, previewTileColumns, rows)
-	return nil
+	return m.maintainPreviewAssets(req.VideoID)
+}
+
+func (m *Manager) maintainPreviewAssets(videoID string) error {
+	if m == nil || m.db == nil {
+		return nil
+	}
+	return m.db.MaintainVideoAssets(videoID, time.Now().UnixMilli())
 }
 
 // backfillPreviews runs once at startup and enqueues any downloaded videos

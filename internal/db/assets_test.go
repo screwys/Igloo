@@ -520,6 +520,131 @@ func TestInsertMediaFileDuplicateKeepsAssetInventoryOnPersistedRow(t *testing.T)
 	}
 }
 
+func TestVideoWritePathsMaintainAssetInventory(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	videoRelPath := filepath.Join("videos", "youtube", "sample_video_asset.mp4")
+	thumbRelPath := filepath.Join("videos", "youtube", "sample_video_asset.jpg")
+	subtitleRelPath := filepath.Join("videos", "youtube", "sample_video_asset.en.vtt")
+	dearrowRelPath := filepath.Join("thumbnails", "dearrow", "sample_video_asset.jpg")
+	previewTrackRelPath := filepath.Join("thumbnails", "previews", "sample_video_asset", "track.json")
+	previewSpriteRelPath := filepath.Join("thumbnails", "previews", "sample_video_asset", "sprite.jpg")
+	writeDBTestFile(t, filepath.Join(d.dataDir, videoRelPath), []byte("video-stream"))
+	writeDBTestFile(t, filepath.Join(d.dataDir, thumbRelPath), []byte("video-thumb"))
+	writeDBTestFile(t, filepath.Join(d.dataDir, subtitleRelPath), []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nhi\n"))
+
+	if err := d.InsertVideo(
+		"sample_video_asset", "youtube_sample_channel", "Sample", "",
+		60, thumbRelPath, videoRelPath, int64(len("video-stream")),
+		1234, "", "video", 0, false,
+	); err != nil {
+		t.Fatalf("InsertVideo: %v", err)
+	}
+
+	wantReady := []struct {
+		kind string
+		id   string
+		path string
+	}{
+		{"video_stream", BuildManifestAssetID("youtube", "youtube_video", "sample_video_asset", "video_stream", 0), videoRelPath},
+		{"post_thumbnail", BuildManifestAssetID("youtube", "youtube_video", "sample_video_asset", "post_thumbnail", 0), thumbRelPath},
+		{"subtitle", BuildManifestAssetID("youtube", "youtube_video", "sample_video_asset", "subtitle", 0), subtitleRelPath},
+	}
+	for _, tt := range wantReady {
+		got, err := d.GetAsset(tt.id, tt.kind)
+		if err != nil {
+			t.Fatalf("GetAsset %s: %v", tt.kind, err)
+		}
+		if got == nil || got.State != AssetStateReady || got.FilePath != tt.path || got.RequiredReason != "retention" {
+			t.Fatalf("%s asset mismatch: %+v", tt.kind, got)
+		}
+	}
+
+	writeDBTestFile(t, filepath.Join(d.dataDir, dearrowRelPath), []byte("dearrow-thumb"))
+	if err := d.SetDearrowData("sample_video_asset", nil, nil, &dearrowRelPath, 2000); err != nil {
+		t.Fatalf("SetDearrowData: %v", err)
+	}
+	dearrowID := BuildManifestAssetID("youtube", "youtube_video", "sample_video_asset", "dearrow_thumbnail", 0)
+	gotDearrow, err := d.GetAsset(dearrowID, "dearrow_thumbnail")
+	if err != nil {
+		t.Fatalf("GetAsset dearrow: %v", err)
+	}
+	if gotDearrow == nil || gotDearrow.State != AssetStateReady || gotDearrow.FilePath != dearrowRelPath {
+		t.Fatalf("dearrow asset mismatch: %+v", gotDearrow)
+	}
+
+	writeDBTestFile(t, filepath.Join(d.dataDir, previewTrackRelPath), []byte(`{"frames":[]}`))
+	writeDBTestFile(t, filepath.Join(d.dataDir, previewSpriteRelPath), []byte("sprite"))
+	if err := d.MaintainVideoAssets("sample_video_asset", 3000); err != nil {
+		t.Fatalf("MaintainVideoAssets: %v", err)
+	}
+	for _, tt := range []struct {
+		kind string
+		id   string
+		path string
+	}{
+		{"preview_track_json", BuildManifestAssetID("youtube", "youtube_video", "sample_video_asset", "preview_track_json", 0), previewTrackRelPath},
+		{"preview_sprite", BuildManifestAssetID("youtube", "youtube_video", "sample_video_asset", "preview_sprite", 0), previewSpriteRelPath},
+	} {
+		got, err := d.GetAsset(tt.id, tt.kind)
+		if err != nil {
+			t.Fatalf("GetAsset %s: %v", tt.kind, err)
+		}
+		if got == nil || got.State != AssetStateReady || got.FilePath != tt.path {
+			t.Fatalf("%s asset mismatch: %+v", tt.kind, got)
+		}
+	}
+}
+
+func TestChannelProfileWritePathsMaintainAssetInventory(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	channelID := "youtube_sample_profile"
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID: channelID,
+		Platform:  "youtube",
+		Handle:    "sample_profile",
+		AvatarURL: "https://example.test/avatar.jpg",
+		BannerURL: "https://example.test/banner.jpg",
+	}); err != nil {
+		t.Fatalf("UpsertChannelProfile: %v", err)
+	}
+
+	avatarID := BuildManifestAssetID("youtube", "channel", channelID, "avatar", 0)
+	bannerID := BuildManifestAssetID("youtube", "channel", channelID, "banner", 0)
+	gotAvatar, err := d.GetAsset(avatarID, "avatar")
+	if err != nil {
+		t.Fatalf("GetAsset avatar queued: %v", err)
+	}
+	if gotAvatar == nil || gotAvatar.State != AssetStateQueued || gotAvatar.SourceURL != "https://example.test/avatar.jpg" {
+		t.Fatalf("queued avatar asset mismatch: %+v", gotAvatar)
+	}
+
+	avatarRelPath := filepath.Join("thumbnails", "avatars", channelID+".jpg")
+	bannerRelPath := filepath.Join("thumbnails", "banners", channelID+".jpg")
+	writeDBTestFile(t, filepath.Join(d.dataDir, avatarRelPath), []byte("avatar"))
+	writeDBTestFile(t, filepath.Join(d.dataDir, bannerRelPath), []byte("banner"))
+	if err := d.MaintainChannelProfileAssets(channelID, 4000); err != nil {
+		t.Fatalf("MaintainChannelProfileAssets: %v", err)
+	}
+	for _, tt := range []struct {
+		kind string
+		id   string
+		path string
+	}{
+		{"avatar", avatarID, avatarRelPath},
+		{"banner", bannerID, bannerRelPath},
+	} {
+		got, err := d.GetAsset(tt.id, tt.kind)
+		if err != nil {
+			t.Fatalf("GetAsset %s ready: %v", tt.kind, err)
+		}
+		if got == nil || got.State != AssetStateReady || got.FilePath != tt.path || got.RequiredReason != "retention" {
+			t.Fatalf("%s asset mismatch: %+v", tt.kind, got)
+		}
+	}
+}
+
 func writeDBTestFile(t *testing.T, path string, body []byte) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

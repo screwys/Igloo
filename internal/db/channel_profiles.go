@@ -21,7 +21,7 @@ func (db *DB) UpsertChannelProfile(p model.ChannelProfile) error {
 	if p.Platform == "" {
 		return fmt.Errorf("UpsertChannelProfile: empty platform for %s", channelID)
 	}
-	return db.WithWrite(func(tx *sql.Tx) error {
+	if err := db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			INSERT INTO channel_profiles (
 				channel_id, platform, handle, display_name, bio, website,
@@ -55,7 +55,10 @@ func (db *DB) UpsertChannelProfile(p model.ChannelProfile) error {
 			boolToInt(p.Tombstone),
 		)
 		return err
-	})
+	}); err != nil {
+		return err
+	}
+	return db.MaintainChannelProfileAssets(channelID, time.Now().UnixMilli())
 }
 
 // ClearChannelProfileAvatar removes a stored avatar source URL when a trusted

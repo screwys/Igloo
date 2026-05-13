@@ -785,9 +785,19 @@ func (m *Manager) downloadProfileMedia(ctx context.Context, channelID, kind, url
 		bytes = fi.Size()
 	}
 	m.recordProfileMediaOperation(ctx, channelID, kind, url, start, nil, 1, bytes)
+	if err := m.maintainProfileAssets(channelID); err != nil {
+		log.Printf("[profile] maintain %s assets %s: %v", kind, channelID, err)
+	}
 	// No media_files bookkeeping — the file lives at the conventional disk
 	// path and resolveAvatarPath/resolveBannerPath find it there.
 	return true
+}
+
+func (m *Manager) maintainProfileAssets(channelID string) error {
+	if m == nil || m.db == nil {
+		return nil
+	}
+	return m.db.MaintainChannelProfileAssets(channelID, time.Now().UnixMilli())
 }
 
 func (m *Manager) recordProfileMediaOperation(ctx context.Context, channelID, kind, rawURL string, start time.Time, err error, files int, bytes int64) {
@@ -871,6 +881,9 @@ func (m *Manager) downloadInstagramProfileAvatar(ctx context.Context, channelID,
 	var lastErr error
 	for _, path := range paths {
 		if _, err := normalizeDownloadedImage(path, dir, channelID); err == nil {
+			if err := m.maintainProfileAssets(channelID); err != nil {
+				log.Printf("[profile] maintain instagram avatar assets %s: %v", channelID, err)
+			}
 			return true
 		} else {
 			lastErr = err

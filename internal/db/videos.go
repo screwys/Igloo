@@ -1065,7 +1065,7 @@ func (db *DB) UpdateVideoThumbnailPath(videoID, thumbnailPath string) error {
 	if videoID == "" || thumbnailPath == "" {
 		return nil
 	}
-	return db.WithWrite(func(tx *sql.Tx) error {
+	if err := db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			UPDATE videos
 			SET thumbnail_path = ?,
@@ -1074,7 +1074,10 @@ func (db *DB) UpdateVideoThumbnailPath(videoID, thumbnailPath string) error {
 			  AND COALESCE(thumbnail_path, '') = ''
 		`, thumbnailPath, db.NextSyncSeq(), videoID)
 		return err
-	})
+	}); err != nil {
+		return err
+	}
+	return db.MaintainVideoAssets(videoID, time.Now().UnixMilli())
 }
 
 // resolveVideoPaths converts relative DB paths to absolute runtime paths.
@@ -1295,7 +1298,7 @@ func (db *DB) InsertVideoWithSourceKind(videoID, channelID, title, description s
 	duration int, thumbnailPath, filePath string, fileSize int64,
 	publishedAtMs int64, metadataJSON, mediaKind string, slideCount int, isTemp bool, sourceKind string) error {
 	seq := db.NextSyncSeq()
-	return db.WithWrite(func(tx *sql.Tx) error {
+	if err := db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			INSERT INTO videos
 				(video_id, channel_id, title, description, duration,
@@ -1359,7 +1362,10 @@ func (db *DB) InsertVideoWithSourceKind(videoID, channelID, title, description s
 			thumbnailPath, filePath, fileSize, publishedAtMs,
 			metadataJSON, mediaKind, slideCount, sourceKind, isTemp, seq)
 		return err
-	})
+	}); err != nil {
+		return err
+	}
+	return db.MaintainVideoAssets(videoID, time.Now().UnixMilli())
 }
 
 // SBCheckedRow represents a row from sponsorblock_checked.

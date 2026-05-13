@@ -24,7 +24,7 @@ func (db *DB) MarkDearrowChecked(videoID string, atMs int64) error {
 // vote, don't override" semantics). Bumps videos.sync_seq so Android's videos
 // delta re-emits the row with the new branding fields.
 func (db *DB) SetDearrowData(videoID string, title, titleCasual, thumbPath *string, atMs int64) error {
-	return db.WithWrite(func(tx *sql.Tx) error {
+	if err := db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			UPDATE videos
 			SET dearrow_title = ?,
@@ -36,7 +36,10 @@ func (db *DB) SetDearrowData(videoID string, title, titleCasual, thumbPath *stri
 			title, titleCasual, thumbPath, atMs, db.NextSyncSeq(), videoID,
 		)
 		return err
-	})
+	}); err != nil {
+		return err
+	}
+	return db.MaintainVideoAssets(videoID, atMs)
 }
 
 // ListVideosNeedingDearrow returns YouTube video IDs that need a DeArrow check.
