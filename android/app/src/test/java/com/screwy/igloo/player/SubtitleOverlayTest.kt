@@ -1,6 +1,7 @@
 package com.screwy.igloo.player
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -9,6 +10,27 @@ import org.junit.Test
  * cues land; malformed cues are silently skipped.
  */
 class SubtitleOverlayTest {
+
+    @Test
+    fun subtitle_default_visibility_only_enables_manual_tracks() {
+        assertTrue(subtitleVisibleByDefault(subtitleIsAuto = false))
+        assertFalse(subtitleVisibleByDefault(subtitleIsAuto = true))
+    }
+
+    @Test
+    fun subtitle_default_waits_for_path_and_metadata() {
+        assertFalse(shouldApplySubtitleDefault(defaultApplied = false, subtitlePath = null, subtitleIsAuto = false))
+        assertFalse(shouldApplySubtitleDefault(defaultApplied = false, subtitlePath = "/tmp/sub.vtt", subtitleIsAuto = null))
+        assertFalse(shouldApplySubtitleDefault(defaultApplied = true, subtitlePath = "/tmp/sub.vtt", subtitleIsAuto = false))
+        assertTrue(shouldApplySubtitleDefault(defaultApplied = false, subtitlePath = "/tmp/sub.vtt", subtitleIsAuto = false))
+    }
+
+    @Test
+    fun subtitle_bottom_padding_lifts_above_visible_scrubber() {
+        assertEquals(16, playerSubtitleBottomPaddingDp(fullscreen = false, controlsVisible = false))
+        assertEquals(76, playerSubtitleBottomPaddingDp(fullscreen = false, controlsVisible = true))
+        assertEquals(84, playerSubtitleBottomPaddingDp(fullscreen = true, controlsVisible = true))
+    }
 
     @Test
     fun parses_basic_three_cue_file() {

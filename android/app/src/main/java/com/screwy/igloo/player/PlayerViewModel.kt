@@ -136,16 +136,16 @@ class PlayerViewModel(
 
     val previewTrackJsonPath: StateFlow<String?> = localAssetPathFlow("preview_track_json")
 
-    val subtitleIsAuto: StateFlow<Boolean> = combine(
+    val subtitleIsAuto: StateFlow<Boolean?> = combine(
         db.androidSyncDao().latestVerifiedAssetsForOwnerFlow(videoId, listOf("subtitle")),
         db.mediaInventoryDao().forOwnerAndKindFlow(videoId, "subtitle"),
     ) { syncRows, fallbackRow ->
-        syncRows.firstOrNull()?.subtitleIsAuto ?: fallbackRow?.subtitleIsAuto ?: true
+        syncRows.firstOrNull()?.subtitleIsAuto ?: fallbackRow?.subtitleIsAuto
     }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = true,
+            initialValue = null,
         )
 
     /**

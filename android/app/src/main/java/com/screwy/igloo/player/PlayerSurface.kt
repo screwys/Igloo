@@ -71,11 +71,7 @@ internal fun PlayerSurface(
     modifier: Modifier = Modifier,
 ) {
     val fullscreen = mode == PlayerSurfaceMode.Fullscreen
-    val subtitleBottomPadding = when {
-        fullscreen && controlsVisible -> 68.dp
-        controlsVisible -> 56.dp
-        else -> 16.dp
-    }
+    val subtitleBottomPadding = playerSubtitleBottomPaddingDp(fullscreen, controlsVisible).dp
     val sponsorBlockBottomPadding = if (fullscreen) 72.dp else 56.dp
 
     Box(
@@ -135,6 +131,12 @@ internal fun PlayerSurface(
             modifier = Modifier.align(Alignment.Center),
         )
     }
+}
+
+internal fun playerSubtitleBottomPaddingDp(fullscreen: Boolean, controlsVisible: Boolean): Int = when {
+    fullscreen && controlsVisible -> 84
+    controlsVisible -> 76
+    else -> 16
 }
 
 @Composable

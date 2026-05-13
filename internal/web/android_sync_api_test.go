@@ -1567,6 +1567,59 @@ func TestAndroidSyncMetadataVideosPublishNonStreamAssetsWithoutStream(t *testing
 	}
 }
 
+func TestAndroidSyncSubtitleAssetPrefersManualTrack(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	dataDir := srv.cfg.DataDir
+	now := time.Now().UnixMilli()
+	autoSubtitle := []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nauto\n")
+	manualSubtitle := []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nmanual\n")
+
+	mustWriteFile(t, filepath.Join(dataDir, "videos", "youtube", "manual-thumb.jpg"), []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43})
+	mustWriteFile(t, filepath.Join(dataDir, "videos", "youtube", "manual.mp4"), []byte("video"))
+	mustWriteFile(t, filepath.Join(dataDir, "videos", "youtube", "manual.en.vtt"), autoSubtitle)
+	mustWriteFile(t, filepath.Join(dataDir, "videos", "youtube", "manual.tr.vtt"), manualSubtitle)
+	mustWriteFile(t, filepath.Join(dataDir, "videos", "youtube", "manual.info.json"), []byte(`{"language":"tr","subtitles":{"tr":[{"url":"https://example.test/manual.vtt"}]},"automatic_captions":{"en":[{"url":"https://example.test/auto.vtt"}]}}`))
+	if err := srv.db.ExecRaw(`
+		INSERT INTO videos (
+			video_id, channel_id, title, duration, thumbnail_path, file_path,
+			file_size, media_kind, published_at, sync_seq
+		) VALUES (
+			'manual_video', 'youtube_chan', 'Manual', 12,
+			'videos/youtube/manual-thumb.jpg', 'videos/youtube/manual.mp4',
+			5, 'video', ?, 1
+		)
+	`, now); err != nil {
+		t.Fatalf("insert video: %v", err)
+	}
+
+	assets, _, err := srv.buildAndroidSyncAssets("", db.AndroidSyncDesiredSets{
+		Tweets: map[string]struct{}{},
+		Videos: map[string]struct{}{
+			"manual_video": {},
+		},
+		MediaVideos: map[string]struct{}{
+			"manual_video": {},
+		},
+		Channels: map[string]struct{}{},
+	})
+	if err != nil {
+		t.Fatalf("build assets: %v", err)
+	}
+	for _, asset := range assets {
+		if asset.OwnerID != "manual_video" || asset.AssetKind != "subtitle" {
+			continue
+		}
+		if asset.IsAuto == nil || *asset.IsAuto {
+			t.Fatalf("subtitle asset should use manual metadata: %+v", asset)
+		}
+		if asset.SizeBytes != int64(len(manualSubtitle)) {
+			t.Fatalf("subtitle size = %d, want manual size %d", asset.SizeBytes, len(manualSubtitle))
+		}
+		return
+	}
+	t.Fatalf("subtitle asset missing: %+v", assets)
+}
+
 func TestAndroidSyncPublishesDearrowThumbnailAsset(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	dataDir := srv.cfg.DataDir

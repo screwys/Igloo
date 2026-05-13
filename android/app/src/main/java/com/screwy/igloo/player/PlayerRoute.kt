@@ -289,8 +289,9 @@ fun PlayerRoute(
     var showSubtitles by remember(videoId) { mutableStateOf(false) }
     var subtitleDefaultApplied by remember(videoId) { mutableStateOf(false) }
     LaunchedEffect(videoId, subtitlePath, subtitleIsAuto) {
-        if (!subtitleDefaultApplied && subtitlePath != null) {
-            showSubtitles = !subtitleIsAuto
+        val trackIsAuto = subtitleIsAuto
+        if (shouldApplySubtitleDefault(subtitleDefaultApplied, subtitlePath, trackIsAuto)) {
+            showSubtitles = subtitleVisibleByDefault(trackIsAuto == true)
             subtitleDefaultApplied = true
         }
     }
@@ -581,6 +582,14 @@ fun PlayerRoute(
         )
     }
 }
+
+internal fun shouldApplySubtitleDefault(
+    defaultApplied: Boolean,
+    subtitlePath: String?,
+    subtitleIsAuto: Boolean?,
+): Boolean = !defaultApplied && subtitlePath != null && subtitleIsAuto != null
+
+internal fun subtitleVisibleByDefault(subtitleIsAuto: Boolean): Boolean = !subtitleIsAuto
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this

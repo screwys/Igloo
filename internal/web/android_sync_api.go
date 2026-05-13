@@ -1747,30 +1747,52 @@ func (s *Server) androidSyncSubtitlePath(videoID string) string {
 	if video == nil || video.FilePath == "" {
 		return ""
 	}
+	return s.androidSyncSubtitlePathForVideo(*video)
+}
+
+func (s *Server) androidSyncSubtitlePathForVideo(video model.Video) string {
+	if video.FilePath == "" {
+		return ""
+	}
 	absFilePath := resolveDataPath(s.cfg.DataDir, video.FilePath)
 	videoBase := strings.TrimSuffix(absFilePath, filepath.Ext(absFilePath))
+	dir := filepath.Dir(absFilePath)
+	stem := filepath.Base(videoBase)
+	infoPath := filepath.Join(dir, stem+".info.json")
+	manualLangs := subtitlemeta.ManualLangs(infoPath)
+	var fallback string
 	for _, suffix := range []string{".en.vtt", ".vtt"} {
 		path := videoBase + suffix
 		if _, err := os.Stat(path); err == nil {
-			return path
+			lang := subtitlemeta.TrackLang(stem, filepath.Base(path))
+			if manualLangs[lang] {
+				return path
+			}
+			if fallback == "" {
+				fallback = path
+			}
 		}
 	}
-	dir := filepath.Dir(absFilePath)
-	stem := filepath.Base(videoBase)
 	entries, _ := os.ReadDir(dir)
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), stem) && strings.HasSuffix(entry.Name(), ".vtt") {
 			path := filepath.Join(dir, entry.Name())
 			if _, err := os.Stat(path); err == nil {
-				return path
+				lang := subtitlemeta.TrackLang(stem, entry.Name())
+				if manualLangs[lang] {
+					return path
+				}
+				if fallback == "" {
+					fallback = path
+				}
 			}
 		}
 	}
-	return ""
+	return fallback
 }
 
 func (s *Server) androidSyncSubtitleMetadata(video model.Video) (bool, string) {
-	subtitlePath := s.androidSyncSubtitlePath(video.VideoID)
+	subtitlePath := s.androidSyncSubtitlePathForVideo(video)
 	if subtitlePath == "" || video.FilePath == "" {
 		return true, ""
 	}
