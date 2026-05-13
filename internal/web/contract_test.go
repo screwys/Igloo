@@ -338,7 +338,9 @@ func TestAndroidSyncProfileAssetUsesProfileMediaPath(t *testing.T) {
 		t.Fatalf("upsert profile: %v", err)
 	}
 
-	assets, _, err := srv.buildAndroidSyncAssets("alice", db.AndroidSyncDesiredSets{})
+	assets, _, err := srv.buildAndroidSyncAssets("alice", db.AndroidSyncDesiredSets{
+		Channels: map[string]struct{}{"twitter_sample_avatar": {}},
+	})
 	if err != nil {
 		t.Fatalf("buildAndroidSyncAssets: %v", err)
 	}
@@ -346,7 +348,7 @@ func TestAndroidSyncProfileAssetUsesProfileMediaPath(t *testing.T) {
 		if asset.AssetKind != "avatar" || asset.OwnerID != "twitter_sample_avatar" {
 			continue
 		}
-		if asset.State != "ready" || asset.ServerURL == "" || asset.RequiredReason != "profile" {
+		if asset.State != "ready" || asset.ServerURL == "" || asset.RequiredReason != "retention" {
 			t.Fatalf("profile avatar asset = %+v, want ready profile asset", asset)
 		}
 		return
