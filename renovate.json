@@ -4,6 +4,11 @@
   "extends": ["config:recommended"],
   "enabledManagers": ["gomod", "gradle", "github-actions", "dockerfile", "custom.regex"],
   "dependencyDashboard": true,
+  "minimumReleaseAge": "2 days",
+  "prCreation": "not-pending",
+  "internalChecksFilter": "strict",
+  "automergeType": "pr",
+  "platformAutomerge": true,
   "prConcurrentLimit": 3,
   "prHourlyLimit": 1,
   "customManagers": [
@@ -17,6 +22,11 @@
     }
   ],
   "packageRules": [
+    {
+      "description": "Automerge non-major dependency updates after required checks pass.",
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "automerge": true
+    },
     {
       "description": "Group Go minor and patch updates.",
       "matchManagers": ["gomod"],
