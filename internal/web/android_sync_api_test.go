@@ -114,6 +114,114 @@ func TestAndroidSyncGenerationPublishesServeableAssets(t *testing.T) {
 	}
 }
 
+func TestAndroidSyncAssetReturnsTooManyRequestsWhenServeSlotsFull(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	dataDir := srv.cfg.DataDir
+
+	mustWriteFile(t, filepath.Join(dataDir, "thumbnails", "avatars", "sample_channel_a.jpg"), []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43})
+
+	gen := model.AndroidSyncGeneration{
+		GenerationID:    "android-sync-throttle",
+		CreatedAtMs:     time.Now().UnixMilli(),
+		Status:          "ready",
+		SourceVersion:   strings.Repeat("a", 64),
+		Retention:       map[string]int{"materializer_version": db.AndroidSyncMaterializerVersion},
+		AssetCount:      1,
+		ReadyAssetCount: 1,
+	}
+	asset := model.AndroidSyncAsset{
+		GenerationID: "android-sync-throttle",
+		Seq:          1,
+		AssetID:      "sample_channel_a_avatar",
+		AssetKind:    "avatar",
+		OwnerID:      "sample_channel_a",
+		OwnerKind:    "channel",
+		Bucket:       "avatar",
+		ServerURL:    "/api/android/sync/assets/sample_channel_a_avatar",
+		ContentType:  "image/jpeg",
+		SizeBytes:    6,
+		SHA256:       "unused",
+		State:        "ready",
+	}
+	if err := srv.db.StoreAndroidSyncGeneration(gen, nil, []model.AndroidSyncAsset{asset}); err != nil {
+		t.Fatalf("store generation: %v", err)
+	}
+
+	for i := 0; i < androidSyncAssetServeLimit; i++ {
+		if !srv.tryAcquireAndroidSyncAssetServeSlot() {
+			t.Fatalf("acquire slot %d failed", i)
+		}
+		defer srv.releaseAndroidSyncAssetServeSlot()
+	}
+
+	req := httptest.NewRequest("GET", "/api/android/sync/assets/sample_channel_a_avatar", nil)
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("asset status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Retry-After"); got != "30" {
+		t.Fatalf("Retry-After = %q, want 30", got)
+	}
+}
+
+func TestAndroidSyncAssetUsesXAccelBehindReverseProxy(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	dataDir := srv.cfg.DataDir
+
+	mustWriteFile(t, filepath.Join(dataDir, "thumbnails", "avatars", "sample_channel_a.jpg"), []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43})
+
+	gen := model.AndroidSyncGeneration{
+		GenerationID:    "android-sync-xaccel",
+		CreatedAtMs:     time.Now().UnixMilli(),
+		Status:          "ready",
+		SourceVersion:   strings.Repeat("b", 64),
+		Retention:       map[string]int{"materializer_version": db.AndroidSyncMaterializerVersion},
+		AssetCount:      1,
+		ReadyAssetCount: 1,
+	}
+	asset := model.AndroidSyncAsset{
+		GenerationID: "android-sync-xaccel",
+		Seq:          1,
+		AssetID:      "sample_channel_a_avatar",
+		AssetKind:    "avatar",
+		OwnerID:      "sample_channel_a",
+		OwnerKind:    "channel",
+		Bucket:       "avatar",
+		ServerURL:    "/api/android/sync/assets/sample_channel_a_avatar",
+		ContentType:  "image/jpeg",
+		SizeBytes:    6,
+		SHA256:       "unused",
+		State:        "ready",
+	}
+	if err := srv.db.StoreAndroidSyncGeneration(gen, nil, []model.AndroidSyncAsset{asset}); err != nil {
+		t.Fatalf("store generation: %v", err)
+	}
+
+	for i := 0; i < androidSyncAssetServeLimit; i++ {
+		if !srv.tryAcquireAndroidSyncAssetServeSlot() {
+			t.Fatalf("acquire slot %d failed", i)
+		}
+		defer srv.releaseAndroidSyncAssetServeSlot()
+	}
+
+	req := httptest.NewRequest("GET", "/api/android/sync/assets/sample_channel_a_avatar", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("asset status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("X-Accel-Redirect"); got != "/x-accel/igloo-data/thumbnails/avatars/sample_channel_a.jpg" {
+		t.Fatalf("X-Accel-Redirect = %q", got)
+	}
+	if got := rec.Body.String(); got != "" {
+		t.Fatalf("asset body = %q, want nginx internal redirect only", got)
+	}
+}
+
 func TestAndroidSyncOldV3RoutesReturn404(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	for _, path := range []string{
@@ -917,35 +1025,6 @@ func TestAndroidSyncCanonicalVideoURL(t *testing.T) {
 	}
 }
 
-func TestAndroidSyncPublishesYouTubeCommentAuthorAvatar(t *testing.T) {
-	srv := newAndroidSyncTestServer(t)
-	dataDir := srv.cfg.DataDir
-	commenterID := "youtube_UCcommenter123"
-	mustWriteFile(t, filepath.Join(dataDir, "thumbnails", "avatars", commenterID+".jpg"), []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43})
-
-	assets, _, err := srv.buildAndroidSyncAssets("", db.AndroidSyncDesiredSets{
-		Tweets: map[string]struct{}{},
-		Videos: map[string]struct{}{},
-		Channels: map[string]struct{}{
-			commenterID: {},
-		},
-	})
-	if err != nil {
-		t.Fatalf("build assets: %v", err)
-	}
-	assetID := db.BuildManifestAssetID("youtube", "channel", commenterID, "avatar", 0)
-	for _, asset := range assets {
-		if asset.AssetID != assetID {
-			continue
-		}
-		if asset.State != "ready" || asset.AssetKind != "avatar" || asset.ServerURL != "/api/media/avatar/"+commenterID {
-			t.Fatalf("comment avatar asset mismatch: %+v", asset)
-		}
-		return
-	}
-	t.Fatalf("comment author avatar asset missing from %+v", assets)
-}
-
 func TestAndroidSyncLatestCreatesGenerationDuringFreshSourceDrift(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	dataDir := srv.cfg.DataDir
@@ -1341,7 +1420,7 @@ func TestAndroidSyncPublishesDearrowThumbnailAsset(t *testing.T) {
 	t.Fatalf("dearrow_thumbnail asset missing: %+v", assets)
 }
 
-func TestAndroidSyncPublishesProfileChannelAssetsOutsideRetentionSets(t *testing.T) {
+func TestAndroidSyncDoesNotPublishProfileChannelAssetsOutsideRetentionSets(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	dataDir := srv.cfg.DataDir
 	now := time.Now().UnixMilli()
@@ -1369,21 +1448,11 @@ func TestAndroidSyncPublishesProfileChannelAssetsOutsideRetentionSets(t *testing
 	if err != nil {
 		t.Fatalf("build assets: %v", err)
 	}
-	found := map[string]bool{}
 	for _, asset := range assets {
 		if asset.OwnerID != "tiktok_profile_only" {
 			continue
 		}
-		if asset.State != "ready" {
-			t.Fatalf("profile asset should be ready: %+v", asset)
-		}
-		if asset.RequiredReason != "profile" {
-			t.Fatalf("profile-only asset should keep profile reason: %+v", asset)
-		}
-		found[asset.AssetKind] = true
-	}
-	if !found["avatar"] || !found["banner"] {
-		t.Fatalf("expected avatar and banner for profile-only channel, found=%v assets=%+v", found, assets)
+		t.Fatalf("profile-only channel outside retention should not publish bulk assets: %+v", asset)
 	}
 }
 

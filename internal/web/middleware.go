@@ -29,12 +29,19 @@ func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)
+		if !loggableRequestPath(r.URL.Path) {
+			return
+		}
 		slog.Info("request",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"dur", time.Since(start).Round(time.Microsecond),
 		)
 	})
+}
+
+func loggableRequestPath(path string) bool {
+	return !strings.HasPrefix(path, "/api/android/sync/assets/")
 }
 
 func recoverPanic(next http.Handler) http.Handler {

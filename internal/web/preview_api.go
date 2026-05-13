@@ -17,15 +17,24 @@ func (s *Server) registerPreviewAPIRoutes(mux *http.ServeMux) {
 func (s *Server) handlePreviewSprite(w http.ResponseWriter, r *http.Request) {
 	videoID := r.PathValue("videoID")
 	path := filepath.Join(s.cfg.DataDir, "thumbnails", "previews", videoID, "sprite.jpg")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	cacheControl := "public, max-age=86400"
+	w.Header().Set("Cache-Control", cacheControl)
+	if s.serveDataFileViaXAccel(w, r, path, "image/jpeg", cacheControl) {
+		return
+	}
 	http.ServeFile(w, r, path)
 }
 
 func (s *Server) handlePreviewTrackJSON(w http.ResponseWriter, r *http.Request) {
 	videoID := r.PathValue("videoID")
 	path := filepath.Join(s.cfg.DataDir, "thumbnails", "previews", videoID, "track.json")
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	contentType := "application/json"
+	cacheControl := "public, max-age=86400"
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", cacheControl)
+	if s.serveDataFileViaXAccel(w, r, path, contentType, cacheControl) {
+		return
+	}
 	http.ServeFile(w, r, path)
 }
 
