@@ -25,5 +25,8 @@ jobs:
       - name: Check generated drift
         run: scripts/dev/drift-check.sh
 
+      - name: Check SQLite schema
+        run: scripts/dev/schema-check.sh
+
       - name: Run Go tests
         run: go test ./...
