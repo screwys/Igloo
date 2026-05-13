@@ -842,36 +842,49 @@ func (db *DB) PruneStaleOrphanChannelMetadata(cutoffMs int64, limit int) (Channe
 	}
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		rows, err := tx.Query(`
-			SELECT c.channel_id
-			FROM channels c
-			INNER JOIN channel_profiles cp ON cp.channel_id = c.channel_id
-			WHERE COALESCE(cp.fetched_at, 0) > 0
-			  AND COALESCE(cp.fetched_at, 0) < ?
-			  AND NOT EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.channel_id = c.channel_id)
-			  AND NOT EXISTS (SELECT 1 FROM channel_stars cs WHERE cs.channel_id = c.channel_id)
-			  AND NOT EXISTS (SELECT 1 FROM channel_settings cs WHERE cs.channel_id = c.channel_id)
-			  AND NOT EXISTS (SELECT 1 FROM videos v WHERE v.channel_id = c.channel_id)
-			  AND NOT EXISTS (SELECT 1 FROM video_repost_sources vrs WHERE vrs.reposter_channel_id = c.channel_id)
+			WITH candidates AS (
+				SELECT cp.channel_id,
+				       COALESCE(cp.fetched_at, 0) AS fetched_at,
+				       LOWER(COALESCE(NULLIF(cp.platform, ''), NULLIF(c.platform, ''), '')) AS platform,
+				       LOWER(LTRIM(COALESCE(NULLIF(cp.handle, ''),
+				           CASE WHEN LOWER(cp.channel_id) LIKE 'twitter_%' THEN SUBSTR(cp.channel_id, 9) ELSE '' END
+				       ), '@')) AS twitter_handle
+				FROM channel_profiles cp
+				LEFT JOIN channels c ON c.channel_id = cp.channel_id
+			)
+			SELECT candidate.channel_id
+			FROM candidates candidate
+			WHERE candidate.fetched_at > 0
+			  AND candidate.fetched_at < ?
+			  AND NOT EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.channel_id = candidate.channel_id)
+			  AND NOT EXISTS (SELECT 1 FROM channel_stars cs WHERE cs.channel_id = candidate.channel_id)
+			  AND NOT EXISTS (SELECT 1 FROM channel_settings cs WHERE cs.channel_id = candidate.channel_id)
+			  AND NOT EXISTS (SELECT 1 FROM videos v WHERE v.channel_id = candidate.channel_id)
+			  AND NOT EXISTS (SELECT 1 FROM video_repost_sources vrs WHERE vrs.reposter_channel_id = candidate.channel_id)
 			  AND (
-			    (lower(COALESCE(c.platform, '')) != 'twitter' AND lower(c.channel_id) NOT LIKE 'twitter_%')
+			    (candidate.platform != 'twitter' AND LOWER(candidate.channel_id) NOT LIKE 'twitter_%')
 			    OR (
 			      NOT EXISTS (
 			        SELECT 1
 			        FROM feed_items fi
-			        WHERE lower(COALESCE(fi.author_handle, '')) = lower(substr(c.channel_id, 9))
-			           OR lower(COALESCE(fi.source_handle, '')) = lower(substr(c.channel_id, 9))
-			           OR lower(COALESCE(fi.retweeted_by_handle, '')) = lower(substr(c.channel_id, 9))
-			           OR lower(COALESCE(fi.quote_author_handle, '')) = lower(substr(c.channel_id, 9))
-			           OR lower(COALESCE(fi.reply_to_handle, '')) = lower(substr(c.channel_id, 9))
+			        WHERE candidate.twitter_handle != ''
+			          AND (
+			            lower(COALESCE(fi.author_handle, '')) = candidate.twitter_handle
+			            OR lower(COALESCE(fi.source_handle, '')) = candidate.twitter_handle
+			            OR lower(COALESCE(fi.retweeted_by_handle, '')) = candidate.twitter_handle
+			            OR lower(COALESCE(fi.quote_author_handle, '')) = candidate.twitter_handle
+			            OR lower(COALESCE(fi.reply_to_handle, '')) = candidate.twitter_handle
+			          )
 			      )
 			      AND NOT EXISTS (
 			        SELECT 1
 			        FROM retweet_sources rs
-			        WHERE lower(COALESCE(rs.retweeter_handle, '')) = lower(substr(c.channel_id, 9))
+			        WHERE candidate.twitter_handle != ''
+			          AND lower(COALESCE(rs.retweeter_handle, '')) = candidate.twitter_handle
 			      )
 			    )
 			  )
-			ORDER BY COALESCE(cp.fetched_at, 0) ASC, c.channel_id ASC
+			ORDER BY candidate.fetched_at ASC, candidate.channel_id ASC
 			LIMIT ?
 		`, cutoffMs, limit)
 		if err != nil {

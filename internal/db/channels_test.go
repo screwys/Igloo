@@ -308,19 +308,35 @@ func TestPruneStaleOrphanChannelMetadataDropsOnlyOldUnreferencedRows(t *testing.
 	if err := d.FollowChannel("tiktok_sample_followed_old"); err != nil {
 		t.Fatalf("FollowChannel: %v", err)
 	}
+	if err := d.FollowChannel("tiktok_sample_profile_followed_old"); err != nil {
+		t.Fatalf("FollowChannel profile-only: %v", err)
+	}
 	if err := d.InsertVideoWithSourceKind("sample_protected_video", "tiktok_sample_video_old", "Protected", "", 0, "", "", 0, old.UnixMilli(), "", "video", 0, false, ""); err != nil {
 		t.Fatalf("InsertVideoWithSourceKind: %v", err)
 	}
+	if err := d.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, author_handle, source_handle, published_at, fetched_at)
+		VALUES ('sample_profile_ref_tweet', 'sample_profile_ref', 'sample_profile_ref', 1, 1)
+	`); err != nil {
+		t.Fatalf("insert referenced feed item: %v", err)
+	}
 	for channelID, fetchedAt := range map[string]time.Time{
-		"tiktok_sample_old_orphan":   old,
-		"tiktok_sample_new_orphan":   fresh,
-		"tiktok_sample_followed_old": old,
-		"tiktok_sample_video_old":    old,
+		"tiktok_sample_old_orphan":           old,
+		"tiktok_sample_new_orphan":           fresh,
+		"tiktok_sample_followed_old":         old,
+		"tiktok_sample_video_old":            old,
+		"tiktok_sample_profile_only_old":     old,
+		"tiktok_sample_profile_followed_old": old,
+		"twitter_sample_profile_ref":         old,
 	} {
+		platform := "tiktok"
+		if strings.HasPrefix(channelID, "twitter_") {
+			platform = "twitter"
+		}
 		if err := d.UpsertChannelProfile(model.ChannelProfile{
 			ChannelID:   channelID,
-			Platform:    "tiktok",
-			Handle:      strings.TrimPrefix(channelID, "tiktok_"),
+			Platform:    platform,
+			Handle:      strings.TrimPrefix(strings.TrimPrefix(channelID, "tiktok_"), "twitter_"),
 			DisplayName: channelID,
 			AvatarURL:   "https://example.invalid/avatar.jpg",
 			FetchedAt:   &fetchedAt,
@@ -336,21 +352,31 @@ func TestPruneStaleOrphanChannelMetadataDropsOnlyOldUnreferencedRows(t *testing.
 	}); err != nil {
 		t.Fatalf("InsertMediaFile: %v", err)
 	}
+	if err := d.InsertMediaFile(model.MediaFile{
+		OwnerType: "avatar",
+		OwnerID:   "tiktok_sample_profile_only_old",
+		FilePath:  "avatars/tiktok_sample_profile_only_old.jpg",
+		MediaType: "photo",
+	}); err != nil {
+		t.Fatalf("InsertMediaFile profile-only: %v", err)
+	}
 
 	pruned, err := d.PruneStaleOrphanChannelMetadata(now.Add(-30*24*time.Hour).UnixMilli(), 100)
 	if err != nil {
 		t.Fatalf("PruneStaleOrphanChannelMetadata: %v", err)
 	}
-	if pruned.Channels != 1 || pruned.ChannelProfiles != 1 || pruned.MediaFiles != 1 {
-		t.Fatalf("pruned = %+v, want one old orphan channel/profile/media", pruned)
+	if pruned.Channels != 1 || pruned.ChannelProfiles != 2 || pruned.MediaFiles != 2 {
+		t.Fatalf("pruned = %+v, want one old channel plus two old profiles/media files", pruned)
 	}
-	for _, channelID := range []string{"tiktok_sample_new_orphan", "tiktok_sample_followed_old", "tiktok_sample_video_old"} {
+	for _, channelID := range []string{"tiktok_sample_new_orphan", "tiktok_sample_followed_old", "tiktok_sample_video_old", "tiktok_sample_profile_followed_old", "twitter_sample_profile_ref"} {
 		if p, _ := d.GetChannelProfile(channelID); p == nil {
 			t.Fatalf("%s profile should survive stale orphan prune", channelID)
 		}
 	}
-	if p, _ := d.GetChannelProfile("tiktok_sample_old_orphan"); p != nil {
-		t.Fatalf("old orphan profile survived prune")
+	for _, channelID := range []string{"tiktok_sample_old_orphan", "tiktok_sample_profile_only_old"} {
+		if p, _ := d.GetChannelProfile(channelID); p != nil {
+			t.Fatalf("%s profile survived stale orphan prune", channelID)
+		}
 	}
 }
 
