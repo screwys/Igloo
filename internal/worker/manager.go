@@ -195,6 +195,7 @@ func (m *Manager) StartAll() {
 	m.launch("download_pool", m.runDownloadPool)
 	m.launch("preview", m.runPreviewWorker)
 	m.launch("downloader_operation_prune", m.runDownloaderOperationPruner)
+	m.launch("channel_metadata_prune", m.runChannelMetadataPruner)
 	m.startOnce("preview_backfill", m.backfillPreviews)
 	m.startOnce("thumbnail_backfill", m.backfillThumbnails)
 	m.launch("feed_scoring", m.runFeedScoringWorker)
@@ -221,6 +222,31 @@ func (m *Manager) runDownloaderOperationPruner(ctx context.Context) {
 		case <-ticker.C:
 			if err := m.db.PruneDownloaderOperations(db.DownloaderOperationMaxRows, db.DownloaderOperationMaxAge); err != nil {
 				log.Printf("[worker] PruneDownloaderOperations: %v", err)
+			}
+		}
+	}
+}
+
+func (m *Manager) runChannelMetadataPruner(ctx context.Context) {
+	if m == nil || m.db == nil {
+		return
+	}
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cutoffMs := time.Now().Add(-db.StaleOrphanChannelMetadataTTL).UnixMilli()
+			result, err := m.db.PruneStaleOrphanChannelMetadata(cutoffMs, db.ChannelMetadataPruneBatchSize)
+			if err != nil {
+				log.Printf("[worker] PruneStaleOrphanChannelMetadata: %v", err)
+				continue
+			}
+			if result.Channels > 0 || result.ChannelProfiles > 0 || result.MediaFiles > 0 {
+				log.Printf("[worker] pruned stale orphan channel metadata: channels=%d profiles=%d media_files=%d",
+					result.Channels, result.ChannelProfiles, result.MediaFiles)
 			}
 		}
 	}

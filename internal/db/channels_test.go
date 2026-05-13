@@ -1,7 +1,9 @@
 package db
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/screwys/igloo/internal/model"
 )
@@ -221,7 +223,7 @@ func TestDeleteTwitterChannelKeepsProfileAndBanner(t *testing.T) {
 	}
 }
 
-func TestPurgeUnfollowedVideoChannelDropsProfileWhenNoBookmarkSurvives(t *testing.T) {
+func TestPurgeUnfollowedVideoChannelRetainsMetadataWhenNoBookmarkSurvives(t *testing.T) {
 	d := openWritableTestDB(t)
 	if err := d.AddChannel(model.Channel{
 		ChannelID: "tiktok_drop", SourceID: "drop", Name: "Drop", Platform: "tiktok",
@@ -279,11 +281,76 @@ func TestPurgeUnfollowedVideoChannelDropsProfileWhenNoBookmarkSurvives(t *testin
 	if err := d.QueryRow(`SELECT COUNT(*) FROM channels WHERE channel_id='tiktok_drop'`).Scan(&count); err != nil {
 		t.Fatalf("count channel: %v", err)
 	}
-	if count != 0 {
-		t.Fatalf("channel row survived purge")
+	if count != 1 {
+		t.Fatalf("channel row was pruned on unfollow, count=%d", count)
 	}
-	if p, _ := d.GetChannelProfile("tiktok_drop"); p != nil {
-		t.Fatalf("profile row survived purge")
+	if p, _ := d.GetChannelProfile("tiktok_drop"); p == nil {
+		t.Fatalf("profile row should survive unfollow purge")
+	}
+}
+
+func TestPruneStaleOrphanChannelMetadataDropsOnlyOldUnreferencedRows(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	old := now.Add(-31 * 24 * time.Hour)
+	fresh := now.Add(-12 * time.Hour)
+
+	for _, ch := range []model.Channel{
+		{ChannelID: "tiktok_sample_old_orphan", SourceID: "sample_old_orphan", Name: "Old Orphan", Platform: "tiktok"},
+		{ChannelID: "tiktok_sample_new_orphan", SourceID: "sample_new_orphan", Name: "New Orphan", Platform: "tiktok"},
+		{ChannelID: "tiktok_sample_followed_old", SourceID: "sample_followed_old", Name: "Followed Old", Platform: "tiktok"},
+		{ChannelID: "tiktok_sample_video_old", SourceID: "sample_video_old", Name: "Video Old", Platform: "tiktok"},
+	} {
+		if err := d.AddChannel(ch); err != nil {
+			t.Fatalf("AddChannel %s: %v", ch.ChannelID, err)
+		}
+	}
+	if err := d.FollowChannel("tiktok_sample_followed_old"); err != nil {
+		t.Fatalf("FollowChannel: %v", err)
+	}
+	if err := d.InsertVideoWithSourceKind("sample_protected_video", "tiktok_sample_video_old", "Protected", "", 0, "", "", 0, old.UnixMilli(), "", "video", 0, false, ""); err != nil {
+		t.Fatalf("InsertVideoWithSourceKind: %v", err)
+	}
+	for channelID, fetchedAt := range map[string]time.Time{
+		"tiktok_sample_old_orphan":   old,
+		"tiktok_sample_new_orphan":   fresh,
+		"tiktok_sample_followed_old": old,
+		"tiktok_sample_video_old":    old,
+	} {
+		if err := d.UpsertChannelProfile(model.ChannelProfile{
+			ChannelID:   channelID,
+			Platform:    "tiktok",
+			Handle:      strings.TrimPrefix(channelID, "tiktok_"),
+			DisplayName: channelID,
+			AvatarURL:   "https://example.invalid/avatar.jpg",
+			FetchedAt:   &fetchedAt,
+		}); err != nil {
+			t.Fatalf("UpsertChannelProfile %s: %v", channelID, err)
+		}
+	}
+	if err := d.InsertMediaFile(model.MediaFile{
+		OwnerType: "avatar",
+		OwnerID:   "tiktok_sample_old_orphan",
+		FilePath:  "avatars/tiktok_sample_old_orphan.jpg",
+		MediaType: "photo",
+	}); err != nil {
+		t.Fatalf("InsertMediaFile: %v", err)
+	}
+
+	pruned, err := d.PruneStaleOrphanChannelMetadata(now.Add(-30*24*time.Hour).UnixMilli(), 100)
+	if err != nil {
+		t.Fatalf("PruneStaleOrphanChannelMetadata: %v", err)
+	}
+	if pruned.Channels != 1 || pruned.ChannelProfiles != 1 || pruned.MediaFiles != 1 {
+		t.Fatalf("pruned = %+v, want one old orphan channel/profile/media", pruned)
+	}
+	for _, channelID := range []string{"tiktok_sample_new_orphan", "tiktok_sample_followed_old", "tiktok_sample_video_old"} {
+		if p, _ := d.GetChannelProfile(channelID); p == nil {
+			t.Fatalf("%s profile should survive stale orphan prune", channelID)
+		}
+	}
+	if p, _ := d.GetChannelProfile("tiktok_sample_old_orphan"); p != nil {
+		t.Fatalf("old orphan profile survived prune")
 	}
 }
 
