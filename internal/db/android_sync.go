@@ -63,6 +63,21 @@ type AndroidSyncPruneDrainResult struct {
 	Debt   AndroidSyncPruneDebt
 }
 
+type AndroidSyncMaintenanceOptions struct {
+	NowMs     int64
+	Policy    AndroidSyncPrunePolicy
+	MaxPasses int
+}
+
+type AndroidSyncMaintenanceResult struct {
+	StartedAtMs int64
+	EndedAtMs   int64
+	DurationMs  int64
+	Before      AndroidSyncPruneDebt
+	Drain       AndroidSyncPruneDrainResult
+	After       AndroidSyncPruneDebt
+}
+
 func DefaultAndroidSyncPrunePolicy() AndroidSyncPrunePolicy {
 	return AndroidSyncPrunePolicy{
 		KeepReadyGenerations: defaultAndroidSyncKeepReadyGenerations,
@@ -1184,6 +1199,33 @@ func (db *DB) DrainAndroidSyncState(nowMs int64, policy AndroidSyncPrunePolicy, 
 	}
 	out.Debt = debt
 	return out, nil
+}
+
+func (db *DB) RunAndroidSyncMaintenance(opts AndroidSyncMaintenanceOptions) (AndroidSyncMaintenanceResult, error) {
+	started := time.Now()
+	nowMs := opts.NowMs
+	if nowMs <= 0 {
+		nowMs = started.UnixMilli()
+	}
+	policy := normalizeAndroidSyncPrunePolicy(opts.Policy)
+
+	before, err := db.AndroidSyncPruneDebt(nowMs, policy)
+	if err != nil {
+		return AndroidSyncMaintenanceResult{}, err
+	}
+	drain, err := db.DrainAndroidSyncState(nowMs, policy, opts.MaxPasses)
+	if err != nil {
+		return AndroidSyncMaintenanceResult{}, err
+	}
+	ended := time.Now()
+	return AndroidSyncMaintenanceResult{
+		StartedAtMs: started.UnixMilli(),
+		EndedAtMs:   ended.UnixMilli(),
+		DurationMs:  ended.Sub(started).Milliseconds(),
+		Before:      before,
+		Drain:       drain,
+		After:       drain.Debt,
+	}, nil
 }
 
 func (db *DB) AndroidSyncPruneDebt(nowMs int64, policy AndroidSyncPrunePolicy) (AndroidSyncPruneDebt, error) {

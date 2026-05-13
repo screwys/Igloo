@@ -360,6 +360,75 @@ func TestAndroidSyncDrainReportsRemainingDebtWhenBudgetEnds(t *testing.T) {
 	}
 }
 
+func TestAndroidSyncMaintenanceDrainsWithinBudget(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := time.Now().UnixMilli()
+	oldBaseMs := nowMs - int64(48*time.Hour/time.Millisecond)
+	for i := 0; i < 6; i++ {
+		insertAndroidSyncGenerationFixture(t, d, fmt.Sprintf("android-sync-maintenance-%02d", i+1), oldBaseMs+int64(i))
+	}
+
+	result, err := d.RunAndroidSyncMaintenance(AndroidSyncMaintenanceOptions{
+		NowMs: nowMs,
+		Policy: AndroidSyncPrunePolicy{
+			KeepReadyGenerations: 1,
+			KeepMinAge:           6 * time.Hour,
+			KeepHealthReports:    100,
+			MaxGenerationDeletes: 1,
+			MaxItemDeletes:       1,
+			MaxAssetDeletes:      1,
+			MaxHealthDeletes:     1,
+		},
+		MaxPasses: 2,
+	})
+	if err != nil {
+		t.Fatalf("RunAndroidSyncMaintenance: %v", err)
+	}
+	if result.Before.EligibleGenerations != 5 {
+		t.Fatalf("before generations = %d, want 5", result.Before.EligibleGenerations)
+	}
+	if result.Drain.Passes != 2 {
+		t.Fatalf("passes = %d, want 2", result.Drain.Passes)
+	}
+	if result.Drain.GenerationsDeleted != 2 || result.Drain.ItemsDeleted != 2 || result.Drain.AssetsDeleted != 2 || result.Drain.HealthReportsDeleted != 2 {
+		t.Fatalf("deleted = %+v, want two rows per sync table", result.Drain)
+	}
+	if result.After.EligibleGenerations != 3 {
+		t.Fatalf("after generations = %d, want 3", result.After.EligibleGenerations)
+	}
+	if result.DurationMs < 0 {
+		t.Fatalf("duration_ms = %d, want non-negative", result.DurationMs)
+	}
+}
+
+func TestAndroidSyncMaintenanceProtectsGeneration(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := time.Now().UnixMilli()
+	oldBaseMs := nowMs - int64(48*time.Hour/time.Millisecond)
+	for i := 0; i < 4; i++ {
+		insertAndroidSyncGenerationFixture(t, d, fmt.Sprintf("android-sync-maintenance-protect-%02d", i+1), oldBaseMs+int64(i))
+	}
+
+	result, err := d.RunAndroidSyncMaintenance(AndroidSyncMaintenanceOptions{
+		NowMs: nowMs,
+		Policy: AndroidSyncPrunePolicy{
+			KeepReadyGenerations: 1,
+			KeepMinAge:           6 * time.Hour,
+			KeepHealthReports:    100,
+			ProtectGenerationID:  "android-sync-maintenance-protect-01",
+		},
+		MaxPasses: 10,
+	})
+	if err != nil {
+		t.Fatalf("RunAndroidSyncMaintenance: %v", err)
+	}
+	if result.After.EligibleGenerations != 0 {
+		t.Fatalf("after debt = %+v, want none", result.After)
+	}
+	assertAndroidSyncGenerationExists(t, d, "android-sync-maintenance-protect-01", true)
+	assertAndroidSyncGenerationExists(t, d, "android-sync-maintenance-protect-04", true)
+}
+
 func assertAndroidSyncGenerationExists(t *testing.T, d *DB, generationID string, want bool) {
 	t.Helper()
 	var got int
