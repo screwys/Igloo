@@ -16,6 +16,7 @@ func TestUsage(t *testing.T) {
 		"android-sync-maintenance",
 		"asset-inventory-reconcile",
 		"persistence-audit",
+		"query-audit",
 		"sqlite-repack",
 	} {
 		if !strings.Contains(stdout.String(), want) {

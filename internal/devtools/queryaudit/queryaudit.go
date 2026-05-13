@@ -1,0 +1,455 @@
+package queryaudit
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/screwys/igloo/internal/config"
+
+	_ "modernc.org/sqlite"
+)
+
+type Options struct {
+	DBPath   string        `json:"db_path,omitempty"`
+	JSON     bool          `json:"-"`
+	Limit    int           `json:"limit"`
+	Username string        `json:"username"`
+	Search   string        `json:"search"`
+	Probe    string        `json:"probe,omitempty"`
+	Timeout  time.Duration `json:"timeout"`
+	NowMs    int64         `json:"now_ms"`
+}
+
+type Report struct {
+	DBPath string        `json:"db_path"`
+	Limit  int           `json:"limit"`
+	Probes []ProbeReport `json:"probes"`
+}
+
+type ProbeReport struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Lifecycle   string   `json:"lifecycle"`
+	ElapsedMs   int64    `json:"elapsed_ms"`
+	Rows        int      `json:"rows"`
+	Plan        []string `json:"plan"`
+	Error       string   `json:"error,omitempty"`
+}
+
+type probeSpec struct {
+	name        string
+	description string
+	lifecycle   string
+	build       func(Options) (string, []any)
+}
+
+func parseOptions(args []string) (Options, error) {
+	opts := defaultOptions()
+	fs := flag.NewFlagSet("query-audit", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.StringVar(&opts.DBPath, "db", "", "database path; defaults to configured Igloo database")
+	fs.BoolVar(&opts.JSON, "json", false, "print JSON output")
+	fs.IntVar(&opts.Limit, "limit", opts.Limit, "maximum rows to read for each probe")
+	fs.StringVar(&opts.Username, "username", opts.Username, "username used for user-scoped probes")
+	fs.StringVar(&opts.Search, "search", opts.Search, "search term used for search probes")
+	fs.StringVar(&opts.Probe, "probe", "", "run one named probe")
+	fs.DurationVar(&opts.Timeout, "timeout", opts.Timeout, "per-probe timeout")
+	if err := fs.Parse(args); err != nil {
+		return Options{}, err
+	}
+	if fs.NArg() != 0 {
+		return Options{}, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	if opts.Limit <= 0 {
+		return Options{}, fmt.Errorf("limit must be positive")
+	}
+	if opts.Timeout <= 0 {
+		return Options{}, fmt.Errorf("timeout must be positive")
+	}
+	opts.Probe = strings.TrimSpace(opts.Probe)
+	if opts.Probe != "" && !knownProbe(opts.Probe) {
+		return Options{}, fmt.Errorf("unknown probe %q", opts.Probe)
+	}
+	return opts, nil
+}
+
+func defaultOptions() Options {
+	return Options{
+		Limit:    50,
+		Username: "",
+		Search:   "sample",
+		Timeout:  5 * time.Second,
+	}
+}
+
+func Run(args []string, stdout, stderr io.Writer) int {
+	opts, err := parseOptions(args)
+	if err != nil {
+		fmt.Fprintf(stderr, "query audit: %v\n", err)
+		return 2
+	}
+	dbPath := strings.TrimSpace(opts.DBPath)
+	if dbPath == "" {
+		cfg := config.Load()
+		if cfg.ConfigError != nil {
+			fmt.Fprintf(stderr, "query audit: invalid configuration: %v\n", cfg.ConfigError)
+			return 1
+		}
+		dbPath = cfg.DatabasePath
+	}
+	opts.DBPath = dbPath
+
+	report, err := ReadReport(dbPath, opts)
+	if err != nil {
+		fmt.Fprintf(stderr, "query audit: %v\n", err)
+		return 1
+	}
+	if opts.JSON {
+		enc := json.NewEncoder(stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(report); err != nil {
+			fmt.Fprintf(stderr, "query audit: encode JSON: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+	fmt.Fprint(stdout, formatText(report))
+	return 0
+}
+
+func ReadReport(dbPath string, opts Options) (Report, error) {
+	opts = normalizeOptions(opts)
+	dbPath = filepath.Clean(dbPath)
+	conn, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro&_pragma=busy_timeout(5000)", dbPath))
+	if err != nil {
+		return Report{}, fmt.Errorf("open readonly db: %w", err)
+	}
+	defer conn.Close()
+	if err := conn.Ping(); err != nil {
+		return Report{}, fmt.Errorf("ping readonly db: %w", err)
+	}
+
+	report := Report{DBPath: dbPath, Limit: opts.Limit}
+	for _, spec := range selectedProbes(opts.Probe) {
+		report.Probes = append(report.Probes, runProbe(conn, opts, spec))
+	}
+	return report, nil
+}
+
+func normalizeOptions(opts Options) Options {
+	def := defaultOptions()
+	if opts.Limit <= 0 {
+		opts.Limit = def.Limit
+	}
+	if opts.Search == "" {
+		opts.Search = def.Search
+	}
+	if opts.Timeout <= 0 {
+		opts.Timeout = def.Timeout
+	}
+	if opts.NowMs <= 0 {
+		opts.NowMs = time.Now().UnixMilli()
+	}
+	return opts
+}
+
+func runProbe(conn *sql.DB, opts Options, spec probeSpec) ProbeReport {
+	sqlText, args := spec.build(opts)
+	out := ProbeReport{
+		Name:        spec.name,
+		Description: spec.description,
+		Lifecycle:   spec.lifecycle,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), opts.Timeout)
+	defer cancel()
+	plan, err := explainPlan(ctx, conn, sqlText, args)
+	if err != nil {
+		out.Error = err.Error()
+		return out
+	}
+	out.Plan = plan
+
+	started := time.Now()
+	rows, err := readRows(ctx, conn, sqlText, args)
+	out.ElapsedMs = time.Since(started).Milliseconds()
+	if err != nil {
+		out.Error = err.Error()
+		return out
+	}
+	out.Rows = rows
+	return out
+}
+
+func explainPlan(ctx context.Context, conn *sql.DB, sqlText string, args []any) ([]string, error) {
+	rows, err := conn.QueryContext(ctx, "EXPLAIN QUERY PLAN "+sqlText, args...)
+	if err != nil {
+		return nil, fmt.Errorf("explain: %w", err)
+	}
+	defer rows.Close()
+
+	var plan []string
+	for rows.Next() {
+		var id, parent, notUsed int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notUsed, &detail); err != nil {
+			return nil, fmt.Errorf("scan explain: %w", err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate explain: %w", err)
+	}
+	return plan, nil
+}
+
+func readRows(ctx context.Context, conn *sql.DB, sqlText string, args []any) (int, error) {
+	rows, err := conn.QueryContext(ctx, sqlText, args...)
+	if err != nil {
+		return 0, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return 0, fmt.Errorf("columns: %w", err)
+	}
+	values := make([]any, len(cols))
+	scan := make([]any, len(cols))
+	for i := range values {
+		scan[i] = &values[i]
+	}
+	count := 0
+	for rows.Next() {
+		if err := rows.Scan(scan...); err != nil {
+			return count, fmt.Errorf("scan row: %w", err)
+		}
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return count, fmt.Errorf("iterate rows: %w", err)
+	}
+	return count, nil
+}
+
+func formatText(report Report) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "db: %s\n", report.DBPath)
+	fmt.Fprintf(&b, "limit: %d\n", report.Limit)
+	fmt.Fprintln(&b, "query_audit:")
+	for _, probe := range report.Probes {
+		fmt.Fprintf(&b, "  %s:\n", probe.Name)
+		fmt.Fprintf(&b, "    lifecycle: %s\n", probe.Lifecycle)
+		fmt.Fprintf(&b, "    elapsed_ms: %d\n", probe.ElapsedMs)
+		fmt.Fprintf(&b, "    rows: %d\n", probe.Rows)
+		if probe.Error != "" {
+			fmt.Fprintf(&b, "    error: %s\n", probe.Error)
+		}
+		fmt.Fprintln(&b, "    plan:")
+		for _, detail := range probe.Plan {
+			fmt.Fprintf(&b, "      - %s\n", detail)
+		}
+	}
+	return b.String()
+}
+
+func knownProbe(name string) bool {
+	for _, spec := range probeSpecs() {
+		if spec.name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func selectedProbes(name string) []probeSpec {
+	specs := probeSpecs()
+	if name == "" {
+		return specs
+	}
+	for _, spec := range specs {
+		if spec.name == name {
+			return []probeSpec{spec}
+		}
+	}
+	return nil
+}
+
+func probeSpecs() []probeSpec {
+	return []probeSpec{
+		{
+			name:        "feed_snapshot_page",
+			description: "ranked feed snapshot page read",
+			lifecycle:   "derived_cache/archive/user_state",
+			build: func(opts Options) (string, []any) {
+				return `
+					SELECT s.tweet_id, s.rank_position
+					FROM feed_rank_snapshot s
+					JOIN feed_items fi ON fi.tweet_id = s.tweet_id
+					WHERE s.username = ?
+					  AND s.rank_position > 0
+					  AND NOT EXISTS (
+					    SELECT 1
+					    FROM feed_seen fs
+					    WHERE fs.username = s.username
+					      AND fs.tweet_id = fi.tweet_id
+					  )
+					ORDER BY s.rank_position ASC
+					LIMIT ?
+				`, []any{opts.Username, opts.Limit}
+			},
+		},
+		{
+			name:        "videos_shorts_page",
+			description: "short-form video page read for followed channels",
+			lifecycle:   "archive/user_state",
+			build: func(opts Options) (string, []any) {
+				return `
+					SELECT v.video_id, v.published_at
+					FROM videos v
+					JOIN channel_follows cf ON cf.channel_id = v.channel_id AND cf.user_id = ''
+					WHERE (v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
+					  AND COALESCE(v.source_kind, '') != 'story'
+					ORDER BY v.published_at DESC, v.video_id DESC
+					LIMIT ?
+				`, []any{opts.Limit}
+			},
+		},
+		{
+			name:        "android_sync_media_videos",
+			description: "Android sync retained media video set",
+			lifecycle:   "archive/user_state",
+			build: func(opts Options) (string, []any) {
+				cutoff := opts.NowMs - int64(90*24*time.Hour/time.Millisecond)
+				return `
+					SELECT DISTINCT v.video_id
+					FROM videos v
+					WHERE (
+					    v.channel_id LIKE 'youtube_%'
+					    OR v.channel_id LIKE 'tiktok_%'
+					    OR v.channel_id LIKE 'instagram_%'
+					  )
+					  AND (
+					    EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.user_id = '' AND cf.channel_id = v.channel_id)
+					    OR v.video_id IN (SELECT b.video_id FROM bookmarks b WHERE b.user_id = '' OR b.user_id = ?)
+					    OR v.video_id IN (SELECT fl.tweet_id FROM feed_likes fl WHERE fl.username = ?)
+					  )
+					  AND (? = 0 OR COALESCE(v.published_at, 0) >= ?)
+					LIMIT ?
+				`, []any{opts.Username, opts.Username, cutoff, cutoff, opts.Limit}
+			},
+		},
+		{
+			name:        "asset_repair_claim_candidates",
+			description: "asset repair lease candidate read",
+			lifecycle:   "maintained_state",
+			build: func(opts Options) (string, []any) {
+				return `
+					SELECT asset_id
+					FROM assets
+					WHERE (
+					    state = 'queued'
+					    AND (next_attempt_at_ms = 0 OR next_attempt_at_ms <= ?)
+					  )
+					   OR (
+					    state = 'downloading'
+					    AND lease_until_ms > 0
+					    AND lease_until_ms <= ?
+					  )
+					ORDER BY attempts ASC, updated_at_ms ASC, id ASC
+					LIMIT ?
+				`, []any{opts.NowMs, opts.NowMs, opts.Limit}
+			},
+		},
+		{
+			name:        "profile_refresh_candidate",
+			description: "profile refresh candidate read",
+			lifecycle:   "archive",
+			build: func(opts Options) (string, []any) {
+				cutoff := opts.NowMs - int64(24*time.Hour/time.Millisecond)
+				return `
+					SELECT channel_id
+					FROM channel_profiles
+					WHERE tombstone = 0
+					  AND (next_retry_at = 0 OR next_retry_at < ?)
+					  AND (
+					    fetched_at = 0
+					    OR fetched_at < ?
+					    OR (
+					      platform IN ('tiktok', 'instagram')
+					      AND COALESCE(banner_url, '') = ''
+					      AND EXISTS (
+					        SELECT 1
+					        FROM videos v
+					        WHERE v.channel_id = channel_profiles.channel_id
+					          AND COALESCE(v.file_path, '') != ''
+					          AND COALESCE(v.is_temp, 0) = 0
+					      )
+					    )
+					  )
+					ORDER BY fetched_at ASC, channel_id ASC
+					LIMIT ?
+				`, []any{opts.NowMs, cutoff, opts.Limit}
+			},
+		},
+		{
+			name:        "channel_search",
+			description: "channel search fallback read",
+			lifecycle:   "archive/user_state",
+			build: func(opts Options) (string, []any) {
+				prefix := opts.Search + "%"
+				wordStart := "% " + opts.Search + "%"
+				return `
+					SELECT c.channel_id
+					FROM channels c
+					LEFT JOIN channel_stars cs ON cs.channel_id = c.channel_id
+					LEFT JOIN channel_profiles cp ON cp.channel_id = c.channel_id AND cp.tombstone = 0
+					WHERE c.name LIKE ?
+					   OR c.name LIKE ?
+					   OR (c.platform IN ('tiktok','twitter') AND c.source_id LIKE ?)
+					   OR cp.display_name LIKE ?
+					   OR cp.display_name LIKE ?
+					ORDER BY
+						CASE
+							WHEN c.name LIKE ? THEN 0
+							WHEN cp.display_name LIKE ? THEN 0
+							WHEN c.name LIKE ? THEN 1
+							WHEN cp.display_name LIKE ? THEN 1
+							ELSE 2
+						END,
+						CASE WHEN cs.channel_id IS NOT NULL THEN 1 ELSE 0 END DESC,
+						COALESCE(NULLIF(cp.display_name, ''), c.name) COLLATE NOCASE
+					LIMIT ?
+				`, []any{prefix, wordStart, prefix, prefix, wordStart, prefix, prefix, wordStart, wordStart, opts.Limit}
+			},
+		},
+		{
+			name:        "mutation_delta_candidates",
+			description: "Android inbound mutation delta candidate read",
+			lifecycle:   "user_state",
+			build: func(opts Options) (string, []any) {
+				return `
+					SELECT version, type, item_id
+					FROM sync_changes
+					WHERE version > ?
+					  AND type IN (
+					    'like', 'bookmark', 'seen', 'mute',
+					    'follow', 'subscribe', 'unsubscribe', 'star', 'channel_setting',
+					    'moment_view', 'moments_cursor',
+					    'progress', 'watch_progress', 'video_watched',
+					    'create_category', 'bookmark_category', 'bookmark_alias'
+					  )
+					ORDER BY version ASC
+					LIMIT ?
+				`, []any{int64(0), opts.Limit}
+			},
+		},
+	}
+}
