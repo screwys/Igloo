@@ -110,15 +110,6 @@ if ! install_output="$(adb -s "$adb_serial" install -r --user 0 "$apk_path" 2>&1
 else
     printf '%s\n' "$install_output"
 fi
-while IFS= read -r user_id; do
-    [ "$user_id" = "0" ] && continue
-    if adb -s "$adb_serial" shell pm list packages --user "$user_id" 2>/dev/null | grep -qx "package:com.screwy.igloo"; then
-        echo "🧹 Removing secondary-profile install for user $user_id..."
-        adb -s "$adb_serial" shell pm uninstall --user "$user_id" com.screwy.igloo >/dev/null || true
-    fi
-done <<EOF
-$(adb -s "$adb_serial" shell pm list users | sed -n 's/.*UserInfo{\([0-9][0-9]*\):.*/\1/p')
-EOF
 echo "🔄 Relaunching app..."
 adb -s "$adb_serial" shell am force-stop --user 0 com.screwy.igloo
 adb -s "$adb_serial" shell am start --user 0 -n "com.screwy.igloo/.MainActivity" >/dev/null 2>&1 || true
