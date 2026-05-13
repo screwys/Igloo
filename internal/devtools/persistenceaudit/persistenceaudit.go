@@ -13,6 +13,7 @@ import (
 
 	"github.com/screwys/igloo/internal/config"
 	igloodb "github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/persistencebudget"
 
 	_ "modernc.org/sqlite"
 )
@@ -24,15 +25,16 @@ type options struct {
 }
 
 type Report struct {
-	DBPath       string           `json:"db_path"`
-	DBBytes      int64            `json:"db_bytes"`
-	WALBytes     int64            `json:"wal_bytes"`
-	PageSize     int64            `json:"page_size"`
-	PageCount    int64            `json:"page_count"`
-	UsedPages    int64            `json:"used_pages"`
-	Freelist     int64            `json:"freelist_count"`
-	Groups       []LifecycleGroup `json:"groups"`
-	Unclassified []TableReport    `json:"unclassified,omitempty"`
+	DBPath       string                      `json:"db_path"`
+	DBBytes      int64                       `json:"db_bytes"`
+	WALBytes     int64                       `json:"wal_bytes"`
+	PageSize     int64                       `json:"page_size"`
+	PageCount    int64                       `json:"page_count"`
+	UsedPages    int64                       `json:"used_pages"`
+	Freelist     int64                       `json:"freelist_count"`
+	Groups       []LifecycleGroup            `json:"groups"`
+	Warnings     []persistencebudget.Warning `json:"warnings,omitempty"`
+	Unclassified []TableReport               `json:"unclassified,omitempty"`
 }
 
 type LifecycleGroup struct {
@@ -145,7 +147,21 @@ func ReadReport(dbPath string, top int) (Report, error) {
 		return Report{}, err
 	}
 	report.Groups, report.Unclassified = lifecycleGroups(conn, tables, bytesByTable, top)
+	report.Warnings = persistencebudget.Evaluate(budgetGroups(report.Groups))
 	return report, nil
+}
+
+func budgetGroups(groups []LifecycleGroup) []persistencebudget.LifecycleGroup {
+	out := make([]persistencebudget.LifecycleGroup, 0, len(groups))
+	for _, group := range groups {
+		out = append(out, persistencebudget.LifecycleGroup{
+			Lifecycle: group.Lifecycle,
+			Tables:    group.Tables,
+			Rows:      group.Rows,
+			Bytes:     group.Bytes,
+		})
+	}
+	return out
 }
 
 func lifecycleGroups(conn *sql.DB, tables []string, bytesByTable map[string]int64, top int) ([]LifecycleGroup, []TableReport) {
@@ -304,6 +320,12 @@ func formatText(report Report) string {
 		fmt.Fprintf(&b, "  %-18s tables=%d rows=%d size=%s\n", group.Lifecycle+":", group.Tables, group.Rows, formatSize(group.Bytes))
 		for _, table := range group.TopTables {
 			fmt.Fprintf(&b, "    %-30s rows=%d size=%s\n", table.Name, table.Rows, formatSize(table.Bytes))
+		}
+	}
+	if len(report.Warnings) > 0 {
+		b.WriteString("warnings:\n")
+		for _, warning := range report.Warnings {
+			fmt.Fprintf(&b, "  - %s %s/%s: %s\n", warning.Severity, warning.Lifecycle, warning.Code, warning.Message)
 		}
 	}
 	return b.String()

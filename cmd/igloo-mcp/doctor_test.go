@@ -133,6 +133,12 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 	`, now, now); err != nil {
 		t.Fatalf("insert downloader op: %v", err)
 	}
+	if err := d.ExecRaw(`CREATE TABLE custom_lifecycle_probe (id INTEGER PRIMARY KEY, value TEXT)`); err != nil {
+		t.Fatalf("create custom lifecycle probe: %v", err)
+	}
+	if err := d.ExecRaw(`INSERT INTO custom_lifecycle_probe (value) VALUES ('sample')`); err != nil {
+		t.Fatalf("insert custom lifecycle probe: %v", err)
+	}
 	if err := os.MkdirAll(filepath.Join(tmp, "logs"), 0o755); err != nil {
 		t.Fatalf("mkdir logs: %v", err)
 	}
@@ -171,6 +177,9 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 		"maintained_state:",
 		"derived_cache:",
 		"queue:",
+		"unclassified:",
+		"warnings:",
+		"unclassified_tables",
 		"Android sync:",
 		"Queue counts:",
 		"Profile/media readiness:",

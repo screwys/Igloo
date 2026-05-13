@@ -12,6 +12,7 @@ import (
 	"time"
 
 	igloodb "github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/persistencebudget"
 )
 
 func doctorStatus() (string, error) {
@@ -150,7 +151,27 @@ func writeDoctorPersistenceLifecycle(sb *strings.Builder, conn *sql.DB) {
 			fmt.Fprintf(sb, "    %-30s rows=%d size=%s\n", table.name, table.rows, formatSize(table.bytes))
 		}
 	}
+	warnings := persistencebudget.Evaluate(doctorBudgetGroups(groups))
+	if len(warnings) > 0 {
+		sb.WriteString("  warnings:\n")
+		for _, warning := range warnings {
+			fmt.Fprintf(sb, "    - %s %s/%s: %s\n", warning.Severity, warning.Lifecycle, warning.Code, warning.Message)
+		}
+	}
 	sb.WriteString("\n")
+}
+
+func doctorBudgetGroups(groups []doctorPersistenceLifecycle) []persistencebudget.LifecycleGroup {
+	out := make([]persistencebudget.LifecycleGroup, 0, len(groups))
+	for _, group := range groups {
+		out = append(out, persistencebudget.LifecycleGroup{
+			Lifecycle: group.name,
+			Tables:    len(group.tables),
+			Rows:      group.rows,
+			Bytes:     group.bytes,
+		})
+	}
+	return out
 }
 
 func doctorPersistenceLifecycles(conn *sql.DB) ([]doctorPersistenceLifecycle, error) {

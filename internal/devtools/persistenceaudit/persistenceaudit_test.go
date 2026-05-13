@@ -23,6 +23,8 @@ func TestRunReportsLifecycles(t *testing.T) {
 	for _, want := range []string{
 		"db: " + dbPath,
 		"lifecycles:",
+		"warnings:",
+		"unclassified_tables",
 		"archive:",
 		"maintained_state:",
 		"derived_cache:",
@@ -63,6 +65,9 @@ func TestReadReportClassifiesGroups(t *testing.T) {
 	}
 	if len(groups["archive"].TopTables) != 1 || groups["archive"].TopTables[0].Name != "feed_items" {
 		t.Fatalf("archive top tables = %+v", groups["archive"].TopTables)
+	}
+	if len(report.Warnings) == 0 || report.Warnings[0].Code != "unclassified_tables" {
+		t.Fatalf("warnings = %+v, want unclassified_tables", report.Warnings)
 	}
 }
 
