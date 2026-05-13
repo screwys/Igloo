@@ -1,5 +1,7 @@
 .git
 .github
+.direnv
+.devenv
 android
 docs
 plans
@@ -17,6 +19,8 @@ scripts/dev/hooks
 backfill_ghost_media
 igloo
 containers
+result
+result-*
 *.db
 *.db-*
 *.log

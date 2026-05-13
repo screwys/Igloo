@@ -132,6 +132,17 @@ docker run -d --name igloo --restart unless-stopped \
   ghcr.io/screwys/igloo:latest
 ```
 
+Change the host paths before the colon if you want data or config stored
+somewhere else; keep the container paths `/data` and `/config` unchanged.
+
+To build the image locally instead:
+
+```bash
+git clone https://github.com/screwys/igloo
+cd igloo
+docker compose up -d --build
+```
+
 Then open Igloo and create the first admin account in the setup screen:
 
 ```text

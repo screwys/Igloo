@@ -2,7 +2,7 @@
 
 ARG GO_VERSION=1.26
 
-FROM golang:${GO_VERSION}-bookworm AS build
+FROM docker.io/library/golang:${GO_VERSION}-bookworm AS build
 ARG DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /src
@@ -27,7 +27,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/igloo .
     && cp -a static/. /out/static/ \
     && cp -a locales/. /out/locales/
 
-FROM debian:bookworm-slim AS runtime
+FROM docker.io/library/debian:bookworm-slim AS runtime
 ARG DEBIAN_FRONTEND=noninteractive
 # renovate: datasource=pypi packageName=pip versioning=pep440
 ARG PIP_VERSION=26.1.1
@@ -37,7 +37,7 @@ ARG YT_DLP_VERSION=2026.3.17
 ARG GALLERY_DL_VERSION=1.32.1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg python3 python3-venv \
+    && apt-get install -y --no-install-recommends ca-certificates ffmpeg python3 python3-venv \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/igloo-py \
     && /opt/igloo-py/bin/pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" \
@@ -64,6 +64,6 @@ VOLUME ["/data", "/config"]
 EXPOSE 5001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:5001/api/health/live >/dev/null || exit 1
+    CMD ["/usr/bin/python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/api/health/live', timeout=4).read()"]
 
 CMD ["igloo"]
