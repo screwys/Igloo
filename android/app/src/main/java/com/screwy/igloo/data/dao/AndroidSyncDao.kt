@@ -38,12 +38,12 @@ interface AndroidSyncDao {
             generation_id, created_at_ms, status, source_version, retention_json,
             item_count, asset_count, ready_asset_count, server_missing_asset_count,
             total_bytes, content_counts_json, asset_counts_json,
-            items_imported_at_ms, assets_imported_at_ms
+            items_imported_at_ms, assets_imported_at_ms, items_importer_version
         ) VALUES (
             :generationId, :createdAtMs, :status, :sourceVersion, :retentionJson,
             :itemCount, :assetCount, :readyAssetCount, :serverMissingAssetCount,
             :totalBytes, :contentCountsJson, :assetCountsJson,
-            :itemsImportedAtMs, :assetsImportedAtMs
+            :itemsImportedAtMs, :assetsImportedAtMs, :itemsImporterVersion
         )
         ON CONFLICT(generation_id) DO UPDATE SET
             created_at_ms = excluded.created_at_ms,
@@ -58,7 +58,8 @@ interface AndroidSyncDao {
             content_counts_json = excluded.content_counts_json,
             asset_counts_json = excluded.asset_counts_json,
             items_imported_at_ms = COALESCE(android_sync_generations.items_imported_at_ms, excluded.items_imported_at_ms),
-            assets_imported_at_ms = COALESCE(android_sync_generations.assets_imported_at_ms, excluded.assets_imported_at_ms)
+            assets_imported_at_ms = COALESCE(android_sync_generations.assets_imported_at_ms, excluded.assets_imported_at_ms),
+            items_importer_version = android_sync_generations.items_importer_version
         """
     )
     suspend fun upsertGeneration(
@@ -76,6 +77,7 @@ interface AndroidSyncDao {
         assetCountsJson: String,
         itemsImportedAtMs: Long?,
         assetsImportedAtMs: Long?,
+        itemsImporterVersion: Int,
     )
 
     suspend fun upsertGeneration(row: AndroidSyncGenerationEntity) {
@@ -94,6 +96,7 @@ interface AndroidSyncDao {
             assetCountsJson = row.assetCountsJson,
             itemsImportedAtMs = row.itemsImportedAtMs,
             assetsImportedAtMs = row.assetsImportedAtMs,
+            itemsImporterVersion = row.itemsImporterVersion,
         )
     }
 
@@ -111,6 +114,7 @@ interface AndroidSyncDao {
                 ON gen.generation_id = prev.generation_id
               WHERE prev.generation_id != :generationId
                 AND gen.items_imported_at_ms IS NOT NULL
+                AND gen.items_importer_version = :importerVersion
                 AND prev.item_kind = cur.item_kind
                 AND prev.item_id = cur.item_id
                 AND prev.payload_json = cur.payload_json
@@ -122,6 +126,7 @@ interface AndroidSyncDao {
         generationId: String,
         afterSeq: Long,
         toSeq: Long,
+        importerVersion: Int,
     ): List<Long>
 
     @Query("SELECT generation_id FROM android_sync_generations ORDER BY created_at_ms DESC LIMIT 1")
@@ -130,16 +135,17 @@ interface AndroidSyncDao {
     @Query(
         """
         SELECT COUNT(*) FROM (
-            SELECT items_imported_at_ms, assets_imported_at_ms
+            SELECT items_imported_at_ms, assets_imported_at_ms, items_importer_version
             FROM android_sync_generations
             ORDER BY created_at_ms DESC
             LIMIT 1
         )
         WHERE items_imported_at_ms IS NULL
+           OR items_importer_version != :itemImporterVersion
            OR assets_imported_at_ms IS NULL
         """
     )
-    suspend fun countLatestIncompleteImports(): Int
+    suspend fun countLatestIncompleteImports(itemImporterVersion: Int): Int
 
     @Query(
         """
@@ -149,6 +155,19 @@ interface AndroidSyncDao {
         """
     )
     suspend fun countItemsImportComplete(generationId: String): Int
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM android_sync_generations
+        WHERE generation_id = :generationId
+          AND items_imported_at_ms IS NOT NULL
+          AND items_importer_version = :importerVersion
+        """
+    )
+    suspend fun countItemsImportCompleteForImporter(generationId: String, importerVersion: Int): Int
+
+    @Query("SELECT items_importer_version FROM android_sync_generations WHERE generation_id = :generationId")
+    suspend fun itemImporterVersion(generationId: String): Int?
 
     @Query(
         """
@@ -255,8 +274,15 @@ interface AndroidSyncDao {
     )
     fun latestVerifiedVideoLocalPathFlow(ownerId: String): Flow<String?>
 
-    @Query("UPDATE android_sync_generations SET items_imported_at_ms = :nowMs WHERE generation_id = :generationId")
-    suspend fun markItemsImported(generationId: String, nowMs: Long)
+    @Query(
+        """
+        UPDATE android_sync_generations
+        SET items_imported_at_ms = :nowMs,
+            items_importer_version = :importerVersion
+        WHERE generation_id = :generationId
+        """
+    )
+    suspend fun markItemsImported(generationId: String, nowMs: Long, importerVersion: Int)
 
     @Query("UPDATE android_sync_generations SET assets_imported_at_ms = :nowMs WHERE generation_id = :generationId")
     suspend fun markAssetsImported(generationId: String, nowMs: Long)

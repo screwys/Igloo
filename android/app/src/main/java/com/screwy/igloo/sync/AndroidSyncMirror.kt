@@ -37,6 +37,8 @@ private val androidSyncJson: Json = Json {
     encodeDefaults = true
 }
 
+const val ANDROID_SYNC_ITEM_IMPORTER_VERSION = 2
+
 private fun AndroidSyncContentPruneCounts.hasDeletes(): Boolean =
     videos > 0 || feedItems > 0 || channels > 0 || channelProfiles > 0 || legacyAssets > 0 || sideRows > 0
 
@@ -205,16 +207,25 @@ class AndroidSyncMirror(
     }
 
     private suspend fun importItems(generationId: String) {
-        if (dao.countItemsImportComplete(generationId) > 0) {
+        if (dao.countItemsImportCompleteForImporter(generationId, ANDROID_SYNC_ITEM_IMPORTER_VERSION) > 0) {
             logger.info(
                 event = "android_sync_items_import_skipped",
-                fields = mapOf("generation_id" to generationId, "reason" to "already_imported"),
+                fields = mapOf(
+                    "generation_id" to generationId,
+                    "reason" to "already_imported",
+                    "importer_version" to ANDROID_SYNC_ITEM_IMPORTER_VERSION,
+                ),
             )
             return
         }
         val ingest = BundleIngest(db, nowMsProvider)
         val guard = PreserveLocalGuard(outboxDao)
-        val resumeAfter = dao.maxImportedItemSeq(generationId).takeIf { it > 0L }
+        val storedImporterVersion = dao.itemImporterVersion(generationId) ?: 0
+        val resumeAfter = if (storedImporterVersion == ANDROID_SYNC_ITEM_IMPORTER_VERSION) {
+            dao.maxImportedItemSeq(generationId).takeIf { it > 0L }
+        } else {
+            null
+        }
         var after: String? = resumeAfter?.toString()
         var total = resumeAfter?.toInt() ?: 0
         if (resumeAfter != null) {
@@ -233,6 +244,7 @@ class AndroidSyncMirror(
                     generationId = generationId,
                     afterSeq = after?.toLongOrNull() ?: 0L,
                     toSeq = page.items.maxOf { it.seq },
+                    importerVersion = ANDROID_SYNC_ITEM_IMPORTER_VERSION,
                 ).toSet()
                 val skippedUnchanged = page.items.size - changedSeqs.size
                 for (item in page.items) {
@@ -284,10 +296,14 @@ class AndroidSyncMirror(
             }
             after = page.next
         }
-        dao.markItemsImported(generationId, nowMsProvider())
+        dao.markItemsImported(generationId, nowMsProvider(), ANDROID_SYNC_ITEM_IMPORTER_VERSION)
         logger.info(
             event = "android_sync_items_imported",
-            fields = mapOf("generation_id" to generationId, "count" to total),
+            fields = mapOf(
+                "generation_id" to generationId,
+                "count" to total,
+                "importer_version" to ANDROID_SYNC_ITEM_IMPORTER_VERSION,
+            ),
         )
     }
 

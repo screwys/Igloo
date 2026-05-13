@@ -157,7 +157,12 @@ class IglooDatabaseTest {
 
         assertEquals(
             listOf(2L, 3L),
-            dao.changedItemSeqsFromPreviousImportedGenerations("new", afterSeq = 0, toSeq = 3),
+            dao.changedItemSeqsFromPreviousImportedGenerations(
+                generationId = "new",
+                afterSeq = 0,
+                toSeq = 3,
+                importerVersion = 0,
+            ),
         )
     }
 
@@ -173,7 +178,7 @@ class IglooDatabaseTest {
 
         dao.upsertGeneration(androidSyncGeneration("gen"))
 
-        assertEquals(0, dao.countLatestIncompleteImports())
+        assertEquals(0, dao.countLatestIncompleteImports(itemImporterVersion = 0))
     }
 
     @Test fun androidSyncRenameMigrationClearsOnlySyncLedger() {

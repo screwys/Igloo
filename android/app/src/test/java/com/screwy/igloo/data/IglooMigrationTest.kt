@@ -61,7 +61,11 @@ class IglooMigrationTest {
         }
 
         val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
-            .addMigrations(IglooMigrations.MIGRATION_29_30, IglooMigrations.MIGRATION_30_31)
+            .addMigrations(
+                IglooMigrations.MIGRATION_29_30,
+                IglooMigrations.MIGRATION_30_31,
+                IglooMigrations.MIGRATION_31_32,
+            )
             .allowMainThreadQueries()
             .build()
 
@@ -114,7 +118,7 @@ class IglooMigrationTest {
         }
 
         val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
-            .addMigrations(IglooMigrations.MIGRATION_30_31)
+            .addMigrations(IglooMigrations.MIGRATION_30_31, IglooMigrations.MIGRATION_31_32)
             .allowMainThreadQueries()
             .build()
 
@@ -139,6 +143,58 @@ class IglooMigrationTest {
                 assertEquals("1080p", it.getString(2))
                 assertEquals(1234L, it.getLong(3))
                 assertEquals(5678L, it.getLong(4))
+            }
+        } finally {
+            roomDb.close()
+            context.deleteDatabase(dbName)
+        }
+    }
+
+    @Test fun migration31To32AddsItemImporterVersionWithoutDroppingImportMarkers() {
+        val dbName = "igloo-migration-31-32"
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val sqlite = createDatabaseFromSchemaSnapshot(
+            context,
+            dbName,
+            31,
+        )
+        try {
+            sqlite.execSQL(
+                """
+                INSERT INTO android_sync_generations (
+                    generation_id, created_at_ms, status, source_version, retention_json,
+                    item_count, asset_count, ready_asset_count, server_missing_asset_count,
+                    total_bytes, content_counts_json, asset_counts_json,
+                    items_imported_at_ms, assets_imported_at_ms
+                ) VALUES (
+                    'android-v3-old', 1, 'ready', 'source', '{}',
+                    1, 0, 0, 0, 0, '{}', '{}', 123, 456
+                )
+                """.trimIndent(),
+            )
+        } finally {
+            sqlite.close()
+        }
+
+        val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
+            .addMigrations(IglooMigrations.MIGRATION_31_32)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            val readable = roomDb.openHelper.readableDatabase
+            assertEquals(IglooMigrations.CURRENT_SCHEMA_VERSION, readable.version)
+            readable.query(
+                """
+                SELECT items_imported_at_ms, assets_imported_at_ms, items_importer_version
+                FROM android_sync_generations
+                WHERE generation_id = 'android-v3-old'
+                """.trimIndent(),
+            ).use {
+                assertTrue(it.moveToFirst())
+                assertEquals(123L, it.getLong(0))
+                assertEquals(456L, it.getLong(1))
+                assertEquals(0, it.getInt(2))
             }
         } finally {
             roomDb.close()

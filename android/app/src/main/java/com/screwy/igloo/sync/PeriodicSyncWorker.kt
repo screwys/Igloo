@@ -184,7 +184,7 @@ class PeriodicSyncWorker(
             idleStreakRequired = IDLE_STREAK_REQUIRED,
         ) { nowMs ->
             val generationId = syncDao.latestGenerationId()
-            val incompleteImports = syncDao.countLatestIncompleteImports()
+            val incompleteImports = syncDao.countLatestIncompleteImports(ANDROID_SYNC_ITEM_IMPORTER_VERSION)
             val runnerWork = androidSync.hasPendingOrActiveWork()
             val syncAssetWork = if (generationId == null) {
                 0

@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 object IglooMigrations {
     const val SUPPORTED_SCHEMA_BASELINE_VERSION = 29
-    const val CURRENT_SCHEMA_VERSION = 31
+    const val CURRENT_SCHEMA_VERSION = 32
 
     /** Adds `media_inventory.audio_language` for the subtitle auto-on rule. */
     val MIGRATION_7_8 = object : Migration(7, 8) {
@@ -43,7 +43,8 @@ object IglooMigrations {
                     content_counts_json TEXT NOT NULL DEFAULT '{}',
                     asset_counts_json TEXT NOT NULL DEFAULT '{}',
                     items_imported_at_ms INTEGER,
-                    assets_imported_at_ms INTEGER
+                    assets_imported_at_ms INTEGER,
+                    items_importer_version INTEGER NOT NULL DEFAULT 0
                 )
                 """.trimIndent(),
             )
@@ -367,6 +368,12 @@ object IglooMigrations {
         }
     }
 
+    val MIGRATION_31_32 = object : Migration(31, 32) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE android_sync_generations ADD COLUMN items_importer_version INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_7_8,
         MIGRATION_8_9,
@@ -392,5 +399,6 @@ object IglooMigrations {
         MIGRATION_28_29,
         MIGRATION_29_30,
         MIGRATION_30_31,
+        MIGRATION_31_32,
     )
 }

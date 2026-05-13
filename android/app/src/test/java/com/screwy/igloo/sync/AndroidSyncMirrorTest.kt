@@ -369,16 +369,16 @@ class AndroidSyncMirrorTest {
         val item = AndroidSyncItemDto(
             seq = 1,
             item_kind = "videos",
-            item_id = "tiktok_clip_1",
+            item_id = "sample_tiktok_video_1",
             payload = BundleEnvelope(
                 primary_kind = "videos",
                 primary = buildJsonObject {
-                    put("video_id", "tiktok_clip_1")
-                    put("channel_id", "tiktok_alice")
+                    put("video_id", "sample_tiktok_video_1")
+                    put("channel_id", "sample_channel")
                     put("title", "Synced clip")
                     put("duration_label", "1:02:06")
                     put("published_at", 123L)
-                    put("canonical_url", "https://www.tiktok.com/@alice/video/clip_1")
+                    put("canonical_url", "https://www.tiktok.com/@sample_user/video/sample_video_1")
                 },
             ),
         )
@@ -417,10 +417,169 @@ class AndroidSyncMirrorTest {
         buildMirror(engine).syncOnce()
 
         assertEquals(
-            "https://www.tiktok.com/@alice/video/clip_1",
-            db.videoDao().getById("tiktok_clip_1")?.canonicalUrl,
+            "https://www.tiktok.com/@sample_user/video/sample_video_1",
+            db.videoDao().getById("sample_tiktok_video_1")?.canonicalUrl,
         )
-        assertEquals("1:02:06", db.videoDao().getById("tiktok_clip_1")?.durationLabel)
+        assertEquals("1:02:06", db.videoDao().getById("sample_tiktok_video_1")?.durationLabel)
+    }
+
+    @Test fun itemImportReplaysGenerationImportedByOlderProjectionVersion() = runBlocking {
+        val dao = db.androidSyncDao()
+        val item = AndroidSyncItemDto(
+            seq = 1,
+            item_kind = "videos",
+            item_id = "sample_tiktok_video_1",
+            payload = BundleEnvelope(
+                primary_kind = "videos",
+                primary = buildJsonObject {
+                    put("video_id", "sample_tiktok_video_1")
+                    put("channel_id", "sample_channel")
+                    put("title", "Synced clip")
+                    put("published_at", 123L)
+                    put("canonical_url", "https://www.tiktok.com/@sample_user/video/sample_video_1")
+                },
+            ),
+        )
+        dao.upsertGeneration(
+            generationEntity(
+                generationId = GENERATION_ID,
+                createdAtMs = nowMs,
+                itemsImportedAtMs = nowMs - 1,
+            ),
+        )
+        db.videoDao().upsert(
+            VideoEntity(
+                videoId = "sample_tiktok_video_1",
+                channelId = "sample_channel",
+                title = "Old clip",
+                publishedAt = 123L,
+                canonicalUrl = null,
+            ),
+        )
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = GENERATION_ID,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                            item_count = 1,
+                        ),
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/items" -> respondJson(
+                    AndroidSyncItemsResponse(
+                        generation_id = GENERATION_ID,
+                        items = listOf(item),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/assets" -> respondJson(
+                    AndroidSyncAssetsResponse(
+                        generation_id = GENERATION_ID,
+                        assets = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        buildMirror(engine).syncOnce()
+
+        assertEquals(
+            "https://www.tiktok.com/@sample_user/video/sample_video_1",
+            db.videoDao().getById("sample_tiktok_video_1")?.canonicalUrl,
+        )
+    }
+
+    @Test fun unchangedPayloadFromOlderProjectionVersionStillRefreshesLocalProjection() = runBlocking {
+        val dao = db.androidSyncDao()
+        val oldGenerationId = "android-sync-old"
+        val currentGenerationId = "android-sync-current"
+        val item = AndroidSyncItemDto(
+            seq = 1,
+            item_kind = "videos",
+            item_id = "sample_tiktok_video_1",
+            payload = BundleEnvelope(
+                primary_kind = "videos",
+                primary = buildJsonObject {
+                    put("video_id", "sample_tiktok_video_1")
+                    put("channel_id", "sample_channel")
+                    put("title", "Synced clip")
+                    put("published_at", 123L)
+                    put("canonical_url", "https://www.tiktok.com/@sample_user/video/sample_video_1")
+                },
+            ),
+        )
+        dao.upsertGeneration(
+            generationEntity(
+                generationId = oldGenerationId,
+                createdAtMs = nowMs - 1,
+                itemsImportedAtMs = nowMs - 1,
+            ),
+        )
+        dao.upsertItems(
+            listOf(
+                AndroidSyncItemEntity(
+                    generationId = oldGenerationId,
+                    seq = item.seq,
+                    itemKind = item.item_kind,
+                    itemId = item.item_id,
+                    payloadJson = iglooJson.encodeToString(item.payload),
+                ),
+            ),
+        )
+        db.videoDao().upsert(
+            VideoEntity(
+                videoId = "sample_tiktok_video_1",
+                channelId = "sample_channel",
+                title = "Old clip",
+                publishedAt = 123L,
+                canonicalUrl = null,
+            ),
+        )
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = currentGenerationId,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                            item_count = 1,
+                        ),
+                    ),
+                )
+                "/api/android/sync/generation/$currentGenerationId/items" -> respondJson(
+                    AndroidSyncItemsResponse(
+                        generation_id = currentGenerationId,
+                        items = listOf(item),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/generation/$currentGenerationId/assets" -> respondJson(
+                    AndroidSyncAssetsResponse(
+                        generation_id = currentGenerationId,
+                        assets = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        buildMirror(engine).syncOnce()
+
+        assertEquals(
+            "https://www.tiktok.com/@sample_user/video/sample_video_1",
+            db.videoDao().getById("sample_tiktok_video_1")?.canonicalUrl,
+        )
     }
 
     @Test fun feedRankSnapshotIsImportedFromAndroidSyncPayload() = runBlocking {
@@ -1283,7 +1442,12 @@ class AndroidSyncMirrorTest {
 
     private fun jsonHeaders() = headersOf("Content-Type", ContentType.Application.Json.toString())
 
-    private fun generationEntity(generationId: String, createdAtMs: Long) = AndroidSyncGenerationEntity(
+    private fun generationEntity(
+        generationId: String,
+        createdAtMs: Long,
+        itemsImportedAtMs: Long? = null,
+        assetsImportedAtMs: Long? = null,
+    ) = AndroidSyncGenerationEntity(
         generationId = generationId,
         createdAtMs = createdAtMs,
         status = "ready",
@@ -1294,6 +1458,8 @@ class AndroidSyncMirrorTest {
         readyAssetCount = 1,
         serverMissingAssetCount = 0,
         totalBytes = 0,
+        itemsImportedAtMs = itemsImportedAtMs,
+        assetsImportedAtMs = assetsImportedAtMs,
     )
 
     private companion object {

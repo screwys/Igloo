@@ -478,6 +478,7 @@ data class AndroidSyncGenerationEntity(
     @ColumnInfo(name = "asset_counts_json") val assetCountsJson: String = "{}",
     @ColumnInfo(name = "items_imported_at_ms") val itemsImportedAtMs: Long? = null,
     @ColumnInfo(name = "assets_imported_at_ms") val assetsImportedAtMs: Long? = null,
+    @ColumnInfo(name = "items_importer_version", defaultValue = "0") val itemsImporterVersion: Int = 0,
 )
 
 @Entity(
