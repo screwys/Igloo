@@ -240,7 +240,7 @@ func TestAndroidSyncLatestKeepsStaleSourceReusePageableAfterPrune(t *testing.T) 
 	}
 }
 
-func TestAndroidSyncLatestRequestPruneLeavesBatchRemainderEligible(t *testing.T) {
+func TestAndroidSyncLatestRequestPruneDrainsBatchRemainder(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	nowMs := time.Now().UnixMilli()
 	oldBaseMs := nowMs - int64(48*time.Hour/time.Millisecond)
@@ -258,18 +258,8 @@ func TestAndroidSyncLatestRequestPruneLeavesBatchRemainderEligible(t *testing.T)
 	}
 
 	remainingSeedGenerations := countAndroidSyncGenerationsForWebTest(t, srv.db, "android-sync-web-batch-prune-%")
-	if remainingSeedGenerations <= 1 {
-		t.Fatalf("request prune removed all eligible old generations in one response path; remaining=%d", remainingSeedGenerations)
-	}
-
-	for i := 0; i < 10 && remainingSeedGenerations > 1; i++ {
-		if _, err := srv.db.PruneAndroidSyncState(time.Now().UnixMilli(), db.DefaultAndroidSyncPrunePolicy()); err != nil {
-			t.Fatalf("follow-up prune %d: %v", i+1, err)
-		}
-		remainingSeedGenerations = countAndroidSyncGenerationsForWebTest(t, srv.db, "android-sync-web-batch-prune-%")
-	}
 	if remainingSeedGenerations != 1 {
-		t.Fatalf("remaining old generations after follow-up prunes = %d, want 1 newest seed generation", remainingSeedGenerations)
+		t.Fatalf("remaining old generations after request drain = %d, want 1 newest seed generation", remainingSeedGenerations)
 	}
 }
 

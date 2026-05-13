@@ -267,6 +267,99 @@ func TestAndroidSyncPruneBoundsHealthReportsIndependently(t *testing.T) {
 	}
 }
 
+func TestAndroidSyncPruneDebtReportsEligibleRows(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := time.Now().UnixMilli()
+	oldBaseMs := nowMs - int64(48*time.Hour/time.Millisecond)
+	for i := 0; i < 4; i++ {
+		insertAndroidSyncGenerationFixture(t, d, fmt.Sprintf("android-sync-debt-%02d", i+1), oldBaseMs+int64(i))
+	}
+
+	debt, err := d.AndroidSyncPruneDebt(nowMs, AndroidSyncPrunePolicy{
+		KeepReadyGenerations: 1,
+		KeepMinAge:           6 * time.Hour,
+		KeepHealthReports:    100,
+	})
+	if err != nil {
+		t.Fatalf("AndroidSyncPruneDebt: %v", err)
+	}
+	if debt.EligibleGenerations != 3 || debt.EligibleItems != 3 || debt.EligibleAssets != 3 || debt.EligibleHealthReports != 3 {
+		t.Fatalf("debt = %+v, want three eligible generations/items/assets/health reports", debt)
+	}
+}
+
+func TestAndroidSyncDrainPrunesUntilDebtClears(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := time.Now().UnixMilli()
+	oldBaseMs := nowMs - int64(48*time.Hour/time.Millisecond)
+	for i := 0; i < 5; i++ {
+		insertAndroidSyncGenerationFixture(t, d, fmt.Sprintf("android-sync-drain-%02d", i+1), oldBaseMs+int64(i))
+	}
+	policy := AndroidSyncPrunePolicy{
+		KeepReadyGenerations: 1,
+		KeepMinAge:           6 * time.Hour,
+		KeepHealthReports:    100,
+		MaxGenerationDeletes: 1,
+		MaxItemDeletes:       1,
+		MaxAssetDeletes:      1,
+		MaxHealthDeletes:     1,
+	}
+
+	first, err := d.PruneAndroidSyncState(nowMs, policy)
+	if err != nil {
+		t.Fatalf("PruneAndroidSyncState: %v", err)
+	}
+	if first.GenerationsDeleted != 1 || first.ItemsDeleted != 1 || first.AssetsDeleted != 1 || first.HealthReportsDeleted != 1 {
+		t.Fatalf("single prune result = %+v, want one fully pruned generation", first)
+	}
+
+	result, err := d.DrainAndroidSyncState(nowMs, policy, 10)
+	if err != nil {
+		t.Fatalf("DrainAndroidSyncState: %v", err)
+	}
+	if result.Passes != 3 {
+		t.Fatalf("drain passes = %d, want 3 result=%+v", result.Passes, result)
+	}
+	if result.GenerationsDeleted != 3 || result.ItemsDeleted != 3 || result.AssetsDeleted != 3 || result.HealthReportsDeleted != 3 {
+		t.Fatalf("drain result = %+v, want remaining eligible rows deleted", result)
+	}
+	if result.Debt.EligibleGenerations != 0 || result.Debt.EligibleItems != 0 || result.Debt.EligibleAssets != 0 || result.Debt.EligibleHealthReports != 0 {
+		t.Fatalf("remaining debt = %+v, want none", result.Debt)
+	}
+	if remaining := countAndroidSyncGenerations(t, d, "android-sync-drain-%"); remaining != 1 {
+		t.Fatalf("remaining generations = %d, want newest retained generation only", remaining)
+	}
+}
+
+func TestAndroidSyncDrainReportsRemainingDebtWhenBudgetEnds(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := time.Now().UnixMilli()
+	oldBaseMs := nowMs - int64(48*time.Hour/time.Millisecond)
+	for i := 0; i < 5; i++ {
+		insertAndroidSyncGenerationFixture(t, d, fmt.Sprintf("android-sync-drain-budget-%02d", i+1), oldBaseMs+int64(i))
+	}
+	policy := AndroidSyncPrunePolicy{
+		KeepReadyGenerations: 1,
+		KeepMinAge:           6 * time.Hour,
+		KeepHealthReports:    100,
+		MaxGenerationDeletes: 1,
+		MaxItemDeletes:       1,
+		MaxAssetDeletes:      1,
+		MaxHealthDeletes:     1,
+	}
+
+	result, err := d.DrainAndroidSyncState(nowMs, policy, 1)
+	if err != nil {
+		t.Fatalf("DrainAndroidSyncState: %v", err)
+	}
+	if result.Passes != 1 {
+		t.Fatalf("drain passes = %d, want 1", result.Passes)
+	}
+	if result.Debt.EligibleGenerations == 0 || result.Debt.EligibleItems == 0 || result.Debt.EligibleAssets == 0 || result.Debt.EligibleHealthReports == 0 {
+		t.Fatalf("remaining debt = %+v, want non-zero debt after budget-limited drain", result.Debt)
+	}
+}
+
 func assertAndroidSyncGenerationExists(t *testing.T, d *DB, generationID string, want bool) {
 	t.Helper()
 	var got int

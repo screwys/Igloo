@@ -27,6 +27,9 @@ const (
 	defaultAndroidSyncPruneGenerationBatch = 50
 	defaultAndroidSyncPruneRowBatch        = 2000
 	defaultAndroidSyncPruneHealthBatch     = 2000
+	// DefaultAndroidSyncPruneDrainPasses caps how many bounded prune batches a
+	// request path may run before reporting remaining debt.
+	DefaultAndroidSyncPruneDrainPasses = 16
 )
 
 type AndroidSyncPrunePolicy struct {
@@ -45,6 +48,19 @@ type AndroidSyncPruneResult struct {
 	ItemsDeleted         int
 	AssetsDeleted        int
 	HealthReportsDeleted int
+}
+
+type AndroidSyncPruneDebt struct {
+	EligibleGenerations   int
+	EligibleItems         int
+	EligibleAssets        int
+	EligibleHealthReports int
+}
+
+type AndroidSyncPruneDrainResult struct {
+	AndroidSyncPruneResult
+	Passes int
+	Debt   AndroidSyncPruneDebt
 }
 
 func DefaultAndroidSyncPrunePolicy() AndroidSyncPrunePolicy {
@@ -1138,6 +1154,104 @@ func (db *DB) PruneAndroidSyncState(nowMs int64, policy AndroidSyncPrunePolicy) 
 		return nil
 	})
 	return result, err
+}
+
+func (db *DB) DrainAndroidSyncState(nowMs int64, policy AndroidSyncPrunePolicy, maxPasses int) (AndroidSyncPruneDrainResult, error) {
+	policy = normalizeAndroidSyncPrunePolicy(policy)
+	if maxPasses <= 0 {
+		maxPasses = DefaultAndroidSyncPruneDrainPasses
+	}
+
+	var out AndroidSyncPruneDrainResult
+	for pass := 0; pass < maxPasses; pass++ {
+		result, err := db.PruneAndroidSyncState(nowMs, policy)
+		if err != nil {
+			return out, err
+		}
+		if result.isZero() {
+			break
+		}
+		out.Passes++
+		out.GenerationsDeleted += result.GenerationsDeleted
+		out.ItemsDeleted += result.ItemsDeleted
+		out.AssetsDeleted += result.AssetsDeleted
+		out.HealthReportsDeleted += result.HealthReportsDeleted
+	}
+
+	debt, err := db.AndroidSyncPruneDebt(nowMs, policy)
+	if err != nil {
+		return out, err
+	}
+	out.Debt = debt
+	return out, nil
+}
+
+func (db *DB) AndroidSyncPruneDebt(nowMs int64, policy AndroidSyncPrunePolicy) (AndroidSyncPruneDebt, error) {
+	policy = normalizeAndroidSyncPrunePolicy(policy)
+	cutoffMs := nowMs - int64(policy.KeepMinAge/time.Millisecond)
+	var debt AndroidSyncPruneDebt
+	err := db.WithRead(func(conn *sql.DB) error {
+		return conn.QueryRow(`
+			WITH retained_ready(generation_id) AS (
+				SELECT generation_id
+				FROM android_sync_generations
+				WHERE status = 'ready'
+				ORDER BY created_at_ms DESC, generation_id DESC
+				LIMIT ?
+			),
+			eligible_generations(generation_id) AS (
+				SELECT g.generation_id
+				FROM android_sync_generations g
+				WHERE g.status = 'ready'
+				  AND g.created_at_ms < ?
+				  AND g.generation_id != ?
+				  AND NOT EXISTS (
+					SELECT 1
+					FROM retained_ready rr
+					WHERE rr.generation_id = g.generation_id
+				  )
+			),
+			overflow_health(id) AS (
+				SELECT h.id
+				FROM android_sync_health_reports h
+				WHERE h.id NOT IN (
+					SELECT kept.id
+					FROM android_sync_health_reports kept
+					ORDER BY kept.reported_at_ms DESC, kept.id DESC
+					LIMIT ?
+				)
+			),
+			health_debt(id) AS (
+				SELECT h.id
+				FROM android_sync_health_reports h
+				INNER JOIN eligible_generations eg ON eg.generation_id = h.generation_id
+				UNION
+				SELECT id FROM overflow_health
+			)
+			SELECT
+				(SELECT COUNT(*) FROM eligible_generations),
+				(SELECT COUNT(*)
+				 FROM android_sync_items i
+				 INNER JOIN eligible_generations eg ON eg.generation_id = i.generation_id),
+				(SELECT COUNT(*)
+				 FROM android_sync_assets a
+				 INNER JOIN eligible_generations eg ON eg.generation_id = a.generation_id),
+				(SELECT COUNT(*) FROM health_debt)
+		`, policy.KeepReadyGenerations, cutoffMs, policy.ProtectGenerationID, policy.KeepHealthReports).Scan(
+			&debt.EligibleGenerations,
+			&debt.EligibleItems,
+			&debt.EligibleAssets,
+			&debt.EligibleHealthReports,
+		)
+	})
+	return debt, err
+}
+
+func (r AndroidSyncPruneResult) isZero() bool {
+	return r.GenerationsDeleted == 0 &&
+		r.ItemsDeleted == 0 &&
+		r.AssetsDeleted == 0 &&
+		r.HealthReportsDeleted == 0
 }
 
 func normalizeAndroidSyncPrunePolicy(policy AndroidSyncPrunePolicy) AndroidSyncPrunePolicy {

@@ -31,6 +31,43 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 	`, now); err != nil {
 		t.Fatalf("insert generation: %v", err)
 	}
+	for i, generationID := range []string{"android-sync-doctor-old-1", "android-sync-doctor-old-2"} {
+		createdAtMs := now - int64(48-i)*int64(time.Hour/time.Millisecond)
+		if err := d.ExecRaw(`
+			INSERT INTO android_sync_generations (
+				generation_id, created_at_ms, status, source_version, retention_json,
+				item_count, asset_count, ready_asset_count, server_missing_asset_count,
+				total_bytes, content_counts_json, asset_counts_json
+			) VALUES (?, ?, 'ready', ?, '{}', 1, 1, 1, 0, 1, '{}', '{}')
+		`, generationID, createdAtMs, generationID+"-source"); err != nil {
+			t.Fatalf("insert old generation %s: %v", generationID, err)
+		}
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO android_sync_items (generation_id, seq, item_kind, item_id, payload_json)
+		VALUES ('android-sync-doctor-old-1', 1, 'videos', 'doctor-video-old', '{}')
+	`); err != nil {
+		t.Fatalf("insert old sync item: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO android_sync_assets (
+			generation_id, seq, asset_id, asset_kind, owner_id, owner_kind,
+			bucket, server_url, content_type, size_bytes, sha256, state,
+			required_reason, effective_recency_ms
+		) VALUES ('android-sync-doctor-old-1', 1, 'doctor-asset-old', 'video_stream',
+			'doctor-video-old', 'video', 'videos', '/asset', 'video/mp4', 1, 'sha',
+			'ready', 'retention', 1)
+	`); err != nil {
+		t.Fatalf("insert old sync asset: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO android_sync_health_reports (
+			generation_id, reported_at_ms, payload_json, verified_assets,
+			pending_assets, failed_assets, missing_assets, total_assets, verified_bytes
+		) VALUES ('android-sync-doctor-old-1', 1, '{}', 1, 0, 0, 0, 1, 1)
+	`); err != nil {
+		t.Fatalf("insert old sync health: %v", err)
+	}
 	if err := d.ExecRaw(`
 		INSERT INTO channel_profiles (channel_id, platform, handle, display_name, avatar_url, banner_url)
 		VALUES ('twitter_sample_profile', 'twitter', 'sample_profile', 'Doctor', 'https://cdn.example.invalid/avatar.jpg', 'https://cdn.example.invalid/banner.jpg')
@@ -75,6 +112,7 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 		"Downloader failures:",
 		"Recent high-signal log errors:",
 		"android-sync-doctor",
+		"prune eligible: generations=1 items=1 assets=1 health_reports=1",
 		"network=1",
 	} {
 		if !strings.Contains(report, want) {

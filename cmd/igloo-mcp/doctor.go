@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	igloodb "github.com/screwys/igloo/internal/db"
 )
 
 func doctorStatus() (string, error) {
@@ -109,7 +111,84 @@ func writeDoctorAndroidSync(sb *strings.Builder, conn *sql.DB) {
 			missing.Int64,
 		)
 	}
+	if debt, err := doctorAndroidSyncPruneDebt(conn, time.Now().UnixMilli(), igloodb.DefaultAndroidSyncPrunePolicy()); err == nil {
+		fmt.Fprintf(
+			sb,
+			"  prune eligible: generations=%d items=%d assets=%d health_reports=%d\n",
+			debt.generations,
+			debt.items,
+			debt.assets,
+			debt.healthReports,
+		)
+	} else {
+		fmt.Fprintf(sb, "  prune eligible: unavailable: %v\n", err)
+	}
 	sb.WriteString("\n")
+}
+
+type doctorPruneDebt struct {
+	generations   int
+	items         int
+	assets        int
+	healthReports int
+}
+
+func doctorAndroidSyncPruneDebt(conn *sql.DB, nowMs int64, policy igloodb.AndroidSyncPrunePolicy) (doctorPruneDebt, error) {
+	cutoffMs := nowMs - int64(policy.KeepMinAge/time.Millisecond)
+	var debt doctorPruneDebt
+	err := conn.QueryRow(`
+		WITH retained_ready(generation_id) AS (
+			SELECT generation_id
+			FROM android_sync_generations
+			WHERE status = 'ready'
+			ORDER BY created_at_ms DESC, generation_id DESC
+			LIMIT ?
+		),
+		eligible_generations(generation_id) AS (
+			SELECT g.generation_id
+			FROM android_sync_generations g
+			WHERE g.status = 'ready'
+			  AND g.created_at_ms < ?
+			  AND g.generation_id != ?
+			  AND NOT EXISTS (
+				SELECT 1
+				FROM retained_ready rr
+				WHERE rr.generation_id = g.generation_id
+			  )
+		),
+		overflow_health(id) AS (
+			SELECT h.id
+			FROM android_sync_health_reports h
+			WHERE h.id NOT IN (
+				SELECT kept.id
+				FROM android_sync_health_reports kept
+				ORDER BY kept.reported_at_ms DESC, kept.id DESC
+				LIMIT ?
+			)
+		),
+		health_debt(id) AS (
+			SELECT h.id
+			FROM android_sync_health_reports h
+			INNER JOIN eligible_generations eg ON eg.generation_id = h.generation_id
+			UNION
+			SELECT id FROM overflow_health
+		)
+		SELECT
+			(SELECT COUNT(*) FROM eligible_generations),
+			(SELECT COUNT(*)
+			 FROM android_sync_items i
+			 INNER JOIN eligible_generations eg ON eg.generation_id = i.generation_id),
+			(SELECT COUNT(*)
+			 FROM android_sync_assets a
+			 INNER JOIN eligible_generations eg ON eg.generation_id = a.generation_id),
+			(SELECT COUNT(*) FROM health_debt)
+	`, policy.KeepReadyGenerations, cutoffMs, policy.ProtectGenerationID, policy.KeepHealthReports).Scan(
+		&debt.generations,
+		&debt.items,
+		&debt.assets,
+		&debt.healthReports,
+	)
+	return debt, err
 }
 
 func writeDoctorQueues(sb *strings.Builder, conn *sql.DB) {
