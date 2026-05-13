@@ -114,10 +114,17 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /\n  id-token: write\n/);
   assert.match(workflow, /\n  attestations: write\n/);
   assert.match(workflow, /\n        id: build\n/);
+  assert.match(workflow, /DeterminateSystems\/determinate-nix-action@v3/);
+  assert.match(workflow, /nix build \.#container --print-build-logs/);
+  assert.match(workflow, /docker load < result/);
+  assert.match(workflow, /SOURCE_IMAGE: ghcr\.io\/screwys\/igloo:latest/);
+  assert.match(workflow, /docker tag "\$SOURCE_IMAGE" "\$tag"/);
+  assert.match(workflow, /docker push "\$tag"/);
   assert.match(workflow, /uses: actions\/attest@v4/);
   assert.match(workflow, /subject-name: ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/igloo/);
   assert.match(workflow, /subject-digest: \$\{\{ steps\.build\.outputs\.digest \}\}/);
   assert.match(workflow, /push-to-registry: true/);
+  assert.doesNotMatch(workflow, /docker\/build-push-action/);
 });
 
 test("Android release publishes signed provenance attestation for the APK", () => {
