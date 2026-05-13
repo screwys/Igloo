@@ -124,7 +124,7 @@ val ktorVersion = "3.4.3"
 val lifecycleVersion = "2.10.0"
 val koinVersion = "4.2.1"
 val coilVersion = "3.4.0"
-val media3Version = "1.10.0"
+val media3Version = "1.10.1"
 val asmVersion = "9.9.1"
 
 dependencies {
