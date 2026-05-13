@@ -25,6 +25,7 @@ static/js/dist/
 .igloo_mcp_cache/
 __pycache__/
 *.info.json
+.mcp.json
 
 # Worktrees
 .worktrees/
