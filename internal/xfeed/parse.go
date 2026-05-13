@@ -204,20 +204,20 @@ func feedItemFromMeta(d map[string]any, fallbackSourceHandle string, media []mod
 	if tid == "" {
 		return FeedItem{}
 	}
-	author := authorHandle(d)
-	if !ValidHandle(author) {
-		return FeedItem{}
-	}
 	source := userHandle(d)
 	if source == "" {
 		source = NormalizeHandle(fallbackSourceHandle)
 	}
-	if source == "" {
-		source = author
-	}
 
 	retweetID := firstString(d, "retweet_id")
 	isRetweet := retweetID != "" && retweetID != "0"
+	author := model.EffectiveTwitterAuthorHandle(authorHandle(d), source, isRetweet)
+	if !ValidHandle(author) {
+		return FeedItem{}
+	}
+	if source == "" {
+		source = author
+	}
 	canonicalTweetID := tid
 	if isRetweet && ValidTweetID(retweetID) {
 		canonicalTweetID = retweetID

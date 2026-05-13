@@ -327,6 +327,15 @@ func (s *Server) handleFeedInteraction(w http.ResponseWriter, r *http.Request) {
 // feedItemToJSON converts a FeedItem to a JSON-serializable map matching Android's FeedItemDto.
 func feedItemToJSON(item model.FeedItem, bookmarkInfo map[string]db.BookmarkInfo, subscribeURLs map[string]string) map[string]any {
 	canonicalURL := canonicalFeedItemURL(item)
+	authorHandle := model.EffectiveTwitterAuthorHandle(item.AuthorHandle, item.SourceHandle, item.IsRetweet)
+	channelID := item.ChannelID
+	if model.IsPlaceholderTwitterHandle(strings.TrimPrefix(channelID, "twitter_")) && !model.IsPlaceholderTwitterHandle(authorHandle) {
+		channelID = "twitter_" + strings.ToLower(strings.TrimPrefix(authorHandle, "@"))
+	}
+	authorAvatarURL := item.AuthorAvatarURL
+	if channelID != "" && (authorAvatarURL == "" || strings.Contains(strings.ToLower(authorAvatarURL), "/twitter_unknown")) {
+		authorAvatarURL = "/api/media/avatar/" + channelID
+	}
 	m := map[string]any{
 		"tweet_id":                  item.TweetID,
 		"title":                     item.BodyText,
@@ -334,10 +343,10 @@ func feedItemToJSON(item model.FeedItem, bookmarkInfo map[string]db.BookmarkInfo
 		"canonical_x_link":          canonicalURL,
 		"canonical_url":             canonicalURL,
 		"source_handle":             item.SourceHandle,
-		"author_handle":             item.AuthorHandle,
+		"author_handle":             authorHandle,
 		"author_display_name":       item.AuthorDisplayName,
-		"author_avatar_url":         item.AuthorAvatarURL,
-		"avatar_url":                item.AuthorAvatarURL,
+		"author_avatar_url":         authorAvatarURL,
+		"avatar_url":                authorAvatarURL,
 		"body_text":                 item.BodyText,
 		"lang":                      item.Lang,
 		"is_retweet":                item.IsRetweet,
@@ -354,10 +363,10 @@ func feedItemToJSON(item model.FeedItem, bookmarkInfo map[string]db.BookmarkInfo
 		"is_bookmarked":             item.IsBookmarked,
 		"is_seen":                   item.IsSeen,
 		"algo_interest_score":       item.AlgoInterestScore,
-		"channel_id":                item.ChannelID,
+		"channel_id":                channelID,
 		"channel_is_followed":       item.ChannelIsFollowed,
 		"channel_is_starred":        item.ChannelIsStarred,
-		"subscribe_url":             subscribeURLs[item.ChannelID],
+		"subscribe_url":             subscribeURLs[channelID],
 		"platform":                  "x",
 		"media_status":              item.MediaStatus,
 		"media_kind":                item.MediaKind,
@@ -485,8 +494,9 @@ func canonicalFeedItemQuoteURL(item model.FeedItem) string {
 
 func canonicalXStatusURL(handle string, fallbackHandle string, id string, fallbackID string) string {
 	h := strings.TrimPrefix(strings.TrimSpace(handle), "@")
-	if h == "" {
-		h = strings.TrimPrefix(strings.TrimSpace(fallbackHandle), "@")
+	fallback := strings.TrimPrefix(strings.TrimSpace(fallbackHandle), "@")
+	if h == "" || (model.IsPlaceholderTwitterHandle(h) && fallback != "") {
+		h = fallback
 	}
 	statusID := strings.TrimSpace(id)
 	if statusID == "" {

@@ -338,6 +338,96 @@ func TestSyncSeqAssignment(t *testing.T) {
 	}
 }
 
+func TestUpsertFeedItemsNormalizesUnknownDirectAuthorFromSourceHandle(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	now := time.Now()
+	tweetID := "sample_placeholder_author"
+	sourceHandle := "sample_source"
+	placeholderAuthor := "unknown"
+	if _, err := d.UpsertFeedItems([]model.FeedItem{{
+		TweetID:      tweetID,
+		SourceHandle: sourceHandle,
+		AuthorHandle: placeholderAuthor,
+		CanonicalURL: "https://x.com/" + placeholderAuthor + "/status/" + tweetID,
+		PublishedAt:  &now,
+	}}); err != nil {
+		t.Fatalf("UpsertFeedItems: %v", err)
+	}
+
+	var author, canonical string
+	if err := d.QueryRow(
+		`SELECT author_handle, COALESCE(canonical_url, '') FROM feed_items WHERE tweet_id = ?`,
+		tweetID,
+	).Scan(&author, &canonical); err != nil {
+		t.Fatalf("read feed item: %v", err)
+	}
+	if author != sourceHandle {
+		t.Fatalf("author_handle = %q, want %s", author, sourceHandle)
+	}
+	if canonical != "https://x.com/"+sourceHandle+"/status/"+tweetID {
+		t.Fatalf("canonical_url = %q", canonical)
+	}
+}
+
+func TestRepairTwitterPlaceholderAuthorsUpdatesExistingRows(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	tweetID := "sample_repair_tweet"
+	sourceHandle := "sample_source"
+	placeholderAuthor := "unknown"
+	if _, err := d.conn.Exec(`
+		INSERT INTO feed_items (
+			tweet_id, source_handle, author_handle, canonical_url, published_at, fetched_at, sync_seq
+		) VALUES (?, ?, ?, ?, 1, 1, 1)
+	`, tweetID, sourceHandle, placeholderAuthor, "https://x.com/"+placeholderAuthor+"/status/"+tweetID); err != nil {
+		t.Fatalf("seed feed item: %v", err)
+	}
+	if _, err := d.conn.Exec(`
+		INSERT INTO videos (video_id, channel_id, title, published_at, sync_seq)
+		VALUES (?, ?, 'Sample', 1, 1)
+	`, tweetID, "twitter_"+placeholderAuthor); err != nil {
+		t.Fatalf("seed video: %v", err)
+	}
+	if _, err := d.conn.Exec(`DELETE FROM schema_migrations WHERE name = 'twitter_placeholder_author_repair'`); err != nil {
+		t.Fatalf("reset repair migration: %v", err)
+	}
+	if err := d.initSyncSeq(); err != nil {
+		t.Fatalf("initSyncSeq: %v", err)
+	}
+
+	if err := d.repairTwitterPlaceholderAuthorsOnce(); err != nil {
+		t.Fatalf("repairTwitterPlaceholderAuthorsOnce: %v", err)
+	}
+
+	var author, canonical, channelID string
+	var feedSeq, videoSeq int64
+	if err := d.QueryRow(
+		`SELECT author_handle, COALESCE(canonical_url, ''), sync_seq FROM feed_items WHERE tweet_id = ?`,
+		tweetID,
+	).Scan(&author, &canonical, &feedSeq); err != nil {
+		t.Fatalf("read feed item: %v", err)
+	}
+	if err := d.QueryRow(
+		`SELECT channel_id, sync_seq FROM videos WHERE video_id = ?`,
+		tweetID,
+	).Scan(&channelID, &videoSeq); err != nil {
+		t.Fatalf("read video: %v", err)
+	}
+	if author != sourceHandle {
+		t.Fatalf("author_handle = %q, want %s", author, sourceHandle)
+	}
+	if canonical != "https://x.com/"+sourceHandle+"/status/"+tweetID {
+		t.Fatalf("canonical_url = %q", canonical)
+	}
+	if channelID != "twitter_"+sourceHandle {
+		t.Fatalf("channel_id = %q, want twitter_%s", channelID, sourceHandle)
+	}
+	if feedSeq <= 1 || videoSeq <= 1 {
+		t.Fatalf("sync_seq values should be bumped, feed=%d video=%d", feedSeq, videoSeq)
+	}
+}
+
 func TestUpsertFeedItemsPreservesFetchedAtOnRefetch(t *testing.T) {
 	d := openWritableTestDB(t)
 

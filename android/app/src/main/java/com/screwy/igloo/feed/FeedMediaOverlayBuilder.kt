@@ -177,11 +177,14 @@ private fun buildOwnerItems(
     val descriptors = parseFeedMediaDescriptors(rawJson)
     val rowsByIndex = inventoryRows.sortedBy(::assetIndex)
     val syncRowsByIndex = latestSyncRowsByIndex(syncAssetRows)
-    val count = maxOf(
-        descriptors.size,
-        rowsByIndex.size,
-        (syncRowsByIndex.keys.maxOrNull() ?: -1) + 1,
-    )
+    val count = if (descriptors.isNotEmpty()) {
+        descriptors.size
+    } else {
+        maxOf(
+            rowsByIndex.size,
+            (syncRowsByIndex.keys.maxOrNull() ?: -1) + 1,
+        )
+    }
     if (count == 0) return emptyList()
 
     return buildList(count) {

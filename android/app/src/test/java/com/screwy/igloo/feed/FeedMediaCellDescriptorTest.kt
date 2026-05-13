@@ -3,6 +3,7 @@ package com.screwy.igloo.feed
 import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
 import com.screwy.igloo.data.entity.FeedItemEntity
 import com.screwy.igloo.data.entity.FeedRow
+import com.screwy.igloo.data.entity.MediaInventoryEntity
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.ui.component.MediaItem
 import java.io.File
@@ -180,6 +181,35 @@ class FeedMediaCellDescriptorTest {
     }
 
     @Test
+    fun route_media_set_does_not_extend_json_media_with_stale_inventory_rows() {
+        val tweetId = "sample_tweet"
+        val json = """[
+            {"type":"photo","url":"https://pbs.twimg.com/media/a.jpg"},
+            {"type":"photo","url":"https://pbs.twimg.com/media/b.jpg"}
+        ]"""
+
+        val set = buildFeedMediaSet(
+            row = feedRow(
+                FeedItemEntity(
+                    tweetId = tweetId,
+                    authorHandle = "sample_author",
+                    mediaJson = json,
+                ),
+            ),
+            inventoryRows = listOf(
+                inventoryPostMedia(tweetId, 0),
+                inventoryPostMedia(tweetId, 1),
+                inventoryPostMedia(tweetId, 2),
+                inventoryPostMedia(tweetId, 3),
+            ),
+            baseUrl = "https://igloo.example",
+        )
+
+        assertEquals(2, set?.items?.size)
+        assertEquals(2, set?.parentMediaCount)
+    }
+
+    @Test
     fun warm_media_set_uses_ready_grid_model_without_waiting_for_route_db_load() {
         val cached = File.createTempFile("igloo-warm-feed", ".jpg").also { it.deleteOnExit() }
         val json = """[{"type":"photo","url":"https://pbs.twimg.com/media/a.jpg"}]"""
@@ -275,6 +305,18 @@ class FeedMediaCellDescriptorTest {
         localPath = localPath,
         fileSize = 1,
         verifiedAtMs = 1,
+    )
+
+    private fun inventoryPostMedia(tweetId: String, index: Int) = MediaInventoryEntity(
+        assetId = if (index == 0) "twitter_tweet_${tweetId}_post_media" else "twitter_tweet_${tweetId}_post_media_$index",
+        assetKind = "post_media",
+        scope = "retention",
+        ownerId = tweetId,
+        bucket = "twitter_media",
+        serverUrl = "/api/media/slide/$tweetId/$index",
+        state = "cached",
+        localPath = "/missing/inventory-$index.jpg",
+        fileSize = 1,
     )
 
     private fun feedRow(item: FeedItemEntity) = FeedRow(

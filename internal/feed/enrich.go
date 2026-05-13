@@ -444,6 +444,9 @@ func enrichMediaStatus(item *model.FeedItem, jobs map[string]model.FeedMediaJob)
 // and rewrites avatar URLs to local proxy.
 // Always sets ChannelID so author names link to in-site profiles (even for non-followed accounts).
 func annotateChannelFlags(item *model.FeedItem, channels map[string]model.Channel, quoteAvatarChannelIDs map[string]string) {
+	if effectiveAuthor := model.EffectiveTwitterAuthorHandle(item.AuthorHandle, item.SourceHandle, item.IsRetweet); effectiveAuthor != item.AuthorHandle {
+		item.AuthorHandle = effectiveAuthor
+	}
 	authorChID := "twitter_" + strings.ToLower(strings.TrimPrefix(item.AuthorHandle, "@"))
 	item.ChannelID = authorChID
 	item.AuthorAvatarURL = "/api/media/avatar/" + authorChID

@@ -89,6 +89,25 @@ func TestFeedItemPrimaryPreservesStoredCanonicalURLs(t *testing.T) {
 	}
 }
 
+func TestFeedItemPrimaryBuildsCanonicalURLFromSourceWhenAuthorIsUnknownPlaceholder(t *testing.T) {
+	tweetID := "sample_tweet"
+	sourceHandle := "sample_source"
+	placeholderAuthor := "unknown"
+	primary := feedItemToBundlePrimary(model.FeedItem{
+		TweetID:      tweetID,
+		SourceHandle: sourceHandle,
+		AuthorHandle: placeholderAuthor,
+	}, nil, nil, nil)
+
+	want := "https://x.com/" + sourceHandle + "/status/" + tweetID
+	if got := primary["canonical_url"]; got != want {
+		t.Fatalf("canonical_url = %#v", got)
+	}
+	if got := primary["link"]; got != want {
+		t.Fatalf("link = %#v", got)
+	}
+}
+
 func TestFeedItemPrimaryIncludesTranslationSourceLabels(t *testing.T) {
 	primary := feedItemToBundlePrimary(model.FeedItem{
 		TweetID:          "tw_translated",

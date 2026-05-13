@@ -885,6 +885,12 @@ func (db *DB) UpsertFeedItems(items []model.FeedItem) (int, error) {
 			)
 			ON CONFLICT(tweet_id) DO UPDATE SET
 				source_handle = COALESCE(excluded.source_handle, feed_items.source_handle),
+				author_handle = CASE
+					WHEN LOWER(COALESCE(feed_items.author_handle, '')) IN ('', 'unknown', 'undefined')
+					 AND LOWER(COALESCE(excluded.author_handle, '')) NOT IN ('', 'unknown', 'undefined')
+					THEN excluded.author_handle
+					ELSE feed_items.author_handle
+				END,
 				author_display_name = COALESCE(excluded.author_display_name, feed_items.author_display_name),
 				author_avatar_url = CASE
 					WHEN excluded.author_avatar_url IS NOT NULL THEN excluded.author_avatar_url
@@ -913,6 +919,17 @@ func (db *DB) UpsertFeedItems(items []model.FeedItem) (int, error) {
 					ELSE feed_items.lang
 				END,
 				media_json = COALESCE(excluded.media_json, feed_items.media_json),
+				canonical_url = CASE
+					WHEN excluded.canonical_url IS NOT NULL
+					 AND excluded.canonical_url != ''
+					 AND (
+						COALESCE(feed_items.canonical_url, '') = ''
+						OR LOWER(feed_items.canonical_url) LIKE '%/unknown/status/%'
+						OR LOWER(feed_items.canonical_url) LIKE '%/undefined/status/%'
+					 )
+					THEN excluded.canonical_url
+					ELSE feed_items.canonical_url
+				END,
 				quote_tweet_id = CASE
 					WHEN feed_items.quote_tweet_id IS NULL THEN excluded.quote_tweet_id
 					ELSE feed_items.quote_tweet_id
@@ -1006,6 +1023,7 @@ func (db *DB) UpsertFeedItems(items []model.FeedItem) (int, error) {
 			if item.TweetID == "" {
 				continue
 			}
+			item = normalizeFeedItemIdentity(item)
 			seq := db.NextSyncSeq()
 			pubMs := timePtrToMillis(item.PublishedAt)
 			quotePubMs := timePtrToMillis(item.QuotePublishedAt)
@@ -1116,6 +1134,35 @@ func (db *DB) UpsertFeedItems(items []model.FeedItem) (int, error) {
 		return nil
 	})
 	return total, err
+}
+
+func normalizeFeedItemIdentity(item model.FeedItem) model.FeedItem {
+	author := model.EffectiveTwitterAuthorHandle(item.AuthorHandle, item.SourceHandle, item.IsRetweet)
+	if author == item.AuthorHandle {
+		return item
+	}
+	item.AuthorHandle = author
+	if shouldRewritePlaceholderXStatusURL(item.CanonicalURL) {
+		statusID := strings.TrimSpace(item.CanonicalTweetID)
+		if statusID == "" {
+			statusID = strings.TrimSpace(item.TweetID)
+		}
+		if statusID != "" {
+			item.CanonicalURL = "https://x.com/" + strings.TrimPrefix(author, "@") + "/status/" + statusID
+		}
+	}
+	return item
+}
+
+func shouldRewritePlaceholderXStatusURL(raw string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	return normalized == "" ||
+		strings.Contains(normalized, "://x.com/unknown/status/") ||
+		strings.Contains(normalized, "://twitter.com/unknown/status/") ||
+		strings.Contains(normalized, "://fxtwitter.com/unknown/status/") ||
+		strings.Contains(normalized, "://x.com/undefined/status/") ||
+		strings.Contains(normalized, "://twitter.com/undefined/status/") ||
+		strings.Contains(normalized, "://fxtwitter.com/undefined/status/")
 }
 
 // GetLatestFeedItem returns the most recently published feed item, or nil if none.

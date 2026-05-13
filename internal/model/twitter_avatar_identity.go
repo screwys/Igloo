@@ -11,6 +11,22 @@ func NormalizeTwitterHandle(raw string) string {
 	return strings.ToLower(strings.TrimSpace(strings.TrimPrefix(raw, "@")))
 }
 
+func IsPlaceholderTwitterHandle(raw string) bool {
+	normalized := NormalizeTwitterHandle(raw)
+	return normalized == "" || normalized == "unknown" || normalized == "undefined"
+}
+
+func EffectiveTwitterAuthorHandle(author, source string, isRetweet bool) string {
+	trimmedAuthor := strings.TrimSpace(strings.TrimPrefix(author, "@"))
+	if !isRetweet && IsPlaceholderTwitterHandle(trimmedAuthor) {
+		trimmedSource := strings.TrimSpace(strings.TrimPrefix(source, "@"))
+		if !IsPlaceholderTwitterHandle(trimmedSource) {
+			return trimmedSource
+		}
+	}
+	return trimmedAuthor
+}
+
 func NormalizeTwitterAvatarURL(raw string) string {
 	return strings.ToLower(strings.TrimSpace(raw))
 }

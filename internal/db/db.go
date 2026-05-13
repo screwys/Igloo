@@ -79,6 +79,14 @@ func OpenWithOptions(path, dataDir string, opts OpenOptions) (*DB, error) {
 	reportPhase(opts.Phase, "db.init_sync_seq", phaseStart)
 
 	phaseStart = time.Now()
+	if err := d.repairTwitterPlaceholderAuthorsOnce(); err != nil {
+		conn.Close()
+		reportPhase(opts.Phase, "db.repair_twitter_placeholder_authors", phaseStart)
+		return nil, fmt.Errorf("repair twitter placeholder authors: %w", err)
+	}
+	reportPhase(opts.Phase, "db.repair_twitter_placeholder_authors", phaseStart)
+
+	phaseStart = time.Now()
 	if err := d.RepairVideoMediaShapesOnce(); err != nil {
 		conn.Close()
 		reportPhase(opts.Phase, "db.repair_video_media_shapes", phaseStart)

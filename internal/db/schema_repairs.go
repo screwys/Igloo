@@ -3,6 +3,9 @@ package db
 import (
 	"database/sql"
 	"log"
+	"strings"
+
+	"github.com/screwys/igloo/internal/model"
 )
 
 func runFeedMediaLegacyFixes(conn *sql.DB) error {
@@ -147,6 +150,88 @@ func cleanupYouTubeCommentAuthorProfilesOnce(conn *sql.DB) error {
 			  AND NOT EXISTS (SELECT 1 FROM videos v WHERE v.channel_id = channel_profiles.channel_id)
 			  AND NOT EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.channel_id = channel_profiles.channel_id)
 			  AND NOT EXISTS (SELECT 1 FROM channel_stars cs WHERE cs.channel_id = channel_profiles.channel_id)
+		`)
+	}
+	return nil
+}
+
+func (db *DB) repairTwitterPlaceholderAuthorsOnce() error {
+	ran, err := runSchemaMigrationOnce(db.conn, "twitter_placeholder_author_repair", func(tx *sql.Tx) error {
+		rows, err := tx.Query(`
+			SELECT tweet_id, COALESCE(source_handle, ''), COALESCE(canonical_tweet_id, ''),
+			       COALESCE(canonical_url, '')
+			FROM feed_items
+			WHERE COALESCE(is_retweet, 0) = 0
+			  AND LOWER(COALESCE(author_handle, '')) IN ('unknown', 'undefined')
+			  AND LOWER(COALESCE(source_handle, '')) NOT IN ('', 'unknown', 'undefined')
+		`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		type repairRow struct {
+			tweetID          string
+			sourceHandle     string
+			canonicalTweetID string
+			canonicalURL     string
+		}
+		var repairs []repairRow
+		for rows.Next() {
+			var row repairRow
+			if err := rows.Scan(&row.tweetID, &row.sourceHandle, &row.canonicalTweetID, &row.canonicalURL); err != nil {
+				return err
+			}
+			repairs = append(repairs, row)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		for _, row := range repairs {
+			author := strings.TrimPrefix(strings.TrimSpace(row.sourceHandle), "@")
+			if model.IsPlaceholderTwitterHandle(author) {
+				continue
+			}
+			statusID := strings.TrimSpace(row.canonicalTweetID)
+			if statusID == "" {
+				statusID = strings.TrimSpace(row.tweetID)
+			}
+			canonicalURL := row.canonicalURL
+			if shouldRewritePlaceholderXStatusURL(canonicalURL) && statusID != "" {
+				canonicalURL = "https://x.com/" + author + "/status/" + statusID
+			}
+			if _, err := tx.Exec(`
+				UPDATE feed_items
+				SET author_handle = ?,
+				    canonical_url = ?,
+				    sync_seq = ?
+				WHERE tweet_id = ?
+			`, author, nilIfEmpty(canonicalURL), db.NextSyncSeq(), row.tweetID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(`
+				UPDATE videos
+				SET channel_id = ?,
+				    sync_seq = ?
+				WHERE video_id = ?
+				  AND LOWER(COALESCE(channel_id, '')) IN ('twitter_', 'twitter_unknown', 'twitter_undefined')
+			`, "twitter_"+strings.ToLower(author), db.NextSyncSeq(), row.tweetID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if !ran {
+		warnIfRows(db.conn, "twitter_placeholder_author_repair", `
+			SELECT COUNT(*)
+			FROM feed_items
+			WHERE COALESCE(is_retweet, 0) = 0
+			  AND LOWER(COALESCE(author_handle, '')) IN ('unknown', 'undefined')
+			  AND LOWER(COALESCE(source_handle, '')) NOT IN ('', 'unknown', 'undefined')
 		`)
 	}
 	return nil

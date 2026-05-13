@@ -84,6 +84,24 @@ func TestParseDumpRequestsMissingQuoteParentStatus(t *testing.T) {
 	}
 }
 
+func TestParseDumpUsesSourceHandleWhenDirectAuthorIsUnknownPlaceholder(t *testing.T) {
+	output := []byte(`[
+		[2, {"tweet_id":"9000000000000000600","content":"direct text","date":"2026-05-09 10:00:00","author":{"name":"unknown","nick":"Direct Author"},"user":{"name":"sample_source","nick":"Sample Source"},"quote_id":0,"reply_id":0,"retweet_id":0}]
+	]`)
+
+	result := ParseDump(output, "")
+	if len(result.Items) != 1 {
+		t.Fatalf("items = %d, want 1", len(result.Items))
+	}
+	item := result.Items[0]
+	if item.AuthorHandle != "sample_source" {
+		t.Fatalf("author_handle = %q, want sample_source", item.AuthorHandle)
+	}
+	if item.CanonicalURL != "https://x.com/sample_source/status/9000000000000000600" {
+		t.Fatalf("canonical_url = %q", item.CanonicalURL)
+	}
+}
+
 func TestParseDumpRejectsUntrustedMediaAndInvalidIDs(t *testing.T) {
 	output := []byte(`[
 		[2, {"tweet_id":"1000000000000000100","content":"safe text","date":"2026-05-09 10:00:00","author":{"name":"safe_author","nick":"Safe Author"},"user":{"name":"source_user"},"quote_id":0,"reply_id":0,"retweet_id":0}],
