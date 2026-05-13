@@ -4,7 +4,7 @@
   "extends": ["config:recommended"],
   "enabledManagers": ["gomod", "gradle", "github-actions", "dockerfile", "custom.regex"],
   "dependencyDashboard": true,
-  "minimumReleaseAge": "2 days",
+  "minimumReleaseAge": "7 days",
   "prCreation": "not-pending",
   "internalChecksFilter": "strict",
   "automergeType": "pr",
