@@ -302,6 +302,9 @@ func (s *Server) handleBookmarkCategoryBatch(w http.ResponseWriter, r *http.Requ
 			if pathErr != nil {
 				continue
 			}
+			if err := ensureArchivePath(archivePath); err != nil {
+				continue
+			}
 		}
 		if name == "" {
 			continue
@@ -345,6 +348,10 @@ func (s *Server) handleBookmarkCategoryCreate(w http.ResponseWriter, r *http.Req
 	}
 	archivePath, err := normalizeArchivePath(body.ArchivePath)
 	if err != nil {
+		writeJSON(w, 422, map[string]any{"success": false, "error": err.Error()})
+		return
+	}
+	if err := ensureArchivePath(archivePath); err != nil {
 		writeJSON(w, 422, map[string]any{"success": false, "error": err.Error()})
 		return
 	}
@@ -392,6 +399,10 @@ func (s *Server) handleBookmarkCategoryUpdate(w http.ResponseWriter, r *http.Req
 		writeJSON(w, 422, map[string]any{"success": false, "error": err.Error()})
 		return
 	}
+	if err := ensureArchivePath(archivePath); err != nil {
+		writeJSON(w, 422, map[string]any{"success": false, "error": err.Error()})
+		return
+	}
 
 	if err := s.db.UpdateBookmarkCategory(userID, categoryID, body.Name, archivePath); err != nil {
 		slog.Error("UpdateBookmarkCategory", "id", categoryID, "err", err)
@@ -415,6 +426,16 @@ func normalizeArchivePath(raw string) (string, error) {
 		return "", errors.New("archive_path must be an absolute path")
 	}
 	return clean, nil
+}
+
+func ensureArchivePath(path string) error {
+	if path == "" {
+		return nil
+	}
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return fmt.Errorf("create archive_path: %w", err)
+	}
+	return nil
 }
 
 func (s *Server) handleBookmarkCategoryDelete(w http.ResponseWriter, r *http.Request) {
@@ -452,8 +473,8 @@ func (s *Server) archiveBookmarkCombined(tweetID, archivePath, customTitle, acco
 	if archivePath == "" {
 		return
 	}
-	if _, err := os.Stat(archivePath); err != nil {
-		slog.Warn("[Bookmark] archive path does not exist", "path", archivePath)
+	if err := ensureArchivePath(archivePath); err != nil {
+		slog.Warn("[Bookmark] archive path is not writable", "path", archivePath, "err", err)
 		return
 	}
 

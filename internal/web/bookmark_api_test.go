@@ -97,6 +97,54 @@ func TestHandleBookmarkCategoryCreateRejectsRelativeArchivePath(t *testing.T) {
 	}
 }
 
+func TestHandleBookmarkCategoryCreateCreatesArchivePath(t *testing.T) {
+	srv := newTestServer(t)
+
+	archiveDir := filepath.Join(t.TempDir(), "bookmarks", "cinema")
+	body := fmt.Sprintf(`{"name":"Cinema","archive_path":%q}`, archiveDir)
+	req := httptest.NewRequest("POST", "/api/bookmark-categories", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = attachTestAuth(req, "alice")
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d - %s", rr.Code, rr.Body.String())
+	}
+	info, err := os.Stat(archiveDir)
+	if err != nil {
+		t.Fatalf("archive path was not created: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("archive path is not a directory")
+	}
+}
+
+func TestHandleBookmarkCategoryCreateLeavesArchivePathEmptyByDefault(t *testing.T) {
+	srv := newTestServer(t)
+
+	req := httptest.NewRequest("POST", "/api/bookmark-categories", strings.NewReader(`{"name":"Cinema"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = attachTestAuth(req, "alice")
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d - %s", rr.Code, rr.Body.String())
+	}
+
+	var archivePath string
+	if err := srv.db.QueryRow(
+		`SELECT COALESCE(archive_path, '') FROM bookmark_categories WHERE user_id = ? AND name = ?`,
+		"alice", "Cinema",
+	).Scan(&archivePath); err != nil {
+		t.Fatalf("select archive path: %v", err)
+	}
+	if archivePath != "" {
+		t.Fatalf("archive_path = %q, want empty", archivePath)
+	}
+}
+
 func TestHandleBookmarkRemove_EmitsExactlyOneSyncChange(t *testing.T) {
 	srv := newTestServer(t)
 

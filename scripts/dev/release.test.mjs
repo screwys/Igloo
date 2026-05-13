@@ -87,7 +87,9 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /\n  id-token: write\n/);
   assert.match(workflow, /\n  attestations: write\n/);
   assert.match(workflow, /\n        id: build\n/);
+  assert.match(workflow, /actions\/setup-go@v6/);
   assert.match(workflow, /DeterminateSystems\/determinate-nix-action@v3/);
+  assert.match(workflow, /go test \.\/\.\.\./);
   assert.match(workflow, /nix build \.#container --print-build-logs/);
   assert.match(workflow, /docker load < result/);
   assert.match(workflow, /SOURCE_IMAGE: ghcr\.io\/screwys\/igloo:latest/);
