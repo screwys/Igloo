@@ -11,8 +11,9 @@ import (
 
 // InsertMediaFile inserts a single media file record, ignoring duplicates.
 func (db *DB) InsertMediaFile(mf model.MediaFile) error {
-	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+	inserted := false
+	if err := db.WithWrite(func(tx *sql.Tx) error {
+		res, err := tx.Exec(`
 			INSERT OR IGNORE INTO media_files
 				(owner_type, owner_id, media_index, file_path, media_type, source_url, file_size)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -20,8 +21,27 @@ func (db *DB) InsertMediaFile(mf model.MediaFile) error {
 			nilIfEmpty(mf.MediaType), nilIfEmpty(mf.SourceURL),
 			nilIfZero(mf.FileSize),
 		)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		inserted = n > 0
+		return nil
+	}); err != nil {
 		return err
-	})
+	}
+	persisted := mf
+	if !inserted {
+		got, err := db.getMediaFileByIdentity(mf.OwnerType, mf.OwnerID, mf.MediaIndex)
+		if err != nil {
+			return err
+		}
+		persisted = got
+	}
+	return db.upsertMediaFileAsset(persisted, time.Now().UnixMilli())
 }
 
 // InsertMediaFileBatch inserts multiple media file records in a single transaction, ignoring duplicates.
@@ -30,6 +50,8 @@ func (db *DB) InsertMediaFileBatch(files []model.MediaFile) error {
 		return nil
 	}
 	repairOwners := make([]string, 0, len(files))
+	assetRows := make([]model.MediaFile, 0, len(files))
+	var ignored []mediaFileIdentity
 	if err := db.WithWrite(func(tx *sql.Tx) error {
 		stmt, err := tx.Prepare(`
 			INSERT OR IGNORE INTO media_files
@@ -44,19 +66,97 @@ func (db *DB) InsertMediaFileBatch(files []model.MediaFile) error {
 			if mf.OwnerType == "feed_media" && strings.TrimSpace(mf.OwnerID) != "" {
 				repairOwners = append(repairOwners, mf.OwnerID)
 			}
-			if _, err := stmt.Exec(
+			res, err := stmt.Exec(
 				mf.OwnerType, mf.OwnerID, mf.MediaIndex, mf.FilePath,
 				nilIfEmpty(mf.MediaType), nilIfEmpty(mf.SourceURL),
 				nilIfZero(mf.FileSize),
-			); err != nil {
+			)
+			if err != nil {
 				return err
+			}
+			n, err := res.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				assetRows = append(assetRows, mf)
+			} else {
+				ignored = append(ignored, mediaFileIdentity{
+					ownerType:  mf.OwnerType,
+					ownerID:    mf.OwnerID,
+					mediaIndex: mf.MediaIndex,
+				})
 			}
 		}
 		return nil
 	}); err != nil {
 		return err
 	}
+	for _, key := range ignored {
+		mf, err := db.getMediaFileByIdentity(key.ownerType, key.ownerID, key.mediaIndex)
+		if err != nil {
+			return err
+		}
+		assetRows = append(assetRows, mf)
+	}
+	nowMs := time.Now().UnixMilli()
+	for _, mf := range assetRows {
+		if err := db.upsertMediaFileAsset(mf, nowMs); err != nil {
+			return err
+		}
+	}
 	return db.repairVideoMediaShapesForIDs(repairOwners)
+}
+
+type mediaFileIdentity struct {
+	ownerType  string
+	ownerID    string
+	mediaIndex int
+}
+
+func (db *DB) getMediaFileByIdentity(ownerType, ownerID string, mediaIndex int) (model.MediaFile, error) {
+	var mf model.MediaFile
+	err := db.conn.QueryRow(`
+		SELECT owner_type, owner_id, media_index, file_path,
+		       COALESCE(media_type,''), COALESCE(source_url,''), COALESCE(file_size,0)
+		FROM media_files
+		WHERE owner_type = ? AND owner_id = ? AND media_index = ?
+	`, ownerType, ownerID, mediaIndex).Scan(
+		&mf.OwnerType,
+		&mf.OwnerID,
+		&mf.MediaIndex,
+		&mf.FilePath,
+		&mf.MediaType,
+		&mf.SourceURL,
+		&mf.FileSize,
+	)
+	if err == sql.ErrNoRows {
+		return mf, fmt.Errorf("media file not found after insert ignore: %s/%s[%d]", ownerType, ownerID, mediaIndex)
+	}
+	return mf, err
+}
+
+func (db *DB) upsertMediaFileAsset(mf model.MediaFile, nowMs int64) error {
+	if mf.OwnerType != "feed_media" && mf.OwnerType != "quote_media" {
+		return nil
+	}
+	if manifestSkipsFile(mf.FilePath) {
+		return nil
+	}
+	asset := db.assetFromLegacyPath(Asset{
+		AssetID:        BuildManifestAssetID("twitter", "tweet", mf.OwnerID, "post_media", mf.MediaIndex),
+		AssetKind:      "post_media",
+		OwnerKind:      "tweet",
+		OwnerID:        mf.OwnerID,
+		MediaIndex:     mf.MediaIndex,
+		SourceURL:      mf.SourceURL,
+		FilePath:       mf.FilePath,
+		ContentType:    contentTypeForMediaPath(mf.FilePath, mf.MediaType, "image/jpeg"),
+		SizeBytes:      mf.FileSize,
+		State:          AssetStateQueued,
+		RequiredReason: "retention",
+	})
+	return db.UpsertAsset(asset, nowMs)
 }
 
 // GetMediaFilePath returns the file_path for a single media file by (ownerType, ownerID, index).
