@@ -163,6 +163,9 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 	for _, want := range []string{
 		"=== Igloo Doctor ===",
 		"Database files:",
+		"SQLite storage:",
+		"page_size:",
+		"reclaimable freelist:",
 		"Android sync:",
 		"Queue counts:",
 		"Profile/media readiness:",

@@ -23,6 +23,7 @@ func doctorStatus() (string, error) {
 	var sb strings.Builder
 	sb.WriteString("=== Igloo Doctor ===\n\n")
 	writeDoctorDBFiles(&sb)
+	writeDoctorSQLiteStorage(&sb, conn)
 	writeDoctorDBStat(&sb, conn)
 	writeDoctorAndroidSync(&sb, conn)
 	writeDoctorQueues(&sb, conn)
@@ -45,6 +46,35 @@ func writeDoctorDBFiles(sb *strings.Builder) {
 		}
 	}
 	sb.WriteString("\n")
+}
+
+func writeDoctorSQLiteStorage(sb *strings.Builder, conn *sql.DB) {
+	sb.WriteString("SQLite storage:\n")
+	var pageSize, pageCount, freelistCount int64
+	if err := conn.QueryRow(`PRAGMA page_size`).Scan(&pageSize); err != nil {
+		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+		return
+	}
+	if err := conn.QueryRow(`PRAGMA page_count`).Scan(&pageCount); err != nil {
+		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+		return
+	}
+	if err := conn.QueryRow(`PRAGMA freelist_count`).Scan(&freelistCount); err != nil {
+		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+		return
+	}
+	usedPages := pageCount - freelistCount
+	if usedPages < 0 {
+		usedPages = 0
+	}
+	reclaimableBytes := freelistCount * pageSize
+	fmt.Fprintf(sb, "  page_size: %s\n", formatSize(pageSize))
+	fmt.Fprintf(sb, "  pages: total=%d used=%d freelist=%d\n", pageCount, usedPages, freelistCount)
+	fmt.Fprintf(sb, "  reclaimable freelist: %s", formatSize(reclaimableBytes))
+	if info, err := os.Stat(getDBPath()); err == nil && info.Size() > 0 {
+		fmt.Fprintf(sb, " (%.1f%% of database file)", float64(reclaimableBytes)*100/float64(info.Size()))
+	}
+	sb.WriteString("\n\n")
 }
 
 func writeDoctorDBStat(sb *strings.Builder, conn *sql.DB) {
