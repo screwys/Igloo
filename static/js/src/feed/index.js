@@ -39,6 +39,11 @@ var feedPagination = document.getElementById('feed-pagination')
 var pendingForms = new WeakSet()
 var feedInitialRankDone = false
 var feedThreadReturnKey = 'igloo.feed.threadReturn'
+var feedThreadHistoryKey = 'iglooFeedThread'
+var feedRouteContent = document.querySelector('[data-feed-route-content]') || feedList
+var activeThreadRoute = null
+var activeThreadAbort = null
+var lastFeedThreadRouteState = null
 
 // ── State helpers ──
 
@@ -81,6 +86,168 @@ function markFeedThreadReturnPending() {
   writeFeedThreadReturnState(state)
 }
 
+function currentHistoryStatePatch(patch) {
+  var current = (window.history && window.history.state && typeof window.history.state === 'object') ? window.history.state : {}
+  var next = {}
+  Object.keys(current).forEach(function (key) { next[key] = current[key] })
+  Object.keys(patch || {}).forEach(function (key) { next[key] = patch[key] })
+  return next
+}
+
+function rememberFeedHistoryState(tweetId) {
+  var state = {
+    mode: 'feed',
+    url: feedReturnURL(),
+    scrollY: window.scrollY || 0,
+    tweetId: String(tweetId || '').trim()
+  }
+  lastFeedThreadRouteState = state
+  if (window.history && window.history.replaceState) {
+    var patch = {}
+    patch[feedThreadHistoryKey] = state
+    window.history.replaceState(currentHistoryStatePatch(patch), '', state.url)
+  }
+  return state
+}
+
+function partialThreadURL(href, returnURL) {
+  var url = new URL(href, window.location.origin)
+  url.searchParams.set('fmt', 'partial')
+  url.searchParams.set('return', returnURL || '/feed')
+  return url.pathname + url.search
+}
+
+function canOpenThreadInFeedRoute(event, link) {
+  if (!feedRouteContent || !link) return false
+  if (event.defaultPrevented || event.button !== 0) return false
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false
+  var target = link.getAttribute('target')
+  if (target && target !== '_self') return false
+  return true
+}
+
+function setFeedRouteHidden(hidden) {
+  if (!feedRouteContent) return
+  feedRouteContent.hidden = !!hidden
+  if (hidden) {
+    feedRouteContent.setAttribute('aria-hidden', 'true')
+  } else {
+    feedRouteContent.removeAttribute('aria-hidden')
+  }
+}
+
+function removeActiveThreadRoute() {
+  if (activeThreadAbort) {
+    try { activeThreadAbort.abort() } catch (_) {}
+    activeThreadAbort = null
+  }
+  if (activeThreadRoute) {
+    activeThreadRoute.remove()
+    activeThreadRoute = null
+  }
+}
+
+function insertThreadRoute(route, returnState) {
+  if (!feedRouteContent || !route) return false
+  removeActiveThreadRoute()
+  setFeedRouteHidden(true)
+  feedRouteContent.insertAdjacentElement('afterend', route)
+  activeThreadRoute = route
+  lastFeedThreadRouteState = returnState || lastFeedThreadRouteState
+  _feedFocusDirty = true
+  _focusedFeedCard = null
+  initFeedCards(route)
+  initThreadBackLink(route)
+  window.scrollTo(0, 0)
+  return true
+}
+
+function renderLoadingThreadRoute(returnHref) {
+  var route = document.createElement('div')
+  route.className = 'thread-page-shell thread-page-shell-loading'
+  route.setAttribute('data-thread-route', '')
+  var back = document.createElement('a')
+  back.className = 'thread-back-link'
+  back.setAttribute('href', returnHref || '/feed')
+  back.setAttribute('data-thread-back-link', '')
+  back.textContent = t('thread_back_to_feed', '<- Feed')
+  var loading = document.createElement('div')
+  loading.className = 'thread-route-loading'
+  loading.textContent = t('status_loading', 'Loading...')
+  route.appendChild(back)
+  route.appendChild(loading)
+  return route
+}
+
+function parseThreadRouteHTML(html) {
+  var template = document.createElement('template')
+  template.innerHTML = String(html || '').trim()
+  var route = template.content.firstElementChild
+  if (!route || !route.matches || !route.matches('[data-thread-route]')) return null
+  return route
+}
+
+function closeThreadRoute(returnState) {
+  var state = returnState || lastFeedThreadRouteState || {}
+  removeActiveThreadRoute()
+  setFeedRouteHidden(false)
+  _feedFocusDirty = true
+  _focusedFeedCard = null
+  var tweetId = String(state.tweetId || '').trim()
+  var target = tweetId && feedList ? feedList.querySelector('[data-feed-item][data-tweet-id="' + cssEscape(tweetId) + '"]') : null
+  if (target && typeof target.scrollIntoView === 'function') {
+    try { target.scrollIntoView({ behavior: 'auto', block: 'center' }) } catch (_) { target.scrollIntoView() }
+    return
+  }
+  if (typeof state.scrollY === 'number') {
+    window.scrollTo(0, state.scrollY)
+  }
+}
+
+function openThreadRoute(href, tweetId, opts) {
+  if (!feedRouteContent || !href) return false
+  var options = opts || {}
+  var returnState = options.returnState || rememberFeedHistoryState(tweetId)
+  var threadState = {
+    mode: 'thread',
+    url: href,
+    tweetId: String(tweetId || '').trim(),
+    returnState: returnState
+  }
+  if (options.push !== false && window.history && window.history.pushState) {
+    var patch = {}
+    patch[feedThreadHistoryKey] = threadState
+    window.history.pushState(currentHistoryStatePatch(patch), '', href)
+  }
+
+  insertThreadRoute(renderLoadingThreadRoute(returnState.url), returnState)
+  if (activeThreadAbort) {
+    try { activeThreadAbort.abort() } catch (_) {}
+  }
+  activeThreadAbort = window.AbortController ? new AbortController() : null
+  var fetchOpts = {
+    credentials: 'same-origin',
+    headers: { 'X-Requested-With': 'fetch' }
+  }
+  if (activeThreadAbort) fetchOpts.signal = activeThreadAbort.signal
+
+  fetch(partialThreadURL(href, returnState.url), fetchOpts)
+    .then(function (response) {
+      if (!response.ok) throw new Error('thread partial failed')
+      return response.text()
+    })
+    .then(function (html) {
+      var route = parseThreadRouteHTML(html)
+      if (!route) throw new Error('thread partial invalid')
+      insertThreadRoute(route, returnState)
+    })
+    .catch(function (err) {
+      if (err && err.name === 'AbortError') return
+      window.location.assign(href)
+    })
+  return true
+}
+
 function restoreFeedThreadReturn() {
   if (!feedList) return
   var state = readFeedThreadReturn()
@@ -98,12 +265,25 @@ function restoreFeedThreadReturn() {
   }
 }
 
-function initThreadBackLink() {
-  var link = document.querySelector('[data-thread-back-link]')
+function initThreadBackLink(scope) {
+  var root = scope || document
+  var link = root.querySelector('[data-thread-back-link]')
   if (!link) return
   var state = readFeedThreadReturn()
   if (state && state.url) link.setAttribute('href', state.url)
-  link.addEventListener('click', function () { markFeedThreadReturnPending() })
+  link.addEventListener('click', function (event) {
+    if (activeThreadRoute && link.closest('[data-thread-route]') === activeThreadRoute) {
+      event.preventDefault()
+      var routeState = window.history && window.history.state && window.history.state[feedThreadHistoryKey]
+      if (routeState && routeState.mode === 'thread' && window.history && window.history.back) {
+        window.history.back()
+      } else {
+        closeThreadRoute(lastFeedThreadRouteState)
+      }
+      return
+    }
+    markFeedThreadReturnPending()
+  })
 }
 
 function isCurrentChannelPath(channelId) {
@@ -721,7 +901,13 @@ document.addEventListener('click', function (event) {
   var threadOpen = event.target && event.target.closest ? event.target.closest('[data-feed-thread-open]') : null
   if (threadOpen) {
     var tweetId = String(threadOpen.getAttribute('data-thread-tweet-id') || '').trim()
+    var threadHref = threadOpen.getAttribute('href')
     if (tweetId) writeFeedThreadReturn(tweetId)
+    if (threadHref && canOpenThreadInFeedRoute(event, threadOpen)) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (openThreadRoute(threadHref, tweetId)) return
+    }
     return
   }
 
@@ -881,44 +1067,56 @@ document.addEventListener('click', function (event) {
   }
 })
 
+window.addEventListener('popstate', function (event) {
+  var routeState = event.state && event.state[feedThreadHistoryKey]
+  if (routeState && routeState.mode === 'thread' && feedRouteContent) {
+    openThreadRoute(routeState.url, routeState.tweetId, {
+      push: false,
+      returnState: routeState.returnState || lastFeedThreadRouteState
+    })
+    return
+  }
+  if (activeThreadRoute) {
+    closeThreadRoute(routeState && routeState.mode === 'feed' ? routeState : lastFeedThreadRouteState)
+  }
+})
+
 // ── Media overlay click delegation ──
 
-if (feedList) {
-  feedList.addEventListener('click', function (event) {
-    var expandBtn = event.target && event.target.closest ? event.target.closest('[data-feed-video-expand]') : null
-    if (expandBtn) {
-      event.preventDefault(); event.stopPropagation()
-      var wrap = expandBtn.closest('[data-feed-media]')
-      if (wrap) openMediaOverlay(wrap, wrap)
-      return
-    }
-
-    var mediaTrigger = event.target && event.target.closest ? event.target.closest('[data-feed-media]') : null
-    if (!mediaTrigger) return
-    if (event.target.closest && event.target.closest('.feed-media-overlay')) return
-
+document.addEventListener('click', function (event) {
+  var expandBtn = event.target && event.target.closest ? event.target.closest('[data-feed-video-expand]') : null
+  if (expandBtn) {
     event.preventDefault(); event.stopPropagation()
-    var mediaKind = String(mediaTrigger.getAttribute('data-feed-media-kind') || '').trim().toLowerCase()
-    if (mediaKind === 'video') {
-      var isInGrid = mediaTrigger.closest && mediaTrigger.closest('.feed-media-wrap-grid')
-      if (isInGrid) { openMediaOverlay(mediaTrigger, mediaTrigger); return }
-      if (event.detail >= 2) { openMediaOverlay(mediaTrigger, mediaTrigger); return }
-      var inlineVideo = mediaTrigger.querySelector('video')
-      if (inlineVideo && inlineVideo.muted) {
-        inlineVideo.muted = false
-        inlineVideo.play().catch(function () {})
-        mediaTrigger.setAttribute('data-feed-video-unmuted', '1')
-        return
-      }
-      if (inlineVideo) {
-        if (inlineVideo.paused) inlineVideo.play().catch(function () {})
-        else inlineVideo.pause()
-      }
+    var wrap = expandBtn.closest('[data-feed-media]')
+    if (wrap) openMediaOverlay(wrap, wrap)
+    return
+  }
+
+  var mediaTrigger = event.target && event.target.closest ? event.target.closest('[data-feed-media]') : null
+  if (!mediaTrigger) return
+  if (event.target.closest && event.target.closest('.feed-media-overlay')) return
+
+  event.preventDefault(); event.stopPropagation()
+  var mediaKind = String(mediaTrigger.getAttribute('data-feed-media-kind') || '').trim().toLowerCase()
+  if (mediaKind === 'video') {
+    var isInGrid = mediaTrigger.closest && mediaTrigger.closest('.feed-media-wrap-grid')
+    if (isInGrid) { openMediaOverlay(mediaTrigger, mediaTrigger); return }
+    if (event.detail >= 2) { openMediaOverlay(mediaTrigger, mediaTrigger); return }
+    var inlineVideo = mediaTrigger.querySelector('video')
+    if (inlineVideo && inlineVideo.muted) {
+      inlineVideo.muted = false
+      inlineVideo.play().catch(function () {})
+      mediaTrigger.setAttribute('data-feed-video-unmuted', '1')
       return
     }
-    openMediaOverlay(mediaTrigger, mediaTrigger)
-  })
-}
+    if (inlineVideo) {
+      if (inlineVideo.paused) inlineVideo.play().catch(function () {})
+      else inlineVideo.pause()
+    }
+    return
+  }
+  openMediaOverlay(mediaTrigger, mediaTrigger)
+})
 
 // ── Keyboard: Enter/Space on focused media opens overlay ──
 
@@ -935,10 +1133,15 @@ document.addEventListener('keydown', function (event) {
 var _focusedFeedCard = null
 var _feedFocusDirty = true
 
+function currentFeedCardScope() {
+  return activeThreadRoute || feedList
+}
+
 function getFocusedFeedCard() {
-  if (!feedList) return null
+  var scope = currentFeedCardScope()
+  if (!scope) return null
   if (!_feedFocusDirty && _focusedFeedCard && document.contains(_focusedFeedCard)) return _focusedFeedCard
-  var cards = feedList.querySelectorAll('[data-feed-item]')
+  var cards = scope.querySelectorAll('[data-feed-item]')
   var best = null, bestScore = -Infinity
   var midY = window.innerHeight / 2
   for (var i = 0; i < cards.length; i++) {

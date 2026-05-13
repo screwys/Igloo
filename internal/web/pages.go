@@ -1134,6 +1134,10 @@ func (s *Server) handlePageThread(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if r.URL.Query().Get("fmt") == "partial" {
+		components.ThreadRoutePartial(p, chain, returnHref).Render(r.Context(), w)
+		return
+	}
 	components.ThreadPage(p, chain, returnHref).Render(r.Context(), w)
 }
 

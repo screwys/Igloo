@@ -7,32 +7,34 @@ import (
 // FeedPage renders the full feed page (used for /feed and individual Twitter channel pages).
 templ FeedPage(p PageProps, items []model.FeedItem, hasMore bool, nextPageURL string, showControls bool, serverReranked bool, xChannel *XChannelInfo, feedHeadAnchor string) {
 	@Base(p) {
-		if showControls {
-			<div id="feed-toolbar" class="feed-toolbar"></div>
-			@FeedNewPostsBar(p, false, feedHeadAnchor, nil)
-		}
-		if xChannel != nil && xChannel.Profile != nil {
-			@ProfileCard(p, xChannel.Profile, "hero", xChannel.IsFollowing, xChannel.IsStarred)
-		}
-		<div
-			id="feed-list"
-			class="feed-list"
-			style="display:flex; flex-direction:column; padding:1rem;"
-			if serverReranked {
-				data-server-reranked="1"
-			}
+		<div id="feed-route-content" data-feed-route-content>
 			if showControls {
-				data-seen-tracked="1"
+				<div id="feed-toolbar" class="feed-toolbar"></div>
+				@FeedNewPostsBar(p, false, feedHeadAnchor, nil)
 			}
-		>
-			if len(items) > 0 {
-				for _, item := range items {
-					@FeedItem(p, item)
+			if xChannel != nil && xChannel.Profile != nil {
+				@ProfileCard(p, xChannel.Profile, "hero", xChannel.IsFollowing, xChannel.IsStarred)
+			}
+			<div
+				id="feed-list"
+				class="feed-list"
+				style="display:flex; flex-direction:column; padding:1rem;"
+				if serverReranked {
+					data-server-reranked="1"
 				}
-			} else {
-				<div class="empty-state"><h3>{ L(p, "feed_empty_title", "No posts") }</h3><p>{ L(p, "feed_empty_items", "No feed items available.") }</p></div>
-			}
-			@FeedScrollSentinel(nextPageURL)
+				if showControls {
+					data-seen-tracked="1"
+				}
+			>
+				if len(items) > 0 {
+					for _, item := range items {
+						@FeedItem(p, item)
+					}
+				} else {
+					<div class="empty-state"><h3>{ L(p, "feed_empty_title", "No posts") }</h3><p>{ L(p, "feed_empty_items", "No feed items available.") }</p></div>
+				}
+				@FeedScrollSentinel(nextPageURL)
+			</div>
 		</div>
 		@RetweetersDialog(p)
 	}
@@ -41,19 +43,21 @@ templ FeedPage(p PageProps, items []model.FeedItem, hasMore bool, nextPageURL st
 // LikedPage renders the liked posts page.
 templ LikedPage(p PageProps, items []model.FeedItem, hasMore bool, nextPageURL string) {
 	@Base(p) {
-		<div
-			id="feed-list"
-			class="feed-list"
-			style="display:flex; flex-direction:column; padding:1rem;"
-		>
-			if len(items) > 0 {
-				for _, item := range items {
-					@FeedItem(p, item)
+		<div id="feed-route-content" data-feed-route-content>
+			<div
+				id="feed-list"
+				class="feed-list"
+				style="display:flex; flex-direction:column; padding:1rem;"
+			>
+				if len(items) > 0 {
+					for _, item := range items {
+						@FeedItem(p, item)
+					}
+				} else {
+					<div class="empty-state"><h3>{ L(p, "feed_empty_title", "No posts") }</h3><p>{ L(p, "feed_empty_items", "No feed items available.") }</p></div>
 				}
-			} else {
-				<div class="empty-state"><h3>{ L(p, "feed_empty_title", "No posts") }</h3><p>{ L(p, "feed_empty_items", "No feed items available.") }</p></div>
-			}
-			@FeedScrollSentinel(nextPageURL)
+				@FeedScrollSentinel(nextPageURL)
+			</div>
 		</div>
 		@RetweetersDialog(p)
 	}

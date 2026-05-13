@@ -9117,6 +9117,18 @@ body.shorts-mode .sidebar {
     padding: 0;
 }
 
+[data-feed-route-content][hidden] {
+    display: none !important;
+}
+
+.thread-route-loading {
+    display: flex;
+    align-items: center;
+    min-height: 7rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
 .feed-thread-capsule {
     display: flex;
     align-items: center;

@@ -35,3 +35,30 @@ func TestThreadPageRendersFullChainAndFeedLink(t *testing.T) {
 		}
 	}
 }
+
+func TestThreadRoutePartialUsesNonFeedListID(t *testing.T) {
+	items := []model.FeedItem{
+		{TweetID: "sample_root", AuthorHandle: "sample_root_author", BodyText: "root body"},
+		{TweetID: "sample_leaf", AuthorHandle: "sample_author", BodyText: "leaf body", IsReply: true, ReplyToStatus: "sample_root"},
+	}
+
+	var buf bytes.Buffer
+	if err := ThreadRoutePartial(newTestPageProps(), items, "/feed").Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render thread route partial: %v", err)
+	}
+	html := buf.String()
+	for _, want := range []string{
+		`data-thread-route`,
+		`id="thread-feed-list"`,
+		`data-thread-back-link`,
+		`data-tweet-id="sample_root"`,
+		`data-tweet-id="sample_leaf"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing %q in html: %s", want, html)
+		}
+	}
+	if strings.Contains(html, `id="feed-list"`) {
+		t.Fatalf("partial should not duplicate feed-list id: %s", html)
+	}
+}
