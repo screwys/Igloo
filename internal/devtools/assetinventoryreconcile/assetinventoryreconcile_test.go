@@ -1,4 +1,4 @@
-package main
+package assetinventoryreconcile
 
 import (
 	"strings"

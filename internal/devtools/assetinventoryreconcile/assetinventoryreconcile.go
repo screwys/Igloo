@@ -1,11 +1,10 @@
-package main
+package assetinventoryreconcile
 
 import (
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -51,7 +50,7 @@ func parseOptions(args []string) (options, error) {
 	return opts, nil
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
+func Run(args []string, stdout, stderr io.Writer) int {
 	opts, err := parseOptions(args)
 	if err != nil {
 		fmt.Fprintf(stderr, "asset inventory reconcile: %v\n", err)
@@ -154,8 +153,4 @@ func formatText(r report) string {
 	}
 	fmt.Fprintf(&b, "duration_ms=%d\n", r.DurationMs)
 	return b.String()
-}
-
-func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }

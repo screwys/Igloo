@@ -1,4 +1,4 @@
-package main
+package sqliterepack
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ func TestDryRunReportsSQLiteStorage(t *testing.T) {
 	dbPath := createRepackFixture(t)
 	var stdout, stderr bytes.Buffer
 
-	code := run([]string{"-db", dbPath}, &stdout, &stderr)
+	code := Run([]string{"-db", dbPath}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("run exit=%d stderr=%s", code, stderr.String())
 	}
@@ -39,7 +39,7 @@ func TestVacuumIntoCreatesCompactCopy(t *testing.T) {
 	outPath := filepath.Join(t.TempDir(), "compact.db")
 	var stdout, stderr bytes.Buffer
 
-	code := run([]string{"-db", dbPath, "-vacuum-into", outPath}, &stdout, &stderr)
+	code := Run([]string{"-db", dbPath, "-vacuum-into", outPath}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("run exit=%d stderr=%s", code, stderr.String())
 	}
@@ -65,7 +65,7 @@ func TestVacuumIntoRefusesExistingOutput(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 
-	code := run([]string{"-db", dbPath, "-vacuum-into", outPath}, &stdout, &stderr)
+	code := Run([]string{"-db", dbPath, "-vacuum-into", outPath}, &stdout, &stderr)
 	if code != 1 {
 		t.Fatalf("run exit=%d want 1 stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}

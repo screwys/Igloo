@@ -1,4 +1,4 @@
-package main
+package sqliterepack
 
 import (
 	"database/sql"
@@ -57,7 +57,7 @@ func parseOptions(args []string) (options, error) {
 	return opts, nil
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
+func Run(args []string, stdout, stderr io.Writer) int {
 	opts, err := parseOptions(args)
 	if err != nil {
 		fmt.Fprintf(stderr, "sqlite repack: %v\n", err)
@@ -225,8 +225,4 @@ func formatSize(bytes int64) string {
 	default:
 		return fmt.Sprintf("%d B", bytes)
 	}
-}
-
-func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }

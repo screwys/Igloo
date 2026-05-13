@@ -19,6 +19,14 @@ cmd/igloo-assets
 | `build.sh all` | Build, restart the server, then build/install Android. |
 | `container-check.sh` | Build and check the container image. |
 
+Maintained diagnostics and repair tools are Go subcommands:
+
+```text
+go run ./cmd/igloo-dev android-sync-maintenance -dry-run
+go run ./cmd/igloo-dev asset-inventory-reconcile -limit 1000
+go run ./cmd/igloo-dev sqlite-repack
+```
+
 The supported browser userscript lives at:
 
 ```text

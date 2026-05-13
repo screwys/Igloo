@@ -1,4 +1,4 @@
-package main
+package androidsyncmaintenance
 
 import (
 	"path/filepath"
@@ -97,7 +97,7 @@ func TestRunDryRunReportsDebtWithoutDeletingRows(t *testing.T) {
 
 	var stdout strings.Builder
 	var stderr strings.Builder
-	code := run([]string{"-dry-run", "-keep-ready", "1"}, &stdout, &stderr)
+	code := Run([]string{"-dry-run", "-keep-ready", "1"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("run code = %d stderr=%s", code, stderr.String())
 	}
