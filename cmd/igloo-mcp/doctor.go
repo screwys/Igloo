@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,6 +28,7 @@ func doctorStatus() (string, error) {
 	writeDoctorQueues(&sb, conn)
 	writeDoctorProfileReadiness(&sb, conn)
 	writeDoctorDownloaderFailures(&sb, conn)
+	writeDoctorAndroidSyncClientFailures(&sb)
 	writeDoctorRecentErrors(&sb)
 	return strings.TrimRight(sb.String(), "\n"), nil
 }
@@ -228,6 +230,164 @@ func writeDoctorDownloaderFailures(sb *strings.Builder, conn *sql.DB) {
 		return
 	}
 	fmt.Fprintf(sb, "  %s\n\n", strings.Join(parts, ", "))
+}
+
+func writeDoctorAndroidSyncClientFailures(sb *strings.Builder) {
+	sb.WriteString("Android sync client failures:\n")
+	assetFailures, assetStale, metadataRetries, err := doctorAndroidSyncClientFailureCounts(60)
+	if err != nil {
+		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+		return
+	}
+	if len(assetFailures) == 0 && len(assetStale) == 0 && len(metadataRetries) == 0 {
+		sb.WriteString("  none\n\n")
+		return
+	}
+	if len(assetFailures) > 0 {
+		fmt.Fprintf(sb, "  asset_failed %s\n", strings.Join(assetFailures, ", "))
+	}
+	if len(assetStale) > 0 {
+		fmt.Fprintf(sb, "  asset_stale %s\n", strings.Join(assetStale, ", "))
+	}
+	if len(metadataRetries) > 0 {
+		fmt.Fprintf(sb, "  metadata_retry %s\n", strings.Join(metadataRetries, ", "))
+	}
+	sb.WriteString("\n")
+}
+
+func doctorAndroidSyncClientFailureCounts(minutes int) ([]string, []string, []string, error) {
+	logsDir := getLogsDir()
+	cutoff := time.Duration(minutes*2) * time.Minute
+	assetCounts := map[string]int{}
+	staleCounts := map[string]int{}
+	metadataCounts := map[string]int{}
+	type androidLogLine struct {
+		Event  string         `json:"event"`
+		Fields map[string]any `json:"fields"`
+	}
+	err := filepath.WalkDir(logsDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d == nil || d.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(logsDir, path)
+		if !strings.Contains(rel, "android") {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil || time.Since(info.ModTime()) > cutoff {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			var entry androidLogLine
+			if err := json.Unmarshal([]byte(line), &entry); err != nil {
+				continue
+			}
+			switch entry.Event {
+			case "android_sync_asset_failed":
+				errorKind := doctorLogField(entry.Fields, "error")
+				assetKind := doctorLogField(entry.Fields, "asset_kind")
+				if errorKind == "" {
+					errorKind = "unknown"
+				}
+				if assetKind == "" {
+					assetKind = "unknown"
+				}
+				assetCounts[maskSensitive(errorKind)+"/"+maskSensitive(assetKind)]++
+			case "android_sync_asset_stale":
+				reason := doctorLogField(entry.Fields, "reason")
+				assetKind := doctorLogField(entry.Fields, "asset_kind")
+				if reason == "" {
+					reason = "unknown"
+				}
+				if assetKind == "" {
+					assetKind = "unknown"
+				}
+				staleCounts[maskSensitive(reason)+"/"+maskSensitive(assetKind)]++
+			case "android_sync_metadata_retry":
+				label := doctorLogField(entry.Fields, "label")
+				message := doctorLogField(entry.Fields, "error")
+				if label == "" {
+					label = "unknown"
+				}
+				if message == "" {
+					message = "unknown"
+				}
+				metadataCounts[maskSensitive(label)+"/"+doctorAndroidSyncMetadataErrorKind(message)]++
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return doctorSortedCountParts(assetCounts), doctorSortedCountParts(staleCounts), doctorSortedCountParts(metadataCounts), nil
+}
+
+func doctorLogField(fields map[string]any, key string) string {
+	if fields == nil {
+		return ""
+	}
+	value, ok := fields[key]
+	if !ok || value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func doctorAndroidSyncMetadataErrorKind(message string) string {
+	lower := strings.ToLower(message)
+	if strings.Contains(lower, "sync http 502") {
+		return "http_502"
+	}
+	if strings.Contains(lower, "sync http 503") {
+		return "http_503"
+	}
+	if strings.Contains(lower, "sync http 504") {
+		return "http_504"
+	}
+	if strings.Contains(lower, "sync decode failed") {
+		return "decode_failed"
+	}
+	if strings.Contains(lower, "connect timeout") {
+		return "connect_timeout"
+	}
+	if strings.Contains(lower, "request timeout") {
+		return "request_timeout"
+	}
+	if strings.Contains(lower, "failed to connect") {
+		return "failed_connect"
+	}
+	if strings.Contains(lower, "certpathvalidator") || strings.Contains(lower, "trust anchor") {
+		return "certificate"
+	}
+	if strings.Contains(lower, "connection abort") || strings.Contains(lower, "unexpected end of stream") {
+		return "connection_closed"
+	}
+	fallback := maskSensitive(strings.TrimSpace(message))
+	if len(fallback) > 80 {
+		fallback = fallback[:80]
+	}
+	if fallback == "" {
+		return "unknown"
+	}
+	return fallback
+}
+
+func doctorSortedCountParts(counts map[string]int) []string {
+	parts := make([]string, 0, len(counts))
+	for key, count := range counts {
+		parts = append(parts, fmt.Sprintf("%s=%d", key, count))
+	}
+	sort.Strings(parts)
+	return parts
 }
 
 func writeDoctorRecentErrors(sb *strings.Builder) {

@@ -98,6 +98,18 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 	); err != nil {
 		t.Fatalf("write log: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(tmp, "logs", "android"), 0o755); err != nil {
+		t.Fatalf("mkdir android logs: %v", err)
+	}
+	androidLog := strings.Join([]string{
+		`{"event":"android_sync_asset_failed","fields":{"asset_kind":"post_thumbnail","error":"verify_failed","generation_id":"android-sync-doctor","asset_id":"sample_asset_1"},"level":"info"}`,
+		`{"event":"android_sync_asset_failed","fields":{"asset_kind":"post_thumbnail","error":"verify_failed","generation_id":"android-sync-doctor","asset_id":"sample_asset_2"},"level":"info"}`,
+		`{"event":"android_sync_asset_stale","fields":{"asset_kind":"post_thumbnail","reason":"stale_generation_asset_verify_failed","generation_id":"android-sync-doctor","asset_id":"sample_asset_3"},"level":"info"}`,
+		`{"event":"android_sync_metadata_retry","fields":{"label":"latest_generation","error":"Sync HTTP 502 for latest_generation"},"level":"info"}`,
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(tmp, "logs", "android", "server.log"), []byte(androidLog), 0o644); err != nil {
+		t.Fatalf("write android log: %v", err)
+	}
 
 	report, err := doctorStatus()
 	if err != nil {
@@ -111,6 +123,10 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 		"Profile/media readiness:",
 		"Downloader failures:",
 		"Recent high-signal log errors:",
+		"Android sync client failures:",
+		"asset_failed verify_failed/post_thumbnail=2",
+		"asset_stale stale_generation_asset_verify_failed/post_thumbnail=1",
+		"metadata_retry latest_generation/http_502=1",
 		"android-sync-doctor",
 		"prune eligible: generations=1 items=1 assets=1 health_reports=1",
 		"network=1",

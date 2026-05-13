@@ -11,7 +11,7 @@
       "owner_kind": "channel_profile",
       "required_reason": "profile",
       "seq": 1,
-      "server_url": "/api/android/sync/assets/asset-contract-ready",
+      "server_url": "/api/android/sync/generation/android-sync-contract/assets/asset-contract-ready",
       "sha256": "sha-contract-ready",
       "size_bytes": 12,
       "state": "ready"

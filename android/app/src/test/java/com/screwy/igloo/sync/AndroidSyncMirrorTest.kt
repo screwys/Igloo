@@ -51,6 +51,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.encodeToString
@@ -278,6 +279,287 @@ class AndroidSyncMirrorTest {
             assertTrue(e.message.orEmpty().contains("Sync decode failed"))
         }
         assertEquals(1, latestAttempts.get())
+    }
+
+    @Test fun staleGenerationAssetConflictTriggersResyncWithoutPermanentAssetFailure() = runBlocking {
+        val assetRequests = AtomicInteger(0)
+        val asset = AndroidSyncAssetDto(
+            seq = 1,
+            asset_id = "asset-1",
+            asset_kind = "post_thumbnail",
+            owner_id = "sample_video",
+            owner_kind = "video",
+            bucket = "thumbnails",
+            server_url = "/api/android/sync/generation/$GENERATION_ID/assets/asset-1",
+            content_type = "image/jpeg",
+            size_bytes = 10L,
+            sha256 = "expected-hash",
+            state = "ready",
+            effective_recency_ms = nowMs,
+        )
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = GENERATION_ID,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                            asset_count = 1,
+                            ready_asset_count = 1,
+                        ),
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/items" -> respondJson(
+                    AndroidSyncItemsResponse(
+                        generation_id = GENERATION_ID,
+                        items = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/assets" -> respondJson(
+                    AndroidSyncAssetsResponse(
+                        generation_id = GENERATION_ID,
+                        assets = listOf(asset),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                "/api/android/sync/generation/$GENERATION_ID/assets/asset-1" -> {
+                    assetRequests.incrementAndGet()
+                    respond(
+                        "asset changed; request latest generation",
+                        HttpStatusCode.Conflict,
+                        headersOf("Content-Type", ContentType.Text.Plain.toString()),
+                    )
+                }
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        val failure = runCatching { buildMirror(engine).syncOnce() }.exceptionOrNull()
+
+        assertTrue(failure is AndroidSyncStaleGenerationException)
+        assertEquals(1, assetRequests.get())
+        val counts = db.androidSyncDao().healthCounts(GENERATION_ID)
+        assertEquals(0, counts.failed)
+        assertEquals(1, counts.pending)
+    }
+
+    @Test fun generationScopedVerifyFailureTriggersResyncWithoutPermanentAssetFailure() = runBlocking {
+        val asset = AndroidSyncAssetDto(
+            seq = 1,
+            asset_id = "asset-1",
+            asset_kind = "post_thumbnail",
+            owner_id = "sample_video",
+            owner_kind = "video",
+            bucket = "thumbnails",
+            server_url = "/api/android/sync/generation/$GENERATION_ID/assets/asset-1",
+            content_type = "image/jpeg",
+            size_bytes = 4L,
+            sha256 = "expected-hash",
+            state = "ready",
+            effective_recency_ms = nowMs,
+        )
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = GENERATION_ID,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                            asset_count = 1,
+                            ready_asset_count = 1,
+                        ),
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/items" -> respondJson(
+                    AndroidSyncItemsResponse(
+                        generation_id = GENERATION_ID,
+                        items = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/assets" -> respondJson(
+                    AndroidSyncAssetsResponse(
+                        generation_id = GENERATION_ID,
+                        assets = listOf(asset),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                "/api/android/sync/generation/$GENERATION_ID/assets/asset-1" -> respond(
+                    ByteReadChannel("bad!"),
+                    HttpStatusCode.OK,
+                    headersOf("Content-Type" to listOf("image/jpeg")),
+                )
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        val failure = runCatching { buildMirror(engine).syncOnce() }.exceptionOrNull()
+
+        assertTrue(failure is AndroidSyncStaleGenerationException)
+        val counts = db.androidSyncDao().healthCounts(GENERATION_ID)
+        assertEquals(0, counts.failed)
+        assertEquals(1, counts.pending)
+    }
+
+    @Test fun runnerTreatsStaleGenerationAsRetrySignal() = runBlocking {
+        val asset = AndroidSyncAssetDto(
+            seq = 1,
+            asset_id = "asset-1",
+            asset_kind = "post_thumbnail",
+            owner_id = "sample_video",
+            owner_kind = "video",
+            bucket = "thumbnails",
+            server_url = "/api/android/sync/generation/$GENERATION_ID/assets/asset-1",
+            content_type = "image/jpeg",
+            size_bytes = 10L,
+            sha256 = "expected-hash",
+            state = "ready",
+            effective_recency_ms = nowMs,
+        )
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = GENERATION_ID,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                            asset_count = 1,
+                            ready_asset_count = 1,
+                        ),
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/items" -> respondJson(
+                    AndroidSyncItemsResponse(
+                        generation_id = GENERATION_ID,
+                        items = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/assets" -> respondJson(
+                    AndroidSyncAssetsResponse(
+                        generation_id = GENERATION_ID,
+                        assets = listOf(asset),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                "/api/android/sync/generation/$GENERATION_ID/assets/asset-1" -> respond(
+                    "asset changed; request latest generation",
+                    HttpStatusCode.Conflict,
+                    headersOf("Content-Type", ContentType.Text.Plain.toString()),
+                )
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+        val mirror = buildMirror(engine)
+        val job = launch { mirror.run() }
+        try {
+            mirror.trigger()
+            waitForLog("android_sync_generation_stale_retry")
+
+            assertFalse(logSink.snapshot().any { it.event == "android_sync_unhandled" })
+        } finally {
+            job.cancel()
+        }
+    }
+
+    @Test fun completedAssetImportRefreshesLegacyUrlsAndRetriesFailedRows() = runBlocking {
+        val dao = db.androidSyncDao()
+        dao.upsertGeneration(generationEntity(GENERATION_ID, createdAtMs = nowMs, assetsImportedAtMs = nowMs))
+        val oldAsset = AndroidSyncAssetEntity(
+            generationId = GENERATION_ID,
+            seq = 1,
+            assetId = "asset-1",
+            assetKind = "post_thumbnail",
+            ownerId = "sample_video",
+            ownerKind = "video",
+            bucket = "thumbnails",
+            serverUrl = "/api/android/sync/assets/asset-1",
+            contentType = "image/jpeg",
+            sizeBytes = "good-body".length.toLong(),
+            serverState = "ready",
+            effectiveRecencyMs = nowMs,
+        )
+        dao.importAssets(listOf(oldAsset), nowMs)
+        dao.markFailed(
+            generationId = oldAsset.generationId,
+            assetId = oldAsset.assetId,
+            assetKind = oldAsset.assetKind,
+            nextAttemptAtMs = nowMs + 60_000,
+            lastError = "verify_failed",
+            nowMs = nowMs,
+        )
+        val refreshedAsset = AndroidSyncAssetDto(
+            seq = oldAsset.seq,
+            asset_id = oldAsset.assetId,
+            asset_kind = oldAsset.assetKind,
+            owner_id = oldAsset.ownerId,
+            owner_kind = oldAsset.ownerKind,
+            bucket = oldAsset.bucket,
+            server_url = "/api/android/sync/generation/$GENERATION_ID/assets/${oldAsset.assetId}",
+            content_type = oldAsset.contentType,
+            size_bytes = oldAsset.sizeBytes,
+            state = "ready",
+            effective_recency_ms = nowMs,
+        )
+        val assetPageRequests = AtomicInteger(0)
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = GENERATION_ID,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                            asset_count = 1,
+                            ready_asset_count = 1,
+                        ),
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/items" -> respondJson(
+                    AndroidSyncItemsResponse(
+                        generation_id = GENERATION_ID,
+                        items = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/assets" -> {
+                    assetPageRequests.incrementAndGet()
+                    respondJson(
+                        AndroidSyncAssetsResponse(
+                            generation_id = GENERATION_ID,
+                            assets = listOf(refreshedAsset),
+                            end_of_stream = true,
+                        ),
+                    )
+                }
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                "/api/android/sync/generation/$GENERATION_ID/assets/asset-1" -> respond(
+                    ByteReadChannel("good-body"),
+                    HttpStatusCode.OK,
+                    headersOf("Content-Type" to listOf("image/jpeg")),
+                )
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        buildMirror(engine).syncOnce()
+
+        assertEquals(1, assetPageRequests.get())
+        val row = dao.latestVerifiedAssetsForOwner("sample_video", listOf("post_thumbnail")).single()
+        assertEquals(refreshedAsset.server_url, row.serverUrl)
+        assertEquals(0, row.attemptCount)
+        assertNull(row.lastError)
     }
 
     @Test fun assetWithoutSizeOrHashFailsWithoutDownload() = runBlocking {

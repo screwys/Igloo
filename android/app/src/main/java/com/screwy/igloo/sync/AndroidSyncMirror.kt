@@ -110,6 +110,13 @@ class AndroidSyncMirror(
                 completedTriggerSeq.set(maxOf(completedTriggerSeq.get(), observedTriggerSeq))
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: AndroidSyncStaleGenerationException) {
+                logger.info(
+                    event = "android_sync_generation_stale_retry",
+                    fields = mapOf("generation_id" to e.generationId),
+                )
+                delay(SYNC_FAILURE_RETRY_MS)
+                trigger()
             } catch (e: Exception) {
                 logger.error(
                     event = "android_sync_unhandled",
@@ -310,16 +317,23 @@ class AndroidSyncMirror(
     }
 
     private suspend fun importAssets(generationId: String) {
-        if (dao.countAssetsImportComplete(generationId) > 0) {
+        if (dao.countAssetsImportCompleteForCurrentContract(generationId) > 0) {
             logger.info(
                 event = "android_sync_assets_import_skipped",
                 fields = mapOf("generation_id" to generationId, "reason" to "already_imported"),
             )
             return
         }
-        val resumeAfter = dao.maxImportedAssetSeq(generationId).takeIf { it > 0L }
+        val refreshCompleteImport = dao.countAssetsImportComplete(generationId) > 0
+        val resumeAfter = if (refreshCompleteImport) null else dao.maxImportedAssetSeq(generationId).takeIf { it > 0L }
         var after: String? = resumeAfter?.toString()
         var total = resumeAfter?.toInt() ?: 0
+        if (refreshCompleteImport) {
+            logger.info(
+                event = "android_sync_assets_contract_refresh",
+                fields = mapOf("generation_id" to generationId),
+            )
+        }
         if (resumeAfter != null) {
             logger.info(
                 event = "android_sync_assets_resume",
@@ -379,6 +393,8 @@ class AndroidSyncMirror(
             try {
                 return block()
             } catch (e: CancellationException) {
+                throw e
+            } catch (e: AndroidSyncStaleGenerationException) {
                 throw e
             } catch (e: Exception) {
                 if (e.isTerminalMetadataFailure()) throw e

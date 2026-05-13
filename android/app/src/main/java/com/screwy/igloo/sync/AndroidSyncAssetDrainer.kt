@@ -23,6 +23,9 @@ import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
 
+class AndroidSyncStaleGenerationException(val generationId: String) :
+    IllegalStateException("Android sync generation $generationId has stale asset bytes; request latest generation")
+
 internal class AndroidSyncAssetDrainer(
     private val dao: AndroidSyncDao,
     private val client: HttpClient,
@@ -43,6 +46,7 @@ internal class AndroidSyncAssetDrainer(
         var healthUploadFailures = 0
         var promoted = false
         var completedSinceHealth = 0
+        var staleGeneration = false
         dao.resetDownloading(generationId = generationId, nowMs = nowMsProvider())
         try {
             coroutineScope {
@@ -87,6 +91,7 @@ internal class AndroidSyncAssetDrainer(
                         DrainResult.VerifiedExisting -> verifiedExisting++
                         DrainResult.Downloaded -> downloaded++
                         DrainResult.Deferred -> deferred++
+                        DrainResult.StaleGeneration -> staleGeneration = true
                         DrainResult.Failed -> Unit
                     }
                     completedSinceHealth++
@@ -129,8 +134,16 @@ internal class AndroidSyncAssetDrainer(
                 "deferred" to deferred,
                 "pending" to dao.countPending(generationId),
                 "health_upload_failures" to healthUploadFailures,
+                "stale_generation" to staleGeneration,
             ),
         )
+        if (staleGeneration) {
+            logger.info(
+                event = "android_sync_generation_stale_assets",
+                fields = mapOf("generation_id" to generationId),
+            )
+            throw AndroidSyncStaleGenerationException(generationId)
+        }
     }
 
     fun deleteUnreferencedAssetFiles(retainedPaths: List<String>): AssetFileDeleteStats {
@@ -198,6 +211,9 @@ internal class AndroidSyncAssetDrainer(
                         deferAsset(asset, "http_$status")
                         DrainResult.Deferred
                     }
+                    status == 409 -> {
+                        deferStaleAsset(asset, "stale_generation_asset_changed")
+                    }
                     status !in 200..299 -> {
                         markAssetFailed(asset, "http_$status")
                         DrainResult.Failed
@@ -206,8 +222,12 @@ internal class AndroidSyncAssetDrainer(
                         copyAssetBodyToFile(response.bodyAsChannel(), partFile, maxDownloadBytes)
                         if (!verifyFile(partFile, asset)) {
                             partFile.delete()
-                            markAssetFailed(asset, "verify_failed")
-                            DrainResult.Failed
+                            if (asset.serverUrl.isGenerationScopedAssetUrl()) {
+                                deferStaleAsset(asset, "stale_generation_asset_verify_failed")
+                            } else {
+                                markAssetFailed(asset, "verify_failed")
+                                DrainResult.Failed
+                            }
                         } else {
                             if (finalFile.exists()) finalFile.delete()
                             if (!partFile.renameTo(finalFile)) {
@@ -308,6 +328,22 @@ internal class AndroidSyncAssetDrainer(
         dao.deferAsset(asset.generationId, asset.assetId, asset.assetKind, next, error, nowMsProvider())
     }
 
+    private suspend fun deferStaleAsset(asset: AndroidSyncAssetEntity, reason: String): DrainResult {
+        deferAsset(asset, reason)
+        logger.info(
+            event = "android_sync_asset_stale",
+            fields = mapOf(
+                "generation_id" to asset.generationId,
+                "asset_id" to asset.assetId,
+                "asset_kind" to asset.assetKind,
+                "owner_id" to asset.ownerId,
+                "owner_kind" to asset.ownerKind,
+                "reason" to reason,
+            ),
+        )
+        return DrainResult.StaleGeneration
+    }
+
     private fun finalFileFor(asset: AndroidSyncAssetEntity): File {
         val bucketDir = File(syncRoot, safePathSegment(asset.bucket)).apply { mkdirs() }
         return File(bucketDir, safePathSegment(asset.assetId) + "." + extFor(asset.contentType))
@@ -320,10 +356,14 @@ internal class AndroidSyncAssetDrainer(
         return sha256Hex(file).equals(expected, ignoreCase = true)
     }
 
+    private fun String.isGenerationScopedAssetUrl(): Boolean =
+        startsWith("/api/android/sync/generation/") && contains("/assets/")
+
     private sealed interface DrainResult {
         data object VerifiedExisting : DrainResult
         data object Downloaded : DrainResult
         data object Deferred : DrainResult
+        data object StaleGeneration : DrainResult
         data object Failed : DrainResult
     }
 

@@ -169,6 +169,9 @@ internal fun momentCaptionBaseBottomPaddingDp(mediaMode: MomentMediaMode): Int =
     MomentMediaMode.Slideshow -> MomentCaptionBaseBottomPaddingDp
 }
 
+internal fun momentShareEnabled(item: MomentItem): Boolean =
+    item.canonicalUrl.isNotBlank()
+
 internal fun momentCollapsedCaptionStartPaddingDp(): Int = MomentCollapsedCaptionStartPaddingDp
 
 internal fun momentCaptionDescriptionMaxLines(expanded: Boolean): Int =
@@ -1059,10 +1062,10 @@ private fun MomentPage(
             ShadowIcon(
                 Icons.Filled.Share,
                 shareLabel,
-                { if (bookmarkItem.canonicalUrl.isNotBlank()) onShare(bookmarkItem) },
+                { if (momentShareEnabled(bookmarkItem)) onShare(bookmarkItem) },
                 false,
                 colors.primary,
-                enabled = bookmarkItem.canonicalUrl.isNotBlank(),
+                enabled = momentShareEnabled(bookmarkItem),
             )
         }
 

@@ -24,19 +24,21 @@ import (
 )
 
 const (
-	androidSyncItemPageCap         = 500
-	androidSyncAssetPageCap        = 2000
-	androidSyncAssetServeLimit     = 4
-	androidSyncAssetRetryAfterSecs = 30
-	androidSyncFreshGenerationTTL  = 6 * time.Hour
-	androidSyncFreshGenerationSkew = 5 * time.Minute
-	androidSyncFeedRankMaxRows     = 5000
+	androidSyncItemPageCap             = 500
+	androidSyncAssetPageCap            = 2000
+	androidSyncAssetServeLimit         = 4
+	androidSyncAssetRetryAfterSecs     = 30
+	androidSyncServeHashVerifyMaxBytes = 32 << 20
+	androidSyncFreshGenerationTTL      = 6 * time.Hour
+	androidSyncFreshGenerationSkew     = 5 * time.Minute
+	androidSyncFeedRankMaxRows         = 5000
 )
 
 func (s *Server) registerAndroidSyncAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/android/sync/generation/latest", s.handleAndroidSyncLatestGeneration)
 	mux.HandleFunc("GET /api/android/sync/generation/{generationID}/items", s.handleAndroidSyncGenerationItems)
 	mux.HandleFunc("GET /api/android/sync/generation/{generationID}/assets", s.handleAndroidSyncGenerationAssets)
+	mux.HandleFunc("GET /api/android/sync/generation/{generationID}/assets/{assetID}", s.handleAndroidSyncGenerationAsset)
 	mux.HandleFunc("GET /api/android/sync/assets/{assetID}", s.handleAndroidSyncAsset)
 	mux.HandleFunc("POST /api/android/sync/health", s.handleAndroidSyncHealth)
 }
@@ -125,7 +127,7 @@ func (s *Server) handleAndroidSyncGenerationAssets(w http.ResponseWriter, r *htt
 	}
 	for i := range assets {
 		if assets[i].State == "ready" {
-			assets[i].ServerURL = "/api/android/sync/assets/" + assets[i].AssetID
+			assets[i].ServerURL = "/api/android/sync/generation/" + url.PathEscape(genID) + "/assets/" + url.PathEscape(assets[i].AssetID)
 		}
 	}
 	next, end := androidSyncPageCursor(assets, androidSyncAssetPageCap, func(asset model.AndroidSyncAsset) int64 { return asset.Seq })
@@ -145,6 +147,22 @@ func (s *Server) handleAndroidSyncGenerationAssets(w http.ResponseWriter, r *htt
 	})
 }
 
+func (s *Server) handleAndroidSyncGenerationAsset(w http.ResponseWriter, r *http.Request) {
+	genID := r.PathValue("generationID")
+	assetID := r.PathValue("assetID")
+	if genID == "" || assetID == "" {
+		http.NotFound(w, r)
+		return
+	}
+	asset, err := s.db.GetAndroidSyncGenerationAsset(genID, assetID)
+	if err != nil {
+		slog.Error("android_sync_generation_asset_lookup_failed", "generation_id", genID, "asset_id", assetID, "err", err)
+		http.Error(w, "asset lookup failed", http.StatusInternalServerError)
+		return
+	}
+	s.serveAndroidSyncAsset(w, r, asset)
+}
+
 func (s *Server) handleAndroidSyncAsset(w http.ResponseWriter, r *http.Request) {
 	assetID := r.PathValue("assetID")
 	if assetID == "" {
@@ -157,6 +175,10 @@ func (s *Server) handleAndroidSyncAsset(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "asset lookup failed", http.StatusInternalServerError)
 		return
 	}
+	s.serveAndroidSyncAsset(w, r, asset)
+}
+
+func (s *Server) serveAndroidSyncAsset(w http.ResponseWriter, r *http.Request, asset *model.AndroidSyncAsset) {
 	if asset == nil || asset.State != "ready" {
 		http.NotFound(w, r)
 		return
@@ -164,6 +186,10 @@ func (s *Server) handleAndroidSyncAsset(w http.ResponseWriter, r *http.Request) 
 	path := s.androidSyncAssetPath(*asset)
 	if path == "" {
 		http.NotFound(w, r)
+		return
+	}
+	if !androidSyncServedAssetStillMatches(*asset, path) {
+		http.Error(w, "android sync asset changed; request latest generation", http.StatusConflict)
 		return
 	}
 	if s.serveAndroidSyncAssetViaAccel(w, r, *asset, path) {
@@ -180,6 +206,21 @@ func (s *Server) handleAndroidSyncAsset(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Set("Cache-Control", "private, no-transform")
 	http.ServeFile(w, r, path)
+}
+
+func androidSyncServedAssetStillMatches(asset model.AndroidSyncAsset, path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	if asset.SizeBytes > 0 && info.Size() != asset.SizeBytes {
+		return false
+	}
+	if asset.SHA256 == "" || info.Size() > androidSyncServeHashVerifyMaxBytes {
+		return true
+	}
+	_, sum, err := hashFile(path)
+	return err == nil && strings.EqualFold(sum, asset.SHA256)
 }
 
 func (s *Server) serveAndroidSyncAssetViaAccel(w http.ResponseWriter, r *http.Request, asset model.AndroidSyncAsset, path string) bool {
@@ -479,7 +520,7 @@ func (s *Server) androidSyncGenerationForRequest(username string, retention db.A
 	}
 	if latest, err := s.db.GetLatestAndroidSyncGeneration(); err != nil {
 		return nil, false, err
-	} else if latest != nil && androidSyncCanServeStaleGeneration() && androidSyncGenerationFreshForRetention(latest, retention, nowMs) {
+	} else if latest != nil && androidSyncCanServeStaleGeneration() && androidSyncGenerationFreshForRequestWindow(latest, retention, nowMs) {
 		s.queueAndroidSyncGenerationRefresh(username, retention, sourceVersion)
 		return latest, true, nil
 	}
@@ -552,6 +593,20 @@ func androidSyncGenerationFreshForRetention(gen *model.AndroidSyncGeneration, re
 	if !androidSyncGenerationRetentionMatches(gen.Retention, retention) {
 		return false
 	}
+	return androidSyncGenerationFreshByAge(gen, nowMs)
+}
+
+func androidSyncGenerationFreshForRequestWindow(gen *model.AndroidSyncGeneration, retention db.AndroidRetentionSettings, nowMs int64) bool {
+	if gen == nil || gen.Status != "ready" {
+		return false
+	}
+	if !androidSyncGenerationRequestWindowMatches(gen.Retention, retention) {
+		return false
+	}
+	return androidSyncGenerationFreshByAge(gen, nowMs)
+}
+
+func androidSyncGenerationFreshByAge(gen *model.AndroidSyncGeneration, nowMs int64) bool {
 	age := time.Duration(nowMs-gen.CreatedAtMs) * time.Millisecond
 	if age < -androidSyncFreshGenerationSkew {
 		return false
@@ -560,14 +615,18 @@ func androidSyncGenerationFreshForRetention(gen *model.AndroidSyncGeneration, re
 }
 
 func androidSyncGenerationRetentionMatches(raw map[string]int, retention db.AndroidRetentionSettings) bool {
+	return androidSyncGenerationRequestWindowMatches(raw, retention) &&
+		raw["materializer_version"] == db.AndroidSyncMaterializerVersion
+}
+
+func androidSyncGenerationRequestWindowMatches(raw map[string]int, retention db.AndroidRetentionSettings) bool {
 	if raw == nil {
 		return false
 	}
 	return raw["feed_days"] == retention.FeedDays &&
 		raw["youtube_days"] == retention.YoutubeDays &&
 		raw["moments_days"] == retention.MomentsDays &&
-		raw["story_hours"] == retention.StoryHours &&
-		raw["materializer_version"] == db.AndroidSyncMaterializerVersion
+		raw["story_hours"] == retention.StoryHours
 }
 
 func (s *Server) buildAndroidSyncItems(username string, sets db.AndroidSyncDesiredSets) ([]model.AndroidSyncItem, map[string]int, error) {

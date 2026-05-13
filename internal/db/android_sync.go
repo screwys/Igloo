@@ -18,7 +18,7 @@ import (
 // AndroidSyncMaterializerVersion is part of the generation source hash. Bump
 // it when server-side asset materialization semantics change and Android needs
 // a fresh immutable generation even if the source rows did not change.
-const AndroidSyncMaterializerVersion = 31
+const AndroidSyncMaterializerVersion = 32
 
 const (
 	defaultAndroidSyncKeepReadyGenerations = 2
@@ -1402,6 +1402,29 @@ func (db *DB) GetAndroidSyncAsset(assetID string) (*model.AndroidSyncAsset, erro
 		ORDER BY g.created_at_ms DESC, a.seq ASC
 		LIMIT 1
 	`, assetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, nil
+	}
+	asset, err := scanAndroidSyncAsset(rows)
+	if err != nil {
+		return nil, err
+	}
+	return &asset, rows.Err()
+}
+
+func (db *DB) GetAndroidSyncGenerationAsset(generationID, assetID string) (*model.AndroidSyncAsset, error) {
+	rows, err := db.conn.Query(`
+		SELECT generation_id, seq, asset_id, asset_kind, owner_id, owner_kind,
+		       bucket, server_url, content_type, size_bytes, sha256, state,
+		       required_reason, is_auto, audio_language, effective_recency_ms
+		FROM android_sync_assets
+		WHERE generation_id = ? AND asset_id = ?
+		LIMIT 1
+	`, generationID, assetID)
 	if err != nil {
 		return nil, err
 	}

@@ -178,6 +178,21 @@ interface AndroidSyncDao {
     )
     suspend fun countAssetsImportComplete(generationId: String): Int
 
+    @Query(
+        """
+        SELECT COUNT(*) FROM android_sync_generations
+        WHERE generation_id = :generationId
+          AND assets_imported_at_ms IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM android_sync_assets
+              WHERE generation_id = :generationId
+                AND server_state = 'ready'
+                AND server_url NOT LIKE '/api/android/sync/generation/%/assets/%'
+          )
+        """
+    )
+    suspend fun countAssetsImportCompleteForCurrentContract(generationId: String): Int
+
     @Query("SELECT COALESCE(MAX(seq), 0) FROM android_sync_items WHERE generation_id = :generationId")
     suspend fun maxImportedItemSeq(generationId: String): Long
 
@@ -622,7 +637,8 @@ interface AndroidSyncDao {
                      AND COALESCE(android_sync_assets.sha256, '') = COALESCE(excluded.sha256, '')
                      AND COALESCE(android_sync_assets.file_size, 0) = excluded.size_bytes THEN 'verified'
                 WHEN android_sync_assets.state = 'failed'
-                     AND COALESCE(android_sync_assets.sha256, '') = COALESCE(excluded.sha256, '') THEN 'failed'
+                     AND COALESCE(android_sync_assets.sha256, '') = COALESCE(excluded.sha256, '')
+                     AND COALESCE(android_sync_assets.server_url, '') = COALESCE(excluded.server_url, '') THEN 'failed'
                 ELSE 'desired'
             END,
             local_path = CASE
@@ -645,17 +661,20 @@ interface AndroidSyncDao {
             END,
             attempt_count = CASE
                 WHEN excluded.server_state = 'server_missing' THEN android_sync_assets.attempt_count
-                WHEN COALESCE(android_sync_assets.sha256, '') = COALESCE(excluded.sha256, '') THEN android_sync_assets.attempt_count
+                WHEN COALESCE(android_sync_assets.sha256, '') = COALESCE(excluded.sha256, '')
+                     AND COALESCE(android_sync_assets.server_url, '') = COALESCE(excluded.server_url, '') THEN android_sync_assets.attempt_count
                 ELSE 0
             END,
             next_attempt_at_ms = CASE
                 WHEN excluded.server_state = 'server_missing' THEN 9223372036854775807
-                WHEN COALESCE(android_sync_assets.sha256, '') = COALESCE(excluded.sha256, '') THEN android_sync_assets.next_attempt_at_ms
+                WHEN COALESCE(android_sync_assets.sha256, '') = COALESCE(excluded.sha256, '')
+                     AND COALESCE(android_sync_assets.server_url, '') = COALESCE(excluded.server_url, '') THEN android_sync_assets.next_attempt_at_ms
                 ELSE 0
             END,
             last_error = CASE
                 WHEN excluded.server_state = 'server_missing' THEN 'server_missing'
-                WHEN COALESCE(android_sync_assets.sha256, '') = COALESCE(excluded.sha256, '') THEN android_sync_assets.last_error
+                WHEN COALESCE(android_sync_assets.sha256, '') = COALESCE(excluded.sha256, '')
+                     AND COALESCE(android_sync_assets.server_url, '') = COALESCE(excluded.server_url, '') THEN android_sync_assets.last_error
                 ELSE NULL
             END,
             updated_at_ms = :nowMs

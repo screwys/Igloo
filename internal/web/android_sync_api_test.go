@@ -99,11 +99,12 @@ func TestAndroidSyncGenerationPublishesServeableAssets(t *testing.T) {
 	if stream.SHA256 == "" || stream.SizeBytes != 14 {
 		t.Fatalf("stream hash/size not materialized: %+v", *stream)
 	}
-	if stream.ServerURL != "/api/android/sync/assets/"+stream.AssetID {
+	wantStreamURL := "/api/android/sync/generation/" + latest.Generation.GenerationID + "/assets/" + stream.AssetID
+	if stream.ServerURL != wantStreamURL {
 		t.Fatalf("stream server_url = %q", stream.ServerURL)
 	}
 
-	req = httptest.NewRequest("GET", "/api/android/sync/assets/"+stream.AssetID, nil)
+	req = httptest.NewRequest("GET", stream.ServerURL, nil)
 	rec = httptest.NewRecorder()
 	srv.mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -316,7 +317,12 @@ func TestAndroidSyncAssetReturnsTooManyRequestsWhenServeSlotsFull(t *testing.T) 
 	srv := newAndroidSyncTestServer(t)
 	dataDir := srv.cfg.DataDir
 
-	mustWriteFile(t, filepath.Join(dataDir, "thumbnails", "avatars", "sample_channel_a.jpg"), []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43})
+	avatarPath := filepath.Join(dataDir, "thumbnails", "avatars", "sample_channel_a.jpg")
+	mustWriteFile(t, avatarPath, []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43})
+	avatarSize, avatarSHA, err := hashFile(avatarPath)
+	if err != nil {
+		t.Fatalf("hash avatar: %v", err)
+	}
 
 	gen := model.AndroidSyncGeneration{
 		GenerationID:    "android-sync-throttle",
@@ -337,8 +343,8 @@ func TestAndroidSyncAssetReturnsTooManyRequestsWhenServeSlotsFull(t *testing.T) 
 		Bucket:       "avatar",
 		ServerURL:    "/api/android/sync/assets/sample_channel_a_avatar",
 		ContentType:  "image/jpeg",
-		SizeBytes:    6,
-		SHA256:       "unused",
+		SizeBytes:    avatarSize,
+		SHA256:       avatarSHA,
 		State:        "ready",
 	}
 	if err := srv.db.StoreAndroidSyncGeneration(gen, nil, []model.AndroidSyncAsset{asset}); err != nil {
@@ -364,11 +370,71 @@ func TestAndroidSyncAssetReturnsTooManyRequestsWhenServeSlotsFull(t *testing.T) 
 	}
 }
 
+func TestAndroidSyncGenerationAssetReturnsConflictWhenBackingBytesChanged(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	dataDir := srv.cfg.DataDir
+	videoPath := filepath.Join(dataDir, "videos", "youtube", "mutable.mp4")
+	mustWriteFile(t, videoPath, []byte("old-stream"))
+	size, sum, err := hashFile(videoPath)
+	if err != nil {
+		t.Fatalf("hash old stream: %v", err)
+	}
+	now := time.Now().UnixMilli()
+	if err := srv.db.ExecRaw(`
+		INSERT INTO videos (video_id, channel_id, title, duration, file_path, file_size, published_at, downloaded_at, sync_seq)
+		VALUES ('sample_video', 'youtube_sample_channel', 'Sample Video', 10, 'videos/youtube/mutable.mp4', ?, ?, ?, 1)
+	`, size, now, now); err != nil {
+		t.Fatalf("insert video: %v", err)
+	}
+	gen := model.AndroidSyncGeneration{
+		GenerationID:    "android-sync-mutable-asset",
+		CreatedAtMs:     now,
+		Status:          "ready",
+		SourceVersion:   "source-mutable-asset",
+		Retention:       map[string]int{"feed_days": 7, "youtube_days": 7, "moments_days": 7, "story_hours": 48},
+		AssetCount:      1,
+		ReadyAssetCount: 1,
+		TotalBytes:      size,
+		AssetCounts:     map[string]int{"video_stream": 1},
+	}
+	asset := model.AndroidSyncAsset{
+		GenerationID:   gen.GenerationID,
+		Seq:            1,
+		AssetID:        "youtube_youtube_video_sample_video_video_stream",
+		AssetKind:      "video_stream",
+		OwnerID:        "sample_video",
+		OwnerKind:      "youtube_video",
+		Bucket:         "videos",
+		ServerURL:      "/api/android/sync/generation/android-sync-mutable-asset/assets/youtube_youtube_video_sample_video_video_stream",
+		ContentType:    "video/mp4",
+		SizeBytes:      size,
+		SHA256:         sum,
+		State:          "ready",
+		RequiredReason: "retention",
+	}
+	if err := srv.db.StoreAndroidSyncGeneration(gen, nil, []model.AndroidSyncAsset{asset}); err != nil {
+		t.Fatalf("store generation: %v", err)
+	}
+	mustWriteFile(t, videoPath, []byte("new-stream-body"))
+
+	req := httptest.NewRequest("GET", asset.ServerURL, nil)
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestAndroidSyncAssetUsesXAccelBehindReverseProxy(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	dataDir := srv.cfg.DataDir
 
-	mustWriteFile(t, filepath.Join(dataDir, "thumbnails", "avatars", "sample_channel_a.jpg"), []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43})
+	avatarPath := filepath.Join(dataDir, "thumbnails", "avatars", "sample_channel_a.jpg")
+	mustWriteFile(t, avatarPath, []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43})
+	avatarSize, avatarSHA, err := hashFile(avatarPath)
+	if err != nil {
+		t.Fatalf("hash avatar: %v", err)
+	}
 
 	gen := model.AndroidSyncGeneration{
 		GenerationID:    "android-sync-xaccel",
@@ -389,8 +455,8 @@ func TestAndroidSyncAssetUsesXAccelBehindReverseProxy(t *testing.T) {
 		Bucket:       "avatar",
 		ServerURL:    "/api/android/sync/assets/sample_channel_a_avatar",
 		ContentType:  "image/jpeg",
-		SizeBytes:    6,
-		SHA256:       "unused",
+		SizeBytes:    avatarSize,
+		SHA256:       avatarSHA,
 		State:        "ready",
 	}
 	if err := srv.db.StoreAndroidSyncGeneration(gen, nil, []model.AndroidSyncAsset{asset}); err != nil {
@@ -1329,6 +1395,94 @@ func TestAndroidSyncLatestServesFreshGenerationWhileRefreshBuilds(t *testing.T) 
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("background refresh did not store source %s", nextSource)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestAndroidSyncLatestServesFreshGenerationDuringMaterializerRefresh(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	now := time.Now().UnixMilli()
+	retention := db.AndroidRetentionSettings{FeedDays: 3, YoutubeDays: 2, MomentsDays: 90, StoryHours: 48}
+	oldGenerationID := "android-sync-old-materializer"
+	storeAndroidSyncGenerationForWebTestWithSource(
+		t,
+		srv.db,
+		oldGenerationID,
+		now,
+		"old-materializer-source",
+		map[string]int{
+			"feed_days":            retention.FeedDays,
+			"youtube_days":         retention.YoutubeDays,
+			"moments_days":         retention.MomentsDays,
+			"story_hours":          retention.StoryHours,
+			"materializer_version": db.AndroidSyncMaterializerVersion - 1,
+		},
+	)
+	currentSource, err := srv.db.AndroidSyncSourceVersion("alice", retention)
+	if err != nil {
+		t.Fatalf("current source version: %v", err)
+	}
+
+	srv.androidSyncGenerationMu.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			srv.androidSyncGenerationMu.Unlock()
+		}
+	}()
+
+	req := httptest.NewRequest("GET", "/api/android/sync/generation/latest?feed_days=3&youtube_days=2&moments_days=90&story_hours=48", nil)
+	req = attachTestAuth(req, "alice")
+	rec := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		srv.mux.ServeHTTP(rec, req)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		srv.androidSyncGenerationMu.Unlock()
+		locked = false
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+		}
+		t.Fatalf("latest generation request blocked behind materializer refresh")
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var latest struct {
+		Generation model.AndroidSyncGeneration `json:"generation"`
+		Refreshing bool                        `json:"refreshing"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&latest); err != nil {
+		t.Fatalf("decode latest: %v", err)
+	}
+	if latest.Generation.GenerationID != oldGenerationID {
+		t.Fatalf("served generation = %s, want existing materializer generation %s", latest.Generation.GenerationID, oldGenerationID)
+	}
+	if !latest.Refreshing {
+		t.Fatalf("refreshing = false, want true while materializer refresh is queued")
+	}
+
+	srv.androidSyncGenerationMu.Unlock()
+	locked = false
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		existing, err := srv.db.GetAndroidSyncGenerationBySource(currentSource)
+		if err != nil {
+			t.Fatalf("lookup refreshed source: %v", err)
+		}
+		if existing != nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("background materializer refresh did not store source %s", currentSource)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
