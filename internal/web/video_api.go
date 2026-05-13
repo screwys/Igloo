@@ -706,7 +706,8 @@ func (s *Server) handleVideoCommentsRefresh(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		slog.Error("AddComments", "video", videoID, "err", err)
 	}
-	s.queueYouTubeCommentAuthorAvatars(parsed)
+	// yt-dlp already returns commenter thumbnails with comments. Commenters are
+	// not navigable Igloo profiles, so keep them out of channel_profiles.
 
 	// If fetch returned nothing but had comments before, log warning
 	if saved == 0 && len(oldComments) > 0 {
@@ -736,32 +737,6 @@ func (s *Server) handleVideoCommentsRefresh(w http.ResponseWriter, r *http.Reque
 		"comments": comments,
 		"count":    len(comments),
 	})
-}
-
-func (s *Server) queueYouTubeCommentAuthorAvatars(comments []db.CommentInput) {
-	if len(comments) == 0 {
-		return
-	}
-	if n, err := s.db.SeedYouTubeCommentAuthorProfiles(); err != nil {
-		slog.Warn("SeedYouTubeCommentAuthorProfiles", "err", err)
-	} else if n > 0 {
-		slog.Info("seeded_youtube_comment_author_profiles", "count", n)
-	}
-	if s.requestAvatar == nil {
-		return
-	}
-	seen := map[string]struct{}{}
-	for _, comment := range comments {
-		channelID := model.YouTubeCommentAuthorChannelID(comment.AuthorID)
-		if channelID == "" {
-			continue
-		}
-		if _, ok := seen[channelID]; ok {
-			continue
-		}
-		seen[channelID] = struct{}{}
-		s.requestAvatar(channelID)
-	}
 }
 
 // stringFromAny safely extracts a string from an any value.
@@ -1010,6 +985,9 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", contentType)
 	}
 	w.Header().Set("Cache-Control", "private, no-transform")
+	if s.serveDataFileViaXAccel(w, r, filePath, contentType, "private, no-transform") {
+		return
+	}
 
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -1034,7 +1012,11 @@ func (s *Server) handleAudio(w http.ResponseWriter, r *http.Request) {
 			for _, stem := range []string{videoID, videoID + "_0"} {
 				candidate := filepath.Join(dir, stem+ext)
 				if _, err := os.Stat(candidate); err == nil {
-					w.Header().Set("Cache-Control", "public, max-age=3600")
+					cacheControl := "public, max-age=3600"
+					w.Header().Set("Cache-Control", cacheControl)
+					if s.serveDataFileViaXAccel(w, r, candidate, "", cacheControl) {
+						return
+					}
 					http.ServeFile(w, r, candidate)
 					return
 				}
@@ -1043,7 +1025,11 @@ func (s *Server) handleAudio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if path := s.findFeedMediaAudioFile(videoID); path != "" {
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		cacheControl := "public, max-age=3600"
+		w.Header().Set("Cache-Control", cacheControl)
+		if s.serveDataFileViaXAccel(w, r, path, "", cacheControl) {
+			return
+		}
 		http.ServeFile(w, r, path)
 		return
 	}
@@ -1117,9 +1103,15 @@ func (s *Server) handleSlide(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveSlideFile(w http.ResponseWriter, r *http.Request, path string) {
-	w.Header().Set("Cache-Control", "public, max-age=3600")
-	if strings.HasPrefix(detectImageContentType(path), "image/") {
-		w.Header().Set("Content-Type", detectImageContentType(path))
+	cacheControl := "public, max-age=3600"
+	w.Header().Set("Cache-Control", cacheControl)
+	contentType := ""
+	if detected := detectImageContentType(path); strings.HasPrefix(detected, "image/") {
+		contentType = detected
+		w.Header().Set("Content-Type", contentType)
+	}
+	if s.serveDataFileViaXAccel(w, r, path, contentType, cacheControl) {
+		return
 	}
 	http.ServeFile(w, r, path)
 }

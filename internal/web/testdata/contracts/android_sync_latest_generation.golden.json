@@ -1,8 +1,8 @@
 {
   "generation": {
-    "asset_count": 2,
+    "asset_count": 1,
     "asset_counts": {
-      "avatar": 2
+      "avatar": 1
     },
     "content_counts": {
       "bookmark_metadata": 1,
@@ -16,12 +16,12 @@
     "ready_asset_count": 0,
     "retention": {
       "feed_days": 7,
-      "materializer_version": 29,
+      "materializer_version": 31,
       "moments_days": 7,
       "story_hours": 48,
       "youtube_days": 7
     },
-    "server_missing_asset_count": 2,
+    "server_missing_asset_count": 1,
     "source_version": "\u003csource-version\u003e",
     "status": "ready",
     "total_bytes": 0

@@ -39,8 +39,13 @@ func (s *Server) handleChannelAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Cache-Control", "public, max-age=2592000, immutable")
-	w.Header().Set("Content-Type", detectImageContentType(avatarPath))
+	cacheControl := "public, max-age=2592000, immutable"
+	contentType := detectImageContentType(avatarPath)
+	w.Header().Set("Cache-Control", cacheControl)
+	w.Header().Set("Content-Type", contentType)
+	if s.serveDataFileViaXAccel(w, r, avatarPath, contentType, cacheControl) {
+		return
+	}
 	http.ServeFile(w, r, avatarPath)
 }
 
@@ -91,8 +96,13 @@ func (s *Server) handleChannelBanner(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r) // CSS renders a gradient fallback
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=2592000, immutable")
-	w.Header().Set("Content-Type", detectImageContentType(bannerPath))
+	cacheControl := "public, max-age=2592000, immutable"
+	contentType := detectImageContentType(bannerPath)
+	w.Header().Set("Cache-Control", cacheControl)
+	w.Header().Set("Content-Type", contentType)
+	if s.serveDataFileViaXAccel(w, r, bannerPath, contentType, cacheControl) {
+		return
+	}
 	http.ServeFile(w, r, bannerPath)
 }
 
@@ -375,7 +385,8 @@ func generateJPEGThumbnail(inputPath, outputPath string) bool {
 }
 
 func (s *Server) serveThumbFile(w http.ResponseWriter, r *http.Request, path string) {
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	cacheControl := "public, max-age=86400"
+	w.Header().Set("Cache-Control", cacheControl)
 	contentType := "image/jpeg"
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".png":
@@ -386,6 +397,9 @@ func (s *Server) serveThumbFile(w http.ResponseWriter, r *http.Request, path str
 		contentType = "image/gif"
 	}
 	w.Header().Set("Content-Type", contentType)
+	if s.serveDataFileViaXAccel(w, r, path, contentType, cacheControl) {
+		return
+	}
 	http.ServeFile(w, r, path)
 }
 
@@ -414,6 +428,9 @@ func (s *Server) handleDownloadVideo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	if s.serveDataFileViaXAccel(w, r, absPath, "", "") {
+		return
+	}
 	http.ServeFile(w, r, absPath)
 }
 

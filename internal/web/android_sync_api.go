@@ -26,6 +26,8 @@ import (
 const (
 	androidSyncItemPageCap         = 500
 	androidSyncAssetPageCap        = 2000
+	androidSyncAssetServeLimit     = 4
+	androidSyncAssetRetryAfterSecs = 30
 	androidSyncFreshGenerationTTL  = 6 * time.Hour
 	androidSyncFreshGenerationSkew = 5 * time.Minute
 	androidSyncFeedRankMaxRows     = 5000
@@ -163,11 +165,43 @@ func (s *Server) handleAndroidSyncAsset(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
+	if s.serveAndroidSyncAssetViaAccel(w, r, *asset, path) {
+		return
+	}
+	if !s.tryAcquireAndroidSyncAssetServeSlot() {
+		w.Header().Set("Retry-After", strconv.Itoa(androidSyncAssetRetryAfterSecs))
+		http.Error(w, "android sync asset concurrency limit reached", http.StatusTooManyRequests)
+		return
+	}
+	defer s.releaseAndroidSyncAssetServeSlot()
 	if asset.ContentType != "" {
 		w.Header().Set("Content-Type", asset.ContentType)
 	}
 	w.Header().Set("Cache-Control", "private, no-transform")
 	http.ServeFile(w, r, path)
+}
+
+func (s *Server) serveAndroidSyncAssetViaAccel(w http.ResponseWriter, r *http.Request, asset model.AndroidSyncAsset, path string) bool {
+	return s.serveDataFileViaXAccel(w, r, path, asset.ContentType, "private, no-transform")
+}
+
+func (s *Server) tryAcquireAndroidSyncAssetServeSlot() bool {
+	s.androidSyncAssetServeSemOnce.Do(func() {
+		s.androidSyncAssetServeSemaphore = make(chan struct{}, androidSyncAssetServeLimit)
+	})
+	select {
+	case s.androidSyncAssetServeSemaphore <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Server) releaseAndroidSyncAssetServeSlot() {
+	select {
+	case <-s.androidSyncAssetServeSemaphore:
+	default:
+	}
 }
 
 func (s *Server) handleAndroidSyncHealth(w http.ResponseWriter, r *http.Request) {
@@ -926,24 +960,6 @@ func (s *Server) buildAndroidSyncAssets(username string, sets db.AndroidSyncDesi
 		"android_sync_asset_phase",
 		"phase", "channel_fallbacks",
 		"channels", len(channelIDs),
-		"assets", len(byKey),
-		"duration_ms", time.Since(phaseStart).Milliseconds(),
-	)
-
-	phaseStart = time.Now()
-	profileChannelIDs, err := s.db.ListAndroidSyncProfileChannelIDs()
-	if err != nil {
-		return nil, counts, err
-	}
-	for _, channelID := range profileChannelIDs {
-		for _, asset := range s.androidSyncChannelFallbackAssets(channelID, "profile") {
-			addAndroidSyncAsset(byKey, asset)
-		}
-	}
-	slog.Info(
-		"android_sync_asset_phase",
-		"phase", "profile_channel_assets",
-		"channels", len(profileChannelIDs),
 		"assets", len(byKey),
 		"duration_ms", time.Since(phaseStart).Milliseconds(),
 	)

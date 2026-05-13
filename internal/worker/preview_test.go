@@ -67,6 +67,20 @@ func TestBuildPreviewTrackJSON(t *testing.T) {
 	}
 }
 
+func TestEnqueuePreviewSkipsUnsupportedMedia(t *testing.T) {
+	m := &Manager{previewChan: make(chan PreviewRequest, 2)}
+
+	m.EnqueuePreview(PreviewRequest{VideoID: "image", FilePath: "/tmp/image.jpg", Duration: 30})
+	if got := len(m.previewChan); got != 0 {
+		t.Fatalf("preview queue length after image = %d, want 0", got)
+	}
+
+	m.EnqueuePreview(PreviewRequest{VideoID: "clip", FilePath: "/tmp/clip.mp4", Duration: 30})
+	if got := len(m.previewChan); got != 1 {
+		t.Fatalf("preview queue length after video = %d, want 1", got)
+	}
+}
+
 func TestEnsurePreviewTrackJSONRepairsExistingSpriteWithoutVTT(t *testing.T) {
 	dir := t.TempDir()
 	outDir := filepath.Join(dir, "previews", "video")
