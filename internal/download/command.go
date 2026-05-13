@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/screwys/igloo/internal/toolenv"
 )
 
 // CommandRunner executes external downloader CLIs and captures redacted
@@ -52,11 +54,14 @@ func (r CommandRunner) Run(ctx context.Context, tool string, args []string, opts
 	}
 	defer cancel()
 
-	cmd := exec.CommandContext(runCtx, tool, args...)
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err := runCommand(runCtx, tool, args, &stdout, &stderr)
+	if executableNotFound(err) {
+		toolenv.ApplyCommonToolPaths()
+		stdout.Reset()
+		stderr.Reset()
+		err = runCommand(runCtx, tool, args, &stdout, &stderr)
+	}
 	ended := time.Now()
 	exitCode := 0
 	if err != nil {
@@ -82,6 +87,21 @@ func (r CommandRunner) Run(ctx context.Context, tool string, args []string, opts
 		ExitCode:     exitCode,
 		Err:          err,
 	}
+}
+
+func runCommand(ctx context.Context, tool string, args []string, stdout, stderr *bytes.Buffer) error {
+	cmd := exec.CommandContext(ctx, tool, args...)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd.Run()
+}
+
+func executableNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var execErr *exec.Error
+	return errors.As(err, &execErr) && errors.Is(execErr.Err, exec.ErrNotFound)
 }
 
 func RedactArgs(args []string) []string {

@@ -38,6 +38,28 @@ func TestCommandRunnerCapturesExitAndRedactsArgs(t *testing.T) {
 	}
 }
 
+func TestCommandRunnerFindsToolsFromCommonUserBins(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	toolPath := filepath.Join(binDir, "igloo-test-tool")
+	if err := os.WriteFile(toolPath, []byte("#!/bin/sh\necho common-path-tool\n"), 0o755); err != nil {
+		t.Fatalf("write tool: %v", err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", "")
+
+	result := CommandRunner{}.Run(context.Background(), "igloo-test-tool", nil, CommandOptions{})
+	if result.Err != nil {
+		t.Fatalf("run tool from common path: %v", result.Err)
+	}
+	if got := strings.TrimSpace(string(result.CombinedOutput())); got != "common-path-tool" {
+		t.Fatalf("output = %q, want common-path-tool", got)
+	}
+}
+
 func TestJSONPayloadsHandlesMixedDownloaderOutput(t *testing.T) {
 	raw := []byte("[gallery-dl][info] log line\n{\"id\":\"one\"}\n[\n {\"id\":\"two\"},\n [{\"id\":\"three\"}]\n]\n")
 	payloads := JSONPayloads(raw)
