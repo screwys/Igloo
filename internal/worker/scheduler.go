@@ -116,15 +116,6 @@ func (m *Manager) runSchedulerCycle(ctx context.Context, force bool) {
 						handle = instagramHandleForChannel(ch)
 					}
 					m.refreshNativeStoriesForChannel(ctx, ch.ChannelID, ch.Platform, handle, ch.Name)
-					for _, ref := range refs {
-						if ref.IsRepost && ref.ChannelID != "" && ref.ChannelID != ch.ChannelID {
-							platform := "tiktok"
-							if strings.HasPrefix(ref.ChannelID, "instagram_") {
-								platform = "instagram"
-							}
-							m.refreshNativeStoriesForChannel(ctx, ref.ChannelID, platform, ref.AuthorHandle, ref.AuthorDisplayName)
-						}
-					}
 				}
 
 				added := m.reconcileSourceWindow(ch, refs)

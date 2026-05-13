@@ -128,31 +128,20 @@ func (db *DB) GetStoryStatusForChannelIDs(username string, channelIDs []string, 
 		return out, nil
 	}
 	cutoff := db.StoryCutoffMs(nowMs)
-	args := []any{cutoff, cutoff, username}
+	args := []any{username}
 	for _, id := range ids {
 		args = append(args, id)
 	}
 	args = append(args, cutoff, cutoff)
 	query := `
-		WITH eligible_repost_channels AS (
-			SELECT DISTINCT v.channel_id
-			FROM video_repost_sources vrs
-			INNER JOIN videos v ON v.video_id = vrs.video_id
-			INNER JOIN channel_follows rcf ON rcf.channel_id = vrs.reposter_channel_id AND rcf.user_id = ''
-			LEFT JOIN channel_settings rcs ON rcs.channel_id = vrs.reposter_channel_id
-			WHERE COALESCE(v.channel_id, '') != ''
-			  AND COALESCE(v.source_kind, '') != 'story'
-			  AND COALESCE(rcs.include_reposts, 1) != 0
-			  AND (? = 0 OR COALESCE(NULLIF(vrs.updated_at_ms, 0), NULLIF(vrs.first_seen_at_ms, 0), NULLIF(vrs.reposted_at_ms, 0), COALESCE(v.published_at, 0)) >= ?)
-		),
-		active AS (
+		WITH active AS (
 			SELECT v.video_id,
 			       v.channel_id,
 			       COALESCE(v.published_at, 0) AS published_at,
 			       CASE WHEN mv.video_id IS NULL THEN 1 ELSE 0 END AS unseen
 			FROM videos v
 			INNER JOIN channels c ON c.channel_id = v.channel_id
-			LEFT JOIN channel_follows cf ON cf.channel_id = v.channel_id AND cf.user_id = ''
+			INNER JOIN channel_follows cf ON cf.channel_id = v.channel_id AND cf.user_id = ''
 			LEFT JOIN moment_views mv ON mv.username = ? AND mv.video_id = v.video_id
 			WHERE v.channel_id IN (` + placeholders(len(ids)) + `)
 			  AND COALESCE(c.platform, '') IN ('tiktok','instagram')
@@ -160,10 +149,6 @@ func (db *DB) GetStoryStatusForChannelIDs(username string, channelIDs []string, 
 			  AND COALESCE(v.is_temp, 0) = 0
 			  AND (? = 0 OR COALESCE(v.published_at, 0) >= ?)
 			  AND ` + validStoryVideoSQL("v", "c") + `
-			  AND (
-			    cf.channel_id IS NOT NULL
-			    OR EXISTS (SELECT 1 FROM eligible_repost_channels erc WHERE erc.channel_id = v.channel_id)
-			  )
 		)
 		SELECT a.channel_id,
 		       COUNT(*) AS story_count,

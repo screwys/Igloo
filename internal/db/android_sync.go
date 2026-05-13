@@ -185,7 +185,7 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 			return out, fmt.Errorf("android sync desired repost media videos: %w", err)
 		}
 	}
-	if err := db.collectStoryVideoIDs(storyCutoff, includeMomentReposts, includeInstagramTagged, out.MediaVideos); err != nil {
+	if err := db.collectStoryVideoIDs(storyCutoff, out.MediaVideos); err != nil {
 		return out, fmt.Errorf("android sync desired story media videos: %w", err)
 	}
 
@@ -225,7 +225,7 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 			return out, fmt.Errorf("android sync desired repost videos: %w", err)
 		}
 	}
-	if err := db.collectStoryVideoIDs(storyCutoff, includeMomentReposts, includeInstagramTagged, out.Videos); err != nil {
+	if err := db.collectStoryVideoIDs(storyCutoff, out.Videos); err != nil {
 		return out, fmt.Errorf("android sync desired story videos: %w", err)
 	}
 
@@ -316,33 +316,17 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 	return out, nil
 }
 
-func (db *DB) collectStoryVideoIDs(storyCutoff int64, includeTikTokSources, includeInstagramSources bool, into map[string]struct{}) error {
+func (db *DB) collectStoryVideoIDs(storyCutoff int64, into map[string]struct{}) error {
 	return db.collectStrings(`
-		WITH eligible_repost_channels AS (
-			SELECT DISTINCT v.channel_id
-			FROM video_repost_sources vrs
-			INNER JOIN videos v ON v.video_id = vrs.video_id
-			INNER JOIN channel_follows rcf ON rcf.channel_id = vrs.reposter_channel_id AND rcf.user_id = ''
-			LEFT JOIN channel_settings rcs ON rcs.channel_id = vrs.reposter_channel_id
-			WHERE COALESCE(v.channel_id, '') != ''
-			  AND COALESCE(v.source_kind, '') != 'story'
-			  AND COALESCE(rcs.include_reposts, 1) != 0
-			  AND `+sourceWindowPlatformEnabledClause("v", includeTikTokSources, includeInstagramSources)+`
-			  AND (? = 0 OR COALESCE(NULLIF(vrs.updated_at_ms, 0), NULLIF(vrs.first_seen_at_ms, 0), NULLIF(vrs.reposted_at_ms, 0), COALESCE(v.published_at, 0)) >= ?)
-		)
 		SELECT DISTINCT sv.video_id
 		FROM videos sv
 		INNER JOIN channels c ON c.channel_id = sv.channel_id
-		LEFT JOIN channel_follows cf ON cf.channel_id = sv.channel_id AND cf.user_id = ''
+		INNER JOIN channel_follows cf ON cf.channel_id = sv.channel_id AND cf.user_id = ''
 		WHERE COALESCE(c.platform, '') IN ('tiktok','instagram')
 		  AND COALESCE(sv.source_kind, '') = 'story'
 		  AND (? = 0 OR COALESCE(sv.published_at, 0) >= ?)
 		  AND `+validStoryVideoSQL("sv", "c")+`
-		  AND (
-		    cf.channel_id IS NOT NULL
-		    OR EXISTS (SELECT 1 FROM eligible_repost_channels erc WHERE erc.channel_id = sv.channel_id)
-		  )
-	`, []any{storyCutoff, storyCutoff, storyCutoff, storyCutoff}, into)
+	`, []any{storyCutoff, storyCutoff}, into)
 }
 
 func (db *DB) ListAndroidSyncAlwaysThumbnailVideoIDs() ([]string, error) {

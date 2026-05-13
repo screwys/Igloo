@@ -83,9 +83,8 @@ func TestStoriesUseCutoffSeenStateAndOwnChannels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("story statuses: %v", err)
 	}
-	author := statuses["tiktok_author"]
-	if author.State != "new" || author.FirstUnseenVideoID != "author_story" || author.Count != 1 {
-		t.Fatalf("recent repost-introduced author should have a new story, got %#v", author)
+	if status, ok := statuses["tiktok_author"]; ok && status.Count > 0 {
+		t.Fatalf("unfollowed repost-introduced author should not have story status, got %#v", status)
 	}
 	if status, ok := statuses["tiktok_reposter"]; ok && status.Count > 0 {
 		t.Fatalf("repost must not become the reposter's own story, got %#v", status)
@@ -93,15 +92,15 @@ func TestStoriesUseCutoffSeenStateAndOwnChannels(t *testing.T) {
 
 	if err := d.ExecRaw(`
 		INSERT INTO moment_views (username, video_id, viewed_at)
-		VALUES ('alice', 'author_story', ?)
+		VALUES ('alice', 'followed_recent', ?)
 	`, nowMs); err != nil {
 		t.Fatalf("insert view: %v", err)
 	}
-	statuses, err = d.GetStoryStatusForChannelIDs("alice", []string{"tiktok_author"}, nowMs)
+	statuses, err = d.GetStoryStatusForChannelIDs("alice", []string{"tiktok_followed"}, nowMs)
 	if err != nil {
 		t.Fatalf("story statuses after view: %v", err)
 	}
-	if got := statuses["tiktok_author"].State; got != "seen" {
+	if got := statuses["tiktok_followed"].State; got != "seen" {
 		t.Fatalf("viewed active story should be seen, got %q", got)
 	}
 }
@@ -167,7 +166,7 @@ func TestStoriesSkipLegacyInstagramTrayRows(t *testing.T) {
 	}
 }
 
-func TestAndroidSyncDesiredSetsIncludeStoryMediaAndBookmarkedExpiredStory(t *testing.T) {
+func TestAndroidSyncDesiredSetsIncludeFollowedStoryMediaAndBookmarkedExpiredStory(t *testing.T) {
 	d := openWritableTestDB(t)
 	nowMs := int64(10 * 86_400_000)
 	recent := nowMs - 12*3_600_000
@@ -177,14 +176,15 @@ func TestAndroidSyncDesiredSetsIncludeStoryMediaAndBookmarkedExpiredStory(t *tes
 	if err := d.ExecRaw(`
 		INSERT INTO channels (channel_id, name, source_id, platform, sync_seq) VALUES
 			('tiktok_author', 'Author', 'author', 'tiktok', 1),
-			('tiktok_reposter', 'Reposter', 'reposter', 'tiktok', 2)
+			('tiktok_sample_reposter', 'Sample Reposter', 'sample_reposter', 'tiktok', 2),
+			('tiktok_followed', 'Followed', 'followed', 'tiktok', 3)
 	`); err != nil {
 		t.Fatalf("insert channels: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO channel_follows (user_id, channel_id, followed_at)
-		VALUES ('', 'tiktok_reposter', ?)
-	`, nowMs); err != nil {
+		VALUES ('', 'tiktok_sample_reposter', ?), ('', 'tiktok_followed', ?)
+	`, nowMs, nowMs); err != nil {
 		t.Fatalf("insert follow: %v", err)
 	}
 	if err := d.ExecRaw(`
@@ -192,15 +192,16 @@ func TestAndroidSyncDesiredSetsIncludeStoryMediaAndBookmarkedExpiredStory(t *tes
 			('recent_author_story', 'tiktok_author', 'recent author story', ?, 'story', 1),
 			('expired_bookmarked_story', 'tiktok_author', 'expired bookmarked story', ?, 'story', 2),
 			('expired_unprotected_story', 'tiktok_author', 'expired unprotected story', ?, 'story', 3),
-			('recent_regular_post', 'tiktok_author', 'recent regular post', ?, '', 4)
-	`, recent, expired, expired, recent); err != nil {
+			('recent_regular_post', 'tiktok_author', 'recent regular post', ?, '', 4),
+			('recent_followed_story', 'tiktok_followed', 'recent followed story', ?, 'story', 5)
+	`, recent, expired, expired, recent, recent); err != nil {
 		t.Fatalf("insert videos: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO video_repost_sources (
 			video_id, reposter_channel_id, reposter_handle, reposter_display_name,
 			reposted_at_ms, first_seen_at_ms, updated_at_ms
-		) VALUES ('recent_regular_post', 'tiktok_reposter', 'reposter', 'Reposter', ?, ?, ?)
+		) VALUES ('recent_regular_post', 'tiktok_sample_reposter', 'sample_reposter', 'Sample Reposter', ?, ?, ?)
 	`, recent, recent, recent); err != nil {
 		t.Fatalf("insert repost source: %v", err)
 	}
@@ -218,8 +219,11 @@ func TestAndroidSyncDesiredSetsIncludeStoryMediaAndBookmarkedExpiredStory(t *tes
 	if err != nil {
 		t.Fatalf("desired sets: %v", err)
 	}
-	if _, ok := sets.MediaVideos["recent_author_story"]; !ok {
-		t.Fatalf("recent repost-introduced story should require media")
+	if _, ok := sets.MediaVideos["recent_author_story"]; ok {
+		t.Fatalf("unfollowed repost-introduced story should not require media")
+	}
+	if _, ok := sets.MediaVideos["recent_followed_story"]; !ok {
+		t.Fatalf("recent followed story should require media")
 	}
 	if _, ok := sets.MediaVideos["expired_bookmarked_story"]; !ok {
 		t.Fatalf("bookmarked expired story should keep media protection")
