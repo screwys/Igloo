@@ -232,18 +232,71 @@ func writeDoctorAssetParity(sb *strings.Builder, conn *sql.DB) {
 	fmt.Fprintf(sb, "  inventory states: %s\n", strings.Join(parts, ", "))
 
 	dataDir := filepath.Dir(getDBPath())
+	postMediaLegacy := doctorCount(conn, `
+		SELECT COUNT(*)
+		FROM (
+			SELECT owner_id, media_index
+			FROM media_files
+			WHERE COALESCE(file_path, '') != ''
+			  AND owner_type IN ('feed_media', 'quote_media')
+			  AND `+doctorNonAudioPathSQL("file_path")+`
+			GROUP BY owner_id, media_index
+		)`)
+	postThumbnailLegacy := doctorCount(conn, `
+		SELECT COUNT(*)
+		FROM (
+			SELECT
+				CASE
+					WHEN channel_id LIKE 'twitter_%' THEN 'tweet'
+					WHEN channel_id LIKE 'tiktok_%' THEN 'tiktok_video'
+					WHEN channel_id LIKE 'instagram_%' THEN 'instagram_reel'
+					ELSE 'youtube_video'
+				END AS owner_kind,
+				video_id AS owner_id
+			FROM videos
+			WHERE COALESCE(thumbnail_path, '') != ''
+			UNION
+			SELECT 'tweet' AS owner_kind, owner_id
+			FROM media_files
+			WHERE COALESCE(file_path, '') != ''
+			  AND owner_type IN ('feed_media', 'quote_media')
+			  AND media_index = 0
+			  AND `+doctorNonAudioPathSQL("file_path")+`
+			  AND (
+			       COALESCE(media_type, '') IN ('video', 'gif')
+			    OR `+doctorNotImageTransportPathSQL("file_path")+`
+			  )
+			GROUP BY owner_id
+		)`)
 	rows := []struct {
 		kind   string
 		legacy int
+		raw    int
 	}{
-		{"post_media", doctorCount(conn, `SELECT COUNT(*) FROM media_files WHERE COALESCE(file_path, '') != '' AND owner_type IN ('feed_media', 'quote_media')`)},
-		{"video_stream", doctorCount(conn, `SELECT COUNT(*) FROM videos WHERE COALESCE(file_path, '') != ''`)},
-		{"post_thumbnail", doctorCount(conn, `SELECT COUNT(*) FROM videos WHERE COALESCE(thumbnail_path, '') != ''`) + countFiles(filepath.Join(dataDir, "thumbnails", "generated"))},
-		{"dearrow_thumbnail", doctorCount(conn, `SELECT COUNT(*) FROM videos WHERE COALESCE(dearrow_thumb_path, '') != ''`) + countFiles(filepath.Join(dataDir, "thumbnails", "dearrow"))},
-		{"avatar", countFiles(filepath.Join(dataDir, "thumbnails", "avatars"))},
-		{"banner", countFiles(filepath.Join(dataDir, "thumbnails", "banners"))},
-		{"preview_track_json", countFilesNamed(filepath.Join(dataDir, "thumbnails", "previews"), "track.json")},
-		{"preview_sprite", countFilesNamed(filepath.Join(dataDir, "thumbnails", "previews"), "sprite.jpg")},
+		{"post_media", postMediaLegacy, 0},
+		{"video_stream", doctorCount(conn, `SELECT COUNT(*) FROM videos WHERE COALESCE(file_path, '') != ''`), 0},
+		{
+			"post_thumbnail",
+			postThumbnailLegacy,
+			doctorCount(conn, `SELECT COUNT(*) FROM videos WHERE COALESCE(thumbnail_path, '') != ''`) + countFiles(filepath.Join(dataDir, "thumbnails", "generated")),
+		},
+		{
+			"dearrow_thumbnail",
+			doctorCount(conn, `SELECT COUNT(*) FROM videos WHERE COALESCE(dearrow_thumb_path, '') != ''`),
+			countFiles(filepath.Join(dataDir, "thumbnails", "dearrow")),
+		},
+		{"avatar", doctorProfileAssetTargetCount(conn, dataDir, "avatar"), countFiles(filepath.Join(dataDir, "thumbnails", "avatars"))},
+		{"banner", doctorProfileAssetTargetCount(conn, dataDir, "banner"), countFiles(filepath.Join(dataDir, "thumbnails", "banners"))},
+		{
+			"preview_track_json",
+			countPreviewFilesForKnownVideos(conn, dataDir, "track.json"),
+			countFilesNamed(filepath.Join(dataDir, "thumbnails", "previews"), "track.json"),
+		},
+		{
+			"preview_sprite",
+			countPreviewFilesForKnownVideos(conn, dataDir, "sprite.jpg"),
+			countFilesNamed(filepath.Join(dataDir, "thumbnails", "previews"), "sprite.jpg"),
+		},
 	}
 	for _, row := range rows {
 		assets := doctorAssetKindCount(conn, row.kind)
@@ -251,9 +304,94 @@ func writeDoctorAssetParity(sb *strings.Builder, conn *sql.DB) {
 		if gap < 0 {
 			gap = 0
 		}
-		fmt.Fprintf(sb, "  %-20s assets=%d legacy=%d gap=%d\n", row.kind+":", assets, row.legacy, gap)
+		if row.raw > 0 && row.raw != row.legacy {
+			fmt.Fprintf(sb, "  %-20s assets=%d legacy=%d raw_files=%d gap=%d\n", row.kind+":", assets, row.legacy, row.raw, gap)
+		} else {
+			fmt.Fprintf(sb, "  %-20s assets=%d legacy=%d gap=%d\n", row.kind+":", assets, row.legacy, gap)
+		}
 	}
 	sb.WriteString("\n")
+}
+
+func doctorNonAudioPathSQL(column string) string {
+	return fmt.Sprintf(`LOWER(COALESCE(%s, '')) NOT LIKE '%%.mp3'
+		  AND LOWER(COALESCE(%s, '')) NOT LIKE '%%.m4a'
+		  AND LOWER(COALESCE(%s, '')) NOT LIKE '%%.aac'
+		  AND LOWER(COALESCE(%s, '')) NOT LIKE '%%.ogg'`, column, column, column, column)
+}
+
+func doctorNotImageTransportPathSQL(column string) string {
+	return fmt.Sprintf(`LOWER(COALESCE(%s, '')) NOT LIKE '%%.jpg'
+		  AND LOWER(COALESCE(%s, '')) NOT LIKE '%%.jpeg'
+		  AND LOWER(COALESCE(%s, '')) NOT LIKE '%%.png'
+		  AND LOWER(COALESCE(%s, '')) NOT LIKE '%%.webp'
+		  AND LOWER(COALESCE(%s, '')) NOT LIKE '%%.gif'
+		  AND LOWER(COALESCE(%s, '')) NOT LIKE '%%.image'`, column, column, column, column, column, column)
+}
+
+func doctorProfileAssetTargetCount(conn *sql.DB, dataDir, kind string) int {
+	sourceColumn := "avatar_url"
+	dirName := "avatars"
+	if kind == "banner" {
+		sourceColumn = "banner_url"
+		dirName = "banners"
+	}
+	rows, err := conn.Query(fmt.Sprintf(`
+		SELECT channel_id, COALESCE(%s, '')
+		FROM channel_profiles
+		WHERE COALESCE(tombstone, 0) = 0
+	`, sourceColumn))
+	if err != nil {
+		return 0
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		var channelID, sourceURL string
+		if err := rows.Scan(&channelID, &sourceURL); err != nil {
+			continue
+		}
+		if sourceURL != "" || doctorProfileMediaFileExists(dataDir, dirName, channelID) {
+			count++
+		}
+	}
+	return count
+}
+
+func doctorProfileMediaFileExists(dataDir, dirName, channelID string) bool {
+	for _, ext := range []string{".jpg", ".jpeg", ".png", ".webp", ".gif"} {
+		if _, err := os.Stat(filepath.Join(dataDir, "thumbnails", dirName, channelID+ext)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func countPreviewFilesForKnownVideos(conn *sql.DB, dataDir, name string) int {
+	dir := filepath.Join(dataDir, "thumbnails", "previews")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, entry.Name(), name)); err != nil {
+			continue
+		}
+		if doctorVideoExists(conn, entry.Name()) {
+			count++
+		}
+	}
+	return count
+}
+
+func doctorVideoExists(conn *sql.DB, videoID string) bool {
+	var exists int
+	err := conn.QueryRow(`SELECT 1 FROM videos WHERE video_id = ? LIMIT 1`, videoID).Scan(&exists)
+	return err == nil && exists == 1
 }
 
 func writeDoctorDownloaderFailures(sb *strings.Builder, conn *sql.DB) {
