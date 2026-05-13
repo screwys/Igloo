@@ -1,8 +1,9 @@
 {
   "generation": {
-    "asset_count": 1,
+    "asset_count": 2,
     "asset_counts": {
-      "avatar": 1
+      "avatar": 1,
+      "post_thumbnail": 1
     },
     "content_counts": {
       "bookmark_metadata": 1,
@@ -21,7 +22,7 @@
       "story_hours": 48,
       "youtube_days": 7
     },
-    "server_missing_asset_count": 1,
+    "server_missing_asset_count": 2,
     "source_version": "\u003csource-version\u003e",
     "status": "ready",
     "total_bytes": 0

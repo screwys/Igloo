@@ -172,6 +172,37 @@ func TestAndroidSyncContractFixtureUsesSingleUserFollowState(t *testing.T) {
 	t.Fatalf("contract channel item missing from Android sync items: %+v", items)
 }
 
+func TestAndroidSyncVideoPayloadIncludesCanonicalURL(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	seedAndroidContractRows(t, srv)
+
+	items, _, err := srv.buildAndroidSyncItems("alice", db.AndroidSyncDesiredSets{
+		Videos: map[string]struct{}{
+			"tiktok_sample_video_sync": {},
+		},
+	})
+	if err != nil {
+		t.Fatalf("buildAndroidSyncItems: %v", err)
+	}
+
+	for _, item := range items {
+		if item.ItemKind != "videos" || item.ItemID != "tiktok_sample_video_sync" {
+			continue
+		}
+		var bundle deltaBundle
+		if err := json.Unmarshal(item.PayloadJSON, &bundle); err != nil {
+			t.Fatalf("decode video payload: %v", err)
+		}
+		got := bundle.Primary["canonical_url"]
+		want := "https://www.tiktok.com/@sample_channel/video/sample_video_sync"
+		if got != want {
+			t.Fatalf("video canonical_url = %#v, want %#v in primary %#v", got, want, bundle.Primary)
+		}
+		return
+	}
+	t.Fatalf("contract video item missing from Android sync items: %+v", items)
+}
+
 func TestContractGoldenNormalizationRejectsMissingOrWrongStableFields(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -481,7 +512,9 @@ func buildAndroidSyncItemsPageContract(t *testing.T) any {
 		Tweets: map[string]struct{}{
 			"sample_tweet_sync": {},
 		},
-		Videos: map[string]struct{}{},
+		Videos: map[string]struct{}{
+			"tiktok_sample_video_sync": {},
+		},
 		Channels: map[string]struct{}{
 			"twitter_sample_channel": {},
 			"youtube_sample_profile": {},
@@ -548,6 +581,12 @@ func seedAndroidContractRows(t *testing.T, srv *testServer) {
 		t.Fatalf("insert channel: %v", err)
 	}
 	if err := srv.db.ExecRaw(`
+		INSERT INTO channels (channel_id, source_id, name, url, platform, sync_seq)
+		VALUES ('tiktok_sample_channel', 'sample_channel', 'Contract TikTok Channel', 'https://www.tiktok.com/@sample_channel', 'tiktok', 12)
+	`); err != nil {
+		t.Fatalf("insert tiktok channel: %v", err)
+	}
+	if err := srv.db.ExecRaw(`
 		INSERT INTO channel_follows (user_id, channel_id, followed_at)
 		VALUES ('', 'twitter_sample_channel', ?)
 	`, now); err != nil {
@@ -573,6 +612,15 @@ func seedAndroidContractRows(t *testing.T, srv *testServer) {
 		FetchedAt:   &fetchedAt,
 	}); err != nil {
 		t.Fatalf("upsert profile-only channel: %v", err)
+	}
+	if err := srv.db.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "tiktok_sample_channel",
+		Platform:    "tiktok",
+		Handle:      "sample_channel",
+		DisplayName: "Contract TikTok Profile",
+		FetchedAt:   &fetchedAt,
+	}); err != nil {
+		t.Fatalf("upsert tiktok profile: %v", err)
 	}
 	published := time.UnixMilli(now)
 	if _, err := srv.db.UpsertFeedItems([]model.FeedItem{{
@@ -602,6 +650,23 @@ func seedAndroidContractRows(t *testing.T, srv *testServer) {
 		FinalScore:   10,
 	}}); err != nil {
 		t.Fatalf("replace feed rank snapshot: %v", err)
+	}
+	if err := srv.db.InsertVideo(
+		"tiktok_sample_video_sync",
+		"tiktok_sample_channel",
+		"Contract Video",
+		"video contract body",
+		90,
+		"",
+		"",
+		0,
+		now,
+		"",
+		"video",
+		0,
+		false,
+	); err != nil {
+		t.Fatalf("insert contract video: %v", err)
 	}
 }
 

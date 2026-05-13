@@ -4,4 +4,4 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-go test ./internal/db -run 'SchemaSnapshot|SchemaTableLifecycles|SchemaMigrationLedger' "$@" -count=1
+go test ./internal/db -run 'SchemaSnapshot|SchemaTableLifecycles|SchemaMigrationLedger|AndroidRoomSchema' "$@" -count=1

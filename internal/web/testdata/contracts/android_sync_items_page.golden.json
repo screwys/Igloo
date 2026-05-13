@@ -209,8 +209,61 @@
         "primary_kind": "feed_rank"
       },
       "seq": 5
+    },
+    {
+      "item_id": "tiktok_sample_video_sync",
+      "item_kind": "videos",
+      "payload": {
+        "attachments": {
+          "user_state": {
+            "channel_follows": [
+              {
+                "channel_id": "tiktok_sample_channel",
+                "followed": false
+              }
+            ],
+            "channel_stars": [
+              {
+                "channel_id": "tiktok_sample_channel",
+                "starred": false
+              }
+            ],
+            "version": 1
+          },
+          "video_repost_sources": []
+        },
+        "primary": {
+          "canonical_url": "https://www.tiktok.com/@sample_channel/video/sample_video_sync",
+          "channel_id": "tiktok_sample_channel",
+          "channel_name": "Contract TikTok Channel",
+          "comment_count": 0,
+          "dearrow_checked_at_ms": null,
+          "dearrow_thumb_path": null,
+          "dearrow_title": null,
+          "dearrow_title_casual": null,
+          "description": "video contract body",
+          "display_title": "Contract Video",
+          "display_title_casual": "Contract Video",
+          "duration": 90,
+          "duration_label": "1:30",
+          "has_subtitles": false,
+          "media_kind": "video",
+          "media_mode": "video",
+          "media_slide_count": 0,
+          "platform": "tiktok",
+          "published_at": 1700000001000,
+          "slide_count": 0,
+          "source_kind": "",
+          "sync_seq": 0,
+          "thumbnail_url": "",
+          "title": "Contract Video",
+          "video_id": "tiktok_sample_video_sync"
+        },
+        "primary_kind": "videos"
+      },
+      "seq": 6
     }
   ],
-  "next": "5",
+  "next": "6",
   "ok": true
 }
