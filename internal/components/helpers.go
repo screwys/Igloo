@@ -687,11 +687,12 @@ type BookmarkCategoryDisplay struct {
 
 // CookieRowData holds data for rendering a cookie platform row.
 type CookieRowData struct {
-	Platform string
-	Name     string
-	Exists   bool
-	Enabled  bool
-	Browser  string
+	Platform  string
+	Name      string
+	Exists    bool
+	Enabled   bool
+	Browser   string
+	FileCount int
 }
 
 func hasPlat(platforms []string, p string) bool {

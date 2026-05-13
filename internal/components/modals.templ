@@ -720,11 +720,19 @@ templ CookieRowsPanel(p PageProps, rows []CookieRowData) {
 			<div class="cookie-row-header">
 				<span class="cookie-platform-name">{ row.Name }</span>
 				if row.Exists && row.Enabled {
-					<span class="cookie-status active">{ L(p, "cookie_status_file_active", "File active") }</span>
-				} else if row.Exists {
-					<span class="cookie-status uploaded">{ L(p, "cookie_status_file_disabled", "File (disabled)") }</span>
+					if row.FileCount > 1 {
+						<span class="cookie-status active">{ fmt.Sprintf(L(p, "cookie_status_files_active", "%d files active"), row.FileCount) }</span>
+					} else {
+						<span class="cookie-status active">{ L(p, "cookie_status_file_active", "File active") }</span>
+					}
 				} else if row.Browser != "" {
 					<span class="cookie-status active">{ row.Browser }</span>
+				} else if row.Exists {
+					if row.FileCount > 1 {
+						<span class="cookie-status uploaded">{ fmt.Sprintf(L(p, "cookie_status_files_disabled", "%d files (disabled)"), row.FileCount) }</span>
+					} else {
+						<span class="cookie-status uploaded">{ L(p, "cookie_status_file_disabled", "File (disabled)") }</span>
+					}
 				} else {
 					<span class="cookie-status inactive">{ L(p, "status_not_set", "Not set") }</span>
 				}
@@ -736,7 +744,7 @@ templ CookieRowsPanel(p PageProps, rows []CookieRowData) {
 					hx-swap="innerHTML"
 					hx-encoding="multipart/form-data"
 				>
-					<input type="file" name="file" accept=".txt" style="display:none;"
+					<input type="file" name="file" accept=".txt" multiple style="display:none;"
 						onchange="if(this.files.length)this.closest('form').requestSubmit()"
 					/>
 					<button class="btn btn-secondary" type="button" style="padding:0.3rem 0.6rem; font-size:0.75rem;"

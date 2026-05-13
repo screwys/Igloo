@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/model"
 )
 
@@ -875,6 +877,88 @@ func TestHandleToggleCookieHTMXRerendersRowsAndKeepsFile(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("toggle response missing %q:\n%s", want, body)
 		}
+	}
+}
+
+func TestHandleUploadCookieAcceptsMultipleFiles(t *testing.T) {
+	srv := newTestServer(t)
+	srv.cfg.CookiesDir = t.TempDir()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for _, item := range []struct {
+		name string
+		data string
+	}{
+		{name: "first.txt", data: "cookie-one"},
+		{name: "second account.txt", data: "cookie-two"},
+	} {
+		part, err := writer.CreateFormFile("file", item.name)
+		if err != nil {
+			t.Fatalf("CreateFormFile: %v", err)
+		}
+		if _, err := part.Write([]byte(item.data)); err != nil {
+			t.Fatalf("Write part: %v", err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("Close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest("POST", "/api/cookies/twitter", &body)
+	req.SetPathValue("platform", "twitter")
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("HX-Request", "true")
+	req = req.WithContext(contextWithUser(req, "admin", "admin"))
+	rec := httptest.NewRecorder()
+
+	srv.handleUploadCookie(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	candidates := download.DiscoverCookieFiles(srv.cfg.CookiesDir, "twitter")
+	if len(candidates) != 2 {
+		t.Fatalf("cookie candidates = %#v, want 2", candidates)
+	}
+	var names []string
+	for _, candidate := range candidates {
+		names = append(names, filepath.Base(candidate.Path))
+	}
+	sort.Strings(names)
+	wantNames := []string{"twitter_cookies.txt", "twitter_cookies_second_account.txt"}
+	if strings.Join(names, ",") != strings.Join(wantNames, ",") {
+		t.Fatalf("cookie filenames = %#v, want %#v", names, wantNames)
+	}
+	if !strings.Contains(rec.Body.String(), ">2 files active<") {
+		t.Fatalf("upload response should show active file count:\n%s", rec.Body.String())
+	}
+}
+
+func TestHandleDeleteCookieRemovesAllDiscoveredFiles(t *testing.T) {
+	srv := newTestServer(t)
+	srv.cfg.CookiesDir = t.TempDir()
+	for _, name := range []string{"twitter_cookies.txt", "twitter_cookies_extra.txt"} {
+		if err := os.WriteFile(filepath.Join(srv.cfg.CookiesDir, name), []byte("cookies"), 0o600); err != nil {
+			t.Fatalf("WriteFile %s: %v", name, err)
+		}
+	}
+
+	req := httptest.NewRequest("DELETE", "/api/cookies/twitter", nil)
+	req.SetPathValue("platform", "twitter")
+	req.Header.Set("HX-Request", "true")
+	req = req.WithContext(contextWithUser(req, "admin", "admin"))
+	rec := httptest.NewRecorder()
+
+	srv.handleDeleteCookie(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := download.DiscoverCookieFiles(srv.cfg.CookiesDir, "twitter"); len(got) != 0 {
+		t.Fatalf("cookie candidates after delete = %#v, want none", got)
+	}
+	if !strings.Contains(rec.Body.String(), `>Not set<`) {
+		t.Fatalf("delete response should show unset row:\n%s", rec.Body.String())
 	}
 }
 

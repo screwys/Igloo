@@ -21,6 +21,7 @@ import (
 	"github.com/screwys/igloo/internal/auth"
 	"github.com/screwys/igloo/internal/components"
 	"github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/fullimport"
 	"github.com/screwys/igloo/internal/model"
 	"github.com/screwys/igloo/internal/restore"
@@ -422,21 +423,31 @@ func (s *Server) handleGetCookies(w http.ResponseWriter, r *http.Request) {
 	platforms := s.enabledPlatforms()
 	result := make(map[string]any, len(platforms))
 	for _, platform := range platforms {
-		path := filepath.Join(s.cfg.CookiesDir, platform+"_cookies.txt")
-		info, err := os.Stat(path)
-		exists := err == nil
+		candidates := download.DiscoverCookieFiles(s.cfg.CookiesDir, platform)
 		var size int64
-		if exists {
-			size = info.Size()
+		filenames := make([]string, 0, len(candidates))
+		for _, candidate := range candidates {
+			info, err := os.Stat(candidate.Path)
+			if err != nil {
+				continue
+			}
+			size += info.Size()
+			filenames = append(filenames, filepath.Base(candidate.Path))
+		}
+		filename := platform + "_cookies.txt"
+		if len(filenames) > 0 {
+			filename = filenames[0]
 		}
 		enabledVal, _ := s.db.GetSetting("cookies_"+platform+"_enabled", "1")
 		browserVal, _ := s.db.GetSetting("cookies_"+platform+"_browser", "")
 		result[platform] = map[string]any{
-			"filename": platform + "_cookies.txt",
-			"exists":   exists,
-			"size":     size,
-			"enabled":  enabledVal == "1",
-			"browser":  browserVal,
+			"filename":   filename,
+			"filenames":  filenames,
+			"file_count": len(filenames),
+			"exists":     len(filenames) > 0,
+			"size":       size,
+			"enabled":    enabledVal == "1",
+			"browser":    browserVal,
 		}
 	}
 	writeJSON(w, 200, result)
@@ -455,17 +466,16 @@ func (s *Server) renderCookieRowsHTML(w http.ResponseWriter, r *http.Request) {
 		if !s.platformEnabled(p.ID) {
 			continue
 		}
-		path := filepath.Join(s.cfg.CookiesDir, p.ID+"_cookies.txt")
-		_, err := os.Stat(path)
-		exists := err == nil
+		candidates := download.DiscoverCookieFiles(s.cfg.CookiesDir, p.ID)
 		enabledVal, _ := s.db.GetSetting("cookies_"+p.ID+"_enabled", "1")
 		browserVal, _ := s.db.GetSetting("cookies_"+p.ID+"_browser", "")
 		rows = append(rows, components.CookieRowData{
-			Platform: p.ID,
-			Name:     p.Name,
-			Exists:   exists,
-			Enabled:  enabledVal == "1",
-			Browser:  browserVal,
+			Platform:  p.ID,
+			Name:      p.Name,
+			Exists:    len(candidates) > 0,
+			Enabled:   enabledVal == "1",
+			Browser:   browserVal,
+			FileCount: len(candidates),
 		})
 	}
 	components.CookieRowsPanel(s.pageProps(w, r), rows).Render(r.Context(), w)
@@ -485,16 +495,14 @@ func (s *Server) handleUploadCookie(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"error": "multipart parse error"})
 		return
 	}
-	file, _, err := r.FormFile("file")
-	if err != nil {
+	if r.MultipartForm == nil {
 		writeJSON(w, 400, map[string]any{"error": "missing file"})
 		return
 	}
-	defer file.Close()
-
-	data, err := io.ReadAll(file)
-	if err != nil {
-		writeJSON(w, 500, map[string]any{"error": "read error"})
+	defer r.MultipartForm.RemoveAll()
+	files := r.MultipartForm.File["file"]
+	if len(files) == 0 {
+		writeJSON(w, 400, map[string]any{"error": "missing file"})
 		return
 	}
 
@@ -503,17 +511,88 @@ func (s *Server) handleUploadCookie(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]any{"error": "mkdir error"})
 		return
 	}
-	dest := filepath.Join(s.cfg.CookiesDir, platform+"_cookies.txt")
-	if err := atomicWrite(dest, data, 0o600); err != nil {
-		slog.Error("write cookie", "platform", platform, "err", err)
-		writeJSON(w, 500, map[string]any{"error": "write error"})
-		return
+	written := make([]string, 0, len(files))
+	used := make(map[string]struct{}, len(files))
+	multiple := len(files) > 1
+	for i, header := range files {
+		file, err := header.Open()
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"error": "open error"})
+			return
+		}
+		data, readErr := io.ReadAll(file)
+		closeErr := file.Close()
+		if readErr != nil {
+			writeJSON(w, 500, map[string]any{"error": "read error"})
+			return
+		}
+		if closeErr != nil {
+			writeJSON(w, 500, map[string]any{"error": "close error"})
+			return
+		}
+		dest := cookieUploadPath(s.cfg.CookiesDir, platform, header.Filename, i, multiple, used)
+		if err := atomicWrite(dest, data, 0o600); err != nil {
+			slog.Error("write cookie", "platform", platform, "err", err)
+			writeJSON(w, 500, map[string]any{"error": "write error"})
+			return
+		}
+		written = append(written, filepath.Base(dest))
 	}
 	if r.Header.Get("HX-Request") != "" {
 		s.renderCookieRowsHTML(w, r)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"success": true, "platform": platform})
+	writeJSON(w, 200, map[string]any{"success": true, "platform": platform, "files": written})
+}
+
+func cookieUploadPath(cookiesDir, platform, filename string, index int, multiple bool, used map[string]struct{}) string {
+	name := platform + "_cookies.txt"
+	if multiple && index > 0 {
+		base := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
+		suffix := sanitizeCookieFilenamePart(base)
+		if suffix == "" || suffix == "cookies" || suffix == platform || suffix == platform+"_cookies" {
+			suffix = strconv.Itoa(index + 1)
+		}
+		name = platform + "_cookies_" + suffix + ".txt"
+	}
+	return uniqueCookieUploadPath(cookiesDir, name, used)
+}
+
+func sanitizeCookieFilenamePart(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	var b strings.Builder
+	lastUnderscore := false
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastUnderscore = false
+			continue
+		}
+		if !lastUnderscore {
+			b.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+	return strings.Trim(b.String(), "_")
+}
+
+func uniqueCookieUploadPath(cookiesDir, name string, used map[string]struct{}) string {
+	base := strings.TrimSuffix(name, filepath.Ext(name))
+	ext := filepath.Ext(name)
+	if ext == "" {
+		ext = ".txt"
+	}
+	for i := 0; ; i++ {
+		candidate := name
+		if i > 0 {
+			candidate = base + "_" + strconv.Itoa(i+1) + ext
+		}
+		if _, ok := used[candidate]; ok {
+			continue
+		}
+		used[candidate] = struct{}{}
+		return filepath.Join(cookiesDir, candidate)
+	}
 }
 
 func (s *Server) handleToggleCookie(w http.ResponseWriter, r *http.Request) {
@@ -598,11 +677,16 @@ func (s *Server) handleDeleteCookie(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"error": "unknown platform"})
 		return
 	}
-	path := filepath.Join(s.cfg.CookiesDir, platform+"_cookies.txt")
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		slog.Error("delete cookie", "platform", platform, "err", err)
-		writeJSON(w, 500, map[string]any{"error": "delete error"})
-		return
+	candidates := download.DiscoverCookieFiles(s.cfg.CookiesDir, platform)
+	if len(candidates) == 0 {
+		candidates = []download.CookieCandidate{{Path: filepath.Join(s.cfg.CookiesDir, platform+"_cookies.txt")}}
+	}
+	for _, candidate := range candidates {
+		if err := os.Remove(candidate.Path); err != nil && !os.IsNotExist(err) {
+			slog.Error("delete cookie", "platform", platform, "err", err)
+			writeJSON(w, 500, map[string]any{"error": "delete error"})
+			return
+		}
 	}
 	if r.Header.Get("HX-Request") != "" {
 		s.renderCookieRowsHTML(w, r)

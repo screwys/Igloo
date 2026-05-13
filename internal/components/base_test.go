@@ -261,10 +261,11 @@ func TestBookmarkCategoryPathsPanelUsesTallerScrollArea(t *testing.T) {
 func TestCookieRowsPanelRendersDisableActionAndCompactBrowserSelect(t *testing.T) {
 	p := newTestPageProps()
 	rows := []CookieRowData{{
-		Platform: "twitter",
-		Name:     "X / Twitter",
-		Exists:   true,
-		Enabled:  true,
+		Platform:  "twitter",
+		Name:      "X / Twitter",
+		Exists:    true,
+		Enabled:   true,
+		FileCount: 2,
 	}}
 	var buf bytes.Buffer
 	if err := CookieRowsPanel(p, rows).Render(context.Background(), &buf); err != nil {
@@ -274,6 +275,8 @@ func TestCookieRowsPanelRendersDisableActionAndCompactBrowserSelect(t *testing.T
 
 	for _, want := range []string{
 		`class="input cookie-browser-select"`,
+		`multiple`,
+		`>2 files active<`,
 		`hx-post="/api/cookies/twitter/toggle"`,
 		`>Disable<`,
 	} {
