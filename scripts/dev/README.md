@@ -24,6 +24,7 @@ Maintained diagnostics and repair tools are Go subcommands:
 ```text
 go run ./cmd/igloo-dev android-sync-maintenance -dry-run
 go run ./cmd/igloo-dev asset-inventory-reconcile -limit 1000
+go run ./cmd/igloo-dev persistence-audit
 go run ./cmd/igloo-dev sqlite-repack
 ```
 

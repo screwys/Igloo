@@ -15,6 +15,7 @@ func TestUsage(t *testing.T) {
 		"Usage: igloo-dev <command> [args]",
 		"android-sync-maintenance",
 		"asset-inventory-reconcile",
+		"persistence-audit",
 		"sqlite-repack",
 	} {
 		if !strings.Contains(stdout.String(), want) {
