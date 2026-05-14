@@ -21,30 +21,28 @@ Any interaction you do on the client, stays in your machine which includes likes
 
 You can import your NewPipe subscriptions directly, or add any subscriptions one by one through the site by an account/post link, or you can use the provided [Tampermonkey script](https://github.com/screwys/Igloo/raw/refs/heads/main/scripts/tampermonkey/igloo-site-sync.user.js) which adds a button to each website that lets you import the account on screen to the server.
 
-Once you import a few subscriptions, you can expand your subscriptions list through Igloo alone. You can enable reposts to get content from accounts you are not directly following, and once they appear on your feed you can follow them. You can also follow accounts that appear as handles in post descriptions. Reposts are opt-in, and can be disabled per platform and per account.
+Once you import a few subscriptions, you can expand your subscriptions list through Igloo alone. You can enable reposts to get content from accounts you are not directly following, and once they appear on your feed you can follow them, more about this at the next part.
 
-## What You Get
+## Features
 
-- A web UI for following accounts, browsing one feed, watching saved media,
-  searching your archive, and managing downloads.
-- Moments for vertical clips, stories, reposts, and image
-  slideshows from TikTok and Instagram.
-- Video pages with subtitles, chapters, playback speed, SponsorBlock, DeArrow,
-  comments, preview thumbnails, and synced watch position where supported.
-- Bookmarks with labels, notes, aliases, and saved media, meant for organizing
-  files into folders without doing the same manual saving steps every time.
-- Discovery through Igloo alone: follow accounts from posts, reposts, stories,
-  profile cards, handles in descriptions, and Moments.
-- Cookie-aware fetching through browser cookies or one or more uploaded cookie files.
-- An offline-first Android app that syncs feed data, media, playback progress,
-  follows, likes, bookmarks, and per-channel settings.
+- A fast to navigate web UI for browsing platforms, watching saved media,
+  searching your archive, and managing the server
+- Discovery through Igloo alone: follow accounts from posts, reposts, stories
+  profile cards, and even handles in descriptions!
+- Easily upload cookies through web
 
-## Main Features
+- With a redirect extension such as [LibRedirect](https://addons.mozilla.org/en-US/firefox/addon/libredirect/) can use Igloo
+  as a custom Invidious target. Set your instance URL to
+  `http://server/temp`, and YouTube watch links can land on
+  `/temp/watch?v=...` for local temporary download and playback. You can also pin the temporary downloads to make them, uh, not temporary.
 
+- Both web and app are made to be themeable, you can select from the ready themes, or bring your own custom CSS. 
+- 
+<img src="static/screenshots/themes.webp" alt="Theme controls" width="100%">
+    
 - **Feed**: one timeline across followed accounts, with opt-in offline algorithm
   based on interactions and recency. It can show reply chains, lets you be able
-  to mute accounts, turn off retweets for an account (or you can do it globally,
-  as is the case for all platforms). It can also be configured to automatically
+  to mute, turn off retweets for an individual account. It also comes with retweet deduplication, a problem in RSS feeds for X, it groups retweets and lists everyone who retweeted in one line. It can also be configured to automatically
   translate tweets, either in bulk or lazily with DeepL, Google Translate,
   kagi-cli or API/self-hosted node. [langdetect](https://github.com/taruti/langdetect) is included to reduce API usage.
 
@@ -69,10 +67,9 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
   media in quote too, therefore we can go up to 8. There are
   also hotkeys to quickly select which images to download as well.
 
-- **Stories**: TikTok and Instagram story-style stories, that can be accessed
-  from tap on user avatar, or dedicated stories sidebar.
 - **Moments**: vertical video player for short videos, image slideshows, TikTok
-  reposts, and Instagram reposts.
+  reposts, and Instagram reposts; also stories, that can be accessed
+  from tap on user avatar, and a stories sidebar.
 
 <img src="static/screenshots/moments.png" alt="Moments" width="100%">
 
@@ -86,17 +83,6 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
 
 <img src="static/screenshots/search.webp" alt="YouTube search" width="100%">
 
-- **YouTube redirect**: a redirect extension such as [LibRedirect](https://addons.mozilla.org/en-US/firefox/addon/libredirect/) can use Igloo
-  as a custom Invidious target. Set your instance URL to
-  `https://your-igloo.example/temp`, and YouTube watch links can land on
-  `/temp/watch?v=...` for local temporary download and playback. Temporary
-  downloads can also be pinned to persist.
-- **Channel management**: follow, unfollow, configure per-channel settings, and
-  browse downloaded media.
-- **Customization**: theme controls for both web and Android, additionally
-  keyboard shortcuts for the web.
-
-<img src="static/screenshots/themes.webp" alt="Theme controls" width="100%">
 
 ### Android App
 <p align="center">
@@ -110,38 +96,34 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
   <img src="static/screenshots/android_4.png" height="800" alt="Android">
 </p>
 
-- Offline-first Jetpack Compose app backed by a local Room database, with every
-  platform-specific feature of web.
+- Designed to be able to run detached from the server with synced items, same feature set with the web where it makes sense
 - If server and app are on the same network, you can even use the app without
   internet permission!
 - Syncs feed rows, bookmarked and liked items, media assets, playback progress,
   follows, likes, bookmarks, and per-channel settings.
-- Queues user actions locally and sends them to the server on the next sync.
-- Platform-specific retention settings while keeping bookmarked and liked items
-  protected.
-- Supports local playback from synced media when the server is unavailable.
+- Queues user actions locally and sends them to the server on the next sync
+- You can select how many days you want to keep the new data on the app per platform, you can turn off local storage too
 
 ## Install
 
 ```bash
-docker pull ghcr.io/screwys/igloo:latest
+IGLOO_VERSION=vX.Y.Z
+docker pull "ghcr.io/screwys/igloo:${IGLOO_VERSION}"
 docker run -d --name igloo --restart unless-stopped \
   --user "$(id -u):$(id -g)" \
   -p 127.0.0.1:5001:5001 \
   -v "YOUR_DIRECTORY:/igloo" \
-  ghcr.io/screwys/igloo:latest
+  "ghcr.io/screwys/igloo:${IGLOO_VERSION}"
 ```
 
-The `--user` flag keeps bind-mounted files owned by your current user. By default,
-Igloo will create `data` and `config` inside `YOUR_DIRECTORY`. Bookmark archive paths
-are configured per category in Settings; use `/igloo/bookmarks/<folder>` to keep
+You can use `latest` or a release tag such as `vX.Y.Z`. The `--user` flag keeps bind-mounted files owned by your current user. By default, this will create `data` and `config` inside `YOUR_DIRECTORY`. You can configure bookmarks through web; use `/igloo/bookmarks/<folder>` to keep
 them under the same folder or reuse one folder for multiple categories. To keep
 bookmark archives elsewhere, add `-v "YOUR_BOOKMARKS_DIRECTORY:/bookmarks"` and
 use `/bookmarks/<folder>`; make that folder writable by your user with
 `sudo chown -R "$(id -u):$(id -g)" YOUR_BOOKMARKS_DIRECTORY`.
 
 If you omit `--user`, the image runs as the unprivileged user
-`10001:10001`; so you would need to make mounted folders writable.
+`10001:10001`; so you would need to make mounted folders writable too.
 
 To build the image locally instead:
 
@@ -165,10 +147,13 @@ By default, Compose stores data under:
 ./igloo/config
 ```
 
+## Back Ups
+
+You can enable automatic backups, and can include bookmarks inside as well, these do not store sensitive files. You can later import a single file or the whole .zip to merge/replace the database. There is also a manual full export option, but it includes .env/cookie files which lets you set up the server and make it continue from where it left on another machine just by running `install.sh`, because I am lazy :) 
+
 ## Platforms
 
-Igloo can run with any combination of the supported platforms. You can enable
-which platforms you want to use during first installation on the web UI. To do that from the start, add this to the `docker run` command:
+You can run the server with any combination of the supported platforms and can enable which platforms you want to use during first installation on the web UI. To do that from the cli with the image, add this to the `docker run` command:
 
 ```bash
 -e IGLOO_ENABLED_PLATFORMS=youtube,tiktok,instagram,twitter
@@ -181,9 +166,6 @@ The supported
 
 ![Tampermonkey import button](static/screenshots/tampermonkey.png)
 
-New installs default to `http://127.0.0.1:5001`. Use the userscript menu to point
-it at a LAN, VPN, Tailscale, or HTTPS Igloo URL.
-
 
 ## Native Development
 
@@ -193,8 +175,8 @@ For native development, clone the repo and run:
 scripts/install.sh --check
 ```
 
- The scripts checks the local machine before you build. You need Go 1.26 or newer, the `templ` generator, `yt-dlp`,
-`gallery-dl`, `ffmpeg`, SQLite, and the usual system tools. 
+This checks for dependencies. You need Go 1.26 or newer, the `templ` generator, `yt-dlp`,
+`gallery-dl`, `ffmpeg`, SQLite, and such.
 For server/web development:
 
 ```bash
@@ -216,16 +198,8 @@ Native installs use these folders by default:
 | `~/.local/share/igloo/` | Database, media, thumbnails, logs |
 | `~/.config/igloo/` | Auth files, config, platform session files |
 
-More maintainer commands and one-off diagnostics are listed in
-[`scripts/dev/README.md`](scripts/dev/README.md). For a release-style local
-check, run:
-
-```bash
-scripts/dev/test-full.sh
-```
-
-That gate checks generated output drift, Go tests, `errcheck`, Android unit
-tests, skipped tests, and Android test XML summaries.
+More development scripts are listed at
+[`scripts/dev/README.md`](scripts/dev/README.md). 
 
 ## Android
 
@@ -241,7 +215,7 @@ android/build.sh apk           # build APK without installing
 
 ## Translations
 
-Currently there are only English and Turkish language options. To improve or add a language, copy `locales/app/en.toml` and translate values while keeping keys unchanged.
+Currently there are only English and Turkish language options. To add a new language (or if you hate my tone), copy `locales/app/en.toml` and translate values while keeping keys unchanged.
 
 ## Configuration
 
