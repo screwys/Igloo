@@ -10,7 +10,14 @@ const script = fs.readFileSync(
 
 function fakeElement() {
   const element = {
-    style: {},
+    style: {
+      setProperty(property, value) {
+        this[property] = value;
+      },
+      removeProperty(property) {
+        delete this[property];
+      },
+    },
     dataset: {},
     classList: {
       add() {},
@@ -138,6 +145,7 @@ function buildHarness({
   pathname = "/home",
   unsafeWindow = {},
   userAgent = "Mozilla/5.0 Chrome/120.0.0.0",
+  initialValues = {},
   twitterChannels = [
     {
       channel_id: "twitter_alice",
@@ -147,12 +155,15 @@ function buildHarness({
 } = {}) {
   const values = new Map([
     ["igloo_sync_x_downloads", false],
+    ["igloo_sync_x_keyboard_shortcuts", false],
     ["xsync_api_base", "http://127.0.0.1:5001"],
     ["xsync_local_list", localList],
+    ...Object.entries(initialValues),
   ]);
   const requests = [];
   const requestCalls = [];
   const downloadCalls = [];
+  const notifications = [];
   const menu = new Map();
   const promptCalls = [];
   const followButtons = followHandles.map((handle) => {
@@ -213,10 +224,15 @@ function buildHarness({
     GM_setValue(key, value) {
       values.set(key, value);
     },
+    GM_deleteValue(key) {
+      values.delete(key);
+    },
     GM_registerMenuCommand(name, callback) {
       menu.set(name, callback);
     },
-    GM_notification() {},
+    GM_notification(options) {
+      notifications.push(options?.text || "");
+    },
     GM_setClipboard() {},
     GM_download(options) {
       downloadCalls.push({
@@ -278,6 +294,7 @@ function buildHarness({
     promptCalls,
     followButtons,
     downloadCalls,
+    notifications,
   };
 }
 
@@ -320,6 +337,33 @@ function responseFor(url, { data, twitterChannels } = {}) {
       text: JSON.stringify({
         access_token: "access-token",
         refresh_token: "refresh-token",
+      }),
+    };
+  }
+  if (url === "https://localhost:5001/api/auth/refresh") {
+    const body = JSON.parse(data || "{}");
+    if (body.refresh_token === "valid-refresh") {
+      return {
+        status: 200,
+        text: JSON.stringify({
+          access_token: "rotated-access-token",
+          refresh_token: "rotated-refresh-token",
+        }),
+      };
+    }
+    return {
+      status: 401,
+      text: JSON.stringify({
+        error_code: "refresh_token_expired",
+        error_message: "expired",
+      }),
+    };
+  }
+  if (url === "https://localhost:5001/api/stats") {
+    return {
+      status: 401,
+      text: JSON.stringify({
+        error_code: "access_token_expired",
       }),
     };
   }
@@ -530,14 +574,24 @@ test("recognizes followed X accounts from channel_id when the endpoint omits url
   assert.equal(harness.followButtons[0].textContent, "Following");
 });
 
-test("login menu prompts for API URL before credentials and removes manual bearer setup", async () => {
+test("menu is limited and login does not persist the password", async () => {
   const harness = buildHarness({
     prompts: ["https://localhost:5001", "admin", "secret"],
+    initialValues: {
+      xsync_auth_pass: "legacy-secret",
+    },
   });
   runScript(harness);
 
+  assert.deepEqual([...harness.menu.keys()], [
+    "Log in to server",
+    "Test connection",
+    "Toggle button overrides",
+    "Toggle theme",
+  ]);
   assert.equal(harness.menu.has("Set Dashboard Bearer Token"), false);
-  const login = harness.menu.get("Login Dashboard (Store Token)");
+  assert.equal(harness.values.has("xsync_auth_pass"), false);
+  const login = harness.menu.get("Log in to server");
   assert.equal(typeof login, "function");
 
   await login();
@@ -545,13 +599,49 @@ test("login menu prompts for API URL before credentials and removes manual beare
 
   assert.deepEqual(
     harness.promptCalls.map(([message]) => message),
-    ["Dashboard API base URL", "Dashboard username", "Dashboard password"],
+    ["Server API base URL", "Server username", "Server password"],
   );
   assert.equal(harness.values.get("xsync_api_base"), "https://localhost:5001");
   assert.equal(harness.values.get("xsync_auth_token"), "access-token");
+  assert.equal(harness.values.get("xsync_auth_refresh"), "refresh-token");
+  assert.equal(harness.values.get("xsync_auth_user"), "admin");
+  assert.equal(harness.values.has("xsync_auth_pass"), false);
   assert.ok(
     harness.requests.includes("https://localhost:5001/api/auth/login"),
     `expected login request over configured HTTPS base, got ${harness.requests.join(", ")}`,
+  );
+});
+
+test("expired refresh token asks for login without password fallback", async () => {
+  const harness = buildHarness({
+    initialValues: {
+      xsync_auth_token: "expired-access",
+      xsync_auth_refresh: "expired-refresh",
+      xsync_auth_user: "admin",
+      xsync_auth_pass: "legacy-secret",
+    },
+  });
+  runScript(harness);
+
+  const testConnection = harness.menu.get("Test connection");
+  await testConnection();
+  await drainMicrotasks();
+
+  assert.ok(
+    harness.requests.includes("https://localhost:5001/api/auth/refresh"),
+    `expected refresh request, got ${harness.requests.join(", ")}`,
+  );
+  assert.equal(
+    harness.requests.includes("https://localhost:5001/api/auth/login"),
+    false,
+  );
+  assert.equal(harness.values.get("xsync_auth_token"), "");
+  assert.equal(harness.values.get("xsync_auth_refresh"), "");
+  assert.equal(harness.values.has("xsync_auth_pass"), false);
+  assert.ok(
+    harness.notifications.some((message) =>
+      message.includes("Log in to server"),
+    ),
   );
 });
 
@@ -575,10 +665,7 @@ test("stays idle on X auth routes", async () => {
   assert.equal(harness.requests.length, 0);
   assert.equal(FakeXMLHttpRequest.prototype.open, nativeOpen);
   assert.equal(harness.context.unsafeWindow.fetch, nativeFetch);
-  assert.equal(
-    typeof harness.menu.get("Login Dashboard (Store Token)"),
-    "function",
-  );
+  assert.equal(typeof harness.menu.get("Log in to server"), "function");
 });
 
 test("does not patch X page globals in Firefox", async () => {
@@ -609,6 +696,12 @@ test("uses follow wording for visible subscription labels", () => {
     script,
     /Save source|Saved source|Toggle Local Save|Local save/,
   );
+});
+
+test("does not keep a password-backed auth fallback", () => {
+  assert.doesNotMatch(script, /authPass/);
+  assert.doesNotMatch(script, /SETTINGS\.[A-Za-z0-9_]*Pass/);
+  assert.doesNotMatch(script, /refreshed via login/);
 });
 
 test("declares Tampermonkey update metadata", () => {

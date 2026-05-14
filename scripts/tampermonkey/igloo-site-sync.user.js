@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.23
+// @version      8.0.24
 // @author       screwys
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @homepageURL  https://github.com/screwys/Igloo
@@ -17,6 +17,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_deleteValue
 // @grant        GM_registerMenuCommand
 // @grant        GM_notification
 // @grant        GM_setClipboard
@@ -34,22 +35,23 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.23";
+  const SCRIPT_VERSION = "8.0.24";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
     authToken: "xsync_auth_token", // access token (24h)
     authRefresh: "xsync_auth_refresh", // refresh token (90d, rotated on use)
     authUser: "xsync_auth_user",
-    authPass: "xsync_auth_pass",
     syncToDashboard: "xsync_sync_to_dashboard",
     saveLocal: "xsync_save_local",
     localList: "xsync_local_list",
     handleAliases: "xdl_handle_aliases",
+    buttonOverrides: "igloo_sync_button_overrides",
     xDownloads: "igloo_sync_x_downloads",
     xKeyboardShortcuts: "igloo_sync_x_keyboard_shortcuts",
     xCleanup: "igloo_sync_x_cleanup",
   };
+  const LEGACY_AUTH_PASSWORD_KEY = "xsync_auth_pass";
 
   const DEFAULT_API_BASE = "https://localhost:5001";
   const DEFAULT_API_BASE_CANDIDATES = [
@@ -141,10 +143,17 @@
   const syncToDashboardEnabled = () =>
     !!GM_getValue(SETTINGS.syncToDashboard, true);
   const saveLocalEnabled = () => !!GM_getValue(SETTINGS.saveLocal, true);
-  const xDownloadsEnabled = () => !!GM_getValue(SETTINGS.xDownloads, true);
-  const xKeyboardShortcutsEnabled = () =>
-    !!GM_getValue(SETTINGS.xKeyboardShortcuts, true);
-  const xCleanupEnabled = () => !!GM_getValue(SETTINGS.xCleanup, true);
+  const buttonOverridesEnabled = () => {
+    const stored = GM_getValue(SETTINGS.buttonOverrides, null);
+    if (stored !== null && stored !== undefined) return !!stored;
+    return !!(
+      GM_getValue(SETTINGS.xDownloads, true) ||
+      GM_getValue(SETTINGS.xKeyboardShortcuts, true)
+    );
+  };
+  const xDownloadsEnabled = () => buttonOverridesEnabled();
+  const xKeyboardShortcutsEnabled = () => buttonOverridesEnabled();
+  const themeOverridesEnabled = () => !!GM_getValue(SETTINGS.xCleanup, true);
   const pageWindow =
     typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
   const X_MEDIA_CACHE_LIMIT = 500;
@@ -188,6 +197,16 @@
     if (json.refresh_token)
       GM_setValue(SETTINGS.authRefresh, String(json.refresh_token));
     return true;
+  }
+
+  function forgetLegacyDashboardPassword() {
+    try {
+      if (typeof GM_deleteValue === "function") {
+        GM_deleteValue(LEGACY_AUTH_PASSWORD_KEY);
+        return;
+      }
+    } catch (_) {}
+    GM_setValue(LEGACY_AUTH_PASSWORD_KEY, "");
   }
 
   let serverHandleSet = null;
@@ -680,36 +699,21 @@
   }
 
   async function _refreshToken() {
-    // Preferred: rotate via /api/auth/refresh (no password needed).
     const refresh = getRefresh();
-    if (refresh) {
-      const r = await _rawApiRequest(
-        "POST",
-        "/api/auth/refresh",
-        { refresh_token: refresh },
-        false,
-      );
-      if (r.ok && storeAuthTokens(r.json)) {
-        console.log("[XSync] token rotated");
-        return true;
-      }
-      // 401 on refresh = expired/replayed/revoked → drop the stale refresh token
-      // and fall through to the username/password fallback below.
-      if (r.status === 401) GM_setValue(SETTINGS.authRefresh, "");
-    }
-    // Fallback: full login with stored username/password (covers first-use + 90d expiry).
-    const user = GM_getValue(SETTINGS.authUser, "");
-    const pass = GM_getValue(SETTINGS.authPass, "");
-    if (!user || !pass) return false;
-    const resp = await _rawApiRequest(
+    if (!refresh) return false;
+    const r = await _rawApiRequest(
       "POST",
-      "/api/auth/login",
-      { username: user, password: pass },
+      "/api/auth/refresh",
+      { refresh_token: refresh },
       false,
     );
-    if (resp.ok && storeAuthTokens(resp.json)) {
-      console.log("[XSync] token refreshed via login");
+    if (r.ok && storeAuthTokens(r.json)) {
+      console.log("[XSync] token rotated");
       return true;
+    }
+    if (r.status === 401) {
+      GM_setValue(SETTINGS.authRefresh, "");
+      GM_setValue(SETTINGS.authToken, "");
     }
     return false;
   }
@@ -731,7 +735,7 @@
       }
       const refreshed = await _refreshingToken;
       if (refreshed) return _rawApiRequest(method, path, body, withAuth);
-      notify("Token expired — use Tampermonkey menu → Login Dashboard");
+      notify("Token expired — use Tampermonkey menu → Log in to server");
     }
     return resp;
   }
@@ -1172,120 +1176,120 @@
     .x-source-save-btn:disabled { opacity: 0.65; cursor: wait; }
 
     /* Hide native bookmark button */
-    body.igloo-x-cleanup [data-testid="bookmark"],
-    body.igloo-x-cleanup [data-testid="removeBookmark"] { display: none !important; }
+    body.igloo-button-overrides [data-testid="bookmark"],
+    body.igloo-button-overrides [data-testid="removeBookmark"] { display: none !important; }
 
     /* Override ALL native action button default color → #f38ba8 */
-    body.igloo-x-cleanup [data-testid="reply"] div,
-    body.igloo-x-cleanup [data-testid="retweet"] div,
-    body.igloo-x-cleanup [data-testid="like"] div,
-    body.igloo-x-cleanup [aria-label="Share post"] div,
-    body.igloo-x-cleanup [aria-label="Share"] div,
-    body.igloo-x-cleanup [data-testid="reply"] svg,
-    body.igloo-x-cleanup [data-testid="retweet"] svg,
-    body.igloo-x-cleanup [data-testid="like"] svg,
-    body.igloo-x-cleanup [aria-label="Share post"] svg,
-    body.igloo-x-cleanup [aria-label="Share"] svg { color: #f38ba8 !important; fill: #f38ba8 !important; }
+    body.igloo-theme-overrides [data-testid="reply"] div,
+    body.igloo-theme-overrides [data-testid="retweet"] div,
+    body.igloo-theme-overrides [data-testid="like"] div,
+    body.igloo-theme-overrides [aria-label="Share post"] div,
+    body.igloo-theme-overrides [aria-label="Share"] div,
+    body.igloo-theme-overrides [data-testid="reply"] svg,
+    body.igloo-theme-overrides [data-testid="retweet"] svg,
+    body.igloo-theme-overrides [data-testid="like"] svg,
+    body.igloo-theme-overrides [aria-label="Share post"] svg,
+    body.igloo-theme-overrides [aria-label="Share"] svg { color: #f38ba8 !important; fill: #f38ba8 !important; }
 
     /* Override native like active (pink → #f38ba8) */
-    body.igloo-x-cleanup [data-testid="unlike"] div,
-    body.igloo-x-cleanup [data-testid="unlike"] svg { color: #f38ba8 !important; }
+    body.igloo-theme-overrides [data-testid="unlike"] div,
+    body.igloo-theme-overrides [data-testid="unlike"] svg { color: #f38ba8 !important; }
 
     /* Override native retweet active (green → Catpucchin Mocha Red */
-    body.igloo-x-cleanup [data-testid="unretweet"] div,
-    body.igloo-x-cleanup [data-testid="unretweet"] svg { color: #f38ba8 !important; fill: #f38ba8 !important; }
+    body.igloo-theme-overrides [data-testid="unretweet"] div,
+    body.igloo-theme-overrides [data-testid="unretweet"] svg { color: #f38ba8 !important; fill: #f38ba8 !important; }
 
     /* Round hover highlight on native buttons — target all inner divs */
-    body.igloo-x-cleanup [data-testid="reply"] div,
-    body.igloo-x-cleanup [data-testid="retweet"] div,
-    body.igloo-x-cleanup [data-testid="like"] div,
-    body.igloo-x-cleanup [data-testid="unlike"] div,
-    body.igloo-x-cleanup [data-testid="unretweet"] div,
-    body.igloo-x-cleanup [aria-label="Share post"] div,
-    body.igloo-x-cleanup [aria-label="Share"] div { border-radius: 9999px !important; }
+    body.igloo-theme-overrides [data-testid="reply"] div,
+    body.igloo-theme-overrides [data-testid="retweet"] div,
+    body.igloo-theme-overrides [data-testid="like"] div,
+    body.igloo-theme-overrides [data-testid="unlike"] div,
+    body.igloo-theme-overrides [data-testid="unretweet"] div,
+    body.igloo-theme-overrides [aria-label="Share post"] div,
+    body.igloo-theme-overrides [aria-label="Share"] div { border-radius: 9999px !important; }
 
     /* Override native hover highlight background color */
-    body.igloo-x-cleanup [data-testid="reply"]:hover .r-1niwhzg,
-    body.igloo-x-cleanup [data-testid="retweet"]:hover .r-1niwhzg,
-    body.igloo-x-cleanup [data-testid="like"]:hover .r-1niwhzg,
-    body.igloo-x-cleanup [data-testid="unlike"]:hover .r-1niwhzg,
-    body.igloo-x-cleanup [data-testid="unretweet"]:hover .r-1niwhzg,
-    body.igloo-x-cleanup [aria-label="Share post"]:hover .r-1niwhzg,
-    body.igloo-x-cleanup [aria-label="Share"]:hover .r-1niwhzg { background-color: rgba(243,139,168,0.1) !important; }
+    body.igloo-theme-overrides [data-testid="reply"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [data-testid="retweet"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [data-testid="like"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [data-testid="unlike"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [data-testid="unretweet"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [aria-label="Share post"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [aria-label="Share"]:hover .r-1niwhzg { background-color: rgba(243,139,168,0.1) !important; }
 
     /* Composer toolbar buttons */
-    body.igloo-x-cleanup button[role="button"][aria-label="Add photos or video"],
-    body.igloo-x-cleanup button[role="button"][data-testid="gifSearchButton"],
-    body.igloo-x-cleanup button[role="button"][data-testid="grokImgGen"],
-    body.igloo-x-cleanup button[role="button"][data-testid="createPollButton"],
-    body.igloo-x-cleanup button[role="button"][aria-label="Add emoji"],
-    body.igloo-x-cleanup button[role="button"][data-testid="scheduleOption"],
-    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"],
-    body.igloo-x-cleanup button[role="button"][data-testid="contentDisclosureButton"] {
+    body.igloo-theme-overrides button[role="button"][aria-label="Add photos or video"],
+    body.igloo-theme-overrides button[role="button"][data-testid="gifSearchButton"],
+    body.igloo-theme-overrides button[role="button"][data-testid="grokImgGen"],
+    body.igloo-theme-overrides button[role="button"][data-testid="createPollButton"],
+    body.igloo-theme-overrides button[role="button"][aria-label="Add emoji"],
+    body.igloo-theme-overrides button[role="button"][data-testid="scheduleOption"],
+    body.igloo-theme-overrides button[role="button"][data-testid="geoButton"],
+    body.igloo-theme-overrides button[role="button"][data-testid="contentDisclosureButton"] {
       border-color: transparent !important;
       background-color: transparent !important;
       border-radius: 9999px !important;
     }
 
-    body.igloo-x-cleanup button[role="button"][aria-label="Add photos or video"] div,
-    body.igloo-x-cleanup button[role="button"][data-testid="gifSearchButton"] div,
-    body.igloo-x-cleanup button[role="button"][data-testid="grokImgGen"] div,
-    body.igloo-x-cleanup button[role="button"][data-testid="createPollButton"] div,
-    body.igloo-x-cleanup button[role="button"][aria-label="Add emoji"] div,
-    body.igloo-x-cleanup button[role="button"][data-testid="scheduleOption"] div,
-    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"]:not(:disabled) div,
-    body.igloo-x-cleanup button[role="button"][data-testid="contentDisclosureButton"] div,
-    body.igloo-x-cleanup button[role="button"][aria-label="Add photos or video"] svg,
-    body.igloo-x-cleanup button[role="button"][data-testid="gifSearchButton"] svg,
-    body.igloo-x-cleanup button[role="button"][data-testid="grokImgGen"] svg,
-    body.igloo-x-cleanup button[role="button"][data-testid="createPollButton"] svg,
-    body.igloo-x-cleanup button[role="button"][aria-label="Add emoji"] svg,
-    body.igloo-x-cleanup button[role="button"][data-testid="scheduleOption"] svg,
-    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"]:not(:disabled) svg,
-    body.igloo-x-cleanup button[role="button"][data-testid="contentDisclosureButton"] svg,
-    body.igloo-x-cleanup button[role="button"][aria-label="Add photos or video"] svg *,
-    body.igloo-x-cleanup button[role="button"][data-testid="gifSearchButton"] svg *,
-    body.igloo-x-cleanup button[role="button"][data-testid="grokImgGen"] svg *,
-    body.igloo-x-cleanup button[role="button"][data-testid="createPollButton"] svg *,
-    body.igloo-x-cleanup button[role="button"][aria-label="Add emoji"] svg *,
-    body.igloo-x-cleanup button[role="button"][data-testid="scheduleOption"] svg *,
-    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"]:not(:disabled) svg *,
-    body.igloo-x-cleanup button[role="button"][data-testid="contentDisclosureButton"] svg * {
+    body.igloo-theme-overrides button[role="button"][aria-label="Add photos or video"] div,
+    body.igloo-theme-overrides button[role="button"][data-testid="gifSearchButton"] div,
+    body.igloo-theme-overrides button[role="button"][data-testid="grokImgGen"] div,
+    body.igloo-theme-overrides button[role="button"][data-testid="createPollButton"] div,
+    body.igloo-theme-overrides button[role="button"][aria-label="Add emoji"] div,
+    body.igloo-theme-overrides button[role="button"][data-testid="scheduleOption"] div,
+    body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:not(:disabled) div,
+    body.igloo-theme-overrides button[role="button"][data-testid="contentDisclosureButton"] div,
+    body.igloo-theme-overrides button[role="button"][aria-label="Add photos or video"] svg,
+    body.igloo-theme-overrides button[role="button"][data-testid="gifSearchButton"] svg,
+    body.igloo-theme-overrides button[role="button"][data-testid="grokImgGen"] svg,
+    body.igloo-theme-overrides button[role="button"][data-testid="createPollButton"] svg,
+    body.igloo-theme-overrides button[role="button"][aria-label="Add emoji"] svg,
+    body.igloo-theme-overrides button[role="button"][data-testid="scheduleOption"] svg,
+    body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:not(:disabled) svg,
+    body.igloo-theme-overrides button[role="button"][data-testid="contentDisclosureButton"] svg,
+    body.igloo-theme-overrides button[role="button"][aria-label="Add photos or video"] svg *,
+    body.igloo-theme-overrides button[role="button"][data-testid="gifSearchButton"] svg *,
+    body.igloo-theme-overrides button[role="button"][data-testid="grokImgGen"] svg *,
+    body.igloo-theme-overrides button[role="button"][data-testid="createPollButton"] svg *,
+    body.igloo-theme-overrides button[role="button"][aria-label="Add emoji"] svg *,
+    body.igloo-theme-overrides button[role="button"][data-testid="scheduleOption"] svg *,
+    body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:not(:disabled) svg *,
+    body.igloo-theme-overrides button[role="button"][data-testid="contentDisclosureButton"] svg * {
       color: #f38ba8 !important;
       fill: #f38ba8 !important;
     }
 
-    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"]:disabled div,
-    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"]:disabled svg,
-    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"]:disabled svg * {
+    body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:disabled div,
+    body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:disabled svg,
+    body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:disabled svg * {
       color: #6c7086 !important;
       fill: #6c7086 !important;
     }
 
-    body.igloo-x-cleanup button[role="button"][aria-label="Add photos or video"] span,
-    body.igloo-x-cleanup button[role="button"][data-testid="gifSearchButton"] span,
-    body.igloo-x-cleanup button[role="button"][data-testid="grokImgGen"] span,
-    body.igloo-x-cleanup button[role="button"][data-testid="createPollButton"] span,
-    body.igloo-x-cleanup button[role="button"][aria-label="Add emoji"] span,
-    body.igloo-x-cleanup button[role="button"][data-testid="scheduleOption"] span,
-    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"] span,
-    body.igloo-x-cleanup button[role="button"][data-testid="contentDisclosureButton"] span {
+    body.igloo-theme-overrides button[role="button"][aria-label="Add photos or video"] span,
+    body.igloo-theme-overrides button[role="button"][data-testid="gifSearchButton"] span,
+    body.igloo-theme-overrides button[role="button"][data-testid="grokImgGen"] span,
+    body.igloo-theme-overrides button[role="button"][data-testid="createPollButton"] span,
+    body.igloo-theme-overrides button[role="button"][aria-label="Add emoji"] span,
+    body.igloo-theme-overrides button[role="button"][data-testid="scheduleOption"] span,
+    body.igloo-theme-overrides button[role="button"][data-testid="geoButton"] span,
+    body.igloo-theme-overrides button[role="button"][data-testid="contentDisclosureButton"] span {
       border-bottom-color: #f38ba8 !important;
     }
 
-    body.igloo-x-cleanup button[role="button"][aria-label="Add photos or video"]:hover,
-    body.igloo-x-cleanup button[role="button"][data-testid="gifSearchButton"]:hover,
-    body.igloo-x-cleanup button[role="button"][data-testid="grokImgGen"]:hover,
-    body.igloo-x-cleanup button[role="button"][data-testid="createPollButton"]:hover,
-    body.igloo-x-cleanup button[role="button"][aria-label="Add emoji"]:hover,
-    body.igloo-x-cleanup button[role="button"][data-testid="scheduleOption"]:hover,
-    body.igloo-x-cleanup button[role="button"][data-testid="geoButton"]:hover,
-    body.igloo-x-cleanup button[role="button"][data-testid="contentDisclosureButton"]:hover {
+    body.igloo-theme-overrides button[role="button"][aria-label="Add photos or video"]:hover,
+    body.igloo-theme-overrides button[role="button"][data-testid="gifSearchButton"]:hover,
+    body.igloo-theme-overrides button[role="button"][data-testid="grokImgGen"]:hover,
+    body.igloo-theme-overrides button[role="button"][data-testid="createPollButton"]:hover,
+    body.igloo-theme-overrides button[role="button"][aria-label="Add emoji"]:hover,
+    body.igloo-theme-overrides button[role="button"][data-testid="scheduleOption"]:hover,
+    body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:hover,
+    body.igloo-theme-overrides button[role="button"][data-testid="contentDisclosureButton"]:hover {
       background-color: rgba(243,139,168,0.1) !important;
     }
 
     /* Even spacing for action bar with 6 buttons */
-    body.igloo-x-cleanup [role="group"] { justify-content: space-between !important; }
+    body.igloo-button-overrides [role="group"] { justify-content: space-between !important; }
 
     /* Our action buttons — match native wrapper structure */
     .x-action-wrap {
@@ -1335,7 +1339,7 @@
 
     /* === Native Follow Button Override (HIGH SPECIFICITY) === */
     /* Force transparent background and native grey border */
-    body.igloo-x-cleanup #react-root button[role="button"][data-testid$="-follow"] {
+    body.igloo-button-overrides #react-root button[role="button"][data-testid$="-follow"] {
       background: transparent !important;
       background-color: transparent !important;
       border: 1px solid rgb(83, 100, 113) !important;
@@ -1343,45 +1347,49 @@
     }
 
     /* Default text color */
-    body.igloo-x-cleanup #react-root button[role="button"][data-testid$="-follow"] * {
+    body.igloo-button-overrides #react-root button[role="button"][data-testid$="-follow"] * {
       color: #cdd6f4 !important;
     }
 
     /* Hover state (subtle grey/white highlight instead of pink) */
-    body.igloo-x-cleanup #react-root button[role="button"][data-testid$="-follow"]:hover {
+    body.igloo-button-overrides #react-root button[role="button"][data-testid$="-follow"]:hover {
       background: rgba(205,214,244,0.1) !important;
       background-color: rgba(205,214,244,0.1) !important;
     }
 
     /* Unfollow / Following state */
-    body.igloo-x-cleanup #react-root button[role="button"][data-testid$="-unfollow"] {
+    body.igloo-button-overrides #react-root button[role="button"][data-testid$="-unfollow"] {
       background: transparent !important;
       background-color: transparent !important;
       border: 1px solid rgb(83, 100, 113) !important;
     }
 
-    body.igloo-x-cleanup #react-root button[role="button"][data-testid$="-unfollow"] * {
+    body.igloo-button-overrides #react-root button[role="button"][data-testid$="-unfollow"] * {
       color: #bac2de !important;
     }
 
-    body.igloo-x-cleanup #react-root button[role="button"][data-testid$="-unfollow"]:hover {
+    body.igloo-button-overrides #react-root button[role="button"][data-testid$="-unfollow"]:hover {
       background: rgba(205,214,244,0.1) !important;
       background-color: rgba(205,214,244,0.1) !important;
       border-color: rgba(205,214,244,0.3) !important;
     }
 
-    body.igloo-x-cleanup #react-root button[role="button"][data-testid$="-unfollow"]:hover * {
+    body.igloo-button-overrides #react-root button[role="button"][data-testid$="-unfollow"]:hover * {
       color: #cdd6f4 !important;
     }
     `;
     document.head.appendChild(style);
   }
 
-  function syncXCleanupClass() {
+  function syncXOverrideClasses() {
     if (!document.body) return;
     document.body.classList.toggle(
-      "igloo-x-cleanup",
-      isXSite() && xCleanupEnabled(),
+      "igloo-button-overrides",
+      isXSite() && buttonOverridesEnabled(),
+    );
+    document.body.classList.toggle(
+      "igloo-theme-overrides",
+      isXSite() && themeOverridesEnabled(),
     );
   }
 
@@ -2294,7 +2302,7 @@
   }
 
   function hideNativeButtons() {
-    if (!xCleanupEnabled()) return;
+    if (!buttonOverridesEnabled()) return;
     const selectors = [
       '[data-testid="bookmark"]',
       '[data-testid="removeBookmark"]',
@@ -2306,8 +2314,38 @@
         let wrap = el;
         while (wrap && wrap.parentElement !== actionBar)
           wrap = wrap.parentElement;
-        if (wrap && wrap.style.display !== "none") wrap.style.display = "none";
+        if (
+          wrap &&
+          wrap.style.display !== "none" &&
+          !wrap.dataset.iglooHiddenNativeButton
+        ) {
+          wrap.dataset.iglooPreviousDisplay = wrap.style.display || "";
+          wrap.dataset.iglooHiddenNativeButton = "1";
+          wrap.style.display = "none";
+        }
       }
+    }
+  }
+
+  function restoreNativeButtons() {
+    for (const wrap of document.querySelectorAll(
+      "[data-igloo-hidden-native-button]",
+    )) {
+      wrap.style.display = wrap.dataset.iglooPreviousDisplay || "";
+      delete wrap.dataset.iglooHiddenNativeButton;
+      delete wrap.dataset.iglooPreviousDisplay;
+    }
+  }
+
+  function clearButtonOverrides() {
+    document.getElementById("x-dl-popover")?.remove();
+    for (const selector of [
+      ".x-sync-btn",
+      "#igloo-x-source-save-btn",
+      ".x-action-wrap",
+      ".igloo-cross-save-btn",
+    ]) {
+      for (const el of document.querySelectorAll(selector)) el.remove();
     }
   }
 
@@ -2442,28 +2480,24 @@
 
   function promptForApiBase(notifyOnSave) {
     const next = prompt(
-      "Dashboard API base URL",
+      "Server API base URL",
       getApiBase() || DEFAULT_API_BASE,
     );
     if (next === null) return false;
     saveApiBaseSetting(next);
-    if (notifyOnSave) notify("Saved API URL");
+    if (notifyOnSave) notify("Saved server URL");
     return true;
   }
 
   function registerMenu() {
-    GM_registerMenuCommand("Set API URL", () => {
-      promptForApiBase(true);
-    });
-
-    GM_registerMenuCommand("Login Dashboard (Store Token)", async () => {
+    GM_registerMenuCommand("Log in to server", async () => {
       if (!promptForApiBase(false)) return;
       const username = prompt(
-        "Dashboard username",
+        "Server username",
         GM_getValue(SETTINGS.authUser, ""),
       );
       if (!username) return;
-      const password = prompt("Dashboard password");
+      const password = prompt("Server password");
       if (!password) return;
       const resp = await _rawApiRequest(
         "POST",
@@ -2483,8 +2517,10 @@
         return;
       }
       GM_setValue(SETTINGS.authUser, username);
-      GM_setValue(SETTINGS.authPass, password);
-      notify(`Saved token for ${username}`);
+      GM_setValue(SETTINGS.syncToDashboard, true);
+      GM_setValue(SETTINGS.saveLocal, true);
+      forgetLegacyDashboardPassword();
+      notify(`Logged in to server as ${username}`);
       if (isXSite()) {
         fetchServerHandles();
         if (xDownloadsEnabled()) {
@@ -2501,59 +2537,41 @@
       }
     });
 
-    GM_registerMenuCommand("Test Dashboard Connection", async () => {
+    GM_registerMenuCommand("Test connection", async () => {
       const resp = await apiRequest("GET", "/api/stats", null, true);
       notify(
         resp.ok
-          ? "Dashboard connection OK"
+          ? "Server connection OK"
           : `Connection failed (${resp.status || resp.error || "error"})`,
       );
     });
 
-    GM_registerMenuCommand("Toggle Server Sync", () => {
-      const next = !syncToDashboardEnabled();
-      GM_setValue(SETTINGS.syncToDashboard, next);
-      notify(`Server sync ${next ? "enabled" : "disabled"}`);
-    });
-
-    GM_registerMenuCommand("Toggle Local Follow", () => {
-      const next = !saveLocalEnabled();
-      GM_setValue(SETTINGS.saveLocal, next);
-      notify(`Local follow ${next ? "enabled" : "disabled"}`);
-    });
-
-    GM_registerMenuCommand("Toggle X Download Buttons", () => {
-      const next = !xDownloadsEnabled();
+    GM_registerMenuCommand("Toggle button overrides", () => {
+      const next = !buttonOverridesEnabled();
+      GM_setValue(SETTINGS.buttonOverrides, next);
       GM_setValue(SETTINGS.xDownloads, next);
-      if (next) {
-        fetchDlCategories();
-        fetchDlLabels();
-        loadHandleAliasesFromApi();
-        mountDlButtons();
-      } else {
-        clearDlButtons();
-      }
-      notify(`X download buttons ${next ? "enabled" : "disabled"}`);
-    });
-
-    GM_registerMenuCommand("Toggle Keyboard Shortcuts", () => {
-      const next = !xKeyboardShortcutsEnabled();
       GM_setValue(SETTINGS.xKeyboardShortcuts, next);
-      notify(`Keyboard shortcuts ${next ? "enabled" : "disabled"}`);
+      syncXOverrideClasses();
+      if (next) {
+        if (isXSite()) {
+          fetchDlCategories();
+          fetchDlLabels();
+          loadHandleAliasesFromApi();
+        }
+        runCurrentPlatformScan();
+      } else {
+        clearButtonOverrides();
+        restoreNativeButtons();
+      }
+      notify(`Button overrides ${next ? "enabled" : "disabled"}`);
     });
 
-    GM_registerMenuCommand("Toggle X Cleanup/Theme Overrides", () => {
-      const next = !xCleanupEnabled();
+    GM_registerMenuCommand("Toggle theme", () => {
+      const next = !themeOverridesEnabled();
       GM_setValue(SETTINGS.xCleanup, next);
-      syncXCleanupClass();
-      if (next) hideNativeButtons();
-      notify(`X cleanup/theme overrides ${next ? "enabled" : "disabled"}`);
-    });
-
-    GM_registerMenuCommand("Copy Local Subs JSON", () => {
-      const list = GM_getValue(SETTINGS.localList, []);
-      GM_setClipboard(JSON.stringify(list, null, 2), "text");
-      notify(`Copied ${list.length} local subs`);
+      syncXOverrideClasses();
+      applyXComposerToolbarTheme();
+      notify(`Theme ${next ? "enabled" : "disabled"}`);
     });
   }
 
@@ -3310,8 +3328,42 @@
     }
   }
 
+  function clearImportantStyle(el, property) {
+    if (el && el.style && typeof el.style.removeProperty === "function") {
+      el.style.removeProperty(property);
+    }
+  }
+
+  function clearXComposerToolbarTheme() {
+    if (!isXSite()) return;
+    for (const btn of document.querySelectorAll(
+      X_COMPOSER_TOOLBAR_BUTTON_SELECTOR,
+    )) {
+      clearImportantStyle(btn, "background-color");
+      clearImportantStyle(btn, "border-color");
+      for (
+        let node = btn.parentElement;
+        node && node !== document.body && node.getAttribute("data-testid") !== "toolBar";
+        node = node.parentElement
+      ) {
+        clearImportantStyle(node, "filter");
+      }
+      for (const svgEl of btn.querySelectorAll("svg, svg *")) {
+        clearImportantStyle(svgEl, "color");
+        clearImportantStyle(svgEl, "fill");
+      }
+      for (const underline of btn.querySelectorAll("span")) {
+        clearImportantStyle(underline, "border-bottom-color");
+      }
+    }
+  }
+
   function applyXComposerToolbarTheme() {
-    if (!isXSite() || !xCleanupEnabled()) return;
+    if (!isXSite()) return;
+    if (!themeOverridesEnabled()) {
+      clearXComposerToolbarTheme();
+      return;
+    }
     for (const btn of document.querySelectorAll(
       X_COMPOSER_TOOLBAR_BUTTON_SELECTOR,
     )) {
@@ -3340,9 +3392,14 @@
 
   function runCurrentPlatformScan() {
     const platform = currentPlatform();
+    syncXOverrideClasses();
+    if (platform === "twitter") applyXComposerToolbarTheme();
+    if (!buttonOverridesEnabled()) {
+      clearButtonOverrides();
+      restoreNativeButtons();
+      return;
+    }
     if (platform === "twitter") {
-      syncXCleanupClass();
-      applyXComposerToolbarTheme();
       mountXFeedSourceButton();
       mountFeedButtons();
       mountDlButtons();
@@ -3365,6 +3422,7 @@
   });
 
   function startIglooSync() {
+    forgetLegacyDashboardPassword();
     registerMenu();
     if (isXAuthRoute()) {
       console.log(`[IglooSync] loaded v${SCRIPT_VERSION} (auth route idle)`);
