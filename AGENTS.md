@@ -4,7 +4,7 @@
 
 - Igloo is a Go/SQLite server with web and Android clients.
 - `android/` is the current Android app.
-- Runtime/config defaults: native `~/.local/share/igloo/` and `~/.config/igloo/`; container `/data` and `/config`; bundled container assets `/app/static`.
+- Runtime/config defaults: native `~/.local/share/igloo/` and `~/.config/igloo/`; container `/igloo/data` and `/igloo/config`; bundled container assets `/app/static`.
 
 ## Evidence
 
