@@ -51,29 +51,17 @@ func TestHashCompatibility(t *testing.T) {
 	if rec.Parallelism != defaultArgon2idParallelism {
 		t.Errorf("parallelism: got %d, want %d", rec.Parallelism, defaultArgon2idParallelism)
 	}
-	if PasswordNeedsRehash(rec) {
-		t.Error("fresh Argon2id record should not need rehash")
-	}
 }
 
-func TestPBKDF2Compatibility(t *testing.T) {
-	rec := hashPasswordPBKDF2("test-password", defaultIterations)
-	if !VerifyPassword("test-password", rec) {
-		t.Fatal("explicit PBKDF2 record did not verify")
-	}
-	if VerifyPassword("wrong-password", rec) {
-		t.Fatal("wrong password verified against PBKDF2 record")
-	}
-	if !PasswordNeedsRehash(rec) {
-		t.Fatal("PBKDF2 record should need rehash")
-	}
-
+func TestVerifyPasswordRejectsNonArgon2idRecord(t *testing.T) {
+	rec := HashPassword("test-password")
 	rec.Algorithm = ""
-	if !VerifyPassword("test-password", rec) {
-		t.Fatal("legacy implicit PBKDF2 record did not verify")
+	if VerifyPassword("test-password", rec) {
+		t.Fatal("unversioned password record verified")
 	}
-	if !PasswordNeedsRehash(rec) {
-		t.Fatal("legacy implicit PBKDF2 record should need rehash")
+	rec.Algorithm = "legacy-kdf"
+	if VerifyPassword("test-password", rec) {
+		t.Fatal("non-Argon2id password record verified")
 	}
 }
 

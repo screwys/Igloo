@@ -3,26 +3,21 @@ package auth
 import (
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"golang.org/x/crypto/argon2"
-	"golang.org/x/crypto/pbkdf2"
 )
 
 const (
-	defaultIterations = 200_000
-	defaultSaltLen    = 16
-	keyLen            = 32 // SHA-256 and Argon2id output length
+	defaultSaltLen = 16
+	keyLen         = 32
 
-	passwordAlgorithmPBKDF2SHA256 = "pbkdf2-sha256"
-	passwordAlgorithmArgon2id     = "argon2id"
+	passwordAlgorithmArgon2id = "argon2id"
 
 	defaultArgon2idMemoryKiB   = 64 * 1024
 	defaultArgon2idTime        = 3
@@ -32,22 +27,17 @@ const (
 // AllPlatforms is the full list of supported platforms.
 var AllPlatforms = []string{"youtube", "twitter", "tiktok", "instagram"}
 
-// PasswordRecord holds versioned password hash components.
-// Empty Algorithm is treated as PBKDF2-SHA256 for compatibility with older
-// auth_users.json files and the legacy Python flat format.
+// PasswordRecord holds Argon2id password hash components.
 type PasswordRecord struct {
 	Algorithm   string `json:"algorithm,omitempty"`
 	Salt        string `json:"salt"`
 	Hash        string `json:"hash"`
-	Iterations  int    `json:"iterations,omitempty"`
 	MemoryKiB   uint32 `json:"memory_kib,omitempty"`
 	Time        uint32 `json:"time,omitempty"`
 	Parallelism uint8  `json:"parallelism,omitempty"`
 }
 
 // UserRecord represents a user entry in the auth_users.json file.
-// Supports both the Go nested format ({"password":{...},"role":...})
-// and the legacy Python flat format ({"hash":...,"salt":...,"iterations":...}).
 type UserRecord struct {
 	Password  PasswordRecord `json:"password"`
 	Role      string         `json:"role"`
@@ -62,30 +52,6 @@ func (u *UserRecord) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*u = UserRecord(nested)
-
-	// If password fields are empty, try flat format (Python legacy).
-	if u.Password.Hash == "" {
-		var flat struct {
-			Hash       string   `json:"hash"`
-			Salt       string   `json:"salt"`
-			Iterations int      `json:"iterations"`
-			Role       string   `json:"role"`
-			Platforms  []string `json:"platforms"`
-		}
-		if err := json.Unmarshal(data, &flat); err == nil && flat.Hash != "" {
-			u.Password = PasswordRecord{
-				Hash:       flat.Hash,
-				Salt:       flat.Salt,
-				Iterations: flat.Iterations,
-			}
-			if flat.Role != "" {
-				u.Role = flat.Role
-			}
-			if flat.Platforms != nil {
-				u.Platforms = flat.Platforms
-			}
-		}
-	}
 
 	// Default role and platforms if missing.
 	if u.Role == "" {
@@ -122,20 +88,6 @@ func hashPasswordArgon2id(password string) PasswordRecord {
 	}
 }
 
-func hashPasswordPBKDF2(password string, iterations int) PasswordRecord {
-	if iterations <= 0 {
-		iterations = defaultIterations
-	}
-	salt := randomSalt()
-	dk := pbkdf2.Key([]byte(password), salt, iterations, keyLen, sha256.New)
-	return PasswordRecord{
-		Algorithm:  passwordAlgorithmPBKDF2SHA256,
-		Salt:       base64.StdEncoding.EncodeToString(salt),
-		Hash:       base64.StdEncoding.EncodeToString(dk),
-		Iterations: iterations,
-	}
-}
-
 func randomSalt() []byte {
 	salt := make([]byte, defaultSaltLen)
 	if _, err := rand.Read(salt); err != nil {
@@ -157,42 +109,14 @@ func VerifyPassword(password string, record PasswordRecord) bool {
 	if len(expected) != keyLen {
 		return false
 	}
-	switch passwordAlgorithm(record) {
-	case passwordAlgorithmArgon2id:
-		if record.MemoryKiB == 0 || record.Time == 0 || record.Parallelism == 0 {
-			return false
-		}
-		dk := argon2.IDKey([]byte(password), salt, record.Time, record.MemoryKiB, record.Parallelism, uint32(len(expected)))
-		return hmac.Equal(dk, expected)
-	case passwordAlgorithmPBKDF2SHA256:
-		iterations := record.Iterations
-		if iterations <= 0 {
-			iterations = defaultIterations
-		}
-		dk := pbkdf2.Key([]byte(password), salt, iterations, len(expected), sha256.New)
-		return hmac.Equal(dk, expected)
-	default:
+	if record.Algorithm != passwordAlgorithmArgon2id {
 		return false
 	}
-}
-
-// PasswordNeedsRehash reports whether a verified password should be rewritten
-// with the current storage algorithm and parameters.
-func PasswordNeedsRehash(record PasswordRecord) bool {
-	if passwordAlgorithm(record) != passwordAlgorithmArgon2id {
-		return true
+	if record.MemoryKiB == 0 || record.Time == 0 || record.Parallelism == 0 {
+		return false
 	}
-	return record.MemoryKiB < defaultArgon2idMemoryKiB ||
-		record.Time < defaultArgon2idTime ||
-		record.Parallelism < defaultArgon2idParallelism
-}
-
-func passwordAlgorithm(record PasswordRecord) string {
-	algorithm := strings.ToLower(strings.TrimSpace(record.Algorithm))
-	if algorithm == "" {
-		return passwordAlgorithmPBKDF2SHA256
-	}
-	return algorithm
+	dk := argon2.IDKey([]byte(password), salt, record.Time, record.MemoryKiB, record.Parallelism, uint32(len(expected)))
+	return hmac.Equal(dk, expected)
 }
 
 // LoadUsers reads the auth_users.json file. Returns empty map if file is missing.
