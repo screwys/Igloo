@@ -30,6 +30,12 @@ go_json="$tmp/go-test.jsonl"
 android_log="$tmp/android-test.log"
 android_results="$ROOT/android/app/build/test-results/testDevtestUnitTest"
 
+echo "[workflows] checking GitHub Actions pinning..."
+if ! scripts/dev/workflow-pin-check.sh; then
+  echo "[workflows] action pinning check failed" >&2
+  status=1
+fi
+
 echo "[drift] checking generated outputs..."
 if ! scripts/dev/drift-check.sh; then
   echo "[drift] generated output check failed" >&2

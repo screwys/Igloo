@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -9,6 +9,10 @@ import {
   renderReleaseNotes,
   updateAndroidBuildGradle,
 } from "./release.mjs";
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const shaPinnedAction = (action, tag) =>
+  new RegExp(`${escapeRegExp(action)}@[0-9a-f]{40} # ${escapeRegExp(tag)}`);
 
 test("bumps patch, minor, and major versions", () => {
   assert.equal(bumpSemver("1.0.0", "patch"), "1.0.1");
@@ -51,6 +55,23 @@ test("release workflow dispatches CodeQL for release tags", () => {
   );
 });
 
+test("GitHub Actions workflow dependencies are SHA-pinned", () => {
+  const workflowsDir = new URL("../../.github/workflows/", import.meta.url);
+  const workflowNames = readdirSync(workflowsDir).filter((name) => name.endsWith(".yml"));
+
+  for (const workflowName of workflowNames) {
+    const workflow = readFileSync(new URL(workflowName, workflowsDir), "utf8");
+    const uses = workflow.matchAll(/^\s*uses:\s+[^#\s]+@([^#\s]+)/gm);
+    for (const match of uses) {
+      assert.match(
+        match[1],
+        /^[0-9a-f]{40}$/,
+        `${workflowName} has mutable action reference: ${match[0].trim()}`,
+      );
+    }
+  }
+});
+
 test("release workflow allows manual major releases", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/release.yml", import.meta.url),
@@ -84,8 +105,8 @@ test("release workflow gates signed releases on the full quality suite", () => {
     "utf8",
   );
 
-  assert.match(workflow, /actions\/setup-go@v6/);
-  assert.match(workflow, /actions\/setup-java@v5/);
+  assert.match(workflow, shaPinnedAction("actions/setup-go", "v6"));
+  assert.match(workflow, shaPinnedAction("actions/setup-java", "v5"));
   assert.match(workflow, /java-version: "26"/);
   assert.match(workflow, /name: Run full release gate/);
   assert.match(workflow, /run: scripts\/dev\/test-full\.sh/);
@@ -106,36 +127,42 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /\n  attestations: write\n/);
   assert.match(workflow, /\n  contents: write\n/);
   assert.match(workflow, /\n        id: build\n/);
-  assert.match(workflow, /actions\/setup-go@v6/);
-  assert.match(workflow, /actions\/setup-java@v5/);
-  assert.match(workflow, /DeterminateSystems\/determinate-nix-action@v3/);
+  assert.match(workflow, shaPinnedAction("actions/setup-go", "v6"));
+  assert.match(workflow, shaPinnedAction("actions/setup-java", "v5"));
+  assert.match(workflow, shaPinnedAction("DeterminateSystems/determinate-nix-action", "v3"));
   assert.match(workflow, /run: scripts\/dev\/test-full\.sh/);
   assert.match(workflow, /nix build \.#container --print-build-logs/);
   assert.match(workflow, /docker load < result/);
   assert.match(workflow, /SOURCE_IMAGE: ghcr\.io\/screwys\/igloo:latest/);
   assert.match(workflow, /docker tag "\$SOURCE_IMAGE" "\$tag"/);
   assert.match(workflow, /docker push "\$tag"/);
+  assert.match(workflow, /name: Install cosign/);
+  assert.match(workflow, /\. scripts\/dev\/go-tool-versions\.sh/);
+  assert.match(workflow, /go install "github\.com\/sigstore\/cosign\/v3\/cmd\/cosign@\$\{COSIGN_VERSION\}"/);
+  assert.match(workflow, /go env GOPATH/);
   assert.match(workflow, /name: Prepare security artifact directory/);
   assert.match(workflow, /run: mkdir -p release-artifacts/);
-  assert.match(workflow, /uses: anchore\/sbom-action@v0\.24\.0/);
+  assert.match(workflow, shaPinnedAction("anchore/sbom-action", "v0.24.0"));
   assert.match(workflow, /image: ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/igloo@\$\{\{ steps\.build\.outputs\.digest \}\}/);
   assert.match(workflow, /output-file: release-artifacts\/igloo-container-\$\{\{ github\.ref_name \}\}\.spdx\.json/);
-  assert.match(workflow, /uses: anchore\/scan-action@v7\.4\.0/);
+  assert.match(workflow, shaPinnedAction("anchore/scan-action", "v7.4.0"));
   assert.match(workflow, /sbom: release-artifacts\/igloo-container-\$\{\{ github\.ref_name \}\}\.spdx\.json/);
   assert.match(workflow, /severity-cutoff: critical/);
   assert.match(workflow, /only-fixed: true/);
   assert.match(workflow, /output-file: release-artifacts\/igloo-container-\$\{\{ github\.ref_name \}\}-vulnerabilities\.json/);
-  assert.match(workflow, /uses: actions\/attest@v4/);
+  assert.match(workflow, shaPinnedAction("actions/attest", "v4"));
   assert.match(workflow, /subject-name: ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/igloo/);
   assert.match(workflow, /subject-digest: \$\{\{ steps\.build\.outputs\.digest \}\}/);
   assert.match(workflow, /push-to-registry: true/);
-  assert.match(workflow, /uses: softprops\/action-gh-release@v3/);
+  assert.match(workflow, shaPinnedAction("softprops/action-gh-release", "v3"));
   assert.match(workflow, /files: release-artifacts\/\*/);
   assert.doesNotMatch(workflow, /go test \.\/\.\.\./);
   assert.doesNotMatch(workflow, /docker\/build-push-action/);
+  assert.doesNotMatch(workflow, /cosign-installer/);
+  assert.doesNotMatch(workflow, /cosign-release:/);
 });
 
-test("Go analysis tools are pinned and Renovate-managed", () => {
+test("Go workflow tools are pinned and Renovate-managed", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/go-ci.yml", import.meta.url),
     "utf8",
@@ -154,6 +181,8 @@ test("Go analysis tools are pinned and Renovate-managed", () => {
   assert.match(versions, /STATICCHECK_VERSION=v\d+\.\d+\.\d+/);
   assert.match(versions, /packageName=golang\.org\/x\/vuln/);
   assert.match(versions, /GOVULNCHECK_VERSION=v\d+\.\d+\.\d+/);
+  assert.match(versions, /packageName=github\.com\/sigstore\/cosign\/v3/);
+  assert.match(versions, /COSIGN_VERSION=v\d+\.\d+\.\d+/);
   assert.match(renovate, /Update pinned Go analysis tool versions/);
   assert.match(renovate, /scripts\/dev\/go-tool-versions\\\\\.sh/);
 });
@@ -184,23 +213,23 @@ test("Android release publishes signed provenance attestation for the APK", () =
     "utf8",
   );
 
-  assert.match(workflow, /actions\/setup-go@v6/);
-  assert.match(workflow, /actions\/setup-java@v5/);
+  assert.match(workflow, shaPinnedAction("actions/setup-go", "v6"));
+  assert.match(workflow, shaPinnedAction("actions/setup-java", "v5"));
   assert.match(workflow, /run: scripts\/dev\/test-full\.sh/);
   assert.match(workflow, /run: \.\/gradlew :app:assembleRelease/);
   assert.match(workflow, /\n  id-token: write\n/);
   assert.match(workflow, /\n  attestations: write\n/);
-  assert.match(workflow, /uses: anchore\/sbom-action@v0\.24\.0/);
+  assert.match(workflow, shaPinnedAction("anchore/sbom-action", "v0.24.0"));
   assert.match(workflow, /file: release-artifacts\/igloo-android-\$\{\{ github\.ref_name \}\}\.apk/);
   assert.match(workflow, /output-file: release-artifacts\/igloo-android-\$\{\{ github\.ref_name \}\}\.spdx\.json/);
-  assert.match(workflow, /uses: anchore\/scan-action@v7\.4\.0/);
+  assert.match(workflow, shaPinnedAction("anchore/scan-action", "v7.4.0"));
   assert.match(workflow, /sbom: release-artifacts\/igloo-android-\$\{\{ github\.ref_name \}\}\.spdx\.json/);
   assert.match(workflow, /severity-cutoff: critical/);
   assert.match(workflow, /only-fixed: true/);
   assert.match(workflow, /output-file: release-artifacts\/igloo-android-\$\{\{ github\.ref_name \}\}-vulnerabilities\.json/);
-  assert.match(workflow, /uses: actions\/attest@v4/);
+  assert.match(workflow, shaPinnedAction("actions/attest", "v4"));
   assert.match(workflow, /subject-path: release-artifacts\/\*\.apk/);
-  assert.match(workflow, /uses: softprops\/action-gh-release@v3/);
+  assert.match(workflow, shaPinnedAction("softprops/action-gh-release", "v3"));
   assert.match(workflow, /files: release-artifacts\/\*/);
   assert.doesNotMatch(workflow, /:app:testDevtestUnitTest :app:assembleRelease/);
 });
@@ -228,7 +257,7 @@ test("CodeQL runs on code changes and published releases instead of a weekly sch
 });
 
 test("CI workflows ignore Markdown-only pushes and pull requests", () => {
-  for (const workflowName of ["android-ci.yml", "go-ci.yml", "semgrep.yml", "codeql.yml"]) {
+  for (const workflowName of ["android-ci.yml", "go-ci.yml", "static-check.yml", "codeql.yml"]) {
     const workflow = readFileSync(
       new URL(`../../.github/workflows/${workflowName}`, import.meta.url),
       "utf8",

@@ -287,7 +287,7 @@ func main() {
 	})
 
 	s.AddTool(mcp.NewTool("get_config_map",
-		mcp.WithDescription("Overview of repo configuration files: MCP, Dependabot, GitHub Actions workflows, Compose services, and Semgrep rules."),
+		mcp.WithDescription("Overview of repo configuration files: MCP, Dependabot, GitHub Actions workflows, and Compose services."),
 		mcp.WithString("filter", mcp.Description("Optional: filter by path, kind, action, service, image, rule, or command.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return textResult(getIndex().GetConfigMap(req.GetString("filter", "")))

@@ -359,7 +359,7 @@ func (idx *CodeIndex) configCandidates() []string {
 		candidates = append(candidates, relpath)
 	}
 
-	for _, relpath := range []string{".mcp.json", ".semgrep.yml", "compose.yaml", ".github/dependabot.yml", ".github/dependabot.yaml"} {
+	for _, relpath := range []string{".mcp.json", "compose.yaml", ".github/dependabot.yml", ".github/dependabot.yaml"} {
 		if _, err := os.Stat(filepath.Join(idx.root, relpath)); err == nil {
 			add(relpath)
 		}
@@ -386,8 +386,6 @@ func configKind(path string) string {
 		return "mcp"
 	case path == "compose.yaml":
 		return "compose"
-	case path == ".semgrep.yml":
-		return "semgrep"
 	case path == ".github/dependabot.yml" || path == ".github/dependabot.yaml":
 		return "dependabot"
 	case strings.HasPrefix(path, ".github/workflows/"):
@@ -437,13 +435,6 @@ func configEntries(path, source string) []string {
 			}
 			if strings.Contains(line, "image:") {
 				add("image: " + strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "image:")))
-			}
-		}
-	case "semgrep":
-		for _, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, "- id:") {
-				add("rule: " + strings.TrimSpace(strings.TrimPrefix(trimmed, "- id:")))
 			}
 		}
 	case "dependabot":

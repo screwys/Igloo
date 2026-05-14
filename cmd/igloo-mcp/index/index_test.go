@@ -183,9 +183,6 @@ func TestCodeIndexBuildConfigMap(t *testing.T) {
   igloo:
     image: ghcr.io/screwys/igloo:latest
 `)
-	mustWrite(".semgrep.yml", `rules:
-  - id: igloo.shell-wrapper-command
-`)
 	mustWrite(".github/dependabot.yml", `version: 2
 updates:
   - package-ecosystem: gomod
@@ -203,7 +200,7 @@ jobs:
 
 	idx := New(root)
 	stats := idx.Build()
-	if !strings.Contains(stats, "config_files=5") {
+	if !strings.Contains(stats, "config_files=4") {
 		t.Fatalf("expected config file count in build stats, got %s", stats)
 	}
 
@@ -213,7 +210,6 @@ jobs:
 		"command: ./bin/igloo-mcp",
 		"compose.yaml [compose]",
 		"service: igloo",
-		"rule: igloo.shell-wrapper-command",
 		".github/dependabot.yml [dependabot]",
 		"ecosystem: gomod",
 		"action: actions/setup-go@v6",
