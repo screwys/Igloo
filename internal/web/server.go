@@ -205,7 +205,7 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 	}
 	langs := s.supportedLanguageChoices(lang)
 	return components.PageProps{
-		CSRFToken:               s.ensureCSRF(sess, w, r),
+		CSRFToken:               s.mustEnsureCSRF(sess, w, r),
 		UserRole:                sessionStr(sess, "user_role", "user"),
 		Username:                sessionStr(sess, "auth_user", ""),
 		UserPlatforms:           s.effectivePlatforms(sessionStrSlice(sess, "user_platforms")),

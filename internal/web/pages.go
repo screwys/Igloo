@@ -234,7 +234,11 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 		return
 	}
-	csrfToken := s.ensureCSRF(sess, w, r)
+	csrfToken, err := s.ensureCSRF(sess, w, r)
+	if err != nil {
+		s.writeCSRFUnavailable(w, r, err)
+		return
+	}
 	next := r.URL.Query().Get("next")
 	p := s.pageProps(w, r)
 	p.PageTitle = p.T("login_title", "Igloo Login")
@@ -261,7 +265,11 @@ func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess, _ := s.store.Get(r, "session")
-	csrfToken := s.ensureCSRF(sess, w, r)
+	csrfToken, err := s.ensureCSRF(sess, w, r)
+	if err != nil {
+		s.writeCSRFUnavailable(w, r, err)
+		return
+	}
 	p := s.pageProps(w, r)
 	p.PageTitle = p.T("login_title", "Igloo Login")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -282,7 +290,11 @@ func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	csrfToken := s.ensureCSRF(sess, w, r)
+	csrfToken, err := s.ensureCSRF(sess, w, r)
+	if err != nil {
+		s.writeCSRFUnavailable(w, r, err)
+		return
+	}
 	p := s.pageProps(w, r)
 	p.PageTitle = p.T("setup_title", "Create First Admin")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -368,7 +380,11 @@ func (s *Server) handleSetupSubmit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderSetupError(w http.ResponseWriter, r *http.Request, sess *sessions.Session, key, fallback string) {
-	csrfToken := s.ensureCSRF(sess, w, r)
+	csrfToken, err := s.ensureCSRF(sess, w, r)
+	if err != nil {
+		s.writeCSRFUnavailable(w, r, err)
+		return
+	}
 	p := s.pageProps(w, r)
 	p.PageTitle = p.T("setup_title", "Create First Admin")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

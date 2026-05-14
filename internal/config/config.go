@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,8 @@ const (
 )
 
 var SupportedPlatforms = []string{"youtube", "twitter", "tiktok", "instagram"}
+
+var secretKeyRandomReader io.Reader = rand.Reader
 
 type Config struct {
 	DatabasePath      string
@@ -315,7 +318,9 @@ func loadSecretKey(configDir string) string {
 		}
 	}
 	b := make([]byte, 32)
-	_, _ = rand.Read(b)
+	if _, err := io.ReadFull(secretKeyRandomReader, b); err != nil {
+		panic(fmt.Sprintf("config: generate secret key: %v", err))
+	}
 	secret := hex.EncodeToString(b)
 	os.MkdirAll(configDir, 0o700)
 	os.WriteFile(path, []byte(secret), 0o600)

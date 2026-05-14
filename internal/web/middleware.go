@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -18,6 +20,8 @@ type contextKey string
 
 const userContextKey contextKey = "user"
 const csrfTokenKey contextKey = "csrf_token"
+
+var csrfRandomReader io.Reader = rand.Reader
 
 type userInfo struct {
 	Username  string
@@ -133,7 +137,11 @@ func (s *Server) enforceAuth(next http.Handler) http.Handler {
 			Platforms: s.effectivePlatforms(platforms),
 		})
 
-		csrfToken := s.ensureCSRF(sess, w, r)
+		csrfToken, err := s.ensureCSRF(sess, w, r)
+		if err != nil {
+			s.writeCSRFUnavailable(w, r, err)
+			return
+		}
 		ctx = context.WithValue(ctx, csrfTokenKey, csrfToken)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -190,16 +198,38 @@ func (s *Server) csrfProtect(next http.Handler) http.Handler {
 }
 
 // ensureCSRF generates or retrieves the CSRF token for the session.
-func (s *Server) ensureCSRF(sess *sessions.Session, w http.ResponseWriter, r *http.Request) string {
+func (s *Server) ensureCSRF(sess *sessions.Session, w http.ResponseWriter, r *http.Request) (string, error) {
 	if token, ok := sess.Values["csrf_token"].(string); ok && token != "" {
-		return token
+		return token, nil
 	}
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := io.ReadFull(csrfRandomReader, b); err != nil {
+		return "", fmt.Errorf("generate csrf token: %w", err)
+	}
 	token := hex.EncodeToString(b)
 	sess.Values["csrf_token"] = token
-	sess.Save(r, w)
+	if err := sess.Save(r, w); err != nil {
+		delete(sess.Values, "csrf_token")
+		return "", fmt.Errorf("save csrf token session: %w", err)
+	}
+	return token, nil
+}
+
+func (s *Server) mustEnsureCSRF(sess *sessions.Session, w http.ResponseWriter, r *http.Request) string {
+	token, err := s.ensureCSRF(sess, w, r)
+	if err != nil {
+		panic(err)
+	}
 	return token
+}
+
+func (s *Server) writeCSRFUnavailable(w http.ResponseWriter, r *http.Request, err error) {
+	slog.Error("csrf token unavailable", "err", err)
+	if apiPath(r.URL.Path) {
+		writeJSONError(w, http.StatusInternalServerError, "internal_error", "Internal Server Error")
+		return
+	}
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }
 
 func userFromContext(ctx context.Context) *userInfo {

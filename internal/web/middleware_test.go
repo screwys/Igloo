@@ -2,15 +2,25 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gorilla/sessions"
 	"github.com/screwys/igloo/internal/auth"
 	"github.com/screwys/igloo/internal/config"
 )
+
+type errorReader struct {
+	err error
+}
+
+func (r errorReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
 
 func TestCSRFRejectsPostWithoutToken(t *testing.T) {
 	s := &Server{cfg: &config.Config{SecretKey: "test-key"}}
@@ -76,5 +86,29 @@ func TestAuthRefreshBypassesExpiredBearerAndCSRF(t *testing.T) {
 	}
 	if body["access_token"] == "" || body["refresh_token"] == "" {
 		t.Fatalf("refresh did not issue a new token pair: %v", body)
+	}
+}
+
+func TestEnsureCSRFReturnsRandomFailure(t *testing.T) {
+	oldReader := csrfRandomReader
+	csrfRandomReader = errorReader{err: errors.New("random unavailable")}
+	t.Cleanup(func() {
+		csrfRandomReader = oldReader
+	})
+
+	s := &Server{store: sessions.NewCookieStore([]byte("test-key"))}
+	req := httptest.NewRequest(http.MethodGet, "/channels", nil)
+	rec := httptest.NewRecorder()
+	sess, err := s.store.Get(req, "session")
+	if err != nil {
+		t.Fatalf("session: %v", err)
+	}
+
+	token, err := s.ensureCSRF(sess, rec, req)
+	if err == nil {
+		t.Fatalf("ensureCSRF succeeded with token %q", token)
+	}
+	if _, ok := sess.Values["csrf_token"]; ok {
+		t.Fatal("csrf token was stored after random source failure")
 	}
 }

@@ -1,11 +1,20 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+type errorReader struct {
+	err error
+}
+
+func (r errorReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
 
 func TestParseDurationFallback(t *testing.T) {
 	if d := parseDuration("6h"); d.Hours() != 6 {
@@ -156,6 +165,22 @@ func TestLoadFreshInstallDefaultsToNoPlatforms(t *testing.T) {
 	if cfg.DatabasePath != filepath.Join(dataDir, DatabaseFilename) {
 		t.Fatalf("DatabasePath = %q, want igloo.db default", cfg.DatabasePath)
 	}
+}
+
+func TestLoadSecretKeyPanicsWhenRandomFails(t *testing.T) {
+	oldReader := secretKeyRandomReader
+	secretKeyRandomReader = errorReader{err: errors.New("random unavailable")}
+	t.Cleanup(func() {
+		secretKeyRandomReader = oldReader
+	})
+	t.Setenv("AUTH_SECRET_KEY", "")
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected loadSecretKey to panic when random source fails")
+		}
+	}()
+	_ = loadSecretKey(t.TempDir())
 }
 
 func TestLoadRespectsExplicitDBPath(t *testing.T) {
