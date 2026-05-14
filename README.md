@@ -15,7 +15,7 @@
 Igloo is an opinionated self-hosted personal social inbox for X, YouTube, TikTok and Instagram written in [Go](https://go.dev/). It pulls content from imported creators, and syncs it to an offline-first Android app. It is not meant to be a complete front-end replacement for these services, it intentionally stays out of any interaction with these platforms, such as posting or commenting. The published image is built with Nix to keep it small, about 200~ MB compressed and 500~ MB local image size. You can also build the image yourself. [Jump to installation](#install)
 
 
-Any interaction you do on the client, stays in your machine which includes likes, follows or bookmarks. You don't need to log in to your accounts on these platforms, but that can also affect what media the server can fetch, since it uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [gallery-dl](https://github.com/mikf/gallery-dl) to download media, you can only go as far as these packages let you go without cookies. On the web UI, you can upload one or more cookie files or set the browser with cookies to automatically enable cookies.
+Any interaction you do on the client, stays in your machine which includes likes, follows or bookmarks. You don't need to log in to your accounts on these platforms, but that can also affect what media the server can fetch, since it uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [gallery-dl](https://github.com/mikf/gallery-dl) to download media, you can only go as far as these packages let you go without cookies. On the web UI, you can upload one or more cookie files or set the browser with cookies to automatically enable cookies (supported out of the box on native installations on Linux, you would need to mount your browser folder if you want to use it with the image).
 
 ![Cookie settings](static/screenshots/cookies.png)
 
@@ -190,6 +190,14 @@ it at a LAN, VPN, Tailscale, or HTTPS Igloo URL.
 For native development, clone the repo and run:
 
 ```bash
+scripts/install.sh --check
+```
+
+ The scripts checks the local machine before you build. You need Go 1.26 or newer, the `templ` generator, `yt-dlp`,
+`gallery-dl`, `ffmpeg`, SQLite, and the usual system tools. 
+For server/web development:
+
+```bash
 scripts/dev/build.sh          # build Go server and assets
 scripts/dev/build.sh restart  # build and restart the local server
 go test ./...
@@ -208,14 +216,27 @@ Native installs use these folders by default:
 | `~/.local/share/igloo/` | Database, media, thumbnails, logs |
 | `~/.config/igloo/` | Auth files, config, platform session files |
 
-## Android
-
-Commands for build & testing:
+More maintainer commands and one-off diagnostics are listed in
+[`scripts/dev/README.md`](scripts/dev/README.md). For a release-style local
+check, run:
 
 ```bash
-android/build.sh        # build and install debug APK on a connected device
-android/build.sh apk    # build APK without installing
-android/test.sh         # run JVM unit tests
+scripts/dev/test-full.sh
+```
+
+That gate checks generated output drift, Go tests, `errcheck`, Android unit
+tests, skipped tests, and Android test XML summaries.
+
+## Android
+
+For Android work, keep the local server
+schema and the Room mirror in sync.
+
+```bash
+android/test.sh <ClassFilter>  # focused JVM test while iterating
+android/test.sh                # full JVM unit test suite
+android/build.sh               # build, install, and relaunch on a connected device (first device with 192.168.1 in adb devices, convenience for me, you can change that)
+android/build.sh apk           # build APK without installing
 ```
 
 ## Translations
