@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
@@ -54,6 +55,7 @@ import com.screwy.igloo.ui.UiEffect
 import com.screwy.igloo.ui.UiEffects
 import com.screwy.igloo.ui.component.AppDrawer
 import com.screwy.igloo.ui.component.BottomNavBar
+import com.screwy.igloo.ui.component.LogoutConfirmDialog
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -142,6 +144,7 @@ fun MainScaffold(
     val edgeDrawerWidth = 56.dp
     val edgeDrawerExclusionPx = with(LocalDensity.current) { edgeDrawerWidth.roundToPx() }
     val rootView = LocalView.current
+    var showLogoutConfirmation by remember { mutableStateOf(false) }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val chromePolicy = routeChromePolicyFor(currentRoute)
@@ -243,10 +246,7 @@ fun MainScaffold(
                 onLogoutClick = {
                     coroutineScope.launch {
                         drawerState.close()
-                        authRepo.logout(LogoutReason.UserInitiated)
-                        navController.navigate(RouteRegistry.Login.route) {
-                            popUpTo(navController.graph.id) { inclusive = true }
-                        }
+                        showLogoutConfirmation = true
                     }
                 },
             )
@@ -316,5 +316,20 @@ fun MainScaffold(
                 }
             }
         }
+    }
+
+    if (showLogoutConfirmation) {
+        LogoutConfirmDialog(
+            onConfirm = {
+                showLogoutConfirmation = false
+                coroutineScope.launch {
+                    authRepo.logout(LogoutReason.UserInitiated)
+                    navController.navigate(RouteRegistry.Login.route) {
+                        popUpTo(navController.graph.id) { inclusive = true }
+                    }
+                }
+            },
+            onDismiss = { showLogoutConfirmation = false },
+        )
     }
 }

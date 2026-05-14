@@ -8,6 +8,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -16,6 +19,7 @@ import androidx.navigation.NavController
 import com.screwy.igloo.R
 import com.screwy.igloo.settings.components.SectionHeader
 import com.screwy.igloo.settings.components.SettingsSubScreen
+import com.screwy.igloo.ui.component.LogoutConfirmDialog
 import com.screwy.igloo.ui.theme.iglooColors
 import org.koin.androidx.compose.koinViewModel
 
@@ -26,6 +30,7 @@ fun AccountRoute(
 ) {
     val vm: AccountSettingsViewModel = koinViewModel()
     val serverUrl by vm.serverUrl.collectAsStateWithLifecycle()
+    var showLogoutConfirmation by remember { mutableStateOf(false) }
 
     SettingsSubScreen(
         title = stringResource(R.string.settings_tab_account),
@@ -42,7 +47,7 @@ fun AccountRoute(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { vm.logout() }
+                .clickable { showLogoutConfirmation = true }
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         ) {
             Text(
@@ -51,5 +56,15 @@ fun AccountRoute(
                 color = MaterialTheme.iglooColors.error,
             )
         }
+    }
+
+    if (showLogoutConfirmation) {
+        LogoutConfirmDialog(
+            onConfirm = {
+                showLogoutConfirmation = false
+                vm.logout()
+            },
+            onDismiss = { showLogoutConfirmation = false },
+        )
     }
 }

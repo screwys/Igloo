@@ -169,6 +169,8 @@
     <string name="common_untitled">Untitled</string>
     <string name="confirm_default_title">Confirm</string>
     <string name="confirm_delete_local_media_body">Delete the downloaded media for this video from this device? Sync can download it again if it remains in retention.</string>
+    <string name="confirm_logout_body">Log out of Igloo on this device? You can sign in again later.</string>
+    <string name="confirm_logout_title">Log out?</string>
     <string name="confirm_remove_channel_and_files">Remove channel and files for %1$s?</string>
     <string name="confirm_unfollow_account_body">This unfollows the account on the server, removes it from your followed list, and its synced videos can be pruned on Android.</string>
     <string name="confirm_unfollow_account_title">Unfollow account?</string>

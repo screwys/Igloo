@@ -168,6 +168,8 @@
     <string name="common_untitled">Başlıksız</string>
     <string name="confirm_default_title">Onayla</string>
     <string name="confirm_delete_local_media_body">Bu videonun bu cihazdaki indirilmiş medyası silinsin mi? Saklama süresindeyse eşitleme yeniden indirebilir.</string>
+    <string name="confirm_logout_body">Bu cihazda Igloo oturumu kapatılsın mı? Daha sonra yeniden giriş yapabilirsiniz.</string>
+    <string name="confirm_logout_title">Çıkış yapılsın mı?</string>
     <string name="confirm_remove_channel_and_files">%1$s kanalı ve dosyaları silinsin mi?</string>
     <string name="confirm_unfollow_account_body">Bu hesabı sunucuda takip etmeyi bırakır ve takip edilenler listenizden kaldırır. Eşitlenen videolar daha sonra Android\'den temizlenebilir.</string>
     <string name="confirm_unfollow_account_title">Takibi bırak</string>
