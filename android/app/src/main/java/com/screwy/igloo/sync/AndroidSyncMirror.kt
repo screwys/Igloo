@@ -140,9 +140,10 @@ class AndroidSyncMirror(
                 fields = mapOf("reachability" to reachability.state.value::class.simpleName.orEmpty()),
             )
             val retention = retentionProvider()
-            val generation = withMetadataRetry("latest_generation") {
-                api.latestGeneration(retention).generation
+            val latest = withMetadataRetry("latest_generation") {
+                api.latestGeneration(retention)
             }
+            val generation = latest.generation
             dao.upsertGeneration(generation.toEntity())
             logger.info(
                 event = "android_sync_generation_start",
@@ -210,6 +211,13 @@ class AndroidSyncMirror(
                     "duration_ms" to (nowMsProvider() - startedAt),
                 ),
             )
+            if (latest.refreshing) {
+                logger.info(
+                    event = "android_sync_generation_refresh_pending",
+                    fields = mapOf("generation_id" to generation.generation_id),
+                )
+                trigger()
+            }
         } finally {
             foregroundPromoter.finishActiveDrain()
         }
@@ -486,6 +494,7 @@ private fun AndroidSyncAssetDto.toEntity(generationId: String): AndroidSyncAsset
         seq = seq,
         assetId = asset_id,
         assetKind = asset_kind,
+        mediaIndex = media_index,
         ownerId = owner_id,
         ownerKind = owner_kind,
         bucket = bucket,

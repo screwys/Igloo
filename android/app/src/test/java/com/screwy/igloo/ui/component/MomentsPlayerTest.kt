@@ -7,6 +7,7 @@ import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
 import com.screwy.igloo.data.entity.MediaInventoryEntity
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.media.OwnerKind
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -305,6 +306,9 @@ class MomentsPlayerTest {
 
     @Test
     fun resolve_moment_slide_uris_prefers_verified_sync_slide_rows() {
+        val first = File.createTempFile("igloo-moment-sync-first", ".jpg").also { it.deleteOnExit() }
+        val second = File.createTempFile("igloo-moment-sync-second", ".jpg").also { it.deleteOnExit() }
+        val third = File.createTempFile("igloo-moment-sync-third", ".jpg").also { it.deleteOnExit() }
         val uris = resolveMomentSlideUris(
             rows = listOf(slideRow(index = 0)),
             baseUrl = "https://igloo.example",
@@ -314,26 +318,32 @@ class MomentsPlayerTest {
                 syncAsset(
                     assetId = "tiktok_tiktok_video_demo_post_media_2",
                     assetKind = "post_media",
+                    mediaIndex = 2,
                     serverUrl = "/api/android/sync/assets/tiktok_tiktok_video_demo_post_media_2",
+                    localPath = third.absolutePath,
                 ),
                 syncAsset(
                     assetId = "tiktok_tiktok_video_demo_post_media",
                     assetKind = "post_media",
+                    mediaIndex = 0,
                     serverUrl = "/api/android/sync/assets/tiktok_tiktok_video_demo_post_media",
+                    localPath = first.absolutePath,
                 ),
                 syncAsset(
                     assetId = "tiktok_tiktok_video_demo_post_media_1",
                     assetKind = "post_media",
+                    mediaIndex = 1,
                     serverUrl = "/api/android/sync/assets/tiktok_tiktok_video_demo_post_media_1",
+                    localPath = second.absolutePath,
                 ),
             ),
         )
 
         assertEquals(
             listOf(
-                MediaUri.Remote("https://igloo.example/api/android/sync/assets/tiktok_tiktok_video_demo_post_media"),
-                MediaUri.Remote("https://igloo.example/api/android/sync/assets/tiktok_tiktok_video_demo_post_media_1"),
-                MediaUri.Remote("https://igloo.example/api/android/sync/assets/tiktok_tiktok_video_demo_post_media_2"),
+                MediaUri.Local(first),
+                MediaUri.Local(second),
+                MediaUri.Local(third),
             ),
             uris,
         )
@@ -369,17 +379,22 @@ class MomentsPlayerTest {
 
     @Test
     fun resolve_moment_audio_uri_prefers_verified_sync_audio_row() {
+        val audio = File.createTempFile("igloo-moment-sync-audio", ".mp3").also { it.deleteOnExit() }
         val uri = resolveMomentAudioUri(
             rows = listOf(audioRow()),
             baseUrl = "https://igloo.example",
             videoId = "demo",
-            syncRows = listOf(syncAsset(assetId = "demo_post_audio", assetKind = "post_audio", serverUrl = "/api/media/audio/demo")),
+            syncRows = listOf(
+                syncAsset(
+                    assetId = "demo_post_audio",
+                    assetKind = "post_audio",
+                    serverUrl = "/api/media/audio/demo",
+                    localPath = audio.absolutePath,
+                ),
+            ),
         )
 
-        assertEquals(
-            MediaUri.Remote("https://igloo.example/api/media/audio/demo"),
-            uri,
-        )
+        assertEquals(MediaUri.Local(audio), uri)
     }
 
     @Test
@@ -534,11 +549,14 @@ class MomentsPlayerTest {
         assetId: String,
         assetKind: String,
         serverUrl: String,
+        mediaIndex: Int = 0,
+        localPath: String? = null,
     ): AndroidSyncAssetEntity = AndroidSyncAssetEntity(
         generationId = "android-sync-test",
         seq = 1L,
         assetId = assetId,
         assetKind = assetKind,
+        mediaIndex = mediaIndex,
         ownerId = "demo",
         ownerKind = "tiktok_video",
         bucket = "shorts_videos",
@@ -550,6 +568,9 @@ class MomentsPlayerTest {
         requiredReason = "retention",
         effectiveRecencyMs = 1_000L,
         state = "verified",
+        localPath = localPath,
+        fileSize = localPath?.let { File(it).length() },
+        verifiedAtMs = localPath?.let { 1_000L },
     )
 
     private fun storyItem(videoId: String, channelId: String): MomentItem =

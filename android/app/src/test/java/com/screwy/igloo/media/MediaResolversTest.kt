@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -96,6 +97,20 @@ class MediaResolversTest {
 
         assertTrue("expected Remote", result is MediaUri.Remote)
         assertEquals("$baseUrl/api/thumb/asset-c", (result as MediaUri.Remote).url)
+    }
+
+    @Test fun thumbnailForPost_pendingRow_withoutRemoteFallback_returnsMissing() = runBlocking {
+        db.mediaInventoryDao().upsert(inventoryRow(
+            assetId = "asset-c-offline",
+            assetKind = "post_thumbnail",
+            ownerId = "sample_media",
+            state = "pending",
+            serverUrl = "/api/thumb/asset-c-offline",
+        ))
+
+        val result = buildResolvers(remoteFallbackAllowed = false).thumbnailForPost("sample_media", OwnerKind.Tweet)
+
+        assertEquals(MediaUri.Missing, result)
     }
 
     // ─── thumbnailForPost — tombstoned row → Remote ───────────────────────────
@@ -261,6 +276,12 @@ class MediaResolversTest {
             "https://igloo.example/api/media/avatar/channel-unknown",
             (result as MediaUri.Remote).url,
         )
+    }
+
+    @Test fun avatarForChannel_noRow_withoutRemoteFallback_returnsMissing() = runBlocking {
+        val result = buildResolvers(remoteFallbackAllowed = false).avatarForChannel("channel-offline")
+
+        assertEquals(MediaUri.Missing, result)
     }
 
     @Test fun avatarForChannel_noInventoryRow_prefersProfileAvatarUrl() = runBlocking {
@@ -585,7 +606,10 @@ class MediaResolversTest {
 
     // ─── Wiring ────────────────────────────────────────────────────────────────
 
-    private fun buildResolvers(prefs: PreferencesRepo = defaultPrefs()): MediaResolversImpl =
+    private fun buildResolvers(
+        prefs: PreferencesRepo = defaultPrefs(),
+        remoteFallbackAllowed: Boolean = true,
+    ): MediaResolversImpl =
         MediaResolversImpl(
             dao = db.mediaInventoryDao(),
             syncDao = db.androidSyncDao(),
@@ -593,6 +617,7 @@ class MediaResolversTest {
             videoDao = db.videoDao(),
             baseUrlProvider = { baseUrl },
             prefs = prefs,
+            remoteFallbackAllowed = flowOf(remoteFallbackAllowed),
         )
 
     /** Default prefs with dearrow off (schema default) — preserves existing test behavior. */

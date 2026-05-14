@@ -33,10 +33,11 @@ func schemaDerivedCacheStatements() []string {
 
 		`CREATE TABLE IF NOT EXISTS android_sync_assets (
 			generation_id        TEXT NOT NULL,
-			seq                  INTEGER NOT NULL,
-			asset_id             TEXT NOT NULL,
-			asset_kind           TEXT NOT NULL,
-			owner_id             TEXT NOT NULL,
+				seq                  INTEGER NOT NULL,
+				asset_id             TEXT NOT NULL,
+				asset_kind           TEXT NOT NULL,
+				media_index          INTEGER NOT NULL DEFAULT 0,
+				owner_id             TEXT NOT NULL,
 			owner_kind           TEXT NOT NULL,
 			bucket               TEXT NOT NULL,
 			server_url           TEXT NOT NULL,

@@ -120,9 +120,11 @@ class MutationDeltaSyncTest {
                 "/api/mutations/delta" -> {
                     val since = request.url.parameters["since"]
                     if (since == null) {
-                        respondJson("""{"version":2,"truncated":true,"changes":[{"version":1,"type":"seen","item_id":"a","value":{}}]}""")
+                        respondJson("""{"version":2,"next_cursor":"opaque-page-1","truncated":true,"changes":[{"version":1,"type":"seen","item_id":"a","value":{}}]}""")
+                    } else if (since == "opaque-page-1") {
+                        respondJson("""{"version":2,"next_cursor":"opaque-final","truncated":false,"changes":[{"version":2,"type":"seen","item_id":"b","value":{}}]}""")
                     } else {
-                        respondJson("""{"version":2,"truncated":false,"changes":[{"version":2,"type":"seen","item_id":"b","value":{}}]}""")
+                        error("unexpected since marker $since")
                     }
                 }
                 else -> error("unexpected path ${request.url.encodedPath}")
@@ -134,7 +136,7 @@ class MutationDeltaSyncTest {
         assertEquals(2, result.applied)
         assertTrue(db.feedSeenDao().exists("a"))
         assertTrue(db.feedSeenDao().exists("b"))
-        assertEquals("2", db.cursorDao().get(MutationDeltaSync.CURSOR_KEY)?.cursor)
+        assertEquals("opaque-final", db.cursorDao().get(MutationDeltaSync.CURSOR_KEY)?.cursor)
     }
 
     @Test fun sync_appliesBookmarkCategoryUpsertAndDelete() = runBlocking {

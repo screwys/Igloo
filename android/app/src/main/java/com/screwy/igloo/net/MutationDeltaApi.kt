@@ -28,6 +28,7 @@ class MutationDeltaApi(
 @Serializable
 data class MutationDeltaResponse(
     val version: Long = 0,
+    val next_cursor: String? = null,
     val changes: List<MutationChange> = emptyList(),
     val truncated: Boolean = false,
     val ok: Boolean = true,

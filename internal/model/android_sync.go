@@ -37,6 +37,7 @@ type AndroidSyncAsset struct {
 	Seq                int64  `json:"seq"`
 	AssetID            string `json:"asset_id"`
 	AssetKind          string `json:"asset_kind"`
+	MediaIndex         int    `json:"media_index"`
 	OwnerID            string `json:"owner_id"`
 	OwnerKind          string `json:"owner_kind"`
 	Bucket             string `json:"bucket"`

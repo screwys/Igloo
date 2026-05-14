@@ -26,7 +26,7 @@ func TestOpenMigratesProductionLikeLegacySchema(t *testing.T) {
 		"feed_items":          {"sync_seq", "algo_interest", "algo_scored_at", "is_reply", "is_ghost"},
 		"feed_media_jobs":     {"lease_owner", "lease_until_ms", "next_attempt_at_ms", "last_error_kind", "tool", "cookie_label", "started_at_ms", "completed_at_ms"},
 		"download_queue":      {"error", "published_at_ms", "lease_owner", "lease_until_ms", "next_attempt_at_ms", "last_error_kind", "last_error_strategy", "tool", "cookie_label"},
-		"android_sync_assets": {"is_auto", "audio_language"},
+		"android_sync_assets": {"is_auto", "audio_language", "media_index"},
 		"assets":              {"lease_owner", "lease_until_ms"},
 	} {
 		for _, column := range columns {

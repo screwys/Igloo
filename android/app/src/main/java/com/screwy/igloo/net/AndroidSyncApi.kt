@@ -111,6 +111,7 @@ private fun String.syncErrorPreview(): String =
 @Serializable
 data class AndroidSyncLatestResponse(
     val generation: AndroidSyncGenerationDto,
+    val refreshing: Boolean = false,
     val ok: Boolean = true,
     val server_time_ms: Long? = null,
 )
@@ -172,6 +173,7 @@ data class AndroidSyncAssetDto(
     val seq: Long,
     val asset_id: String,
     val asset_kind: String,
+    val media_index: Int = 0,
     val owner_id: String,
     val owner_kind: String,
     val bucket: String,

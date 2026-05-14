@@ -67,6 +67,7 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 		"ALTER TABLE feed_items ADD COLUMN is_ghost INTEGER DEFAULT 0",
 		"ALTER TABLE android_sync_assets ADD COLUMN is_auto INTEGER",
 		"ALTER TABLE android_sync_assets ADD COLUMN audio_language TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE android_sync_assets ADD COLUMN media_index INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE assets ADD COLUMN lease_owner TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE assets ADD COLUMN lease_until_ms INTEGER NOT NULL DEFAULT 0",
 	}

@@ -1211,6 +1211,7 @@ func (s *Server) androidSyncAssetFromInventory(row db.Asset) model.AndroidSyncAs
 	asset := model.AndroidSyncAsset{
 		AssetID:        row.AssetID,
 		AssetKind:      row.AssetKind,
+		MediaIndex:     row.MediaIndex,
 		OwnerID:        row.OwnerID,
 		OwnerKind:      row.OwnerKind,
 		Bucket:         androidSyncInventoryBucket(row),
@@ -1293,6 +1294,7 @@ func (s *Server) androidSyncAssetsFromMediaRow(row db.AndroidSyncMediaAssetRow) 
 	out := []model.AndroidSyncAsset{{
 		AssetID:            db.BuildManifestAssetID("twitter", "tweet", row.OwnerID, "post_media", row.MediaIndex),
 		AssetKind:          "post_media",
+		MediaIndex:         row.MediaIndex,
 		OwnerID:            row.OwnerID,
 		OwnerKind:          "tweet",
 		Bucket:             "twitter_media",
@@ -1307,6 +1309,7 @@ func (s *Server) androidSyncAssetsFromMediaRow(row db.AndroidSyncMediaAssetRow) 
 		out = append(out, model.AndroidSyncAsset{
 			AssetID:            db.BuildManifestAssetID("twitter", "tweet", row.OwnerID, "post_thumbnail", 0),
 			AssetKind:          "post_thumbnail",
+			MediaIndex:         0,
 			OwnerID:            row.OwnerID,
 			OwnerKind:          "tweet",
 			Bucket:             "twitter_media",
@@ -1394,6 +1397,7 @@ func (s *Server) androidSyncAssetFromManifest(entry model.ManifestEntry) model.A
 	return model.AndroidSyncAsset{
 		AssetID:            entry.AssetID,
 		AssetKind:          entry.AssetKind,
+		MediaIndex:         entry.MediaIndex,
 		OwnerID:            entry.OwnerID,
 		OwnerKind:          entry.OwnerKind,
 		Bucket:             entry.Bucket,
@@ -1472,6 +1476,7 @@ func (s *Server) androidSyncVideoPlaybackAssets(video model.Video) []model.Andro
 			out = append(out, model.AndroidSyncAsset{
 				AssetID:            db.BuildManifestAssetID(platform, ownerKind, video.VideoID, "post_media", i),
 				AssetKind:          "post_media",
+				MediaIndex:         i,
 				OwnerID:            video.VideoID,
 				OwnerKind:          ownerKind,
 				Bucket:             bucket,

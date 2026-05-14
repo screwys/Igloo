@@ -584,6 +584,7 @@ interface AndroidSyncDao {
                 seq = row.seq,
                 assetId = row.assetId,
                 assetKind = row.assetKind,
+                mediaIndex = row.mediaIndex,
                 ownerId = row.ownerId,
                 ownerKind = row.ownerKind,
                 bucket = row.bucket,
@@ -604,12 +605,12 @@ interface AndroidSyncDao {
     @Query(
         """
         INSERT INTO android_sync_assets (
-            generation_id, seq, asset_id, asset_kind, owner_id, owner_kind,
+            generation_id, seq, asset_id, asset_kind, media_index, owner_id, owner_kind,
             bucket, server_url, content_type, size_bytes, sha256, server_state,
             required_reason, subtitle_is_auto, audio_language, effective_recency_ms, state, local_path, file_size,
             verified_at_ms, attempt_count, next_attempt_at_ms, last_error, updated_at_ms
         ) VALUES (
-            :generationId, :seq, :assetId, :assetKind, :ownerId, :ownerKind,
+            :generationId, :seq, :assetId, :assetKind, :mediaIndex, :ownerId, :ownerKind,
             :bucket, :serverUrl, :contentType, :sizeBytes, :sha256, :serverState,
             :requiredReason, :subtitleIsAuto, :audioLanguage, :effectiveRecencyMs,
             CASE WHEN :serverState = 'server_missing' THEN 'server_missing' ELSE 'desired' END,
@@ -619,6 +620,7 @@ interface AndroidSyncDao {
         )
         ON CONFLICT(generation_id, asset_id, asset_kind) DO UPDATE SET
             seq = excluded.seq,
+            media_index = excluded.media_index,
             owner_id = excluded.owner_id,
             owner_kind = excluded.owner_kind,
             bucket = excluded.bucket,
@@ -685,6 +687,7 @@ interface AndroidSyncDao {
         seq: Long,
         assetId: String,
         assetKind: String,
+        mediaIndex: Int,
         ownerId: String,
         ownerKind: String,
         bucket: String,

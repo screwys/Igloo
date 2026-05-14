@@ -80,7 +80,7 @@ func TestAndroidRoomSchemaKeepsServerSyncContractColumns(t *testing.T) {
 			"generation_id", "seq", "item_kind", "item_id", "payload_json",
 		},
 		"android_sync_assets": {
-			"generation_id", "seq", "asset_id", "asset_kind", "owner_id",
+			"generation_id", "seq", "asset_id", "asset_kind", "media_index", "owner_id",
 			"owner_kind", "bucket", "server_url", "content_type", "size_bytes",
 			"sha256", "server_state", "required_reason", "subtitle_is_auto",
 			"audio_language", "effective_recency_ms", "state", "local_path",

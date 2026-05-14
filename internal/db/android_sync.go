@@ -996,10 +996,10 @@ func (db *DB) StoreAndroidSyncGeneration(gen model.AndroidSyncGeneration, items 
 
 		assetStmt, err := tx.Prepare(`
 			INSERT OR IGNORE INTO android_sync_assets (
-				generation_id, seq, asset_id, asset_kind, owner_id, owner_kind,
+				generation_id, seq, asset_id, asset_kind, media_index, owner_id, owner_kind,
 				bucket, server_url, content_type, size_bytes, sha256, state,
 				required_reason, is_auto, audio_language, effective_recency_ms
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`)
 		if err != nil {
 			return err
@@ -1011,6 +1011,7 @@ func (db *DB) StoreAndroidSyncGeneration(gen model.AndroidSyncGeneration, items 
 				asset.Seq,
 				asset.AssetID,
 				asset.AssetKind,
+				asset.MediaIndex,
 				asset.OwnerID,
 				asset.OwnerKind,
 				asset.Bucket,
@@ -1362,7 +1363,7 @@ func (db *DB) ListAndroidSyncAssets(generationID string, afterSeq int64, limit i
 		limit = 2000
 	}
 	rows, err := db.conn.Query(`
-		SELECT generation_id, seq, asset_id, asset_kind, owner_id, owner_kind,
+		SELECT generation_id, seq, asset_id, asset_kind, media_index, owner_id, owner_kind,
 		       bucket, server_url, content_type, size_bytes, sha256, state,
 		       required_reason, is_auto, audio_language, effective_recency_ms
 		FROM android_sync_assets
@@ -1387,7 +1388,7 @@ func (db *DB) ListAndroidSyncAssets(generationID string, afterSeq int64, limit i
 
 func (db *DB) GetAndroidSyncAsset(assetID string) (*model.AndroidSyncAsset, error) {
 	rows, err := db.conn.Query(`
-		SELECT a.generation_id, a.seq, a.asset_id, a.asset_kind, a.owner_id, a.owner_kind,
+		SELECT a.generation_id, a.seq, a.asset_id, a.asset_kind, a.media_index, a.owner_id, a.owner_kind,
 		       a.bucket, a.server_url, a.content_type, a.size_bytes, a.sha256, a.state,
 		       a.required_reason, a.is_auto, a.audio_language, a.effective_recency_ms
 		FROM android_sync_assets a
@@ -1412,7 +1413,7 @@ func (db *DB) GetAndroidSyncAsset(assetID string) (*model.AndroidSyncAsset, erro
 
 func (db *DB) GetAndroidSyncGenerationAsset(generationID, assetID string) (*model.AndroidSyncAsset, error) {
 	rows, err := db.conn.Query(`
-		SELECT generation_id, seq, asset_id, asset_kind, owner_id, owner_kind,
+		SELECT generation_id, seq, asset_id, asset_kind, media_index, owner_id, owner_kind,
 		       bucket, server_url, content_type, size_bytes, sha256, state,
 		       required_reason, is_auto, audio_language, effective_recency_ms
 		FROM android_sync_assets
@@ -1444,6 +1445,7 @@ func scanAndroidSyncAsset(rows androidSyncAssetScanner) (model.AndroidSyncAsset,
 		&asset.Seq,
 		&asset.AssetID,
 		&asset.AssetKind,
+		&asset.MediaIndex,
 		&asset.OwnerID,
 		&asset.OwnerKind,
 		&asset.Bucket,

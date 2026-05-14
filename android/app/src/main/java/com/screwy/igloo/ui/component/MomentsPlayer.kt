@@ -1733,19 +1733,7 @@ private fun isMomentSyncSlideAsset(row: AndroidSyncAssetEntity): Boolean {
 }
 
 private fun momentSyncSlideIndex(row: AndroidSyncAssetEntity): Int =
-    row.assetId.slideIndexAfterPostMedia()
-        ?: row.serverUrl.substringAfterLast('/').toIntOrNull()
-        ?: Int.MAX_VALUE
-
-private fun String.slideIndexAfterPostMedia(): Int? {
-    val marker = "_post_media"
-    val markerIndex = lastIndexOf(marker)
-    if (markerIndex < 0) return null
-    val suffix = substring(markerIndex + marker.length)
-    if (suffix.isEmpty()) return 0
-    if (!suffix.startsWith("_")) return null
-    return suffix.drop(1).toIntOrNull()
-}
+    row.mediaIndex
 
 private fun momentInventoryRowToMediaUri(
     row: MediaInventoryEntity,
@@ -1763,16 +1751,14 @@ private fun momentInventoryRowToMediaUri(
 
 private fun momentSyncAssetToMediaUri(
     row: AndroidSyncAssetEntity,
-    baseUrl: String,
+    @Suppress("UNUSED_PARAMETER") baseUrl: String,
 ): MediaUri {
     if (row.state == "verified" && !row.localPath.isNullOrBlank()) {
         val file = File(row.localPath)
         if (file.exists()) return MediaUri.Local(file)
     }
 
-    val root = baseUrl.trim().trimEnd('/')
-    if (root.isBlank()) return MediaUri.Missing
-    return MediaUri.Remote(root + row.serverUrl)
+    return MediaUri.Missing
 }
 
 private fun prepareMomentAudio(

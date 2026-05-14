@@ -127,6 +127,45 @@ class AndroidSyncMirrorTest {
         assertTrue(mirror.hasPendingOrActiveWork())
     }
 
+    @Test fun syncOnceMarksMirrorPendingWhenServerGenerationIsRefreshing() = runBlocking {
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = GENERATION_ID,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                        ),
+                        refreshing = true,
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/items" -> respondJson(
+                    AndroidSyncItemsResponse(
+                        generation_id = GENERATION_ID,
+                        items = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/assets" -> respondJson(
+                    AndroidSyncAssetsResponse(
+                        generation_id = GENERATION_ID,
+                        assets = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+        val mirror = buildMirror(engine)
+
+        mirror.syncOnce()
+
+        assertTrue(mirror.hasPendingOrActiveWork())
+    }
+
     @Test fun healthUploadFailureDoesNotStopAssetDrain() = runBlocking {
         val healthAttempts = AtomicInteger(0)
         val assetBody = "asset-body"

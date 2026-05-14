@@ -513,6 +513,7 @@ data class AndroidSyncAssetEntity(
     @ColumnInfo(name = "seq") val seq: Long,
     @ColumnInfo(name = "asset_id") val assetId: String,
     @ColumnInfo(name = "asset_kind") val assetKind: String,
+    @ColumnInfo(name = "media_index") val mediaIndex: Int = 0,
     @ColumnInfo(name = "owner_id") val ownerId: String,
     @ColumnInfo(name = "owner_kind") val ownerKind: String,
     @ColumnInfo(name = "bucket") val bucket: String,

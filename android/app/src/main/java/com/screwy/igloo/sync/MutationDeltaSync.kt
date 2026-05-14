@@ -61,7 +61,7 @@ class MutationDeltaSync(
             val response = api.delta(since = requestMarker, limit = PAGE_SIZE)
             var pageApplied = 0
             var pageRankAffecting = false
-            var lastVersion = requestMarker?.toLongOrNull() ?: 0L
+            var lastVersion = 0L
 
             db.withTransaction {
                 val guard = PreserveLocalGuard(outboxDao)
@@ -77,17 +77,20 @@ class MutationDeltaSync(
             rankAffecting = rankAffecting || pageRankAffecting
 
             if (response.truncated) {
-                val previousVersion = requestMarker?.toLongOrNull() ?: 0L
-                if (response.changes.isEmpty() || lastVersion <= previousVersion) {
+                if (response.changes.isEmpty()) {
                     throw IllegalStateException("mutation delta marker stalled at ${requestMarker.orEmpty()}")
                 }
             }
 
-            val nextCursor = when {
+            val fallbackCursor = when {
                 response.truncated && response.changes.isNotEmpty() -> lastVersion.toString()
                 response.version > 0 -> response.version.toString()
                 response.changes.isNotEmpty() -> lastVersion.toString()
                 else -> requestMarker
+            }
+            val nextCursor = response.next_cursor?.takeIf { it.isNotBlank() } ?: fallbackCursor
+            if (response.truncated && (nextCursor.isNullOrBlank() || nextCursor == requestMarker)) {
+                throw IllegalStateException("mutation delta marker stalled at ${requestMarker.orEmpty()}")
             }
 
             if (nextCursor != null && nextCursor != requestMarker) {

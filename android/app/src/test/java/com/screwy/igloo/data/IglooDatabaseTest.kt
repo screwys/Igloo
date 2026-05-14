@@ -222,13 +222,13 @@ class IglooDatabaseTest {
         writable.execSQL(
             """
             INSERT INTO android_sync_assets (
-                generation_id, seq, asset_id, asset_kind, owner_id, owner_kind,
+                generation_id, seq, asset_id, asset_kind, media_index, owner_id, owner_kind,
                 bucket, server_url, content_type, size_bytes, sha256, server_state,
                 required_reason, subtitle_is_auto, audio_language, effective_recency_ms,
                 state, local_path, file_size, verified_at_ms, attempt_count,
                 next_attempt_at_ms, last_error, updated_at_ms
             ) VALUES (
-                'android-v3-old', 1, 'asset-1', 'video_stream', 'durable-video', 'video',
+                'android-v3-old', 1, 'asset-1', 'video_stream', 0, 'durable-video', 'video',
                 'videos', '/asset', 'video/mp4', 1, 'sha', 'ready',
                 'retention', 1, NULL, 1, 'verified', '/tmp/old.mp4', 1, 1, 0, 0, NULL, 1
             )

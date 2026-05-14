@@ -273,14 +273,13 @@ private fun MediaInventoryEntity?.toMediaUri(baseUrl: String): MediaUri? {
     return MediaUri.Remote(baseUrl + serverUrl)
 }
 
-private fun AndroidSyncAssetEntity?.toMediaUri(baseUrl: String): MediaUri? {
+private fun AndroidSyncAssetEntity?.toMediaUri(@Suppress("UNUSED_PARAMETER") baseUrl: String): MediaUri? {
     if (this == null) return null
     if (state == "verified" && !localPath.isNullOrEmpty()) {
         val file = File(localPath)
         if (file.exists()) return MediaUri.Local(file)
     }
-    if (serverState != "ready") return null
-    return MediaUri.Remote(baseUrl + serverUrl)
+    return null
 }
 
 private fun latestSyncRowsByIndex(rows: List<AndroidSyncAssetEntity>): Map<Int, AndroidSyncAssetEntity> {
@@ -319,12 +318,4 @@ private fun assetIndex(row: MediaInventoryEntity): Int {
     return suffix.toIntOrNull() ?: 0
 }
 
-private fun assetIndex(row: AndroidSyncAssetEntity): Int {
-    val suffix = row.assetId.substringAfterLast('_', missingDelimiterValue = "")
-    return suffix.toIntOrNull() ?: androidSyncSlideIndex(row.serverUrl)
-}
-
-private fun androidSyncSlideIndex(serverUrl: String): Int {
-    val suffix = serverUrl.trimEnd('/').substringAfterLast('/', missingDelimiterValue = "")
-    return suffix.toIntOrNull() ?: 0
-}
+private fun assetIndex(row: AndroidSyncAssetEntity): Int = row.mediaIndex

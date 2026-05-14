@@ -146,8 +146,8 @@ class FeedMediaCellDescriptorTest {
             inventoryRows = emptyList(),
             baseUrl = "https://igloo.example",
             syncAssetRows = listOf(
-                syncPostMedia(assetId = "twitter_tweet_tweet-1_post_media_1", localPath = second.absolutePath),
-                syncPostMedia(assetId = "twitter_tweet_tweet-1_post_media_0", localPath = first.absolutePath),
+                syncPostMedia(assetId = "twitter_tweet_tweet-1_post_media_1", mediaIndex = 1, localPath = second.absolutePath),
+                syncPostMedia(assetId = "twitter_tweet_tweet-1_post_media_0", mediaIndex = 0, localPath = first.absolutePath),
             ),
         )
 
@@ -157,7 +157,7 @@ class FeedMediaCellDescriptorTest {
     }
 
     @Test
-    fun preview_items_use_sync_server_url_before_public_descriptor_url_when_file_is_missing() {
+    fun preview_items_ignore_sync_server_url_when_file_is_missing() {
         val json = """[{"type":"photo","url":"https://pbs.twimg.com/media/a.jpg"}]"""
 
         val items = buildFeedPreviewItems(
@@ -175,7 +175,7 @@ class FeedMediaCellDescriptorTest {
         )
 
         assertEquals(
-            "https://igloo.example/api/android/sync/assets/twitter_tweet_tweet-1_post_media_0",
+            "https://pbs.twimg.com/media/a.jpg",
             (((items.single() as MediaItem.Image).uri) as MediaUri.Remote).url,
         )
     }
@@ -287,6 +287,7 @@ class FeedMediaCellDescriptorTest {
 
     private fun syncPostMedia(
         assetId: String,
+        mediaIndex: Int = 0,
         localPath: String,
         serverUrl: String = "/api/android/sync/assets/$assetId",
     ) = AndroidSyncAssetEntity(
@@ -294,6 +295,7 @@ class FeedMediaCellDescriptorTest {
         seq = 1,
         assetId = assetId,
         assetKind = "post_media",
+        mediaIndex = mediaIndex,
         ownerId = "tweet-1",
         ownerKind = "tweet",
         bucket = "twitter_media",

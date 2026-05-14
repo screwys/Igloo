@@ -65,6 +65,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_29_30,
                 IglooMigrations.MIGRATION_30_31,
                 IglooMigrations.MIGRATION_31_32,
+                IglooMigrations.MIGRATION_32_33,
             )
             .allowMainThreadQueries()
             .build()
@@ -118,7 +119,11 @@ class IglooMigrationTest {
         }
 
         val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
-            .addMigrations(IglooMigrations.MIGRATION_30_31, IglooMigrations.MIGRATION_31_32)
+            .addMigrations(
+                IglooMigrations.MIGRATION_30_31,
+                IglooMigrations.MIGRATION_31_32,
+                IglooMigrations.MIGRATION_32_33,
+            )
             .allowMainThreadQueries()
             .build()
 
@@ -177,7 +182,7 @@ class IglooMigrationTest {
         }
 
         val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
-            .addMigrations(IglooMigrations.MIGRATION_31_32)
+            .addMigrations(IglooMigrations.MIGRATION_31_32, IglooMigrations.MIGRATION_32_33)
             .allowMainThreadQueries()
             .build()
 
@@ -195,6 +200,70 @@ class IglooMigrationTest {
                 assertEquals(123L, it.getLong(0))
                 assertEquals(456L, it.getLong(1))
                 assertEquals(0, it.getInt(2))
+            }
+        } finally {
+            roomDb.close()
+            context.deleteDatabase(dbName)
+        }
+    }
+
+    @Test fun migration32To33AddsSyncAssetMediaIndexWithoutDroppingAssets() {
+        val dbName = "igloo-migration-32-33"
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val sqlite = createDatabaseFromSchemaSnapshot(
+            context,
+            dbName,
+            32,
+        )
+        try {
+            sqlite.execSQL(
+                """
+                INSERT INTO android_sync_generations (
+                    generation_id, created_at_ms, status, source_version, retention_json,
+                    item_count, asset_count, ready_asset_count, server_missing_asset_count,
+                    total_bytes, content_counts_json, asset_counts_json,
+                    items_imported_at_ms, assets_imported_at_ms, items_importer_version
+                ) VALUES (
+                    'android-v3-media-index', 1, 'ready', 'source', '{}',
+                    0, 1, 1, 0, 0, '{}', '{}', 123, 456, 1
+                )
+                """.trimIndent(),
+            )
+            sqlite.execSQL(
+                """
+                INSERT INTO android_sync_assets (
+                    generation_id, seq, asset_id, asset_kind, owner_id, owner_kind,
+                    bucket, server_url, size_bytes, server_state, subtitle_is_auto,
+                    effective_recency_ms, state, attempt_count, next_attempt_at_ms, updated_at_ms
+                ) VALUES (
+                    'android-v3-media-index', 1, 'asset-one', 'post_media', 'owner-one', 'tweet',
+                    'twitter_media', '/api/media/slide/owner-one/0', 12, 'ready', 1,
+                    10, 'desired', 0, 0, 20
+                )
+                """.trimIndent(),
+            )
+        } finally {
+            sqlite.close()
+        }
+
+        val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
+            .addMigrations(IglooMigrations.MIGRATION_32_33)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            val readable = roomDb.openHelper.readableDatabase
+            assertEquals(IglooMigrations.CURRENT_SCHEMA_VERSION, readable.version)
+            readable.query(
+                """
+                SELECT asset_id, media_index
+                FROM android_sync_assets
+                WHERE generation_id = 'android-v3-media-index'
+                """.trimIndent(),
+            ).use {
+                assertTrue(it.moveToFirst())
+                assertEquals("asset-one", it.getString(0))
+                assertEquals(0, it.getInt(1))
             }
         } finally {
             roomDb.close()

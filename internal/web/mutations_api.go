@@ -82,6 +82,7 @@ func (s *Server) handleMutationDelta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	currentVersion, _ := s.db.GetCurrentSyncVersion()
+	nextCursor := strconv.FormatInt(currentVersion, 10)
 
 	result := make([]map[string]any, 0, len(changes))
 	for _, c := range changes {
@@ -93,11 +94,15 @@ func (s *Server) handleMutationDelta(w http.ResponseWriter, r *http.Request) {
 			"created_at": c.CreatedAtMs,
 		})
 	}
+	if truncated && len(changes) > 0 {
+		nextCursor = strconv.FormatInt(changes[len(changes)-1].Version, 10)
+	}
 
 	writeJSON(w, 200, map[string]any{
-		"version":   currentVersion,
-		"changes":   result,
-		"truncated": truncated,
+		"version":     currentVersion,
+		"next_cursor": nextCursor,
+		"changes":     result,
+		"truncated":   truncated,
 	})
 }
 
