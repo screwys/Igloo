@@ -3,6 +3,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || exit 1
 cd "$ROOT" || exit 1
+. scripts/dev/go-tool-versions.sh
 
 tmp="$(mktemp -d)" || exit 1
 cleanup() {
@@ -77,7 +78,7 @@ then
 fi
 
 echo "[go] running errcheck..."
-go run github.com/kisielk/errcheck@latest ./...
+go run "github.com/kisielk/errcheck@${ERRCHECK_VERSION}" ./...
 errcheck_status=$?
 if [[ "$errcheck_status" -ne 0 ]]; then
   echo "[go] errcheck failed with exit code $errcheck_status" >&2
@@ -85,7 +86,7 @@ if [[ "$errcheck_status" -ne 0 ]]; then
 fi
 
 echo "[go] running staticcheck..."
-go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+go run "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}" ./...
 staticcheck_status=$?
 if [[ "$staticcheck_status" -ne 0 ]]; then
   echo "[go] staticcheck failed with exit code $staticcheck_status" >&2
@@ -93,7 +94,7 @@ if [[ "$staticcheck_status" -ne 0 ]]; then
 fi
 
 echo "[go] running govulncheck..."
-go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
 govulncheck_status=$?
 if [[ "$govulncheck_status" -ne 0 ]]; then
   echo "[go] govulncheck failed with exit code $govulncheck_status" >&2

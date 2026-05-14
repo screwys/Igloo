@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
   attestations: write
   packages: write
@@ -80,6 +80,27 @@ jobs:
           test -n "$digest"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare security artifact directory
+        run: mkdir -p release-artifacts
+
+      - name: Generate container SBOM
+        uses: anchore/sbom-action@v0.24.0
+        with:
+          image: ghcr.io/${{ github.repository_owner }}/igloo@${{ steps.build.outputs.digest }}
+          artifact-name: igloo-container-sbom.spdx.json
+          output-file: release-artifacts/igloo-container-${{ github.ref_name }}.spdx.json
+          upload-release-assets: false
+
+      - name: Scan container SBOM
+        uses: anchore/scan-action@v7.4.0
+        with:
+          sbom: release-artifacts/igloo-container-${{ github.ref_name }}.spdx.json
+          fail-build: true
+          severity-cutoff: critical
+          only-fixed: true
+          output-format: json
+          output-file: release-artifacts/igloo-container-${{ github.ref_name }}-vulnerabilities.json
+
       - name: Sign container image keyless
         env:
           IMAGE_DIGEST: ghcr.io/${{ github.repository_owner }}/igloo@${{ steps.build.outputs.digest }}
@@ -101,3 +122,9 @@ jobs:
           subject-name: ghcr.io/${{ github.repository_owner }}/igloo
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      - name: Attach container security artifacts to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: release-artifacts/*

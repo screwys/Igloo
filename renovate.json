@@ -19,6 +19,14 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[a-z-]+) packageName=(?<packageName>[^\\s]+) versioning=(?<versioning>[a-z0-9-]+)\\s+ARG [A-Z0-9_]+_VERSION=(?<currentValue>[^\\s]+)"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "Update pinned Go analysis tool versions.",
+      "managerFilePatterns": ["/(^|/)scripts/dev/go-tool-versions\\.sh$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) packageName=(?<packageName>[^\\s]+) versioning=(?<versioning>[a-z0-9-]+)\\s+[A-Z0-9_]+_VERSION=(?<currentValue>[^\\s]+)"
+      ]
     }
   ],
   "packageRules": [

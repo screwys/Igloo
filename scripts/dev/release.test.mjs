@@ -104,6 +104,7 @@ test("container release publishes signed provenance attestation", () => {
 
   assert.match(workflow, /\n  id-token: write\n/);
   assert.match(workflow, /\n  attestations: write\n/);
+  assert.match(workflow, /\n  contents: write\n/);
   assert.match(workflow, /\n        id: build\n/);
   assert.match(workflow, /actions\/setup-go@v6/);
   assert.match(workflow, /actions\/setup-java@v5/);
@@ -114,12 +115,47 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /SOURCE_IMAGE: ghcr\.io\/screwys\/igloo:latest/);
   assert.match(workflow, /docker tag "\$SOURCE_IMAGE" "\$tag"/);
   assert.match(workflow, /docker push "\$tag"/);
+  assert.match(workflow, /name: Prepare security artifact directory/);
+  assert.match(workflow, /run: mkdir -p release-artifacts/);
+  assert.match(workflow, /uses: anchore\/sbom-action@v0\.24\.0/);
+  assert.match(workflow, /image: ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/igloo@\$\{\{ steps\.build\.outputs\.digest \}\}/);
+  assert.match(workflow, /output-file: release-artifacts\/igloo-container-\$\{\{ github\.ref_name \}\}\.spdx\.json/);
+  assert.match(workflow, /uses: anchore\/scan-action@v7\.4\.0/);
+  assert.match(workflow, /sbom: release-artifacts\/igloo-container-\$\{\{ github\.ref_name \}\}\.spdx\.json/);
+  assert.match(workflow, /severity-cutoff: critical/);
+  assert.match(workflow, /only-fixed: true/);
+  assert.match(workflow, /output-file: release-artifacts\/igloo-container-\$\{\{ github\.ref_name \}\}-vulnerabilities\.json/);
   assert.match(workflow, /uses: actions\/attest@v4/);
   assert.match(workflow, /subject-name: ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/igloo/);
   assert.match(workflow, /subject-digest: \$\{\{ steps\.build\.outputs\.digest \}\}/);
   assert.match(workflow, /push-to-registry: true/);
+  assert.match(workflow, /uses: softprops\/action-gh-release@v3/);
+  assert.match(workflow, /files: release-artifacts\/\*/);
   assert.doesNotMatch(workflow, /go test \.\/\.\.\./);
   assert.doesNotMatch(workflow, /docker\/build-push-action/);
+});
+
+test("Go analysis tools are pinned and Renovate-managed", () => {
+  const workflow = readFileSync(
+    new URL("../../.github/workflows/go-ci.yml", import.meta.url),
+    "utf8",
+  );
+  const fullGate = readFileSync(new URL("./test-full.sh", import.meta.url), "utf8");
+  const versions = readFileSync(new URL("./go-tool-versions.sh", import.meta.url), "utf8");
+  const renovate = readFileSync(new URL("../../renovate.json", import.meta.url), "utf8");
+
+  assert.doesNotMatch(workflow, /@latest/);
+  assert.doesNotMatch(fullGate, /@latest/);
+  assert.match(workflow, /\. scripts\/dev\/go-tool-versions\.sh/);
+  assert.match(fullGate, /\. scripts\/dev\/go-tool-versions\.sh/);
+  assert.match(versions, /packageName=github\.com\/kisielk\/errcheck/);
+  assert.match(versions, /ERRCHECK_VERSION=v\d+\.\d+\.\d+/);
+  assert.match(versions, /packageName=honnef\.co\/go\/tools/);
+  assert.match(versions, /STATICCHECK_VERSION=v\d+\.\d+\.\d+/);
+  assert.match(versions, /packageName=golang\.org\/x\/vuln/);
+  assert.match(versions, /GOVULNCHECK_VERSION=v\d+\.\d+\.\d+/);
+  assert.match(renovate, /Update pinned Go analysis tool versions/);
+  assert.match(renovate, /scripts\/dev\/go-tool-versions\\\\\.sh/);
 });
 
 test("container images run as non-root by default", () => {
@@ -134,6 +170,12 @@ test("container images run as non-root by default", () => {
   assert.match(flake, /"HOME=\/tmp"/);
   assert.match(flake, /chown -R 10001:10001 igloo/);
   assert.match(compose, /user: "\$\{IGLOO_UID:-1000\}:\$\{IGLOO_GID:-1000\}"/);
+  assert.match(compose, /read_only: true/);
+  assert.match(compose, /\/tmp:size=256m,mode=1777/);
+  assert.match(compose, /cap_drop:\n\s+- ALL/);
+  assert.match(compose, /security_opt:\n\s+- no-new-privileges:true/);
+  assert.match(compose, /mem_limit: \$\{IGLOO_MEM_LIMIT:-2g\}/);
+  assert.match(compose, /cpus: "\$\{IGLOO_CPUS:-2\.0\}"/);
 });
 
 test("Android release publishes signed provenance attestation for the APK", () => {
@@ -148,8 +190,18 @@ test("Android release publishes signed provenance attestation for the APK", () =
   assert.match(workflow, /run: \.\/gradlew :app:assembleRelease/);
   assert.match(workflow, /\n  id-token: write\n/);
   assert.match(workflow, /\n  attestations: write\n/);
+  assert.match(workflow, /uses: anchore\/sbom-action@v0\.24\.0/);
+  assert.match(workflow, /file: release-artifacts\/igloo-android-\$\{\{ github\.ref_name \}\}\.apk/);
+  assert.match(workflow, /output-file: release-artifacts\/igloo-android-\$\{\{ github\.ref_name \}\}\.spdx\.json/);
+  assert.match(workflow, /uses: anchore\/scan-action@v7\.4\.0/);
+  assert.match(workflow, /sbom: release-artifacts\/igloo-android-\$\{\{ github\.ref_name \}\}\.spdx\.json/);
+  assert.match(workflow, /severity-cutoff: critical/);
+  assert.match(workflow, /only-fixed: true/);
+  assert.match(workflow, /output-file: release-artifacts\/igloo-android-\$\{\{ github\.ref_name \}\}-vulnerabilities\.json/);
   assert.match(workflow, /uses: actions\/attest@v4/);
   assert.match(workflow, /subject-path: release-artifacts\/\*\.apk/);
+  assert.match(workflow, /uses: softprops\/action-gh-release@v3/);
+  assert.match(workflow, /files: release-artifacts\/\*/);
   assert.doesNotMatch(workflow, /:app:testDevtestUnitTest :app:assembleRelease/);
 });
 
