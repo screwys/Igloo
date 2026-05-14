@@ -150,6 +150,26 @@ test("CodeQL runs on code changes and published releases instead of a weekly sch
   assert.doesNotMatch(workflow, /cron:/);
 });
 
+test("CI workflows ignore Markdown-only pushes and pull requests", () => {
+  for (const workflowName of ["android-ci.yml", "go-ci.yml", "semgrep.yml", "codeql.yml"]) {
+    const workflow = readFileSync(
+      new URL(`../../.github/workflows/${workflowName}`, import.meta.url),
+      "utf8",
+    );
+
+    assert.match(
+      workflow,
+      /\n  push:\n    paths-ignore:\n      - "\*\*\/\*\.md"\n/,
+      `${workflowName} push trigger should ignore Markdown-only changes`,
+    );
+    assert.match(
+      workflow,
+      /\n  pull_request:\n    paths-ignore:\n      - "\*\*\/\*\.md"\n/,
+      `${workflowName} pull_request trigger should ignore Markdown-only changes`,
+    );
+  }
+});
+
 test("updates android release version fields", () => {
   const source = `
 android {
