@@ -346,11 +346,11 @@ class OutboxDispatcher(
                     db.bookmarkDao().upsert(
                         BookmarkEntity(
                             videoId = videoId,
-                            categoryId = prev?.long("category_id") ?: 0L,
-                            customTitle = prev?.string("custom_title"),
-                            accountHandles = prev?.string("account_handles"),
-                            mediaIndices = prev?.string("media_indices"),
-                            bookmarkedAt = prev?.long("bookmarked_at") ?: row.createdAtMs,
+                            categoryId = prev.long("category_id") ?: 0L,
+                            customTitle = prev.string("custom_title"),
+                            accountHandles = prev.string("account_handles"),
+                            mediaIndices = prev.string("media_indices"),
+                            bookmarkedAt = prev.long("bookmarked_at") ?: row.createdAtMs,
                         ),
                     )
                 }
@@ -365,7 +365,7 @@ class OutboxDispatcher(
                     dao.delete(channelId)
                 } else {
                     val current = dao.getById(channelId) ?: ChannelSettingEntity(channelId = channelId)
-                    dao.upsert(current.withField(settingField, prev?.long("value"), row.createdAtMs))
+                    dao.upsert(current.withField(settingField, prev.long("value"), row.createdAtMs))
                 }
             }
             OutboxKind.CODE_CREATE_CATEGORY -> {

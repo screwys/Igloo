@@ -143,18 +143,20 @@ internal fun buildRemoteImageModel(
     memoryCacheKey: String? = null,
     placeholderMemoryCacheKey: String? = null,
 ): Any {
-    val shouldAuthorize = shouldAuthorizeIglooImage(url, iglooHost) && !bearerToken.isNullOrBlank()
-    if (!shouldAuthorize && memoryCacheKey.isNullOrBlank() && placeholderMemoryCacheKey.isNullOrBlank()) {
+    val authorizedToken = bearerToken?.takeIf { token ->
+        token.isNotBlank() && shouldAuthorizeIglooImage(url, iglooHost)
+    }
+    if (authorizedToken == null && memoryCacheKey.isNullOrBlank() && placeholderMemoryCacheKey.isNullOrBlank()) {
         return url
     }
     val builder = ImageRequest.Builder(context).data(url)
-    val authCacheKey = if (shouldAuthorize) "igloo-auth:$url" else null
-    if (shouldAuthorize) {
+    val authCacheKey = if (authorizedToken == null) null else "igloo-auth:$url"
+    if (authorizedToken != null) {
         val headers = NetworkHeaders.Builder()
-            .set("Authorization", bearerToken!!)
+            .set("Authorization", authorizedToken)
             .build()
         builder.httpHeaders(headers)
-        builder.diskCacheKey(authCacheKey!!)
+        builder.diskCacheKey("igloo-auth:$url")
     }
     (memoryCacheKey ?: authCacheKey)?.takeIf { it.isNotBlank() }?.let(builder::memoryCacheKey)
     placeholderMemoryCacheKey?.takeIf { it.isNotBlank() }?.let(builder::placeholderMemoryCacheKey)

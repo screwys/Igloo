@@ -100,6 +100,8 @@ android {
         // Robolectric (room-testing JVM runner) needs Android resources on the test
         // classpath to resolve `ApplicationProvider.getApplicationContext()`.
         unitTests.isIncludeAndroidResources = true
+        // TODO(jdk-hardening): MockK/ByteBuddy still emit Java 26 final-field and
+        // Unsafe warnings during JVM tests; revisit before future JDK hardening.
         unitTests.all {
             it.jvmArgs(
                 "-XX:+EnableDynamicAgentLoading",
