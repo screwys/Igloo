@@ -1,0 +1,79 @@
+name: Bug Report
+description: Report a bug, unexpected behavior, or accessibility problem.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # Bug Report
+
+        Thanks for taking the time to report a problem. Please include enough
+        detail to reproduce the issue.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before opening this issue
+      options:
+        - label: I am using the newest release or a recent commit.
+          required: true
+        - label: I searched existing issues for the same problem.
+          required: true
+
+  - type: checkboxes
+    id: area
+    attributes:
+      label: Area
+      description: Select all that apply.
+      options:
+        - label: Server
+        - label: Web UI
+        - label: Android
+        - label: Sync
+        - label: Import/download
+        - label: Accessibility
+        - label: Not sure
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.0.0 or commit SHA
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install type
+      options:
+        - Native
+        - Container
+        - Android app
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and the steps to reproduce it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Add relevant logs, screenshots, or approximate time of the issue.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
