@@ -1,7 +1,6 @@
 package web
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -98,7 +97,11 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 			Password  string   `json:"password"`
 			Platforms []string `json:"platforms"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := decodeJSON(w, r, &body); err != nil {
+			if requestBodyTooLarge(err) {
+				writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+				return
+			}
 			writeJSON(w, 400, map[string]any{"error": "invalid JSON"})
 			return
 		}
@@ -229,7 +232,11 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		Password  string   `json:"password"`
 		Platforms []string `json:"platforms"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"error": "invalid JSON"})
 		return
 	}

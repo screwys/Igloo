@@ -1,7 +1,6 @@
 package web
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -45,7 +44,10 @@ func (s *Server) handleFeedLike(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Item map[string]string `json:"item"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSON(w, r, &body); err != nil && requestBodyTooLarge(err) {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+		return
+	}
 
 	fields := body.Item
 	if fields == nil {
@@ -125,7 +127,15 @@ func (s *Server) handleFeedSeen(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			TweetIDs []string `json:"tweet_ids"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.TweetIDs) == 0 {
+		if err := decodeJSON(w, r, &body); err != nil {
+			if requestBodyTooLarge(err) {
+				writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+				return
+			}
+			writeJSON(w, 400, map[string]any{"success": false, "error": "tweet_ids required"})
+			return
+		}
+		if len(body.TweetIDs) == 0 {
 			writeJSON(w, 400, map[string]any{"success": false, "error": "tweet_ids required"})
 			return
 		}
@@ -265,7 +275,15 @@ func (s *Server) handleFeedMediaRetry(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		TweetID string `json:"tweet_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.TweetID == "" {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
+		writeJSON(w, 400, map[string]any{"success": false, "error": "tweet_id required"})
+		return
+	}
+	if body.TweetID == "" {
 		writeJSON(w, 400, map[string]any{"success": false, "error": "tweet_id required"})
 		return
 	}
@@ -284,7 +302,11 @@ func (s *Server) handleFeedInteraction(w http.ResponseWriter, r *http.Request) {
 		TweetID string         `json:"tweet_id"`
 		Item    map[string]any `json:"item"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"error": "invalid JSON"})
 		return
 	}

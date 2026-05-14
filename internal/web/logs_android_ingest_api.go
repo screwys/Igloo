@@ -18,6 +18,8 @@ var allowedAndroidTags = map[string]bool{
 	"CrashReport": true, "StatsLogger": true,
 }
 
+const androidLegacyLogMaxBodyBytes int64 = 256 << 10
+
 func hasAllowedTag(line string) bool {
 	for tag := range allowedAndroidTags {
 		if strings.Contains(line, tag) {
@@ -31,7 +33,11 @@ func (s *Server) handleAndroidLog(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Line string `json:"line"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeLimitedJSON(w, r, androidLegacyLogMaxBodyBytes, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"success": false, "error": "invalid JSON"})
 		return
 	}
@@ -62,7 +68,11 @@ func (s *Server) handleAndroidBatch(w http.ResponseWriter, r *http.Request) {
 		AndroidVersion string            `json:"android_version"`
 		Logs           []androidLogEvent `json:"logs"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeLimitedJSON(w, r, androidLegacyLogMaxBodyBytes, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"success": false, "error": "invalid JSON"})
 		return
 	}
@@ -109,7 +119,11 @@ func (s *Server) handleAndroidStats(w http.ResponseWriter, r *http.Request) {
 		DeviceID string   `json:"device_id"`
 		Lines    []string `json:"lines"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeLimitedJSON(w, r, androidLegacyLogMaxBodyBytes, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"success": false, "error": "invalid JSON"})
 		return
 	}
@@ -146,7 +160,15 @@ func (s *Server) handleAndroidDebugLog(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Lines []string `json:"lines"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.Lines) == 0 {
+	if err := decodeLimitedJSON(w, r, androidLegacyLogMaxBodyBytes, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
+		writeJSON(w, 400, map[string]any{"success": false, "error": "lines required"})
+		return
+	}
+	if len(body.Lines) == 0 {
 		writeJSON(w, 400, map[string]any{"success": false, "error": "lines required"})
 		return
 	}
@@ -165,7 +187,11 @@ func (s *Server) handleAndroidDebugLog(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAndroidCacheHealth(w http.ResponseWriter, r *http.Request) {
 	var body map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeLimitedJSON(w, r, androidLegacyLogMaxBodyBytes, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"success": false, "error": "bad json"})
 		return
 	}

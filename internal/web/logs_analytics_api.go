@@ -1,7 +1,6 @@
 package web
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -10,11 +9,17 @@ import (
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
+const analyticsEventsMaxBodyBytes int64 = 256 << 10
+
 func (s *Server) handleAnalyticsEvents(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Events []db.AnalyticsEvent `json:"events"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeLimitedJSON(w, r, analyticsEventsMaxBodyBytes, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"success": false, "error": "invalid JSON"})
 		return
 	}

@@ -2,7 +2,6 @@ package web
 
 import (
 	"bufio"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -264,7 +263,10 @@ func (s *Server) handleLogsCleanup(w http.ResponseWriter, r *http.Request) {
 		Days int `json:"days"`
 	}
 	body.Days = 30
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSON(w, r, &body); err != nil && requestBodyTooLarge(err) {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+		return
+	}
 	if body.Days <= 0 {
 		body.Days = 30
 	}

@@ -247,7 +247,11 @@ func (s *Server) releaseAndroidSyncAssetServeSlot() {
 
 func (s *Server) handleAndroidSyncHealth(w http.ResponseWriter, r *http.Request) {
 	var body map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "body_too_large", requestBodyTooLargeMessage)
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "bad_json", "invalid health payload")
 		return
 	}

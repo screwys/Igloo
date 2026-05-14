@@ -173,7 +173,11 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// JSON from Android / legacy JS.
 		var raw map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		if err := decodeJSON(w, r, &raw); err != nil {
+			if requestBodyTooLarge(err) {
+				writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+				return
+			}
 			writeJSON(w, 400, map[string]any{"error": "invalid JSON"})
 			return
 		}

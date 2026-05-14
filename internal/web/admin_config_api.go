@@ -25,6 +25,12 @@ import (
 
 // ── Config export / import ────────────────────────────────────────────────────
 
+const (
+	configImportMaxBodyBytes     int64 = 512 << 20
+	configImportMaxMemoryBytes   int64 = 8 << 20
+	configImportJSONMaxBodyBytes int64 = 16 << 20
+)
+
 func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 	if !requireAdmin(w, r) {
 		return
@@ -397,11 +403,25 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := r.ParseMultipartForm(8 << 20); err != nil {
+	if requestContentLengthTooLarge(r, configImportMaxBodyBytes) {
+		importErr(http.StatusRequestEntityTooLarge, requestBodyTooLargeMessage)
+		return
+	}
+	limitRequestBody(w, r, configImportMaxBodyBytes)
+	if err := r.ParseMultipartForm(configImportMaxMemoryBytes); err != nil {
+		if requestBodyTooLarge(err) {
+			importErr(http.StatusRequestEntityTooLarge, requestBodyTooLargeMessage)
+			return
+		}
 		importErr(400, "multipart parse error")
 		return
 	}
-	file, _, err := r.FormFile("file")
+	if r.MultipartForm != nil {
+		defer func() {
+			_ = r.MultipartForm.RemoveAll()
+		}()
+	}
+	file, header, err := r.FormFile("file")
 	if err != nil {
 		importErr(400, "missing file")
 		return
@@ -410,14 +430,14 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 		_ = file.Close()
 	}()
 
-	data, err := io.ReadAll(file)
+	prefix, err := readUploadPrefix(file, 4)
 	if err != nil {
 		importErr(500, "read error")
 		return
 	}
 
-	if len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b {
-		if err := restore.StageTarball(bytes.NewReader(data), s.cfg.DataDir); err != nil {
+	if isGzipPrefix(prefix) {
+		if err := restore.StageTarball(file, s.cfg.DataDir); err != nil {
 			slog.Error("StageTarball", "err", err)
 			importErr(400, "tarball error: "+err.Error())
 			return
@@ -439,8 +459,8 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if fullimport.IsZipPayload(data) {
-		if err := restore.StageZip(bytes.NewReader(data), int64(len(data)), s.cfg.DataDir); err == nil {
+	if fullimport.IsZipPrefix(prefix) {
+		if err := restore.StageZip(file, header.Size, s.cfg.DataDir); err == nil {
 			slog.Info("restore: staged zip backup, exiting for systemd restart")
 			if isHTMX {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -466,7 +486,7 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 			userID = user.Username
 		}
 		replace := r.FormValue("mode") == "replace"
-		result, restoredMedia, restoredConfig, err := fullimport.ImportFullExportZip(s.db, s.cfg.DataDir, s.cfg.ConfDir, s.repoDirForRuntimeExport(), data, userID, replace)
+		result, restoredMedia, restoredConfig, err := fullimport.ImportFullExportZipReaderAt(s.db, s.cfg.DataDir, s.cfg.ConfDir, s.repoDirForRuntimeExport(), file, header.Size, userID, replace)
 		if err != nil {
 			slog.Error("ImportFullExportZip", "err", err)
 			importErr(400, "zip import error: "+err.Error())
@@ -507,6 +527,15 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	data, err := readLimitedBody(file, configImportJSONMaxBodyBytes)
+	if err != nil {
+		if requestBodyTooLarge(err) {
+			importErr(http.StatusRequestEntityTooLarge, requestBodyTooLargeMessage)
+			return
+		}
+		importErr(500, "read error")
+		return
+	}
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) == 0 {
 		importErr(400, "empty file")
@@ -582,4 +611,20 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 	default:
 		importErr(400, "unrecognized format")
 	}
+}
+
+func readUploadPrefix(file io.ReadSeeker, n int) ([]byte, error) {
+	buf := make([]byte, n)
+	read, err := io.ReadFull(file, buf)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return buf[:read], nil
+}
+
+func isGzipPrefix(data []byte) bool {
+	return len(data) >= 2 && data[0] == 0x1f && data[1] == 0x8b
 }

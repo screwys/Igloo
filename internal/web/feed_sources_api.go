@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -40,7 +39,11 @@ func (s *Server) handleFeedSourcesCreate(w http.ResponseWriter, r *http.Request)
 		URL   string `json:"url"`
 		Label string `json:"label"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "invalid json"})
 		return
 	}

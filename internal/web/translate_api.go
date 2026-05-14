@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -22,7 +21,11 @@ func (s *Server) handleTranslate(w http.ResponseWriter, r *http.Request) {
 		Field      string `json:"field"`
 		TargetLang string `json:"target_lang"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"error": "invalid JSON"})
 		return
 	}

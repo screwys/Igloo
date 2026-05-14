@@ -390,7 +390,10 @@ func (s *Server) handleVideoWatched(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Watched *bool `json:"watched"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSON(w, r, &body); err != nil && requestBodyTooLarge(err) {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+		return
+	}
 
 	watched := true
 	if body.Watched != nil {
@@ -459,7 +462,10 @@ func (s *Server) handleVideoPin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Pinned *bool `json:"pinned"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSON(w, r, &body); err != nil && requestBodyTooLarge(err) {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+		return
+	}
 
 	pinned := true
 	if body.Pinned != nil {
@@ -549,7 +555,10 @@ func (s *Server) handleVideoProgressPost(w http.ResponseWriter, r *http.Request)
 		UpdatedAtMs int64   `json:"updated_at_ms"`
 		ClientType  string  `json:"client_type"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSON(w, r, &body); err != nil && requestBodyTooLarge(err) {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+		return
+	}
 
 	result, err := s.db.SaveProgress(user.Username, videoID, body.Position, body.Duration, body.UpdatedAtMs, body.ClientType)
 	if err != nil {

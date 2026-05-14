@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -57,7 +56,11 @@ func (s *Server) handleTweetMediaSave(w http.ResponseWriter, r *http.Request) {
 		Label      string   `json:"label"`
 		CategoryID int64    `json:"category_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"success": false, "error": "invalid JSON"})
 		return
 	}
@@ -114,7 +117,11 @@ func (s *Server) handleTweetMediaMove(w http.ResponseWriter, r *http.Request) {
 			Ext         string `json:"ext"`
 		} `json:"staged_files"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"success": false, "error": "invalid JSON"})
 		return
 	}
@@ -204,7 +211,15 @@ func (s *Server) handleTweetMediaDl(w http.ResponseWriter, r *http.Request) {
 		Label      string `json:"label"`
 		CategoryID int64  `json:"category_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.TweetURL == "" {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
+		writeJSON(w, 400, map[string]any{"success": false, "error": "tweet_url required"})
+		return
+	}
+	if body.TweetURL == "" {
 		writeJSON(w, 400, map[string]any{"success": false, "error": "tweet_url required"})
 		return
 	}

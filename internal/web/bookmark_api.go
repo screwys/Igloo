@@ -48,7 +48,11 @@ func (s *Server) handleBookmarkAdd(w http.ResponseWriter, r *http.Request) {
 		AccountHandles []string `json:"account_handles"`
 		MediaIndices   []int    `json:"media_indices"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+	if err := decodeJSON(w, r, &body); err != nil && !errors.Is(err, io.EOF) {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"success": false, "error": "invalid json"})
 		return
 	}
@@ -384,7 +388,15 @@ func (s *Server) handleBookmarkCategoryCreate(w http.ResponseWriter, r *http.Req
 		Name        string `json:"name"`
 		ArchivePath string `json:"archive_path"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
+		writeJSON(w, 400, map[string]any{"success": false, "error": "name required"})
+		return
+	}
+	if body.Name == "" {
 		writeJSON(w, 400, map[string]any{"success": false, "error": "name required"})
 		return
 	}
@@ -437,7 +449,15 @@ func (s *Server) handleBookmarkCategoryUpdate(w http.ResponseWriter, r *http.Req
 		Name        string `json:"name"`
 		ArchivePath string `json:"archive_path"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
+		writeJSON(w, 400, map[string]any{"success": false, "error": "name required"})
+		return
+	}
+	if body.Name == "" {
 		writeJSON(w, 400, map[string]any{"success": false, "error": "name required"})
 		return
 	}

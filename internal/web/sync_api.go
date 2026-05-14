@@ -1,7 +1,6 @@
 package web
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -87,7 +86,15 @@ func (s *Server) handleMomentsCursor(w http.ResponseWriter, r *http.Request) {
 		Scope       string `json:"scope"`
 		SortAtMs    int64  `json:"sort_at_ms"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.VideoID == "" {
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"success": false, "error": requestBodyTooLargeMessage})
+			return
+		}
+		writeJSON(w, 400, map[string]any{"success": false, "error": "video_id required"})
+		return
+	}
+	if body.VideoID == "" {
 		writeJSON(w, 400, map[string]any{"success": false, "error": "video_id required"})
 		return
 	}

@@ -1,8 +1,6 @@
 package web
 
 import (
-	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -15,6 +13,11 @@ import (
 )
 
 // ── Cookies ───────────────────────────────────────────────────────────────────
+
+const (
+	cookieUploadMaxBodyBytes   int64 = 16 << 20
+	cookieUploadMaxMemoryBytes int64 = 1 << 20
+)
 
 func (s *Server) handleGetCookies(w http.ResponseWriter, r *http.Request) {
 	if !requireAdmin(w, r) {
@@ -96,7 +99,16 @@ func (s *Server) handleUploadCookie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if requestContentLengthTooLarge(r, cookieUploadMaxBodyBytes) {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+		return
+	}
+	limitRequestBody(w, r, cookieUploadMaxBodyBytes)
+	if err := r.ParseMultipartForm(cookieUploadMaxMemoryBytes); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+			return
+		}
 		writeJSON(w, 400, map[string]any{"error": "multipart parse error"})
 		return
 	}
@@ -127,9 +139,13 @@ func (s *Server) handleUploadCookie(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 500, map[string]any{"error": "open error"})
 			return
 		}
-		data, readErr := io.ReadAll(file)
+		data, readErr := readLimitedBody(file, cookieUploadMaxBodyBytes)
 		closeErr := file.Close()
 		if readErr != nil {
+			if requestBodyTooLarge(readErr) {
+				writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+				return
+			}
 			writeJSON(w, 500, map[string]any{"error": "read error"})
 			return
 		}
@@ -252,7 +268,11 @@ func (s *Server) handleSetCookieBrowser(w http.ResponseWriter, r *http.Request) 
 		var body struct {
 			Browser string `json:"browser"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := decodeJSON(w, r, &body); err != nil {
+			if requestBodyTooLarge(err) {
+				writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+				return
+			}
 			writeJSON(w, 400, map[string]any{"error": "bad request"})
 			return
 		}

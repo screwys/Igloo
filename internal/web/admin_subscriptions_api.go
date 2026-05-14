@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -32,7 +31,11 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 			URL      string `json:"url"`
 			Platform string `json:"platform"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := decodeJSON(w, r, &body); err != nil {
+			if requestBodyTooLarge(err) {
+				writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+				return
+			}
 			writeJSON(w, 400, map[string]any{"error": "invalid JSON"})
 			return
 		}

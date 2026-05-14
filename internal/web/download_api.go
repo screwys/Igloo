@@ -43,7 +43,11 @@ func (s *Server) handleQuickDownload(w http.ResponseWriter, r *http.Request) {
 			URL         string `json:"url"`
 			SaveChannel bool   `json:"save_channel"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := decodeJSON(w, r, &body); err != nil {
+			if requestBodyTooLarge(err) {
+				writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+				return
+			}
 			writeJSON(w, 400, map[string]any{"error": "url required"})
 			return
 		}
@@ -138,7 +142,10 @@ func (s *Server) handleCancelDownload(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		VideoID string `json:"video_id"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSON(w, r, &body); err != nil && requestBodyTooLarge(err) {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+		return
+	}
 	// Stub: full cancellation requires tracking active download contexts
 	writeJSON(w, 200, map[string]any{"success": true, "video_id": body.VideoID})
 }

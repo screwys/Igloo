@@ -16,6 +16,10 @@ import (
 )
 
 func IsZipPayload(data []byte) bool {
+	return IsZipPrefix(data)
+}
+
+func IsZipPrefix(data []byte) bool {
 	return len(data) >= 4 && data[0] == 'P' && data[1] == 'K' && data[2] == 0x03 && data[3] == 0x04
 }
 
@@ -35,7 +39,11 @@ func ReadExportConfig(data []byte) (db.ConfigExport, error) {
 }
 
 func ImportFullExportZip(store *db.DB, dataDir, configDir, repoDir string, data []byte, userID string, replace bool) (db.ImportResult, int, int, error) {
-	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	return ImportFullExportZipReaderAt(store, dataDir, configDir, repoDir, bytes.NewReader(data), int64(len(data)), userID, replace)
+}
+
+func ImportFullExportZipReaderAt(store *db.DB, dataDir, configDir, repoDir string, readerAt io.ReaderAt, size int64, userID string, replace bool) (db.ImportResult, int, int, error) {
+	zr, err := zip.NewReader(readerAt, size)
 	if err != nil {
 		return db.ImportResult{}, 0, 0, fmt.Errorf("open zip: %w", err)
 	}
