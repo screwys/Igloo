@@ -1222,7 +1222,6 @@ type AndroidDashboardData struct {
 	Warnings          []AndroidWarningEntry
 	LogFilter         string // "all", "errors", "warnings"
 	ForceSyncPending  bool
-	RoomQuery         *AndroidRoomResult
 }
 
 // AndroidPipelineStep is a single sync step row.
@@ -1263,15 +1262,6 @@ type AndroidErrorEntry struct {
 type AndroidWarningEntry struct {
 	Tag     string
 	Message string
-}
-
-// AndroidRoomResult is the result of a Room DB query.
-type AndroidRoomResult struct {
-	Error    string
-	Query    string
-	RowCount int
-	Columns  []string
-	Rows     [][]string
 }
 
 // AndroidLogFilterCount returns count of log entries matching a filter.

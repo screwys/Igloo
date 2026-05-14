@@ -19,8 +19,6 @@ type androidState struct {
 	forceSyncFlag  bool
 	fetchRequested bool
 	eventBuffer    []androidLogEvent // maxlen 500
-	roomQuery      *string
-	roomResult     any
 	cacheHealth    map[string]any
 }
 
@@ -49,10 +47,4 @@ func (s *Server) registerLogsAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/logs/android/force-sync", s.handleAndroidForceSync)
 	mux.HandleFunc("GET /api/logs/android/force-sync/check", s.handleAndroidForceSyncCheck)
 	mux.HandleFunc("POST /api/logs/android/fetch", s.handleAndroidFetch)
-
-	// Room query relay
-	mux.HandleFunc("POST /api/logs/android/room-query", s.handleRoomQueryPost)
-	mux.HandleFunc("GET /api/logs/android/room-query/check", s.handleRoomQueryCheck)
-	mux.HandleFunc("POST /api/logs/android/room-query/result", s.handleRoomQueryResultPost)
-	mux.HandleFunc("GET /api/logs/android/room-query/result", s.handleRoomQueryResultGet)
 }

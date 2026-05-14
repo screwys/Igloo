@@ -2,15 +2,9 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -133,17 +127,6 @@ func main() {
 		mcp.WithString("component", mcp.Required(), mcp.Description("Component base name, e.g. modal, btn, prefs")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return textResult(getIndex().GetCSSComponent(req.GetString("component", "")))
-	})
-
-	s.AddTool(mcp.NewTool("room_query",
-		mcp.WithDescription("Execute a read-only SQL query against the Android Room database via the igloo server. Takes ~5-10s."),
-		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL query (SELECT or PRAGMA only). Max 200 rows.")),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		result, err := roomQuery(req.GetString("sql", ""))
-		if err != nil {
-			return mcp.NewToolResultText("Error: " + err.Error()), nil
-		}
-		return mcp.NewToolResultText(result), nil
 	})
 
 	// ── Server database tools ────────────────────────────────────────────
@@ -348,91 +331,4 @@ func main() {
 	if err := server.ServeStdio(s); err != nil {
 		log.Fatal(err)
 	}
-}
-
-// roomQuery posts a SQL query to the igloo server and polls for the Android result.
-func roomQuery(sql string) (string, error) {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
-		},
-	}
-	base := "https://127.0.0.1:8443"
-
-	// Post the query
-	body, _ := json.Marshal(map[string]string{"query": sql})
-	resp, err := client.Post(base+"/api/logs/android/room-query", "application/json",
-		strings.NewReader(string(body)))
-	if err != nil {
-		return "", fmt.Errorf("failed to post query: %w", err)
-	}
-	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		return "", fmt.Errorf("server returned %d for room-query POST", resp.StatusCode)
-	}
-
-	// Poll for result (Android checks every 5s)
-	for i := 0; i < 12; i++ {
-		time.Sleep(3 * time.Second)
-		resp, err := client.Get(base + "/api/logs/android/room-query/result")
-		if err != nil {
-			continue
-		}
-		data, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if len(data) == 0 {
-			continue
-		}
-		var envelope map[string]any
-		if err := json.Unmarshal(data, &envelope); err != nil {
-			continue
-		}
-		// Server wraps in {"has_result": true, "result": {...}}
-		result, _ := envelope["result"].(map[string]any)
-		if result == nil {
-			continue
-		}
-		if result["query"] != sql {
-			continue
-		}
-		if errMsg, ok := result["error"].(string); ok && errMsg != "" {
-			return "", fmt.Errorf("%s", errMsg)
-		}
-		cols, _ := result["columns"].([]any)
-		rows, _ := result["rows"].([]any)
-		rowCount, _ := result["row_count"].(float64)
-		if len(cols) == 0 {
-			return fmt.Sprintf("Query returned %d rows (no columns)", int(rowCount)), nil
-		}
-		var colStrs []string
-		for _, c := range cols {
-			colStrs = append(colStrs, fmt.Sprint(c))
-		}
-		lines := []string{strings.Join(colStrs, " | ")}
-		var sep []string
-		for _, c := range colStrs {
-			dashes := c
-			for len(dashes) < 6 {
-				dashes += "-"
-			}
-			sep = append(sep, dashes)
-		}
-		lines = append(lines, strings.Join(sep, "-+-"))
-		for _, row := range rows {
-			if rowArr, ok := row.([]any); ok {
-				var vals []string
-				for _, v := range rowArr {
-					if v == nil {
-						vals = append(vals, "NULL")
-					} else {
-						vals = append(vals, fmt.Sprint(v))
-					}
-				}
-				lines = append(lines, strings.Join(vals, " | "))
-			}
-		}
-		return fmt.Sprintf("%d rows\n%s", int(rowCount), strings.Join(lines, "\n")), nil
-	}
-	return "", fmt.Errorf("timeout waiting for Android response (is the app open?)")
 }

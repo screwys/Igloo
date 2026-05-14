@@ -16,7 +16,6 @@ func (s *Server) handleAndroidStatus(w http.ResponseWriter, r *http.Request) {
 	android.mu.Lock()
 	buf := make([]androidLogEvent, len(android.eventBuffer))
 	copy(buf, android.eventBuffer)
-	roomResult := android.roomResult
 	pending := android.forceSyncFlag
 	android.mu.Unlock()
 
@@ -361,47 +360,6 @@ func (s *Server) handleAndroidStatus(w http.ResponseWriter, r *http.Request) {
 			msg, _ := w["message"].(string)
 			d.Warnings = append(d.Warnings, components.AndroidWarningEntry{Tag: tag, Message: msg})
 		}
-		if roomResult != nil {
-			rr := components.AndroidRoomResult{}
-			if m, ok := roomResult.(map[string]any); ok {
-				if s, ok := m["error"].(string); ok {
-					rr.Error = s
-				}
-				if s, ok := m["query"].(string); ok {
-					rr.Query = s
-				}
-				if n, ok := m["row_count"].(int); ok {
-					rr.RowCount = n
-				} else if n, ok := m["row_count"].(float64); ok {
-					rr.RowCount = int(n)
-				}
-				if cols, ok := m["columns"].([]string); ok {
-					rr.Columns = cols
-				} else if colsAny, ok := m["columns"].([]any); ok {
-					for _, c := range colsAny {
-						if s, ok := c.(string); ok {
-							rr.Columns = append(rr.Columns, s)
-						}
-					}
-				}
-				if rows, ok := m["rows"].([]any); ok {
-					for _, row := range rows {
-						if ra, ok := row.([]any); ok {
-							var rowStr []string
-							for _, v := range ra {
-								if v == nil {
-									rowStr = append(rowStr, "")
-								} else {
-									rowStr = append(rowStr, fmt.Sprintf("%v", v))
-								}
-							}
-							rr.Rows = append(rr.Rows, rowStr)
-						}
-					}
-				}
-			}
-			d.RoomQuery = &rr
-		}
 		w.Header().Set("Content-Type", "text/html")
 		_ = components.AndroidDashboard(s.pageProps(w, r), d).Render(r.Context(), w)
 		return
@@ -426,7 +384,6 @@ func (s *Server) handleAndroidStatus(w http.ResponseWriter, r *http.Request) {
 			"feed":    expectations.FeedMedia,
 			"avatars": expectations.Avatars,
 		},
-		"room_query": roomResult,
 	})
 }
 

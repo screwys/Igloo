@@ -78,8 +78,7 @@ func (s *Server) enforceAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		if path == "/login" || path == "/setup" || path == "/logout" || openAuthAPIPath(path) || path == "/api/health" || path == "/api/health/live" ||
-			strings.HasPrefix(path, "/static/") ||
-			strings.HasPrefix(path, "/api/logs/android/room-query") {
+			strings.HasPrefix(path, "/static/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -157,8 +156,7 @@ func (s *Server) csrfProtect(next http.Handler) http.Handler {
 		// Login/setup POSTs use their own CSRF via form field + session.
 		// /api/auth/* token endpoints are JSON credential exchanges, not session
 		// cookie mutations, so Android can refresh after an access token expires.
-		if r.URL.Path == "/login" || r.URL.Path == "/setup" || openAuthAPIPath(r.URL.Path) ||
-			strings.HasPrefix(r.URL.Path, "/api/logs/android/room-query") {
+		if r.URL.Path == "/login" || r.URL.Path == "/setup" || openAuthAPIPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
