@@ -249,9 +249,6 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 var loginInvalidMessage = components.N("login_error_invalid_credentials", "Invalid username or password")
 
 func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
-	username := strings.TrimSpace(r.FormValue("username"))
-	password := r.FormValue("password")
-
 	// Use the same auth source as Android (auth_users.json).
 	users := auth.GetCachedUsers()
 	if len(users) == 0 {
@@ -259,12 +256,20 @@ func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sess, _ := s.store.Get(r, "session")
+	expected, _ := sess.Values["csrf_token"].(string)
+	if expected == "" || r.FormValue("_csrf_token") != expected {
+		http.Error(w, "CSRF token invalid", http.StatusForbidden)
+		return
+	}
+
+	username := strings.TrimSpace(r.FormValue("username"))
+	password := r.FormValue("password")
 	if rec, ok := users[username]; ok && auth.VerifyPassword(password, rec.Password) {
 		s.loginSuccess(w, r, username, rec.Role, rec.Platforms)
 		return
 	}
 
-	sess, _ := s.store.Get(r, "session")
 	csrfToken, err := s.ensureCSRF(sess, w, r)
 	if err != nil {
 		s.writeCSRFUnavailable(w, r, err)

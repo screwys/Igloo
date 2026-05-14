@@ -58,6 +58,66 @@ func TestLoginSubmitRedirectsToSetupWhenNoUsersExist(t *testing.T) {
 	}
 }
 
+func TestLoginSubmitRejectsMissingOrInvalidCSRF(t *testing.T) {
+	s := newLoginSubmitTestServer(t)
+
+	tests := []struct {
+		name       string
+		formToken  string
+		sessionTok string
+	}{
+		{name: "missing"},
+		{name: "invalid", formToken: "wrong-token", sessionTok: "valid-token"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			form := url.Values{
+				"username": {"admin"},
+				"password": {"secret-pass"},
+			}
+			if tt.formToken != "" {
+				form.Set("_csrf_token", tt.formToken)
+			}
+			req := httptest.NewRequest("POST", "/login", strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			if tt.sessionTok != "" {
+				req.AddCookie(loginSessionCookie(t, s, tt.sessionTok))
+			}
+			rec := httptest.NewRecorder()
+
+			s.handleLoginSubmit(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want 403", rec.Code)
+			}
+			assertNoAuthSession(t, s, rec)
+		})
+	}
+}
+
+func TestLoginSubmitAcceptsValidCSRF(t *testing.T) {
+	s := newLoginSubmitTestServer(t)
+	form := url.Values{
+		"_csrf_token": {"valid-token"},
+		"username":    {"admin"},
+		"password":    {"secret-pass"},
+	}
+	req := httptest.NewRequest("POST", "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(loginSessionCookie(t, s, "valid-token"))
+	rec := httptest.NewRecorder()
+
+	s.handleLoginSubmit(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("Location = %q, want /", got)
+	}
+	assertAuthSession(t, s, rec, "admin")
+}
+
 func TestSafeLoginNextRejectsExternalTargets(t *testing.T) {
 	tests := []struct {
 		raw  string
@@ -436,6 +496,87 @@ func newLocalRequest(method, target string, body io.Reader) *http.Request {
 	req.RemoteAddr = "127.0.0.1:12345"
 	req.Host = "127.0.0.1:5001"
 	return req
+}
+
+func newLoginSubmitTestServer(t *testing.T) *Server {
+	t.Helper()
+
+	authPath := filepath.Join(t.TempDir(), "auth_users.json")
+	if err := auth.SaveUsers(authPath, map[string]auth.UserRecord{
+		"admin": {
+			Password: auth.HashPassword("secret-pass"),
+			Role:     "admin",
+		},
+	}); err != nil {
+		t.Fatalf("SaveUsers: %v", err)
+	}
+	auth.InitCache(authPath)
+
+	return &Server{
+		cfg:   &config.Config{SecretKey: "test-secret", AuthUsersPath: authPath},
+		store: sessions.NewCookieStore([]byte("test-secret")),
+	}
+}
+
+func loginSessionCookie(t *testing.T, s *Server, token string) *http.Cookie {
+	t.Helper()
+
+	req := httptest.NewRequest("GET", "/login", nil)
+	rec := httptest.NewRecorder()
+	sess, err := s.store.Get(req, "session")
+	if err != nil {
+		t.Fatalf("session: %v", err)
+	}
+	sess.Values["csrf_token"] = token
+	if err := sess.Save(req, rec); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("session cookies = %d, want 1", len(cookies))
+	}
+	return cookies[0]
+}
+
+func assertNoAuthSession(t *testing.T, s *Server, rec *httptest.ResponseRecorder) {
+	t.Helper()
+
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name != "session" {
+			continue
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		req.AddCookie(cookie)
+		sess, err := s.store.Get(req, "session")
+		if err != nil {
+			t.Fatalf("session: %v", err)
+		}
+		if username, _ := sess.Values["auth_user"].(string); username != "" {
+			t.Fatalf("auth_user = %q, want empty", username)
+		}
+	}
+}
+
+func assertAuthSession(t *testing.T, s *Server, rec *httptest.ResponseRecorder, want string) {
+	t.Helper()
+
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name != "session" {
+			continue
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		req.AddCookie(cookie)
+		sess, err := s.store.Get(req, "session")
+		if err != nil {
+			t.Fatalf("session: %v", err)
+		}
+		username, _ := sess.Values["auth_user"].(string)
+		if username == want {
+			return
+		}
+		t.Fatalf("auth_user = %q, want %q", username, want)
+	}
+	t.Fatal("login did not set a session cookie")
 }
 
 func TestSubscribeRejectsDisabledPlatform(t *testing.T) {
