@@ -495,10 +495,12 @@ type FeedItem struct {
 	ReposterChannelID    string
 	QuoteChannelID       string
 	QuoteChannelFollowed bool
-	// ThreadChain is the conversation chain for replies, ordered root → parent.
-	// The leaf (this FeedItem itself) is NOT included. Empty for non-replies or
-	// when chain resolution fails. Populated by feed.EnrichFeedItems for replies.
+	// ThreadChain is legacy conversation-chain presentation data, ordered root
+	// → parent. The leaf (this FeedItem itself) is NOT included.
 	ThreadChain []FeedItem
+	// ThreadDepth is presentation metadata for full thread views. Root posts are
+	// depth 0; direct replies are depth 1.
+	ThreadDepth int
 	// Media enrichment
 	MediaKind           string // video|image|slideshow
 	MediaSlideCount     int

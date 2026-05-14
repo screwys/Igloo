@@ -1136,13 +1136,13 @@ func (s *Server) handlePageThread(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	chain, err := s.db.GetThreadChain(tweetID)
+	items, err := s.db.GetThreadTree(tweetID)
 	if err != nil {
-		slog.Error("GetThreadChain", "tweet_id", tweetID, "err", err)
+		slog.Error("GetThreadTree", "tweet_id", tweetID, "err", err)
 		http.Error(w, "thread query failed", http.StatusInternalServerError)
 		return
 	}
-	if len(chain) == 0 {
+	if len(items) == 0 {
 		http.NotFound(w, r)
 		return
 	}
@@ -1151,7 +1151,7 @@ func (s *Server) handlePageThread(w http.ResponseWriter, r *http.Request) {
 	if user := userFromContext(r.Context()); user != nil {
 		username = user.Username
 	}
-	chain = feed.EnrichFeedItemsPreserveRows(s.db, chain, username)
+	items = feed.EnrichFeedItemsPreserveRows(s.db, items, username)
 
 	p := s.pageProps(w, r)
 	p.PageTitle = "Thread"
@@ -1166,10 +1166,10 @@ func (s *Server) handlePageThread(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if r.URL.Query().Get("fmt") == "partial" {
-		components.ThreadRoutePartial(p, chain, returnHref).Render(r.Context(), w)
+		components.ThreadRoutePartial(p, items, returnHref).Render(r.Context(), w)
 		return
 	}
-	components.ThreadPage(p, chain, returnHref).Render(r.Context(), w)
+	components.ThreadPage(p, items, returnHref).Render(r.Context(), w)
 }
 
 func (s *Server) handlePageLiked(w http.ResponseWriter, r *http.Request) {

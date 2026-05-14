@@ -140,6 +140,43 @@ func TestGetThreadChainMissingParent(t *testing.T) {
 	}
 }
 
+func TestGetThreadTreeReturnsRootAndReplyBranches(t *testing.T) {
+	d := openWritableTestDB(t)
+	rootAt := time.Unix(100, 0).UTC()
+	bAt := time.Unix(110, 0).UTC()
+	bChildAt := time.Unix(120, 0).UTC()
+	cAt := time.Unix(130, 0).UTC()
+	cChildAt := time.Unix(140, 0).UTC()
+	if _, err := d.UpsertFeedItems([]model.FeedItem{
+		{TweetID: "root", AuthorHandle: "sample_author_a", BodyText: "root", PublishedAt: &rootAt, FetchedAt: rootAt, ContentHash: "h_root"},
+		{TweetID: "reply_b", AuthorHandle: "sample_author_b", BodyText: "reply b", IsReply: true, ReplyToHandle: "sample_author_a", ReplyToStatus: "root", PublishedAt: &bAt, FetchedAt: bAt, ContentHash: "h_b"},
+		{TweetID: "reply_b_child", AuthorHandle: "sample_author_d", BodyText: "reply b child", IsReply: true, ReplyToHandle: "sample_author_b", ReplyToStatus: "reply_b", PublishedAt: &bChildAt, FetchedAt: bChildAt, ContentHash: "h_b_child"},
+		{TweetID: "reply_c", AuthorHandle: "sample_author_c", BodyText: "reply c", IsReply: true, ReplyToHandle: "sample_author_a", ReplyToStatus: "root", PublishedAt: &cAt, FetchedAt: cAt, ContentHash: "h_c"},
+		{TweetID: "reply_c_child", AuthorHandle: "sample_author_e", BodyText: "reply c child", IsReply: true, ReplyToHandle: "sample_author_c", ReplyToStatus: "reply_c", PublishedAt: &cChildAt, FetchedAt: cChildAt, ContentHash: "h_c_child"},
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	tree, err := d.GetThreadTree("reply_b_child")
+	if err != nil {
+		t.Fatalf("GetThreadTree: %v", err)
+	}
+	gotIDs := make([]string, 0, len(tree))
+	gotDepths := make([]int, 0, len(tree))
+	for _, item := range tree {
+		gotIDs = append(gotIDs, item.TweetID)
+		gotDepths = append(gotDepths, item.ThreadDepth)
+	}
+	wantIDs := []string{"root", "reply_b", "reply_b_child", "reply_c", "reply_c_child"}
+	wantDepths := []int{0, 1, 2, 1, 2}
+	if !equalStringSlices(gotIDs, wantIDs) {
+		t.Fatalf("tree IDs = %v, want %v", gotIDs, wantIDs)
+	}
+	if !equalIntSlices(gotDepths, wantDepths) {
+		t.Fatalf("tree depths = %v, want %v", gotDepths, wantDepths)
+	}
+}
+
 func TestFindUnresolvedReplies(t *testing.T) {
 	d := openWritableTestDB(t)
 	now := time.Now().UTC()
@@ -155,4 +192,28 @@ func TestFindUnresolvedReplies(t *testing.T) {
 	if len(got) != 1 || got[0].TweetID != "u_1" {
 		t.Errorf("expected one unresolved reply with tweet_id=u_1, got %+v", got)
 	}
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func equalIntSlices(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

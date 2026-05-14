@@ -106,6 +106,7 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_channels_platform ON channels(platform)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_feed_items_algo ON feed_items(algo_interest DESC, published_at DESC)")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_feed_items_published ON feed_items(published_at DESC, tweet_id DESC)")
+	conn.Exec("CREATE INDEX IF NOT EXISTS idx_feed_items_reply_parent ON feed_items(reply_to_status, published_at, tweet_id) WHERE reply_to_status IS NOT NULL AND reply_to_status != ''")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_feed_items_unscored ON feed_items(algo_scored_at) WHERE algo_scored_at = 0")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_feed_items_quote ON feed_items(quote_tweet_id) WHERE quote_tweet_id IS NOT NULL AND quote_tweet_id != ''")
 	conn.Exec("CREATE INDEX IF NOT EXISTS idx_feed_items_content_hash ON feed_items(content_hash) WHERE content_hash IS NOT NULL AND content_hash != ''")

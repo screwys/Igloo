@@ -9,7 +9,7 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
-func TestFeedItemThreadShowsRepostLineOnThreadWrapper(t *testing.T) {
+func TestFeedItemRendersStandaloneEvenWithLegacyThreadChain(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:                "leaf_1",
 		AuthorHandle:           "author_a",
@@ -34,34 +34,25 @@ func TestFeedItemThreadShowsRepostLineOnThreadWrapper(t *testing.T) {
 		t.Fatalf("render feed item: %v", err)
 	}
 	html := buf.String()
-	if !strings.Contains(html, `class="feed-thread-repost"`) {
-		t.Fatalf("thread repost wrapper missing: %s", html)
+	if strings.Contains(html, `class="feed-thread"`) || strings.Contains(html, `data-feed-thread-row`) {
+		t.Fatalf("feed card should not inline conversation thread markup: %s", html)
+	}
+	if strings.Contains(html, `root body`) {
+		t.Fatalf("feed card rendered ancestor body: %s", html)
 	}
 	if got := strings.Count(html, `data-feed-repost-line`); got != 1 {
 		t.Fatalf("data-feed-repost-line count = %d, want 1; html=%s", got, html)
-	}
-	repostAt := strings.Index(html, `class="feed-thread-repost"`)
-	rowAt := strings.Index(html, `data-feed-thread-row`)
-	if repostAt < 0 || rowAt < 0 || repostAt > rowAt {
-		t.Fatalf("repost line should render before thread rows; repost=%d row=%d html=%s", repostAt, rowAt, html)
 	}
 	if !strings.Contains(html, `Reposter A`) || !strings.Contains(html, `reposted`) {
 		t.Fatalf("repost label missing: %s", html)
 	}
 }
 
-func TestFeedItemThreadRowsRenderBottomActions(t *testing.T) {
+func TestFeedItemActionsOpenLocalThread(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:      "leaf_1",
 		AuthorHandle: "author_a",
 		BodyText:     "leaf body",
-		ThreadChain: []model.FeedItem{
-			{
-				TweetID:      "root_1",
-				AuthorHandle: "root_author",
-				BodyText:     "root body",
-			},
-		},
 	}
 
 	var buf bytes.Buffer
@@ -69,68 +60,15 @@ func TestFeedItemThreadRowsRenderBottomActions(t *testing.T) {
 		t.Fatalf("render feed item: %v", err)
 	}
 	html := buf.String()
-	if got := strings.Count(html, `class="feed-actions"`); got != 2 {
-		t.Fatalf("feed action rows = %d, want ancestor + leaf; html=%s", got, html)
-	}
-	for _, action := range []string{
-		`data-feed-action="share"`,
-		`data-feed-action="heart"`,
-		`data-feed-action="bookmark"`,
-		`data-feed-action="openx"`,
-	} {
-		if got := strings.Count(html, action); got != 2 {
-			t.Fatalf("%s count = %d, want 2; html=%s", action, got, html)
-		}
-	}
-	for _, link := range []string{
-		`data-feed-link="https://x.com/root_author/status/root_1"`,
-		`data-feed-link="https://x.com/author_a/status/leaf_1"`,
-		`href="https://x.com/root_author/status/root_1"`,
-		`href="https://x.com/author_a/status/leaf_1"`,
-	} {
-		if !strings.Contains(html, link) {
-			t.Fatalf("missing synthesized action link %q; html=%s", link, html)
-		}
-	}
-}
-
-func TestFeedItemThreadRendersConversationCapsuleForOlderAncestors(t *testing.T) {
-	item := model.FeedItem{
-		TweetID:      "leaf_1",
-		AuthorHandle: "sample_author",
-		BodyText:     "leaf body",
-		ThreadChain: []model.FeedItem{
-			{TweetID: "root_1", AuthorHandle: "sample_root", BodyText: "root body"},
-			{TweetID: "mid_1", AuthorHandle: "sample_author_older", BodyText: "mid body"},
-			{TweetID: "parent_1", AuthorHandle: "sample_parent", BodyText: "parent body"},
-		},
-	}
-
-	var buf bytes.Buffer
-	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
-		t.Fatalf("render feed item: %v", err)
-	}
-	html := buf.String()
-	if strings.Contains(html, `data-feed-thread-more`) || strings.Contains(html, `Load more replies`) {
-		t.Fatalf("load-more control should not render: %s", html)
-	}
-	if strings.Contains(html, `data-feed-thread-collapsed`) {
-		t.Fatalf("collapsed hidden thread rows should not render: %s", html)
-	}
-	for _, hiddenID := range []string{`data-tweet-id="root_1"`, `data-tweet-id="mid_1"`} {
-		if strings.Contains(html, hiddenID) {
-			t.Fatalf("older ancestor %s should not render in feed card: %s", hiddenID, html)
-		}
-	}
 	for _, want := range []string{
-		`data-feed-thread-capsule`,
+		`data-feed-action="thread"`,
+		`data-feed-thread-open`,
+		`data-thread-tweet-id="leaf_1"`,
 		`href="/thread/leaf_1"`,
-		`4 posts across 4 people`,
-		`data-tweet-id="parent_1"`,
-		`data-tweet-id="leaf_1"`,
+		`Open thread`,
 	} {
 		if !strings.Contains(html, want) {
-			t.Fatalf("missing %q in html: %s", want, html)
+			t.Fatalf("missing local thread action %q; html=%s", want, html)
 		}
 	}
 }

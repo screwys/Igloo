@@ -12,8 +12,8 @@ import (
 func TestThreadPageRendersFullChainAndFeedLink(t *testing.T) {
 	items := []model.FeedItem{
 		{TweetID: "sample_root", AuthorHandle: "sample_root_author", BodyText: "root body"},
-		{TweetID: "sample_parent", AuthorHandle: "sample_parent_author", BodyText: "parent body", IsReply: true, ReplyToStatus: "sample_root"},
-		{TweetID: "sample_leaf", AuthorHandle: "sample_author", BodyText: "leaf body", IsReply: true, ReplyToStatus: "sample_parent"},
+		{TweetID: "sample_parent", AuthorHandle: "sample_parent_author", BodyText: "parent body", IsReply: true, ReplyToStatus: "sample_root", ThreadDepth: 1},
+		{TweetID: "sample_leaf", AuthorHandle: "sample_author", BodyText: "leaf body", IsReply: true, ReplyToStatus: "sample_parent", ThreadDepth: 2},
 	}
 
 	var buf bytes.Buffer
@@ -26,6 +26,9 @@ func TestThreadPageRendersFullChainAndFeedLink(t *testing.T) {
 		`href="/feed?offset=40"`,
 		`data-thread-back-link`,
 		`&lt;- Feed`,
+		`data-thread-tree`,
+		`data-thread-reply`,
+		`data-thread-depth="2"`,
 		`data-tweet-id="sample_root"`,
 		`data-tweet-id="sample_parent"`,
 		`data-tweet-id="sample_leaf"`,

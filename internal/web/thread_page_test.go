@@ -12,10 +12,13 @@ import (
 
 func TestHandlePageThreadRendersFullThread(t *testing.T) {
 	ts := newTestServer(t)
-	now := time.Now().UTC()
+	rootAt := time.Unix(100, 0).UTC()
+	leafAt := time.Unix(110, 0).UTC()
+	siblingAt := time.Unix(120, 0).UTC()
 	if _, err := ts.db.UpsertFeedItems([]model.FeedItem{
-		{TweetID: "sample_root", AuthorHandle: "sample_root_author", BodyText: "root body", PublishedAt: &now, FetchedAt: now, ContentHash: "sample_thread_root"},
-		{TweetID: "sample_leaf", AuthorHandle: "sample_author", BodyText: "leaf body", IsReply: true, ReplyToHandle: "sample_root_author", ReplyToStatus: "sample_root", PublishedAt: &now, FetchedAt: now, ContentHash: "sample_thread_leaf"},
+		{TweetID: "sample_root", AuthorHandle: "sample_root_author", BodyText: "root body", PublishedAt: &rootAt, FetchedAt: rootAt, ContentHash: "sample_thread_root"},
+		{TweetID: "sample_leaf", AuthorHandle: "sample_author", BodyText: "leaf body", IsReply: true, ReplyToHandle: "sample_root_author", ReplyToStatus: "sample_root", PublishedAt: &leafAt, FetchedAt: leafAt, ContentHash: "sample_thread_leaf"},
+		{TweetID: "sample_sibling", AuthorHandle: "sample_author_b", BodyText: "sibling body", IsReply: true, ReplyToHandle: "sample_root_author", ReplyToStatus: "sample_root", PublishedAt: &siblingAt, FetchedAt: siblingAt, ContentHash: "sample_thread_sibling"},
 	}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -29,7 +32,7 @@ func TestHandlePageThreadRendersFullThread(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{`root body`, `leaf body`, `data-thread-back-link`, `href="/feed"`} {
+	for _, want := range []string{`root body`, `leaf body`, `sibling body`, `data-thread-back-link`, `href="/feed"`, `data-thread-reply`, `data-thread-depth="1"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing %q in body: %s", want, body)
 		}

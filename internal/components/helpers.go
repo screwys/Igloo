@@ -534,6 +534,24 @@ func threadCapsulePeopleCount(item model.FeedItem) int {
 	return len(seen)
 }
 
+func threadDepthAttr(depth int) string {
+	return strconv.Itoa(clampThreadDepth(depth))
+}
+
+func threadDepthStyle(depth int) string {
+	return fmt.Sprintf("--thread-depth:%d", clampThreadDepth(depth))
+}
+
+func clampThreadDepth(depth int) int {
+	if depth < 0 {
+		return 0
+	}
+	if depth > 8 {
+		return 8
+	}
+	return depth
+}
+
 // feedPublishedAtStr returns the published_at time as a string or empty.
 func feedPublishedAtStr(t *time.Time) string {
 	if t == nil || t.IsZero() {

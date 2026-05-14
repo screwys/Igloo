@@ -18,18 +18,32 @@ templ threadRoute(p PageProps, items []model.FeedItem, returnHref string, listID
 		<a class="thread-back-link" href={ templ.SafeURL(returnHref) } data-thread-back-link>{ L(p, "thread_back_to_feed", "<- Feed") }</a>
 		<div id={ listID } class="feed-list thread-page-feed-list" data-thread-page>
 			if len(items) > 0 {
-				<div class="feed-thread feed-thread-page" data-feed-thread data-leaf-tweet-id={ items[len(items)-1].TweetID }>
-					for i, item := range items {
-						if i < len(items)-1 {
-							@feedThreadCard(p, stripThreadNoise(item), false)
-						} else {
-							@feedLeafCard(p, stripThreadNoise(item))
-						}
+				<div class="thread-tree" data-thread-tree data-thread-root-id={ items[0].TweetID }>
+					<div class="thread-root-card" data-thread-root>
+						@feedLeafCard(p, stripThreadNoise(items[0]))
+					</div>
+					if len(items) > 1 {
+						<div class="thread-replies" data-thread-replies>
+							for _, item := range items[1:] {
+								@threadReplyCard(p, stripThreadNoise(item))
+							}
+						</div>
 					}
 				</div>
 			} else {
 				<div class="empty-state"><h3>{ L(p, "thread_unavailable", "Thread unavailable") }</h3></div>
 			}
 		</div>
+	</div>
+}
+
+templ threadReplyCard(p PageProps, item model.FeedItem) {
+	<div
+		class="thread-reply-shell"
+		data-thread-reply
+		data-thread-depth={ threadDepthAttr(item.ThreadDepth) }
+		style={ templ.SafeCSS(threadDepthStyle(item.ThreadDepth)) }
+	>
+		@feedLeafCard(p, item)
 	</div>
 }

@@ -94,6 +94,9 @@ CREATE INDEX idx_feed_items_published ON feed_items(published_at DESC, tweet_id 
 -- index: idx_feed_items_quote on feed_items
 CREATE INDEX idx_feed_items_quote ON feed_items(quote_tweet_id) WHERE quote_tweet_id IS NOT NULL AND quote_tweet_id != '';
 
+-- index: idx_feed_items_reply_parent on feed_items
+CREATE INDEX idx_feed_items_reply_parent ON feed_items(reply_to_status, published_at, tweet_id) WHERE reply_to_status IS NOT NULL AND reply_to_status != '';
+
 -- index: idx_feed_items_sync_seq on feed_items
 CREATE INDEX idx_feed_items_sync_seq ON feed_items(sync_seq);
 

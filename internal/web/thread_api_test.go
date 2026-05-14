@@ -11,12 +11,16 @@ import (
 
 func TestGetThreadHandler(t *testing.T) {
 	ts := newTestServer(t)
-	now := time.Now().UTC()
+	rootAt := time.Unix(100, 0).UTC()
+	midAt := time.Unix(110, 0).UTC()
+	leafAt := time.Unix(120, 0).UTC()
+	siblingAt := time.Unix(130, 0).UTC()
 
 	_, err := ts.db.UpsertFeedItems([]model.FeedItem{
-		{TweetID: "t_1", AuthorHandle: "user_alpha", BodyText: "root", PublishedAt: &now, FetchedAt: now, ContentHash: "th_1"},
-		{TweetID: "t_2", AuthorHandle: "user_beta", BodyText: "mid", IsReply: true, ReplyToHandle: "user_alpha", ReplyToStatus: "t_1", PublishedAt: &now, FetchedAt: now, ContentHash: "th_2"},
-		{TweetID: "t_3", AuthorHandle: "user_alpha", BodyText: "leaf", IsReply: true, ReplyToHandle: "user_beta", ReplyToStatus: "t_2", PublishedAt: &now, FetchedAt: now, ContentHash: "th_3"},
+		{TweetID: "t_1", AuthorHandle: "user_alpha", BodyText: "root", PublishedAt: &rootAt, FetchedAt: rootAt, ContentHash: "th_1"},
+		{TweetID: "t_2", AuthorHandle: "user_beta", BodyText: "mid", IsReply: true, ReplyToHandle: "user_alpha", ReplyToStatus: "t_1", PublishedAt: &midAt, FetchedAt: midAt, ContentHash: "th_2"},
+		{TweetID: "t_3", AuthorHandle: "user_alpha", BodyText: "leaf", IsReply: true, ReplyToHandle: "user_beta", ReplyToStatus: "t_2", PublishedAt: &leafAt, FetchedAt: leafAt, ContentHash: "th_3"},
+		{TweetID: "t_4", AuthorHandle: "sample_author_c", BodyText: "sibling branch", IsReply: true, ReplyToHandle: "user_alpha", ReplyToStatus: "t_1", PublishedAt: &siblingAt, FetchedAt: siblingAt, ContentHash: "th_4"},
 	})
 	if err != nil {
 		t.Fatalf("seed: %v", err)
@@ -34,6 +38,7 @@ func TestGetThreadHandler(t *testing.T) {
 	var resp struct {
 		Success bool             `json:"success"`
 		Thread  []map[string]any `json:"thread"`
+		RootID  string           `json:"root_id"`
 		LeafID  string           `json:"leaf_id"`
 	}
 	if err := decodeInto(rr.Body.Bytes(), &resp); err != nil {
@@ -42,14 +47,21 @@ func TestGetThreadHandler(t *testing.T) {
 	if !resp.Success {
 		t.Fatal("response not successful")
 	}
-	if len(resp.Thread) != 3 {
-		t.Fatalf("thread length: got %d, want 3, body=%s", len(resp.Thread), rr.Body.String())
+	if len(resp.Thread) != 4 {
+		t.Fatalf("thread length: got %d, want 4, body=%s", len(resp.Thread), rr.Body.String())
 	}
-	want := []string{"t_1", "t_2", "t_3"}
+	want := []string{"t_1", "t_2", "t_3", "t_4"}
+	wantDepths := []float64{0, 1, 2, 1}
 	for i, item := range resp.Thread {
 		if got, _ := item["tweet_id"].(string); got != want[i] {
 			t.Errorf("thread[%d].tweet_id: got %q, want %q", i, got, want[i])
 		}
+		if got, _ := item["thread_depth"].(float64); got != wantDepths[i] {
+			t.Errorf("thread[%d].thread_depth: got %.0f, want %.0f", i, got, wantDepths[i])
+		}
+	}
+	if resp.RootID != "t_1" {
+		t.Errorf("root_id: got %q, want t_1", resp.RootID)
 	}
 	if resp.LeafID != "t_3" {
 		t.Errorf("leaf_id: got %q, want t_3", resp.LeafID)
