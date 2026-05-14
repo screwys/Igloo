@@ -2177,6 +2177,43 @@ func TestNormalizeDownloadedImageKeepsRealExtension(t *testing.T) {
 	}
 }
 
+func TestNormalizeDownloadedImageRejectsUnsafeKey(t *testing.T) {
+	dir := t.TempDir()
+	tmpPath := filepath.Join(dir, "avatar.download")
+	if err := os.WriteFile(tmpPath, testProfilePNGBytes(), 0o644); err != nil {
+		t.Fatalf("write tmp: %v", err)
+	}
+
+	if _, err := normalizeDownloadedImage(tmpPath, dir, "../avatar"); err == nil {
+		t.Fatal("normalizeDownloadedImage accepted unsafe key")
+	}
+}
+
+func TestResolveVideoThumbFileRejectsOutsideDataDir(t *testing.T) {
+	dataDir := t.TempDir()
+	outsideDir := t.TempDir()
+	outside := filepath.Join(outsideDir, "cover.jpg")
+	if err := os.WriteFile(outside, testProfilePNGBytes(), 0o644); err != nil {
+		t.Fatalf("write outside cover: %v", err)
+	}
+
+	if got := resolveVideoThumbFile(dataDir, outside); got != "" {
+		t.Fatalf("resolveVideoThumbFile outside DataDir = %q, want empty", got)
+	}
+}
+
+func TestSafeFolderNameRejectsDotDirs(t *testing.T) {
+	if got := safeFolderName("."); got != "playlist" {
+		t.Fatalf("safeFolderName dot = %q, want playlist", got)
+	}
+	if got := safeFolderName(".."); got != "playlist" {
+		t.Fatalf("safeFolderName dotdot = %q, want playlist", got)
+	}
+	if got := safeFolderName("Road Trip"); got != "Road Trip" {
+		t.Fatalf("safeFolderName valid = %q, want Road Trip", got)
+	}
+}
+
 func testProfilePNGBytes() []byte {
 	return []byte{
 		0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n',

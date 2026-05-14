@@ -142,15 +142,17 @@ func filterNoise(lines []string) []string {
 	return out
 }
 
-// logPathForType resolves a log file path given a type string.
-func (s *Server) logPathForType(logType string) string {
+// logPathForType resolves a recognized log type to its file path.
+func (s *Server) logPathForType(logType string) (string, bool) {
 	switch logType {
+	case "server", "api", "download", "scheduler", "x_ingest", "error":
+		return filepath.Join(s.cfg.DataDir, "logs", "server", logType+".log"), true
 	case "android":
-		return filepath.Join(s.cfg.DataDir, "logs", "android", "android.log")
+		return filepath.Join(s.cfg.DataDir, "logs", "android", "android.log"), true
 	case "android-stats":
-		return filepath.Join(s.cfg.DataDir, "logs", "android", "stats.jsonl")
+		return filepath.Join(s.cfg.DataDir, "logs", "android", "stats.jsonl"), true
 	default:
-		return filepath.Join(s.cfg.DataDir, "logs", "server", logType+".log")
+		return "", false
 	}
 }
 
@@ -227,7 +229,11 @@ func (s *Server) handleLogsServer(w http.ResponseWriter, r *http.Request) {
 	}
 	filterNoisyParam := r.URL.Query().Get("filter_noise")
 
-	path := s.logPathForType(logType)
+	path, ok := s.logPathForType(logType)
+	if !ok {
+		writeJSON(w, 400, map[string]any{"success": false, "error": "unknown log type"})
+		return
+	}
 	lines, err := readLastLines(path, n)
 	if err != nil {
 		if os.IsNotExist(err) {

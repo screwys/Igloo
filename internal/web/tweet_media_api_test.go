@@ -78,6 +78,17 @@ func TestHandleTweetMediaMoveRejectsHTMLDisguisedAsMP4(t *testing.T) {
 	}
 }
 
+func TestNormalizeTweetMediaExtRejectsTraversal(t *testing.T) {
+	for _, raw := range []string{".mp4/../../escape", `jpg\..\escape`, "..jpg"} {
+		if _, err := normalizeTweetMediaExt(raw, "fallback.jpg"); err == nil {
+			t.Fatalf("normalizeTweetMediaExt(%q) succeeded, want error", raw)
+		}
+	}
+	if got, err := normalizeTweetMediaExt("png", "fallback.jpg"); err != nil || got != ".png" {
+		t.Fatalf("normalizeTweetMediaExt png = %q, %v; want .png nil", got, err)
+	}
+}
+
 func TestHandleTweetMediaDlArchivesDirectMediaURL(t *testing.T) {
 	srv := newTestServer(t)
 

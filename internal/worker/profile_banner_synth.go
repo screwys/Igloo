@@ -62,9 +62,9 @@ func resolveVideoThumbFile(dataDir, filePath string) string {
 	if filePath == "" {
 		return ""
 	}
-	abs := filePath
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(dataDir, filePath)
+	abs, ok := dataDirMediaPath(dataDir, filePath)
+	if !ok {
+		return ""
 	}
 	ext := strings.ToLower(filepath.Ext(abs))
 	switch ext {
@@ -86,6 +86,10 @@ func resolveVideoThumbFile(dataDir, filePath string) string {
 // using normalizeDownloadedImage to detect the true content type and strip
 // any stale banner files with mismatched extensions.
 func copyBannerFromThumb(srcPath, bnDir, channelID string) error {
+	channelID, err := safeProfileMediaKey(channelID)
+	if err != nil {
+		return err
+	}
 	tmpPath := filepath.Join(bnDir, channelID+".download")
 	if err := copyFile(srcPath, tmpPath); err != nil {
 		return err
@@ -95,6 +99,29 @@ func copyBannerFromThumb(srcPath, bnDir, channelID string) error {
 		return err
 	}
 	return nil
+}
+
+func dataDirMediaPath(dataDir, filePath string) (string, bool) {
+	if strings.TrimSpace(dataDir) == "" || strings.TrimSpace(filePath) == "" {
+		return "", false
+	}
+	abs := filePath
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(dataDir, filePath)
+	}
+	baseAbs, err := filepath.Abs(dataDir)
+	if err != nil {
+		return "", false
+	}
+	abs, err = filepath.Abs(abs)
+	if err != nil {
+		return "", false
+	}
+	rel, err := filepath.Rel(baseAbs, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", false
+	}
+	return abs, true
 }
 
 func copyFile(src, dst string) error {

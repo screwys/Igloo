@@ -293,6 +293,26 @@ func resolveDataPath(dataDir, path string) string {
 	return filepath.Join(dataDir, path)
 }
 
+func resolveDataPathUnder(dataDir, path string) (string, bool) {
+	if strings.TrimSpace(dataDir) == "" || strings.TrimSpace(path) == "" {
+		return "", false
+	}
+	abs := resolveDataPath(dataDir, path)
+	baseAbs, err := filepath.Abs(dataDir)
+	if err != nil {
+		return "", false
+	}
+	abs, err = filepath.Abs(abs)
+	if err != nil {
+		return "", false
+	}
+	rel, err := filepath.Rel(baseAbs, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", false
+	}
+	return abs, true
+}
+
 func writeJSON(w http.ResponseWriter, status int, body map[string]any) {
 	writeJSONEnvelope(w, status, body)
 }

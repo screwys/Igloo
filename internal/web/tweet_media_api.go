@@ -150,15 +150,11 @@ func (s *Server) handleTweetMediaMove(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		ext := item.Ext
-		if ext == "" {
-			ext = filepath.Ext(name)
-		}
-		if !strings.HasPrefix(ext, ".") {
-			ext = "." + ext
-		}
-		if ext == "." {
-			ext = ".bin"
+		ext, err := normalizeTweetMediaExt(item.Ext, name)
+		if err != nil {
+			slog.Warn("[TweetMediaMove] rejected staged extension", "name", name, "ext", item.Ext, "err", err)
+			failed = append(failed, name)
+			continue
 		}
 
 		if err := validateTweetMediaStagingFile(src, ext); err != nil {
@@ -266,9 +262,10 @@ func (s *Server) handleTweetMediaDl(w http.ResponseWriter, r *http.Request) {
 
 	var saved []string
 	for i, p := range paths {
-		ext := filepath.Ext(p)
-		if ext == "" {
-			ext = ".mp4"
+		ext, err := normalizeTweetMediaExt(filepath.Ext(p), p)
+		if err != nil {
+			slog.Warn("[TweetMedia] rejected downloaded extension", "path", p, "err", err)
+			continue
 		}
 		fileNum := startNum + i
 		destFile := filepath.Join(archivePath, fmt.Sprintf("%s %03d%s", safeName, fileNum, ext))
@@ -336,7 +333,9 @@ func tweetMediaExtFromURL(rawURL string) string {
 	path := strings.SplitN(rawURL, "?", 2)[0]
 	ext := filepath.Ext(path)
 	if ext != "" {
-		return ext
+		if safeExt, err := normalizeTweetMediaExt(ext, ""); err == nil {
+			return safeExt
+		}
 	}
 	if strings.Contains(rawURL, "format=png") {
 		return ".png"
@@ -345,6 +344,29 @@ func tweetMediaExtFromURL(rawURL string) string {
 		return ".webp"
 	}
 	return ".jpg"
+}
+
+func normalizeTweetMediaExt(raw, fallbackName string) (string, error) {
+	ext := strings.TrimSpace(raw)
+	if ext == "" {
+		ext = filepath.Ext(fallbackName)
+	}
+	if ext == "" || ext == "." {
+		return ".bin", nil
+	}
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	ext = strings.ToLower(ext)
+	if strings.ContainsAny(ext, `/\`) || strings.Contains(ext, "..") || filepath.Base(ext) != ext {
+		return "", fmt.Errorf("unsafe media extension %q", raw)
+	}
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".bin":
+		return ext, nil
+	default:
+		return "", fmt.Errorf("unsupported media extension %q", ext)
+	}
 }
 
 func archiveTweetMediaURL(ctx context.Context, dl *download.Downloader, mediaURL, archivePath, safeName string, fileNum int) (string, error) {

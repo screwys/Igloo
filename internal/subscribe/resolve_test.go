@@ -139,6 +139,23 @@ func TestParseInstagramHandle(t *testing.T) {
 	}
 }
 
+func TestParseTikTokHandleUsesOnlyURLPath(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"https://www.tiktok.com/@sample_user/video/sample_video", "sample_user"},
+		{"https://tnktok.com/@sample.user", "sample.user"},
+		{"https://www.tiktok.com/share?u=https://www.tiktok.com/@sample_user", ""},
+		{"https://example.com/@sample_user", ""},
+	}
+	for _, tt := range tests {
+		if got := parseTikTokHandle(tt.input); got != tt.want {
+			t.Fatalf("parseTikTokHandle(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestResolveChannelTwitterSetsSourceID(t *testing.T) {
 	got, err := ResolveChannel(context.Background(), "https://x.com/User_A/status/123", "twitter", nil)
 	if err != nil {
@@ -153,15 +170,15 @@ func TestResolveChannelTwitterSetsSourceID(t *testing.T) {
 }
 
 func TestResolveChannelTikTokSetsSourceID(t *testing.T) {
-	got, err := ResolveChannel(context.Background(), "https://www.tiktok.com/@User_B", "tiktok", nil)
+	got, err := ResolveChannel(context.Background(), "https://www.tiktok.com/@sample_user", "tiktok", nil)
 	if err != nil {
 		t.Fatalf("ResolveChannel: %v", err)
 	}
-	if got.ChannelID != "tiktok_user_b" {
-		t.Fatalf("ChannelID = %q; want tiktok_user_b", got.ChannelID)
+	if got.ChannelID != "tiktok_sample_user" {
+		t.Fatalf("ChannelID = %q; want tiktok_sample_user", got.ChannelID)
 	}
-	if got.SourceID != "user_b" {
-		t.Fatalf("SourceID = %q; want user_b", got.SourceID)
+	if got.SourceID != "sample_user" {
+		t.Fatalf("SourceID = %q; want sample_user", got.SourceID)
 	}
 }
 

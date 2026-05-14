@@ -239,7 +239,7 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 		s.writeCSRFUnavailable(w, r, err)
 		return
 	}
-	next := r.URL.Query().Get("next")
+	next := safeLoginNext(r.URL.Query().Get("next"))
 	p := s.pageProps(w, r)
 	p.PageTitle = p.T("login_title", "Igloo Login")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -555,11 +555,26 @@ func (s *Server) loginSuccess(w http.ResponseWriter, r *http.Request, username, 
 	sess.Options.SameSite = http.SameSiteLaxMode
 	sess.Save(r, w)
 
-	next := r.FormValue("next")
-	if next == "" || next == "/login" {
-		next = "/"
-	}
+	next := safeLoginNext(r.FormValue("next"))
 	http.Redirect(w, r, next, http.StatusSeeOther)
+}
+
+func safeLoginNext(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || strings.Contains(raw, `\`) {
+		return "/"
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.IsAbs() || u.Host != "" || u.User != nil {
+		return "/"
+	}
+	if u.Path == "" || !strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") || strings.Contains(u.Path, `\`) {
+		return "/"
+	}
+	if u.Path == "/login" {
+		return "/"
+	}
+	return u.RequestURI()
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

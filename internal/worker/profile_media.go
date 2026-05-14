@@ -11,6 +11,10 @@ import (
 var cachedImageExts = []string{".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 func conventionalMediaPath(dir, key string) string {
+	key, err := safeProfileMediaKey(key)
+	if err != nil {
+		return ""
+	}
 	for _, ext := range cachedImageExts {
 		candidate := filepath.Join(dir, key+ext)
 		if _, err := os.Stat(candidate); err == nil {
@@ -25,6 +29,10 @@ func hasConventionalMediaFile(dir, key string) bool {
 }
 
 func removeConventionalMediaFiles(dir, key string) error {
+	key, err := safeProfileMediaKey(key)
+	if err != nil {
+		return err
+	}
 	for _, ext := range cachedImageExts {
 		candidate := filepath.Join(dir, key+ext)
 		if err := os.Remove(candidate); err != nil && !os.IsNotExist(err) {
@@ -35,6 +43,10 @@ func removeConventionalMediaFiles(dir, key string) error {
 }
 
 func normalizeDownloadedImage(path, dir, key string) (string, error) {
+	key, err := safeProfileMediaKey(key)
+	if err != nil {
+		return "", err
+	}
 	contentType, err := sniffImageContentType(path)
 	if err != nil {
 		return "", err
@@ -54,6 +66,17 @@ func normalizeDownloadedImage(path, dir, key string) (string, error) {
 		return "", fmt.Errorf("rename media %s -> %s: %w", path, finalPath, err)
 	}
 	return finalPath, nil
+}
+
+func safeProfileMediaKey(key string) (string, error) {
+	key = strings.TrimSpace(key)
+	if key == "" || key == "." || key == ".." {
+		return "", fmt.Errorf("unsafe profile media key %q", key)
+	}
+	if strings.ContainsAny(key, `/\`) || filepath.Base(key) != key || filepath.Clean(key) != key {
+		return "", fmt.Errorf("unsafe profile media key %q", key)
+	}
+	return key, nil
 }
 
 func sniffImageContentType(path string) (string, error) {

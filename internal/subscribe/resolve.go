@@ -78,6 +78,7 @@ func ValidateInput(rawURL, platform string) error {
 
 var twitterHandleOnlyRe = regexp.MustCompile(`^@?[A-Za-z0-9_]{1,50}$`)
 var instagramHandleRe = regexp.MustCompile(`^[A-Za-z0-9_.]{1,64}$`)
+var tiktokHandleOnlyRe = regexp.MustCompile(`^[A-Za-z0-9_.]{1,64}$`)
 
 // ParseTwitterHandle extracts a clean, lower-case Twitter handle from:
 //   - Full URLs: https://x.com/username or https://twitter.com/username/status/123
@@ -114,9 +115,6 @@ func ParseTwitterHandle(input string) string {
 	return strings.ToLower(handle)
 }
 
-// tiktokHandleRe matches @username in a TikTok or tnktok URL path.
-var tiktokHandleRe = regexp.MustCompile(`(?i)(?:tiktok\.com|tnktok\.com)/@([A-Za-z0-9_.]{1,64})`)
-
 func ParseInstagramHandle(input string) string {
 	u, err := parseHTTPInput(input)
 	if err != nil || !isInstagramHost(normalizedHost(u.Host)) {
@@ -139,6 +137,22 @@ func ParseInstagramHandle(input string) string {
 	}
 	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
 	if instagramHandleRe.MatchString(handle) {
+		return handle
+	}
+	return ""
+}
+
+func parseTikTokHandle(input string) string {
+	u, err := parseHTTPInput(input)
+	if err != nil || !isTikTokHost(normalizedHost(u.Host)) {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) == 0 || parts[0] == "" || !strings.HasPrefix(parts[0], "@") {
+		return ""
+	}
+	handle := strings.ToLower(strings.TrimPrefix(parts[0], "@"))
+	if tiktokHandleOnlyRe.MatchString(handle) {
 		return handle
 	}
 	return ""
@@ -196,9 +210,8 @@ func ResolveChannel(ctx context.Context, rawURL, platform string, dl *download.D
 		}, nil
 
 	case "tiktok":
-		// Fast path: extract handle directly from URL with regex.
-		if m := tiktokHandleRe.FindStringSubmatch(rawURL); len(m) == 2 {
-			handle := strings.ToLower(m[1])
+		// Fast path: extract only the first URL path segment as @handle.
+		if handle := parseTikTokHandle(rawURL); handle != "" {
 			return model.Channel{
 				ChannelID:    "tiktok_" + handle,
 				SourceID:     handle,
@@ -209,6 +222,9 @@ func ResolveChannel(ctx context.Context, rawURL, platform string, dl *download.D
 			}, nil
 		}
 		// Fallback: ask yt-dlp.
+		if dl == nil || dl.YtDlp == nil {
+			return model.Channel{}, fmt.Errorf("could not parse TikTok handle from %q", rawURL)
+		}
 		info, err := dl.YtDlp.ChannelInfo(ctx, rawURL)
 		if err != nil {
 			return model.Channel{}, fmt.Errorf("resolve tiktok channel: %w", err)

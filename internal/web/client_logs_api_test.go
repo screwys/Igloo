@@ -87,6 +87,22 @@ func TestClientLogDebugWritesToDebugFile(t *testing.T) {
 	}
 }
 
+func TestLogPathForTypeRejectsTraversalType(t *testing.T) {
+	srv := newTestServer(t)
+	srv.cfg.DataDir = t.TempDir()
+
+	if _, ok := srv.logPathForType("../../outside"); ok {
+		t.Fatal("traversal log type was accepted")
+	}
+	path, ok := srv.logPathForType("server")
+	if !ok {
+		t.Fatal("server log type was rejected")
+	}
+	if want := filepath.Join(srv.cfg.DataDir, "logs", "server", "server.log"); path != want {
+		t.Fatalf("server log path = %q, want %q", path, want)
+	}
+}
+
 func TestClientLogMomentsWritesPersistentJSONL(t *testing.T) {
 	srv := newTestServer(t)
 	dataDir := t.TempDir()

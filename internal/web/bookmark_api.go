@@ -603,9 +603,9 @@ func (s *Server) collectSlides(tweetID string) []string {
 			var slides []string
 			for i := range meta.Slides {
 				path := meta.SlidePath(i)
-				if path != "" {
-					if _, err := os.Stat(path); err == nil {
-						slides = append(slides, path)
+				if fullPath, ok := resolveDataPathUnder(s.cfg.DataDir, path); ok {
+					if _, err := os.Stat(fullPath); err == nil {
+						slides = append(slides, fullPath)
 					}
 				}
 			}
@@ -615,12 +615,10 @@ func (s *Server) collectSlides(tweetID string) []string {
 		}
 		// Single video/image file
 		if video.FilePath != "" {
-			fullPath := video.FilePath
-			if !filepath.IsAbs(fullPath) {
-				fullPath = filepath.Join(s.cfg.DataDir, fullPath)
-			}
-			if _, err := os.Stat(fullPath); err == nil {
-				return []string{fullPath}
+			if fullPath, ok := resolveDataPathUnder(s.cfg.DataDir, video.FilePath); ok {
+				if _, err := os.Stat(fullPath); err == nil {
+					return []string{fullPath}
+				}
 			}
 		}
 	}
@@ -632,9 +630,10 @@ func (s *Server) collectSlides(tweetID string) []string {
 		if err != nil {
 			break
 		}
-		fullPath := filepath.Join(s.cfg.DataDir, relPath)
-		if _, err := os.Stat(fullPath); err == nil {
-			mediaFileSlides = append(mediaFileSlides, fullPath)
+		if fullPath, ok := resolveDataPathUnder(s.cfg.DataDir, relPath); ok {
+			if _, err := os.Stat(fullPath); err == nil {
+				mediaFileSlides = append(mediaFileSlides, fullPath)
+			}
 		}
 	}
 	if len(mediaFileSlides) > 0 {

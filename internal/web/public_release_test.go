@@ -58,6 +58,40 @@ func TestLoginSubmitRedirectsToSetupWhenNoUsersExist(t *testing.T) {
 	}
 }
 
+func TestSafeLoginNextRejectsExternalTargets(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{"/feed?filter=bookmarked", "/feed?filter=bookmarked"},
+		{"https://example.com/feed", "/"},
+		{"//example.com/feed", "/"},
+		{"/login", "/"},
+		{"feed", "/"},
+		{`/feed\..\admin`, "/"},
+		{"/feed%5c..%5cadmin", "/"},
+	}
+	for _, tt := range tests {
+		if got := safeLoginNext(tt.raw); got != tt.want {
+			t.Fatalf("safeLoginNext(%q) = %q, want %q", tt.raw, got, tt.want)
+		}
+	}
+}
+
+func TestResolveDataPathUnderRejectsEscapes(t *testing.T) {
+	dataDir := t.TempDir()
+	if _, ok := resolveDataPathUnder(dataDir, "../outside.jpg"); ok {
+		t.Fatal("relative escape path was accepted")
+	}
+	outside := filepath.Join(t.TempDir(), "outside.jpg")
+	if _, ok := resolveDataPathUnder(dataDir, outside); ok {
+		t.Fatal("absolute outside path was accepted")
+	}
+	if got, ok := resolveDataPathUnder(dataDir, "feed_media/item.jpg"); !ok || got != filepath.Join(dataDir, "feed_media", "item.jpg") {
+		t.Fatalf("valid data path = %q, %v", got, ok)
+	}
+}
+
 func TestFirstInstallLoginRedirectsToSetup(t *testing.T) {
 	handler, _ := newFirstInstallTestHandler(t)
 

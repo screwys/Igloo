@@ -348,7 +348,7 @@ func extractPlaylistID(rawURL string) string {
 func safeFolderName(raw string) string {
 	replacer := strings.NewReplacer("/", "_", "\\", "_", ":", "_", "?", "_", "*", "_", "\"", "_", "<", "_", ">", "_", "|", "_")
 	name := replacer.Replace(strings.TrimSpace(raw))
-	if name == "" {
+	if name == "" || name == "." || name == ".." || filepath.Base(name) != name || filepath.Clean(name) != name {
 		return "playlist"
 	}
 	if len(name) > 100 {
