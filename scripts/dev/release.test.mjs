@@ -43,16 +43,13 @@ test("release workflow is manually dispatched", () => {
   assert.doesNotMatch(workflow, /threshold 30/);
 });
 
-test("release workflow dispatches CodeQL for release tags", () => {
+test("release workflow leaves CodeQL to the published release trigger", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/release.yml", import.meta.url),
     "utf8",
   );
 
-  assert.match(
-    workflow,
-    /gh workflow run codeql\.yml --ref "\$\{\{ steps\.release\.outputs\.tag \}\}"/,
-  );
+  assert.doesNotMatch(workflow, /gh workflow run codeql\.yml/);
 });
 
 test("GitHub Actions workflow dependencies are SHA-pinned", () => {
@@ -162,9 +159,9 @@ test("container release publishes signed provenance attestation", () => {
   assert.doesNotMatch(workflow, /cosign-release:/);
 });
 
-test("Go workflow tools are pinned and Renovate-managed", () => {
+test("CI Go analysis tools are pinned and Renovate-managed", () => {
   const workflow = readFileSync(
-    new URL("../../.github/workflows/go-ci.yml", import.meta.url),
+    new URL("../../.github/workflows/ci.yml", import.meta.url),
     "utf8",
   );
   const fullGate = readFileSync(new URL("./test-full.sh", import.meta.url), "utf8");
@@ -176,12 +173,16 @@ test("Go workflow tools are pinned and Renovate-managed", () => {
   assert.match(fullGate, /go run \.\/scripts\/dev\/staticcheck/);
   assert.match(workflow, /\. scripts\/dev\/go-tool-versions\.sh/);
   assert.match(fullGate, /\. scripts\/dev\/go-tool-versions\.sh/);
+  assert.match(workflow, /github\.com\/rhysd\/actionlint\/cmd\/actionlint@\$\{ACTIONLINT_VERSION\}/);
+  assert.match(fullGate, /github\.com\/rhysd\/actionlint\/cmd\/actionlint@\$\{ACTIONLINT_VERSION\}/);
   assert.match(versions, /packageName=github\.com\/kisielk\/errcheck/);
   assert.match(versions, /ERRCHECK_VERSION=v\d+\.\d+\.\d+/);
   assert.match(versions, /packageName=honnef\.co\/go\/tools/);
   assert.match(versions, /STATICCHECK_VERSION=v\d+\.\d+\.\d+/);
   assert.match(versions, /packageName=golang\.org\/x\/vuln/);
   assert.match(versions, /GOVULNCHECK_VERSION=v\d+\.\d+\.\d+/);
+  assert.match(versions, /packageName=github\.com\/rhysd\/actionlint/);
+  assert.match(versions, /ACTIONLINT_VERSION=v\d+\.\d+\.\d+/);
   assert.match(versions, /packageName=github\.com\/sigstore\/cosign\/v3/);
   assert.match(versions, /COSIGN_VERSION=v\d+\.\d+\.\d+/);
   assert.match(renovate, /Update pinned Go analysis tool versions/);
@@ -235,7 +236,7 @@ test("Android release publishes signed provenance attestation for the APK", () =
   assert.doesNotMatch(workflow, /:app:testDevtestUnitTest :app:assembleRelease/);
 });
 
-test("CodeQL runs on code changes and published releases instead of a weekly schedule", () => {
+test("CodeQL runs on published releases and manual dispatch only", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/codeql.yml", import.meta.url),
     "utf8",
@@ -243,38 +244,36 @@ test("CodeQL runs on code changes and published releases instead of a weekly sch
 
   assert.match(
     workflow,
-    /\n  push:\n    paths-ignore:\n      - "\*\*\/\*\.md"\n/,
+    /\n  release:\n    types:\n      - published\n/,
+  );
+  assert.match(workflow, /\n  workflow_dispatch:\n/);
+  assert.doesNotMatch(workflow, /\n  push:\n/);
+  assert.doesNotMatch(workflow, /\n  pull_request:\n/);
+  assert.doesNotMatch(workflow, /\n  schedule:\n/);
+  assert.doesNotMatch(workflow, /cron:/);
+});
+
+test("CI covers pull requests and pushes to main with three jobs", () => {
+  const workflow = readFileSync(
+    new URL("../../.github/workflows/ci.yml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    workflow,
+    /\n  push:\n    branches:\n      - main\n    paths-ignore:\n      - "\*\*\/\*\.md"\n/,
   );
   assert.match(
     workflow,
     /\n  pull_request:\n    paths-ignore:\n      - "\*\*\/\*\.md"\n/,
   );
-  assert.match(
-    workflow,
-    /\n  release:\n    types:\n      - published\n/,
-  );
-  assert.doesNotMatch(workflow, /\n  schedule:\n/);
-  assert.doesNotMatch(workflow, /cron:/);
-});
-
-test("CI workflows ignore Markdown-only pushes and pull requests", () => {
-  for (const workflowName of ["android-ci.yml", "go-ci.yml", "static-check.yml", "codeql.yml"]) {
-    const workflow = readFileSync(
-      new URL(`../../.github/workflows/${workflowName}`, import.meta.url),
-      "utf8",
-    );
-
-    assert.match(
-      workflow,
-      /\n  push:\n    paths-ignore:\n      - "\*\*\/\*\.md"\n/,
-      `${workflowName} push trigger should ignore Markdown-only changes`,
-    );
-    assert.match(
-      workflow,
-      /\n  pull_request:\n    paths-ignore:\n      - "\*\*\/\*\.md"\n/,
-      `${workflowName} pull_request trigger should ignore Markdown-only changes`,
-    );
-  }
+  assert.match(workflow, /\n  static:\n/);
+  assert.match(workflow, /\n  go:\n/);
+  assert.match(workflow, /\n  android:\n/);
+  assert.match(workflow, /run: scripts\/dev\/workflow-pin-check\.sh/);
+  assert.match(workflow, /run: go test \.\/\.\.\./);
+  assert.match(workflow, /run: \.\/test\.sh/);
+  assert.match(workflow, /No Android-relevant changes/);
 });
 
 test("updates android release version fields", () => {

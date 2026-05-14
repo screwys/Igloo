@@ -42,6 +42,14 @@ if ! go run ./scripts/dev/staticcheck; then
   status=1
 fi
 
+echo "[static] running actionlint..."
+go run "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}"
+actionlint_status=$?
+if [[ "$actionlint_status" -ne 0 ]]; then
+  echo "[static] actionlint failed with exit code $actionlint_status" >&2
+  status=1
+fi
+
 echo "[drift] checking generated outputs..."
 if ! scripts/dev/drift-check.sh; then
   echo "[drift] generated output check failed" >&2
