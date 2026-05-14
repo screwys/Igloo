@@ -13,7 +13,6 @@ plans
 **/*.pyc
 node_modules
 scripts/dev/*
-!scripts/dev/esbuild.mjs
 scripts/dev/desktop
 scripts/dev/hooks
 backfill_ghost_media
@@ -28,4 +27,3 @@ result-*
 *.jks
 .env
 .env.*
-!package-lock.json
