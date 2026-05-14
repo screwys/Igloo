@@ -199,6 +199,10 @@ func TestCookieResolverUsesPlatformSpecificFilesAndRotationCandidates(t *testing
 	if filepath.Base(insta.File) != "www.instagram.com_cookies.txt" || insta.Browser != "" {
 		t.Fatalf("instagram cookies = %#v", insta)
 	}
+	instaSets := ResolveCookieSets(dir, "instagram", true, "firefox")
+	if len(instaSets) != 2 || filepath.Base(instaSets[0].File) != "www.instagram.com_cookies.txt" || instaSets[1].Browser != "firefox" {
+		t.Fatalf("instagram cookie sets = %#v", instaSets)
+	}
 	youtube := ResolveCookieSet(dir, "youtube", false, "firefox")
 	if youtube.File != "" || youtube.Browser != "firefox" {
 		t.Fatalf("youtube browser fallback = %#v", youtube)

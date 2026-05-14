@@ -18,17 +18,23 @@ type CookieCandidate struct {
 }
 
 func ResolveCookieSet(cookiesDir, platform string, fileEnabled bool, browser string) CookieSet {
-	var set CookieSet
+	for _, set := range ResolveCookieSets(cookiesDir, platform, fileEnabled, browser) {
+		return set
+	}
+	return CookieSet{}
+}
+
+func ResolveCookieSets(cookiesDir, platform string, fileEnabled bool, browser string) []CookieSet {
+	var sets []CookieSet
 	if fileEnabled {
 		for _, candidate := range DiscoverCookieFiles(cookiesDir, platform) {
-			set.File = candidate.Path
-			break
+			sets = append(sets, CookieSet{File: candidate.Path})
 		}
 	}
-	if set.File == "" {
-		set.Browser = strings.TrimSpace(browser)
+	if browser = strings.TrimSpace(browser); browser != "" {
+		sets = append(sets, CookieSet{Browser: browser})
 	}
-	return set
+	return sets
 }
 
 func DiscoverCookieFiles(cookiesDir, platform string) []CookieCandidate {

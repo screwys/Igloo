@@ -36,9 +36,11 @@ func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel b
 	}
 
 	cookiesFile, cookiesBrowser := m.cookiesFor(platform)
+	cookieSets := m.cookieSetsFor(platform)
 	authOpts := download.Opts{
 		Cookies:            cookiesFile,
 		CookiesFromBrowser: cookiesBrowser,
+		CookieAlternates:   cookieSets,
 	}
 
 	// Check for YouTube playlist.
@@ -107,6 +109,7 @@ func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel b
 		ID:                 videoID,
 		Cookies:            cookiesFile,
 		CookiesFromBrowser: cookiesBrowser,
+		CookieAlternates:   cookieSets,
 		Subtitles:          true,
 	}
 

@@ -203,3 +203,78 @@ func TestDownloadDirectTwitterVideoUsesLargeHTTPBudget(t *testing.T) {
 		t.Errorf("unexpected content: %q", data)
 	}
 }
+
+func TestDownloadRetriesCookieAlternatesForInstagramAuthFailure(t *testing.T) {
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "gallery-dl"), `#!/bin/sh
+out=""
+cookie=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -D)
+      shift
+      out="$1"
+      ;;
+    --cookies)
+      shift
+      cookie="$1"
+      ;;
+    --cookies-from-browser)
+      shift
+      cookie="browser:$1"
+      ;;
+  esac
+  shift
+done
+if [ "$cookie" = "browser:firefox" ]; then
+  mkdir -p "$out"
+  printf 'video data' > "$out/source.mp4"
+  printf '{"id":"source"}' > "$out/source.json"
+  exit 0
+fi
+echo 'ERROR: login required; cookies missing' >&2
+exit 1
+`)
+	writeExecutable(t, filepath.Join(bin, "yt-dlp"), `#!/bin/sh
+echo 'ERROR: login required; cookies missing' >&2
+exit 1
+`)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	cookieDir := t.TempDir()
+	badCookie := filepath.Join(cookieDir, "instagram_cookies.txt")
+	if err := os.WriteFile(badCookie, []byte("# stale\n"), 0o600); err != nil {
+		t.Fatalf("write bad cookie: %v", err)
+	}
+
+	d := NewDownloader("")
+	outDir := t.TempDir()
+	paths, err := d.Download(context.Background(), "https://www.instagram.com/p/sample/", "video", Opts{
+		OutputDir: outDir,
+		ID:        "sample",
+		CookieAlternates: []CookieSet{
+			{File: badCookie},
+			{Browser: "firefox"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Download returned error: %v", err)
+	}
+	if len(paths) != 1 || paths[0] != filepath.Join(outDir, "sample.mp4") {
+		t.Fatalf("paths = %#v, want sample.mp4 in output dir", paths)
+	}
+	data, err := os.ReadFile(paths[0])
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	if string(data) != "video data" {
+		t.Fatalf("output = %q, want video data", data)
+	}
+}
+
+func writeExecutable(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+		t.Fatalf("write executable %s: %v", path, err)
+	}
+}

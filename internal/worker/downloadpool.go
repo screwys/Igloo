@@ -194,6 +194,7 @@ func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadQueueRow, pl
 		ID:                 job.VideoID,
 		Cookies:            cookiesFile,
 		CookiesFromBrowser: cookiesBrowser,
+		CookieAlternates:   m.cookieSetsFor(platform),
 		Format:             formatStr,
 		Subtitles:          subtitles,
 	}
@@ -443,6 +444,14 @@ func (m *Manager) startDownloadQueueLeaseRenewal(ctx context.Context, job db.Dow
 // Prefers an enabled cookies file if one exists; falls back to
 // --cookies-from-browser if configured via cookies_{platform}_browser DB setting.
 func (m *Manager) cookiesFor(platform string) (string, string) {
+	sets := m.cookieSetsFor(platform)
+	if len(sets) == 0 {
+		return "", ""
+	}
+	return sets[0].File, sets[0].Browser
+}
+
+func (m *Manager) cookieSetsFor(platform string) []download.CookieSet {
 	fileEnabled := "1"
 	if m.db != nil {
 		fileEnabled, _ = m.db.GetSetting("cookies_"+platform+"_enabled", "1")
@@ -455,8 +464,7 @@ func (m *Manager) cookiesFor(platform string) (string, string) {
 	if m.cfg != nil {
 		cookiesDir = m.cfg.CookiesDir
 	}
-	set := download.ResolveCookieSet(cookiesDir, platform, fileEnabled != "0", browser)
-	return set.File, set.Browser
+	return download.ResolveCookieSets(cookiesDir, platform, fileEnabled != "0", browser)
 }
 
 func cookieFileCandidates(cookiesDir, platform string) []string {

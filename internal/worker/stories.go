@@ -109,6 +109,7 @@ func (m *Manager) downloadNativeStory(ctx context.Context, platform, handle stri
 		ID:                 ref.VideoID,
 		Cookies:            cookiesFile,
 		CookiesFromBrowser: cookiesBrowser,
+		CookieAlternates:   m.cookieSetsFor(platform),
 		Format:             resolveFormatString(platform, ""),
 	}
 	paths, err := m.downloader.Download(ctx, ref.URL, "video", opts)

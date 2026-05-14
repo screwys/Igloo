@@ -25,8 +25,12 @@ type GalleryDLWrapper struct {
 	OperationSink OperationSink
 }
 
-func (g *GalleryDLWrapper) Run(ctx context.Context, operation, platform, subject string, args []string, cookiesFile string, opts CommandOptions) CommandResult {
+func (g *GalleryDLWrapper) Run(ctx context.Context, operation, platform, subject string, args []string, cookiesFile string, opts CommandOptions, cookiesBrowser ...string) CommandResult {
 	result := g.Runner.Run(ctx, "gallery-dl", args, opts)
+	browser := ""
+	if len(cookiesBrowser) > 0 {
+		browser = cookiesBrowser[0]
+	}
 	status := statusForError(result.Err)
 	errorKind := ""
 	errorText := ""
@@ -44,7 +48,7 @@ func (g *GalleryDLWrapper) Run(ctx context.Context, operation, platform, subject
 		Status:      status,
 		ErrorKind:   errorKind,
 		Error:       errorText,
-		CookieLabel: CookieLabel(cookiesFile, ""),
+		CookieLabel: CookieLabel(cookiesFile, browser),
 		ElapsedMs:   result.ElapsedMs,
 		SummaryJSON: operationSummaryJSON(map[string]any{
 			"args":      result.RedactedArgs,
@@ -52,6 +56,18 @@ func (g *GalleryDLWrapper) Run(ctx context.Context, operation, platform, subject
 		}),
 	})
 	return result
+}
+
+func appendCookieAuthArgs(args []string, cookiesFile, cookiesBrowser string) []string {
+	cookiesFile = strings.TrimSpace(cookiesFile)
+	cookiesBrowser = strings.TrimSpace(cookiesBrowser)
+	if cookiesFile != "" {
+		return append(args, "--cookies", cookiesFile)
+	}
+	if cookiesBrowser != "" {
+		return append(args, "--cookies-from-browser", cookiesBrowser)
+	}
+	return args
 }
 
 // Reposts fetches TikTok repost metadata from gallery-dl's /@USER/reposts
@@ -289,24 +305,27 @@ func millisFromAny(value any) int64 {
 // Videos are renamed to {id}.{ext}; image slides are renamed to
 // {id}_{1-based-index}.{ext}. Thumbnails next to videos are copied as
 // {id}.{ext} so existing thumbnail discovery can use them.
-// If cookiesFile is non-empty, it is passed via --cookies.
-func (g *GalleryDLWrapper) Download(ctx context.Context, rawURL, destDir, id, cookiesFile string) ([]string, error) {
+// If cookiesFile is non-empty, it is passed via --cookies. Otherwise, an
+// optional cookiesBrowser is passed via --cookies-from-browser.
+func (g *GalleryDLWrapper) Download(ctx context.Context, rawURL, destDir, id, cookiesFile string, cookiesBrowser ...string) ([]string, error) {
 	tmpDir, err := os.MkdirTemp("", "gallerydl-*")
 	if err != nil {
 		return nil, fmt.Errorf("gallery-dl tmpdir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
+	browser := ""
+	if len(cookiesBrowser) > 0 {
+		browser = strings.TrimSpace(cookiesBrowser[0])
+	}
 
 	args := []string{
 		"--no-mtime",
 		"--write-info-json",
 		"-D", tmpDir,
 	}
-	if cookiesFile != "" {
-		args = append(args, "--cookies", cookiesFile)
-	}
+	args = appendCookieAuthArgs(args, cookiesFile, browser)
 	args = append(args, rawURL)
-	result := g.Run(ctx, "media.gallerydl", platformFromURL(rawURL), rawURL, args, cookiesFile, CommandOptions{Timeout: galleryDLDefaultTimeout})
+	result := g.Run(ctx, "media.gallerydl", platformFromURL(rawURL), rawURL, args, cookiesFile, CommandOptions{Timeout: galleryDLDefaultTimeout}, browser)
 	output := result.CombinedOutput()
 	err = result.Err
 	// TikTok posts that are deleted, private, or geo-restricted surface as

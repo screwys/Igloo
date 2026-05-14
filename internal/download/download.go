@@ -18,12 +18,13 @@ const (
 
 // Opts configures a Download call.
 type Opts struct {
-	OutputDir          string // Directory to write files into.
-	ID                 string // Used in output filename when set.
-	Cookies            string // Path to cookies file (for yt-dlp).
-	CookiesFromBrowser string // Browser name for --cookies-from-browser (e.g. "firefox").
-	Format             string // yt-dlp -f format string (overrides default FormatSort when set).
-	Subtitles          bool   // Download English subtitles as VTT.
+	OutputDir          string      // Directory to write files into.
+	ID                 string      // Used in output filename when set.
+	Cookies            string      // Path to cookies file (for yt-dlp).
+	CookiesFromBrowser string      // Browser name for --cookies-from-browser (e.g. "firefox").
+	CookieAlternates   []CookieSet // Ordered credential fallbacks.
+	Format             string      // yt-dlp -f format string (overrides default FormatSort when set).
+	Subtitles          bool        // Download English subtitles as VTT.
 }
 
 // Downloader is the unified entry point that routes to the correct backend.
@@ -74,6 +75,7 @@ func (d *Downloader) Download(ctx context.Context, rawURL string, mediaType stri
 	}
 	var paths []string
 	var err error
+	usedOpts := opts
 	defer func() {
 		files, bytes := summarizePaths(paths)
 		recordOperation(ctx, d.sink, model.DownloaderOperation{
@@ -86,24 +88,38 @@ func (d *Downloader) Download(ctx context.Context, rawURL string, mediaType stri
 			Status:      statusForError(err),
 			ErrorKind:   ClassifyFailure(err, nil, 0).Kind,
 			Error:       errorString(err, nil),
-			CookieLabel: CookieLabel(opts.Cookies, opts.CookiesFromBrowser),
+			CookieLabel: CookieLabel(usedOpts.Cookies, usedOpts.CookiesFromBrowser),
 			FileCount:   files,
 			MediaCount:  files,
 			Bytes:       bytes,
 		})
 	}()
+	attempts := opts.cookieAttempts()
+	for i, auth := range attempts {
+		usedOpts = opts.withCookieSet(auth)
+		paths, err = d.downloadOnce(ctx, rawURL, mediaType, usedOpts)
+		if err == nil {
+			return paths, nil
+		}
+		if i+1 >= len(attempts) || !shouldTryNextCookieAttempt(err) {
+			return paths, err
+		}
+	}
+	return paths, err
+}
+
+func (d *Downloader) downloadOnce(ctx context.Context, rawURL string, mediaType string, opts Opts) ([]string, error) {
 	if IsTikTokURL(rawURL) {
-		paths, err = d.downloadTikTok(ctx, rawURL, opts)
-		return paths, err
+		return d.downloadTikTok(ctx, rawURL, opts)
 	}
 	if IsInstagramURL(rawURL) {
-		paths, err = d.downloadGalleryDLFirst(ctx, canonicalInstagramURL(rawURL), opts)
-		return paths, err
+		return d.downloadGalleryDLFirst(ctx, canonicalInstagramURL(rawURL), opts)
 	}
 	if isDirectMedia(rawURL, mediaType) {
 		filename := opts.ID + mediaExtFromURL(rawURL)
 		httpOpts := directMediaHTTPOptions(rawURL, mediaType)
 		var p string
+		var err error
 		p, err = d.HTTP.DownloadFileWithOptions(ctx, rawURL, opts.OutputDir, filename, httpOpts)
 		if err != nil {
 			// Try lower quality variants for twimg photos that 403/404 on orig/large/etc.
@@ -122,11 +138,57 @@ func (d *Downloader) Download(ctx context.Context, rawURL string, mediaType stri
 				return nil, err
 			}
 		}
-		paths = []string{p}
-		return paths, nil
+		return []string{p}, nil
 	}
-	paths, err = d.YtDlp.Download(ctx, rawURL, opts)
-	return paths, err
+	return d.YtDlp.Download(ctx, rawURL, opts)
+}
+
+func (opts Opts) cookieAttempts() []CookieSet {
+	if len(opts.CookieAlternates) > 0 {
+		sets := make([]CookieSet, 0, len(opts.CookieAlternates))
+		seen := map[string]struct{}{}
+		for _, set := range opts.CookieAlternates {
+			set = normalizeCookieSet(set)
+			key := set.File + "\x00" + set.Browser
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			sets = append(sets, set)
+		}
+		if len(sets) > 0 {
+			return sets
+		}
+	}
+	return []CookieSet{normalizeCookieSet(CookieSet{File: opts.Cookies, Browser: opts.CookiesFromBrowser})}
+}
+
+func (opts Opts) withCookieSet(set CookieSet) Opts {
+	set = normalizeCookieSet(set)
+	opts.Cookies = set.File
+	opts.CookiesFromBrowser = set.Browser
+	opts.CookieAlternates = nil
+	return opts
+}
+
+func normalizeCookieSet(set CookieSet) CookieSet {
+	set.File = strings.TrimSpace(set.File)
+	set.Browser = strings.TrimSpace(set.Browser)
+	if set.File != "" {
+		set.Browser = ""
+	}
+	return set
+}
+
+func shouldTryNextCookieAttempt(err error) bool {
+	if err == nil {
+		return false
+	}
+	if ClassifyFailure(err, nil, 0).Kind == ErrorKindAuth {
+		return true
+	}
+	text := strings.ToLower(err.Error())
+	return containsAny(text, "login required", "not logged in", "use --cookies", "--cookies-from-browser")
 }
 
 func directMediaHTTPOptions(rawURL, mediaType string) HTTPDownloadOptions {
@@ -145,7 +207,7 @@ func directMediaHTTPOptions(rawURL, mediaType string) HTTPDownloadOptions {
 func (d *Downloader) downloadTikTok(ctx context.Context, rawURL string, opts Opts) ([]string, error) {
 	// gallery-dl handles TikTok slideshows natively (images + audio).
 	// It fails fast on regular videos, so there's no significant overhead.
-	gdlPaths, gdlErr := d.GalleryDL.Download(ctx, rawURL, opts.OutputDir, opts.ID, opts.Cookies)
+	gdlPaths, gdlErr := d.GalleryDL.Download(ctx, rawURL, opts.OutputDir, opts.ID, opts.Cookies, opts.CookiesFromBrowser)
 	if gdlErr == nil && len(gdlPaths) > 0 {
 		return gdlPaths, nil
 	}
@@ -163,7 +225,7 @@ func (d *Downloader) downloadTikTok(ctx context.Context, rawURL string, opts Opt
 }
 
 func (d *Downloader) downloadGalleryDLFirst(ctx context.Context, rawURL string, opts Opts) ([]string, error) {
-	gdlPaths, gdlErr := d.GalleryDL.Download(ctx, rawURL, opts.OutputDir, opts.ID, opts.Cookies)
+	gdlPaths, gdlErr := d.GalleryDL.Download(ctx, rawURL, opts.OutputDir, opts.ID, opts.Cookies, opts.CookiesFromBrowser)
 	if gdlErr == nil && len(gdlPaths) > 0 {
 		return gdlPaths, nil
 	}
