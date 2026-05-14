@@ -78,6 +78,24 @@ test("release workflow signs release commits and tags", () => {
   assert.doesNotMatch(workflow, /git tag -a "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
 });
 
+test("release workflow gates signed releases on the full quality suite", () => {
+  const workflow = readFileSync(
+    new URL("../../.github/workflows/release.yml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(workflow, /actions\/setup-go@v6/);
+  assert.match(workflow, /actions\/setup-java@v5/);
+  assert.match(workflow, /java-version: "26"/);
+  assert.match(workflow, /name: Run full release gate/);
+  assert.match(workflow, /run: scripts\/dev\/test-full\.sh/);
+  assert.ok(
+    workflow.indexOf("run: scripts/dev/test-full.sh") <
+      workflow.indexOf("git commit -S -m"),
+    "full release gate should run before signing the release commit",
+  );
+});
+
 test("container release publishes signed provenance attestation", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/container-release.yml", import.meta.url),
@@ -88,8 +106,9 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /\n  attestations: write\n/);
   assert.match(workflow, /\n        id: build\n/);
   assert.match(workflow, /actions\/setup-go@v6/);
+  assert.match(workflow, /actions\/setup-java@v5/);
   assert.match(workflow, /DeterminateSystems\/determinate-nix-action@v3/);
-  assert.match(workflow, /go test \.\/\.\.\./);
+  assert.match(workflow, /run: scripts\/dev\/test-full\.sh/);
   assert.match(workflow, /nix build \.#container --print-build-logs/);
   assert.match(workflow, /docker load < result/);
   assert.match(workflow, /SOURCE_IMAGE: ghcr\.io\/screwys\/igloo:latest/);
@@ -99,6 +118,7 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /subject-name: ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/igloo/);
   assert.match(workflow, /subject-digest: \$\{\{ steps\.build\.outputs\.digest \}\}/);
   assert.match(workflow, /push-to-registry: true/);
+  assert.doesNotMatch(workflow, /go test \.\/\.\.\./);
   assert.doesNotMatch(workflow, /docker\/build-push-action/);
 });
 
@@ -122,10 +142,15 @@ test("Android release publishes signed provenance attestation for the APK", () =
     "utf8",
   );
 
+  assert.match(workflow, /actions\/setup-go@v6/);
+  assert.match(workflow, /actions\/setup-java@v5/);
+  assert.match(workflow, /run: scripts\/dev\/test-full\.sh/);
+  assert.match(workflow, /run: \.\/gradlew :app:assembleRelease/);
   assert.match(workflow, /\n  id-token: write\n/);
   assert.match(workflow, /\n  attestations: write\n/);
   assert.match(workflow, /uses: actions\/attest@v4/);
   assert.match(workflow, /subject-path: release-artifacts\/\*\.apk/);
+  assert.doesNotMatch(workflow, /:app:testDevtestUnitTest :app:assembleRelease/);
 });
 
 test("CodeQL runs on code changes and published releases instead of a weekly schedule", () => {

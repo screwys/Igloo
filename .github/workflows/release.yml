@@ -32,6 +32,16 @@ jobs:
       - name: Require main
         run: test "$GITHUB_REF" = "refs/heads/main"
 
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "26"
+
       - name: Test release helper
         run: node --test scripts/dev/release.test.mjs
 
@@ -40,6 +50,10 @@ jobs:
         env:
           INPUT_BUMP: ${{ inputs.bump }}
         run: node scripts/dev/release.mjs prepare "${INPUT_BUMP:-patch}" --notes release-notes.md --description-file .github/release-description.md
+
+      - name: Run full release gate
+        if: steps.release.outputs.should_release == 'true'
+        run: scripts/dev/test-full.sh
 
       - name: Commit and tag signed release
         if: steps.release.outputs.should_release == 'true'
