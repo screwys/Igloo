@@ -6,6 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/screwys/igloo/internal/model"
 )
 
 func testDBPath() string {
@@ -21,15 +24,42 @@ func testDataDir() string {
 func openTestDB(t *testing.T) *DB {
 	t.Helper()
 	path := testDBPath()
-	if _, err := os.Stat(path); err != nil {
-		t.Skip("database not found")
+	if _, err := os.Stat(path); err == nil {
+		d, err := OpenReadOnly(path, testDataDir())
+		if err != nil {
+			t.Fatalf("open: %v", err)
+		}
+		t.Cleanup(func() { _ = d.Close() })
+		return d
 	}
-	d, err := OpenReadOnly(path, testDataDir())
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	t.Cleanup(func() { _ = d.Close() })
+
+	d := openWritableTestDB(t)
+	seedReadOnlyFixtureDB(t, d)
 	return d
+}
+
+func openReadOnlyFixtureDB(t *testing.T) (string, string) {
+	t.Helper()
+	tmpFile, err := os.CreateTemp("", "igloo-readonly-test-*.db")
+	if err != nil {
+		t.Fatalf("create temp db: %v", err)
+	}
+	tmpPath := tmpFile.Name()
+	_ = tmpFile.Close()
+
+	d, err := Open(tmpPath, t.TempDir())
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		t.Fatalf("open writable: %v", err)
+	}
+	seedReadOnlyFixtureDB(t, d)
+	if err := d.Close(); err != nil {
+		t.Fatalf("close fixture db: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(tmpPath)
+	})
+	return tmpPath, t.TempDir()
 }
 
 // openWritableTestDB creates a fresh temp DB with schema for write tests.
@@ -84,6 +114,48 @@ func seedTestVideo(t *testing.T, d *DB, videoID, channelID string) {
 		VALUES (?, ?, 'Fixture Video', 120, 'videos/fixture.mp4', 1)
 	`, videoID, channelID); err != nil {
 		t.Fatalf("seed video %s: %v", videoID, err)
+	}
+}
+
+func seedReadOnlyFixtureDB(t *testing.T, d *DB) {
+	t.Helper()
+	now := time.Unix(1_700_000_000, 0).UTC()
+	const (
+		channelID = "youtube_fixture_channel"
+		videoID   = "youtube_fixture_video"
+		tweetID   = "twitter_fixture_tweet"
+		username  = "fixture_user"
+	)
+	seedTestFollowedChannel(t, d, channelID)
+	seedTestVideo(t, d, videoID, channelID)
+	if err := d.ExecRaw(`
+		INSERT OR IGNORE INTO video_comments (
+			video_id, comment_id, author_name, author_id, text, like_count, published_at, platform, fetched_at
+		) VALUES (?, 'fixture_comment', 'Fixture Commenter', 'fixture_author', 'Fixture comment text', 1, 1, 'youtube', 1)
+	`, videoID); err != nil {
+		t.Fatalf("seed comment: %v", err)
+	}
+	if _, err := d.UpsertFeedItems([]model.FeedItem{{
+		TweetID:        tweetID,
+		AuthorHandle:   "fixture_author",
+		BodyText:       "fixture feed item",
+		PublishedAt:    &now,
+		FetchedAt:      now,
+		ContentHash:    "fixture_feed_hash",
+		CanonicalURL:   "https://x.com/fixture_author/status/" + tweetID,
+		MediaJSON:      `[]`,
+		QuoteMediaJSON: `[]`,
+	}}); err != nil {
+		t.Fatalf("seed feed item: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT OR IGNORE INTO feed_likes (username, tweet_id, liked_at)
+		VALUES (?, ?, 1)
+	`, username, tweetID); err != nil {
+		t.Fatalf("seed feed like: %v", err)
+	}
+	if _, err := d.RebuildSearchIndex(t.Context()); err != nil {
+		t.Fatalf("seed search index: %v", err)
 	}
 }
 
@@ -183,11 +255,12 @@ func TestOpenDropsLegacyChannelCheckInterval(t *testing.T) {
 
 func TestOpenReadOnly(t *testing.T) {
 	path := testDBPath()
+	dataDir := testDataDir()
 	if _, err := os.Stat(path); err != nil {
-		t.Skip("database not found, skipping integration test")
+		path, dataDir = openReadOnlyFixtureDB(t)
 	}
 
-	d, err := OpenReadOnly(path, testDataDir())
+	d, err := OpenReadOnly(path, dataDir)
 	if err != nil {
 		t.Fatalf("OpenReadOnly: %v", err)
 	}

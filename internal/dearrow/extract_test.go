@@ -11,7 +11,7 @@ import (
 func ensureFfmpeg(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not available")
+		t.Fatalf("ffmpeg not available: %v", err)
 	}
 }
 
