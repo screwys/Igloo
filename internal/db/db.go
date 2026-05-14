@@ -55,7 +55,7 @@ func OpenWithOptions(path, dataDir string, opts OpenOptions) (*DB, error) {
 
 	d := &DB{conn: conn, dataDir: dataDir}
 	phaseStart = time.Now()
-	if err := EnsureSchemaWithOptions(conn, EnsureSchemaOptions{Phase: opts.Phase}); err != nil {
+	if err := EnsureSchemaWithOptions(conn, EnsureSchemaOptions(opts)); err != nil {
 		_ = conn.Close()
 		reportPhase(opts.Phase, "db.ensure_schema", phaseStart)
 		return nil, fmt.Errorf("ensure schema: %w", err)

@@ -84,6 +84,28 @@ if [[ "$errcheck_status" -ne 0 ]]; then
   status=1
 fi
 
+echo "[go] running staticcheck..."
+go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+staticcheck_status=$?
+if [[ "$staticcheck_status" -ne 0 ]]; then
+  echo "[go] staticcheck failed with exit code $staticcheck_status" >&2
+  status=1
+fi
+
+echo "[go] running govulncheck..."
+go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+govulncheck_status=$?
+if [[ "$govulncheck_status" -ne 0 ]]; then
+  echo "[go] govulncheck failed with exit code $govulncheck_status" >&2
+  status=1
+fi
+
+echo "[web] running smoke test..."
+if ! scripts/dev/web-smoke.sh; then
+  echo "[web] smoke test failed" >&2
+  status=1
+fi
+
 echo "[android] running JVM unit tests..."
 rm -rf "$android_results"
 android/test.sh 2>&1 | tee "$android_log"

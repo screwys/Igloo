@@ -131,9 +131,6 @@ func TestDownloadQueueClaimBatch(t *testing.T) {
 	for _, r := range claimed {
 		if r.VideoID == "dlq_vid_001" || r.VideoID == "dlq_vid_002" {
 			found++
-			if r.Status != "pending" {
-				// Status field in struct reflects pre-update value; no assertion needed
-			}
 		}
 	}
 	if found != 2 {

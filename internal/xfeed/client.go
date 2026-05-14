@@ -80,7 +80,7 @@ func (c *Client) FetchTimeline(ctx context.Context, handle string, limit int) ([
 func (c *Client) FetchSource(ctx context.Context, rawURL string, limit int) ([]FeedItem, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		return nil, fmt.Errorf("X source URL is required")
+		return nil, fmt.Errorf("x source URL is required")
 	}
 	if limit <= 0 {
 		limit = defaultTimelineLimit

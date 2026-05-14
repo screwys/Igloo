@@ -109,7 +109,7 @@ func (m *Manager) runSchedulerCycle(ctx context.Context, force bool) {
 					m.rememberInstagramProfileFromRefs(ch, refs)
 				}
 				if ch.Platform == "tiktok" || ch.Platform == "instagram" {
-					handle := ch.SourceID
+					var handle string
 					if ch.Platform == "tiktok" {
 						handle = tiktokHandleForChannel(ch)
 					} else {

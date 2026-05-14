@@ -94,7 +94,7 @@ func (g *GalleryDLWrapper) InstagramTagged(ctx context.Context, handle string, l
 		cookieOutput, cookieErr := g.instagramTaggedDumpOutput(ctx, rawURL, limit, cookiesFile)
 		cookieRefs := ParseInstagramTaggedDumpForHandle(cookieOutput, handle)
 		if cookieErr == nil && len(cookieRefs) > 0 {
-			output, err, refs = cookieOutput, nil, cookieRefs
+			err, refs = nil, cookieRefs
 		} else if err == nil {
 			err = cookieErr
 		}

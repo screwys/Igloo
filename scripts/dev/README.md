@@ -17,7 +17,8 @@ cmd/igloo-assets
 | `build.sh android` | Build the server, then build/install the Android APK. |
 | `build.sh all` | Build, restart the server, then build/install Android. |
 | `doctor.sh` | Run Igloo Doctor against the local data/config paths. |
-| `test-full.sh` | Run generated drift, Go, errcheck, and Android test gates. |
+| `test-full.sh` | Run generated drift, Go, errcheck, staticcheck, govulncheck, web smoke, and Android test gates. |
+| `web-smoke.sh` | Start a throwaway Igloo server and exercise liveness, setup, login, and the authenticated home redirect. |
 | `container-check.sh` | Build and check the container image. |
 
 Maintained diagnostics and repair tools are Go subcommands:

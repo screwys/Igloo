@@ -530,9 +530,9 @@ func (s *Server) handleServerStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract db_size_mb, wal_size_mb, table_count from dbStats for top-level exposure
-	dbSizeMB, _ := dbStats["db_size_mb"]
-	walSizeMB, _ := dbStats["wal_size_mb"]
-	tableCount, _ := dbStats["table_count"]
+	dbSizeMB := dbStats["db_size_mb"]
+	walSizeMB := dbStats["wal_size_mb"]
+	tableCount := dbStats["table_count"]
 
 	// Map worker statuses to process-like entries
 	workerStatuses := s.workers.Status()

@@ -2,13 +2,7 @@ name: Android CI
 
 on:
   push:
-    paths:
-      - "android/**"
-      - ".github/workflows/android-ci.yml"
   pull_request:
-    paths:
-      - "android/**"
-      - ".github/workflows/android-ci.yml"
   workflow_dispatch:
 
 concurrency:
@@ -19,7 +13,40 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      android: ${{ steps.filter.outputs.android }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        name: Detect Android-relevant changes
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.sha }}"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+            if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+              base="$(git rev-list --max-parents=0 "$head")"
+            fi
+          fi
+
+          git diff --name-only "$base" "$head" | tee "$RUNNER_TEMP/android-changed-files.txt"
+          if grep -Eq '^(android/|\.github/workflows/android-ci\.yml$)' "$RUNNER_TEMP/android-changed-files.txt"; then
+            echo "android=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "android=false" >> "$GITHUB_OUTPUT"
+          fi
+
   unit-tests:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -34,6 +61,8 @@ jobs:
         run: ./test.sh
 
   instrumented-tests:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -61,3 +90,29 @@ jobs:
           ./gradlew :app:pixel2Api35DevtestAndroidTest --no-daemon \
             -Dorg.gradle.jvmargs="-Xmx4096m -Dfile.encoding=UTF-8" \
             -Pkotlin.daemon.jvmargs="-Xmx4096m"
+
+  required:
+    needs:
+      - changes
+      - unit-tests
+      - instrumented-tests
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Android CI result
+        shell: bash
+        run: |
+          if [[ "${{ needs.changes.outputs.android }}" != "true" ]]; then
+            echo "No Android-relevant changes; Android CI is not required for this ref."
+            exit 0
+          fi
+
+          unit="${{ needs.unit-tests.result }}"
+          instrumented="${{ needs.instrumented-tests.result }}"
+          if [[ "$unit" == "success" && "$instrumented" == "success" ]]; then
+            echo "Android CI passed."
+            exit 0
+          fi
+
+          echo "Android CI failed or was cancelled: unit-tests=$unit instrumented-tests=$instrumented" >&2
+          exit 1

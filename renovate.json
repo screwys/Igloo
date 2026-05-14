@@ -8,7 +8,7 @@
   "prCreation": "not-pending",
   "internalChecksFilter": "strict",
   "automergeType": "pr",
-  "platformAutomerge": true,
+  "platformAutomerge": false,
   "prConcurrentLimit": 3,
   "prHourlyLimit": 1,
   "customManagers": [
@@ -23,9 +23,9 @@
   ],
   "packageRules": [
     {
-      "description": "Automerge non-major dependency updates after required checks pass.",
+      "description": "Keep non-major dependency updates manual until branch protection requires strict CI gates.",
       "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
-      "automerge": true
+      "automerge": false
     },
     {
       "description": "Group Go minor and patch updates.",

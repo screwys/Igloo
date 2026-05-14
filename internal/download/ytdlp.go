@@ -167,7 +167,7 @@ func (y *YtDlpWrapper) ChannelCheck(ctx context.Context, url string, limit int) 
 	result, err := ytdlp.New().
 		SkipDownload().
 		NoWarnings().
-		PlaylistEnd(limit).
+		PlaylistItems(fmt.Sprintf(":%d", limit)).
 		DumpJSON().
 		Run(ctx, url)
 	if err != nil {

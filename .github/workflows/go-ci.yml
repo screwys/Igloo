@@ -2,11 +2,8 @@ name: Go CI
 
 on:
   push:
-    paths-ignore:
-      - "**/*.md"
   pull_request:
-    paths-ignore:
-      - "**/*.md"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,3 +31,15 @@ jobs:
 
       - name: Run Go tests
         run: go test ./...
+
+      - name: Run errcheck
+        run: go run github.com/kisielk/errcheck@latest ./...
+
+      - name: Run staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: Run web smoke test
+        run: scripts/dev/web-smoke.sh

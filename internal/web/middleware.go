@@ -175,10 +175,10 @@ func (s *Server) csrfProtect(next http.Handler) http.Handler {
 		expected := r.Context().Value(csrfTokenKey)
 		if expected == nil {
 			if apiPath(r.URL.Path) {
-				writeJSONError(w, 403, "csrf_token_missing", "CSRF token missing")
+				writeJSONError(w, http.StatusForbidden, "csrf_token_missing", "CSRF token missing")
 				return
 			}
-			http.Error(w, "CSRF token missing", 403)
+			http.Error(w, "CSRF token missing", http.StatusForbidden)
 			return
 		}
 		provided := r.Header.Get("X-CSRF-Token")
@@ -187,10 +187,10 @@ func (s *Server) csrfProtect(next http.Handler) http.Handler {
 		}
 		if provided != expected.(string) {
 			if apiPath(r.URL.Path) {
-				writeJSONError(w, 403, "csrf_token_invalid", "CSRF token invalid")
+				writeJSONError(w, http.StatusForbidden, "csrf_token_invalid", "CSRF token invalid")
 				return
 			}
-			http.Error(w, "CSRF token invalid", 403)
+			http.Error(w, "CSRF token invalid", http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)

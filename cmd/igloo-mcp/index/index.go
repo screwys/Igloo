@@ -163,9 +163,7 @@ func (idx *CodeIndex) scanGoHandlers() {
 			idx.tables[t.Table] = append(idx.tables[t.Table], t)
 			node.DBTables = append(node.DBTables, t)
 		}
-		for _, comp := range result.TemplComponents {
-			node.Imports = append(node.Imports, comp)
-		}
+		node.Imports = append(node.Imports, result.TemplComponents...)
 		if len(result.PageScripts) > 0 {
 			idx.pageScripts[relpath] = result.PageScripts
 		}
@@ -1201,9 +1199,7 @@ func (idx *CodeIndex) scanTemplComponents() {
 			})
 		}
 
-		for _, call := range result.Calls {
-			node.Imports = append(node.Imports, call)
-		}
+		node.Imports = append(node.Imports, result.Calls...)
 
 		idx.symbols = append(idx.symbols, result.Symbols...)
 	}
