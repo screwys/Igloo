@@ -55,6 +55,38 @@ func openWritableTestDB(t *testing.T) *DB {
 	return d
 }
 
+func seedTestChannel(t *testing.T, d *DB, channelID string) {
+	t.Helper()
+	if err := d.ExecRaw(`
+		INSERT OR IGNORE INTO channels (channel_id, source_id, name, url, platform, created_at)
+		VALUES (?, ?, 'Fixture Channel', '', 'youtube', 1)
+	`, channelID, channelID); err != nil {
+		t.Fatalf("seed channel %s: %v", channelID, err)
+	}
+}
+
+func seedTestFollowedChannel(t *testing.T, d *DB, channelID string) {
+	t.Helper()
+	seedTestChannel(t, d, channelID)
+	if err := d.ExecRaw(`
+		INSERT OR IGNORE INTO channel_follows (user_id, channel_id, followed_at)
+		VALUES ('', ?, 1)
+	`, channelID); err != nil {
+		t.Fatalf("seed channel follow %s: %v", channelID, err)
+	}
+}
+
+func seedTestVideo(t *testing.T, d *DB, videoID, channelID string) {
+	t.Helper()
+	seedTestChannel(t, d, channelID)
+	if err := d.ExecRaw(`
+		INSERT OR IGNORE INTO videos (video_id, channel_id, title, duration, file_path, published_at)
+		VALUES (?, ?, 'Fixture Video', 120, 'videos/fixture.mp4', 1)
+	`, videoID, channelID); err != nil {
+		t.Fatalf("seed video %s: %v", videoID, err)
+	}
+}
+
 func TestOpen(t *testing.T) {
 	d := openWritableTestDB(t)
 

@@ -102,15 +102,16 @@ func TestGetBookmarkCount(t *testing.T) {
 
 func TestAddAndRemoveBookmark(t *testing.T) {
 	d := openWritableTestDB(t)
+	const videoID = "fixture_bookmark_video"
 
-	// Use a real video_id from the DB (FK constraint)
-	var videoID string
-	_ = d.conn.QueryRow("SELECT video_id FROM videos LIMIT 1").Scan(&videoID)
-	if videoID == "" {
-		t.Skip("no videos in test DB")
+	seedTestVideo(t, d, videoID, "youtube_bookmark_fixture")
+	if err := d.ExecRaw(`
+		INSERT INTO bookmark_categories (id, user_id, name, created_at)
+		VALUES (1, '', 'Default', 1)
+	`); err != nil {
+		t.Fatalf("seed bookmark category: %v", err)
 	}
 
-	// Use category_id=1 (default, FK constraint requires existing category)
 	err := d.AddBookmark("", videoID, 1, "", "", "")
 	if err != nil {
 		t.Fatalf("AddBookmark: %v", err)

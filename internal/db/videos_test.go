@@ -299,37 +299,45 @@ func TestGetPlaybackPosition(t *testing.T) {
 
 func TestMarkWatched(t *testing.T) {
 	d := openWritableTestDB(t)
-	var videoID string
-	_ = d.conn.QueryRow("SELECT video_id FROM videos LIMIT 1").Scan(&videoID)
-	if videoID == "" {
-		t.Skip("no videos")
-	}
+	const videoID = "fixture_mark_watched"
+
+	seedTestVideo(t, d, videoID, "youtube_watch_fixture")
 	err := d.MarkWatched(videoID, true)
 	if err != nil {
 		t.Fatalf("MarkWatched: %v", err)
+	}
+	var watched int
+	if err := d.QueryRow(`SELECT COALESCE(watched, 0) FROM videos WHERE video_id = ?`, videoID).Scan(&watched); err != nil {
+		t.Fatalf("read watched: %v", err)
+	}
+	if watched != 1 {
+		t.Fatalf("watched = %d, want 1", watched)
 	}
 }
 
 func TestSetPinned(t *testing.T) {
 	d := openWritableTestDB(t)
-	var videoID string
-	_ = d.conn.QueryRow("SELECT video_id FROM videos LIMIT 1").Scan(&videoID)
-	if videoID == "" {
-		t.Skip("no videos")
-	}
+	const videoID = "fixture_set_pinned"
+
+	seedTestVideo(t, d, videoID, "youtube_pin_fixture")
 	err := d.SetPinned(videoID, true)
 	if err != nil {
 		t.Fatalf("SetPinned: %v", err)
+	}
+	var pinned int
+	if err := d.QueryRow(`SELECT COALESCE(is_pinned, 0) FROM videos WHERE video_id = ?`, videoID).Scan(&pinned); err != nil {
+		t.Fatalf("read pinned: %v", err)
+	}
+	if pinned != 1 {
+		t.Fatalf("is_pinned = %d, want 1", pinned)
 	}
 }
 
 func TestSaveProgress(t *testing.T) {
 	d := openWritableTestDB(t)
-	var videoID string
-	_ = d.conn.QueryRow("SELECT video_id FROM videos LIMIT 1").Scan(&videoID)
-	if videoID == "" {
-		t.Skip("no videos")
-	}
+	const videoID = "fixture_save_progress"
+
+	seedTestVideo(t, d, videoID, "youtube_progress_fixture")
 	result, err := d.SaveProgress("test_user", videoID, 30.5, 120.0, 0, "web")
 	if err != nil {
 		t.Fatalf("SaveProgress: %v", err)
@@ -339,6 +347,18 @@ func TestSaveProgress(t *testing.T) {
 	}
 	if result.ResolvedPosition != 30.5 {
 		t.Errorf("expected position 30.5, got %f", result.ResolvedPosition)
+	}
+	var position, duration float64
+	var source string
+	if err := d.QueryRow(`
+		SELECT playback_position, duration, progress_source
+		FROM watch_history
+		WHERE user_id = 'test_user' AND video_id = ?
+	`, videoID).Scan(&position, &duration, &source); err != nil {
+		t.Fatalf("read watch history: %v", err)
+	}
+	if position != 30.5 || duration != 120 || source != "web" {
+		t.Fatalf("watch history = position %f duration %f source %q, want 30.5/120/web", position, duration, source)
 	}
 }
 

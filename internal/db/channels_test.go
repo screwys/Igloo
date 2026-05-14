@@ -116,12 +116,16 @@ func TestGetAllVideoCountsByChannel(t *testing.T) {
 
 func TestToggleChannelStar(t *testing.T) {
 	d := openWritableTestDB(t)
-	var channelID string
-	_ = d.conn.QueryRow("SELECT channel_id FROM channel_follows LIMIT 1").Scan(&channelID)
-	if channelID == "" {
-		t.Skip("no subscribed channels")
+	const channelID = "youtube_star_fixture"
+
+	seedTestFollowedChannel(t, d, channelID)
+	ch, err := d.GetChannel(channelID)
+	if err != nil {
+		t.Fatalf("GetChannel: %v", err)
 	}
-	ch, _ := d.GetChannel(channelID)
+	if ch == nil {
+		t.Fatal("seeded channel missing")
+	}
 	oldStarred := ch.IsStarred
 	newStarred, err := d.ToggleChannelStar(channelID)
 	if err != nil {
@@ -141,11 +145,9 @@ func TestToggleChannelStar(t *testing.T) {
 
 func TestGetAndUpdateChannelSettings(t *testing.T) {
 	d := openWritableTestDB(t)
-	var channelID string
-	_ = d.conn.QueryRow("SELECT channel_id FROM channel_follows LIMIT 1").Scan(&channelID)
-	if channelID == "" {
-		t.Skip("no subscribed channels")
-	}
+	const channelID = "youtube_settings_fixture"
+
+	seedTestFollowedChannel(t, d, channelID)
 	settings, err := d.GetChannelSettings(channelID)
 	if err != nil {
 		t.Fatalf("GetChannelSettings: %v", err)
@@ -157,7 +159,13 @@ func TestGetAndUpdateChannelSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateChannelSettings: %v", err)
 	}
-	updated, _ := d.GetChannelSettings(channelID)
+	updated, err := d.GetChannelSettings(channelID)
+	if err != nil {
+		t.Fatalf("GetChannelSettings updated: %v", err)
+	}
+	if updated == nil {
+		t.Fatal("expected updated settings")
+	}
 	if updated.Quality != "720p" {
 		t.Errorf("expected quality 720p, got %q", updated.Quality)
 	}
