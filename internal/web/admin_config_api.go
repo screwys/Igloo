@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -439,6 +440,27 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if fullimport.IsZipPayload(data) {
+		if err := restore.StageZip(bytes.NewReader(data), int64(len(data)), s.cfg.DataDir); err == nil {
+			slog.Info("restore: staged zip backup, exiting for systemd restart")
+			if isHTMX {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				_, _ = fmt.Fprint(w, `<span class="status-message success">Restore staged. Igloo is restarting…</span><script>setTimeout(function(){window.location.reload()},12000)</script>`)
+			} else {
+				writeJSON(w, 200, map[string]any{"success": true, "format": "zip_backup", "restart": true})
+			}
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			go func() {
+				time.Sleep(500 * time.Millisecond)
+				os.Exit(1)
+			}()
+			return
+		} else if !errors.Is(err, restore.ErrMissingDatabase) {
+			slog.Error("StageZip", "err", err)
+			importErr(400, "zip backup error: "+err.Error())
+			return
+		}
 		userID := ""
 		if user := userFromContext(r.Context()); user != nil {
 			userID = user.Username

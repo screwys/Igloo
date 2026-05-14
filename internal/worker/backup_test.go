@@ -1,10 +1,8 @@
 package worker
 
 import (
-	"archive/tar"
-	"compress/gzip"
+	"archive/zip"
 	"database/sql"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,14 +96,14 @@ func TestCreateBackupWritesIglooDBAndSkipsStaleSnapshotName(t *testing.T) {
 		t.Fatalf("createBackup: %v", err)
 	}
 
-	matches, err := filepath.Glob(filepath.Join(backupDir, backupPrefix+"*.tar.gz"))
+	matches, err := filepath.Glob(filepath.Join(backupDir, backupPrefix+"*.zip"))
 	if err != nil {
 		t.Fatalf("glob backups: %v", err)
 	}
 	if len(matches) != 1 {
 		t.Fatalf("backups = %v, want exactly one", matches)
 	}
-	names := tarEntryNames(t, matches[0])
+	names := zipEntryNames(t, matches[0])
 	if !names[config.DatabaseFilename] {
 		t.Fatalf("backup missing %s; entries=%v", config.DatabaseFilename, names)
 	}
@@ -139,7 +137,7 @@ func TestCreateBackupWritesIglooDBAndSkipsStaleSnapshotName(t *testing.T) {
 func TestPruneBackupsUsesConfiguredKeepCount(t *testing.T) {
 	backupDir := t.TempDir()
 	for _, stamp := range []string{"20260101-000001", "20260102-000001", "20260103-000001", "20260104-000001"} {
-		path := filepath.Join(backupDir, backupPrefix+stamp+".tar.gz")
+		path := filepath.Join(backupDir, backupPrefix+stamp+".zip")
 		if err := os.WriteFile(path, []byte("backup"), 0o644); err != nil {
 			t.Fatalf("write backup fixture %s: %v", stamp, err)
 		}
@@ -147,7 +145,7 @@ func TestPruneBackupsUsesConfiguredKeepCount(t *testing.T) {
 
 	(&Manager{}).pruneBackups(backupDir, 2)
 
-	matches, err := filepath.Glob(filepath.Join(backupDir, backupPrefix+"*.tar.gz"))
+	matches, err := filepath.Glob(filepath.Join(backupDir, backupPrefix+"*.zip"))
 	if err != nil {
 		t.Fatalf("glob backups: %v", err)
 	}
@@ -156,8 +154,8 @@ func TestPruneBackupsUsesConfiguredKeepCount(t *testing.T) {
 		got = append(got, filepath.Base(path))
 	}
 	want := strings.Join([]string{
-		backupPrefix + "20260103-000001.tar.gz",
-		backupPrefix + "20260104-000001.tar.gz",
+		backupPrefix + "20260103-000001.zip",
+		backupPrefix + "20260104-000001.zip",
 	}, ",")
 	if strings.Join(got, ",") != want {
 		t.Fatalf("remaining backups = %v, want %s", got, want)
@@ -217,33 +215,18 @@ func TestCreateBackupRejectsRelativeDir(t *testing.T) {
 	}
 }
 
-func tarEntryNames(t *testing.T, path string) map[string]bool {
+func zipEntryNames(t *testing.T, path string) map[string]bool {
 	t.Helper()
-	f, err := os.Open(path)
+	r, err := zip.OpenReader(path)
 	if err != nil {
-		t.Fatalf("open backup: %v", err)
+		t.Fatalf("open backup zip: %v", err)
 	}
 	defer func() {
-		_ = f.Close()
+		_ = r.Close()
 	}()
-	gz, err := gzip.NewReader(f)
-	if err != nil {
-		t.Fatalf("gzip backup: %v", err)
-	}
-	defer func() {
-		_ = gz.Close()
-	}()
-	tr := tar.NewReader(gz)
 	out := map[string]bool{}
-	for {
-		hdr, err := tr.Next()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			t.Fatalf("tar next: %v", err)
-		}
-		out[strings.TrimSpace(hdr.Name)] = true
+	for _, f := range r.File {
+		out[strings.TrimSpace(f.Name)] = true
 	}
 	return out
 }

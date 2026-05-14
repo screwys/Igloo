@@ -1,8 +1,8 @@
 // Package restore implements pending-restore staging and on-startup application
-// for full backup tarballs (igloo.db + config dir) produced by the
-// backup worker. The flow is:
+// for full backup archives (igloo.db + config dir) produced by the backup
+// worker. The flow is:
 //
-//  1. Import handler receives a .tar.gz upload, calls StageTarball() to
+//  1. Import handler receives a backup archive upload, calls StageTarball() or StageZip() to
 //     extract it into <DataDir>/restore-staging/ and write a marker file.
 //  2. Process exits; systemd restarts igloo.
 //  3. Startup calls ApplyPending() before opening the database. If the
@@ -12,7 +12,9 @@ package restore
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -29,6 +31,8 @@ const (
 	configPrefix  = "config/"
 )
 
+var ErrMissingDatabase = errors.New("backup archive missing database")
+
 func stagingDir(dataDir string) string { return filepath.Join(dataDir, stagingSubdir) }
 func markerPath(dataDir string) string { return filepath.Join(stagingDir(dataDir), markerName) }
 
@@ -38,11 +42,24 @@ func HasPending(dataDir string) bool {
 	return err == nil
 }
 
-// StageTarball extracts a gzipped tar archive into the staging directory and
-// writes the marker file. The tar is expected to contain `igloo.db` at the
-// root and a `config/` directory tree, as produced by worker.createBackup.
-// Returns an error if the tarball is malformed or missing the database.
+// StageTarball extracts a legacy gzipped tar backup into the staging directory
+// and writes the marker file.
 func StageTarball(reader io.Reader, dataDir string) error {
+	return stageBackup(dataDir, func(stage string) (bool, error) {
+		return extractTarBackup(reader, stage)
+	})
+}
+
+// StageZip extracts a zip backup into the staging directory and writes the
+// marker file. It returns ErrMissingDatabase when the zip is not a backup
+// archive, allowing callers to fall through to other zip import formats.
+func StageZip(readerAt io.ReaderAt, size int64, dataDir string) error {
+	return stageBackup(dataDir, func(stage string) (bool, error) {
+		return extractZipBackup(readerAt, size, stage)
+	})
+}
+
+func stageBackup(dataDir string, extract func(stage string) (bool, error)) error {
 	stage := stagingDir(dataDir)
 	if err := os.RemoveAll(stage); err != nil {
 		return fmt.Errorf("clear staging dir: %w", err)
@@ -51,9 +68,25 @@ func StageTarball(reader io.Reader, dataDir string) error {
 		return fmt.Errorf("create staging dir: %w", err)
 	}
 
+	dbSeen, err := extract(stage)
+	if err != nil {
+		return err
+	}
+	if !dbSeen {
+		_ = os.RemoveAll(stage)
+		return ErrMissingDatabase
+	}
+
+	if err := os.WriteFile(markerPath(dataDir), []byte(""), 0o644); err != nil {
+		return fmt.Errorf("write marker: %w", err)
+	}
+	return nil
+}
+
+func extractTarBackup(reader io.Reader, stage string) (bool, error) {
 	gz, err := gzip.NewReader(reader)
 	if err != nil {
-		return fmt.Errorf("gzip reader: %w", err)
+		return false, fmt.Errorf("gzip reader: %w", err)
 	}
 	defer func() {
 		_ = gz.Close()
@@ -67,20 +100,15 @@ func StageTarball(reader io.Reader, dataDir string) error {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("tar next: %w", err)
+			return false, fmt.Errorf("tar next: %w", err)
 		}
 
-		clean := filepath.Clean(hdr.Name)
-		if clean == "." || clean == "" {
-			continue
+		clean, dbEntry, ok, err := backupArchiveEntry(hdr.Name)
+		if err != nil {
+			return false, err
 		}
-		if strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) || strings.Contains(clean, "..") {
-			return fmt.Errorf("unsafe tar path: %s", hdr.Name)
-		}
-		// Only allow the DB at root and entries under config/.
-		dbEntry := clean == config.DatabaseFilename
-		if !dbEntry && !strings.HasPrefix(filepath.ToSlash(clean)+"/", configPrefix) && filepath.ToSlash(clean) != strings.TrimSuffix(configPrefix, "/") {
-			slog.Warn("restore: skipping unexpected tar entry", "name", clean)
+		if !ok {
+			slog.Warn("restore: skipping unexpected tar entry", "name", filepath.Clean(hdr.Name))
 			continue
 		}
 
@@ -88,18 +116,18 @@ func StageTarball(reader io.Reader, dataDir string) error {
 		switch hdr.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(dest, 0o755); err != nil {
-				return fmt.Errorf("mkdir %s: %w", dest, err)
+				return false, fmt.Errorf("mkdir %s: %w", dest, err)
 			}
 		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-				return fmt.Errorf("mkdir parent of %s: %w", dest, err)
+				return false, fmt.Errorf("mkdir parent of %s: %w", dest, err)
 			}
 			mode := os.FileMode(hdr.Mode).Perm()
 			if mode == 0 {
 				mode = 0o644
 			}
 			if err := writeStream(dest, tr, mode); err != nil {
-				return err
+				return false, err
 			}
 			if dbEntry {
 				dbSeen = true
@@ -107,14 +135,74 @@ func StageTarball(reader io.Reader, dataDir string) error {
 		}
 	}
 
-	if !dbSeen {
-		return fmt.Errorf("tarball missing %s entry", config.DatabaseFilename)
-	}
+	return dbSeen, nil
+}
 
-	if err := os.WriteFile(markerPath(dataDir), []byte(""), 0o644); err != nil {
-		return fmt.Errorf("write marker: %w", err)
+func extractZipBackup(readerAt io.ReaderAt, size int64, stage string) (bool, error) {
+	zr, err := zip.NewReader(readerAt, size)
+	if err != nil {
+		return false, fmt.Errorf("open zip: %w", err)
 	}
-	return nil
+	dbSeen := false
+	for _, f := range zr.File {
+		clean, dbEntry, ok, err := backupArchiveEntry(f.Name)
+		if err != nil {
+			return false, err
+		}
+		if !ok {
+			slog.Warn("restore: skipping unexpected zip entry", "name", filepath.Clean(f.Name))
+			continue
+		}
+		dest := filepath.Join(stage, clean)
+		info := f.FileInfo()
+		if info.IsDir() {
+			if err := os.MkdirAll(dest, 0o755); err != nil {
+				return false, fmt.Errorf("mkdir %s: %w", dest, err)
+			}
+			continue
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return false, fmt.Errorf("mkdir parent of %s: %w", dest, err)
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return false, fmt.Errorf("open zip entry %s: %w", f.Name, err)
+		}
+		mode := info.Mode().Perm()
+		if mode == 0 {
+			mode = 0o644
+		}
+		writeErr := writeStream(dest, rc, mode)
+		closeErr := rc.Close()
+		if writeErr != nil {
+			return false, writeErr
+		}
+		if closeErr != nil {
+			return false, closeErr
+		}
+		if dbEntry {
+			dbSeen = true
+		}
+	}
+	return dbSeen, nil
+}
+
+func backupArchiveEntry(name string) (clean string, dbEntry bool, ok bool, err error) {
+	clean = filepath.Clean(name)
+	if clean == "." || clean == "" {
+		return "", false, false, nil
+	}
+	if strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) || strings.Contains(clean, "..") {
+		return "", false, false, fmt.Errorf("unsafe backup path: %s", name)
+	}
+	dbEntry = clean == config.DatabaseFilename
+	if !dbEntry && !strings.HasPrefix(filepath.ToSlash(clean)+"/", configPrefix) && filepath.ToSlash(clean) != strings.TrimSuffix(configPrefix, "/") {
+		return clean, false, false, nil
+	}
+	return clean, dbEntry, true, nil
 }
 
 // ApplyPending runs at startup before the database is opened. If a staged

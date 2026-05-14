@@ -1,8 +1,7 @@
 package worker
 
 import (
-	"archive/tar"
-	"compress/gzip"
+	"archive/zip"
 	"context"
 	"fmt"
 	"io"
@@ -82,7 +81,7 @@ func (m *Manager) backupDue(dir string) bool {
 	}
 	var latest time.Time
 	for _, e := range entries {
-		if !strings.HasPrefix(e.Name(), backupPrefix) || !strings.HasSuffix(e.Name(), ".tar.gz") {
+		if !isBackupArchiveName(e.Name()) {
 			continue
 		}
 		info, err := e.Info()
@@ -112,7 +111,7 @@ func (m *Manager) createBackup(dir string) error {
 	}
 
 	stamp := time.Now().Format("20060102-150405")
-	name := fmt.Sprintf("%s%s.tar.gz", backupPrefix, stamp)
+	name := fmt.Sprintf("%s%s.zip", backupPrefix, stamp)
 	tmpPath := filepath.Join(dir, name+".tmp")
 	finalPath := filepath.Join(dir, name)
 
@@ -125,8 +124,7 @@ func (m *Manager) createBackup(dir string) error {
 		_ = os.Remove(tmpPath)
 	}()
 
-	gw := gzip.NewWriter(f)
-	tw := tar.NewWriter(gw)
+	zw := zip.NewWriter(f)
 
 	dbSnapFile, err := os.CreateTemp(dir, ".igloo-db-snapshot-*.db")
 	if err != nil {
@@ -147,14 +145,14 @@ func (m *Manager) createBackup(dir string) error {
 		_ = os.Remove(dbSnap)
 	}()
 
-	if err := addFileToTar(tw, dbSnap, config.DatabaseFilename); err != nil {
-		return fmt.Errorf("tar db: %w", err)
+	if err := addFileToZip(zw, dbSnap, config.DatabaseFilename); err != nil {
+		return fmt.Errorf("zip db: %w", err)
 	}
 
 	configDir := m.cfg.ConfDir
 	if configDir != "" {
-		if err := addDirToTar(tw, configDir, "config", config.RuntimeConfigBackupAllowed); err != nil {
-			return fmt.Errorf("tar config: %w", err)
+		if err := addDirToZip(zw, configDir, "config", config.RuntimeConfigBackupAllowed); err != nil {
+			return fmt.Errorf("zip config: %w", err)
 		}
 	}
 
@@ -165,16 +163,13 @@ func (m *Manager) createBackup(dir string) error {
 	mediaFiles := exportbundle.CollectBookmarkMedia(m.db, m.cfg.DataDir, cfg.Bookmarks)
 	mediaFiles = append(mediaFiles, exportbundle.CollectAvatarMedia(m.cfg.DataDir)...)
 	for _, file := range mediaFiles {
-		if err := addFileToTar(tw, file.SourcePath, file.ArchivePath); err != nil {
-			return fmt.Errorf("tar media %s: %w", file.ArchivePath, err)
+		if err := addFileToZip(zw, file.SourcePath, file.ArchivePath); err != nil {
+			return fmt.Errorf("zip media %s: %w", file.ArchivePath, err)
 		}
 	}
 
-	if err := tw.Close(); err != nil {
-		return fmt.Errorf("close tar: %w", err)
-	}
-	if err := gw.Close(); err != nil {
-		return fmt.Errorf("close gzip: %w", err)
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("close zip: %w", err)
 	}
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("close file: %w", err)
@@ -198,7 +193,7 @@ func (m *Manager) pruneBackups(dir string, keepCount int) {
 	}
 	var backups []string
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), backupPrefix) && strings.HasSuffix(e.Name(), ".tar.gz") {
+		if isBackupArchiveName(e.Name()) {
 			backups = append(backups, e.Name())
 		}
 	}
@@ -215,7 +210,11 @@ func (m *Manager) pruneBackups(dir string, keepCount int) {
 	}
 }
 
-func addFileToTar(tw *tar.Writer, srcPath, tarName string) error {
+func isBackupArchiveName(name string) bool {
+	return strings.HasPrefix(name, backupPrefix) && (strings.HasSuffix(name, ".zip") || strings.HasSuffix(name, ".tar.gz"))
+}
+
+func addFileToZip(zw *zip.Writer, srcPath, zipName string) error {
 	f, err := os.Open(srcPath)
 	if err != nil {
 		return err
@@ -229,20 +228,21 @@ func addFileToTar(tw *tar.Writer, srcPath, tarName string) error {
 		return err
 	}
 
-	hdr := &tar.Header{
-		Name:    tarName,
-		Size:    info.Size(),
-		Mode:    0o644,
-		ModTime: info.ModTime(),
-	}
-	if err := tw.WriteHeader(hdr); err != nil {
+	hdr, err := zip.FileInfoHeader(info)
+	if err != nil {
 		return err
 	}
-	_, err = io.Copy(tw, f)
+	hdr.Name = filepath.ToSlash(zipName)
+	hdr.Method = zip.Deflate
+	dst, err := zw.CreateHeader(hdr)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(dst, f)
 	return err
 }
 
-func addDirToTar(tw *tar.Writer, srcDir, tarPrefix string, include func(string) bool) error {
+func addDirToZip(zw *zip.Writer, srcDir, zipPrefix string, include func(string) bool) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -257,29 +257,30 @@ func addDirToTar(tw *tar.Writer, srcDir, tarPrefix string, include func(string) 
 			}
 			return nil
 		}
-		tarName := filepath.Join(tarPrefix, rel)
+		zipName := filepath.ToSlash(filepath.Join(zipPrefix, rel))
 
 		if info.IsDir() {
-			hdr := &tar.Header{
-				Name:     tarName + "/",
-				Typeflag: tar.TypeDir,
-				Mode:     0o755,
-				ModTime:  info.ModTime(),
+			hdr, err := zip.FileInfoHeader(info)
+			if err != nil {
+				return err
 			}
-			return tw.WriteHeader(hdr)
+			hdr.Name = strings.TrimSuffix(zipName, "/") + "/"
+			_, err = zw.CreateHeader(hdr)
+			return err
 		}
 
 		if !info.Mode().IsRegular() {
 			return nil
 		}
 
-		hdr := &tar.Header{
-			Name:    tarName,
-			Size:    info.Size(),
-			Mode:    int64(info.Mode().Perm()),
-			ModTime: info.ModTime(),
+		hdr, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
 		}
-		if err := tw.WriteHeader(hdr); err != nil {
+		hdr.Name = zipName
+		hdr.Method = zip.Deflate
+		dst, err := zw.CreateHeader(hdr)
+		if err != nil {
 			return err
 		}
 		f, err := os.Open(path)
@@ -289,7 +290,7 @@ func addDirToTar(tw *tar.Writer, srcDir, tarPrefix string, include func(string) 
 		defer func() {
 			_ = f.Close()
 		}()
-		_, err = io.Copy(tw, f)
+		_, err = io.Copy(dst, f)
 		return err
 	})
 }
