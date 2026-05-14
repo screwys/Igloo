@@ -64,7 +64,6 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 
 ## Releases
 
-- Use patch releases for small fixes and minor releases for larger user-visible changes.
 - Releases are manually dispatched from the release workflow with an explicit patch, minor, or major bump.
 - Release commits and tags are GPG-signed with `RELEASE_GPG_PRIVATE_KEY` and `RELEASE_GPG_PASSPHRASE`; set `RELEASE_GIT_USER_NAME` and `RELEASE_GIT_USER_EMAIL` when the signing identity should show as verified on GitHub.
 - Release APKs and container images publish GitHub artifact attestations.
@@ -93,7 +92,4 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 - Do not run a separate full `android/test.sh` after `scripts/dev/test-full.sh`
   just to duplicate full-suite proof; run it separately when debugging Android
   failures or when Android-only output is needed.
-- For Android build, install, launcher, signing, SDK, Gradle, or device-script changes, `android/build.sh` is the required proof because it builds, installs, and relaunches on the device. `android/build.sh apk` and `android/build.sh compile` are useful diagnostics only; do not present them as completion unless the user explicitly narrowed the request to APK or compile output.
-- Before pushing Android changes, run full `android/test.sh` and `android/build.sh` so the APK is built, installed, and relaunched on the device. If device install is not available or fails, report that blocker plainly instead of falling back to APK-only proof unless the user explicitly narrowed verification or says they are building it.
-- Do not run `adb uninstall`, `pm uninstall`, or package-removal retries for Igloo on a device unless the user explicitly approves that exact action. `pm uninstall -k` still removes the installed app and is not a safe install-recovery step.
-- Do not reset Android app data or preferences as a debugging shortcut.
+- For Android build, install, launcher, signing, SDK, Gradle, or device-script changes, `android/build.sh` is the required proof because it builds, installs, and relaunches on the device.

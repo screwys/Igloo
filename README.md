@@ -187,7 +187,7 @@ See [PRIVACY.md](PRIVACY.md).
 
 ## AI Usage
 
-This project is developed heavily with AI. I don't use AI for human-facing parts such as documentation and locales and will never automate that part.
+This project is developed heavily with AI. I don't and won't use AI for any kind of communication or documentation.
 
 ## License
 
