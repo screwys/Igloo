@@ -118,6 +118,23 @@ func TestParseDumpRejectsUntrustedMediaAndInvalidIDs(t *testing.T) {
 	}
 }
 
+func TestMediaRefRejectsOverflowDimensions(t *testing.T) {
+	ref, ok := mediaRef("https://pbs.twimg.com/media/sample.jpg", map[string]any{
+		"type":   "photo",
+		"width":  "9223372036854775807",
+		"height": int64(720),
+	})
+	if !ok {
+		t.Fatal("mediaRef rejected valid media URL")
+	}
+	if ref.Width != 0 {
+		t.Fatalf("Width = %d, want 0 for overflow", ref.Width)
+	}
+	if ref.Height != 720 {
+		t.Fatalf("Height = %d, want 720", ref.Height)
+	}
+}
+
 func TestClientFetchTimelineRetriesAllCookies(t *testing.T) {
 	var used []string
 	runner := func(_ context.Context, args []string) ([]byte, error) {

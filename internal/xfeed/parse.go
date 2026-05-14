@@ -400,8 +400,8 @@ func mediaRef(rawURL string, d map[string]any) (model.MediaRef, bool) {
 		Type:         firstString(d, "type", "media_type"),
 		ThumbnailURL: firstString(d, "thumbnail", "thumbnail_url", "preview_image_url"),
 		AltText:      firstString(d, "description", "alt", "alt_text"),
-		Width:        int(firstInt64(d, "width", "w")),
-		Height:       int(firstInt64(d, "height", "h")),
+		Width:        mediaDimension(d, "width", "w"),
+		Height:       mediaDimension(d, "height", "h"),
 	}
 	if ref.Type == "animated_gif" || ref.Type == "gif" {
 		ref.Type = "video"
@@ -418,6 +418,18 @@ func mediaRef(rawURL string, d map[string]any) (model.MediaRef, bool) {
 		return model.MediaRef{}, false
 	}
 	return ref, true
+}
+
+func mediaDimension(item map[string]any, keys ...string) int {
+	n := firstInt64(item, keys...)
+	if n <= 0 {
+		return 0
+	}
+	const maxMediaDimension = int64(1<<31 - 1)
+	if n > maxMediaDimension {
+		return 0
+	}
+	return int(n)
 }
 
 func mediaJSON(media []model.MediaRef) string {
