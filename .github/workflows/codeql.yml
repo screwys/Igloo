@@ -1,9 +1,18 @@
 name: CodeQL
 
 on:
-  release:
-    types:
-      - published
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/*.md"
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "**/*.md"
+  schedule:
+    - cron: "22 4 * * 1"
   workflow_dispatch:
 
 concurrency:
