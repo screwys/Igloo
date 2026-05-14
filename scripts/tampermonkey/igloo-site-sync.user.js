@@ -953,6 +953,10 @@
         if (seenVideos.has(owner.tweetId)) return;
         seenVideos.add(owner.tweetId);
         const mediaId = videoMediaIdFromElement(node);
+        const videoUrl =
+          (mediaId && cachedVideoUrlsForMediaId(mediaId)[0]) ||
+          cachedVideoUrlsForTweet(owner.tweetId)[0] ||
+          "";
         const item = {
           kind: "video",
           tweetId: owner.tweetId,
@@ -961,6 +965,7 @@
           ext: ".mp4",
           domOrder: items.length,
         };
+        if (videoUrl) item.url = videoUrl;
         items.push(item);
       });
 
@@ -1831,17 +1836,16 @@
   }
 
   function downloadTweetMediaViaServer(media, handle, label, categoryId) {
-    return apiRequest(
-      "POST",
-      "/api/tweet-media-dl",
-      {
-        tweet_url: media.tweetUrl,
-        handle,
-        label,
-        category_id: categoryId,
-      },
-      true,
-    );
+    const body = {
+      tweet_url: media.tweetUrl,
+      handle,
+      label,
+      category_id: categoryId,
+    };
+    if (media.url) body.media_url = media.url;
+    if (media.mediaId) body.media_id = media.mediaId;
+    if (Number.isInteger(media.index)) body.media_index = media.index;
+    return apiRequest("POST", "/api/tweet-media-dl", body, true);
   }
 
   function mediaDownloadResult(moved, failed) {

@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +11,12 @@ import (
 	"strings"
 	"testing"
 )
+
+type tweetMediaRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f tweetMediaRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func TestHandleTweetMediaMoveRejectsHTMLDisguisedAsMP4(t *testing.T) {
 	srv := newTestServer(t)
@@ -68,5 +75,64 @@ func TestHandleTweetMediaMoveRejectsHTMLDisguisedAsMP4(t *testing.T) {
 	}
 	if _, err := os.Stat(stagedPath); !os.IsNotExist(err) {
 		t.Fatalf("invalid staging file should be removed, stat err=%v", err)
+	}
+}
+
+func TestHandleTweetMediaDlArchivesDirectMediaURL(t *testing.T) {
+	srv := newTestServer(t)
+
+	archiveDir := t.TempDir()
+	categoryID, err := srv.db.CreateBookmarkCategory("sample_user", "Clips", archiveDir)
+	if err != nil {
+		t.Fatalf("CreateBookmarkCategory: %v", err)
+	}
+
+	var requestedURL string
+	srv.workers.Downloader().HTTP.AllowPrivateHosts = true
+	srv.workers.Downloader().HTTP.Client = &http.Client{Transport: tweetMediaRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requestedURL = req.URL.String()
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader("\x00\x00\x00\x18ftypmp42sample")),
+			Request:    req,
+		}, nil
+	})}
+
+	body := strings.NewReader(`{
+		"tweet_url": "https://x.com/sample_handle/status/111",
+		"media_url": "https://video.twimg.com/ext_tw_video/999/pu/vid/640x360/high.mp4?tag=12",
+		"media_id": "999",
+		"media_index": 0,
+		"handle": "sample_handle",
+		"label": "clip",
+		"category_id": ` + strconv.FormatInt(categoryID, 10) + `
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/tweet-media-dl", body)
+	req.Header.Set("Content-Type", "application/json")
+	req = attachTestAuth(req, "sample_user")
+	rec := httptest.NewRecorder()
+
+	srv.handleTweetMediaDl(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d - %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Success bool     `json:"success"`
+		Moved   []string `json:"moved"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !resp.Success || len(resp.Moved) != 1 || resp.Moved[0] != "sample_handle clip 001.mp4" {
+		t.Fatalf("response = %#v", resp)
+	}
+	if requestedURL != "https://video.twimg.com/ext_tw_video/999/pu/vid/640x360/high.mp4?tag=12" {
+		t.Fatalf("requested URL = %q", requestedURL)
+	}
+	if _, err := os.Stat(filepath.Join(archiveDir, "sample_handle clip 001.mp4")); err != nil {
+		t.Fatalf("archived direct video: %v", err)
 	}
 }

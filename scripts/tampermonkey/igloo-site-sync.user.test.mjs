@@ -411,6 +411,44 @@ function tweetApiBodyWithImage() {
   };
 }
 
+function tweetApiBodyWithVideo() {
+  return {
+    data: {
+      tweetResult: {
+        result: {
+          __typename: "Tweet",
+          rest_id: "333",
+          legacy: {
+            id_str: "333",
+            extended_entities: {
+              media: [
+                {
+                  type: "video",
+                  id_str: "999",
+                  video_info: {
+                    variants: [
+                      {
+                        content_type: "video/mp4",
+                        bitrate: 256000,
+                        url: "https://video.twimg.com/ext_tw_video/999/pu/vid/320x180/low.mp4?tag=12",
+                      },
+                      {
+                        content_type: "video/mp4",
+                        bitrate: 832000,
+                        url: "https://video.twimg.com/ext_tw_video/999/pu/vid/640x360/high.mp4?tag=12",
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 function tweetApiBodyWithQuoteImage() {
   return {
     data: {
@@ -712,7 +750,7 @@ test("uses cached X API image media when the overlay article has no rendered ima
     tweetApiBodyWithImage(),
   );
   const article = el("article", {}, [
-    el("a", { href: "/alice/status/333" }, [el("time")]),
+    el("a", { href: "/sample_handle/status/333" }, [el("time")]),
   ]);
 
   const items = JSON.parse(
@@ -726,7 +764,41 @@ test("uses cached X API image media when the overlay article has no rendered ima
       url: "https://pbs.twimg.com/media/detail-photo?format=png&name=orig",
       ext: ".png",
       tweetId: "333",
-      tweetUrl: "https://x.com/alice/status/333",
+      tweetUrl: "https://x.com/sample_handle/status/333",
+      index: 0,
+    },
+  ]);
+});
+
+test("attaches cached X API video URL to the selected video item", () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  const cached = harness.context.__iglooTest.cacheTweetMediaFromApiResponse(
+    tweetApiBodyWithVideo(),
+  );
+  const article = el("article", {}, [
+    el("a", { href: "/sample_handle/status/333" }, [el("time")]),
+    el("div", { "data-testid": "videoPlayer" }, [
+      el("video", {
+        src: "https://video.twimg.com/ext_tw_video/999/pu/vid/320x180/low.mp4?tag=12",
+      }),
+    ]),
+  ]);
+
+  const items = JSON.parse(
+    JSON.stringify(harness.context.__iglooTest.collectTweetMediaItems(article)),
+  );
+
+  assert.equal(cached, 1);
+  assert.deepEqual(items, [
+    {
+      kind: "video",
+      tweetId: "333",
+      tweetUrl: "https://x.com/sample_handle/status/333",
+      mediaId: "999",
+      url: "https://video.twimg.com/ext_tw_video/999/pu/vid/640x360/high.mp4?tag=12",
+      ext: ".mp4",
       index: 0,
     },
   ]);
@@ -851,6 +923,8 @@ test("downloads videos through the server backend", async () => {
         kind: "video",
         tweetId: "222",
         tweetUrl: "https://x.com/quote/status/222",
+        mediaId: "999",
+        url: "https://video.twimg.com/ext_tw_video/999/pu/vid/640x360/high.mp4?tag=12",
         ext: ".mp4",
         index: 0,
       },
@@ -872,6 +946,10 @@ test("downloads videos through the server backend", async () => {
   assert.ok(call, "expected server video download request");
   assert.deepEqual(JSON.parse(call.data), {
     tweet_url: "https://x.com/quote/status/222",
+    media_url:
+      "https://video.twimg.com/ext_tw_video/999/pu/vid/640x360/high.mp4?tag=12",
+    media_id: "999",
+    media_index: 0,
     handle,
     label: "label",
     category_id: 1,

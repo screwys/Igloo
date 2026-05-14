@@ -258,7 +258,7 @@ func TestBookmarkCategoryPathsPanelUsesTallerScrollArea(t *testing.T) {
 	}
 }
 
-func TestCookieRowsPanelRendersDisableActionAndCompactBrowserSelect(t *testing.T) {
+func TestCookieRowsPanelRendersDisableActionWithoutRemoveAndCompactBrowserSelect(t *testing.T) {
 	p := newTestPageProps()
 	rows := []CookieRowData{{
 		Platform:  "twitter",
@@ -282,6 +282,14 @@ func TestCookieRowsPanelRendersDisableActionAndCompactBrowserSelect(t *testing.T
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("cookie rows panel missing %q:\n%s", want, html)
+		}
+	}
+	for _, unwanted := range []string{
+		`hx-delete="/api/cookies/twitter"`,
+		`>Remove<`,
+	} {
+		if strings.Contains(html, unwanted) {
+			t.Fatalf("cookie rows panel should not render %q:\n%s", unwanted, html)
 		}
 	}
 }

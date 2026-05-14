@@ -17,9 +17,8 @@ import (
 
 const DefaultBaseURL = "https://api.fxtwitter.com"
 
-// ErrNotFound is returned when fxtwitter returns an empty body, which is
-// its observed behavior for handles that don't exist. (It does not return
-// a structured 404.)
+// ErrNotFound is returned when fxtwitter returns 404 or an empty body, which is
+// its observed behavior for handles that don't exist.
 var ErrNotFound = errors.New("fxtwitter: user not found")
 
 // User mirrors the subset of fxtwitter's JSON we use.
@@ -89,6 +88,9 @@ func (c *Client) FetchUser(ctx context.Context, handle string) (*User, error) {
 		return nil, fmt.Errorf("fxtwitter request: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("fxtwitter status %d", resp.StatusCode)
 	}

@@ -72,17 +72,15 @@ func (s *Server) handleTweetMediaSave(w http.ResponseWriter, r *http.Request) {
 	dl := s.workers.Downloader()
 	ctx := r.Context()
 	var saved []string
-	for i, imgURL := range body.URLs {
-		if !isAllowedTweetMediaURL(imgURL) {
-			slog.Warn("[TweetMedia] rejected unsupported media URL", "url", imgURL)
+	for i, mediaURL := range body.URLs {
+		if !isAllowedTweetMediaURL(mediaURL) {
+			slog.Warn("[TweetMedia] rejected unsupported media URL", "url", mediaURL)
 			continue
 		}
-		ext := tweetMediaExtFromURL(imgURL)
 		fileNum := startNum + i + 1
-		filename := fmt.Sprintf("%s %03d%s", safeName, fileNum, ext)
-		destPath, err := dl.HTTP.DownloadFile(ctx, imgURL, archivePath, filename)
+		destPath, err := archiveTweetMediaURL(ctx, dl, mediaURL, archivePath, safeName, fileNum)
 		if err != nil {
-			slog.Warn("[TweetMedia] download failed", "url", imgURL, "err", err)
+			slog.Warn("[TweetMedia] download failed", "url", mediaURL, "err", err)
 			continue
 		}
 		saved = append(saved, filepath.Base(destPath))
@@ -192,6 +190,9 @@ func (s *Server) handleTweetMediaMove(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTweetMediaDl(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		TweetURL   string `json:"tweet_url"`
+		MediaURL   string `json:"media_url"`
+		MediaID    string `json:"media_id"`
+		MediaIndex *int   `json:"media_index"`
 		Handle     string `json:"handle"`
 		Label      string `json:"label"`
 		CategoryID int64  `json:"category_id"`
@@ -214,16 +215,30 @@ func (s *Server) handleTweetMediaDl(w http.ResponseWriter, r *http.Request) {
 	safeName := sanitizeArchiveName(body.Handle + " " + body.Label)
 	startNum := findNextArchiveIndex(archivePath, safeName)
 
+	dl := s.workers.Downloader()
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+
+	if strings.TrimSpace(body.MediaURL) != "" {
+		destPath, err := archiveTweetMediaURL(ctx, dl, body.MediaURL, archivePath, safeName, startNum)
+		if err != nil {
+			slog.Warn("[TweetMedia] direct media download failed", "url", body.MediaURL, "media_id", body.MediaID, "err", err)
+			writeJSON(w, 200, map[string]any{"success": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{
+			"success": true,
+			"moved":   []string{filepath.Base(destPath)},
+		})
+		return
+	}
+
 	tmpDir, err := os.MkdirTemp("", "igloo-tweetdl-*")
 	if err != nil {
 		writeJSON(w, 500, map[string]any{"success": false, "error": "cannot create temp dir"})
 		return
 	}
 	defer os.RemoveAll(tmpDir)
-
-	dl := s.workers.Downloader()
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
-	defer cancel()
 
 	paths, dlErr := dl.YtDlp.Download(ctx, body.TweetURL, download.Opts{
 		OutputDir: tmpDir,
@@ -241,6 +256,11 @@ func (s *Server) handleTweetMediaDl(w http.ResponseWriter, r *http.Request) {
 		}
 		slog.Warn("[TweetMedia] yt-dlp failed", "url", body.TweetURL, "err", dlErr)
 		writeJSON(w, 200, map[string]any{"success": false, "error": errMsg})
+		return
+	}
+	if len(paths) > 1 {
+		slog.Warn("[TweetMedia] yt-dlp returned multiple files for one selected video", "url", body.TweetURL, "media_id", body.MediaID, "media_index", body.MediaIndex, "count", len(paths))
+		writeJSON(w, 200, map[string]any{"success": false, "error": "multiple videos returned; refresh X and try again"})
 		return
 	}
 
@@ -325,6 +345,32 @@ func tweetMediaExtFromURL(rawURL string) string {
 		return ".webp"
 	}
 	return ".jpg"
+}
+
+func archiveTweetMediaURL(ctx context.Context, dl *download.Downloader, mediaURL, archivePath, safeName string, fileNum int) (string, error) {
+	if dl == nil || dl.HTTP == nil {
+		return "", fmt.Errorf("media downloader unavailable")
+	}
+	if !isAllowedTweetMediaURL(mediaURL) {
+		return "", fmt.Errorf("unsupported media URL")
+	}
+	ext := tweetMediaExtFromURL(mediaURL)
+	filename := fmt.Sprintf("%s %03d%s", safeName, fileNum, ext)
+	if strings.EqualFold(ext, ".mp4") {
+		destPath, err := dl.HTTP.DownloadFileWithOptions(ctx, mediaURL, archivePath, filename, download.HTTPDownloadOptions{
+			MaxBytes: 4 << 30,
+			Timeout:  2 * time.Hour,
+		})
+		if err != nil {
+			return "", err
+		}
+		if err := validateTweetMediaStagingFile(destPath, ext); err != nil {
+			_ = os.Remove(destPath)
+			return "", err
+		}
+		return destPath, nil
+	}
+	return dl.HTTP.DownloadFile(ctx, mediaURL, archivePath, filename)
 }
 
 func validateTweetMediaStagingFile(path, ext string) error {

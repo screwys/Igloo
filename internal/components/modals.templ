@@ -782,11 +782,6 @@ templ CookieRowsPanel(p PageProps, rows []CookieRowData) {
 								{ L(p, "action_enable", "Enable") }
 							}
 						</button>
-						<button class="btn btn-secondary" type="button" style="padding:0.3rem 0.6rem; font-size:0.75rem;"
-							hx-delete={ "/api/cookies/" + row.Platform }
-							hx-target="#cookie-rows-container"
-							hx-swap="innerHTML"
-						>{ L(p, "action_remove", "Remove") }</button>
 					}
 				</div>
 			</div>
