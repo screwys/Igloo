@@ -128,7 +128,7 @@ test("Android release publishes signed provenance attestation for the APK", () =
   assert.match(workflow, /subject-path: release-artifacts\/\*\.apk/);
 });
 
-test("CodeQL runs on published releases instead of a weekly schedule", () => {
+test("CodeQL runs on code changes and published releases instead of a weekly schedule", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/codeql.yml", import.meta.url),
     "utf8",
@@ -136,10 +136,16 @@ test("CodeQL runs on published releases instead of a weekly schedule", () => {
 
   assert.match(
     workflow,
+    /\n  push:\n    paths-ignore:\n      - "\*\*\/\*\.md"\n/,
+  );
+  assert.match(
+    workflow,
+    /\n  pull_request:\n    paths-ignore:\n      - "\*\*\/\*\.md"\n/,
+  );
+  assert.match(
+    workflow,
     /\n  release:\n    types:\n      - published\n/,
   );
-  assert.doesNotMatch(workflow, /\n  push:\n/);
-  assert.doesNotMatch(workflow, /\n  pull_request:\n/);
   assert.doesNotMatch(workflow, /\n  schedule:\n/);
   assert.doesNotMatch(workflow, /cron:/);
 });
