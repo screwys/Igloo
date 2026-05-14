@@ -512,7 +512,7 @@ func threadVisibleAncestorStart(chain []model.FeedItem) int {
 }
 
 func threadCapsuleVisible(chain []model.FeedItem) bool {
-	return len(chain) > 1
+	return len(chain) > 0
 }
 
 func threadCapsulePostCount(item model.FeedItem) int {

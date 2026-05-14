@@ -9,7 +9,7 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
-func TestFeedItemRendersStandaloneEvenWithLegacyThreadChain(t *testing.T) {
+func TestFeedItemThreadRendersCapsuleBelowReply(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:                "leaf_1",
 		AuthorHandle:           "author_a",
@@ -34,11 +34,23 @@ func TestFeedItemRendersStandaloneEvenWithLegacyThreadChain(t *testing.T) {
 		t.Fatalf("render feed item: %v", err)
 	}
 	html := buf.String()
-	if strings.Contains(html, `class="feed-thread"`) || strings.Contains(html, `data-feed-thread-row`) {
-		t.Fatalf("feed card should not inline conversation thread markup: %s", html)
+	for _, want := range []string{
+		`class="feed-thread"`,
+		`data-feed-thread-row`,
+		`root body`,
+		`reply body`,
+		`data-feed-thread-capsule`,
+		`href="/thread/leaf_1"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing %q in html: %s", want, html)
+		}
 	}
-	if strings.Contains(html, `root body`) {
-		t.Fatalf("feed card rendered ancestor body: %s", html)
+	rootAt := strings.Index(html, `data-tweet-id="root_1"`)
+	leafAt := strings.Index(html, `data-tweet-id="leaf_1"`)
+	capsuleAt := strings.Index(html, `data-feed-thread-capsule`)
+	if rootAt < 0 || leafAt < 0 || capsuleAt < 0 || !(rootAt < leafAt && leafAt < capsuleAt) {
+		t.Fatalf("thread order should be post, reply, capsule; root=%d leaf=%d capsule=%d html=%s", rootAt, leafAt, capsuleAt, html)
 	}
 	if got := strings.Count(html, `data-feed-repost-line`); got != 1 {
 		t.Fatalf("data-feed-repost-line count = %d, want 1; html=%s", got, html)
@@ -48,7 +60,7 @@ func TestFeedItemRendersStandaloneEvenWithLegacyThreadChain(t *testing.T) {
 	}
 }
 
-func TestFeedItemActionsOpenLocalThread(t *testing.T) {
+func TestFeedItemActionsDoNotShowStandaloneThreadButton(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:      "leaf_1",
 		AuthorHandle: "author_a",
@@ -60,16 +72,8 @@ func TestFeedItemActionsOpenLocalThread(t *testing.T) {
 		t.Fatalf("render feed item: %v", err)
 	}
 	html := buf.String()
-	for _, want := range []string{
-		`data-feed-action="thread"`,
-		`data-feed-thread-open`,
-		`data-thread-tweet-id="leaf_1"`,
-		`href="/thread/leaf_1"`,
-		`Open thread`,
-	} {
-		if !strings.Contains(html, want) {
-			t.Fatalf("missing local thread action %q; html=%s", want, html)
-		}
+	if strings.Contains(html, `data-feed-action="thread"`) || strings.Contains(html, `data-feed-thread-open`) {
+		t.Fatalf("standalone action row should not render local thread button: %s", html)
 	}
 }
 

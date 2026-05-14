@@ -9179,7 +9179,7 @@ body.shorts-mode .sidebar {
     padding: 0.55rem 0.7rem 0.45rem calc(0.7rem + var(--thread-gutter));
     color: var(--text-secondary);
     text-decoration: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
     font-size: 0.82rem;
     line-height: 1.25;
 }

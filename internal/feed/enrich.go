@@ -10,7 +10,9 @@ import (
 )
 
 func EnrichFeedItems(database *db.DB, items []model.FeedItem, username string) []model.FeedItem {
-	return enrichFeedItems(database, items, username, true)
+	items = enrichFeedItems(database, items, username, true)
+	items = attachThreadChains(database, items, username)
+	return items
 }
 
 // EnrichFeedItemsPreserveRows attaches the same per-row state as EnrichFeedItems
