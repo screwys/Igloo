@@ -2,7 +2,7 @@ package com.screwy.igloo.sync
 
 import com.screwy.igloo.log.Logger
 import com.screwy.igloo.net.Reachability
-import com.screwy.igloo.outbox.OutboxDrain
+import com.screwy.igloo.outbox.OutboxDrainRunner
 import com.screwy.igloo.outbox.OutboxWriter
 import io.mockk.clearMocks
 import io.mockk.coEvery
@@ -24,7 +24,6 @@ import org.junit.Test
 class SchedulerTest {
     @Test
     fun triggerAllStartsSyncWhenOutboxCompletesBeforeInboundFinishes() = runTest {
-        val passCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val foreground = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
         val reachability = Reachability(
             scope = this,
@@ -37,12 +36,7 @@ class SchedulerTest {
         coEvery { inbound.run() } coAnswers { awaitCancellation() }
         every { inbound.trigger() } just runs
 
-        val outbox = mockk<OutboxDrain>(relaxed = true)
-        every { outbox.passCompleted } returns passCompleted
-        coEvery { outbox.run() } coAnswers { awaitCancellation() }
-        every { outbox.trigger() } just runs
-        every { outbox.wireWriter(any()) } just runs
-
+        val outbox = FakeOutboxDrain()
         val retentionReplay = mockk<RetentionReplayCoordinator>(relaxed = true)
         val androidSync = mockk<AndroidSyncMirror>(relaxed = true)
         coEvery { androidSync.run() } coAnswers { awaitCancellation() }
@@ -68,7 +62,7 @@ class SchedulerTest {
         runCurrent()
         clearMocks(androidSync, answers = false, recordedCalls = true)
         scheduler.triggerAll()
-        passCompleted.emit(Unit)
+        outbox.passCompleted.emit(Unit)
         runCurrent()
 
         verify(exactly = 2) { androidSync.trigger() }
@@ -84,7 +78,6 @@ class SchedulerTest {
 
     @Test
     fun triggerStreamMergesScopedRequestsAfterOutboxCompletion() = runTest {
-        val passCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val foreground = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
         val reachability = Reachability(
             scope = this,
@@ -97,12 +90,7 @@ class SchedulerTest {
         coEvery { inbound.run() } coAnswers { awaitCancellation() }
         every { inbound.triggerStreams(any()) } just runs
 
-        val outbox = mockk<OutboxDrain>(relaxed = true)
-        every { outbox.passCompleted } returns passCompleted
-        coEvery { outbox.run() } coAnswers { awaitCancellation() }
-        every { outbox.trigger() } just runs
-        every { outbox.wireWriter(any()) } just runs
-
+        val outbox = FakeOutboxDrain()
         val retentionReplay = mockk<RetentionReplayCoordinator>(relaxed = true)
         val androidSync = mockk<AndroidSyncMirror>(relaxed = true)
         coEvery { androidSync.run() } coAnswers { awaitCancellation() }
@@ -130,7 +118,7 @@ class SchedulerTest {
         clearMocks(androidSync, inbound, mutationDelta, answers = false, recordedCalls = true)
         scheduler.triggerStream(SyncStream.Feed)
         scheduler.triggerStream(SyncStream.Channels)
-        passCompleted.emit(Unit)
+        outbox.passCompleted.emit(Unit)
         runCurrent()
 
         verify(exactly = 1) { androidSync.trigger() }
@@ -142,7 +130,6 @@ class SchedulerTest {
 
     @Test
     fun foregroundMutationDeltaRankChangeTriggersAndroidSyncRefresh() = runTest {
-        val passCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val foreground = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
         val reachability = Reachability(
             scope = this,
@@ -154,11 +141,7 @@ class SchedulerTest {
         val inbound = mockk<InboundReconciler>(relaxed = true)
         coEvery { inbound.run() } coAnswers { awaitCancellation() }
 
-        val outbox = mockk<OutboxDrain>(relaxed = true)
-        every { outbox.passCompleted } returns passCompleted
-        coEvery { outbox.run() } coAnswers { awaitCancellation() }
-        every { outbox.wireWriter(any()) } just runs
-
+        val outbox = FakeOutboxDrain()
         val retentionReplay = mockk<RetentionReplayCoordinator>(relaxed = true)
         val androidSync = mockk<AndroidSyncMirror>(relaxed = true)
         coEvery { androidSync.run() } coAnswers { awaitCancellation() }
@@ -192,5 +175,17 @@ class SchedulerTest {
         verify(exactly = 2) { androidSync.trigger() }
 
         scheduler.stopAll()
+    }
+
+    private class FakeOutboxDrain : OutboxDrainRunner {
+        override val passCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+        override fun wireWriter(writer: OutboxWriter) = Unit
+
+        override fun trigger() = Unit
+
+        override suspend fun run() {
+            awaitCancellation()
+        }
     }
 }

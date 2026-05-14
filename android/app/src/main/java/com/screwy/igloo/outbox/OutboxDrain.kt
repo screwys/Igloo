@@ -12,6 +12,16 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.merge
 
+interface OutboxDrainRunner {
+    val passCompleted: SharedFlow<Unit>
+
+    fun wireWriter(writer: OutboxWriter)
+
+    fun trigger()
+
+    suspend fun run()
+}
+
 /**
  * Outbox drain loop.
  *
@@ -43,7 +53,7 @@ class OutboxDrain(
     private val reachability: Reachability,
     private val logger: Logger,
     private val nowMsProvider: () -> Long = { System.currentTimeMillis() },
-) {
+) : OutboxDrainRunner {
 
     /** Local manual trigger used from scheduler / tests when no shared signal is wired. */
     private val localTrigger = MutableSharedFlow<Unit>(
@@ -59,17 +69,17 @@ class OutboxDrain(
         replay = 0,
         extraBufferCapacity = 8,
     )
-    val passCompleted: SharedFlow<Unit> = _passCompleted
+    override val passCompleted: SharedFlow<Unit> = _passCompleted
 
-    fun wireWriter(writer: OutboxWriter) {
+    override fun wireWriter(writer: OutboxWriter) {
         writerSignal = writer.drainSignal
     }
 
-    fun trigger() {
+    override fun trigger() {
         localTrigger.tryEmit(Unit)
     }
 
-    suspend fun run() {
+    override suspend fun run() {
         val upstream = writerSignal?.let { merge(localTrigger, it) } ?: localTrigger
         upstream.collect {
             try {

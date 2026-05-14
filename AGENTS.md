@@ -89,6 +89,9 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 - Retention widening triggers replay/backfill; narrowing prunes; bookmarks and likes survive prune.
 - Use project scripts: `android/build.sh`, `android/test.sh`, `scripts/dev/build.sh android`, `scripts/dev/build.sh all`.
 - Before committing Android changes, run the focused `android/test.sh <ClassFilter>` proof for the touched area.
+- Treat Android JVM final-field mutation warnings as test failures. Replace
+  concrete-class mocks with fakes/interfaces rather than adding JVM flags to
+  silence the warning.
 - Do not run a separate full `android/test.sh` after `scripts/dev/test-full.sh`
   just to duplicate full-suite proof; run it separately when debugging Android
   failures or when Android-only output is needed.

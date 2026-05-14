@@ -125,7 +125,7 @@ val iglooSyncModule = module {
         Scheduler(
             scope = get(named("applicationScope")),
             inbound = get(),
-            outbox = get(),
+            outbox = get<OutboxDrain>(),
             androidSync = get(),
             retentionReplay = get(),
             reachability = get(),

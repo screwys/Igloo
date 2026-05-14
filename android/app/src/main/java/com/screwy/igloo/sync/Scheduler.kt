@@ -2,7 +2,7 @@ package com.screwy.igloo.sync
 
 import com.screwy.igloo.log.Logger
 import com.screwy.igloo.net.Reachability
-import com.screwy.igloo.outbox.OutboxDrain
+import com.screwy.igloo.outbox.OutboxDrainRunner
 import com.screwy.igloo.outbox.OutboxWriter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
 class Scheduler(
     private val scope: CoroutineScope,
     private val inbound: InboundReconciler,
-    private val outbox: OutboxDrain,
+    private val outbox: OutboxDrainRunner,
     private val androidSync: AndroidSyncMirror,
     private val retentionReplay: RetentionReplayCoordinator,
     private val reachability: Reachability,
