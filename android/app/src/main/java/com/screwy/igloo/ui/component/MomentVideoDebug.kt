@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.media3.common.Format
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.LoadEventInfo
@@ -20,6 +21,7 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.delay
 
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
 internal fun MomentVideoDebugTelemetry(
     pageIndex: Int,

@@ -8,7 +8,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.screwy.igloo.R
@@ -108,20 +108,20 @@ internal fun rememberSponsorBlockPlaybackState(
     segments: List<SponsorBlockSegmentEntity>,
     modes: Map<String, String>,
 ): SponsorBlockPlaybackState {
-    val context = LocalContext.current
+    val resources = LocalResources.current
     val activeSegments = remember(segments, modes) {
         buildSponsorBlockUiSegments(segments, modes)
     }
     val visibleSegments = remember(activeSegments) {
         activeSegments.map { it.source }
     }
-    val controller = remember(videoId, player) {
+    val controller = remember(videoId, player, resources) {
         SponsorBlockPlaybackController(
             seekTo = player::seekTo,
             skippedMessage = { category ->
-                context.getString(
+                resources.getString(
                     R.string.sponsorblock_segment_skipped,
-                    context.getString(sponsorBlockLabelRes(category)),
+                    resources.getString(sponsorBlockLabelRes(category)),
                 )
             },
         )

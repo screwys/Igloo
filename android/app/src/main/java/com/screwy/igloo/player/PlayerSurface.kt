@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
@@ -139,6 +140,7 @@ internal fun playerSubtitleBottomPaddingDp(fullscreen: Boolean, controlsVisible:
     else -> 16
 }
 
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
 private fun VideoSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
     val context = LocalContext.current

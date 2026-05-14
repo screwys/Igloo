@@ -36,8 +36,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -132,7 +132,7 @@ fun MainScaffold(
     val authRepo: AuthRepo = koinInject()
     val channelDao: ChannelDao = koinInject()
     val channelProfileDao: ChannelProfileDao = koinInject()
-    val context = LocalContext.current
+    val resources = LocalResources.current
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -201,7 +201,7 @@ fun MainScaffold(
         TopBarTitle.None -> null
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(resources) {
         uiEffects.flow.collect { effect ->
             when (effect) {
                 is UiEffect.Toast -> {
@@ -212,9 +212,9 @@ fun MainScaffold(
                 }
                 is UiEffect.ToastRes -> {
                     val message = if (effect.formatArgs.isEmpty()) {
-                        context.getString(effect.resId)
+                        resources.getString(effect.resId)
                     } else {
-                        context.getString(effect.resId, *effect.formatArgs.toTypedArray())
+                        resources.getString(effect.resId, *effect.formatArgs.toTypedArray())
                     }
                     snackbarHostState.showSnackbar(
                         message = message,

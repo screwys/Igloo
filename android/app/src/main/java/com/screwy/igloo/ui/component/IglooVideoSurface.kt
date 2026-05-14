@@ -10,11 +10,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 internal fun videoResizeModeFor(
     width: Int,
     height: Int,
@@ -29,6 +31,7 @@ internal fun videoResizeModeFor(
     }
 }
 
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
 internal fun IglooVideoSurface(
     player: ExoPlayer,

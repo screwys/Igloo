@@ -151,9 +151,12 @@ private fun SnapshotMediaRoute(
     val db = remember(databaseHolder) { databaseHolder.requireCurrent() }
     val outboxWriter: OutboxWriter = koinInject()
     val coroutineScope = rememberCoroutineScope()
-    val categories by db.bookmarkCategoryDao()
-        .allFlow()
-        .map { entities -> entities.map { BookmarkCategoryDisplay(it.categoryId, it.name) } }
+    val categoryDisplaysFlow = remember(db) {
+        db.bookmarkCategoryDao()
+            .allFlow()
+            .map { entities -> entities.map { BookmarkCategoryDisplay(it.categoryId, it.name) } }
+    }
+    val categories by categoryDisplaysFlow
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val likeRow by db.feedLikeDao()
         .getByIdFlow(snapshot.ownerId)

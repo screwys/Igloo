@@ -7,6 +7,7 @@ import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.common.util.UnstableApi
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.NetDefaults
 import com.screwy.igloo.net.auth.AuthTokenProvider
@@ -29,6 +30,7 @@ fun buildIglooPlayer(
     iglooHostResolver = hostProvider::hostSync,
 )
 
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 internal fun buildIglooPlayer(
     context: Context,
     tokenProvider: AuthTokenProvider,

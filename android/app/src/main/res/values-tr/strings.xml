@@ -191,6 +191,8 @@
     <string name="cookie_browser_source">Tarayıcı çerezleri</string>
     <string name="cookie_status_file_active">Dosya kullanılıyor</string>
     <string name="cookie_status_file_disabled">Dosya kapalı</string>
+    <string name="cookie_status_files_active">%d dosya kullanılıyor</string>
+    <string name="cookie_status_files_disabled">%d dosya (kapalı)</string>
     <string name="download_url_placeholder">İndirmek için URL yapıştırın...</string>
     <string name="drawer_accounts">Hesaplar</string>
     <string name="drawer_other">Diğer</string>
