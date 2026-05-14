@@ -256,6 +256,13 @@ func normalizeSettingsUpdate(body map[string]string) {
 		}
 		body["translate_auto_lookahead"] = strconv.Itoa(settings.ClampTranslateLookahead(n))
 	}
+	if v, ok := body["backup_keep_count"]; ok {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			n = settings.IntDefault("backup_keep_count")
+		}
+		body["backup_keep_count"] = strconv.Itoa(settings.ClampBackupKeepCount(n))
+	}
 	if v, ok := body["moments_default_tab"]; ok {
 		body["moments_default_tab"] = db.NormalizeMomentsTab(v)
 	}
@@ -310,7 +317,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 		"media_download_limit_default", "x_feed_fetch_delay",
 		"translate_target_lang", "translate_backend",
 		"translate_auto_mode", "translate_auto_lookahead",
-		"backup_dir", "starting_page",
+		"backup_dir", "backup_keep_count", "starting_page",
 		"dearrow_mode", "ui_language",
 	}
 	for _, key := range simpleFields {

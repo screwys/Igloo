@@ -14,12 +14,13 @@ import (
 	"time"
 
 	"github.com/screwys/igloo/internal/config"
+	"github.com/screwys/igloo/internal/exportbundle"
+	"github.com/screwys/igloo/internal/settings"
 )
 
 const (
 	backupCheckInterval = 1 * time.Hour
 	backupMinAge        = 24 * time.Hour
-	backupKeepCount     = 5
 	backupPrefix        = "igloo-backup-"
 )
 
@@ -69,7 +70,7 @@ func (m *Manager) tryBackup() {
 		return
 	}
 
-	m.pruneBackups(dir)
+	m.pruneBackups(dir, m.backupKeepCount())
 	m.setStatus("backup", WorkerStatus{Name: "backup", Running: true, LastRunAt: time.Now(), Detail: "idle"})
 	m.Emit("backup", "backup completed", "info")
 }
@@ -152,8 +153,20 @@ func (m *Manager) createBackup(dir string) error {
 
 	configDir := m.cfg.ConfDir
 	if configDir != "" {
-		if err := addDirToTar(tw, configDir, "config"); err != nil {
+		if err := addDirToTar(tw, configDir, "config", config.RuntimeConfigBackupAllowed); err != nil {
 			return fmt.Errorf("tar config: %w", err)
+		}
+	}
+
+	cfg, err := m.db.ExportFullData("")
+	if err != nil {
+		return fmt.Errorf("export bookmark data: %w", err)
+	}
+	mediaFiles := exportbundle.CollectBookmarkMedia(m.db, m.cfg.DataDir, cfg.Bookmarks)
+	mediaFiles = append(mediaFiles, exportbundle.CollectAvatarMedia(m.cfg.DataDir)...)
+	for _, file := range mediaFiles {
+		if err := addFileToTar(tw, file.SourcePath, file.ArchivePath); err != nil {
+			return fmt.Errorf("tar media %s: %w", file.ArchivePath, err)
 		}
 	}
 
@@ -173,7 +186,12 @@ func (m *Manager) createBackup(dir string) error {
 	return nil
 }
 
-func (m *Manager) pruneBackups(dir string) {
+func (m *Manager) backupKeepCount() int {
+	return settings.ClampBackupKeepCount(m.db.IntSetting("backup_keep_count"))
+}
+
+func (m *Manager) pruneBackups(dir string, keepCount int) {
+	keepCount = settings.ClampBackupKeepCount(keepCount)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -185,10 +203,10 @@ func (m *Manager) pruneBackups(dir string) {
 		}
 	}
 	sort.Strings(backups)
-	if len(backups) <= backupKeepCount {
+	if len(backups) <= keepCount {
 		return
 	}
-	for _, name := range backups[:len(backups)-backupKeepCount] {
+	for _, name := range backups[:len(backups)-keepCount] {
 		if err := os.Remove(filepath.Join(dir, name)); err != nil {
 			slog.Warn("backup: prune failed", "file", name, "err", err)
 		} else {
@@ -224,7 +242,7 @@ func addFileToTar(tw *tar.Writer, srcPath, tarName string) error {
 	return err
 }
 
-func addDirToTar(tw *tar.Writer, srcDir, tarPrefix string) error {
+func addDirToTar(tw *tar.Writer, srcDir, tarPrefix string, include func(string) bool) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -232,6 +250,12 @@ func addDirToTar(tw *tar.Writer, srcDir, tarPrefix string) error {
 		rel, err := filepath.Rel(srcDir, path)
 		if err != nil {
 			return err
+		}
+		if include != nil && !include(rel) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		tarName := filepath.Join(tarPrefix, rel)
 

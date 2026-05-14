@@ -116,6 +116,27 @@ func TestEnsureRuntimeDirsRejectsEmptyPaths(t *testing.T) {
 	}
 }
 
+func TestRuntimeConfigBackupAllowedSkipsSecretsAndEnv(t *testing.T) {
+	tests := map[string]bool{
+		".env":                          false,
+		"auth_secret":                   false,
+		"auth_users.json":               false,
+		"config.json":                   true,
+		"cookies/twitter.txt":           false,
+		"custom.env":                    false,
+		"nested/token.txt":              false,
+		"nginx.conf":                    true,
+		"server.crt":                    true,
+		"server.key":                    false,
+		filepath.Join("nested", ".tmp"): false,
+	}
+	for rel, want := range tests {
+		if got := RuntimeConfigBackupAllowed(rel); got != want {
+			t.Fatalf("RuntimeConfigBackupAllowed(%q) = %v, want %v", rel, got, want)
+		}
+	}
+}
+
 func TestPlatformEnabledNormalizesAliases(t *testing.T) {
 	platforms, err := ParseEnabledPlatforms("youtube,twitter")
 	if err != nil {

@@ -78,6 +78,8 @@ var _ = []string{
 	N("cache_subtitles", "Subtitles"),
 	N("cache_x_media", "X media"),
 	N("common_untitled", "Untitled"),
+	N("cookie_status_files_active", "%d files active"),
+	N("cookie_status_files_disabled", "%d files (disabled)"),
 	N("drawer_accounts", "Accounts"),
 	N("drawer_other", "Other"),
 	N("drawer_search_accounts", "Search accounts"),

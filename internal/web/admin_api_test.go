@@ -148,6 +148,25 @@ func TestHandleUpdateSettingsRejectsRelativeBackupDir(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateSettingsClampsBackupKeepCount(t *testing.T) {
+	srv := newTestServer(t)
+	form := url.Values{}
+	form.Set("backup_keep_count", "9")
+	req := httptest.NewRequest("POST", "/api/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(contextWithUser(req, "admin", "admin"))
+	rec := httptest.NewRecorder()
+
+	srv.handleUpdateSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got, _ := srv.db.GetSetting("backup_keep_count", ""); got != "5" {
+		t.Fatalf("stored backup_keep_count = %q, want 5", got)
+	}
+}
+
 func TestHandleUpdateSettingsRejectsNonAdmin(t *testing.T) {
 	srv := newTestServer(t)
 	if err := srv.db.SetSetting("", "web_theme_id", "dracula"); err != nil {
@@ -387,6 +406,9 @@ func TestHandleConfigExportSavesToBackupDirWhenConfigured(t *testing.T) {
 	if err := srv.db.SetSetting("", "backup_dir", backupDir); err != nil {
 		t.Fatalf("SetSetting backup_dir: %v", err)
 	}
+	if err := srv.db.SetSetting("", "backup_enabled", "true"); err != nil {
+		t.Fatalf("SetSetting backup_enabled: %v", err)
+	}
 	if err := srv.db.SetSetting("", "export_test_key", "export_test_val"); err != nil {
 		t.Fatalf("SetSetting export key: %v", err)
 	}
@@ -426,6 +448,34 @@ func TestHandleConfigExportSavesToBackupDirWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestHandleConfigExportDownloadsWhenBackupDirConfiguredButDisabled(t *testing.T) {
+	srv := newTestServer(t)
+	backupDir := t.TempDir()
+	if err := srv.db.SetSetting("", "backup_dir", backupDir); err != nil {
+		t.Fatalf("SetSetting backup_dir: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/config/export", nil)
+	req = req.WithContext(contextWithUser(req, "admin", "admin"))
+	rec := httptest.NewRecorder()
+
+	srv.handleConfigExport(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Disposition"); !strings.Contains(got, "attachment") {
+		t.Fatalf("Content-Disposition = %q, want download attachment", got)
+	}
+	matches, err := filepath.Glob(filepath.Join(backupDir, "igloo-config-*.json"))
+	if err != nil {
+		t.Fatalf("glob config exports: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("config export files = %v, want none", matches)
+	}
+}
+
 func TestWriteExportFileRejectsRelativeDir(t *testing.T) {
 	_, err := writeExportFile(filepath.Join("var", "mnt", "external_drive"), "igloo-config", ".json", func(dst io.Writer) error {
 		_, err := dst.Write([]byte("{}"))
@@ -444,6 +494,9 @@ func TestHandleConfigExportFullSavesZipToBackupDirWhenConfigured(t *testing.T) {
 	backupDir := t.TempDir()
 	if err := srv.db.SetSetting("", "backup_dir", backupDir); err != nil {
 		t.Fatalf("SetSetting backup_dir: %v", err)
+	}
+	if err := srv.db.SetSetting("", "backup_enabled", "true"); err != nil {
+		t.Fatalf("SetSetting backup_enabled: %v", err)
 	}
 
 	mediaRelPath := filepath.Join("media", "youtube", "channel_alpha", "booked_video.mp4")

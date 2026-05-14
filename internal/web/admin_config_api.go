@@ -17,6 +17,7 @@ import (
 
 	"github.com/screwys/igloo/internal/auth"
 	"github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/exportbundle"
 	"github.com/screwys/igloo/internal/fullimport"
 	"github.com/screwys/igloo/internal/restore"
 )
@@ -82,8 +83,8 @@ func (s *Server) handleConfigExportFull(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	mediaFiles := s.collectFullExportBookmarkMedia(cfg.Bookmarks)
-	mediaFiles = append(mediaFiles, s.collectFullExportAvatarMedia()...)
+	mediaFiles := exportbundle.CollectBookmarkMedia(s.db, s.cfg.DataDir, cfg.Bookmarks)
+	mediaFiles = append(mediaFiles, exportbundle.CollectAvatarMedia(s.cfg.DataDir)...)
 	runtimeFiles := s.collectFullExportRuntimeConfigFiles()
 	runtimeManifest := s.fullExportRuntimeManifest()
 
@@ -118,7 +119,7 @@ func writeConfigExportJSON(w io.Writer, cfg db.ConfigExport) error {
 	return json.NewEncoder(w).Encode(cfg)
 }
 
-func writeFullExportZip(w io.Writer, cfg db.ConfigExport, mediaFiles []fullExportMediaFile, runtimeFiles []fullExportRuntimeFile, runtimeManifest fullimport.RuntimeManifest) error {
+func writeFullExportZip(w io.Writer, cfg db.ConfigExport, mediaFiles []exportbundle.MediaFile, runtimeFiles []fullExportRuntimeFile, runtimeManifest fullimport.RuntimeManifest) error {
 	zw := zip.NewWriter(w)
 	if err := writeFullExportJSON(zw, cfg); err != nil {
 		_ = zw.Close()
@@ -142,6 +143,9 @@ func writeFullExportZip(w io.Writer, cfg db.ConfigExport, mediaFiles []fullExpor
 }
 
 func (s *Server) configuredExportDir() string {
+	if !s.db.BoolSetting("backup_enabled") {
+		return ""
+	}
 	dir, _ := s.db.GetSetting("backup_dir", "")
 	dir = strings.TrimSpace(dir)
 	if dir != "" && !filepath.IsAbs(dir) {
@@ -189,11 +193,6 @@ func writeExportFile(dir, prefix, ext string, write func(io.Writer) error) (stri
 		return "", fmt.Errorf("rename export: %w", err)
 	}
 	return finalPath, nil
-}
-
-type fullExportMediaFile struct {
-	SourcePath  string
-	ArchivePath string
 }
 
 type fullExportRuntimeFile struct {
@@ -250,7 +249,7 @@ func writeFullExportRuntimeConfigFile(zw *zip.Writer, file fullExportRuntimeFile
 	return err
 }
 
-func writeFullExportMediaFile(zw *zip.Writer, file fullExportMediaFile) error {
+func writeFullExportMediaFile(zw *zip.Writer, file exportbundle.MediaFile) error {
 	src, err := os.Open(file.SourcePath)
 	if err != nil {
 		return err
@@ -372,108 +371,6 @@ func skipFullExportRuntimeConfigPath(rel string) bool {
 		}
 	}
 	return false
-}
-
-func (s *Server) collectFullExportBookmarkMedia(bookmarks []db.BookmarkExport) []fullExportMediaFile {
-	var files []fullExportMediaFile
-	seenPath := make(map[string]bool)
-	countByBookmark := make(map[string]int)
-	add := func(bookmarkID, path string) {
-		path = strings.TrimSpace(path)
-		if path == "" {
-			return
-		}
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(s.cfg.DataDir, path)
-		}
-		cleanPath := filepath.Clean(path)
-		info, err := os.Stat(cleanPath)
-		if err != nil || info.IsDir() || seenPath[cleanPath] {
-			return
-		}
-		seenPath[cleanPath] = true
-		safeID := sanitizeFilename(bookmarkID)
-		if safeID == "" {
-			safeID = "item"
-		}
-		idx := countByBookmark[safeID]
-		countByBookmark[safeID] = idx + 1
-		ext := strings.ToLower(filepath.Ext(cleanPath))
-		if ext == "" {
-			ext = ".bin"
-		}
-		files = append(files, fullExportMediaFile{
-			SourcePath:  cleanPath,
-			ArchivePath: filepath.ToSlash(filepath.Join("media", "bookmarks", safeID, fmt.Sprintf("%03d%s", idx, ext))),
-		})
-	}
-
-	for _, bm := range bookmarks {
-		for _, path := range s.collectSlides(bm.VideoID) {
-			add(bm.VideoID, path)
-		}
-		if path := s.androidSyncAudioPath(bm.VideoID); path != "" {
-			add(bm.VideoID, path)
-		}
-		items, err := s.db.GetFeedItemsForTweetIDs([]string{bm.VideoID})
-		if err == nil {
-			if item, ok := items[bm.VideoID]; ok && item.QuoteTweetID != "" {
-				for _, path := range s.collectSlides(item.QuoteTweetID) {
-					add(bm.VideoID, path)
-				}
-				if path := s.androidSyncAudioPath(item.QuoteTweetID); path != "" {
-					add(bm.VideoID, path)
-				}
-			}
-		}
-	}
-	return files
-}
-
-func (s *Server) collectFullExportAvatarMedia() []fullExportMediaFile {
-	if s == nil || s.cfg == nil || strings.TrimSpace(s.cfg.DataDir) == "" {
-		return nil
-	}
-	root := filepath.Join(s.cfg.DataDir, "thumbnails", "avatars")
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return nil
-	}
-	files := make([]fullExportMediaFile, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
-			continue
-		}
-		name := entry.Name()
-		if !fullExportAvatarMediaName(name) {
-			continue
-		}
-		sourcePath := filepath.Join(root, name)
-		info, err := entry.Info()
-		if err != nil || !info.Mode().IsRegular() {
-			continue
-		}
-		files = append(files, fullExportMediaFile{
-			SourcePath:  sourcePath,
-			ArchivePath: filepath.ToSlash(filepath.Join("media", "avatars", name)),
-		})
-	}
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].ArchivePath < files[j].ArchivePath
-	})
-	return files
-}
-
-func fullExportAvatarMediaName(name string) bool {
-	if strings.TrimSpace(name) == "" || name != filepath.Base(name) {
-		return false
-	}
-	switch strings.ToLower(filepath.Ext(name)) {
-	case ".jpg", ".jpeg", ".png", ".webp", ".gif":
-		return true
-	default:
-		return false
-	}
 }
 
 func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {

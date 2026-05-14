@@ -78,6 +78,55 @@ type RuntimeConfig struct {
 	EnabledPlatforms []string `json:"enabled_platforms"`
 }
 
+// RuntimeConfigBackupAllowed reports whether a path under ConfDir is safe to
+// include in automatic backups. Full exports intentionally use their own rules.
+func RuntimeConfigBackupAllowed(rel string) bool {
+	rel = filepath.Clean(rel)
+	if rel == "." {
+		return true
+	}
+	if rel == "" || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return false
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." || strings.HasPrefix(part, ".") {
+			return false
+		}
+		if runtimeConfigBackupSensitiveName(part) {
+			return false
+		}
+	}
+	return true
+}
+
+func runtimeConfigBackupSensitiveName(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return true
+	}
+	switch name {
+	case "auth_secret", "auth_users.json", "cookies", "kagi.env", "server.key":
+		return true
+	}
+	for _, prefix := range []string{".auth_users_", ".config_", ".upload_", ".import-media-", ".import-config-"} {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	for _, suffix := range []string{".env", ".key", ".pem", ".p12", ".pfx"} {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	for _, marker := range []string{"secret", "token", "password", "passwd", "credential", "cookie", "session"} {
+		if strings.Contains(name, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func ParseEnabledPlatforms(raw string) ([]string, error) {
 	raw = strings.TrimSpace(raw)
 	if strings.EqualFold(raw, "all") {

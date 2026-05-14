@@ -82,6 +82,16 @@ func ClampTranslateLookahead(n int) int {
 	return n
 }
 
+func ClampBackupKeepCount(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > 5 {
+		return 5
+	}
+	return n
+}
+
 // SponsorBlockCategoriesDefault is the canonical default category policy shared by
 // server-side settings, rendered pages, and UI fallbacks.
 const SponsorBlockCategoriesDefault = "sponsor:silent,selfpromo:silent,interaction:silent,intro:ask,outro:ask,preview:ask,filler:ask,music_offtopic:ask"
@@ -134,6 +144,7 @@ var Defaults = map[string]any{
 	"archive_bookmarks":                false,
 	"backup_enabled":                   false,
 	"backup_dir":                       "",
+	"backup_keep_count":                5,
 	"sponsorblock_categories":          SponsorBlockCategoriesDefault,
 	"starting_page":                    "feed",
 	"dearrow_mode":                     "off",
