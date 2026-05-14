@@ -1,7 +1,6 @@
 # Development Scripts
 
-`scripts/dev/` contains maintainer and local-development tools. It is not the
-public runtime surface for a normal container install.
+`scripts/dev/` these are development tools that are not used in runtime, or included in images.
 
 Web assets are bundled by the Go asset builder:
 
@@ -17,14 +16,19 @@ cmd/igloo-assets
 | `build.sh restart` | Build and restart the local server. |
 | `build.sh android` | Build the server, then build/install the Android APK. |
 | `build.sh all` | Build, restart the server, then build/install Android. |
+| `doctor.sh` | Run Igloo Doctor against the local data/config paths. |
+| `test-full.sh` | Run generated drift, Go, errcheck, and Android test gates. |
 | `container-check.sh` | Build and check the container image. |
 
 Maintained diagnostics and repair tools are Go subcommands:
 
 ```text
+go run ./cmd/igloo-mcp doctor
 go run ./cmd/igloo-dev android-sync-maintenance -dry-run
 go run ./cmd/igloo-dev asset-inventory-reconcile -limit 1000
+go run ./cmd/igloo-dev lifecycle-audit
 go run ./cmd/igloo-dev persistence-audit
+go run ./cmd/igloo-dev query-audit
 go run ./cmd/igloo-dev sqlite-repack
 ```
 
