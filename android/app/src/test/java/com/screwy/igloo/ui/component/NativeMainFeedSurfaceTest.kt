@@ -111,7 +111,7 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeSingleMediaUsesTransparentLeftAlignedStage() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
+        val text = nativeFeedSource()
         val mediaGridText = text.substringAfter("private fun bindMediaGrid")
             .substringBefore("private fun bindMediaCell")
         val mediaCellText = text.substringAfter("private fun bindMediaCell")
@@ -221,13 +221,13 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeMainFeedRowsDoNotUseComposeView() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
+        val text = nativeFeedSource()
         assertFalse(text.contains("ComposeView"))
     }
 
     @Test
     fun nativeMainFeedKeepsRefreshAndAvatarsNative() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
+        val text = nativeFeedSource()
         assertFalse(text.contains("PullToRefreshBox"))
         assertTrue(text.contains("SwipeRefreshLayout"))
         assertTrue(text.contains("avatarForChannel"))
@@ -235,11 +235,11 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeFeedCardMovesTranslationIntoHeaderMetaRow() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
-        val cardViewsText = text.substringAfter("private class NativeFeedCardViews")
-            .substringBefore("private class NativeIdentityHeaderViews")
-        val headerViewsText = text.substringAfter("private class NativeIdentityHeaderViews")
-            .substringBefore("private data class NativeVideoSlot")
+        val text = nativeFeedSource()
+        val cardViewsText = text.substringAfter("internal class NativeFeedCardViews")
+            .substringBefore("internal class NativeIdentityHeaderViews")
+        val headerViewsText = text.substringAfter("internal class NativeIdentityHeaderViews")
+            .substringBefore("internal data class NativeVideoSlot")
 
         assertFalse(cardViewsText.contains("val translate: TextView"))
         assertFalse(cardViewsText.contains("root.addView(translate)"))
@@ -252,7 +252,7 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeQuoteCardsClampTextAndOpenQuotedTweet() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
+        val text = nativeFeedSource()
         val quoteText = text.substringAfter("private fun bindQuote")
             .substringBefore("private fun bindActions")
 
@@ -264,7 +264,7 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeFeedRendersThreadChainsWithCollapsedAncestorButton() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
+        val text = nativeFeedSource()
         val threadText = text.substringAfter("private fun bindThread")
             .substringBefore("private fun bindRetweeter")
 
@@ -275,9 +275,9 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeFeedMenusUseThemePopupAndVerticalOverflowIcon() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
-        val cardViewsText = text.substringAfter("private class NativeFeedCardViews")
-            .substringBefore("private class NativeIdentityHeaderViews")
+        val text = nativeFeedSource()
+        val cardViewsText = text.substringAfter("internal class NativeFeedCardViews")
+            .substringBefore("internal class NativeIdentityHeaderViews")
 
         assertFalse(text.contains("PopupMenu"))
         assertTrue(text.contains("PopupWindow"))
@@ -289,8 +289,8 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeFeedConfirmationsAreHostedByComposeDialogs() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
-        val nativeHolderText = text.substringAfter("private class NativeFeedViewHolder")
+        val text = nativeFeedSource()
+        val nativeHolderText = text.substringAfter("internal class NativeFeedViewHolder")
             .substringBefore("private fun bindHeader")
 
         assertFalse(text.contains("android.app.AlertDialog"))
@@ -305,7 +305,7 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeBodyClampUsesLocalizedReadMoreAndShowLess() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
+        val text = nativeFeedSource()
         val bindBodyText = text.substringAfter("private fun bindBody")
             .substringBefore("private fun bindQuote")
 
@@ -333,10 +333,10 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeChannelHeaderKeepsActionIconsCompact() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
-        val headerText = text.substringAfter("private class NativeFeedChannelHeaderViewHolder")
-            .substringBefore("private class NativeFeedViewHolder")
-        val headerViewsText = text.substringAfter("private class NativeFeedChannelHeaderViews")
+        val text = nativeFeedSource()
+        val headerText = text.substringAfter("internal class NativeFeedChannelHeaderViewHolder")
+            .substringBefore("internal class NativeFeedViewHolder")
+        val headerViewsText = text.substringAfter("internal class NativeFeedChannelHeaderViews")
 
         assertFalse(headerText.contains("android.R.drawable.btn_star_big_off"))
         assertFalse(headerText.contains("views.menu.text"))
@@ -348,8 +348,8 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeChannelHeaderBioUsesClickableMentionsAndUrls() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
-        val headerText = text.substringAfter("private class NativeFeedChannelHeaderViewHolder")
+        val text = nativeFeedSource()
+        val headerText = text.substringAfter("internal class NativeFeedChannelHeaderViewHolder")
             .substringBefore("fun recycle()")
 
         assertTrue(headerText.contains("bindHeaderBio"))
@@ -384,9 +384,9 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeChannelHeaderUsesCompactNativeTextPadding() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
-        val headerViewsText = text.substringAfter("private class NativeFeedChannelHeaderViews")
-            .substringBefore("private class NativeFeedCardViews")
+        val text = nativeFeedSource()
+        val headerViewsText = text.substringAfter("internal class NativeFeedChannelHeaderViews")
+            .substringBefore("internal class NativeFeedCardViews")
 
         assertTrue(headerViewsText.contains("setIncludeFontPadding(false)"))
         assertTrue(headerViewsText.contains("setLineSpacing(0f, 1.0f)"))
@@ -394,9 +394,9 @@ class NativeMainFeedSurfaceTest {
 
     @Test
     fun nativeChannelHeaderKeepsBioInThemeCard() {
-        val text = source("main/java/com/screwy/igloo/ui/component/NativeMainFeedSurface.kt")
-        val headerViewsText = text.substringAfter("private class NativeFeedChannelHeaderViews")
-            .substringBefore("private class NativeFeedCardViews")
+        val text = nativeFeedSource()
+        val headerViewsText = text.substringAfter("internal class NativeFeedChannelHeaderViews")
+            .substringBefore("internal class NativeFeedCardViews")
 
         assertTrue(headerViewsText.contains("val infoCard: LinearLayout"))
         assertTrue(headerViewsText.contains("ChannelProfileHeaderDefaults.CardHorizontalMarginDp"))
@@ -482,6 +482,20 @@ class NativeMainFeedSurfaceTest {
             ?: error("Could not locate Android source root from $userDir")
         return File(root, "app/src/$relative").readText()
     }
+
+    private fun nativeFeedSource(): String =
+        listOf(
+            "NativeMainFeedSurface.kt",
+            "NativeMainFeedController.kt",
+            "NativeFeedAdapter.kt",
+            "NativeFeedChannelHeaderViewHolder.kt",
+            "NativeFeedPostViewHolder.kt",
+            "NativeFeedViews.kt",
+            "NativeFeedMedia.kt",
+            "NativeFeedUiPrimitives.kt",
+        ).joinToString("\n") { filename ->
+            source("main/java/com/screwy/igloo/ui/component/$filename")
+        }
 
     private fun assertInfoCardChild(source: String, child: String) {
         assertTrue(Regex("""infoCard\.addView\(\s*$child\b""").containsMatchIn(source))
