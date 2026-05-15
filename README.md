@@ -111,10 +111,13 @@ IGLOO_VERSION=vX.Y.Z
 docker pull "ghcr.io/screwys/igloo:${IGLOO_VERSION}"
 docker run -d --name igloo --restart unless-stopped \
   --user "$(id -u):$(id -g)" \
-  -p 127.0.0.1:5001:5001 \
+  -p 5001:5001 \
   -v "YOUR_DIRECTORY:/igloo" \
   "ghcr.io/screwys/igloo:${IGLOO_VERSION}"
 ```
+
+Use `-p 127.0.0.1:5001:5001` instead if you only want same-machine browser access.
+If you serve Igloo only over HTTPS, set `IGLOO_SESSION_COOKIE_SECURE=true`.
 
 You can use `latest` or a release tag such as `vX.Y.Z`. The `--user` flag keeps bind-mounted files owned by your current user. By default, this will create `data` and `config` inside `YOUR_DIRECTORY`. You can configure bookmarks through web; use `/igloo/bookmarks/<folder>` to keep
 them under the same folder or reuse one folder for multiple categories. To keep
@@ -137,7 +140,7 @@ IGLOO_UID="$(id -u)" IGLOO_GID="$(id -g)" docker compose up -d --build
 Then open Igloo and create the first admin account in the setup screen:
 
 ```text
-http://127.0.0.1:5001
+http://<server-ip>:5001
 ```
 
 By default, Compose stores data under:

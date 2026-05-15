@@ -188,6 +188,29 @@ func TestLoadFreshInstallDefaultsToNoPlatforms(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsSessionCookiesToLANHTTP(t *testing.T) {
+	t.Setenv("IGLOO_DATA_DIR", t.TempDir())
+	t.Setenv("IGLOO_CONFIG_DIR", t.TempDir())
+	t.Setenv("IGLOO_REPO_DIR", t.TempDir())
+
+	cfg := Load()
+	if cfg.SessionCookieSecure {
+		t.Fatal("SessionCookieSecure = true, want false")
+	}
+}
+
+func TestLoadCanRequireSecureSessionCookies(t *testing.T) {
+	t.Setenv("IGLOO_DATA_DIR", t.TempDir())
+	t.Setenv("IGLOO_CONFIG_DIR", t.TempDir())
+	t.Setenv("IGLOO_REPO_DIR", t.TempDir())
+	t.Setenv("IGLOO_SESSION_COOKIE_SECURE", "true")
+
+	cfg := Load()
+	if !cfg.SessionCookieSecure {
+		t.Fatal("SessionCookieSecure = false, want true")
+	}
+}
+
 func TestLoadSecretKeyPanicsWhenRandomFails(t *testing.T) {
 	oldReader := secretKeyRandomReader
 	secretKeyRandomReader = errorReader{err: errors.New("random unavailable")}

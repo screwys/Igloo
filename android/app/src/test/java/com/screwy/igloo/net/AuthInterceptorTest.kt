@@ -91,11 +91,11 @@ class AuthInterceptorTest {
         assertEquals("Bearer tok", seen.single())
     }
 
-    @Test fun remoteCleartextIglooHost_doesNotGetBearerHeader() = runBlocking {
+    @Test fun cleartextIglooHost_getsBearerHeader() = runBlocking {
         val (client, seen) = buildClient(token = "tok", iglooHost = "igloo.example.com")
         client.get("http://igloo.example.com:5001/api/health")
         client.close()
-        assertNull(seen.single())
+        assertEquals("Bearer tok", seen.single())
     }
 
     @Test fun localCleartextIglooHost_getsBearerHeader() = runBlocking {

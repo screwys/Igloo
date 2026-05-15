@@ -70,7 +70,7 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 	s := &Server{
 		db:            database,
 		cfg:           cfg,
-		store:         newSessionStore(cfg.SecretKey),
+		store:         newSessionStore(cfg.SecretKey, cfg.SessionCookieSecure),
 		workers:       workers,
 		requestAvatar: workers.RequestAvatar,
 		staticV:       staticV,
@@ -154,12 +154,12 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 	)
 }
 
-func newSessionStore(secret string) *sessions.CookieStore {
+func newSessionStore(secret string, secure bool) *sessions.CookieStore {
 	store := sessions.NewCookieStore([]byte(secret))
 	store.Options = &sessions.Options{
 		Path:     "/",
 		MaxAge:   sessionCookieMaxAge,
-		Secure:   true,
+		Secure:   secure,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	}

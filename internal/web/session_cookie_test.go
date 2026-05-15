@@ -6,7 +6,7 @@ import (
 )
 
 func TestNewSessionStoreUsesExplicitCookieOptions(t *testing.T) {
-	store := newSessionStore("test-secret")
+	store := newSessionStore("test-secret", false)
 	opts := store.Options
 
 	if opts == nil {
@@ -18,13 +18,20 @@ func TestNewSessionStoreUsesExplicitCookieOptions(t *testing.T) {
 	if opts.MaxAge != sessionCookieMaxAge {
 		t.Fatalf("MaxAge = %d", opts.MaxAge)
 	}
-	if !opts.Secure {
-		t.Fatal("Secure = false")
+	if opts.Secure {
+		t.Fatal("Secure = true")
 	}
 	if !opts.HttpOnly {
 		t.Fatal("HttpOnly = false")
 	}
 	if opts.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("SameSite = %v", opts.SameSite)
+	}
+}
+
+func TestNewSessionStoreCanRequireSecureCookie(t *testing.T) {
+	store := newSessionStore("test-secret", true)
+	if !store.Options.Secure {
+		t.Fatal("Secure = false")
 	}
 }

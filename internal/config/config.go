@@ -21,19 +21,20 @@ var SupportedPlatforms = []string{"youtube", "twitter", "tiktok", "instagram"}
 var secretKeyRandomReader io.Reader = rand.Reader
 
 type Config struct {
-	DatabasePath      string
-	DataDir           string
-	ConfDir           string
-	RepoDir           string
-	StaticDir         string
-	LocaleDir         string
-	ListenAddr        string
-	SecretKey         string
-	CookiesDir        string
-	TLSCert           string
-	TLSKey            string
-	AuthUsersPath     string
-	RuntimeConfigPath string
+	DatabasePath        string
+	DataDir             string
+	ConfDir             string
+	RepoDir             string
+	StaticDir           string
+	LocaleDir           string
+	ListenAddr          string
+	SecretKey           string
+	CookiesDir          string
+	TLSCert             string
+	TLSKey              string
+	AuthUsersPath       string
+	RuntimeConfigPath   string
+	SessionCookieSecure bool
 
 	EnabledPlatforms   []string
 	EnabledPlatformSet map[string]bool
@@ -50,19 +51,20 @@ func Load() *Config {
 	enabledPlatforms, platformErr := resolveEnabledPlatforms(configDir, runtimeConfig)
 
 	return &Config{
-		DatabasePath:      databasePath,
-		DataDir:           dataDir,
-		ConfDir:           configDir,
-		RepoDir:           repoDir,
-		StaticDir:         filepath.Join(repoDir, "static"),
-		LocaleDir:         envOr("IGLOO_LOCALE_DIR", filepath.Join(repoDir, "locales", "app")),
-		ListenAddr:        ":" + envOr("IGLOO_PORT", "5001"),
-		SecretKey:         loadSecretKey(configDir),
-		CookiesDir:        filepath.Join(configDir, "cookies"),
-		TLSCert:           filepath.Join(configDir, "server.crt"),
-		TLSKey:            filepath.Join(configDir, "server.key"),
-		AuthUsersPath:     filepath.Join(configDir, "auth_users.json"),
-		RuntimeConfigPath: runtimePath,
+		DatabasePath:        databasePath,
+		DataDir:             dataDir,
+		ConfDir:             configDir,
+		RepoDir:             repoDir,
+		StaticDir:           filepath.Join(repoDir, "static"),
+		LocaleDir:           envOr("IGLOO_LOCALE_DIR", filepath.Join(repoDir, "locales", "app")),
+		ListenAddr:          ":" + envOr("IGLOO_PORT", "5001"),
+		SecretKey:           loadSecretKey(configDir),
+		CookiesDir:          filepath.Join(configDir, "cookies"),
+		TLSCert:             filepath.Join(configDir, "server.crt"),
+		TLSKey:              filepath.Join(configDir, "server.key"),
+		AuthUsersPath:       filepath.Join(configDir, "auth_users.json"),
+		RuntimeConfigPath:   runtimePath,
+		SessionCookieSecure: envBool("IGLOO_SESSION_COOKIE_SECURE", false),
 
 		EnabledPlatforms:   enabledPlatforms,
 		EnabledPlatformSet: platformSet(enabledPlatforms),
@@ -335,6 +337,20 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func envBool(key string, fallback bool) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch v {
+	case "":
+		return fallback
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }
 
 func homeDir() string {
