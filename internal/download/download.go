@@ -221,7 +221,11 @@ func (d *Downloader) downloadTikTok(ctx context.Context, rawURL string, opts Opt
 	}
 
 	// gallery-dl failed or returned nothing — it's a regular video. Use yt-dlp.
-	return d.YtDlp.Download(ctx, rawURL, opts)
+	ytPaths, ytErr := d.YtDlp.Download(ctx, rawURL, opts)
+	if ytErr == nil && len(ytPaths) > 0 {
+		return ytPaths, nil
+	}
+	return ytPaths, fallbackDownloadError(gdlErr, ytErr)
 }
 
 func (d *Downloader) downloadGalleryDLFirst(ctx context.Context, rawURL string, opts Opts) ([]string, error) {
@@ -237,7 +241,25 @@ func (d *Downloader) downloadGalleryDLFirst(ctx context.Context, rawURL string, 
 	if ytErr == nil && len(ytPaths) > 0 {
 		return ytPaths, nil
 	}
-	return ytPaths, ytErr
+	return ytPaths, fallbackDownloadError(gdlErr, ytErr)
+}
+
+func fallbackDownloadError(primaryErr, fallbackErr error) error {
+	if fallbackErr == nil {
+		return fallbackErr
+	}
+	if primaryErr == nil {
+		return fallbackErr
+	}
+	primaryKind := ClassifyError(primaryErr, nil)
+	fallbackKind := ClassifyError(fallbackErr, nil)
+	switch primaryKind {
+	case ErrorKindAuth, ErrorKindRateLimit:
+		if fallbackKind == ErrorKindUnknown || fallbackKind == ErrorKindEmptyResult {
+			return primaryErr
+		}
+	}
+	return fallbackErr
 }
 
 // isDirectMedia reports whether the URL or mediaType indicates media that

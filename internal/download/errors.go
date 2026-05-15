@@ -47,13 +47,13 @@ func ClassifyError(err error, output []byte) string {
 	if containsAny(text, "429", "too many requests", "rate limit", "ratelimit") {
 		return ErrorKindRateLimit
 	}
-	if containsAny(text, "login required", "not logged in", "authentication", "unauthorized", "cookie", "cookies", "forbidden") {
+	if containsAny(text, "login required", "redirect to login", "login page", "not logged in", "authentication", "unauthorized", "cookie", "cookies", "forbidden") {
 		return ErrorKindAuth
 	}
 	if containsAny(text, "not found", "notfound", "404", "410", "no such user", "requested post not available", "unavailable") {
 		return ErrorKindNotFound
 	}
-	if containsAny(text, "no files downloaded", "no results", "empty result", "returned no info", "returned no") {
+	if containsAny(text, "no files downloaded", "no video formats", "no results", "empty result", "returned no info", "returned no") {
 		return ErrorKindEmptyResult
 	}
 	if containsAny(text, "invalid character", "unexpected eof", "parse", "decode", "unmarshal") {

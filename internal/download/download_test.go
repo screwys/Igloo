@@ -272,6 +272,69 @@ exit 1
 	}
 }
 
+func TestDownloadRetriesCookieAlternateWhenYtDlpMasksInstagramGalleryDLAuth(t *testing.T) {
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "gallery-dl"), `#!/bin/sh
+out=""
+cookie=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -D)
+      shift
+      out="$1"
+      ;;
+    --cookies)
+      shift
+      cookie="$1"
+      ;;
+  esac
+  shift
+done
+case "$cookie" in
+  *good.txt)
+    mkdir -p "$out"
+    printf 'video data' > "$out/source.mp4"
+    printf '{"id":"source"}' > "$out/source.json"
+    exit 0
+    ;;
+esac
+echo '[instagram][error] HTTP redirect to login page (https://www.instagram.com/accounts/login/)' >&2
+exit 4
+`)
+	writeExecutable(t, filepath.Join(bin, "yt-dlp"), `#!/bin/sh
+echo 'ERROR: [Instagram] sample: No video formats found!' >&2
+exit 1
+`)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	cookieDir := t.TempDir()
+	badCookie := filepath.Join(cookieDir, "bad.txt")
+	goodCookie := filepath.Join(cookieDir, "good.txt")
+	if err := os.WriteFile(badCookie, []byte("# stale\n"), 0o600); err != nil {
+		t.Fatalf("write bad cookie: %v", err)
+	}
+	if err := os.WriteFile(goodCookie, []byte("# fresh\n"), 0o600); err != nil {
+		t.Fatalf("write good cookie: %v", err)
+	}
+
+	d := NewDownloader("")
+	outDir := t.TempDir()
+	paths, err := d.Download(context.Background(), "https://www.instagram.com/p/sample/", "video", Opts{
+		OutputDir: outDir,
+		ID:        "sample",
+		CookieAlternates: []CookieSet{
+			{File: badCookie},
+			{File: goodCookie},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Download returned error: %v", err)
+	}
+	if len(paths) != 1 || paths[0] != filepath.Join(outDir, "sample.mp4") {
+		t.Fatalf("paths = %#v, want sample.mp4 in output dir", paths)
+	}
+}
+
 func writeExecutable(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {

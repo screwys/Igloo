@@ -91,6 +91,7 @@ func TestClassifyErrorPatterns(t *testing.T) {
 		{"rate", errors.New("HTTP Error 429: Too Many Requests"), nil, ErrorKindRateLimit},
 		{"not_found", nil, []byte("Requested post not available"), ErrorKindNotFound},
 		{"empty", errors.New("gallery-dl: no files downloaded"), nil, ErrorKindEmptyResult},
+		{"no_video_formats", errors.New("[Instagram] ABC123: No video formats found!"), nil, ErrorKindEmptyResult},
 		{"parse", errors.New("invalid character '<' looking for beginning of value"), nil, ErrorKindParse},
 		{"canceled", context.Canceled, nil, ErrorKindCanceled},
 	}
