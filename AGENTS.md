@@ -25,10 +25,6 @@ If profile media only becomes ready after hover/page render, treat that as a pip
 
 ## Coding Rules
 
-- Commit subjects may use Conventional Commits:
-  `<type>[optional scope]: <description>`.
-  Examples: `fix(feed): trigger hover on cards`, `docs: trim setup notes`.
-  Lowercase unless a name requires caps.
 - Keep changes scoped. Do not mix unrelated cleanup, formatting, generated churn, or private workflow notes into product work.
 - Use generic names in tests, docs, examples, comments, and commits.
   Do not commit real handles, usernames, channel IDs, post IDs, or local data
