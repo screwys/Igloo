@@ -377,6 +377,16 @@ function responseFor(url, { data, twitterChannels } = {}) {
         }),
       };
     }
+    if (String(data || "").includes("moved-but-success-false")) {
+      return {
+        status: 200,
+        text: JSON.stringify({
+          success: false,
+          moved: ["alice label 001.mp4"],
+          error: "gallery-dl reported a non-zero exit after writing output",
+        }),
+      };
+    }
     return {
       status: 200,
       text: JSON.stringify({
@@ -1079,6 +1089,37 @@ test("reports server video download failures", async () => {
   assert.equal(result?.json?.success, false);
   assert.deepEqual(result?.json?.moved, []);
   assert.deepEqual(result?.json?.failed, ["tweet 222: yt-dlp failed"]);
+});
+
+test("accepts server video downloads when the response contains moved files", async () => {
+  const harness = buildHarness();
+  runScript(harness, { exposeDebug: true });
+
+  let result = null;
+  harness.context.__iglooTest.downloadMediaItems(
+    "111",
+    "sample_handle",
+    [
+      {
+        kind: "video",
+        tweetId: "222",
+        tweetUrl: "https://x.com/quote/status/222",
+        ext: ".mp4",
+        index: 0,
+      },
+    ],
+    1,
+    "moved-but-success-false",
+    (resp) => {
+      result = JSON.parse(JSON.stringify(resp));
+    },
+  );
+
+  await drainMicrotasks();
+
+  assert.equal(result?.json?.success, true);
+  assert.deepEqual(result?.json?.moved, ["alice label 001.mp4"]);
+  assert.deepEqual(result?.json?.failed, []);
 });
 
 test("saves images through the server backend", async () => {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.24
+// @version      8.0.25
 // @author       screwys
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @homepageURL  https://github.com/screwys/Igloo
@@ -35,7 +35,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.24";
+  const SCRIPT_VERSION = "8.0.25";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -1869,6 +1869,21 @@
     };
   }
 
+  function normalizeMediaDownloadResponse(resp) {
+    const json = resp?.json || {};
+    const moved = Array.isArray(json.moved) ? json.moved : [];
+    const failed = Array.isArray(json.failed) ? json.failed : [];
+    const hasMoved = moved.length > 0;
+    const failedByServer =
+      resp?.ok === false || json.success === false || failed.length > 0;
+    return {
+      moved,
+      failed,
+      success: hasMoved && failed.length === 0,
+      partial: hasMoved && failedByServer,
+    };
+  }
+
   function downloadErrorText(err) {
     if (!err) return "download failed";
     if (typeof err === "string") return err;
@@ -1913,8 +1928,10 @@
                 categoryId,
               )
             : await saveImageViaServer(media, handle, label, categoryId);
-        if (resp.ok && resp.json && resp.json.success) {
-          moved.push(...(resp.json.moved || []));
+        const normalized = normalizeMediaDownloadResponse(resp);
+        if (normalized.success || normalized.partial) {
+          moved.push(...normalized.moved);
+          failed.push(...normalized.failed);
         } else {
           failed.push(mediaFailureLabel(media, resp.json || resp));
         }
