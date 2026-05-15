@@ -143,13 +143,13 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, username string, d
 		// Attach cached translations
 		if tr, ok := translations[item.TweetID]; ok {
 			if body, ok := tr["body"]; ok {
-				if translationSourceAllowed(body.SourceLang, translateSkipSet) {
+				if shouldAttachTranslation(item.BodyText, body.TranslatedText, body.SourceLang, translateSkipSet) {
 					item.BodyTranslation = body.TranslatedText
 					item.BodySourceLang = body.SourceLang
 				}
 			}
 			if quote, ok := tr["quote"]; ok {
-				if translationSourceAllowed(quote.SourceLang, translateSkipSet) {
+				if shouldAttachTranslation(item.QuoteBodyText, quote.TranslatedText, quote.SourceLang, translateSkipSet) {
 					item.QuoteTranslation = quote.TranslatedText
 					item.QuoteSourceLang = quote.SourceLang
 				}
@@ -297,6 +297,24 @@ func splitTranslateSkipSet(raw string) map[string]bool {
 
 func translationSourceAllowed(sourceLang string, skipSet map[string]bool) bool {
 	return strings.TrimSpace(sourceLang) == "" || !language.InSet(sourceLang, skipSet)
+}
+
+func shouldAttachTranslation(sourceText, translatedText, sourceLang string, skipSet map[string]bool) bool {
+	if strings.TrimSpace(translatedText) == "" {
+		return false
+	}
+	if !translationSourceAllowed(sourceLang, skipSet) {
+		return false
+	}
+	return !translationTextEquivalent(sourceText, translatedText)
+}
+
+func translationTextEquivalent(a, b string) bool {
+	return normalizeTranslationText(a) == normalizeTranslationText(b)
+}
+
+func normalizeTranslationText(text string) string {
+	return strings.Join(strings.Fields(text), " ")
 }
 
 // attachThreadChains populates ThreadChain on reply items by walking up via

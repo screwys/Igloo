@@ -263,9 +263,11 @@ class NativeMainFeedSurfaceTest {
     }
 
     @Test
-    fun nativeFeedRendersThreadChainsWithRootPreviewAndCapsule() {
+    fun nativeFeedRendersThreadChainsWithRootPreviewActionsAndCapsule() {
         val text = nativeFeedSource()
         val threadText = text.substringAfter("private fun bindThread")
+            .substringBefore("private fun bindRetweeter")
+        val ancestorText = text.substringAfter("private fun threadAncestorView")
             .substringBefore("private fun bindRetweeter")
 
         assertTrue(threadText.contains("nativeThreadPreviewAncestors(chain)"))
@@ -273,6 +275,10 @@ class NativeMainFeedSurfaceTest {
         assertTrue(threadText.contains("R.string.feed_thread_capsule"))
         assertTrue(threadText.contains("callbacks.onRowClick(threaded.row)"))
         assertTrue(threadText.contains("stripReplyPrefix(item, item.bodyText.orEmpty())"))
+        assertFalse(ancestorText.contains("background = roundedStroke(colors.surface"))
+        assertTrue(ancestorText.contains("threadAncestorActions(row, colors, callbacks)"))
+        assertTrue(text.contains("bindActionButtons(actions, row, post, shareUrl, colors, callbacks)"))
+        assertTrue(text.contains("bindReply(item, callbacks, colors, visible = adapterRow.threaded.chain.isEmpty())"))
     }
 
     @Test

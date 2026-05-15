@@ -13,6 +13,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -34,6 +35,7 @@ import com.screwy.igloo.data.entity.ThreadedFeedRow
 import com.screwy.igloo.feed.FeedMediaCellModel
 import com.screwy.igloo.feed.FeedMediaGridModel
 import com.screwy.igloo.feed.SocialPostModel
+import com.screwy.igloo.feed.buildSocialPostModel
 import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.net.IglooHostProvider
@@ -139,7 +141,7 @@ internal class NativeFeedViewHolder(
             },
         )
 
-        bindReply(item, callbacks, colors)
+        bindReply(item, callbacks, colors, visible = adapterRow.threaded.chain.isEmpty())
         bindBody(
             textView = views.body,
             moreView = views.showMore,
@@ -236,8 +238,7 @@ internal class NativeFeedViewHolder(
         )
         val container = LinearLayout(views.root.context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(8), dp(7), dp(8), dp(7))
-            background = roundedStroke(colors.surface, colors.borderSubtle, dp(1), dp(8))
+            setPadding(0, dp(5), 0, dp(5))
             setOnClickListener { callbacks.onRowClick(row) }
         }
         val header = NativeIdentityHeaderViews(views.root.context)
@@ -261,27 +262,18 @@ internal class NativeFeedViewHolder(
         )
         container.addView(header.root)
 
-        val replyHandle = normalizeHandle(item.replyToHandle)
-        if (replyHandle.isNotBlank()) {
-            container.addView(
-                smallText(views.root.context).apply {
-                    text = context.getString(R.string.feed_replying_to, replyHandle)
-                    setTextColor(colors.primary)
-                },
-            )
-        }
-
         val body = stripReplyPrefix(item, item.bodyText.orEmpty())
         if (body.isNotBlank()) {
             container.addView(
-                quoteText(views.root.context).apply {
+                bodyText(views.root.context).apply {
                     setTextColor(colors.onSurface)
                     bindMentionText(this, body, colors, callbacks)
-                    maxLines = NativeFeedQuoteCollapsedLines
+                    maxLines = NativeFeedBodyCollapsedLines
                     ellipsize = TextUtils.TruncateAt.END
                 },
             )
         }
+        container.addView(threadAncestorActions(row, colors, callbacks))
         return container
     }
 
@@ -321,10 +313,12 @@ internal class NativeFeedViewHolder(
         item: FeedItemEntity,
         callbacks: NativeFeedCallbacks,
         colors: NativeFeedColors,
+        visible: Boolean = true,
     ) {
         val replyHandle = normalizeHandle(item.replyToHandle)
-        if (replyHandle.isBlank()) {
+        if (!visible || replyHandle.isBlank()) {
             views.reply.visibility = View.GONE
+            views.reply.setOnClickListener(null)
             return
         }
         views.reply.visibility = View.VISIBLE
@@ -468,49 +462,16 @@ internal class NativeFeedViewHolder(
         colors: NativeFeedColors,
         callbacks: NativeFeedCallbacks,
     ) {
-        val canOpenExternal = shareUrl.isNotBlank()
-        views.actions.removeAllViews()
-        NativeFeedPrimaryActions.forEach { action ->
-            val button = actionIconButton(views.root.context, colors)
-            button.contentDescription = action.contentDescription(views.root.context, post)
-            button.isEnabled = when (action) {
-                NativeFeedPrimaryAction.Share -> canOpenExternal
-                NativeFeedPrimaryAction.Like,
-                NativeFeedPrimaryAction.Bookmark -> true
-            }
-            val selected = when (action) {
-                NativeFeedPrimaryAction.Like -> post.actions.isLiked
-                NativeFeedPrimaryAction.Bookmark -> post.actions.isBookmarked
-                else -> false
-            }
-            button.setImageResource(action.iconRes(selected))
-            button.setColorFilter(
-                when {
-                    !button.isEnabled -> colors.onSurfaceFaint
-                    selected -> colors.primary
-                    else -> colors.onSurfaceMuted
-                }
-            )
-            button.setOnClickListener {
-                when (action) {
-                    NativeFeedPrimaryAction.Share -> sharePlainText(
-                        views.root.context,
-                        shareUrl,
-                        callbacks.useEmbedFriendlyShareLinks,
-                    )
-                    NativeFeedPrimaryAction.Like -> callbacks.onLikeToggle(row.item.tweetId, row.isLiked == 0)
-                    NativeFeedPrimaryAction.Bookmark -> callbacks.onBookmarkToggle(row)
-                }
-            }
-            views.actions.addView(button)
-        }
-        views.menu.setImageResource(R.drawable.ic_feed_more_vert_24)
-        views.menu.setColorFilter(colors.onSurfaceMuted)
-        views.menu.contentDescription = views.root.context.getString(R.string.action_more)
-        views.menu.setOnClickListener { showMenu(row, post, shareUrl) }
+        bindActionButtons(views.actions, row, post, shareUrl, colors, callbacks)
+        configureMenuButton(views.menu, colors)
+        views.menu.setOnClickListener { showMenu(views.menu, row, post, shareUrl) }
     }
 
     private fun showMenu(row: FeedRow, post: SocialPostModel, shareUrl: String = feedShareUrl(row.item).trim()) {
+        showMenu(views.menu, row, post, shareUrl)
+    }
+
+    private fun showMenu(anchor: View, row: FeedRow, post: SocialPostModel, shareUrl: String = feedShareUrl(row.item).trim()) {
         val callbacks = getCallbacks()
         val context = views.root.context
         val items = mutableListOf<NativeFeedMenuItem>()
@@ -556,7 +517,87 @@ internal class NativeFeedViewHolder(
                 },
             )
         }
-        showNativeFeedPopup(views.menu, getColors(), items)
+        showNativeFeedPopup(anchor, getColors(), items)
+    }
+
+    private fun threadAncestorActions(
+        row: FeedRow,
+        colors: NativeFeedColors,
+        callbacks: NativeFeedCallbacks,
+    ): LinearLayout {
+        val context = views.root.context
+        val post = buildSocialPostModel(row, emptyMap())
+        val shareUrl = feedShareUrl(row.item).trim()
+        val actions = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val menu = ImageButton(context)
+        configureMenuButton(menu, colors)
+        menu.setOnClickListener { showMenu(menu, row, post, shareUrl) }
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(menu, LinearLayout.LayoutParams(dp(48), dp(36)))
+            addView(View(context), LinearLayout.LayoutParams(0, dp(40), 1f))
+            bindActionButtons(actions, row, post, shareUrl, colors, callbacks)
+            addView(actions, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)))
+        }
+    }
+
+    private fun bindActionButtons(
+        actions: LinearLayout,
+        row: FeedRow,
+        post: SocialPostModel,
+        shareUrl: String,
+        colors: NativeFeedColors,
+        callbacks: NativeFeedCallbacks,
+    ) {
+        val canOpenExternal = shareUrl.isNotBlank()
+        actions.removeAllViews()
+        NativeFeedPrimaryActions.forEach { action ->
+            val button = actionIconButton(views.root.context, colors)
+            button.contentDescription = action.contentDescription(views.root.context, post)
+            button.isEnabled = when (action) {
+                NativeFeedPrimaryAction.Share -> canOpenExternal
+                NativeFeedPrimaryAction.Like,
+                NativeFeedPrimaryAction.Bookmark -> true
+            }
+            val selected = when (action) {
+                NativeFeedPrimaryAction.Like -> post.actions.isLiked
+                NativeFeedPrimaryAction.Bookmark -> post.actions.isBookmarked
+                else -> false
+            }
+            button.setImageResource(action.iconRes(selected))
+            button.setColorFilter(
+                when {
+                    !button.isEnabled -> colors.onSurfaceFaint
+                    selected -> colors.primary
+                    else -> colors.onSurfaceMuted
+                }
+            )
+            button.setOnClickListener {
+                when (action) {
+                    NativeFeedPrimaryAction.Share -> sharePlainText(
+                        views.root.context,
+                        shareUrl,
+                        callbacks.useEmbedFriendlyShareLinks,
+                    )
+                    NativeFeedPrimaryAction.Like -> callbacks.onLikeToggle(row.item.tweetId, row.isLiked == 0)
+                    NativeFeedPrimaryAction.Bookmark -> callbacks.onBookmarkToggle(row)
+                }
+            }
+            actions.addView(button)
+        }
+    }
+
+    private fun configureMenuButton(menu: ImageButton, colors: NativeFeedColors) {
+        menu.background = null
+        menu.scaleType = ImageView.ScaleType.CENTER
+        menu.setPadding(dp(10), dp(6), dp(10), dp(6))
+        menu.setImageResource(R.drawable.ic_feed_more_vert_24)
+        menu.setColorFilter(colors.onSurfaceMuted)
+        menu.contentDescription = views.root.context.getString(R.string.action_more)
     }
 
     private fun threadCapsulePostCount(threaded: ThreadedFeedRow): Int =

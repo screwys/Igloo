@@ -284,6 +284,30 @@ func TestEnrichFeedItemsSkipsConfiguredTranslationLanguages(t *testing.T) {
 	}
 }
 
+func TestEnrichFeedItemsSkipsNoopTranslations(t *testing.T) {
+	d := openWritableFeedTestDB(t)
+	if err := d.SetTranslation("sample_tweet_translate", "body", "Indonesian", "en", "@sample_parent What if sample topic"); err != nil {
+		t.Fatalf("SetTranslation body: %v", err)
+	}
+	if err := d.SetTranslation("sample_tweet_translate", "quote", "Indonesian", "en", "same quote text"); err != nil {
+		t.Fatalf("SetTranslation quote: %v", err)
+	}
+
+	got := EnrichFeedItems(d, []model.FeedItem{{
+		TweetID:       "sample_tweet_translate",
+		AuthorHandle:  "sample_author_alpha",
+		BodyText:      "@sample_parent What if sample topic",
+		QuoteTweetID:  "sample_quote_1",
+		QuoteBodyText: "same\nquote text",
+	}}, "")
+	if got[0].BodyTranslation != "" || got[0].BodySourceLang != "" {
+		t.Fatalf("body translation = (%q, %q), want empty no-op", got[0].BodyTranslation, got[0].BodySourceLang)
+	}
+	if got[0].QuoteTranslation != "" || got[0].QuoteSourceLang != "" {
+		t.Fatalf("quote translation = (%q, %q), want empty no-op", got[0].QuoteTranslation, got[0].QuoteSourceLang)
+	}
+}
+
 func openWritableFeedTestDB(t *testing.T) *db.DB {
 	t.Helper()
 	tmpFile, err := os.CreateTemp("", "igloo-feed-test-*.db")

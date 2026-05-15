@@ -518,6 +518,26 @@ func TestAndroidSyncSourceVersionChangesWhenMediaFileAppears(t *testing.T) {
 	}
 }
 
+func TestAndroidSyncSourceVersionChangesWhenTranslationsChange(t *testing.T) {
+	d := openWritableTestDB(t)
+	settings := AndroidRetentionSettings{FeedDays: 3, YoutubeDays: 2, MomentsDays: 90}
+
+	before, err := d.AndroidSyncSourceVersion("alice", settings)
+	if err != nil {
+		t.Fatalf("source version before translation: %v", err)
+	}
+	if err := d.SetTranslation("tweet_translate", "body", "Korean", "en", "translated text"); err != nil {
+		t.Fatalf("SetTranslation: %v", err)
+	}
+	after, err := d.AndroidSyncSourceVersion("alice", settings)
+	if err != nil {
+		t.Fatalf("source version after translation: %v", err)
+	}
+	if before == after {
+		t.Fatalf("source version did not change after translation row changed: %s", before)
+	}
+}
+
 func TestAndroidSyncSourceVersionChangesWhenUserStateRowsChange(t *testing.T) {
 	d := openWritableTestDB(t)
 	settings := AndroidRetentionSettings{FeedDays: 3, YoutubeDays: 2, MomentsDays: 90}

@@ -18,7 +18,7 @@ import (
 // AndroidSyncMaterializerVersion is part of the generation source hash. Bump
 // it when server-side asset materialization semantics change and Android needs
 // a fresh immutable generation even if the source rows did not change.
-const AndroidSyncMaterializerVersion = 32
+const AndroidSyncMaterializerVersion = 33
 
 const (
 	defaultAndroidSyncKeepReadyGenerations = 2
@@ -597,6 +597,7 @@ func (db *DB) AndroidSyncSourceVersion(username string, settings AndroidRetentio
 		{"bookmarks", `SELECT COUNT(*), COALESCE(MAX(bookmarked_at),0) FROM bookmarks`},
 		{"feed_likes", `SELECT COUNT(*), COALESCE(MAX(liked_at),0) FROM feed_likes`},
 		{"feed_seen", `SELECT COUNT(*), COALESCE(MAX(seen_at),0) FROM feed_seen`},
+		{"translations", `SELECT COUNT(*), COALESCE(MAX(translated_at),0) FROM translations`},
 		{"feed_rank_snapshot", `SELECT COUNT(*), COALESCE(MAX(computed_at),0) FROM feed_rank_snapshot`},
 		{"muted_accounts", `SELECT COUNT(*), COALESCE(MAX(muted_at),0) FROM muted_accounts`},
 		{"moment_views", `SELECT COUNT(*), COALESCE(MAX(viewed_at),0) FROM moment_views`},
