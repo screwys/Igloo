@@ -25,6 +25,7 @@ import kotlinx.serialization.Serializable
     indices = [
         Index(value = ["published_at"], orders = [Index.Order.DESC], name = "idx_feed_items_published"),
         Index(value = ["sync_seq"], orders = [Index.Order.DESC], name = "idx_feed_items_sync_seq"),
+        Index(value = ["reply_to_status"], name = "idx_feed_items_reply_parent"),
         Index(
             value = ["channel_id", "published_at"],
             orders = [Index.Order.ASC, Index.Order.DESC],

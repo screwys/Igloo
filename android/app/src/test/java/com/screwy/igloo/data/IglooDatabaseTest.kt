@@ -78,6 +78,10 @@ class IglooDatabaseTest {
         assertTableHasColumns("feed_items", "quote_canonical_url")
     }
 
+    @Test fun feedItemsTableHasReplyParentIndex() {
+        assertTableHasIndexes("feed_items", "idx_feed_items_reply_parent")
+    }
+
     @Test fun videoCommentsTableHasPresentationColumns() {
         assertTableHasColumns("video_comments", "thread_order", "thread_depth", "parent_order", "reply_to_author", "is_creator", "like_count_label")
     }
@@ -98,6 +102,17 @@ class IglooDatabaseTest {
                 found += it.getString(it.getColumnIndexOrThrow("name"))
             }
             names.forEach { name -> assertTrue("$table missing $name", name in found) }
+        }
+    }
+
+    private fun assertTableHasIndexes(table: String, vararg names: String) {
+        val cursor = db.openHelper.readableDatabase.query("PRAGMA index_list($table)")
+        cursor.use {
+            val found = mutableSetOf<String>()
+            while (it.moveToNext()) {
+                found += it.getString(it.getColumnIndexOrThrow("name"))
+            }
+            names.forEach { name -> assertTrue("$table missing index $name", name in found) }
         }
     }
 

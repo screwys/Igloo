@@ -185,10 +185,17 @@ internal fun stripReplyPrefix(item: FeedItemEntity, text: String): String {
     val replyHandle = normalizeHandle(item.replyToHandle)
     if (replyHandle.isBlank()) return text
 
-    val prefix = "@$replyHandle"
-    if (!text.startsWith(prefix, ignoreCase = true)) return text
+    var rest = text
+    val first = leadingReplyMentionRegex.find(rest) ?: return text
+    if (normalizeHandle(first.groupValues[1]) != replyHandle) return text
 
-    val rest = text.drop(prefix.length)
-    if (rest.isNotEmpty() && rest.first() !in setOf(' ', '\n', '\t', ',', ':')) return text
-    return rest.trimStart(' ', '\n', '\t', ',', ':').trimStart()
+    while (true) {
+        val match = leadingReplyMentionRegex.find(rest) ?: break
+        rest = rest
+            .drop(match.value.length)
+            .trimStart(' ', '\n', '\t', ',', ':')
+    }
+    return rest.trimStart()
 }
+
+private val leadingReplyMentionRegex = Regex("^@([A-Za-z0-9_]{1,30})(?=$|[\\s,:\n\t])")

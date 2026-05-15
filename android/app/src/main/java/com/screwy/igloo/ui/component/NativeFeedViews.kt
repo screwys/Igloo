@@ -261,6 +261,10 @@ internal class NativeFeedCardViews(context: Context) {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
     }
+    val threadCapsule: TextView = smallText(context).apply {
+        gravity = Gravity.CENTER
+        setPadding(dp(10), dp(7), dp(10), dp(7))
+    }
     val menu: ImageButton = ImageButton(context).apply {
         background = null
         scaleType = ImageView.ScaleType.CENTER
@@ -286,11 +290,12 @@ internal class NativeFeedCardViews(context: Context) {
         actionContainer.addView(View(context), LinearLayout.LayoutParams(0, dp(40), 1f))
         actionContainer.addView(actions, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)))
         root.addView(actionContainer)
+        root.addView(threadCapsule, verticalSpacingLayoutParams())
     }
 
     fun applyColors(colors: NativeFeedColors) {
         root.background = roundedFill(colors.surfaceElevated, dp(8))
-        listOf(retweeter, reply, showMore).forEach { it.setTextColor(colors.onSurfaceMuted) }
+        listOf(retweeter, reply, showMore, threadCapsule).forEach { it.setTextColor(colors.onSurfaceMuted) }
         body.setTextColor(colors.onSurface)
         quoteBody.setTextColor(colors.onSurface)
     }

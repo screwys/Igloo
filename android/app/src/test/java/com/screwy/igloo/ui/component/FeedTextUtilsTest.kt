@@ -151,6 +151,14 @@ class FeedTextUtilsTest {
             stripReplyPrefix(item, "@sample_parent_author: only if it reaches 100 retweets"),
         )
         assertEquals(
+            "only if it reaches 100 retweets",
+            stripReplyPrefix(item, "@sample_parent_author @sample_other_author only if it reaches 100 retweets"),
+        )
+        assertEquals(
+            "only if it reaches 100 retweets",
+            stripReplyPrefix(item, "@sample_parent_author,@sample_other_author: only if it reaches 100 retweets"),
+        )
+        assertEquals(
             "@sample_other_author only if it reaches 100 retweets",
             stripReplyPrefix(item, "@sample_other_author only if it reaches 100 retweets"),
         )

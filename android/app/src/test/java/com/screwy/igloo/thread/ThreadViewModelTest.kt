@@ -70,23 +70,34 @@ class ThreadViewModelTest {
             )
         )
 
-    @Test fun load_returnsChainRootToLeaf() = runBlocking {
-        db.channelDao().upsert(ChannelEntity(channelId = "twitter_user_alpha", name = "Alpha", platform = "twitter"))
+    @Test fun load_returnsRootAndSelectedReplyBranch() = runBlocking {
+        db.channelDao().upsert(ChannelEntity(channelId = "twitter_sample_alpha", name = "Alpha", platform = "twitter"))
+        db.channelDao().upsert(ChannelEntity(channelId = "twitter_sample_beta", name = "Beta", platform = "twitter"))
         db.feedItemDao().upsert(listOf(
-            FeedItemEntity(tweetId = "t1", authorHandle = "user_alpha", channelId = "twitter_user_alpha"),
+            FeedItemEntity(tweetId = "t1", authorHandle = "sample_alpha", channelId = "twitter_sample_alpha"),
             FeedItemEntity(
                 tweetId = "t2",
-                authorHandle = "user_alpha",
-                channelId = "twitter_user_alpha",
+                authorHandle = "sample_beta",
+                channelId = "twitter_sample_beta",
                 isReply = true,
                 replyToStatus = "t1",
+                publishedAt = 10,
             ),
             FeedItemEntity(
                 tweetId = "t3",
-                authorHandle = "user_alpha",
-                channelId = "twitter_user_alpha",
+                authorHandle = "sample_alpha",
+                channelId = "twitter_sample_alpha",
                 isReply = true,
                 replyToStatus = "t2",
+                publishedAt = 20,
+            ),
+            FeedItemEntity(
+                tweetId = "t4",
+                authorHandle = "sample_alpha",
+                channelId = "twitter_sample_alpha",
+                isReply = true,
+                replyToStatus = "t1",
+                publishedAt = 30,
             ),
         ))
         val vm = newViewModel()

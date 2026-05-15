@@ -160,6 +160,7 @@ internal class NativeFeedViewHolder(
         )
         bindQuote(row, post, quoteTranslation, colors, callbacks)
         bindActions(row, post, shareUrl, colors, callbacks)
+        bindThreadCapsule(adapterRow.threaded, colors, callbacks)
     }
 
     fun recycle() {
@@ -197,6 +198,33 @@ internal class NativeFeedViewHolder(
             }
             views.thread.addView(threadAncestorView(row, colors, callbacks), params)
         }
+    }
+
+    private fun bindThreadCapsule(
+        threaded: ThreadedFeedRow,
+        colors: NativeFeedColors,
+        callbacks: NativeFeedCallbacks,
+    ) {
+        val chain = threaded.chain
+        if (chain.isEmpty()) {
+            views.threadCapsule.visibility = View.GONE
+            views.threadCapsule.setOnClickListener(null)
+            return
+        }
+        val context = views.root.context
+        val postCount = threadCapsulePostCount(threaded)
+        val peopleCount = threadCapsulePeopleCount(threaded)
+        views.threadCapsule.visibility = View.VISIBLE
+        views.threadCapsule.text = context.getString(R.string.feed_thread_capsule, postCount, peopleCount) +
+            " - " + context.getString(R.string.feed_thread_open_inline)
+        views.threadCapsule.contentDescription = context.getString(
+            R.string.feed_thread_open_capsule_a11y,
+            postCount,
+            peopleCount,
+        )
+        views.threadCapsule.setTextColor(colors.onSurfaceMuted)
+        views.threadCapsule.background = roundedStroke(Color.TRANSPARENT, colors.borderSubtle, dp(1), dp(14))
+        views.threadCapsule.setOnClickListener { callbacks.onRowClick(threaded.row) }
     }
 
     private fun threadMoreButton(colors: NativeFeedColors): TextView =
@@ -547,6 +575,19 @@ internal class NativeFeedViewHolder(
             )
         }
         showNativeFeedPopup(views.menu, getColors(), items)
+    }
+
+    private fun threadCapsulePostCount(threaded: ThreadedFeedRow): Int =
+        threaded.chain.size + 1
+
+    private fun threadCapsulePeopleCount(threaded: ThreadedFeedRow): Int {
+        val handles = linkedSetOf<String>()
+        (threaded.chain + threaded.row).forEach { row ->
+            normalizeHandle(row.item.authorHandle)
+                .takeIf { it.isNotBlank() }
+                ?.let(handles::add)
+        }
+        return handles.size
     }
 
     private fun bindHeader(

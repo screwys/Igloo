@@ -188,7 +188,7 @@ class ThreadViewModel(
 
     private suspend fun loadThreadRows(tweetId: String): List<FeedRow> {
         val normalizedTweetId = tweetId.trim()
-        val rows = db.feedReadDao().getThreadChain(normalizedTweetId)
+        val rows = db.feedReadDao().getThreadTree(normalizedTweetId)
         if (rows.isNotEmpty()) return rows
 
         return db.feedReadDao()

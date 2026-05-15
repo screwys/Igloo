@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 object IglooMigrations {
     const val SUPPORTED_SCHEMA_BASELINE_VERSION = 29
-    const val CURRENT_SCHEMA_VERSION = 33
+    const val CURRENT_SCHEMA_VERSION = 34
 
     /** Adds `media_inventory.audio_language` for the subtitle auto-on rule. */
     val MIGRATION_7_8 = object : Migration(7, 8) {
@@ -380,6 +380,12 @@ object IglooMigrations {
         }
     }
 
+    val MIGRATION_33_34 = object : Migration(33, 34) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_feed_items_reply_parent ON feed_items(reply_to_status)")
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_7_8,
         MIGRATION_8_9,
@@ -407,5 +413,6 @@ object IglooMigrations {
         MIGRATION_30_31,
         MIGRATION_31_32,
         MIGRATION_32_33,
+        MIGRATION_33_34,
     )
 }

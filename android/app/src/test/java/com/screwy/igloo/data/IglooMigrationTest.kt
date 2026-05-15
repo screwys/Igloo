@@ -66,6 +66,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_30_31,
                 IglooMigrations.MIGRATION_31_32,
                 IglooMigrations.MIGRATION_32_33,
+                IglooMigrations.MIGRATION_33_34,
             )
             .allowMainThreadQueries()
             .build()
@@ -123,6 +124,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_30_31,
                 IglooMigrations.MIGRATION_31_32,
                 IglooMigrations.MIGRATION_32_33,
+                IglooMigrations.MIGRATION_33_34,
             )
             .allowMainThreadQueries()
             .build()
@@ -182,7 +184,11 @@ class IglooMigrationTest {
         }
 
         val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
-            .addMigrations(IglooMigrations.MIGRATION_31_32, IglooMigrations.MIGRATION_32_33)
+            .addMigrations(
+                IglooMigrations.MIGRATION_31_32,
+                IglooMigrations.MIGRATION_32_33,
+                IglooMigrations.MIGRATION_33_34,
+            )
             .allowMainThreadQueries()
             .build()
 
@@ -247,7 +253,7 @@ class IglooMigrationTest {
         }
 
         val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
-            .addMigrations(IglooMigrations.MIGRATION_32_33)
+            .addMigrations(IglooMigrations.MIGRATION_32_33, IglooMigrations.MIGRATION_33_34)
             .allowMainThreadQueries()
             .build()
 
@@ -264,6 +270,39 @@ class IglooMigrationTest {
                 assertTrue(it.moveToFirst())
                 assertEquals("asset-one", it.getString(0))
                 assertEquals(0, it.getInt(1))
+            }
+        } finally {
+            roomDb.close()
+            context.deleteDatabase(dbName)
+        }
+    }
+
+    @Test fun migration33To34AddsFeedReplyParentIndex() {
+        val dbName = "igloo-migration-33-34"
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val sqlite = createDatabaseFromSchemaSnapshot(
+            context,
+            dbName,
+            33,
+        )
+        sqlite.close()
+
+        val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
+            .addMigrations(IglooMigrations.MIGRATION_33_34)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            val readable = roomDb.openHelper.readableDatabase
+            assertEquals(IglooMigrations.CURRENT_SCHEMA_VERSION, readable.version)
+            readable.query("PRAGMA index_list(feed_items)").use { cursor ->
+                var found = false
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(1) == "idx_feed_items_reply_parent") {
+                        found = true
+                    }
+                }
+                assertTrue(found)
             }
         } finally {
             roomDb.close()

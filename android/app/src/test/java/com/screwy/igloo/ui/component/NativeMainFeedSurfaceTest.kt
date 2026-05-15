@@ -270,6 +270,8 @@ class NativeMainFeedSurfaceTest {
 
         assertTrue(threadText.contains("nativeThreadVisibleAncestorStart(chain.size)"))
         assertTrue(threadText.contains("R.string.feed_thread_load_more_replies"))
+        assertTrue(threadText.contains("R.string.feed_thread_capsule"))
+        assertTrue(threadText.contains("callbacks.onRowClick(threaded.row)"))
         assertTrue(threadText.contains("stripReplyPrefix(item, item.bodyText.orEmpty())"))
     }
 

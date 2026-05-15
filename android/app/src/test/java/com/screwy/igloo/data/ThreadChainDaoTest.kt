@@ -97,4 +97,61 @@ class ThreadChainDaoTest {
 
         assertEquals(emptyList<String>(), chain.map { it.item.tweetId })
     }
+
+    @Test fun getThreadTree_returnsRootAndSelectedReplyBranch() = runBlocking {
+        db.channelDao().upsert(ChannelEntity(channelId = "twitter_sample_alpha", name = "Alpha", platform = "twitter"))
+        db.channelDao().upsert(ChannelEntity(channelId = "twitter_sample_beta", name = "Beta", platform = "twitter"))
+        db.channelDao().upsert(ChannelEntity(channelId = "twitter_sample_gamma", name = "Gamma", platform = "twitter"))
+        db.feedItemDao().upsert(listOf(
+            FeedItemEntity(
+                tweetId = "root",
+                authorHandle = "sample_alpha",
+                channelId = "twitter_sample_alpha",
+                publishedAt = 100,
+            ),
+            FeedItemEntity(
+                tweetId = "branch",
+                authorHandle = "sample_beta",
+                channelId = "twitter_sample_beta",
+                isReply = true,
+                replyToHandle = "sample_alpha",
+                replyToStatus = "root",
+                publishedAt = 110,
+            ),
+            FeedItemEntity(
+                tweetId = "leaf",
+                authorHandle = "sample_alpha",
+                channelId = "twitter_sample_alpha",
+                isReply = true,
+                replyToHandle = "sample_beta",
+                replyToStatus = "branch",
+                publishedAt = 120,
+            ),
+            FeedItemEntity(
+                tweetId = "branch_sibling_child",
+                authorHandle = "sample_gamma",
+                channelId = "twitter_sample_gamma",
+                isReply = true,
+                replyToHandle = "sample_beta",
+                replyToStatus = "branch",
+                publishedAt = 130,
+            ),
+            FeedItemEntity(
+                tweetId = "separate_branch",
+                authorHandle = "sample_gamma",
+                channelId = "twitter_sample_gamma",
+                isReply = true,
+                replyToHandle = "sample_alpha",
+                replyToStatus = "root",
+                publishedAt = 140,
+            ),
+        ))
+
+        val tree = db.feedReadDao().getThreadTree("leaf")
+
+        assertEquals(
+            listOf("root", "branch", "leaf", "branch_sibling_child"),
+            tree.map { it.item.tweetId },
+        )
+    }
 }

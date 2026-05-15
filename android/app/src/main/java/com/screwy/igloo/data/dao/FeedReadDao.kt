@@ -440,6 +440,114 @@ interface FeedReadDao {
     suspend fun getThreadChain(tweetId: String): List<FeedRow>
 
     /**
+     * Return the conversation root followed by the selected top-level reply branch.
+     * This mirrors the web thread route: sibling reply branches under the same root
+     * remain separate, while descendants of the selected branch are included.
+     */
+    @RewriteQueriesToDropUnusedColumns
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
+    @Query(
+        """
+        WITH RECURSIVE
+        chain(tweet_id, depth) AS (
+            SELECT tweet_id, 0
+            FROM feed_items
+            WHERE tweet_id = :tweetId
+            UNION ALL
+            SELECT fi.reply_to_status, c.depth + 1
+            FROM chain c
+            JOIN feed_items fi ON fi.tweet_id = c.tweet_id
+            WHERE fi.reply_to_status IS NOT NULL
+              AND fi.reply_to_status != ''
+              AND c.depth < 50
+        ),
+        root_depth(max_depth) AS (
+            SELECT COALESCE(MAX(depth), 0) FROM chain
+        ),
+        root(root_tweet_id) AS (
+            SELECT tweet_id
+            FROM chain
+            WHERE depth = (SELECT max_depth FROM root_depth)
+            LIMIT 1
+        ),
+        branch(branch_tweet_id, branch_depth) AS (
+            SELECT tweet_id,
+                   CASE WHEN (SELECT max_depth FROM root_depth) > 0 THEN 1 ELSE 0 END
+            FROM chain
+            WHERE depth = CASE
+                WHEN (SELECT max_depth FROM root_depth) > 0
+                    THEN (SELECT max_depth FROM root_depth) - 1
+                ELSE 0
+            END
+            LIMIT 1
+        ),
+        subtree(tweet_id, parent_id, depth, sort_path) AS (
+            SELECT fi.tweet_id,
+                   COALESCE(fi.reply_to_status, ''),
+                   (SELECT branch_depth FROM branch),
+                   printf('%020d:%s', COALESCE(fi.published_at, 0), fi.tweet_id)
+            FROM feed_items fi
+            WHERE fi.tweet_id = (SELECT branch_tweet_id FROM branch)
+            UNION ALL
+            SELECT child.tweet_id,
+                   child.reply_to_status,
+                   subtree.depth + 1,
+                   subtree.sort_path || '/' || printf('%020d:%s', COALESCE(child.published_at, 0), child.tweet_id)
+            FROM feed_items child
+            JOIN subtree ON child.reply_to_status = subtree.tweet_id
+            WHERE subtree.depth < 50
+        ),
+        selected(tweet_id, depth, sort_path) AS (
+            SELECT fi.tweet_id, 0, ''
+            FROM feed_items fi
+            WHERE fi.tweet_id = (SELECT root_tweet_id FROM root)
+              AND (SELECT root_tweet_id FROM root) != (SELECT branch_tweet_id FROM branch)
+            UNION ALL
+            SELECT tweet_id, depth, sort_path FROM subtree
+        )
+        SELECT
+            fi.*,
+            COALESCE(NULLIF(cp.display_name, ''), c.name) AS channel_name,
+            c.avatar_url       AS channel_avatar_url,
+            COALESCE(c.platform, cp.platform) AS channel_platform,
+
+            CASE WHEN fl.tweet_id IS NOT NULL THEN 1 ELSE 0 END AS is_liked,
+            fl.liked_at                                         AS liked_at,
+
+            CASE WHEN bm.video_id IS NOT NULL THEN 1 ELSE 0 END AS is_bookmarked,
+            bm.category_id                                      AS bookmark_category_id,
+            bm.custom_title                                     AS bookmark_custom_title,
+            bm.bookmarked_at                                    AS bookmarked_at,
+
+            CASE WHEN cf.channel_id IS NOT NULL THEN 1 ELSE 0 END AS channel_is_followed,
+            CASE WHEN cs.channel_id IS NOT NULL THEN 1 ELSE 0 END AS channel_is_starred,
+            CASE
+                WHEN NULLIF(TRIM(COALESCE(fi.quote_author_handle, '')), '') IS NOT NULL
+                    THEN 'twitter_' || LOWER(LTRIM(TRIM(fi.quote_author_handle), '@'))
+                ELSE NULL
+            END AS quote_channel_id,
+            CASE WHEN qcf.channel_id IS NOT NULL THEN 1 ELSE 0 END AS quote_channel_is_followed
+        FROM selected st
+        JOIN feed_items fi ON fi.tweet_id = st.tweet_id
+        LEFT JOIN channels        c  ON fi.channel_id = c.channel_id
+        LEFT JOIN channel_profiles cp ON fi.channel_id = cp.channel_id
+        LEFT JOIN feed_likes      fl ON fi.tweet_id   = fl.tweet_id
+        LEFT JOIN bookmarks       bm ON bm.video_id   = fi.tweet_id
+        LEFT JOIN channel_follows cf ON fi.channel_id = cf.channel_id
+        LEFT JOIN channel_stars   cs ON fi.channel_id = cs.channel_id
+        LEFT JOIN channel_follows qcf
+          ON qcf.channel_id = CASE
+              WHEN NULLIF(TRIM(COALESCE(fi.quote_author_handle, '')), '') IS NOT NULL
+                  THEN 'twitter_' || LOWER(LTRIM(TRIM(fi.quote_author_handle), '@'))
+              ELSE NULL
+          END
+        WHERE st.tweet_id IS NOT NULL AND st.tweet_id != ''
+        ORDER BY st.sort_path
+        """
+    )
+    suspend fun getThreadTree(tweetId: String): List<FeedRow>
+
+    /**
      * Quotes can be synced as embedded payloads on a parent feed row without a separate
      * feed_items row for the quoted tweet. The thread screen uses this source only as a
      * fallback when the quoted tweet id itself is not present locally.
