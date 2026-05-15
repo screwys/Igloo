@@ -39,7 +39,7 @@ type InstagramProfile struct {
 
 // InstagramChannel fetches recent Instagram posts and reels through gallery-dl
 // without downloading media.
-func (g *GalleryDLWrapper) InstagramChannel(ctx context.Context, handle string, limit int, cookiesFile string) ([]VideoRef, error) {
+func (g *GalleryDLWrapper) InstagramChannel(ctx context.Context, handle string, limit int, cookiesFile string, cookiesBrowser ...string) ([]VideoRef, error) {
 	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
 	if handle == "" {
 		return nil, nil
@@ -47,18 +47,31 @@ func (g *GalleryDLWrapper) InstagramChannel(ctx context.Context, handle string, 
 	if limit <= 0 {
 		limit = 20
 	}
+	authAttempts := instagramCookieAuthAttempts(cookiesFile, optionalCookieBrowser(cookiesBrowser))
 	var all []VideoRef
 	var firstErr error
 	anySuccess := false
 	for _, suffix := range instagramSourceSuffixes {
 		rawURL := "https://www.instagram.com/" + handle + "/" + suffix + "/"
-		refs, err := g.instagramDump(ctx, rawURL, limit, "", handle)
-		if (err != nil || len(refs) == 0) && cookiesFile != "" {
-			cookieRefs, cookieErr := g.instagramDump(ctx, rawURL, limit, cookiesFile, handle)
-			if cookieErr == nil && len(cookieRefs) > 0 {
-				refs, err = cookieRefs, nil
-			} else if err == nil {
-				err = cookieErr
+		refs, err := g.instagramDump(ctx, rawURL, limit, CookieSet{}, handle)
+		if err != nil || len(refs) == 0 {
+			authSucceeded := false
+			for _, auth := range authAttempts {
+				cookieRefs, cookieErr := g.instagramDump(ctx, rawURL, limit, auth, handle)
+				if cookieErr == nil {
+					authSucceeded = true
+					refs, err = cookieRefs, nil
+					if len(cookieRefs) > 0 {
+						break
+					}
+					continue
+				}
+				if err == nil {
+					err = cookieErr
+				}
+			}
+			if authSucceeded && len(refs) == 0 {
+				err = nil
 			}
 		}
 		if err != nil {
@@ -79,7 +92,7 @@ func (g *GalleryDLWrapper) InstagramChannel(ctx context.Context, handle string, 
 // InstagramTagged fetches recent posts where handle was tagged. The returned
 // refs keep the original post owner in ChannelID and use repost-source fields
 // to record the followed tagged account that introduced the post.
-func (g *GalleryDLWrapper) InstagramTagged(ctx context.Context, handle string, limit int, cookiesFile string) ([]VideoRef, error) {
+func (g *GalleryDLWrapper) InstagramTagged(ctx context.Context, handle string, limit int, cookiesFile string, cookiesBrowser ...string) ([]VideoRef, error) {
 	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
 	if handle == "" {
 		return nil, nil
@@ -87,16 +100,29 @@ func (g *GalleryDLWrapper) InstagramTagged(ctx context.Context, handle string, l
 	if limit <= 0 {
 		limit = 20
 	}
+	authAttempts := instagramCookieAuthAttempts(cookiesFile, optionalCookieBrowser(cookiesBrowser))
 	rawURL := "https://www.instagram.com/" + handle + "/tagged/"
 	output, err := g.instagramTaggedDumpOutput(ctx, rawURL, limit, "")
 	refs := ParseInstagramTaggedDumpForHandle(output, handle)
-	if (err != nil || len(refs) == 0) && cookiesFile != "" {
-		cookieOutput, cookieErr := g.instagramTaggedDumpOutput(ctx, rawURL, limit, cookiesFile)
-		cookieRefs := ParseInstagramTaggedDumpForHandle(cookieOutput, handle)
-		if cookieErr == nil && len(cookieRefs) > 0 {
-			err, refs = nil, cookieRefs
-		} else if err == nil {
-			err = cookieErr
+	if err != nil || len(refs) == 0 {
+		authSucceeded := false
+		for _, auth := range authAttempts {
+			cookieOutput, cookieErr := g.instagramTaggedDumpOutput(ctx, rawURL, limit, auth.File, auth.Browser)
+			cookieRefs := ParseInstagramTaggedDumpForHandle(cookieOutput, handle)
+			if cookieErr == nil {
+				authSucceeded = true
+				err, refs = nil, cookieRefs
+				if len(cookieRefs) > 0 {
+					break
+				}
+				continue
+			}
+			if err == nil {
+				err = cookieErr
+			}
+		}
+		if authSucceeded && len(refs) == 0 {
+			err = nil
 		}
 	}
 	if err != nil {
@@ -105,18 +131,18 @@ func (g *GalleryDLWrapper) InstagramTagged(ctx context.Context, handle string, l
 	return mergeInstagramRefs(refs, limit), nil
 }
 
-func (g *GalleryDLWrapper) InstagramProfile(ctx context.Context, handle string, cookiesFile string) (*InstagramProfile, error) {
+func (g *GalleryDLWrapper) InstagramProfile(ctx context.Context, handle string, cookiesFile string, cookiesBrowser ...string) (*InstagramProfile, error) {
 	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
 	if handle == "" {
 		return nil, nil
 	}
 	var firstErr error
 	anySuccess := false
-	cookieAttempts := instagramProfileCookieAttempts(cookiesFile)
+	cookieAttempts := instagramProfileCookieAttempts(cookiesFile, optionalCookieBrowser(cookiesBrowser))
 	for _, suffix := range instagramSourceSuffixes {
 		rawURL := "https://www.instagram.com/" + handle + "/" + suffix + "/"
-		for _, cookieFile := range cookieAttempts {
-			output, err := g.instagramDumpOutput(ctx, rawURL, 1, cookieFile)
+		for _, cookies := range cookieAttempts {
+			output, err := g.instagramDumpOutput(ctx, rawURL, 1, cookies.File, cookies.Browser)
 			profile := ParseInstagramProfileDump(output, handle)
 			if err != nil {
 				if firstErr == nil {
@@ -136,24 +162,50 @@ func (g *GalleryDLWrapper) InstagramProfile(ctx context.Context, handle string, 
 	return &InstagramProfile{Handle: handle, DisplayName: handle}, nil
 }
 
-func instagramProfileCookieAttempts(cookiesFile string) []string {
+func instagramProfileCookieAttempts(cookiesFile, cookiesBrowser string) []CookieSet {
 	if strings.TrimSpace(cookiesFile) == "" {
-		return []string{""}
+		if strings.TrimSpace(cookiesBrowser) == "" {
+			return []CookieSet{{}}
+		}
+		return []CookieSet{{Browser: strings.TrimSpace(cookiesBrowser)}, {}}
 	}
-	return []string{cookiesFile, ""}
+	out := []CookieSet{{File: strings.TrimSpace(cookiesFile)}}
+	if strings.TrimSpace(cookiesBrowser) != "" {
+		out = append(out, CookieSet{Browser: strings.TrimSpace(cookiesBrowser)})
+	}
+	return append(out, CookieSet{})
 }
 
-func (g *GalleryDLWrapper) instagramDump(ctx context.Context, rawURL string, limit int, cookiesFile string, sourceHandle string) ([]VideoRef, error) {
-	output, err := g.instagramDumpOutput(ctx, rawURL, limit, cookiesFile)
+func instagramCookieAuthAttempts(cookiesFile, cookiesBrowser string) []CookieSet {
+	var out []CookieSet
+	if strings.TrimSpace(cookiesFile) != "" {
+		out = append(out, CookieSet{File: strings.TrimSpace(cookiesFile)})
+	}
+	if strings.TrimSpace(cookiesBrowser) != "" {
+		out = append(out, CookieSet{Browser: strings.TrimSpace(cookiesBrowser)})
+	}
+	return out
+}
+
+func optionalCookieBrowser(cookiesBrowser []string) string {
+	if len(cookiesBrowser) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(cookiesBrowser[0])
+}
+
+func (g *GalleryDLWrapper) instagramDump(ctx context.Context, rawURL string, limit int, cookies CookieSet, sourceHandle string) ([]VideoRef, error) {
+	output, err := g.instagramDumpOutput(ctx, rawURL, limit, cookies.File, cookies.Browser)
 	if err != nil {
 		return nil, err
 	}
 	return ParseInstagramChannelDumpForHandle(output, sourceHandle), nil
 }
 
-func (g *GalleryDLWrapper) instagramDumpOutput(ctx context.Context, rawURL string, limit int, cookiesFile string) ([]byte, error) {
-	args := instagramDumpArgs(limit, cookiesFile, rawURL)
-	result := g.Run(ctx, "instagram.dump", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: instagramGalleryDLTimeout})
+func (g *GalleryDLWrapper) instagramDumpOutput(ctx context.Context, rawURL string, limit int, cookiesFile string, cookiesBrowser ...string) ([]byte, error) {
+	browser := optionalCookieBrowser(cookiesBrowser)
+	args := instagramDumpArgs(limit, cookiesFile, rawURL, browser)
+	result := g.Run(ctx, "instagram.dump", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: instagramGalleryDLTimeout}, browser)
 	output := result.CombinedOutput()
 	err := result.Err
 	if err != nil {
@@ -165,9 +217,10 @@ func (g *GalleryDLWrapper) instagramDumpOutput(ctx context.Context, rawURL strin
 	return output, nil
 }
 
-func (g *GalleryDLWrapper) instagramTaggedDumpOutput(ctx context.Context, rawURL string, limit int, cookiesFile string) ([]byte, error) {
-	args := instagramTaggedArgs(limit, cookiesFile, rawURL)
-	result := g.Run(ctx, "instagram.tagged", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: instagramGalleryDLTimeout})
+func (g *GalleryDLWrapper) instagramTaggedDumpOutput(ctx context.Context, rawURL string, limit int, cookiesFile string, cookiesBrowser ...string) ([]byte, error) {
+	browser := optionalCookieBrowser(cookiesBrowser)
+	args := instagramTaggedArgs(limit, cookiesFile, rawURL, browser)
+	result := g.Run(ctx, "instagram.tagged", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: instagramGalleryDLTimeout}, browser)
 	output := result.CombinedOutput()
 	err := result.Err
 	if err != nil {
@@ -179,7 +232,7 @@ func (g *GalleryDLWrapper) instagramTaggedDumpOutput(ctx context.Context, rawURL
 	return output, nil
 }
 
-func instagramDumpArgs(limit int, cookiesFile, rawURL string) []string {
+func instagramDumpArgs(limit int, cookiesFile, rawURL string, cookiesBrowser ...string) []string {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -188,15 +241,13 @@ func instagramDumpArgs(limit int, cookiesFile, rawURL string) []string {
 		"--simulate",
 		"--range", "1-" + strconv.Itoa(limit),
 	}
-	if cookiesFile != "" {
-		args = append(args, "--cookies", cookiesFile)
-	}
+	args = appendCookieAuthArgs(args, cookiesFile, optionalCookieBrowser(cookiesBrowser))
 	args = append(args, rawURL)
 	return args
 }
 
-func instagramTaggedArgs(limit int, cookiesFile, rawURL string) []string {
-	return instagramDumpArgs(limit, cookiesFile, rawURL)
+func instagramTaggedArgs(limit int, cookiesFile, rawURL string, cookiesBrowser ...string) []string {
+	return instagramDumpArgs(limit, cookiesFile, rawURL, cookiesBrowser...)
 }
 
 func ParseInstagramChannelDump(output []byte) []VideoRef {

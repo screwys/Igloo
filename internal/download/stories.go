@@ -50,7 +50,7 @@ func (g *GalleryDLWrapper) TikTokStories(ctx context.Context, handle string, lim
 
 // InstagramStories fetches native Instagram stories through gallery-dl without
 // downloading media.
-func (g *GalleryDLWrapper) InstagramStories(ctx context.Context, handle string, limit int, cookiesFile string) ([]StoryRef, error) {
+func (g *GalleryDLWrapper) InstagramStories(ctx context.Context, handle string, limit int, cookiesFile string, cookiesBrowser ...string) ([]StoryRef, error) {
 	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
 	if handle == "" {
 		return nil, nil
@@ -59,7 +59,7 @@ func (g *GalleryDLWrapper) InstagramStories(ctx context.Context, handle string, 
 		limit = 20
 	}
 	rawURL := "https://www.instagram.com/stories/" + handle + "/"
-	output, err := g.instagramDumpOutput(ctx, rawURL, limit, cookiesFile)
+	output, err := g.instagramDumpOutput(ctx, rawURL, limit, cookiesFile, optionalCookieBrowser(cookiesBrowser))
 	if err != nil {
 		return nil, err
 	}

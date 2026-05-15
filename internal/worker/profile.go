@@ -695,8 +695,8 @@ func (m *Manager) fetchInstagramProfile(ctx context.Context, channelID, handle s
 	if m == nil || m.downloader == nil || m.downloader.GalleryDL == nil {
 		return nil, nil
 	}
-	cookiesFile, _ := m.cookiesFor("instagram")
-	profile, err := m.downloader.GalleryDL.InstagramProfile(ctx, handle, cookiesFile)
+	cookiesFile, cookiesBrowser := m.cookiesFor("instagram")
+	profile, err := m.downloader.GalleryDL.InstagramProfile(ctx, handle, cookiesFile, cookiesBrowser)
 	if err != nil {
 		return nil, err
 	}

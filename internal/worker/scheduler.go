@@ -268,13 +268,13 @@ func (m *Manager) checkChannel(ctx context.Context, ch model.Channel) ([]downloa
 	limit := m.getChannelMaxVideos(ch)
 	if ch.Platform == "instagram" && m.downloader != nil && m.downloader.GalleryDL != nil {
 		handle := instagramHandleForChannel(ch)
-		cookiesFile, _ := m.cookiesFor("instagram")
-		refs, err := m.downloader.GalleryDL.InstagramChannel(ctx, handle, limit, cookiesFile)
+		cookiesFile, cookiesBrowser := m.cookiesFor("instagram")
+		refs, err := m.downloader.GalleryDL.InstagramChannel(ctx, handle, limit, cookiesFile, cookiesBrowser)
 		if err != nil {
 			return refs, err
 		}
 		if m.db.InstagramIncludeTaggedForChannel(ch.ChannelID) {
-			tagged, taggedErr := m.downloader.GalleryDL.InstagramTagged(ctx, handle, limit, cookiesFile)
+			tagged, taggedErr := m.downloader.GalleryDL.InstagramTagged(ctx, handle, limit, cookiesFile, cookiesBrowser)
 			if taggedErr != nil {
 				log.Printf("[scheduler] instagram tagged check %s: %v", ch.ChannelID, taggedErr)
 			} else if len(tagged) > 0 {

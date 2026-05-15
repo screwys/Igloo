@@ -264,6 +264,33 @@ func TestCookiesForSkipsDisabledCookieFile(t *testing.T) {
 	}
 }
 
+func TestCookiesForFallsBackToBrowserWhenCookieFileDisabled(t *testing.T) {
+	dir := t.TempDir()
+	cookiePath := filepath.Join(dir, "instagram_cookies.txt")
+	if err := os.WriteFile(cookiePath, []byte("# Netscape HTTP Cookie File\n"), 0o600); err != nil {
+		t.Fatalf("write cookie file: %v", err)
+	}
+	d := newTestWorkerDB(t)
+	if err := d.SetSetting("", "cookies_instagram_enabled", "0"); err != nil {
+		t.Fatalf("SetSetting enabled: %v", err)
+	}
+	if err := d.SetSetting("", "cookies_instagram_browser", "firefox"); err != nil {
+		t.Fatalf("SetSetting browser: %v", err)
+	}
+
+	m := &Manager{
+		cfg: &config.Config{CookiesDir: dir},
+		db:  d,
+	}
+	gotFile, gotBrowser := m.cookiesFor("instagram")
+	if gotFile != "" {
+		t.Fatalf("cookiesFor disabled instagram file = %q, want empty", gotFile)
+	}
+	if gotBrowser != "firefox" {
+		t.Fatalf("cookiesFor instagram browser = %q, want firefox", gotBrowser)
+	}
+}
+
 func TestDownloadPoolLeaseOwnerIsProcessScoped(t *testing.T) {
 	got := downloadPoolLeaseOwner()
 	if got == "" || got == "downloadpool:legacy" {

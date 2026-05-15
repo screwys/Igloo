@@ -44,7 +44,7 @@ func (m *Manager) refreshNativeStoriesForChannel(ctx context.Context, channelID,
 	if handle == "" {
 		return 0
 	}
-	cookiesFile, _ := m.cookiesFor(platform)
+	cookiesFile, cookiesBrowser := m.cookiesFor(platform)
 	var (
 		refs []download.StoryRef
 		err  error
@@ -53,7 +53,7 @@ func (m *Manager) refreshNativeStoriesForChannel(ctx context.Context, channelID,
 	case "tiktok":
 		refs, err = m.downloader.GalleryDL.TikTokStories(ctx, handle, nativeStoryFetchLimit, cookiesFile)
 	case "instagram":
-		refs, err = m.downloader.GalleryDL.InstagramStories(ctx, handle, nativeStoryFetchLimit, cookiesFile)
+		refs, err = m.downloader.GalleryDL.InstagramStories(ctx, handle, nativeStoryFetchLimit, cookiesFile, cookiesBrowser)
 	}
 	if err != nil {
 		log.Printf("[stories] check %s_%s: %v", platform, handle, err)

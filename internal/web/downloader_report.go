@@ -409,7 +409,7 @@ func (s *Server) addInstagramReportRows(ctx context.Context, dl *download.Downlo
 	opts := s.reportDownloadOpts("instagram", filepath.Join(tempDir, "instagram"), "instagram-demo")
 	var rawURL string
 	report.Rows = append(report.Rows, s.runReportCheck(ctx, "instagram post/reel dump", "instagram", "instagram.dump", func(ctx context.Context) (map[string]any, error) {
-		refs, err := dl.GalleryDL.InstagramChannel(ctx, handle, 10, opts.Cookies)
+		refs, err := dl.GalleryDL.InstagramChannel(ctx, handle, 10, opts.Cookies, opts.CookiesFromBrowser)
 		for _, ref := range refs {
 			if ref.URL != "" {
 				rawURL = ref.URL
@@ -437,11 +437,11 @@ func (s *Server) addInstagramReportRows(ctx context.Context, dl *download.Downlo
 		return map[string]any{"url": rawURL, "file_count": files, "bytes": bytes}, nil
 	}))
 	report.Rows = append(report.Rows, s.runReportCheck(ctx, "instagram story dump", "instagram", "instagram.stories", func(ctx context.Context) (map[string]any, error) {
-		refs, err := dl.GalleryDL.InstagramStories(ctx, handle, 10, opts.Cookies)
+		refs, err := dl.GalleryDL.InstagramStories(ctx, handle, 10, opts.Cookies, opts.CookiesFromBrowser)
 		return map[string]any{"item_count": len(refs)}, err
 	}))
 	report.Rows = append(report.Rows, s.runReportCheck(ctx, "instagram profile", "instagram", "instagram.profile", func(ctx context.Context) (map[string]any, error) {
-		p, err := dl.GalleryDL.InstagramProfile(ctx, handle, opts.Cookies)
+		p, err := dl.GalleryDL.InstagramProfile(ctx, handle, opts.Cookies, opts.CookiesFromBrowser)
 		if err != nil {
 			return nil, err
 		}
