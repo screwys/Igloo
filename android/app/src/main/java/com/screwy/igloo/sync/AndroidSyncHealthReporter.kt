@@ -9,6 +9,7 @@ import com.screwy.igloo.net.AndroidSyncHealthRequest
 import com.screwy.igloo.net.AndroidSyncRetentionRequest
 import com.screwy.igloo.net.Reachability
 import kotlinx.coroutines.CancellationException
+import java.util.concurrent.TimeUnit
 
 internal class AndroidSyncHealthReporter(
     private val dao: AndroidSyncDao,
@@ -32,6 +33,7 @@ internal class AndroidSyncHealthReporter(
             ),
             bytes = AndroidSyncHealthBytePayload(verified = counts.verifiedBytes),
         )
+        val uploadStartedAt = System.nanoTime()
         val uploaded = try {
             api.health(req).status.value in 200..299
         } catch (e: CancellationException) {
@@ -40,11 +42,13 @@ internal class AndroidSyncHealthReporter(
             if (e.isLikelyTransportFailure()) reachability.downgrade()
             false
         }
+        val uploadElapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - uploadStartedAt)
         logger.info(
             event = "android_sync_health_reported",
             fields = mapOf(
                 "generation_id" to generationId,
                 "uploaded" to uploaded,
+                "upload_elapsed_ms" to uploadElapsedMs,
                 "verified" to counts.verified,
                 "pending" to counts.pending,
                 "failed" to counts.failed,

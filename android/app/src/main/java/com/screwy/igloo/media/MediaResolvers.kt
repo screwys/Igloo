@@ -7,8 +7,13 @@ import com.screwy.igloo.data.dao.ChannelProfileDao
 import com.screwy.igloo.data.dao.MediaInventoryDao
 import com.screwy.igloo.data.dao.VideoDao
 import com.screwy.igloo.data.entity.ChannelProfileEntity
+import com.screwy.igloo.data.entity.MediaInventoryEntity
 import com.screwy.igloo.data.entity.VideoEntity
+import com.screwy.igloo.log.Logger
 import java.io.File
+import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -89,7 +94,10 @@ class MediaResolversImpl(
     private val baseUrlProvider: () -> String,
     private val prefs: PreferencesRepo,
     private val remoteFallbackAllowed: Flow<Boolean> = flowOf(true),
+    logger: Logger? = null,
+    resolverFallbackFlushEvery: Int = RESOLVER_FALLBACK_FLUSH_EVERY,
 ) : MediaResolvers {
+    private val fallbackTelemetry = MediaResolverFallbackTelemetry(logger, resolverFallbackFlushEvery)
 
     private object MediaUriMemory {
         private const val MaxEntries = 4000
@@ -111,23 +119,37 @@ class MediaResolversImpl(
         val mode = prefs.dearrowMode().first()
         val allowRemoteFallback = remoteFallbackAllowed.first()
         if (shouldUseDearrow(mode, video)) {
-            return resolveAsset(ownerId, "dearrow_thumbnail", allowRemoteFallback)
-                .orIfMissing { dearrowRemoteThumb(ownerId, allowRemoteFallback) }
+            return resolveAsset(
+                ownerId = ownerId,
+                kind = "dearrow_thumbnail",
+                allowRemoteFallback = allowRemoteFallback,
+                route = "thumbnail_for_post",
+                ownerKind = ownerKind.telemetryName(),
+            ).orIfMissing {
+                dearrowRemoteThumb(ownerId, ownerKind, allowRemoteFallback)
+            }
         }
-        val resolved = resolvePreferredAsset(ownerId, "post_thumbnail", "post_media", allowRemoteFallback)
+        val resolved = resolvePreferredAsset(
+            ownerId = ownerId,
+            primaryKind = "post_thumbnail",
+            fallbackKind = "post_media",
+            allowRemoteFallback = allowRemoteFallback,
+            route = "thumbnail_for_post",
+            ownerKind = ownerKind.telemetryName(),
+        )
         if (resolved !is MediaUri.Missing) return resolved
         return thumbnailFallback(ownerId, ownerKind, video, allowRemoteFallback)
     }
 
     override suspend fun avatarForChannel(channelId: String): MediaUri {
         val allowRemoteFallback = remoteFallbackAllowed.first()
-        return resolveAsset(channelId, "avatar", allowRemoteFallback)
+        return resolveAsset(channelId, "avatar", allowRemoteFallback, route = "avatar_for_channel", ownerKind = "channel")
             .orAvatarFallback(channelId, channelProfileDao.getById(channelId), allowRemoteFallback)
     }
 
     override suspend fun bannerForChannel(channelId: String): MediaUri {
         val allowRemoteFallback = remoteFallbackAllowed.first()
-        return resolveAsset(channelId, "banner", allowRemoteFallback)
+        return resolveAsset(channelId, "banner", allowRemoteFallback, route = "banner_for_channel", ownerKind = "channel")
             .orBannerFallback(channelId, channelProfileDao.getById(channelId), allowRemoteFallback)
     }
 
@@ -140,14 +162,14 @@ class MediaResolversImpl(
 
     override fun thumbnailForPostFlow(ownerId: String, ownerKind: OwnerKind): Flow<MediaUri> =
         combine(
-            preferredAssetFlow(ownerId, "post_thumbnail", "post_media"),
-            assetFlow(ownerId, "dearrow_thumbnail"),
+            preferredAssetFlow(ownerId, "post_thumbnail", "post_media", "thumbnail_for_post", ownerKind.telemetryName()),
+            assetFlow(ownerId, "dearrow_thumbnail", "thumbnail_for_post", ownerKind.telemetryName()),
             videoDao.getByIdFlow(ownerId),
             prefs.dearrowMode(),
             remoteFallbackAllowed,
         ) { resolved, dearrowResolved, video, mode, allowRemoteFallback ->
             if (shouldUseDearrow(mode, video)) {
-                return@combine dearrowResolved.orIfMissing { dearrowRemoteThumb(ownerId, allowRemoteFallback) }
+                return@combine dearrowResolved.orIfMissing { dearrowRemoteThumb(ownerId, ownerKind, allowRemoteFallback) }
             }
             if (resolved !is MediaUri.Missing) resolved else thumbnailFallback(ownerId, ownerKind, video, allowRemoteFallback)
         }
@@ -156,7 +178,7 @@ class MediaResolversImpl(
 
     override fun avatarForChannelFlow(channelId: String): Flow<MediaUri> =
         combine(
-            assetFlow(channelId, "avatar"),
+            assetFlow(channelId, "avatar", "avatar_for_channel", "channel"),
             channelProfileDao.getByIdFlow(channelId),
             remoteFallbackAllowed,
         ) { resolved, profile, allowRemoteFallback ->
@@ -167,7 +189,7 @@ class MediaResolversImpl(
 
     override fun bannerForChannelFlow(channelId: String): Flow<MediaUri> =
         combine(
-            assetFlow(channelId, "banner"),
+            assetFlow(channelId, "banner", "banner_for_channel", "channel"),
             channelProfileDao.getByIdFlow(channelId),
             remoteFallbackAllowed,
         ) { resolved, profile, allowRemoteFallback ->
@@ -189,8 +211,11 @@ class MediaResolversImpl(
     ): MediaUri {
         if (this !is MediaUri.Missing) return this
         if (!allowRemoteFallback) return MediaUri.Missing
-        profile?.avatarUrl?.toAbsoluteHttpUri()?.let { return MediaUri.Remote(it) }
+        profile?.avatarUrl?.toAbsoluteHttpUri()?.let {
+            return MediaUri.Remote(it).recordRemoteFallback("avatar_for_channel", "channel", "avatar")
+        }
         return MediaUri.Remote(baseUrlProvider() + "/api/media/avatar/" + channelId)
+            .recordRemoteFallback("avatar_for_channel", "channel", "avatar")
     }
 
     private fun MediaUri.orBannerFallback(
@@ -208,6 +233,7 @@ class MediaResolversImpl(
             platform == "tiktok" || platform == "youtube"
         if (!hasProfileBanner && !canHaveServerBanner) return MediaUri.Missing
         return MediaUri.Remote("$root/api/media/banner/$channelId")
+            .recordRemoteFallback("banner_for_channel", "channel", "banner")
     }
 
     override fun videoStreamFlow(videoId: String): Flow<MediaUri> =
@@ -221,9 +247,15 @@ class MediaResolversImpl(
             .distinctUntilChanged()
             .withMediaUriMemory("video:$videoId")
 
-    private suspend fun resolveAsset(ownerId: String, kind: String, allowRemoteFallback: Boolean): MediaUri =
+    private suspend fun resolveAsset(
+        ownerId: String,
+        kind: String,
+        allowRemoteFallback: Boolean,
+        route: String,
+        ownerKind: String,
+    ): MediaUri =
         resolveSyncAsset(ownerId, kind).orIfMissing {
-            dao.resolveForOwner(ownerId, kind).toMediaUri(allowRemoteFallback)
+            dao.resolveForOwner(ownerId, kind).toMediaUri(allowRemoteFallback, route, ownerKind, kind)
         }
 
     private suspend fun resolvePreferredAsset(
@@ -231,14 +263,23 @@ class MediaResolversImpl(
         primaryKind: String,
         fallbackKind: String,
         allowRemoteFallback: Boolean,
+        route: String,
+        ownerKind: String,
     ): MediaUri =
         resolveSyncPreferredAsset(ownerId, primaryKind, fallbackKind).orIfMissing {
-            resolveInventoryPreferredAsset(ownerId, primaryKind, fallbackKind, allowRemoteFallback)
+            resolveInventoryPreferredAsset(ownerId, primaryKind, fallbackKind, allowRemoteFallback, route, ownerKind)
         }
 
     private suspend fun resolveVideoAsset(videoId: String, allowRemoteFallback: Boolean): MediaUri =
         syncDao.latestVerifiedVideoLocalPath(videoId).toExistingLocalUriOrMissing().orIfMissing {
-            resolveInventoryPreferredAsset(videoId, "video_stream", "post_media", allowRemoteFallback)
+            resolveInventoryPreferredAsset(
+                ownerId = videoId,
+                primaryKind = "video_stream",
+                fallbackKind = "post_media",
+                allowRemoteFallback = allowRemoteFallback,
+                route = "video_stream",
+                ownerKind = "video",
+            )
         }
 
     private suspend fun resolveInventoryPreferredAsset(
@@ -246,9 +287,11 @@ class MediaResolversImpl(
         primaryKind: String,
         fallbackKind: String,
         allowRemoteFallback: Boolean,
+        route: String,
+        ownerKind: String,
     ): MediaUri =
         (dao.resolveForOwner(ownerId, primaryKind) ?: dao.resolveForOwner(ownerId, fallbackKind))
-            .toMediaUri(allowRemoteFallback)
+            .toMediaUri(allowRemoteFallback, route, ownerKind, primaryKind)
 
     private suspend fun resolveSyncAsset(ownerId: String, kind: String): MediaUri =
         syncDao.latestVerifiedLocalPath(ownerId, kind).toExistingLocalUriOrMissing()
@@ -263,23 +306,27 @@ class MediaResolversImpl(
         }
     }
 
-    private fun assetFlow(ownerId: String, kind: String): Flow<MediaUri> =
+    private fun assetFlow(ownerId: String, kind: String, route: String, ownerKind: String): Flow<MediaUri> =
         combine(
             syncDao.latestVerifiedLocalPathFlow(ownerId, kind),
             dao.forOwnerAndKindFlow(ownerId, kind),
             remoteFallbackAllowed,
         ) { syncPath, row, allowRemoteFallback ->
-            syncPath.toExistingLocalUriOrMissing().orIfMissing { row.toMediaUri(allowRemoteFallback) }
+            syncPath.toExistingLocalUriOrMissing().orIfMissing {
+                row.toMediaUri(allowRemoteFallback, route, ownerKind, kind)
+            }
         }.distinctUntilChanged()
 
     private fun preferredAssetFlow(
         ownerId: String,
         primaryKind: String,
         fallbackKind: String,
+        route: String,
+        ownerKind: String,
     ): Flow<MediaUri> =
         combine(
             syncPreferredAssetFlow(ownerId, primaryKind, fallbackKind),
-            inventoryPreferredAssetFlow(ownerId, primaryKind, fallbackKind),
+            inventoryPreferredAssetFlow(ownerId, primaryKind, fallbackKind, route, ownerKind),
         ) { syncResolved, inventoryResolved ->
             syncResolved.orIfMissing { inventoryResolved }
         }.distinctUntilChanged()
@@ -287,7 +334,7 @@ class MediaResolversImpl(
     private fun videoAssetFlow(videoId: String): Flow<MediaUri> =
         combine(
             syncDao.latestVerifiedVideoLocalPathFlow(videoId),
-            inventoryPreferredAssetFlow(videoId, "video_stream", "post_media"),
+            inventoryPreferredAssetFlow(videoId, "video_stream", "post_media", "video_stream", "video"),
         ) { syncPath, inventoryResolved ->
             syncPath.toExistingLocalUriOrMissing().orIfMissing { inventoryResolved }
         }.distinctUntilChanged()
@@ -296,13 +343,15 @@ class MediaResolversImpl(
         ownerId: String,
         primaryKind: String,
         fallbackKind: String,
+        route: String,
+        ownerKind: String,
     ): Flow<MediaUri> =
         combine(
             dao.forOwnerAndKindFlow(ownerId, primaryKind),
             dao.forOwnerAndKindFlow(ownerId, fallbackKind),
             remoteFallbackAllowed,
         ) { primary, fallback, allowRemoteFallback ->
-            (primary ?: fallback).toMediaUri(allowRemoteFallback)
+            (primary ?: fallback).toMediaUri(allowRemoteFallback, route, ownerKind, primaryKind)
         }.distinctUntilChanged()
 
     private fun syncPreferredAssetFlow(
@@ -333,11 +382,12 @@ class MediaResolversImpl(
      * Android sync `dearrow_thumbnail` assets are preferred when synced; this is
      * only the server fallback for unsynced or legacy rows.
      */
-    private fun dearrowRemoteThumb(ownerId: String, allowRemoteFallback: Boolean): MediaUri {
+    private fun dearrowRemoteThumb(ownerId: String, ownerKind: OwnerKind, allowRemoteFallback: Boolean): MediaUri {
         if (!allowRemoteFallback) return MediaUri.Missing
         val root = baseUrlProvider().trimEnd('/')
         if (root.isBlank()) return MediaUri.Missing
         return MediaUri.Remote("$root/api/media/thumbnail/$ownerId?da=1")
+            .recordRemoteFallback("thumbnail_for_post", ownerKind.telemetryName(), "dearrow_thumbnail")
     }
 
     private suspend fun thumbnailFallback(ownerId: String, ownerKind: OwnerKind, allowRemoteFallback: Boolean): MediaUri =
@@ -359,7 +409,7 @@ class MediaResolversImpl(
             existing.mediaKind.equals("slideshow", ignoreCase = true) ||
                 existing.mediaKind.equals("image", ignoreCase = true) -> MediaUri.Remote("$root/api/media/slide/$ownerId/0")
             else -> MediaUri.Remote("$root/api/media/thumbnail/$ownerId")
-        }
+        }.recordRemoteFallback("thumbnail_for_post", ownerKind.telemetryName(), "post_thumbnail")
     }
 
     private suspend fun videoStreamFallback(videoId: String, allowRemoteFallback: Boolean): MediaUri =
@@ -371,9 +421,15 @@ class MediaResolversImpl(
         val root = baseUrlProvider().trimEnd('/')
         if (root.isBlank()) return MediaUri.Missing
         return MediaUri.Remote("$root/api/media/stream/$videoId")
+            .recordRemoteFallback("video_stream", video.telemetryOwnerKind(), "video_stream")
     }
 
-    private fun com.screwy.igloo.data.entity.MediaInventoryEntity?.toMediaUri(allowRemoteFallback: Boolean): MediaUri {
+    private fun MediaInventoryEntity?.toMediaUri(
+        allowRemoteFallback: Boolean,
+        route: String,
+        ownerKind: String,
+        requestedAssetKind: String,
+    ): MediaUri {
         if (this == null) return MediaUri.Missing
         if (state == "cached" && !localPath.isNullOrEmpty()) {
             val file = File(localPath)
@@ -381,6 +437,7 @@ class MediaResolversImpl(
         }
         if (!allowRemoteFallback) return MediaUri.Missing
         return MediaUri.Remote(baseUrlProvider() + serverUrl)
+            .recordRemoteFallback(route, ownerKind, assetKind.ifBlank { requestedAssetKind })
     }
 
     private fun String?.toExistingLocalUriOrMissing(): MediaUri {
@@ -397,6 +454,18 @@ class MediaResolversImpl(
     private inline fun MediaUri.orIfMissing(fallback: () -> MediaUri): MediaUri =
         if (this is MediaUri.Missing) fallback() else this
 
+    private fun MediaUri.recordRemoteFallback(route: String, ownerKind: String, assetKind: String): MediaUri {
+        if (this is MediaUri.Remote) {
+            fallbackTelemetry.record(
+                route = route,
+                ownerKind = ownerKind,
+                assetKind = assetKind,
+                urlClass = mediaResolverUrlClass(url),
+            )
+        }
+        return this
+    }
+
     private fun Flow<MediaUri>.withMediaUriMemory(key: String): Flow<MediaUri> = flow {
         MediaUriMemory.get(key)?.let { emit(it) }
         collect { uri ->
@@ -404,4 +473,84 @@ class MediaResolversImpl(
             emit(uri)
         }
     }.distinctUntilChanged()
+
+    private fun OwnerKind.telemetryName(): String = when (this) {
+        OwnerKind.Tweet -> "tweet"
+        OwnerKind.TikTokVideo -> "tiktok_video"
+        OwnerKind.InstagramReel -> "instagram_reel"
+        OwnerKind.YouTubeVideo -> "youtube_video"
+    }
+
+    private fun VideoEntity.telemetryOwnerKind(): String =
+        ownerKindFromChannelId(channelId).telemetryName()
+
+    private companion object {
+        const val RESOLVER_FALLBACK_FLUSH_EVERY = 32
+    }
+}
+
+private data class MediaResolverFallbackKey(
+    val route: String,
+    val ownerKind: String,
+    val assetKind: String,
+    val urlClass: String,
+)
+
+private class MediaResolverFallbackTelemetry(
+    private val logger: Logger?,
+    flushEvery: Int,
+) {
+    private val flushEvery = flushEvery.coerceAtLeast(1)
+    private val counts = ConcurrentHashMap<MediaResolverFallbackKey, AtomicInteger>()
+    private val seenKeys = ConcurrentHashMap<MediaResolverFallbackKey, Boolean>()
+    private val pending = AtomicInteger(0)
+    private val lock = Any()
+
+    fun record(route: String, ownerKind: String, assetKind: String, urlClass: String) {
+        val target = logger ?: return
+        val key = MediaResolverFallbackKey(route, ownerKind, assetKind, urlClass)
+        val counter = counts[key] ?: synchronized(lock) {
+            counts[key] ?: AtomicInteger(0).also { counts[key] = it }
+        }
+        counter.incrementAndGet()
+        val firstForKey = seenKeys.putIfAbsent(key, true) == null
+        if (firstForKey || pending.incrementAndGet() >= flushEvery) flush(target)
+    }
+
+    private fun flush(target: Logger) {
+        synchronized(lock) {
+            pending.set(0)
+            counts.forEach { (key, countRef) ->
+                val count = countRef.getAndSet(0)
+                if (count > 0) {
+                    target.info(
+                        event = "media_resolver_remote_fallbacks",
+                        fields = mapOf(
+                            "route" to key.route,
+                            "owner_kind" to key.ownerKind,
+                            "asset_kind" to key.assetKind,
+                            "url_class" to key.urlClass,
+                            "count" to count,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun mediaResolverUrlClass(url: String): String {
+    val trimmed = url.trim()
+    val path = runCatching { URI(trimmed).path.orEmpty() }.getOrDefault("")
+    return when {
+        path.startsWith("/api/media/avatar/") -> "igloo_media_avatar"
+        path.startsWith("/api/media/banner/") -> "igloo_media_banner"
+        path.startsWith("/api/media/thumbnail/") -> "igloo_media_thumbnail"
+        path.startsWith("/api/media/slide/") -> "igloo_media_slide"
+        path.startsWith("/api/media/stream/") -> "igloo_media_stream"
+        path.startsWith("/api/media/") -> "igloo_media_other"
+        path.startsWith("/api/") -> "igloo_api_other"
+        trimmed.startsWith("https://") || trimmed.startsWith("http://") -> "external_http"
+        else -> "unknown"
+    }
 }

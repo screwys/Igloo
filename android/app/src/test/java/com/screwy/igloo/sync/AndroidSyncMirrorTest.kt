@@ -72,6 +72,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import io.mockk.mockk
+import java.security.MessageDigest
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -240,6 +241,138 @@ class AndroidSyncMirrorTest {
         assertNotNull(localPath)
         assertTrue(localPath!!.contains("${java.io.File.separator}sync${java.io.File.separator}feed${java.io.File.separator}"))
         assertTrue("health should be attempted after each batch and final report", healthAttempts.get() >= 2)
+    }
+
+    @Test fun assetDrainDoneLogCapturesTelemetryCountsAndTiming() = runBlocking {
+        val existingBody = "existing-body"
+        val downloadedBody = "downloaded-body"
+        val existingFile = java.io.File(tmpFolder.root, "sync/feed/existing.bin").apply {
+            parentFile?.mkdirs()
+            writeText(existingBody)
+        }
+        val assets = listOf(
+            AndroidSyncAssetDto(
+                seq = 1,
+                asset_id = "existing",
+                asset_kind = "post_media",
+                owner_id = "owner-existing",
+                owner_kind = "feed_item",
+                bucket = "feed",
+                server_url = "/api/android/sync/assets/existing",
+                content_type = "application/octet-stream",
+                size_bytes = existingBody.length.toLong(),
+                sha256 = sha256Hex(existingBody),
+                state = "ready",
+                effective_recency_ms = nowMs,
+            ),
+            AndroidSyncAssetDto(
+                seq = 2,
+                asset_id = "downloaded",
+                asset_kind = "post_media",
+                owner_id = "owner-downloaded",
+                owner_kind = "feed_item",
+                bucket = "feed",
+                server_url = "/api/android/sync/assets/downloaded",
+                content_type = "application/octet-stream",
+                size_bytes = downloadedBody.length.toLong(),
+                sha256 = sha256Hex(downloadedBody),
+                state = "ready",
+                effective_recency_ms = nowMs - 1,
+            ),
+            AndroidSyncAssetDto(
+                seq = 3,
+                asset_id = "limited",
+                asset_kind = "post_media",
+                owner_id = "owner-limited",
+                owner_kind = "feed_item",
+                bucket = "feed",
+                server_url = "/api/android/sync/assets/limited",
+                content_type = "application/octet-stream",
+                size_bytes = 1,
+                state = "ready",
+                effective_recency_ms = nowMs - 2,
+            ),
+            AndroidSyncAssetDto(
+                seq = 4,
+                asset_id = "missing",
+                asset_kind = "post_media",
+                owner_id = "owner-missing",
+                owner_kind = "feed_item",
+                bucket = "feed",
+                server_url = "/api/android/sync/assets/missing",
+                content_type = "application/octet-stream",
+                size_bytes = 1,
+                state = "ready",
+                effective_recency_ms = nowMs - 3,
+            ),
+        )
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = GENERATION_ID,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                            asset_count = assets.size,
+                            ready_asset_count = assets.size,
+                        ),
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/items" -> respondJson(
+                    AndroidSyncItemsResponse(
+                        generation_id = GENERATION_ID,
+                        items = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/assets" -> respondJson(
+                    AndroidSyncAssetsResponse(
+                        generation_id = GENERATION_ID,
+                        assets = assets,
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                "/api/android/sync/assets/downloaded" -> respond(
+                    ByteReadChannel(downloadedBody),
+                    HttpStatusCode.OK,
+                    headersOf("Content-Type" to listOf("application/octet-stream")),
+                )
+                "/api/android/sync/assets/limited" -> respond(
+                    ByteReadChannel(""),
+                    HttpStatusCode.TooManyRequests,
+                    headersOf("Content-Type" to listOf("text/plain")),
+                )
+                "/api/android/sync/assets/missing" -> respond(
+                    ByteReadChannel(""),
+                    HttpStatusCode.NotFound,
+                    headersOf("Content-Type" to listOf("text/plain")),
+                )
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        buildMirror(engine).syncOnce()
+
+        assertTrue(existingFile.exists())
+        val log = waitForLog("android_sync_asset_drain_done")
+        assertEquals(32, log.fields["worker_cap"])
+        assertEquals(1, log.fields["verified_existing"])
+        assertEquals(1, log.fields["downloaded"])
+        assertEquals(1, log.fields["deferred"])
+        assertEquals(1, log.fields["server_missing"])
+        assertEquals(0, log.fields["failed"])
+        assertEquals(1, log.fields["pending"])
+        assertEquals(1, log.fields["claim_batches"])
+        assertEquals(4, log.fields["claimed_assets"])
+        assertEquals(1, log.fields["empty_claims"])
+        assertEquals(1, log.fields["http_429"])
+        assertTrue((log.fields["hash_bytes"] as Long) >= (existingBody.length + downloadedBody.length).toLong())
+        assertTrue((log.fields["hash_time_us"] as Long) >= 0L)
+        assertEquals(1, log.fields["health_uploads"])
+        assertTrue((log.fields["health_upload_time_ms"] as Long) >= 0L)
     }
 
     @Test fun transientGatewayMetadataFailureRetriesAsHttpStatusNotDecodeFailure() = runBlocking {
@@ -1973,6 +2106,11 @@ class AndroidSyncMirrorTest {
         respond(body, HttpStatusCode.OK, headersOf("Content-Type", ContentType.Application.Json.toString()))
 
     private fun jsonHeaders() = headersOf("Content-Type", ContentType.Application.Json.toString())
+
+    private fun sha256Hex(body: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(body.toByteArray())
+        return digest.joinToString("") { "%02x".format(it) }
+    }
 
     private fun generationEntity(
         generationId: String,

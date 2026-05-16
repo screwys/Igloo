@@ -22,6 +22,9 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 class AndroidSyncStaleGenerationException(val generationId: String) :
     IllegalStateException("Android sync generation $generationId has stale asset bytes; request latest generation")
@@ -43,10 +46,13 @@ internal class AndroidSyncAssetDrainer(
         var downloaded = 0
         var verifiedExisting = 0
         var deferred = 0
+        var serverMissing = 0
+        var failed = 0
         var healthUploadFailures = 0
         var promoted = false
         var completedSinceHealth = 0
         var staleGeneration = false
+        val telemetry = DrainTelemetry()
         dao.resetDownloading(generationId = generationId, nowMs = nowMsProvider())
         try {
             coroutineScope {
@@ -57,6 +63,7 @@ internal class AndroidSyncAssetDrainer(
                     try {
                         while (true) {
                             val batch = dao.claimableAssets(generationId, nowMsProvider(), ASSET_CLAIM_BATCH_SIZE)
+                            telemetry.recordClaim(batch.size)
                             if (batch.isEmpty()) break
                             if (!promoted) {
                                 foregroundPromoter.startDownloading(listOf(SYNC_DRAIN_TOKEN))
@@ -75,7 +82,7 @@ internal class AndroidSyncAssetDrainer(
                 val workers = List(ASSET_WORKER_COUNT) {
                     launch(Dispatchers.IO) {
                         for (asset in work) {
-                            results.send(downloadOrVerify(asset))
+                            results.send(downloadOrVerify(asset, telemetry))
                         }
                     }
                 }
@@ -91,13 +98,14 @@ internal class AndroidSyncAssetDrainer(
                         DrainResult.VerifiedExisting -> verifiedExisting++
                         DrainResult.Downloaded -> downloaded++
                         DrainResult.Deferred -> deferred++
+                        DrainResult.ServerMissing -> serverMissing++
                         DrainResult.StaleGeneration -> staleGeneration = true
-                        DrainResult.Failed -> Unit
+                        DrainResult.Failed -> failed++
                     }
                     completedSinceHealth++
                     if (completedSinceHealth >= HEALTH_REPORT_EVERY_ASSETS) {
                         completedSinceHealth = 0
-                        val uploaded = healthReporter.report(generationId, retention)
+                        val uploaded = reportHealth(generationId, retention, telemetry)
                         if (!uploaded) {
                             healthUploadFailures++
                             logger.info(
@@ -107,8 +115,12 @@ internal class AndroidSyncAssetDrainer(
                                     "downloaded" to downloaded,
                                     "verified_existing" to verifiedExisting,
                                     "deferred" to deferred,
+                                    "server_missing" to serverMissing,
+                                    "failed" to failed,
                                     "pending" to dao.countPending(generationId),
                                     "health_upload_failures" to healthUploadFailures,
+                                    "health_uploads" to telemetry.healthUploadCount(),
+                                    "health_upload_time_ms" to telemetry.healthUploadTimeMs(),
                                 ),
                             )
                         }
@@ -122,20 +134,23 @@ internal class AndroidSyncAssetDrainer(
             }
         }
         if (completedSinceHealth > 0) {
-            val uploaded = healthReporter.report(generationId, retention)
+            val uploaded = reportHealth(generationId, retention, telemetry)
             if (!uploaded) healthUploadFailures++
         }
         logger.info(
             event = "android_sync_asset_drain_done",
             fields = mapOf(
                 "generation_id" to generationId,
+                "worker_cap" to ASSET_WORKER_COUNT,
                 "downloaded" to downloaded,
                 "verified_existing" to verifiedExisting,
                 "deferred" to deferred,
+                "server_missing" to serverMissing,
+                "failed" to failed,
                 "pending" to dao.countPending(generationId),
                 "health_upload_failures" to healthUploadFailures,
                 "stale_generation" to staleGeneration,
-            ),
+            ) + telemetry.fields(),
         )
         if (staleGeneration) {
             logger.info(
@@ -176,7 +191,20 @@ internal class AndroidSyncAssetDrainer(
     private fun String.isUnder(rootPath: String, rootPrefix: String): Boolean =
         this == rootPath || startsWith(rootPrefix)
 
-    private suspend fun downloadOrVerify(asset: AndroidSyncAssetEntity): DrainResult {
+    private suspend fun reportHealth(
+        generationId: String,
+        retention: AndroidSyncRetentionRequest,
+        telemetry: DrainTelemetry,
+    ): Boolean {
+        val startedAt = System.nanoTime()
+        return try {
+            healthReporter.report(generationId, retention)
+        } finally {
+            telemetry.recordHealthUpload(System.nanoTime() - startedAt)
+        }
+    }
+
+    private suspend fun downloadOrVerify(asset: AndroidSyncAssetEntity, telemetry: DrainTelemetry): DrainResult {
         val maxDownloadBytes = maxDownloadBytesFor(asset)
         if (maxDownloadBytes == null) {
             markAssetFailed(asset, "missing_integrity_metadata")
@@ -184,7 +212,7 @@ internal class AndroidSyncAssetDrainer(
         }
 
         val finalFile = finalFileFor(asset)
-        if (finalFile.exists() && verifyFile(finalFile, asset)) {
+        if (finalFile.exists() && verifyFile(finalFile, asset, telemetry)) {
             dao.markVerified(
                 asset.generationId,
                 asset.assetId,
@@ -211,9 +239,10 @@ internal class AndroidSyncAssetDrainer(
                 when {
                     status == 404 -> {
                         dao.markServerMissing(asset.generationId, asset.assetId, asset.assetKind, "404", nowMsProvider())
-                        DrainResult.Failed
+                        DrainResult.ServerMissing
                     }
                     status == 408 || status == 429 || status >= 500 -> {
+                        if (status == 429) telemetry.recordHttp429()
                         deferAsset(asset, "http_$status")
                         DrainResult.Deferred
                     }
@@ -226,7 +255,7 @@ internal class AndroidSyncAssetDrainer(
                     }
                     else -> {
                         copyAssetBodyToFile(response.bodyAsChannel(), partFile, maxDownloadBytes)
-                        if (!verifyFile(partFile, asset)) {
+                        if (!verifyFile(partFile, asset, telemetry)) {
                             partFile.delete()
                             if (asset.serverUrl.isGenerationScopedAssetUrl()) {
                                 deferStaleAsset(asset, "stale_generation_asset_verify_failed")
@@ -355,11 +384,14 @@ internal class AndroidSyncAssetDrainer(
         return File(bucketDir, safePathSegment(asset.assetId) + "." + extFor(asset.contentType))
     }
 
-    private fun verifyFile(file: File, asset: AndroidSyncAssetEntity): Boolean {
+    private fun verifyFile(file: File, asset: AndroidSyncAssetEntity, telemetry: DrainTelemetry): Boolean {
         if (!file.exists() || !file.isFile) return false
         if (asset.sizeBytes > 0 && file.length() != asset.sizeBytes) return false
         val expected = asset.sha256?.takeIf { it.isNotBlank() } ?: return true
-        return sha256Hex(file).equals(expected, ignoreCase = true)
+        val startedAt = System.nanoTime()
+        val actual = sha256Hex(file)
+        telemetry.recordHash(file.length(), System.nanoTime() - startedAt)
+        return actual.equals(expected, ignoreCase = true)
     }
 
     private fun String.isGenerationScopedAssetUrl(): Boolean =
@@ -369,8 +401,61 @@ internal class AndroidSyncAssetDrainer(
         data object VerifiedExisting : DrainResult
         data object Downloaded : DrainResult
         data object Deferred : DrainResult
+        data object ServerMissing : DrainResult
         data object StaleGeneration : DrainResult
         data object Failed : DrainResult
+    }
+
+    private class DrainTelemetry {
+        private val claimChecks = AtomicInteger(0)
+        private val claimBatches = AtomicInteger(0)
+        private val claimedAssets = AtomicInteger(0)
+        private val emptyClaims = AtomicInteger(0)
+        private val http429 = AtomicInteger(0)
+        private val hashBytes = AtomicLong(0L)
+        private val hashTimeNs = AtomicLong(0L)
+        private val healthUploads = AtomicInteger(0)
+        private val healthUploadTimeNs = AtomicLong(0L)
+
+        fun recordClaim(claimed: Int) {
+            claimChecks.incrementAndGet()
+            if (claimed > 0) {
+                claimBatches.incrementAndGet()
+                claimedAssets.addAndGet(claimed)
+            } else {
+                emptyClaims.incrementAndGet()
+            }
+        }
+
+        fun recordHttp429() {
+            http429.incrementAndGet()
+        }
+
+        fun recordHash(bytes: Long, elapsedNs: Long) {
+            hashBytes.addAndGet(bytes.coerceAtLeast(0L))
+            hashTimeNs.addAndGet(elapsedNs.coerceAtLeast(0L))
+        }
+
+        fun recordHealthUpload(elapsedNs: Long) {
+            healthUploads.incrementAndGet()
+            healthUploadTimeNs.addAndGet(elapsedNs.coerceAtLeast(0L))
+        }
+
+        fun healthUploadCount(): Int = healthUploads.get()
+
+        fun healthUploadTimeMs(): Long = TimeUnit.NANOSECONDS.toMillis(healthUploadTimeNs.get())
+
+        fun fields(): Map<String, Any> = mapOf(
+            "claim_checks" to claimChecks.get(),
+            "claim_batches" to claimBatches.get(),
+            "claimed_assets" to claimedAssets.get(),
+            "empty_claims" to emptyClaims.get(),
+            "http_429" to http429.get(),
+            "hash_bytes" to hashBytes.get(),
+            "hash_time_us" to TimeUnit.NANOSECONDS.toMicros(hashTimeNs.get()),
+            "health_uploads" to healthUploads.get(),
+            "health_upload_time_ms" to healthUploadTimeMs(),
+        )
     }
 
     private companion object {

@@ -39,6 +39,7 @@ val iglooMediaModule = module {
             baseUrlProvider = get<ServerBaseUrlProvider>()::baseUrl,
             prefs = get(),
             remoteFallbackAllowed = get<Reachability>().state.map { it is Reachability.State.Online },
+            logger = get(),
         )
     } bind MediaResolvers::class
 

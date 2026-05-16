@@ -7,14 +7,19 @@ import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
 import com.screwy.igloo.data.entity.ChannelProfileEntity
 import com.screwy.igloo.data.entity.MediaInventoryEntity
 import com.screwy.igloo.data.entity.VideoEntity
+import com.screwy.igloo.log.InMemoryLogSink
+import com.screwy.igloo.log.LogEntry
+import com.screwy.igloo.log.Logger
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -34,11 +39,13 @@ class MediaResolversTest {
 
     private lateinit var db: IglooDatabase
     private lateinit var prefsScope: CoroutineScope
+    private lateinit var logSink: InMemoryLogSink
     private val baseUrl = "https://igloo.example"
 
     @Before fun setUp() {
         db = RoomTestSupport.freshDb()
         prefsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        logSink = InMemoryLogSink()
     }
 
     @After fun tearDown() {
@@ -471,6 +478,33 @@ class MediaResolversTest {
         assertEquals("$baseUrl/api/media/stream/video-fallback-no-paths-stream", (result as MediaUri.Remote).url)
     }
 
+    @Test fun remoteFallbackTelemetryCapturesRouteOwnerAssetAndUrlClass() = runBlocking {
+        db.videoDao().upsert(
+            VideoEntity(
+                videoId = "video-telemetry",
+                channelId = "youtube_channel",
+                publishedAt = 1L,
+            ),
+        )
+        val logger = Logger(
+            prefs = defaultPrefs(),
+            sink = logSink,
+            scope = prefsScope,
+            nowMsProvider = { 1_000_000L },
+        )
+
+        val result = buildResolvers(logger = logger, resolverFallbackFlushEvery = 1)
+            .thumbnailForPost("video-telemetry", OwnerKind.YouTubeVideo)
+
+        assertTrue(result is MediaUri.Remote)
+        val log = waitForLog("media_resolver_remote_fallbacks")
+        assertEquals("thumbnail_for_post", log.fields["route"])
+        assertEquals("youtube_video", log.fields["owner_kind"])
+        assertEquals("post_thumbnail", log.fields["asset_kind"])
+        assertEquals("igloo_media_thumbnail", log.fields["url_class"])
+        assertEquals(1, log.fields["count"])
+    }
+
     // ─── server_url is path — baseUrl is prepended ────────────────────────────
 
     @Test fun serverUrl_prefixedWithBaseUrl() = runBlocking {
@@ -609,6 +643,8 @@ class MediaResolversTest {
     private fun buildResolvers(
         prefs: PreferencesRepo = defaultPrefs(),
         remoteFallbackAllowed: Boolean = true,
+        logger: Logger? = null,
+        resolverFallbackFlushEvery: Int = 32,
     ): MediaResolversImpl =
         MediaResolversImpl(
             dao = db.mediaInventoryDao(),
@@ -618,11 +654,22 @@ class MediaResolversTest {
             baseUrlProvider = { baseUrl },
             prefs = prefs,
             remoteFallbackAllowed = flowOf(remoteFallbackAllowed),
+            logger = logger,
+            resolverFallbackFlushEvery = resolverFallbackFlushEvery,
         )
 
     /** Default prefs with dearrow off (schema default) — preserves existing test behavior. */
     private fun defaultPrefs(): PreferencesRepo =
         PreferencesRepo(db.preferenceDao(), prefsScope)
+
+    private suspend fun waitForLog(event: String): LogEntry =
+        withTimeout(1_500L) {
+            while (true) {
+                logSink.snapshot().firstOrNull { it.event == event }?.let { return@withTimeout it }
+                delay(10)
+            }
+            error("unreachable")
+        }
 
     // ─── Entity factory ────────────────────────────────────────────────────────
 
