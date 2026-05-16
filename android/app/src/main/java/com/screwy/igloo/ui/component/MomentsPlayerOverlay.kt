@@ -431,6 +431,7 @@ internal fun createMomentPlayerView(context: android.content.Context): PlayerVie
 internal fun VideoSurface(
     player: ExoPlayer,
     mediaKey: String,
+    pageIndex: Int,
     onStateChange: (MomentVideoSurfaceState) -> Unit,
     sharedPlayerView: PlayerView? = null,
     modifier: Modifier = Modifier,
@@ -459,6 +460,22 @@ internal fun VideoSurface(
             val next = currentSurfaceState()
             surfaceState = next
             onStateChange(next)
+            PerfProbe.log(
+                event = "moments_surface_state",
+            ) {
+                mapOf(
+                    "page" to pageIndex,
+                    "video" to momentDebugHash(mediaKey),
+                    "current" to momentDebugHash(player.currentMediaItem?.mediaId),
+                    "state" to player.playbackState.momentPlayerStateDebugName(),
+                    "expected" to next.hasExpectedMedia,
+                    "first_frame" to next.renderedFirstFrame,
+                    "frames" to next.renderedFrameCount,
+                    "playing" to next.playerIsPlaying,
+                    "size" to "${next.videoWidth}x${next.videoHeight}",
+                    "player" to Integer.toHexString(System.identityHashCode(player)),
+                )
+            }
         }
         publish()
         val listener = object : Player.Listener {
@@ -512,6 +529,19 @@ internal fun VideoSurface(
             playerView
         },
         update = { view ->
+            val attaching = view.player !== player
+            if (attaching) {
+                PerfProbe.log(
+                    event = "moments_surface_attach",
+                ) {
+                    mapOf(
+                        "page" to pageIndex,
+                        "video" to momentDebugHash(mediaKey),
+                        "player" to Integer.toHexString(System.identityHashCode(player)),
+                        "view" to Integer.toHexString(System.identityHashCode(view)),
+                    )
+                }
+            }
             view.alpha = momentVideoSurfaceAlpha(surfaceState)
             if (view.player !== player) view.player = player
             view.setBackgroundColor(android.graphics.Color.BLACK)

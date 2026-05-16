@@ -488,8 +488,14 @@ private fun BoxScope.MomentVideoLayer(
         resolvedStreamUri
     }
     var playbackStreamUri by remember(item.videoId) { mutableStateOf(candidateStreamUri) }
-    LaunchedEffect(candidateStreamUri, isActive, item.videoId) {
-        if (!isActive || playbackStreamUri is MediaUri.Missing) {
+    LaunchedEffect(candidateStreamUri, isActive, pagerScrolling, item.videoId) {
+        if (
+            shouldAdoptMomentPlaybackStreamUri(
+                currentStreamUri = playbackStreamUri,
+                isActive = isActive,
+                pagerScrolling = pagerScrolling,
+            )
+        ) {
             playbackStreamUri = candidateStreamUri
         }
     }
@@ -641,6 +647,42 @@ private fun BoxScope.MomentVideoLayer(
         streamUri = playbackStreamUri,
         remoteOffline = remoteOffline,
     )
+    LaunchedEffect(
+        item.videoId,
+        pageIndex,
+        isActive,
+        pagerScrolling,
+        shouldPrepare,
+        shouldPreparePlayer,
+        shouldMountVideoSurface,
+        showFallbackLayer,
+        loadedKey,
+        surfaceState.hasExpectedMedia,
+        surfaceState.renderedFirstFrame,
+        surfaceState.videoWidth,
+        surfaceState.videoHeight,
+    ) {
+        PerfProbe.log(
+            event = "moments_layer_state",
+        ) {
+            mapOf(
+                "page" to pageIndex,
+                "video" to momentDebugHash(item.videoId),
+                "active" to isActive,
+                "scrolling" to pagerScrolling,
+                "prepare_window" to shouldPrepare,
+                "prepare_player" to shouldPreparePlayer,
+                "mount_surface" to shouldMountVideoSurface,
+                "fallback" to showFallbackLayer,
+                "loaded" to (momentStreamLoadKeyVideoId(loadedKey) == item.videoId),
+                "surface_expected" to surfaceState.hasExpectedMedia,
+                "first_frame" to surfaceState.renderedFirstFrame,
+                "size" to "${surfaceState.videoWidth}x${surfaceState.videoHeight}",
+                "shared" to playerIsShared,
+                "player" to Integer.toHexString(System.identityHashCode(player)),
+            )
+        }
+    }
 
     Box(
         modifier = modifier
@@ -651,6 +693,7 @@ private fun BoxScope.MomentVideoLayer(
             VideoSurface(
                 player = player,
                 mediaKey = item.videoId,
+                pageIndex = pageIndex,
                 onStateChange = { surfaceState = it },
                 sharedPlayerView = sharedPlayerView,
                 modifier = Modifier

@@ -563,6 +563,31 @@ class MomentsPlayerTest {
     }
 
     @Test
+    fun playback_stream_uri_does_not_swap_for_visible_page_during_swipe() {
+        assertFalse(
+            shouldAdoptMomentPlaybackStreamUri(
+                currentStreamUri = MediaUri.Remote("https://igloo.example/api/media/stream/v1"),
+                isActive = false,
+                pagerScrolling = true,
+            ),
+        )
+        assertTrue(
+            shouldAdoptMomentPlaybackStreamUri(
+                currentStreamUri = MediaUri.Remote("https://igloo.example/api/media/stream/v1"),
+                isActive = false,
+                pagerScrolling = false,
+            ),
+        )
+        assertTrue(
+            shouldAdoptMomentPlaybackStreamUri(
+                currentStreamUri = MediaUri.Missing,
+                isActive = true,
+                pagerScrolling = true,
+            ),
+        )
+    }
+
+    @Test
     fun ready_state_requires_a_rendered_frame_before_hiding_thumbnail() {
         val noFrame = momentVideoSurfaceStateFor(
             expectedMediaId = "demo",

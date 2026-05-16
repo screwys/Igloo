@@ -269,6 +269,13 @@ internal inline fun Logger.debugMoment(
     debug(event, fields())
 }
 
+internal fun momentDebugHash(value: String?): String =
+    value
+        ?.takeIf { it.isNotBlank() }
+        ?.hashCode()
+        ?.let(Integer::toHexString)
+        .orEmpty()
+
 internal fun momentVideoDebugFields(
     item: MomentItem,
     pageIndex: Int,

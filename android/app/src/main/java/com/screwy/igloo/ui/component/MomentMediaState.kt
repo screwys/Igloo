@@ -115,6 +115,13 @@ internal fun shouldShowMomentsVideoProgressBar(
         surfaceState.hasExpectedMedia &&
         surfaceState.renderedFirstFrame
 
+internal fun shouldAdoptMomentPlaybackStreamUri(
+    currentStreamUri: MediaUri,
+    isActive: Boolean,
+    pagerScrolling: Boolean,
+): Boolean =
+    currentStreamUri is MediaUri.Missing || (!isActive && !pagerScrolling)
+
 internal fun shouldPrepareMomentVideoPlayer(
     isActive: Boolean,
     shouldPrepare: Boolean,

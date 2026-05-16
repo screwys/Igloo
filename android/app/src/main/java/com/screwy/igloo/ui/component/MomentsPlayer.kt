@@ -380,6 +380,9 @@ fun MomentsPlayer(
                 ) {
                     mapOf(
                         "page" to page,
+                        "settled_page" to pagerState.settledPage.coerceIn(0, items.lastIndex),
+                        "target_page" to pagerState.targetPage.coerceIn(0, items.lastIndex),
+                        "offset_x1000" to (pagerState.currentPageOffsetFraction * 1000).toInt(),
                         "scrolling" to scrolling,
                         "lifecycle_started" to started,
                         "items" to items.size,
