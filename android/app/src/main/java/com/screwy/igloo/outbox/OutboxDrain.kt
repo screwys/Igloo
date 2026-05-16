@@ -236,8 +236,7 @@ class OutboxDrain(
     private suspend fun ttlSweep() {
         val cutoff = nowMsProvider() - TTL_CUTOFF_MS
         // Clause 1: flip stuck-pending to dead + rollback them.
-        val stuckPending = outboxDao.claimPending(nowMs = nowMsProvider(), limit = 1000)
-            .filter { it.createdAtMs < cutoff }
+        val stuckPending = outboxDao.stuckPending(cutoffMs = cutoff, limit = TTL_PENDING_SWEEP_LIMIT)
         for (row in stuckPending) {
             markDeadAndRollback(
                 row = row,
@@ -281,6 +280,7 @@ class OutboxDrain(
         private const val LOG_BATCH_LIMIT = 100
         private const val LOGS_INSPECTOR_CAP = 500
         private const val TTL_CUTOFF_MS = 24L * 60L * 60L * 1000L
+        private const val TTL_PENDING_SWEEP_LIMIT = 1000
     }
 }
 

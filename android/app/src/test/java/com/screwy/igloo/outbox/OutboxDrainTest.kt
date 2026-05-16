@@ -245,6 +245,27 @@ class OutboxDrainTest {
         assertFalse("feed_likes row should have been rolled back", db.feedLikeDao().exists("t1"))
     }
 
+    @Test fun ttl_stuckFutureRetryPendingPast24h_flipsToDead_andRollbackFires() = runBlocking {
+        val drain = buildDrain(MockEngine { okJson("""{"ok":true}""") })
+
+        val oldTs = nowMs - 25L * 60L * 60L * 1000L
+        db.feedLikeDao().upsert(FeedLikeEntity("t1", likedAt = oldTs))
+        db.outboxDao().insert(
+            pendingLike(
+                tweetId = "t1",
+                action = "set",
+                createdAtMs = oldTs,
+                nextAttemptAtMs = nowMs + 60L * 60L * 1000L,
+            ),
+        )
+
+        drain.runDrainPass()
+
+        assertEquals(0, db.outboxDao().countByState("pending"))
+        assertEquals(0, db.outboxDao().countByState("dead"))
+        assertFalse("feed_likes row should have been rolled back", db.feedLikeDao().exists("t1"))
+    }
+
     @Test fun ttl_deadPast24h_deleted() = runBlocking {
         val drain = buildDrain(MockEngine { okJson("""{"ok":true}""") })
 
@@ -300,13 +321,19 @@ class OutboxDrainTest {
 
     // ─── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun pendingLike(tweetId: String, action: String, createdAtMs: Long): OutboxEntity =
+    private fun pendingLike(
+        tweetId: String,
+        action: String,
+        createdAtMs: Long,
+        nextAttemptAtMs: Long = 0,
+    ): OutboxEntity =
         OutboxEntity(
             kind = OutboxKind.CODE_LIKE,
             itemId = tweetId,
             payloadJson = """{"tweet_id":"$tweetId","action":"$action","updated_at_ms":$createdAtMs}""",
             state = "pending",
             createdAtMs = createdAtMs,
+            nextAttemptAtMs = nextAttemptAtMs,
         )
 
     private fun pendingSeen(tweetId: String, createdAtMs: Long): OutboxEntity =

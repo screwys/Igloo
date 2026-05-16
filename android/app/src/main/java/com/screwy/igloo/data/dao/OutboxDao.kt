@@ -164,6 +164,17 @@ interface OutboxDao {
 
     // ─── TTL sweeps ──────────────────────────────────────────────────────────
 
+    /** Pending rows old enough to expire, regardless of retry backoff eligibility. */
+    @Query(
+        """
+        SELECT * FROM outbox
+        WHERE state = 'pending' AND created_at_ms < :cutoffMs
+        ORDER BY created_at_ms
+        LIMIT :limit
+        """
+    )
+    suspend fun stuckPending(cutoffMs: Long, limit: Int): List<OutboxEntity>
+
     /** Clause 1: perpetually-failing pending rows flip to dead after 24h. */
     @Query(
         """
