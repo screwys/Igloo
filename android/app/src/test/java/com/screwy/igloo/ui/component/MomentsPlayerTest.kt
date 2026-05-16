@@ -231,6 +231,14 @@ class MomentsPlayerTest {
     }
 
     @Test
+    fun moment_debug_hash_is_stable_without_logging_raw_ids() {
+        assertEquals("", momentDebugHash(null))
+        assertEquals("", momentDebugHash(""))
+        assertEquals(momentDebugHash("sample-video-id"), momentDebugHash("sample-video-id"))
+        assertFalse(momentDebugHash("sample-video-id").contains("sample-video-id"))
+    }
+
+    @Test
     fun moment_player_media_item_carries_video_id_as_media_id() {
         val mediaItem = momentPlayerMediaItem(
             videoId = "demo",
@@ -571,6 +579,27 @@ class MomentsPlayerTest {
                 pagerScrolling = true,
             ),
         )
+        assertFalse(
+            shouldAdoptMomentPlaybackStreamUri(
+                currentStreamUri = MediaUri.Local(File("/tmp/v1.mp4")),
+                isActive = false,
+                pagerScrolling = true,
+            ),
+        )
+        assertFalse(
+            shouldAdoptMomentPlaybackStreamUri(
+                currentStreamUri = MediaUri.Remote("https://igloo.example/api/media/stream/v1"),
+                isActive = true,
+                pagerScrolling = false,
+            ),
+        )
+        assertFalse(
+            shouldAdoptMomentPlaybackStreamUri(
+                currentStreamUri = MediaUri.Remote("https://igloo.example/api/media/stream/v1"),
+                isActive = true,
+                pagerScrolling = true,
+            ),
+        )
         assertTrue(
             shouldAdoptMomentPlaybackStreamUri(
                 currentStreamUri = MediaUri.Remote("https://igloo.example/api/media/stream/v1"),
@@ -610,6 +639,28 @@ class MomentsPlayerTest {
         )
         assertTrue(withFrame.playerReady)
         assertFalse(shouldShowMomentThumbnailFallback(remoteOffline = false, surfaceState = withFrame))
+    }
+
+    @Test
+    fun surface_state_discards_stale_frame_metadata_when_player_media_changes() {
+        val staleFrame = momentVideoSurfaceStateFor(
+            expectedMediaId = "visible",
+            currentMediaId = "previous",
+            playbackState = Player.STATE_READY,
+            videoWidth = 720,
+            videoHeight = 1280,
+            renderedFrameCount = 1,
+            playerIsPlaying = true,
+            playerPositionMs = 3_000L,
+        )
+
+        assertFalse(staleFrame.hasExpectedMedia)
+        assertFalse(staleFrame.renderedFirstFrame)
+        assertEquals(0, staleFrame.renderedFrameCount)
+        assertEquals(0, staleFrame.videoWidth)
+        assertEquals(0, staleFrame.videoHeight)
+        assertEquals(0L, staleFrame.playerPositionMs)
+        assertFalse(shouldShowMomentVideoSurface(staleFrame))
     }
 
     @Test
