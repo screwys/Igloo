@@ -1,8 +1,9 @@
 # Android Performance Profiling Probes
 
 This instrumentation is scoped to the Android performance findings verified on
-2026-05-16. It avoids product behavior changes and emits either Android trace
-sections/counters or logcat lines under `IglooPerf`.
+2026-05-16. It avoids product behavior changes and is gated by the Android log
+tag `IglooPerf`: when that tag is not `DEBUG`, probe timers, counters, trace
+sections, collector tracking, and high-volume Room logging return early.
 
 ## Enable Log Probes
 
@@ -19,6 +20,14 @@ adb -s "$SERIAL" logcat -v threadtime -s IglooPerf
 
 Set the property before the app opens its Room database; the query callback is
 installed at DB build time.
+
+Disable probes for normal app use:
+
+```bash
+adb -s "$SERIAL" shell setprop log.tag.IglooPerf INFO
+adb -s "$SERIAL" shell am force-stop com.screwy.igloo
+adb -s "$SERIAL" shell am start -n com.screwy.igloo/.MainActivity
+```
 
 ## Probe Coverage
 

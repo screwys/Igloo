@@ -69,7 +69,7 @@ internal class NativeFeedAdapter(
         val viewType = getItemViewType(position)
         PerfProbe.timed(
             event = "native_feed_bind",
-            fields = mapOf("view_type" to viewType),
+            fields = { mapOf("view_type" to viewType) },
         ) {
             when (val item = getItem(position)) {
                 is NativeFeedAdapterItem.Header -> (holder as NativeFeedChannelHeaderViewHolder).bind(item.header)

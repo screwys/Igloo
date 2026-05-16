@@ -82,8 +82,7 @@ private fun prepareMomentVideo(
         if (loadedKey != null || player.mediaItemCount > 0) {
             PerfProbe.log(
                 event = "moments_player_clear",
-                fields = mapOf("reason" to "missing_stream", "page" to pageIndex),
-            )
+            ) { mapOf("reason" to "missing_stream", "page" to pageIndex) }
             logger.debugMoment("moments_player_clear_missing_stream") {
                 momentVideoDebugFields(
                     item = item,
@@ -110,21 +109,21 @@ private fun prepareMomentVideo(
     ) {
         PerfProbe.log(
             event = "moments_player_prepare_skip",
-            fields = mapOf("reason" to "already_loaded", "page" to pageIndex),
-        )
+        ) { mapOf("reason" to "already_loaded", "page" to pageIndex) }
         return loadedKey
     }
 
     val mediaItem = momentPlayerMediaItem(item.videoId, streamUri) ?: return null
     PerfProbe.log(
         event = "moments_player_prepare",
-        fields = mapOf(
+    ) {
+        mapOf(
             "page" to pageIndex,
             "uri" to PerfProbe.uriKind(streamUri),
             "seed_position" to (seedPositionMs > 0L),
             "had_media" to (player.mediaItemCount > 0),
-        ),
-    )
+        )
+    }
     logger.debugMoment("moments_player_prepare_page") {
         momentVideoDebugFields(
             item = item,
@@ -138,7 +137,7 @@ private fun prepareMomentVideo(
     }
     PerfProbe.timed(
         event = "moments_player_prepare_call",
-        fields = mapOf("page" to pageIndex, "uri" to PerfProbe.uriKind(streamUri)),
+        fields = { mapOf("page" to pageIndex, "uri" to PerfProbe.uriKind(streamUri)) },
     ) {
         replaceMomentPlayerMediaItem(player, mediaItem, seedPositionMs)
     }
@@ -483,8 +482,7 @@ private fun BoxScope.MomentVideoLayer(
             PerfProbe.incrementCounter("igloo_moments_player_build_count")
             PerfProbe.log(
                 event = "moments_player_build",
-                fields = mapOf("page" to pageIndex, "story_mode" to storyMode),
-            )
+            ) { mapOf("page" to pageIndex, "story_mode" to storyMode) }
         }
     }
     DisposableEffect(player) {
@@ -492,8 +490,7 @@ private fun BoxScope.MomentVideoLayer(
             PerfProbe.incrementCounter("igloo_moments_player_release_count")
             PerfProbe.log(
                 event = "moments_player_release",
-                fields = mapOf("page" to pageIndex, "story_mode" to storyMode),
-            )
+            ) { mapOf("page" to pageIndex, "story_mode" to storyMode) }
             player.release()
         }
     }
@@ -514,8 +511,7 @@ private fun BoxScope.MomentVideoLayer(
         if (!shouldPrepare) {
             PerfProbe.log(
                 event = "moments_player_clear",
-                fields = mapOf("reason" to "outside_prepare_window", "page" to pageIndex),
-            )
+            ) { mapOf("reason" to "outside_prepare_window", "page" to pageIndex) }
             player.playWhenReady = false
             player.pause()
             player.clearMediaItems()

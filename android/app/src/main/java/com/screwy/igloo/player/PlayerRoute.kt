@@ -262,25 +262,25 @@ fun PlayerRoute(
     // Listener wiring + periodic loop live together so either signal fires a
     // sample without duplicating call sites.
     LaunchedEffect(player) {
-        val pollFields = mapOf("surface" to "long_form", "cadence_ms" to 5_000)
-        val pollKey = PerfProbe.collectorStart("playback_poll", pollFields)
+        fun pollFields() = mapOf("surface" to "long_form", "cadence_ms" to 5_000)
+        val pollKey = PerfProbe.collectorStart("playback_poll", ::pollFields)
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 PerfProbe.log(
                     event = "long_form_playback_state",
-                    fields = mapOf(
+                ) {
+                    mapOf(
                         "state" to playbackState.perfPlaybackStateName(),
                         "is_playing" to player.isPlaying,
                         "media_items" to player.mediaItemCount,
-                    ),
-                )
+                    )
+                }
             }
 
             override fun onIsPlayingChanged(playing: Boolean) {
                 PerfProbe.log(
                     event = "long_form_playback_is_playing",
-                    fields = mapOf("playing" to playing, "state" to player.playbackState.perfPlaybackStateName()),
-                )
+                ) { mapOf("playing" to playing, "state" to player.playbackState.perfPlaybackStateName()) }
                 // `isPlaying == false` covers both user-pause and buffer-pause —
                 // either way, the current position is a valid sample to persist.
                 if (!playing) {
@@ -308,7 +308,7 @@ fun PlayerRoute(
             }
         } finally {
             player.removeListener(listener)
-            PerfProbe.collectorEnd("playback_poll", pollKey, pollFields)
+            PerfProbe.collectorEnd("playback_poll", pollKey, ::pollFields)
         }
     }
 
@@ -354,15 +354,16 @@ fun PlayerRoute(
     LaunchedEffect(playerControlsVisible, showSubtitles, segments.size, previewSpritePath, previewTrackJsonPath) {
         PerfProbe.log(
             event = "long_form_playback_ui_state",
-            fields = mapOf(
+        ) {
+            mapOf(
                 "controls_visible" to playerControlsVisible,
                 "subtitles_visible" to showSubtitles,
                 "subtitle_path" to (subtitlePath != null),
                 "sponsor_segments" to segments.size,
                 "preview_sprite" to (previewSpritePath != null),
                 "preview_track" to (previewTrackJsonPath != null),
-            ),
-        )
+            )
+        }
     }
     fun showLevelFeedback(label: String, level: Float) {
         levelFeedbackNonce += 1

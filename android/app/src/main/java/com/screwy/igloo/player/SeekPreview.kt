@@ -43,7 +43,7 @@ fun SeekPreview(
     val bitmap = remember(previewSpritePath) {
         PerfProbe.timed(
             event = "seek_preview_sprite_decode",
-            fields = mapOf("has_path" to (previewSpritePath != null)),
+            fields = { mapOf("has_path" to (previewSpritePath != null)) },
         ) {
             previewSpritePath
                 ?.let(::File)
@@ -55,7 +55,7 @@ fun SeekPreview(
     val trackCues = remember(previewTrackJsonPath) {
         PerfProbe.timed(
             event = "seek_preview_track_parse",
-            fields = mapOf("has_path" to (previewTrackJsonPath != null)),
+            fields = { mapOf("has_path" to (previewTrackJsonPath != null)) },
         ) {
             previewTrackJsonPath
                 ?.let(::File)

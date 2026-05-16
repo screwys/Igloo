@@ -112,9 +112,9 @@ internal fun MomentsVideoProgressBar(
     var barWidthPx by remember(player) { mutableIntStateOf(1) }
 
     DisposableEffect(player) {
-        val fields = mapOf("surface" to "moments", "cadence_ms" to 150)
-        val key = PerfProbe.collectorStart("playback_poll", fields)
-        onDispose { PerfProbe.collectorEnd("playback_poll", key, fields) }
+        fun fields() = mapOf("surface" to "moments", "cadence_ms" to 150)
+        val key = PerfProbe.collectorStart("playback_poll", ::fields)
+        onDispose { PerfProbe.collectorEnd("playback_poll", key, ::fields) }
     }
 
     LaunchedEffect(player) {

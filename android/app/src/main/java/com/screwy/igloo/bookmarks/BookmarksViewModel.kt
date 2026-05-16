@@ -98,8 +98,7 @@ class BookmarksViewModel(
         .map<List<BookmarkItem>, List<BookmarkItem>?> { rows ->
             PerfProbe.log(
                 event = "full_list_room_emit",
-                fields = mapOf("surface" to "bookmarks", "rows" to rows.size),
-            )
+            ) { mapOf("surface" to "bookmarks", "rows" to rows.size) }
             rows
         }
         .stateIn(
@@ -148,7 +147,9 @@ class BookmarksViewModel(
     val items: StateFlow<List<BookmarkItem>> = combine(allItems, selectedBookmarkFilter) { list, filter ->
         PerfProbe.timed(
             event = "full_list_map",
-            fields = mapOf("surface" to "bookmarks", "rows" to (list?.size ?: 0), "filter" to filter.perfName()),
+            fields = {
+                mapOf("surface" to "bookmarks", "rows" to (list?.size ?: 0), "filter" to filter.perfName())
+            },
         ) {
             filterBookmarkItems(list.orEmpty(), filter)
         }

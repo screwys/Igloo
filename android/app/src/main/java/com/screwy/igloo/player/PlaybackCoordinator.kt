@@ -30,10 +30,12 @@ class PlaybackCoordinator {
 
         PerfProbe.timed(
             event = "long_form_playback_bind",
-            fields = mapOf(
-                "uri" to PerfProbe.uriKind(source.mediaUri),
-                "resume" to (source.resumeMs > 0L),
-            ),
+            fields = {
+                mapOf(
+                    "uri" to PerfProbe.uriKind(source.mediaUri),
+                    "resume" to (source.resumeMs > 0L),
+                )
+            },
         ) {
             player.stop()
             player.setMediaItem(uri)

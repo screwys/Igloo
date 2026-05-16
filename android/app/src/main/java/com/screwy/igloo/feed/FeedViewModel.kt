@@ -125,8 +125,7 @@ class FeedViewModel(
     fun toggleLike(tweetId: String, newValue: Boolean) {
         PerfProbe.log(
             event = "feed_action_toggle",
-            fields = mapOf("action" to "like", "new_value" to newValue),
-        )
+        ) { mapOf("action" to "like", "new_value" to newValue) }
         val action = if (newValue) OutboxKind.Action.Set else OutboxKind.Action.Clear
         val likedAt = if (newValue) System.currentTimeMillis() else null
         patchRows({ it.item.tweetId == tweetId }) { row ->
@@ -140,8 +139,7 @@ class FeedViewModel(
     fun toggleBookmark(row: FeedRow) {
         PerfProbe.log(
             event = "feed_action_toggle",
-            fields = mapOf("action" to "bookmark_sheet", "currently_bookmarked" to (row.isBookmarked == 1)),
-        )
+        ) { mapOf("action" to "bookmark_sheet", "currently_bookmarked" to (row.isBookmarked == 1)) }
         _pendingBookmark.value = if (row.isBookmarked == 1) {
             bookmarkTargetForRow(
                 row = row,
@@ -160,8 +158,7 @@ class FeedViewModel(
         val target = _pendingBookmark.value ?: return
         PerfProbe.log(
             event = "feed_action_toggle",
-            fields = mapOf("action" to "bookmark_set", "media_indices" to (payload.mediaIndices?.size ?: 0)),
-        )
+        ) { mapOf("action" to "bookmark_set", "media_indices" to (payload.mediaIndices?.size ?: 0)) }
         _pendingBookmark.value = null
         patchBookmarkRows(target.itemId) { row ->
             row.copy(
@@ -191,7 +188,7 @@ class FeedViewModel(
 
     fun removePendingBookmark() {
         val target = _pendingBookmark.value ?: return
-        PerfProbe.log(event = "feed_action_toggle", fields = mapOf("action" to "bookmark_clear"))
+        PerfProbe.log(event = "feed_action_toggle") { mapOf("action" to "bookmark_clear") }
         _pendingBookmark.value = null
         patchBookmarkRows(target.itemId) { row ->
             row.copy(
@@ -225,8 +222,7 @@ class FeedViewModel(
     fun toggleFollow(channelId: String, newValue: Boolean) {
         PerfProbe.log(
             event = "feed_action_toggle",
-            fields = mapOf("action" to "follow", "new_value" to newValue),
-        )
+        ) { mapOf("action" to "follow", "new_value" to newValue) }
         val action = if (newValue) OutboxKind.Action.Set else OutboxKind.Action.Clear
         patchRows({ row ->
             row.item.channelId == channelId || row.quoteChannelId == channelId
@@ -252,8 +248,7 @@ class FeedViewModel(
     fun toggleStar(channelId: String, newValue: Boolean) {
         PerfProbe.log(
             event = "feed_action_toggle",
-            fields = mapOf("action" to "star", "new_value" to newValue),
-        )
+        ) { mapOf("action" to "star", "new_value" to newValue) }
         val action = if (newValue) OutboxKind.Action.Set else OutboxKind.Action.Clear
         patchRows({ it.item.channelId == channelId }) { row ->
             row.copy(channelIsStarred = if (newValue) 1 else 0)
@@ -284,7 +279,7 @@ class FeedViewModel(
 
     fun markSeen(tweetIds: List<String>) {
         if (tweetIds.isEmpty()) return
-        PerfProbe.log(event = "feed_seen_enqueue", fields = mapOf("count" to tweetIds.size))
+        PerfProbe.log(event = "feed_seen_enqueue") { mapOf("count" to tweetIds.size) }
         viewModelScope.launch {
             for (id in tweetIds) {
                 outboxWriter.enqueue(OutboxKind.Seen(tweetId = id))
@@ -293,7 +288,7 @@ class FeedViewModel(
     }
 
     fun warmMediaModels(rows: List<FeedRow>) {
-        PerfProbe.log(event = "feed_warm_media_models", fields = mapOf("rows" to rows.size))
+        PerfProbe.log(event = "feed_warm_media_models") { mapOf("rows" to rows.size) }
         mediaModelStore.warmMediaModels(rows)
     }
 
@@ -311,13 +306,13 @@ class FeedViewModel(
     private suspend fun loadSnapshot(resetCue: Boolean) {
         val rows = PerfProbe.timedSuspend(
             event = "feed_snapshot_query_first",
-            fields = mapOf("limit" to FEED_LIMIT),
+            fields = { mapOf("limit" to FEED_LIMIT) },
         ) {
             db.feedReadDao().feedFlow(limit = FEED_LIMIT, offset = 0).first()
         }
         val threadedRows = PerfProbe.timedSuspend(
             event = "feed_snapshot_attach_threads",
-            fields = mapOf("rows" to rows.size),
+            fields = { mapOf("rows" to rows.size) },
         ) {
             attachThreadChains(db.feedReadDao(), rows)
         }
@@ -412,7 +407,7 @@ class FeedViewModel(
 
     private fun applyActionStates(states: List<FeedRowActionState>) {
         if (states.isEmpty()) return
-        PerfProbe.log(event = "feed_action_state_emit", fields = mapOf("rows" to states.size))
+        PerfProbe.log(event = "feed_action_state_emit") { mapOf("rows" to states.size) }
         val byId = states.associateBy { it.tweetId }
         patchRows({ row -> row.item.tweetId in byId }) { row ->
             val state = byId.getValue(row.item.tweetId)
@@ -450,7 +445,7 @@ class FeedViewModel(
     ) {
         activeRows.value = PerfProbe.timed(
             event = "feed_patch_rows",
-            fields = mapOf("threaded_rows" to activeRows.value.size),
+            fields = { mapOf("threaded_rows" to activeRows.value.size) },
         ) {
             activeRows.value.map { threaded ->
                 threaded.copy(

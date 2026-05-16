@@ -153,8 +153,7 @@ class MomentsViewModel(
     }.map<List<DbMomentItem>, List<DbMomentItem>?> { rows ->
         PerfProbe.log(
             event = "full_list_room_emit",
-            fields = mapOf("surface" to "moments_grid", "rows" to rows.size),
-        )
+        ) { mapOf("surface" to "moments_grid", "rows" to rows.size) }
         rows
     }
         .stateIn(
@@ -177,8 +176,7 @@ class MomentsViewModel(
     }.map<List<DbMomentItem>, List<DbMomentItem>?> { rows ->
         PerfProbe.log(
             event = "full_list_room_emit",
-            fields = mapOf("surface" to "moments_player", "rows" to rows.size),
-        )
+        ) { mapOf("surface" to "moments_player", "rows" to rows.size) }
         rows
     }
         .stateIn(
@@ -196,7 +194,7 @@ class MomentsViewModel(
         .map { rows ->
             PerfProbe.timed(
                 event = "full_list_map",
-                fields = mapOf("surface" to "moments_grid", "rows" to (rows?.size ?: 0)),
+                fields = { mapOf("surface" to "moments_grid", "rows" to (rows?.size ?: 0)) },
             ) {
                 if (rows == null) emptyList()
                 else rows.map { row ->
@@ -231,11 +229,13 @@ class MomentsViewModel(
     val playerItems: StateFlow<List<PlayerMomentItem>> = combine(playerRowsRaw, storyStatusByChannel) { rows, storyStatuses ->
             PerfProbe.timed(
                 event = "full_list_map",
-                fields = mapOf(
-                    "surface" to "moments_player",
-                    "rows" to (rows?.size ?: 0),
-                    "story_statuses" to storyStatuses.size,
-                ),
+                fields = {
+                    mapOf(
+                        "surface" to "moments_player",
+                        "rows" to (rows?.size ?: 0),
+                        "story_statuses" to storyStatuses.size,
+                    )
+                },
             ) {
                 if (rows == null) emptyList()
                 else rows.map { row ->

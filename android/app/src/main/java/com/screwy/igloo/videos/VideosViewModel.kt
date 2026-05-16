@@ -28,7 +28,9 @@ class VideosViewModel(
     private val itemsRaw: StateFlow<List<VideoGridItem>?> = db.videoReadDao()
         .videosFlow()
         .map<List<VideoGridItem>, List<VideoGridItem>?> { rows ->
-            PerfProbe.log(event = "full_list_room_emit", fields = mapOf("surface" to "videos", "rows" to rows.size))
+            PerfProbe.log(event = "full_list_room_emit") {
+                mapOf("surface" to "videos", "rows" to rows.size)
+            }
             rows
         }
         .stateIn(
@@ -41,7 +43,7 @@ class VideosViewModel(
         .map { rows ->
             PerfProbe.timed(
                 event = "full_list_map",
-                fields = mapOf("surface" to "videos", "rows" to (rows?.size ?: 0)),
+                fields = { mapOf("surface" to "videos", "rows" to (rows?.size ?: 0)) },
             ) {
                 rows ?: emptyList()
             }

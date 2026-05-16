@@ -140,7 +140,7 @@ class PeriodicSyncWorker(
                 preparePeriodicSyncSession(databaseHolder, authRepo)
             }
             if (!prepared) {
-                PerfProbe.log(event = "workmanager_catchup_done", fields = mapOf("prepared" to false))
+                PerfProbe.log(event = "workmanager_catchup_done") { mapOf("prepared" to false) }
                 return ListenableWorker.Result.success()
             }
 
@@ -179,13 +179,14 @@ class PeriodicSyncWorker(
             }
             PerfProbe.log(
                 event = "workmanager_catchup_done",
-                fields = mapOf(
+            ) {
+                mapOf(
                     "prepared" to true,
                     "completed" to drain.completed,
                     "elapsed_ms" to drain.elapsedMs,
                     "remaining_work" to drain.remainingWork,
-                ),
-            )
+                )
+            }
             if (drain.completed) {
                 ListenableWorker.Result.success()
             } else {

@@ -190,13 +190,14 @@ class AndroidSyncMirror(
             )
             PerfProbe.log(
                 event = "android_sync_orphan_asset_files_walk",
-                fields = mapOf(
+            ) {
+                mapOf(
                     "files_walked" to orphanAssetFiles.walkedFiles,
                     "files_deleted" to orphanAssetFiles.files,
                     "bytes_deleted" to orphanAssetFiles.bytes,
                     "duration_ms" to orphanAssetFiles.walkDurationMs,
-                ),
-            )
+                )
+            }
             if (orphanAssetFiles.hasDeletes()) {
                 logger.info(
                     event = "android_sync_orphan_asset_files_pruned",
@@ -445,6 +446,7 @@ class AndroidSyncMirror(
         step: String,
         block: suspend () -> Int,
     ): Int {
+        if (!PerfProbe.enabled()) return block()
         val startedAt = android.os.SystemClock.elapsedRealtimeNanos()
         var rows: Int? = null
         val traceName = "android_sync_prune_$step"
@@ -455,12 +457,13 @@ class AndroidSyncMirror(
             PerfProbe.endAsync(traceName, cookie)
             PerfProbe.log(
                 event = "android_sync_prune_step",
-                fields = mapOf(
+            ) {
+                mapOf(
                     "step" to step,
                     "rows" to (rows ?: "failed"),
                     "duration_ms" to PerfProbe.elapsedMsSince(startedAt),
-                ),
-            )
+                )
+            }
         }
     }
 

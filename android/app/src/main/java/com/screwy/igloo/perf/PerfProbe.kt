@@ -15,18 +15,27 @@ internal object PerfProbe {
     private val collectorCounts = ConcurrentHashMap<String, AtomicInteger>()
     private val counters = ConcurrentHashMap<String, AtomicInteger>()
     private val asyncCookies = AtomicInteger(1)
+    private val syncTraceDepth: ThreadLocal<Int> = ThreadLocal.withInitial { 0 }
 
-    fun logsEnabled(): Boolean = Log.isLoggable(TAG, Log.DEBUG)
+    fun enabled(): Boolean = Log.isLoggable(TAG, Log.DEBUG)
+
+    fun logsEnabled(): Boolean = enabled()
 
     fun begin(section: String) {
+        if (!enabled()) return
         Trace.beginSection(sectionName(section))
+        syncTraceDepth.set((syncTraceDepth.get() ?: 0) + 1)
     }
 
     fun end() {
+        val depth = syncTraceDepth.get() ?: 0
+        if (depth <= 0) return
         Trace.endSection()
+        syncTraceDepth.set(depth - 1)
     }
 
     fun beginAsync(section: String): Int {
+        if (!enabled()) return 0
         val cookie = asyncCookies.getAndIncrement()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             Trace.beginAsyncSection(sectionName(section), cookie)
@@ -35,6 +44,7 @@ internal object PerfProbe {
     }
 
     fun endAsync(section: String, cookie: Int) {
+        if (cookie == 0) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             Trace.endAsyncSection(sectionName(section), cookie)
         }
@@ -54,6 +64,39 @@ internal object PerfProbe {
         fields: Map<String, Any?> = emptyMap(),
         block: () -> T,
     ): T {
+        if (!enabled()) return block()
+        val started = SystemClock.elapsedRealtimeNanos()
+        val cookie = beginAsync(event)
+        return try {
+            block()
+        } finally {
+            endAsync(event, cookie)
+            log(event, fields + ("duration_ms" to elapsedMsSince(started)))
+        }
+    }
+
+    inline fun <T> timed(
+        event: String,
+        crossinline fields: () -> Map<String, Any?>,
+        block: () -> T,
+    ): T {
+        if (!enabled()) return block()
+        val started = SystemClock.elapsedRealtimeNanos()
+        val cookie = beginAsync(event)
+        return try {
+            block()
+        } finally {
+            endAsync(event, cookie)
+            log(event) { fields() + ("duration_ms" to elapsedMsSince(started)) }
+        }
+    }
+
+    suspend inline fun <T> timedSuspend(
+        event: String,
+        fields: Map<String, Any?> = emptyMap(),
+        crossinline block: suspend () -> T,
+    ): T {
+        if (!enabled()) return block()
         val started = SystemClock.elapsedRealtimeNanos()
         val cookie = beginAsync(event)
         return try {
@@ -66,37 +109,46 @@ internal object PerfProbe {
 
     suspend inline fun <T> timedSuspend(
         event: String,
-        fields: Map<String, Any?> = emptyMap(),
+        crossinline fields: () -> Map<String, Any?>,
         crossinline block: suspend () -> T,
     ): T {
+        if (!enabled()) return block()
         val started = SystemClock.elapsedRealtimeNanos()
         val cookie = beginAsync(event)
         return try {
             block()
         } finally {
             endAsync(event, cookie)
-            log(event, fields + ("duration_ms" to elapsedMsSince(started)))
+            log(event) { fields() + ("duration_ms" to elapsedMsSince(started)) }
         }
     }
 
     fun log(event: String, fields: Map<String, Any?> = emptyMap()) {
-        if (!logsEnabled()) return
+        if (!enabled()) return
         Log.d(TAG, formatLine(event, fields))
     }
 
+    inline fun log(event: String, crossinline fields: () -> Map<String, Any?>) {
+        if (!enabled()) return
+        Log.d(TAG, formatLine(event, fields()))
+    }
+
     fun incrementCounter(name: String, delta: Int = 1): Int {
+        if (!enabled()) return 0
         val value = counters.getOrPut(name) { AtomicInteger(0) }.addAndGet(delta)
         setCounter(name, value)
         return value
     }
 
     fun setCounter(name: String, value: Int) {
+        if (!enabled()) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             Trace.setCounter(sectionName(name), value.toLong())
         }
     }
 
     fun collectorStart(kind: String, fields: Map<String, Any?> = emptyMap()): String {
+        if (!enabled()) return ""
         val key = fields.entries
             .joinToString(separator = "|", prefix = kind) { (field, value) -> "$field=$value" }
         val active = collectorCounts.getOrPut(key) { AtomicInteger(0) }.incrementAndGet()
@@ -105,13 +157,29 @@ internal object PerfProbe {
         return key
     }
 
+    inline fun collectorStart(kind: String, crossinline fields: () -> Map<String, Any?>): String {
+        if (!enabled()) return ""
+        return collectorStart(kind, fields())
+    }
+
     fun collectorEnd(kind: String, key: String, fields: Map<String, Any?> = emptyMap()) {
+        if (key.isEmpty() || !enabled()) return
         val active = collectorCounts[key]?.decrementAndGet()?.coerceAtLeast(0) ?: 0
         setCounter("${counterName(kind)}_active", active)
         log("${kind}_collector_end", fields + ("active" to active))
     }
 
+    inline fun collectorEnd(
+        kind: String,
+        key: String,
+        crossinline fields: () -> Map<String, Any?>,
+    ) {
+        if (key.isEmpty() || !enabled()) return
+        collectorEnd(kind, key, fields())
+    }
+
     fun roomQuery(sql: String, argCount: Int) {
+        if (!enabled()) return
         val count = incrementCounter("igloo_room_query_count")
         log(
             event = "room_query",
@@ -125,6 +193,7 @@ internal object PerfProbe {
     }
 
     fun roomInvalidated(tables: Set<String>) {
+        if (!enabled()) return
         val count = incrementCounter("igloo_room_invalidation_count")
         log(
             event = "room_invalidated",

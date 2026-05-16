@@ -47,7 +47,7 @@ class Scheduler(
     /** Start sync workers + the reachability-upgrade signal. Idempotent. */
     fun start() {
         if (running.any { it.isActive }) return
-        PerfProbe.log(event = "scheduler_start", fields = mapOf("existing_jobs" to running.size))
+        PerfProbe.log(event = "scheduler_start") { mapOf("existing_jobs" to running.size) }
         running.clear()
 
         outbox.wireWriter(writer)
@@ -87,7 +87,7 @@ class Scheduler(
 
     /** Queue a scoped ordered sync cycle: outbox first, then the requested stream(s). */
     fun triggerStream(stream: SyncStream) {
-        PerfProbe.log(event = "scheduler_trigger_stream", fields = mapOf("stream" to stream.name.lowercase()))
+        PerfProbe.log(event = "scheduler_trigger_stream") { mapOf("stream" to stream.name.lowercase()) }
         requestAfterOutbox(
             TriggerEvent.Inbound(setOf(stream)),
             TriggerEvent.MutationDelta,
@@ -97,7 +97,7 @@ class Scheduler(
 
     private suspend fun observeForegroundStarts() {
         foregroundFlow.collect { inForeground ->
-            PerfProbe.log(event = "scheduler_foreground_state", fields = mapOf("foreground" to inForeground))
+            PerfProbe.log(event = "scheduler_foreground_state") { mapOf("foreground" to inForeground) }
             if (inForeground) {
                 triggerAll()
             }
@@ -131,11 +131,12 @@ class Scheduler(
             val request = synchronized(pendingLock) { pendingAfterOutbox.drain() }
             PerfProbe.log(
                 event = "scheduler_outbox_pass_completed",
-                fields = mapOf(
+            ) {
+                mapOf(
                     "inbound_streams" to request.inboundStreams.size,
                     "mutation_delta" to request.runMutationDelta,
-                ),
-            )
+                )
+            }
 
             if (request.runMutationDelta) runMutationDelta()
             if (request.inboundStreams.isEmpty()) return@collect
@@ -182,8 +183,7 @@ class Scheduler(
             }
             PerfProbe.log(
                 event = "mutation_delta_sync_done",
-                fields = mapOf("rank_affecting" to result.rankAffecting),
-            )
+            ) { mapOf("rank_affecting" to result.rankAffecting) }
             if (result.rankAffecting) {
                 androidSync.trigger()
             }

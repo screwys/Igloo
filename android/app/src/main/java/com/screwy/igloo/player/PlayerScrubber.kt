@@ -65,12 +65,13 @@ internal fun ScrubberWithSegments(
                     dragFraction = scrubberFractionForX(down.position.x, barWidthPx)
                     PerfProbe.log(
                         event = "long_form_scrub_start",
-                        fields = mapOf(
+                    ) {
+                        mapOf(
                             "segments" to segments.size,
                             "duration_ms" to durationMs,
                             "preview_enabled" to (previewSpritePath != null && previewTrackJsonPath != null),
-                        ),
-                    )
+                        )
+                    }
                     onScrubStart(scrubberTargetMs(dragFraction, duration))
                     val downSegment = scrubberSegmentAtFraction(
                         segments = segments,
@@ -88,7 +89,7 @@ internal fun ScrubberWithSegments(
                         )
                         onSeekTo(target)
                         onScrubEnd(target)
-                        PerfProbe.log(event = "long_form_scrub_end", fields = mapOf("dragging" to false))
+                        PerfProbe.log(event = "long_form_scrub_end") { mapOf("dragging" to false) }
                         return@awaitEachGesture
                     }
 
@@ -108,7 +109,7 @@ internal fun ScrubberWithSegments(
                     onSeekTo(target)
                     onScrubEnd(target)
                     isDragging = false
-                    PerfProbe.log(event = "long_form_scrub_end", fields = mapOf("dragging" to true))
+                    PerfProbe.log(event = "long_form_scrub_end") { mapOf("dragging" to true) }
                 }
             },
     ) {

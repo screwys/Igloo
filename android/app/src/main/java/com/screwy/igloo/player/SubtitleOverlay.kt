@@ -52,7 +52,7 @@ fun SubtitleOverlay(
     val cues = remember(subtitlePath) {
         PerfProbe.timed(
             event = "subtitle_parse",
-            fields = mapOf("has_path" to true),
+            fields = { mapOf("has_path" to true) },
         ) {
             runCatching { File(subtitlePath).readText() }
                 .map { parseVtt(it) }
@@ -65,9 +65,9 @@ fun SubtitleOverlay(
     // coarser than per-frame so it doesn't thrash recomposition.
     var posMs by remember { mutableStateOf(0L) }
     androidx.compose.runtime.DisposableEffect(subtitlePath) {
-        val fields = mapOf("surface" to "subtitle", "cadence_ms" to 200, "cues" to cues.size)
-        val key = PerfProbe.collectorStart("playback_poll", fields)
-        onDispose { PerfProbe.collectorEnd("playback_poll", key, fields) }
+        fun fields() = mapOf("surface" to "subtitle", "cadence_ms" to 200, "cues" to cues.size)
+        val key = PerfProbe.collectorStart("playback_poll", ::fields)
+        onDispose { PerfProbe.collectorEnd("playback_poll", key, ::fields) }
     }
     LaunchedEffect(subtitlePath) {
         while (isActive) {

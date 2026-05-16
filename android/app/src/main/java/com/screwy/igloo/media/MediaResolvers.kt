@@ -500,23 +500,26 @@ class MediaResolversImpl(
         ownerKind: String,
         assetKinds: String,
     ): Flow<MediaUri> = flow {
-        val fields = mapOf(
+        if (!PerfProbe.enabled()) {
+            collect { emit(it) }
+            return@flow
+        }
+        fun fields() = mapOf(
             "resolver" to resolver,
             "owner_kind" to ownerKind,
             "asset_kinds" to assetKinds,
         )
-        val key = PerfProbe.collectorStart("media_resolver", fields)
+        val key = PerfProbe.collectorStart("media_resolver", ::fields)
         try {
             collect { uri ->
                 PerfProbe.incrementCounter("igloo_media_resolver_emit_count")
                 PerfProbe.log(
                     event = "media_resolver_emit",
-                    fields = fields + ("uri" to PerfProbe.uriKind(uri)),
-                )
+                ) { fields() + ("uri" to PerfProbe.uriKind(uri)) }
                 emit(uri)
             }
         } finally {
-            PerfProbe.collectorEnd("media_resolver", key, fields)
+            PerfProbe.collectorEnd("media_resolver", key, ::fields)
         }
     }.distinctUntilChanged()
 

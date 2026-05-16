@@ -7,6 +7,7 @@ import com.screwy.igloo.media.ForegroundPromoter
 import com.screwy.igloo.net.AndroidSyncRetentionRequest
 import com.screwy.igloo.net.Reachability
 import com.screwy.igloo.net.ServerBaseUrlProvider
+import com.screwy.igloo.perf.PerfProbe
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.prepareGet
@@ -162,7 +163,8 @@ internal class AndroidSyncAssetDrainer(
     }
 
     fun deleteUnreferencedAssetFiles(retainedPaths: List<String>): AssetFileDeleteStats {
-        val startedAt = android.os.SystemClock.elapsedRealtimeNanos()
+        val collectWalkStats = PerfProbe.enabled()
+        val startedAt = if (collectWalkStats) android.os.SystemClock.elapsedRealtimeNanos() else 0L
         val root = syncRoot.absoluteFile
         if (!root.exists()) return AssetFileDeleteStats(walkDurationMs = 0L)
         val rootPath = normalizedAbsolutePath(root)
@@ -176,7 +178,7 @@ internal class AndroidSyncAssetDrainer(
         var bytes = 0L
         root.walkTopDown().forEach { file ->
             if (!file.isFile) return@forEach
-            walkedFiles++
+            if (collectWalkStats) walkedFiles++
             val path = runCatching { normalizedAbsolutePath(file) }.getOrNull() ?: return@forEach
             if (!path.startsWith(rootPrefix) || path in retained) return@forEach
             val size = file.length()
@@ -189,9 +191,11 @@ internal class AndroidSyncAssetDrainer(
             files = files,
             bytes = bytes,
             walkedFiles = walkedFiles,
-            walkDurationMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
-                android.os.SystemClock.elapsedRealtimeNanos() - startedAt,
-            ),
+            walkDurationMs = if (collectWalkStats) {
+                TimeUnit.NANOSECONDS.toMillis(android.os.SystemClock.elapsedRealtimeNanos() - startedAt)
+            } else {
+                0L
+            },
         )
     }
 

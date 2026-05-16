@@ -181,12 +181,13 @@ fun MediaViewer(
     LaunchedEffect(pagerState.currentPage, isVideoPage) {
         PerfProbe.log(
             event = "media_viewer_page",
-            fields = mapOf(
+        ) {
+            mapOf(
                 "page" to pagerState.currentPage,
                 "items" to media.items.size,
                 "is_video_page" to isVideoPage,
-            ),
-        )
+            )
+        }
         videoProgress = 0f
         videoSeekToFraction = null
     }
@@ -363,8 +364,7 @@ private fun MediaVideoPage(
                 PerfProbe.incrementCounter("igloo_media_viewer_player_build_count")
                 PerfProbe.log(
                     event = "media_viewer_player_build",
-                    fields = mapOf("page" to pageIndex, "uri" to PerfProbe.uriKind(streamUri)),
-                )
+                ) { mapOf("page" to pageIndex, "uri" to PerfProbe.uriKind(streamUri)) }
                 player.repeatMode = if (loop) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
                 val mediaItem = when (streamUri) {
                     is MediaUri.Local -> Media3Item.fromUri(streamUri.file.toURI().toString())
@@ -374,7 +374,7 @@ private fun MediaVideoPage(
                 mediaItem?.let {
                     PerfProbe.timed(
                         event = "media_viewer_player_prepare",
-                        fields = mapOf("page" to pageIndex, "uri" to PerfProbe.uriKind(streamUri)),
+                        fields = { mapOf("page" to pageIndex, "uri" to PerfProbe.uriKind(streamUri)) },
                     ) {
                         player.setMediaItem(it)
                         player.prepare()
@@ -419,7 +419,7 @@ private fun MediaVideoPage(
         current.addListener(listener)
         onDispose {
             PerfProbe.incrementCounter("igloo_media_viewer_player_release_count")
-            PerfProbe.log(event = "media_viewer_player_release", fields = mapOf("page" to pageIndex))
+            PerfProbe.log(event = "media_viewer_player_release") { mapOf("page" to pageIndex) }
             currentOnPositionUpdate(current.currentPosition)
             current.removeListener(listener)
             current.release()
@@ -427,9 +427,9 @@ private fun MediaVideoPage(
     }
     DisposableEffect(player) {
         player ?: return@DisposableEffect onDispose { }
-        val fields = mapOf("surface" to "media_viewer", "cadence_ms" to "250_or_500")
-        val key = PerfProbe.collectorStart("playback_poll", fields)
-        onDispose { PerfProbe.collectorEnd("playback_poll", key, fields) }
+        fun fields() = mapOf("surface" to "media_viewer", "cadence_ms" to "250_or_500")
+        val key = PerfProbe.collectorStart("playback_poll", ::fields)
+        onDispose { PerfProbe.collectorEnd("playback_poll", key, ::fields) }
     }
     DisposableEffect(active, seekToFraction) {
         if (active) onSeekAvailable(seekToFraction)

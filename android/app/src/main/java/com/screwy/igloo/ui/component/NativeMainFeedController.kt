@@ -108,11 +108,13 @@ internal class NativeMainFeedController(
         rootView.setBackgroundColor(if (channelHeader != null) colors.surface else colors.background)
         val items = PerfProbe.timed(
             event = "native_feed_model_build",
-            fields = mapOf(
-                "rows" to rows.size,
-                "media_models" to mediaModels.size,
-                "has_header" to (channelHeader != null),
-            ),
+            fields = {
+                mapOf(
+                    "rows" to rows.size,
+                    "media_models" to mediaModels.size,
+                    "has_header" to (channelHeader != null),
+                )
+            },
         ) {
             buildList {
                 channelHeader?.let { add(NativeFeedAdapterItem.Header(it)) }
@@ -128,14 +130,12 @@ internal class NativeMainFeedController(
         }
         PerfProbe.log(
             event = "native_feed_submit_list",
-            fields = mapOf("items" to items.size, "posts" to rows.size),
-        )
+        ) { mapOf("items" to items.size, "posts" to rows.size) }
         adapter.submitList(items) {
             recyclerView.post {
                 PerfProbe.log(
                     event = "native_feed_submit_done",
-                    fields = mapOf("items" to adapter.currentList.size),
-                )
+                ) { mapOf("items" to adapter.currentList.size) }
                 restoreInitialScrollAnchorIfNeeded()
                 onViewportChanged()
             }
@@ -160,11 +160,13 @@ internal class NativeMainFeedController(
     private fun onViewportChanged() {
         PerfProbe.timed(
             event = "native_feed_viewport_changed",
-            fields = mapOf(
-                "adapter_items" to adapter.currentList.size,
-                "first_visible" to layoutManager.findFirstVisibleItemPosition(),
-                "last_visible" to layoutManager.findLastVisibleItemPosition(),
-            ),
+            fields = {
+                mapOf(
+                    "adapter_items" to adapter.currentList.size,
+                    "first_visible" to layoutManager.findFirstVisibleItemPosition(),
+                    "last_visible" to layoutManager.findLastVisibleItemPosition(),
+                )
+            },
         ) {
             onScrollAnchorChanged(nativeFeedScrollAnchor(adapter.currentList, layoutManager))
             val firstVisible = layoutManager.findFirstVisibleItemPosition().coerceAtLeast(0)
@@ -215,12 +217,13 @@ internal class NativeMainFeedController(
         if (rows.isNotEmpty()) {
             PerfProbe.log(
                 event = "native_feed_warm_near_visible",
-                fields = mapOf(
+            ) {
+                mapOf(
                     "first_post" to firstVisiblePost,
                     "last_post" to lastVisiblePost,
                     "rows" to rows.size,
-                ),
-            )
+                )
+            }
             callbacks.onWarmMediaRows(rows)
         }
     }

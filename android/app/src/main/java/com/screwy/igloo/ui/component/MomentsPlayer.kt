@@ -277,13 +277,13 @@ fun MomentsPlayer(
     val slideshowAudioPlayer = remember(authTokens.bearerTokenSync()) {
         buildIglooPlayer(context, authTokens, iglooHostProvider).also {
             PerfProbe.incrementCounter("igloo_moments_slideshow_audio_build_count")
-            PerfProbe.log(event = "moments_slideshow_audio_build", fields = mapOf("items" to items.size))
+            PerfProbe.log(event = "moments_slideshow_audio_build") { mapOf("items" to items.size) }
         }
     }
     DisposableEffect(slideshowAudioPlayer) {
         onDispose {
             PerfProbe.incrementCounter("igloo_moments_slideshow_audio_release_count")
-            PerfProbe.log(event = "moments_slideshow_audio_release", fields = mapOf("items" to items.size))
+            PerfProbe.log(event = "moments_slideshow_audio_release") { mapOf("items" to items.size) }
             slideshowAudioPlayer.release()
         }
     }
@@ -343,12 +343,13 @@ fun MomentsPlayer(
                 if (page !in items.indices) return@collect
                 PerfProbe.log(
                     event = "moments_pager_page",
-                    fields = mapOf(
+                ) {
+                    mapOf(
                         "page" to page,
                         "items" to items.size,
                         "story_mode" to storyMode,
-                    ),
-                )
+                    )
+                }
                 if (lastFiredPage != page) {
                     onIndexChange(page)
                     onViewEvent(items[page].videoId)
@@ -377,13 +378,14 @@ fun MomentsPlayer(
             .collectLatest { (page, scrolling, started) ->
                 PerfProbe.log(
                     event = "moments_pager_scroll_state",
-                    fields = mapOf(
+                ) {
+                    mapOf(
                         "page" to page,
                         "scrolling" to scrolling,
                         "lifecycle_started" to started,
                         "items" to items.size,
-                    ),
-                )
+                    )
+                }
                 val currentItem = items.getOrNull(page)
                 if (
                     currentItem == null ||

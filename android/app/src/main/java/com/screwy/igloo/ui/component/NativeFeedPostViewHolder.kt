@@ -584,8 +584,7 @@ internal class NativeFeedViewHolder(
             button.setOnClickListener {
                 PerfProbe.log(
                     event = "native_feed_action_click",
-                    fields = mapOf("action" to action.name.lowercase(), "selected" to selected),
-                )
+                ) { mapOf("action" to action.name.lowercase(), "selected" to selected) }
                 when (action) {
                     NativeFeedPrimaryAction.Share -> sharePlainText(
                         views.root.context,
