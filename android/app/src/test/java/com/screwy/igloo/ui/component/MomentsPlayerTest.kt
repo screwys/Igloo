@@ -1,6 +1,7 @@
 package com.screwy.igloo.ui.component
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.media3.common.Player
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
@@ -444,11 +445,45 @@ class MomentsPlayerTest {
             ),
         )
         assertTrue(
+            shouldShowMomentVideoSurface(
+                MomentVideoSurfaceState(
+                    hasExpectedMedia = true,
+                    renderedFirstFrame = true,
+                ),
+            ),
+        )
+        assertEquals(
+            1f,
+            momentVideoSurfaceAlpha(
+                MomentVideoSurfaceState(
+                    hasExpectedMedia = true,
+                    renderedFirstFrame = true,
+                ),
+            ),
+        )
+        assertTrue(
             shouldShowMomentThumbnailFallback(
                 remoteOffline = false,
                 surfaceState = MomentVideoSurfaceState(
                     playerReady = false,
                     isWide = false,
+                    hasExpectedMedia = true,
+                    renderedFirstFrame = false,
+                ),
+            ),
+        )
+        assertFalse(
+            shouldShowMomentVideoSurface(
+                MomentVideoSurfaceState(
+                    hasExpectedMedia = true,
+                    renderedFirstFrame = false,
+                ),
+            ),
+        )
+        assertEquals(
+            0f,
+            momentVideoSurfaceAlpha(
+                MomentVideoSurfaceState(
                     hasExpectedMedia = true,
                     renderedFirstFrame = false,
                 ),
@@ -465,6 +500,12 @@ class MomentsPlayerTest {
                 ),
             ),
         )
+    }
+
+    @Test
+    fun video_fallback_poster_uses_crop_to_match_short_video_surface() {
+        assertEquals(ContentScale.Fit, momentFitWidthContentScale())
+        assertEquals(ContentScale.Crop, momentVideoFallbackContentScale())
     }
 
     @Test

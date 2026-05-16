@@ -505,9 +505,11 @@ internal fun VideoSurface(
     AndroidView(
         factory = {
             (playerView.parent as? ViewGroup)?.removeView(playerView)
+            playerView.alpha = 0f
             playerView
         },
         update = { view ->
+            view.alpha = momentVideoSurfaceAlpha(surfaceState)
             if (view.player !== player) view.player = player
             view.setBackgroundColor(android.graphics.Color.BLACK)
             view.resizeMode = momentsVideoResizeMode(
@@ -515,9 +517,7 @@ internal fun VideoSurface(
                 height = surfaceState.videoHeight,
             )
         },
-        modifier = modifier.alpha(
-            if (surfaceState.hasExpectedMedia && surfaceState.renderedFirstFrame) 1f else 0f,
-        ),
+        modifier = modifier.alpha(momentVideoSurfaceAlpha(surfaceState)),
     )
 
     DisposableEffect(player) {
@@ -539,6 +539,8 @@ internal fun momentsVideoResizeMode(width: Int, height: Int): Int =
 
 internal fun momentFitWidthContentScale(): ContentScale = ContentScale.Fit
 
+internal fun momentVideoFallbackContentScale(): ContentScale = ContentScale.Crop
+
 internal fun shouldClearMomentRenderedFrame(playbackState: Int): Boolean =
     playbackState == Player.STATE_IDLE
 
@@ -556,6 +558,7 @@ internal fun BoxScope.ThumbnailFallback(
     thumbnailUri: MediaUri,
     alphaOverride: Float?,
     brokenIconTint: Color,
+    contentScale: ContentScale = momentFitWidthContentScale(),
 ) {
     when (thumbnailUri) {
         is MediaUri.Local -> AsyncImage(
@@ -564,7 +567,7 @@ internal fun BoxScope.ThumbnailFallback(
             modifier = Modifier
                 .fillMaxSize()
                 .alpha(alphaOverride ?: mediaAlpha(thumbnailUri)),
-            contentScale = momentFitWidthContentScale(),
+            contentScale = contentScale,
         )
         is MediaUri.Remote -> AsyncImage(
             model = rememberRemoteImageModel(thumbnailUri.url),
@@ -572,7 +575,7 @@ internal fun BoxScope.ThumbnailFallback(
             modifier = Modifier
                 .fillMaxSize()
                 .alpha(alphaOverride ?: mediaAlpha(thumbnailUri)),
-            contentScale = momentFitWidthContentScale(),
+            contentScale = contentScale,
         )
         is MediaUri.Missing -> Icon(
             imageVector = Icons.Default.BrokenImage,

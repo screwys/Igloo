@@ -228,10 +228,15 @@ internal fun MomentPage(
             fallbackThumbnailUri = item.fallbackThumbnailUri,
         )
     }
-    val resolvedThumbnailUri by resolvers.thumbnailForPostFlow(item.mediaOwnerId, ownerKind)
-        .collectAsState(initial = initialThumbnailUri)
+    val thumbnailFlow = remember(resolvers, item.mediaOwnerId, ownerKind) {
+        resolvers.thumbnailForPostFlow(item.mediaOwnerId, ownerKind)
+    }
+    val resolvedThumbnailUri by thumbnailFlow.collectAsState(initial = initialThumbnailUri)
     val thumbnailUri = if (resolvedThumbnailUri is MediaUri.Missing) initialThumbnailUri else resolvedThumbnailUri
-    val bookmarkRow by bookmarkDao.getByIdFlow(item.videoId).collectAsState(initial = null)
+    val bookmarkFlow = remember(bookmarkDao, item.videoId) {
+        bookmarkDao.getByIdFlow(item.videoId)
+    }
+    val bookmarkRow by bookmarkFlow.collectAsState(initial = null)
     val isBookmarked = bookmarkRow != null
     val bookmarkItem = if (isBookmarked == item.isBookmarked) item else item.copy(isBookmarked = isBookmarked)
 
@@ -469,8 +474,10 @@ private fun BoxScope.MomentVideoLayer(
             ?.let(MediaUri::Remote)
             ?: MediaUri.Missing
     }
-    val resolvedStreamUri by resolvers.videoStreamFlow(item.mediaOwnerId)
-        .collectAsState(initial = initialStreamUri)
+    val streamFlow = remember(resolvers, item.mediaOwnerId) {
+        resolvers.videoStreamFlow(item.mediaOwnerId)
+    }
+    val resolvedStreamUri by streamFlow.collectAsState(initial = initialStreamUri)
     val candidateStreamUri = if (resolvedStreamUri is MediaUri.Missing) {
         initialStreamUri
     } else {
@@ -630,6 +637,7 @@ private fun BoxScope.MomentVideoLayer(
                 thumbnailUri = thumbnailUri,
                 alphaOverride = if (remoteOffline) 0.55f else 1f,
                 brokenIconTint = MaterialTheme.iglooColors.onSurfaceFaint,
+                contentScale = momentVideoFallbackContentScale(),
             )
         }
         if (shouldMountVideoSurface) {

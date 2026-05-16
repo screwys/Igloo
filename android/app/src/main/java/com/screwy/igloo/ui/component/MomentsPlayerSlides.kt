@@ -54,13 +54,16 @@ internal fun MomentImageSurface(
     val mediaInventoryDao: MediaInventoryDao = koinInject()
     val syncDao: AndroidSyncDao = koinInject()
     val baseUrl = baseUrlProvider.baseUrl()
-    val slideUris by momentSlideMediaFlow(
-        mediaInventoryDao = mediaInventoryDao,
-        syncDao = syncDao,
-        baseUrl = baseUrl,
-        videoId = videoId,
-        fallbackSlideCount = 1,
-    ).collectAsState(initial = emptyList())
+    val slideMediaFlow = remember(mediaInventoryDao, syncDao, baseUrl, videoId) {
+        momentSlideMediaFlow(
+            mediaInventoryDao = mediaInventoryDao,
+            syncDao = syncDao,
+            baseUrl = baseUrl,
+            videoId = videoId,
+            fallbackSlideCount = 1,
+        )
+    }
+    val slideUris by slideMediaFlow.collectAsState(initial = emptyList())
 
     MomentStillImage(
         mediaUri = slideUris.firstOrNull() ?: thumbnailUri,
@@ -91,13 +94,16 @@ internal fun MomentSlideshowSurface(
     val mediaInventoryDao: MediaInventoryDao = koinInject()
     val syncDao: AndroidSyncDao = koinInject()
     val baseUrl = baseUrlProvider.baseUrl()
-    val slideUris by momentSlideMediaFlow(
-        mediaInventoryDao = mediaInventoryDao,
-        syncDao = syncDao,
-        baseUrl = baseUrl,
-        videoId = videoId,
-        fallbackSlideCount = slideCount,
-    ).collectAsState(initial = emptyList())
+    val slideMediaFlow = remember(mediaInventoryDao, syncDao, baseUrl, videoId, slideCount) {
+        momentSlideMediaFlow(
+            mediaInventoryDao = mediaInventoryDao,
+            syncDao = syncDao,
+            baseUrl = baseUrl,
+            videoId = videoId,
+            fallbackSlideCount = slideCount,
+        )
+    }
+    val slideUris by slideMediaFlow.collectAsState(initial = emptyList())
     val effectiveSlideUris = remember(slideUris, thumbnailUri) {
         if (slideUris.isNotEmpty()) slideUris else listOf(thumbnailUri)
     }

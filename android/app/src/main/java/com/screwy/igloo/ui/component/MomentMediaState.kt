@@ -84,7 +84,13 @@ internal fun shouldShowMomentThumbnailFallback(
     remoteOffline: Boolean,
     surfaceState: MomentVideoSurfaceState,
 ): Boolean =
-    remoteOffline || !surfaceState.hasExpectedMedia || !surfaceState.renderedFirstFrame
+    remoteOffline || !shouldShowMomentVideoSurface(surfaceState)
+
+internal fun shouldShowMomentVideoSurface(surfaceState: MomentVideoSurfaceState): Boolean =
+    surfaceState.hasExpectedMedia && surfaceState.renderedFirstFrame
+
+internal fun momentVideoSurfaceAlpha(surfaceState: MomentVideoSurfaceState): Float =
+    if (shouldShowMomentVideoSurface(surfaceState)) 1f else 0f
 
 internal fun shouldShowMomentsVideoProgressBar(
     isActive: Boolean,
