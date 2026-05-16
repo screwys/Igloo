@@ -30,16 +30,16 @@
         let
           ffmpeg81 = {
             version = "8.1";
-            source = prev.fetchurl {
+            source = builtins.fetchurl {
               url = "https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz";
-              hash = "sha256-sHKu1ocZmMzps253dAMxBcop4zYyvltjR/MgaJjgdWo=";
+              sha256 = "sha256-sHKu1ocZmMzps253dAMxBcop4zYyvltjR/MgaJjgdWo=";
             };
           };
           openssl362 = prev.openssl_3_6.overrideAttrs (_: {
             version = "3.6.2";
-            src = prev.fetchurl {
+            src = builtins.fetchurl {
               url = "https://github.com/openssl/openssl/releases/download/openssl-3.6.2/openssl-3.6.2.tar.gz";
-              hash = "sha256-qvUaH+BkOE+BHa6utOxNznNA7IvYkwJ+7mdq8x6DoE8=";
+              sha256 = "sha256-qvUaH+BkOE+BHa6utOxNznNA7IvYkwJ+7mdq8x6DoE8=";
             };
           });
         in
