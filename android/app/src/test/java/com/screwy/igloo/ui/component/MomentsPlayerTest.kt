@@ -246,7 +246,7 @@ class MomentsPlayerTest {
         assertEquals(AspectRatioFrameLayout.RESIZE_MODE_ZOOM, momentsVideoResizeMode(width = 720, height = 1280))
         assertEquals(AspectRatioFrameLayout.RESIZE_MODE_FIT, momentsVideoResizeMode(width = 1920, height = 1080))
         assertEquals(AspectRatioFrameLayout.RESIZE_MODE_FIT, momentsVideoResizeMode(width = 1000, height = 1000))
-        assertEquals(AspectRatioFrameLayout.RESIZE_MODE_FIT, momentsVideoResizeMode(width = 0, height = 0))
+        assertEquals(AspectRatioFrameLayout.RESIZE_MODE_ZOOM, momentsVideoResizeMode(width = 0, height = 0))
     }
 
     @Test

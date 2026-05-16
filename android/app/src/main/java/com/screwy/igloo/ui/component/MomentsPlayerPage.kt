@@ -567,14 +567,16 @@ private fun BoxScope.MomentVideoLayer(
         player.volume = if (muted) 0f else 1f
     }
     if (!playerIsShared || isActive) {
-        LaunchedEffect(player, isActive, shouldPreparePlayer, loadedKey) {
+        LaunchedEffect(player, isActive, shouldPreparePlayer, loadedKey, pagerScrolling) {
             if (isActive && shouldPreparePlayer && loadedKey != null) {
                 player.playWhenReady = true
             } else {
-                delay(MOMENTS_STOP_OLD_PAGE_DELAY_MS)
+                if (pagerScrolling && shouldPreparePlayer) {
+                    delay(MOMENTS_STOP_OLD_PAGE_DELAY_MS)
+                }
                 player.playWhenReady = false
                 player.pause()
-                if (player.mediaItemCount > 0) player.seekTo(0L)
+                if (!shouldPreparePlayer && player.mediaItemCount > 0) player.seekTo(0L)
             }
         }
     }
@@ -585,6 +587,7 @@ private fun BoxScope.MomentVideoLayer(
                 override fun onPlaybackStateChanged(state: Int) {
                     if (state != Player.STATE_ENDED) return
                     if (player.currentMediaItem?.mediaId != item.videoId) return
+                    if (!isActive) return
                     if (autoSwipe) {
                         onAutoAdvance()
                         return

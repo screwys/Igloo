@@ -38,7 +38,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
 import com.screwy.igloo.R
 import com.screwy.igloo.data.dao.AndroidSyncDao
 import com.screwy.igloo.data.dao.MediaInventoryDao
@@ -288,36 +287,6 @@ fun MomentsPlayer(
             slideshowAudioPlayer.release()
         }
     }
-    val hasVideoItems = remember(items) {
-        items.any { item ->
-            momentMediaMode(item.mediaKind, item.slideCount) == MomentMediaMode.Video
-        }
-    }
-    val momentsVideoPlayer = remember(authTokens.bearerTokenSync(), hasVideoItems) {
-        if (!hasVideoItems) {
-            null
-        } else {
-            buildIglooPlayer(context, authTokens, iglooHostProvider).apply {
-                repeatMode = Player.REPEAT_MODE_OFF
-                PerfProbe.incrementCounter("igloo_moments_player_build_count")
-                PerfProbe.log(
-                    event = "moments_player_build",
-                ) { mapOf("page" to -1, "items" to items.size, "shared" to true) }
-            }
-        }
-    }
-    DisposableEffect(momentsVideoPlayer) {
-        if (momentsVideoPlayer == null) {
-            return@DisposableEffect onDispose { }
-        }
-        onDispose {
-            PerfProbe.incrementCounter("igloo_moments_player_release_count")
-            PerfProbe.log(
-                event = "moments_player_release",
-            ) { mapOf("page" to -1, "items" to items.size, "shared" to true) }
-            momentsVideoPlayer.release()
-        }
-    }
     var lifecycleStarted by remember {
         mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
     }
@@ -336,26 +305,6 @@ fun MomentsPlayer(
     val storyProgressWindow = remember(storyMode, currentIndex, items) {
         if (storyMode) storyProgressWindow(items, currentIndex) else StoryProgressWindow(index = 0, count = 0)
     }
-    LaunchedEffect(momentsVideoPlayer, currentIndex, items, lifecycleStarted) {
-        val player = momentsVideoPlayer ?: return@LaunchedEffect
-        val currentItem = items.getOrNull(currentIndex)
-        val currentIsVideo = currentItem != null &&
-            momentMediaMode(currentItem.mediaKind, currentItem.slideCount) == MomentMediaMode.Video
-        if (!lifecycleStarted) {
-            player.playWhenReady = false
-            player.pause()
-            return@LaunchedEffect
-        }
-        if (!currentIsVideo && player.mediaItemCount > 0) {
-            PerfProbe.log(
-                event = "moments_player_clear",
-            ) { mapOf("reason" to "current_page_not_video", "page" to currentIndex, "shared" to true) }
-            player.playWhenReady = false
-            player.pause()
-            player.clearMediaItems()
-        }
-    }
-
     LaunchedEffect(safeStart, items.size) {
         if (safeStart in items.indices && pagerState.currentPage != safeStart) {
             pagerState.scrollToPage(safeStart)
@@ -366,15 +315,13 @@ fun MomentsPlayer(
         BackHandler { onOpenAllMomentsGrid() }
     }
 
-    DisposableEffect(lifecycleOwner, slideshowAudioPlayer, momentsVideoPlayer) {
+    DisposableEffect(lifecycleOwner, slideshowAudioPlayer) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
                     lifecycleStarted = false
                     slideshowAudioPlayer.playWhenReady = false
                     slideshowAudioPlayer.pause()
-                    momentsVideoPlayer?.playWhenReady = false
-                    momentsVideoPlayer?.pause()
                 }
                 Lifecycle.Event.ON_START -> lifecycleStarted = true
                 else -> Unit
@@ -414,7 +361,6 @@ fun MomentsPlayer(
     LaunchedEffect(muteDefault) { muted = muteDefault }
     LaunchedEffect(muted) {
         slideshowAudioPlayer.volume = if (muted) 0f else 1f
-        momentsVideoPlayer?.volume = if (muted) 0f else 1f
     }
     var pendingUnfollowItem by remember { mutableStateOf<MomentItem?>(null) }
 
@@ -570,7 +516,6 @@ fun MomentsPlayer(
                 onSwipeLeftToChannel = onSwipeLeftToChannel,
                 onSwipeRightFromEdge = drawerController::open,
                 logger = logger,
-                sharedVideoPlayer = momentsVideoPlayer,
             )
         }
         if (storyMode) {

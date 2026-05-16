@@ -423,6 +423,7 @@ internal fun createMomentPlayerView(context: android.content.Context): PlayerVie
         setBackgroundColor(android.graphics.Color.BLACK)
         setShutterBackgroundColor(android.graphics.Color.BLACK)
         setKeepContentOnPlayerReset(false)
+        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
     }
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
@@ -533,7 +534,7 @@ internal fun VideoSurface(
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 internal fun momentsVideoResizeMode(width: Int, height: Int): Int =
-    if (isVerticalMomentVideo(width, height)) {
+    if (width <= 0 || height <= 0 || isVerticalMomentVideo(width, height)) {
         AspectRatioFrameLayout.RESIZE_MODE_ZOOM
     } else {
         AspectRatioFrameLayout.RESIZE_MODE_FIT
