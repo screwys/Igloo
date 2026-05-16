@@ -493,6 +493,43 @@ class MomentsPlayerTest {
     }
 
     @Test
+    fun moments_video_progress_bar_only_mounts_for_active_ready_page() {
+        val ready = MomentVideoSurfaceState(
+            hasExpectedMedia = true,
+            renderedFirstFrame = true,
+        )
+        val streamUri = MediaUri.Remote("https://igloo.example/api/media/stream/demo")
+
+        assertTrue(
+            shouldShowMomentsVideoProgressBar(
+                isActive = true,
+                shouldPrepare = true,
+                streamUri = streamUri,
+                remoteOffline = false,
+                surfaceState = ready,
+            ),
+        )
+        assertFalse(
+            shouldShowMomentsVideoProgressBar(
+                isActive = false,
+                shouldPrepare = true,
+                streamUri = streamUri,
+                remoteOffline = false,
+                surfaceState = ready,
+            ),
+        )
+        assertFalse(
+            shouldShowMomentsVideoProgressBar(
+                isActive = true,
+                shouldPrepare = true,
+                streamUri = MediaUri.Missing,
+                remoteOffline = false,
+                surfaceState = ready,
+            ),
+        )
+    }
+
+    @Test
     fun ended_loop_keeps_rendered_frame_until_restart() {
         assertFalse(shouldClearMomentRenderedFrame(Player.STATE_ENDED))
         assertTrue(shouldClearMomentRenderedFrame(Player.STATE_IDLE))

@@ -86,6 +86,20 @@ internal fun shouldShowMomentThumbnailFallback(
 ): Boolean =
     remoteOffline || !surfaceState.hasExpectedMedia || !surfaceState.renderedFirstFrame
 
+internal fun shouldShowMomentsVideoProgressBar(
+    isActive: Boolean,
+    shouldPrepare: Boolean,
+    streamUri: MediaUri,
+    remoteOffline: Boolean,
+    surfaceState: MomentVideoSurfaceState,
+): Boolean =
+    isActive &&
+        shouldPrepare &&
+        streamUri !is MediaUri.Missing &&
+        !remoteOffline &&
+        surfaceState.hasExpectedMedia &&
+        surfaceState.renderedFirstFrame
+
 internal fun momentVideoSurfaceStateFor(
     expectedMediaId: String,
     currentMediaId: String?,

@@ -615,11 +615,13 @@ private fun BoxScope.MomentVideoLayer(
         }
         MomentBottomScrim(modifier = Modifier.align(Alignment.BottomCenter))
         if (
-            playbackStreamUri !is MediaUri.Missing &&
-            !remoteOffline &&
-            shouldPrepare &&
-            surfaceState.hasExpectedMedia &&
-            surfaceState.renderedFirstFrame
+            shouldShowMomentsVideoProgressBar(
+                isActive = isActive,
+                shouldPrepare = shouldPrepare,
+                streamUri = playbackStreamUri,
+                remoteOffline = remoteOffline,
+                surfaceState = surfaceState,
+            )
         ) {
             MomentsVideoProgressBar(
                 player = player,
