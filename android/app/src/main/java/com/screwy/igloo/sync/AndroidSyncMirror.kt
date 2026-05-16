@@ -46,6 +46,9 @@ private fun AndroidSyncContentPruneCounts.hasDeletes(): Boolean =
 
 private fun AssetFileDeleteStats.hasDeletes(): Boolean = files > 0
 
+private fun elapsedMsSince(startedAtNanos: Long): Long =
+    (System.nanoTime() - startedAtNanos) / 1_000_000L
+
 /**
  * Android sync mirror runner. This imports the server-owned immutable generation,
  * applies content bundles through the same BundleIngest path, downloads every
@@ -252,22 +255,41 @@ class AndroidSyncMirror(
             )
         }
         while (true) {
-            val page = withMetadataRetry("items", "generation_id" to generationId, "after" to (after ?: "")) {
-                api.items(generationId, after)
+            val measuredPage = withMetadataRetry("items", "generation_id" to generationId, "after" to (after ?: "")) {
+                api.measuredItems(generationId, after)
             }
+            val page = measuredPage.value
+            var ledgerWriteMs = 0L
+            var changedItemQueryMs = 0L
+            var changedCount = 0
+            var skippedUnchanged = 0
+            var ingestTransactions = 0
+            var ingestOk = 0
+            var ingestUnknown = 0
+            var ingestParseFailures = 0
+            var ingestTransactionMs = 0L
             if (page.items.isNotEmpty()) {
+                val ledgerWriteStartedAt = System.nanoTime()
                 dao.upsertItems(page.items.map { it.toEntity(generationId) })
+                ledgerWriteMs = elapsedMsSince(ledgerWriteStartedAt)
+                val changedQueryStartedAt = System.nanoTime()
                 val changedSeqs = dao.changedItemSeqsFromPreviousImportedGenerations(
                     generationId = generationId,
                     afterSeq = after?.toLongOrNull() ?: 0L,
                     toSeq = page.items.maxOf { it.seq },
                     importerVersion = ANDROID_SYNC_ITEM_IMPORTER_VERSION,
                 ).toSet()
-                val skippedUnchanged = page.items.size - changedSeqs.size
+                changedItemQueryMs = elapsedMsSince(changedQueryStartedAt)
+                changedCount = changedSeqs.size
+                skippedUnchanged = page.items.size - changedSeqs.size
                 for (item in page.items) {
                     if (item.seq !in changedSeqs) continue
+                    val ingestStartedAt = System.nanoTime()
                     val result = ingest.ingest(item.payload, guard)
+                    ingestTransactionMs += elapsedMsSince(ingestStartedAt)
+                    ingestTransactions++
                     if (result is IngestResult.ParseFailure) {
+                        ingestParseFailures++
                         logger.info(
                             event = "android_sync_item_parse_failed",
                             fields = mapOf(
@@ -277,6 +299,10 @@ class AndroidSyncMirror(
                                 "error" to (result.cause.message ?: result.cause::class.simpleName.orEmpty()),
                             ),
                         )
+                    } else if (result is IngestResult.UnknownKind) {
+                        ingestUnknown++
+                    } else {
+                        ingestOk++
                     }
                 }
                 if (skippedUnchanged > 0) {
@@ -286,7 +312,7 @@ class AndroidSyncMirror(
                             "generation_id" to generationId,
                             "after" to (after ?: ""),
                             "skipped" to skippedUnchanged,
-                            "changed" to changedSeqs.size,
+                            "changed" to changedCount,
                         ),
                     )
                 }
@@ -299,6 +325,17 @@ class AndroidSyncMirror(
                     "after" to (after ?: ""),
                     "count" to page.items.size,
                     "total" to total,
+                    "page_bytes" to measuredPage.byteCount,
+                    "decode_ms" to measuredPage.decodeDurationMs,
+                    "ledger_write_ms" to ledgerWriteMs,
+                    "changed_item_query_ms" to changedItemQueryMs,
+                    "changed" to changedCount,
+                    "skipped" to skippedUnchanged,
+                    "ingest_transactions" to ingestTransactions,
+                    "ingest_ok" to ingestOk,
+                    "ingest_unknown" to ingestUnknown,
+                    "ingest_parse_failed" to ingestParseFailures,
+                    "ingest_transaction_ms" to ingestTransactionMs,
                     "next" to page.next,
                     "end" to page.end_of_stream,
                 ),

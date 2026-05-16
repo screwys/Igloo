@@ -917,6 +917,73 @@ class AndroidSyncMirrorTest {
         )
     }
 
+    @Test fun itemImportLogsPageDecodeAndIngestCounters() = runBlocking {
+        val item = AndroidSyncItemDto(
+            seq = 1,
+            item_kind = "channels",
+            item_id = "sample_channel",
+            payload = BundleEnvelope(
+                primary_kind = "channels",
+                primary = buildJsonObject {
+                    put("channel_id", "sample_channel")
+                    put("source_id", "sample")
+                    put("name", "Sample Channel")
+                    put("platform", "youtube")
+                },
+            ),
+        )
+        var rawItemsBody = ""
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = GENERATION_ID,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                            item_count = 1,
+                        ),
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/items" -> {
+                    rawItemsBody = iglooJson.encodeToString(
+                        AndroidSyncItemsResponse(
+                            generation_id = GENERATION_ID,
+                            items = listOf(item),
+                            end_of_stream = true,
+                        ),
+                    )
+                    respond(rawItemsBody, HttpStatusCode.OK, jsonHeaders())
+                }
+                "/api/android/sync/generation/$GENERATION_ID/assets" -> respondJson(
+                    AndroidSyncAssetsResponse(
+                        generation_id = GENERATION_ID,
+                        assets = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        buildMirror(engine).syncOnce()
+
+        val pageLog = waitForLog("android_sync_items_page")
+        assertEquals(rawItemsBody.encodeToByteArray().size, pageLog.fields["page_bytes"])
+        assertTrue((pageLog.fields["decode_ms"] as Long) >= 0L)
+        assertTrue((pageLog.fields["ledger_write_ms"] as Long) >= 0L)
+        assertTrue((pageLog.fields["changed_item_query_ms"] as Long) >= 0L)
+        assertEquals(1, pageLog.fields["changed"])
+        assertEquals(0, pageLog.fields["skipped"])
+        assertEquals(1, pageLog.fields["ingest_transactions"])
+        assertEquals(1, pageLog.fields["ingest_ok"])
+        assertEquals(0, pageLog.fields["ingest_unknown"])
+        assertEquals(0, pageLog.fields["ingest_parse_failed"])
+        assertTrue((pageLog.fields["ingest_transaction_ms"] as Long) >= 0L)
+    }
+
     @Test fun unchangedPayloadFromOlderProjectionVersionStillRefreshesLocalProjection() = runBlocking {
         val dao = db.androidSyncDao()
         val oldGenerationId = "android-sync-old"

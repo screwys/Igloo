@@ -499,9 +499,17 @@ func (s *Server) ensureAndroidSyncGeneration(username string, retention db.Andro
 		ContentCounts:           contentCounts,
 		AssetCounts:             assetCounts,
 	}
+	phaseStart = time.Now()
 	if err := s.db.StoreAndroidSyncGeneration(gen, items, assets); err != nil {
 		return nil, err
 	}
+	slog.Info(
+		"android_sync_generation_phase",
+		"phase", "store",
+		"items", len(items),
+		"assets", len(assets),
+		"duration_ms", time.Since(phaseStart).Milliseconds(),
+	)
 	return &gen, nil
 }
 
@@ -1128,12 +1136,28 @@ func (s *Server) buildAndroidSyncAssets(username string, sets db.AndroidSyncDesi
 		"duration_ms", time.Since(phaseStart).Milliseconds(),
 	)
 
+	phaseStart = time.Now()
 	out := make([]model.AndroidSyncAsset, 0, len(byKey))
 	finalizedCount := 0
+	readyAssets := 0
+	serverMissingAssets := 0
+	hashedFiles := 0
+	var hashedBytes int64
+	var hashDuration time.Duration
 	for _, asset := range byKey {
-		finalized := s.finalizeAndroidSyncAsset(asset)
+		finalized, fileHash := s.finalizeAndroidSyncAsset(asset)
 		out = append(out, finalized)
 		counts[finalized.AssetKind]++
+		if finalized.State == "server_missing" {
+			serverMissingAssets++
+		} else {
+			readyAssets++
+		}
+		if fileHash.Attempted {
+			hashedFiles++
+			hashedBytes += fileHash.Bytes
+			hashDuration += fileHash.Duration
+		}
 		finalizedCount++
 		if finalizedCount%1000 == 0 {
 			slog.Info(
@@ -1143,6 +1167,17 @@ func (s *Server) buildAndroidSyncAssets(username string, sets db.AndroidSyncDesi
 			)
 		}
 	}
+	slog.Info(
+		"android_sync_asset_phase",
+		"phase", "asset_finalize",
+		"assets", len(byKey),
+		"ready_assets", readyAssets,
+		"server_missing_assets", serverMissingAssets,
+		"hashed_files", hashedFiles,
+		"hashed_bytes", hashedBytes,
+		"hash_duration_ms", hashDuration.Milliseconds(),
+		"duration_ms", time.Since(phaseStart).Milliseconds(),
+	)
 	sort.Slice(out, func(i, j int) bool {
 		pi, pj := androidSyncAssetPriority(out[i]), androidSyncAssetPriority(out[j])
 		if pi != pj {
@@ -1624,28 +1659,40 @@ func (s *Server) androidSyncChannelFallbackAssets(channelID string, reason strin
 	return out
 }
 
-func (s *Server) finalizeAndroidSyncAsset(asset model.AndroidSyncAsset) model.AndroidSyncAsset {
+type androidSyncFileHashMetrics struct {
+	Attempted bool
+	Bytes     int64
+	Duration  time.Duration
+}
+
+func (s *Server) finalizeAndroidSyncAsset(asset model.AndroidSyncAsset) (model.AndroidSyncAsset, androidSyncFileHashMetrics) {
 	path := s.androidSyncAssetPath(asset)
 	if path == "" {
 		asset.State = "server_missing"
 		asset.SizeBytes = 0
 		asset.SHA256 = ""
-		return asset
+		return asset, androidSyncFileHashMetrics{}
 	}
 	if asset.ContentType == "" {
 		asset.ContentType = androidSyncContentType(path)
 	}
+	hashStart := time.Now()
 	size, sum, err := hashFile(path)
+	hashMetrics := androidSyncFileHashMetrics{
+		Attempted: true,
+		Bytes:     size,
+		Duration:  time.Since(hashStart),
+	}
 	if err != nil {
 		asset.State = "server_missing"
 		asset.SizeBytes = 0
 		asset.SHA256 = ""
-		return asset
+		return asset, hashMetrics
 	}
 	asset.State = "ready"
 	asset.SizeBytes = size
 	asset.SHA256 = sum
-	return asset
+	return asset, hashMetrics
 }
 
 func hashFile(path string) (int64, string, error) {

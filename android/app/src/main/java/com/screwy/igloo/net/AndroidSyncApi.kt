@@ -29,10 +29,16 @@ class AndroidSyncApi(
         }.decodeSyncResponse("latest_generation")
 
     suspend fun items(generationId: String, after: String? = null): AndroidSyncItemsResponse =
+        measuredItems(generationId, after).value
+
+    suspend fun measuredItems(
+        generationId: String,
+        after: String? = null,
+    ): AndroidSyncMeasuredResponse<AndroidSyncItemsResponse> =
         client.get(baseUrlProvider() + "/api/android/sync/generation/$generationId/items") {
             syncMetadataTimeout()
             if (!after.isNullOrEmpty()) parameter("after", after)
-        }.decodeSyncResponse("items:$generationId")
+        }.decodeMeasuredSyncResponse("items:$generationId")
 
     suspend fun assets(generationId: String, after: String? = null): AndroidSyncAssetsResponse =
         client.get(baseUrlProvider() + "/api/android/sync/generation/$generationId/assets") {
@@ -80,12 +86,56 @@ class AndroidSyncDecodeException(
     cause: Throwable,
 ) : IllegalStateException("Sync decode failed for $label: ${body.syncErrorPreview()}", cause)
 
+data class AndroidSyncMeasuredResponse<T>(
+    val value: T,
+    val byteCount: Int,
+    val decodeDurationMs: Long,
+)
+
 private suspend inline fun <reified T> HttpResponse.decodeSyncResponse(label: String): T {
     val raw = bodyAsText()
     if (!status.isSuccess()) {
         throw AndroidSyncHttpException(label, status.value, raw)
     }
     return raw.decodeSync(label)
+}
+
+private suspend inline fun <reified T> HttpResponse.decodeMeasuredSyncResponse(
+    label: String,
+): AndroidSyncMeasuredResponse<T> {
+    val raw = bodyAsText()
+    if (!status.isSuccess()) {
+        throw AndroidSyncHttpException(label, status.value, raw)
+    }
+    val decodeStartedAt = System.nanoTime()
+    val value = raw.decodeSync<T>(label)
+    return AndroidSyncMeasuredResponse(
+        value = value,
+        byteCount = raw.utf8ByteCount(),
+        decodeDurationMs = (System.nanoTime() - decodeStartedAt) / 1_000_000L,
+    )
+}
+
+private fun String.utf8ByteCount(): Int {
+    var bytes = 0
+    var index = 0
+    while (index < length) {
+        val ch = this[index]
+        val code = ch.code
+        bytes += when {
+            code <= 0x7F -> 1
+            code <= 0x7FF -> 2
+            Character.isHighSurrogate(ch) &&
+                index + 1 < length &&
+                Character.isLowSurrogate(this[index + 1]) -> {
+                index++
+                4
+            }
+            else -> 3
+        }
+        index++
+    }
+    return bytes
 }
 
 private inline fun <reified T> String.decodeSync(label: String): T =

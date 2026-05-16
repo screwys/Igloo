@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -126,6 +127,20 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 		MediaVideos: map[string]struct{}{},
 		Channels:    map[string]struct{}{},
 	}
+	collect := func(name string, query string, args []any, dest map[string]struct{}) error {
+		start := time.Now()
+		before := len(dest)
+		err := db.collectStrings(query, args, dest)
+		androidSyncLogDesiredSetQuery(name, len(dest)-before, len(dest), start, err)
+		return err
+	}
+	collectStories := func(name string, cutoffMs int64, dest map[string]struct{}) error {
+		start := time.Now()
+		before := len(dest)
+		err := db.collectStoryVideoIDs(cutoffMs, dest)
+		androidSyncLogDesiredSetQuery(name, len(dest)-before, len(dest), start, err)
+		return err
+	}
 
 	feedCutoff := retentionCutoffMs(nowMs, settings.FeedDays)
 	youtubeCutoff := retentionCutoffMs(nowMs, settings.YoutubeDays)
@@ -140,14 +155,14 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 	includeSourceWindows := includeMomentReposts || includeInstagramTagged
 
 	cte, args := androidEligibleFeedCTE(username, feedCutoff)
-	if err := db.collectStrings(cte+`
+	if err := collect("tweets", cte+`
 		SELECT DISTINCT fi.tweet_id
 		FROM eligible_tweet_ids e
 		JOIN feed_items fi ON fi.tweet_id = e.tweet_id
 		WHERE `+retweetFilterClause("fi"), args, out.Tweets); err != nil {
 		return out, fmt.Errorf("android sync desired tweets: %w", err)
 	}
-	if err := db.collectStrings(cte+`,
+	if err := collect("thread_ancestors", cte+`,
 		reply_chain(tweet_id, depth) AS (
 			SELECT tweet_id, 0 FROM eligible_tweet_ids
 
@@ -169,7 +184,8 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 		return out, fmt.Errorf("android sync desired thread ancestors: %w", err)
 	}
 
-	if err := db.collectStrings(
+	if err := collect(
+		"media_videos",
 		androidSyncDesiredVideoRowsSQL("v.video_id", true),
 		androidSyncDesiredVideoRowsArgs(username, youtubeCutoff, true, momentsCutoff),
 		out.MediaVideos,
@@ -177,7 +193,7 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 		return out, fmt.Errorf("android sync desired media videos: %w", err)
 	}
 	if includeSourceWindows {
-		if err := db.collectStrings(`
+		if err := collect("repost_media_videos", `
 			SELECT DISTINCT v.video_id
 			FROM videos v
 			INNER JOIN video_repost_sources vrs ON vrs.video_id = v.video_id
@@ -191,11 +207,12 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 			return out, fmt.Errorf("android sync desired repost media videos: %w", err)
 		}
 	}
-	if err := db.collectStoryVideoIDs(storyCutoff, out.MediaVideos); err != nil {
+	if err := collectStories("story_media_videos", storyCutoff, out.MediaVideos); err != nil {
 		return out, fmt.Errorf("android sync desired story media videos: %w", err)
 	}
 
-	if err := db.collectStrings(
+	if err := collect(
+		"content_videos",
 		androidSyncDesiredVideoRowsSQL("v.video_id", false),
 		androidSyncDesiredVideoRowsArgs(username, 0, false, momentsCutoff),
 		out.Videos,
@@ -203,7 +220,7 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 		return out, fmt.Errorf("android sync desired content videos: %w", err)
 	}
 	if includeSourceWindows {
-		if err := db.collectStrings(`
+		if err := collect("repost_content_videos", `
 			SELECT DISTINCT v.video_id
 			FROM videos v
 			INNER JOIN video_repost_sources vrs ON vrs.video_id = v.video_id
@@ -217,7 +234,7 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 			return out, fmt.Errorf("android sync desired repost videos: %w", err)
 		}
 	}
-	if err := db.collectStoryVideoIDs(storyCutoff, out.Videos); err != nil {
+	if err := collectStories("story_content_videos", storyCutoff, out.Videos); err != nil {
 		return out, fmt.Errorf("android sync desired story videos: %w", err)
 	}
 
@@ -225,7 +242,7 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 	contentVideoArgs := androidSyncDesiredVideoRowsArgs(username, 0, false, momentsCutoff)
 	channelArgs := append([]any{}, args...)
 	channelArgs = append(channelArgs, contentVideoArgs...)
-	if err := db.collectStrings(cte+`
+	if err := collect("channels", cte+`
 		, reply_chain(tweet_id, depth) AS (
 			SELECT tweet_id, 0 FROM eligible_tweet_ids
 
@@ -294,7 +311,7 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 		for i, id := range chunk {
 			args[i] = id
 		}
-		if err := db.collectStrings(`
+		if err := collect("video_channels", `
 			SELECT DISTINCT channel_id
 			FROM videos
 			WHERE video_id IN (`+placeholders(len(chunk))+`)
@@ -302,7 +319,7 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 		`, args, out.Channels); err != nil {
 			return out, fmt.Errorf("android sync desired video channels: %w", err)
 		}
-		if err := db.collectStrings(`
+		if err := collect("video_reposter_channels", `
 			SELECT DISTINCT reposter_channel_id
 			FROM video_repost_sources
 			WHERE video_id IN (`+placeholders(len(chunk))+`)
@@ -313,6 +330,21 @@ func (db *DB) ListAndroidSyncDesiredSets(username string, settings AndroidRetent
 	}
 
 	return out, nil
+}
+
+func androidSyncLogDesiredSetQuery(name string, added int, total int, start time.Time, err error) {
+	fields := []any{
+		"query", name,
+		"added", added,
+		"total", total,
+		"duration_ms", time.Since(start).Milliseconds(),
+	}
+	if err != nil {
+		fields = append(fields, "err", err)
+		slog.Warn("android_sync_desired_set_query", fields...)
+		return
+	}
+	slog.Info("android_sync_desired_set_query", fields...)
 }
 
 func androidSyncDesiredVideoRowsSQL(selectExpr string, includeYouTubeCutoff bool) string {
@@ -615,6 +647,7 @@ func stringChunks(values []string, size int) [][]string {
 // AndroidSyncSourceVersion returns a stable fingerprint of the rows/settings
 // that can change one user's generation membership or asset bytes.
 func (db *DB) AndroidSyncSourceVersion(username string, settings AndroidRetentionSettings) (string, error) {
+	overallStart := time.Now()
 	username = strings.TrimSpace(username)
 	type stat struct {
 		Name  string
@@ -622,6 +655,7 @@ func (db *DB) AndroidSyncSourceVersion(username string, settings AndroidRetentio
 		Max   int64
 	}
 	stats := []stat{}
+	phaseStart := time.Now()
 	for _, q := range []struct {
 		name  string
 		query string
@@ -653,22 +687,53 @@ func (db *DB) AndroidSyncSourceVersion(username string, settings AndroidRetentio
 		}
 		stats = append(stats, s)
 	}
+	slog.Info(
+		"android_sync_source_version_phase",
+		"phase", "table_stats",
+		"queries", len(stats),
+		"duration_ms", time.Since(phaseStart).Milliseconds(),
+	)
+	phaseStart = time.Now()
 	fileStats, err := db.androidSyncSourceFileStats()
 	if err != nil {
 		return "", err
 	}
+	slog.Info(
+		"android_sync_source_version_phase",
+		"phase", "file_stats",
+		"files", len(fileStats),
+		"duration_ms", time.Since(phaseStart).Milliseconds(),
+	)
+	phaseStart = time.Now()
 	profileHash, err := db.androidSyncProfileHash()
 	if err != nil {
 		return "", err
 	}
+	slog.Info(
+		"android_sync_source_version_phase",
+		"phase", "profile_hash",
+		"duration_ms", time.Since(phaseStart).Milliseconds(),
+	)
+	phaseStart = time.Now()
 	channelFollowHash, err := db.androidSyncChannelFollowHash()
 	if err != nil {
 		return "", err
 	}
+	slog.Info(
+		"android_sync_source_version_phase",
+		"phase", "channel_follow_hash",
+		"duration_ms", time.Since(phaseStart).Milliseconds(),
+	)
+	phaseStart = time.Now()
 	bookmarkMetadataHash, err := db.androidSyncBookmarkMetadataHash()
 	if err != nil {
 		return "", err
 	}
+	slog.Info(
+		"android_sync_source_version_phase",
+		"phase", "bookmark_metadata_hash",
+		"duration_ms", time.Since(phaseStart).Milliseconds(),
+	)
 	payload := map[string]any{
 		"materializer_version":   AndroidSyncMaterializerVersion,
 		"username":               username,
@@ -686,7 +751,20 @@ func (db *DB) AndroidSyncSourceVersion(username string, settings AndroidRetentio
 		return "", err
 	}
 	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:]), nil
+	sourceVersion := hex.EncodeToString(sum[:])
+	slog.Info(
+		"android_sync_source_version_done",
+		"source_version", shortAndroidSyncSourceVersion(sourceVersion),
+		"duration_ms", time.Since(overallStart).Milliseconds(),
+	)
+	return sourceVersion, nil
+}
+
+func shortAndroidSyncSourceVersion(sourceVersion string) string {
+	if len(sourceVersion) <= 16 {
+		return sourceVersion
+	}
+	return sourceVersion[:16]
 }
 
 func (db *DB) androidSyncProfileHash() (string, error) {
