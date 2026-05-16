@@ -55,8 +55,11 @@ import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.ui.component.sharePlainText
+import com.screwy.igloo.ui.nav.ApplyOverlayChrome
 import com.screwy.igloo.ui.nav.IglooNavigationSource
+import com.screwy.igloo.ui.nav.OverlayChromeState
 import com.screwy.igloo.ui.nav.consumeFullscreenMediaTransitionFromPrevious
+import com.screwy.igloo.ui.nav.rememberIglooAdaptiveLayout
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
 import com.screwy.igloo.outbox.OutboxKind
 import com.screwy.igloo.outbox.OutboxWriter
@@ -77,8 +80,9 @@ import org.koin.core.parameter.parametersOf
  *   3. Inline "Comments" header.
  *   4. Comment list (replies indented under parents when `parent_id` is set).
  *
- * No `MainScaffold` wrapping — the spec calls this out explicitly as
- * full-screen chromeless.
+ * Compact phones host this route directly for the existing fullscreen-first
+ * behavior. Wide layouts may host it inside the app shell so the sidebar can
+ * stay visible while the inline player remains centered.
  *
  * ExoPlayer lifecycle lives here (route-owned) and is released via
  * `DisposableEffect` on dispose. The VM exposes state as Flows and the
@@ -112,6 +116,8 @@ fun PlayerRoute(
 
     val ctx = LocalContext.current
     val configuration = LocalConfiguration.current
+    val adaptiveLayout = rememberIglooAdaptiveLayout()
+    val wideLayout = adaptiveLayout.isWide
     val lifecycleOwner = LocalLifecycleOwner.current
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
@@ -208,17 +214,21 @@ fun PlayerRoute(
         isFullscreen = false
     }
 
-    DisposableEffect(activity, isFullscreen, autoFullscreenSuppressed) {
+    if (wideLayout && isFullscreen) {
+        ApplyOverlayChrome(OverlayChromeState.FullscreenMedia)
+    }
+
+    DisposableEffect(activity, isFullscreen, autoFullscreenSuppressed, wideLayout) {
         if (activity != null) {
             val controller = WindowCompat.getInsetsController(
                 activity.window,
                 activity.window.decorView,
             )
             if (isFullscreen) {
-                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                activity.requestedOrientation = playerFullscreenRequestedOrientation(wideLayout)
                 controller.hide(WindowInsetsCompat.Type.systemBars())
             } else {
-                activity.requestedOrientation = playerInlineRequestedOrientation(autoFullscreenSuppressed)
+                activity.requestedOrientation = playerInlineRequestedOrientation(autoFullscreenSuppressed, wideLayout)
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
         }
@@ -231,8 +241,8 @@ fun PlayerRoute(
         }
     }
     BackHandler(enabled = isFullscreen) { exitFullscreen() }
-    LaunchedEffect(configuration.orientation, autoFullscreenSuppressed) {
-        if (shouldAutoEnterPlayerFullscreen(configuration.orientation, autoFullscreenSuppressed)) {
+    LaunchedEffect(configuration.orientation, autoFullscreenSuppressed, wideLayout) {
+        if (shouldAutoEnterPlayerFullscreen(configuration.orientation, autoFullscreenSuppressed, wideLayout)) {
             enterFullscreen()
         }
     }

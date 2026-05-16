@@ -4,12 +4,14 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navDeepLink
 import androidx.navigation.navigation
@@ -51,6 +53,8 @@ import org.koin.compose.koinInject
 @Composable
 fun AppNavHost() {
     val navController = rememberNavController()
+    val adaptiveLayout = rememberIglooAdaptiveLayout()
+    val backStackEntry by navController.currentBackStackEntryAsState()
     val authRepo: AuthRepo = koinInject()
     val uiEffects: UiEffects = koinInject()
     // PreferencesRepo is DB-backed — resolve only when logged in, otherwise
@@ -78,6 +82,11 @@ fun AppNavHost() {
             }
         }
     }
+
+    ApplyRouteOrientation(
+        route = backStackEntry?.destination?.route,
+        layout = adaptiveLayout,
+    )
 
     NavHost(
         navController = navController,
@@ -138,7 +147,13 @@ fun AppNavHost() {
 
         directDestination(RouteRegistry.Player) { entry ->
             val videoId = entry.arguments!!.getString("video_id")!!
-            PlayerRoute(videoId = videoId, navController = navController)
+            if (adaptiveLayout.isWide && routeUsesWideSidebar(RouteRegistry.Player.route)) {
+                MainScaffold(navController = navController) {
+                    PlayerRoute(videoId = videoId, navController = navController)
+                }
+            } else {
+                PlayerRoute(videoId = videoId, navController = navController)
+            }
         }
 
         scaffoldDestination(navController, RouteRegistry.Thread) { entry ->

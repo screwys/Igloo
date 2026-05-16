@@ -27,9 +27,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Subject
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +41,7 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,6 +61,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,13 +82,52 @@ import com.screwy.igloo.ui.theme.iglooColors
 import org.koin.compose.koinInject
 
 /**
- * Drawer body. Identity row,
- * Liked shortcut, filterable Accounts (Starred / All), then Settings / Logs / Logout.
- * Accounts fill remaining vertical space via `Modifier.weight(1f)` on the LazyColumn.
+ * Drawer body. Identity row, primary navigation, filterable Accounts
+ * (Starred / All), then Settings / Logs / Logout. Accounts fill remaining
+ * vertical space via `Modifier.weight(1f)` on the LazyColumn.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppDrawer(
+    navController: NavController,
+    onCloseDrawer: () -> Unit,
+    onLogoutClick: () -> Unit,
+) {
+    ModalDrawerSheet(modifier = Modifier.widthIn(max = 320.dp)) {
+        AppDrawerContent(
+            navController = navController,
+            onCloseDrawer = onCloseDrawer,
+            onLogoutClick = onLogoutClick,
+        )
+    }
+}
+
+@Composable
+fun PermanentAppSidebar(
+    navController: NavController,
+    width: Dp,
+    onLogoutClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .width(width)
+            .fillMaxHeight(),
+        color = MaterialTheme.iglooColors.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        AppDrawerContent(
+            navController = navController,
+            onCloseDrawer = {},
+            onLogoutClick = onLogoutClick,
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AppDrawerContent(
     navController: NavController,
     onCloseDrawer: () -> Unit,
     onLogoutClick: () -> Unit,
@@ -133,13 +178,12 @@ fun AppDrawer(
     val instagramLabel = stringResource(R.string.platform_instagram)
     val xLabel = stringResource(R.string.platform_x)
 
-    ModalDrawerSheet(modifier = Modifier.widthIn(max = 320.dp)) {
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
             Text(
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.titleLarge,
@@ -156,6 +200,42 @@ fun AppDrawer(
             }
             HorizontalDivider()
 
+            NavigationDrawerItem(
+                label = { Text(stringResource(R.string.nav_feed)) },
+                icon = { Icon(Icons.Default.DynamicFeed, contentDescription = null) },
+                selected = drawerDestinationSelected(currentRoute, IglooDestination.Feed),
+                onClick = {
+                    navigator.openDestination(IglooDestination.Feed, IglooNavigationSource.Drawer)
+                },
+                colors = NavigationDrawerItemDefaults.colors(),
+            )
+            NavigationDrawerItem(
+                label = { Text(stringResource(R.string.nav_videos)) },
+                icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null) },
+                selected = drawerDestinationSelected(currentRoute, IglooDestination.Videos),
+                onClick = {
+                    navigator.openDestination(IglooDestination.Videos, IglooNavigationSource.Drawer)
+                },
+                colors = NavigationDrawerItemDefaults.colors(),
+            )
+            NavigationDrawerItem(
+                label = { Text(stringResource(R.string.nav_moments)) },
+                icon = { Icon(Icons.Default.PlayCircle, contentDescription = null) },
+                selected = drawerDestinationSelected(currentRoute, IglooDestination.Moments),
+                onClick = {
+                    navigator.openDestination(IglooDestination.Moments, IglooNavigationSource.Drawer)
+                },
+                colors = NavigationDrawerItemDefaults.colors(),
+            )
+            NavigationDrawerItem(
+                label = { Text(stringResource(R.string.nav_bookmarks)) },
+                icon = { Icon(Icons.Default.Bookmark, contentDescription = null) },
+                selected = drawerDestinationSelected(currentRoute, IglooDestination.Bookmarks),
+                onClick = {
+                    navigator.openDestination(IglooDestination.Bookmarks, IglooNavigationSource.Drawer)
+                },
+                colors = NavigationDrawerItemDefaults.colors(),
+            )
             NavigationDrawerItem(
                 label = { Text(stringResource(R.string.nav_liked)) },
                 icon = { Icon(Icons.Default.Favorite, contentDescription = null) },
@@ -229,7 +309,6 @@ fun AppDrawer(
                 onClick = onLogoutClick,
             )
         }
-    }
 }
 
 @Composable
@@ -283,6 +362,12 @@ private fun LazyListScope.platformSection(
 internal fun drawerDestinationSelected(currentRoute: String?, destination: IglooDestination): Boolean {
     val route = currentRoute?.trim().orEmpty()
     return when (destination) {
+        IglooDestination.Feed -> route == RouteRegistry.Feed.route
+        IglooDestination.Videos -> route == RouteRegistry.Videos.route
+        IglooDestination.Moments -> route == RouteRegistry.Moments.route ||
+            route == RouteRegistry.AllMoments.route ||
+            route == RouteRegistry.Shorts.route
+        IglooDestination.Bookmarks -> route == RouteRegistry.Bookmarks.route
         IglooDestination.Liked -> route == RouteRegistry.Liked.route
         IglooDestination.Settings -> route == RouteRegistry.Settings.route || route.startsWith("settings/")
         IglooDestination.Logs -> route == RouteRegistry.Logs.route || route == RouteRegistry.OutboxLogs.route

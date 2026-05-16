@@ -75,6 +75,7 @@ object RouteRegistry {
             topChrome = TopChrome.PinnedMediaGuard,
             bottomChrome = BottomChrome.Hidden,
             drawerChrome = DrawerChrome.Disabled,
+            wideDrawerChrome = DrawerChrome.Enabled,
         ),
         deepLinks = listOf(
             "igloo://youtube/{video_id}",
@@ -89,6 +90,7 @@ object RouteRegistry {
             topChrome = TopChrome.ScrollAwayAppBar,
             bottomChrome = BottomChrome.Hidden,
             drawerChrome = DrawerChrome.Disabled,
+            wideDrawerChrome = DrawerChrome.Enabled,
             topBarTitle = TopBarTitle.Resource(R.string.label_thread),
         ),
         deepLinks = listOf("igloo://tw/{tweet_id}"),

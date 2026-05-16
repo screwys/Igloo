@@ -23,6 +23,10 @@ enum class IglooNavigationSource {
 }
 
 enum class IglooDestination {
+    Feed,
+    Videos,
+    Moments,
+    Bookmarks,
     Liked,
     Settings,
     Logs,
@@ -219,6 +223,10 @@ object IglooNavigation {
 
     private fun routeForDestination(destination: IglooDestination): String =
         when (destination) {
+            IglooDestination.Feed -> RouteRegistry.Feed.route
+            IglooDestination.Videos -> RouteRegistry.Videos.route
+            IglooDestination.Moments -> RouteRegistry.Moments.route
+            IglooDestination.Bookmarks -> RouteRegistry.Bookmarks.route
             IglooDestination.Liked -> RouteRegistry.Liked.route
             IglooDestination.Settings -> RouteRegistry.Settings.route
             IglooDestination.Logs -> RouteRegistry.Logs.route

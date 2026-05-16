@@ -3,9 +3,14 @@ package com.screwy.igloo.ui.nav
 import android.graphics.Rect
 import android.view.View
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -37,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
@@ -56,6 +62,7 @@ import com.screwy.igloo.ui.UiEffects
 import com.screwy.igloo.ui.component.AppDrawer
 import com.screwy.igloo.ui.component.BottomNavBar
 import com.screwy.igloo.ui.component.LogoutConfirmDialog
+import com.screwy.igloo.ui.component.PermanentAppSidebar
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -148,7 +155,11 @@ fun MainScaffold(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val chromePolicy = routeChromePolicyFor(currentRoute)
-    val drawerEnabled = chromePolicy.drawerChrome == DrawerChrome.Enabled
+    val adaptiveLayout = rememberIglooAdaptiveLayout()
+    val compactDrawerEnabled = !adaptiveLayout.isWide && chromePolicy.drawerChrome == DrawerChrome.Enabled
+    val wideSidebarEnabled = adaptiveLayout.isWide && chromePolicy.wideDrawerChrome == DrawerChrome.Enabled
+    val fullscreenOverlayActive = overlayChromeController.state == OverlayChromeState.FullscreenMedia
+    val showPermanentSidebar = wideSidebarEnabled && !fullscreenOverlayActive
     val channelId = backStackEntry?.arguments?.getString("channel_id")
     val emptyChannelState = remember { mutableStateOf<com.screwy.igloo.data.entity.ChannelEntity?>(null) }
     val emptyProfileState = remember { mutableStateOf<com.screwy.igloo.data.entity.ChannelProfileEntity?>(null) }
@@ -164,14 +175,19 @@ fun MainScaffold(
     val channelProfile by channelProfileState
 
     fun openDrawer() {
-        if (!drawerEnabled) return
+        if (!compactDrawerEnabled) return
         coroutineScope.launch {
             drawerState.open()
         }
     }
-    val drawerController = remember { DrawerController(::openDrawer) }
+    val drawerController = remember(compactDrawerEnabled) { DrawerController(::openDrawer) }
 
-    DisposableEffect(rootView, edgeDrawerExclusionPx) {
+    DisposableEffect(rootView, edgeDrawerExclusionPx, compactDrawerEnabled) {
+        if (!compactDrawerEnabled) {
+            ViewCompat.setSystemGestureExclusionRects(rootView, emptyList())
+            return@DisposableEffect onDispose { }
+        }
+
         fun updateExclusion(view: View) {
             ViewCompat.setSystemGestureExclusionRects(
                 view,
@@ -193,6 +209,11 @@ fun MainScaffold(
 
     val suppressTopBar: Boolean = !chromePolicy.usesScaffoldTopBar ||
         overlayChromeController.state.hidesScaffoldTopBar
+    val showTopBarBackButton = shouldShowScaffoldBackButton(
+        route = currentRoute,
+        wideLayout = adaptiveLayout.isWide,
+        compactDrawerEnabled = compactDrawerEnabled,
+    )
     val topBarTitle = when (val title = chromePolicy.topBarTitle) {
         is TopBarTitle.Static -> title.value
         is TopBarTitle.Resource -> stringResource(title.id)
@@ -236,22 +257,7 @@ fun MainScaffold(
         }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        gesturesEnabled = drawerEnabled,
-        drawerContent = {
-            AppDrawer(
-                navController = navController,
-                onCloseDrawer = { coroutineScope.launch { drawerState.close() } },
-                onLogoutClick = {
-                    coroutineScope.launch {
-                        drawerState.close()
-                        showLogoutConfirmation = true
-                    }
-                },
-            )
-        },
-    ) {
+    val scaffoldContent: @Composable () -> Unit = {
         Scaffold(
             modifier = if (!suppressTopBar && chromePolicy.usesScaffoldTopBar) {
                 Modifier.nestedScroll(topBarScrollBehavior.nestedScrollConnection)
@@ -271,14 +277,14 @@ fun MainScaffold(
                             }
                         },
                         navigationIcon = {
-                            if (drawerEnabled) {
+                            if (compactDrawerEnabled) {
                                 IconButton(onClick = ::openDrawer) {
                                     Icon(
                                         imageVector = Icons.Default.Menu,
                                         contentDescription = stringResource(R.string.action_open_drawer),
                                     )
                                 }
-                            } else {
+                            } else if (showTopBarBackButton) {
                                 IconButton(onClick = { navController.popBackStack() }) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -297,13 +303,19 @@ fun MainScaffold(
                 }
             },
             bottomBar = {
-                if (chromePolicy.showsBottomNav && !overlayChromeController.state.hidesBottomNav) {
+                if (!adaptiveLayout.isWide &&
+                    chromePolicy.showsBottomNav &&
+                    !overlayChromeController.state.hidesBottomNav
+                ) {
                     BottomNavBar(navController = navController)
                 }
             },
             snackbarHost = { SnackbarHost(snackbarHostState) },
         ) { paddingValues ->
-            Box(
+            AdaptiveContentHost(
+                route = currentRoute,
+                layout = adaptiveLayout,
+                forceFullBleed = fullscreenOverlayActive,
                 modifier = Modifier
                     .padding(paddingValues)
                     .fillMaxSize(),
@@ -315,6 +327,42 @@ fun MainScaffold(
                     content()
                 }
             }
+        }
+    }
+
+    when {
+        showPermanentSidebar -> Row(modifier = Modifier.fillMaxSize()) {
+            PermanentAppSidebar(
+                navController = navController,
+                width = adaptiveLayout.sidebarWidthDp.dp,
+                onLogoutClick = { showLogoutConfirmation = true },
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            ) {
+                scaffoldContent()
+            }
+        }
+        adaptiveLayout.isWide -> scaffoldContent()
+        else -> ModalNavigationDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = compactDrawerEnabled,
+            drawerContent = {
+                AppDrawer(
+                    navController = navController,
+                    onCloseDrawer = { coroutineScope.launch { drawerState.close() } },
+                    onLogoutClick = {
+                        coroutineScope.launch {
+                            drawerState.close()
+                            showLogoutConfirmation = true
+                        }
+                    },
+                )
+            },
+        ) {
+            scaffoldContent()
         }
     }
 
@@ -332,4 +380,65 @@ fun MainScaffold(
             onDismiss = { showLogoutConfirmation = false },
         )
     }
+}
+
+@Composable
+private fun AdaptiveContentHost(
+    route: String?,
+    layout: IglooAdaptiveLayout,
+    forceFullBleed: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    if (!layout.isWide || forceFullBleed) {
+        Box(modifier = modifier.fillMaxSize()) {
+            content()
+        }
+        return
+    }
+
+    val kind = wideContentKindForRoute(route)
+    BoxWithConstraints(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        if (kind == WideContentKind.MomentsStage) {
+            val stage = wideMomentsStageSizeDp(
+                availableWidthDp = maxWidth.value.toInt(),
+                availableHeightDp = maxHeight.value.toInt(),
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .width(stage.widthDp.dp)
+                    .height(stage.heightDp.dp),
+            ) {
+                content()
+            }
+        } else {
+            val contentWidth = minOf(maxWidth, wideContentMaxWidthDp(kind).dp)
+            Box(
+                modifier = Modifier
+                    .width(contentWidth)
+                    .fillMaxHeight(),
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+private fun shouldShowScaffoldBackButton(
+    route: String?,
+    wideLayout: Boolean,
+    compactDrawerEnabled: Boolean,
+): Boolean {
+    if (!wideLayout) return !compactDrawerEnabled
+    return route !in setOf(
+        RouteRegistry.Feed.route,
+        RouteRegistry.Videos.route,
+        RouteRegistry.Moments.route,
+        RouteRegistry.Bookmarks.route,
+        RouteRegistry.Liked.route,
+    )
 }

@@ -99,6 +99,11 @@ class AppDrawerTest {
 
     @Test
     fun drawer_destination_selection_tracks_registered_routes() {
+        assertTrue(drawerDestinationSelected(RouteRegistry.Feed.route, IglooDestination.Feed))
+        assertTrue(drawerDestinationSelected(RouteRegistry.Videos.route, IglooDestination.Videos))
+        assertTrue(drawerDestinationSelected(RouteRegistry.Moments.route, IglooDestination.Moments))
+        assertTrue(drawerDestinationSelected(RouteRegistry.Shorts.route, IglooDestination.Moments))
+        assertTrue(drawerDestinationSelected(RouteRegistry.Bookmarks.route, IglooDestination.Bookmarks))
         assertTrue(drawerDestinationSelected(RouteRegistry.Liked.route, IglooDestination.Liked))
         assertTrue(drawerDestinationSelected(RouteRegistry.PlaybackSettings.route, IglooDestination.Settings))
         assertTrue(drawerDestinationSelected(RouteRegistry.OutboxLogs.route, IglooDestination.Logs))

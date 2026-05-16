@@ -15,6 +15,7 @@ class PlayerOrientationTest {
             shouldAutoEnterPlayerFullscreen(
                 configurationOrientation = Configuration.ORIENTATION_LANDSCAPE,
                 autoFullscreenSuppressed = false,
+                wideLayout = false,
             ),
         )
     }
@@ -25,6 +26,18 @@ class PlayerOrientationTest {
             shouldAutoEnterPlayerFullscreen(
                 configurationOrientation = Configuration.ORIENTATION_LANDSCAPE,
                 autoFullscreenSuppressed = true,
+                wideLayout = false,
+            ),
+        )
+    }
+
+    @Test
+    fun wide_layout_does_not_auto_enter_landscape_fullscreen() {
+        assertFalse(
+            shouldAutoEnterPlayerFullscreen(
+                configurationOrientation = Configuration.ORIENTATION_LANDSCAPE,
+                autoFullscreenSuppressed = false,
+                wideLayout = true,
             ),
         )
     }
@@ -33,11 +46,27 @@ class PlayerOrientationTest {
     fun manual_fullscreen_exit_requests_portrait_until_device_is_upright() {
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
-            playerInlineRequestedOrientation(autoFullscreenSuppressed = true),
+            playerInlineRequestedOrientation(autoFullscreenSuppressed = true, wideLayout = false),
         )
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR,
-            playerInlineRequestedOrientation(autoFullscreenSuppressed = false),
+            playerInlineRequestedOrientation(autoFullscreenSuppressed = false, wideLayout = false),
+        )
+    }
+
+    @Test
+    fun wide_layout_player_requests_user_orientation_without_landscape_forcing() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_FULL_USER,
+            playerInlineRequestedOrientation(autoFullscreenSuppressed = false, wideLayout = true),
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_FULL_USER,
+            playerFullscreenRequestedOrientation(wideLayout = true),
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            playerFullscreenRequestedOrientation(wideLayout = false),
         )
     }
 

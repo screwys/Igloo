@@ -25,12 +25,27 @@ internal fun playerDevicePostureForDegrees(degrees: Int): PlayerDevicePosture {
 internal fun shouldAutoEnterPlayerFullscreen(
     configurationOrientation: Int,
     autoFullscreenSuppressed: Boolean,
+    wideLayout: Boolean = false,
 ): Boolean =
-    configurationOrientation == Configuration.ORIENTATION_LANDSCAPE && !autoFullscreenSuppressed
+    !wideLayout &&
+        configurationOrientation == Configuration.ORIENTATION_LANDSCAPE &&
+        !autoFullscreenSuppressed
 
-internal fun playerInlineRequestedOrientation(autoFullscreenSuppressed: Boolean): Int =
-    if (autoFullscreenSuppressed) {
+internal fun playerInlineRequestedOrientation(
+    autoFullscreenSuppressed: Boolean,
+    wideLayout: Boolean = false,
+): Int =
+    if (wideLayout) {
+        ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+    } else if (autoFullscreenSuppressed) {
         ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     } else {
         ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+    }
+
+internal fun playerFullscreenRequestedOrientation(wideLayout: Boolean = false): Int =
+    if (wideLayout) {
+        ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+    } else {
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     }

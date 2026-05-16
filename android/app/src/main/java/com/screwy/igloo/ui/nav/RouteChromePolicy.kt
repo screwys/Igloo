@@ -14,12 +14,16 @@ data class RouteChromePolicy(
     val bottomChrome: BottomChrome,
     val drawerChrome: DrawerChrome,
     val topBarTitle: TopBarTitle = TopBarTitle.None,
+    val wideDrawerChrome: DrawerChrome = drawerChrome,
 ) {
     val usesScaffoldTopBar: Boolean
         get() = topChrome == TopChrome.ScrollAwayAppBar
 
     val showsBottomNav: Boolean
         get() = bottomChrome == BottomChrome.Visible
+
+    val supportsWideSidebar: Boolean
+        get() = wideDrawerChrome == DrawerChrome.Enabled
 }
 
 sealed class TopChrome {

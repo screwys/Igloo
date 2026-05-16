@@ -49,12 +49,13 @@ class RouteRegistryTest {
     }
 
     @Test
-    fun threadUsesCentralScaffoldWithoutDrawerOrBottomNav() {
+    fun threadUsesCentralScaffoldWithoutCompactDrawerOrBottomNav() {
         val thread = RouteRegistry.Thread
 
         assertEquals(TopChrome.ScrollAwayAppBar, thread.chrome.topChrome)
         assertEquals(BottomChrome.Hidden, thread.chrome.bottomChrome)
         assertEquals(DrawerChrome.Disabled, thread.chrome.drawerChrome)
+        assertEquals(DrawerChrome.Enabled, thread.chrome.wideDrawerChrome)
         assertEquals(TopBarTitle.Resource(R.string.label_thread), thread.chrome.topBarTitle)
     }
 
