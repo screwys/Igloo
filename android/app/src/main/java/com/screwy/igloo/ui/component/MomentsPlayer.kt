@@ -335,7 +335,11 @@ fun MomentsPlayer(
         initialPage = safeStart,
         pageCount = { items.size },
     )
-    val currentIndex = pagerState.currentPage.coerceIn(0, items.lastIndex)
+    val currentIndex = momentPlaybackPage(
+        currentPage = pagerState.currentPage,
+        settledPage = pagerState.settledPage,
+        isScrollInProgress = pagerState.isScrollInProgress,
+    ).coerceIn(0, items.lastIndex)
     val storyMode = exitOnEnd
     val storyProgressWindow = remember(storyMode, currentIndex, items) {
         if (storyMode) storyProgressWindow(items, currentIndex) else StoryProgressWindow(index = 0, count = 0)
@@ -390,10 +394,16 @@ fun MomentsPlayer(
 
     // Drive view-event + onIndexChange from the pager's selected page. The
     // platform pager owns drag/fling physics; the shared video player follows
-    // the current page so swipes do not build and release a player per page.
+    // the settled page so it is not reparented mid-swipe.
     var lastFiredPage by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(pagerState, items) {
-        snapshotFlow { pagerState.currentPage.coerceIn(0, items.lastIndex) }
+        snapshotFlow {
+            momentPlaybackPage(
+                currentPage = pagerState.currentPage,
+                settledPage = pagerState.settledPage,
+                isScrollInProgress = pagerState.isScrollInProgress,
+            ).coerceIn(0, items.lastIndex)
+        }
             .distinctUntilChanged()
             .collect { page ->
                 if (page !in items.indices) return@collect
@@ -425,7 +435,13 @@ fun MomentsPlayer(
     LaunchedEffect(pagerState, items, mediaInventoryDao, syncDao, baseUrlProvider.baseUrl()) {
         val baseUrl = baseUrlProvider.baseUrl()
         combine(
-            snapshotFlow { pagerState.currentPage.coerceIn(0, items.lastIndex) },
+            snapshotFlow {
+                momentPlaybackPage(
+                    currentPage = pagerState.currentPage,
+                    settledPage = pagerState.settledPage,
+                    isScrollInProgress = pagerState.isScrollInProgress,
+                ).coerceIn(0, items.lastIndex)
+            },
             snapshotFlow { pagerState.isScrollInProgress },
             snapshotFlow { lifecycleStarted },
         ) { page, scrolling, started ->
