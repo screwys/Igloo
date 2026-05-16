@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.screwy.igloo.R
+import com.screwy.igloo.data.platformKeyFromChannelId
+import com.screwy.igloo.data.entity.ChannelEntity
 import com.screwy.igloo.data.entity.ChannelProfileEntity
 import com.screwy.igloo.data.entity.FeedRow
 import com.screwy.igloo.data.entity.ThreadedFeedRow
@@ -42,6 +44,7 @@ import com.screwy.igloo.ui.component.Platform
 import com.screwy.igloo.ui.component.VideoGrid
 import com.screwy.igloo.ui.component.channelProfileHeaderUiModel
 import com.screwy.igloo.ui.component.normalizeHandle
+import com.screwy.igloo.ui.component.parsePlatform
 import com.screwy.igloo.ui.component.resolveInitialMomentThumbnailUri
 import com.screwy.igloo.ui.nav.ApplyOverlayChrome
 import com.screwy.igloo.ui.nav.IglooNavigationSource
@@ -83,8 +86,6 @@ fun ChannelRoute(
     val pendingBookmark by vm.pendingBookmark.collectAsStateWithLifecycle()
     val bookmarkCategories by vm.bookmarkCategories.collectAsStateWithLifecycle()
     val mutedHandles by vm.mutedHandles.collectAsStateWithLifecycle()
-    val twitterRows by vm.twitterRows.collectAsStateWithLifecycle()
-    val mediaModels by vm.mediaModels.collectAsStateWithLifecycle()
     var confirmUnfollow by remember { mutableStateOf(false) }
     val navigator = rememberIglooNavigator(navController)
 
@@ -100,13 +101,7 @@ fun ChannelRoute(
         val matchingSnapshot = initialSnapshot?.takeIf { it.channelId == channelId }
         val display = channel
         val profileForHeader = channelProfile ?: matchingSnapshot?.toChannelProfileEntity()
-        val displayNameOverride = channelProfile?.displayName?.takeIf { it.isNotBlank() }
-            ?: matchingSnapshot?.displayName?.takeIf { it.isNotBlank() }
-            ?: resolveHeaderDisplayName(
-                primaryName = display.channel.name,
-                sourceHandle = profileForHeader?.handle ?: display.channel.sourceId,
-                authorDisplayNames = twitterRows.mapNotNull { it.item.authorDisplayName },
-            )
+        val routePlatform = resolveChannelRoutePlatform(profileForHeader, display.channel)
         val headerLabels = ChannelProfileHeaderLabels(
             following = stringResource(R.string.profile_following),
             followers = stringResource(R.string.profile_followers),
@@ -114,19 +109,31 @@ fun ChannelRoute(
             protectedAccount = stringResource(R.string.profile_protected_account),
             browser = stringResource(R.string.system_browser),
         )
-        val profileHeader = channelProfileHeaderUiModel(
-            baseUrl = baseUrl,
-            channel = display,
-            profile = profileForHeader,
-            displayNameOverride = displayNameOverride,
-            initialAvatarUri = matchingSnapshot?.avatarUri ?: MediaUri.Missing,
-            initialBannerUri = matchingSnapshot?.bannerUri ?: MediaUri.Missing,
-            labels = headerLabels,
-        ).copy(
-            storyRingState = storyStatus.ringState,
-            storyFirstVideoId = storyStatus.firstVideoId,
-        )
-        val headerContent: @Composable () -> Unit = {
+
+        fun buildProfileHeader(authorDisplayNames: List<String> = emptyList()): ChannelProfileHeaderUiModel {
+            val displayNameOverride = channelRouteDisplayNameOverride(
+                profileDisplayName = channelProfile?.displayName,
+                snapshotDisplayName = matchingSnapshot?.displayName,
+                routePlatform = routePlatform,
+                primaryName = display.channel.name,
+                sourceHandle = profileForHeader?.handle ?: display.channel.sourceId,
+                twitterAuthorDisplayNames = authorDisplayNames,
+            )
+            return channelProfileHeaderUiModel(
+                baseUrl = baseUrl,
+                channel = display,
+                profile = profileForHeader,
+                displayNameOverride = displayNameOverride,
+                initialAvatarUri = matchingSnapshot?.avatarUri ?: MediaUri.Missing,
+                initialBannerUri = matchingSnapshot?.bannerUri ?: MediaUri.Missing,
+                labels = headerLabels,
+            ).copy(
+                storyRingState = storyStatus.ringState,
+                storyFirstVideoId = storyStatus.firstVideoId,
+            )
+        }
+
+        fun headerContent(profileHeader: ChannelProfileHeaderUiModel): @Composable () -> Unit = {
             ComposeChannelHeader(
                 header = profileHeader,
                 onFollowToggle = { newValue ->
@@ -154,89 +161,105 @@ fun ChannelRoute(
             )
         }
 
-        when (profileHeader.platform) {
-            Platform.Twitter -> ChannelTwitterBody(
-                vm = vm,
-                mutedHandles = mutedHandles,
-                mediaModels = mediaModels,
-                pendingBookmark = pendingBookmark,
-                bookmarkCategories = bookmarkCategories,
-                header = profileHeader,
-                onHeaderFollowToggle = { newValue ->
-                    if (newValue) {
-                        vm.toggleFollow(true)
-                    } else {
-                        confirmUnfollow = true
-                    }
-                },
-                onHeaderStarToggle = vm::toggleStar,
-                onHeaderRefresh = vm::refresh,
-                onHeaderOpenInPlatform = {
-                    profileHeader.platformUrl?.takeIf { it.isNotBlank() }?.let(uriHandler::openUri)
-                },
-                onChannelClick = { cid ->
-                    navigator.openChannel(cid, IglooNavigationSource.Channel)
-                },
-                onProfileOpen = { post ->
-                    navigator.openChannel(
-                        channelId = post.author.channelId,
-                        source = IglooNavigationSource.Channel,
-                        originItemId = post.row.item.tweetId,
-                        snapshot = buildProfileOpenSnapshot(post, baseUrl),
-                    )
-                },
-                onMediaOpen = { row, mediaIndex, visibleMediaModel ->
-                    val snapshot = buildFeedMediaOpenSnapshot(
-                        row = row,
-                        mediaIndex = mediaIndex,
-                        mediaModels = mediaModels,
-                        visibleMediaModel = visibleMediaModel,
-                    )
-                    navigator.openMedia(
-                        ownerKind = "tweet",
-                        ownerId = row.item.tweetId,
-                        index = mediaIndex,
-                        source = IglooNavigationSource.Channel,
-                        posterUri = snapshot.posterUri,
-                        snapshot = snapshot,
-                    )
-                },
-                onQuoteOpen = { tweetId ->
-                    navigator.openThread(tweetId, IglooNavigationSource.Channel)
-                },
-            )
-            Platform.TikTok, Platform.Instagram -> ChannelMomentsBody(
-                vm = vm,
-                currentChannelId = channelId,
-                headerContent = headerContent,
-                onOpenMoment = { item ->
-                    navigator.openShorts(
-                        playlistType = "channel",
-                        playlistId = channelId,
-                        videoId = item.videoId,
-                        source = IglooNavigationSource.Channel,
-                        posterUri = item.routePosterUri(baseUrl),
-                    )
-                },
-                onChannelClick = { cid ->
-                    navigator.openChannel(cid, IglooNavigationSource.Channel)
-                },
-            )
-            Platform.YouTube -> ChannelVideosBody(
-                vm = vm,
-                headerContent = headerContent,
-                onVideoClick = { vid ->
-                    navigator.openVideo(vid, IglooNavigationSource.Channel)
-                },
-                onVideoClickWithPoster = { vid, posterUri ->
-                    navigator.openVideo(vid, IglooNavigationSource.Channel, posterUri)
-                },
-                onChannelClick = { cid ->
-                    navigator.openChannel(cid, IglooNavigationSource.Channel)
-                },
-            )
+        when (routePlatform) {
+            Platform.Twitter -> {
+                val twitterRows by vm.twitterRows.collectAsStateWithLifecycle()
+                val mediaModels by vm.mediaModels.collectAsStateWithLifecycle()
+                val profileHeader = buildProfileHeader(
+                    authorDisplayNames = twitterRows.mapNotNull { it.item.authorDisplayName },
+                )
+                ChannelTwitterBody(
+                    vm = vm,
+                    rows = twitterRows,
+                    mutedHandles = mutedHandles,
+                    mediaModels = mediaModels,
+                    pendingBookmark = pendingBookmark,
+                    bookmarkCategories = bookmarkCategories,
+                    header = profileHeader,
+                    onHeaderFollowToggle = { newValue ->
+                        if (newValue) {
+                            vm.toggleFollow(true)
+                        } else {
+                            confirmUnfollow = true
+                        }
+                    },
+                    onHeaderStarToggle = vm::toggleStar,
+                    onHeaderRefresh = vm::refresh,
+                    onHeaderOpenInPlatform = {
+                        profileHeader.platformUrl?.takeIf { it.isNotBlank() }?.let(uriHandler::openUri)
+                    },
+                    onChannelClick = { cid ->
+                        navigator.openChannel(cid, IglooNavigationSource.Channel)
+                    },
+                    onProfileOpen = { post ->
+                        navigator.openChannel(
+                            channelId = post.author.channelId,
+                            source = IglooNavigationSource.Channel,
+                            originItemId = post.row.item.tweetId,
+                            snapshot = buildProfileOpenSnapshot(post, baseUrl),
+                        )
+                    },
+                    onMediaOpen = { row, mediaIndex, visibleMediaModel ->
+                        val snapshot = buildFeedMediaOpenSnapshot(
+                            row = row,
+                            mediaIndex = mediaIndex,
+                            mediaModels = mediaModels,
+                            visibleMediaModel = visibleMediaModel,
+                        )
+                        navigator.openMedia(
+                            ownerKind = "tweet",
+                            ownerId = row.item.tweetId,
+                            index = mediaIndex,
+                            source = IglooNavigationSource.Channel,
+                            posterUri = snapshot.posterUri,
+                            snapshot = snapshot,
+                        )
+                    },
+                    onQuoteOpen = { tweetId ->
+                        navigator.openThread(tweetId, IglooNavigationSource.Channel)
+                    },
+                )
+            }
+            Platform.TikTok, Platform.Instagram -> {
+                val profileHeader = buildProfileHeader()
+                ChannelMomentsBody(
+                    vm = vm,
+                    currentChannelId = channelId,
+                    headerContent = headerContent(profileHeader),
+                    onOpenMoment = { item ->
+                        navigator.openShorts(
+                            playlistType = "channel",
+                            playlistId = channelId,
+                            videoId = item.videoId,
+                            source = IglooNavigationSource.Channel,
+                            posterUri = item.routePosterUri(baseUrl),
+                        )
+                    },
+                    onChannelClick = { cid ->
+                        navigator.openChannel(cid, IglooNavigationSource.Channel)
+                    },
+                )
+            }
+            Platform.YouTube -> {
+                val profileHeader = buildProfileHeader()
+                ChannelVideosBody(
+                    vm = vm,
+                    headerContent = headerContent(profileHeader),
+                    onVideoClick = { vid ->
+                        navigator.openVideo(vid, IglooNavigationSource.Channel)
+                    },
+                    onVideoClickWithPoster = { vid, posterUri ->
+                        navigator.openVideo(vid, IglooNavigationSource.Channel, posterUri)
+                    },
+                    onChannelClick = { cid ->
+                        navigator.openChannel(cid, IglooNavigationSource.Channel)
+                    },
+                )
+            }
             null -> androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxSize()) {
-                headerContent()
+                val profileHeader = buildProfileHeader()
+                val unknownHeaderContent = headerContent(profileHeader)
+                unknownHeaderContent()
                 Text(
                     text = stringResource(
                         R.string.error_unknown_platform,
@@ -281,6 +304,7 @@ fun ChannelRoute(
 @Composable
 private fun ChannelTwitterBody(
     vm: ChannelViewModel,
+    rows: List<FeedRow>,
     mutedHandles: Set<String>,
     mediaModels: Map<String, FeedMediaGridModel>,
     pendingBookmark: BookmarkTarget?,
@@ -295,7 +319,6 @@ private fun ChannelTwitterBody(
     onMediaOpen: (FeedRow, Int, FeedMediaGridModel) -> Unit,
     onQuoteOpen: (String) -> Unit,
 ) {
-    val rows by vm.twitterRows.collectAsStateWithLifecycle()
     val threadedRows = remember(rows) { rows.map { ThreadedFeedRow(row = it, chain = emptyList()) } }
 
     NativeFeedSurface(
@@ -376,6 +399,34 @@ private fun ProfileOpenSnapshot.toChannelProfileEntity(): ChannelProfileEntity =
 
 private fun MediaUri.remoteUrlOrNull(): String? =
     (this as? MediaUri.Remote)?.url?.takeIf { it.isNotBlank() }
+
+internal fun resolveChannelRoutePlatform(
+    profile: ChannelProfileEntity?,
+    channel: ChannelEntity,
+): Platform? =
+    parsePlatform(profile?.platform)
+        ?: parsePlatform(channel.platform)
+        ?: parsePlatform(platformKeyFromChannelId(channel.channelId))
+
+internal fun channelRouteDisplayNameOverride(
+    profileDisplayName: String?,
+    snapshotDisplayName: String?,
+    routePlatform: Platform?,
+    primaryName: String?,
+    sourceHandle: String?,
+    twitterAuthorDisplayNames: List<String>,
+): String? =
+    profileDisplayName?.takeIf { it.isNotBlank() }
+        ?: snapshotDisplayName?.takeIf { it.isNotBlank() }
+        ?: if (routePlatform == Platform.Twitter) {
+            resolveHeaderDisplayName(
+                primaryName = primaryName,
+                sourceHandle = sourceHandle,
+                authorDisplayNames = twitterAuthorDisplayNames,
+            )
+        } else {
+            null
+        }
 
 /**
  * YouTube body — 2-column long-form grid per the channel-feed (YouTube)
