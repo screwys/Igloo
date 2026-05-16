@@ -29,7 +29,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -71,10 +73,17 @@ class FeedViewModelTest {
         uiEffects = UiEffects()
     }
 
-    @After fun tearDown() {
+    @After fun tearDown() = runBlocking {
         viewModels.clearAll()
-        scope.cancel()
-        db.close()
+        if (::scope.isInitialized) {
+            scope.cancel()
+        }
+        withContext(Dispatchers.Default) {
+            yield()
+        }
+        if (::db.isInitialized) {
+            db.close()
+        }
         Dispatchers.resetMain()
     }
 
@@ -352,8 +361,13 @@ class FeedViewModelTest {
             while (vm.rows.value.map { it.row.item.tweetId } != listOf("t3", "t4", "t5", "t6", "t2", "t1")) delay(10)
             true
         }
+        val refreshSettled = withTimeoutOrNull(2_000L) {
+            while (vm.isRefreshing.value) delay(10)
+            true
+        }
         sub.cancel()
         assertEquals(true, refreshed)
+        assertEquals(true, refreshSettled)
         assertEquals(false, vm.newPostsAvailable.value)
         assertEquals(emptyList<String>(), vm.newPostPosters.value.map { it.channelId })
     }
