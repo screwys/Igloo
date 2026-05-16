@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import com.screwy.igloo.R
 import com.screwy.igloo.data.dao.BookmarkDao
 import com.screwy.igloo.data.stripPlatformPrefix
@@ -185,6 +186,8 @@ internal fun MomentPage(
     onSwipeLeftToChannel: (channelId: String) -> Unit,
     onSwipeRightFromEdge: () -> Unit,
     logger: Logger,
+    sharedVideoPlayer: ExoPlayer? = null,
+    sharedPlayerView: PlayerView? = null,
 ) {
     val colors = MaterialTheme.iglooColors
     val density = LocalDensity.current
@@ -293,6 +296,8 @@ internal fun MomentPage(
                     onCursorAdvance = onCursorAdvance,
                     logger = logger,
                     storyMode = storyMode,
+                    sharedVideoPlayer = sharedVideoPlayer,
+                    sharedPlayerView = sharedPlayerView,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -449,6 +454,8 @@ private fun BoxScope.MomentVideoLayer(
     onCursorAdvance: (videoId: String, positionMs: Long) -> Unit,
     logger: Logger,
     storyMode: Boolean,
+    sharedVideoPlayer: ExoPlayer? = null,
+    sharedPlayerView: PlayerView? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -476,46 +483,58 @@ private fun BoxScope.MomentVideoLayer(
         }
     }
 
-    val player = remember(item.videoId, authTokens.bearerTokenSync()) {
+    val playerIsShared = sharedVideoPlayer != null
+    val player = sharedVideoPlayer ?: remember(item.videoId, authTokens.bearerTokenSync()) {
         buildIglooPlayer(context, authTokens, iglooHostProvider).apply {
             repeatMode = Player.REPEAT_MODE_OFF
             PerfProbe.incrementCounter("igloo_moments_player_build_count")
             PerfProbe.log(
                 event = "moments_player_build",
-            ) { mapOf("page" to pageIndex, "story_mode" to storyMode) }
+            ) { mapOf("page" to pageIndex, "story_mode" to storyMode, "shared" to false) }
         }
     }
-    DisposableEffect(player) {
-        onDispose {
-            PerfProbe.incrementCounter("igloo_moments_player_release_count")
-            PerfProbe.log(
-                event = "moments_player_release",
-            ) { mapOf("page" to pageIndex, "story_mode" to storyMode) }
-            player.release()
+    if (!playerIsShared) {
+        DisposableEffect(player) {
+            onDispose {
+                PerfProbe.incrementCounter("igloo_moments_player_release_count")
+                PerfProbe.log(
+                    event = "moments_player_release",
+                ) { mapOf("page" to pageIndex, "story_mode" to storyMode, "shared" to false) }
+                player.release()
+            }
         }
     }
     var loadedKey by remember(item.videoId) { mutableStateOf<String?>(null) }
     var surfaceState by remember(item.videoId) { mutableStateOf(MomentVideoSurfaceState()) }
-    MomentVideoDebugTelemetry(
-        pageIndex = pageIndex,
-        item = item,
-        streamUri = playbackStreamUri,
-        player = player,
-        loadedKey = loadedKey,
+    if (!playerIsShared || isActive) {
+        MomentVideoDebugTelemetry(
+            pageIndex = pageIndex,
+            item = item,
+            streamUri = playbackStreamUri,
+            player = player,
+            loadedKey = loadedKey,
+            isActive = isActive,
+            shouldPrepare = shouldPrepare,
+            logger = logger,
+        )
+    }
+
+    val shouldPreparePlayer = shouldPrepareMomentVideoPlayer(
         isActive = isActive,
         shouldPrepare = shouldPrepare,
-        logger = logger,
+        sharedPlayer = playerIsShared,
     )
-
-    LaunchedEffect(player, playbackStreamUri, item.videoId, shouldPrepare) {
-        if (!shouldPrepare) {
-            PerfProbe.log(
-                event = "moments_player_clear",
-            ) { mapOf("reason" to "outside_prepare_window", "page" to pageIndex) }
-            player.playWhenReady = false
-            player.pause()
-            player.clearMediaItems()
-            loadedKey = null
+    LaunchedEffect(player, playbackStreamUri, item.videoId, shouldPreparePlayer, playerIsShared) {
+        if (!shouldPreparePlayer) {
+            if (!playerIsShared && !shouldPrepare) {
+                PerfProbe.log(
+                    event = "moments_player_clear",
+                ) { mapOf("reason" to "outside_prepare_window", "page" to pageIndex) }
+                player.playWhenReady = false
+                player.pause()
+                player.clearMediaItems()
+                loadedKey = null
+            }
             surfaceState = MomentVideoSurfaceState()
             return@LaunchedEffect
         }
@@ -536,46 +555,50 @@ private fun BoxScope.MomentVideoLayer(
     LaunchedEffect(player, muted) {
         player.volume = if (muted) 0f else 1f
     }
-    LaunchedEffect(player, isActive, shouldPrepare, loadedKey) {
-        if (isActive && shouldPrepare && loadedKey != null) {
-            player.playWhenReady = true
-        } else {
-            delay(MOMENTS_STOP_OLD_PAGE_DELAY_MS)
-            player.playWhenReady = false
-            player.pause()
-            if (player.mediaItemCount > 0) player.seekTo(0L)
-        }
-    }
-
-    DisposableEffect(player, item.videoId, autoSwipe, isActive) {
-        val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(state: Int) {
-                if (state != Player.STATE_ENDED) return
-                if (player.currentMediaItem?.mediaId != item.videoId) return
-                if (autoSwipe) {
-                    onAutoAdvance()
-                    return
-                }
-                logger.debugMoment("moments_player_loop_restart") {
-                    momentVideoDebugFields(
-                        item = item,
-                        pageIndex = pageIndex,
-                        streamUri = playbackStreamUri,
-                        player = player,
-                        loadedKey = loadedKey,
-                        targetLoadKey = loadedKey,
-                    )
-                }
-                player.seekTo(0L)
-                player.playWhenReady = isActive
+    if (!playerIsShared || isActive) {
+        LaunchedEffect(player, isActive, shouldPreparePlayer, loadedKey) {
+            if (isActive && shouldPreparePlayer && loadedKey != null) {
+                player.playWhenReady = true
+            } else {
+                delay(MOMENTS_STOP_OLD_PAGE_DELAY_MS)
+                player.playWhenReady = false
+                player.pause()
+                if (player.mediaItemCount > 0) player.seekTo(0L)
             }
         }
-        player.addListener(listener)
-        onDispose { player.removeListener(listener) }
     }
 
-    LaunchedEffect(cursorTracking, isActive, player, item.videoId) {
-        if (!cursorTracking) return@LaunchedEffect
+    if (!playerIsShared || isActive) {
+        DisposableEffect(player, item.videoId, autoSwipe, isActive) {
+            val listener = object : Player.Listener {
+                override fun onPlaybackStateChanged(state: Int) {
+                    if (state != Player.STATE_ENDED) return
+                    if (player.currentMediaItem?.mediaId != item.videoId) return
+                    if (autoSwipe) {
+                        onAutoAdvance()
+                        return
+                    }
+                    logger.debugMoment("moments_player_loop_restart") {
+                        momentVideoDebugFields(
+                            item = item,
+                            pageIndex = pageIndex,
+                            streamUri = playbackStreamUri,
+                            player = player,
+                            loadedKey = loadedKey,
+                            targetLoadKey = loadedKey,
+                        )
+                    }
+                    player.seekTo(0L)
+                    player.playWhenReady = isActive
+                }
+            }
+            player.addListener(listener)
+            onDispose { player.removeListener(listener) }
+        }
+    }
+
+    LaunchedEffect(cursorTracking, isActive, player, item.videoId, playerIsShared) {
+        if (!cursorTracking || (playerIsShared && !isActive)) return@LaunchedEffect
         while (true) {
             delay(2_000L)
             if (isActive && player.currentMediaItem?.mediaId == item.videoId) {
@@ -588,6 +611,13 @@ private fun BoxScope.MomentVideoLayer(
     val showFallback = shouldShowMomentThumbnailFallback(
         remoteOffline = remoteOffline,
         surfaceState = surfaceState,
+    )
+    val shouldMountVideoSurface = shouldMountMomentVideoSurface(
+        isActive = isActive,
+        shouldPrepare = shouldPrepare,
+        sharedPlayer = playerIsShared,
+        streamUri = playbackStreamUri,
+        remoteOffline = remoteOffline,
     )
 
     Box(
@@ -602,11 +632,12 @@ private fun BoxScope.MomentVideoLayer(
                 brokenIconTint = MaterialTheme.iglooColors.onSurfaceFaint,
             )
         }
-        if (shouldPrepare && playbackStreamUri !is MediaUri.Missing && !remoteOffline) {
+        if (shouldMountVideoSurface) {
             VideoSurface(
                 player = player,
                 mediaKey = item.videoId,
                 onStateChange = { surfaceState = it },
+                sharedPlayerView = sharedPlayerView,
                 modifier = Modifier.fillMaxSize(),
             )
         }

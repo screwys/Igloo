@@ -530,6 +530,51 @@ class MomentsPlayerTest {
     }
 
     @Test
+    fun shared_moments_player_is_owned_only_by_active_page() {
+        val streamUri = MediaUri.Remote("https://igloo.example/api/media/stream/demo")
+
+        assertTrue(
+            shouldPrepareMomentVideoPlayer(
+                isActive = true,
+                shouldPrepare = true,
+                sharedPlayer = true,
+            ),
+        )
+        assertFalse(
+            shouldPrepareMomentVideoPlayer(
+                isActive = false,
+                shouldPrepare = true,
+                sharedPlayer = true,
+            ),
+        )
+        assertTrue(
+            shouldPrepareMomentVideoPlayer(
+                isActive = false,
+                shouldPrepare = true,
+                sharedPlayer = false,
+            ),
+        )
+        assertTrue(
+            shouldMountMomentVideoSurface(
+                isActive = true,
+                shouldPrepare = true,
+                sharedPlayer = true,
+                streamUri = streamUri,
+                remoteOffline = false,
+            ),
+        )
+        assertFalse(
+            shouldMountMomentVideoSurface(
+                isActive = false,
+                shouldPrepare = true,
+                sharedPlayer = true,
+                streamUri = streamUri,
+                remoteOffline = false,
+            ),
+        )
+    }
+
+    @Test
     fun ended_loop_keeps_rendered_frame_until_restart() {
         assertFalse(shouldClearMomentRenderedFrame(Player.STATE_ENDED))
         assertTrue(shouldClearMomentRenderedFrame(Player.STATE_IDLE))

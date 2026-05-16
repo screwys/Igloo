@@ -100,6 +100,28 @@ internal fun shouldShowMomentsVideoProgressBar(
         surfaceState.hasExpectedMedia &&
         surfaceState.renderedFirstFrame
 
+internal fun shouldPrepareMomentVideoPlayer(
+    isActive: Boolean,
+    shouldPrepare: Boolean,
+    sharedPlayer: Boolean,
+): Boolean =
+    shouldPrepare && (!sharedPlayer || isActive)
+
+internal fun shouldMountMomentVideoSurface(
+    isActive: Boolean,
+    shouldPrepare: Boolean,
+    sharedPlayer: Boolean,
+    streamUri: MediaUri,
+    remoteOffline: Boolean,
+): Boolean =
+    shouldPrepareMomentVideoPlayer(
+        isActive = isActive,
+        shouldPrepare = shouldPrepare,
+        sharedPlayer = sharedPlayer,
+    ) &&
+        streamUri !is MediaUri.Missing &&
+        !remoteOffline
+
 internal fun momentVideoSurfaceStateFor(
     expectedMediaId: String,
     currentMediaId: String?,

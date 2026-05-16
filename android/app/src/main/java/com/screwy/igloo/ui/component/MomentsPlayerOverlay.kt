@@ -1,6 +1,7 @@
 package com.screwy.igloo.ui.component
 
 import android.view.LayoutInflater
+import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -417,11 +418,19 @@ private fun collapseMomentCaptionWhitespace(text: String): String =
     text.replace(MomentCaptionWhitespace, " ").trim()
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
+internal fun createMomentPlayerView(context: android.content.Context): PlayerView =
+    (LayoutInflater.from(context).inflate(R.layout.moment_player_view, null) as PlayerView).apply {
+        setBackgroundColor(android.graphics.Color.BLACK)
+        setShutterBackgroundColor(android.graphics.Color.BLACK)
+    }
+
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
 internal fun VideoSurface(
     player: ExoPlayer,
     mediaKey: String,
     onStateChange: (MomentVideoSurfaceState) -> Unit,
+    sharedPlayerView: PlayerView? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -491,15 +500,13 @@ internal fun VideoSurface(
         }
     }
 
-    val playerView = remember {
-        (LayoutInflater.from(context).inflate(R.layout.moment_player_view, null) as PlayerView).apply {
-            setBackgroundColor(android.graphics.Color.BLACK)
-            setShutterBackgroundColor(android.graphics.Color.BLACK)
-        }
-    }
+    val playerView = sharedPlayerView ?: remember { createMomentPlayerView(context) }
 
     AndroidView(
-        factory = { playerView },
+        factory = {
+            (playerView.parent as? ViewGroup)?.removeView(playerView)
+            playerView
+        },
         update = { view ->
             if (view.player !== player) view.player = player
             view.setBackgroundColor(android.graphics.Color.BLACK)
@@ -515,7 +522,9 @@ internal fun VideoSurface(
 
     DisposableEffect(player) {
         onDispose {
-            playerView.player = null
+            if (sharedPlayerView == null) {
+                playerView.player = null
+            }
         }
     }
 }
