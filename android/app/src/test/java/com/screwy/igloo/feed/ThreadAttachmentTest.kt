@@ -26,16 +26,16 @@ class ThreadAttachmentTest {
     @After fun tearDown() { db.close() }
 
     @Test fun attachThreadChains_setsChainOnReplyLeafs() = runBlocking {
-        db.channelDao().upsert(ChannelEntity(channelId = "twitter_user_alpha", name = "Alpha", platform = "twitter"))
+        db.channelDao().upsert(ChannelEntity(channelId = "twitter_sample_alpha", name = "Alpha", platform = "twitter"))
         db.feedItemDao().upsert(listOf(
-            FeedItemEntity(tweetId = "t1", authorHandle = "user_alpha", channelId = "twitter_user_alpha", syncSeq = 1),
+            FeedItemEntity(tweetId = "t1", authorHandle = "sample_alpha", channelId = "twitter_sample_alpha", syncSeq = 1),
             FeedItemEntity(
                 tweetId = "t2",
-                authorHandle = "user_alpha",
-                channelId = "twitter_user_alpha",
+                authorHandle = "sample_alpha",
+                channelId = "twitter_sample_alpha",
                 syncSeq = 2,
                 isReply = true,
-                replyToHandle = "user_alpha",
+                replyToHandle = "sample_alpha",
                 replyToStatus = "t1",
             ),
         ))
@@ -50,46 +50,46 @@ class ThreadAttachmentTest {
 
     @Test fun attachThreadChains_collapsesSiblingReplyBranchesToFirstRankedLeaf() = runBlocking {
         db.channelDao().upsert(listOf(
-            ChannelEntity(channelId = "twitter_user_alpha", name = "Alpha", platform = "twitter"),
-            ChannelEntity(channelId = "twitter_user_beta", name = "Beta", platform = "twitter"),
-            ChannelEntity(channelId = "twitter_user_gamma", name = "Gamma", platform = "twitter"),
+            ChannelEntity(channelId = "twitter_sample_alpha", name = "Alpha", platform = "twitter"),
+            ChannelEntity(channelId = "twitter_sample_beta", name = "Beta", platform = "twitter"),
+            ChannelEntity(channelId = "twitter_sample_gamma", name = "Gamma", platform = "twitter"),
         ))
         db.feedItemDao().upsert(listOf(
-            FeedItemEntity(tweetId = "root", authorHandle = "user_alpha", channelId = "twitter_user_alpha", syncSeq = 1),
+            FeedItemEntity(tweetId = "root", authorHandle = "sample_alpha", channelId = "twitter_sample_alpha", syncSeq = 1),
             FeedItemEntity(
                 tweetId = "parent_a",
-                authorHandle = "user_beta",
-                channelId = "twitter_user_beta",
+                authorHandle = "sample_beta",
+                channelId = "twitter_sample_beta",
                 syncSeq = 2,
                 isReply = true,
-                replyToHandle = "user_alpha",
+                replyToHandle = "sample_alpha",
                 replyToStatus = "root",
             ),
             FeedItemEntity(
                 tweetId = "leaf_a",
-                authorHandle = "user_gamma",
-                channelId = "twitter_user_gamma",
+                authorHandle = "sample_gamma",
+                channelId = "twitter_sample_gamma",
                 syncSeq = 3,
                 isReply = true,
-                replyToHandle = "user_beta",
+                replyToHandle = "sample_beta",
                 replyToStatus = "parent_a",
             ),
             FeedItemEntity(
                 tweetId = "parent_b",
-                authorHandle = "user_beta",
-                channelId = "twitter_user_beta",
+                authorHandle = "sample_beta",
+                channelId = "twitter_sample_beta",
                 syncSeq = 4,
                 isReply = true,
-                replyToHandle = "user_alpha",
+                replyToHandle = "sample_alpha",
                 replyToStatus = "root",
             ),
             FeedItemEntity(
                 tweetId = "leaf_b",
-                authorHandle = "user_alpha",
-                channelId = "twitter_user_alpha",
+                authorHandle = "sample_alpha",
+                channelId = "twitter_sample_alpha",
                 syncSeq = 5,
                 isReply = true,
-                replyToHandle = "user_beta",
+                replyToHandle = "sample_beta",
                 replyToStatus = "parent_b",
             ),
         ))
@@ -109,9 +109,9 @@ class ThreadAttachmentTest {
     }
 
     @Test fun attachThreadChains_keepsNonReplyRows() = runBlocking {
-        db.channelDao().upsert(ChannelEntity(channelId = "twitter_user_alpha", name = "Alpha", platform = "twitter"))
+        db.channelDao().upsert(ChannelEntity(channelId = "twitter_sample_alpha", name = "Alpha", platform = "twitter"))
         db.feedItemDao().upsert(
-            FeedItemEntity(tweetId = "t1", authorHandle = "user_alpha", channelId = "twitter_user_alpha"),
+            FeedItemEntity(tweetId = "t1", authorHandle = "sample_alpha", channelId = "twitter_sample_alpha"),
         )
 
         val rows = db.feedReadDao().feedFlow(limit = 10).first()
@@ -123,12 +123,12 @@ class ThreadAttachmentTest {
     }
 
     @Test fun attachThreadChains_replyWithMissingParentHasEmptyChain() = runBlocking {
-        db.channelDao().upsert(ChannelEntity(channelId = "twitter_user_alpha", name = "Alpha", platform = "twitter"))
+        db.channelDao().upsert(ChannelEntity(channelId = "twitter_sample_alpha", name = "Alpha", platform = "twitter"))
         db.feedItemDao().upsert(
             FeedItemEntity(
                 tweetId = "t1",
-                authorHandle = "user_alpha",
-                channelId = "twitter_user_alpha",
+                authorHandle = "sample_alpha",
+                channelId = "twitter_sample_alpha",
                 isReply = true,
                 replyToHandle = "user_unknown",
                 replyToStatus = "9999",

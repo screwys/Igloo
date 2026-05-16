@@ -162,9 +162,18 @@ func main() {
 	fmt.Printf("  GetBookmarks(page):          %6dms  (%d rows)\n", time.Since(t).Milliseconds(), len(bmarksPage))
 
 	cats, _ := d.GetBookmarkCategories(username)
+	labelCounts, _ := d.GetBookmarkLabelCounts(username)
 	t = time.Now()
 	var bookmarksHTML bytes.Buffer
-	_ = components.BookmarksPage(benchPageProps("Bookmarks", "bookmarks"), bmarksPage, cats, 0, model.Pager{Page: 1, PerPage: webPageSize, Total: bCount}).Render(context.Background(), &bookmarksHTML)
+	_ = components.BookmarksPage(
+		benchPageProps("Bookmarks", "bookmarks"),
+		bmarksPage,
+		cats,
+		labelCounts,
+		0,
+		components.BookmarkLabelSelection{},
+		model.Pager{Page: 1, PerPage: webPageSize, Total: bCount},
+	).Render(context.Background(), &bookmarksHTML)
 	fmt.Printf("  Render BookmarksPage:        %6dms  (%d KB)\n", time.Since(t).Milliseconds(), bookmarksHTML.Len()/1024)
 
 	fmt.Println()
