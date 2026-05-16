@@ -61,6 +61,7 @@ import com.screwy.igloo.media.ownerKindFromChannelId
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.ServerBaseUrlProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
+import com.screwy.igloo.perf.PerfProbe
 import com.screwy.igloo.player.buildIglooPlayer
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlin.math.max
@@ -79,6 +80,10 @@ private fun prepareMomentVideo(
     val targetLoadKey = momentStreamLoadKey(item.videoId, streamUri)
     if (targetLoadKey == null) {
         if (loadedKey != null || player.mediaItemCount > 0) {
+            PerfProbe.log(
+                event = "moments_player_clear",
+                fields = mapOf("reason" to "missing_stream", "page" to pageIndex),
+            )
             logger.debugMoment("moments_player_clear_missing_stream") {
                 momentVideoDebugFields(
                     item = item,
@@ -103,10 +108,23 @@ private fun prepareMomentVideo(
         player.currentMediaItem?.mediaId == item.videoId &&
         player.playbackState != Player.STATE_ENDED
     ) {
+        PerfProbe.log(
+            event = "moments_player_prepare_skip",
+            fields = mapOf("reason" to "already_loaded", "page" to pageIndex),
+        )
         return loadedKey
     }
 
     val mediaItem = momentPlayerMediaItem(item.videoId, streamUri) ?: return null
+    PerfProbe.log(
+        event = "moments_player_prepare",
+        fields = mapOf(
+            "page" to pageIndex,
+            "uri" to PerfProbe.uriKind(streamUri),
+            "seed_position" to (seedPositionMs > 0L),
+            "had_media" to (player.mediaItemCount > 0),
+        ),
+    )
     logger.debugMoment("moments_player_prepare_page") {
         momentVideoDebugFields(
             item = item,
@@ -118,7 +136,12 @@ private fun prepareMomentVideo(
             seedPositionMs = seedPositionMs,
         )
     }
-    replaceMomentPlayerMediaItem(player, mediaItem, seedPositionMs)
+    PerfProbe.timed(
+        event = "moments_player_prepare_call",
+        fields = mapOf("page" to pageIndex, "uri" to PerfProbe.uriKind(streamUri)),
+    ) {
+        replaceMomentPlayerMediaItem(player, mediaItem, seedPositionMs)
+    }
     return targetLoadKey
 }
 
@@ -457,10 +480,22 @@ private fun BoxScope.MomentVideoLayer(
     val player = remember(item.videoId, authTokens.bearerTokenSync()) {
         buildIglooPlayer(context, authTokens, iglooHostProvider).apply {
             repeatMode = Player.REPEAT_MODE_OFF
+            PerfProbe.incrementCounter("igloo_moments_player_build_count")
+            PerfProbe.log(
+                event = "moments_player_build",
+                fields = mapOf("page" to pageIndex, "story_mode" to storyMode),
+            )
         }
     }
     DisposableEffect(player) {
-        onDispose { player.release() }
+        onDispose {
+            PerfProbe.incrementCounter("igloo_moments_player_release_count")
+            PerfProbe.log(
+                event = "moments_player_release",
+                fields = mapOf("page" to pageIndex, "story_mode" to storyMode),
+            )
+            player.release()
+        }
     }
     var loadedKey by remember(item.videoId) { mutableStateOf<String?>(null) }
     var surfaceState by remember(item.videoId) { mutableStateOf(MomentVideoSurfaceState()) }
@@ -477,6 +512,10 @@ private fun BoxScope.MomentVideoLayer(
 
     LaunchedEffect(player, playbackStreamUri, item.videoId, shouldPrepare) {
         if (!shouldPrepare) {
+            PerfProbe.log(
+                event = "moments_player_clear",
+                fields = mapOf("reason" to "outside_prepare_window", "page" to pageIndex),
+            )
             player.playWhenReady = false
             player.pause()
             player.clearMediaItems()

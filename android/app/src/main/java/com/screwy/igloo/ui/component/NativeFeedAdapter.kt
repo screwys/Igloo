@@ -11,6 +11,7 @@ import coil3.ImageLoader
 import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
+import com.screwy.igloo.perf.PerfProbe
 import kotlinx.coroutines.CoroutineScope
 
 internal class NativeFeedAdapter(
@@ -65,9 +66,15 @@ internal class NativeFeedAdapter(
         }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        when (val item = getItem(position)) {
-            is NativeFeedAdapterItem.Header -> (holder as NativeFeedChannelHeaderViewHolder).bind(item.header)
-            is NativeFeedAdapterItem.Post -> (holder as NativeFeedViewHolder).bind(item)
+        val viewType = getItemViewType(position)
+        PerfProbe.timed(
+            event = "native_feed_bind",
+            fields = mapOf("view_type" to viewType),
+        ) {
+            when (val item = getItem(position)) {
+                is NativeFeedAdapterItem.Header -> (holder as NativeFeedChannelHeaderViewHolder).bind(item.header)
+                is NativeFeedAdapterItem.Post -> (holder as NativeFeedViewHolder).bind(item)
+            }
         }
     }
 

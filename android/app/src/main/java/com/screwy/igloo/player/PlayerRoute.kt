@@ -60,6 +60,7 @@ import com.screwy.igloo.ui.nav.consumeFullscreenMediaTransitionFromPrevious
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
 import com.screwy.igloo.outbox.OutboxKind
 import com.screwy.igloo.outbox.OutboxWriter
+import com.screwy.igloo.perf.PerfProbe
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -125,7 +126,10 @@ fun PlayerRoute(
     val videoDao: VideoDao = koinInject()
     val outboxWriter: OutboxWriter = koinInject()
     val player = remember(authTokens.bearerTokenSync()) {
-        buildIglooPlayer(ctx, authTokens, iglooHostProvider)
+        buildIglooPlayer(ctx, authTokens, iglooHostProvider).also {
+            PerfProbe.incrementCounter("igloo_long_form_player_build_count")
+            PerfProbe.log(event = "long_form_player_build")
+        }
     }
     val playbackCoordinator = remember { PlaybackCoordinator() }
     val playbackPlayer = remember(player) { ExoPlayerPlaybackPlayer(player) }
@@ -176,7 +180,11 @@ fun PlayerRoute(
         value = videoDao.getNextVideoId(videoId)
     }
     DisposableEffect(Unit) {
-        onDispose { player.release() }
+        onDispose {
+            PerfProbe.incrementCounter("igloo_long_form_player_release_count")
+            PerfProbe.log(event = "long_form_player_release")
+            player.release()
+        }
     }
 
     DisposableEffect(lifecycleOwner, player) {
@@ -254,8 +262,25 @@ fun PlayerRoute(
     // Listener wiring + periodic loop live together so either signal fires a
     // sample without duplicating call sites.
     LaunchedEffect(player) {
+        val pollFields = mapOf("surface" to "long_form", "cadence_ms" to 5_000)
+        val pollKey = PerfProbe.collectorStart("playback_poll", pollFields)
         val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                PerfProbe.log(
+                    event = "long_form_playback_state",
+                    fields = mapOf(
+                        "state" to playbackState.perfPlaybackStateName(),
+                        "is_playing" to player.isPlaying,
+                        "media_items" to player.mediaItemCount,
+                    ),
+                )
+            }
+
             override fun onIsPlayingChanged(playing: Boolean) {
+                PerfProbe.log(
+                    event = "long_form_playback_is_playing",
+                    fields = mapOf("playing" to playing, "state" to player.playbackState.perfPlaybackStateName()),
+                )
                 // `isPlaying == false` covers both user-pause and buffer-pause —
                 // either way, the current position is a valid sample to persist.
                 if (!playing) {
@@ -283,6 +308,7 @@ fun PlayerRoute(
             }
         } finally {
             player.removeListener(listener)
+            PerfProbe.collectorEnd("playback_poll", pollKey, pollFields)
         }
     }
 
@@ -325,6 +351,19 @@ fun PlayerRoute(
         segments = segments,
         modes = sponsorBlockModes,
     )
+    LaunchedEffect(playerControlsVisible, showSubtitles, segments.size, previewSpritePath, previewTrackJsonPath) {
+        PerfProbe.log(
+            event = "long_form_playback_ui_state",
+            fields = mapOf(
+                "controls_visible" to playerControlsVisible,
+                "subtitles_visible" to showSubtitles,
+                "subtitle_path" to (subtitlePath != null),
+                "sponsor_segments" to segments.size,
+                "preview_sprite" to (previewSpritePath != null),
+                "preview_track" to (previewTrackJsonPath != null),
+            ),
+        )
+    }
     fun showLevelFeedback(label: String, level: Float) {
         levelFeedbackNonce += 1
         levelFeedback = PlayerLevelFeedback(label, level, levelFeedbackNonce)
@@ -595,6 +634,14 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is android.content.ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+private fun Int.perfPlaybackStateName(): String = when (this) {
+    Player.STATE_IDLE -> "idle"
+    Player.STATE_BUFFERING -> "buffering"
+    Player.STATE_READY -> "ready"
+    Player.STATE_ENDED -> "ended"
+    else -> "unknown"
 }
 
 @Composable

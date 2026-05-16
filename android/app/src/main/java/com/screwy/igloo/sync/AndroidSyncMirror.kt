@@ -1,5 +1,6 @@
 package com.screwy.igloo.sync
 
+import androidx.room.withTransaction
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.dao.AndroidSyncContentPruneCounts
 import com.screwy.igloo.data.dao.AndroidSyncDao
@@ -8,6 +9,7 @@ import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
 import com.screwy.igloo.data.entity.AndroidSyncGenerationEntity
 import com.screwy.igloo.data.entity.AndroidSyncItemEntity
 import com.screwy.igloo.log.Logger
+import com.screwy.igloo.media.ForegroundPromoter
 import com.screwy.igloo.net.AndroidSyncApi
 import com.screwy.igloo.net.AndroidSyncAssetDto
 import com.screwy.igloo.net.AndroidSyncDecodeException
@@ -17,7 +19,7 @@ import com.screwy.igloo.net.AndroidSyncItemDto
 import com.screwy.igloo.net.AndroidSyncRetentionRequest
 import com.screwy.igloo.net.Reachability
 import com.screwy.igloo.net.ServerBaseUrlProvider
-import com.screwy.igloo.media.ForegroundPromoter
+import com.screwy.igloo.perf.PerfProbe
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -168,7 +170,7 @@ class AndroidSyncMirror(
                 assetDrain.await()
             }
             healthReporter.report(generation.generation_id, retention)
-            val contentPruned = dao.pruneContentOutsideGeneration(generation.generation_id)
+            val contentPruned = pruneContentOutsideGenerationMeasured(generation.generation_id)
             if (contentPruned.hasDeletes()) {
                 logger.info(
                     event = "android_sync_content_pruned",
@@ -186,6 +188,15 @@ class AndroidSyncMirror(
             val orphanAssetFiles = assetDrainer.deleteUnreferencedAssetFiles(
                 dao.verifiedLocalPaths(generation.generation_id),
             )
+            PerfProbe.log(
+                event = "android_sync_orphan_asset_files_walk",
+                fields = mapOf(
+                    "files_walked" to orphanAssetFiles.walkedFiles,
+                    "files_deleted" to orphanAssetFiles.files,
+                    "bytes_deleted" to orphanAssetFiles.bytes,
+                    "duration_ms" to orphanAssetFiles.walkDurationMs,
+                ),
+            )
             if (orphanAssetFiles.hasDeletes()) {
                 logger.info(
                     event = "android_sync_orphan_asset_files_pruned",
@@ -193,10 +204,12 @@ class AndroidSyncMirror(
                         "generation_id" to generation.generation_id,
                         "files" to orphanAssetFiles.files,
                         "bytes" to orphanAssetFiles.bytes,
+                        "walked_files" to orphanAssetFiles.walkedFiles,
+                        "walk_duration_ms" to orphanAssetFiles.walkDurationMs,
                     ),
                 )
             }
-            val prunedGenerations = dao.pruneGenerationsExcept(generation.generation_id)
+            val prunedGenerations = pruneGenerationsExceptMeasured(generation.generation_id)
             if (prunedGenerations > 0) {
                 logger.info(
                     event = "android_sync_generations_pruned",
@@ -359,6 +372,96 @@ class AndroidSyncMirror(
                 "importer_version" to ANDROID_SYNC_ITEM_IMPORTER_VERSION,
             ),
         )
+    }
+
+    private suspend fun pruneGenerationsExceptMeasured(generationId: String): Int =
+        db.withTransaction {
+            timedPruneStep("delete_items_for_other_generations") {
+                dao.deleteItemsForOtherGenerations(generationId)
+            }
+            timedPruneStep("delete_assets_for_other_generations") {
+                dao.deleteAssetsForOtherGenerations(generationId)
+            }
+            timedPruneStep("delete_other_generations") {
+                dao.deleteOtherGenerations(generationId)
+            }
+        }
+
+    private suspend fun pruneContentOutsideGenerationMeasured(generationId: String): AndroidSyncContentPruneCounts =
+        db.withTransaction {
+            val videos = timedPruneStep("delete_videos_outside_generation") {
+                dao.deleteVideosOutsideGeneration(generationId)
+            }
+            val feedItems = timedPruneStep("delete_feed_items_outside_generation") {
+                dao.deleteFeedItemsOutsideGeneration(generationId)
+            }
+            val sideRows = timedPruneStep("delete_video_comments_without_video") {
+                dao.deleteVideoCommentsWithoutVideo()
+            } + timedPruneStep("delete_video_repost_sources_without_video") {
+                dao.deleteVideoRepostSourcesWithoutVideo()
+            } + timedPruneStep("delete_sponsorblock_segments_without_video") {
+                dao.deleteSponsorBlockSegmentsWithoutVideo()
+            } + timedPruneStep("delete_sponsorblock_checks_without_video") {
+                dao.deleteSponsorBlockChecksWithoutVideo()
+            } + timedPruneStep("delete_watch_history_without_video") {
+                dao.deleteWatchHistoryWithoutVideo()
+            } + timedPruneStep("delete_moment_views_without_video") {
+                dao.deleteMomentViewsWithoutVideo()
+            } + timedPruneStep("delete_feed_seen_without_feed_item") {
+                dao.deleteFeedSeenWithoutFeedItem()
+            } + timedPruneStep("delete_feed_rank_without_feed_item") {
+                dao.deleteFeedRankWithoutFeedItem()
+            } + timedPruneStep("delete_feed_thread_context_without_feed_item") {
+                dao.deleteFeedThreadContextWithoutFeedItem()
+            } + timedPruneStep("delete_retweet_sources_without_feed_item") {
+                dao.deleteRetweetSourcesWithoutFeedItem()
+            } + timedPruneStep("delete_channel_follows_outside_generation") {
+                dao.deleteChannelFollowsOutsideGeneration(generationId)
+            } + timedPruneStep("delete_channel_stars_outside_generation") {
+                dao.deleteChannelStarsOutsideGeneration(generationId)
+            } + timedPruneStep("delete_channel_settings_outside_generation") {
+                dao.deleteChannelSettingsOutsideGeneration(generationId)
+            }
+            val channels = timedPruneStep("delete_channels_outside_generation") {
+                dao.deleteChannelsOutsideGeneration(generationId)
+            }
+            val channelProfiles = timedPruneStep("delete_channel_profiles_without_channel") {
+                dao.deleteChannelProfilesWithoutChannel(generationId)
+            }
+            val legacyAssets = timedPruneStep("delete_legacy_assets_without_owner") {
+                dao.deleteLegacyAssetsWithoutOwner()
+            }
+            AndroidSyncContentPruneCounts(
+                videos = videos,
+                feedItems = feedItems,
+                channels = channels,
+                channelProfiles = channelProfiles,
+                legacyAssets = legacyAssets,
+                sideRows = sideRows,
+            )
+        }
+
+    private suspend fun timedPruneStep(
+        step: String,
+        block: suspend () -> Int,
+    ): Int {
+        val startedAt = android.os.SystemClock.elapsedRealtimeNanos()
+        var rows: Int? = null
+        val traceName = "android_sync_prune_$step"
+        val cookie = PerfProbe.beginAsync(traceName)
+        return try {
+            block().also { rows = it }
+        } finally {
+            PerfProbe.endAsync(traceName, cookie)
+            PerfProbe.log(
+                event = "android_sync_prune_step",
+                fields = mapOf(
+                    "step" to step,
+                    "rows" to (rows ?: "failed"),
+                    "duration_ms" to PerfProbe.elapsedMsSince(startedAt),
+                ),
+            )
+        }
     }
 
     private suspend fun importAssets(generationId: String) {

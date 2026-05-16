@@ -3,10 +3,12 @@ package com.screwy.igloo.data
 import android.content.Context
 import android.util.Log
 import androidx.room.Database
+import androidx.room.InvalidationTracker
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.File
+import java.util.concurrent.Executors
 import com.screwy.igloo.data.dao.BookmarkCategoryDao
 import com.screwy.igloo.data.dao.BookmarkDao
 import com.screwy.igloo.data.dao.BookmarkLabelDao
@@ -69,6 +71,7 @@ import com.screwy.igloo.data.entity.VideoCommentEntity
 import com.screwy.igloo.data.entity.VideoEntity
 import com.screwy.igloo.data.entity.VideoRepostSourceEntity
 import com.screwy.igloo.data.entity.WatchHistoryEntity
+import com.screwy.igloo.perf.PerfProbe
 
 /**
  * The Igloo local database.
@@ -198,7 +201,7 @@ abstract class IglooDatabase : RoomDatabase() {
             val appCtx = context.applicationContext
             // Tied to the iglooMediaModule "mediaRoot" binding — must stay in sync.
             val mediaRoot = File(appCtx.filesDir, "media")
-            return Room.databaseBuilder(appCtx, IglooDatabase::class.java, fileName)
+            val builder = Room.databaseBuilder(appCtx, IglooDatabase::class.java, fileName)
                 .addMigrations(*IglooMigrations.ALL)
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .addCallback(object : RoomDatabase.Callback() {
@@ -213,10 +216,60 @@ abstract class IglooDatabase : RoomDatabase() {
                         }
                     }
                 })
-                .build()
+            if (PerfProbe.logsEnabled()) {
+                builder.setQueryCallback(
+                    { sql, bindArgs -> PerfProbe.roomQuery(sql, bindArgs.size) },
+                    Executors.newSingleThreadExecutor { runnable ->
+                        Thread(runnable, "igloo-room-query-probe").apply { isDaemon = true }
+                    },
+                )
+            }
+            return builder.build().also { db ->
+                if (PerfProbe.logsEnabled()) db.installPerfInvalidationProbe()
+            }
         }
 
         fun buildForUser(context: Context, username: String): IglooDatabase =
             build(context, fileNameFor(username))
+
+        private fun IglooDatabase.installPerfInvalidationProbe() {
+            invalidationTracker.addObserver(
+                object : InvalidationTracker.Observer(PerfInvalidationTables) {
+                    override fun onInvalidated(tables: Set<String>) {
+                        PerfProbe.roomInvalidated(tables)
+                    }
+                },
+            )
+        }
+
+        private val PerfInvalidationTables = arrayOf(
+            "android_sync_assets",
+            "android_sync_generations",
+            "android_sync_items",
+            "media_inventory",
+            "videos",
+            "feed_items",
+            "feed_likes",
+            "bookmarks",
+            "bookmark_categories",
+            "bookmark_labels",
+            "moment_views",
+            "watch_history",
+            "channels",
+            "channel_profiles",
+            "channel_follows",
+            "channel_stars",
+            "channel_settings",
+            "outbox",
+            "preferences",
+            "feed_seen",
+            "feed_rank",
+            "feed_thread_context",
+            "retweet_sources",
+            "sponsorblock_segments",
+            "sponsorblock_checked",
+            "video_comments",
+            "video_repost_sources",
+        )
     }
 }

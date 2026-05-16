@@ -27,6 +27,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.screwy.igloo.data.entity.SponsorBlockSegmentEntity
+import com.screwy.igloo.perf.PerfProbe
 
 @Composable
 internal fun ScrubberWithSegments(
@@ -62,6 +63,14 @@ internal fun ScrubberWithSegments(
                     val down = awaitFirstDown(requireUnconsumed = false)
                     down.consume()
                     dragFraction = scrubberFractionForX(down.position.x, barWidthPx)
+                    PerfProbe.log(
+                        event = "long_form_scrub_start",
+                        fields = mapOf(
+                            "segments" to segments.size,
+                            "duration_ms" to durationMs,
+                            "preview_enabled" to (previewSpritePath != null && previewTrackJsonPath != null),
+                        ),
+                    )
                     onScrubStart(scrubberTargetMs(dragFraction, duration))
                     val downSegment = scrubberSegmentAtFraction(
                         segments = segments,
@@ -79,6 +88,7 @@ internal fun ScrubberWithSegments(
                         )
                         onSeekTo(target)
                         onScrubEnd(target)
+                        PerfProbe.log(event = "long_form_scrub_end", fields = mapOf("dragging" to false))
                         return@awaitEachGesture
                     }
 
@@ -98,6 +108,7 @@ internal fun ScrubberWithSegments(
                     onSeekTo(target)
                     onScrubEnd(target)
                     isDragging = false
+                    PerfProbe.log(event = "long_form_scrub_end", fields = mapOf("dragging" to true))
                 }
             },
     ) {

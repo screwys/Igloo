@@ -17,6 +17,7 @@ import com.screwy.igloo.feed.buildSocialPostModel
 import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
+import com.screwy.igloo.perf.PerfProbe
 import com.screwy.igloo.player.buildIglooPlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -105,18 +106,36 @@ internal class NativeMainFeedController(
         rootView.isRefreshing = isRefreshing
         recyclerView.setBackgroundColor(if (channelHeader != null) colors.surface else colors.background)
         rootView.setBackgroundColor(if (channelHeader != null) colors.surface else colors.background)
-        adapter.submitList(buildList {
-            channelHeader?.let { add(NativeFeedAdapterItem.Header(it)) }
-            rows.forEach { threaded ->
-                add(
-                    NativeFeedAdapterItem.Post(
-                        threaded = threaded,
-                        post = buildSocialPostModel(threaded.row, mediaModels),
+        val items = PerfProbe.timed(
+            event = "native_feed_model_build",
+            fields = mapOf(
+                "rows" to rows.size,
+                "media_models" to mediaModels.size,
+                "has_header" to (channelHeader != null),
+            ),
+        ) {
+            buildList {
+                channelHeader?.let { add(NativeFeedAdapterItem.Header(it)) }
+                rows.forEach { threaded ->
+                    add(
+                        NativeFeedAdapterItem.Post(
+                            threaded = threaded,
+                            post = buildSocialPostModel(threaded.row, mediaModels),
+                        )
                     )
-                )
+                }
             }
-        }) {
+        }
+        PerfProbe.log(
+            event = "native_feed_submit_list",
+            fields = mapOf("items" to items.size, "posts" to rows.size),
+        )
+        adapter.submitList(items) {
             recyclerView.post {
+                PerfProbe.log(
+                    event = "native_feed_submit_done",
+                    fields = mapOf("items" to adapter.currentList.size),
+                )
                 restoreInitialScrollAnchorIfNeeded()
                 onViewportChanged()
             }
@@ -139,16 +158,25 @@ internal class NativeMainFeedController(
     }
 
     private fun onViewportChanged() {
-        onScrollAnchorChanged(nativeFeedScrollAnchor(adapter.currentList, layoutManager))
-        val firstVisible = layoutManager.findFirstVisibleItemPosition().coerceAtLeast(0)
-        val firstVisiblePost = firstVisiblePostIndex(firstVisible).coerceAtLeast(0)
-        seenTracker.onViewportChanged(
-            rowIds = adapter.postItems().map { it.id },
-            firstVisibleIndex = firstVisiblePost,
-        )
-        onScrollToTopVisibility(firstVisiblePost > 5)
-        warmNearVisibleRows(firstVisiblePost)
-        inlineVideoManager.selectFrom(recyclerView)
+        PerfProbe.timed(
+            event = "native_feed_viewport_changed",
+            fields = mapOf(
+                "adapter_items" to adapter.currentList.size,
+                "first_visible" to layoutManager.findFirstVisibleItemPosition(),
+                "last_visible" to layoutManager.findLastVisibleItemPosition(),
+            ),
+        ) {
+            onScrollAnchorChanged(nativeFeedScrollAnchor(adapter.currentList, layoutManager))
+            val firstVisible = layoutManager.findFirstVisibleItemPosition().coerceAtLeast(0)
+            val firstVisiblePost = firstVisiblePostIndex(firstVisible).coerceAtLeast(0)
+            seenTracker.onViewportChanged(
+                rowIds = adapter.postItems().map { it.id },
+                firstVisibleIndex = firstVisiblePost,
+            )
+            onScrollToTopVisibility(firstVisiblePost > 5)
+            warmNearVisibleRows(firstVisiblePost)
+            inlineVideoManager.selectFrom(recyclerView)
+        }
     }
 
     private fun restoreInitialScrollAnchorIfNeeded() {
@@ -184,6 +212,16 @@ internal class NativeMainFeedController(
                     ?.let { threaded -> threaded.chain + threaded.row }
                     .orEmpty()
             }
-        if (rows.isNotEmpty()) callbacks.onWarmMediaRows(rows)
+        if (rows.isNotEmpty()) {
+            PerfProbe.log(
+                event = "native_feed_warm_near_visible",
+                fields = mapOf(
+                    "first_post" to firstVisiblePost,
+                    "last_post" to lastVisiblePost,
+                    "rows" to rows.size,
+                ),
+            )
+            callbacks.onWarmMediaRows(rows)
+        }
     }
 }

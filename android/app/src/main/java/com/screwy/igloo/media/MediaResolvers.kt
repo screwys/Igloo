@@ -10,6 +10,7 @@ import com.screwy.igloo.data.entity.ChannelProfileEntity
 import com.screwy.igloo.data.entity.MediaInventoryEntity
 import com.screwy.igloo.data.entity.VideoEntity
 import com.screwy.igloo.log.Logger
+import com.screwy.igloo.perf.PerfProbe
 import java.io.File
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
@@ -175,6 +176,11 @@ class MediaResolversImpl(
         }
             .distinctUntilChanged()
             .withMediaUriMemory("thumbnail:$ownerKind:$ownerId")
+            .profileMediaResolverFlow(
+                resolver = "thumbnail",
+                ownerKind = ownerKind.telemetryName(),
+                assetKinds = "post_thumbnail,post_media,dearrow_thumbnail",
+            )
 
     override fun avatarForChannelFlow(channelId: String): Flow<MediaUri> =
         combine(
@@ -186,6 +192,11 @@ class MediaResolversImpl(
         }
             .distinctUntilChanged()
             .withMediaUriMemory("avatar:$channelId")
+            .profileMediaResolverFlow(
+                resolver = "avatar",
+                ownerKind = "channel",
+                assetKinds = "avatar",
+            )
 
     override fun bannerForChannelFlow(channelId: String): Flow<MediaUri> =
         combine(
@@ -197,6 +208,11 @@ class MediaResolversImpl(
         }
             .distinctUntilChanged()
             .withMediaUriMemory("banner:$channelId")
+            .profileMediaResolverFlow(
+                resolver = "banner",
+                ownerKind = "channel",
+                assetKinds = "banner",
+            )
 
     /**
      * Server always has `/api/media/avatar/{channelId}` — serves cached bytes if
@@ -246,6 +262,11 @@ class MediaResolversImpl(
         }
             .distinctUntilChanged()
             .withMediaUriMemory("video:$videoId")
+            .profileMediaResolverFlow(
+                resolver = "video_stream",
+                ownerKind = "video",
+                assetKinds = "video_stream,post_media",
+            )
 
     private suspend fun resolveAsset(
         ownerId: String,
@@ -471,6 +492,31 @@ class MediaResolversImpl(
         collect { uri ->
             MediaUriMemory.put(key, uri)
             emit(uri)
+        }
+    }.distinctUntilChanged()
+
+    private fun Flow<MediaUri>.profileMediaResolverFlow(
+        resolver: String,
+        ownerKind: String,
+        assetKinds: String,
+    ): Flow<MediaUri> = flow {
+        val fields = mapOf(
+            "resolver" to resolver,
+            "owner_kind" to ownerKind,
+            "asset_kinds" to assetKinds,
+        )
+        val key = PerfProbe.collectorStart("media_resolver", fields)
+        try {
+            collect { uri ->
+                PerfProbe.incrementCounter("igloo_media_resolver_emit_count")
+                PerfProbe.log(
+                    event = "media_resolver_emit",
+                    fields = fields + ("uri" to PerfProbe.uriKind(uri)),
+                )
+                emit(uri)
+            }
+        } finally {
+            PerfProbe.collectorEnd("media_resolver", key, fields)
         }
     }.distinctUntilChanged()
 

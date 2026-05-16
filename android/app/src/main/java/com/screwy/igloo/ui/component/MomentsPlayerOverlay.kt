@@ -64,6 +64,7 @@ import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import com.screwy.igloo.R
 import com.screwy.igloo.media.MediaUri
+import com.screwy.igloo.perf.PerfProbe
 import com.screwy.igloo.ui.theme.IglooColors
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.delay
@@ -109,6 +110,12 @@ internal fun MomentsVideoProgressBar(
     var isDragging by remember(player) { mutableStateOf(false) }
     var dragProgress by remember(player) { mutableStateOf(0f) }
     var barWidthPx by remember(player) { mutableIntStateOf(1) }
+
+    DisposableEffect(player) {
+        val fields = mapOf("surface" to "moments", "cadence_ms" to 150)
+        val key = PerfProbe.collectorStart("playback_poll", fields)
+        onDispose { PerfProbe.collectorEnd("playback_poll", key, fields) }
+    }
 
     LaunchedEffect(player) {
         while (true) {

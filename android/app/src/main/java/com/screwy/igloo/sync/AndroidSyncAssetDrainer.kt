@@ -162,18 +162,21 @@ internal class AndroidSyncAssetDrainer(
     }
 
     fun deleteUnreferencedAssetFiles(retainedPaths: List<String>): AssetFileDeleteStats {
+        val startedAt = android.os.SystemClock.elapsedRealtimeNanos()
         val root = syncRoot.absoluteFile
-        if (!root.exists()) return AssetFileDeleteStats()
+        if (!root.exists()) return AssetFileDeleteStats(walkDurationMs = 0L)
         val rootPath = normalizedAbsolutePath(root)
         val rootPrefix = rootPath + File.separator
         val retained = retainedPaths.mapNotNull { path ->
             runCatching { normalizedAbsolutePath(File(path)) }.getOrNull()
         }.filter { it.isUnder(rootPath, rootPrefix) }.toHashSet()
 
+        var walkedFiles = 0
         var files = 0
         var bytes = 0L
         root.walkTopDown().forEach { file ->
             if (!file.isFile) return@forEach
+            walkedFiles++
             val path = runCatching { normalizedAbsolutePath(file) }.getOrNull() ?: return@forEach
             if (!path.startsWith(rootPrefix) || path in retained) return@forEach
             val size = file.length()
@@ -182,7 +185,14 @@ internal class AndroidSyncAssetDrainer(
                 bytes += size
             }
         }
-        return AssetFileDeleteStats(files, bytes)
+        return AssetFileDeleteStats(
+            files = files,
+            bytes = bytes,
+            walkedFiles = walkedFiles,
+            walkDurationMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                android.os.SystemClock.elapsedRealtimeNanos() - startedAt,
+            ),
+        )
     }
 
     private fun normalizedAbsolutePath(file: File): String =
@@ -516,4 +526,6 @@ internal class AndroidSyncAssetDrainer(
 internal data class AssetFileDeleteStats(
     val files: Int = 0,
     val bytes: Long = 0,
+    val walkedFiles: Int = 0,
+    val walkDurationMs: Long = 0,
 )

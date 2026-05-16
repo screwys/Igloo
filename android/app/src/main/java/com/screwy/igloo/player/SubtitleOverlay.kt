@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.screwy.igloo.perf.PerfProbe
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.io.File
@@ -49,15 +50,25 @@ fun SubtitleOverlay(
 ) {
     if (!visible || subtitlePath == null) return
     val cues = remember(subtitlePath) {
-        runCatching { File(subtitlePath).readText() }
-            .map { parseVtt(it) }
-            .getOrDefault(emptyList())
+        PerfProbe.timed(
+            event = "subtitle_parse",
+            fields = mapOf("has_path" to true),
+        ) {
+            runCatching { File(subtitlePath).readText() }
+                .map { parseVtt(it) }
+                .getOrDefault(emptyList())
+        }
     }
     if (cues.isEmpty()) return
 
     // Re-sample the position every 200ms — finer than the eye perceives,
     // coarser than per-frame so it doesn't thrash recomposition.
     var posMs by remember { mutableStateOf(0L) }
+    androidx.compose.runtime.DisposableEffect(subtitlePath) {
+        val fields = mapOf("surface" to "subtitle", "cadence_ms" to 200, "cues" to cues.size)
+        val key = PerfProbe.collectorStart("playback_poll", fields)
+        onDispose { PerfProbe.collectorEnd("playback_poll", key, fields) }
+    }
     LaunchedEffect(subtitlePath) {
         while (isActive) {
             posMs = currentPositionMs()

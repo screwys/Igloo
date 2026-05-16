@@ -4,6 +4,7 @@ import com.screwy.igloo.log.Logger
 import com.screwy.igloo.net.Reachability
 import com.screwy.igloo.outbox.OutboxDrainRunner
 import com.screwy.igloo.outbox.OutboxWriter
+import com.screwy.igloo.perf.PerfProbe
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -46,6 +47,7 @@ class Scheduler(
     /** Start sync workers + the reachability-upgrade signal. Idempotent. */
     fun start() {
         if (running.any { it.isActive }) return
+        PerfProbe.log(event = "scheduler_start", fields = mapOf("existing_jobs" to running.size))
         running.clear()
 
         outbox.wireWriter(writer)
@@ -74,6 +76,7 @@ class Scheduler(
 
     /** Queue a full ordered sync cycle: outbox first, then inbound, then media. */
     fun triggerAll() {
+        PerfProbe.log(event = "scheduler_trigger_all")
         requestAfterOutbox(
             TriggerEvent.Inbound(SyncStream.ALL),
             TriggerEvent.MutationDelta,
@@ -84,6 +87,7 @@ class Scheduler(
 
     /** Queue a scoped ordered sync cycle: outbox first, then the requested stream(s). */
     fun triggerStream(stream: SyncStream) {
+        PerfProbe.log(event = "scheduler_trigger_stream", fields = mapOf("stream" to stream.name.lowercase()))
         requestAfterOutbox(
             TriggerEvent.Inbound(setOf(stream)),
             TriggerEvent.MutationDelta,
@@ -93,6 +97,7 @@ class Scheduler(
 
     private suspend fun observeForegroundStarts() {
         foregroundFlow.collect { inForeground ->
+            PerfProbe.log(event = "scheduler_foreground_state", fields = mapOf("foreground" to inForeground))
             if (inForeground) {
                 triggerAll()
             }
@@ -110,6 +115,7 @@ class Scheduler(
             val upgraded = previous !is Reachability.State.Online && current is Reachability.State.Online
             previous = current
             if (upgraded) {
+                PerfProbe.log(event = "scheduler_reachability_upgrade")
                 requestAfterOutbox(
                     TriggerEvent.Inbound(SyncStream.ALL),
                     TriggerEvent.MutationDelta,
@@ -123,6 +129,13 @@ class Scheduler(
     private suspend fun observeOutboxCompletion() {
         outbox.passCompleted.collect {
             val request = synchronized(pendingLock) { pendingAfterOutbox.drain() }
+            PerfProbe.log(
+                event = "scheduler_outbox_pass_completed",
+                fields = mapOf(
+                    "inbound_streams" to request.inboundStreams.size,
+                    "mutation_delta" to request.runMutationDelta,
+                ),
+            )
 
             if (request.runMutationDelta) runMutationDelta()
             if (request.inboundStreams.isEmpty()) return@collect
@@ -164,7 +177,13 @@ class Scheduler(
 
     private suspend fun runMutationDelta() {
         try {
-            val result = mutationDelta.sync()
+            val result = PerfProbe.timedSuspend(event = "mutation_delta_sync") {
+                mutationDelta.sync()
+            }
+            PerfProbe.log(
+                event = "mutation_delta_sync_done",
+                fields = mapOf("rank_affecting" to result.rankAffecting),
+            )
             if (result.rankAffecting) {
                 androidSync.trigger()
             }

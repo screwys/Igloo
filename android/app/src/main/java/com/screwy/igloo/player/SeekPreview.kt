@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.screwy.igloo.perf.PerfProbe
 import com.screwy.igloo.ui.component.formatDuration
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -40,19 +41,29 @@ fun SeekPreview(
 ) {
     if (!visible) return
     val bitmap = remember(previewSpritePath) {
-        previewSpritePath
-            ?.let(::File)
-            ?.takeIf { it.exists() }
-            ?.let { BitmapFactory.decodeFile(it.absolutePath) }
-            ?.asImageBitmap()
+        PerfProbe.timed(
+            event = "seek_preview_sprite_decode",
+            fields = mapOf("has_path" to (previewSpritePath != null)),
+        ) {
+            previewSpritePath
+                ?.let(::File)
+                ?.takeIf { it.exists() }
+                ?.let { BitmapFactory.decodeFile(it.absolutePath) }
+                ?.asImageBitmap()
+        }
     }
     val trackCues = remember(previewTrackJsonPath) {
-        previewTrackJsonPath
-            ?.let(::File)
-            ?.takeIf { it.exists() }
-            ?.readText()
-            ?.let(::parsePreviewTrackJson)
-            .orEmpty()
+        PerfProbe.timed(
+            event = "seek_preview_track_parse",
+            fields = mapOf("has_path" to (previewTrackJsonPath != null)),
+        ) {
+            previewTrackJsonPath
+                ?.let(::File)
+                ?.takeIf { it.exists() }
+                ?.readText()
+                ?.let(::parsePreviewTrackJson)
+                .orEmpty()
+        }
     }
     val cue = remember(targetMs, trackCues) {
         findPreviewCue(trackCues, targetMs)

@@ -10,6 +10,7 @@ import com.screwy.igloo.data.entity.BookmarkCategoryEntity
 import com.screwy.igloo.data.entity.BookmarkItem
 import com.screwy.igloo.outbox.OutboxKind
 import com.screwy.igloo.outbox.OutboxWriter
+import com.screwy.igloo.perf.PerfProbe
 import com.screwy.igloo.ui.component.BookmarkCategoryDisplay
 import com.screwy.igloo.ui.component.BookmarkPayload
 import com.screwy.igloo.ui.component.BookmarkState
@@ -94,7 +95,13 @@ class BookmarksViewModel(
 
     private val allItems: StateFlow<List<BookmarkItem>?> = db.bookmarkReadDao()
         .bookmarksFlow()
-        .map<List<BookmarkItem>, List<BookmarkItem>?> { it }
+        .map<List<BookmarkItem>, List<BookmarkItem>?> { rows ->
+            PerfProbe.log(
+                event = "full_list_room_emit",
+                fields = mapOf("surface" to "bookmarks", "rows" to rows.size),
+            )
+            rows
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
@@ -139,7 +146,12 @@ class BookmarksViewModel(
         )
 
     val items: StateFlow<List<BookmarkItem>> = combine(allItems, selectedBookmarkFilter) { list, filter ->
-        filterBookmarkItems(list.orEmpty(), filter)
+        PerfProbe.timed(
+            event = "full_list_map",
+            fields = mapOf("surface" to "bookmarks", "rows" to (list?.size ?: 0), "filter" to filter.perfName()),
+        ) {
+            filterBookmarkItems(list.orEmpty(), filter)
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000L),
@@ -255,6 +267,13 @@ class BookmarksViewModel(
 
 internal fun normalizeBookmarkLabel(label: String?): String? =
     label?.trim()?.takeIf { it.isNotEmpty() }
+
+private fun BookmarkFilter.perfName(): String = when (this) {
+    BookmarkFilter.All -> "all"
+    is BookmarkFilter.Category -> "category"
+    is BookmarkFilter.Label -> "label"
+    BookmarkFilter.NoLabel -> "no_label"
+}
 
 internal fun bookmarkLabelCounts(items: List<BookmarkItem>): List<BookmarkLabelCount> =
     items

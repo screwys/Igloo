@@ -77,6 +77,7 @@ import com.screwy.igloo.R
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
+import com.screwy.igloo.perf.PerfProbe
 import com.screwy.igloo.player.buildIglooPlayer
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.delay
@@ -178,6 +179,14 @@ fun MediaViewer(
     BackHandler(onBack = dismiss)
 
     LaunchedEffect(pagerState.currentPage, isVideoPage) {
+        PerfProbe.log(
+            event = "media_viewer_page",
+            fields = mapOf(
+                "page" to pagerState.currentPage,
+                "items" to media.items.size,
+                "is_video_page" to isVideoPage,
+            ),
+        )
         videoProgress = 0f
         videoSeekToFraction = null
     }
@@ -212,6 +221,7 @@ fun MediaViewer(
             when (item) {
                 is MediaItem.Image -> MediaImagePage(item)
                 is MediaItem.Video -> MediaVideoPage(
+                    pageIndex = page,
                     streamUri = item.streamUri,
                     posterUri = item.thumbnailUri,
                     active = active,
@@ -223,6 +233,7 @@ fun MediaViewer(
                     onSeekAvailable = { seek -> if (active) videoSeekToFraction = seek },
                 )
                 is MediaItem.Gif -> MediaVideoPage(
+                    pageIndex = page,
                     streamUri = item.streamUri,
                     posterUri = MediaUri.Missing,
                     active = active,
@@ -329,6 +340,7 @@ private fun MediaImagePage(item: MediaItem.Image) {
 
 @Composable
 private fun MediaVideoPage(
+    pageIndex: Int,
     streamUri: MediaUri,
     posterUri: MediaUri,
     active: Boolean,
@@ -348,14 +360,26 @@ private fun MediaVideoPage(
             null
         } else {
             buildIglooPlayer(context, authTokens, iglooHostProvider).also { player ->
+                PerfProbe.incrementCounter("igloo_media_viewer_player_build_count")
+                PerfProbe.log(
+                    event = "media_viewer_player_build",
+                    fields = mapOf("page" to pageIndex, "uri" to PerfProbe.uriKind(streamUri)),
+                )
                 player.repeatMode = if (loop) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
                 val mediaItem = when (streamUri) {
                     is MediaUri.Local -> Media3Item.fromUri(streamUri.file.toURI().toString())
                     is MediaUri.Remote -> Media3Item.fromUri(streamUri.url)
                     is MediaUri.Missing -> null
                 }
-                mediaItem?.let(player::setMediaItem)
-                player.prepare()
+                mediaItem?.let {
+                    PerfProbe.timed(
+                        event = "media_viewer_player_prepare",
+                        fields = mapOf("page" to pageIndex, "uri" to PerfProbe.uriKind(streamUri)),
+                    ) {
+                        player.setMediaItem(it)
+                        player.prepare()
+                    }
+                }
                 player.playWhenReady = active
             }
         }
@@ -394,10 +418,18 @@ private fun MediaVideoPage(
         }
         current.addListener(listener)
         onDispose {
+            PerfProbe.incrementCounter("igloo_media_viewer_player_release_count")
+            PerfProbe.log(event = "media_viewer_player_release", fields = mapOf("page" to pageIndex))
             currentOnPositionUpdate(current.currentPosition)
             current.removeListener(listener)
             current.release()
         }
+    }
+    DisposableEffect(player) {
+        player ?: return@DisposableEffect onDispose { }
+        val fields = mapOf("surface" to "media_viewer", "cadence_ms" to "250_or_500")
+        val key = PerfProbe.collectorStart("playback_poll", fields)
+        onDispose { PerfProbe.collectorEnd("playback_poll", key, fields) }
     }
     DisposableEffect(active, seekToFraction) {
         if (active) onSeekAvailable(seekToFraction)

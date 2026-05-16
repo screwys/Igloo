@@ -40,6 +40,7 @@ import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
+import com.screwy.igloo.perf.PerfProbe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -581,6 +582,10 @@ internal class NativeFeedViewHolder(
                 }
             )
             button.setOnClickListener {
+                PerfProbe.log(
+                    event = "native_feed_action_click",
+                    fields = mapOf("action" to action.name.lowercase(), "selected" to selected),
+                )
                 when (action) {
                     NativeFeedPrimaryAction.Share -> sharePlainText(
                         views.root.context,

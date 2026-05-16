@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.entity.VideoGridItem
+import com.screwy.igloo.perf.PerfProbe
 import com.screwy.igloo.sync.Scheduler
 import com.screwy.igloo.sync.SyncStream
 import com.screwy.igloo.ui.UiState
@@ -26,7 +27,10 @@ class VideosViewModel(
 
     private val itemsRaw: StateFlow<List<VideoGridItem>?> = db.videoReadDao()
         .videosFlow()
-        .map<List<VideoGridItem>, List<VideoGridItem>?> { it }
+        .map<List<VideoGridItem>, List<VideoGridItem>?> { rows ->
+            PerfProbe.log(event = "full_list_room_emit", fields = mapOf("surface" to "videos", "rows" to rows.size))
+            rows
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
@@ -34,7 +38,14 @@ class VideosViewModel(
         )
 
     val items: StateFlow<List<VideoGridItem>> = itemsRaw
-        .map { it ?: emptyList() }
+        .map { rows ->
+            PerfProbe.timed(
+                event = "full_list_map",
+                fields = mapOf("surface" to "videos", "rows" to (rows?.size ?: 0)),
+            ) {
+                rows ?: emptyList()
+            }
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),

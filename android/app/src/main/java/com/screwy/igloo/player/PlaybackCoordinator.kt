@@ -2,6 +2,7 @@ package com.screwy.igloo.player
 
 import androidx.media3.exoplayer.ExoPlayer
 import com.screwy.igloo.media.MediaUri
+import com.screwy.igloo.perf.PerfProbe
 
 data class PlaybackSource(
     val mediaUri: MediaUri,
@@ -27,13 +28,21 @@ class PlaybackCoordinator {
             is MediaUri.Missing -> return
         }
 
-        player.stop()
-        player.setMediaItem(uri)
-        player.prepare()
-        if (source.resumeMs > 0L) {
-            player.seekTo(source.resumeMs)
+        PerfProbe.timed(
+            event = "long_form_playback_bind",
+            fields = mapOf(
+                "uri" to PerfProbe.uriKind(source.mediaUri),
+                "resume" to (source.resumeMs > 0L),
+            ),
+        ) {
+            player.stop()
+            player.setMediaItem(uri)
+            player.prepare()
+            if (source.resumeMs > 0L) {
+                player.seekTo(source.resumeMs)
+            }
+            player.setPlayWhenReady(true)
         }
-        player.setPlayWhenReady(true)
     }
 }
 

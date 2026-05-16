@@ -23,6 +23,7 @@ import com.screwy.igloo.data.DatabaseHolder
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.dao.AndroidSyncDao
 import com.screwy.igloo.log.Logger
+import com.screwy.igloo.perf.PerfProbe
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import org.koin.core.context.GlobalContext
@@ -129,11 +130,17 @@ class PeriodicSyncWorker(
 
     override suspend fun doWork(): ListenableWorker.Result {
         return try {
-            AppRuntime.ensureStarted(applicationContext as Application)
+            PerfProbe.timedSuspend(event = "workmanager_catchup_do_work") {
+                AppRuntime.ensureStarted(applicationContext as Application)
+            }
             val koin = GlobalContext.get()
             val databaseHolder: DatabaseHolder = koin.get()
             val authRepo: AuthRepo = koin.get()
-            if (!preparePeriodicSyncSession(databaseHolder, authRepo)) {
+            val prepared = PerfProbe.timedSuspend(event = "workmanager_prepare_session") {
+                preparePeriodicSyncSession(databaseHolder, authRepo)
+            }
+            if (!prepared) {
+                PerfProbe.log(event = "workmanager_catchup_done", fields = mapOf("prepared" to false))
                 return ListenableWorker.Result.success()
             }
 
@@ -146,7 +153,11 @@ class PeriodicSyncWorker(
             // foreground-service token covers the entire drain — including the
             // MediaForegroundService start that ForegroundPromoter would
             // otherwise block on under Android 12+ background-start rules.
-            runCatching { setForeground(getForegroundInfo()) }
+            runCatching {
+                PerfProbe.timedSuspend(event = "workmanager_set_foreground") {
+                    setForeground(getForegroundInfo())
+                }
+            }
                 .onFailure { error ->
                     logger.info(
                         event = "periodic_sync_foreground_failed",
@@ -157,11 +168,24 @@ class PeriodicSyncWorker(
                     )
                 }
 
-            scheduler.start()
-            scheduler.triggerAll()
+            PerfProbe.timed(event = "workmanager_scheduler_trigger") {
+                scheduler.start()
+                scheduler.triggerAll()
+            }
             logger.info(event = "periodic_sync_triggered", fields = emptyMap())
 
-            val drain = awaitDrainOrCap(syncDao, androidSync, logger)
+            val drain = PerfProbe.timedSuspend(event = "workmanager_await_drain") {
+                awaitDrainOrCap(syncDao, androidSync, logger)
+            }
+            PerfProbe.log(
+                event = "workmanager_catchup_done",
+                fields = mapOf(
+                    "prepared" to true,
+                    "completed" to drain.completed,
+                    "elapsed_ms" to drain.elapsedMs,
+                    "remaining_work" to drain.remainingWork,
+                ),
+            )
             if (drain.completed) {
                 ListenableWorker.Result.success()
             } else {

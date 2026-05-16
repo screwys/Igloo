@@ -13,6 +13,7 @@ import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.media.ownerKindFromChannelId
 import com.screwy.igloo.outbox.OutboxKind
 import com.screwy.igloo.outbox.OutboxWriter
+import com.screwy.igloo.perf.PerfProbe
 import com.screwy.igloo.sync.Scheduler
 import com.screwy.igloo.sync.SyncStream
 import com.screwy.igloo.ui.UiEffect
@@ -149,7 +150,13 @@ class MomentsViewModel(
         } else {
             db.momentReadDao().momentsAllFlow()
         }
-    }.map<List<DbMomentItem>, List<DbMomentItem>?> { it }
+    }.map<List<DbMomentItem>, List<DbMomentItem>?> { rows ->
+        PerfProbe.log(
+            event = "full_list_room_emit",
+            fields = mapOf("surface" to "moments_grid", "rows" to rows.size),
+        )
+        rows
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
@@ -167,7 +174,13 @@ class MomentsViewModel(
         } else {
             db.momentReadDao().playerMomentsAllFlow()
         }
-    }.map<List<DbMomentItem>, List<DbMomentItem>?> { it }
+    }.map<List<DbMomentItem>, List<DbMomentItem>?> { rows ->
+        PerfProbe.log(
+            event = "full_list_room_emit",
+            fields = mapOf("surface" to "moments_player", "rows" to rows.size),
+        )
+        rows
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
@@ -181,22 +194,27 @@ class MomentsViewModel(
      */
     val items: StateFlow<List<MomentThumbnailItem>> = rowsRaw
         .map { rows ->
-            if (rows == null) emptyList()
-            else rows.map { row ->
-                val handle = momentHandle(row.channelSourceId, row.video.channelId)
-                MomentThumbnailItem(
-                    videoId = row.video.videoId,
-                    channelId = row.video.channelId,
-                    ownerKind = ownerKindFromChannelId(row.video.channelId),
-                    thumbnailPath = row.video.thumbnailPath,
-                    mediaKind = row.video.mediaMode?.takeIf { it.isNotBlank() } ?: row.video.mediaKind,
-                    slideCount = row.video.slideCount,
-                    durationMs = row.video.durationMs(),
-                    publishedAt = row.video.publishedAt,
-                    isViewed = row.isViewed == 1,
-                    authorDisplayName = row.channelName?.takeIf { it.isNotBlank() },
-                    authorHandle = if (handle.isNotBlank()) "@$handle" else "",
-                )
+            PerfProbe.timed(
+                event = "full_list_map",
+                fields = mapOf("surface" to "moments_grid", "rows" to (rows?.size ?: 0)),
+            ) {
+                if (rows == null) emptyList()
+                else rows.map { row ->
+                    val handle = momentHandle(row.channelSourceId, row.video.channelId)
+                    MomentThumbnailItem(
+                        videoId = row.video.videoId,
+                        channelId = row.video.channelId,
+                        ownerKind = ownerKindFromChannelId(row.video.channelId),
+                        thumbnailPath = row.video.thumbnailPath,
+                        mediaKind = row.video.mediaMode?.takeIf { it.isNotBlank() } ?: row.video.mediaKind,
+                        slideCount = row.video.slideCount,
+                        durationMs = row.video.durationMs(),
+                        publishedAt = row.video.publishedAt,
+                        isViewed = row.isViewed == 1,
+                        authorDisplayName = row.channelName?.takeIf { it.isNotBlank() },
+                        authorHandle = if (handle.isNotBlank()) "@$handle" else "",
+                    )
+                }
             }
         }
         .stateIn(
@@ -211,33 +229,42 @@ class MomentsViewModel(
      * Stream URIs, thumbnails, and bookmark state are resolved lazily in the player.
      */
     val playerItems: StateFlow<List<PlayerMomentItem>> = combine(playerRowsRaw, storyStatusByChannel) { rows, storyStatuses ->
-            if (rows == null) emptyList()
-            else rows.map { row ->
-                val video = row.video
-                val handle = momentHandle(row.channelSourceId, video.channelId)
-                val storyStatus = storyStatuses[video.channelId]
-                val repost = repostMeta(row)
-                PlayerMomentItem(
-                    videoId = video.videoId,
-                    channelId = video.channelId,
-                    canonicalUrl = video.canonicalUrl.orEmpty(),
-                    authorDisplayName = row.channelName?.takeIf { it.isNotBlank() },
-                    authorHandle = if (handle.isNotBlank()) "@$handle" else "",
-                    description = momentDisplayText(video.description, video.title),
-                    likeCount = null,
-                    isLiked = false,
-                    isBookmarked = false,
-                    mediaKind = video.mediaMode?.takeIf { it.isNotBlank() } ?: video.mediaKind,
-                    slideCount = video.slideCount,
-                    ownerKind = ownerKindFromChannelId(video.channelId),
-                    fallbackThumbnailPath = video.thumbnailPath,
-                    publishedAt = video.publishedAt,
-                    isAuthorFollowed = row.channelIsFollowed == 1,
-                    repostAuthorLabel = repost?.authorLabel,
-                    repostOtherCount = repost?.otherCount ?: 0,
-                    storyRingState = storyStatus.storyRingState(),
-                    storyFirstVideoId = storyStatus?.startVideoId().orEmpty(),
-                )
+            PerfProbe.timed(
+                event = "full_list_map",
+                fields = mapOf(
+                    "surface" to "moments_player",
+                    "rows" to (rows?.size ?: 0),
+                    "story_statuses" to storyStatuses.size,
+                ),
+            ) {
+                if (rows == null) emptyList()
+                else rows.map { row ->
+                    val video = row.video
+                    val handle = momentHandle(row.channelSourceId, video.channelId)
+                    val storyStatus = storyStatuses[video.channelId]
+                    val repost = repostMeta(row)
+                    PlayerMomentItem(
+                        videoId = video.videoId,
+                        channelId = video.channelId,
+                        canonicalUrl = video.canonicalUrl.orEmpty(),
+                        authorDisplayName = row.channelName?.takeIf { it.isNotBlank() },
+                        authorHandle = if (handle.isNotBlank()) "@$handle" else "",
+                        description = momentDisplayText(video.description, video.title),
+                        likeCount = null,
+                        isLiked = false,
+                        isBookmarked = false,
+                        mediaKind = video.mediaMode?.takeIf { it.isNotBlank() } ?: video.mediaKind,
+                        slideCount = video.slideCount,
+                        ownerKind = ownerKindFromChannelId(video.channelId),
+                        fallbackThumbnailPath = video.thumbnailPath,
+                        publishedAt = video.publishedAt,
+                        isAuthorFollowed = row.channelIsFollowed == 1,
+                        repostAuthorLabel = repost?.authorLabel,
+                        repostOtherCount = repost?.otherCount ?: 0,
+                        storyRingState = storyStatus.storyRingState(),
+                        storyFirstVideoId = storyStatus?.startVideoId().orEmpty(),
+                    )
+                }
             }
         }
         .stateIn(

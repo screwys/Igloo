@@ -20,6 +20,7 @@ import com.screwy.igloo.log.Logger
 import com.screwy.igloo.log.iglooLogModule
 import com.screwy.igloo.media.iglooMediaModule
 import com.screwy.igloo.net.Reachability
+import com.screwy.igloo.perf.PerfProbe
 import com.screwy.igloo.net.iglooNetModule
 import com.screwy.igloo.sync.PeriodicSyncWorker
 import com.screwy.igloo.sync.Scheduler
@@ -48,19 +49,24 @@ class MainActivity : ComponentActivity() {
     private val languageStore: AppLanguageStore by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        AppRuntime.ensureStarted(application)
-        super.onCreate(savedInstanceState)
-        setContent {
-            val languageTag by languageStore.languageTag.collectAsStateWithLifecycle()
-            AppLocaleProvider(languageTag = languageTag) {
-                if (databaseHolder.current != null) {
-                    LoggedInContent()
-                } else {
-                    IglooTheme {
-                        AppNavHost()
+        PerfProbe.begin("app_on_create")
+        try {
+            AppRuntime.ensureStarted(application)
+            super.onCreate(savedInstanceState)
+            setContent {
+                val languageTag by languageStore.languageTag.collectAsStateWithLifecycle()
+                AppLocaleProvider(languageTag = languageTag) {
+                    if (databaseHolder.current != null) {
+                        LoggedInContent()
+                    } else {
+                        IglooTheme {
+                            AppNavHost()
+                        }
                     }
                 }
             }
+        } finally {
+            PerfProbe.end()
         }
     }
 }
@@ -85,59 +91,69 @@ object AppRuntime {
     @Volatile private var appStartLogged = false
 
     fun ensureStarted(application: Application) {
-        if (GlobalContext.getOrNull() == null) {
-            startKoin {
-                androidContext(application)
-                modules(
-                    iglooDataModule,
-                    iglooNetModule,
-                    iglooLogModule,
-                    iglooUiModule,
-                    iglooMediaModule,
-                    iglooSyncModule,
-                    iglooAuthModule,
-                    iglooFeatureModule,
-                )
+        PerfProbe.timed(event = "app_runtime_ensure_started") {
+            if (GlobalContext.getOrNull() == null) {
+                PerfProbe.timed(event = "app_runtime_start_koin") {
+                    startKoin {
+                        androidContext(application)
+                        modules(
+                            iglooDataModule,
+                            iglooNetModule,
+                            iglooLogModule,
+                            iglooUiModule,
+                            iglooMediaModule,
+                            iglooSyncModule,
+                            iglooAuthModule,
+                            iglooFeatureModule,
+                        )
+                    }
+                    configureImageLoader()
+                }
             }
-            configureImageLoader()
-        }
 
-        val koin = GlobalContext.get()
-        val databaseHolder: DatabaseHolder = koin.get()
-        if (databaseHolder.current == null) {
-            runCatching {
-                val authRepo: AuthRepo = koin.get()
-                if (authRepo.canOpenLocalSessionSync()) {
-                    authRepo.usernameSync()?.takeIf { it.isNotBlank() }?.let { username ->
-                        databaseHolder.openForUser(username)
+            val koin = GlobalContext.get()
+            val databaseHolder: DatabaseHolder = koin.get()
+            if (databaseHolder.current == null) {
+                PerfProbe.timed(event = "app_runtime_open_local_session") {
+                    runCatching {
+                        val authRepo: AuthRepo = koin.get()
+                        if (authRepo.canOpenLocalSessionSync()) {
+                            authRepo.usernameSync()?.takeIf { it.isNotBlank() }?.let { username ->
+                                databaseHolder.openForUser(username)
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        if (databaseHolder.current != null) {
-            bootstrapPostLogin()
+            if (databaseHolder.current != null) {
+                bootstrapPostLogin()
+            }
         }
     }
 
     fun bootstrapPostLogin() {
-        val koin = GlobalContext.get()
-        koin.get<Reachability>().start()
+        PerfProbe.timed(event = "app_runtime_bootstrap_post_login") {
+            val koin = GlobalContext.get()
+            koin.get<Reachability>().start()
 
-        if (appStartLogged) return
-        appStartLogged = true
+            if (appStartLogged) return@timed
+            appStartLogged = true
 
-        koin.get<Logger>().info(event = "app_start", fields = emptyMap())
+            koin.get<Logger>().info(event = "app_start", fields = emptyMap())
 
-        val scheduler: Scheduler = koin.get()
-        val prefs: PreferencesRepo = koin.get()
-        val authRepo: AuthRepo = koin.get()
-        val scope: CoroutineScope = koin.get(named("applicationScope"))
-        scope.launch {
-            authRepo.onAppStart()
-            if (authRepo.canOpenLocalSessionSync()) {
-                scheduler.start()
-                PeriodicSyncWorker.enqueue(koin.get<Application>(), prefs)
+            val scheduler: Scheduler = koin.get()
+            val prefs: PreferencesRepo = koin.get()
+            val authRepo: AuthRepo = koin.get()
+            val scope: CoroutineScope = koin.get(named("applicationScope"))
+            scope.launch {
+                PerfProbe.timedSuspend(event = "app_runtime_post_login_async") {
+                    authRepo.onAppStart()
+                    if (authRepo.canOpenLocalSessionSync()) {
+                        scheduler.start()
+                        PeriodicSyncWorker.enqueue(koin.get<Application>(), prefs)
+                    }
+                }
             }
         }
     }
