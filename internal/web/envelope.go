@@ -5,14 +5,19 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/screwys/igloo/internal/auth"
 )
 
+const serverTimeHeader = "X-Igloo-Server-Time-Ms"
+
 // Response envelope contract: every /api/* JSON response carries
-// {ok, server_time_ms} alongside endpoint fields. sync_version + sync_stream
+// {ok, server_time_ms} alongside endpoint fields. The same server time is
+// also exposed in X-Igloo-Server-Time-Ms so clients can update clock offset
+// without parsing large response bodies twice. sync_version + sync_stream
 // land with mutation endpoints.
 // HTML pages, HTMX fragments, binary media, and file downloads are exempt.
 
@@ -25,8 +30,10 @@ func writeJSONEnvelope(w http.ResponseWriter, status int, body map[string]any) {
 	if _, set := body["ok"]; !set {
 		body["ok"] = status < 400
 	}
-	body["server_time_ms"] = nowMs()
+	serverTimeMs := nowMs()
+	body["server_time_ms"] = serverTimeMs
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(serverTimeHeader, strconv.FormatInt(serverTimeMs, 10))
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		slog.Error("envelope encode", "err", err)

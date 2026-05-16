@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 )
 
@@ -16,6 +17,9 @@ func TestWriteJSONEnvelopeInjectsOkAndServerTime(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
 		t.Errorf("expected Content-Type application/json, got %q", ct)
 	}
+	if rec.Header().Get(serverTimeHeader) == "" {
+		t.Fatalf("expected %s header", serverTimeHeader)
+	}
 
 	var body map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
@@ -24,12 +28,20 @@ func TestWriteJSONEnvelopeInjectsOkAndServerTime(t *testing.T) {
 	if body["ok"] != true {
 		t.Errorf("expected ok=true, got %v", body["ok"])
 	}
-	if _, ok := body["server_time_ms"].(float64); !ok {
-		t.Errorf("expected server_time_ms numeric, got %T (%v)", body["server_time_ms"], body["server_time_ms"])
+	serverTimeBody, ok := body["server_time_ms"].(float64)
+	if !ok {
+		t.Fatalf("expected server_time_ms numeric, got %T (%v)", body["server_time_ms"], body["server_time_ms"])
+	}
+	if rec.Header().Get(serverTimeHeader) != formatTestMillis(serverTimeBody) {
+		t.Errorf("expected %s to match body server_time_ms, got header=%q body=%v", serverTimeHeader, rec.Header().Get(serverTimeHeader), serverTimeBody)
 	}
 	if body["foo"] != "bar" {
 		t.Errorf("expected foo=bar, got %v", body["foo"])
 	}
+}
+
+func formatTestMillis(ms float64) string {
+	return strconv.FormatInt(int64(ms), 10)
 }
 
 func TestWriteJSONEnvelopeMarksErrorOk(t *testing.T) {

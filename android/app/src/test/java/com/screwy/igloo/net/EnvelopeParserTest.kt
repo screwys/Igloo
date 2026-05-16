@@ -87,6 +87,32 @@ class EnvelopeParserTest {
         assertEquals(2345L, prefs.serverTimeOffsetMs().first())
     }
 
+    @Test fun serverTimeHeader_writesOffsetWithoutBodyEnvelopeField() = runBlocking {
+        val body = """{"ok":true,"items":[{"id":"sample"}]}"""
+        val engine = MockEngine { _ ->
+            respond(
+                content = ByteReadChannel(body),
+                status = HttpStatusCode.OK,
+                headers = headersOf(
+                    "Content-Type" to listOf("application/json"),
+                    "X-Igloo-Server-Time-Ms" to listOf("15000"),
+                ),
+            )
+        }
+        val client = HttpClient(engine) {
+            EnvelopeParser.install(this, { prefs }, nowMsProvider = { 10_000L })
+            expectSuccess = false
+        }
+
+        val response = client.get("/api/android/sync/generation/sample/items")
+        val bodyText = response.bodyAsText()
+        client.close()
+
+        assertEquals(body, bodyText)
+        waitFor { prefs.serverTimeOffsetMs().first() == 5_000L }
+        assertEquals(5_000L, prefs.serverTimeOffsetMs().first())
+    }
+
     @Test fun syncVersionAndStream_doesNotTouchCursor() = runBlocking {
         val body = """{"ok":true,"server_time_ms":10000,"sync_version":789,"sync_stream":"feed"}"""
         val client = buildClient(body)
