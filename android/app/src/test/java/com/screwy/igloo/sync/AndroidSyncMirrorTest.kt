@@ -129,7 +129,7 @@ class AndroidSyncMirrorTest {
         assertTrue(mirror.hasPendingOrActiveWork())
     }
 
-    @Test fun syncOnceMarksMirrorPendingWhenServerGenerationIsRefreshing() = runBlocking {
+    @Test fun syncOnceSchedulesDelayedRetryWhenServerGenerationIsRefreshing() = runBlocking {
         val engine = MockEngine { request ->
             when (request.url.encodedPath) {
                 "/api/android/sync/generation/latest" -> respondJson(
@@ -161,11 +161,13 @@ class AndroidSyncMirrorTest {
                 else -> error("Unexpected request ${request.url}")
             }
         }
-        val mirror = buildMirror(engine)
+        val mirror = buildMirror(engine, refreshRetryDelayMs = 1L)
 
         mirror.syncOnce()
 
-        assertTrue(mirror.hasPendingOrActiveWork())
+        withTimeout(1_000L) {
+            while (!mirror.hasPendingOrActiveWork()) delay(10L)
+        }
     }
 
     @Test fun sameGenerationSyncSkipsRepeatedOrphanFileWalkWhenNothingWasPruned() = runBlocking {
@@ -1093,6 +1095,134 @@ class AndroidSyncMirrorTest {
         assertEquals(
             "https://www.tiktok.com/@sample_user/video/sample_video_1",
             db.videoDao().getById("sample_tiktok_video_1")?.canonicalUrl,
+        )
+    }
+
+    @Test fun itemImportResumesAfterLastFullyIngestedPage() = runBlocking {
+        val dao = db.androidSyncDao()
+        val firstItem = AndroidSyncItemDto(
+            seq = 1,
+            item_kind = "channels",
+            item_id = "sample_channel_one",
+            payload = BundleEnvelope(
+                primary_kind = "channels",
+                primary = buildJsonObject {
+                    put("channel_id", "sample_channel_one")
+                    put("source_id", "sample_one")
+                    put("name", "Sample Channel One")
+                    put("platform", "youtube")
+                },
+            ),
+        )
+        val secondItem = AndroidSyncItemDto(
+            seq = 2,
+            item_kind = "channels",
+            item_id = "sample_channel_two",
+            payload = BundleEnvelope(
+                primary_kind = "channels",
+                primary = buildJsonObject {
+                    put("channel_id", "sample_channel_two")
+                    put("source_id", "sample_two")
+                    put("name", "Sample Channel Two")
+                    put("platform", "youtube")
+                },
+            ),
+        )
+        val firstEngine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = GENERATION_ID,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                            item_count = 2,
+                        ),
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/items" -> {
+                    if (request.url.parameters["after"] == "1") {
+                        respond("{malformed", HttpStatusCode.OK, jsonHeaders())
+                    } else {
+                        respondJson(
+                            AndroidSyncItemsResponse(
+                                generation_id = GENERATION_ID,
+                                items = listOf(firstItem),
+                                next = "1",
+                                end_of_stream = false,
+                            ),
+                        )
+                    }
+                }
+                "/api/android/sync/generation/$GENERATION_ID/assets" -> respondJson(
+                    AndroidSyncAssetsResponse(
+                        generation_id = GENERATION_ID,
+                        assets = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        val firstResult = runCatching { buildMirror(firstEngine).syncOnce() }
+
+        assertTrue(firstResult.isFailure)
+        assertNotNull(db.channelDao().getById("sample_channel_one"))
+        assertNull(db.channelDao().getById("sample_channel_two"))
+        assertEquals(1L, dao.importedItemSeq(GENERATION_ID))
+        client.close()
+
+        val requestedAfterMarkers = Collections.synchronizedList(mutableListOf<String?>())
+        val secondEngine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = GENERATION_ID,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                            item_count = 2,
+                        ),
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/items" -> {
+                    val after = request.url.parameters["after"]
+                    requestedAfterMarkers += after
+                    assertEquals("1", after)
+                    respondJson(
+                        AndroidSyncItemsResponse(
+                            generation_id = GENERATION_ID,
+                            items = listOf(secondItem),
+                            end_of_stream = true,
+                        ),
+                    )
+                }
+                "/api/android/sync/generation/$GENERATION_ID/assets" -> respondJson(
+                    AndroidSyncAssetsResponse(
+                        generation_id = GENERATION_ID,
+                        assets = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        buildMirror(secondEngine).syncOnce()
+
+        assertEquals(listOf("1"), requestedAfterMarkers.toList())
+        assertNotNull(db.channelDao().getById("sample_channel_one"))
+        assertNotNull(db.channelDao().getById("sample_channel_two"))
+        assertEquals(2L, dao.importedItemSeq(GENERATION_ID))
+        assertTrue(
+            logSink.snapshot().any {
+                it.event == "android_sync_items_resume" && it.fields["after"] == 1L
+            },
         )
     }
 
@@ -2122,6 +2252,7 @@ class AndroidSyncMirrorTest {
         retentionProvider: suspend () -> AndroidSyncRetentionRequest = {
             AndroidSyncRetentionRequest(feedDays = 7, youtubeDays = 7, momentsDays = 7, storyHours = 48)
         },
+        refreshRetryDelayMs: Long = 30_000L,
     ): AndroidSyncMirror {
         client = HttpClient(engine) {
             expectSuccess = false
@@ -2137,6 +2268,7 @@ class AndroidSyncMirrorTest {
         )
         val baseUrlProvider = ServerBaseUrlProvider { BASE_URL }
         return AndroidSyncMirror(
+            scope = scope,
             db = db,
             dao = db.androidSyncDao(),
             outboxDao = db.outboxDao(),
@@ -2149,6 +2281,7 @@ class AndroidSyncMirrorTest {
             logger = logger,
             retentionProvider = retentionProvider,
             nowMsProvider = { nowMs },
+            refreshRetryDelayMs = refreshRetryDelayMs,
         )
     }
 

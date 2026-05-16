@@ -497,6 +497,7 @@ data class AndroidSyncGenerationEntity(
     @ColumnInfo(name = "items_imported_at_ms") val itemsImportedAtMs: Long? = null,
     @ColumnInfo(name = "assets_imported_at_ms") val assetsImportedAtMs: Long? = null,
     @ColumnInfo(name = "items_importer_version", defaultValue = "0") val itemsImporterVersion: Int = 0,
+    @ColumnInfo(name = "items_imported_seq", defaultValue = "0") val itemsImportedSeq: Long = 0,
 )
 
 @Entity(

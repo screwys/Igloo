@@ -82,6 +82,7 @@ val iglooSyncModule = module {
     single {
         val prefs = get<PreferencesRepo>()
         AndroidSyncMirror(
+            scope = get(named("applicationScope")),
             db = get<DatabaseHolder>().requireCurrent(),
             dao = get(),
             outboxDao = get(),

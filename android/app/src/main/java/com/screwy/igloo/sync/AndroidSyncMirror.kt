@@ -23,11 +23,13 @@ import com.screwy.igloo.net.ServerBaseUrlProvider
 import com.screwy.igloo.perf.PerfProbe
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -62,6 +64,7 @@ private fun elapsedMsSince(startedAtNanos: Long): Long =
  * generation coverage.
  */
 class AndroidSyncMirror(
+    private val scope: CoroutineScope,
     private val db: IglooDatabase,
     private val dao: AndroidSyncDao,
     private val outboxDao: OutboxDao,
@@ -76,6 +79,7 @@ class AndroidSyncMirror(
         AndroidSyncRetentionRequest(feedDays = 7, youtubeDays = 7, momentsDays = 7, storyHours = 48)
     },
     private val nowMsProvider: () -> Long = { System.currentTimeMillis() },
+    private val refreshRetryDelayMs: Long = SYNC_REFRESH_RETRY_MS,
 ) {
 
     private val triggerChannel = Channel<Unit>(capacity = Channel.CONFLATED)
@@ -100,6 +104,7 @@ class AndroidSyncMirror(
     private val triggerSeq = AtomicLong(0L)
     private val completedTriggerSeq = AtomicLong(0L)
     private val syncActive = AtomicBoolean(false)
+    private val refreshRetryScheduled = AtomicBoolean(false)
     private var lastOrphanAssetWalkGenerationId: String? = null
 
     fun trigger() {
@@ -220,10 +225,22 @@ class AndroidSyncMirror(
                     event = "android_sync_generation_refresh_pending",
                     fields = mapOf("generation_id" to generation.generation_id),
                 )
-                trigger()
+                scheduleRefreshRetry()
             }
         } finally {
             foregroundPromoter.finishActiveDrain()
+        }
+    }
+
+    private fun scheduleRefreshRetry() {
+        if (!refreshRetryScheduled.compareAndSet(false, true)) return
+        scope.launch {
+            try {
+                delay(refreshRetryDelayMs)
+                trigger()
+            } finally {
+                refreshRetryScheduled.set(false)
+            }
         }
     }
 
@@ -241,12 +258,8 @@ class AndroidSyncMirror(
         }
         val ingest = BundleIngest(db, nowMsProvider)
         val guard = PreserveLocalGuard(outboxDao)
-        val storedImporterVersion = dao.itemImporterVersion(generationId) ?: 0
-        val resumeAfter = if (storedImporterVersion == ANDROID_SYNC_ITEM_IMPORTER_VERSION) {
-            dao.maxImportedItemSeq(generationId).takeIf { it > 0L }
-        } else {
-            null
-        }
+        dao.markItemsImportStarted(generationId, ANDROID_SYNC_ITEM_IMPORTER_VERSION)
+        val resumeAfter = dao.importedItemSeq(generationId).takeIf { it > 0L }
         var after: String? = resumeAfter?.toString()
         var total = resumeAfter?.toInt() ?: 0
         if (resumeAfter != null) {
@@ -321,6 +334,11 @@ class AndroidSyncMirror(
                         ),
                     )
                 }
+                dao.markItemsImportPageComplete(
+                    generationId = generationId,
+                    importedSeq = page.items.maxOf { it.seq },
+                    importerVersion = ANDROID_SYNC_ITEM_IMPORTER_VERSION,
+                )
                 total += page.items.size
             }
             logger.info(
@@ -608,6 +626,7 @@ class AndroidSyncMirror(
 
     private companion object {
         const val SYNC_FAILURE_RETRY_MS = 30_000L
+        const val SYNC_REFRESH_RETRY_MS = 30_000L
 
         val METADATA_RETRY_DELAYS_MS = listOf(1_000L, 5_000L, 15_000L)
     }

@@ -69,6 +69,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_33_34,
                 IglooMigrations.MIGRATION_34_35,
                 IglooMigrations.MIGRATION_35_36,
+                IglooMigrations.MIGRATION_36_37,
             )
             .allowMainThreadQueries()
             .build()
@@ -129,6 +130,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_33_34,
                 IglooMigrations.MIGRATION_34_35,
                 IglooMigrations.MIGRATION_35_36,
+                IglooMigrations.MIGRATION_36_37,
             )
             .allowMainThreadQueries()
             .build()
@@ -194,6 +196,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_33_34,
                 IglooMigrations.MIGRATION_34_35,
                 IglooMigrations.MIGRATION_35_36,
+                IglooMigrations.MIGRATION_36_37,
             )
             .allowMainThreadQueries()
             .build()
@@ -264,6 +267,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_33_34,
                 IglooMigrations.MIGRATION_34_35,
                 IglooMigrations.MIGRATION_35_36,
+                IglooMigrations.MIGRATION_36_37,
             )
             .allowMainThreadQueries()
             .build()
@@ -303,6 +307,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_33_34,
                 IglooMigrations.MIGRATION_34_35,
                 IglooMigrations.MIGRATION_35_36,
+                IglooMigrations.MIGRATION_36_37,
             )
             .allowMainThreadQueries()
             .build()
@@ -336,7 +341,11 @@ class IglooMigrationTest {
         sqlite.close()
 
         val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
-            .addMigrations(IglooMigrations.MIGRATION_34_35, IglooMigrations.MIGRATION_35_36)
+            .addMigrations(
+                IglooMigrations.MIGRATION_34_35,
+                IglooMigrations.MIGRATION_35_36,
+                IglooMigrations.MIGRATION_36_37,
+            )
             .allowMainThreadQueries()
             .build()
 
@@ -367,7 +376,7 @@ class IglooMigrationTest {
         sqlite.close()
 
         val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
-            .addMigrations(IglooMigrations.MIGRATION_35_36)
+            .addMigrations(IglooMigrations.MIGRATION_35_36, IglooMigrations.MIGRATION_36_37)
             .allowMainThreadQueries()
             .build()
 
@@ -382,6 +391,57 @@ class IglooMigrationTest {
                     }
                 }
                 assertTrue(found)
+            }
+        } finally {
+            roomDb.close()
+            context.deleteDatabase(dbName)
+        }
+    }
+
+    @Test fun migration36To37AddsItemImportResumeSequence() {
+        val dbName = "igloo-migration-36-37"
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val sqlite = createDatabaseFromSchemaSnapshot(
+            context,
+            dbName,
+            36,
+        )
+        try {
+            sqlite.execSQL(
+                """
+                INSERT INTO android_sync_generations (
+                    generation_id, created_at_ms, status, source_version, retention_json,
+                    item_count, asset_count, ready_asset_count, server_missing_asset_count,
+                    total_bytes, content_counts_json, asset_counts_json,
+                    items_imported_at_ms, assets_imported_at_ms, items_importer_version
+                ) VALUES (
+                    'android-v3-resume', 1, 'ready', 'source', '{}',
+                    1, 0, 0, 0, 0, '{}', '{}', NULL, 456, 3
+                )
+                """.trimIndent(),
+            )
+        } finally {
+            sqlite.close()
+        }
+
+        val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
+            .addMigrations(IglooMigrations.MIGRATION_36_37)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            val readable = roomDb.openHelper.readableDatabase
+            assertEquals(IglooMigrations.CURRENT_SCHEMA_VERSION, readable.version)
+            readable.query(
+                """
+                SELECT items_importer_version, items_imported_seq
+                FROM android_sync_generations
+                WHERE generation_id = 'android-v3-resume'
+                """.trimIndent(),
+            ).use {
+                assertTrue(it.moveToFirst())
+                assertEquals(3, it.getInt(0))
+                assertEquals(0L, it.getLong(1))
             }
         } finally {
             roomDb.close()
