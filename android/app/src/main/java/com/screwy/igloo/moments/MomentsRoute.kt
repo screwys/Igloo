@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import androidx.navigation.compose.currentBackStackEntryAsState
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.ui.UiStateSwitch
@@ -43,8 +42,7 @@ fun MomentsRoute(
     navController: NavController,
     modifier: Modifier = Modifier,
 ) {
-    val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val backStackEntry = remember(navController, currentBackStackEntry) {
+    val backStackEntry = remember(navController) {
         navController.getBackStackEntry(RouteRegistry.MomentsGraphRoute)
     }
     val vm: MomentsViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
