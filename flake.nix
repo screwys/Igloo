@@ -25,12 +25,44 @@
             hash = goSourceHash;
           };
         });
+      patchedRuntimeOverlay =
+        final: prev:
+        let
+          ffmpeg81 = {
+            version = "8.1";
+            source = prev.fetchurl {
+              url = "https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz";
+              hash = "sha256-sHKu1ocZmMzps253dAMxBcop4zYyvltjR/MgaJjgdWo=";
+            };
+          };
+          openssl362 = prev.openssl_3_6.overrideAttrs (_: {
+            version = "3.6.2";
+            src = prev.fetchurl {
+              url = "https://github.com/openssl/openssl/releases/download/openssl-3.6.2/openssl-3.6.2.tar.gz";
+              hash = "sha256-qvUaH+BkOE+BHa6utOxNznNA7IvYkwJ+7mdq8x6DoE8=";
+            };
+          });
+        in
+        {
+          openssl = openssl362;
+          openssl_3_6 = openssl362;
+
+          ffmpeg_8 = prev.ffmpeg_8.override ffmpeg81;
+          ffmpeg_8-headless = prev.ffmpeg_8-headless.override ffmpeg81;
+          ffmpeg_8-full = prev.ffmpeg_8-full.override ffmpeg81;
+          ffmpeg = final.ffmpeg_8;
+          ffmpeg-headless = final.ffmpeg_8-headless;
+          ffmpeg-full = final.ffmpeg_8-full;
+        };
     in
     {
       packages = forAllSystems (
         system:
         let
-          pkgs = import nixpkgs { inherit system; };
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ patchedRuntimeOverlay ];
+          };
           lib = pkgs.lib;
           revision = self.shortRev or (self.dirtyShortRev or "dev");
           containerImageName = "ghcr.io/screwys/igloo";
