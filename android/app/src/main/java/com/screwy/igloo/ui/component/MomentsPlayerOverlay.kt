@@ -422,6 +422,7 @@ internal fun createMomentPlayerView(context: android.content.Context): PlayerVie
     (LayoutInflater.from(context).inflate(R.layout.moment_player_view, null) as PlayerView).apply {
         setBackgroundColor(android.graphics.Color.BLACK)
         setShutterBackgroundColor(android.graphics.Color.BLACK)
+        setKeepContentOnPlayerReset(false)
     }
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
@@ -504,6 +505,7 @@ internal fun VideoSurface(
 
     AndroidView(
         factory = {
+            if (playerView.player != null) playerView.player = null
             (playerView.parent as? ViewGroup)?.removeView(playerView)
             playerView.alpha = 0f
             playerView
@@ -541,6 +543,10 @@ internal fun momentFitWidthContentScale(): ContentScale = ContentScale.Fit
 
 internal fun momentVideoFallbackContentScale(): ContentScale = ContentScale.Crop
 
+internal fun momentVideoSurfaceZIndex(): Float = 0f
+
+internal fun momentVideoFallbackZIndex(): Float = 1f
+
 internal fun shouldClearMomentRenderedFrame(playbackState: Int): Boolean =
     playbackState == Player.STATE_IDLE
 
@@ -559,12 +565,13 @@ internal fun BoxScope.ThumbnailFallback(
     alphaOverride: Float?,
     brokenIconTint: Color,
     contentScale: ContentScale = momentFitWidthContentScale(),
+    modifier: Modifier = Modifier,
 ) {
     when (thumbnailUri) {
         is MediaUri.Local -> AsyncImage(
             model = thumbnailUri.file,
             contentDescription = null,
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxSize()
                 .alpha(alphaOverride ?: mediaAlpha(thumbnailUri)),
             contentScale = contentScale,
@@ -572,7 +579,7 @@ internal fun BoxScope.ThumbnailFallback(
         is MediaUri.Remote -> AsyncImage(
             model = rememberRemoteImageModel(thumbnailUri.url),
             contentDescription = null,
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxSize()
                 .alpha(alphaOverride ?: mediaAlpha(thumbnailUri)),
             contentScale = contentScale,
@@ -581,7 +588,7 @@ internal fun BoxScope.ThumbnailFallback(
             imageVector = Icons.Default.BrokenImage,
             contentDescription = stringResource(R.string.content_description_missing_media),
             tint = brokenIconTint,
-            modifier = Modifier.align(Alignment.Center),
+            modifier = modifier.align(Alignment.Center),
         )
     }
 }

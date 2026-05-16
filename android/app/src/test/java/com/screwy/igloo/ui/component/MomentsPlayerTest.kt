@@ -509,6 +509,11 @@ class MomentsPlayerTest {
     }
 
     @Test
+    fun video_fallback_poster_draws_above_the_player_surface_until_first_frame() {
+        assertTrue(momentVideoFallbackZIndex() > momentVideoSurfaceZIndex())
+    }
+
+    @Test
     fun ready_state_requires_a_rendered_frame_before_hiding_thumbnail() {
         val noFrame = momentVideoSurfaceStateFor(
             expectedMediaId = "demo",

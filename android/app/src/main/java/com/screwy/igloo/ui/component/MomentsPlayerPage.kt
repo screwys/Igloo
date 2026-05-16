@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -632,21 +633,24 @@ private fun BoxScope.MomentVideoLayer(
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        if (showFallback) {
-            ThumbnailFallback(
-                thumbnailUri = thumbnailUri,
-                alphaOverride = if (remoteOffline) 0.55f else 1f,
-                brokenIconTint = MaterialTheme.iglooColors.onSurfaceFaint,
-                contentScale = momentVideoFallbackContentScale(),
-            )
-        }
         if (shouldMountVideoSurface) {
             VideoSurface(
                 player = player,
                 mediaKey = item.videoId,
                 onStateChange = { surfaceState = it },
                 sharedPlayerView = sharedPlayerView,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(momentVideoSurfaceZIndex()),
+            )
+        }
+        if (showFallback) {
+            ThumbnailFallback(
+                thumbnailUri = thumbnailUri,
+                alphaOverride = if (remoteOffline) 0.55f else 1f,
+                brokenIconTint = MaterialTheme.iglooColors.onSurfaceFaint,
+                contentScale = momentVideoFallbackContentScale(),
+                modifier = Modifier.zIndex(momentVideoFallbackZIndex()),
             )
         }
         if (!storyMode && isActive && playbackStreamUri !is MediaUri.Missing && !remoteOffline) {
