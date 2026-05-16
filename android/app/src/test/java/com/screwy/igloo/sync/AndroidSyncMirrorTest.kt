@@ -303,7 +303,7 @@ class AndroidSyncMirrorTest {
                 seq = 1,
                 asset_id = "existing",
                 asset_kind = "post_media",
-                owner_id = "owner-existing",
+                owner_id = "sample_existing",
                 owner_kind = "feed_item",
                 bucket = "feed",
                 server_url = "/api/android/sync/assets/existing",
@@ -317,7 +317,7 @@ class AndroidSyncMirrorTest {
                 seq = 2,
                 asset_id = "downloaded",
                 asset_kind = "post_media",
-                owner_id = "owner-downloaded",
+                owner_id = "sample_new",
                 owner_kind = "feed_item",
                 bucket = "feed",
                 server_url = "/api/android/sync/assets/downloaded",
@@ -331,7 +331,7 @@ class AndroidSyncMirrorTest {
                 seq = 3,
                 asset_id = "limited",
                 asset_kind = "post_media",
-                owner_id = "owner-limited",
+                owner_id = "sample_media",
                 owner_kind = "feed_item",
                 bucket = "feed",
                 server_url = "/api/android/sync/assets/limited",
@@ -344,7 +344,7 @@ class AndroidSyncMirrorTest {
                 seq = 4,
                 asset_id = "missing",
                 asset_kind = "post_media",
-                owner_id = "owner-missing",
+                owner_id = "sample_missing",
                 owner_kind = "feed_item",
                 bucket = "feed",
                 server_url = "/api/android/sync/assets/missing",
@@ -1932,7 +1932,7 @@ class AndroidSyncMirrorTest {
             )
         }
 
-        val rows = dao.latestVerifiedAssetsForOwner("slide-video", listOf("post_media"))
+        val rows = dao.latestVerifiedAssetsForOwner("sample_slide_video", listOf("post_media"))
             .sortedBy { it.mediaIndex }
 
         assertEquals(listOf(0, 1), rows.map { it.mediaIndex })
@@ -2337,10 +2337,10 @@ class AndroidSyncMirrorTest {
         assetId = slideAssetId(index),
         assetKind = "post_media",
         mediaIndex = index,
-        ownerId = "slide-video",
+        ownerId = "sample_slide_video",
         ownerKind = "tiktok_video",
         bucket = "shorts_videos",
-        serverUrl = "/api/media/slide/slide-video/$index",
+        serverUrl = "/api/media/slide/sample_slide_video/$index",
         contentType = "image/jpeg",
         sizeBytes = sizeBytes,
         sha256 = "slide-$index",
@@ -2349,7 +2349,7 @@ class AndroidSyncMirrorTest {
     )
 
     private fun slideAssetId(index: Int): String =
-        "tiktok_tiktok_video_slide-video_post_media_$index"
+        "tiktok_tiktok_video_sample_slide_video_post_media_$index"
 
     private companion object {
         const val BASE_URL = "http://example.local"

@@ -621,7 +621,7 @@ class MediaResolversTest {
         db.videoDao().upsert(
             VideoEntity(
                 videoId = "da-no-thumb-video",
-                channelId = "youtube_channel",
+                channelId = "youtube_sample_channel",
                 dearrowThumbPath = null,
                 publishedAt = 1L,
             ),

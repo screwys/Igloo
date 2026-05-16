@@ -15,15 +15,15 @@ class ChannelRouteTest {
             Platform.YouTube,
             resolveChannelRoutePlatform(
                 profile = ChannelProfileEntity(
-                    channelId = "twitter_alice",
+                    channelId = "twitter_sample_creator",
                     platform = "youtube",
-                    handle = "alice",
+                    handle = "sample_creator",
                 ),
                 channel = ChannelEntity(
-                    channelId = "twitter_alice",
-                    name = "Alice",
+                    channelId = "twitter_sample_creator",
+                    name = "Sample Creator",
                     platform = "twitter",
-                    sourceId = "alice",
+                    sourceId = "sample_creator",
                 ),
             ),
         )
@@ -32,10 +32,10 @@ class ChannelRouteTest {
             resolveChannelRoutePlatform(
                 profile = null,
                 channel = ChannelEntity(
-                    channelId = "youtube_alice",
-                    name = "Alice",
+                    channelId = "youtube_sample_creator",
+                    name = "Sample Creator",
                     platform = "tiktok",
-                    sourceId = "alice",
+                    sourceId = "sample_creator",
                 ),
             ),
         )
@@ -44,10 +44,10 @@ class ChannelRouteTest {
             resolveChannelRoutePlatform(
                 profile = null,
                 channel = ChannelEntity(
-                    channelId = "instagram_alice",
-                    name = "Alice",
+                    channelId = "instagram_sample_creator",
+                    name = "Sample Creator",
                     platform = "",
-                    sourceId = "alice",
+                    sourceId = "sample_creator",
                 ),
             ),
         )
@@ -56,14 +56,14 @@ class ChannelRouteTest {
     @Test
     fun channelRouteDisplayNameOverride_usesAuthorFallbackOnlyForTwitter() {
         assertEquals(
-            "Alice Doe",
+            "Sample Creator",
             channelRouteDisplayNameOverride(
                 profileDisplayName = null,
                 snapshotDisplayName = null,
                 routePlatform = Platform.Twitter,
-                primaryName = "@alice",
-                sourceHandle = "alice",
-                twitterAuthorDisplayNames = listOf("Alice Doe"),
+                primaryName = "@sample_creator",
+                sourceHandle = "sample_creator",
+                twitterAuthorDisplayNames = listOf("Sample Creator"),
             ),
         )
         assertNull(
@@ -71,9 +71,9 @@ class ChannelRouteTest {
                 profileDisplayName = null,
                 snapshotDisplayName = null,
                 routePlatform = Platform.YouTube,
-                primaryName = "@alice",
-                sourceHandle = "alice",
-                twitterAuthorDisplayNames = listOf("Alice Doe"),
+                primaryName = "@sample_creator",
+                sourceHandle = "sample_creator",
+                twitterAuthorDisplayNames = listOf("Sample Creator"),
             ),
         )
     }
@@ -81,11 +81,11 @@ class ChannelRouteTest {
     @Test
     fun resolveHeaderDisplayName_prefersAuthorDisplayNameWhenStoredNameMatchesHandle() {
         assertEquals(
-            "Alice Doe",
+            "Sample Creator",
             resolveHeaderDisplayName(
-                primaryName = "@alice",
-                sourceHandle = "alice",
-                authorDisplayNames = listOf("Alice Doe"),
+                primaryName = "@sample_creator",
+                sourceHandle = "sample_creator",
+                authorDisplayNames = listOf("Sample Creator"),
             ),
         )
     }
@@ -94,9 +94,9 @@ class ChannelRouteTest {
     fun resolveHeaderDisplayName_returnsNullWhenPrimaryAlreadyLooksLikeDisplayName() {
         assertNull(
             resolveHeaderDisplayName(
-                primaryName = "Alice Doe",
-                sourceHandle = "alice",
-                authorDisplayNames = listOf("Alice Doe"),
+                primaryName = "Sample Creator",
+                sourceHandle = "sample_creator",
+                authorDisplayNames = listOf("Sample Creator"),
             ),
         )
     }
