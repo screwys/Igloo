@@ -70,6 +70,8 @@ import com.screwy.igloo.ui.component.displayMediaCellThumbnail
 import com.screwy.igloo.ui.component.normalizeHandle
 import com.screwy.igloo.ui.component.scrollArrowVisibility
 import com.screwy.igloo.ui.nav.IglooNavigationSource
+import com.screwy.igloo.ui.nav.WideVerticalGridMinCellWidthDp
+import com.screwy.igloo.ui.nav.rememberIglooAdaptiveLayout
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.launch
@@ -77,7 +79,7 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
 /**
- * Bookmarks tab: a 3-column vertical grid with a category-chip filter row on top.
+ * Bookmarks tab: vertical thumbnail grid with a category-chip filter row on top.
  * Each tile shows the post thumbnail with a small avatar bug and opens playable
  * items in the shared in-place moments-style overlay.
  */
@@ -100,6 +102,12 @@ fun BookmarksRoute(
     val pendingBookmark by vm.pendingBookmark.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
     val navigator = rememberIglooNavigator(navController)
+    val adaptiveLayout = rememberIglooAdaptiveLayout()
+    val gridCells = if (adaptiveLayout.isWide) {
+        GridCells.Adaptive(WideVerticalGridMinCellWidthDp.dp)
+    } else {
+        GridCells.Fixed(3)
+    }
     var labelPopupOpen by remember { mutableStateOf(false) }
 
     val scrollFabsEnabled = items.isNotEmpty() && pendingBookmark == null
@@ -118,7 +126,7 @@ fun BookmarksRoute(
     UiStateSwitch(state = uiState, modifier = modifier) {
         Box(modifier = Modifier.fillMaxSize()) {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
+                columns = gridCells,
                 state = gridState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
@@ -126,7 +134,7 @@ fun BookmarksRoute(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 // Chip row spans the full 3-col width so the grid scrolls with its filter.
-                item(span = { GridItemSpan(3) }) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     CategoryChipRow(
                         categories = categories,
                         counts = counts,

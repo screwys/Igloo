@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -98,6 +99,7 @@ fun AppDrawer(
             navController = navController,
             onCloseDrawer = onCloseDrawer,
             onLogoutClick = onLogoutClick,
+            dense = false,
         )
     }
 }
@@ -121,6 +123,7 @@ fun PermanentAppSidebar(
             navController = navController,
             onCloseDrawer = {},
             onLogoutClick = onLogoutClick,
+            dense = true,
         )
     }
 }
@@ -131,6 +134,7 @@ private fun AppDrawerContent(
     navController: NavController,
     onCloseDrawer: () -> Unit,
     onLogoutClick: () -> Unit,
+    dense: Boolean,
 ) {
     val authRepo: AuthRepo = koinInject()
     val channelReadDao: ChannelReadDao = koinInject()
@@ -177,12 +181,15 @@ private fun AppDrawerContent(
     val tiktokLabel = stringResource(R.string.platform_tiktok)
     val instagramLabel = stringResource(R.string.platform_instagram)
     val xLabel = stringResource(R.string.platform_x)
+    val rowModifier = if (dense) Modifier.height(44.dp) else Modifier
+    val outerVerticalPadding = if (dense) 8.dp else 12.dp
+    val rowSpacing = if (dense) 4.dp else 8.dp
 
     Column(
         modifier = Modifier
             .fillMaxHeight()
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 10.dp, vertical = outerVerticalPadding),
+        verticalArrangement = Arrangement.spacedBy(rowSpacing),
     ) {
             Text(
                 text = stringResource(R.string.app_name),
@@ -201,6 +208,7 @@ private fun AppDrawerContent(
             HorizontalDivider()
 
             NavigationDrawerItem(
+                modifier = rowModifier,
                 label = { Text(stringResource(R.string.nav_feed)) },
                 icon = { Icon(Icons.Default.DynamicFeed, contentDescription = null) },
                 selected = drawerDestinationSelected(currentRoute, IglooDestination.Feed),
@@ -210,6 +218,7 @@ private fun AppDrawerContent(
                 colors = NavigationDrawerItemDefaults.colors(),
             )
             NavigationDrawerItem(
+                modifier = rowModifier,
                 label = { Text(stringResource(R.string.nav_videos)) },
                 icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null) },
                 selected = drawerDestinationSelected(currentRoute, IglooDestination.Videos),
@@ -219,6 +228,7 @@ private fun AppDrawerContent(
                 colors = NavigationDrawerItemDefaults.colors(),
             )
             NavigationDrawerItem(
+                modifier = rowModifier,
                 label = { Text(stringResource(R.string.nav_moments)) },
                 icon = { Icon(Icons.Default.PlayCircle, contentDescription = null) },
                 selected = drawerDestinationSelected(currentRoute, IglooDestination.Moments),
@@ -228,6 +238,7 @@ private fun AppDrawerContent(
                 colors = NavigationDrawerItemDefaults.colors(),
             )
             NavigationDrawerItem(
+                modifier = rowModifier,
                 label = { Text(stringResource(R.string.nav_bookmarks)) },
                 icon = { Icon(Icons.Default.Bookmark, contentDescription = null) },
                 selected = drawerDestinationSelected(currentRoute, IglooDestination.Bookmarks),
@@ -237,6 +248,7 @@ private fun AppDrawerContent(
                 colors = NavigationDrawerItemDefaults.colors(),
             )
             NavigationDrawerItem(
+                modifier = rowModifier,
                 label = { Text(stringResource(R.string.nav_liked)) },
                 icon = { Icon(Icons.Default.Favorite, contentDescription = null) },
                 selected = drawerDestinationSelected(currentRoute, IglooDestination.Liked),
@@ -286,6 +298,7 @@ private fun AppDrawerContent(
 
             HorizontalDivider()
             NavigationDrawerItem(
+                modifier = rowModifier,
                 label = { Text(stringResource(R.string.settings_screen_title)) },
                 icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                 selected = drawerDestinationSelected(currentRoute, IglooDestination.Settings),
@@ -294,6 +307,7 @@ private fun AppDrawerContent(
                 },
             )
             NavigationDrawerItem(
+                modifier = rowModifier,
                 label = { Text(stringResource(R.string.logs_title)) },
                 icon = { Icon(Icons.AutoMirrored.Filled.Subject, contentDescription = null) },
                 selected = drawerDestinationSelected(currentRoute, IglooDestination.Logs),
@@ -303,6 +317,7 @@ private fun AppDrawerContent(
             )
             HorizontalDivider()
             NavigationDrawerItem(
+                modifier = rowModifier,
                 label = { Text(stringResource(R.string.action_logout)) },
                 icon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null) },
                 selected = false,

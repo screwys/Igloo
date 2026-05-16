@@ -4,13 +4,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
 
 internal const val WideLayoutBreakpointDp = 600
-internal const val WideSidebarExpandedBreakpointDp = 720
-internal const val WideSidebarCompactWidthDp = 280
-internal const val WideSidebarExpandedWidthDp = 320
+internal const val WideSidebarExpandedBreakpointDp = 840
+internal const val WideSidebarCompactWidthDp = 240
+internal const val WideSidebarExpandedWidthDp = 280
 internal const val TimelineContentMaxWidthDp = 760
 internal const val GridContentMaxWidthDp = 960
 internal const val PlayerContentMaxWidthDp = 960
 internal const val MomentsStageMaxWidthDp = 430
+internal const val WideVideoGridMinCellWidthDp = 200
+internal const val WideVerticalGridMinCellWidthDp = 144
 
 internal enum class IglooLayoutClass {
     Compact,

@@ -429,8 +429,7 @@ internal fun channelRouteDisplayNameOverride(
         }
 
 /**
- * YouTube body — 2-column long-form grid per the channel-feed (YouTube)
- * screenshot. Faded-but-tappable for not-yet-downloaded entries is already
+ * YouTube body. Faded-but-tappable for not-yet-downloaded entries is already
  * handled inside [VideoGrid] via `video.filePath.isNullOrEmpty()`.
  */
 @Composable

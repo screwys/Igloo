@@ -15,10 +15,10 @@ class AdaptiveLayoutTest {
     }
 
     @Test
-    fun sidebar_width_expands_at_seven_twenty_dp() {
-        assertEquals(WideSidebarCompactWidthDp, wideSidebarWidthDp(600))
-        assertEquals(WideSidebarCompactWidthDp, wideSidebarWidthDp(719))
-        assertEquals(WideSidebarExpandedWidthDp, wideSidebarWidthDp(720))
+    fun sidebar_width_expands_at_eight_forty_dp() {
+        assertEquals(240, wideSidebarWidthDp(600))
+        assertEquals(240, wideSidebarWidthDp(839))
+        assertEquals(280, wideSidebarWidthDp(840))
     }
 
     @Test

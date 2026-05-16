@@ -43,6 +43,8 @@ import com.screwy.igloo.data.entity.VideoEntity
 import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.media.OwnerKind
+import com.screwy.igloo.ui.nav.WideVideoGridMinCellWidthDp
+import com.screwy.igloo.ui.nav.rememberIglooAdaptiveLayout
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -66,6 +68,12 @@ fun VideoGrid(
     val resolvers: MediaResolvers = koinInject()
     val prefs: PreferencesRepo = koinInject()
     val dearrowMode by prefs.dearrowMode().collectAsState(initial = PreferencesRepo.Defaults.DEARROW_MODE)
+    val adaptiveLayout = rememberIglooAdaptiveLayout()
+    val gridCells = if (adaptiveLayout.isWide) {
+        GridCells.Adaptive(WideVideoGridMinCellWidthDp.dp)
+    } else {
+        GridCells.Fixed(columns)
+    }
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val headerOffset = if (headerContent != null) 1 else 0
@@ -98,7 +106,7 @@ fun VideoGrid(
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
+            columns = gridCells,
             state = gridState,
             modifier = Modifier.fillMaxSize(),
         ) {

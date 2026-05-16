@@ -44,6 +44,8 @@ import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.media.OwnerKind
 import com.screwy.igloo.net.ServerBaseUrlProvider
+import com.screwy.igloo.ui.nav.WideVerticalGridMinCellWidthDp
+import com.screwy.igloo.ui.nav.rememberIglooAdaptiveLayout
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -73,8 +75,8 @@ data class MomentThumbnailItem(
 )
 
 /**
- * 3-column grid of moment thumbnails with per-cell left-swipe to channel +
- * optional scroll-to-top/bottom FABs.
+ * Grid of moment thumbnails with per-cell left-swipe to channel + optional
+ * scroll-to-top/bottom FABs.
  */
 @Composable
 fun MomentsGrid(
@@ -84,9 +86,16 @@ fun MomentsGrid(
     onSwipeLeftOnItem: (channelId: String) -> Unit,
     showScrollFabs: Boolean = true,
     headerContent: (@Composable () -> Unit)? = null,
+    columns: Int = 3,
     modifier: Modifier = Modifier,
 ) {
     val resolvers: MediaResolvers = koinInject()
+    val adaptiveLayout = rememberIglooAdaptiveLayout()
+    val gridCells = if (adaptiveLayout.isWide) {
+        GridCells.Adaptive(WideVerticalGridMinCellWidthDp.dp)
+    } else {
+        GridCells.Fixed(columns)
+    }
     val headerOffset = if (headerContent != null) 1 else 0
     val safeInitialIndex = initialIndex.coerceAtLeast(0)
     val initialGridIndex = if (safeInitialIndex > 0) safeInitialIndex + headerOffset else 0
@@ -134,7 +143,7 @@ fun MomentsGrid(
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
+            columns = gridCells,
             state = gridState,
             modifier = Modifier.fillMaxSize(),
         ) {
