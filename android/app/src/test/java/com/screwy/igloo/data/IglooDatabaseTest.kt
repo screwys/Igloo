@@ -156,14 +156,50 @@ class IglooDatabaseTest {
             WHERE type = 'index'
               AND name IN (
                   'idx_android_sync_assets_owner_kind_state',
+                  'idx_android_sync_assets_generation_state_path',
                   'idx_android_sync_items_kind_identity'
               )
             """.trimIndent(),
         )
         cursor.use {
             assertTrue(it.moveToFirst())
-            assertEquals(2, it.getInt(0))
+            assertEquals(3, it.getInt(0))
         }
+    }
+
+    @Test fun androidSyncChangedItemUpsertSkipsIdenticalLedgerRows() = runBlocking {
+        val dao = db.androidSyncDao()
+        dao.upsertGeneration(androidSyncGeneration("gen"))
+        dao.upsertItems(
+            listOf(
+                AndroidSyncItemEntity("gen", 1, "feed_items", "same", """{"value":1}"""),
+                AndroidSyncItemEntity("gen", 2, "feed_items", "changed", """{"value":1}"""),
+            ),
+        )
+
+        val written = dao.upsertChangedItems(
+            listOf(
+                AndroidSyncItemEntity("gen", 1, "feed_items", "same", """{"value":1}"""),
+                AndroidSyncItemEntity("gen", 2, "feed_items", "changed", """{"value":2}"""),
+                AndroidSyncItemEntity("gen", 3, "feed_items", "new", """{"value":1}"""),
+            ),
+        )
+
+        assertEquals(2, written)
+        val snapshots = dao.itemLedgerSnapshots("gen", minSeq = 1, maxSeq = 3).associateBy { it.seq }
+        assertEquals("""{"value":1}""", snapshots[1]?.payloadJson)
+        assertEquals("""{"value":2}""", snapshots[2]?.payloadJson)
+        assertEquals("""{"value":1}""", snapshots[3]?.payloadJson)
+        assertEquals(
+            0,
+            dao.upsertChangedItems(
+                listOf(
+                    AndroidSyncItemEntity("gen", 1, "feed_items", "same", """{"value":1}"""),
+                    AndroidSyncItemEntity("gen", 2, "feed_items", "changed", """{"value":2}"""),
+                    AndroidSyncItemEntity("gen", 3, "feed_items", "new", """{"value":1}"""),
+                ),
+            ),
+        )
     }
 
     @Test fun androidSyncChangedItemsIgnoreUnchangedPayloadsFromImportedGenerations() = runBlocking {

@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.dao.AndroidSyncContentPruneCounts
 import com.screwy.igloo.data.dao.AndroidSyncDao
+import com.screwy.igloo.data.dao.AndroidSyncGenerationPruneCounts
 import com.screwy.igloo.data.dao.OutboxDao
 import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
 import com.screwy.igloo.data.entity.AndroidSyncGenerationEntity
@@ -45,6 +46,9 @@ const val ANDROID_SYNC_ITEM_IMPORTER_VERSION = 3
 
 private fun AndroidSyncContentPruneCounts.hasDeletes(): Boolean =
     videos > 0 || feedItems > 0 || channels > 0 || channelProfiles > 0 || legacyAssets > 0 || sideRows > 0
+
+private fun AndroidSyncGenerationPruneCounts.hasDeletes(): Boolean =
+    items > 0 || assets > 0 || generations > 0
 
 private fun AssetFileDeleteStats.hasDeletes(): Boolean = files > 0
 
@@ -96,6 +100,7 @@ class AndroidSyncMirror(
     private val triggerSeq = AtomicLong(0L)
     private val completedTriggerSeq = AtomicLong(0L)
     private val syncActive = AtomicBoolean(false)
+    private var lastOrphanAssetWalkGenerationId: String? = null
 
     fun trigger() {
         triggerSeq.incrementAndGet()
@@ -185,41 +190,23 @@ class AndroidSyncMirror(
                     ),
                 )
             }
-            val orphanAssetFiles = assetDrainer.deleteUnreferencedAssetFiles(
-                dao.verifiedLocalPaths(generation.generation_id),
-            )
-            PerfProbe.log(
-                event = "android_sync_orphan_asset_files_walk",
-            ) {
-                mapOf(
-                    "files_walked" to orphanAssetFiles.walkedFiles,
-                    "files_deleted" to orphanAssetFiles.files,
-                    "bytes_deleted" to orphanAssetFiles.bytes,
-                    "duration_ms" to orphanAssetFiles.walkDurationMs,
-                )
-            }
-            if (orphanAssetFiles.hasDeletes()) {
-                logger.info(
-                    event = "android_sync_orphan_asset_files_pruned",
-                    fields = mapOf(
-                        "generation_id" to generation.generation_id,
-                        "files" to orphanAssetFiles.files,
-                        "bytes" to orphanAssetFiles.bytes,
-                        "walked_files" to orphanAssetFiles.walkedFiles,
-                        "walk_duration_ms" to orphanAssetFiles.walkDurationMs,
-                    ),
-                )
-            }
             val prunedGenerations = pruneGenerationsExceptMeasured(generation.generation_id)
-            if (prunedGenerations > 0) {
+            if (prunedGenerations.hasDeletes()) {
                 logger.info(
                     event = "android_sync_generations_pruned",
                     fields = mapOf(
                         "generation_id" to generation.generation_id,
-                        "pruned_generations" to prunedGenerations,
+                        "items" to prunedGenerations.items,
+                        "assets" to prunedGenerations.assets,
+                        "generations" to prunedGenerations.generations,
                     ),
                 )
             }
+            runOrSkipOrphanAssetFileCleanup(
+                generationId = generation.generation_id,
+                contentPruned = contentPruned,
+                generationPruned = prunedGenerations,
+            )
 
             logger.info(
                 event = "android_sync_generation_done",
@@ -274,6 +261,7 @@ class AndroidSyncMirror(
             }
             val page = measuredPage.value
             var ledgerWriteMs = 0L
+            var ledgerRowsWritten = 0
             var changedItemQueryMs = 0L
             var changedCount = 0
             var skippedUnchanged = 0
@@ -283,8 +271,9 @@ class AndroidSyncMirror(
             var ingestParseFailures = 0
             var ingestTransactionMs = 0L
             if (page.items.isNotEmpty()) {
+                val itemRows = page.items.map { it.toEntity(generationId) }
                 val ledgerWriteStartedAt = System.nanoTime()
-                dao.upsertItems(page.items.map { it.toEntity(generationId) })
+                ledgerRowsWritten = dao.upsertChangedItems(itemRows)
                 ledgerWriteMs = elapsedMsSince(ledgerWriteStartedAt)
                 val changedQueryStartedAt = System.nanoTime()
                 val changedSeqs = dao.changedItemSeqsFromPreviousImportedGenerations(
@@ -342,6 +331,7 @@ class AndroidSyncMirror(
                     "page_bytes" to measuredPage.byteCount,
                     "decode_ms" to measuredPage.decodeDurationMs,
                     "ledger_write_ms" to ledgerWriteMs,
+                    "ledger_rows_written" to ledgerRowsWritten,
                     "changed_item_query_ms" to changedItemQueryMs,
                     "changed" to changedCount,
                     "skipped" to skippedUnchanged,
@@ -375,18 +365,66 @@ class AndroidSyncMirror(
         )
     }
 
-    private suspend fun pruneGenerationsExceptMeasured(generationId: String): Int =
+    private suspend fun pruneGenerationsExceptMeasured(generationId: String): AndroidSyncGenerationPruneCounts =
         db.withTransaction {
-            timedPruneStep("delete_items_for_other_generations") {
+            val items = timedPruneStep("delete_items_for_other_generations") {
                 dao.deleteItemsForOtherGenerations(generationId)
             }
-            timedPruneStep("delete_assets_for_other_generations") {
+            val assets = timedPruneStep("delete_assets_for_other_generations") {
                 dao.deleteAssetsForOtherGenerations(generationId)
             }
-            timedPruneStep("delete_other_generations") {
+            val generations = timedPruneStep("delete_other_generations") {
                 dao.deleteOtherGenerations(generationId)
             }
+            AndroidSyncGenerationPruneCounts(items = items, assets = assets, generations = generations)
         }
+
+    private suspend fun runOrSkipOrphanAssetFileCleanup(
+        generationId: String,
+        contentPruned: AndroidSyncContentPruneCounts,
+        generationPruned: AndroidSyncGenerationPruneCounts,
+    ) {
+        val firstWalkForGeneration = lastOrphanAssetWalkGenerationId != generationId
+        if (!firstWalkForGeneration && !contentPruned.hasDeletes() && !generationPruned.hasDeletes()) {
+            PerfProbe.log(event = "android_sync_orphan_asset_files_walk_skipped") {
+                mapOf("generation_id" to generationId, "reason" to "unchanged_generation")
+            }
+            return
+        }
+
+        val orphanAssetFiles = assetDrainer.deleteUnreferencedAssetFiles(
+            dao.verifiedLocalPaths(generationId),
+        )
+        lastOrphanAssetWalkGenerationId = generationId
+        PerfProbe.log(
+            event = "android_sync_orphan_asset_files_walk",
+        ) {
+            mapOf(
+                "generation_id" to generationId,
+                "files_walked" to orphanAssetFiles.walkedFiles,
+                "files_deleted" to orphanAssetFiles.files,
+                "bytes_deleted" to orphanAssetFiles.bytes,
+                "duration_ms" to orphanAssetFiles.walkDurationMs,
+                "reason" to when {
+                    firstWalkForGeneration -> "first_generation_pass"
+                    contentPruned.hasDeletes() -> "content_pruned"
+                    else -> "generation_pruned"
+                },
+            )
+        }
+        if (orphanAssetFiles.hasDeletes()) {
+            logger.info(
+                event = "android_sync_orphan_asset_files_pruned",
+                fields = mapOf(
+                    "generation_id" to generationId,
+                    "files" to orphanAssetFiles.files,
+                    "bytes" to orphanAssetFiles.bytes,
+                    "walked_files" to orphanAssetFiles.walkedFiles,
+                    "walk_duration_ms" to orphanAssetFiles.walkDurationMs,
+                ),
+            )
+        }
+    }
 
     private suspend fun pruneContentOutsideGenerationMeasured(generationId: String): AndroidSyncContentPruneCounts =
         db.withTransaction {

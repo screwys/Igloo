@@ -68,6 +68,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_32_33,
                 IglooMigrations.MIGRATION_33_34,
                 IglooMigrations.MIGRATION_34_35,
+                IglooMigrations.MIGRATION_35_36,
             )
             .allowMainThreadQueries()
             .build()
@@ -127,6 +128,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_32_33,
                 IglooMigrations.MIGRATION_33_34,
                 IglooMigrations.MIGRATION_34_35,
+                IglooMigrations.MIGRATION_35_36,
             )
             .allowMainThreadQueries()
             .build()
@@ -191,6 +193,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_32_33,
                 IglooMigrations.MIGRATION_33_34,
                 IglooMigrations.MIGRATION_34_35,
+                IglooMigrations.MIGRATION_35_36,
             )
             .allowMainThreadQueries()
             .build()
@@ -260,6 +263,7 @@ class IglooMigrationTest {
                 IglooMigrations.MIGRATION_32_33,
                 IglooMigrations.MIGRATION_33_34,
                 IglooMigrations.MIGRATION_34_35,
+                IglooMigrations.MIGRATION_35_36,
             )
             .allowMainThreadQueries()
             .build()
@@ -295,7 +299,11 @@ class IglooMigrationTest {
         sqlite.close()
 
         val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
-            .addMigrations(IglooMigrations.MIGRATION_33_34, IglooMigrations.MIGRATION_34_35)
+            .addMigrations(
+                IglooMigrations.MIGRATION_33_34,
+                IglooMigrations.MIGRATION_34_35,
+                IglooMigrations.MIGRATION_35_36,
+            )
             .allowMainThreadQueries()
             .build()
 
@@ -328,7 +336,7 @@ class IglooMigrationTest {
         sqlite.close()
 
         val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
-            .addMigrations(IglooMigrations.MIGRATION_34_35)
+            .addMigrations(IglooMigrations.MIGRATION_34_35, IglooMigrations.MIGRATION_35_36)
             .allowMainThreadQueries()
             .build()
 
@@ -341,6 +349,39 @@ class IglooMigrationTest {
                     columns += cursor.getString(1)
                 }
                 assertTrue(columns.containsAll(listOf("leaf_tweet_id", "root_tweet_id", "ancestor_tweet_id", "ancestor_order")))
+            }
+        } finally {
+            roomDb.close()
+            context.deleteDatabase(dbName)
+        }
+    }
+
+    @Test fun migration35To36AddsVerifiedAssetPathIndex() {
+        val dbName = "igloo-migration-35-36"
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val sqlite = createDatabaseFromSchemaSnapshot(
+            context,
+            dbName,
+            35,
+        )
+        sqlite.close()
+
+        val roomDb = Room.databaseBuilder(context, IglooDatabase::class.java, dbName)
+            .addMigrations(IglooMigrations.MIGRATION_35_36)
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            val readable = roomDb.openHelper.readableDatabase
+            assertEquals(IglooMigrations.CURRENT_SCHEMA_VERSION, readable.version)
+            readable.query("PRAGMA index_list(android_sync_assets)").use { cursor ->
+                var found = false
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(1) == "idx_android_sync_assets_generation_state_path") {
+                        found = true
+                    }
+                }
+                assertTrue(found)
             }
         } finally {
             roomDb.close()

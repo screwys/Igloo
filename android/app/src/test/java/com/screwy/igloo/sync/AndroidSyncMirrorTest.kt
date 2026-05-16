@@ -72,6 +72,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import io.mockk.mockk
+import java.io.File
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
@@ -165,6 +166,51 @@ class AndroidSyncMirrorTest {
         mirror.syncOnce()
 
         assertTrue(mirror.hasPendingOrActiveWork())
+    }
+
+    @Test fun sameGenerationSyncSkipsRepeatedOrphanFileWalkWhenNothingWasPruned() = runBlocking {
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/generation/latest" -> respondJson(
+                    AndroidSyncLatestResponse(
+                        generation = AndroidSyncGenerationDto(
+                            generation_id = GENERATION_ID,
+                            created_at_ms = nowMs,
+                            status = "published",
+                            source_version = "test",
+                        ),
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/items" -> respondJson(
+                    AndroidSyncItemsResponse(
+                        generation_id = GENERATION_ID,
+                        items = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/generation/$GENERATION_ID/assets" -> respondJson(
+                    AndroidSyncAssetsResponse(
+                        generation_id = GENERATION_ID,
+                        assets = emptyList(),
+                        end_of_stream = true,
+                    ),
+                )
+                "/api/android/sync/health" -> respond("""{"ok":true}""", HttpStatusCode.OK, jsonHeaders())
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+        val mirror = buildMirror(engine)
+        val syncBucket = File(tmpFolder.root, "sync/manual").apply { mkdirs() }
+        val staleBeforeFirstWalk = File(syncBucket, "stale-before-first-walk.bin").apply { writeText("stale") }
+
+        mirror.syncOnce()
+
+        assertFalse(staleBeforeFirstWalk.exists())
+        val staleAfterCleanPass = File(syncBucket, "stale-after-clean-pass.bin").apply { writeText("stale") }
+
+        mirror.syncOnce()
+
+        assertTrue(staleAfterCleanPass.exists())
     }
 
     @Test fun healthUploadFailureDoesNotStopAssetDrain() = runBlocking {

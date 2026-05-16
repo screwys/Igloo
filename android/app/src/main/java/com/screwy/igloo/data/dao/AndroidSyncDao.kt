@@ -1,6 +1,7 @@
 package com.screwy.igloo.data.dao
 
 import androidx.room.Dao
+import androidx.room.ColumnInfo
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
@@ -8,6 +9,12 @@ import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
 import com.screwy.igloo.data.entity.AndroidSyncGenerationEntity
 import com.screwy.igloo.data.entity.AndroidSyncItemEntity
 import kotlinx.coroutines.flow.Flow
+
+data class AndroidSyncGenerationPruneCounts(
+    val items: Int,
+    val assets: Int,
+    val generations: Int,
+)
 
 data class AndroidSyncHealthCounts(
     val total: Int,
@@ -27,10 +34,62 @@ data class AndroidSyncContentPruneCounts(
     val sideRows: Int,
 )
 
+data class AndroidSyncItemLedgerSnapshot(
+    @ColumnInfo(name = "seq")
+    val seq: Long,
+    @ColumnInfo(name = "item_kind")
+    val itemKind: String,
+    @ColumnInfo(name = "item_id")
+    val itemId: String,
+    @ColumnInfo(name = "payload_json")
+    val payloadJson: String,
+) {
+    fun matches(row: AndroidSyncItemEntity): Boolean =
+        seq == row.seq &&
+            itemKind == row.itemKind &&
+            itemId == row.itemId &&
+            payloadJson == row.payloadJson
+}
+
 @Dao
 interface AndroidSyncDao {
 
     @Upsert suspend fun upsertItems(rows: List<AndroidSyncItemEntity>)
+
+    @Transaction
+    suspend fun upsertChangedItems(rows: List<AndroidSyncItemEntity>): Int {
+        if (rows.isEmpty()) return 0
+        val byGeneration = rows.groupBy { it.generationId }
+        var changed = 0
+        for ((generationId, generationRows) in byGeneration) {
+            val existing = itemLedgerSnapshots(
+                generationId = generationId,
+                minSeq = generationRows.minOf { it.seq },
+                maxSeq = generationRows.maxOf { it.seq },
+            ).associateBy { it.seq }
+            val changedRows = generationRows.filter { row -> existing[row.seq]?.matches(row) != true }
+            if (changedRows.isNotEmpty()) {
+                upsertItems(changedRows)
+                changed += changedRows.size
+            }
+        }
+        return changed
+    }
+
+    @Query(
+        """
+        SELECT seq, item_kind, item_id, payload_json
+        FROM android_sync_items
+        WHERE generation_id = :generationId
+          AND seq >= :minSeq
+          AND seq <= :maxSeq
+        """
+    )
+    suspend fun itemLedgerSnapshots(
+        generationId: String,
+        minSeq: Long,
+        maxSeq: Long,
+    ): List<AndroidSyncItemLedgerSnapshot>
 
     @Query(
         """

@@ -521,6 +521,7 @@ data class AndroidSyncItemEntity(
     indices = [
         Index(value = ["generation_id", "seq"], name = "idx_android_sync_assets_page"),
         Index(value = ["generation_id", "state", "next_attempt_at_ms"], name = "idx_android_sync_assets_claim"),
+        Index(value = ["generation_id", "state", "local_path"], name = "idx_android_sync_assets_generation_state_path"),
         Index(value = ["generation_id", "bucket"], name = "idx_android_sync_assets_bucket"),
         Index(value = ["asset_id", "asset_kind", "server_state", "state"], name = "idx_android_sync_assets_identity_state"),
         Index(value = ["owner_id", "asset_kind", "server_state", "state", "verified_at_ms", "generation_id"], name = "idx_android_sync_assets_owner_kind_state"),
