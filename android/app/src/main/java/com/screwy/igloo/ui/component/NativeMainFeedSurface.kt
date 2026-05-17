@@ -582,6 +582,7 @@ internal sealed class NativeFeedAdapterItem {
     data class Post(
         val threaded: ThreadedFeedRow,
         val post: SocialPostModel,
+        val chainPosts: List<SocialPostModel> = emptyList(),
     ) : NativeFeedAdapterItem() {
         override val id: String = post.stableKey
     }

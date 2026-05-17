@@ -123,6 +123,7 @@ internal class NativeMainFeedController(
                         NativeFeedAdapterItem.Post(
                             threaded = threaded,
                             post = buildSocialPostModel(threaded.row, mediaModels),
+                            chainPosts = threaded.chain.map { row -> buildSocialPostModel(row, mediaModels) },
                         )
                     )
                 }

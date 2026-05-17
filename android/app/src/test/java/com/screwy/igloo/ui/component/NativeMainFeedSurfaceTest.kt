@@ -271,6 +271,8 @@ class NativeMainFeedSurfaceTest {
             .substringBefore("private fun bindRetweeter")
         val ancestorText = text.substringAfter("private fun threadAncestorView")
             .substringBefore("private fun bindRetweeter")
+        val controllerText = text.substringAfter("internal class NativeMainFeedController")
+            .substringBefore("fun scrollToTop")
 
         assertTrue(threadText.contains("nativeThreadPreviewAncestors(chain)"))
         assertFalse(threadText.contains("feed_thread_load_more_replies"))
@@ -281,8 +283,12 @@ class NativeMainFeedSurfaceTest {
         assertTrue(cardViewsText.contains("val threadCapsuleAvatars: LinearLayout"))
         assertTrue(cardViewsText.contains("val threadCapsuleText: TextView"))
         assertTrue(threadText.contains("stripReplyPrefix(item, item.bodyText.orEmpty())"))
+        assertTrue(controllerText.contains("chainPosts = threaded.chain.map"))
+        assertTrue(ancestorText.contains("post.media.grid.mediaCount > 0"))
+        assertTrue(ancestorText.contains("bindMediaGrid("))
+        assertTrue(ancestorText.contains("grid = post.media.grid"))
         assertFalse(ancestorText.contains("background = roundedStroke(colors.surface"))
-        assertTrue(ancestorText.contains("threadAncestorActions(row, colors, callbacks)"))
+        assertTrue(ancestorText.contains("threadAncestorActions(post, colors, callbacks)"))
         assertTrue(text.contains("bindActionButtons(actions, row, post, shareUrl, colors, callbacks)"))
         assertTrue(text.contains("bindReply(item, callbacks, colors, visible = adapterRow.threaded.chain.isEmpty())"))
     }

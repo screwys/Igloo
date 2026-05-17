@@ -106,7 +106,7 @@ internal class NativeFeedViewHolder(
             true
         }
 
-        bindThread(adapterRow.threaded, colors, callbacks)
+        bindThread(adapterRow.threaded, adapterRow.chainPosts, colors, callbacks)
         bindRetweeter(item, callbacks, colors)
         bindHeader(
             header = views.header,
@@ -177,6 +177,7 @@ internal class NativeFeedViewHolder(
 
     private fun bindThread(
         threaded: ThreadedFeedRow,
+        chainPosts: List<SocialPostModel>,
         colors: NativeFeedColors,
         callbacks: NativeFeedCallbacks,
     ) {
@@ -190,11 +191,21 @@ internal class NativeFeedViewHolder(
 
         views.thread.visibility = View.VISIBLE
         val visibleChain = nativeThreadPreviewAncestors(chain)
+        val chainPostsById = chainPosts.associateBy { it.row.item.tweetId }
         visibleChain.forEachIndexed { index, row ->
             val params = verticalSpacingLayoutParams().apply {
                 if (index == 0) topMargin = 0
             }
-            views.thread.addView(threadAncestorView(row, colors, callbacks), params)
+            val post = chainPostsById[row.item.tweetId] ?: buildSocialPostModel(row, emptyMap())
+            views.thread.addView(
+                threadAncestorView(
+                    post = post,
+                    ownerKeyPrefix = "thread:${threaded.row.item.tweetId}:${row.item.tweetId}",
+                    colors = colors,
+                    callbacks = callbacks,
+                ),
+                params,
+            )
         }
     }
 
@@ -230,10 +241,12 @@ internal class NativeFeedViewHolder(
     }
 
     private fun threadAncestorView(
-        row: FeedRow,
+        post: SocialPostModel,
+        ownerKeyPrefix: String,
         colors: NativeFeedColors,
         callbacks: NativeFeedCallbacks,
     ): LinearLayout {
+        val row = post.row
         val item = row.item
         val authorHandle = normalizeHandle(item.authorHandle)
         val authorDisplay = displayLabel(
@@ -278,7 +291,22 @@ internal class NativeFeedViewHolder(
                 },
             )
         }
-        container.addView(threadAncestorActions(row, colors, callbacks))
+        if (post.media.grid.mediaCount > 0) {
+            val media = LinearLayout(views.root.context).apply {
+                orientation = LinearLayout.VERTICAL
+            }
+            bindMediaGrid(
+                container = media,
+                ownerKeyPrefix = ownerKeyPrefix,
+                row = row,
+                grid = post.media.grid,
+                mediaIndexOffset = 0,
+                colors = colors,
+                callbacks = callbacks,
+            )
+            container.addView(media, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        container.addView(threadAncestorActions(post, colors, callbacks))
         return container
     }
 
@@ -526,12 +554,12 @@ internal class NativeFeedViewHolder(
     }
 
     private fun threadAncestorActions(
-        row: FeedRow,
+        post: SocialPostModel,
         colors: NativeFeedColors,
         callbacks: NativeFeedCallbacks,
     ): LinearLayout {
         val context = views.root.context
-        val post = buildSocialPostModel(row, emptyMap())
+        val row = post.row
         val shareUrl = feedShareUrl(row.item).trim()
         val actions = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
