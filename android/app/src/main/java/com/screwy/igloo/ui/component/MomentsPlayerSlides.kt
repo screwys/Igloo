@@ -1,5 +1,6 @@
 package com.screwy.igloo.ui.component
 
+import android.view.ViewGroup
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -13,17 +14,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -39,6 +43,7 @@ import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @Composable
@@ -63,10 +68,10 @@ internal fun MomentImageSurface(
             fallbackSlideCount = 1,
         )
     }
-    val slideUris by slideMediaFlow.collectAsState(initial = emptyList())
+    val slideMedia by slideMediaFlow.collectAsState(initial = emptyList())
 
     MomentStillImage(
-        mediaUri = slideUris.firstOrNull() ?: thumbnailUri,
+        mediaUri = slideMedia.firstOrNull()?.uri ?: thumbnailUri,
         contentDescription = stringResource(R.string.content_description_moment_image),
         modifier = modifier,
     )
@@ -88,6 +93,7 @@ internal fun MomentSlideshowSurface(
     onAutoAdvance: () -> Unit,
     manualAdvanceTick: Int = 0,
     onManualAdvanceAtEnd: () -> Unit = {},
+    muted: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val baseUrlProvider: ServerBaseUrlProvider = koinInject()
@@ -103,12 +109,13 @@ internal fun MomentSlideshowSurface(
             fallbackSlideCount = slideCount,
         )
     }
-    val slideUris by slideMediaFlow.collectAsState(initial = emptyList())
-    val effectiveSlideUris = remember(slideUris, thumbnailUri) {
-        if (slideUris.isNotEmpty()) slideUris else listOf(thumbnailUri)
+    val slideMedia by slideMediaFlow.collectAsState(initial = emptyList())
+    val effectiveSlideMedia = remember(slideMedia, thumbnailUri) {
+        if (slideMedia.isNotEmpty()) slideMedia else listOf(MomentSlideMedia(thumbnailUri, MomentSlideKind.Image))
     }
-    val effectiveSlideCount = effectiveSlideUris.size.coerceAtLeast(1)
+    val effectiveSlideCount = effectiveSlideMedia.size.coerceAtLeast(1)
     val pagerState = rememberPagerState(pageCount = { effectiveSlideCount })
+    val pagerScope = rememberCoroutineScope()
 
     LaunchedEffect(manualAdvanceTick, effectiveSlideCount) {
         if (manualAdvanceTick == 0 || effectiveSlideCount <= 0) return@LaunchedEffect
@@ -131,16 +138,49 @@ internal fun MomentSlideshowSurface(
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        if (effectiveSlideUris.isNotEmpty()) {
+        if (effectiveSlideMedia.isNotEmpty()) {
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
-                MomentStillImage(
-                    mediaUri = effectiveSlideUris[page],
-                    contentDescription = stringResource(R.string.content_description_slide_number, page + 1),
-                    modifier = Modifier.fillMaxSize(),
-                )
+                val slide = effectiveSlideMedia[page]
+                when (slide.kind) {
+                    MomentSlideKind.Image -> MomentStillImage(
+                        mediaUri = slide.uri,
+                        contentDescription = stringResource(R.string.content_description_slide_number, page + 1),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    MomentSlideKind.Video -> MomentVideoSlide(
+                        mediaUri = slide.uri,
+                        isActive = isActive && pagerState.currentPage == page,
+                        muted = muted,
+                        onEnded = {
+                            val currentPage = pagerState.currentPage
+                            pagerScope.launch {
+                                if (currentPage < effectiveSlideCount - 1) {
+                                    pagerState.animateScrollToPage(
+                                        page = currentPage + 1,
+                                        animationSpec = tween(
+                                            durationMillis = AUTO_SWIPE_SCROLL_DURATION_MS,
+                                            easing = FastOutSlowInEasing,
+                                        ),
+                                    )
+                                } else if (autoSwipe) {
+                                    onAutoAdvance()
+                                } else {
+                                    pagerState.animateScrollToPage(
+                                        page = 0,
+                                        animationSpec = tween(
+                                            durationMillis = AUTO_SWIPE_SCROLL_DURATION_MS,
+                                            easing = FastOutSlowInEasing,
+                                        ),
+                                    )
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         } else {
             MomentStillImage(
@@ -170,6 +210,9 @@ internal fun MomentSlideshowSurface(
             if (pagerState.isScrollInProgress || pagerState.currentPage != pageAtStart) {
                 continue
             }
+            if (effectiveSlideMedia.getOrNull(pageAtStart)?.kind == MomentSlideKind.Video) {
+                continue
+            }
 
             if (pageAtStart < effectiveSlideCount - 1) {
                 pagerState.animateScrollToPage(
@@ -194,6 +237,16 @@ internal fun MomentSlideshowSurface(
         }
     }
 }
+
+internal enum class MomentSlideKind {
+    Image,
+    Video,
+}
+
+internal data class MomentSlideMedia(
+    val uri: MediaUri,
+    val kind: MomentSlideKind,
+)
 
 @Composable
 private fun MomentStillImage(
@@ -230,6 +283,93 @@ private fun MomentStillImage(
     }
 }
 
+@Composable
+private fun MomentVideoSlide(
+    mediaUri: MediaUri,
+    isActive: Boolean,
+    muted: Boolean,
+    onEnded: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (mediaUri == MediaUri.Missing) {
+        MomentStillImage(
+            mediaUri = MediaUri.Missing,
+            contentDescription = stringResource(R.string.content_description_missing_media),
+            modifier = modifier,
+        )
+        return
+    }
+
+    val context = LocalContext.current
+    val currentOnEnded by rememberUpdatedState(onEnded)
+    val player = remember {
+        ExoPlayer.Builder(context).build().apply {
+            repeatMode = Player.REPEAT_MODE_OFF
+        }
+    }
+    val playerView = remember { createMomentPlayerView(context) }
+
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) currentOnEnded()
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+        }
+    }
+
+    LaunchedEffect(player, mediaUri) {
+        val item = momentSlideVideoMediaItem(mediaUri)
+        if (item == null) {
+            player.stop()
+            player.clearMediaItems()
+            return@LaunchedEffect
+        }
+        player.setMediaItem(item)
+        player.prepare()
+    }
+
+    LaunchedEffect(player, isActive, muted) {
+        player.volume = if (muted) 0f else 1f
+        if (isActive) {
+            if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+            player.playWhenReady = true
+            player.play()
+        } else {
+            player.playWhenReady = false
+            player.pause()
+        }
+    }
+
+    AndroidView(
+        factory = {
+            (playerView.parent as? ViewGroup)?.removeView(playerView)
+            if (playerView.player !== player) playerView.player = player
+            playerView
+        },
+        update = { view ->
+            if (view.player !== player) view.player = player
+        },
+        modifier = modifier,
+    )
+
+    DisposableEffect(playerView) {
+        onDispose {
+            playerView.player = null
+        }
+    }
+}
+
+private fun momentSlideVideoMediaItem(mediaUri: MediaUri): MediaItem? = when (mediaUri) {
+    is MediaUri.Local -> MediaItem.fromUri(mediaUri.file.toURI().toString())
+    is MediaUri.Remote -> MediaItem.fromUri(mediaUri.url)
+    MediaUri.Missing -> null
+}
+
 private fun momentSlideMediaFlow(
     mediaInventoryDao: MediaInventoryDao,
     syncDao: AndroidSyncDao,
@@ -240,7 +380,7 @@ private fun momentSlideMediaFlow(
     mediaInventoryDao.forOwnerFlow(videoId),
     syncDao.latestVerifiedAssetsForOwnerFlow(videoId, listOf("post_media")),
 ) { rows, syncRows ->
-    resolveMomentSlideUris(
+    resolveMomentSlideMedia(
         rows = rows,
         baseUrl = baseUrl,
         videoId = videoId,
@@ -274,14 +414,37 @@ internal fun resolveMomentSlideUris(
     videoId: String,
     fallbackSlideCount: Int,
     syncRows: List<AndroidSyncAssetEntity> = emptyList(),
-): List<MediaUri> {
+): List<MediaUri> = resolveMomentSlideMedia(
+    rows = rows,
+    baseUrl = baseUrl,
+    videoId = videoId,
+    fallbackSlideCount = fallbackSlideCount,
+    syncRows = syncRows,
+).map { slide -> slide.uri }
+
+internal fun resolveMomentSlideMedia(
+    rows: List<MediaInventoryEntity>,
+    baseUrl: String,
+    videoId: String,
+    fallbackSlideCount: Int,
+    syncRows: List<AndroidSyncAssetEntity> = emptyList(),
+): List<MomentSlideMedia> {
     val syncSlideRows = syncRows
         .asSequence()
-        .filter(::isMomentSyncSlideAsset)
+        .filter(::isMomentSyncPostMediaAsset)
         .sortedBy(::momentSyncSlideIndex)
         .toList()
     if (syncSlideRows.isNotEmpty()) {
-        return syncSlideRows.map { row -> momentSyncAssetToMediaUri(row, baseUrl) }
+        return syncSlideRows.map { row ->
+            MomentSlideMedia(
+                uri = momentSyncAssetToMediaUri(row, baseUrl),
+                kind = momentSlideKind(
+                    contentType = row.contentType,
+                    serverUrl = row.serverUrl,
+                    localPath = row.localPath,
+                ),
+            )
+        }
     }
 
     val slideRows = rows
@@ -292,15 +455,27 @@ internal fun resolveMomentSlideUris(
         .sortedBy(::momentSlideIndex)
         .toList()
     if (slideRows.isNotEmpty()) {
-        return slideRows.map { row -> momentInventoryRowToMediaUri(row, baseUrl) }
+        return slideRows.map { row ->
+            MomentSlideMedia(
+                uri = momentInventoryRowToMediaUri(row, baseUrl),
+                kind = momentSlideKind(
+                    contentType = row.contentType,
+                    serverUrl = row.serverUrl,
+                    localPath = row.localPath,
+                ),
+            )
+        }
     }
 
     val fallbackCount = fallbackSlideCount.coerceAtLeast(0)
     if (fallbackCount == 0) return emptyList()
     return List(fallbackCount) { index ->
-        momentSlideUrl(baseUrl, videoId, index)
-            ?.let(MediaUri::Remote)
-            ?: MediaUri.Missing
+        MomentSlideMedia(
+            uri = momentSlideUrl(baseUrl, videoId, index)
+                ?.let(MediaUri::Remote)
+                ?: MediaUri.Missing,
+            kind = MomentSlideKind.Image,
+        )
     }
 }
 
@@ -337,10 +512,22 @@ private fun momentSlideIndex(row: MediaInventoryEntity): Int =
         ?: row.assetId.substringAfterLast('_').toIntOrNull()
         ?: Int.MAX_VALUE
 
-private fun isMomentSyncSlideAsset(row: AndroidSyncAssetEntity): Boolean {
-    if (row.assetKind != "post_media") return false
-    val contentType = row.contentType?.trim()?.lowercase().orEmpty()
-    return contentType.isBlank() || contentType.startsWith("image/")
+private fun isMomentSyncPostMediaAsset(row: AndroidSyncAssetEntity): Boolean =
+    row.assetKind == "post_media"
+
+private fun momentSlideKind(
+    contentType: String?,
+    serverUrl: String?,
+    localPath: String?,
+): MomentSlideKind {
+    val type = contentType?.trim()?.lowercase().orEmpty()
+    if (type.startsWith("video/")) return MomentSlideKind.Video
+    if (type.startsWith("image/")) return MomentSlideKind.Image
+    val path = listOfNotNull(localPath, serverUrl).firstOrNull { it.isNotBlank() }.orEmpty()
+    return when (File(path).extension.lowercase()) {
+        "mp4", "webm", "mkv", "mov", "m4v" -> MomentSlideKind.Video
+        else -> MomentSlideKind.Image
+    }
 }
 
 private fun momentSyncSlideIndex(row: AndroidSyncAssetEntity): Int =

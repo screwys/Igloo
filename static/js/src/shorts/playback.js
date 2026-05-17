@@ -17,6 +17,29 @@ function autoAdvanceEnabled() {
   return !!(_state && _state.autoPlayNext)
 }
 
+function slideshowSlides(slideshow) {
+  return (slideshow && (slideshow.slides || slideshow.images)) || []
+}
+
+function isVideoSlide(slide) {
+  return !!(slide && String(slide.dataset && slide.dataset.slideType || '').toLowerCase() === 'video')
+}
+
+function currentSlideshowSlide(slideshow) {
+  var slides = slideshowSlides(slideshow)
+  return slides[slideshow.index || 0] || null
+}
+
+function pauseSlideshowVideos(slideshow, exceptIndex) {
+  slideshowSlides(slideshow).forEach(function (slide, idx) {
+    if (!isVideoSlide(slide) || idx === exceptIndex) return
+    try {
+      slide.pause()
+      slide.currentTime = 0
+    } catch (_) { }
+  })
+}
+
 export function pauseAllShorts(exceptId) {
   _state.items.forEach(function (entry) {
     var slideshow = entry && entry.refs && entry.refs.slideshow
@@ -26,6 +49,10 @@ export function pauseAllShorts(exceptId) {
     }
     if (slideshow && slideshow.audio) {
       try { slideshow.audio.pause(); slideshow.audio.currentTime = 0 } catch (_) { }
+    }
+    if (slideshow) {
+      slideshow.playing = false
+      pauseSlideshowVideos(slideshow)
     }
     var video = entry && entry.refs && entry.refs.video
     if (!video) return
@@ -50,20 +77,34 @@ export function setSlideshowIndex(entry, index) {
   var next = Math.max(0, parseInt(index, 10) || 0)
   if (next >= slideshow.count) next = slideshow.count - 1
   slideshow.index = next
-  slideshow.images.forEach(function (img, idx) {
-    if (img) img.classList.toggle('active', idx === next)
+  slideshowSlides(slideshow).forEach(function (slide, idx) {
+    if (!slide) return
+    slide.classList.toggle('active', idx === next)
+    if (isVideoSlide(slide)) {
+      slide.muted = !!(_state && _state.muted)
+      if (idx !== next || !slideshow.playing) {
+        try { slide.pause() } catch (_) { }
+      }
+    }
   })
+  pauseSlideshowVideos(slideshow, next)
   ;(slideshow.dots || []).forEach(function (dot, idx) {
     if (dot) dot.classList.toggle('active', idx === next)
   })
   if (slideshow.counter) {
     slideshow.counter.textContent = String(next + 1) + ' / ' + String(slideshow.count)
   }
+  var current = currentSlideshowSlide(slideshow)
+  if (isVideoSlide(current) && slideshow.playing) {
+    var p = current.play()
+    if (p && typeof p.catch === 'function') p.catch(function () {})
+  }
 }
 
 export function startSlideshowPlayback(entry) {
   var slideshow = entry && entry.refs && entry.refs.slideshow
   if (!slideshow || !slideshow.count) return
+  slideshow.playing = true
   if (slideshow.timer) {
     try { clearTimeout(slideshow.timer) } catch (_) { }
     slideshow.timer = 0
@@ -86,6 +127,32 @@ export function startSlideshowPlayback(entry) {
         try { audio.currentTime = 0; audio.play().catch(function () {}) } catch (_) { }
       }
     })
+  }
+  var activeSlide = currentSlideshowSlide(slideshow)
+  if (isVideoSlide(activeSlide)) {
+    if (audio) {
+      try { audio.pause() } catch (_) { }
+    }
+    if (!activeSlide._endedWired) {
+      activeSlide._endedWired = true
+      activeSlide.addEventListener('ended', function () {
+        if (!_state.overlayOpen) return
+        var cur = currentData()
+        if (!cur || cur.id !== entry.data.id) return
+        var next = (slideshow.index || 0) + 1
+        if (next >= slideshow.count) {
+          if (autoAdvanceEnabled()) _goNext()
+          else { setSlideshowIndex(entry, 0); startSlideshowPlayback(entry) }
+          return
+        }
+        setSlideshowIndex(entry, next)
+        startSlideshowPlayback(entry)
+      })
+    }
+    activeSlide.muted = !!_state.muted
+    var vp = activeSlide.play()
+    if (vp && typeof vp.catch === 'function') vp.catch(function () {})
+    return
   }
   if (_state.storyMode && !audio) return
   if (slideshow.count <= 1) {
@@ -131,8 +198,23 @@ export function toggleShortPlayback(entry) {
   }
   var slideshow = entry.refs.slideshow
   if (!slideshow || !slideshow.count) return
+  var activeSlide = currentSlideshowSlide(slideshow)
+  if (isVideoSlide(activeSlide)) {
+    if (activeSlide.paused) {
+      slideshow.playing = true
+      activeSlide.muted = !!(_state && _state.muted)
+      var vp = activeSlide.play()
+      if (vp && typeof vp.catch === 'function') vp.catch(function () {})
+    } else {
+      slideshow.playing = false
+      try { activeSlide.pause() } catch (_) { }
+      if (slideshow.timer) { try { clearTimeout(slideshow.timer) } catch (_) { } slideshow.timer = 0 }
+    }
+    return
+  }
   var audio = slideshow.audio
   if (audio && audio.src && !audio.paused) {
+    slideshow.playing = false
     try { audio.pause() } catch (_) { }
     if (slideshow.timer) { try { clearTimeout(slideshow.timer) } catch (_) { } slideshow.timer = 0 }
     return

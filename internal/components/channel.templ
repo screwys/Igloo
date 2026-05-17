@@ -130,6 +130,9 @@ templ VideoCard(p PageProps, v model.Video) {
 		data-story-unseen={ boolDataAttr(v.StoryUnseen) }
 		data-media-kind={ v.MediaKind }
 		data-media-slide-count={ strconv.Itoa(v.MediaSlideCount) }
+		if len(v.MediaTypes) > 0 {
+			data-media-types={ toJSONAttr(v.MediaTypes) }
+		}
 		data-shorts-eligible={ boolDataAttr(v.IsShortForm) }
 		data-original-url={ videoWebpageURL(v) }
 		if len(taggedAccounts) > 0 {

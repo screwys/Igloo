@@ -1116,15 +1116,33 @@ func (s *Server) handleSlide(w http.ResponseWriter, r *http.Request) {
 func (s *Server) serveSlideFile(w http.ResponseWriter, r *http.Request, path string) {
 	cacheControl := "public, max-age=3600"
 	w.Header().Set("Cache-Control", cacheControl)
-	contentType := ""
-	if detected := detectImageContentType(path); strings.HasPrefix(detected, "image/") {
-		contentType = detected
+	contentType := slideContentType(path)
+	if contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}
 	if s.serveDataFileViaXAccel(w, r, path, contentType, cacheControl) {
 		return
 	}
 	http.ServeFile(w, r, path)
+}
+
+func slideContentType(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".image":
+		return detectImageContentType(path)
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mkv":
+		return "video/x-matroska"
+	case ".mov":
+		return "video/quicktime"
+	case ".m4v":
+		return "video/mp4"
+	default:
+		return mime.TypeByExtension(filepath.Ext(path))
+	}
 }
 
 type feedMediaOwnerRef struct {

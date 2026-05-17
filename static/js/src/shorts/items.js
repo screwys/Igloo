@@ -96,6 +96,7 @@ export function parseCardData(card) {
 	    sortAtMs: Number.isFinite(sortAtMs) && sortAtMs > 0 ? sortAtMs : null,
 	    mediaKind: String(card.getAttribute('data-media-kind') || '').trim().toLowerCase(),
     mediaSlideCount: Math.max(0, parseInt(card.getAttribute('data-media-slide-count') || '0', 10) || 0),
+    mediaTypes: parseMediaTypesAttr(card.getAttribute('data-media-types')),
     originalUrl: String(card.getAttribute('data-original-url') || '').trim(),
     channelFollowed: String(card.getAttribute('data-channel-followed') || '') === '1',
     repostIntroduced: String(card.getAttribute('data-repost-introduced') || '') === '1',
@@ -112,6 +113,31 @@ export function parseCardData(card) {
     storyUnseen: String(card.getAttribute('data-story-unseen') || '') === '1',
     page: Number.isFinite(rawPage) && rawPage > 0 ? rawPage : null
   }
+}
+
+function parseMediaTypesAttr(raw) {
+  if (!raw) return []
+  var parsed = null
+  try { parsed = JSON.parse(String(raw)) } catch (_) { parsed = null }
+  if (!Array.isArray(parsed)) return []
+  return parsed.map(normalizeSlideMediaType).filter(Boolean)
+}
+
+function normalizeSlideMediaType(value) {
+  var s = String(value || '').trim().toLowerCase()
+  if (!s) return ''
+  if (s === 'photo' || s === 'image' || s.indexOf('image/') === 0) return 'image'
+  if (s === 'video' || s === 'gif' || s === 'animated_gif' || s.indexOf('video/') === 0) return 'video'
+  return ''
+}
+
+function mediaTypeForSlide(entryData, index) {
+  var types = Array.isArray(entryData.mediaTypes) ? entryData.mediaTypes : []
+  var explicit = normalizeSlideMediaType(types[index])
+  if (explicit) return explicit
+  var mediaKind = String(entryData.mediaKind || '').trim().toLowerCase()
+  if (mediaKind === 'image') return 'image'
+  return 'image'
 }
 
 function normalizeStoryState(value) {
@@ -260,20 +286,31 @@ export function makeShortItem(entryData, existingEl) {
   if (hasSlides && slideCount > 0) {
     var slideWrap = doc.createElement('div')
     slideWrap.className = 'slideshow-container'
-    var images = []
+    var slides = []
     var dots = []
     var encId = encodeURIComponent(entryData.id)
     for (var i = 0; i < slideCount; i += 1) {
-      var img = doc.createElement('img')
-      img.className = 'slide-image'
-      img.alt = ''
-      img.decoding = 'async'
-      img.loading = 'lazy'
-      img.src = '/api/media/slide/' + encId + '/' + String(i)
-      slideWrap.appendChild(img)
-      images.push(img)
+      var slideType = mediaTypeForSlide(entryData, i)
+      var slide = slideType === 'video' ? doc.createElement('video') : doc.createElement('img')
+      slide.className = slideType === 'video' ? 'slide-image slide-video' : 'slide-image'
+      slide.dataset.slideType = slideType
+      if (slideType === 'video') {
+        slide.preload = 'metadata'
+        slide.playsInline = true
+        slide.controls = false
+        slide.muted = _state.muted
+        slide.loop = false
+        slide.setAttribute('playsinline', '')
+      } else {
+        slide.alt = ''
+        slide.decoding = 'async'
+        slide.loading = 'lazy'
+      }
+      slide.src = '/api/media/slide/' + encId + '/' + String(i)
+      slideWrap.appendChild(slide)
+      slides.push(slide)
     }
-    slideshow = { container: slideWrap, images: images, dots: dots, count: slideCount, index: 0, timer: 0, counter: null, audio: null }
+    slideshow = { container: slideWrap, slides: slides, images: slides, dots: dots, count: slideCount, index: 0, timer: 0, counter: null, audio: null, playing: false }
     wrapper.appendChild(slideWrap)
     var slideshowAudioSrc = entryData.audioUrl
     if (!slideshowAudioSrc && entryData.platform === 'tiktok' && mediaKind === 'slideshow') {
@@ -543,10 +580,10 @@ export function makeShortItem(entryData, existingEl) {
       }
     })
     attachShortVideoDebug(entryObj)
-  } else if (slideshow && slideshow.images && slideshow.images.length) {
-    var firstImg = slideshow.images[0]
-    if (firstImg) {
-      firstImg.addEventListener('error', function () {
+  } else if (slideshow && slideshow.slides && slideshow.slides.length) {
+    var firstSlide = slideshow.slides[0]
+    if (firstSlide) {
+      firstSlide.addEventListener('error', function () {
         wrapper.classList.add('shorts-video-error')
         showToast(t('shorts_media_unavailable_skipping', 'Short media unavailable, skipping'))
         var cur = _fns.currentData()

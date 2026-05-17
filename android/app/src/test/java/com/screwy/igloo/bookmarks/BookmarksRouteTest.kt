@@ -6,6 +6,7 @@ import com.screwy.igloo.data.entity.FeedItemEntity
 import com.screwy.igloo.data.entity.VideoEntity
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.media.OwnerKind
+import com.screwy.igloo.ui.component.MediaType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -177,6 +178,33 @@ class BookmarksRouteTest {
         ).initialThumbnailUri("https://igloo.example")
 
         assertEquals(MediaUri.Remote("https://igloo.example/api/media/slide/tiktok_slide/0"), uri)
+    }
+
+    @Test
+    fun mixed_tweet_bookmark_uses_feed_media_shape_when_video_stub_is_empty() {
+        val item = tweetBookmark(
+            tweetId = "sample_tweet_mixed",
+            mediaJson = """[{"type":"photo"},{"type":"video"},{"type":"video"}]""",
+        ).copy(
+            video = VideoEntity(
+                videoId = "sample_tweet_mixed",
+                channelId = "twitter_sample_author",
+                mediaKind = "",
+                slideCount = 0,
+            ),
+        )
+
+        val playerItem = toBookmarkMomentItem(item, baseUrl = "https://igloo.example")
+
+        assertEquals(MediaType.Slideshow, bookmarkMediaType(item))
+        assertEquals("slideshow", playerItem.mediaKind)
+        assertEquals(3, playerItem.slideCount)
+        assertEquals("sample_tweet_mixed", playerItem.mediaOwnerId)
+        assertEquals(OwnerKind.Tweet, playerItem.ownerKind)
+        assertEquals(
+            MediaUri.Remote("https://igloo.example/api/media/slide/sample_tweet_mixed/0"),
+            playerItem.fallbackThumbnailUri,
+        )
     }
 
     @Test

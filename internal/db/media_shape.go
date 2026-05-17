@@ -12,33 +12,46 @@ type derivedMediaShape struct {
 	Kind       string
 	SlideCount int
 	HasAudio   bool
+	MediaTypes []string
 }
 
 func deriveMediaShapeFromPaths(paths []string) derivedMediaShape {
-	imageCount := 0
-	videoCount := 0
+	mediaTypes := make([]string, 0, len(paths))
 	hasAudio := false
 
 	for _, path := range paths {
-		switch strings.ToLower(filepath.Ext(path)) {
-		case ".jpg", ".jpeg", ".png", ".webp":
-			imageCount++
-		case ".mp3", ".m4a", ".ogg", ".aac", ".wav":
+		mediaType, audio := mediaTypeFromPath(path)
+		if audio {
 			hasAudio = true
-		case ".mp4", ".webm", ".mkv", ".mov", ".m4v", ".gif":
-			videoCount++
+			continue
+		}
+		if mediaType != "" {
+			mediaTypes = append(mediaTypes, mediaType)
 		}
 	}
 
 	switch {
-	case imageCount > 1:
-		return derivedMediaShape{Kind: "slideshow", SlideCount: imageCount, HasAudio: hasAudio}
-	case imageCount == 1 && videoCount == 0:
-		return derivedMediaShape{Kind: "image", SlideCount: 1, HasAudio: hasAudio}
-	case videoCount > 0:
-		return derivedMediaShape{Kind: "video", SlideCount: 0, HasAudio: hasAudio}
+	case len(mediaTypes) > 1:
+		return derivedMediaShape{Kind: "slideshow", SlideCount: len(mediaTypes), HasAudio: hasAudio, MediaTypes: mediaTypes}
+	case len(mediaTypes) == 1 && mediaTypes[0] == "image":
+		return derivedMediaShape{Kind: "image", SlideCount: 1, HasAudio: hasAudio, MediaTypes: mediaTypes}
+	case len(mediaTypes) == 1 && mediaTypes[0] == "video":
+		return derivedMediaShape{Kind: "video", SlideCount: 0, HasAudio: hasAudio, MediaTypes: mediaTypes}
 	default:
 		return derivedMediaShape{}
+	}
+}
+
+func mediaTypeFromPath(path string) (mediaType string, audio bool) {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".image":
+		return "image", false
+	case ".mp3", ".m4a", ".ogg", ".aac", ".wav":
+		return "", true
+	case ".mp4", ".webm", ".mkv", ".mov", ".m4v":
+		return "video", false
+	default:
+		return "", false
 	}
 }
 

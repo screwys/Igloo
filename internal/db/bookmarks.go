@@ -234,6 +234,7 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 			if shape, err := db.deriveBookmarkMediaShape(v.VideoID); err == nil && shape.Kind != "" {
 				v.MediaKind = shape.Kind
 				v.MediaSlideCount = shape.SlideCount
+				v.MediaTypes = shape.MediaTypes
 			} else {
 				switch firstMediaType {
 				case "photo":

@@ -465,3 +465,56 @@ func TestGetBookmarksDerivesTikTokSlideshowFromFeedMediaFiles(t *testing.T) {
 		t.Fatalf("MediaSlideCount = %d, want 4", got)
 	}
 }
+
+func TestGetBookmarksDerivesMixedTweetSlideshowFromFeedMediaFiles(t *testing.T) {
+	d := openFreshTestDB(t)
+
+	const (
+		videoID   = "sample_tweet_mixed_media"
+		channelID = "twitter_sample_author"
+	)
+
+	if err := d.ExecRaw(`
+		INSERT INTO videos (video_id, channel_id, title, duration, file_path, published_at)
+		VALUES (?, ?, 'X post sample_tweet_mixed_media', 0, '', 1)
+	`, videoID, channelID); err != nil {
+		t.Fatalf("insert video stub: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, source_handle, author_handle, media_json, published_at, fetched_at)
+		VALUES (?, 'sample_source', 'sample_author', '[{"type":"photo"},{"type":"video"},{"type":"video"}]', 1, 1)
+	`, videoID); err != nil {
+		t.Fatalf("insert feed item: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO bookmarks (user_id, video_id, category_id, bookmarked_at)
+		VALUES ('admin', ?, 0, 2)
+	`, videoID); err != nil {
+		t.Fatalf("insert bookmark: %v", err)
+	}
+	if err := d.InsertMediaFileBatch([]model.MediaFile{
+		{OwnerType: "feed_media", OwnerID: videoID, MediaIndex: 0, FilePath: "media/twitter/sample_source/sample_tweet_mixed_media_0.jpg", MediaType: "photo"},
+		{OwnerType: "feed_media", OwnerID: videoID, MediaIndex: 1, FilePath: "media/twitter/sample_source/sample_tweet_mixed_media_1.mp4", MediaType: "video"},
+		{OwnerType: "feed_media", OwnerID: videoID, MediaIndex: 2, FilePath: "media/twitter/sample_source/sample_tweet_mixed_media_2.mp4", MediaType: "video"},
+	}); err != nil {
+		t.Fatalf("insert media files: %v", err)
+	}
+
+	bookmarks, err := d.GetBookmarks(GetBookmarksOpts{UserID: "admin", Limit: 10})
+	if err != nil {
+		t.Fatalf("GetBookmarks: %v", err)
+	}
+	if len(bookmarks) != 1 {
+		t.Fatalf("expected 1 bookmark, got %d", len(bookmarks))
+	}
+	if got := bookmarks[0].MediaKind; got != "slideshow" {
+		t.Fatalf("MediaKind = %q, want slideshow", got)
+	}
+	if got := bookmarks[0].MediaSlideCount; got != 3 {
+		t.Fatalf("MediaSlideCount = %d, want 3", got)
+	}
+	wantTypes := []string{"image", "video", "video"}
+	if got := bookmarks[0].MediaTypes; strings.Join(got, ",") != strings.Join(wantTypes, ",") {
+		t.Fatalf("MediaTypes = %#v, want %#v", got, wantTypes)
+	}
+}

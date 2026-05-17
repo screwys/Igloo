@@ -285,6 +285,7 @@ internal fun MomentPage(
                 onAutoAdvance = onAutoAdvance,
                 manualAdvanceTick = manualSlideAdvanceTick,
                 onManualAdvanceAtEnd = onAutoAdvance,
+                muted = muted,
                 modifier = Modifier.fillMaxSize(),
             )
             MomentMediaMode.Video -> {

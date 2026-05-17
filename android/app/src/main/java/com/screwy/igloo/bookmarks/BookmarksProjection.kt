@@ -1,8 +1,9 @@
 package com.screwy.igloo.bookmarks
 
-import com.screwy.igloo.data.stripPlatformPrefix
 import com.screwy.igloo.data.entity.BookmarkItem
 import com.screwy.igloo.data.entity.FeedItemEntity
+import com.screwy.igloo.data.entity.VideoEntity
+import com.screwy.igloo.data.stripPlatformPrefix
 import com.screwy.igloo.feed.parseFeedMediaDescriptors
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.media.OwnerKind
@@ -13,13 +14,12 @@ import com.screwy.igloo.ui.component.normalizeHandle
 
 /**
  * Bookmark media type — videos resolve directly off `videos.media_kind` /
- * `slide_count`; tweets fall back to the descriptor-count heuristic that's been
- * the bookmark module's slideshow detector (multi-photo tweet = slideshow,
- * single photo = image, else video/gif).
+ * `slide_count` unless the videos row is an empty bookmark stub; tweets fall
+ * back to descriptor count and kind so mixed photo/video posts stay slideshows.
  */
 internal fun bookmarkMediaType(item: BookmarkItem) = when (val video = item.video) {
     null -> mediaTypeFor(bookmarkFeedMediaKind(item), bookmarkFeedSlideCount(item))
-    else -> mediaTypeFor(video.mediaMode?.takeIf { it.isNotBlank() } ?: video.mediaKind, video.slideCount)
+    else -> mediaTypeFor(bookmarkEffectiveMediaKind(item, video), bookmarkEffectiveSlideCount(item, video))
 }
 
 internal fun bookmarkPublishedAt(item: BookmarkItem): Long =
@@ -57,8 +57,8 @@ internal fun toBookmarkMomentItem(item: BookmarkItem, baseUrl: String = ""): Mom
         likeCount = likeCount,
         isLiked = false,
         isBookmarked = true,
-        mediaKind = item.video?.mediaMode?.takeIf { it.isNotBlank() } ?: item.video?.mediaKind ?: feedMediaKind,
-        slideCount = item.video?.slideCount ?: feedSlideCount,
+        mediaKind = item.video?.let { video -> bookmarkEffectiveMediaKind(item, video) } ?: feedMediaKind,
+        slideCount = item.video?.let { video -> bookmarkEffectiveSlideCount(item, video) } ?: feedSlideCount,
         publishedAt = bookmarkPublishedAt(item),
         ownerKind = bookmarkOwnerKind(item),
         fallbackThumbnailUri = item.initialThumbnailUri(baseUrl),
@@ -151,6 +151,28 @@ private fun bookmarkFeedMediaDescriptors(item: BookmarkItem) = item.feedItem?.le
         .ifEmpty { parseFeedMediaDescriptors(feedItem.quoteMediaJson) }
 }.orEmpty()
 
+private fun bookmarkEffectiveMediaKind(item: BookmarkItem, video: VideoEntity): String? {
+    val videoKind = video.mediaMode?.takeIf { it.isNotBlank() } ?: video.mediaKind?.takeIf { it.isNotBlank() }
+    val feedKind = bookmarkFeedMediaKind(item)
+    val feedSlideCount = bookmarkFeedSlideCount(item)
+    val videoSlideCount = video.slideCount.coerceAtLeast(0)
+    return if (feedKind != null && (videoKind == null || (feedSlideCount > 1 && videoSlideCount < feedSlideCount))) {
+        feedKind
+    } else {
+        videoKind ?: feedKind
+    }
+}
+
+private fun bookmarkEffectiveSlideCount(item: BookmarkItem, video: VideoEntity): Int {
+    val feedSlideCount = bookmarkFeedSlideCount(item)
+    val videoSlideCount = video.slideCount.coerceAtLeast(0)
+    return when {
+        feedSlideCount > 1 && videoSlideCount < feedSlideCount -> feedSlideCount
+        videoSlideCount > 0 -> videoSlideCount
+        else -> feedSlideCount
+    }
+}
+
 private fun preferredBookmarkDisplayName(
     primary: String?,
     channelName: String?,
@@ -170,8 +192,8 @@ internal fun BookmarkItem.initialThumbnailUri(baseUrl: String): MediaUri {
         mediaId = bookmarkMediaOwnerId(this),
         ownerKind = ownerKind,
         thumbnailPath = video?.thumbnailPath,
-        mediaKind = video?.mediaMode?.takeIf { it.isNotBlank() } ?: video?.mediaKind ?: bookmarkFeedMediaKind(this),
-        slideCount = video?.slideCount ?: bookmarkFeedSlideCount(this),
+        mediaKind = video?.let { bookmarkEffectiveMediaKind(this, it) } ?: bookmarkFeedMediaKind(this),
+        slideCount = video?.let { bookmarkEffectiveSlideCount(this, it) } ?: bookmarkFeedSlideCount(this),
         allowServerThumbnailFallback = true,
     ).initialThumbnailUri(baseUrl)
 }

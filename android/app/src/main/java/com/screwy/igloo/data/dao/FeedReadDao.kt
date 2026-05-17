@@ -416,7 +416,12 @@ interface FeedReadDao {
                 fi.channel_id = :channelId
                 OR (
                     :channelHandle != ''
-                    AND LOWER(LTRIM(fi.author_handle, '@')) = LOWER(LTRIM(:channelHandle, '@'))
+                    AND (
+                        LOWER(LTRIM(COALESCE(fi.author_handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
+                        OR LOWER(LTRIM(COALESCE(fi.source_handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
+                        OR LOWER(LTRIM(COALESCE(fi.retweeted_by_handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
+                        OR LOWER(LTRIM(COALESCE(fi.quote_author_handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
+                    )
                 )
             )
             AND COALESCE(fi.is_ghost, 0) = 0

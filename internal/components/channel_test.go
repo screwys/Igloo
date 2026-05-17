@@ -73,6 +73,32 @@ func TestVideoCardRender(t *testing.T) {
 	}
 }
 
+func TestVideoCardRendersMediaTypesForMixedSlides(t *testing.T) {
+	v := model.Video{
+		VideoID:         "sample_tweet_mixed_media",
+		ChannelID:       "twitter_sample_author",
+		Title:           "Mixed media",
+		Platform:        "twitter",
+		MediaKind:       "slideshow",
+		MediaSlideCount: 3,
+		MediaTypes:      []string{"image", "video", "video"},
+	}
+
+	var buf bytes.Buffer
+	if err := VideoCard(newTestPageProps(), v).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	if !strings.Contains(html, `data-media-types=`) {
+		t.Fatal("expected media types data attribute")
+	}
+	for _, value := range []string{"image", "video"} {
+		if !strings.Contains(html, value) {
+			t.Fatalf("expected %q in rendered media types, got %s", value, html)
+		}
+	}
+}
+
 func TestVideoCardRendersInstagramCoauthorsAsTaggedAccounts(t *testing.T) {
 	v := model.Video{
 		VideoID:      "instagram_post_POST123",

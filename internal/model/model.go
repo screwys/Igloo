@@ -149,7 +149,8 @@ type Video struct {
 	IsShortForm        bool
 	MediaKind          string // video|image|slideshow
 	MediaSlideCount    int
-	SourceKind         string // ""|story
+	MediaTypes         []string // image|video per slide for mixed local media
+	SourceKind         string   // ""|story
 	PlaybackPosition   float64
 	EagerLoad          bool // skip loading="lazy" for above-the-fold images
 	Metadata           *VideoMetadata
