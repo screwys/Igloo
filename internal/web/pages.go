@@ -876,6 +876,13 @@ func (s *Server) renderTwitterChannelFeed(w http.ResponseWriter, r *http.Request
 	if idx := strings.Index(channelID, "_"); idx >= 0 {
 		handle = channelID[idx+1:]
 	}
+	offset := 0
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			offset = n
+		}
+	}
+	pageSize := 40
 
 	user := userFromContext(r.Context())
 	username := ""
@@ -883,8 +890,25 @@ func (s *Server) renderTwitterChannelFeed(w http.ResponseWriter, r *http.Request
 		username = user.Username
 	}
 
-	items, _ := s.db.GetFeedItemsByAuthor(handle, 40)
+	items, _ := s.db.GetFeedItemsByAuthorPage(handle, pageSize+1, offset)
+	hasMore := len(items) > pageSize
+	if hasMore {
+		items = items[:pageSize]
+	}
 	items = feed.EnrichFeedItems(s.db, items, username)
+	nextPageURL := ""
+	if hasMore {
+		nextOffset := offset + len(items)
+		nextPageURL = fmt.Sprintf("/channels/%s?offset=%d", url.PathEscape(channelID), nextOffset)
+	}
+
+	p := s.pageProps(w, r)
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = components.FeedItemsPartial(p, items).Render(r.Context(), w)
+		_ = components.FeedScrollSentinel(nextPageURL).Render(r.Context(), w)
+		return
+	}
 
 	// Pick display name: prefer items where this handle is the author,
 	// then quote author, then fall back to @handle.
@@ -933,14 +957,17 @@ func (s *Server) renderTwitterChannelFeed(w http.ResponseWriter, r *http.Request
 		Profile:     profile,
 	}
 
-	p := s.pageProps(w, r)
 	p.PageTitle = displayName
-	p.PageBadge = fmt.Sprintf("%d posts", len(items))
+	if count, err := s.db.CountFeedItemsByAuthor(handle); err == nil {
+		p.PageBadge = fmt.Sprintf("%d posts", count)
+	} else {
+		p.PageBadge = fmt.Sprintf("%d posts", len(items))
+	}
 	p.ESBundle = "js/dist/feed.js"
 	p.Sidebar = s.mustBuildSidebar(r)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = components.FeedPage(p, items, false, "", false, false, xCh, "").Render(r.Context(), w)
+	_ = components.FeedPage(p, items, hasMore, nextPageURL, false, false, xCh, "").Render(r.Context(), w)
 }
 
 func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {

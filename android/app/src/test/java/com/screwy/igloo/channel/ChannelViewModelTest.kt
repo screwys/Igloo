@@ -5,6 +5,8 @@ import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.RoomTestSupport
 import com.screwy.igloo.data.entity.ChannelEntity
+import com.screwy.igloo.data.entity.FeedItemEntity
+import com.screwy.igloo.data.entity.FeedThreadContextEntity
 import com.screwy.igloo.data.entity.VideoEntity
 import com.screwy.igloo.media.OwnerKind
 import com.screwy.igloo.net.Reachability
@@ -101,6 +103,7 @@ class ChannelViewModelTest {
     private fun subscribe(vm: ChannelViewModel): Job = scope.launch {
         launch { vm.channel.collect {} }
         launch { vm.uiState.collect {} }
+        launch { vm.twitterRows.collect {} }
         launch { vm.momentThumbs.collect {} }
     }
 
@@ -270,6 +273,62 @@ class ChannelViewModelTest {
         assertEquals("@alice", vm.momentThumbs.value.single().authorHandle)
         assertEquals(OwnerKind.TikTokVideo, vm.momentThumbs.value.single().ownerKind)
         assertEquals("/thumbs/clip_1.jpg", vm.momentThumbs.value.single().thumbnailPath)
+    }
+
+    @Test fun twitterRows_attachConversationThreadsOnChannelProfiles() = runBlocking {
+        val channelId = "twitter_sample_author"
+        db.channelDao().upsert(ChannelEntity(
+            channelId = channelId,
+            name = "Sample Author",
+            platform = "twitter",
+            sourceId = "sample_author",
+        ))
+        db.feedItemDao().upsert(
+            listOf(
+                FeedItemEntity(
+                    tweetId = "root_1",
+                    authorHandle = "sample_author",
+                    channelId = channelId,
+                    bodyText = "root body",
+                    publishedAt = 100L,
+                    syncSeq = 1L,
+                ),
+                FeedItemEntity(
+                    tweetId = "reply_1",
+                    authorHandle = "sample_author",
+                    channelId = channelId,
+                    bodyText = "reply body",
+                    isReply = true,
+                    replyToHandle = "sample_author",
+                    replyToStatus = "root_1",
+                    publishedAt = 200L,
+                    syncSeq = 2L,
+                ),
+            ),
+        )
+        db.feedThreadContextDao().replaceForLeaf(
+            "reply_1",
+            listOf(
+                FeedThreadContextEntity(
+                    leafTweetId = "reply_1",
+                    rootTweetId = "root_1",
+                    ancestorTweetId = "root_1",
+                    ancestorOrder = 0,
+                ),
+            ),
+        )
+
+        val vm = newViewModel(channelId)
+        val sub = subscribe(vm)
+        val ok = withTimeoutOrNull(2_000L) {
+            while (vm.twitterRows.value.firstOrNull()?.row?.item?.tweetId != "reply_1") delay(10)
+            true
+        }
+        sub.cancel()
+
+        assertEquals(true, ok)
+        assertEquals(listOf("reply_1"), vm.twitterRows.value.map { it.row.item.tweetId })
+        assertEquals(listOf("root_1"), vm.twitterRows.value.single().chain.map { it.item.tweetId })
     }
 
     @Test fun resolveMentionAndNavigate_usesCurrentChannelPlatformForSyntheticRoutes() = runBlocking {

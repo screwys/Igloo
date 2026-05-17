@@ -14,6 +14,7 @@ import com.screwy.igloo.data.entity.ChannelEntity
 import com.screwy.igloo.data.entity.ChannelProfileEntity
 import com.screwy.igloo.data.entity.FeedRow
 import com.screwy.igloo.data.entity.StoryChannelItem
+import com.screwy.igloo.data.entity.ThreadedFeedRow
 import com.screwy.igloo.data.entity.VideoGridItem
 import com.screwy.igloo.data.entity.durationMs
 import com.screwy.igloo.media.ownerKindFromChannelId
@@ -36,6 +37,7 @@ import com.screwy.igloo.ui.component.storyRingState
 import com.screwy.igloo.ui.component.toBookmarkState
 import com.screwy.igloo.feed.FeedMediaGridModel
 import com.screwy.igloo.feed.FeedMediaModelStore
+import com.screwy.igloo.feed.attachThreadChains
 import com.screwy.igloo.feed.feedMediaCount
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flatMapLatest
@@ -43,6 +45,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -134,7 +137,7 @@ class ChannelViewModel(
      * Older locally cached rows can predate the server-enriched `channel_id`, so
      * pass the account handle as a secondary key.
      */
-    val twitterRows: StateFlow<List<FeedRow>> = channel
+    val twitterRows: StateFlow<List<ThreadedFeedRow>> = channel
         .flatMapLatest { display ->
             db.feedReadDao().channelFeedFlow(
                 channelId = channelId,
@@ -142,7 +145,9 @@ class ChannelViewModel(
                     ?: stripPlatformPrefix(channelId),
                 limit = TWITTER_FEED_LIMIT,
                 offset = 0,
-            )
+            ).mapLatest { rows ->
+                attachThreadChains(db.feedReadDao(), rows)
+            }
         }
         .stateIn(
             scope = viewModelScope,

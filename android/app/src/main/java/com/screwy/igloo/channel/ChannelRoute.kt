@@ -166,7 +166,7 @@ fun ChannelRoute(
                 val twitterRows by vm.twitterRows.collectAsStateWithLifecycle()
                 val mediaModels by vm.mediaModels.collectAsStateWithLifecycle()
                 val profileHeader = buildProfileHeader(
-                    authorDisplayNames = twitterRows.mapNotNull { it.item.authorDisplayName },
+                    authorDisplayNames = twitterRows.mapNotNull { it.row.item.authorDisplayName },
                 )
                 ChannelTwitterBody(
                     vm = vm,
@@ -304,7 +304,7 @@ fun ChannelRoute(
 @Composable
 private fun ChannelTwitterBody(
     vm: ChannelViewModel,
-    rows: List<FeedRow>,
+    rows: List<ThreadedFeedRow>,
     mutedHandles: Set<String>,
     mediaModels: Map<String, FeedMediaGridModel>,
     pendingBookmark: BookmarkTarget?,
@@ -319,10 +319,8 @@ private fun ChannelTwitterBody(
     onMediaOpen: (FeedRow, Int, FeedMediaGridModel) -> Unit,
     onQuoteOpen: (String) -> Unit,
 ) {
-    val threadedRows = remember(rows) { rows.map { ThreadedFeedRow(row = it, chain = emptyList()) } }
-
     NativeFeedSurface(
-        rows = threadedRows,
+        rows = rows,
         uiState = UiState.Data(Unit),
         isRefreshing = false,
         pendingBookmark = pendingBookmark,

@@ -1,10 +1,12 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/screwys/igloo/internal/model"
 )
@@ -73,6 +75,76 @@ func TestHandlePageChannelRendersTwitterChannelWithChannelsNavActive(t *testing.
 	html := rec.Body.String()
 	assertActiveNav(t, html, "/channels")
 	assertInactiveNav(t, html, "/feed")
+}
+
+func TestHandlePageTwitterChannelFeedPaginatesPastFirstChunk(t *testing.T) {
+	srv := newTestServer(t)
+	srv.staticV = func(path string) string { return "/static/" + path }
+	if err := srv.db.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "twitter_sample_author",
+		Platform:    "twitter",
+		Handle:      "sample_author",
+		DisplayName: "Sample Author",
+	}); err != nil {
+		t.Fatalf("UpsertChannelProfile: %v", err)
+	}
+
+	base := time.UnixMilli(1700000000000)
+	items := make([]model.FeedItem, 45)
+	for i := range items {
+		publishedAt := base.Add(time.Duration(i) * time.Minute)
+		items[i] = model.FeedItem{
+			TweetID:           fmt.Sprintf("sample_post_%02d", i+1),
+			AuthorHandle:      "sample_author",
+			AuthorDisplayName: "Sample Author",
+			BodyText:          "post body",
+			PublishedAt:       &publishedAt,
+		}
+	}
+	if _, err := srv.db.UpsertFeedItems(items); err != nil {
+		t.Fatalf("UpsertFeedItems: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/channels/twitter_sample_author", nil)
+	req.SetPathValue("channelID", "twitter_sample_author")
+	rec := httptest.NewRecorder()
+	srv.handlePageChannel(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	html := rec.Body.String()
+	if got := strings.Count(html, `data-tweet-id=`); got != 40 {
+		t.Fatalf("initial page tweet count = %d, want 40\n%s", got, html)
+	}
+	if !strings.Contains(html, `sample_post_45`) || strings.Contains(html, `sample_post_05`) {
+		t.Fatalf("initial page should contain newest chunk only\n%s", html)
+	}
+	if !strings.Contains(html, `hx-get="/channels/twitter_sample_author?offset=40"`) {
+		t.Fatalf("initial page missing next-page sentinel\n%s", html)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/channels/twitter_sample_author?offset=40", nil)
+	req.Header.Set("HX-Request", "true")
+	req.SetPathValue("channelID", "twitter_sample_author")
+	rec = httptest.NewRecorder()
+	srv.handlePageChannel(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("partial status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	html = rec.Body.String()
+	if got := strings.Count(html, `data-tweet-id=`); got != 5 {
+		t.Fatalf("partial page tweet count = %d, want 5\n%s", got, html)
+	}
+	for _, want := range []string{`sample_post_05`, `sample_post_01`} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("partial page missing %q\n%s", want, html)
+		}
+	}
+	if strings.Contains(html, `profile-card--hero`) || strings.Contains(html, `feed-scroll-sentinel`) {
+		t.Fatalf("final partial should contain only remaining feed rows\n%s", html)
+	}
 }
 
 func TestHandlePageShortsStartsAtOldestMoment(t *testing.T) {

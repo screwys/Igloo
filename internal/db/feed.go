@@ -662,8 +662,29 @@ func (db *DB) GetDisplayNamesForHandles(handles []string) (map[string]string, er
 
 // GetFeedItemsByAuthor returns feed items by author or source handle, newest first.
 func (db *DB) GetFeedItemsByAuthor(handle string, limit int) ([]model.FeedItem, error) {
+	return db.GetFeedItemsByAuthorPage(handle, limit, 0)
+}
+
+// CountFeedItemsByAuthor returns the total locally stored feed rows for a handle.
+func (db *DB) CountFeedItemsByAuthor(handle string) (int, error) {
+	var count int
+	err := db.conn.QueryRow(`
+		SELECT COUNT(*)
+		FROM feed_items
+		WHERE LOWER(author_handle) = LOWER(?) OR LOWER(source_handle) = LOWER(?) OR LOWER(quote_author_handle) = LOWER(?)
+	`, handle, handle, handle).Scan(&count)
+	return count, err
+}
+
+// GetFeedItemsByAuthorPage returns a bounded page of feed items by author or
+// source handle, newest first. The caller owns pagination; this method is not a
+// retention policy.
+func (db *DB) GetFeedItemsByAuthorPage(handle string, limit int, offset int) ([]model.FeedItem, error) {
 	if limit <= 0 {
 		limit = 40
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	rows, err := db.conn.Query(`
 		SELECT tweet_id, COALESCE(source_handle,''), author_handle,
@@ -685,8 +706,8 @@ func (db *DB) GetFeedItemsByAuthor(handle string, limit int) ([]model.FeedItem, 
 		FROM feed_items
 		WHERE LOWER(author_handle) = LOWER(?) OR LOWER(source_handle) = LOWER(?) OR LOWER(quote_author_handle) = LOWER(?)
 		ORDER BY published_at DESC
-		LIMIT ?
-	`, handle, handle, handle, limit)
+		LIMIT ? OFFSET ?
+	`, handle, handle, handle, limit, offset)
 	if err != nil {
 		return nil, err
 	}
