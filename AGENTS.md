@@ -91,4 +91,9 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 - Do not run a separate full `android/test.sh` after `scripts/dev/test-full.sh`
   just to duplicate full-suite proof; run it separately when debugging Android
   failures or when Android-only output is needed.
-- For Android build, install, launcher, signing, SDK, Gradle, or device-script changes, `android/build.sh` is the required proof because it builds, installs, and relaunches on the device.
+ If any file under `android/` changes, `android/build.sh` is the required final
+  Android proof before final response or commit. It builds, installs, and
+  relaunches the app on the device. Do not treat `android/test.sh`, a focused
+  Gradle test, or `BUILD SUCCESSFUL` from compilation as a substitute. If
+  `android/build.sh` cannot run because no device or Android tool is available,
+  say that explicitly in the final response.
