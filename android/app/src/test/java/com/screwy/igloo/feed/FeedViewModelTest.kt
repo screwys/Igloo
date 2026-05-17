@@ -259,7 +259,7 @@ class FeedViewModelTest {
         sub.cancel()
         assertEquals(true, loaded)
         assertEquals("t520", vm.rows.value.first().row.item.tweetId)
-        assertEquals("t21", vm.rows.value.last().row.item.tweetId)
+        assertEquals("t321", vm.rows.value.last().row.item.tweetId)
     }
 
     @Test fun sideTableActionStateUpdatesVisibleSnapshot() = runBlocking {

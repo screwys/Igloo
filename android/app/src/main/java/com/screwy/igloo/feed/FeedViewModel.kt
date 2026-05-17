@@ -457,7 +457,7 @@ class FeedViewModel(
     }
 
     companion object {
-        const val FEED_LIMIT: Int = 500
+        const val FEED_LIMIT: Int = 200
         private const val INITIAL_MEDIA_WARM_ROWS: Int = 16
         private const val NEW_POST_SCAN_LIMIT: Int = 80
     }
