@@ -83,7 +83,7 @@ import com.screwy.igloo.ui.theme.iglooColors
 import org.koin.compose.koinInject
 
 /**
- * Drawer body. Identity row, primary navigation, filterable Accounts
+ * Drawer body. Identity row, wide-only primary navigation, filterable Accounts
  * (Starred / All), then Settings / Logs / Logout. Accounts fill remaining
  * vertical space via `Modifier.weight(1f)` on the LazyColumn.
  */
@@ -100,6 +100,7 @@ fun AppDrawer(
             onCloseDrawer = onCloseDrawer,
             onLogoutClick = onLogoutClick,
             dense = false,
+            showPrimaryNavigation = false,
         )
     }
 }
@@ -124,6 +125,7 @@ fun PermanentAppSidebar(
             onCloseDrawer = {},
             onLogoutClick = onLogoutClick,
             dense = true,
+            showPrimaryNavigation = true,
         )
     }
 }
@@ -135,6 +137,7 @@ private fun AppDrawerContent(
     onCloseDrawer: () -> Unit,
     onLogoutClick: () -> Unit,
     dense: Boolean,
+    showPrimaryNavigation: Boolean,
 ) {
     val authRepo: AuthRepo = koinInject()
     val channelReadDao: ChannelReadDao = koinInject()
@@ -184,6 +187,7 @@ private fun AppDrawerContent(
     val rowModifier = if (dense) Modifier.height(44.dp) else Modifier
     val outerVerticalPadding = if (dense) 8.dp else 12.dp
     val rowSpacing = if (dense) 4.dp else 8.dp
+    val primaryDestinations = drawerPrimaryDestinations(showPrimaryNavigation)
 
     Column(
         modifier = Modifier
@@ -207,58 +211,60 @@ private fun AppDrawerContent(
             }
             HorizontalDivider()
 
-            NavigationDrawerItem(
-                modifier = rowModifier,
-                label = { Text(stringResource(R.string.nav_feed)) },
-                icon = { Icon(Icons.Default.DynamicFeed, contentDescription = null) },
-                selected = drawerDestinationSelected(currentRoute, IglooDestination.Feed),
-                onClick = {
-                    navigator.openDestination(IglooDestination.Feed, IglooNavigationSource.Drawer)
-                },
-                colors = NavigationDrawerItemDefaults.colors(),
-            )
-            NavigationDrawerItem(
-                modifier = rowModifier,
-                label = { Text(stringResource(R.string.nav_videos)) },
-                icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null) },
-                selected = drawerDestinationSelected(currentRoute, IglooDestination.Videos),
-                onClick = {
-                    navigator.openDestination(IglooDestination.Videos, IglooNavigationSource.Drawer)
-                },
-                colors = NavigationDrawerItemDefaults.colors(),
-            )
-            NavigationDrawerItem(
-                modifier = rowModifier,
-                label = { Text(stringResource(R.string.nav_moments)) },
-                icon = { Icon(Icons.Default.PlayCircle, contentDescription = null) },
-                selected = drawerDestinationSelected(currentRoute, IglooDestination.Moments),
-                onClick = {
-                    navigator.openDestination(IglooDestination.Moments, IglooNavigationSource.Drawer)
-                },
-                colors = NavigationDrawerItemDefaults.colors(),
-            )
-            NavigationDrawerItem(
-                modifier = rowModifier,
-                label = { Text(stringResource(R.string.nav_bookmarks)) },
-                icon = { Icon(Icons.Default.Bookmark, contentDescription = null) },
-                selected = drawerDestinationSelected(currentRoute, IglooDestination.Bookmarks),
-                onClick = {
-                    navigator.openDestination(IglooDestination.Bookmarks, IglooNavigationSource.Drawer)
-                },
-                colors = NavigationDrawerItemDefaults.colors(),
-            )
-            NavigationDrawerItem(
-                modifier = rowModifier,
-                label = { Text(stringResource(R.string.nav_liked)) },
-                icon = { Icon(Icons.Default.Favorite, contentDescription = null) },
-                selected = drawerDestinationSelected(currentRoute, IglooDestination.Liked),
-                onClick = {
-                    navigator.openDestination(IglooDestination.Liked, IglooNavigationSource.Drawer)
-                },
-                colors = NavigationDrawerItemDefaults.colors(),
-            )
+            if (primaryDestinations.isNotEmpty()) {
+                NavigationDrawerItem(
+                    modifier = rowModifier,
+                    label = { Text(stringResource(R.string.nav_feed)) },
+                    icon = { Icon(Icons.Default.DynamicFeed, contentDescription = null) },
+                    selected = drawerDestinationSelected(currentRoute, IglooDestination.Feed),
+                    onClick = {
+                        navigator.openDestination(IglooDestination.Feed, IglooNavigationSource.Drawer)
+                    },
+                    colors = NavigationDrawerItemDefaults.colors(),
+                )
+                NavigationDrawerItem(
+                    modifier = rowModifier,
+                    label = { Text(stringResource(R.string.nav_videos)) },
+                    icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null) },
+                    selected = drawerDestinationSelected(currentRoute, IglooDestination.Videos),
+                    onClick = {
+                        navigator.openDestination(IglooDestination.Videos, IglooNavigationSource.Drawer)
+                    },
+                    colors = NavigationDrawerItemDefaults.colors(),
+                )
+                NavigationDrawerItem(
+                    modifier = rowModifier,
+                    label = { Text(stringResource(R.string.nav_moments)) },
+                    icon = { Icon(Icons.Default.PlayCircle, contentDescription = null) },
+                    selected = drawerDestinationSelected(currentRoute, IglooDestination.Moments),
+                    onClick = {
+                        navigator.openDestination(IglooDestination.Moments, IglooNavigationSource.Drawer)
+                    },
+                    colors = NavigationDrawerItemDefaults.colors(),
+                )
+                NavigationDrawerItem(
+                    modifier = rowModifier,
+                    label = { Text(stringResource(R.string.nav_bookmarks)) },
+                    icon = { Icon(Icons.Default.Bookmark, contentDescription = null) },
+                    selected = drawerDestinationSelected(currentRoute, IglooDestination.Bookmarks),
+                    onClick = {
+                        navigator.openDestination(IglooDestination.Bookmarks, IglooNavigationSource.Drawer)
+                    },
+                    colors = NavigationDrawerItemDefaults.colors(),
+                )
+                NavigationDrawerItem(
+                    modifier = rowModifier,
+                    label = { Text(stringResource(R.string.nav_liked)) },
+                    icon = { Icon(Icons.Default.Favorite, contentDescription = null) },
+                    selected = drawerDestinationSelected(currentRoute, IglooDestination.Liked),
+                    onClick = {
+                        navigator.openDestination(IglooDestination.Liked, IglooNavigationSource.Drawer)
+                    },
+                    colors = NavigationDrawerItemDefaults.colors(),
+                )
 
-            HorizontalDivider()
+                HorizontalDivider()
+            }
 
             Text(
                 text = stringResource(R.string.drawer_accounts).uppercase(),
@@ -373,6 +379,17 @@ private fun LazyListScope.platformSection(
         }
     }
 }
+
+private val WideDrawerPrimaryDestinations = listOf(
+    IglooDestination.Feed,
+    IglooDestination.Videos,
+    IglooDestination.Moments,
+    IglooDestination.Bookmarks,
+    IglooDestination.Liked,
+)
+
+internal fun drawerPrimaryDestinations(showPrimaryNavigation: Boolean): List<IglooDestination> =
+    if (showPrimaryNavigation) WideDrawerPrimaryDestinations else emptyList()
 
 internal fun drawerDestinationSelected(currentRoute: String?, destination: IglooDestination): Boolean {
     val route = currentRoute?.trim().orEmpty()

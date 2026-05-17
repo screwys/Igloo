@@ -111,6 +111,24 @@ class AppDrawerTest {
     }
 
     @Test
+    fun primary_drawer_destinations_are_wide_only() {
+        assertEquals(
+            emptyList<IglooDestination>(),
+            drawerPrimaryDestinations(showPrimaryNavigation = false),
+        )
+        assertEquals(
+            listOf(
+                IglooDestination.Feed,
+                IglooDestination.Videos,
+                IglooDestination.Moments,
+                IglooDestination.Bookmarks,
+                IglooDestination.Liked,
+            ),
+            drawerPrimaryDestinations(showPrimaryNavigation = true),
+        )
+    }
+
+    @Test
     fun drawer_channel_selection_only_matches_current_channel_route() {
         assertTrue(
             drawerChannelSelected(
