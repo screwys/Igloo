@@ -66,6 +66,82 @@ func TestBuildSnapshot_DiversityBreaksRelatedContentClumps(t *testing.T) {
 	}
 }
 
+func TestBuildSnapshot_HidesNearbyOriginalWhenPureRepostIsClose(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	publishedAt := now.Add(-time.Hour).UnixMilli()
+	in := []db.PreDiversitySnapshotRow{
+		{TweetID: "original", AuthorHandle: "sample_author", SourceHandle: "sample_author", ContentHash: "same_content", PublishedAtMs: publishedAt, BaseScore: 100, DecayFactor: 1},
+		{TweetID: "sample_repost", AuthorHandle: "sample_author", SourceHandle: "sample_reposter", ContentHash: "same_content", IsRetweet: true, PublishedAtMs: publishedAt + int64(time.Hour/time.Millisecond), BaseScore: 99, DecayFactor: 1},
+	}
+	out := BuildSnapshot(in, now)
+	if got, want := snapshotIDs(out), []string{"sample_repost"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshot IDs = %v, want %v", got, want)
+	}
+	if out[0].RankPosition != 1 {
+		t.Fatalf("remaining repost rank_position = %d, want 1", out[0].RankPosition)
+	}
+}
+
+func TestBuildSnapshot_KeepsOriginalWhenPureRepostIsOutsideTimeWindow(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	publishedAt := now.Add(-12 * time.Hour).UnixMilli()
+	in := []db.PreDiversitySnapshotRow{
+		{TweetID: "original", AuthorHandle: "sample_author", SourceHandle: "sample_author", ContentHash: "same_content", PublishedAtMs: publishedAt, BaseScore: 100, DecayFactor: 1},
+		{TweetID: "sample_repost_later", AuthorHandle: "sample_author", SourceHandle: "sample_reposter", ContentHash: "same_content", IsRetweet: true, PublishedAtMs: publishedAt + int64(nearbyRepostMergeWindow/time.Millisecond) + 1, BaseScore: 99, DecayFactor: 1},
+	}
+	out := BuildSnapshot(in, now)
+	if !snapshotHasID(out, "original") || !snapshotHasID(out, "sample_repost_later") {
+		t.Fatalf("expected original and late repost to remain, got %v", snapshotIDs(out))
+	}
+}
+
+func TestBuildSnapshot_KeepsOriginalWhenPureRepostIsOutsideRankWindow(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	publishedAt := now.Add(-time.Hour).UnixMilli()
+	in := []db.PreDiversitySnapshotRow{
+		{TweetID: "original", AuthorHandle: "sample_author", SourceHandle: "sample_author", ContentHash: "same_content", PublishedAtMs: publishedAt, BaseScore: 400, DecayFactor: 1},
+	}
+	for i := 0; i <= nearbyRepostMergeRankDistance; i++ {
+		in = append(in, db.PreDiversitySnapshotRow{
+			TweetID:       fmt.Sprintf("filler_%03d", i),
+			AuthorHandle:  fmt.Sprintf("filler_author_%03d", i),
+			SourceHandle:  fmt.Sprintf("filler_source_%03d", i),
+			ContentHash:   fmt.Sprintf("filler_hash_%03d", i),
+			PublishedAtMs: publishedAt,
+			BaseScore:     399 - float64(i),
+			DecayFactor:   1,
+		})
+	}
+	in = append(in, db.PreDiversitySnapshotRow{
+		TweetID:       "sample_repost_b",
+		AuthorHandle:  "sample_author",
+		SourceHandle:  "sample_reposter",
+		ContentHash:   "same_content",
+		IsRetweet:     true,
+		PublishedAtMs: publishedAt + int64(time.Hour/time.Millisecond),
+		BaseScore:     100,
+		DecayFactor:   1,
+	})
+
+	out := BuildSnapshot(in, now)
+	if !snapshotHasID(out, "original") || !snapshotHasID(out, "sample_repost_b") {
+		t.Fatalf("expected original and distant repost to remain, got %v", snapshotIDs(out))
+	}
+}
+
+func TestBuildSnapshot_KeepsOriginalForQuoteRetweet(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	publishedAt := now.Add(-time.Hour).UnixMilli()
+	in := []db.PreDiversitySnapshotRow{
+		{TweetID: "original", AuthorHandle: "sample_author", SourceHandle: "sample_author", ContentHash: "same_content", PublishedAtMs: publishedAt, BaseScore: 100, DecayFactor: 1},
+		{TweetID: "sample_quote_repost", AuthorHandle: "sample_author", SourceHandle: "sample_reposter", ContentHash: "same_content", IsRetweet: true, QuoteTweetID: "quoted_status", PublishedAtMs: publishedAt + int64(time.Hour/time.Millisecond), BaseScore: 99, DecayFactor: 1},
+	}
+	out := BuildSnapshot(in, now)
+	if !snapshotHasID(out, "original") || !snapshotHasID(out, "sample_quote_repost") {
+		t.Fatalf("expected original and quote repost to remain, got %v", snapshotIDs(out))
+	}
+}
+
 func TestBuildSnapshot_EmptyInput(t *testing.T) {
 	out := BuildSnapshot(nil, time.Unix(0, 0))
 	if out != nil {
@@ -309,6 +385,23 @@ func firstSnapshotDiff(got, want []db.SnapshotRow) string {
 		}
 	}
 	return "none"
+}
+
+func snapshotIDs(rows []db.SnapshotRow) []string {
+	ids := make([]string, len(rows))
+	for i, row := range rows {
+		ids[i] = row.TweetID
+	}
+	return ids
+}
+
+func snapshotHasID(rows []db.SnapshotRow, id string) bool {
+	for _, row := range rows {
+		if row.TweetID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func absFloat(x float64) float64 {

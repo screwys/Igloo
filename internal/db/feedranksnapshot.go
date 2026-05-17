@@ -309,6 +309,10 @@ type PreDiversitySnapshotRow struct {
 	AuthorHandle      string
 	SourceHandle      string
 	RelatedContentKey string
+	ContentHash       string
+	IsRetweet         bool
+	QuoteTweetID      string
+	PublishedAtMs     int64
 	BaseScore         float64
 	DecayFactor       float64
 	FreshnessBonus    float64
@@ -319,9 +323,12 @@ type PreDiversitySnapshotRow struct {
 // breakdown, ordered by raw (base*decay + freshness) DESC. This is the input
 // to the Go-side diversity + jitter pass that produces the snapshot.
 //
-// Filters mirror ListRankedFeedItems: muted accounts excluded, seen items
-// excluded, canonical items only, retweet/quote dedup applied, and zero-interest
-// items past the freshness window dropped.
+// Filters mirror the main-feed ranked snapshot path: muted accounts excluded,
+// seen items excluded, canonical items plus pure reposts, retweet/quote filters
+// applied, and zero-interest items past the freshness window dropped. Pure
+// reposts stay in the candidate set so the snapshot presentation layer can
+// decide whether a nearby repost should own the main-feed card without
+// rewriting stored canonical identity.
 func (db *DB) ListPreDiversityRanked(username string) ([]PreDiversitySnapshotRow, error) {
 	return db.ListPreDiversityRankedContext(context.Background(), username)
 }
@@ -349,7 +356,15 @@ func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string
 		args = append(args, feedUnseenPredicateArgs(username)...)
 	}
 
-	where = append(where, "(fi.canonical_tweet_id IS NULL OR fi.canonical_tweet_id = '' OR fi.canonical_tweet_id = fi.tweet_id)")
+	where = append(where, `(
+		fi.canonical_tweet_id IS NULL
+		OR fi.canonical_tweet_id = ''
+		OR fi.canonical_tweet_id = fi.tweet_id
+		OR (
+			COALESCE(fi.is_retweet,0) = 1
+			AND COALESCE(fi.quote_tweet_id,'') = ''
+		)
+	)`)
 	where = append(where, retweetFilterClause("fi"))
 	// Rows without published_at produce NULL age_h and hence NULL decay/freshness,
 	// which breaks the SQL → Go scan. Items without a published_at can't meaningfully
@@ -381,6 +396,10 @@ func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string
 				       fi.author_handle,
 				       COALESCE(fi.source_handle,''),
 				       %s AS related_content_key,
+				       COALESCE(fi.content_hash, '') AS content_hash,
+				       COALESCE(fi.is_retweet, 0) AS is_retweet,
+				       COALESCE(fi.quote_tweet_id, '') AS quote_tweet_id,
+				       fi.published_at,
 				       %s AS base,
 				       %s AS decay,
 				       %s AS freshness,
@@ -402,10 +421,13 @@ func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string
 	out := make([]PreDiversitySnapshotRow, 0, snapshotMaxItems)
 	for rows.Next() {
 		var r PreDiversitySnapshotRow
+		var isRetweet int
 		if err := rows.Scan(&r.TweetID, &r.AuthorHandle, &r.SourceHandle,
-			&r.RelatedContentKey, &r.BaseScore, &r.DecayFactor, &r.FreshnessBonus, &r.ReplyPenalty); err != nil {
+			&r.RelatedContentKey, &r.ContentHash, &isRetweet, &r.QuoteTweetID, &r.PublishedAtMs,
+			&r.BaseScore, &r.DecayFactor, &r.FreshnessBonus, &r.ReplyPenalty); err != nil {
 			return nil, err
 		}
+		r.IsRetweet = isRetweet != 0
 		out = append(out, r)
 	}
 	return out, rows.Err()

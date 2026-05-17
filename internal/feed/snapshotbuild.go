@@ -17,6 +17,9 @@ const (
 	diversitySourcePen  = 2.5  // demote if source_handle seen in last N
 	diversityRelatedPen = 12.0 // demote if quoted/canonical tweet seen in last N
 	jitterRangePerTweet = 0.38 // total spread; per-tweet jitter is centered in ±half
+
+	nearbyRepostMergeRankDistance = 150
+	nearbyRepostMergeWindow       = 4 * time.Hour
 )
 
 // BuildSnapshot turns a pre-diversity ranked list into the final snapshot rows
@@ -125,7 +128,77 @@ func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.Snapshot
 		recentSources.push(c.sourceLower)
 		recentRelated.push(c.relatedLower)
 	}
+	return mergeNearbyOriginalsIntoPureReposts(out, in)
+}
+
+func mergeNearbyOriginalsIntoPureReposts(rows []db.SnapshotRow, meta []db.PreDiversitySnapshotRow) []db.SnapshotRow {
+	if len(rows) < 2 || len(meta) == 0 {
+		return rows
+	}
+	metadata := make(map[string]db.PreDiversitySnapshotRow, len(meta))
+	for _, row := range meta {
+		metadata[row.TweetID] = row
+	}
+
+	type positionedOriginal struct {
+		index int
+		row   db.PreDiversitySnapshotRow
+	}
+	originalsByHash := make(map[string][]positionedOriginal)
+	for i, snapshotRow := range rows {
+		row, ok := metadata[snapshotRow.TweetID]
+		if !ok || row.ContentHash == "" || row.IsRetweet {
+			continue
+		}
+		originalsByHash[row.ContentHash] = append(originalsByHash[row.ContentHash], positionedOriginal{
+			index: i,
+			row:   row,
+		})
+	}
+	if len(originalsByHash) == 0 {
+		return rows
+	}
+
+	hideOriginal := make(map[int]bool)
+	for i, snapshotRow := range rows {
+		repost, ok := metadata[snapshotRow.TweetID]
+		if !ok || !isPureRepostSnapshotRow(repost) {
+			continue
+		}
+		for _, original := range originalsByHash[repost.ContentHash] {
+			if absInt(i-original.index) > nearbyRepostMergeRankDistance {
+				continue
+			}
+			if !withinNearbyRepostWindow(repost.PublishedAtMs, original.row.PublishedAtMs) {
+				continue
+			}
+			hideOriginal[original.index] = true
+		}
+	}
+	if len(hideOriginal) == 0 {
+		return rows
+	}
+
+	out := make([]db.SnapshotRow, 0, len(rows)-len(hideOriginal))
+	for i, row := range rows {
+		if hideOriginal[i] {
+			continue
+		}
+		row.RankPosition = len(out) + 1
+		out = append(out, row)
+	}
 	return out
+}
+
+func isPureRepostSnapshotRow(row db.PreDiversitySnapshotRow) bool {
+	return row.IsRetweet && row.ContentHash != "" && strings.TrimSpace(row.QuoteTweetID) == ""
+}
+
+func withinNearbyRepostWindow(leftMs, rightMs int64) bool {
+	if leftMs <= 0 || rightMs <= 0 {
+		return false
+	}
+	return time.Duration(absInt64(leftMs-rightMs))*time.Millisecond <= nearbyRepostMergeWindow
 }
 
 // jitterFor produces a deterministic ±jitterRangePerTweet/2 value for a
@@ -197,4 +270,18 @@ func containsLower(buf []string, candidate string) bool {
 		}
 	}
 	return false
+}
+
+func absInt(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func absInt64(value int64) int64 {
+	if value < 0 {
+		return -value
+	}
+	return value
 }

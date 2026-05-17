@@ -186,6 +186,25 @@ func TestHandleFeedDebugItemRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestFeedDebugRankInputExclusionReasonsAllowsPureRepostCandidates(t *testing.T) {
+	viewer := feedDebugViewerState{}
+	pureRepost := feedDebugItem{
+		TweetID:          "sample_repost",
+		CanonicalTweetID: "sample_original",
+		IsRetweet:        true,
+	}
+	if got := feedDebugRankInputExclusionReasons(pureRepost, viewer); stringSliceContains(got, "non_canonical_tweet") {
+		t.Fatalf("pure repost should be a ranked candidate, got reasons %v", got)
+	}
+
+	quoteRepost := pureRepost
+	quoteRepost.TweetID = "sample_quote_repost"
+	quoteRepost.QuoteTweetID = "sample_quote"
+	if got := feedDebugRankInputExclusionReasons(quoteRepost, viewer); !stringSliceContains(got, "non_canonical_tweet") {
+		t.Fatalf("quote repost should keep non-canonical exclusion, got reasons %v", got)
+	}
+}
+
 func nestedMap(t *testing.T, body map[string]any, key string) map[string]any {
 	t.Helper()
 	nested, ok := body[key].(map[string]any)
@@ -196,13 +215,18 @@ func nestedMap(t *testing.T, body map[string]any, key string) map[string]any {
 }
 
 func stringSliceContains(raw any, want string) bool {
-	items, ok := raw.([]any)
-	if !ok {
-		return false
-	}
-	for _, item := range items {
-		if item == want {
-			return true
+	switch items := raw.(type) {
+	case []any:
+		for _, item := range items {
+			if item == want {
+				return true
+			}
+		}
+	case []string:
+		for _, item := range items {
+			if item == want {
+				return true
+			}
 		}
 	}
 	return false

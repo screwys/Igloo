@@ -567,6 +567,58 @@ func TestListPreDiversityRankedSetsRelatedContentKey(t *testing.T) {
 	}
 }
 
+func TestListPreDiversityRankedIncludesNonCanonicalPureReposts(t *testing.T) {
+	d := openWritableTestDB(t)
+	publishedAt := time.Now().Add(-time.Hour).UnixMilli()
+
+	for _, row := range []struct {
+		id        string
+		isRetweet int
+		quoteID   string
+		canonical string
+	}{
+		{id: "original", canonical: "original"},
+		{id: "pure_repost", isRetweet: 1, canonical: "original"},
+		{id: "quote_repost", isRetweet: 1, quoteID: "quoted_status", canonical: "original"},
+		{id: "non_repost_duplicate", canonical: "original"},
+	} {
+		if _, err := d.conn.Exec(`INSERT INTO feed_items
+				(tweet_id, author_handle, source_handle, is_retweet, quote_tweet_id,
+				 canonical_tweet_id, content_hash, body_text, published_at, fetched_at,
+				 algo_interest, algo_scored_at)
+				VALUES (?, 'sample_author', 'sample_source', ?, ?, ?, 'same_content',
+				 'body', ?, ?, 30, 1)`,
+			row.id, row.isRetweet, row.quoteID, row.canonical, publishedAt, publishedAt,
+		); err != nil {
+			t.Fatalf("insert %s: %v", row.id, err)
+		}
+	}
+
+	rows, err := d.ListPreDiversityRanked("")
+	if err != nil {
+		t.Fatalf("ListPreDiversityRanked: %v", err)
+	}
+	ids := map[string]PreDiversitySnapshotRow{}
+	for _, row := range rows {
+		ids[row.TweetID] = row
+	}
+	if _, ok := ids["original"]; !ok {
+		t.Fatalf("canonical original missing from ranked input: %+v", rows)
+	}
+	repost, ok := ids["pure_repost"]
+	if !ok {
+		t.Fatalf("non-canonical pure repost missing from ranked input: %+v", rows)
+	}
+	if !repost.IsRetweet || repost.ContentHash != "same_content" || repost.PublishedAtMs != publishedAt {
+		t.Fatalf("pure repost metadata = %+v", repost)
+	}
+	for _, excluded := range []string{"quote_repost", "non_repost_duplicate"} {
+		if _, ok := ids[excluded]; ok {
+			t.Fatalf("%s should remain excluded from ranked input: %+v", excluded, rows)
+		}
+	}
+}
+
 func TestFeedRelatedSeenCountSQLUsesPrecomputedSet(t *testing.T) {
 	relatedExpr := feedRelatedSeenCountSelect("fi")
 	if strings.Contains(strings.ToUpper(relatedExpr), "SELECT COUNT") {
