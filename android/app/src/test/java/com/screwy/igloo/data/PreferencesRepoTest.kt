@@ -64,8 +64,8 @@ class PreferencesRepoTest {
         assertEquals(PreferencesRepo.Defaults.RETENTION_DAYS_YOUTUBE, repo.retentionDaysYoutube().first())
         assertEquals(PreferencesRepo.Defaults.SHARE_EMBED_FRIENDLY_LINKS, repo.shareEmbedFriendlyLinks().first())
         assertEquals(7, repo.retentionDaysMoments().first())
-        assertEquals(7, repo.retentionDaysFeed().first())
-        assertEquals(7, repo.retentionDaysYoutube().first())
+        assertEquals(2, repo.retentionDaysFeed().first())
+        assertEquals(3, repo.retentionDaysYoutube().first())
         assertEquals(
             PreferencesRepo.Defaults.SB_SPONSOR,
             repo.flowString(

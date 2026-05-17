@@ -295,14 +295,15 @@ class AuthRepo(
 
     companion object {
         /**
-         * Strip trailing slashes, default to `https` when the user omits the scheme. Matches
-         * `06-auth-and-multiuser.md` §4's "normalize server URL" step.
+         * Strip trailing slashes, default to `http` when the user omits the scheme.
+         * Igloo's native server listens on plain HTTP by default; users can still enter
+         * an explicit HTTPS URL for reverse-proxied installs.
          */
         fun normalizeServerUrl(raw: String): String {
             val trimmed = raw.trim().trimEnd('/')
             if (trimmed.isEmpty()) return ""
             return if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed
-            else "https://$trimmed"
+            else "http://$trimmed"
         }
 
         private fun slug(username: String): String = buildString(username.length) {

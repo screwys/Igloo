@@ -4,6 +4,7 @@ import com.screwy.igloo.AppRuntime
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.ServerBaseUrlProvider
+import com.screwy.igloo.net.ServerDiscovery
 import com.screwy.igloo.net.auth.AuthTokenProvider
 import com.screwy.igloo.sync.Scheduler
 import org.koin.core.module.dsl.viewModel
@@ -56,6 +57,6 @@ val iglooAuthModule = module {
     single { IglooHostProvider(hostSource = { get<AuthRepo>().serverHostSync() }) }
 
     viewModel { (onSuccess: () -> Unit) ->
-        LoginViewModel(authRepo = get(), onLoginSuccess = onSuccess)
+        LoginViewModel(authRepo = get(), serverDiscovery = get<ServerDiscovery>(), onLoginSuccess = onSuccess)
     }
 }

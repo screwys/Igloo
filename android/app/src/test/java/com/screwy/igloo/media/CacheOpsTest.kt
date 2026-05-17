@@ -197,6 +197,35 @@ class CacheOpsTest {
         assertEquals(1, syncTriggers)
     }
 
+    @Test fun clearCaches_deletesEveryBucketAndTriggersOnce() = runBlocking {
+        var syncTriggers = 0
+        val youtubeFile = java.io.File(mediaRoot, "youtube_videos/video.mp4").also {
+            it.parentFile?.mkdirs()
+            it.writeBytes(ByteArray(5))
+        }
+        val legacyYoutubeFile = java.io.File(mediaRoot, "sync/videos/legacy.mp4").also {
+            it.parentFile?.mkdirs()
+            it.writeBytes(ByteArray(7))
+        }
+        val momentsFile = java.io.File(mediaRoot, "sync/shorts_videos/clip.mp4").also {
+            it.parentFile?.mkdirs()
+            it.writeBytes(ByteArray(9))
+        }
+        db.mediaInventoryDao().upsert(inventoryRow("yt-1", "video_stream", "vid-1", "youtube_videos", "cached"))
+        insertVerifiedSyncAsset("generation-clear-many", "legacy-yt", "video_stream", "vid-2", "videos", legacyYoutubeFile)
+        insertVerifiedSyncAsset("generation-clear-many", "moment", "video_stream", "vid-3", "shorts_videos", momentsFile)
+
+        buildCacheOps(syncTrigger = { syncTriggers++ })
+            .clearCaches(listOf("youtube_videos", "videos"))
+
+        assertFalse("youtube bucket file should be deleted", youtubeFile.exists())
+        assertFalse("legacy videos bucket file should be deleted", legacyYoutubeFile.exists())
+        assertTrue("unselected moments bucket file should survive", momentsFile.exists())
+        assertEquals(null, db.androidSyncDao().latestVerifiedLocalPath("vid-2", "video_stream"))
+        assertEquals(momentsFile.absolutePath, db.androidSyncDao().latestVerifiedLocalPath("vid-3", "video_stream"))
+        assertEquals(1, syncTriggers)
+    }
+
     // ─── Wiring ────────────────────────────────────────────────────────────────
 
     private fun buildCacheOps(syncTrigger: () -> Unit = {}) = CacheOps(

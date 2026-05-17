@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.screwy.igloo.R
 import com.screwy.igloo.data.DatabaseHolder
 import com.screwy.igloo.net.AuthApi
+import com.screwy.igloo.net.ServerDiscovery
 import com.screwy.igloo.testutil.ViewModelTestTracker
 import com.screwy.igloo.ui.UiEffects
 import io.ktor.client.HttpClient
@@ -69,8 +70,12 @@ class LoginViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun newViewModel(repo: AuthRepo, onLoginSuccess: () -> Unit = {}): LoginViewModel =
-        viewModels.track(LoginViewModel(repo, onLoginSuccess))
+    private fun newViewModel(
+        repo: AuthRepo,
+        onLoginSuccess: () -> Unit = {},
+        serverDiscovery: ServerDiscovery? = null,
+    ): LoginViewModel =
+        viewModels.track(LoginViewModel(repo, onLoginSuccess, serverDiscovery))
 
     @Test fun initialState_prefillsServerUrlFromAuthStorage() {
         storage.edit { putString(AuthKeys.SERVER_URL, "https://custom.server:9443") }
@@ -99,6 +104,45 @@ class LoginViewModelTest {
         vm.onPasswordChange("pw")
 
         assertTrue(vm.state.value.submitEnabled)
+    }
+
+    @Test fun discoverServers_prefillsBlankServerUrlAndKeepsSuggestions() = runBlocking {
+        val vm = newViewModel(
+            buildRepo(buildAuthApi()),
+            serverDiscovery = object : ServerDiscovery {
+                override suspend fun discover(): List<String> =
+                    listOf("http://192.168.1.20:5001", "https://192.168.1.20:8443")
+            },
+        )
+
+        vm.discoverServers()
+
+        withTimeoutOrNull(1_500L) {
+            while (vm.state.value.discoveredServers.isEmpty()) delay(5)
+        }
+        assertEquals("http://192.168.1.20:5001", vm.state.value.serverUrl)
+        assertEquals(
+            listOf("http://192.168.1.20:5001", "https://192.168.1.20:8443"),
+            vm.state.value.discoveredServers,
+        )
+        assertEquals(LoginViewModel.DiscoveryStatus.Idle, vm.state.value.discoveryStatus)
+    }
+
+    @Test fun discoverServers_surfacesNoServersWhenProbeFindsNothing() = runBlocking {
+        val vm = newViewModel(
+            buildRepo(buildAuthApi()),
+            serverDiscovery = object : ServerDiscovery {
+                override suspend fun discover(): List<String> = emptyList()
+            },
+        )
+
+        vm.discoverServers()
+
+        withTimeoutOrNull(1_500L) {
+            while (vm.state.value.discoveryStatus == LoginViewModel.DiscoveryStatus.Scanning) delay(5)
+        }
+        assertEquals("", vm.state.value.serverUrl)
+        assertEquals(LoginViewModel.DiscoveryStatus.NoServers, vm.state.value.discoveryStatus)
     }
 
     @Test fun submit_success_firesNavigateCallback() = runBlocking {

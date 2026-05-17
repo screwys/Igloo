@@ -13,9 +13,10 @@
     <string name="action_channel_settings_short">Ayarlar</string>
     <string name="action_clear">Temizle</string>
     <string name="action_clear_all_cache">Tüm önbelleği temizle</string>
-    <string name="action_clear_moments_cache">Anlar önbelleğini temizle</string>
+    <string name="action_clear_moments_cache">Anlar indirmelerini temizle</string>
     <string name="action_clear_muted_accounts">Tümünü sessizden çıkar</string>
-    <string name="action_clear_youtube_cache">YouTube önbelleğini temizle</string>
+    <string name="action_clear_x_cache">X indirmelerini temizle</string>
+    <string name="action_clear_youtube_cache">YouTube indirmelerini temizle</string>
     <string name="action_close">Kapat</string>
     <string name="action_close_logs">Kayıtları kapat</string>
     <string name="action_close_shorts_mode">Anlar modunu kapat</string>
@@ -37,6 +38,7 @@
     <string name="action_export_data">Verileri dışa aktar</string>
     <string name="action_favourite_account">Favorilere ekle</string>
     <string name="action_filter">Filtrele...</string>
+    <string name="action_find_server">Bul</string>
     <string name="action_follow">Takip et</string>
     <string name="action_follow_account">Hesabı takip et</string>
     <string name="action_following">Takip ediliyor</string>
@@ -283,6 +285,7 @@
     <string name="language_english">İngilizce</string>
     <string name="language_system">Sistem varsayılanı</string>
     <string name="list_sep_and">ve</string>
+    <string name="login_discovery_none">Igloo sunucusu bulunamadı.</string>
     <string name="login_error_invalid_credentials">Geçersiz kullanıcı adı veya şifre</string>
     <string name="login_error_no_users">Henüz kullanıcı yok. İlk yöneticiyi oluşturmak için kurulumu açın.</string>
     <string name="login_error_reach_server">Sunucuya ulaşılamıyor — URL\'yi kontrol edin</string>
@@ -725,6 +728,7 @@
     <string name="status_preferences_save_failed">Ayarlar kaydedilemedi</string>
     <string name="status_preferences_saved">Ayarlar kaydedildi</string>
     <string name="status_save_preferences_to_apply">Uygulamak için ayarlarınızı kaydedin</string>
+    <string name="status_scanning_network">Taranıyor...</string>
     <string name="status_signed_in_as">%1$s olarak giriş yapıldı</string>
     <string name="status_up_to_date">Her şey güncel</string>
     <string name="status_verified">Doğrulanmış</string>

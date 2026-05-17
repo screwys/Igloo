@@ -55,8 +55,9 @@ class MainActivity : ComponentActivity() {
             super.onCreate(savedInstanceState)
             setContent {
                 val languageTag by languageStore.languageTag.collectAsStateWithLifecycle()
+                val username by databaseHolder.usernameFlow.collectAsStateWithLifecycle()
                 AppLocaleProvider(languageTag = languageTag) {
-                    if (databaseHolder.current != null) {
+                    if (username != null) {
                         LoggedInContent()
                     } else {
                         IglooTheme {

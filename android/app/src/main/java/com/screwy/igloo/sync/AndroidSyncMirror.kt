@@ -2,6 +2,7 @@ package com.screwy.igloo.sync
 
 import androidx.room.withTransaction
 import com.screwy.igloo.data.IglooDatabase
+import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.dao.AndroidSyncContentPruneCounts
 import com.screwy.igloo.data.dao.AndroidSyncDao
 import com.screwy.igloo.data.dao.AndroidSyncGenerationPruneCounts
@@ -76,7 +77,12 @@ class AndroidSyncMirror(
     mediaRoot: File,
     private val logger: Logger,
     private val retentionProvider: suspend () -> AndroidSyncRetentionRequest = {
-        AndroidSyncRetentionRequest(feedDays = 7, youtubeDays = 7, momentsDays = 7, storyHours = 48)
+        AndroidSyncRetentionRequest(
+            feedDays = PreferencesRepo.Defaults.RETENTION_DAYS_FEED,
+            youtubeDays = PreferencesRepo.Defaults.RETENTION_DAYS_YOUTUBE,
+            momentsDays = PreferencesRepo.Defaults.RETENTION_DAYS_MOMENTS,
+            storyHours = PreferencesRepo.Defaults.STORIES_WINDOW_HOURS,
+        )
     },
     private val nowMsProvider: () -> Long = { System.currentTimeMillis() },
     private val refreshRetryDelayMs: Long = SYNC_REFRESH_RETRY_MS,

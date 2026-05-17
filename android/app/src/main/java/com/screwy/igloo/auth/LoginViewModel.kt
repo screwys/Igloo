@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.screwy.igloo.R
+import com.screwy.igloo.net.ServerDiscovery
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +22,7 @@ import kotlinx.coroutines.launch
 class LoginViewModel(
     private val authRepo: AuthRepo,
     private val onLoginSuccess: () -> Unit = {},
+    private val serverDiscovery: ServerDiscovery? = null,
 ) : ViewModel() {
 
     data class UiState(
@@ -28,6 +30,9 @@ class LoginViewModel(
         val username: String = "",
         val password: String = "",
         val status: Status = Status.Idle,
+        val discoveryAvailable: Boolean = false,
+        val discoveryStatus: DiscoveryStatus = DiscoveryStatus.Idle,
+        val discoveredServers: List<String> = emptyList(),
     ) {
         val submitEnabled: Boolean
             get() = status != Status.Loading &&
@@ -40,11 +45,28 @@ class LoginViewModel(
         data class Error(@param:StringRes val resId: Int) : Status()
     }
 
-    private val _state = MutableStateFlow(UiState(serverUrl = authRepo.serverUrlSync()))
+    enum class DiscoveryStatus {
+        Idle,
+        Scanning,
+        NoServers,
+    }
+
+    private val _state = MutableStateFlow(
+        UiState(
+            serverUrl = authRepo.serverUrlSync(),
+            discoveryAvailable = serverDiscovery != null,
+        ),
+    )
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     fun onServerUrlChange(value: String) {
-        _state.update { it.copy(serverUrl = value, status = clearErrorOnEdit(it.status)) }
+        _state.update {
+            it.copy(
+                serverUrl = value,
+                status = clearErrorOnEdit(it.status),
+                discoveryStatus = DiscoveryStatus.Idle,
+            )
+        }
     }
 
     fun onUsernameChange(value: String) {
@@ -53,6 +75,33 @@ class LoginViewModel(
 
     fun onPasswordChange(value: String) {
         _state.update { it.copy(password = value, status = clearErrorOnEdit(it.status)) }
+    }
+
+    fun discoverServers() {
+        val discovery = serverDiscovery ?: return
+        if (_state.value.discoveryStatus == DiscoveryStatus.Scanning) return
+        _state.update {
+            it.copy(
+                discoveryStatus = DiscoveryStatus.Scanning,
+                discoveredServers = emptyList(),
+            )
+        }
+        viewModelScope.launch {
+            val servers = runCatching { discovery.discover() }
+                .getOrDefault(emptyList())
+                .distinct()
+            _state.update { current ->
+                current.copy(
+                    serverUrl = current.serverUrl.ifBlank { servers.firstOrNull().orEmpty() },
+                    discoveryStatus = if (servers.isEmpty()) DiscoveryStatus.NoServers else DiscoveryStatus.Idle,
+                    discoveredServers = servers,
+                )
+            }
+        }
+    }
+
+    fun chooseDiscoveredServer(url: String) {
+        onServerUrlChange(url)
     }
 
     fun onSubmit() {

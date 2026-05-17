@@ -341,9 +341,9 @@ class AuthRepoTest {
 
     // ─── URL normalization ───────────────────────────────────────────────────
 
-    @Test fun normalizeServerUrl_stripsTrailingSlashAndAddsScheme() {
+    @Test fun normalizeServerUrl_stripsTrailingSlashAndAddsHttpScheme() {
         assertEquals("https://igloo.local:8443", AuthRepo.normalizeServerUrl("https://igloo.local:8443/"))
-        assertEquals("https://igloo.local", AuthRepo.normalizeServerUrl("igloo.local"))
+        assertEquals("http://igloo.local", AuthRepo.normalizeServerUrl("igloo.local"))
         assertEquals("http://igloo.local", AuthRepo.normalizeServerUrl("http://igloo.local"))
         assertEquals("", AuthRepo.normalizeServerUrl(""))
     }

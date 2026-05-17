@@ -52,6 +52,7 @@ class StorageViewModelTest {
         coEvery { cacheOps.stats() } returns emptyList()
         coEvery { cacheOps.clearCache(any()) } just Runs
         coEvery { cacheOps.clearCache(null) } just Runs
+        coEvery { cacheOps.clearCaches(any()) } just Runs
     }
 
     @After fun tearDown() {
@@ -132,6 +133,16 @@ class StorageViewModelTest {
 
         val ok = eventuallyVerify {
             coVerify { cacheOps.clearCache(null) }
+        }
+        assertEquals(true, ok)
+    }
+
+    @Test fun clearCacheBuckets_forwardsBucketGroupToCacheOps() = runBlocking {
+        val vm = newViewModel()
+        vm.clearCacheBuckets(listOf("youtube_videos", "videos"))
+
+        val ok = eventuallyVerify {
+            coVerify { cacheOps.clearCaches(listOf("youtube_videos", "videos")) }
         }
         assertEquals(true, ok)
     }

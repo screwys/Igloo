@@ -13,9 +13,10 @@
     <string name="action_channel_settings_short">Settings</string>
     <string name="action_clear">Clear</string>
     <string name="action_clear_all_cache">Clear all cache</string>
-    <string name="action_clear_moments_cache">Clear Moments cache</string>
+    <string name="action_clear_moments_cache">Clear Moments downloads</string>
     <string name="action_clear_muted_accounts">Clear muted accounts</string>
-    <string name="action_clear_youtube_cache">Clear YouTube cache</string>
+    <string name="action_clear_x_cache">Clear X downloads</string>
+    <string name="action_clear_youtube_cache">Clear YouTube downloads</string>
     <string name="action_close">Close</string>
     <string name="action_close_logs">Close logs</string>
     <string name="action_close_shorts_mode">Close Shorts mode</string>
@@ -37,6 +38,7 @@
     <string name="action_export_data">Export data</string>
     <string name="action_favourite_account">Favourite account</string>
     <string name="action_filter">Filter...</string>
+    <string name="action_find_server">Find</string>
     <string name="action_follow">Follow</string>
     <string name="action_follow_account">Follow account</string>
     <string name="action_following">Following</string>
@@ -284,6 +286,7 @@
     <string name="language_english">English</string>
     <string name="language_system">System default</string>
     <string name="list_sep_and">and</string>
+    <string name="login_discovery_none">No Igloo servers found.</string>
     <string name="login_error_invalid_credentials">Invalid username or password</string>
     <string name="login_error_no_users">No users are configured. Open setup to create the first admin.</string>
     <string name="login_error_reach_server">Can\'t reach server — check the URL</string>
@@ -726,6 +729,7 @@
     <string name="status_preferences_save_failed">Failed to save preferences</string>
     <string name="status_preferences_saved">Preferences saved</string>
     <string name="status_save_preferences_to_apply">Save your preferences to apply</string>
+    <string name="status_scanning_network">Scanning...</string>
     <string name="status_signed_in_as">Signed in as %1$s</string>
     <string name="status_up_to_date">You\'re up to date!</string>
     <string name="status_verified">Verified</string>

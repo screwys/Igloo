@@ -123,8 +123,8 @@ class PreferencesRepo(
         const val DEBUG_MODE                 = false
         const val SERVER_TIME_OFFSET_MS      = 0L
         const val RETENTION_DAYS_MOMENTS     = 7
-        const val RETENTION_DAYS_FEED        = 7
-        const val RETENTION_DAYS_YOUTUBE     = 7
+        const val RETENTION_DAYS_FEED        = 2
+        const val RETENTION_DAYS_YOUTUBE     = 3
         const val STORIES_WINDOW_HOURS       = 48
         const val STARTING_PAGE              = "videos"
         const val SHARE_EMBED_FRIENDLY_LINKS = false

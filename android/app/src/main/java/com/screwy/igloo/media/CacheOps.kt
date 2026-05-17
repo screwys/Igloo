@@ -62,26 +62,45 @@ class CacheOps(
      */
     suspend fun clearCache(bucket: String? = null) {
         if (bucket == null) {
-            dao.deleteAll()
-            syncDao.resetVerifiedLocalPaths(bucket = null, nowMs = nowMsProvider())
-            // Wipe every file under mediaRoot but leave the directory itself so subsequent
-            // downloads can proceed without needing to recreate it.
-            mediaRoot.listFiles()?.forEach { it.deleteRecursively() }
+            clearAllBuckets()
             logger.info(
                 event = "cache_cleared",
                 fields = mapOf("bucket" to "all"),
             )
         } else {
-            dao.deleteBucket(bucket)
-            syncDao.resetVerifiedLocalPaths(bucket = bucket, nowMs = nowMsProvider())
-            File(mediaRoot, bucket).deleteRecursively()
-            File(File(mediaRoot, SYNC_DIR), bucket).deleteRecursively()
+            clearBucket(bucket)
             logger.info(
                 event = "cache_cleared",
                 fields = mapOf("bucket" to bucket),
             )
         }
         syncTrigger()
+    }
+
+    suspend fun clearCaches(buckets: Collection<String>) {
+        val normalized = buckets.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        if (normalized.isEmpty()) return
+        normalized.forEach { bucket -> clearBucket(bucket) }
+        logger.info(
+            event = "cache_cleared",
+            fields = mapOf("buckets" to normalized.joinToString(",")),
+        )
+        syncTrigger()
+    }
+
+    private suspend fun clearAllBuckets() {
+        dao.deleteAll()
+        syncDao.resetVerifiedLocalPaths(bucket = null, nowMs = nowMsProvider())
+        // Wipe every file under mediaRoot but leave the directory itself so subsequent
+        // downloads can proceed without needing to recreate it.
+        mediaRoot.listFiles()?.forEach { it.deleteRecursively() }
+    }
+
+    private suspend fun clearBucket(bucket: String) {
+        dao.deleteBucket(bucket)
+        syncDao.resetVerifiedLocalPaths(bucket = bucket, nowMs = nowMsProvider())
+        File(mediaRoot, bucket).deleteRecursively()
+        File(File(mediaRoot, SYNC_DIR), bucket).deleteRecursively()
     }
 
     private fun diskBytesByBucket(): Map<String, Long> {

@@ -1,15 +1,22 @@
 package com.screwy.igloo.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -51,6 +58,7 @@ fun StorageRoute(
     val rFd by storageVm.retentionDaysFeed.collectAsStateWithLifecycle()
     val storiesWindowHours by storageVm.storiesWindowHours.collectAsStateWithLifecycle()
     val stats by storageVm.stats.collectAsStateWithLifecycle()
+    val statsLoading by storageVm.statsLoading.collectAsStateWithLifecycle()
 
     SettingsSubScreen(
         title = stringResource(R.string.settings_storage_sync),
@@ -88,14 +96,21 @@ fun StorageRoute(
         StoriesWindowRow(storiesWindowHours, storageVm::setStoriesWindowHours)
 
         SectionHeader(stringResource(R.string.settings_section_cache))
-        if (stats.isEmpty()) {
-            SectionDescription(stringResource(R.string.settings_no_cached_media))
-        } else {
-            stats.forEach { row -> StatsRow(row) }
+        when {
+            statsLoading -> CacheStatsSkeleton()
+            stats.isEmpty() -> SectionDescription(stringResource(R.string.settings_no_cached_media))
+            else -> stats.forEach { row -> StatsRow(row) }
         }
         TextActionRow(label = stringResource(R.string.action_clear_all_cache)) { storageVm.clearCache(null) }
-        TextActionRow(label = stringResource(R.string.action_clear_youtube_cache)) { storageVm.clearCache("youtube_videos") }
-        TextActionRow(label = stringResource(R.string.action_clear_moments_cache)) { storageVm.clearCache("shorts_videos") }
+        TextActionRow(label = stringResource(R.string.action_clear_youtube_cache)) {
+            storageVm.clearCacheBuckets(YoutubeDownloadBuckets)
+        }
+        TextActionRow(label = stringResource(R.string.action_clear_moments_cache)) {
+            storageVm.clearCacheBuckets(MomentsDownloadBuckets)
+        }
+        TextActionRow(label = stringResource(R.string.action_clear_x_cache)) {
+            storageVm.clearCacheBuckets(XDownloadBuckets)
+        }
 
         SectionHeader(stringResource(R.string.settings_section_export))
         SectionDescription(stringResource(R.string.settings_export_help))
@@ -105,6 +120,10 @@ fun StorageRoute(
         }
     }
 }
+
+private val YoutubeDownloadBuckets = listOf("youtube_videos", "videos")
+private val MomentsDownloadBuckets = listOf("shorts_videos")
+private val XDownloadBuckets = listOf("twitter_media")
 
 @Composable
 private fun StatsRow(row: CacheStats) {
@@ -127,14 +146,49 @@ private fun StatsRow(row: CacheStats) {
 }
 
 @Composable
+private fun CacheStatsSkeleton() {
+    listOf(140.dp, 96.dp, 118.dp).forEach { labelWidth ->
+        SkeletonStatsRow(labelWidth = labelWidth)
+    }
+}
+
+@Composable
+private fun SkeletonStatsRow(labelWidth: Dp) {
+    val colors = MaterialTheme.iglooColors
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .width(labelWidth)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(colors.surfaceElevated),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .width(64.dp)
+                .height(16.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(colors.surfaceElevated),
+        )
+    }
+}
+
+@Composable
 internal fun formatCacheBucketLabel(bucket: String): String = when (bucket) {
     "feed_items" -> stringResource(cacheBucketLabelResource(bucket) ?: R.string.cache_feed_items)
     "youtube_videos" -> stringResource(R.string.platform_youtube)
+    "videos" -> stringResource(R.string.platform_youtube)
     else -> cacheBucketLabelResource(bucket)?.let { stringResource(it) } ?: humanizeCacheBucket(bucket)
 }
 
 internal fun cacheBucketLabelResource(bucket: String): Int? = when (bucket) {
     "feed_items" -> R.string.cache_feed_items
+    "videos" -> R.string.platform_youtube
     "shorts_videos" -> R.string.nav_moments
     "twitter_media" -> R.string.cache_x_media
     "avatars" -> R.string.cache_avatars

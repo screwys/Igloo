@@ -9,6 +9,7 @@ class StorageRouteTest {
     @Test fun cacheBucketLabelResource_usesProductNames() {
         assertEquals(R.string.cache_feed_items, cacheBucketLabelResource("feed_items"))
         assertEquals(null, cacheBucketLabelResource("youtube_videos"))
+        assertEquals(R.string.platform_youtube, cacheBucketLabelResource("videos"))
         assertEquals(R.string.nav_moments, cacheBucketLabelResource("shorts_videos"))
         assertEquals(R.string.cache_x_media, cacheBucketLabelResource("twitter_media"))
     }

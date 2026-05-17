@@ -112,28 +112,62 @@ fun LoginRoute(navController: NavController) {
                     modifier = Modifier.fillMaxWidth(),
                 )
             } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.settings_section_server),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = state.serverUrl.ifBlank { stringResource(R.string.status_not_set) },
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (state.discoveryAvailable) {
+                                TextButton(
+                                    onClick = viewModel::discoverServers,
+                                    enabled = state.status != LoginViewModel.Status.Loading &&
+                                        state.discoveryStatus != LoginViewModel.DiscoveryStatus.Scanning,
+                                ) {
+                                    Text(
+                                        if (state.discoveryStatus == LoginViewModel.DiscoveryStatus.Scanning) {
+                                            stringResource(R.string.status_scanning_network)
+                                        } else {
+                                            stringResource(R.string.action_find_server)
+                                        },
+                                    )
+                                }
+                            }
+                            TextButton(
+                                onClick = { serverEditMode = true },
+                                enabled = state.status != LoginViewModel.Status.Loading,
+                            ) {
+                                Text(stringResource(R.string.action_edit))
+                            }
+                        }
+                    }
+                    if (state.discoveryStatus == LoginViewModel.DiscoveryStatus.NoServers) {
                         Text(
-                            text = stringResource(R.string.settings_section_server),
-                            style = MaterialTheme.typography.labelMedium,
+                            text = stringResource(R.string.login_discovery_none),
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Text(
-                            text = state.serverUrl.ifBlank { stringResource(R.string.status_not_set) },
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontFamily = FontFamily.Monospace,
-                        )
                     }
-                    TextButton(
-                        onClick = { serverEditMode = true },
-                        enabled = state.status != LoginViewModel.Status.Loading,
-                    ) {
-                        Text(stringResource(R.string.action_edit))
+                    state.discoveredServers.take(3).forEach { url ->
+                        TextButton(
+                            onClick = { viewModel.chooseDiscoveredServer(url) },
+                            enabled = state.status != LoginViewModel.Status.Loading,
+                        ) {
+                            Text(text = url, fontFamily = FontFamily.Monospace)
+                        }
                     }
                 }
             }

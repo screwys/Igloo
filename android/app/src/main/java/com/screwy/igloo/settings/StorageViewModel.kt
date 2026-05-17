@@ -46,6 +46,8 @@ class StorageViewModel(
 
     private val _stats = MutableStateFlow<List<CacheStats>>(emptyList())
     val stats: StateFlow<List<CacheStats>> = _stats.asStateFlow()
+    private val _statsLoading = MutableStateFlow(true)
+    val statsLoading: StateFlow<Boolean> = _statsLoading.asStateFlow()
 
     init { refresh() }
 
@@ -78,18 +80,44 @@ class StorageViewModel(
     }
 
     fun refresh() {
-        viewModelScope.launch(Dispatchers.IO) { _stats.value = cacheOps.stats() }
+        viewModelScope.launch(Dispatchers.IO) { loadStats() }
     }
 
     fun clearCache(bucket: String?) {
         viewModelScope.launch(Dispatchers.IO) {
-            cacheOps.clearCache(bucket)
-            _stats.value = cacheOps.stats()
+            _statsLoading.value = true
+            try {
+                cacheOps.clearCache(bucket)
+                _stats.value = cacheOps.stats()
+            } finally {
+                _statsLoading.value = false
+            }
+        }
+    }
+
+    fun clearCacheBuckets(buckets: Collection<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _statsLoading.value = true
+            try {
+                cacheOps.clearCaches(buckets)
+                _stats.value = cacheOps.stats()
+            } finally {
+                _statsLoading.value = false
+            }
         }
     }
 
     fun triggerSyncNow() {
         scheduler?.triggerAll()
+    }
+
+    private suspend fun loadStats() {
+        _statsLoading.value = true
+        try {
+            _stats.value = cacheOps.stats()
+        } finally {
+            _statsLoading.value = false
+        }
     }
 
     private fun <T> Flow<T>.stateDefault(initial: T): StateFlow<T> =

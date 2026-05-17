@@ -51,6 +51,7 @@ class DatabaseHolderTest {
         val b = holder.openForUser("alice")
         assertSame(a, b) // same instance
         assertEquals("alice", holder.username)
+        assertEquals("alice", holder.usernameFlow.value)
     }
 
     @Test fun openForUser_swapsInstanceOnUserChange() {
@@ -62,6 +63,7 @@ class DatabaseHolderTest {
         assertNotSame(a, b)
         assertSame(b, holder.current)
         assertEquals("bob", holder.username)
+        assertEquals("bob", holder.usernameFlow.value)
     }
 
     @Test fun closeAndDelete_removesFile() {
@@ -76,6 +78,7 @@ class DatabaseHolderTest {
         holder.closeAndDelete("alice")
         assertNull(holder.current)
         assertNull(holder.username)
+        assertNull(holder.usernameFlow.value)
         assertFalse(dbFile.exists())
 
         // WAL / SHM sidecars gone too

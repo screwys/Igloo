@@ -2,6 +2,9 @@ package com.screwy.igloo.data
 
 import android.content.Context
 import java.io.File
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Single that wraps the currently-open per-user `IglooDatabase`.
@@ -25,11 +28,14 @@ class DatabaseHolder(
     private var currentInstance: IglooDatabase? = null
     @Volatile
     private var currentUsername: String? = null
+    private val usernameState = MutableStateFlow<String?>(null)
 
     val current: IglooDatabase? get() = currentInstance
 
     /** Currently-opened username, or null when logged out. */
     val username: String? get() = currentUsername
+
+    val usernameFlow: StateFlow<String?> = usernameState.asStateFlow()
 
     fun requireCurrent(): IglooDatabase =
         currentInstance
@@ -47,6 +53,7 @@ class DatabaseHolder(
         val db = IglooDatabase.buildForUser(appContext, username)
         currentInstance = db
         currentUsername = username
+        usernameState.value = username
         db
     }
 
@@ -61,6 +68,7 @@ class DatabaseHolder(
         }
         currentInstance = null
         currentUsername = null
+        usernameState.value = null
 
         val dbDir = File(appContext.getDatabasePath(IglooDatabase.fileNameFor(username)).parent ?: "")
         if (!dbDir.isDirectory) return
@@ -76,5 +84,6 @@ class DatabaseHolder(
         currentInstance?.close()
         currentInstance = null
         currentUsername = null
+        usernameState.value = null
     }
 }

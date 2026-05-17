@@ -33,6 +33,7 @@ val iglooNetModule = module {
     single { ReachabilitySignals() }
 
     single { LanServerNetworkBinder(context = androidContext(), hostProvider = get()) }
+    single<ServerDiscovery> { LanServerDiscovery(context = androidContext()) }
 
     // ServerBaseUrlProvider, IglooHostProvider and AuthTokenProvider are declared in
     // `iglooAuthModule` — they read from `AuthRepo`'s DB-independent auth cache so
