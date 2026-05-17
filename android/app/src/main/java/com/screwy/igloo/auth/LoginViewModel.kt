@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.screwy.igloo.R
+import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.net.ServerDiscovery
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,8 +17,9 @@ import kotlinx.coroutines.launch
  * translates [AuthRepo.LoginResult] into inline-error text per `07-ui-design-system.md`
  * §4 (login spec).
  *
- * Server URL pre-fills from `AuthRepo.serverUrlSync()`. Public builds leave it blank
- * unless `DEFAULT_SERVER_URL` is supplied at build time.
+ * Server URL pre-fills from `AuthRepo.serverUrlSync()`. Public builds use the
+ * generic `http://igloo.local:5001` starter unless `DEFAULT_SERVER_URL` is supplied
+ * at build time.
  */
 class LoginViewModel(
     private val authRepo: AuthRepo,
@@ -58,8 +60,10 @@ class LoginViewModel(
         ),
     )
     val state: StateFlow<UiState> = _state.asStateFlow()
+    private var serverUrlEdited = false
 
     fun onServerUrlChange(value: String) {
+        serverUrlEdited = true
         _state.update {
             it.copy(
                 serverUrl = value,
@@ -92,7 +96,11 @@ class LoginViewModel(
                 .distinct()
             _state.update { current ->
                 current.copy(
-                    serverUrl = current.serverUrl.ifBlank { servers.firstOrNull().orEmpty() },
+                    serverUrl = if (shouldAutofillDiscoveredServer(current.serverUrl, servers)) {
+                        servers.first()
+                    } else {
+                        current.serverUrl
+                    },
                     discoveryStatus = if (servers.isEmpty()) DiscoveryStatus.NoServers else DiscoveryStatus.Idle,
                     discoveredServers = servers,
                 )
@@ -131,4 +139,9 @@ class LoginViewModel(
 
     private fun clearErrorOnEdit(current: Status): Status =
         if (current is Status.Error) Status.Idle else current
+
+    private fun shouldAutofillDiscoveredServer(currentUrl: String, servers: List<String>): Boolean {
+        if (servers.isEmpty() || serverUrlEdited) return false
+        return currentUrl.isBlank() || currentUrl == PreferencesRepo.Defaults.BUILTIN_SERVER_URL
+    }
 }

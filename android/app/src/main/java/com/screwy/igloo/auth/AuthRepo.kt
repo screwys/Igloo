@@ -64,7 +64,10 @@ class AuthRepo(
     private val usernameCache = MutableStateFlow(storage.getString(AuthKeys.USERNAME))
     private val isAdminCache = MutableStateFlow(storage.getBoolean(AuthKeys.IS_ADMIN) ?: false)
     private val serverUrlCache = MutableStateFlow(
-        storage.getString(AuthKeys.SERVER_URL) ?: PreferencesRepo.Defaults.SERVER_URL,
+        storage.getString(AuthKeys.SERVER_URL)
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::normalizeServerUrl)
+            ?: PreferencesRepo.Defaults.SERVER_URL,
     )
 
     val accessTokenFlow: StateFlow<String?> = accessTokenCache.asStateFlow()

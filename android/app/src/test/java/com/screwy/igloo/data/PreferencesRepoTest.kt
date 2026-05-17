@@ -53,6 +53,7 @@ class PreferencesRepoTest {
     @Test fun defaults_surfaceWhenMissing() = runBlocking {
         val repo = PreferencesRepo(db.preferenceDao(), scope, nowMsProvider = { 0L })
         assertEquals(PreferencesRepo.Defaults.SERVER_URL, repo.serverUrl().first())
+        assertTrue(repo.serverUrl().first().startsWith("http://") || repo.serverUrl().first().startsWith("https://"))
         assertEquals(PreferencesRepo.Defaults.SYNC_ENABLED, repo.syncEnabled().first())
         assertEquals(PreferencesRepo.Defaults.SYNC_INTERVAL_MINUTES, repo.syncIntervalMinutes().first())
         assertEquals(PreferencesRepo.Defaults.DEBUG_MODE, repo.debugMode().first())

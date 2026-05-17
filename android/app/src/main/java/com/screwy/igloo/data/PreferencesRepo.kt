@@ -102,7 +102,8 @@ class PreferencesRepo(
     }
 
     object Defaults {
-        val SERVER_URL                       = BuildConfig.DEFAULT_SERVER_URL
+        const val BUILTIN_SERVER_URL         = "http://igloo.local:5001"
+        val SERVER_URL                       = defaultServerUrl()
         const val SYNC_ENABLED               = true
         const val SYNC_INTERVAL_MINUTES      = 30
         const val SYNC_WIFI_ONLY             = false
@@ -170,6 +171,18 @@ class PreferencesRepo(
             Keys.SB_FILLER         -> SB_FILLER
             Keys.SB_MUSIC_OFFTOPIC -> SB_MUSIC_OFFTOPIC
             else                   -> "ask"
+        }
+
+        private fun defaultServerUrl(): String {
+            val configured = BuildConfig.DEFAULT_SERVER_URL.trim().trimEnd('/')
+            if (configured.isEmpty()) return BUILTIN_SERVER_URL
+            return if (configured.startsWith("http://", ignoreCase = true) ||
+                configured.startsWith("https://", ignoreCase = true)
+            ) {
+                configured
+            } else {
+                "http://$configured"
+            }
         }
 
         fun normalizeThemeCustomCss(value: String): String {

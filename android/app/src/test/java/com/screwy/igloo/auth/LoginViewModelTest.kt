@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.screwy.igloo.R
 import com.screwy.igloo.data.DatabaseHolder
+import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.net.AuthApi
 import com.screwy.igloo.net.ServerDiscovery
 import com.screwy.igloo.testutil.ViewModelTestTracker
@@ -86,8 +87,16 @@ class LoginViewModelTest {
         assertTrue(vm.state.value.status is LoginViewModel.Status.Idle)
     }
 
+    @Test fun initialState_usesHttpBuiltinServerUrlWhenStorageBlank() {
+        storage.edit { putString(AuthKeys.SERVER_URL, "") }
+        val vm = newViewModel(buildRepo(buildAuthApi()))
+
+        assertEquals(PreferencesRepo.Defaults.SERVER_URL, vm.state.value.serverUrl)
+    }
+
     @Test fun submitEnabled_requiresAllThreeFields() {
         val vm = newViewModel(buildRepo(buildAuthApi()))
+        vm.onServerUrlChange("")
         assertTrue(!vm.state.value.submitEnabled)
         vm.onUsernameChange("alice")
         assertTrue(!vm.state.value.submitEnabled)
@@ -106,7 +115,8 @@ class LoginViewModelTest {
         assertTrue(vm.state.value.submitEnabled)
     }
 
-    @Test fun discoverServers_prefillsBlankServerUrlAndKeepsSuggestions() = runBlocking {
+    @Test fun discoverServers_replacesBuiltinServerUrlAndKeepsSuggestions() = runBlocking {
+        storage.edit { putString(AuthKeys.SERVER_URL, PreferencesRepo.Defaults.BUILTIN_SERVER_URL) }
         val vm = newViewModel(
             buildRepo(buildAuthApi()),
             serverDiscovery = object : ServerDiscovery {
@@ -128,6 +138,24 @@ class LoginViewModelTest {
         assertEquals(LoginViewModel.DiscoveryStatus.Idle, vm.state.value.discoveryStatus)
     }
 
+    @Test fun discoverServers_doesNotReplaceEditedServerUrl() = runBlocking {
+        val vm = newViewModel(
+            buildRepo(buildAuthApi()),
+            serverDiscovery = object : ServerDiscovery {
+                override suspend fun discover(): List<String> = listOf("http://192.168.1.20:5001")
+            },
+        )
+        vm.onServerUrlChange("http://manual.local:5001")
+
+        vm.discoverServers()
+
+        withTimeoutOrNull(1_500L) {
+            while (vm.state.value.discoveredServers.isEmpty()) delay(5)
+        }
+        assertEquals("http://manual.local:5001", vm.state.value.serverUrl)
+        assertEquals(listOf("http://192.168.1.20:5001"), vm.state.value.discoveredServers)
+    }
+
     @Test fun discoverServers_surfacesNoServersWhenProbeFindsNothing() = runBlocking {
         val vm = newViewModel(
             buildRepo(buildAuthApi()),
@@ -141,7 +169,7 @@ class LoginViewModelTest {
         withTimeoutOrNull(1_500L) {
             while (vm.state.value.discoveryStatus == LoginViewModel.DiscoveryStatus.Scanning) delay(5)
         }
-        assertEquals("", vm.state.value.serverUrl)
+        assertEquals(PreferencesRepo.Defaults.SERVER_URL, vm.state.value.serverUrl)
         assertEquals(LoginViewModel.DiscoveryStatus.NoServers, vm.state.value.discoveryStatus)
     }
 

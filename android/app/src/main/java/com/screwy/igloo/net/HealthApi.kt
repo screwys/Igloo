@@ -7,8 +7,8 @@ import io.ktor.client.statement.HttpResponse
 import kotlin.time.Duration
 
 /**
- * `GET /api/health/live` — the 5s-budget reachability probe. Returns the standard envelope
- * `{ok: true, server_time_ms}` with no auth required.
+ * `GET /api/health/live` — the 5s-budget reachability probe. Returns
+ * `{status: "live"}` with no auth required.
  */
 class HealthApi(
     private val client: HttpClient,

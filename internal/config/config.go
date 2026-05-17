@@ -32,6 +32,7 @@ type Config struct {
 	CookiesDir          string
 	TLSCert             string
 	TLSKey              string
+	PublishedServerURL  string
 	AuthUsersPath       string
 	RuntimeConfigPath   string
 	SessionCookieSecure bool
@@ -62,6 +63,7 @@ func Load() *Config {
 		CookiesDir:          filepath.Join(configDir, "cookies"),
 		TLSCert:             filepath.Join(configDir, "server.crt"),
 		TLSKey:              filepath.Join(configDir, "server.key"),
+		PublishedServerURL:  normalizePublishedServerURL(os.Getenv("IGLOO_PUBLISHED_SERVER_URL")),
 		AuthUsersPath:       filepath.Join(configDir, "auth_users.json"),
 		RuntimeConfigPath:   runtimePath,
 		SessionCookieSecure: envBool("IGLOO_SESSION_COOKIE_SECURE", false),
@@ -74,6 +76,17 @@ func Load() *Config {
 
 func DefaultDatabasePath(dataDir string) string {
 	return filepath.Join(dataDir, DatabaseFilename)
+}
+
+func normalizePublishedServerURL(raw string) string {
+	raw = strings.TrimRight(strings.TrimSpace(raw), "/")
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToLower(raw), "http://") || strings.HasPrefix(strings.ToLower(raw), "https://") {
+		return raw
+	}
+	return "http://" + raw
 }
 
 type RuntimeConfig struct {

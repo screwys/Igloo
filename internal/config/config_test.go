@@ -199,6 +199,18 @@ func TestLoadDefaultsSessionCookiesToLANHTTP(t *testing.T) {
 	}
 }
 
+func TestLoadNormalizesPublishedServerURL(t *testing.T) {
+	t.Setenv("IGLOO_DATA_DIR", t.TempDir())
+	t.Setenv("IGLOO_CONFIG_DIR", t.TempDir())
+	t.Setenv("IGLOO_REPO_DIR", t.TempDir())
+	t.Setenv("IGLOO_PUBLISHED_SERVER_URL", "igloo.local:5001/")
+
+	cfg := Load()
+	if cfg.PublishedServerURL != "http://igloo.local:5001" {
+		t.Fatalf("PublishedServerURL = %q", cfg.PublishedServerURL)
+	}
+}
+
 func TestLoadCanRequireSecureSessionCookies(t *testing.T) {
 	t.Setenv("IGLOO_DATA_DIR", t.TempDir())
 	t.Setenv("IGLOO_CONFIG_DIR", t.TempDir())

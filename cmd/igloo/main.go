@@ -113,7 +113,9 @@ func main() {
 	logStartupPhase("listener_bind", time.Since(phaseStart))
 
 	// Use TLS if cert/key exist, otherwise plain HTTP
-	if _, err := os.Stat(cfg.TLSCert); err == nil {
+	tlsEnabled := tlsFilesExist(cfg)
+	go serveDiscovery(appCtx, cfg, tlsEnabled)
+	if tlsEnabled {
 		slog.Info("listening (TLS)", "addr", cfg.ListenAddr)
 		if err := srv.ServeTLS(listener, cfg.TLSCert, cfg.TLSKey); err != http.ErrServerClosed {
 			slog.Error("server error", "err", err)
