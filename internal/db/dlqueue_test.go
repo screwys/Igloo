@@ -60,6 +60,141 @@ func TestChannelQueueUpdateStatus(t *testing.T) {
 	}
 }
 
+func TestChannelQueueClaimNextFiltersPlatformAndPriority(t *testing.T) {
+	d := openFreshTestDB(t)
+	if err := d.ExecRaw(`
+		INSERT INTO channels (channel_id, name, platform, last_checked, created_at)
+		VALUES
+			('youtube_sample_channel_claim_low', 'YouTube Low', 'youtube', 0, 1),
+			('tiktok_sample_channel_claim_high', 'TikTok High', 'tiktok', 0, 1),
+			('instagram_sample_channel_claim_skip', 'Instagram Skip', 'instagram', 0, 1)
+	`); err != nil {
+		t.Fatalf("insert channels: %v", err)
+	}
+	if err := d.AddChannelToQueue("youtube_sample_channel_claim_low", 1); err != nil {
+		t.Fatalf("AddChannelToQueue youtube: %v", err)
+	}
+	if err := d.AddChannelToQueue("tiktok_sample_channel_claim_high", 10); err != nil {
+		t.Fatalf("AddChannelToQueue tiktok: %v", err)
+	}
+	if err := d.AddChannelToQueue("instagram_sample_channel_claim_skip", 20); err != nil {
+		t.Fatalf("AddChannelToQueue instagram: %v", err)
+	}
+
+	claimed, ok, err := d.ClaimNextChannelQueue([]string{"youtube", "tiktok"})
+	if err != nil {
+		t.Fatalf("ClaimNextChannelQueue: %v", err)
+	}
+	if !ok {
+		t.Fatal("ClaimNextChannelQueue returned no row")
+	}
+	if claimed.ChannelID != "tiktok_sample_channel_claim_high" || claimed.Platform != "tiktok" || claimed.Status != "processing" {
+		t.Fatalf("claimed = %+v, want tiktok processing row", claimed)
+	}
+
+	entries, err := d.GetPendingChannelQueue(10)
+	if err != nil {
+		t.Fatalf("GetPendingChannelQueue: %v", err)
+	}
+	for _, entry := range entries {
+		if entry.ChannelID == claimed.ChannelID {
+			t.Fatalf("claimed row still pending: %+v", entry)
+		}
+	}
+}
+
+func TestChannelQueueEnqueueDoesNotResetProcessing(t *testing.T) {
+	d := openFreshTestDB(t)
+	if err := d.ExecRaw(`
+		INSERT INTO channels (channel_id, name, platform, last_checked, created_at)
+		VALUES ('youtube_sample_channel_processing', 'YouTube Processing', 'youtube', 0, 1)
+	`); err != nil {
+		t.Fatalf("insert channel: %v", err)
+	}
+	if err := d.AddChannelToQueue("youtube_sample_channel_processing", 1); err != nil {
+		t.Fatalf("AddChannelToQueue: %v", err)
+	}
+	if _, ok, err := d.ClaimNextChannelQueue([]string{"youtube"}); err != nil || !ok {
+		t.Fatalf("ClaimNextChannelQueue ok=%v err=%v", ok, err)
+	}
+	if err := d.AddChannelToQueue("youtube_sample_channel_processing", 10); err != nil {
+		t.Fatalf("AddChannelToQueue processing: %v", err)
+	}
+
+	var status string
+	var priority int
+	if err := d.QueryRow(`SELECT status, priority FROM channel_queue WHERE channel_id='youtube_sample_channel_processing'`).Scan(&status, &priority); err != nil {
+		t.Fatalf("query channel_queue: %v", err)
+	}
+	if status != "processing" || priority != 1 {
+		t.Fatalf("processing enqueue changed row to status=%q priority=%d, want processing/1", status, priority)
+	}
+}
+
+func TestResetStaleChannelQueueItems(t *testing.T) {
+	d := openFreshTestDB(t)
+	now := time.Now().UnixMilli()
+	if err := d.ExecRaw(`
+		INSERT INTO channel_queue (channel_id, status, priority, added_at, started_at)
+		VALUES
+			('youtube_sample_channel_stale', 'processing', 0, ?, ?),
+			('youtube_sample_channel_active', 'processing', 0, ?, ?)
+	`, now, now-int64(time.Hour/time.Millisecond), now, now); err != nil {
+		t.Fatalf("insert queue rows: %v", err)
+	}
+
+	n, err := d.ResetStaleChannelQueueItems(30 * time.Minute)
+	if err != nil {
+		t.Fatalf("ResetStaleChannelQueueItems: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("reset count = %d, want 1", n)
+	}
+
+	var stale, active string
+	if err := d.QueryRow(`SELECT status FROM channel_queue WHERE channel_id='youtube_sample_channel_stale'`).Scan(&stale); err != nil {
+		t.Fatalf("query stale: %v", err)
+	}
+	if err := d.QueryRow(`SELECT status FROM channel_queue WHERE channel_id='youtube_sample_channel_active'`).Scan(&active); err != nil {
+		t.Fatalf("query active: %v", err)
+	}
+	if stale != "pending" || active != "processing" {
+		t.Fatalf("statuses = stale:%s active:%s, want pending/processing", stale, active)
+	}
+}
+
+func TestResetProcessingChannelQueueItems(t *testing.T) {
+	d := openFreshTestDB(t)
+	now := time.Now().UnixMilli()
+	if err := d.ExecRaw(`
+		INSERT INTO channel_queue (channel_id, status, priority, added_at, started_at)
+		VALUES
+			('youtube_sample_channel_startup_a', 'processing', 0, ?, ?),
+			('youtube_sample_channel_startup_b', 'pending', 0, ?, 0)
+	`, now, now, now); err != nil {
+		t.Fatalf("insert queue rows: %v", err)
+	}
+
+	n, err := d.ResetProcessingChannelQueueItems()
+	if err != nil {
+		t.Fatalf("ResetProcessingChannelQueueItems: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("reset count = %d, want 1", n)
+	}
+
+	var processing, pending string
+	if err := d.QueryRow(`SELECT status FROM channel_queue WHERE channel_id='youtube_sample_channel_startup_a'`).Scan(&processing); err != nil {
+		t.Fatalf("query processing: %v", err)
+	}
+	if err := d.QueryRow(`SELECT status FROM channel_queue WHERE channel_id='youtube_sample_channel_startup_b'`).Scan(&pending); err != nil {
+		t.Fatalf("query pending: %v", err)
+	}
+	if processing != "pending" || pending != "pending" {
+		t.Fatalf("statuses = processing:%s pending:%s, want pending/pending", processing, pending)
+	}
+}
+
 func TestClearPlatformCheckedClearsFollowedChannels(t *testing.T) {
 	d := openFreshTestDB(t)
 

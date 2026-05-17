@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/model"
 )
@@ -188,14 +189,78 @@ func TestDiscoverySelectionSkipsDisabledPlatforms(t *testing.T) {
 	}
 }
 
+func TestMaterializeDiscoveryChannelsQueuesDueNonXOnly(t *testing.T) {
+	d := newTestWorkerDB(t)
+	now := time.Unix(1000, 0)
+	old := now.Add(-3 * time.Hour).UnixMilli()
+	fresh := now.Add(-1 * time.Minute).UnixMilli()
+	if err := d.ExecRaw(`
+		INSERT INTO channels (channel_id, name, platform, last_checked, created_at)
+		VALUES
+			('youtube_sample_channel_due_shared_queue', 'YouTube Due', 'youtube', ?, 1),
+			('youtube_sample_channel_fresh_shared_queue', 'YouTube Fresh', 'youtube', ?, 1),
+			('tiktok_sample_channel_disabled_shared_queue', 'TikTok Disabled', 'tiktok', ?, 1),
+			('twitter_sample_channel_skip_shared_queue', 'Twitter Skip', 'twitter', ?, 1)
+	`, old, fresh, old, old); err != nil {
+		t.Fatalf("insert channels: %v", err)
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO channel_follows (user_id, channel_id, followed_at)
+		VALUES
+			('', 'youtube_sample_channel_due_shared_queue', 1),
+			('', 'youtube_sample_channel_fresh_shared_queue', 1),
+			('', 'tiktok_sample_channel_disabled_shared_queue', 1),
+			('', 'twitter_sample_channel_skip_shared_queue', 1)
+	`); err != nil {
+		t.Fatalf("insert follows: %v", err)
+	}
+	cfg := testCfg(t.TempDir())
+	cfg.EnabledPlatforms = []string{"youtube"}
+	cfg.EnabledPlatformSet = map[string]bool{"youtube": true}
+	m := &Manager{db: d, cfg: cfg}
+
+	if queued := m.materializeDiscoveryChannels(now, false); queued != 1 {
+		t.Fatalf("materialized = %d, want 1", queued)
+	}
+
+	entries, err := d.GetPendingChannelQueue(10)
+	if err != nil {
+		t.Fatalf("GetPendingChannelQueue: %v", err)
+	}
+	if got, want := schedulerQueueIDs(entries), []string{"youtube_sample_channel_due_shared_queue"}; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("queued channels = %v, want %v", got, want)
+	}
+}
+
+func TestPlatformDiscoveryGateAllowsOneActiveYoutube(t *testing.T) {
+	gate := newPlatformDiscoveryGate()
+	now := time.Unix(1000, 0)
+	delayFor := func(string) time.Duration { return 120 * time.Second }
+
+	if got := gate.eligiblePlatforms([]string{"youtube"}, delayFor, now); fmt.Sprint(got) != "[youtube]" {
+		t.Fatalf("initial eligible platforms = %v, want [youtube]", got)
+	}
+	gate.markStart("youtube", now)
+	if got := gate.eligiblePlatforms([]string{"youtube"}, delayFor, now.Add(time.Second)); len(got) != 0 {
+		t.Fatalf("active youtube should not be eligible: %v", got)
+	}
+	gate.markDone("youtube")
+	if got := gate.eligiblePlatforms([]string{"youtube"}, delayFor, now.Add(119*time.Second)); len(got) != 0 {
+		t.Fatalf("youtube before delay should not be eligible: %v", got)
+	}
+	if got := gate.eligiblePlatforms([]string{"youtube"}, delayFor, now.Add(120*time.Second)); fmt.Sprint(got) != "[youtube]" {
+		t.Fatalf("youtube after delay eligible = %v, want [youtube]", got)
+	}
+}
+
 func TestPlatformFetchDelayDefaults(t *testing.T) {
 	d := newTestWorkerDB(t)
 	m := &Manager{db: d, cfg: testCfg(t.TempDir())}
 
 	tests := map[string]time.Duration{
-		"youtube":   10 * time.Second,
-		"tiktok":    2 * time.Second,
-		"instagram": 2 * time.Second,
+		"youtube":   120 * time.Second,
+		"tiktok":    30 * time.Second,
+		"instagram": 30 * time.Second,
 	}
 	for platform, want := range tests {
 		if got := m.platformFetchDelay(platform); got != want {
@@ -205,6 +270,14 @@ func TestPlatformFetchDelayDefaults(t *testing.T) {
 }
 
 func schedulerChannelIDs(channels []model.Channel) []string {
+	ids := make([]string, 0, len(channels))
+	for _, ch := range channels {
+		ids = append(ids, ch.ChannelID)
+	}
+	return ids
+}
+
+func schedulerQueueIDs(channels []db.ChannelQueueRow) []string {
 	ids := make([]string, 0, len(channels))
 	for _, ch := range channels {
 		ids = append(ids, ch.ChannelID)

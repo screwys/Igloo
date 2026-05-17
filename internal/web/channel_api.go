@@ -385,9 +385,8 @@ func (s *Server) handleChannelRefresh(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	} else {
-		// Clear last_checked so the scheduler considers it due, then trigger a cycle.
-		_ = s.db.ClearChannelChecked(channelID)
-		s.workers.TriggerDownloadCycle(false)
+		// Queue the channel directly so refresh follows the same discovery path as background checks.
+		s.workers.TriggerChannelCheck(channelID)
 	}
 	writeJSON(w, 200, map[string]any{"success": true, "channel_id": channelID, "message": "Refresh triggered"})
 }

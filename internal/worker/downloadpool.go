@@ -26,11 +26,10 @@ var (
 	downloadPoolLeaseRenewInterval = downloadPoolLeaseDuration / 2
 )
 
-// platformSem limits concurrent downloads per platform. YouTube tolerates
-// parallel yt-dlp sessions; short-form platforms stay at 1 because we rely on
-// the pacing below to dodge per-IP/session rate limits.
+// platformSem limits concurrent downloads per platform. Keep each upstream
+// platform at one active downloader; discovery pacing owns freshness.
 var platformSem = map[string]chan struct{}{
-	"youtube":   make(chan struct{}, 3),
+	"youtube":   make(chan struct{}, 1),
 	"tiktok":    make(chan struct{}, 1),
 	"instagram": make(chan struct{}, 1),
 }

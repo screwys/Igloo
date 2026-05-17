@@ -1902,9 +1902,9 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var99 string
-		templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("youtube_fetch_delay", "10"))
+		templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("youtube_fetch_delay", "120"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 446, Col: 171}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 446, Col: 172}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var99)
 		if templ_7745c5c3_Err != nil {
@@ -2884,9 +2884,9 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var162 string
-		templ_7745c5c3_Var162, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("instagram_fetch_delay", "2"))
+		templ_7745c5c3_Var162, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("instagram_fetch_delay", "30"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 583, Col: 176}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 583, Col: 177}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var162)
 		if templ_7745c5c3_Err != nil {
@@ -2973,9 +2973,9 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var168 string
-		templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("tiktok_fetch_delay", "2"))
+		templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("tiktok_fetch_delay", "30"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 602, Col: 167}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 602, Col: 168}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var168)
 		if templ_7745c5c3_Err != nil {

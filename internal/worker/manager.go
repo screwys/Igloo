@@ -41,7 +41,9 @@ type Manager struct {
 	wg               sync.WaitGroup
 	feedMediaKick    chan struct{} // buffered(1): coalescing kick
 	downloadKick     chan struct{} // buffered(1): coalescing kick for download pool
-	avatarRequest    chan string   // buffered(256): on-demand avatar/profile fetch requests
+	discoveryKick    chan struct{} // buffered(1): coalescing kick for platform discovery
+	discoveryJobs    chan db.ChannelQueueRow
+	avatarRequest    chan string // buffered(256): on-demand avatar/profile fetch requests
 	xStatusEnrich    chan xfeed.StatusEnrichmentRequest
 	previewChan      chan PreviewRequest // buffered(256): FIFO preview queue
 	ingestKick       chan struct{}       // buffered(1): trigger immediate ingest
@@ -74,6 +76,7 @@ type Manager struct {
 	xFeedFetcher  xFeedFetcher
 	xStatusMu     sync.Mutex
 	xStatusQueued map[string]time.Time
+	discoveryGate *platformDiscoveryGate
 
 	// dearrowFetcher is the configured DeArrow orchestrator. Nil means DeArrow
 	// fetching is disabled (e.g. unit tests that don't care about it).
@@ -110,6 +113,8 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 		cancel:          cancel,
 		feedMediaKick:   make(chan struct{}, 1),
 		downloadKick:    make(chan struct{}, 1),
+		discoveryKick:   make(chan struct{}, 1),
+		discoveryJobs:   make(chan db.ChannelQueueRow, discoveryWorkerCount),
 		avatarRequest:   make(chan string, 256),
 		xStatusEnrich:   make(chan xfeed.StatusEnrichmentRequest, 1024),
 		previewChan:     make(chan PreviewRequest, 256),
@@ -120,6 +125,7 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 		dlActivity:      NewActivityRing(100),
 		feedActivity:    NewActivityRing(200),
 		xStatusQueued:   make(map[string]time.Time),
+		discoveryGate:   newPlatformDiscoveryGate(),
 	}
 	m.dearrowFetcher = &dearrow.Fetcher{
 		Client:   dearrow.NewClient(dearrow.DefaultBaseURL),
@@ -348,6 +354,17 @@ func (m *Manager) KickDownloadPool() {
 	}
 }
 
+// KickDiscovery sends a non-blocking signal to wake the platform discovery dispatcher.
+func (m *Manager) KickDiscovery() {
+	if m == nil || m.discoveryKick == nil {
+		return
+	}
+	select {
+	case m.discoveryKick <- struct{}{}:
+	default:
+	}
+}
+
 // RequestAvatar enqueues channelID for an on-demand avatar fetch.
 // The send is non-blocking; if the buffer is full, a skeleton channel_profiles
 // row or stale existing avatar row still ensures the next refresh cycle will
@@ -503,7 +520,7 @@ func (m *Manager) IsIngestRunning() bool {
 // TriggerChannelCheck queues a single channel for immediate check.
 func (m *Manager) TriggerChannelCheck(channelID string) {
 	_ = m.db.AddChannelToQueue(channelID, 10) // high priority
-	m.KickDownloadPool()
+	m.KickDiscovery()
 }
 
 // TriggerPlatformRefresh clears last_checked for all channels of a platform

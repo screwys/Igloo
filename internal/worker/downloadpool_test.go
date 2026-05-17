@@ -475,8 +475,8 @@ func TestParseDateString(t *testing.T) {
 
 func TestPlatformSemFor(t *testing.T) {
 	youtubeSem := platformSemFor("youtube")
-	if cap(youtubeSem) != 3 {
-		t.Errorf("youtube semaphore cap = %d, want 3", cap(youtubeSem))
+	if cap(youtubeSem) != 1 {
+		t.Errorf("youtube semaphore cap = %d, want 1", cap(youtubeSem))
 	}
 
 	tt := platformSemFor("tiktok")

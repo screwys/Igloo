@@ -18,6 +18,15 @@ type ChannelQueueRow struct {
 	Platform  string // joined from channels table
 }
 
+const channelQueuePlatformSQL = `
+	COALESCE(NULLIF(c.platform,''), CASE
+		WHEN cq.channel_id LIKE 'twitter_%' THEN 'twitter'
+		WHEN cq.channel_id LIKE 'youtube_%' THEN 'youtube'
+		WHEN cq.channel_id LIKE 'tiktok_%' THEN 'tiktok'
+		WHEN cq.channel_id LIKE 'instagram_%' THEN 'instagram'
+		ELSE 'youtube'
+	END)`
+
 // DownloadQueueRow is the DB-level representation of a video download queue entry.
 type DownloadQueueRow struct {
 	VideoID           string
@@ -39,21 +48,47 @@ type DownloadQueueRow struct {
 
 // AddChannelToQueue inserts or updates a channel in the channel_queue with status='pending'.
 func (db *DB) AddChannelToQueue(channelID string, priority int) error {
-	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+	_, err := db.EnqueueChannelCheck(channelID, priority)
+	return err
+}
+
+// EnqueueChannelCheck inserts or updates a channel queue row. It returns true
+// when the call created a pending row, requeued a completed row, or raised the
+// priority of an already-pending row.
+func (db *DB) EnqueueChannelCheck(channelID string, priority int) (bool, error) {
+	changed := false
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		res, err := tx.Exec(`
 			INSERT INTO channel_queue (channel_id, status, priority, added_at)
 			VALUES (?, 'pending', ?, CAST(strftime('%s','now') AS INTEGER) * 1000)
 			ON CONFLICT(channel_id) DO UPDATE SET
-				status='pending', priority=excluded.priority
+				status = 'pending',
+				priority = CASE
+					WHEN channel_queue.status = 'pending' THEN MAX(channel_queue.priority, excluded.priority)
+					ELSE excluded.priority
+				END,
+				added_at = excluded.added_at,
+				completed_at = 0
+			WHERE channel_queue.status != 'processing'
+			  AND (channel_queue.status != 'pending' OR channel_queue.priority < excluded.priority)
 		`, channelID, priority)
-		return err
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		changed = n > 0
+		return nil
 	})
+	return changed, err
 }
 
 // GetPendingChannelQueue returns up to limit pending channel queue entries joined with channels.platform.
 func (db *DB) GetPendingChannelQueue(limit int) ([]ChannelQueueRow, error) {
 	rows, err := db.conn.Query(`
-		SELECT cq.channel_id, cq.status, cq.priority, COALESCE(c.platform, 'youtube')
+		SELECT cq.channel_id, cq.status, cq.priority, `+channelQueuePlatformSQL+`
 		FROM channel_queue cq
 		LEFT JOIN channels c ON c.channel_id = cq.channel_id
 		WHERE cq.status = 'pending'
@@ -78,6 +113,73 @@ func (db *DB) GetPendingChannelQueue(limit int) ([]ChannelQueueRow, error) {
 	return result, rows.Err()
 }
 
+// ClaimNextChannelQueue atomically claims one pending channel queue row whose
+// platform is currently eligible for a discovery worker.
+func (db *DB) ClaimNextChannelQueue(platforms []string) (ChannelQueueRow, bool, error) {
+	platforms = normalizeChannelQueuePlatforms(platforms)
+	if len(platforms) == 0 {
+		return ChannelQueueRow{}, false, nil
+	}
+	var claimed ChannelQueueRow
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		query := `
+			SELECT cq.channel_id, cq.status, cq.priority, ` + channelQueuePlatformSQL + `
+			FROM channel_queue cq
+			LEFT JOIN channels c ON c.channel_id = cq.channel_id
+			WHERE cq.status = 'pending'
+			  AND ` + channelQueuePlatformSQL + ` IN (` + placeholders(len(platforms)) + `)
+			ORDER BY cq.priority DESC, cq.added_at ASC
+			LIMIT 1`
+		args := stringsToAny(platforms)
+		row := tx.QueryRow(query, args...)
+		var candidate ChannelQueueRow
+		if err := row.Scan(&candidate.ChannelID, &candidate.Status, &candidate.Priority, &candidate.Platform); err != nil {
+			if err == sql.ErrNoRows {
+				return nil
+			}
+			return err
+		}
+		res, err := tx.Exec(`
+			UPDATE channel_queue
+			SET status='processing',
+			    started_at=CAST(strftime('%s','now') AS INTEGER) * 1000,
+			    completed_at=0
+			WHERE channel_id=? AND status='pending'
+		`, candidate.ChannelID)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return nil
+		}
+		candidate.Status = "processing"
+		claimed = candidate
+		return nil
+	})
+	if err != nil {
+		return ChannelQueueRow{}, false, err
+	}
+	return claimed, claimed.ChannelID != "", nil
+}
+
+func normalizeChannelQueuePlatforms(platforms []string) []string {
+	seen := make(map[string]bool, len(platforms))
+	out := make([]string, 0, len(platforms))
+	for _, platform := range platforms {
+		platform = strings.ToLower(strings.TrimSpace(platform))
+		if platform == "" || seen[platform] {
+			continue
+		}
+		seen[platform] = true
+		out = append(out, platform)
+	}
+	return out
+}
+
 // UpdateChannelQueueStatus updates the status of a channel_queue entry.
 func (db *DB) UpdateChannelQueueStatus(channelID, status string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
@@ -87,6 +189,75 @@ func (db *DB) UpdateChannelQueueStatus(channelID, status string) error {
 		)
 		return err
 	})
+}
+
+// CompleteChannelQueue marks a claimed channel check complete.
+func (db *DB) CompleteChannelQueue(channelID string) error {
+	return db.WithWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			UPDATE channel_queue
+			SET status='completed',
+			    completed_at=CAST(strftime('%s','now') AS INTEGER) * 1000
+			WHERE channel_id=?
+		`, channelID)
+		return err
+	})
+}
+
+// ResetProcessingChannelQueueItems returns all in-flight channel checks to
+// pending. Use on process startup, where old processing rows cannot still have
+// an active worker in this process.
+func (db *DB) ResetProcessingChannelQueueItems() (int, error) {
+	var affected int
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		res, err := tx.Exec(`
+			UPDATE channel_queue
+			SET status='pending',
+			    started_at=0,
+			    completed_at=0
+			WHERE status='processing'
+		`)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		affected = int(n)
+		return nil
+	})
+	return affected, err
+}
+
+// ResetStaleChannelQueueItems returns old processing channel checks to pending
+// so an interrupted worker cannot permanently strand discovery for a channel.
+func (db *DB) ResetStaleChannelQueueItems(maxAge time.Duration) (int, error) {
+	if maxAge <= 0 {
+		maxAge = 30 * time.Minute
+	}
+	cutoff := time.Now().Add(-maxAge).UnixMilli()
+	var affected int
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		res, err := tx.Exec(`
+			UPDATE channel_queue
+			SET status='pending',
+			    started_at=0,
+			    completed_at=0
+			WHERE status='processing'
+			  AND (started_at = 0 OR started_at < ?)
+		`, cutoff)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		affected = int(n)
+		return nil
+	})
+	return affected, err
 }
 
 // AddToDownloadQueue inserts a video into download_queue, ignoring duplicates.

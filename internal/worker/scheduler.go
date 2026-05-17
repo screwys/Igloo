@@ -9,49 +9,181 @@ import (
 	"sync"
 	"time"
 
+	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/model"
 )
 
-// runScheduler periodically checks channels for new content.
-func (m *Manager) runScheduler(ctx context.Context) {
-	// Initial delay to let server start.
-	select {
-	case <-time.After(15 * time.Second):
-	case <-ctx.Done():
+const (
+	discoveryWorkerCount           = 4
+	discoveryChannelQueueStaleAge  = 30 * time.Minute
+	discoveryMaintenanceInterval   = 10 * time.Minute
+	discoveryFallbackWakeDelay     = time.Minute
+	discoveryMaxScheduledWakeDelay = 30 * time.Minute
+)
+
+type platformDiscoveryGate struct {
+	mu        sync.Mutex
+	active    map[string]int
+	lastStart map[string]time.Time
+}
+
+func newPlatformDiscoveryGate() *platformDiscoveryGate {
+	return &platformDiscoveryGate{
+		active:    make(map[string]int),
+		lastStart: make(map[string]time.Time),
+	}
+}
+
+func (g *platformDiscoveryGate) eligiblePlatforms(platforms []string, delayFor func(string) time.Duration, now time.Time) []string {
+	if g == nil {
+		return platforms
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	ready := make([]string, 0, len(platforms))
+	for _, platform := range platforms {
+		platform = strings.ToLower(strings.TrimSpace(platform))
+		if platform == "" || g.active[platform] >= 1 {
+			continue
+		}
+		if last := g.lastStart[platform]; !last.IsZero() && now.Before(last.Add(delayFor(platform))) {
+			continue
+		}
+		ready = append(ready, platform)
+	}
+	return ready
+}
+
+func (g *platformDiscoveryGate) markStart(platform string, now time.Time) {
+	if g == nil {
 		return
 	}
+	platform = strings.ToLower(strings.TrimSpace(platform))
+	if platform == "" {
+		return
+	}
+	g.mu.Lock()
+	g.active[platform]++
+	g.lastStart[platform] = now
+	g.mu.Unlock()
+}
 
-	log.Printf("[scheduler] running initial cycle")
-	m.runSchedulerCycle(ctx, false)
+func (g *platformDiscoveryGate) markDone(platform string) {
+	if g == nil {
+		return
+	}
+	platform = strings.ToLower(strings.TrimSpace(platform))
+	if platform == "" {
+		return
+	}
+	g.mu.Lock()
+	if g.active[platform] > 0 {
+		g.active[platform]--
+	}
+	g.mu.Unlock()
+}
+
+func (g *platformDiscoveryGate) nextReadyDelay(platforms []string, delayFor func(string) time.Duration, now time.Time) time.Duration {
+	if g == nil {
+		return 0
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	var min time.Duration
+	for _, platform := range platforms {
+		platform = strings.ToLower(strings.TrimSpace(platform))
+		if platform == "" || g.active[platform] > 0 {
+			continue
+		}
+		last := g.lastStart[platform]
+		if last.IsZero() {
+			return 0
+		}
+		wait := last.Add(delayFor(platform)).Sub(now)
+		if wait <= 0 {
+			return 0
+		}
+		if min == 0 || wait < min {
+			min = wait
+		}
+	}
+	return min
+}
+
+// runScheduler continuously dispatches non-X platform discovery through a shared worker pool.
+func (m *Manager) runScheduler(ctx context.Context) {
+	if m.discoveryGate == nil {
+		m.discoveryGate = newPlatformDiscoveryGate()
+	}
+	if m.discoveryJobs == nil {
+		m.discoveryJobs = make(chan db.ChannelQueueRow, discoveryWorkerCount)
+	}
+	if n, err := m.db.ResetProcessingChannelQueueItems(); err != nil {
+		log.Printf("[scheduler] ResetProcessingChannelQueueItems: %v", err)
+	} else if n > 0 {
+		log.Printf("[scheduler] reset %d in-flight channel checks on startup", n)
+	}
+	var workerWG sync.WaitGroup
+	for i := 0; i < discoveryWorkerCount; i++ {
+		workerWG.Add(1)
+		go func(workerID int) {
+			defer workerWG.Done()
+			m.runDiscoveryWorker(ctx, workerID)
+		}(i + 1)
+	}
+	defer workerWG.Wait()
+
+	log.Printf("[scheduler] discovery dispatcher started")
+	m.setStatus("scheduler", workerStatus("scheduler", true, "discovery dispatcher running", ""))
+	nextMaintenance := time.Now()
 
 	for {
-		select {
-		case <-time.After(60 * time.Second):
-			m.runSchedulerCycle(ctx, false)
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
+		}
+		now := time.Now()
+		if !now.Before(nextMaintenance) {
+			m.runDiscoveryMaintenance()
+			nextMaintenance = now.Add(discoveryMaintenanceInterval)
+		}
+		if queued := m.materializeDiscoveryChannels(now, false); queued > 0 {
+			log.Printf("[scheduler] queued %d due channel checks", queued)
+		}
+		if dispatched := m.dispatchReadyDiscoveryJobs(ctx); dispatched > 0 {
+			continue
+		}
+		wait := m.nextDiscoveryWakeDelay(time.Now(), nextMaintenance)
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-m.discoveryKick:
+			timer.Stop()
+		case <-timer.C:
 		}
 	}
 }
 
 // TriggerDownloadCycle can be called from API handlers.
 func (m *Manager) TriggerDownloadCycle(force bool) {
-	go func() {
-		m.runSchedulerCycle(m.ctx, force)
-	}()
+	if force {
+		_ = m.materializeDiscoveryChannels(time.Now(), true)
+	}
+	m.KickDiscovery()
 }
 
-func (m *Manager) runSchedulerCycle(ctx context.Context, force bool) {
-	start := time.Now()
-	m.Emit("scheduler", "Starting download cycle", "info")
-	m.setStatus("scheduler", workerStatus("scheduler", true, "running cycle", ""))
-
-	// Reset stale queue items.
+func (m *Manager) runDiscoveryMaintenance() {
 	if n, err := m.db.ResetStaleDownloadQueueItems(); err != nil {
 		log.Printf("[scheduler] ResetStaleDownloadQueueItems: %v", err)
 	} else if n > 0 {
 		log.Printf("[scheduler] reset %d stale download queue items", n)
+	}
+	if n, err := m.db.ResetStaleChannelQueueItems(discoveryChannelQueueStaleAge); err != nil {
+		log.Printf("[scheduler] ResetStaleChannelQueueItems: %v", err)
+	} else if n > 0 {
+		log.Printf("[scheduler] reset %d stale channel checks", n)
 	}
 	if n, err := m.db.ClearFailedDownloadQueueItems(); err != nil {
 		log.Printf("[scheduler] ClearFailedDownloadQueueItems: %v", err)
@@ -59,99 +191,202 @@ func (m *Manager) runSchedulerCycle(ctx context.Context, force bool) {
 		log.Printf("[scheduler] reset %d failed download queue items for retry", n)
 	}
 
-	// Cleanup temp videos.
 	m.cleanupTempVideos()
-	if n, err := m.db.DeleteExpiredStoryVideos(time.Now().UnixMilli(), m.cfg.DataDir); err != nil {
+	dataDir := ""
+	if m.cfg != nil {
+		dataDir = m.cfg.DataDir
+	}
+	if n, err := m.db.DeleteExpiredStoryVideos(time.Now().UnixMilli(), dataDir); err != nil {
 		log.Printf("[scheduler] DeleteExpiredStoryVideos: %v", err)
 	} else if n > 0 {
 		log.Printf("[scheduler] deleted %d expired native stories", n)
 	}
+}
 
+func (m *Manager) materializeDiscoveryChannels(now time.Time, force bool) int {
 	channels, err := m.db.GetSubscribedChannels()
 	if err != nil {
 		log.Printf("[scheduler] GetSubscribedChannels: %v", err)
+		return 0
+	}
+	byPlatform := m.discoveryChannelsByPlatform(channels, force, now)
+	queued := 0
+	for _, chs := range byPlatform {
+		for _, ch := range chs {
+			changed, err := m.db.EnqueueChannelCheck(ch.ChannelID, 0)
+			if err != nil {
+				log.Printf("[scheduler] AddChannelToQueue %s: %v", ch.ChannelID, err)
+				continue
+			}
+			if changed {
+				queued++
+			}
+		}
+	}
+	return queued
+}
+
+func (m *Manager) dispatchReadyDiscoveryJobs(ctx context.Context) int {
+	if m.discoveryJobs == nil || m.discoveryGate == nil {
+		return 0
+	}
+	dispatched := 0
+	for len(m.discoveryJobs) < cap(m.discoveryJobs) {
+		ready := m.discoveryGate.eligiblePlatforms(discoveryPlatforms(), m.platformFetchDelay, time.Now())
+		if len(ready) == 0 {
+			return dispatched
+		}
+		job, ok, err := m.db.ClaimNextChannelQueue(ready)
+		if err != nil {
+			log.Printf("[scheduler] ClaimNextChannelQueue: %v", err)
+			return dispatched
+		}
+		if !ok {
+			return dispatched
+		}
+		start := time.Now()
+		m.discoveryGate.markStart(job.Platform, start)
+		select {
+		case m.discoveryJobs <- job:
+			dispatched++
+		case <-ctx.Done():
+			m.discoveryGate.markDone(job.Platform)
+			return dispatched
+		}
+	}
+	return dispatched
+}
+
+func (m *Manager) runDiscoveryWorker(ctx context.Context, workerID int) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case job := <-m.discoveryJobs:
+			m.processDiscoveryJob(ctx, workerID, job)
+			if m.discoveryGate != nil {
+				m.discoveryGate.markDone(job.Platform)
+			}
+			m.KickDiscovery()
+		}
+	}
+}
+
+func (m *Manager) processDiscoveryJob(ctx context.Context, workerID int, job db.ChannelQueueRow) {
+	if ctx.Err() != nil {
+		return
+	}
+	start := time.Now()
+	ch, err := m.db.GetChannel(job.ChannelID)
+	if err != nil || ch == nil {
+		log.Printf("[scheduler] worker %d missing channel %s: %v", workerID, job.ChannelID, err)
+		_ = m.db.CompleteChannelQueue(job.ChannelID)
+		return
+	}
+	if ch.Platform == "twitter" || (m.cfg != nil && !m.cfg.PlatformEnabled(ch.Platform)) {
+		_ = m.db.CompleteChannelQueue(job.ChannelID)
 		return
 	}
 
-	byPlatform := m.discoveryChannelsByPlatform(channels, force, time.Now())
+	log.Printf("[scheduler] worker %d checking %s (%s)", workerID, ch.Name, ch.ChannelID)
+	m.emitSchedulerEvent(fmt.Sprintf("Checking: %s", ch.Name), "start", ch.ChannelID, ch.Platform)
 
-	var (
-		queuedMu sync.Mutex
-		queued   int
-		wg       sync.WaitGroup
-	)
-
-	for platform, chs := range byPlatform {
-		wg.Add(1)
-		go func(platform string, chs []model.Channel) {
-			defer wg.Done()
-			for i, ch := range chs {
-				if ctx.Err() != nil {
-					return
-				}
-				if i > 0 {
-					if !m.waitForPlatformFetchDelay(ctx, platform) {
-						return
-					}
-				}
-
-				log.Printf("[scheduler] checking %s (%s)", ch.Name, ch.ChannelID)
-				m.emitSchedulerEvent(fmt.Sprintf("Checking: %s", ch.Name), "start", ch.ChannelID, ch.Platform)
-
-				refs, err := m.checkChannel(ctx, ch)
-				if err != nil {
-					log.Printf("[scheduler] check %s failed: %v", ch.Name, err)
-					m.emitSchedulerEvent(fmt.Sprintf("Check failed: %s — %v", ch.Name, err), "error", ch.ChannelID, ch.Platform)
-					_ = m.db.UpdateChannelChecked(ch.ChannelID)
-					continue
-				}
-				if ch.Platform == "instagram" {
-					m.rememberInstagramProfileFromRefs(ch, refs)
-				}
-				if ch.Platform == "tiktok" || ch.Platform == "instagram" {
-					var handle string
-					if ch.Platform == "tiktok" {
-						handle = tiktokHandleForChannel(ch)
-					} else {
-						handle = instagramHandleForChannel(ch)
-					}
-					m.refreshNativeStoriesForChannel(ctx, ch.ChannelID, ch.Platform, handle, ch.Name)
-				}
-
-				added := m.reconcileSourceWindow(ch, refs)
-				_ = m.db.UpdateChannelChecked(ch.ChannelID)
-
-				if added > 0 {
-					queuedMu.Lock()
-					queued += added
-					queuedMu.Unlock()
-					log.Printf("[scheduler] queued %d videos for %s", added, ch.Name)
-					m.emitSchedulerEvent(fmt.Sprintf("Queued %d for %s", added, ch.Name), "queue", ch.ChannelID, ch.Platform)
-				} else {
-					m.emitSchedulerEvent(fmt.Sprintf("Up to date: %s", ch.Name), "done", ch.ChannelID, ch.Platform)
-				}
-			}
-		}(platform, chs)
+	refs, err := m.checkChannel(ctx, *ch)
+	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		log.Printf("[scheduler] check %s failed: %v", ch.Name, err)
+		m.emitSchedulerEvent(fmt.Sprintf("Check failed: %s — %v", ch.Name, err), "error", ch.ChannelID, ch.Platform)
+		_ = m.db.UpdateChannelChecked(ch.ChannelID)
+		_ = m.db.CompleteChannelQueue(ch.ChannelID)
+		m.setStatus("scheduler", workerStatus("scheduler", true, fmt.Sprintf("worker %d failed %s", workerID, ch.ChannelID), err.Error()))
+		return
 	}
-	wg.Wait()
+	if ch.Platform == "instagram" {
+		m.rememberInstagramProfileFromRefs(*ch, refs)
+	}
+	if ch.Platform == "tiktok" || ch.Platform == "instagram" {
+		handle := tiktokHandleForChannel(*ch)
+		if ch.Platform == "instagram" {
+			handle = instagramHandleForChannel(*ch)
+		}
+		m.refreshNativeStoriesForChannel(ctx, ch.ChannelID, ch.Platform, handle, ch.Name)
+	}
 
-	if queued > 0 {
+	added := m.reconcileSourceWindow(*ch, refs)
+	_ = m.db.UpdateChannelChecked(ch.ChannelID)
+	m.enforceChannelLimit(*ch)
+	_ = m.db.CompleteChannelQueue(ch.ChannelID)
+	if added > 0 {
+		log.Printf("[scheduler] queued %d videos for %s", added, ch.Name)
+		m.emitSchedulerEvent(fmt.Sprintf("Queued %d for %s", added, ch.Name), "queue", ch.ChannelID, ch.Platform)
 		m.KickDownloadPool()
+	} else {
+		m.emitSchedulerEvent(fmt.Sprintf("Up to date: %s", ch.Name), "done", ch.ChannelID, ch.Platform)
 	}
+	elapsed := time.Since(start).Round(time.Millisecond)
+	m.setStatus("scheduler", workerStatus("scheduler", true, fmt.Sprintf("worker %d checked %s: %d queued (%s)", workerID, ch.ChannelID, added, elapsed), ""))
+}
 
-	// Enforce channel limits.
+func (m *Manager) nextDiscoveryWakeDelay(now, nextMaintenance time.Time) time.Duration {
+	wait := m.nextDiscoveryDueDelay(now)
+	if m.discoveryGate != nil {
+		if gateWait := m.discoveryGate.nextReadyDelay(discoveryPlatforms(), m.platformFetchDelay, now); gateWait > 0 && (wait == 0 || gateWait < wait) {
+			wait = gateWait
+		}
+	}
+	if maintWait := nextMaintenance.Sub(now); maintWait > 0 && (wait == 0 || maintWait < wait) {
+		wait = maintWait
+	}
+	if wait <= 0 {
+		return time.Second
+	}
+	if wait > discoveryMaxScheduledWakeDelay {
+		return discoveryMaxScheduledWakeDelay
+	}
+	return wait
+}
+
+func (m *Manager) nextDiscoveryDueDelay(now time.Time) time.Duration {
+	channels, err := m.db.GetSubscribedChannels()
+	if err != nil {
+		log.Printf("[scheduler] GetSubscribedChannels: %v", err)
+		return discoveryFallbackWakeDelay
+	}
+	byPlatform := make(map[string][]model.Channel)
 	for _, ch := range channels {
 		if ch.Platform == "twitter" {
 			continue
 		}
-		m.enforceChannelLimit(ch)
+		if m.cfg != nil && !m.cfg.PlatformEnabled(ch.Platform) {
+			continue
+		}
+		byPlatform[ch.Platform] = append(byPlatform[ch.Platform], ch)
 	}
-
-	elapsed := time.Since(start).Round(time.Millisecond)
-	log.Printf("[scheduler] cycle done: queued %d videos (%s)", queued, elapsed)
-	m.Emit("scheduler", fmt.Sprintf("Download cycle complete: %d queued", queued), "done")
-	m.setStatus("scheduler", workerStatus("scheduler", true,
-		fmt.Sprintf("cycle done: %d queued (%s)", queued, elapsed), ""))
+	var wait time.Duration
+	for platform, chs := range byPlatform {
+		interval := m.platformDiscoveryCycleInterval(platform, len(chs))
+		if interval <= 0 {
+			return 0
+		}
+		for _, ch := range chs {
+			if ch.LastChecked == nil {
+				return 0
+			}
+			remaining := interval - now.Sub(*ch.LastChecked)
+			if remaining <= 0 {
+				return 0
+			}
+			if wait == 0 || remaining < wait {
+				wait = remaining
+			}
+		}
+	}
+	if wait == 0 {
+		return discoveryFallbackWakeDelay
+	}
+	return wait
 }
 
 func (m *Manager) platformFetchDelay(platform string) time.Duration {
@@ -208,6 +443,10 @@ func (m *Manager) platformDiscoveryCycleInterval(platform string, channelCount i
 	return m.platformFetchDelay(platform) * time.Duration(channelCount)
 }
 
+func discoveryPlatforms() []string {
+	return []string{"youtube", "tiktok", "instagram"}
+}
+
 func readyDiscoveryChannels(channels []model.Channel, interval time.Duration, now time.Time) []model.Channel {
 	if len(channels) == 0 {
 		return nil
@@ -242,21 +481,6 @@ func sortChannelsByLastChecked(channels []model.Channel) {
 			return left.Before(*right)
 		}
 	})
-}
-
-func (m *Manager) waitForPlatformFetchDelay(ctx context.Context, platform string) bool {
-	delay := m.platformFetchDelay(platform)
-	if delay <= 0 {
-		return true
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-timer.C:
-		return true
-	}
 }
 
 func (m *Manager) checkChannel(ctx context.Context, ch model.Channel) ([]download.VideoRef, error) {
