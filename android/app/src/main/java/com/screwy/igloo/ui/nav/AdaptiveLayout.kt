@@ -13,6 +13,7 @@ internal const val PlayerContentMaxWidthDp = 960
 internal const val MomentsStageMaxWidthDp = 430
 internal const val WideVideoGridMinCellWidthDp = 200
 internal const val WideVerticalGridMinCellWidthDp = 144
+internal const val CompactMomentsShortHeightRatioPermille = 1500
 
 internal enum class IglooLayoutClass {
     Compact,
@@ -98,6 +99,21 @@ internal fun wideMomentsStageSizeDp(
         .coerceAtLeast(1)
     val height = (width * 16 / 9).coerceAtMost(safeHeight).coerceAtLeast(1)
     return MomentsStageSizeDp(widthDp = width, heightDp = height)
+}
+
+internal fun compactMomentsStageSizeDp(
+    availableWidthDp: Int,
+    availableHeightDp: Int,
+): MomentsStageSizeDp {
+    val safeWidth = availableWidthDp.coerceAtLeast(1)
+    val safeHeight = availableHeightDp.coerceAtLeast(1)
+    val shortHeight = safeHeight * 1000 < safeWidth * CompactMomentsShortHeightRatioPermille
+    if (!shortHeight) return MomentsStageSizeDp(widthDp = safeWidth, heightDp = safeHeight)
+    return wideMomentsStageSizeDp(
+        availableWidthDp = safeWidth,
+        availableHeightDp = safeHeight,
+        maxWidthDp = safeWidth,
+    )
 }
 
 internal fun routeUsesWideSidebar(route: String?): Boolean =

@@ -46,6 +46,22 @@ class AdaptiveLayoutTest {
     }
 
     @Test
+    fun compact_moments_stage_stays_full_bleed_until_split_screen_is_too_short() {
+        assertEquals(
+            MomentsStageSizeDp(widthDp = 390, heightDp = 700),
+            compactMomentsStageSizeDp(390, 700),
+        )
+        assertEquals(
+            MomentsStageSizeDp(widthDp = 337, heightDp = 599),
+            compactMomentsStageSizeDp(500, 600),
+        )
+        assertEquals(
+            MomentsStageSizeDp(widthDp = 1, heightDp = 1),
+            compactMomentsStageSizeDp(0, 0),
+        )
+    }
+
+    @Test
     fun route_orientation_keeps_compact_non_player_portrait_and_wide_user_oriented() {
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,

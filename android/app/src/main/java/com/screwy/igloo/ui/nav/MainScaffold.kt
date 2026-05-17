@@ -398,23 +398,32 @@ private fun AdaptiveContentHost(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    if (!layout.isWide || forceFullBleed) {
+    val kind = wideContentKindForRoute(route)
+    if ((!layout.isWide && kind != WideContentKind.MomentsStage) || forceFullBleed) {
         Box(modifier = modifier.fillMaxSize()) {
             content()
         }
         return
     }
 
-    val kind = wideContentKindForRoute(route)
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.TopCenter,
     ) {
         if (kind == WideContentKind.MomentsStage) {
-            val stage = wideMomentsStageSizeDp(
-                availableWidthDp = maxWidth.value.toInt(),
-                availableHeightDp = maxHeight.value.toInt(),
-            )
+            val availableWidthDp = maxWidth.value.toInt()
+            val availableHeightDp = maxHeight.value.toInt()
+            val stage = if (layout.isWide) {
+                wideMomentsStageSizeDp(
+                    availableWidthDp = availableWidthDp,
+                    availableHeightDp = availableHeightDp,
+                )
+            } else {
+                compactMomentsStageSizeDp(
+                    availableWidthDp = availableWidthDp,
+                    availableHeightDp = availableHeightDp,
+                )
+            }
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
