@@ -124,19 +124,16 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /\n  attestations: write\n/);
   assert.match(workflow, /\n  contents: write\n/);
   assert.match(workflow, /\n        id: build\n/);
-  assert.match(workflow, shaPinnedAction("actions/setup-go", "v6"));
-  assert.match(workflow, shaPinnedAction("actions/setup-java", "v5"));
   assert.match(workflow, shaPinnedAction("DeterminateSystems/determinate-nix-action", "v3"));
-  assert.match(workflow, /run: scripts\/dev\/test-full\.sh/);
+  assert.match(workflow, shaPinnedAction("DeterminateSystems/magic-nix-cache-action", "main"));
+  assert.match(workflow, /use-flakehub: false/);
   assert.match(workflow, /nix build \.#container --print-build-logs/);
   assert.match(workflow, /docker load < result/);
   assert.match(workflow, /SOURCE_IMAGE: ghcr\.io\/screwys\/igloo:latest/);
   assert.match(workflow, /docker tag "\$SOURCE_IMAGE" "\$tag"/);
   assert.match(workflow, /docker push "\$tag"/);
-  assert.match(workflow, /name: Install cosign/);
-  assert.match(workflow, /\. scripts\/dev\/go-tool-versions\.sh/);
-  assert.match(workflow, /go install "github\.com\/sigstore\/cosign\/v3\/cmd\/cosign@\$\{COSIGN_VERSION\}"/);
-  assert.match(workflow, /go env GOPATH/);
+  assert.match(workflow, shaPinnedAction("sigstore/cosign-installer", "v4.1.2"));
+  assert.match(workflow, /cosign-release: v3\.0\.6/);
   assert.match(workflow, /name: Prepare security artifact directory/);
   assert.match(workflow, /run: mkdir -p release-artifacts/);
   assert.match(workflow, shaPinnedAction("anchore/sbom-action", "v0.24.0"));
@@ -154,9 +151,11 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, shaPinnedAction("softprops/action-gh-release", "v3"));
   assert.match(workflow, /files: release-artifacts\/\*/);
   assert.doesNotMatch(workflow, /go test \.\/\.\.\./);
+  assert.doesNotMatch(workflow, /scripts\/dev\/test-full\.sh/);
+  assert.doesNotMatch(workflow, /actions\/setup-go/);
+  assert.doesNotMatch(workflow, /actions\/setup-java/);
   assert.doesNotMatch(workflow, /docker\/build-push-action/);
-  assert.doesNotMatch(workflow, /cosign-installer/);
-  assert.doesNotMatch(workflow, /cosign-release:/);
+  assert.doesNotMatch(workflow, /go install "github\.com\/sigstore\/cosign\/v3\/cmd\/cosign/);
 });
 
 test("CI Go analysis tools are pinned and Renovate-managed", () => {
@@ -215,9 +214,7 @@ test("Android release publishes only the APK asset with signed provenance attest
     "utf8",
   );
 
-  assert.match(workflow, shaPinnedAction("actions/setup-go", "v6"));
   assert.match(workflow, shaPinnedAction("actions/setup-java", "v5"));
-  assert.match(workflow, /run: scripts\/dev\/test-full\.sh/);
   assert.match(workflow, /run: \.\/gradlew :app:assembleRelease/);
   assert.match(workflow, /\n  id-token: write\n/);
   assert.match(workflow, /\n  attestations: write\n/);
@@ -232,6 +229,8 @@ test("Android release publishes only the APK asset with signed provenance attest
   assert.doesNotMatch(workflow, /anchore\/sbom-action/);
   assert.doesNotMatch(workflow, /anchore\/scan-action/);
   assert.doesNotMatch(workflow, /:app:testDevtestUnitTest :app:assembleRelease/);
+  assert.doesNotMatch(workflow, /scripts\/dev\/test-full\.sh/);
+  assert.doesNotMatch(workflow, /actions\/setup-go/);
 });
 
 test("CodeQL runs on published releases and manual dispatch only", () => {
