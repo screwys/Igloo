@@ -302,6 +302,7 @@ function buildHarness({
       requestCalls.push({
         method: options.method,
         url: options.url,
+        headers: options.headers || {},
         data: options.data,
       });
       const response = responseFor(options.url, {
@@ -1047,6 +1048,29 @@ test("enabled X theme loads Igloo theme colors without sampling X", async () => 
     ),
     "igloo",
   );
+  const themeRequest = harness.requestCalls.find((call) =>
+    call.url.endsWith("/api/theme.json"),
+  );
+  assert.equal(themeRequest?.headers.Authorization, undefined);
+});
+
+test("X theme fetch sends stored auth token when available", async () => {
+  const harness = buildHarness({
+    initialValues: {
+      igloo_sync_x_cleanup: true,
+      xsync_auth_token: "theme-access-token",
+    },
+  });
+  runScript(harness);
+  await drainMicrotasks();
+
+  const themeRequest = harness.requestCalls.find((call) =>
+    call.url.endsWith("/api/theme.json"),
+  );
+  assert.equal(
+    themeRequest?.headers.Authorization,
+    "Bearer theme-access-token",
+  );
 });
 
 test("disabled X theme does not fetch or apply theme overrides", async () => {
@@ -1145,6 +1169,10 @@ test("custom X controls use control theme variables instead of page theme variab
     script,
     /labelInput\.style\.borderColor = "var\(--igloo-x-control-accent\)";/,
   );
+  assert.match(script, /body\.igloo-theme-overrides \[data-testid="cellInnerDiv"\]/);
+  assert.match(script, /body\.igloo-theme-overrides \[aria-label\^="Timeline:"\]/);
+  assert.match(script, /body\.igloo-theme-overrides header\[role="banner"\]/);
+  assert.match(script, /body\.igloo-theme-overrides \[data-testid="sidebarColumn"\]/);
 });
 
 test("ghost-resubscribed X handles can be unfollowed immediately", async () => {

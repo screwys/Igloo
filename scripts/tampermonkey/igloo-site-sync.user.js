@@ -233,7 +233,7 @@
       return true;
     }
     if (_iglooThemeFetch) return _iglooThemeFetch;
-    _iglooThemeFetch = apiRequest("GET", "/api/theme.json", null, false)
+    _iglooThemeFetch = apiRequest("GET", "/api/theme.json", null, true)
       .then((resp) => {
         if (!resp.ok || !setIglooThemeSnapshot(resp.json)) return false;
         return true;
@@ -1517,9 +1517,21 @@
       color: var(--igloo-x-text);
     }
     body.igloo-theme-overrides,
+    body.igloo-theme-overrides #react-root,
+    body.igloo-theme-overrides #react-root > div,
+    body.igloo-theme-overrides #react-root > div > div,
+    body.igloo-theme-overrides header[role="banner"],
+    body.igloo-theme-overrides header[role="banner"] nav,
+    body.igloo-theme-overrides main,
+    body.igloo-theme-overrides [role="main"],
+    body.igloo-theme-overrides [data-testid="sidebarColumn"],
     body.igloo-theme-overrides .PageContainer,
     body.igloo-theme-overrides #placeholder,
     body.igloo-theme-overrides [data-testid="primaryColumn"],
+    body.igloo-theme-overrides [data-testid="cellInnerDiv"],
+    body.igloo-theme-overrides [data-testid="tweet"],
+    body.igloo-theme-overrides article[data-testid="tweet"],
+    body.igloo-theme-overrides [aria-label^="Timeline:"],
     body.igloo-theme-overrides .r-kemksi {
       background-color: var(--igloo-x-base) !important;
       color: var(--igloo-x-text);

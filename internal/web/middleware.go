@@ -75,7 +75,7 @@ func openAuthAPIPath(path string) bool {
 
 func openThemeAPIPath(path string) bool {
 	switch path {
-	case "/api/theme.css", "/api/theme.json":
+	case "/api/theme.css":
 		return true
 	default:
 		return false

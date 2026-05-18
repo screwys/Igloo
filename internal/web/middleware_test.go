@@ -89,36 +89,62 @@ func TestAuthRefreshBypassesExpiredBearerAndCSRF(t *testing.T) {
 	}
 }
 
-func TestThemeAssetsBypassAuth(t *testing.T) {
+func TestThemeCSSBypassesAuth(t *testing.T) {
 	srv := newTestServer(t)
 	mux := http.NewServeMux()
 	srv.registerAdminAPIRoutes(mux)
 	handler := chain(mux, srv.enforceAuth, srv.csrfProtect)
 
-	for _, tc := range []struct {
-		path        string
-		contentType string
-		body        string
-	}{
-		{"/api/theme.css", "text/css", "--bg-primary:"},
-		{"/api/theme.json", "application/json", `"tokens":`},
-	} {
-		t.Run(tc.path, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
-			rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/theme.css", nil)
+	rec := httptest.NewRecorder()
 
-			handler.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, req)
 
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want 200, body = %s", rec.Code, rec.Body.String())
-			}
-			if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, tc.contentType) {
-				t.Fatalf("Content-Type = %q, want prefix %q", got, tc.contentType)
-			}
-			if !strings.Contains(rec.Body.String(), tc.body) {
-				t.Fatalf("body missing %q: %s", tc.body, rec.Body.String())
-			}
-		})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/css") {
+		t.Fatalf("Content-Type = %q, want text/css", got)
+	}
+	if !strings.Contains(rec.Body.String(), "--bg-primary:") {
+		t.Fatalf("theme CSS missing bg token: %s", rec.Body.String())
+	}
+}
+
+func TestThemeJSONRequiresBearerAuth(t *testing.T) {
+	srv := newTestServer(t)
+	mux := http.NewServeMux()
+	srv.registerAdminAPIRoutes(mux)
+	handler := chain(mux, srv.enforceAuth, srv.csrfProtect)
+
+	unauthReq := httptest.NewRequest(http.MethodGet, "/api/theme.json", nil)
+	unauthRec := httptest.NewRecorder()
+	handler.ServeHTTP(unauthRec, unauthReq)
+
+	if unauthRec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status = %d, want 401, body = %s", unauthRec.Code, unauthRec.Body.String())
+	}
+
+	sessionID, err := srv.db.CreateAuthSession("alice")
+	if err != nil {
+		t.Fatalf("CreateAuthSession: %v", err)
+	}
+	issuedAtMs := time.Now().UnixMilli()
+	token := auth.SignAccessToken(srv.cfg.SecretKey, "alice", "admin", nil, sessionID, issuedAtMs)
+	authReq := httptest.NewRequest(http.MethodGet, "/api/theme.json", nil)
+	authReq.Header.Set("Authorization", "Bearer "+token)
+	authRec := httptest.NewRecorder()
+
+	handler.ServeHTTP(authRec, authReq)
+
+	if authRec.Code != http.StatusOK {
+		t.Fatalf("authenticated status = %d, want 200, body = %s", authRec.Code, authRec.Body.String())
+	}
+	if got := authRec.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+	if !strings.Contains(authRec.Body.String(), `"tokens":`) {
+		t.Fatalf("theme JSON missing tokens: %s", authRec.Body.String())
 	}
 }
 
