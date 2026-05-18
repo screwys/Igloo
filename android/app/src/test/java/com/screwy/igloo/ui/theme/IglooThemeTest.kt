@@ -31,6 +31,7 @@ class IglooThemeTest {
                 "catppuccin-frappe",
                 "catppuccin-latte",
                 "dracula",
+                "occult-umbral",
                 "ayu-dark",
                 "github-dark",
                 "github-light",
@@ -64,6 +65,11 @@ class IglooThemeTest {
         val solarized = resolveIglooColors("solarized-dark", "", systemDark = true)
         assertEquals(Color(0xFF002B36), solarized.background)
         assertEquals(Color(0xFF268BD2), solarized.primary)
+
+        val occultUmbral = resolveIglooColors("occult-umbral", "", systemDark = true)
+        assertEquals(Color(0xFF0A0A12), occultUmbral.background)
+        assertEquals(Color(0xFF8B2E2E), occultUmbral.primary)
+        assertEquals(Color(0xFF8BAA82), occultUmbral.success)
     }
 
     @Test

@@ -21,6 +21,7 @@ func TestBuiltInThemeCatalogAndAccentNormalization(t *testing.T) {
 		"green-eyes",
 		"gruvbox-dark",
 		"nord",
+		"occult-umbral",
 		"solarized-dark",
 		"system",
 		"tokyo-night",
@@ -91,6 +92,25 @@ func TestCSSUsesThemeSurfacesCustomAccentAndReadableOnAccent(t *testing.T) {
 	for _, want := range checks {
 		if !strings.Contains(css, want) {
 			t.Fatalf("theme CSS missing %q:\n%s", want, css)
+		}
+	}
+}
+
+func TestOccultUmbralUsesNoctaliaPalette(t *testing.T) {
+	css := CSS(Settings{ThemeID: "occult-umbral"})
+
+	for _, want := range []string{
+		`--web-theme-id: "occult-umbral";`,
+		`--bg-primary: #0a0a12;`,
+		`--bg-secondary: #14141e;`,
+		`--text-primary: #e4ded2;`,
+		`--accent-primary: #8b2e2e;`,
+		`--accent-secondary: #a83a3a;`,
+		`--success: #8baa82;`,
+		`--error: #c25b5b;`,
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("Occult Umbral CSS missing %q:\n%s", want, css)
 		}
 	}
 }

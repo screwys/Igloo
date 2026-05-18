@@ -66,6 +66,16 @@ private val ThemeCatalog = listOf(
         surface0 = "#343746", base = "#282a36", mantle = "#21222c", crust = "#191a21",
     ),
     ThemeSpec(
+        id = "occult-umbral", label = "Occult Umbral", catppuccin = false, dark = true,
+        defaultAccent = "#8b2e2e",
+        red = "#c25b5b", maroon = "#a83a3a", peach = "#e6c27a", yellow = "#e6c27a", green = "#8baa82",
+        teal = "#95b3b0", sky = "#95b3b0", sapphire = "#6270a8", blue = "#6270a8", mauve = "#9a7398",
+        pink = "#9a7398", lavender = "#9a7398", rosewater = "#f2eadf", flamingo = "#c25b5b",
+        text = "#e4ded2", subtext1 = "#cfc8bb", subtext0 = "#aba397", overlay2 = "#6f6a7d",
+        overlay1 = "#5b5b75", overlay0 = "#3a3a4a", surface2 = "#2a2a38", surface1 = "#1c1c28",
+        surface0 = "#14141e", base = "#0a0a12", mantle = "#0f0f18", crust = "#040407",
+    ),
+    ThemeSpec(
         id = "ayu-dark", label = "Ayu Dark", catppuccin = false, dark = true, defaultAccent = "#ffb454",
         red = "#f07178", maroon = "#ff8f40", peach = "#ff8f40", yellow = "#ffee99", green = "#aad94c",
         teal = "#95e6cb", sky = "#59c2ff", sapphire = "#39bae6", blue = "#59c2ff", mauve = "#d2a6ff",

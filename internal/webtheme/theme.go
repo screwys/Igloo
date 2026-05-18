@@ -83,6 +83,15 @@ var themes = []Theme{
 		Surface0: "#343746", Base: "#282a36", Mantle: "#21222c", Crust: "#191a21",
 	},
 	{
+		ID: "occult-umbral", Label: "Occult Umbral", Dark: true, DefaultAccent: "#8b2e2e", Secondary: "#a83a3a",
+		Red: "#c25b5b", Maroon: "#a83a3a", Peach: "#e6c27a", Yellow: "#e6c27a", Green: "#8baa82",
+		Teal: "#95b3b0", Sky: "#95b3b0", Sapphire: "#6270a8", Blue: "#6270a8", Mauve: "#9a7398",
+		Pink: "#9a7398", Lavender: "#9a7398", Rosewater: "#f2eadf", Flamingo: "#c25b5b",
+		Text: "#e4ded2", Subtext1: "#cfc8bb", Subtext0: "#aba397", Overlay2: "#6f6a7d",
+		Overlay1: "#5b5b75", Overlay0: "#3a3a4a", Surface2: "#2a2a38", Surface1: "#1c1c28",
+		Surface0: "#14141e", Base: "#0a0a12", Mantle: "#0f0f18", Crust: "#040407",
+	},
+	{
 		ID: "ayu-dark", Label: "Ayu Dark", Dark: true, DefaultAccent: "#ffb454", Secondary: "#f07178",
 		Red: "#f07178", Maroon: "#ff8f40", Peach: "#ff8f40", Yellow: "#ffee99", Green: "#aad94c",
 		Teal: "#95e6cb", Sky: "#59c2ff", Sapphire: "#39bae6", Blue: "#59c2ff", Mauve: "#d2a6ff",
