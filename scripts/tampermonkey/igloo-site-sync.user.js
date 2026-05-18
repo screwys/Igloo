@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.27
+// @version      8.0.28
 // @author       screwys
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @homepageURL  https://github.com/screwys/Igloo
@@ -11,6 +11,8 @@
 // @match        https://x.com/*
 // @match        https://x.co/*
 // @match        https://twitter.com/*
+// @match        https://api.x.com/*
+// @match        https://api.twitter.com/*
 // @match        https://www.tiktok.com/*
 // @match        https://www.instagram.com/*
 // @match        https://www.youtube.com/*
@@ -35,7 +37,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.27";
+  const SCRIPT_VERSION = "8.0.28";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -540,7 +542,13 @@
 
   function currentPlatform() {
     const host = location.hostname.toLowerCase();
-    if (host === "x.com" || host === "x.co" || host === "twitter.com")
+    if (
+      host === "x.com" ||
+      host === "x.co" ||
+      host === "twitter.com" ||
+      host === "api.x.com" ||
+      host === "api.twitter.com"
+    )
       return "twitter";
     if (host === "www.tiktok.com" || host === "tiktok.com") return "tiktok";
     if (host === "www.instagram.com" || host === "instagram.com")
@@ -555,6 +563,8 @@
 
   function isXAuthRoute() {
     if (!isXSite()) return false;
+    const host = location.hostname.toLowerCase();
+    if (host === "api.x.com" || host === "api.twitter.com") return true;
     const path = location.pathname || "/";
     return (
       path === "/login" ||
@@ -1557,6 +1567,9 @@
       --igloo-x-lavender: var(--igloo-x-accent);
       --igloo-x-border: rgb(83, 100, 113);
     }
+    html[data-igloo-x-theme-source="catppuccin"] {
+      background: var(--igloo-x-mantle) !important;
+    }
     .x-sync-btn {
       border: 1px solid var(--igloo-x-border); background: transparent;
       color: var(--igloo-x-text); border-radius: 9999px; font-size: 12px;
@@ -1641,15 +1654,23 @@
     }
     body.igloo-theme-overrides .r-1kqtdi0,
     body.igloo-theme-overrides .r-1roi411,
-    body.igloo-theme-overrides .r-1igl3o0,
-    body.igloo-theme-overrides .r-2sztyj,
-    body.igloo-theme-overrides .r-1aihyag,
     body.igloo-theme-overrides [stroke="#2F3336" i],
     body.igloo-theme-overrides [style*="border-color: rgb(51, 54, 57)"] {
       border-color: var(--igloo-x-surface0) !important;
       stroke: var(--igloo-x-surface2) !important;
     }
-    body.igloo-theme-overrides .r-1wyyjkm,
+    body.igloo-theme-overrides .r-1igl3o0 {
+      border-bottom-color: var(--igloo-x-surface0) !important;
+    }
+    body.igloo-theme-overrides .r-2sztyj {
+      border-top-color: var(--igloo-x-surface0) !important;
+    }
+    body.igloo-theme-overrides .r-1aihyag {
+      border-right-color: var(--igloo-x-surface0) !important;
+    }
+    body.igloo-theme-overrides .r-1wyyjkm {
+      border-left-color: var(--igloo-x-subtext0) !important;
+    }
     body.igloo-theme-overrides [style*="border-color: rgb(83, 100, 113)"] {
       border-color: var(--igloo-x-surface1) !important;
     }
@@ -1727,6 +1748,10 @@
     }
     body.igloo-theme-overrides .r-9cip40 {
       box-shadow: var(--igloo-x-accent) 0 0 0 1px !important;
+    }
+    @keyframes r-1wvy3k1 {
+      0% { box-shadow: color-mix(in srgb, var(--igloo-x-mauve) 40%, transparent) 0; }
+      100% { box-shadow: color-mix(in srgb, var(--igloo-x-mauve) 0%, transparent) 0; }
     }
     body.igloo-theme-overrides [style="background-image: linear-gradient(61.63deg, rgb(45, 66, 255) -15.05%, rgb(156, 99, 250) 104.96%);"] {
       background-image: linear-gradient(61.63deg, var(--igloo-x-blue) -15.05%, var(--igloo-x-mauve) 104.96%) !important;
@@ -1837,9 +1862,11 @@
       border-color: color-mix(in srgb, var(--igloo-x-red) 50%, transparent) !important;
     }
     body.igloo-theme-overrides [style*="border-color: rgb(29, 155, 240)"],
-    body.igloo-theme-overrides .r-vhj8yc,
-    body.igloo-theme-overrides .r-1pbtemp {
+    body.igloo-theme-overrides .r-vhj8yc {
       border-color: var(--igloo-x-accent) !important;
+    }
+    body.igloo-theme-overrides .r-1pbtemp {
+      border-right-color: var(--igloo-x-accent) !important;
     }
     body.igloo-theme-overrides [style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
     body.igloo-theme-overrides [style*="color: rgb(239, 243, 244)"]:not([style*="background-color: rgb(239, 243, 244)"]),
@@ -1884,6 +1911,9 @@
     body.igloo-theme-overrides [style*="background-color: rgb(147, 147, 147)"] {
       background-color: var(--igloo-x-overlay0) !important;
     }
+    body.igloo-theme-overrides [style*="background-color: rgb(147, 147, 147)"] + [style*="background-color: rgb(250, 250, 250)"] {
+      background-color: var(--igloo-x-text) !important;
+    }
     body.igloo-theme-overrides [style*="background-color: rgb(239, 243, 244)"] {
       background-color: var(--igloo-x-text) !important;
     }
@@ -1913,6 +1943,174 @@
     }
     body.igloo-theme-overrides [style*="background-color: rgba(15, 20, 25, 0.75)"] {
       background-color: color-mix(in srgb, var(--igloo-x-crust) 75%, transparent) !important;
+    }
+    body.igloo-theme-overrides [style*="background-color: rgba(15, 20, 25, 0.75)"] [style*="color: rgb(255, 255, 255)"] svg {
+      color: var(--igloo-x-text) !important;
+    }
+    body.igloo-theme-overrides .r-l5o3uw [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-l5o3uw[style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-1vtznih [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-1vtznih[style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-4nw3r4 [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-4nw3r4[style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-12d83nn [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-12d83nn[style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-oybae9 [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-oybae9[style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-yuvema [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-yuvema[style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-3gvs5h [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-3gvs5h[style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides [style="background-image: linear-gradient(61.63deg, rgb(45, 66, 255) -15.05%, rgb(156, 99, 250) 104.96%);"] [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides [style="background-image: linear-gradient(61.63deg, rgb(45, 66, 255) -15.05%, rgb(156, 99, 250) 104.96%);"][style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-l5o3uw [style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-l5o3uw[style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-1vtznih [style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-1vtznih[style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-4nw3r4 [style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-4nw3r4[style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-12d83nn [style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-12d83nn[style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-oybae9 [style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-oybae9[style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-yuvema [style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-yuvema[style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-3gvs5h [style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-3gvs5h[style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides [style="background-image: linear-gradient(61.63deg, rgb(45, 66, 255) -15.05%, rgb(156, 99, 250) 104.96%);"] [style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides [style="background-image: linear-gradient(61.63deg, rgb(45, 66, 255) -15.05%, rgb(156, 99, 250) 104.96%);"][style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides .r-l5o3uw [color="white"],
+    body.igloo-theme-overrides .r-1vtznih [color="white"],
+    body.igloo-theme-overrides .r-4nw3r4 [color="white"],
+    body.igloo-theme-overrides .r-12d83nn [color="white"],
+    body.igloo-theme-overrides .r-oybae9 [color="white"],
+    body.igloo-theme-overrides .r-yuvema [color="white"],
+    body.igloo-theme-overrides .r-3gvs5h [color="white"],
+    body.igloo-theme-overrides [style="background-image: linear-gradient(61.63deg, rgb(45, 66, 255) -15.05%, rgb(156, 99, 250) 104.96%);"] [color="white"] {
+      color: var(--igloo-x-on-accent) !important;
+    }
+    body.igloo-theme-overrides [data-testid="videoComponent"]:not(.r-4nw3r4) [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides [data-testid="videoComponent"]:not(.r-4nw3r4)[style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides [data-testid="videoComponent"]:not(.r-4nw3r4) .r-jwli3a,
+    body.igloo-theme-overrides .r-loe9s5 [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-loe9s5[style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-loe9s5 .r-jwli3a,
+    body.igloo-theme-overrides .r-drfeu3:has([style="background-color: rgba(255, 255, 255, 0.25); border-color: rgba(0, 0, 0, 0); backdrop-filter: blur(4px);"]) [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-drfeu3:has([style="background-color: rgba(255, 255, 255, 0.25); border-color: rgba(0, 0, 0, 0); backdrop-filter: blur(4px);"])[style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]),
+    body.igloo-theme-overrides .r-drfeu3:has([style="background-color: rgba(255, 255, 255, 0.25); border-color: rgba(0, 0, 0, 0); backdrop-filter: blur(4px);"]) .r-jwli3a {
+      color: #fff !important;
+    }
+    body.igloo-theme-overrides #header {
+      color: var(--igloo-x-subtext0);
+      background: var(--igloo-x-base);
+      border-bottom-color: var(--igloo-x-surface1);
+    }
+    body.igloo-theme-overrides #header .logo a {
+      border-bottom-color: transparent;
+    }
+    body.igloo-theme-overrides #session a,
+    body.igloo-theme-overrides #session input,
+    body.igloo-theme-overrides #session button {
+      background: var(--igloo-x-surface0);
+      color: var(--igloo-x-subtext0);
+    }
+    body.igloo-theme-overrides #session h2 img,
+    body.igloo-theme-overrides .oauth #bd,
+    body.igloo-theme-overrides .list-btn {
+      border-color: var(--igloo-x-surface1);
+    }
+    body.igloo-theme-overrides .footer {
+      background: var(--igloo-x-mantle);
+      border-top-color: var(--igloo-x-surface1);
+    }
+    body.igloo-theme-overrides .auth h2,
+    body.igloo-theme-overrides .notice,
+    body.igloo-theme-overrides .notice p,
+    body.igloo-theme-overrides h2 {
+      color: var(--igloo-x-subtext1);
+    }
+    body.igloo-theme-overrides .notice.error {
+      background: color-mix(in srgb, var(--igloo-x-red) 20%, transparent);
+      border-color: color-mix(in srgb, var(--igloo-x-red) 25%, transparent);
+    }
+    body.igloo-theme-overrides .app-info h3 img {
+      border-color: var(--igloo-x-base);
+    }
+    body.igloo-theme-overrides .permissions.allow strong {
+      color: var(--igloo-x-green);
+    }
+    body.igloo-theme-overrides .button {
+      background: var(--igloo-x-overlay0);
+      color: var(--igloo-x-text);
+      border-color: var(--igloo-x-surface1);
+    }
+    body.igloo-theme-overrides .button:hover {
+      background: color-mix(in srgb, var(--igloo-x-surface2) 88%, #000);
+      color: var(--igloo-x-text);
+      border-color: var(--igloo-x-surface1);
+    }
+    body.igloo-theme-overrides .button.selected,
+    body.igloo-theme-overrides .follow-button .unfollow .button,
+    body.igloo-theme-overrides .submit-btn {
+      background-color: var(--igloo-x-accent);
+      color: var(--igloo-x-on-accent);
+      border-color: color-mix(in srgb, var(--igloo-x-accent) 88%, #000);
+    }
+    body.igloo-theme-overrides .button.selected:hover,
+    body.igloo-theme-overrides .follow-button .unfollow .button:hover,
+    body.igloo-theme-overrides .submit-btn:hover,
+    body.igloo-theme-overrides .redirect-btn:hover {
+      background-color: color-mix(in srgb, var(--igloo-x-accent) 88%, #000);
+    }
+    body.igloo-theme-overrides .button.selected .app-info,
+    body.igloo-theme-overrides .button.selected #bd h3,
+    body.igloo-theme-overrides .follow-button .unfollow .button .app-info,
+    body.igloo-theme-overrides .follow-button .unfollow .button #bd h3,
+    body.igloo-theme-overrides .list-explanation {
+      color: var(--igloo-x-subtext0);
+    }
+    body.igloo-theme-overrides .button.selected #ft,
+    body.igloo-theme-overrides .follow-button .unfollow .button #ft {
+      color: var(--igloo-x-overlay0);
+    }
+    body.igloo-theme-overrides .ResponsiveLayout--Night .PageContainer {
+      background-color: var(--igloo-x-base);
+    }
+    body.igloo-theme-overrides .ResponsiveLayout--Night .list-btn:first-of-type {
+      border-top-color: var(--igloo-x-mantle);
+    }
+    body.igloo-theme-overrides .ResponsiveLayout--Night .list-btn:hover {
+      background-color: var(--igloo-x-mantle);
+    }
+    body.igloo-theme-overrides .block-btn {
+      color: var(--igloo-x-maroon);
+      border-color: var(--igloo-x-maroon);
+    }
+    body.igloo-theme-overrides .mute-btn,
+    body.igloo-theme-overrides .unfollow-btn,
+    body.igloo-theme-overrides .email-report-btn {
+      color: var(--igloo-x-accent);
+      border-color: var(--igloo-x-accent);
+    }
+    body.igloo-theme-overrides .list-btn:first-of-type {
+      border-top-color: var(--igloo-x-surface1);
+    }
+    body.igloo-theme-overrides .list-btn:hover,
+    body.igloo-theme-overrides .js #session .user-menu {
+      background-color: var(--igloo-x-surface0);
+    }
+    body.igloo-theme-overrides #session .user-menu a:focus,
+    body.igloo-theme-overrides #session .user-menu a:hover,
+    body.igloo-theme-overrides #session .user-menu button:focus,
+    body.igloo-theme-overrides #session .user-menu button:hover,
+    body.igloo-theme-overrides #session .user-menu input:focus,
+    body.igloo-theme-overrides #session .user-menu input:hover {
+      color: var(--igloo-x-on-accent);
+      background-color: var(--igloo-x-accent);
+    }
+    body.igloo-theme-overrides .dropdown-caret .caret-outer,
+    body.igloo-theme-overrides .dropdown-caret .caret-inner {
+      border-bottom-color: var(--igloo-x-surface0);
     }
 
     /* Preserve the original Igloo action-button treatment, backed by theme vars. */
@@ -4217,6 +4415,7 @@
     forgetLegacyDashboardPassword();
     registerMenu();
     if (isXAuthRoute()) {
+      refreshXThemeStyles();
       console.log(`[IglooSync] loaded v${SCRIPT_VERSION} (auth route idle)`);
       return;
     }
