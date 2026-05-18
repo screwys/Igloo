@@ -73,11 +73,20 @@ func openAuthAPIPath(path string) bool {
 	}
 }
 
+func openThemeAPIPath(path string) bool {
+	switch path {
+	case "/api/theme.css", "/api/theme.json":
+		return true
+	default:
+		return false
+	}
+}
+
 // enforceAuth checks session auth. Skips /login, /logout, /static/.
 func (s *Server) enforceAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if path == "/login" || path == "/setup" || path == "/logout" || openAuthAPIPath(path) || path == "/api/health" || path == "/api/health/live" ||
+		if path == "/login" || path == "/setup" || path == "/logout" || openAuthAPIPath(path) || openThemeAPIPath(path) || path == "/api/health" || path == "/api/health/live" ||
 			strings.HasPrefix(path, "/static/") {
 			next.ServeHTTP(w, r)
 			return

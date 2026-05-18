@@ -89,6 +89,39 @@ func TestAuthRefreshBypassesExpiredBearerAndCSRF(t *testing.T) {
 	}
 }
 
+func TestThemeAssetsBypassAuth(t *testing.T) {
+	srv := newTestServer(t)
+	mux := http.NewServeMux()
+	srv.registerAdminAPIRoutes(mux)
+	handler := chain(mux, srv.enforceAuth, srv.csrfProtect)
+
+	for _, tc := range []struct {
+		path        string
+		contentType string
+		body        string
+	}{
+		{"/api/theme.css", "text/css", "--bg-primary:"},
+		{"/api/theme.json", "application/json", `"tokens":`},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200, body = %s", rec.Code, rec.Body.String())
+			}
+			if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, tc.contentType) {
+				t.Fatalf("Content-Type = %q, want prefix %q", got, tc.contentType)
+			}
+			if !strings.Contains(rec.Body.String(), tc.body) {
+				t.Fatalf("body missing %q: %s", tc.body, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestEnsureCSRFReturnsRandomFailure(t *testing.T) {
 	oldReader := csrfRandomReader
 	csrfRandomReader = errorReader{err: errors.New("random unavailable")}
