@@ -315,6 +315,56 @@ func TestHandleThemeCSSServesPersistedThemeAsNoStoreCSS(t *testing.T) {
 	}
 }
 
+func TestHandleThemeJSONServesPersistedThemeTokens(t *testing.T) {
+	srv := newTestServer(t)
+	if err := srv.db.SetSetting("", "web_theme_id", "dracula"); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.SetSetting("", "web_theme_accent", "#50fa7b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.SetSetting("", "web_custom_css", ".feed-card { border-color: hotpink; }"); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/theme.json", nil)
+	rec := httptest.NewRecorder()
+	srv.handleThemeJSON(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+	var body struct {
+		ThemeID string `json:"theme_id"`
+		Tokens  struct {
+			Accent string `json:"accent"`
+			Base   string `json:"base"`
+			Text   string `json:"text"`
+		} `json:"tokens"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode theme json: %v\n%s", err, rec.Body.String())
+	}
+	if body.ThemeID != "dracula" {
+		t.Fatalf("theme_id = %q, want dracula", body.ThemeID)
+	}
+	if body.Tokens.Accent != "#50fa7b" {
+		t.Fatalf("accent = %q, want #50fa7b", body.Tokens.Accent)
+	}
+	if body.Tokens.Base != "#282a36" {
+		t.Fatalf("base = %q, want #282a36", body.Tokens.Base)
+	}
+	if body.Tokens.Text != "#f8f8f2" {
+		t.Fatalf("text = %q, want #f8f8f2", body.Tokens.Text)
+	}
+	if strings.Contains(rec.Body.String(), "hotpink") {
+		t.Fatal("theme JSON should not expose custom CSS")
+	}
+}
+
 func TestHandleConfigExportFullIncludesBookmarkedMediaAndAvatars(t *testing.T) {
 	srv := newTestServer(t)
 

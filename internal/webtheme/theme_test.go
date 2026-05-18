@@ -58,6 +58,34 @@ func TestDefaultThemeFollowsSystemColorScheme(t *testing.T) {
 	}
 }
 
+func TestThemeSnapshotIncludesSystemLightAndDarkTokens(t *testing.T) {
+	snapshot := ThemeSnapshot(Settings{})
+	if snapshot.ThemeID != SystemThemeID {
+		t.Fatalf("ThemeID = %q, want %q", snapshot.ThemeID, SystemThemeID)
+	}
+	if snapshot.ColorScheme != "light dark" {
+		t.Fatalf("ColorScheme = %q, want light dark", snapshot.ColorScheme)
+	}
+	if snapshot.LightTokens == nil || snapshot.DarkTokens == nil {
+		t.Fatalf("system snapshot should include light and dark tokens: %#v", snapshot)
+	}
+	if snapshot.LightTokens.Dark {
+		t.Fatalf("light tokens marked dark")
+	}
+	if !snapshot.DarkTokens.Dark {
+		t.Fatalf("dark tokens marked light")
+	}
+	if snapshot.LightTokens.Base != "#eff1f5" {
+		t.Fatalf("light base = %q, want Catppuccin Latte base", snapshot.LightTokens.Base)
+	}
+	if snapshot.DarkTokens.Base != "#1e1e2e" {
+		t.Fatalf("dark base = %q, want Catppuccin Mocha base", snapshot.DarkTokens.Base)
+	}
+	if snapshot.Tokens.Base != snapshot.DarkTokens.Base {
+		t.Fatalf("default tokens base = %q, want dark token base %q", snapshot.Tokens.Base, snapshot.DarkTokens.Base)
+	}
+}
+
 func TestNormalizeSettingsFallsBackToDefaultThemeAccent(t *testing.T) {
 	got := NormalizeSettings(Settings{
 		ThemeID:   "missing-theme",

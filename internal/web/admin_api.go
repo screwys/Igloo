@@ -22,6 +22,7 @@ func (s *Server) registerAdminAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings/form", s.handleSettingsForm)
 	mux.HandleFunc("POST /api/settings", s.handleUpdateSettings)
 	mux.HandleFunc("GET /api/theme.css", s.handleThemeCSS)
+	mux.HandleFunc("GET /api/theme.json", s.handleThemeJSON)
 
 	// Cookies
 	mux.HandleFunc("GET /api/cookies", s.handleGetCookies)
@@ -391,6 +392,17 @@ func (s *Server) handleThemeCSS(w http.ResponseWriter, r *http.Request) {
 		AccentHex: accent,
 		CustomCSS: customCSS,
 	})))
+}
+
+func (s *Server) handleThemeJSON(w http.ResponseWriter, r *http.Request) {
+	themeID, _ := s.db.GetSetting("web_theme_id", webtheme.DefaultThemeID)
+	accent, _ := s.db.GetSetting("web_theme_accent", webtheme.DefaultAccentHex)
+	w.Header().Set("Cache-Control", "no-store")
+	snapshot := webtheme.ThemeSnapshot(webtheme.Settings{
+		ThemeID:   themeID,
+		AccentHex: accent,
+	})
+	writeJSON(w, http.StatusOK, snapshot.Map())
 }
 
 func requireAdmin(w http.ResponseWriter, r *http.Request) bool {

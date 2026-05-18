@@ -67,6 +67,69 @@ type AccentChoice struct {
 	Hex   string
 }
 
+// Tokens is the normalized color set a client needs to mirror Igloo's web theme
+// outside the Igloo page.
+type Tokens struct {
+	ThemeID     string `json:"theme_id"`
+	ColorScheme string `json:"color_scheme"`
+	Dark        bool   `json:"dark"`
+	Accent      string `json:"accent"`
+	OnAccent    string `json:"on_accent"`
+	Rosewater   string `json:"rosewater"`
+	Flamingo    string `json:"flamingo"`
+	Pink        string `json:"pink"`
+	Mauve       string `json:"mauve"`
+	Red         string `json:"red"`
+	Maroon      string `json:"maroon"`
+	Peach       string `json:"peach"`
+	Yellow      string `json:"yellow"`
+	Green       string `json:"green"`
+	Teal        string `json:"teal"`
+	Sky         string `json:"sky"`
+	Sapphire    string `json:"sapphire"`
+	Blue        string `json:"blue"`
+	Lavender    string `json:"lavender"`
+	Text        string `json:"text"`
+	Subtext1    string `json:"subtext1"`
+	Subtext0    string `json:"subtext0"`
+	Overlay2    string `json:"overlay2"`
+	Overlay1    string `json:"overlay1"`
+	Overlay0    string `json:"overlay0"`
+	Surface2    string `json:"surface2"`
+	Surface1    string `json:"surface1"`
+	Surface0    string `json:"surface0"`
+	Base        string `json:"base"`
+	Mantle      string `json:"mantle"`
+	Crust       string `json:"crust"`
+}
+
+// Snapshot is the JSON form of Igloo's resolved web theme. System themes include
+// both light and dark token sets so browser-side integrations can honor the
+// user's current color-scheme preference.
+type Snapshot struct {
+	ThemeID     string  `json:"theme_id"`
+	ColorScheme string  `json:"color_scheme"`
+	Tokens      Tokens  `json:"tokens"`
+	LightTokens *Tokens `json:"light_tokens,omitempty"`
+	DarkTokens  *Tokens `json:"dark_tokens,omitempty"`
+}
+
+// Map returns Snapshot as a JSON object compatible with the web API envelope.
+func (s Snapshot) Map() map[string]any {
+	body := map[string]any{
+		"theme_id":     s.ThemeID,
+		"color_scheme": s.ColorScheme,
+		"tokens":       s.Tokens,
+	}
+	if s.LightTokens != nil {
+		body["light_tokens"] = s.LightTokens
+	}
+	if s.DarkTokens != nil {
+		body["dark_tokens"] = s.DarkTokens
+	}
+	return body
+}
+
 var themes = []Theme{
 	systemTheme(),
 	catppuccinMocha(),
@@ -277,6 +340,72 @@ func CSS(settings Settings) string {
 	b.WriteString("}\n")
 	appendCustomCSS(&b, normalized.CustomCSS)
 	return b.String()
+}
+
+// ThemeSnapshot resolves persisted theme settings to a client-friendly JSON
+// payload. Custom CSS is intentionally omitted; the payload represents the
+// normalized theme tokens, not arbitrary page CSS.
+func ThemeSnapshot(settings Settings) Snapshot {
+	normalized := NormalizeSettings(settings)
+	if normalized.ThemeID == SystemThemeID {
+		darkTheme := catppuccinMocha()
+		lightTheme := catppuccinLatte()
+		darkTokens := tokensForTheme(SystemThemeID, darkTheme, normalized.AccentHex, "light dark")
+		lightTokens := tokensForTheme(SystemThemeID, lightTheme, normalized.AccentHex, "light dark")
+		return Snapshot{
+			ThemeID:     SystemThemeID,
+			ColorScheme: "light dark",
+			Tokens:      darkTokens,
+			DarkTokens:  &darkTokens,
+			LightTokens: &lightTokens,
+		}
+	}
+
+	theme, ok := Lookup(normalized.ThemeID)
+	if !ok {
+		theme, _ = Lookup(DefaultThemeID)
+	}
+	return Snapshot{
+		ThemeID:     theme.ID,
+		ColorScheme: colorScheme(theme),
+		Tokens:      tokensForTheme(theme.ID, theme, normalized.AccentHex, colorScheme(theme)),
+	}
+}
+
+func tokensForTheme(themeID string, theme Theme, accent, scheme string) Tokens {
+	return Tokens{
+		ThemeID:     themeID,
+		ColorScheme: scheme,
+		Dark:        theme.Dark,
+		Accent:      strings.ToLower(accent),
+		OnAccent:    onAccent(accent),
+		Rosewater:   strings.ToLower(theme.Rosewater),
+		Flamingo:    strings.ToLower(theme.Flamingo),
+		Pink:        strings.ToLower(theme.Pink),
+		Mauve:       strings.ToLower(theme.Mauve),
+		Red:         strings.ToLower(theme.Red),
+		Maroon:      strings.ToLower(theme.Maroon),
+		Peach:       strings.ToLower(theme.Peach),
+		Yellow:      strings.ToLower(theme.Yellow),
+		Green:       strings.ToLower(theme.Green),
+		Teal:        strings.ToLower(theme.Teal),
+		Sky:         strings.ToLower(theme.Sky),
+		Sapphire:    strings.ToLower(theme.Sapphire),
+		Blue:        strings.ToLower(theme.Blue),
+		Lavender:    strings.ToLower(theme.Lavender),
+		Text:        strings.ToLower(theme.Text),
+		Subtext1:    strings.ToLower(theme.Subtext1),
+		Subtext0:    strings.ToLower(theme.Subtext0),
+		Overlay2:    strings.ToLower(theme.Overlay2),
+		Overlay1:    strings.ToLower(theme.Overlay1),
+		Overlay0:    strings.ToLower(theme.Overlay0),
+		Surface2:    strings.ToLower(theme.Surface2),
+		Surface1:    strings.ToLower(theme.Surface1),
+		Surface0:    strings.ToLower(theme.Surface0),
+		Base:        strings.ToLower(theme.Base),
+		Mantle:      strings.ToLower(theme.Mantle),
+		Crust:       strings.ToLower(theme.Crust),
+	}
 }
 
 func systemCSS(settings Settings) string {

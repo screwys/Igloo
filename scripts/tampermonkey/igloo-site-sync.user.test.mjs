@@ -365,6 +365,48 @@ function responseFor(url, { data, twitterChannels } = {}) {
       }),
     };
   }
+  if (url === "https://localhost:5001/api/theme.json") {
+    return {
+      status: 200,
+      text: JSON.stringify({
+        theme_id: "dracula",
+        color_scheme: "dark",
+        tokens: {
+          theme_id: "dracula",
+          color_scheme: "dark",
+          dark: true,
+          accent: "#50fa7b",
+          on_accent: "#11111b",
+          rosewater: "#f8f8f2",
+          flamingo: "#ffb3d9",
+          pink: "#ff79c6",
+          mauve: "#bd93f9",
+          red: "#ff5555",
+          maroon: "#ff6e6e",
+          peach: "#ffb86c",
+          yellow: "#f1fa8c",
+          green: "#50fa7b",
+          teal: "#8be9fd",
+          sky: "#8be9fd",
+          sapphire: "#8be9fd",
+          blue: "#6272a4",
+          lavender: "#bd93f9",
+          text: "#f8f8f2",
+          subtext1: "#e6e6e6",
+          subtext0: "#cfcfd7",
+          overlay2: "#a5adc6",
+          overlay1: "#858ba3",
+          overlay0: "#6272a4",
+          surface2: "#6272a4",
+          surface1: "#44475a",
+          surface0: "#343746",
+          base: "#282a36",
+          mantle: "#21222c",
+          crust: "#191a21",
+        },
+      }),
+    };
+  }
   if (url === "https://localhost:5001/api/subscribe") {
     return {
       status: 201,
@@ -919,19 +961,8 @@ test("covers current Catppuccin Twitter class selectors", () => {
   }
 });
 
-test("single X theme toggle enables all theme CSS with current site colors", () => {
+test("single X theme toggle enables all theme CSS with Igloo theme colors", async () => {
   const harness = buildHarness({
-    computedStyles: {
-      '[data-testid="primaryColumn"]': {
-        "background-color": "rgb(12, 18, 24)",
-      },
-      body: {
-        color: "rgb(220, 230, 240)",
-      },
-      '[data-testid="tweetButtonInline"]': {
-        "background-color": "rgb(10, 200, 180)",
-      },
-    },
     initialValues: {
       igloo_sync_x_cleanup: false,
       igloo_sync_x_theme_source: "catppuccin",
@@ -942,6 +973,7 @@ test("single X theme toggle enables all theme CSS with current site colors", () 
   runScript(harness);
 
   harness.menu.get("Toggle theme")();
+  await drainMicrotasks();
 
   assert.equal(harness.values.get("igloo_sync_x_cleanup"), true);
   assert.equal(
@@ -950,15 +982,15 @@ test("single X theme toggle enables all theme CSS with current site colors", () 
   );
   assert.equal(
     harness.context.document.documentElement.style["--igloo-x-accent"],
-    "rgb(10, 200, 180)",
+    "#50fa7b",
   );
   assert.equal(
     harness.context.document.documentElement.style["--igloo-x-base"],
-    "rgb(12, 18, 24)",
+    "#282a36",
   );
 });
 
-test("enabled X theme defaults to current site colors for non-Catppuccin themes", () => {
+test("enabled X theme loads Igloo theme colors without sampling X", async () => {
   const harness = buildHarness({
     computedStyles: {
       '[data-testid="primaryColumn"]': {
@@ -987,32 +1019,37 @@ test("enabled X theme defaults to current site colors for non-Catppuccin themes"
     },
   });
   runScript(harness);
+  await drainMicrotasks();
 
   assert.equal(
     harness.context.document.documentElement.style["--igloo-x-accent"],
-    "rgb(10, 200, 180)",
+    "#50fa7b",
   );
   assert.equal(
     harness.context.document.documentElement.style["--igloo-x-base"],
-    "rgb(12, 18, 24)",
+    "#282a36",
   );
   assert.equal(
     harness.context.document.documentElement.style["--igloo-x-text"],
-    "rgb(220, 230, 240)",
+    "#f8f8f2",
   );
   assert.equal(
     harness.context.document.documentElement.style["--igloo-x-control-accent"],
-    "rgb(10, 200, 180)",
+    "#50fa7b",
+  );
+  assert.equal(
+    harness.context.document.documentElement.style["color-scheme"],
+    "dark",
   );
   assert.equal(
     harness.context.document.documentElement.getAttribute(
       "data-igloo-x-theme-source",
     ),
-    "site",
+    "igloo",
   );
 });
 
-test("X control colors follow the site palette when theme overrides are disabled", () => {
+test("disabled X theme does not fetch or apply theme overrides", async () => {
   const harness = buildHarness({
     initialValues: {
       igloo_sync_x_cleanup: false,
@@ -1021,14 +1058,73 @@ test("X control colors follow the site palette when theme overrides are disabled
     },
   });
   runScript(harness);
+  await drainMicrotasks();
 
   assert.equal(
-    harness.context.document.documentElement.style["--igloo-x-accent"],
-    "rgb(29, 155, 240)",
+    harness.requestCalls.some((call) => call.url.endsWith("/api/theme.json")),
+    false,
   );
   assert.equal(
-    harness.context.document.documentElement.style["--igloo-x-control-accent"],
-    "rgb(29, 155, 240)",
+    harness.context.document.body.classList.contains("igloo-theme-overrides"),
+    false,
+  );
+  assert.equal(
+    harness.context.document.documentElement.getAttribute(
+      "data-igloo-x-theme-source",
+    ),
+    "disabled",
+  );
+  assert.equal(
+    harness.context.document.documentElement.style["--igloo-x-base"],
+    undefined,
+  );
+  assert.equal(
+    harness.context.document.documentElement.style["color-scheme"],
+    "light dark",
+  );
+});
+
+test("turning X theme off removes cached Igloo theme application", async () => {
+  const harness = buildHarness({
+    initialValues: {
+      igloo_sync_x_cleanup: false,
+    },
+  });
+  runScript(harness);
+
+  harness.menu.get("Toggle theme")();
+  await drainMicrotasks();
+  assert.equal(
+    harness.context.document.body.classList.contains("igloo-theme-overrides"),
+    true,
+  );
+  assert.equal(
+    harness.context.document.documentElement.getAttribute(
+      "data-igloo-x-theme-source",
+    ),
+    "igloo",
+  );
+
+  harness.menu.get("Toggle theme")();
+  await drainMicrotasks();
+
+  assert.equal(
+    harness.context.document.body.classList.contains("igloo-theme-overrides"),
+    false,
+  );
+  assert.equal(
+    harness.context.document.documentElement.getAttribute(
+      "data-igloo-x-theme-source",
+    ),
+    "disabled",
+  );
+  assert.equal(
+    harness.context.document.documentElement.style["--igloo-x-base"],
+    undefined,
+  );
+  assert.equal(
+    harness.context.document.documentElement.style["--igloo-x-control-base"],
+    undefined,
   );
 });
 

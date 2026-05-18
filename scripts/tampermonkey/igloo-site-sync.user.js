@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.31
+// @version      8.0.32
 // @author       screwys
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @homepageURL  https://github.com/screwys/Igloo
@@ -37,7 +37,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.31";
+  const SCRIPT_VERSION = "8.0.32";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -140,115 +140,142 @@
     );
   }
 
-  function computedXColor(selectors, properties, fallback) {
-    if (
-      typeof window.getComputedStyle !== "function" ||
-      !document ||
-      typeof document.querySelector !== "function"
-    ) {
-      return fallback;
+  let _iglooThemePalette = null;
+  let _iglooThemeFetch = null;
+  let _iglooThemeFetchedAt = 0;
+  const IGLOO_THEME_CACHE_MS = 30000;
+
+  function prefersLightColorScheme() {
+    try {
+      return (
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-color-scheme: light)").matches
+      );
+    } catch (_) {
+      return false;
     }
-    for (const selector of selectors) {
-      const el = selector === ":root" ? document.documentElement : document.querySelector(selector);
-      if (!el) continue;
-      let style;
-      try {
-        style = window.getComputedStyle(el);
-      } catch (_) {
-        continue;
-      }
-      for (const property of properties) {
-        const value = style.getPropertyValue(property) || style[property];
-        if (isUsableCssColor(value)) return value.trim();
-      }
-    }
-    return fallback;
   }
 
-  function detectedXSitePalette() {
-    const base = computedXColor(
-      ['[data-testid="primaryColumn"]', "body", ":root"],
-      ["background-color"],
-      "rgb(0, 0, 0)",
-    );
-    const text = computedXColor(["body", ":root"], ["color"], "rgb(231, 233, 234)");
-    const accent = computedXColor(
-      [
-        '[data-testid="tweetButtonInline"]',
-        '[data-testid="SideNav_NewTweet_Button"]',
-        '[aria-selected="true"]',
-        '[style*="color: rgb(29, 155, 240)"]',
-        '[style*="background-color: rgb(29, 155, 240)"]',
-      ],
-      ["background-color", "color", "border-color"],
-      "rgb(29, 155, 240)",
-    );
-    const border = computedXColor(
-      ['[style*="border-color"]', '[data-testid="primaryColumn"]', "body"],
-      ["border-color"],
-      "rgb(83, 100, 113)",
-    );
-    const muted = computedXColor(
-      ['[style*="color: rgb(113, 118, 123)"]', '[data-testid="User-Name"]', "body"],
-      ["color"],
-      "rgb(113, 118, 123)",
-    );
-    const surface = computedXColor(
-      ['[data-testid="SearchBox_Search_Input"]', '[role="dialog"]', "body"],
-      ["background-color"],
-      base,
-    );
+  function themeToken(tokens, key, fallback) {
+    const value = tokens && tokens[key];
+    return isUsableCssColor(value) ? String(value).trim() : fallback;
+  }
+
+  function selectIglooThemeTokens(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return null;
+    if (prefersLightColorScheme() && snapshot.light_tokens) {
+      return snapshot.light_tokens;
+    }
+    if (!prefersLightColorScheme() && snapshot.dark_tokens) {
+      return snapshot.dark_tokens;
+    }
+    return snapshot.tokens || null;
+  }
+
+  function paletteFromIglooTheme(snapshot) {
+    const tokens = selectIglooThemeTokens(snapshot);
+    if (!tokens) return null;
+    const accent = themeToken(tokens, "accent", "");
+    const base = themeToken(tokens, "base", "");
+    const text = themeToken(tokens, "text", "");
+    if (!accent || !base || !text) return null;
+    const surface1 = themeToken(tokens, "surface1", base);
+    const dark =
+      tokens.dark === true ||
+      (tokens.dark !== false && colorLuma(base) <= 0.58);
     return {
-      source: "site",
-      flavor: colorLuma(base) > 0.58 ? "latte" : "mocha",
+      source: "igloo",
+      flavor: String(tokens.theme_id || snapshot.theme_id || "igloo"),
+      dark,
+      colorScheme: String(tokens.color_scheme || snapshot.color_scheme || ""),
       accent,
-      onAccent: readableColorForBackground(accent),
+      onAccent: themeToken(tokens, "on_accent", readableColorForBackground(accent)),
       base,
-      mantle: base,
-      crust: base,
-      surface0: surface,
-      surface1: border,
-      surface2: border,
-      overlay0: muted,
-      overlay1: muted,
-      overlay2: muted,
-      subtext0: muted,
-      subtext1: muted,
+      mantle: themeToken(tokens, "mantle", base),
+      crust: themeToken(tokens, "crust", base),
+      surface0: themeToken(tokens, "surface0", base),
+      surface1,
+      surface2: themeToken(tokens, "surface2", surface1),
+      overlay0: themeToken(tokens, "overlay0", text),
+      overlay1: themeToken(tokens, "overlay1", text),
+      overlay2: themeToken(tokens, "overlay2", text),
+      subtext0: themeToken(tokens, "subtext0", text),
+      subtext1: themeToken(tokens, "subtext1", text),
       text,
-      red: "rgb(249, 24, 128)",
-      maroon: "rgb(244, 33, 46)",
-      green: "rgb(0, 186, 124)",
-      yellow: "rgb(255, 212, 0)",
-      pink: "rgb(250, 68, 152)",
-      mauve: "rgb(120, 86, 255)",
-      peach: "rgb(255, 122, 0)",
-      blue: accent,
-      sapphire: accent,
-      sky: accent,
-      lavender: accent,
-      rosewater: text,
-      flamingo: text,
+      red: themeToken(tokens, "red", accent),
+      maroon: themeToken(tokens, "maroon", accent),
+      green: themeToken(tokens, "green", accent),
+      yellow: themeToken(tokens, "yellow", accent),
+      pink: themeToken(tokens, "pink", accent),
+      mauve: themeToken(tokens, "mauve", accent),
+      peach: themeToken(tokens, "peach", accent),
+      blue: themeToken(tokens, "blue", accent),
+      sapphire: themeToken(tokens, "sapphire", accent),
+      sky: themeToken(tokens, "sky", accent),
+      lavender: themeToken(tokens, "lavender", accent),
     };
   }
 
-  function detectedXSitePaletteWithoutOwnOverrides() {
-    const body = document.body;
-    const classList = body && body.classList;
-    const hadThemeClass =
-      classList &&
-      typeof classList.contains === "function" &&
-      classList.contains("igloo-theme-overrides");
-    if (hadThemeClass && typeof classList.remove === "function") {
-      classList.remove("igloo-theme-overrides");
-    }
-    try {
-      return detectedXSitePalette();
-    } finally {
-      if (hadThemeClass && typeof classList.add === "function") {
-        classList.add("igloo-theme-overrides");
-      }
-    }
+  function setIglooThemeSnapshot(snapshot) {
+    const palette = paletteFromIglooTheme(snapshot);
+    if (!palette) return false;
+    _iglooThemePalette = palette;
+    _iglooThemeFetchedAt = Date.now();
+    return true;
   }
+
+  async function fetchIglooThemePalette(force = false) {
+    if (
+      !force &&
+      _iglooThemePalette &&
+      Date.now() - _iglooThemeFetchedAt < IGLOO_THEME_CACHE_MS
+    ) {
+      return true;
+    }
+    if (_iglooThemeFetch) return _iglooThemeFetch;
+    _iglooThemeFetch = apiRequest("GET", "/api/theme.json", null, false)
+      .then((resp) => {
+        if (!resp.ok || !setIglooThemeSnapshot(resp.json)) return false;
+        return true;
+      })
+      .finally(() => {
+        _iglooThemeFetch = null;
+      });
+    return _iglooThemeFetch;
+  }
+
+  function xThemeOverridesActive() {
+    return isXSite() && themeOverridesEnabled() && !!_iglooThemePalette;
+  }
+
+  const X_THEME_VAR_KEYS = [
+    "accent",
+    "on-accent",
+    "base",
+    "mantle",
+    "crust",
+    "surface0",
+    "surface1",
+    "surface2",
+    "overlay0",
+    "overlay1",
+    "overlay2",
+    "subtext0",
+    "subtext1",
+    "text",
+    "red",
+    "maroon",
+    "green",
+    "yellow",
+    "pink",
+    "mauve",
+    "peach",
+    "blue",
+    "sapphire",
+    "sky",
+    "lavender",
+    "border",
+  ];
 
   function xThemeVarsForPalette(palette) {
     return {
@@ -287,22 +314,35 @@
     }
   }
 
+  function clearXThemeVars(root, prefix = "") {
+    for (const key of X_THEME_VAR_KEYS) {
+      root.style.removeProperty(`--igloo-x-${prefix}${key}`);
+    }
+  }
+
   function applyXThemeSettings() {
     if (!isXSite()) return;
     const root = document.documentElement;
     if (!root || !root.style) return;
     const themeEnabled = themeOverridesEnabled();
-    const palette = detectedXSitePaletteWithoutOwnOverrides();
+    const palette = themeEnabled ? _iglooThemePalette : null;
+    if (!palette) {
+      clearXThemeVars(root);
+      clearXThemeVars(root, "control-");
+      root.style.setProperty("color-scheme", "light dark");
+      const state = themeEnabled ? "unavailable" : "disabled";
+      root.setAttribute("data-igloo-x-theme-source", state);
+      root.setAttribute("data-igloo-x-theme-flavor", state);
+      root.setAttribute("data-igloo-x-control-source", state);
+      root.setAttribute("data-igloo-x-control-flavor", state);
+      return;
+    }
     const controlPalette = palette;
     setXThemeVars(root, "", palette);
     setXThemeVars(root, "control-", controlPalette);
     root.style.setProperty(
       "color-scheme",
-      themeEnabled
-        ? palette.flavor === "latte"
-          ? "light"
-          : "dark"
-        : "light dark",
+      themeEnabled ? (palette.dark ? "dark" : "light") : "light dark",
     );
     root.setAttribute("data-igloo-x-theme-source", palette.source || "site");
     root.setAttribute("data-igloo-x-theme-flavor", palette.flavor || "site");
@@ -1409,34 +1449,34 @@
       --igloo-x-sky: var(--igloo-x-accent);
       --igloo-x-lavender: var(--igloo-x-accent);
       --igloo-x-border: rgb(83, 100, 113);
-      --igloo-x-control-accent: var(--igloo-x-accent);
-      --igloo-x-control-on-accent: var(--igloo-x-on-accent);
-      --igloo-x-control-base: var(--igloo-x-base);
-      --igloo-x-control-mantle: var(--igloo-x-mantle);
-      --igloo-x-control-crust: var(--igloo-x-crust);
-      --igloo-x-control-surface0: var(--igloo-x-surface0);
-      --igloo-x-control-surface1: var(--igloo-x-surface1);
-      --igloo-x-control-surface2: var(--igloo-x-surface2);
-      --igloo-x-control-overlay0: var(--igloo-x-overlay0);
-      --igloo-x-control-overlay1: var(--igloo-x-overlay1);
-      --igloo-x-control-overlay2: var(--igloo-x-overlay2);
-      --igloo-x-control-subtext0: var(--igloo-x-subtext0);
-      --igloo-x-control-subtext1: var(--igloo-x-subtext1);
-      --igloo-x-control-text: var(--igloo-x-text);
-      --igloo-x-control-red: var(--igloo-x-red);
-      --igloo-x-control-maroon: var(--igloo-x-maroon);
-      --igloo-x-control-green: var(--igloo-x-green);
-      --igloo-x-control-yellow: var(--igloo-x-yellow);
-      --igloo-x-control-pink: var(--igloo-x-pink);
-      --igloo-x-control-mauve: var(--igloo-x-mauve);
-      --igloo-x-control-peach: var(--igloo-x-peach);
-      --igloo-x-control-blue: var(--igloo-x-blue);
-      --igloo-x-control-sapphire: var(--igloo-x-sapphire);
-      --igloo-x-control-sky: var(--igloo-x-sky);
-      --igloo-x-control-lavender: var(--igloo-x-lavender);
-      --igloo-x-control-border: var(--igloo-x-border);
+      --igloo-x-control-accent: rgb(29, 155, 240);
+      --igloo-x-control-on-accent: #ffffff;
+      --igloo-x-control-base: transparent;
+      --igloo-x-control-mantle: Canvas;
+      --igloo-x-control-crust: Canvas;
+      --igloo-x-control-surface0: color-mix(in srgb, currentColor 8%, transparent);
+      --igloo-x-control-surface1: color-mix(in srgb, currentColor 24%, transparent);
+      --igloo-x-control-surface2: color-mix(in srgb, currentColor 35%, transparent);
+      --igloo-x-control-overlay0: currentColor;
+      --igloo-x-control-overlay1: currentColor;
+      --igloo-x-control-overlay2: currentColor;
+      --igloo-x-control-subtext0: currentColor;
+      --igloo-x-control-subtext1: currentColor;
+      --igloo-x-control-text: currentColor;
+      --igloo-x-control-red: rgb(244, 33, 46);
+      --igloo-x-control-maroon: rgb(244, 33, 46);
+      --igloo-x-control-green: rgb(0, 186, 124);
+      --igloo-x-control-yellow: rgb(255, 212, 0);
+      --igloo-x-control-pink: rgb(249, 24, 128);
+      --igloo-x-control-mauve: rgb(120, 86, 255);
+      --igloo-x-control-peach: rgb(255, 122, 0);
+      --igloo-x-control-blue: rgb(29, 155, 240);
+      --igloo-x-control-sapphire: rgb(29, 155, 240);
+      --igloo-x-control-sky: rgb(29, 155, 240);
+      --igloo-x-control-lavender: rgb(29, 155, 240);
+      --igloo-x-control-border: color-mix(in srgb, currentColor 35%, transparent);
     }
-    html[data-igloo-x-theme-source="catppuccin"] {
+    html[data-igloo-x-theme-source="igloo"] {
       background: var(--igloo-x-mantle) !important;
     }
     .x-sync-btn {
@@ -2186,7 +2226,7 @@
     );
     document.body.classList.toggle(
       "igloo-theme-overrides",
-      isXSite() && themeOverridesEnabled(),
+      xThemeOverridesActive(),
     );
   }
 
@@ -3303,11 +3343,25 @@
     return true;
   }
 
-  function refreshXThemeStyles() {
+  function refreshXThemeStyles(options = {}) {
     if (!isXSite()) return;
     ensureButtonStyles();
-    syncXOverrideClasses();
+    if (!themeOverridesEnabled()) {
+      syncXOverrideClasses();
+      applyXThemeSettings();
+      clearXComposerToolbarTheme();
+      return;
+    }
+    fetchIglooThemePalette(!!options.force).then((ok) => {
+      applyXThemeSettings();
+      syncXOverrideClasses();
+      applyXComposerToolbarTheme();
+      if (!ok && options.notifyFailure) {
+        notify("Theme unavailable: could not read Igloo web theme");
+      }
+    });
     applyXThemeSettings();
+    syncXOverrideClasses();
     applyXComposerToolbarTheme();
   }
 
@@ -3391,7 +3445,7 @@
     GM_registerMenuCommand("Toggle theme", () => {
       const next = !themeOverridesEnabled();
       GM_setValue(SETTINGS.xCleanup, next);
-      refreshXThemeStyles();
+      refreshXThemeStyles({ force: next, notifyFailure: next });
       notify(`Theme ${next ? "enabled" : "disabled"}`);
     });
   }
@@ -4181,7 +4235,7 @@
 
   function applyXComposerToolbarTheme() {
     if (!isXSite()) return;
-    if (!themeOverridesEnabled()) {
+    if (!xThemeOverridesActive()) {
       clearXComposerToolbarTheme();
       return;
     }
@@ -4215,9 +4269,7 @@
     const platform = currentPlatform();
     syncXOverrideClasses();
     if (platform === "twitter") {
-      ensureButtonStyles();
-      applyXThemeSettings();
-      applyXComposerToolbarTheme();
+      refreshXThemeStyles();
     }
     if (!buttonOverridesEnabled()) {
       clearButtonOverrides();
@@ -4250,7 +4302,6 @@
     forgetLegacyDashboardPassword();
     registerMenu();
     if (isXAuthRoute()) {
-      refreshXThemeStyles();
       console.log(`[IglooSync] loaded v${SCRIPT_VERSION} (auth route idle)`);
       return;
     }
