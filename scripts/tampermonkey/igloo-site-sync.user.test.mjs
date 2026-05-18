@@ -9,6 +9,8 @@ const script = fs.readFileSync(
 );
 
 function fakeElement() {
+  const classes = new Set();
+  const attrs = new Map();
   const element = {
     style: {
       setProperty(property, value) {
@@ -20,11 +22,30 @@ function fakeElement() {
     },
     dataset: {},
     classList: {
-      add() {},
-      remove() {},
-      toggle() {},
-      contains() {
-        return false;
+      add(...names) {
+        for (const name of names) classes.add(name);
+      },
+      remove(...names) {
+        for (const name of names) classes.delete(name);
+      },
+      toggle(name, force) {
+        if (force === true) {
+          classes.add(name);
+          return true;
+        }
+        if (force === false) {
+          classes.delete(name);
+          return false;
+        }
+        if (classes.has(name)) {
+          classes.delete(name);
+          return false;
+        }
+        classes.add(name);
+        return true;
+      },
+      contains(name) {
+        return classes.has(name);
       },
     },
     appendChild(child) {
@@ -32,9 +53,11 @@ function fakeElement() {
     },
     insertAdjacentElement() {},
     remove() {},
-    setAttribute() {},
-    getAttribute() {
-      return "";
+    setAttribute(name, value) {
+      attrs.set(name, String(value));
+    },
+    getAttribute(name) {
+      return attrs.get(name) || "";
     },
     addEventListener() {},
     querySelector() {
@@ -142,6 +165,7 @@ function buildHarness({
   followHandles = [],
   localList = [],
   failDownloads = [],
+  computedStyles = {},
   pathname = "/home",
   unsafeWindow = {},
   userAgent = "Mozilla/5.0 Chrome/120.0.0.0",
@@ -174,6 +198,26 @@ function buildHarness({
   const documentElement = fakeElement();
   const body = fakeElement();
   const head = fakeElement();
+  const computedStyleElements = new Map();
+  for (const [selector, style] of Object.entries(computedStyles)) {
+    const target =
+      selector === "body"
+        ? body
+        : selector === ":root"
+          ? documentElement
+          : fakeElement();
+    target.__computedStyle = style;
+    computedStyleElements.set(selector, target);
+  }
+  function computedStyleFor(element) {
+    const style = element?.__computedStyle || {};
+    return {
+      ...style,
+      getPropertyValue(property) {
+        return style[property] || "";
+      },
+    };
+  }
 
   const context = {
     console: {
@@ -191,6 +235,7 @@ function buildHarness({
     },
     window: {
       addEventListener() {},
+      getComputedStyle: computedStyleFor,
     },
     unsafeWindow,
     document: {
@@ -201,7 +246,11 @@ function buildHarness({
       getElementById() {
         return null;
       },
-      querySelector() {
+      querySelector(selector) {
+        if (computedStyleElements.has(selector)) {
+          return computedStyleElements.get(selector);
+        }
+        if (selector === "body") return body;
         return null;
       },
       querySelectorAll(selector) {
@@ -598,6 +647,7 @@ test("menu is limited and login does not persist the password", async () => {
     "Test connection",
     "Toggle button overrides",
     "Toggle theme",
+    "Use current X site theme colors",
     "Set X theme flavor",
     "Set X theme accent",
   ]);
@@ -887,10 +937,65 @@ test("X theme menu stores palette controls and refreshes CSS variables", () => {
 
   assert.equal(harness.values.get("igloo_sync_x_theme_flavor"), "macchiato");
   assert.equal(harness.values.get("igloo_sync_x_theme_accent"), "lavender");
+  assert.equal(harness.values.get("igloo_sync_x_theme_source"), "catppuccin");
   assert.equal(harness.values.get("igloo_sync_x_cleanup"), true);
   assert.equal(
     harness.context.document.documentElement.style["--igloo-x-accent"],
     "#b7bdf8",
+  );
+});
+
+test("enabled X theme defaults to current site colors for non-Catppuccin themes", () => {
+  const harness = buildHarness({
+    computedStyles: {
+      '[data-testid="primaryColumn"]': {
+        "background-color": "rgb(12, 18, 24)",
+      },
+      body: {
+        color: "rgb(220, 230, 240)",
+      },
+      '[data-testid="tweetButtonInline"]': {
+        "background-color": "rgb(10, 200, 180)",
+      },
+      '[style*="border-color"]': {
+        "border-color": "rgb(55, 65, 75)",
+      },
+      '[style*="color: rgb(113, 118, 123)"]': {
+        color: "rgb(130, 140, 150)",
+      },
+      '[data-testid="SearchBox_Search_Input"]': {
+        "background-color": "rgb(18, 24, 30)",
+      },
+    },
+    initialValues: {
+      igloo_sync_x_cleanup: true,
+      igloo_sync_x_theme_flavor: "macchiato",
+      igloo_sync_x_theme_accent: "lavender",
+    },
+  });
+  runScript(harness);
+
+  assert.equal(
+    harness.context.document.documentElement.style["--igloo-x-accent"],
+    "rgb(10, 200, 180)",
+  );
+  assert.equal(
+    harness.context.document.documentElement.style["--igloo-x-base"],
+    "rgb(12, 18, 24)",
+  );
+  assert.equal(
+    harness.context.document.documentElement.style["--igloo-x-text"],
+    "rgb(220, 230, 240)",
+  );
+  assert.equal(
+    harness.context.document.documentElement.style["--igloo-x-control-accent"],
+    "rgb(10, 200, 180)",
+  );
+  assert.equal(
+    harness.context.document.documentElement.getAttribute(
+      "data-igloo-x-theme-source",
+    ),
+    "site",
   );
 });
 
@@ -918,6 +1023,7 @@ test("X control colors use the Catppuccin accent while theme overrides are enabl
   const harness = buildHarness({
     initialValues: {
       igloo_sync_x_cleanup: true,
+      igloo_sync_x_theme_source: "catppuccin",
       igloo_sync_x_theme_flavor: "macchiato",
       igloo_sync_x_theme_accent: "lavender",
     },
@@ -931,6 +1037,36 @@ test("X control colors use the Catppuccin accent while theme overrides are enabl
   assert.equal(
     harness.context.document.documentElement.style["--igloo-x-control-accent"],
     "#b7bdf8",
+  );
+});
+
+test("X theme source menu switches Catppuccin theming back to site colors", () => {
+  const harness = buildHarness({
+    computedStyles: {
+      '[data-testid="tweetButtonInline"]': {
+        "background-color": "rgb(10, 200, 180)",
+      },
+    },
+    initialValues: {
+      igloo_sync_x_cleanup: true,
+      igloo_sync_x_theme_source: "catppuccin",
+      igloo_sync_x_theme_flavor: "macchiato",
+      igloo_sync_x_theme_accent: "lavender",
+    },
+  });
+  runScript(harness);
+
+  assert.equal(
+    harness.context.document.documentElement.style["--igloo-x-accent"],
+    "#b7bdf8",
+  );
+
+  harness.menu.get("Use current X site theme colors")();
+
+  assert.equal(harness.values.get("igloo_sync_x_theme_source"), "site");
+  assert.equal(
+    harness.context.document.documentElement.style["--igloo-x-accent"],
+    "rgb(10, 200, 180)",
   );
 });
 

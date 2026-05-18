@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.29
+// @version      8.0.30
 // @author       screwys
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @homepageURL  https://github.com/screwys/Igloo
@@ -37,7 +37,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.29";
+  const SCRIPT_VERSION = "8.0.30";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -52,6 +52,7 @@
     xDownloads: "igloo_sync_x_downloads",
     xKeyboardShortcuts: "igloo_sync_x_keyboard_shortcuts",
     xCleanup: "igloo_sync_x_cleanup",
+    xThemeSource: "igloo_sync_x_theme_source",
     xThemeFlavor: "igloo_sync_x_theme_flavor",
     xThemeAccent: "igloo_sync_x_theme_accent",
   };
@@ -100,7 +101,13 @@
 
   const X_THEME_FLAVOR_DEFAULT = "auto";
   const X_THEME_ACCENT_DEFAULT = "red";
+  const X_THEME_SOURCE_SITE = "site";
+  const X_THEME_SOURCE_CATPPUCCIN = "catppuccin";
   const X_THEME_FLAVOR_ORDER = ["auto", "latte", "frappe", "macchiato", "mocha"];
+  const X_THEME_SOURCE_ORDER = [
+    X_THEME_SOURCE_SITE,
+    X_THEME_SOURCE_CATPPUCCIN,
+  ];
   const X_THEME_ACCENT_ORDER = [
     "rosewater",
     "flamingo",
@@ -241,6 +248,18 @@
   function normalizeXThemeAccent(value) {
     const accent = String(value || "").trim().toLowerCase();
     return X_THEME_ACCENT_ORDER.includes(accent) ? accent : "";
+  }
+
+  function normalizeXThemeSource(value) {
+    const source = String(value || "").trim().toLowerCase();
+    return X_THEME_SOURCE_ORDER.includes(source) ? source : "";
+  }
+
+  function xThemeSourceSetting() {
+    return (
+      normalizeXThemeSource(GM_getValue(SETTINGS.xThemeSource, "")) ||
+      X_THEME_SOURCE_SITE
+    );
   }
 
   function xThemeFlavorSetting() {
@@ -409,6 +428,25 @@
     };
   }
 
+  function detectedXSitePaletteWithoutOwnOverrides() {
+    const body = document.body;
+    const classList = body && body.classList;
+    const hadThemeClass =
+      classList &&
+      typeof classList.contains === "function" &&
+      classList.contains("igloo-theme-overrides");
+    if (hadThemeClass && typeof classList.remove === "function") {
+      classList.remove("igloo-theme-overrides");
+    }
+    try {
+      return detectedXSitePalette();
+    } finally {
+      if (hadThemeClass && typeof classList.add === "function") {
+        classList.add("igloo-theme-overrides");
+      }
+    }
+  }
+
   function currentXThemePalette() {
     const flavor = resolvedXThemeFlavor();
     const palette = X_THEME_PALETTES[flavor] || X_THEME_PALETTES.mocha;
@@ -465,9 +503,13 @@
     const root = document.documentElement;
     if (!root || !root.style) return;
     const themeEnabled = themeOverridesEnabled();
-    const sitePalette = themeEnabled ? null : detectedXSitePalette();
-    const palette = themeEnabled ? currentXThemePalette() : sitePalette;
-    const controlPalette = themeEnabled ? palette : sitePalette;
+    const source = xThemeSourceSetting();
+    const sitePalette = detectedXSitePaletteWithoutOwnOverrides();
+    const palette =
+      themeEnabled && source === X_THEME_SOURCE_CATPPUCCIN
+        ? currentXThemePalette()
+        : sitePalette;
+    const controlPalette = palette;
     setXThemeVars(root, "", palette);
     setXThemeVars(root, "control-", controlPalette);
     root.style.setProperty(
@@ -3569,6 +3611,13 @@
       notify(`Theme ${next ? "enabled" : "disabled"}`);
     });
 
+    GM_registerMenuCommand("Use current X site theme colors", () => {
+      GM_setValue(SETTINGS.xThemeSource, X_THEME_SOURCE_SITE);
+      GM_setValue(SETTINGS.xCleanup, true);
+      refreshXThemeStyles();
+      notify("X theme colors set to current site theme");
+    });
+
     GM_registerMenuCommand("Set X theme flavor", () => {
       const value = prompt(
         "X theme flavor: " + X_THEME_FLAVOR_ORDER.join(", "),
@@ -3580,10 +3629,11 @@
         notify("Unknown X theme flavor");
         return;
       }
+      GM_setValue(SETTINGS.xThemeSource, X_THEME_SOURCE_CATPPUCCIN);
       GM_setValue(SETTINGS.xThemeFlavor, next);
       GM_setValue(SETTINGS.xCleanup, true);
       refreshXThemeStyles();
-      notify(`X theme flavor set to ${next}`);
+      notify(`Catppuccin X theme flavor set to ${next}`);
     });
 
     GM_registerMenuCommand("Set X theme accent", () => {
@@ -3597,10 +3647,11 @@
         notify("Unknown X theme accent");
         return;
       }
+      GM_setValue(SETTINGS.xThemeSource, X_THEME_SOURCE_CATPPUCCIN);
       GM_setValue(SETTINGS.xThemeAccent, next);
       GM_setValue(SETTINGS.xCleanup, true);
       refreshXThemeStyles();
-      notify(`X theme accent set to ${next}`);
+      notify(`Catppuccin X theme accent set to ${next}`);
     });
   }
 
