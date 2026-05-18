@@ -751,6 +751,18 @@ test("themes current X composer toolbar buttons", () => {
   assert.match(script, /setImportantStyle\(svgEl, "color", color\)/);
   assert.match(script, /var\(--igloo-x-accent\)/);
   assert.match(script, /X_THEME_PALETTES/);
+  assert.match(
+    script,
+    /data-testid="unretweet"[\s\S]+color: var\(--igloo-x-accent\) !important; fill: var\(--igloo-x-accent\) !important;/,
+  );
+  assert.match(
+    script,
+    /data-testid="unlike"[\s\S]+color: var\(--igloo-x-accent\) !important; fill: var\(--igloo-x-accent\) !important;/,
+  );
+  assert.match(
+    script,
+    /\[data-testid\$="-follow"\][\s\S]+color: var\(--igloo-x-on-accent\) !important;/,
+  );
 });
 
 test("X theme menu stores palette controls and refreshes CSS variables", () => {

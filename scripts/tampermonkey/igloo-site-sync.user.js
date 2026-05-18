@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.26
+// @version      8.0.27
 // @author       screwys
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @homepageURL  https://github.com/screwys/Igloo
@@ -35,7 +35,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.26";
+  const SCRIPT_VERSION = "8.0.27";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -1626,6 +1626,9 @@
     body.igloo-theme-overrides .r-5zmot {
       background-color: color-mix(in srgb, var(--igloo-x-base) 75%, transparent) !important;
     }
+    body.igloo-theme-overrides .r-cqee49 {
+      color: var(--igloo-x-base) !important;
+    }
     body.igloo-theme-overrides .r-1hdo0pc,
     body.igloo-theme-overrides .r-pjtv4k {
       background-color: color-mix(in srgb, var(--igloo-x-text) 10%, transparent) !important;
@@ -1653,6 +1656,9 @@
     body.igloo-theme-overrides .r-1ccsd61,
     body.igloo-theme-overrides .r-xzxzvz {
       border-color: var(--igloo-x-surface2) !important;
+    }
+    body.igloo-theme-overrides .r-1xc7w19 {
+      border-color: var(--igloo-x-base) !important;
     }
     body.igloo-theme-overrides .r-gu4em3,
     body.igloo-theme-overrides .r-1bnu78o,
@@ -1682,9 +1688,18 @@
     body.igloo-theme-overrides .r-yuvema {
       background-color: color-mix(in srgb, var(--igloo-x-accent) 82%, #000) !important;
     }
+    body.igloo-theme-overrides .r-eff69c {
+      background-color: color-mix(in srgb, var(--igloo-x-accent) 95%, #000) !important;
+    }
+    body.igloo-theme-overrides .r-eff69c [style*="color: rgb(255, 255, 255)"] {
+      color: var(--igloo-x-on-accent) !important;
+    }
     body.igloo-theme-overrides .r-1peqgm7,
     body.igloo-theme-overrides .r-rgqbpe,
     body.igloo-theme-overrides [style*="background-color: rgb(2, 17, 61)"] {
+      background-color: color-mix(in srgb, var(--igloo-x-accent) 12%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-11z020y {
       background-color: color-mix(in srgb, var(--igloo-x-accent) 12%, transparent) !important;
     }
     body.igloo-theme-overrides .r-r18ze4 {
@@ -1713,8 +1728,14 @@
     body.igloo-theme-overrides .r-9cip40 {
       box-shadow: var(--igloo-x-accent) 0 0 0 1px !important;
     }
+    body.igloo-theme-overrides [style="background-image: linear-gradient(61.63deg, rgb(45, 66, 255) -15.05%, rgb(156, 99, 250) 104.96%);"] {
+      background-image: linear-gradient(61.63deg, var(--igloo-x-blue) -15.05%, var(--igloo-x-mauve) 104.96%) !important;
+    }
     body.igloo-theme-overrides .r-1blqq69 {
       border-color: var(--igloo-x-mauve) !important;
+    }
+    body.igloo-theme-overrides .r-11mg6pl {
+      border-color: var(--igloo-x-on-accent) !important;
     }
     body.igloo-theme-overrides .draftjs-styles_0 .public-DraftEditorPlaceholder-root {
       color: var(--igloo-x-overlay0) !important;
@@ -1752,6 +1773,21 @@
     }
     body.igloo-theme-overrides .r-oybae9 {
       background-color: color-mix(in srgb, var(--igloo-x-red) 82%, #000) !important;
+    }
+    body.igloo-theme-overrides .r-n94g0g {
+      background-color: color-mix(in srgb, var(--igloo-x-text) 30%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-z9i421 {
+      background-color: color-mix(in srgb, var(--igloo-x-text) 27%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-19130f6 {
+      background-color: var(--igloo-x-crust) !important;
+    }
+    body.igloo-theme-overrides .r-l8tqsx {
+      background-color: color-mix(in srgb, var(--igloo-x-text) 10%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-3gvs5h {
+      background-color: var(--igloo-x-overlay1) !important;
     }
     body.igloo-theme-overrides .r-vkub15,
     body.igloo-theme-overrides .r-9l7dzd,
@@ -1851,6 +1887,26 @@
     body.igloo-theme-overrides [style*="background-color: rgb(239, 243, 244)"] {
       background-color: var(--igloo-x-text) !important;
     }
+    body.igloo-theme-overrides [data-testid$="-follow"] {
+      background: var(--igloo-x-text) !important;
+      background-color: var(--igloo-x-text) !important;
+      border-color: var(--igloo-x-text) !important;
+    }
+    body.igloo-theme-overrides [data-testid$="-follow"],
+    body.igloo-theme-overrides [data-testid$="-follow"] *,
+    body.igloo-theme-overrides [data-testid$="-follow"][style*="color: rgb(15, 20, 25)"],
+    body.igloo-theme-overrides [data-testid$="-follow"] [style*="color: rgb(15, 20, 25)"] {
+      color: var(--igloo-x-on-accent) !important;
+    }
+    body.igloo-theme-overrides [data-testid$="-unfollow"] {
+      background: transparent !important;
+      background-color: transparent !important;
+      border-color: var(--igloo-x-surface1) !important;
+    }
+    body.igloo-theme-overrides [data-testid$="-unfollow"],
+    body.igloo-theme-overrides [data-testid$="-unfollow"] * {
+      color: var(--igloo-x-text) !important;
+    }
     body.igloo-theme-overrides [style*="background-color: rgb(0, 0, 0)"],
     body.igloo-theme-overrides [style*="background-color: #000"] {
       background-color: var(--igloo-x-base) !important;
@@ -1859,21 +1915,21 @@
       background-color: color-mix(in srgb, var(--igloo-x-crust) 75%, transparent) !important;
     }
 
-    /* Native action colors use the active theme palette instead of one fixed accent. */
+    /* Preserve the original Igloo action-button treatment, backed by theme vars. */
     body.igloo-theme-overrides [data-testid="reply"] div,
+    body.igloo-theme-overrides [data-testid="retweet"] div,
+    body.igloo-theme-overrides [data-testid="like"] div,
+    body.igloo-theme-overrides [data-testid="unlike"] div,
+    body.igloo-theme-overrides [data-testid="unretweet"] div,
     body.igloo-theme-overrides [aria-label="Share post"] div,
     body.igloo-theme-overrides [aria-label="Share"] div,
     body.igloo-theme-overrides [data-testid="reply"] svg,
+    body.igloo-theme-overrides [data-testid="retweet"] svg,
+    body.igloo-theme-overrides [data-testid="like"] svg,
+    body.igloo-theme-overrides [data-testid="unlike"] svg,
+    body.igloo-theme-overrides [data-testid="unretweet"] svg,
     body.igloo-theme-overrides [aria-label="Share post"] svg,
     body.igloo-theme-overrides [aria-label="Share"] svg { color: var(--igloo-x-accent) !important; fill: var(--igloo-x-accent) !important; }
-    body.igloo-theme-overrides [data-testid="retweet"] div,
-    body.igloo-theme-overrides [data-testid="unretweet"] div,
-    body.igloo-theme-overrides [data-testid="retweet"] svg,
-    body.igloo-theme-overrides [data-testid="unretweet"] svg { color: var(--igloo-x-green) !important; fill: var(--igloo-x-green) !important; }
-    body.igloo-theme-overrides [data-testid="like"] div,
-    body.igloo-theme-overrides [data-testid="unlike"] div,
-    body.igloo-theme-overrides [data-testid="like"] svg,
-    body.igloo-theme-overrides [data-testid="unlike"] svg { color: var(--igloo-x-red) !important; fill: var(--igloo-x-red) !important; }
 
     body.igloo-theme-overrides [data-testid="reply"] div,
     body.igloo-theme-overrides [data-testid="retweet"] div,
@@ -1884,12 +1940,12 @@
     body.igloo-theme-overrides [aria-label="Share"] div { border-radius: 9999px !important; }
 
     body.igloo-theme-overrides [data-testid="reply"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [data-testid="retweet"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [data-testid="like"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [data-testid="unlike"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [data-testid="unretweet"]:hover .r-1niwhzg,
     body.igloo-theme-overrides [aria-label="Share post"]:hover .r-1niwhzg,
     body.igloo-theme-overrides [aria-label="Share"]:hover .r-1niwhzg { background-color: color-mix(in srgb, var(--igloo-x-accent) 10%, transparent) !important; }
-    body.igloo-theme-overrides [data-testid="retweet"]:hover .r-1niwhzg,
-    body.igloo-theme-overrides [data-testid="unretweet"]:hover .r-1niwhzg { background-color: color-mix(in srgb, var(--igloo-x-green) 10%, transparent) !important; }
-    body.igloo-theme-overrides [data-testid="like"]:hover .r-1niwhzg,
-    body.igloo-theme-overrides [data-testid="unlike"]:hover .r-1niwhzg { background-color: color-mix(in srgb, var(--igloo-x-red) 10%, transparent) !important; }
 
     /* Composer toolbar buttons */
     body.igloo-theme-overrides button[role="button"][aria-label="Add photos or video"],
