@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.32
+// @version      8.0.33
 // @author       screwys
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @homepageURL  https://github.com/screwys/Igloo
@@ -37,7 +37,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.32";
+  const SCRIPT_VERSION = "8.0.33";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -97,7 +97,9 @@
   ].join(",");
 
   function hexToRgb(value) {
-    const hex = String(value || "").trim().replace(/^#/, "");
+    const hex = String(value || "")
+      .trim()
+      .replace(/^#/, "");
     if (!/^[0-9a-f]{6}$/i.test(hex)) return null;
     return {
       r: parseInt(hex.slice(0, 2), 16),
@@ -119,7 +121,9 @@
   }
 
   function colorLuma(value) {
-    const rgb = String(value || "").trim().startsWith("#")
+    const rgb = String(value || "")
+      .trim()
+      .startsWith("#")
       ? hexToRgb(value)
       : cssRgbToRgb(value);
     if (!rgb) return 0;
@@ -189,7 +193,11 @@
       dark,
       colorScheme: String(tokens.color_scheme || snapshot.color_scheme || ""),
       accent,
-      onAccent: themeToken(tokens, "on_accent", readableColorForBackground(accent)),
+      onAccent: themeToken(
+        tokens,
+        "on_accent",
+        readableColorForBackground(accent),
+      ),
       base,
       mantle: themeToken(tokens, "mantle", base),
       crust: themeToken(tokens, "crust", base),
@@ -642,7 +650,8 @@
       .replace(/%3D/gi, "=")
       .replace(/%26/gi, "&")
       .replace(/&amp;/g, "&");
-    const re = /https?:\/\/video\.twimg\.com\/[^"'\\\s<>]+?\.mp4(?:\?[^"'\\\s<>]*)?/gi;
+    const re =
+      /https?:\/\/video\.twimg\.com\/[^"'\\\s<>]+?\.mp4(?:\?[^"'\\\s<>]*)?/gi;
     let match;
     while ((match = re.exec(normalized))) {
       let url = match[0];
@@ -1090,7 +1099,9 @@
   function twitterChannelHandleKeys(ch) {
     const keys = [];
     const add = (value) => {
-      const h = String(value || "").trim().replace(/^@+/, "");
+      const h = String(value || "")
+        .trim()
+        .replace(/^@+/, "");
       if (isLikelyHandle(h)) keys.push(h.toLowerCase());
     };
     const channelId = String(ch.channel_id || ch.id || "").trim();
@@ -1131,8 +1142,7 @@
   }
 
   function mediaOwnerForElement(node, article, parentInfo, quoteScopes) {
-    const statusLink =
-      node.closest && node.closest('a[href*="/status/"]');
+    const statusLink = node.closest && node.closest('a[href*="/status/"]');
     let genericStatusOwner = null;
     if (statusLink) {
       const owner = parseTweetInfoFromHref(
@@ -2640,8 +2650,7 @@
     const valid = Array.from(
       new Set(
         selectedIndices.filter(
-          (idx) =>
-            Number.isInteger(idx) && idx >= 0 && idx < mediaCount,
+          (idx) => Number.isInteger(idx) && idx >= 0 && idx < mediaCount,
         ),
       ),
     ).sort((a, b) => a - b);
@@ -2863,8 +2872,7 @@
               setDlButtonState(dlBtn, "error");
               const firstFailure = (resp.json?.failed || [])[0];
               showToast(
-                "Download failed" +
-                  (firstFailure ? ": " + firstFailure : ""),
+                "Download failed" + (firstFailure ? ": " + firstFailure : ""),
               );
             },
           );
@@ -3741,9 +3749,7 @@
   function setCrossButtonState(btn, saved) {
     btn.textContent = saved ? "Following" : "Follow";
     btn.dataset.saved = saved ? "1" : "0";
-    btn.title = saved
-      ? "Remove from Igloo subscriptions"
-      : "Follow in Igloo";
+    btn.title = saved ? "Remove from Igloo subscriptions" : "Follow in Igloo";
   }
 
   function makeCrossSaveButton(id, platform, key, url) {
@@ -4202,9 +4208,7 @@
       info.key,
       subscribeURL,
     );
-    btn.title = info.name
-      ? `Follow ${info.name} in Igloo`
-      : btn.title;
+    btn.title = info.name ? `Follow ${info.name} in Igloo` : btn.title;
     anchor.insertAdjacentElement("afterend", btn);
     currentYouTubeKey = stateKey;
   }
@@ -4230,7 +4234,9 @@
       clearImportantStyle(btn, "border-color");
       for (
         let node = btn.parentElement;
-        node && node !== document.body && node.getAttribute("data-testid") !== "toolBar";
+        node &&
+        node !== document.body &&
+        node.getAttribute("data-testid") !== "toolBar";
         node = node.parentElement
       ) {
         clearImportantStyle(node, "filter");
@@ -4262,7 +4268,9 @@
       setImportantStyle(btn, "border-color", "transparent");
       for (
         let node = btn.parentElement;
-        node && node !== document.body && node.getAttribute("data-testid") !== "toolBar";
+        node &&
+        node !== document.body &&
+        node.getAttribute("data-testid") !== "toolBar";
         node = node.parentElement
       ) {
         setImportantStyle(node, "filter", "none");
