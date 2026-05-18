@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.25
+// @version      8.0.26
 // @author       screwys
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @homepageURL  https://github.com/screwys/Igloo
@@ -35,7 +35,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.25";
+  const SCRIPT_VERSION = "8.0.26";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -50,6 +50,8 @@
     xDownloads: "igloo_sync_x_downloads",
     xKeyboardShortcuts: "igloo_sync_x_keyboard_shortcuts",
     xCleanup: "igloo_sync_x_cleanup",
+    xThemeFlavor: "igloo_sync_x_theme_flavor",
+    xThemeAccent: "igloo_sync_x_theme_accent",
   };
   const LEGACY_AUTH_PASSWORD_KEY = "xsync_auth_pass";
 
@@ -93,6 +95,381 @@
     'button[role="button"][data-testid="geoButton"]',
     'button[role="button"][data-testid="contentDisclosureButton"]',
   ].join(",");
+
+  const X_THEME_FLAVOR_DEFAULT = "auto";
+  const X_THEME_ACCENT_DEFAULT = "red";
+  const X_THEME_FLAVOR_ORDER = ["auto", "latte", "frappe", "macchiato", "mocha"];
+  const X_THEME_ACCENT_ORDER = [
+    "rosewater",
+    "flamingo",
+    "pink",
+    "mauve",
+    "red",
+    "maroon",
+    "peach",
+    "yellow",
+    "green",
+    "teal",
+    "blue",
+    "sapphire",
+    "sky",
+    "lavender",
+    "subtext0",
+  ];
+  const X_THEME_PALETTES = {
+    latte: {
+      rosewater: "#dc8a78",
+      flamingo: "#dd7878",
+      pink: "#ea76cb",
+      mauve: "#8839ef",
+      red: "#d20f39",
+      maroon: "#e64553",
+      peach: "#fe640b",
+      yellow: "#df8e1d",
+      green: "#40a02b",
+      teal: "#179299",
+      sky: "#04a5e5",
+      sapphire: "#209fb5",
+      blue: "#1e66f5",
+      lavender: "#7287fd",
+      text: "#4c4f69",
+      subtext1: "#5c5f77",
+      subtext0: "#6c6f85",
+      overlay2: "#7c7f93",
+      overlay1: "#8c8fa1",
+      overlay0: "#9ca0b0",
+      surface2: "#acb0be",
+      surface1: "#bcc0cc",
+      surface0: "#ccd0da",
+      base: "#eff1f5",
+      mantle: "#e6e9ef",
+      crust: "#dce0e8",
+    },
+    frappe: {
+      rosewater: "#f2d5cf",
+      flamingo: "#eebebe",
+      pink: "#f4b8e4",
+      mauve: "#ca9ee6",
+      red: "#e78284",
+      maroon: "#ea999c",
+      peach: "#ef9f76",
+      yellow: "#e5c890",
+      green: "#a6d189",
+      teal: "#81c8be",
+      sky: "#99d1db",
+      sapphire: "#85c1dc",
+      blue: "#8caaee",
+      lavender: "#babbf1",
+      text: "#c6d0f5",
+      subtext1: "#b5bfe2",
+      subtext0: "#a5adce",
+      overlay2: "#949cbb",
+      overlay1: "#838ba7",
+      overlay0: "#737994",
+      surface2: "#626880",
+      surface1: "#51576d",
+      surface0: "#414559",
+      base: "#303446",
+      mantle: "#292c3c",
+      crust: "#232634",
+    },
+    macchiato: {
+      rosewater: "#f4dbd6",
+      flamingo: "#f0c6c6",
+      pink: "#f5bde6",
+      mauve: "#c6a0f6",
+      red: "#ed8796",
+      maroon: "#ee99a0",
+      peach: "#f5a97f",
+      yellow: "#eed49f",
+      green: "#a6da95",
+      teal: "#8bd5ca",
+      sky: "#91d7e3",
+      sapphire: "#7dc4e4",
+      blue: "#8aadf4",
+      lavender: "#b7bdf8",
+      text: "#cad3f5",
+      subtext1: "#b8c0e0",
+      subtext0: "#a5adcb",
+      overlay2: "#939ab7",
+      overlay1: "#8087a2",
+      overlay0: "#6e738d",
+      surface2: "#5b6078",
+      surface1: "#494d64",
+      surface0: "#363a4f",
+      base: "#24273a",
+      mantle: "#1e2030",
+      crust: "#181926",
+    },
+    mocha: {
+      rosewater: "#f5e0dc",
+      flamingo: "#f2cdcd",
+      pink: "#f5c2e7",
+      mauve: "#cba6f7",
+      red: "#f38ba8",
+      maroon: "#eba0ac",
+      peach: "#fab387",
+      yellow: "#f9e2af",
+      green: "#a6e3a1",
+      teal: "#94e2d5",
+      sky: "#89dceb",
+      sapphire: "#74c7ec",
+      blue: "#89b4fa",
+      lavender: "#b4befe",
+      text: "#cdd6f4",
+      subtext1: "#bac2de",
+      subtext0: "#a6adc8",
+      overlay2: "#9399b2",
+      overlay1: "#7f849c",
+      overlay0: "#6c7086",
+      surface2: "#585b70",
+      surface1: "#45475a",
+      surface0: "#313244",
+      base: "#1e1e2e",
+      mantle: "#181825",
+      crust: "#11111b",
+    },
+  };
+
+  function normalizeXThemeFlavor(value) {
+    const flavor = String(value || "").trim().toLowerCase();
+    return X_THEME_FLAVOR_ORDER.includes(flavor) ? flavor : "";
+  }
+
+  function normalizeXThemeAccent(value) {
+    const accent = String(value || "").trim().toLowerCase();
+    return X_THEME_ACCENT_ORDER.includes(accent) ? accent : "";
+  }
+
+  function xThemeFlavorSetting() {
+    return (
+      normalizeXThemeFlavor(GM_getValue(SETTINGS.xThemeFlavor, "")) ||
+      X_THEME_FLAVOR_DEFAULT
+    );
+  }
+
+  function xThemeAccentSetting() {
+    return (
+      normalizeXThemeAccent(GM_getValue(SETTINGS.xThemeAccent, "")) ||
+      X_THEME_ACCENT_DEFAULT
+    );
+  }
+
+  function prefersLightColorScheme() {
+    try {
+      return (
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-color-scheme: light)").matches
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function resolvedXThemeFlavor() {
+    const configured = xThemeFlavorSetting();
+    if (configured !== "auto") return configured;
+    return prefersLightColorScheme() ? "latte" : "mocha";
+  }
+
+  function hexToRgb(value) {
+    const hex = String(value || "").trim().replace(/^#/, "");
+    if (!/^[0-9a-f]{6}$/i.test(hex)) return null;
+    return {
+      r: parseInt(hex.slice(0, 2), 16),
+      g: parseInt(hex.slice(2, 4), 16),
+      b: parseInt(hex.slice(4, 6), 16),
+    };
+  }
+
+  function cssRgbToRgb(value) {
+    const match = String(value || "").match(
+      /rgba?\(\s*([0-9.]+)[,\s]+([0-9.]+)[,\s]+([0-9.]+)/i,
+    );
+    if (!match) return null;
+    return {
+      r: Number(match[1]),
+      g: Number(match[2]),
+      b: Number(match[3]),
+    };
+  }
+
+  function colorLuma(value) {
+    const rgb = String(value || "").trim().startsWith("#")
+      ? hexToRgb(value)
+      : cssRgbToRgb(value);
+    if (!rgb) return 0;
+    return (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+  }
+
+  function readableColorForBackground(value) {
+    return colorLuma(value) > 0.58 ? "#0f1419" : "#ffffff";
+  }
+
+  function isUsableCssColor(value) {
+    const color = String(value || "").trim();
+    return (
+      color &&
+      color !== "transparent" &&
+      color !== "rgba(0, 0, 0, 0)" &&
+      color !== "rgba(0 0 0 / 0)"
+    );
+  }
+
+  function computedXColor(selectors, properties, fallback) {
+    if (
+      typeof window.getComputedStyle !== "function" ||
+      !document ||
+      typeof document.querySelector !== "function"
+    ) {
+      return fallback;
+    }
+    for (const selector of selectors) {
+      const el = selector === ":root" ? document.documentElement : document.querySelector(selector);
+      if (!el) continue;
+      let style;
+      try {
+        style = window.getComputedStyle(el);
+      } catch (_) {
+        continue;
+      }
+      for (const property of properties) {
+        const value = style.getPropertyValue(property) || style[property];
+        if (isUsableCssColor(value)) return value.trim();
+      }
+    }
+    return fallback;
+  }
+
+  function detectedXSitePalette() {
+    const base = computedXColor(
+      ['[data-testid="primaryColumn"]', "body", ":root"],
+      ["background-color"],
+      "rgb(0, 0, 0)",
+    );
+    const text = computedXColor(["body", ":root"], ["color"], "rgb(231, 233, 234)");
+    const accent = computedXColor(
+      [
+        '[data-testid="tweetButtonInline"]',
+        '[data-testid="SideNav_NewTweet_Button"]',
+        '[aria-selected="true"]',
+        '[style*="color: rgb(29, 155, 240)"]',
+        '[style*="background-color: rgb(29, 155, 240)"]',
+      ],
+      ["background-color", "color", "border-color"],
+      "rgb(29, 155, 240)",
+    );
+    const border = computedXColor(
+      ['[style*="border-color"]', '[data-testid="primaryColumn"]', "body"],
+      ["border-color"],
+      "rgb(83, 100, 113)",
+    );
+    const muted = computedXColor(
+      ['[style*="color: rgb(113, 118, 123)"]', '[data-testid="User-Name"]', "body"],
+      ["color"],
+      "rgb(113, 118, 123)",
+    );
+    const surface = computedXColor(
+      ['[data-testid="SearchBox_Search_Input"]', '[role="dialog"]', "body"],
+      ["background-color"],
+      base,
+    );
+    return {
+      source: "site",
+      flavor: colorLuma(base) > 0.58 ? "latte" : "mocha",
+      accent,
+      onAccent: readableColorForBackground(accent),
+      base,
+      mantle: base,
+      crust: base,
+      surface0: surface,
+      surface1: border,
+      surface2: border,
+      overlay0: muted,
+      overlay1: muted,
+      overlay2: muted,
+      subtext0: muted,
+      subtext1: muted,
+      text,
+      red: "rgb(249, 24, 128)",
+      maroon: "rgb(244, 33, 46)",
+      green: "rgb(0, 186, 124)",
+      yellow: "rgb(255, 212, 0)",
+      pink: "rgb(250, 68, 152)",
+      mauve: "rgb(120, 86, 255)",
+      peach: "rgb(255, 122, 0)",
+      blue: accent,
+      sapphire: accent,
+      sky: accent,
+      lavender: accent,
+      rosewater: text,
+      flamingo: text,
+    };
+  }
+
+  function currentXThemePalette() {
+    const flavor = resolvedXThemeFlavor();
+    const palette = X_THEME_PALETTES[flavor] || X_THEME_PALETTES.mocha;
+    const accentName = xThemeAccentSetting();
+    const accent = palette[accentName] || palette.red;
+    return {
+      ...palette,
+      source: "catppuccin",
+      flavor,
+      accent,
+      onAccent: flavor === "latte" ? "#ffffff" : palette.crust,
+    };
+  }
+
+  function applyXThemeSettings() {
+    if (!isXSite()) return;
+    const root = document.documentElement;
+    if (!root || !root.style) return;
+    const palette = themeOverridesEnabled()
+      ? currentXThemePalette()
+      : detectedXSitePalette();
+    const vars = {
+      accent: palette.accent,
+      "on-accent": palette.onAccent,
+      base: palette.base,
+      mantle: palette.mantle,
+      crust: palette.crust,
+      surface0: palette.surface0,
+      surface1: palette.surface1,
+      surface2: palette.surface2,
+      overlay0: palette.overlay0,
+      overlay1: palette.overlay1,
+      overlay2: palette.overlay2,
+      subtext0: palette.subtext0,
+      subtext1: palette.subtext1,
+      text: palette.text,
+      red: palette.red,
+      maroon: palette.maroon,
+      green: palette.green,
+      yellow: palette.yellow,
+      pink: palette.pink,
+      mauve: palette.mauve,
+      peach: palette.peach,
+      blue: palette.blue,
+      sapphire: palette.sapphire,
+      sky: palette.sky,
+      lavender: palette.lavender,
+      border: palette.surface1,
+    };
+    for (const [key, value] of Object.entries(vars)) {
+      root.style.setProperty(`--igloo-x-${key}`, value);
+    }
+    root.style.setProperty(
+      "color-scheme",
+      themeOverridesEnabled()
+        ? palette.flavor === "latte"
+          ? "light"
+          : "dark"
+        : "light dark",
+    );
+    root.setAttribute("data-igloo-x-theme-source", palette.source || "site");
+    root.setAttribute("data-igloo-x-theme-flavor", palette.flavor || "site");
+  }
 
   function normalizeApiBase(value) {
     return String(value || "")
@@ -1152,54 +1529,352 @@
     const style = document.createElement("style");
     style.id = "x-sync-style";
     style.textContent = `
+    :root {
+      --igloo-x-accent: rgb(29, 155, 240);
+      --igloo-x-on-accent: #ffffff;
+      --igloo-x-base: rgb(0, 0, 0);
+      --igloo-x-mantle: rgb(0, 0, 0);
+      --igloo-x-crust: rgb(0, 0, 0);
+      --igloo-x-surface0: rgb(22, 24, 28);
+      --igloo-x-surface1: rgb(47, 51, 54);
+      --igloo-x-surface2: rgb(83, 100, 113);
+      --igloo-x-overlay0: rgb(113, 118, 123);
+      --igloo-x-overlay1: rgb(113, 118, 123);
+      --igloo-x-overlay2: rgb(113, 118, 123);
+      --igloo-x-subtext0: rgb(113, 118, 123);
+      --igloo-x-subtext1: rgb(113, 118, 123);
+      --igloo-x-text: rgb(231, 233, 234);
+      --igloo-x-red: rgb(249, 24, 128);
+      --igloo-x-maroon: rgb(244, 33, 46);
+      --igloo-x-green: rgb(0, 186, 124);
+      --igloo-x-yellow: rgb(255, 212, 0);
+      --igloo-x-pink: rgb(250, 68, 152);
+      --igloo-x-mauve: rgb(120, 86, 255);
+      --igloo-x-peach: rgb(255, 122, 0);
+      --igloo-x-blue: var(--igloo-x-accent);
+      --igloo-x-sapphire: var(--igloo-x-accent);
+      --igloo-x-sky: var(--igloo-x-accent);
+      --igloo-x-lavender: var(--igloo-x-accent);
+      --igloo-x-border: rgb(83, 100, 113);
+    }
     .x-sync-btn {
-      border: 1px solid rgb(83, 100, 113); background: transparent;
-      color: #cdd6f4; border-radius: 9999px; font-size: 12px;
+      border: 1px solid var(--igloo-x-border); background: transparent;
+      color: var(--igloo-x-text); border-radius: 9999px; font-size: 12px;
       line-height: 16px; font-weight: 700; padding: 4px 10px;
       margin-right: 8px; cursor: pointer; transition: all 0.15s;
     }
-    .x-sync-btn:hover { background: rgba(205,214,244,0.1); }
-    .x-sync-btn[data-saved="1"] { border-color: rgba(83, 100, 113, 0.5); opacity: 0.55; color: #bac2de; }
+    .x-sync-btn:hover { background: color-mix(in srgb, var(--igloo-x-text) 10%, transparent); }
+    .x-sync-btn[data-saved="1"] { border-color: color-mix(in srgb, var(--igloo-x-border) 55%, transparent); opacity: 0.55; color: var(--igloo-x-subtext1); }
     .x-sync-btn[data-saved="1"]:hover { opacity: 0.85; }
     .x-sync-btn:disabled { opacity: 0.65; cursor: wait; }
     .x-source-save-btn {
       position: fixed; right: 24px; bottom: 24px; z-index: 2147483647;
-      border: 1px solid rgb(83, 100, 113); background: #15202b;
-      color: #cdd6f4; border-radius: 9999px; font-size: 13px;
+      border: 1px solid var(--igloo-x-border); background: var(--igloo-x-mantle);
+      color: var(--igloo-x-text); border-radius: 9999px; font-size: 13px;
       line-height: 16px; font-weight: 800; padding: 9px 15px;
       cursor: pointer; transition: all 0.15s;
       box-shadow: 0 4px 20px rgba(0,0,0,0.6);
       font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
     }
-    .x-source-save-btn:hover { background: rgba(21,32,43,0.92); border-color: rgba(205,214,244,0.6); }
-    .x-source-save-btn[data-saved="1"] { opacity: 0.72; color: #bac2de; }
+    .x-source-save-btn:hover { background: color-mix(in srgb, var(--igloo-x-mantle) 92%, var(--igloo-x-text)); border-color: color-mix(in srgb, var(--igloo-x-text) 60%, transparent); }
+    .x-source-save-btn[data-saved="1"] { opacity: 0.72; color: var(--igloo-x-subtext1); }
     .x-source-save-btn:disabled { opacity: 0.65; cursor: wait; }
 
     /* Hide native bookmark button */
     body.igloo-button-overrides [data-testid="bookmark"],
     body.igloo-button-overrides [data-testid="removeBookmark"] { display: none !important; }
 
-    /* Override ALL native action button default color → #f38ba8 */
+    /* X theme selectors adapted from Catppuccin userstyles' MIT-licensed Twitter theme. */
+    body.igloo-theme-overrides {
+      --border-color: var(--igloo-x-surface0);
+      --color: var(--igloo-x-overlay1);
+      --color-emphasis: var(--igloo-x-text);
+      --hover-bg-color: var(--igloo-x-surface0);
+      --cpft-text-primary: var(--igloo-x-text);
+      background-color: var(--igloo-x-base) !important;
+      color: var(--igloo-x-text);
+    }
+    body.igloo-theme-overrides,
+    body.igloo-theme-overrides .PageContainer,
+    body.igloo-theme-overrides #placeholder,
+    body.igloo-theme-overrides [data-testid="primaryColumn"],
+    body.igloo-theme-overrides .r-kemksi {
+      background-color: var(--igloo-x-base) !important;
+      color: var(--igloo-x-text);
+    }
+    body.igloo-theme-overrides #ScriptLoadFailure span,
+    body.igloo-theme-overrides .r-1nao33i,
+    body.igloo-theme-overrides .r-jwli3a,
+    body.igloo-theme-overrides a[aria-label^="Translated from"][aria-label$="by Google"] svg path {
+      color: var(--igloo-x-text) !important;
+      fill: var(--igloo-x-text) !important;
+    }
+    body.igloo-theme-overrides [style*="scrollbar-color: rgb(62, 65, 68) rgb(22, 24, 28)"] {
+      scrollbar-color: var(--igloo-x-accent) transparent !important;
+      scrollbar-width: thin;
+    }
+    body.igloo-theme-overrides .r-qo02w8,
+    body.igloo-theme-overrides .r-15ce4ve {
+      box-shadow: rgba(0, 0, 0, 0.4) 0 0 15px, rgba(0, 0, 0, 0.35) 0 0 3px 1px !important;
+    }
+    body.igloo-theme-overrides .r-1tbvlxk {
+      filter: drop-shadow(rgba(0, 0, 0, 0.5) 1px -1px 1px) !important;
+    }
+    body.igloo-theme-overrides .r-1uusn97 {
+      box-shadow: rgba(0, 0, 0, 0.4) 0 0 5px, rgba(0, 0, 0, 0.35) 0 1px 4px 1px !important;
+    }
+    body.igloo-theme-overrides .r-5zmot {
+      background-color: color-mix(in srgb, var(--igloo-x-base) 75%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-1hdo0pc,
+    body.igloo-theme-overrides .r-pjtv4k {
+      background-color: color-mix(in srgb, var(--igloo-x-text) 10%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-11gmi9o {
+      background-color: color-mix(in srgb, var(--igloo-x-text) 20%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-1cuuowz {
+      background-color: color-mix(in srgb, var(--igloo-x-text) 3%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-1kqtdi0,
+    body.igloo-theme-overrides .r-1roi411,
+    body.igloo-theme-overrides .r-1igl3o0,
+    body.igloo-theme-overrides .r-2sztyj,
+    body.igloo-theme-overrides .r-1aihyag,
+    body.igloo-theme-overrides [stroke="#2F3336" i],
+    body.igloo-theme-overrides [style*="border-color: rgb(51, 54, 57)"] {
+      border-color: var(--igloo-x-surface0) !important;
+      stroke: var(--igloo-x-surface2) !important;
+    }
+    body.igloo-theme-overrides .r-1wyyjkm,
+    body.igloo-theme-overrides [style*="border-color: rgb(83, 100, 113)"] {
+      border-color: var(--igloo-x-surface1) !important;
+    }
+    body.igloo-theme-overrides .r-1ccsd61,
+    body.igloo-theme-overrides .r-xzxzvz {
+      border-color: var(--igloo-x-surface2) !important;
+    }
+    body.igloo-theme-overrides .r-gu4em3,
+    body.igloo-theme-overrides .r-1bnu78o,
+    body.igloo-theme-overrides .r-z32n2g,
+    body.igloo-theme-overrides .r-1m3jxhj,
+    body.igloo-theme-overrides .r-1pr99xn,
+    body.igloo-theme-overrides .r-1fkb3t2 {
+      background-color: var(--igloo-x-surface0) !important;
+    }
+    body.igloo-theme-overrides .r-g2wdr4 {
+      background-color: var(--igloo-x-mantle) !important;
+    }
+    body.igloo-theme-overrides .r-14wv3jr {
+      border-color: var(--igloo-x-mantle) !important;
+    }
+    body.igloo-theme-overrides .r-1bwzh9t,
+    body.igloo-theme-overrides .r-qazpri {
+      color: var(--igloo-x-overlay1) !important;
+    }
+    body.igloo-theme-overrides .r-l5o3uw,
+    body.igloo-theme-overrides [style*="background-color: rgb(29, 155, 240)"] {
+      background-color: var(--igloo-x-accent) !important;
+    }
+    body.igloo-theme-overrides .r-1vtznih {
+      background-color: color-mix(in srgb, var(--igloo-x-accent) 88%, #000) !important;
+    }
+    body.igloo-theme-overrides .r-yuvema {
+      background-color: color-mix(in srgb, var(--igloo-x-accent) 82%, #000) !important;
+    }
+    body.igloo-theme-overrides .r-1peqgm7,
+    body.igloo-theme-overrides .r-rgqbpe,
+    body.igloo-theme-overrides [style*="background-color: rgb(2, 17, 61)"] {
+      background-color: color-mix(in srgb, var(--igloo-x-accent) 12%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-r18ze4 {
+      background-color: color-mix(in srgb, var(--igloo-x-accent) 20%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-l5o3uw .r-jwli3a,
+    body.igloo-theme-overrides .r-1vtznih .r-jwli3a,
+    body.igloo-theme-overrides .r-yuvema .r-jwli3a,
+    body.igloo-theme-overrides [style*="background-color: rgb(29, 155, 240)"] [style*="color: rgb(255, 255, 255)"],
+    body.igloo-theme-overrides [style*="background-color: rgb(239, 243, 244)"] [style*="color: rgb(15, 20, 25)"],
+    body.igloo-theme-overrides [data-testid$="-follow"] [style*="color: rgb(15, 20, 25)"] {
+      color: var(--igloo-x-on-accent) !important;
+    }
+    body.igloo-theme-overrides .r-jc7xae {
+      background-color: color-mix(in srgb, var(--igloo-x-text) 96%, #000) !important;
+    }
+    body.igloo-theme-overrides .r-6wtuen {
+      background-color: color-mix(in srgb, var(--igloo-x-text) 92%, #000) !important;
+    }
+    body.igloo-theme-overrides .r-1eltapf {
+      background-color: color-mix(in srgb, var(--igloo-x-sapphire) 10%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-eok2q2 {
+      background-color: color-mix(in srgb, var(--igloo-x-accent) 60%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-9cip40 {
+      box-shadow: var(--igloo-x-accent) 0 0 0 1px !important;
+    }
+    body.igloo-theme-overrides .r-1blqq69 {
+      border-color: var(--igloo-x-mauve) !important;
+    }
+    body.igloo-theme-overrides .draftjs-styles_0 .public-DraftEditorPlaceholder-root {
+      color: var(--igloo-x-overlay0) !important;
+    }
+    body.igloo-theme-overrides .r-s224ru {
+      background-color: var(--igloo-x-green) !important;
+    }
+    body.igloo-theme-overrides .r-h7o7i8,
+    body.igloo-theme-overrides .r-15azkrj {
+      background-color: color-mix(in srgb, var(--igloo-x-green) 10%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-1x669os {
+      background-color: color-mix(in srgb, var(--igloo-x-green) 20%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-4nw3r4,
+    body.igloo-theme-overrides .r-1dgebii,
+    body.igloo-theme-overrides [style*="background-color: rgb(244, 33, 46)"] {
+      background-color: var(--igloo-x-red) !important;
+    }
+    body.igloo-theme-overrides .r-b5kvu3 {
+      border-color: var(--igloo-x-red) !important;
+    }
+    body.igloo-theme-overrides .r-qqmkd0,
+    body.igloo-theme-overrides .r-1krxqcr {
+      background-color: color-mix(in srgb, var(--igloo-x-red) 10%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-1kwlb9n {
+      background-color: color-mix(in srgb, var(--igloo-x-red) 12%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-uuique {
+      background-color: color-mix(in srgb, var(--igloo-x-red) 20%, transparent) !important;
+    }
+    body.igloo-theme-overrides .r-12d83nn {
+      background-color: color-mix(in srgb, var(--igloo-x-red) 88%, #000) !important;
+    }
+    body.igloo-theme-overrides .r-oybae9 {
+      background-color: color-mix(in srgb, var(--igloo-x-red) 82%, #000) !important;
+    }
+    body.igloo-theme-overrides .r-vkub15,
+    body.igloo-theme-overrides .r-9l7dzd,
+    body.igloo-theme-overrides [fill="rgb(249,22,127)"],
+    body.igloo-theme-overrides [fill="rgb(222,45,108)"],
+    body.igloo-theme-overrides g[clip-path="url(#__lottie_element_562)"] path,
+    body.igloo-theme-overrides [style="color: rgb(249, 24, 128);"] [viewBox="0 0 24 24"] path {
+      color: var(--igloo-x-red) !important;
+      fill: var(--igloo-x-red) !important;
+    }
+    body.igloo-theme-overrides .r-1cvl2hr,
+    body.igloo-theme-overrides [stroke="#1D9BF0" i],
+    body.igloo-theme-overrides [style*="stroke: rgb(29, 155, 240)"] {
+      color: var(--igloo-x-accent) !important;
+      stroke: var(--igloo-x-accent) !important;
+    }
+    body.igloo-theme-overrides .r-o6sn0f {
+      color: var(--igloo-x-green) !important;
+    }
+    body.igloo-theme-overrides [stroke="#FFD400" i],
+    body.igloo-theme-overrides [stop-color="#f4e72a" i],
+    body.igloo-theme-overrides [stop-color="#cd8105" i],
+    body.igloo-theme-overrides [stop-color="#cb7b00" i],
+    body.igloo-theme-overrides [stop-color="#f4ec26" i],
+    body.igloo-theme-overrides [stop-color="#f9e87f" i],
+    body.igloo-theme-overrides [stop-color="#e2b719" i] {
+      stroke: var(--igloo-x-yellow) !important;
+      stop-color: var(--igloo-x-yellow) !important;
+    }
+    body.igloo-theme-overrides [fill="#829AAB" i],
+    body.igloo-theme-overrides [data-testid="card.wrapper"] [d="M21.04 1.54L17.5 5.09c-.04-.02-.08-.03-.13-.04L14.3 3H9.7l-3 2H5C3.62 5 2.5 6.12 2.5 7.5v11c0 .46.12.88.34 1.25l-1.3 1.29 1.42 1.42 19.5-19.5-1.42-1.42zM13.7 5l2.33 1.56-2 1.99C13.44 8.2 12.74 8 12 8c-2.21 0-4 1.79-4 4 0 .74.2 1.44.55 2.03L4.5 18.09V7.5c0-.28.22-.5.5-.5h2.3l3-2h3.4zM12 10c.18 0 .35.02.52.07l-2.45 2.45c-.05-.17-.07-.34-.07-.52 0-1.1.9-2 2-2zm7 11H7.24l2-2H19c.28 0 .5-.22.5-.5V9h2v9.5c0 1.38-1.12 2.5-2.5 2.5z"] {
+      color: var(--igloo-x-overlay0) !important;
+      fill: var(--igloo-x-overlay2) !important;
+    }
+    body.igloo-theme-overrides [fill="#1DA1F2" i],
+    body.igloo-theme-overrides [fill="#78C6EE" i] {
+      fill: var(--igloo-x-sky) !important;
+    }
+    body.igloo-theme-overrides [fill="#d18800" i] {
+      fill: var(--igloo-x-yellow) !important;
+    }
+    body.igloo-theme-overrides [style*="https://abs.twimg.com/responsive-web/client-web/background-premiumplus-web"] {
+      background-image: none !important;
+      background-color: var(--igloo-x-surface0) !important;
+    }
+    body.igloo-theme-overrides [style*="border-color: rgb(103, 7, 15)"] {
+      border-color: color-mix(in srgb, var(--igloo-x-red) 50%, transparent) !important;
+    }
+    body.igloo-theme-overrides [style*="border-color: rgb(29, 155, 240)"],
+    body.igloo-theme-overrides .r-vhj8yc,
+    body.igloo-theme-overrides .r-1pbtemp {
+      border-color: var(--igloo-x-accent) !important;
+    }
+    body.igloo-theme-overrides [style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]),
+    body.igloo-theme-overrides [style*="color: rgb(239, 243, 244)"]:not([style*="background-color: rgb(239, 243, 244)"]),
+    body.igloo-theme-overrides [style*="color: rgb(255, 255, 255)"]:not([style*="background-color: rgb(255, 255, 255)"]) {
+      color: var(--igloo-x-text) !important;
+    }
+    body.igloo-theme-overrides [style*="color: rgb(231, 233, 234)"]:not([style*="background-color: rgb(231, 233, 234)"]) input::placeholder {
+      color: var(--igloo-x-subtext1) !important;
+    }
+    body.igloo-theme-overrides [style*="color: rgb(113, 118, 123)"]:not([style*="background-color: rgb(113, 118, 123)"]),
+    body.igloo-theme-overrides [style*="color: rgb(182, 185, 188)"]:not([style*="background-color: rgb(182, 185, 188)"]) {
+      color: var(--igloo-x-overlay1) !important;
+    }
+    body.igloo-theme-overrides [style*="color: rgb(0, 186, 124)"]:not([style*="background-color: rgb(0, 186, 124)"]) {
+      color: var(--igloo-x-green) !important;
+    }
+    body.igloo-theme-overrides [style*="color: rgb(249, 24, 128)"]:not([style*="background-color: rgb(249, 24, 128)"]),
+    body.igloo-theme-overrides [style*="color: rgb(244, 33, 46)"]:not([style*="background-color: rgb(244, 33, 46)"]) {
+      color: var(--igloo-x-red) !important;
+    }
+    body.igloo-theme-overrides [style*="color: rgb(250, 68, 152)"]:not([style*="background-color: rgb(250, 68, 152)"]) {
+      color: var(--igloo-x-pink) !important;
+    }
+    body.igloo-theme-overrides [style*="color: rgb(255, 212, 0)"]:not([style*="background-color: rgb(255, 212, 0)"]) {
+      color: var(--igloo-x-yellow) !important;
+    }
+    body.igloo-theme-overrides [style*="color: rgb(120, 86, 255)"]:not([style*="background-color: rgb(120, 86, 255)"]) {
+      color: var(--igloo-x-mauve) !important;
+    }
+    body.igloo-theme-overrides [style*="color: rgb(255, 122, 0)"]:not([style*="background-color: rgb(255, 122, 0)"]) {
+      color: var(--igloo-x-peach) !important;
+    }
+    body.igloo-theme-overrides [style*="color: rgb(29, 155, 240)"]:not([style*="background-color: rgb(29, 155, 240)"]) {
+      color: var(--igloo-x-accent) !important;
+    }
+    body.igloo-theme-overrides [style*="background-color: rgb(142, 205, 248)"] {
+      background-color: color-mix(in srgb, var(--igloo-x-accent) 88%, #fff) !important;
+    }
+    body.igloo-theme-overrides [style*="background-color: rgba(255, 255, 255, 0.25)"] {
+      background-color: color-mix(in srgb, var(--igloo-x-text) 25%, transparent) !important;
+    }
+    body.igloo-theme-overrides [style*="background-color: rgb(147, 147, 147)"] {
+      background-color: var(--igloo-x-overlay0) !important;
+    }
+    body.igloo-theme-overrides [style*="background-color: rgb(239, 243, 244)"] {
+      background-color: var(--igloo-x-text) !important;
+    }
+    body.igloo-theme-overrides [style*="background-color: rgb(0, 0, 0)"],
+    body.igloo-theme-overrides [style*="background-color: #000"] {
+      background-color: var(--igloo-x-base) !important;
+    }
+    body.igloo-theme-overrides [style*="background-color: rgba(15, 20, 25, 0.75)"] {
+      background-color: color-mix(in srgb, var(--igloo-x-crust) 75%, transparent) !important;
+    }
+
+    /* Native action colors use the active theme palette instead of one fixed accent. */
     body.igloo-theme-overrides [data-testid="reply"] div,
-    body.igloo-theme-overrides [data-testid="retweet"] div,
-    body.igloo-theme-overrides [data-testid="like"] div,
     body.igloo-theme-overrides [aria-label="Share post"] div,
     body.igloo-theme-overrides [aria-label="Share"] div,
     body.igloo-theme-overrides [data-testid="reply"] svg,
-    body.igloo-theme-overrides [data-testid="retweet"] svg,
-    body.igloo-theme-overrides [data-testid="like"] svg,
     body.igloo-theme-overrides [aria-label="Share post"] svg,
-    body.igloo-theme-overrides [aria-label="Share"] svg { color: #f38ba8 !important; fill: #f38ba8 !important; }
-
-    /* Override native like active (pink → #f38ba8) */
-    body.igloo-theme-overrides [data-testid="unlike"] div,
-    body.igloo-theme-overrides [data-testid="unlike"] svg { color: #f38ba8 !important; }
-
-    /* Override native retweet active (green → Catpucchin Mocha Red */
+    body.igloo-theme-overrides [aria-label="Share"] svg { color: var(--igloo-x-accent) !important; fill: var(--igloo-x-accent) !important; }
+    body.igloo-theme-overrides [data-testid="retweet"] div,
     body.igloo-theme-overrides [data-testid="unretweet"] div,
-    body.igloo-theme-overrides [data-testid="unretweet"] svg { color: #f38ba8 !important; fill: #f38ba8 !important; }
+    body.igloo-theme-overrides [data-testid="retweet"] svg,
+    body.igloo-theme-overrides [data-testid="unretweet"] svg { color: var(--igloo-x-green) !important; fill: var(--igloo-x-green) !important; }
+    body.igloo-theme-overrides [data-testid="like"] div,
+    body.igloo-theme-overrides [data-testid="unlike"] div,
+    body.igloo-theme-overrides [data-testid="like"] svg,
+    body.igloo-theme-overrides [data-testid="unlike"] svg { color: var(--igloo-x-red) !important; fill: var(--igloo-x-red) !important; }
 
-    /* Round hover highlight on native buttons — target all inner divs */
     body.igloo-theme-overrides [data-testid="reply"] div,
     body.igloo-theme-overrides [data-testid="retweet"] div,
     body.igloo-theme-overrides [data-testid="like"] div,
@@ -1208,14 +1883,13 @@
     body.igloo-theme-overrides [aria-label="Share post"] div,
     body.igloo-theme-overrides [aria-label="Share"] div { border-radius: 9999px !important; }
 
-    /* Override native hover highlight background color */
     body.igloo-theme-overrides [data-testid="reply"]:hover .r-1niwhzg,
-    body.igloo-theme-overrides [data-testid="retweet"]:hover .r-1niwhzg,
-    body.igloo-theme-overrides [data-testid="like"]:hover .r-1niwhzg,
-    body.igloo-theme-overrides [data-testid="unlike"]:hover .r-1niwhzg,
-    body.igloo-theme-overrides [data-testid="unretweet"]:hover .r-1niwhzg,
     body.igloo-theme-overrides [aria-label="Share post"]:hover .r-1niwhzg,
-    body.igloo-theme-overrides [aria-label="Share"]:hover .r-1niwhzg { background-color: rgba(243,139,168,0.1) !important; }
+    body.igloo-theme-overrides [aria-label="Share"]:hover .r-1niwhzg { background-color: color-mix(in srgb, var(--igloo-x-accent) 10%, transparent) !important; }
+    body.igloo-theme-overrides [data-testid="retweet"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [data-testid="unretweet"]:hover .r-1niwhzg { background-color: color-mix(in srgb, var(--igloo-x-green) 10%, transparent) !important; }
+    body.igloo-theme-overrides [data-testid="like"]:hover .r-1niwhzg,
+    body.igloo-theme-overrides [data-testid="unlike"]:hover .r-1niwhzg { background-color: color-mix(in srgb, var(--igloo-x-red) 10%, transparent) !important; }
 
     /* Composer toolbar buttons */
     body.igloo-theme-overrides button[role="button"][aria-label="Add photos or video"],
@@ -1255,15 +1929,15 @@
     body.igloo-theme-overrides button[role="button"][data-testid="scheduleOption"] svg *,
     body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:not(:disabled) svg *,
     body.igloo-theme-overrides button[role="button"][data-testid="contentDisclosureButton"] svg * {
-      color: #f38ba8 !important;
-      fill: #f38ba8 !important;
+      color: var(--igloo-x-accent) !important;
+      fill: var(--igloo-x-accent) !important;
     }
 
     body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:disabled div,
     body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:disabled svg,
     body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:disabled svg * {
-      color: #6c7086 !important;
-      fill: #6c7086 !important;
+      color: var(--igloo-x-overlay0) !important;
+      fill: var(--igloo-x-overlay0) !important;
     }
 
     body.igloo-theme-overrides button[role="button"][aria-label="Add photos or video"] span,
@@ -1274,7 +1948,7 @@
     body.igloo-theme-overrides button[role="button"][data-testid="scheduleOption"] span,
     body.igloo-theme-overrides button[role="button"][data-testid="geoButton"] span,
     body.igloo-theme-overrides button[role="button"][data-testid="contentDisclosureButton"] span {
-      border-bottom-color: #f38ba8 !important;
+      border-bottom-color: var(--igloo-x-accent) !important;
     }
 
     body.igloo-theme-overrides button[role="button"][aria-label="Add photos or video"]:hover,
@@ -1285,7 +1959,7 @@
     body.igloo-theme-overrides button[role="button"][data-testid="scheduleOption"]:hover,
     body.igloo-theme-overrides button[role="button"][data-testid="geoButton"]:hover,
     body.igloo-theme-overrides button[role="button"][data-testid="contentDisclosureButton"]:hover {
-      background-color: rgba(243,139,168,0.1) !important;
+      background-color: color-mix(in srgb, var(--igloo-x-accent) 10%, transparent) !important;
     }
 
     /* Even spacing for action bar with 6 buttons */
@@ -1298,84 +1972,84 @@
     }
     .x-action-wrap button {
       display: flex; align-items: center; justify-content: center;
-      background: transparent; border: none; color: #f38ba8;
+      background: transparent; border: none; color: var(--igloo-x-accent);
       cursor: pointer; border-radius: 9999px; padding: 8px;
       transition: color 0.15s, background-color 0.15s;
     }
     .x-action-wrap button svg { width: 18.75px; height: 18.75px; }
-    .x-action-wrap button:hover { background-color: rgba(243,139,168,0.1); }
+    .x-action-wrap button:hover { background-color: color-mix(in srgb, var(--igloo-x-accent) 10%, transparent); }
     .x-action-wrap button:disabled { opacity: 0.5; cursor: wait; }
-    .x-action-wrap button.done { color: #f38ba8; }
-    .x-action-wrap button.error { color: #f38ba8; }
-    .x-action-wrap button.downloaded { color: #f38ba8; }
+    .x-action-wrap button.done { color: var(--igloo-x-accent); }
+    .x-action-wrap button.error { color: var(--igloo-x-red); }
+    .x-action-wrap button.downloaded { color: var(--igloo-x-green); }
     .x-action-wrap button.downloaded svg { display: none; }
     .x-action-wrap button.downloaded::after { content: '\u2713'; font-size: 16px; font-weight: 700; }
-    .x-action-wrap button.copied { color: #f38ba8; }
+    .x-action-wrap button.copied { color: var(--igloo-x-accent); }
     #x-dl-popover {
-    position: absolute; background: #1e1e2e;
-    border: 1px solid rgba(243,139,168,0.25); border-radius: 16px;
+    position: absolute; background: var(--igloo-x-base);
+    border: 1px solid color-mix(in srgb, var(--igloo-x-accent) 25%, transparent); border-radius: 16px;
     padding: 20px 22px; z-index: 999998; min-width: 300px; max-width: 340px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.6);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    font-size: 14px; color: #cdd6f4;
+    font-size: 14px; color: var(--igloo-x-text);
     }
-    #x-dl-popover .xdl-label-text { display:block;margin-bottom:6px;font-size:13px;color:#bac2de;font-weight:500; }
-    #x-dl-popover .xdl-preview { font-size:12px;color:#a6adc8;margin-bottom:14px;min-height:18px; }
+    #x-dl-popover .xdl-label-text { display:block;margin-bottom:6px;font-size:13px;color:var(--igloo-x-subtext1);font-weight:500; }
+    #x-dl-popover .xdl-preview { font-size:12px;color:var(--igloo-x-subtext0);margin-bottom:14px;min-height:18px; }
     #x-dl-popover button.xdl-confirm {
-    width:100%;padding:10px;border-radius:9999px;background:#f38ba8;
-    color:#1e1e2e;border:none;font-weight:700;cursor:pointer;font-size:14px;transition:background 0.15s;
+    width:100%;padding:10px;border-radius:9999px;background:var(--igloo-x-accent);
+    color:var(--igloo-x-on-accent);border:none;font-weight:700;cursor:pointer;font-size:14px;transition:background 0.15s;
     }
-    #x-dl-popover button.xdl-confirm:hover { background:#eba0ac; }
+    #x-dl-popover button.xdl-confirm:hover { background:color-mix(in srgb, var(--igloo-x-accent) 88%, #000); }
     .xdl-cat-pill {
-      background:transparent;border:1px solid rgba(243,139,168,0.35);
-      color:#bac2de;border-radius:9999px;padding:6px 14px;
+      background:transparent;border:1px solid color-mix(in srgb, var(--igloo-x-accent) 35%, transparent);
+      color:var(--igloo-x-subtext1);border-radius:9999px;padding:6px 14px;
       font-size:13px;font-weight:600;cursor:pointer;transition:all 0.12s;
     }
-    .xdl-cat-pill:hover,.xdl-cat-pill.selected { background:#f38ba8;border-color:#f38ba8;color:#1e1e2e; }
+    .xdl-cat-pill:hover,.xdl-cat-pill.selected { background:var(--igloo-x-accent);border-color:var(--igloo-x-accent);color:var(--igloo-x-on-accent); }
     .xdl-media-idx-row { display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 12px; }
-    .xdl-media-idx-btn { width:28px;height:28px;border-radius:6px;border:1px solid rgba(243,139,168,0.35);background:transparent;color:#bac2de;font-size:12px;font-weight:600;cursor:pointer;padding:0;line-height:28px;text-align:center;transition:all 0.12s; }
-    .xdl-media-idx-btn:hover { background:rgba(243,139,168,0.18);border-color:#f38ba8; }
-    .xdl-media-idx-btn.selected { background:#f38ba8;border-color:#f38ba8;color:#1e1e2e; }
+    .xdl-media-idx-btn { width:28px;height:28px;border-radius:6px;border:1px solid color-mix(in srgb, var(--igloo-x-accent) 35%, transparent);background:transparent;color:var(--igloo-x-subtext1);font-size:12px;font-weight:600;cursor:pointer;padding:0;line-height:28px;text-align:center;transition:all 0.12s; }
+    .xdl-media-idx-btn:hover { background:color-mix(in srgb, var(--igloo-x-accent) 18%, transparent);border-color:var(--igloo-x-accent); }
+    .xdl-media-idx-btn.selected { background:var(--igloo-x-accent);border-color:var(--igloo-x-accent);color:var(--igloo-x-on-accent); }
 
     /* === Native Follow Button Override (HIGH SPECIFICITY) === */
     /* Force transparent background and native grey border */
     body.igloo-button-overrides #react-root button[role="button"][data-testid$="-follow"] {
       background: transparent !important;
       background-color: transparent !important;
-      border: 1px solid rgb(83, 100, 113) !important;
+      border: 1px solid var(--igloo-x-border) !important;
       transition: all 0.15s !important;
     }
 
     /* Default text color */
     body.igloo-button-overrides #react-root button[role="button"][data-testid$="-follow"] * {
-      color: #cdd6f4 !important;
+      color: var(--igloo-x-text) !important;
     }
 
     /* Hover state (subtle grey/white highlight instead of pink) */
     body.igloo-button-overrides #react-root button[role="button"][data-testid$="-follow"]:hover {
-      background: rgba(205,214,244,0.1) !important;
-      background-color: rgba(205,214,244,0.1) !important;
+      background: color-mix(in srgb, var(--igloo-x-text) 10%, transparent) !important;
+      background-color: color-mix(in srgb, var(--igloo-x-text) 10%, transparent) !important;
     }
 
     /* Unfollow / Following state */
     body.igloo-button-overrides #react-root button[role="button"][data-testid$="-unfollow"] {
       background: transparent !important;
       background-color: transparent !important;
-      border: 1px solid rgb(83, 100, 113) !important;
+      border: 1px solid var(--igloo-x-border) !important;
     }
 
     body.igloo-button-overrides #react-root button[role="button"][data-testid$="-unfollow"] * {
-      color: #bac2de !important;
+      color: var(--igloo-x-subtext1) !important;
     }
 
     body.igloo-button-overrides #react-root button[role="button"][data-testid$="-unfollow"]:hover {
-      background: rgba(205,214,244,0.1) !important;
-      background-color: rgba(205,214,244,0.1) !important;
-      border-color: rgba(205,214,244,0.3) !important;
+      background: color-mix(in srgb, var(--igloo-x-text) 10%, transparent) !important;
+      background-color: color-mix(in srgb, var(--igloo-x-text) 10%, transparent) !important;
+      border-color: color-mix(in srgb, var(--igloo-x-text) 30%, transparent) !important;
     }
 
     body.igloo-button-overrides #react-root button[role="button"][data-testid$="-unfollow"]:hover * {
-      color: #cdd6f4 !important;
+      color: var(--igloo-x-text) !important;
     }
     `;
     document.head.appendChild(style);
@@ -1408,7 +2082,7 @@
 
     const hdr = document.createElement("div");
     hdr.style.cssText =
-      "font-size:15px;font-weight:700;color:#cdd6f4;margin-bottom:14px;";
+      "font-size:15px;font-weight:700;color:var(--igloo-x-text);margin-bottom:14px;";
     hdr.textContent =
       mediaCount > 0
         ? "Download " + mediaCount + " file" + (mediaCount > 1 ? "s" : "")
@@ -1543,7 +2217,7 @@
         inp.type = "text";
         inp.value = pill.textContent;
         inp.style.cssText =
-          "background:#313244;border:1px solid #f38ba8;color:#cdd6f4;border-radius:9999px;padding:6px 14px;font-size:13px;font-weight:600;outline:none;width:" +
+          "background:var(--igloo-x-surface0);border:1px solid var(--igloo-x-accent);color:var(--igloo-x-text);border-radius:9999px;padding:6px 14px;font-size:13px;font-weight:600;outline:none;width:" +
           Math.max(80, pill.offsetWidth + 10) +
           "px;";
         pill.replaceWith(inp);
@@ -1584,12 +2258,12 @@
     labelInput.setAttribute("autocomplete", "off");
     labelInput.placeholder = "label (empty = tweet ID)";
     labelInput.style.cssText =
-      "width:100%;box-sizing:border-box;background:#313244;border:1px solid #45475a;color:#cdd6f4;border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:12px;outline:none;";
+      "width:100%;box-sizing:border-box;background:var(--igloo-x-surface0);border:1px solid var(--igloo-x-surface1);color:var(--igloo-x-text);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:12px;outline:none;";
     labelInput.addEventListener("focus", () => {
-      labelInput.style.borderColor = "#f38ba8";
+      labelInput.style.borderColor = "var(--igloo-x-accent)";
     });
     labelInput.addEventListener("blur", () => {
-      labelInput.style.borderColor = "#45475a";
+      labelInput.style.borderColor = "var(--igloo-x-surface1)";
     });
     const dlListId = "xdl-labels-" + tweetId;
     labelInput.setAttribute("list", dlListId);
@@ -2034,7 +2708,7 @@
     const toast = document.createElement("div");
     toast.id = "x-sync-toast";
     toast.style.cssText =
-      "position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1e1e2e;color:#cdd6f4;border:1px solid rgba(108,112,134,0.55);border-radius:8px;padding:11px 18px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;z-index:999999;display:flex;align-items:center;gap:6px;box-shadow:0 4px 20px rgba(0,0,0,0.5);opacity:1;transition:opacity 0.3s ease;white-space:nowrap;";
+      "position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--igloo-x-base);color:var(--igloo-x-text);border:1px solid color-mix(in srgb, var(--igloo-x-overlay0) 55%, transparent);border-radius:8px;padding:11px 18px;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;z-index:999999;display:flex;align-items:center;gap:6px;box-shadow:0 4px 20px rgba(0,0,0,0.5);opacity:1;transition:opacity 0.3s ease;white-space:nowrap;";
 
     const text = document.createElement("span");
     text.textContent = message;
@@ -2053,7 +2727,7 @@
       const action = document.createElement("span");
       action.textContent = actionLabel;
       action.style.cssText =
-        "text-decoration:underline;cursor:pointer;color:#f38ba8;margin-left:2px;";
+        "text-decoration:underline;cursor:pointer;color:var(--igloo-x-accent);margin-left:2px;";
       action.addEventListener("click", () => dismiss(true));
       toast.appendChild(action);
     }
@@ -2506,6 +3180,14 @@
     return true;
   }
 
+  function refreshXThemeStyles() {
+    if (!isXSite()) return;
+    ensureButtonStyles();
+    syncXOverrideClasses();
+    applyXThemeSettings();
+    applyXComposerToolbarTheme();
+  }
+
   function registerMenu() {
     GM_registerMenuCommand("Log in to server", async () => {
       if (!promptForApiBase(false)) return;
@@ -2586,9 +3268,42 @@
     GM_registerMenuCommand("Toggle theme", () => {
       const next = !themeOverridesEnabled();
       GM_setValue(SETTINGS.xCleanup, next);
-      syncXOverrideClasses();
-      applyXComposerToolbarTheme();
+      refreshXThemeStyles();
       notify(`Theme ${next ? "enabled" : "disabled"}`);
+    });
+
+    GM_registerMenuCommand("Set X theme flavor", () => {
+      const value = prompt(
+        "X theme flavor: " + X_THEME_FLAVOR_ORDER.join(", "),
+        xThemeFlavorSetting(),
+      );
+      if (value === null) return;
+      const next = normalizeXThemeFlavor(value);
+      if (!next) {
+        notify("Unknown X theme flavor");
+        return;
+      }
+      GM_setValue(SETTINGS.xThemeFlavor, next);
+      GM_setValue(SETTINGS.xCleanup, true);
+      refreshXThemeStyles();
+      notify(`X theme flavor set to ${next}`);
+    });
+
+    GM_registerMenuCommand("Set X theme accent", () => {
+      const value = prompt(
+        "X theme accent: " + X_THEME_ACCENT_ORDER.join(", "),
+        xThemeAccentSetting(),
+      );
+      if (value === null) return;
+      const next = normalizeXThemeAccent(value);
+      if (!next) {
+        notify("Unknown X theme accent");
+        return;
+      }
+      GM_setValue(SETTINGS.xThemeAccent, next);
+      GM_setValue(SETTINGS.xCleanup, true);
+      refreshXThemeStyles();
+      notify(`X theme accent set to ${next}`);
     });
   }
 
@@ -3386,8 +4101,8 @@
     )) {
       const color =
         btn.disabled || btn.getAttribute("aria-disabled") === "true"
-          ? "#6c7086"
-          : "#f38ba8";
+          ? "var(--igloo-x-overlay0)"
+          : "var(--igloo-x-accent)";
       setImportantStyle(btn, "background-color", "transparent");
       setImportantStyle(btn, "border-color", "transparent");
       for (
@@ -3410,7 +4125,11 @@
   function runCurrentPlatformScan() {
     const platform = currentPlatform();
     syncXOverrideClasses();
-    if (platform === "twitter") applyXComposerToolbarTheme();
+    if (platform === "twitter") {
+      ensureButtonStyles();
+      applyXThemeSettings();
+      applyXComposerToolbarTheme();
+    }
     if (!buttonOverridesEnabled()) {
       clearButtonOverrides();
       restoreNativeButtons();

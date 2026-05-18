@@ -598,6 +598,8 @@ test("menu is limited and login does not persist the password", async () => {
     "Test connection",
     "Toggle button overrides",
     "Toggle theme",
+    "Set X theme flavor",
+    "Set X theme accent",
   ]);
   assert.equal(harness.menu.has("Set Dashboard Bearer Token"), false);
   assert.equal(harness.values.has("xsync_auth_pass"), false);
@@ -745,7 +747,31 @@ test("themes current X composer toolbar buttons", () => {
   assert.match(script, /applyXComposerToolbarTheme/);
   assert.match(script, /setProperty\(property, value, "important"\)/);
   assert.match(script, /setImportantStyle\(node, "filter", "none"\)/);
-  assert.match(script, /border-bottom-color:\s*#f38ba8\s*!important/);
+  assert.match(script, /border-bottom-color:\s*var\(--igloo-x-accent\)\s*!important/);
+  assert.match(script, /setImportantStyle\(svgEl, "color", color\)/);
+  assert.match(script, /var\(--igloo-x-accent\)/);
+  assert.match(script, /X_THEME_PALETTES/);
+});
+
+test("X theme menu stores palette controls and refreshes CSS variables", () => {
+  const harness = buildHarness({
+    prompts: ["macchiato", "lavender"],
+    initialValues: {
+      igloo_sync_x_cleanup: false,
+    },
+  });
+  runScript(harness);
+
+  harness.menu.get("Set X theme flavor")();
+  harness.menu.get("Set X theme accent")();
+
+  assert.equal(harness.values.get("igloo_sync_x_theme_flavor"), "macchiato");
+  assert.equal(harness.values.get("igloo_sync_x_theme_accent"), "lavender");
+  assert.equal(harness.values.get("igloo_sync_x_cleanup"), true);
+  assert.equal(
+    harness.context.document.documentElement.style["--igloo-x-accent"],
+    "#b7bdf8",
+  );
 });
 
 test("ghost-resubscribed X handles can be unfollowed immediately", async () => {
