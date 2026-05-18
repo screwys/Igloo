@@ -23,7 +23,6 @@ import com.screwy.igloo.ui.component.MomentsPlayer
 import com.screwy.igloo.ui.component.sharePlainText
 import com.screwy.igloo.ui.nav.IglooDestination
 import com.screwy.igloo.ui.nav.IglooNavigationSource
-import com.screwy.igloo.ui.nav.RouteRegistry
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -42,9 +41,7 @@ fun MomentsRoute(
     navController: NavController,
     modifier: Modifier = Modifier,
 ) {
-    val backStackEntry = remember(navController) {
-        navController.getBackStackEntry(RouteRegistry.MomentsGraphRoute)
-    }
+    val backStackEntry = rememberMomentsGraphBackStackEntry(navController) ?: return
     val vm: MomentsViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
 
     val items by vm.playerItems.collectAsStateWithLifecycle()

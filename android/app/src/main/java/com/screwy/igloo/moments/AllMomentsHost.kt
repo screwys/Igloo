@@ -2,7 +2,6 @@ package com.screwy.igloo.moments
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -11,7 +10,6 @@ import com.screwy.igloo.net.ServerBaseUrlProvider
 import com.screwy.igloo.ui.UiStateSwitch
 import com.screwy.igloo.ui.component.resolveInitialMomentThumbnailUri
 import com.screwy.igloo.ui.nav.IglooNavigationSource
-import com.screwy.igloo.ui.nav.RouteRegistry
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -31,9 +29,7 @@ fun AllMomentsHost(
     navController: NavController,
     modifier: Modifier = Modifier,
 ) {
-    val backStackEntry = remember(navController) {
-        navController.getBackStackEntry(RouteRegistry.MomentsGraphRoute)
-    }
+    val backStackEntry = rememberMomentsGraphBackStackEntry(navController) ?: return
     val vm: MomentsViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
 
     val items by vm.items.collectAsStateWithLifecycle()
