@@ -1,9 +1,6 @@
 name: Container Release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
 
 concurrency:
@@ -136,16 +133,6 @@ jobs:
         env:
           IMAGE_DIGEST: ghcr.io/${{ github.repository_owner }}/igloo@${{ steps.build.outputs.digest }}
         run: cosign sign --yes "$IMAGE_DIGEST"
-
-      - name: Sign container image with release key
-        env:
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          IMAGE_DIGEST: ghcr.io/${{ github.repository_owner }}/igloo@${{ steps.build.outputs.digest }}
-        run: |
-          test -n "$COSIGN_PRIVATE_KEY"
-          test -n "$COSIGN_PASSWORD"
-          cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$IMAGE_DIGEST"
 
       - name: Generate container attestation
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4

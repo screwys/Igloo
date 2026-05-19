@@ -55,16 +55,14 @@ jobs:
         run: node scripts/dev/release.mjs prepare "${INPUT_BUMP:-patch}" --notes release-notes.md --description-file .github/release-description.md
 
       - name: Run full release gate
-        if: steps.release.outputs.should_release == 'true'
         run: scripts/dev/test-full.sh
 
       - name: Commit and tag signed release
-        if: steps.release.outputs.should_release == 'true'
         env:
           RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
           RELEASE_GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
-          RELEASE_GIT_USER_NAME: ${{ secrets.RELEASE_GIT_USER_NAME }}
-          RELEASE_GIT_USER_EMAIL: ${{ secrets.RELEASE_GIT_USER_EMAIL }}
+          RELEASE_GIT_USER_NAME: ${{ vars.RELEASE_GIT_USER_NAME }}
+          RELEASE_GIT_USER_EMAIL: ${{ vars.RELEASE_GIT_USER_EMAIL }}
         run: |
           test -n "$RELEASE_GPG_PRIVATE_KEY"
           test -n "$RELEASE_GPG_PASSPHRASE"
@@ -90,17 +88,14 @@ jobs:
           git tag -s "${{ steps.release.outputs.tag }}" -m "release ${{ steps.release.outputs.version }}"
 
       - name: Push release commit and tag
-        if: steps.release.outputs.should_release == 'true'
         run: git push --atomic origin HEAD:main "refs/tags/${{ steps.release.outputs.tag }}"
 
       - name: Create GitHub release
-        if: steps.release.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "${{ steps.release.outputs.tag }}" --title "${{ steps.release.outputs.tag }}" --notes-file release-notes.md --verify-tag
 
       - name: Build release artifacts
-        if: steps.release.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

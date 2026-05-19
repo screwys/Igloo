@@ -61,8 +61,8 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 ## Releases
 
 - Releases are manually dispatched from the release workflow with an explicit patch, minor, or major bump.
-- Release commits and tags are GPG-signed with `RELEASE_GPG_PRIVATE_KEY` and `RELEASE_GPG_PASSPHRASE`; set `RELEASE_GIT_USER_NAME` and `RELEASE_GIT_USER_EMAIL` when the signing identity should show as verified on GitHub.
-- Release APKs and container images publish GitHub artifact attestations.
+- Release commits and tags are GPG-signed with `RELEASE_GPG_PRIVATE_KEY` and `RELEASE_GPG_PASSPHRASE`; optional `RELEASE_GIT_USER_NAME` and `RELEASE_GIT_USER_EMAIL` repository variables set the non-secret commit identity.
+- Release APKs and container images publish GitHub artifact attestations; container images are also signed keylessly with cosign.
 - Release notes should list the exact commits since the previous tag.
 
 ## Server And Web

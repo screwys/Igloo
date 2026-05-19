@@ -187,7 +187,6 @@ function prepareRelease(argv) {
   }
 
   const bump = normalizeReleaseBump(args.bump);
-  const shouldRelease = true;
 
   const nextVersion = bumpSemver(currentVersion, bump);
   const nextTag = `v${nextVersion}`;
@@ -218,7 +217,6 @@ function prepareRelease(argv) {
   );
 
   const outputs = {
-    should_release: String(shouldRelease),
     version: nextVersion,
     tag: nextTag,
     previous_tag: previousTag,

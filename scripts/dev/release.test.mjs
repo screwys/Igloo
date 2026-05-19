@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -40,6 +40,7 @@ test("release workflow is manually dispatched", () => {
   assert.match(workflow, /\n  workflow_dispatch:\n/);
   assert.doesNotMatch(workflow, /\n  push:\n/);
   assert.doesNotMatch(workflow, /prepare-auto/);
+  assert.doesNotMatch(workflow, /should_release/);
   assert.doesNotMatch(workflow, /threshold 30/);
 });
 
@@ -87,6 +88,10 @@ test("release workflow signs release commits and tags", () => {
 
   assert.match(workflow, /RELEASE_GPG_PRIVATE_KEY/);
   assert.match(workflow, /RELEASE_GPG_PASSPHRASE/);
+  assert.doesNotMatch(workflow, /secrets\.RELEASE_GIT_USER_NAME/);
+  assert.doesNotMatch(workflow, /secrets\.RELEASE_GIT_USER_EMAIL/);
+  assert.match(workflow, /vars\.RELEASE_GIT_USER_NAME/);
+  assert.match(workflow, /vars\.RELEASE_GIT_USER_EMAIL/);
   assert.match(workflow, /git commit -S -m "release \$\{\{ steps\.release\.outputs\.version \}\}"/);
   assert.match(workflow, /git tag -s "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
   assert.match(workflow, /git add android\/app\/build\.gradle\.kts \.github\/release-description\.md/);
@@ -120,6 +125,8 @@ test("container release publishes signed provenance attestation", () => {
     "utf8",
   );
 
+  assert.match(workflow, /\non:\n  workflow_dispatch:\n/);
+  assert.doesNotMatch(workflow, /\n  push:\n/);
   assert.match(workflow, /\n  id-token: write\n/);
   assert.match(workflow, /\n  attestations: write\n/);
   assert.match(workflow, /\n  contents: write\n/);
@@ -148,6 +155,10 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /docker push "\$tag"/);
   assert.match(workflow, shaPinnedAction("sigstore/cosign-installer", "v4.1.2"));
   assert.match(workflow, /cosign-release: v3\.0\.6/);
+  assert.match(workflow, /cosign sign --yes "\$IMAGE_DIGEST"/);
+  assert.doesNotMatch(workflow, /COSIGN_PRIVATE_KEY/);
+  assert.doesNotMatch(workflow, /COSIGN_PASSWORD/);
+  assert.doesNotMatch(workflow, /Sign container image with release key/);
   assert.match(workflow, /name: Prepare security artifact directory/);
   assert.match(workflow, /run: mkdir -p release-artifacts/);
   assert.match(workflow, shaPinnedAction("anchore/sbom-action", "v0.24.0"));
@@ -224,10 +235,16 @@ test("CI Go analysis tools are pinned and Renovate-managed", () => {
   assert.match(versions, /GOVULNCHECK_VERSION=v\d+\.\d+\.\d+/);
   assert.match(versions, /packageName=github\.com\/rhysd\/actionlint/);
   assert.match(versions, /ACTIONLINT_VERSION=v\d+\.\d+\.\d+/);
-  assert.match(versions, /packageName=github\.com\/sigstore\/cosign\/v3/);
-  assert.match(versions, /COSIGN_VERSION=v\d+\.\d+\.\d+/);
+  assert.doesNotMatch(versions, /COSIGN_VERSION/);
   assert.match(renovate, /Update pinned Go analysis tool versions/);
   assert.match(renovate, /scripts\/dev\/go-tool-versions\\\\\.sh/);
+});
+
+test("keyless container signing does not keep a static cosign public key", () => {
+  assert.equal(
+    existsSync(new URL("../../.github/cosign.pub", import.meta.url)),
+    false,
+  );
 });
 
 test("container images run as non-root by default", () => {
@@ -256,6 +273,8 @@ test("Android release publishes only the APK asset with signed provenance attest
     "utf8",
   );
 
+  assert.match(workflow, /\non:\n  workflow_dispatch:\n/);
+  assert.doesNotMatch(workflow, /\n  push:\n/);
   assert.match(workflow, /\n    if: startsWith\(github\.ref, 'refs\/tags\/v'\)\n/);
   assert.match(workflow, /\n    environment: android-release\n/);
   assert.match(workflow, /fetch-depth: 0/);
