@@ -366,7 +366,7 @@ func (y *YtDlpWrapper) Download(ctx context.Context, url string, opts Opts) ([]s
 	files, bytes := summarizePaths(paths)
 	y.recordYtDlpOperationWithCounts(ctx, "media.ytdlp", url, start, err, opts, 0, files, bytes)
 	if err != nil {
-		return nil, err
+		return nil, WithOperationContext(err, "yt-dlp", CookieLabel(opts.Cookies, opts.CookiesFromBrowser))
 	}
 
 	if opts.Subtitles && len(paths) > 0 {

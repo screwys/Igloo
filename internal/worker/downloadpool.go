@@ -34,12 +34,19 @@ var platformSem = map[string]chan struct{}{
 	"instagram": make(chan struct{}, 1),
 }
 
-// tiktokDownloadDelay enforces a minimum gap between short-form downloads to avoid rate limiting.
+// short-form downloads share one pacing clock to avoid rapid cross-platform bursts.
 var (
 	tiktokDlMu       sync.Mutex
 	tiktokDlLastTime time.Time
-	tiktokDlDelay    = 15 * time.Second
 )
+
+const downloadAuthBackoff = 3 * time.Hour
+const shortFormDownloadDelayFallback = 60 * time.Second
+
+type downloadPlatformBackoff struct {
+	Until time.Time
+	Kind  string
+}
 
 // qualityFormats maps quality names to yt-dlp format strings.
 var qualityFormats = map[string]string{
@@ -152,17 +159,23 @@ func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadQueueRow, pl
 		defer stopRenew()
 	}
 
+	if backoff, ok := m.activeDownloadPlatformBackoff(platform, time.Now()); ok {
+		m.postponeDownloadJobForPlatformBackoff(job, platform, backoff)
+		return
+	}
+
 	// Short-form rate-limit pacing: enforce minimum gap between downloads,
 	// measured from the END of the previous download attempt.
-	if platform == "tiktok" || platform == "instagram" {
+	if isShortFormDownloadPlatform(platform) {
+		downloadDelay := m.shortFormDownloadDelay(platform)
 		tiktokDlMu.Lock()
-		if elapsed := time.Since(tiktokDlLastTime); elapsed < tiktokDlDelay {
-			time.Sleep(tiktokDlDelay - elapsed)
+		if elapsed := time.Since(tiktokDlLastTime); elapsed < downloadDelay {
+			time.Sleep(downloadDelay - elapsed)
 		}
 		tiktokDlMu.Unlock()
 	}
 	defer func() {
-		if platform == "tiktok" || platform == "instagram" {
+		if isShortFormDownloadPlatform(platform) {
 			tiktokDlMu.Lock()
 			tiktokDlLastTime = time.Now()
 			tiktokDlMu.Unlock()
@@ -383,13 +396,16 @@ func (m *Manager) failDownloadJob(job db.DownloadQueueRow, err error) {
 	}
 	newRetry := job.RetryCount + 1
 	classification := download.ClassifyFailure(err, nil, newRetry)
+	tool, cookieLabel := download.ErrorOperationContext(err)
+	classification = retryShortFormAuthFailure(job, classification)
+	m.recordDownloadPlatformBackoff(job, classification)
 	strategy := classification.Strategy
 	if classification.Permanent || newRetry >= 5 {
 		if strategy == "" {
 			strategy = download.ErrorStrategyPermanent
 		}
 		log.Printf("[downloadpool] job %s failed permanently after %d retries: %v", job.VideoID, newRetry, err)
-		if err := m.db.UpdateDownloadQueueStatus(job.VideoID, job.LeaseOwner, "failed", err.Error(), newRetry, classification.Kind, strategy, 0, time.Now().UnixMilli()); err != nil {
+		if err := m.db.UpdateDownloadQueueStatusWithContext(job.VideoID, job.LeaseOwner, "failed", err.Error(), newRetry, classification.Kind, strategy, 0, time.Now().UnixMilli(), tool, cookieLabel); err != nil {
 			log.Printf("[downloadpool] UpdateDownloadQueueStatus %s: %v", job.VideoID, err)
 		}
 		atomic.AddInt32(&m.dlSessionFailed, 1)
@@ -399,8 +415,119 @@ func (m *Manager) failDownloadJob(job db.DownloadQueueRow, err error) {
 		strategy = download.ErrorStrategyRetry
 	}
 	log.Printf("[downloadpool] job %s queued for retry %d: %v", job.VideoID, newRetry, err)
-	if err := m.db.UpdateDownloadQueueStatus(job.VideoID, job.LeaseOwner, "pending", err.Error(), newRetry, classification.Kind, strategy, classification.RetryDelay, time.Now().UnixMilli()); err != nil {
+	if err := m.db.UpdateDownloadQueueStatusWithContext(job.VideoID, job.LeaseOwner, "pending", err.Error(), newRetry, classification.Kind, strategy, classification.RetryDelay, time.Now().UnixMilli(), tool, cookieLabel); err != nil {
 		log.Printf("[downloadpool] UpdateDownloadQueueStatus %s: %v", job.VideoID, err)
+	}
+}
+
+func retryShortFormAuthFailure(job db.DownloadQueueRow, classification download.FailureClassification) download.FailureClassification {
+	if classification.Kind != download.ErrorKindAuth {
+		return classification
+	}
+	if !isShortFormDownloadPlatform(platformFromDownloadChannelID(job.ChannelID)) {
+		return classification
+	}
+	classification.Permanent = false
+	classification.Strategy = download.ErrorStrategyRetry
+	if classification.RetryDelay <= 0 {
+		classification.RetryDelay = downloadAuthBackoff
+	}
+	return classification
+}
+
+func (m *Manager) recordDownloadPlatformBackoff(job db.DownloadQueueRow, classification download.FailureClassification) {
+	platform := platformFromDownloadChannelID(job.ChannelID)
+	if platform == "" {
+		return
+	}
+	var delay time.Duration
+	switch classification.Kind {
+	case download.ErrorKindRateLimit:
+		delay = classification.RetryDelay
+		if delay <= 0 {
+			delay = time.Hour
+		}
+	case download.ErrorKindAuth:
+		if !isShortFormDownloadPlatform(platform) {
+			return
+		}
+		delay = downloadAuthBackoff
+	default:
+		return
+	}
+	until := time.Now().Add(delay)
+	extended := m.setDownloadPlatformBackoff(platform, downloadPlatformBackoff{Until: until, Kind: classification.Kind})
+	if extended {
+		log.Printf("[downloadpool] %s downloads cooling down until %s after %s", platform, until.Format(time.RFC3339), classification.Kind)
+		if m.activity != nil && m.dlActivity != nil {
+			m.EmitDownload(fmt.Sprintf("%s downloads cooling down until %s after %s", platform, until.Format(time.RFC3339), classification.Kind), "warning", "", platform)
+		}
+	}
+}
+
+func platformFromDownloadChannelID(channelID string) string {
+	switch {
+	case strings.HasPrefix(channelID, "instagram_"):
+		return "instagram"
+	case strings.HasPrefix(channelID, "tiktok_"):
+		return "tiktok"
+	case strings.HasPrefix(channelID, "youtube_"):
+		return "youtube"
+	default:
+		return ""
+	}
+}
+
+func (m *Manager) setDownloadPlatformBackoff(platform string, backoff downloadPlatformBackoff) bool {
+	if m == nil || platform == "" || backoff.Until.IsZero() {
+		return false
+	}
+	m.downloadBackoffMu.Lock()
+	defer m.downloadBackoffMu.Unlock()
+	if m.downloadBackoff == nil {
+		m.downloadBackoff = make(map[string]downloadPlatformBackoff)
+	}
+	existing := m.downloadBackoff[platform]
+	if !existing.Until.IsZero() && !backoff.Until.After(existing.Until) {
+		return false
+	}
+	m.downloadBackoff[platform] = backoff
+	return true
+}
+
+func (m *Manager) activeDownloadPlatformBackoff(platform string, now time.Time) (downloadPlatformBackoff, bool) {
+	if m == nil || platform == "" {
+		return downloadPlatformBackoff{}, false
+	}
+	m.downloadBackoffMu.Lock()
+	defer m.downloadBackoffMu.Unlock()
+	backoff, ok := m.downloadBackoff[platform]
+	if !ok || backoff.Until.IsZero() {
+		return downloadPlatformBackoff{}, false
+	}
+	if !now.Before(backoff.Until) {
+		delete(m.downloadBackoff, platform)
+		return downloadPlatformBackoff{}, false
+	}
+	return backoff, true
+}
+
+func (m *Manager) postponeDownloadJobForPlatformBackoff(job db.DownloadQueueRow, platform string, backoff downloadPlatformBackoff) {
+	if m == nil || m.db == nil {
+		return
+	}
+	now := time.Now()
+	delay := backoff.Until.Sub(now)
+	if delay <= 0 {
+		delay = time.Second
+	}
+	kind := backoff.Kind
+	if kind == "" {
+		kind = download.ErrorKindRateLimit
+	}
+	reason := fmt.Sprintf("%s download backoff active until %s", platform, backoff.Until.Format(time.RFC3339))
+	if err := m.db.UpdateDownloadQueueStatusWithContext(job.VideoID, job.LeaseOwner, "pending", reason, job.RetryCount, kind, download.ErrorStrategyRetry, delay, now.UnixMilli(), "", ""); err != nil {
+		log.Printf("[downloadpool] postpone %s during %s backoff: %v", job.VideoID, platform, err)
 	}
 }
 
@@ -486,6 +613,19 @@ func platformSemFor(platform string) chan struct{} {
 		return sem
 	}
 	return platformSem["youtube"]
+}
+
+func isShortFormDownloadPlatform(platform string) bool {
+	return platform == "tiktok" || platform == "instagram"
+}
+
+func (m *Manager) shortFormDownloadDelay(platform string) time.Duration {
+	if m != nil && m.db != nil {
+		if delay := m.platformFetchDelay(platform); delay > 0 {
+			return delay
+		}
+	}
+	return shortFormDownloadDelayFallback
 }
 
 // --- Pure helper functions (testable) ---

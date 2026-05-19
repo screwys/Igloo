@@ -581,7 +581,7 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 				<h4 style="margin:1.25rem 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "platform_instagram", "Instagram") }</h4>
 				<div class="form-group">
 					<label for="global-setting-instagram-fetch-delay">{ L(p, "settings_fetch_delay_seconds", "Fetch Delay (seconds)") }</label>
-					<input type="number" id="global-setting-instagram-fetch-delay" name="instagram_fetch_delay" class="input" min="1" max="300" value={ prefs.Str("instagram_fetch_delay", "30") }/>
+					<input type="number" id="global-setting-instagram-fetch-delay" name="instagram_fetch_delay" class="input" min="1" max="300" value={ prefs.Str("instagram_fetch_delay", "60") }/>
 				</div>
 				<div class="form-group">
 					<label for="global-setting-instagram-max-videos">{ L(p, "settings_max_videos", "Max Videos") }</label>
@@ -600,7 +600,7 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 				<h4 style="margin:1.25rem 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_tiktok", "TikTok") }</h4>
 				<div class="form-group">
 					<label for="global-setting-tiktok-fetch-delay">{ L(p, "settings_fetch_delay_seconds", "Fetch Delay (seconds)") }</label>
-					<input type="number" id="global-setting-tiktok-fetch-delay" name="tiktok_fetch_delay" class="input" min="1" max="300" value={ prefs.Str("tiktok_fetch_delay", "30") }/>
+					<input type="number" id="global-setting-tiktok-fetch-delay" name="tiktok_fetch_delay" class="input" min="1" max="300" value={ prefs.Str("tiktok_fetch_delay", "60") }/>
 				</div>
 				<div class="form-group">
 					<label for="global-setting-shorts-max-videos">{ L(p, "settings_max_videos", "Max Videos") }</label>

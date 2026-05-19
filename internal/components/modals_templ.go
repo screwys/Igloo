@@ -2897,7 +2897,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var163 string
-		templ_7745c5c3_Var163, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("instagram_fetch_delay", "30"))
+		templ_7745c5c3_Var163, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("instagram_fetch_delay", "60"))
 		if templ_7745c5c3_Err != nil {
 			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 584, Col: 177}
 		}
@@ -2986,7 +2986,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var169 string
-		templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("tiktok_fetch_delay", "30"))
+		templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("tiktok_fetch_delay", "60"))
 		if templ_7745c5c3_Err != nil {
 			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 603, Col: 168}
 		}

@@ -89,7 +89,14 @@ func TestClassifyErrorPatterns(t *testing.T) {
 	}{
 		{"auth", errors.New("login required; cookies missing"), nil, ErrorKindAuth},
 		{"rate", errors.New("HTTP Error 429: Too Many Requests"), nil, ErrorKindRateLimit},
+		{"hyphenated_rate_limit", errors.New("Requested content is not available, rate-limit reached or login required. Use --cookies for authentication"), nil, ErrorKindRateLimit},
 		{"not_found", nil, []byte("Requested post not available"), ErrorKindNotFound},
+		{
+			"cookie_log_with_forbidden_media",
+			errors.New("exit status 4"),
+			[]byte("[cookies][info] Extracted 733 cookies from Firefox\n[downloader.http][warning] '403 Forbidden' for 'https://scontent.example/avatar.jpg'"),
+			ErrorKindPermanentHTTP,
+		},
 		{"empty", errors.New("gallery-dl: no files downloaded"), nil, ErrorKindEmptyResult},
 		{"no_video_formats", errors.New("[Instagram] ABC123: No video formats found!"), nil, ErrorKindEmptyResult},
 		{"parse", errors.New("invalid character '<' looking for beginning of value"), nil, ErrorKindParse},

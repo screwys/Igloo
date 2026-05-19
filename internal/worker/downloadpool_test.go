@@ -448,6 +448,120 @@ func TestFailDownloadJobPersistsClassification(t *testing.T) {
 	}
 }
 
+func TestFailDownloadJobPersistsDownloaderContext(t *testing.T) {
+	d := newTestWorkerDB(t)
+	now := time.Now().UnixMilli()
+	videoID := "dlq_context_auth"
+	if err := d.ExecRaw(`
+		INSERT INTO download_queue
+			(video_id, channel_id, title, status, retry_count, lease_owner, lease_until_ms, next_attempt_at_ms, added_at)
+		VALUES (?, 'instagram_sample_channel', 'Context Failure', 'processing', 0, 'download-current', ?, 0, ?)
+	`, videoID, now+60000, now); err != nil {
+		t.Fatalf("insert download queue row: %v", err)
+	}
+
+	m := &Manager{db: d}
+	err := download.WithOperationContext(errors.New("login required; cookies missing"), "yt-dlp", "browser:firefox")
+	m.failDownloadJob(db.DownloadQueueRow{
+		VideoID:    videoID,
+		RetryCount: 0,
+		LeaseOwner: "download-current",
+	}, err)
+
+	var tool, cookieLabel string
+	if err := d.QueryRow(`
+		SELECT COALESCE(tool,''), COALESCE(cookie_label,'')
+		  FROM download_queue
+		 WHERE video_id=?
+	`, videoID).Scan(&tool, &cookieLabel); err != nil {
+		t.Fatalf("query download queue row: %v", err)
+	}
+	if tool != "yt-dlp" || cookieLabel != "browser:firefox" {
+		t.Fatalf("tool=%q cookie_label=%q, want yt-dlp/browser:firefox", tool, cookieLabel)
+	}
+}
+
+func TestFailDownloadJobRetriesShortFormAuthWithBackoff(t *testing.T) {
+	d := newTestWorkerDB(t)
+	now := time.Now().UnixMilli()
+	videoID := "instagram_post_auth_retry"
+	if err := d.ExecRaw(`
+		INSERT INTO download_queue
+			(video_id, channel_id, title, status, retry_count, lease_owner, lease_until_ms, next_attempt_at_ms, added_at)
+		VALUES (?, 'instagram_sample_channel', 'Auth Retry', 'processing', 0, 'download-current', ?, 0, ?)
+	`, videoID, now+60000, now); err != nil {
+		t.Fatalf("insert download queue row: %v", err)
+	}
+
+	m := &Manager{db: d, cfg: testCfg(t.TempDir())}
+	m.failDownloadJob(db.DownloadQueueRow{
+		VideoID:    videoID,
+		ChannelID:  "instagram_sample_channel",
+		RetryCount: 0,
+		LeaseOwner: "download-current",
+	}, errors.New("login required; cookies missing"))
+
+	var status, kind, strategy string
+	var retries int
+	var nextAttempt int64
+	if err := d.QueryRow(`
+		SELECT status, retry_count, COALESCE(next_attempt_at_ms,0),
+		       COALESCE(last_error_kind,''), COALESCE(last_error_strategy,'')
+		  FROM download_queue
+		 WHERE video_id=?
+	`, videoID).Scan(&status, &retries, &nextAttempt, &kind, &strategy); err != nil {
+		t.Fatalf("query download queue row: %v", err)
+	}
+	if status != "pending" || retries != 1 || kind != download.ErrorKindAuth || strategy != download.ErrorStrategyRetry || nextAttempt <= now {
+		t.Fatalf("row = status=%q retries=%d kind=%q strategy=%q next=%d, want pending retry auth with future retry", status, retries, kind, strategy, nextAttempt)
+	}
+}
+
+func TestDownloadPlatformBackoffPostponesClaimedJobs(t *testing.T) {
+	d := newTestWorkerDB(t)
+	now := time.Now().UnixMilli()
+	firstID := "instagram_post_rate_first"
+	secondID := "instagram_post_rate_second"
+	for _, videoID := range []string{firstID, secondID} {
+		if err := d.ExecRaw(`
+			INSERT INTO download_queue
+				(video_id, channel_id, title, status, retry_count, lease_owner, lease_until_ms, next_attempt_at_ms, added_at)
+			VALUES (?, 'instagram_sample_channel', 'Backoff Proof', 'processing', 0, 'download-current', ?, 0, ?)
+		`, videoID, now+60000, now); err != nil {
+			t.Fatalf("insert %s: %v", videoID, err)
+		}
+	}
+
+	m := &Manager{db: d, cfg: testCfg(t.TempDir())}
+	m.failDownloadJob(db.DownloadQueueRow{
+		VideoID:    firstID,
+		ChannelID:  "instagram_sample_channel",
+		RetryCount: 0,
+		LeaseOwner: "download-current",
+	}, errors.New("Requested content is not available, rate-limit reached or login required"))
+
+	m.downloadVideo(context.Background(), db.DownloadQueueRow{
+		VideoID:    secondID,
+		ChannelID:  "instagram_sample_channel",
+		RetryCount: 0,
+		LeaseOwner: "download-current",
+	}, "instagram", "sample_channel", "", false)
+
+	var status, kind string
+	var retries int
+	var nextAttempt int64
+	if err := d.QueryRow(`
+		SELECT status, retry_count, COALESCE(next_attempt_at_ms,0), COALESCE(last_error_kind,'')
+		  FROM download_queue
+		 WHERE video_id=?
+	`, secondID).Scan(&status, &retries, &nextAttempt, &kind); err != nil {
+		t.Fatalf("query second row: %v", err)
+	}
+	if status != "pending" || retries != 0 || kind != download.ErrorKindRateLimit || nextAttempt <= now {
+		t.Fatalf("row = status=%q retries=%d kind=%q next=%d, want pending retry=0 rate_limit future next", status, retries, kind, nextAttempt)
+	}
+}
+
 func TestParseDateString(t *testing.T) {
 	tests := []struct {
 		input string

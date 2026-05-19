@@ -62,6 +62,8 @@ type Manager struct {
 	dlSessionCompleted int32        // atomic
 	dlSessionFailed    int32        // atomic
 	dlLastDownload     atomic.Value // stores *LastDownloadInfo
+	downloadBackoffMu  sync.Mutex
+	downloadBackoff    map[string]downloadPlatformBackoff
 
 	lastCycleAt       int64
 	lastCycleFailures map[string]string
@@ -126,6 +128,7 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 		feedActivity:    NewActivityRing(200),
 		xStatusQueued:   make(map[string]time.Time),
 		discoveryGate:   newPlatformDiscoveryGate(),
+		downloadBackoff: make(map[string]downloadPlatformBackoff),
 	}
 	m.dearrowFetcher = &dearrow.Fetcher{
 		Client:   dearrow.NewClient(dearrow.DefaultBaseURL),

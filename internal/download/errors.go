@@ -15,6 +15,47 @@ type FailureClassification struct {
 	RetryDelay time.Duration
 }
 
+// OperationContextError carries the concrete downloader backend and credential
+// source that produced an error while preserving normal error unwrapping.
+type OperationContextError struct {
+	Tool        string
+	CookieLabel string
+	Err         error
+}
+
+func (e *OperationContextError) Error() string {
+	if e == nil || e.Err == nil {
+		return ""
+	}
+	return e.Err.Error()
+}
+
+func (e *OperationContextError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+func WithOperationContext(err error, tool, cookieLabel string) error {
+	if err == nil {
+		return nil
+	}
+	var existing *OperationContextError
+	if errors.As(err, &existing) {
+		return err
+	}
+	return &OperationContextError{Tool: strings.TrimSpace(tool), CookieLabel: strings.TrimSpace(cookieLabel), Err: err}
+}
+
+func ErrorOperationContext(err error) (tool, cookieLabel string) {
+	var ctxErr *OperationContextError
+	if errors.As(err, &ctxErr) && ctxErr != nil {
+		return ctxErr.Tool, ctxErr.CookieLabel
+	}
+	return "", ""
+}
+
 func ClassifyError(err error, output []byte) string {
 	text := strings.ToLower(string(output))
 	if err != nil {
@@ -35,7 +76,7 @@ func ClassifyError(err error, output []byte) string {
 			return ErrorKindNotFound
 		}
 		if httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 {
-			if containsAny(text, "login", "auth", "cookie", "unauthorized") {
+			if containsAuthSignal(text) {
 				return ErrorKindAuth
 			}
 			return ErrorKindPermanentHTTP
@@ -44,14 +85,17 @@ func ClassifyError(err error, output []byte) string {
 			return ErrorKindTemporary
 		}
 	}
-	if containsAny(text, "429", "too many requests", "rate limit", "ratelimit") {
+	if containsAny(text, "429", "too many requests", "rate limit", "rate-limit", "ratelimit", "rate limited") {
 		return ErrorKindRateLimit
 	}
-	if containsAny(text, "login required", "redirect to login", "login page", "not logged in", "authentication", "unauthorized", "cookie", "cookies", "forbidden") {
+	if containsAuthSignal(text) {
 		return ErrorKindAuth
 	}
 	if containsAny(text, "not found", "notfound", "404", "410", "no such user", "requested post not available", "unavailable") {
 		return ErrorKindNotFound
+	}
+	if containsAny(text, "403 forbidden", "http error 403", "error 403", "status 403", "unexpected status 403", "forbidden") {
+		return ErrorKindPermanentHTTP
 	}
 	if containsAny(text, "no files downloaded", "no video formats", "no results", "empty result", "returned no info", "returned no") {
 		return ErrorKindEmptyResult
@@ -140,4 +184,23 @@ func containsAny(s string, needles ...string) bool {
 		}
 	}
 	return false
+}
+
+func containsAuthSignal(s string) bool {
+	return containsAny(s,
+		"login required",
+		"redirect to login",
+		"login page",
+		"locked behind the login",
+		"not logged in",
+		"authentication",
+		"unauthorized",
+		"use --cookies",
+		"use --cookies-from-browser",
+		"cookies missing",
+		"cookies are missing",
+		"cookies required",
+		"invalid cookies",
+		"expired cookies",
+	)
 }

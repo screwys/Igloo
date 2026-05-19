@@ -339,6 +339,9 @@ func (g *GalleryDLWrapper) Download(ctx context.Context, rawURL, destDir, id, co
 	if len(cookiesBrowser) > 0 {
 		browser = strings.TrimSpace(cookiesBrowser[0])
 	}
+	contextErr := func(err error) error {
+		return WithOperationContext(err, "gallery-dl", CookieLabel(cookiesFile, browser))
+	}
 
 	args := []string{
 		"--no-mtime",
@@ -355,19 +358,19 @@ func (g *GalleryDLWrapper) Download(ctx context.Context, rawURL, destDir, id, co
 	// check we'd fall through to yt-dlp, which reports a misleading "IP
 	// blocked" error and never prunes the job.
 	if strings.Contains(string(output), "Requested post not available") {
-		return nil, &HTTPStatusError{StatusCode: 404, URL: rawURL}
+		return nil, contextErr(&HTTPStatusError{StatusCode: 404, URL: rawURL})
 	}
 	if err != nil {
-		return nil, fmt.Errorf("gallery-dl: %w: %s", err, RedactText(string(output)))
+		return nil, contextErr(fmt.Errorf("gallery-dl: %w: %s", err, RedactText(string(output))))
 	}
 
 	// Collect downloaded files, sort for deterministic ordering
 	entries, err := os.ReadDir(tmpDir)
 	if err != nil {
-		return nil, fmt.Errorf("gallery-dl read dir: %w", err)
+		return nil, contextErr(fmt.Errorf("gallery-dl read dir: %w", err))
 	}
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("gallery-dl: no files downloaded")
+		return nil, contextErr(fmt.Errorf("gallery-dl: no files downloaded"))
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -375,11 +378,11 @@ func (g *GalleryDLWrapper) Download(ctx context.Context, rawURL, destDir, id, co
 	})
 
 	if err := enforceGalleryDLOutputLimits(entries, defaultGalleryDLOutputLimits); err != nil {
-		return nil, err
+		return nil, contextErr(err)
 	}
 
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return nil, fmt.Errorf("gallery-dl mkdir: %w", err)
+		return nil, contextErr(fmt.Errorf("gallery-dl mkdir: %w", err))
 	}
 
 	// Copy gallery-dl metadata → {id}.info.json so extractPublishedAt can read it.
@@ -433,7 +436,7 @@ func (g *GalleryDLWrapper) Download(ctx context.Context, rawURL, destDir, id, co
 			_ = copyFileStreaming(filepath.Join(tmpDir, e.Name()), destPath)
 		}
 		if len(paths) == 0 {
-			return nil, fmt.Errorf("gallery-dl: no files after rename")
+			return nil, contextErr(fmt.Errorf("gallery-dl: no files after rename"))
 		}
 		return paths, nil
 	}
@@ -464,7 +467,7 @@ func (g *GalleryDLWrapper) Download(ctx context.Context, rawURL, destDir, id, co
 	}
 
 	if len(paths) == 0 {
-		return nil, fmt.Errorf("gallery-dl: no files after rename")
+		return nil, contextErr(fmt.Errorf("gallery-dl: no files after rename"))
 	}
 	return paths, nil
 }

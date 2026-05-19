@@ -115,6 +115,9 @@ func TestInstagramUsesOwnGlobalSchedulerSettings(t *testing.T) {
 	if got := m.platformFetchDelay(ch.Platform); got != 7*time.Second {
 		t.Fatalf("instagram fetch delay = %s, want 7s", got)
 	}
+	if got := m.shortFormDownloadDelay(ch.Platform); got != 7*time.Second {
+		t.Fatalf("instagram download delay = %s, want 7s", got)
+	}
 	if got := m.platformDiscoveryCycleInterval(ch.Platform, 4); got != 28*time.Second {
 		t.Fatalf("instagram cycle interval = %s, want 28s", got)
 	}
@@ -259,8 +262,8 @@ func TestPlatformFetchDelayDefaults(t *testing.T) {
 
 	tests := map[string]time.Duration{
 		"youtube":   120 * time.Second,
-		"tiktok":    30 * time.Second,
-		"instagram": 30 * time.Second,
+		"tiktok":    60 * time.Second,
+		"instagram": 60 * time.Second,
 	}
 	for platform, want := range tests {
 		if got := m.platformFetchDelay(platform); got != want {

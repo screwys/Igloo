@@ -373,12 +373,18 @@ func readDownloadQueueRowTx(tx *sql.Tx, videoID string) (DownloadQueueRow, error
 
 // UpdateDownloadQueueStatus updates the status, error message, and retry count for a download job.
 func (db *DB) UpdateDownloadQueueStatus(videoID, owner, status, errMsg string, retryCount int, errorKind, errorStrategy string, retryDelay time.Duration, nowMs int64) error {
+	return db.UpdateDownloadQueueStatusWithContext(videoID, owner, status, errMsg, retryCount, errorKind, errorStrategy, retryDelay, nowMs, "", "")
+}
+
+// UpdateDownloadQueueStatusWithContext updates a download job and records the
+// downloader backend and credential source used by the attempt when known.
+func (db *DB) UpdateDownloadQueueStatusWithContext(videoID, owner, status, errMsg string, retryCount int, errorKind, errorStrategy string, retryDelay time.Duration, nowMs int64, tool, cookieLabel string) error {
 	if nowMs == 0 {
 		nowMs = time.Now().UnixMilli()
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
 		nextAttempt := int64(0)
-		if status == "pending" && retryCount > 0 {
+		if status == "pending" && (retryCount > 0 || retryDelay > 0) {
 			if retryDelay <= 0 {
 				retryDelay = jobRetryDelay(retryCount)
 			}
@@ -403,12 +409,14 @@ func (db *DB) UpdateDownloadQueueStatus(videoID, owner, status, errMsg string, r
 			    next_attempt_at_ms=?,
 			    last_error_kind=?,
 			    last_error_strategy=?,
+			    tool=?,
+			    cookie_label=?,
 			    lease_owner='',
 			    lease_until_ms=0
 			WHERE video_id=?
 			  AND status='processing'
 			  AND lease_owner=?
-		`, status, nilIfEmpty(errMsg), retryCount, nowMs, completedAt, nextAttempt, trimJobError(errorKind), trimJobError(errorStrategy), videoID, owner)
+		`, status, nilIfEmpty(errMsg), retryCount, nowMs, completedAt, nextAttempt, trimJobError(errorKind), trimJobError(errorStrategy), trimJobError(tool), trimJobError(cookieLabel), videoID, owner)
 		if err != nil {
 			return err
 		}
