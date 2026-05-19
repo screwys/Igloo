@@ -132,7 +132,7 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /\n  attestations: write\n/);
   assert.match(workflow, /\n  contents: write\n/);
   assert.match(workflow, /\n    if: startsWith\(github\.ref, 'refs\/tags\/v'\)\n/);
-  assert.match(workflow, /\n    environment: container-release\n/);
+  assert.doesNotMatch(workflow, /\n    environment: container-release\n/);
   assert.match(workflow, /fetch-depth: 0/);
   assert.match(workflow, /name: Verify release tag/);
   assert.match(workflow, /run: scripts\/dev\/verify-release-tag\.sh/);
@@ -142,7 +142,11 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, shaPinnedAction("DeterminateSystems/magic-nix-cache-action", "main"));
   assert.match(workflow, /use-flakehub: false/);
   assert.match(workflow, shaPinnedAction("cachix/cachix-action", "v17"));
-  assert.match(workflow, /if: \$\{\{ vars\.CACHIX_CACHE_NAME != '' \}\}/);
+  assert.match(workflow, /name: Check Cachix auth token/);
+  assert.match(workflow, /\n        id: cachix\n/);
+  assert.match(workflow, /CACHIX_AUTH_TOKEN: \$\{\{ secrets\.CACHIX_AUTH_TOKEN \}\}/);
+  assert.match(workflow, /echo "enabled=true" >> "\$GITHUB_OUTPUT"/);
+  assert.match(workflow, /if: \$\{\{ vars\.CACHIX_CACHE_NAME != '' && steps\.cachix\.outputs\.enabled == 'true' \}\}/);
   assert.match(workflow, /name: \$\{\{ vars\.CACHIX_CACHE_NAME \}\}/);
   assert.match(workflow, /authToken: \$\{\{ secrets\.CACHIX_AUTH_TOKEN \}\}/);
   assert.match(workflow, /useDaemon: true/);
@@ -298,7 +302,7 @@ test("Android release publishes only the APK asset with signed provenance attest
   assert.match(workflow, /\non:\n  workflow_dispatch:\n/);
   assert.doesNotMatch(workflow, /\n  push:\n/);
   assert.match(workflow, /\n    if: startsWith\(github\.ref, 'refs\/tags\/v'\)\n/);
-  assert.match(workflow, /\n    environment: android-release\n/);
+  assert.doesNotMatch(workflow, /\n    environment: android-release\n/);
   assert.match(workflow, /fetch-depth: 0/);
   assert.match(workflow, /name: Verify release tag/);
   assert.match(workflow, /run: scripts\/dev\/verify-release-tag\.sh/);
