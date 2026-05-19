@@ -840,7 +840,7 @@ func TestRefreshInstagramProfileClearsCaptionDerivedBio(t *testing.T) {
 	}
 }
 
-func TestRefreshInstagramProfileClearsUntrustedMediaAvatar(t *testing.T) {
+func TestRefreshInstagramProfilePreservesExistingAvatarWhenProfileHasNoAvatar(t *testing.T) {
 	d := newTestWorkerDB(t)
 	dir := t.TempDir()
 	if err := d.UpsertChannelProfile(model.ChannelProfile{
@@ -879,11 +879,14 @@ func TestRefreshInstagramProfileClearsUntrustedMediaAvatar(t *testing.T) {
 	if err != nil || got == nil {
 		t.Fatalf("GetChannelProfile: %v / %+v", err, got)
 	}
-	if got.Bio != "" || got.AvatarURL != "" {
-		t.Fatalf("profile fields survived trusted empty refresh: %+v", got)
+	if got.Bio != "" {
+		t.Fatalf("Bio = %q, want cleared when safe profile has no bio", got.Bio)
 	}
-	if hasConventionalMediaFile(avDir, "instagram_cinema") {
-		t.Fatal("stale cached avatar survived trusted empty refresh")
+	if got.AvatarURL != "https://example.test/media-avatar.jpg" {
+		t.Fatalf("AvatarURL = %q, want preserved existing avatar", got.AvatarURL)
+	}
+	if !hasConventionalMediaFile(avDir, "instagram_cinema") {
+		t.Fatal("cached avatar was removed when profile had no replacement avatar")
 	}
 }
 
