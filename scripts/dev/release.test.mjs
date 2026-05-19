@@ -123,6 +123,14 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /\n  id-token: write\n/);
   assert.match(workflow, /\n  attestations: write\n/);
   assert.match(workflow, /\n  contents: write\n/);
+  assert.match(workflow, /\n    if: startsWith\(github\.ref, 'refs\/tags\/v'\)\n/);
+  assert.match(workflow, /\n    environment: container-release\n/);
+  assert.match(workflow, /fetch-depth: 0/);
+  assert.match(workflow, /name: Verify release tag/);
+  assert.match(workflow, /\^v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+\$/);
+  assert.match(workflow, /git cat-file -t "refs\/tags\/\$\{GITHUB_REF_NAME\}"/);
+  assert.match(workflow, /BEGIN PGP SIGNATURE/);
+  assert.match(workflow, /git merge-base --is-ancestor "\$tag_target" origin\/main/);
   assert.match(workflow, /\n        id: build\n/);
   assert.match(workflow, shaPinnedAction("DeterminateSystems/determinate-nix-action", "v3"));
   assert.match(workflow, shaPinnedAction("DeterminateSystems/magic-nix-cache-action", "main"));
@@ -162,6 +170,16 @@ test("container release publishes signed provenance attestation", () => {
   assert.doesNotMatch(workflow, /actions\/setup-java/);
   assert.doesNotMatch(workflow, /docker\/build-push-action/);
   assert.doesNotMatch(workflow, /go install "github\.com\/sigstore\/cosign\/v3\/cmd\/cosign/);
+  assert.ok(
+    workflow.indexOf("name: Verify release tag") <
+      workflow.indexOf("name: Build Nix container image"),
+    "container release tag verification should run before building",
+  );
+  assert.ok(
+    workflow.indexOf("name: Verify release tag") <
+      workflow.indexOf("name: Push container image"),
+    "container release tag verification should run before publishing",
+  );
 });
 
 test("Nix container runtime stays on cacheable nixpkgs packages", () => {
@@ -238,6 +256,14 @@ test("Android release publishes only the APK asset with signed provenance attest
     "utf8",
   );
 
+  assert.match(workflow, /\n    if: startsWith\(github\.ref, 'refs\/tags\/v'\)\n/);
+  assert.match(workflow, /\n    environment: android-release\n/);
+  assert.match(workflow, /fetch-depth: 0/);
+  assert.match(workflow, /name: Verify release tag/);
+  assert.match(workflow, /\^v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+\$/);
+  assert.match(workflow, /git cat-file -t "refs\/tags\/\$\{GITHUB_REF_NAME\}"/);
+  assert.match(workflow, /BEGIN PGP SIGNATURE/);
+  assert.match(workflow, /git merge-base --is-ancestor "\$tag_target" origin\/main/);
   assert.match(workflow, shaPinnedAction("actions/setup-java", "v5"));
   assert.match(workflow, /run: \.\/gradlew :app:assembleRelease/);
   assert.match(workflow, /\n  id-token: write\n/);
@@ -255,6 +281,29 @@ test("Android release publishes only the APK asset with signed provenance attest
   assert.doesNotMatch(workflow, /:app:testDevtestUnitTest :app:assembleRelease/);
   assert.doesNotMatch(workflow, /scripts\/dev\/test-full\.sh/);
   assert.doesNotMatch(workflow, /actions\/setup-go/);
+  assert.ok(
+    workflow.indexOf("name: Verify release tag") <
+      workflow.indexOf("name: Decode release keystore"),
+    "Android release tag verification should run before keystore access",
+  );
+  assert.ok(
+    workflow.indexOf("name: Verify release tag") <
+      workflow.indexOf("name: Build release APK"),
+    "Android release tag verification should run before signing",
+  );
+});
+
+test("Android Gradle wrapper pins the distribution checksum", () => {
+  const properties = readFileSync(
+    new URL("../../android/gradle/wrapper/gradle-wrapper.properties", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(properties, /distributionUrl=https\\:\/\/services\.gradle\.org\/distributions\/gradle-9\.5\.1-bin\.zip/);
+  assert.match(
+    properties,
+    /^distributionSha256Sum=bafc141b619ad6350fd975fc903156dd5c151998cc8b058e8c1044ab5f7b031f$/m,
+  );
 });
 
 test("CodeQL runs on published releases and manual dispatch only", () => {
