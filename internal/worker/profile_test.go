@@ -306,6 +306,9 @@ func TestRefreshInstagramProfileDefersWhileSourceBacklogExists(t *testing.T) {
 	avDir, bnDir := filepath.Join(dir, "a"), filepath.Join(dir, "b")
 	_ = os.MkdirAll(avDir, 0o755)
 	_ = os.MkdirAll(bnDir, 0o755)
+	if err := os.WriteFile(filepath.Join(avDir, "instagram_waiting.jpg"), testProfilePNGBytes(), 0o644); err != nil {
+		t.Fatalf("write cached avatar: %v", err)
+	}
 	m.refreshProfile(context.Background(), newFakeFetcher().Fetch, "instagram_waiting", avDir, bnDir)
 
 	got, err := d.GetChannelProfile("instagram_waiting")
@@ -366,6 +369,130 @@ func TestRefreshInstagramProfileFetchesMissingAvatarDespiteDownloadBacklog(t *te
 	}
 	if got.NextRetryAt != nil {
 		t.Fatalf("NextRetryAt = %v, want no deferral for missing-avatar profile", got.NextRetryAt)
+	}
+}
+
+func TestRefreshInstagramProfileRefreshesMissingCachedAvatarDespiteDownloadBacklog(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	installGalleryDLAvatarStub(t, dir)
+	if err := d.AddChannel(model.Channel{
+		ChannelID:    "instagram_sample_author",
+		Platform:     "instagram",
+		Name:         "Sample Author",
+		URL:          "https://instagram.com/sample_author",
+		IsSubscribed: true,
+	}); err != nil {
+		t.Fatalf("seed channel: %v", err)
+	}
+	if err := d.AddToDownloadQueue("instagram_reel_SAMPLE_VIDEO", "instagram_sample_author", "Sample Author Reel"); err != nil {
+		t.Fatalf("seed download queue: %v", err)
+	}
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_sample_author",
+		Platform:    "instagram",
+		Handle:      "sample_author",
+		DisplayName: "Sample Author",
+		AvatarURL:   "https://cdn.example.invalid/old-avatar.jpg",
+	}); err != nil {
+		t.Fatalf("seed profile: %v", err)
+	}
+
+	fetches := 0
+	m := &Manager{
+		db:         d,
+		cfg:        testCfg(dir),
+		downloader: testDownloader(),
+		instagramProfileFetch: func(context.Context, string, string) (*model.ChannelProfile, error) {
+			fetches++
+			return &model.ChannelProfile{
+				ChannelID:   "instagram_sample_author",
+				Platform:    "instagram",
+				Handle:      "sample_author",
+				DisplayName: "Sample Author",
+				AvatarURL:   "https://cdn.example.invalid/new-avatar.jpg",
+			}, nil
+		},
+	}
+	avDir, bnDir := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	_ = os.MkdirAll(avDir, 0o755)
+	_ = os.MkdirAll(bnDir, 0o755)
+	m.refreshProfile(context.Background(), newFakeFetcher().Fetch, "instagram_sample_author", avDir, bnDir)
+
+	if fetches != 1 {
+		t.Fatalf("profile fetches = %d, want 1", fetches)
+	}
+	got, err := d.GetChannelProfile("instagram_sample_author")
+	if err != nil || got == nil {
+		t.Fatalf("GetChannelProfile: %v / %+v", err, got)
+	}
+	if got.FetchedAt == nil {
+		t.Fatalf("FetchedAt = nil, want missing cached avatar to refresh despite media backlog")
+	}
+	if got.NextRetryAt != nil {
+		t.Fatalf("NextRetryAt = %v, want no deferral for missing cached avatar", got.NextRetryAt)
+	}
+	if got.AvatarURL != "https://cdn.example.invalid/new-avatar.jpg" {
+		t.Fatalf("AvatarURL = %q, want refreshed avatar URL", got.AvatarURL)
+	}
+	if !hasConventionalMediaFile(avDir, "instagram_sample_author") {
+		t.Fatal("expected refreshed instagram avatar file")
+	}
+}
+
+func TestRefreshInstagramProfileBacksOffFailedStoredAvatarDownload(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	installGalleryDLFailureStub(t, dir)
+	avatarServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	defer avatarServer.Close()
+
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_sample_author",
+		Platform:    "instagram",
+		Handle:      "sample_author",
+		DisplayName: "Sample Author",
+		AvatarURL:   "https://cdn.example.invalid/old-avatar.jpg",
+	}); err != nil {
+		t.Fatalf("seed profile: %v", err)
+	}
+
+	m := &Manager{
+		db:         d,
+		cfg:        testCfg(dir),
+		downloader: testDownloader(),
+		instagramProfileFetch: func(context.Context, string, string) (*model.ChannelProfile, error) {
+			return &model.ChannelProfile{
+				ChannelID:   "instagram_sample_author",
+				Platform:    "instagram",
+				Handle:      "sample_author",
+				DisplayName: "Sample Author",
+				AvatarURL:   avatarServer.URL + "/avatar.png",
+			}, nil
+		},
+	}
+	avDir, bnDir := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	_ = os.MkdirAll(avDir, 0o755)
+	_ = os.MkdirAll(bnDir, 0o755)
+	m.refreshProfile(context.Background(), newFakeFetcher().Fetch, "instagram_sample_author", avDir, bnDir)
+
+	got, err := d.GetChannelProfile("instagram_sample_author")
+	if err != nil || got == nil {
+		t.Fatalf("GetChannelProfile: %v / %+v", err, got)
+	}
+	if got.AvatarURL != avatarServer.URL+"/avatar.png" {
+		t.Fatalf("AvatarURL = %q, want refreshed avatar URL preserved", got.AvatarURL)
+	}
+	if got.FailCount == 0 {
+		t.Fatalf("FailCount = %d, want failed stored avatar download recorded", got.FailCount)
+	}
+	if got.NextRetryAt == nil || got.NextRetryAt.Before(time.Now().Add(10*time.Minute)) {
+		t.Fatalf("NextRetryAt = %v, want instagram avatar backoff", got.NextRetryAt)
+	}
+	if hasConventionalMediaFile(avDir, "instagram_sample_author") {
+		t.Fatal("unexpected avatar file after failed download")
 	}
 }
 

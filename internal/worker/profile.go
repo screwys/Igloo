@@ -572,7 +572,7 @@ func (m *Manager) refreshInstagramStoredProfile(ctx context.Context, channelID, 
 	row.BannerURL = m.refreshStoredShortsBanner(channelID, bnDir, existing, row.BannerURL)
 	// Avoid competing with the Instagram source/download backlog when we already
 	// have an avatar URL to use, but do not starve blank avatar rows forever.
-	if m.instagramSourceBacklogExists() && row.AvatarURL != "" {
+	if m.instagramSourceBacklogExists() && row.AvatarURL != "" && hasConventionalMediaFile(avDir, channelID) {
 		next := now.Add(instagramProfileBackoff)
 		row.FetchedAt = nil
 		if existing != nil {
@@ -633,7 +633,9 @@ func (m *Manager) refreshInstagramStoredProfile(ctx context.Context, channelID, 
 	}
 	m.primeProfileBioMentions(row)
 	if row.AvatarURL != "" && !hasConventionalMediaFile(avDir, channelID) {
-		m.downloadProfileMedia(ctx, channelID, "avatar", row.AvatarURL, avDir)
+		if !m.downloadProfileMedia(ctx, channelID, "avatar", row.AvatarURL, avDir) && m != nil && m.downloader != nil {
+			m.recordInstagramAvatarFallbackError(channelID, &row, errors.New("instagram avatar download failed"), now)
+		}
 	} else if row.AvatarURL == "" && !hasConventionalMediaFile(avDir, channelID) {
 		if downloaded, err := m.downloadInstagramProfileAvatar(ctx, channelID, avDir); !downloaded && err != nil {
 			m.recordInstagramAvatarFallbackError(channelID, &row, err, now)
