@@ -22,3 +22,24 @@ func TestWebShareHelperIncludesInstagramEmbedMirror(t *testing.T) {
 		}
 	}
 }
+
+func TestWebShareHelperFallsBackWhenAsyncClipboardIsRejected(t *testing.T) {
+	for _, path := range []string{
+		"../../static/js/src/utils.js",
+		"../../static/js/site_base.js",
+	} {
+		srcBytes, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		src := string(srcBytes)
+		for _, want := range []string{
+			".writeText(value).catch",
+			"execCommand('copy')",
+		} {
+			if !strings.Contains(src, want) {
+				t.Fatalf("%s missing clipboard fallback fragment %q", path, want)
+			}
+		}
+	}
+}

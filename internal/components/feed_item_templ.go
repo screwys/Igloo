@@ -2738,7 +2738,7 @@ func feedMediaTile(p PageProps, tweetID string, index int, m model.MediaRef, med
 		ariaLabel := fmt.Sprintf(L(p, "feed_open_media_index", "Open media %d"), index+1)
 		if m.Type == "video" || m.Type == "gif" {
 			tileStreamURL := streamURL
-			if tileStreamURL == "" || strings.HasPrefix(tileStreamURL, "/api/media/slide/") {
+			if mediaCount > 1 || tileStreamURL == "" || strings.HasPrefix(tileStreamURL, "/api/media/slide/") {
 				tileStreamURL = slideURL
 			}
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 207, " <div class=\"feed-media-tile\" data-feed-media data-feed-media-kind=\"video\" data-feed-media-url=\"")
@@ -3748,7 +3748,7 @@ func feedQuoteMediaTile(p PageProps, quoteTweetID string, index int, qm model.Me
 		ariaLabel := fmt.Sprintf(L(p, "feed_open_media_index", "Open media %d"), index+1)
 		if qm.Type == "video" || qm.Type == "gif" {
 			tileStreamURL := streamURL
-			if tileStreamURL == "" || strings.HasPrefix(tileStreamURL, "/api/media/slide/") {
+			if qMediaCount > 1 || tileStreamURL == "" || strings.HasPrefix(tileStreamURL, "/api/media/slide/") {
 				tileStreamURL = slideURL
 			}
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 302, " <div class=\"feed-media-tile\" data-feed-media data-feed-media-kind=\"video\" data-feed-media-url=\"")

@@ -568,10 +568,45 @@
     }, Math.max(900, Number(timeoutMs) || 2200));
   }
 
+  function copyTextFallback(value) {
+    return new Promise(function (resolve, reject) {
+      const textarea = doc.createElement('textarea');
+      const active = doc.activeElement;
+      textarea.value = value;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '0';
+      textarea.style.opacity = '0';
+      doc.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      try {
+        if (doc.execCommand && doc.execCommand('copy')) {
+          resolve();
+        } else {
+          reject(new Error('copy failed'));
+        }
+      } catch (err) {
+        reject(err);
+      } finally {
+        textarea.remove();
+        if (active && typeof active.focus === 'function') {
+          try { active.focus({ preventScroll: true }); } catch (_) { active.focus(); }
+        }
+      }
+    });
+  }
+
   function copyText(text) {
     const value = String(text || '');
     if (!value) return Promise.reject(new Error('empty'));
-    return navigator.clipboard.writeText(value);
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      return navigator.clipboard.writeText(value).catch(function () {
+        return copyTextFallback(value);
+      });
+    }
+    return copyTextFallback(value);
   }
 
   // Sidebar toggle

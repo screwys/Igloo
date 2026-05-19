@@ -14,12 +14,44 @@ func TestDriftCheckUsesPinnedTemplGenerator(t *testing.T) {
 	tmp := t.TempDir()
 	bin := filepath.Join(tmp, "bin")
 	home := filepath.Join(tmp, "home")
+	distDir := filepath.Join(root, "static/js/dist")
+	distBackupRoot := filepath.Join(root, "tmp", "repo-checks", filepath.Base(tmp))
+	distBackup := filepath.Join(distBackupRoot, "static-js-dist-backup")
+	restoreDist := false
 	if err := os.MkdirAll(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(distBackupRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(distDir); err == nil {
+		restoreDist = true
+		if err := os.Rename(distDir, distBackup); err != nil {
+			t.Fatalf("backup static/js/dist: %v", err)
+		}
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat static/js/dist: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(distDir); err != nil {
+			t.Errorf("remove generated mock dist: %v", err)
+		}
+		if restoreDist {
+			if err := os.MkdirAll(filepath.Dir(distDir), 0o755); err != nil {
+				t.Errorf("recreate static/js parent: %v", err)
+				return
+			}
+			if err := os.Rename(distBackup, distDir); err != nil {
+				t.Errorf("restore static/js/dist: %v", err)
+			}
+		}
+		if err := os.RemoveAll(distBackupRoot); err != nil {
+			t.Errorf("remove dist backup dir: %v", err)
+		}
+	})
 
 	writeExecutable(t, filepath.Join(bin, "templ"), `#!/usr/bin/env bash
 echo "templ $*" >>"$DRIFT_TEST_LOG"

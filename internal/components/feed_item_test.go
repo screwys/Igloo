@@ -147,7 +147,7 @@ func TestFeedItemActionsDoNotShowStandaloneThreadButton(t *testing.T) {
 func TestFeedItemRendersSingleVideoFromSlideEndpointWhenStreamMissing(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:      "video_1",
-		AuthorHandle: "author_a",
+		AuthorHandle: "sample_author_a",
 		BodyText:     "video body",
 		Media: []model.MediaRef{{
 			Type: "video",
@@ -171,13 +171,45 @@ func TestFeedItemRendersSingleVideoFromSlideEndpointWhenStreamMissing(t *testing
 	}
 }
 
+func TestFeedItemMultiVideoTilesUseIndexedSlideEndpoints(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:        "video_multi",
+		AuthorHandle:   "sample_author_a",
+		BodyText:       "video body",
+		MediaStreamURL: "/api/media/stream/video_multi",
+		Media: []model.MediaRef{
+			{Type: "video", URL: "https://cdn.example/video_a.mp4"},
+			{Type: "video", URL: "https://cdn.example/video_b.mp4"},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+	for _, want := range []string{
+		`data-feed-media-stream="/api/media/slide/video_multi/0"`,
+		`data-feed-media-stream="/api/media/slide/video_multi/1"`,
+		`<source src="/api/media/slide/video_multi/0" type="video/mp4">`,
+		`<source src="/api/media/slide/video_multi/1" type="video/mp4">`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing %q in html: %s", want, html)
+		}
+	}
+	if strings.Contains(html, `data-feed-media-stream="/api/media/stream/video_multi"`) {
+		t.Fatalf("multi-video tile reused the single stream endpoint: %s", html)
+	}
+}
+
 func TestFeedItemQuoteVideoTileUsesItsOwnSlideEndpoint(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:           "parent_1",
-		AuthorHandle:      "author_a",
+		AuthorHandle:      "sample_author_a",
 		BodyText:          "parent body",
 		QuoteTweetID:      "quote_1",
-		QuoteAuthorHandle: "quote_author",
+		QuoteAuthorHandle: "sample_quote_author",
 		QuoteBodyText:     "quote body",
 		QuoteMedia: []model.MediaRef{
 			{Type: "photo", URL: "https://cdn.example/photo.jpg"},
@@ -196,6 +228,39 @@ func TestFeedItemQuoteVideoTileUsesItsOwnSlideEndpoint(t *testing.T) {
 	}
 	if strings.Contains(html, `<source src="/api/media/slide/quote_1/0" type="video/mp4">`) {
 		t.Fatalf("quote video tile reused the first slide stream: %s", html)
+	}
+}
+
+func TestFeedItemQuoteVideoTileDoesNotReuseSingleStreamEndpoint(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:             "parent_1",
+		AuthorHandle:        "sample_author_a",
+		BodyText:            "parent body",
+		QuoteTweetID:        "quote_1",
+		QuoteAuthorHandle:   "sample_quote_author",
+		QuoteBodyText:       "quote body",
+		QuoteMediaStreamURL: "/api/media/stream/quote_1",
+		QuoteMedia: []model.MediaRef{
+			{Type: "video", URL: "https://cdn.example/video_a.mp4"},
+			{Type: "video", URL: "https://cdn.example/video_b.mp4"},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+	for _, want := range []string{
+		`data-feed-media-stream="/api/media/slide/quote_1/0"`,
+		`data-feed-media-stream="/api/media/slide/quote_1/1"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing %q in html: %s", want, html)
+		}
+	}
+	if strings.Contains(html, `data-feed-media-stream="/api/media/stream/quote_1"`) {
+		t.Fatalf("quote video tile reused the single stream endpoint: %s", html)
 	}
 }
 
@@ -250,7 +315,7 @@ func TestFeedExternalURLRejectsNonHTTPStoredURL(t *testing.T) {
 func TestFeedItemShowsHandleWhenDisplayNameMissing(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:      "tweet_1",
-		AuthorHandle: "author_a",
+		AuthorHandle: "sample_author_a",
 		BodyText:     "body",
 	}
 
@@ -259,7 +324,7 @@ func TestFeedItemShowsHandleWhenDisplayNameMissing(t *testing.T) {
 		t.Fatalf("render feed item: %v", err)
 	}
 	html := buf.String()
-	if !strings.Contains(html, `class="feed-author-handle">@author_a</span>`) {
+	if !strings.Contains(html, `class="feed-author-handle">@sample_author_a</span>`) {
 		t.Fatalf("missing author handle in feed header: %s", html)
 	}
 }
@@ -305,7 +370,7 @@ func TestFeedItemFollowActionsUseDisplayedAuthorState(t *testing.T) {
 func TestFeedItemSeenTrackingIsPageGatedHTMX(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:      "seen_1",
-		AuthorHandle: "author_a",
+		AuthorHandle: "sample_author_a",
 		BodyText:     "body",
 	}
 
@@ -341,7 +406,7 @@ func TestFeedItemRendersIndependentBodyAndQuoteTranslatePills(t *testing.T) {
 		BodyText:               "parent foreign text",
 		Lang:                   "ko",
 		QuoteTweetID:           "quoted_status",
-		QuoteAuthorHandle:      "quote_author",
+		QuoteAuthorHandle:      "sample_quote_author",
 		QuoteAuthorDisplayName: "Quote Author",
 		QuoteBodyText:          "quote foreign text",
 		QuoteLang:              "fr",
@@ -374,7 +439,7 @@ func TestFeedItemQuoteTranslationDoesNotActivateParentTranslatePill(t *testing.T
 		BodyText:               "parent text",
 		Lang:                   "en",
 		QuoteTweetID:           "quoted_status",
-		QuoteAuthorHandle:      "quote_author",
+		QuoteAuthorHandle:      "sample_quote_author",
 		QuoteAuthorDisplayName: "Quote Author",
 		QuoteBodyText:          "texte cite",
 		QuoteLang:              "fr",

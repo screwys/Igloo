@@ -965,17 +965,17 @@ document.addEventListener('click', function (event) {
         copyText(shareLink).then(function () { showToast(t('toast_link_copied', 'Link copied')) }).catch(function () { showToast(t('error_copy_link_failed', 'Failed to copy link')) })
         var shareTweetId = String(root.getAttribute('data-tweet-id') || '').trim()
         if (shareTweetId) {
-          apiFetch('/api/feed/interaction', {
-            method: 'POST',
-            body: JSON.stringify({
-              action: 'share',
-              item: {
-                tweet_id: shareTweetId,
-                source_handle: String(root.getAttribute('data-feed-source-handle') || '').trim(),
-                author_handle: String(root.getAttribute('data-feed-author-handle') || '').trim()
-              }
-            })
-          }).catch(function () {})
+	          apiFetch('/api/feed/interaction', {
+	            method: 'POST',
+	            body: JSON.stringify({
+	              action: 'share',
+	              item: {
+	                tweet_id: shareTweetId,
+	                source_handle: String(root.getAttribute('data-source-handle') || '').trim(),
+	                author_handle: String(root.getAttribute('data-author-handle') || '').trim()
+	              }
+	            })
+	          }).catch(function () {})
         }
         return
       }

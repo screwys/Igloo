@@ -550,7 +550,7 @@ templ feedMediaTile(p PageProps, tweetID string, index int, m model.MediaRef, me
 	{{ ariaLabel := fmt.Sprintf(L(p, "feed_open_media_index", "Open media %d"), index+1) }}
 	if m.Type == "video" || m.Type == "gif" {
 		{{ tileStreamURL := streamURL }}
-		if tileStreamURL == "" || strings.HasPrefix(tileStreamURL, "/api/media/slide/") {
+		if mediaCount > 1 || tileStreamURL == "" || strings.HasPrefix(tileStreamURL, "/api/media/slide/") {
 			{{ tileStreamURL = slideURL }}
 		}
 		<div
@@ -756,7 +756,7 @@ templ feedQuoteMediaTile(p PageProps, quoteTweetID string, index int, qm model.M
 	{{ ariaLabel := fmt.Sprintf(L(p, "feed_open_media_index", "Open media %d"), index+1) }}
 	if qm.Type == "video" || qm.Type == "gif" {
 		{{ tileStreamURL := streamURL }}
-		if tileStreamURL == "" || strings.HasPrefix(tileStreamURL, "/api/media/slide/") {
+		if qMediaCount > 1 || tileStreamURL == "" || strings.HasPrefix(tileStreamURL, "/api/media/slide/") {
 			{{ tileStreamURL = slideURL }}
 		}
 		<div

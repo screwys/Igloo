@@ -118,9 +118,44 @@ export function copyText(text) {
   if (window.MpaSiteBase && typeof window.MpaSiteBase.copyText === 'function') {
     return window.MpaSiteBase.copyText(text)
   }
-  return navigator.clipboard
-    ? navigator.clipboard.writeText(text)
-    : Promise.reject(new Error(t('error_clipboard_unavailable', 'Clipboard unavailable')))
+  var value = String(text || '')
+  if (!value) return Promise.reject(new Error('empty'))
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    return navigator.clipboard.writeText(value).catch(function () {
+      return copyTextFallback(value)
+    })
+  }
+  return copyTextFallback(value)
+}
+
+function copyTextFallback(value) {
+  return new Promise(function (resolve, reject) {
+    var textarea = document.createElement('textarea')
+    var active = document.activeElement
+    textarea.value = value
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    textarea.style.top = '0'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.focus()
+    textarea.select()
+    try {
+      if (document.execCommand && document.execCommand('copy')) {
+        resolve()
+      } else {
+        reject(new Error(t('error_clipboard_unavailable', 'Clipboard unavailable')))
+      }
+    } catch (err) {
+      reject(err)
+    } finally {
+      textarea.remove()
+      if (active && typeof active.focus === 'function') {
+        try { active.focus({ preventScroll: true }) } catch (_) { active.focus() }
+      }
+    }
+  })
 }
 
 export function askConfirm(opts) {
