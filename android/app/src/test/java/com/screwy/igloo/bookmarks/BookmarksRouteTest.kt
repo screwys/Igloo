@@ -270,6 +270,35 @@ class BookmarksRouteTest {
     }
 
     @Test
+    fun bookmark_playlist_ids_round_trip_selected_filters() {
+        val labelId = bookmarkPlaylistId(BookmarkFilter.Label(" art/studies "))
+
+        assertEquals(BookmarkFilter.All, bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter.All)))
+        assertEquals(BookmarkFilter.Category(34L), bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter.Category(34L))))
+        assertEquals(BookmarkFilter.Label("art/studies"), bookmarkFilterFromPlaylistId(labelId))
+        assertEquals(BookmarkFilter.NoLabel, bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter.NoLabel)))
+        assertFalse(labelId.contains("/"))
+    }
+
+    @Test
+    fun bookmark_moment_playlist_applies_category_and_label_filters() {
+        val rows = listOf(
+            videoBookmark(videoId = "art_first", categoryId = 7L, customTitle = "art"),
+            videoBookmark(videoId = "music_first", categoryId = 9L, customTitle = "music"),
+            videoBookmark(videoId = "art_second", categoryId = 7L, customTitle = "art"),
+        )
+
+        assertEquals(
+            listOf("art_first", "art_second"),
+            bookmarkMomentPlaylistItems(rows, BookmarkFilter.Category(7L)).map { it.videoId },
+        )
+        assertEquals(
+            listOf("art_first", "art_second"),
+            bookmarkMomentPlaylistItems(rows, BookmarkFilter.Label("art")).map { it.videoId },
+        )
+    }
+
+    @Test
     fun label_search_matches_displayed_no_label_row() {
         val rows = listOf(
             BookmarkLabelCount(label = null, count = 3),

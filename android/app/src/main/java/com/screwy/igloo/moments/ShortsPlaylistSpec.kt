@@ -20,6 +20,7 @@ data class ShortsPlaylistSpec(
         get() = when (type) {
             ShortsPlaylistType.Channel,
             ShortsPlaylistType.Story -> playlistId.trim()
+            ShortsPlaylistType.Bookmarks -> playlistId.trim().takeIf { it.isNotEmpty() } ?: RootPlaylistId
             ShortsPlaylistType.StoryTray -> RootPlaylistId
             else -> RootPlaylistId
         }
@@ -36,8 +37,11 @@ data class ShortsPlaylistSpec(
         fun allMoments(): ShortsPlaylistSpec =
             ShortsPlaylistSpec(ShortsPlaylistType.AllMoments, RootPlaylistId)
 
-        fun bookmarks(): ShortsPlaylistSpec =
-            ShortsPlaylistSpec(ShortsPlaylistType.Bookmarks, RootPlaylistId)
+        fun bookmarks(playlistId: String? = RootPlaylistId): ShortsPlaylistSpec =
+            ShortsPlaylistSpec(
+                ShortsPlaylistType.Bookmarks,
+                playlistId?.trim()?.takeIf { it.isNotEmpty() } ?: RootPlaylistId,
+            )
 
         fun channel(channelId: String?): ShortsPlaylistSpec? {
             val id = channelId?.trim()?.takeIf { it.isNotEmpty() } ?: return null
@@ -58,7 +62,7 @@ data class ShortsPlaylistSpec(
             return when (type) {
                 ShortsPlaylistType.Moments -> moments()
                 ShortsPlaylistType.AllMoments -> allMoments()
-                ShortsPlaylistType.Bookmarks -> bookmarks()
+                ShortsPlaylistType.Bookmarks -> bookmarks(routeId)
                 ShortsPlaylistType.Channel -> channel(routeId)
                 ShortsPlaylistType.Story -> story(routeId)
                 ShortsPlaylistType.StoryTray -> storyTray()

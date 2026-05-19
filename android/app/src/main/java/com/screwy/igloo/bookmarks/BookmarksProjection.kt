@@ -11,6 +11,7 @@ import com.screwy.igloo.ui.component.MediaCellModel
 import com.screwy.igloo.ui.component.MomentItem
 import com.screwy.igloo.ui.component.mediaTypeFor
 import com.screwy.igloo.ui.component.normalizeHandle
+import java.util.Base64
 
 /**
  * Bookmark media type — videos resolve directly off `videos.media_kind` /
@@ -30,6 +31,40 @@ internal fun bookmarkPublishedAt(item: BookmarkItem): Long =
 
 internal fun opensBookmarkInMomentsOverlay(item: BookmarkItem): Boolean =
     item.video != null || item.assetMediaCount > 0 || item.feedItem?.hasMomentStyleMedia() == true
+
+internal fun bookmarkMomentPlaylistItems(
+    items: List<BookmarkItem>,
+    filter: BookmarkFilter,
+    baseUrl: String = "",
+): List<MomentItem> =
+    filterBookmarkItems(items, filter)
+        .filter(::opensBookmarkInMomentsOverlay)
+        .map { item -> toBookmarkMomentItem(item, baseUrl) }
+
+internal fun bookmarkPlaylistId(filter: BookmarkFilter): String = when (filter) {
+    BookmarkFilter.All -> BookmarkPlaylistAllId
+    is BookmarkFilter.Category -> "$BookmarkPlaylistCategoryPrefix${filter.categoryId}"
+    is BookmarkFilter.Label -> normalizeBookmarkLabel(filter.label)
+        ?.let { label -> "$BookmarkPlaylistLabelPrefix${encodeBookmarkPlaylistLabel(label)}" }
+        ?: BookmarkPlaylistNoLabelId
+    BookmarkFilter.NoLabel -> BookmarkPlaylistNoLabelId
+}
+
+internal fun bookmarkFilterFromPlaylistId(playlistId: String?): BookmarkFilter {
+    val id = playlistId?.trim()?.takeIf { it.isNotEmpty() } ?: return BookmarkFilter.All
+    if (id == BookmarkPlaylistAllId) return BookmarkFilter.All
+    if (id == BookmarkPlaylistNoLabelId) return BookmarkFilter.NoLabel
+    if (id.startsWith(BookmarkPlaylistCategoryPrefix)) {
+        val categoryId = id.removePrefix(BookmarkPlaylistCategoryPrefix).toLongOrNull()
+        return categoryId?.let(BookmarkFilter::Category) ?: BookmarkFilter.All
+    }
+    if (id.startsWith(BookmarkPlaylistLabelPrefix)) {
+        val label = decodeBookmarkPlaylistLabel(id.removePrefix(BookmarkPlaylistLabelPrefix))
+            ?.let(::normalizeBookmarkLabel)
+        return label?.let(BookmarkFilter::Label) ?: BookmarkFilter.All
+    }
+    return BookmarkFilter.All
+}
 
 internal fun toBookmarkMomentItem(item: BookmarkItem, baseUrl: String = ""): MomentItem {
     val feedMediaKind = bookmarkFeedMediaKind(item)
@@ -228,3 +263,16 @@ internal fun BookmarkItem.initialThumbnailUri(baseUrl: String): MediaUri {
 
 private fun FeedItemEntity.hasMomentStyleMedia(): Boolean =
     !mediaJson.isNullOrBlank() || !quoteMediaJson.isNullOrBlank()
+
+private const val BookmarkPlaylistAllId = "_"
+private const val BookmarkPlaylistNoLabelId = "no_label"
+private const val BookmarkPlaylistCategoryPrefix = "category_"
+private const val BookmarkPlaylistLabelPrefix = "label_"
+
+private fun encodeBookmarkPlaylistLabel(label: String): String =
+    Base64.getUrlEncoder().withoutPadding().encodeToString(label.toByteArray(Charsets.UTF_8))
+
+private fun decodeBookmarkPlaylistLabel(value: String): String? =
+    runCatching {
+        String(Base64.getUrlDecoder().decode(value), Charsets.UTF_8)
+    }.getOrNull()

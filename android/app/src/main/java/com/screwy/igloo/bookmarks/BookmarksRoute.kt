@@ -159,7 +159,7 @@ fun BookmarksRoute(
                             if (opensBookmarkInMomentsOverlay(item)) {
                                 navigator.openShorts(
                                     playlistType = "bookmarks",
-                                    playlistId = "_",
+                                    playlistId = bookmarkPlaylistId(selectedFilter),
                                     videoId = item.bookmark.videoId,
                                     source = IglooNavigationSource.Bookmarks,
                                     posterUri = item.initialThumbnailUri(baseUrl),

@@ -1,8 +1,11 @@
 package com.screwy.igloo.moments
 
+import com.screwy.igloo.bookmarks.BookmarkFilter
+import com.screwy.igloo.bookmarks.bookmarkPlaylistId
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.RoomTestSupport
+import com.screwy.igloo.data.entity.BookmarkEntity
 import com.screwy.igloo.data.entity.ChannelEntity
 import com.screwy.igloo.data.entity.ChannelFollowEntity
 import com.screwy.igloo.data.entity.MomentViewEntity
@@ -179,6 +182,37 @@ class ShortsRouteViewModelTest {
         sub.cancel()
 
         assertEquals(listOf("v_sample_two", "v_sample_old", "v_sample_one"), vm.items.value.map { it.videoId })
+    }
+
+    @Test fun bookmarksPlaylistUsesRouteFilter() = runBlocking {
+        db.videoDao().upsert(listOf(
+            VideoEntity("art_new", "tiktok_artist", title = "Art new", mediaKind = "video", publishedAt = 30L),
+            VideoEntity("music_new", "tiktok_artist", title = "Music new", mediaKind = "video", publishedAt = 20L),
+            VideoEntity("art_old", "tiktok_artist", title = "Art old", mediaKind = "video", publishedAt = 10L),
+        ))
+        db.bookmarkDao().upsert(BookmarkEntity("art_new", categoryId = 34L, customTitle = "art", bookmarkedAt = 300L))
+        db.bookmarkDao().upsert(BookmarkEntity("music_new", categoryId = 5L, customTitle = "music", bookmarkedAt = 200L))
+        db.bookmarkDao().upsert(BookmarkEntity("art_old", categoryId = 34L, customTitle = "art", bookmarkedAt = 100L))
+
+        val vm = viewModels.track(ShortsRouteViewModel(
+            playlistSpec = ShortsPlaylistSpec.bookmarks(bookmarkPlaylistId(BookmarkFilter.Category(34L))),
+            startVideoId = "art_new",
+            db = db,
+            outboxWriter = writer,
+            prefs = prefs,
+            uiEffects = uiEffects,
+            baseUrlProvider = ServerBaseUrlProvider { "https://example.test" },
+        ))
+        val sub = subscribe(vm)
+        val loaded = withTimeoutOrNull(2_000L) {
+            while (vm.items.value.size < 2) delay(10)
+            true
+        }
+        sub.cancel()
+
+        assertEquals(true, loaded)
+        assertEquals(listOf("art_new", "art_old"), vm.items.value.map { it.videoId })
+        assertEquals(0, vm.startIndex.value)
     }
 
     @Test fun onCursorAdvance_persistsZeroPositionForMomentsRoute() = runBlocking {

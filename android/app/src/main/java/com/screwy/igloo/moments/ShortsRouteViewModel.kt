@@ -2,8 +2,8 @@ package com.screwy.igloo.moments
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.screwy.igloo.bookmarks.opensBookmarkInMomentsOverlay
-import com.screwy.igloo.bookmarks.toBookmarkMomentItem
+import com.screwy.igloo.bookmarks.bookmarkFilterFromPlaylistId
+import com.screwy.igloo.bookmarks.bookmarkMomentPlaylistItems
 import com.screwy.igloo.channel.ChannelRouteResolver
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
@@ -60,6 +60,7 @@ class ShortsRouteViewModel(
         if (playlistSpec.type == ShortsPlaylistType.Moments) "following" else "all"
     private val recordsMomentViews: Boolean =
         playlistSpec.type != ShortsPlaylistType.Bookmarks
+    private val bookmarkFilter = bookmarkFilterFromPlaylistId(playlistSpec.playlistId)
 
     private val storyStatusByChannel: StateFlow<Map<String, StoryChannelItem>> = prefs.storiesWindowHours()
         .flatMapLatest { hours -> db.momentReadDao().storyStatusesFlow(storyCutoffMillis(hours)) }
@@ -313,11 +314,7 @@ class ShortsRouteViewModel(
             .map { rows -> rows.map(::toPlayerMomentItem) }
         ShortsPlaylistType.Bookmarks -> db.bookmarkReadDao()
             .bookmarksFlow()
-            .map { rows ->
-                rows
-                    .filter(::opensBookmarkInMomentsOverlay)
-                    .map { item -> toBookmarkMomentItem(item, baseUrl) }
-            }
+            .map { rows -> bookmarkMomentPlaylistItems(rows, bookmarkFilter, baseUrl) }
     }
 
     private fun bookmarkTargetForMoment(

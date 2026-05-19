@@ -1,5 +1,7 @@
 package com.screwy.igloo.moments
 
+import com.screwy.igloo.bookmarks.BookmarkFilter
+import com.screwy.igloo.bookmarks.bookmarkPlaylistId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -18,6 +20,10 @@ class ShortsPlaylistSpecTest {
         assertEquals(
             ShortsPlaylistSpec(type = ShortsPlaylistType.Bookmarks, playlistId = ShortsPlaylistSpec.RootPlaylistId),
             ShortsPlaylistSpec.decode("bookmarks", null),
+        )
+        assertEquals(
+            ShortsPlaylistSpec(type = ShortsPlaylistType.Bookmarks, playlistId = bookmarkPlaylistId(BookmarkFilter.Category(34L))),
+            ShortsPlaylistSpec.decode("bookmarks", bookmarkPlaylistId(BookmarkFilter.Category(34L))),
         )
         assertEquals(
             ShortsPlaylistSpec(type = ShortsPlaylistType.StoryTray, playlistId = ShortsPlaylistSpec.RootPlaylistId),
@@ -40,6 +46,10 @@ class ShortsPlaylistSpecTest {
         assertEquals(ShortsPlaylistSpec.RootPlaylistId, ShortsPlaylistSpec.moments().routePlaylistId)
         assertEquals("all_moments", ShortsPlaylistSpec.allMoments().routePlaylistType)
         assertEquals(ShortsPlaylistSpec.RootPlaylistId, ShortsPlaylistSpec.bookmarks().routePlaylistId)
+        assertEquals(
+            bookmarkPlaylistId(BookmarkFilter.Label("art")),
+            ShortsPlaylistSpec.bookmarks(bookmarkPlaylistId(BookmarkFilter.Label("art"))).routePlaylistId,
+        )
         assertEquals("channel", ShortsPlaylistSpec.channel("instagram_a")?.routePlaylistType)
         assertEquals("instagram_a", ShortsPlaylistSpec.channel("instagram_a")?.routePlaylistId)
         assertEquals("stories", ShortsPlaylistSpec.storyTray().routePlaylistType)
