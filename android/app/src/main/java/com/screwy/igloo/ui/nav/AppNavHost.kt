@@ -147,13 +147,7 @@ fun AppNavHost() {
 
         directDestination(RouteRegistry.Player) { entry ->
             val videoId = entry.arguments!!.getString("video_id")!!
-            if (adaptiveLayout.isWide && routeUsesWideSidebar(RouteRegistry.Player.route)) {
-                MainScaffold(navController = navController) {
-                    PlayerRoute(videoId = videoId, navController = navController)
-                }
-            } else {
-                PlayerRoute(videoId = videoId, navController = navController)
-            }
+            PlayerRoute(videoId = videoId, navController = navController)
         }
 
         scaffoldDestination(navController, RouteRegistry.Thread) { entry ->

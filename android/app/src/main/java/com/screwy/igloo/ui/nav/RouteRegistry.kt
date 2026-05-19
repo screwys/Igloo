@@ -75,7 +75,6 @@ object RouteRegistry {
             topChrome = TopChrome.PinnedMediaGuard,
             bottomChrome = BottomChrome.Hidden,
             drawerChrome = DrawerChrome.Disabled,
-            wideDrawerChrome = DrawerChrome.Enabled,
         ),
         deepLinks = listOf(
             "igloo://youtube/{video_id}",

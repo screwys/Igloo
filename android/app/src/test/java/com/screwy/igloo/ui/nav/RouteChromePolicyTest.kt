@@ -81,7 +81,7 @@ class RouteChromePolicyTest {
         assertSame(TopChrome.PinnedMediaGuard, player.topChrome)
         assertEquals(BottomChrome.Hidden, player.bottomChrome)
         assertEquals(DrawerChrome.Disabled, player.drawerChrome)
-        assertEquals(DrawerChrome.Enabled, player.wideDrawerChrome)
+        assertEquals(DrawerChrome.Disabled, player.wideDrawerChrome)
 
         val thread = routeChromePolicyFor("tweet/{tweet_id}")
         assertSame(TopChrome.ScrollAwayAppBar, thread.topChrome)
@@ -95,7 +95,7 @@ class RouteChromePolicyTest {
     fun overlayRoutesDoNotOptIntoWideSidebar() {
         assertFalse(routeChromePolicyFor("login").supportsWideSidebar)
         assertFalse(routeChromePolicyFor("media/{owner_kind}/{owner_id}/{index}").supportsWideSidebar)
-        assertTrue(routeChromePolicyFor("player/{video_id}").supportsWideSidebar)
+        assertFalse(routeChromePolicyFor("player/{video_id}").supportsWideSidebar)
         assertTrue(routeChromePolicyFor("tweet/{tweet_id}").supportsWideSidebar)
     }
 }

@@ -64,6 +64,14 @@ class RouteOwnedMediaCleanupTest {
     }
 
     @Test
+    fun playerRouteIsDirectHostedSoWideSidebarCannotAttachDuringRotation() {
+        val text = source("main/java/com/screwy/igloo/ui/nav/AppNavHost.kt")
+        assertTrue("Player route should be direct hosting", text.contains("directDestination(RouteRegistry.Player)"))
+        assertFalse("Player route should not be scaffold hosted", text.contains("scaffoldDestination(navController, RouteRegistry.Player)"))
+        assertFalse("Player route should not wrap itself in MainScaffold", text.contains("routeUsesWideSidebar(RouteRegistry.Player.route)"))
+    }
+
+    @Test
     fun mediaRouteObservesActionSideTablesInsteadOfOnlyEntrySnapshot() {
         val text = source("main/java/com/screwy/igloo/media/MediaRouteViewModel.kt")
         assertTrue("Media route lost its live like state flow", text.contains("db.feedLikeDao().getByIdFlow(ownerId)"))

@@ -23,7 +23,7 @@ class AdaptiveLayoutTest {
 
     @Test
     fun wide_sidebar_applies_to_non_overlay_detail_routes_only_when_policy_allows() {
-        assertTrue(routeUsesWideSidebar(RouteRegistry.Player.route))
+        assertFalse(routeUsesWideSidebar(RouteRegistry.Player.route))
         assertTrue(routeUsesWideSidebar(RouteRegistry.Thread.route))
         assertFalse(routeUsesWideSidebar(RouteRegistry.Media.route))
         assertFalse(routeUsesWideSidebar(RouteRegistry.Login.route))
