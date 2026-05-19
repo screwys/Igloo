@@ -14,50 +14,56 @@
       ];
 
       forAllSystems = nixpkgs.lib.genAttrs systems;
-      goSourceVersion = "1.26.3";
-      goSourceHash = "sha256-HGRoddCqh5kTMYTtV895/yS97+jIggRwYCqdPW2Rkrg=";
-      goFor =
-        pkgs:
-        (pkgs.go_1_26 or pkgs.go).overrideAttrs (_: {
-          version = goSourceVersion;
-          src = pkgs.fetchurl {
-            url = "https://go.dev/dl/go${goSourceVersion}.src.tar.gz";
-            hash = goSourceHash;
-          };
-        });
-      patchedRuntimeOverlay =
-        final: prev:
-        let
-          ffmpeg81 = {
-            version = "8.1";
-            source = builtins.fetchurl {
-              url = "https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz";
-              sha256 = "sha256-sHKu1ocZmMzps253dAMxBcop4zYyvltjR/MgaJjgdWo=";
-            };
-          };
-          openssl362 = prev.openssl_3_6.overrideAttrs (old: {
-            version = "3.6.2";
-            src = builtins.fetchurl {
-              url = "https://github.com/openssl/openssl/releases/download/openssl-3.6.2/openssl-3.6.2.tar.gz";
-              sha256 = "sha256-qvUaH+BkOE+BHa6utOxNznNA7IvYkwJ+7mdq8x6DoE8=";
-            };
-            patches = builtins.filter (
-              patch:
-              !(prev.lib.hasInfix "openssl-aes-gcm-ppc-remove-localentry-directive" (toString patch))
-            ) (old.patches or [ ]);
-          });
-        in
-        {
-          openssl = openssl362;
-          openssl_3_6 = openssl362;
-
-          ffmpeg_8 = prev.ffmpeg_8.override ffmpeg81;
-          ffmpeg_8-headless = prev.ffmpeg_8-headless.override ffmpeg81;
-          ffmpeg_8-full = prev.ffmpeg_8-full.override ffmpeg81;
-          ffmpeg = final.ffmpeg_8;
-          ffmpeg-headless = final.ffmpeg_8-headless;
-          ffmpeg-full = final.ffmpeg_8-full;
+      goVersion = "1.26.3";
+      goBinaryArchives = {
+        x86_64-linux = {
+          arch = "amd64";
+          hash = "sha256-Kyz8cUhJPaXnOYG/+/M1OvOB1fk+eJyCx5r/ZJYutVY=";
         };
+        aarch64-linux = {
+          arch = "arm64";
+          hash = "sha256-nYmj6lfRQcKyLXAIPyyEWbo4kPLZ6Bjn6TO3VhSTZWU=";
+        };
+      };
+      goFor =
+        system: pkgs:
+        let
+          upstreamGo = pkgs.go_1_26 or pkgs.go;
+          goArchive = goBinaryArchives.${system};
+        in
+        if (upstreamGo.version or "") == goVersion then
+          upstreamGo
+        else
+          pkgs.stdenvNoCC.mkDerivation {
+            pname = "go";
+            version = goVersion;
+
+            src = pkgs.fetchurl {
+              url = "https://dl.google.com/go/go${goVersion}.linux-${goArchive.arch}.tar.gz";
+              hash = goArchive.hash;
+            };
+
+            dontConfigure = true;
+            dontBuild = true;
+
+            CGO_ENABLED = upstreamGo.CGO_ENABLED or 1;
+            GOOS = upstreamGo.GOOS or "linux";
+            GOARCH = upstreamGo.GOARCH or goArchive.arch;
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p "$out"
+              cp -R . "$out"
+              runHook postInstall
+            '';
+
+            meta = (upstreamGo.meta or { }) // {
+              description = "Go compiler and tools";
+              homepage = "https://go.dev/";
+              license = pkgs.lib.licenses.bsd3;
+              platforms = [ system ];
+            };
+          };
     in
     {
       packages = forAllSystems (
@@ -66,13 +72,12 @@
           pkgs = import nixpkgs {
             inherit system;
           };
-          runtimePkgs = pkgs.extend patchedRuntimeOverlay;
           lib = pkgs.lib;
           revision = self.shortRev or (self.dirtyShortRev or "dev");
           containerImageName = "ghcr.io/screwys/igloo";
-          go = goFor pkgs;
+          go = goFor system pkgs;
           buildGoModule = pkgs.buildGoModule.override { inherit go; };
-          pythonPackages = runtimePkgs.python3Packages;
+          pythonPackages = pkgs.python3Packages;
           runtimeRequirementLines = lib.splitString "\n" (builtins.readFile ./requirements-runtime.txt);
           runtimeToolVersion =
             package:
@@ -90,7 +95,7 @@
             version = runtimeToolVersion "yt-dlp";
             pyproject = true;
 
-            src = runtimePkgs.fetchPypi {
+            src = pkgs.fetchPypi {
               pname = "yt_dlp";
               inherit version;
               hash = "sha256-unqjHVM/H/zP5w5CFZbXyo/wvxOY3Gu2WLfZ3sBX0sk=";
@@ -121,7 +126,7 @@
             version = runtimeToolVersion "gallery-dl";
             pyproject = true;
 
-            src = runtimePkgs.fetchPypi {
+            src = pkgs.fetchPypi {
               inherit pname version;
               hash = "sha256-tZ8cO1h4PJyQTTi6JMtk4gBDQchBAJA1ZJEzQPuXdn8=";
             };
@@ -209,12 +214,12 @@
             };
           };
 
-          runtimeEnv = runtimePkgs.buildEnv {
+          runtimeEnv = pkgs.buildEnv {
             name = "igloo-runtime";
             paths = [
               igloo
-              runtimePkgs.cacert
-              (lib.getBin runtimePkgs.ffmpeg-headless)
+              pkgs.cacert
+              (lib.getBin pkgs.ffmpeg-headless)
               galleryDl
               ytDlp
             ];
@@ -253,8 +258,8 @@
               Cmd = [ "/usr/local/bin/igloo" ];
               Env = [
                 "PATH=/usr/local/bin:${runtimeEnv}/bin:/bin"
-                "SSL_CERT_FILE=${runtimePkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
-                "REQUESTS_CA_BUNDLE=${runtimePkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+                "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+                "REQUESTS_CA_BUNDLE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
                 "LANG=C.UTF-8"
                 "HOME=/tmp"
                 "IGLOO_DATA_DIR=/igloo/data"
@@ -305,7 +310,7 @@
         system:
         let
           pkgs = import nixpkgs { inherit system; };
-          go = goFor pkgs;
+          go = goFor system pkgs;
         in
         {
           default = pkgs.mkShell {

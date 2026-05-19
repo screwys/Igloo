@@ -127,6 +127,12 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, shaPinnedAction("DeterminateSystems/determinate-nix-action", "v3"));
   assert.match(workflow, shaPinnedAction("DeterminateSystems/magic-nix-cache-action", "main"));
   assert.match(workflow, /use-flakehub: false/);
+  assert.match(workflow, shaPinnedAction("cachix/cachix-action", "v17"));
+  assert.match(workflow, /if: \$\{\{ vars\.CACHIX_CACHE_NAME != '' \}\}/);
+  assert.match(workflow, /name: \$\{\{ vars\.CACHIX_CACHE_NAME \}\}/);
+  assert.match(workflow, /authToken: \$\{\{ secrets\.CACHIX_AUTH_TOKEN \}\}/);
+  assert.match(workflow, /useDaemon: true/);
+  assert.match(workflow, /pushFilter: "\(-source\$\|\\\\\.tar\\\\\.gz\$\)"/);
   assert.match(workflow, /nix build \.#container --print-build-logs/);
   assert.match(workflow, /docker load < result/);
   assert.match(workflow, /SOURCE_IMAGE: ghcr\.io\/screwys\/igloo:latest/);
@@ -156,6 +162,24 @@ test("container release publishes signed provenance attestation", () => {
   assert.doesNotMatch(workflow, /actions\/setup-java/);
   assert.doesNotMatch(workflow, /docker\/build-push-action/);
   assert.doesNotMatch(workflow, /go install "github\.com\/sigstore\/cosign\/v3\/cmd\/cosign/);
+});
+
+test("Nix container runtime stays on cacheable nixpkgs packages", () => {
+  const flake = readFileSync(new URL("../../flake.nix", import.meta.url), "utf8");
+
+  assert.match(flake, /goBinaryArchives/);
+  assert.match(flake, /https:\/\/dl\.google\.com\/go\/go\$\{goVersion\}\.linux-\$\{goArchive\.arch\}\.tar\.gz/);
+  assert.match(flake, /if \(upstreamGo\.version or ""\) == goVersion then/);
+  assert.match(flake, /CGO_ENABLED = upstreamGo\.CGO_ENABLED or 1;/);
+  assert.match(flake, /GOOS = upstreamGo\.GOOS or "linux";/);
+  assert.match(flake, /GOARCH = upstreamGo\.GOARCH or goArchive\.arch;/);
+  assert.match(flake, /pkgs\.ffmpeg-headless/);
+  assert.match(flake, /pkgs\.cacert/);
+  assert.doesNotMatch(flake, /patchedRuntimeOverlay|runtimePkgs/);
+  assert.doesNotMatch(flake, /go\$\{[^}]+\}\.src\.tar\.gz/);
+  assert.doesNotMatch(flake, /ffmpeg\.org\/releases\/ffmpeg-/);
+  assert.doesNotMatch(flake, /openssl\/releases\/download\/openssl-/);
+  assert.doesNotMatch(flake, /openssl_3_6\.overrideAttrs|ffmpeg_8.*override/);
 });
 
 test("CI Go analysis tools are pinned and Renovate-managed", () => {
