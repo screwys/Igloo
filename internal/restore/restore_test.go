@@ -8,9 +8,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/screwys/igloo/internal/config"
+	igloodb "github.com/screwys/igloo/internal/db"
 )
 
 func buildTarball(t *testing.T, files map[string]string) []byte {
@@ -43,6 +45,15 @@ func buildTarball(t *testing.T, files map[string]string) []byte {
 
 func buildZip(t *testing.T, files map[string]string) []byte {
 	t.Helper()
+	byteFiles := make(map[string][]byte, len(files))
+	for name, body := range files {
+		byteFiles[name] = []byte(body)
+	}
+	return buildZipBytes(t, byteFiles)
+}
+
+func buildZipBytes(t *testing.T, files map[string][]byte) []byte {
+	t.Helper()
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	for name, body := range files {
@@ -50,7 +61,7 @@ func buildZip(t *testing.T, files map[string]string) []byte {
 		if err != nil {
 			t.Fatalf("create zip entry %s: %v", name, err)
 		}
-		if _, err := w.Write([]byte(body)); err != nil {
+		if _, err := w.Write(body); err != nil {
 			t.Fatalf("write zip entry %s: %v", name, err)
 		}
 	}
@@ -183,6 +194,105 @@ func TestStageZipRoundTrip(t *testing.T) {
 	}
 	if string(cfgBytes) != `{"enabled_platforms":["youtube"]}` {
 		t.Errorf("config not restored: got %q", string(cfgBytes))
+	}
+}
+
+func TestStageZipRestoresFullExportExtras(t *testing.T) {
+	sourceDataDir := t.TempDir()
+	sourceDBPath := filepath.Join(sourceDataDir, "igloo.db")
+	sourceDB, err := igloodb.Open(sourceDBPath, sourceDataDir)
+	if err != nil {
+		t.Fatalf("open source db: %v", err)
+	}
+	if err := sourceDB.ExecRaw(`
+		INSERT INTO videos (video_id, channel_id, title, file_path)
+		VALUES ('sample_video', 'sample_channel', 'Sample Video', '/old/data/media/source/sample_video.mp4')
+	`); err != nil {
+		t.Fatalf("seed source db: %v", err)
+	}
+	if err := sourceDB.Close(); err != nil {
+		t.Fatalf("close source db: %v", err)
+	}
+	dbBytes, err := os.ReadFile(sourceDBPath)
+	if err != nil {
+		t.Fatalf("read source db: %v", err)
+	}
+
+	dataDir := t.TempDir()
+	confDir := t.TempDir()
+	repoDir := t.TempDir()
+	zipBytes := buildZipBytes(t, map[string][]byte{
+		"igloo.db":                             dbBytes,
+		"runtime.json":                         []byte(`{"version":1,"data_dir":"/old/data","config_dir":"/old/config","repo_dir":"/old/repo"}`),
+		"config/nginx.conf":                    []byte("pid /old/data/nginx.pid;\nssl_certificate /old/config/server.crt;\nroot /old/repo/static;\n"),
+		"media/bookmarks/sample_video/000.mp4": []byte("sample-video-bytes"),
+		"media/avatars/sample_channel.jpg":     []byte("avatar-bytes"),
+	})
+
+	if err := StageZip(bytes.NewReader(zipBytes), int64(len(zipBytes)), dataDir); err != nil {
+		t.Fatalf("StageZip: %v", err)
+	}
+	cfg := &config.Config{
+		DataDir:      dataDir,
+		ConfDir:      confDir,
+		RepoDir:      repoDir,
+		DatabasePath: filepath.Join(dataDir, "igloo.db"),
+	}
+	if err := ApplyPending(cfg); err != nil {
+		t.Fatalf("ApplyPending: %v", err)
+	}
+
+	nginxConf, err := os.ReadFile(filepath.Join(confDir, "nginx.conf"))
+	if err != nil {
+		t.Fatalf("read restored nginx.conf: %v", err)
+	}
+	nginxText := string(nginxConf)
+	for _, want := range []string{
+		filepath.Join(dataDir, "nginx.pid"),
+		filepath.Join(confDir, "server.crt"),
+		filepath.Join(repoDir, "static"),
+	} {
+		if !strings.Contains(nginxText, want) {
+			t.Fatalf("restored nginx.conf missing rewritten path %q:\n%s", want, nginxText)
+		}
+	}
+
+	mediaPath := filepath.Join(dataDir, "media", "imported", "bookmarks", "sample_video", "000.mp4")
+	mediaBytes, err := os.ReadFile(mediaPath)
+	if err != nil {
+		t.Fatalf("read restored media: %v", err)
+	}
+	if string(mediaBytes) != "sample-video-bytes" {
+		t.Fatalf("restored media = %q", string(mediaBytes))
+	}
+	avatarBytes, err := os.ReadFile(filepath.Join(dataDir, "thumbnails", "avatars", "sample_channel.jpg"))
+	if err != nil {
+		t.Fatalf("read restored avatar: %v", err)
+	}
+	if string(avatarBytes) != "avatar-bytes" {
+		t.Fatalf("restored avatar = %q", string(avatarBytes))
+	}
+
+	restoredDB, err := igloodb.Open(cfg.DatabasePath, dataDir)
+	if err != nil {
+		t.Fatalf("open restored db: %v", err)
+	}
+	defer func() {
+		_ = restoredDB.Close()
+	}()
+	var videoPath, mediaRel string
+	if err := restoredDB.QueryRow(`SELECT file_path FROM videos WHERE video_id = 'sample_video'`).Scan(&videoPath); err != nil {
+		t.Fatalf("read restored video path: %v", err)
+	}
+	if err := restoredDB.QueryRow(`SELECT file_path FROM media_files WHERE owner_type = 'feed_media' AND owner_id = 'sample_video' AND media_index = 0`).Scan(&mediaRel); err != nil {
+		t.Fatalf("read restored media_files row: %v", err)
+	}
+	wantRel := filepath.ToSlash(filepath.Join("media", "imported", "bookmarks", "sample_video", "000.mp4"))
+	if mediaRel != wantRel {
+		t.Fatalf("media_files file_path = %q, want %q", mediaRel, wantRel)
+	}
+	if videoPath != mediaPath {
+		t.Fatalf("video file_path = %q, want %q", videoPath, mediaPath)
 	}
 }
 

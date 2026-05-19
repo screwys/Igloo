@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/screwys/igloo/internal/auth"
+	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/exportbundle"
 	"github.com/screwys/igloo/internal/fullimport"
@@ -94,10 +95,17 @@ func (s *Server) handleConfigExportFull(w http.ResponseWriter, r *http.Request) 
 	mediaFiles = append(mediaFiles, exportbundle.CollectAvatarMedia(s.cfg.DataDir)...)
 	runtimeFiles := s.collectFullExportRuntimeConfigFiles()
 	runtimeManifest := s.fullExportRuntimeManifest()
+	dbSnapshotPath, cleanupSnapshot, err := s.createFullExportDatabaseSnapshot()
+	if err != nil {
+		slog.Error("ExportFullData database snapshot", "err", err)
+		writeJSON(w, 500, map[string]any{"error": "export snapshot error"})
+		return
+	}
+	defer cleanupSnapshot()
 
 	if dir := s.configuredExportDir(); dir != "" {
 		path, err := writeExportFile(dir, "igloo-full", ".zip", func(dst io.Writer) error {
-			return writeFullExportZip(dst, cfg, mediaFiles, runtimeFiles, runtimeManifest)
+			return writeFullExportZip(dst, cfg, dbSnapshotPath, mediaFiles, runtimeFiles, runtimeManifest)
 		})
 		if err != nil {
 			slog.Error("ExportFullData save", "dir", dir, "err", err)
@@ -117,7 +125,7 @@ func (s *Server) handleConfigExportFull(w http.ResponseWriter, r *http.Request) 
 		fmt.Sprintf(`attachment; filename="igloo-full-%s.zip"`,
 			time.Now().UTC().Format("2006-01-02")))
 	w.WriteHeader(200)
-	if err := writeFullExportZip(w, cfg, mediaFiles, runtimeFiles, runtimeManifest); err != nil {
+	if err := writeFullExportZip(w, cfg, dbSnapshotPath, mediaFiles, runtimeFiles, runtimeManifest); err != nil {
 		slog.Error("ExportFullData zip write", "err", err)
 	}
 }
@@ -126,8 +134,14 @@ func writeConfigExportJSON(w io.Writer, cfg db.ConfigExport) error {
 	return json.NewEncoder(w).Encode(cfg)
 }
 
-func writeFullExportZip(w io.Writer, cfg db.ConfigExport, mediaFiles []exportbundle.MediaFile, runtimeFiles []fullExportRuntimeFile, runtimeManifest fullimport.RuntimeManifest) error {
+func writeFullExportZip(w io.Writer, cfg db.ConfigExport, databasePath string, mediaFiles []exportbundle.MediaFile, runtimeFiles []fullExportRuntimeFile, runtimeManifest fullimport.RuntimeManifest) error {
 	zw := zip.NewWriter(w)
+	if strings.TrimSpace(databasePath) != "" {
+		if err := writeFullExportDatabaseFile(zw, databasePath); err != nil {
+			_ = zw.Close()
+			return err
+		}
+	}
 	if err := writeFullExportJSON(zw, cfg); err != nil {
 		_ = zw.Close()
 		return err
@@ -147,6 +161,39 @@ func writeFullExportZip(w io.Writer, cfg db.ConfigExport, mediaFiles []exportbun
 		}
 	}
 	return zw.Close()
+}
+
+func (s *Server) createFullExportDatabaseSnapshot() (string, func(), error) {
+	if s == nil || s.db == nil {
+		return "", func() {}, fmt.Errorf("database is unavailable")
+	}
+	dir := ""
+	if s.cfg != nil {
+		dir = strings.TrimSpace(s.cfg.DataDir)
+	}
+	if dir == "" {
+		dir = os.TempDir()
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", func() {}, fmt.Errorf("create database snapshot dir: %w", err)
+	}
+	tmp, err := os.CreateTemp(dir, ".igloo-full-export-db-*.db")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("create database snapshot temp path: %w", err)
+	}
+	path := tmp.Name()
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", func() {}, fmt.Errorf("close database snapshot temp path: %w", err)
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return "", func() {}, fmt.Errorf("prepare database snapshot path: %w", err)
+	}
+	if err := s.db.VacuumInto(path); err != nil {
+		_ = os.Remove(path)
+		return "", func() {}, fmt.Errorf("vacuum database snapshot: %w", err)
+	}
+	return path, func() { _ = os.Remove(path) }, nil
 }
 
 func (s *Server) configuredExportDir() string {
@@ -225,6 +272,35 @@ func writeFullExportRuntimeManifest(zw *zip.Writer, manifest fullimport.RuntimeM
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
 	return enc.Encode(manifest)
+}
+
+func writeFullExportDatabaseFile(zw *zip.Writer, databasePath string) error {
+	src, err := os.Open(databasePath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = src.Close()
+	}()
+	info, err := src.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("database snapshot path is not a regular file")
+	}
+	hdr, err := zip.FileInfoHeader(info)
+	if err != nil {
+		return err
+	}
+	hdr.Name = config.DatabaseFilename
+	hdr.Method = zip.Deflate
+	dst, err := zw.CreateHeader(hdr)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(dst, src)
+	return err
 }
 
 func writeFullExportRuntimeConfigFile(zw *zip.Writer, file fullExportRuntimeFile) error {

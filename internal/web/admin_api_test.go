@@ -18,7 +18,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/download"
+	"github.com/screwys/igloo/internal/exportbundle"
 	"github.com/screwys/igloo/internal/model"
 )
 
@@ -414,6 +416,12 @@ func TestHandleConfigExportFullIncludesBookmarkedMediaAndAvatars(t *testing.T) {
 				VALUES ('admin', 'booked_video', 7, 'Watch Later', 2000)`, nil},
 			{`INSERT INTO bookmarks (user_id, video_id, category_id, custom_title, bookmarked_at)
 				VALUES ('admin', 'post_1', 7, 'Reference', 3000)`, nil},
+			{`INSERT INTO muted_accounts (handle, muted_at)
+				VALUES ('muted_sample', 4000)`, nil},
+			{`INSERT INTO watch_history (user_id, video_id, last_watched)
+				VALUES ('admin', 'booked_video', 5000)`, nil},
+			{`INSERT INTO moment_views (username, video_id, viewed_at)
+				VALUES ('admin', 'booked_video', 6000)`, nil},
 		}
 		for _, stmt := range statements {
 			if _, err := tx.Exec(stmt.sql, stmt.args...); err != nil {
@@ -450,6 +458,30 @@ func TestHandleConfigExportFullIncludesBookmarkedMediaAndAvatars(t *testing.T) {
 	}
 	if got := payload["bookmarks"].([]any)[0].(map[string]any)["custom_title"]; got != "Watch Later" {
 		t.Fatalf("first bookmark custom_title = %v, want Watch Later", got)
+	}
+	dbBytes, ok := entries[config.DatabaseFilename]
+	if !ok {
+		t.Fatalf("full export missing %s; entries=%v", config.DatabaseFilename, mapKeys(entries))
+	}
+	snapshotPath := filepath.Join(t.TempDir(), config.DatabaseFilename)
+	if err := os.WriteFile(snapshotPath, dbBytes, 0o644); err != nil {
+		t.Fatalf("write db snapshot: %v", err)
+	}
+	snapshotDB, err := sql.Open("sqlite", "file:"+snapshotPath+"?mode=ro")
+	if err != nil {
+		t.Fatalf("open db snapshot: %v", err)
+	}
+	defer func() {
+		_ = snapshotDB.Close()
+	}()
+	for _, table := range []string{"muted_accounts", "watch_history", "moment_views"} {
+		var count int
+		if err := snapshotDB.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err != nil {
+			t.Fatalf("snapshot count %s: %v", table, err)
+		}
+		if count != 1 {
+			t.Fatalf("snapshot %s count = %d, want 1", table, count)
+		}
 	}
 
 	wantMedia := map[string]string{
@@ -678,6 +710,9 @@ func TestHandleConfigExportFullSavesZipToBackupDirWhenConfigured(t *testing.T) {
 		t.Fatalf("read saved full export: %v", err)
 	}
 	entries := readZipEntries(t, data)
+	if _, ok := entries[config.DatabaseFilename]; !ok {
+		t.Fatalf("saved full export missing %s; entries=%v", config.DatabaseFilename, mapKeys(entries))
+	}
 	if string(entries["media/bookmarks/booked_video/000.mp4"]) != "bookmarked-video-bytes" {
 		t.Fatalf("saved full export missing bookmarked media; entries=%v", mapKeys(entries))
 	}
@@ -732,15 +767,18 @@ func TestHandleConfigImportFullZipRestoresMetadataBookmarkedMediaAndAvatars(t *t
 		t.Fatalf("seed export fixture: %v", err)
 	}
 
-	exportReq := httptest.NewRequest("GET", "/api/config/export-full", nil)
-	exportReq = exportReq.WithContext(contextWithUser(exportReq, "admin", "admin"))
-	exportRec := httptest.NewRecorder()
-	src.handleConfigExportFull(exportRec, exportReq)
-	if exportRec.Code != http.StatusOK {
-		t.Fatalf("export status = %d, body = %s", exportRec.Code, exportRec.Body.String())
+	cfg, err := src.db.ExportFullData("admin")
+	if err != nil {
+		t.Fatalf("ExportFullData: %v", err)
+	}
+	mediaFiles := exportbundle.CollectBookmarkMedia(src.db, src.cfg.DataDir, cfg.Bookmarks)
+	mediaFiles = append(mediaFiles, exportbundle.CollectAvatarMedia(src.cfg.DataDir)...)
+	var exportBuf bytes.Buffer
+	if err := writeFullExportZip(&exportBuf, cfg, "", mediaFiles, src.collectFullExportRuntimeConfigFiles(), src.fullExportRuntimeManifest()); err != nil {
+		t.Fatalf("write legacy full export zip: %v", err)
 	}
 
-	body, contentType := multipartBody(t, "file", "igloo-full.zip", exportRec.Body.Bytes())
+	body, contentType := multipartBody(t, "file", "igloo-full.zip", exportBuf.Bytes())
 	importReq := httptest.NewRequest(http.MethodPost, "/api/config/import", body)
 	importReq.Header.Set("Content-Type", contentType)
 	importReq = importReq.WithContext(contextWithUser(importReq, "admin", "admin"))

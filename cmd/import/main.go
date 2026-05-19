@@ -2,6 +2,8 @@
 package main
 
 import (
+	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -13,6 +15,7 @@ import (
 	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/fullimport"
+	"github.com/screwys/igloo/internal/restore"
 )
 
 func main() {
@@ -54,6 +57,20 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	if !fullimport.IsZipPayload(data) {
 		_, _ = fmt.Fprintln(stderr, "not an Igloo full export zip: missing zip signature")
+		return 1
+	}
+	if err := restore.StageZip(bytes.NewReader(data), int64(len(data)), cfg.DataDir); err == nil {
+		if err := restore.ApplyPending(cfg); err != nil {
+			_, _ = fmt.Fprintf(stderr, "restore full export backup: %v\n", err)
+			return 1
+		}
+		_, _ = fmt.Fprintln(stdout, "format=zip_backup")
+		_, _ = fmt.Fprintf(stdout, "data_dir=%s\n", cfg.DataDir)
+		_, _ = fmt.Fprintf(stdout, "config_dir=%s\n", cfg.ConfDir)
+		_, _ = fmt.Fprintf(stdout, "database=%s\n", cfg.DatabasePath)
+		return 0
+	} else if !errors.Is(err, restore.ErrMissingDatabase) {
+		_, _ = fmt.Fprintf(stderr, "restore full export backup: %v\n", err)
 		return 1
 	}
 	exportCfg, err := fullimport.ReadExportConfig(data)
