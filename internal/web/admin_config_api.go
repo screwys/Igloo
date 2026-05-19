@@ -76,6 +76,48 @@ func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) handleConfigExportSubscriptions(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
+	userID := ""
+	if user := userFromContext(r.Context()); user != nil {
+		userID = user.Username
+	}
+	cfg, err := s.db.ExportSubscriptions(userID)
+	if err != nil {
+		slog.Error("ExportSubscriptions", "err", err)
+		writeJSON(w, 500, map[string]any{"error": "export error"})
+		return
+	}
+
+	if dir := s.configuredExportDir(); dir != "" {
+		path, err := writeExportFile(dir, "igloo-subscriptions", ".json", func(dst io.Writer) error {
+			return writeSubscriptionsExportJSON(dst, cfg)
+		})
+		if err != nil {
+			slog.Error("ExportSubscriptions save", "dir", dir, "err", err)
+			writeJSON(w, 500, map[string]any{"error": "export save error"})
+			return
+		}
+		writeJSON(w, 200, map[string]any{
+			"success": true,
+			"saved":   true,
+			"path":    path,
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf(`attachment; filename="igloo-subscriptions-%s.json"`,
+			time.Now().UTC().Format("2006-01-02")))
+	w.WriteHeader(200)
+	if err := writeSubscriptionsExportJSON(w, cfg); err != nil {
+		slog.Error("ExportSubscriptions write", "err", err)
+	}
+}
+
 func (s *Server) handleConfigExportFull(w http.ResponseWriter, r *http.Request) {
 	if !requireAdmin(w, r) {
 		return
@@ -134,6 +176,38 @@ func writeConfigExportJSON(w io.Writer, cfg db.ConfigExport) error {
 	return json.NewEncoder(w).Encode(cfg)
 }
 
+type subscriptionsExportDocument struct {
+	Version       int                `json:"version"`
+	Scope         string             `json:"scope"`
+	UserID        string             `json:"user_id,omitempty"`
+	ExportedAt    time.Time          `json:"exported_at"`
+	Subscriptions []db.ChannelExport `json:"subscriptions"`
+}
+
+func subscriptionsExportPayload(cfg db.ConfigExport) subscriptionsExportDocument {
+	if cfg.Version == 0 {
+		cfg.Version = 1
+	}
+	if cfg.ExportedAt.IsZero() {
+		cfg.ExportedAt = time.Now().UTC()
+	}
+	subs := cfg.Subscriptions
+	if subs == nil {
+		subs = []db.ChannelExport{}
+	}
+	return subscriptionsExportDocument{
+		Version:       cfg.Version,
+		Scope:         "subscriptions",
+		UserID:        cfg.UserID,
+		ExportedAt:    cfg.ExportedAt,
+		Subscriptions: subs,
+	}
+}
+
+func writeSubscriptionsExportJSON(w io.Writer, cfg db.ConfigExport) error {
+	return json.NewEncoder(w).Encode(subscriptionsExportPayload(cfg))
+}
+
 func writeFullExportZip(w io.Writer, cfg db.ConfigExport, databasePath string, mediaFiles []exportbundle.MediaFile, runtimeFiles []fullExportRuntimeFile, runtimeManifest fullimport.RuntimeManifest) error {
 	zw := zip.NewWriter(w)
 	if strings.TrimSpace(databasePath) != "" {
@@ -143,6 +217,10 @@ func writeFullExportZip(w io.Writer, cfg db.ConfigExport, databasePath string, m
 		}
 	}
 	if err := writeFullExportJSON(zw, cfg); err != nil {
+		_ = zw.Close()
+		return err
+	}
+	if err := writeFullExportSubscriptionsJSON(zw, cfg); err != nil {
 		_ = zw.Close()
 		return err
 	}
@@ -262,6 +340,16 @@ func writeFullExportJSON(zw *zip.Writer, cfg db.ConfigExport) error {
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
 	return enc.Encode(cfg)
+}
+
+func writeFullExportSubscriptionsJSON(zw *zip.Writer, cfg db.ConfigExport) error {
+	f, err := zw.Create("subscriptions.json")
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	return enc.Encode(subscriptionsExportPayload(cfg))
 }
 
 func writeFullExportRuntimeManifest(zw *zip.Writer, manifest fullimport.RuntimeManifest) error {
@@ -446,6 +534,10 @@ func skipFullExportRuntimeConfigPath(rel string) bool {
 	}
 	base := filepath.Base(rel)
 	if base == "" || strings.HasPrefix(base, ".") {
+		return true
+	}
+	lowerBase := strings.ToLower(base)
+	if lowerBase == "subscriptions.json" || (strings.HasPrefix(lowerBase, "subscriptions_") && strings.HasSuffix(lowerBase, ".json")) {
 		return true
 	}
 	for _, prefix := range []string{".auth_users_", ".config_", ".upload_", ".import-media-", ".import-config-"} {

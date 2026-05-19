@@ -36,6 +36,7 @@
     <string name="action_exit_fullscreen">Tam ekrandan çık</string>
     <string name="action_export">Yedekleme</string>
     <string name="action_export_data">Verileri dışa aktar</string>
+    <string name="action_export_subscriptions">Takipleri dışa aktar</string>
     <string name="action_favourite_account">Favorilere ekle</string>
     <string name="action_filter">Filtrele...</string>
     <string name="action_find_server">Bul</string>

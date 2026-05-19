@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/screwys/igloo/internal/config"
+	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/exportbundle"
 	"github.com/screwys/igloo/internal/model"
@@ -522,6 +523,18 @@ func TestHandleConfigExportFullIncludesRuntimeConfigFiles(t *testing.T) {
 			t.Fatalf("WriteFile %s: %v", rel, err)
 		}
 	}
+	sidecarPath := filepath.Join(srv.cfg.ConfDir, "subscriptions_youtube.json")
+	if err := os.WriteFile(sidecarPath, []byte(`[{"id":"stale_sidecar"}]`+"\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile stale subscription sidecar: %v", err)
+	}
+	if err := srv.db.AddChannel(model.Channel{
+		ChannelID:    "youtube_sample_export",
+		Name:         "Runtime Subs",
+		Platform:     "youtube",
+		IsSubscribed: true,
+	}); err != nil {
+		t.Fatalf("AddChannel runtime subscription: %v", err)
+	}
 
 	req := httptest.NewRequest("GET", "/api/config/export-full", nil)
 	req = req.WithContext(contextWithUser(req, "admin", "admin"))
@@ -543,6 +556,26 @@ func TestHandleConfigExportFullIncludesRuntimeConfigFiles(t *testing.T) {
 			t.Fatalf("%s = %q, want %q", name, string(got), want)
 		}
 	}
+	if _, ok := entries["config/subscriptions_youtube.json"]; ok {
+		t.Fatalf("full export included stale subscription sidecar; entries=%v", mapKeys(entries))
+	}
+	rawSubs, ok := entries["subscriptions.json"]
+	if !ok {
+		t.Fatalf("subscriptions.json missing; entries=%v", mapKeys(entries))
+	}
+	if bytes.Contains(rawSubs, []byte("stale_sidecar")) {
+		t.Fatalf("subscriptions.json came from stale sidecar: %s", string(rawSubs))
+	}
+	var subsPayload db.ConfigExport
+	if err := json.Unmarshal(rawSubs, &subsPayload); err != nil {
+		t.Fatalf("subscriptions.json invalid: %v", err)
+	}
+	if len(subsPayload.Subscriptions) != 1 || subsPayload.Subscriptions[0].ChannelID != "youtube_sample_export" {
+		t.Fatalf("subscriptions.json subscriptions = %#v", subsPayload.Subscriptions)
+	}
+	if subsPayload.Scope != "subscriptions" {
+		t.Fatalf("subscriptions.json scope = %q, want subscriptions", subsPayload.Scope)
+	}
 	if _, ok := entries["runtime.json"]; !ok {
 		t.Fatalf("runtime.json missing; entries=%v", mapKeys(entries))
 	}
@@ -553,6 +586,68 @@ func TestHandleConfigExportFullIncludesRuntimeConfigFiles(t *testing.T) {
 	}
 	if got := payload["user_id"]; got != "admin" {
 		t.Fatalf("export user_id = %v, want admin", got)
+	}
+}
+
+func TestHandleConfigExportSubscriptionsDownloadsDBSubscriptions(t *testing.T) {
+	srv := newTestServer(t)
+
+	if err := srv.db.AddChannel(model.Channel{
+		ChannelID:    "youtube_sample_followed",
+		Name:         "Export Subscription",
+		Platform:     "youtube",
+		IsSubscribed: true,
+		IsStarred:    true,
+	}); err != nil {
+		t.Fatalf("AddChannel subscribed: %v", err)
+	}
+	if err := srv.db.AddChannel(model.Channel{
+		ChannelID:    "youtube_sample_unfollowed",
+		Name:         "Not Exported",
+		Platform:     "youtube",
+		IsSubscribed: false,
+	}); err != nil {
+		t.Fatalf("AddChannel unsubscribed: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/config/export-subscriptions", nil)
+	req = req.WithContext(contextWithUser(req, "admin", "admin"))
+	rec := httptest.NewRecorder()
+
+	srv.handleConfigExportSubscriptions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+	if got := rec.Header().Get("Content-Disposition"); !strings.Contains(got, "igloo-subscriptions-") {
+		t.Fatalf("Content-Disposition = %q, want subscriptions attachment", got)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("response invalid JSON: %v", err)
+	}
+	if _, ok := raw["settings"]; ok {
+		t.Fatalf("subscription export should not carry settings: %s", rec.Body.String())
+	}
+	var payload db.ConfigExport
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("response invalid config payload: %v", err)
+	}
+	if payload.UserID != "admin" {
+		t.Fatalf("user_id = %q, want admin", payload.UserID)
+	}
+	if payload.Scope != "subscriptions" {
+		t.Fatalf("scope = %q, want subscriptions", payload.Scope)
+	}
+	if len(payload.Subscriptions) != 1 {
+		t.Fatalf("subscriptions = %#v, want one DB follow", payload.Subscriptions)
+	}
+	got := payload.Subscriptions[0]
+	if got.ChannelID != "youtube_sample_followed" || !got.IsStarred {
+		t.Fatalf("subscription payload = %#v", got)
 	}
 }
 

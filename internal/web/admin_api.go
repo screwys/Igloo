@@ -46,6 +46,7 @@ func (s *Server) registerAdminAPIRoutes(mux *http.ServeMux) {
 
 	// Config export / import
 	mux.HandleFunc("GET /api/config/export", s.handleConfigExport)
+	mux.HandleFunc("GET /api/config/export-subscriptions", s.handleConfigExportSubscriptions)
 	mux.HandleFunc("GET /api/config/export-full", s.handleConfigExportFull)
 	mux.HandleFunc("POST /api/config/import", s.handleConfigImport)
 }

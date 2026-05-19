@@ -266,6 +266,7 @@ templ PrefsBody(p PageProps, prefs PrefsData) {
 			if p.UserRole == "admin" {
 				<div class="prefs-actions-secondary">
 					<button type="button" class="btn btn-secondary btn-sm" data-config-export-url="/api/config/export">{ L(p, "action_export", "Export") }</button>
+					<button type="button" class="btn btn-secondary btn-sm" data-config-export-url="/api/config/export-subscriptions">{ L(p, "action_export_subscriptions", "Export Subscriptions") }</button>
 					<button type="button" class="btn btn-secondary btn-sm" data-config-export-url="/api/config/export-full">{ L(p, "action_full_export", "Full Export") }</button>
 					<button id="import-config-btn" class="btn btn-secondary btn-sm" type="button">{ L(p, "action_import", "Import") }</button>
 				</div>

@@ -24,6 +24,7 @@ var _ = []string{
 	N("action_copy_logs", "Copy logs"),
 	N("action_edit", "Edit"),
 	N("action_export_data", "Export data"),
+	N("action_export_subscriptions", "Export Subscriptions"),
 	N("action_follow", "Follow"),
 	N("action_following", "Following"),
 	N("action_grid", "Grid"),

@@ -216,6 +216,7 @@ type FeedSeenExport struct {
 // ConfigExport is the config snapshot for export/import.
 type ConfigExport struct {
 	Version            int                     `json:"version"`
+	Scope              string                  `json:"scope,omitempty"`
 	UserID             string                  `json:"user_id,omitempty"`
 	ExportedAt         time.Time               `json:"exported_at"`
 	Subscriptions      []ChannelExport         `json:"subscriptions"`
@@ -263,22 +264,25 @@ func (db *DB) resolveLikeUsername(preferredUserID string) string {
 	return preferredUserID
 }
 
-// ExportConfig gathers preferences, subscriptions, bookmark categories, and bookmarks.
-func (db *DB) ExportConfig(userID string) (ConfigExport, error) {
-	cfg := ConfigExport{
-		Version:    1,
-		UserID:     userID,
-		ExportedAt: time.Now().UTC(),
+func newConfigExport(userID string) ConfigExport {
+	return ConfigExport{
+		Version:       1,
+		UserID:        userID,
+		ExportedAt:    time.Now().UTC(),
+		Subscriptions: make([]ChannelExport, 0),
 	}
+}
 
-	// Subscriptions: compact export
+func (db *DB) exportSubscriptions() ([]ChannelExport, error) {
+	out := make([]ChannelExport, 0)
+
 	channels, err := db.GetSubscribedChannels()
 	if err != nil {
-		return cfg, fmt.Errorf("export subscriptions: %w", err)
+		return nil, err
 	}
 	settingsByChannel, err := db.exportChannelSettingsMap()
 	if err != nil {
-		return cfg, fmt.Errorf("export channel_settings: %w", err)
+		return nil, fmt.Errorf("export channel_settings: %w", err)
 	}
 	for _, ch := range channels {
 		ce := ChannelExport{
@@ -295,8 +299,35 @@ func (db *DB) ExportConfig(userID string) (ConfigExport, error) {
 			ce.MediaDownloadLimit = s.mediaDownloadLimit
 			ce.IncludeReposts = s.includeReposts
 		}
-		cfg.Subscriptions = append(cfg.Subscriptions, ce)
+		out = append(out, ce)
 	}
+	return out, nil
+}
+
+// ExportSubscriptions gathers only the DB-backed subscription list.
+func (db *DB) ExportSubscriptions(userID string) (ConfigExport, error) {
+	cfg := newConfigExport(userID)
+	cfg.Scope = "subscriptions"
+	subs, err := db.exportSubscriptions()
+	if err != nil {
+		return cfg, fmt.Errorf("export subscriptions: %w", err)
+	}
+	cfg.Subscriptions = subs
+	return cfg, nil
+}
+
+// ExportConfig gathers preferences, subscriptions, bookmark categories, and bookmarks.
+func (db *DB) ExportConfig(userID string) (ConfigExport, error) {
+	cfg := newConfigExport(userID)
+	cfg.BookmarkCategories = make([]BookmarkCatExport, 0)
+	cfg.Bookmarks = make([]BookmarkExport, 0)
+
+	// Subscriptions: compact export
+	subs, err := db.exportSubscriptions()
+	if err != nil {
+		return cfg, fmt.Errorf("export subscriptions: %w", err)
+	}
+	cfg.Subscriptions = subs
 
 	// Settings
 	cfg.Settings, err = db.GetAllSettings()
@@ -365,6 +396,9 @@ func (db *DB) ExportFullData(userID string) (ConfigExport, error) {
 	if err != nil {
 		return cfg, err
 	}
+	cfg.LikedPosts = make([]LikedPostExport, 0)
+	cfg.BookmarkedVideos = make([]BookmarkedVideoExport, 0)
+	cfg.FeedSeen = make([]FeedSeenExport, 0)
 
 	// Liked posts
 	likeUID := db.resolveLikeUsername(userID)
@@ -513,18 +547,45 @@ func (db *DB) ClaimBootstrapUserData(userID string) error {
 	})
 }
 
-// ImportConfig performs a config import. When replace is true, existing settings,
-// bookmark categories, and bookmarks are cleared first. Channels are always merged
-// (INSERT OR IGNORE + UPDATE settings for existing).
+// ImportConfig performs a config import. When replace is true, full config
+// imports clear existing settings, bookmark categories, and bookmarks first.
+// Subscription-scoped imports only replace follow/star/settings rows. Channels are always merged
+// (INSERT OR IGNORE + UPDATE settings for existing), while follow/star/settings
+// rows are replaced when the import carries a subscriptions section.
 func (db *DB) ImportConfig(cfg ConfigExport, userID string, replace bool) (ImportResult, error) {
 	var res ImportResult
 
 	return res, db.WithWrite(func(tx *sql.Tx) error {
 		// Replace mode: clear existing data
 		if replace {
-			_, _ = tx.Exec("DELETE FROM settings WHERE user_id = ''")
-			_, _ = tx.Exec("DELETE FROM bookmarks WHERE user_id = ?", userID)
-			_, _ = tx.Exec("DELETE FROM bookmark_categories WHERE user_id = ?", userID)
+			subscriptionsOnly := strings.EqualFold(strings.TrimSpace(cfg.Scope), "subscriptions")
+			if !subscriptionsOnly {
+				if _, err := tx.Exec("DELETE FROM settings WHERE user_id = ''"); err != nil {
+					return err
+				}
+				if _, err := tx.Exec("DELETE FROM bookmarks WHERE user_id = ?", userID); err != nil {
+					return err
+				}
+				if _, err := tx.Exec("DELETE FROM bookmark_categories WHERE user_id = ?", userID); err != nil {
+					return err
+				}
+			}
+			if cfg.Subscriptions != nil {
+				if _, err := tx.Exec(`
+					DELETE FROM channel_settings
+					WHERE channel_id IN (
+						SELECT channel_id FROM channel_follows WHERE user_id = ''
+					)
+				`); err != nil {
+					return err
+				}
+				if _, err := tx.Exec("DELETE FROM channel_follows WHERE user_id = ''"); err != nil {
+					return err
+				}
+				if _, err := tx.Exec("DELETE FROM channel_stars WHERE user_id = ''"); err != nil {
+					return err
+				}
+			}
 		}
 
 		// Upsert settings

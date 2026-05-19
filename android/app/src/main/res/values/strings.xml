@@ -36,6 +36,7 @@
     <string name="action_exit_fullscreen">Exit fullscreen</string>
     <string name="action_export">Export</string>
     <string name="action_export_data">Export data</string>
+    <string name="action_export_subscriptions">Export Subscriptions</string>
     <string name="action_favourite_account">Favourite account</string>
     <string name="action_filter">Filter...</string>
     <string name="action_find_server">Find</string>

@@ -244,6 +244,120 @@ func TestExportConfig(t *testing.T) {
 	}
 }
 
+func TestExportSubscriptionsUsesFollowRows(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	if err := d.AddChannel(model.Channel{
+		ChannelID:    "youtube_sample_followed",
+		Name:         "Followed Export",
+		Platform:     "youtube",
+		IsSubscribed: true,
+		IsStarred:    true,
+	}); err != nil {
+		t.Fatalf("AddChannel followed: %v", err)
+	}
+	if err := d.UpdateChannelSettings("youtube_sample_followed", map[string]any{"max_videos": 12}); err != nil {
+		t.Fatalf("UpdateChannelSettings followed: %v", err)
+	}
+	if err := d.AddChannel(model.Channel{
+		ChannelID:    "youtube_sample_unfollowed",
+		Name:         "Unfollowed Export",
+		Platform:     "youtube",
+		IsSubscribed: false,
+	}); err != nil {
+		t.Fatalf("AddChannel unfollowed: %v", err)
+	}
+
+	cfg, err := d.ExportSubscriptions("alice")
+	if err != nil {
+		t.Fatalf("ExportSubscriptions: %v", err)
+	}
+	if cfg.Version != 1 || cfg.Scope != "subscriptions" || cfg.UserID != "alice" || cfg.ExportedAt.IsZero() {
+		t.Fatalf("export metadata = version:%d scope:%q user:%q at:%v", cfg.Version, cfg.Scope, cfg.UserID, cfg.ExportedAt)
+	}
+	if len(cfg.Subscriptions) != 1 {
+		t.Fatalf("subscriptions = %#v, want one followed channel", cfg.Subscriptions)
+	}
+	got := cfg.Subscriptions[0]
+	if got.ChannelID != "youtube_sample_followed" || !got.IsStarred || got.MaxVideos != 12 {
+		t.Fatalf("exported subscription = %#v", got)
+	}
+	if cfg.Settings != nil || cfg.Bookmarks != nil || cfg.BookmarkCategories != nil {
+		t.Fatalf("subscription export carried non-subscription sections: %#v", cfg)
+	}
+}
+
+func TestImportConfigReplaceSubscriptionsClearsStaleFollows(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	for _, ch := range []model.Channel{
+		{ChannelID: "youtube_sample_old", Name: "Old Follow", Platform: "youtube", IsSubscribed: true, IsStarred: true},
+		{ChannelID: "youtube_sample_existing", Name: "Keep Follow", Platform: "youtube", IsSubscribed: true},
+	} {
+		if err := d.AddChannel(ch); err != nil {
+			t.Fatalf("AddChannel %s: %v", ch.ChannelID, err)
+		}
+	}
+	if err := d.UpdateChannelSettings("youtube_sample_old", map[string]any{"max_videos": 5}); err != nil {
+		t.Fatalf("UpdateChannelSettings old: %v", err)
+	}
+	if err := d.UpdateChannelSettings("youtube_sample_existing", map[string]any{"max_videos": 9}); err != nil {
+		t.Fatalf("UpdateChannelSettings keep: %v", err)
+	}
+	if err := d.SetSetting("", "preserved_setting", "still-here"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+
+	result, err := d.ImportConfig(ConfigExport{
+		Version: 1,
+		Scope:   "subscriptions",
+		Subscriptions: []ChannelExport{
+			{ChannelID: "youtube_sample_existing", Name: "Keep Follow", Platform: "youtube", MaxVideos: 14},
+			{ChannelID: "youtube_sample_new", Name: "New Follow", Platform: "youtube"},
+		},
+	}, "alice", true)
+	if err != nil {
+		t.Fatalf("ImportConfig replace: %v", err)
+	}
+	if result.AddedChannels != 2 {
+		t.Fatalf("AddedChannels = %d, want 2", result.AddedChannels)
+	}
+
+	for channelID, wantFollowed := range map[string]bool{
+		"youtube_sample_old":      false,
+		"youtube_sample_existing": true,
+		"youtube_sample_new":      true,
+	} {
+		ch, err := d.GetChannelByID(channelID)
+		if err != nil {
+			t.Fatalf("GetChannelByID %s: %v", channelID, err)
+		}
+		if ch.IsSubscribed != wantFollowed {
+			t.Fatalf("%s subscribed = %v, want %v", channelID, ch.IsSubscribed, wantFollowed)
+		}
+	}
+	var oldStars, oldSettings int
+	if err := d.QueryRow(`SELECT COUNT(*) FROM channel_stars WHERE user_id = '' AND channel_id = 'youtube_sample_old'`).Scan(&oldStars); err != nil {
+		t.Fatalf("count old stars: %v", err)
+	}
+	if err := d.QueryRow(`SELECT COUNT(*) FROM channel_settings WHERE channel_id = 'youtube_sample_old'`).Scan(&oldSettings); err != nil {
+		t.Fatalf("count old settings: %v", err)
+	}
+	if oldStars != 0 || oldSettings != 0 {
+		t.Fatalf("old follow state remained: stars=%d settings=%d", oldStars, oldSettings)
+	}
+	keepSettings, err := d.GetChannelSettings("youtube_sample_existing")
+	if err != nil {
+		t.Fatalf("GetChannelSettings keep: %v", err)
+	}
+	if keepSettings.MaxVideos != 14 {
+		t.Fatalf("keep max_videos = %d, want 14", keepSettings.MaxVideos)
+	}
+	if got, err := d.GetSetting("preserved_setting", ""); err != nil || got != "still-here" {
+		t.Fatalf("preserved_setting = %q, %v", got, err)
+	}
+}
+
 func TestImportConfigIgnoresRetiredIntervalSettings(t *testing.T) {
 	d := openWritableTestDB(t)
 

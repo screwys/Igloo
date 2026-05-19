@@ -113,6 +113,7 @@ func TestApiPathGatesNonJSONRoutes(t *testing.T) {
 		{"/api/media/manifest", false},
 		{"/api/media/manifest/health", false},
 		{"/api/config/export", false},
+		{"/api/config/export-subscriptions", false},
 		{"/api/config/export-full", false},
 		{"/channels", false},
 		{"/", false},

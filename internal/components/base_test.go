@@ -516,6 +516,9 @@ func TestPrefsModalAdminTabs(t *testing.T) {
 		if !strings.Contains(html, `/api/config/export`) {
 			t.Error("expected export link for admin")
 		}
+		if !strings.Contains(html, `/api/config/export-subscriptions`) {
+			t.Error("expected subscriptions export link for admin")
+		}
 	})
 
 	t.Run("non-admin no users tab", func(t *testing.T) {
