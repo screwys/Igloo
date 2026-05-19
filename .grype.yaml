@@ -1,0 +1,14 @@
+# Temporary release waivers for fixed upstream issues that have not reached the
+# public nixpkgs cache used by the container flake yet. Keep the scan blocking
+# for all other fixed critical vulnerabilities.
+ignore:
+  - vulnerability: CVE-2026-40962
+    package:
+      name: ffmpeg
+      version: 8.0.1
+      type: UnknownPackage
+  - vulnerability: CVE-2026-31789
+    package:
+      name: openssl
+      version: 3.6.1
+      type: nix

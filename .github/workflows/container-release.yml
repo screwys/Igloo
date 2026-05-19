@@ -94,6 +94,7 @@ jobs:
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         with:
           sbom: release-artifacts/igloo-container-${{ github.ref_name }}.spdx.json
+          config: .grype.yaml
           fail-build: true
           severity-cutoff: critical
           only-fixed: true
