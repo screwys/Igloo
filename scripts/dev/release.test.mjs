@@ -13,6 +13,7 @@ import {
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const shaPinnedAction = (action, tag) =>
   new RegExp(`${escapeRegExp(action)}@[0-9a-f]{40} # ${escapeRegExp(tag)}`);
+const releaseFingerprint = "05DC1C810BD2BC8D1BBD1397AAAC9B802753EA1A";
 
 test("bumps patch, minor, and major versions", () => {
   assert.equal(bumpSemver("1.0.0", "patch"), "1.0.1");
@@ -134,10 +135,8 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /\n    environment: container-release\n/);
   assert.match(workflow, /fetch-depth: 0/);
   assert.match(workflow, /name: Verify release tag/);
-  assert.match(workflow, /\^v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+\$/);
-  assert.match(workflow, /git cat-file -t "refs\/tags\/\$\{GITHUB_REF_NAME\}"/);
-  assert.match(workflow, /BEGIN PGP SIGNATURE/);
-  assert.match(workflow, /git merge-base --is-ancestor "\$tag_target" origin\/main/);
+  assert.match(workflow, /run: scripts\/dev\/verify-release-tag\.sh/);
+  assert.doesNotMatch(workflow, /BEGIN PGP SIGNATURE/);
   assert.match(workflow, /\n        id: build\n/);
   assert.match(workflow, shaPinnedAction("DeterminateSystems/determinate-nix-action", "v3"));
   assert.match(workflow, shaPinnedAction("DeterminateSystems/magic-nix-cache-action", "main"));
@@ -247,6 +246,29 @@ test("keyless container signing does not keep a static cosign public key", () =>
   );
 });
 
+test("release tag verifier pins the release public key", () => {
+  const publicKey = readFileSync(
+    new URL("../../.github/release-gpg.pub", import.meta.url),
+    "utf8",
+  );
+  const verifier = readFileSync(new URL("./verify-release-tag.sh", import.meta.url), "utf8");
+
+  assert.match(publicKey, /^-----BEGIN PGP PUBLIC KEY BLOCK-----/);
+  assert.match(publicKey, /-----END PGP PUBLIC KEY BLOCK-----\n$/);
+  assert.match(verifier, new RegExp(`expected_fingerprint="${releaseFingerprint}"`));
+  assert.match(verifier, /gpg --batch --import "\$public_key_path"/);
+  assert.match(verifier, /gpg --batch --with-colons --fingerprint "\$expected_fingerprint"/);
+  assert.match(verifier, /gpg --batch --import-ownertrust/);
+  assert.match(verifier, /gpgconf --kill all/);
+  assert.ok(
+    verifier.includes('[[ ! "$release_ref_name" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]'),
+  );
+  assert.match(verifier, /git cat-file -t "refs\/tags\/\$\{release_ref_name\}"/);
+  assert.match(verifier, /git tag -v "\$release_ref_name"/);
+  assert.match(verifier, /git merge-base --is-ancestor "\$tag_target" origin\/main/);
+  assert.doesNotMatch(verifier, /BEGIN PGP SIGNATURE/);
+});
+
 test("container images run as non-root by default", () => {
   const dockerfile = readFileSync(new URL("../../Dockerfile", import.meta.url), "utf8");
   const flake = readFileSync(new URL("../../flake.nix", import.meta.url), "utf8");
@@ -279,10 +301,8 @@ test("Android release publishes only the APK asset with signed provenance attest
   assert.match(workflow, /\n    environment: android-release\n/);
   assert.match(workflow, /fetch-depth: 0/);
   assert.match(workflow, /name: Verify release tag/);
-  assert.match(workflow, /\^v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+\$/);
-  assert.match(workflow, /git cat-file -t "refs\/tags\/\$\{GITHUB_REF_NAME\}"/);
-  assert.match(workflow, /BEGIN PGP SIGNATURE/);
-  assert.match(workflow, /git merge-base --is-ancestor "\$tag_target" origin\/main/);
+  assert.match(workflow, /run: scripts\/dev\/verify-release-tag\.sh/);
+  assert.doesNotMatch(workflow, /BEGIN PGP SIGNATURE/);
   assert.match(workflow, shaPinnedAction("actions/setup-java", "v5"));
   assert.match(workflow, /run: \.\/gradlew :app:assembleRelease/);
   assert.match(workflow, /\n  id-token: write\n/);

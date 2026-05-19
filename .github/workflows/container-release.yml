@@ -24,31 +24,7 @@ jobs:
           fetch-depth: 0
 
       - name: Verify release tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "release ref must be a vX.Y.Z tag" >&2
-            exit 1
-          fi
-          git fetch --force origin \
-            "refs/heads/main:refs/remotes/origin/main" \
-            "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
-          if [[ "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" != "tag" ]]; then
-            echo "release ref must be an annotated signed tag" >&2
-            exit 1
-          fi
-          if ! git cat-file tag "refs/tags/${GITHUB_REF_NAME}" | grep -q '^-----BEGIN PGP SIGNATURE-----$'; then
-            echo "release ref must contain a PGP signature" >&2
-            exit 1
-          fi
-          tag_target="$(git rev-list -n1 "refs/tags/${GITHUB_REF_NAME}")"
-          head_commit="$(git rev-parse HEAD)"
-          if [[ "$tag_target" != "$head_commit" ]]; then
-            echo "checked-out commit does not match release tag target" >&2
-            exit 1
-          fi
-          git merge-base --is-ancestor "$tag_target" origin/main
+        run: scripts/dev/verify-release-tag.sh
 
       - uses: DeterminateSystems/determinate-nix-action@bafaa638b9d5ec0e7e3ac1a7fc80453ef1fd265f # v3
 
