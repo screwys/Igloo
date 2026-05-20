@@ -193,6 +193,25 @@ function q(sel, root) {
   return (root || document).querySelector(sel)
 }
 
+function navigateStoryFromClick(entry, event) {
+  if (!_state || !_state.storyMode || !_fns) return false
+  var wrapper = entry && entry.refs && entry.refs.wrapper
+  if (!wrapper || typeof wrapper.getBoundingClientRect !== 'function') return false
+  if (event) {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+  var rect = wrapper.getBoundingClientRect()
+  var clickX = event ? Number(event.clientX || 0) : 0
+  var localX = rect.width > 0 ? clickX - rect.left : rect.width
+  if (rect.width > 0 && localX < rect.width / 2) {
+    if (typeof _fns.goStoryPrev === 'function') _fns.goStoryPrev()
+  } else if (typeof _fns.goStoryNext === 'function') {
+    _fns.goStoryNext()
+  }
+  return true
+}
+
 // safeSetMarkup renders trusted HTML/SVG strings via a <template> element.
 // All content comes from escapeHtml-sanitized values or static iconSvg strings.
 function safeSetMarkup(el, markup) {
@@ -377,9 +396,7 @@ export function makeShortItem(entryData, existingEl) {
     storyChrome.className = 'shorts-story-chrome hidden'
     storyChrome.setAttribute('data-story-chrome', '')
     safeSetMarkup(storyChrome, '' +
-      '<div class="shorts-story-progress"></div>' +
-      '<button class="shorts-story-arrow shorts-story-arrow-prev" type="button" data-story-action="prev" aria-label="' + escapeHtml(t('action_previous', 'Previous')) + '">‹</button>' +
-      '<button class="shorts-story-arrow shorts-story-arrow-next" type="button" data-story-action="next" aria-label="' + escapeHtml(t('action_next', 'Next')) + '">›</button>'
+      '<div class="shorts-story-progress"></div>'
     )
     wrapper.appendChild(storyChrome)
   }
@@ -566,6 +583,7 @@ export function makeShortItem(entryData, existingEl) {
       }
     })
     video.addEventListener('click', function (e) {
+      if (navigateStoryFromClick(entryObj, e)) return
       e.preventDefault()
       e.stopPropagation()
       toggleShortPlayback(entryObj)
@@ -721,6 +739,7 @@ export function makeShortItem(entryData, existingEl) {
   wrapper.addEventListener('click', function (e) {
     var clickOnControl = e.target && e.target.closest && e.target.closest('.shorts-actions, .shorts-header-overlay, .shorts-story-chrome, .val-progress-container, .shorts-slide-controls')
     if (clickOnControl) return
+    if (navigateStoryFromClick(entryObj, e)) return
     toggleShortPlayback(entryObj)
   })
 

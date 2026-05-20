@@ -5370,54 +5370,6 @@ select.input.themed-select-native {
     background: rgba(255, 255, 255, 0.94);
 }
 
-.shorts-story-arrow {
-    position: absolute;
-    bottom: calc(clamp(7rem, 20%, 14rem) + 21rem);
-    width: 2.45rem;
-    height: 2.45rem;
-    border: 0;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.28);
-    color: #fff;
-    font-size: 1.72rem;
-    font-weight: 500;
-    line-height: 1;
-    cursor: pointer;
-    pointer-events: auto;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
-}
-
-.shorts-layout.shorts-story-mode .shorts-story-chrome .shorts-story-arrow {
-    position: absolute !important;
-    top: auto !important;
-    bottom: calc(clamp(7rem, 20%, 14rem) + 21rem) !important;
-    transform: none !important;
-}
-
-.shorts-story-arrow-prev {
-    left: clamp(0.75rem, 2vw, 1.25rem);
-}
-
-.shorts-story-arrow-next {
-    right: clamp(0.75rem, 2vw, 1.25rem);
-}
-
-.shorts-story-arrow:hover,
-.shorts-story-arrow:focus-visible {
-    background: rgba(255, 255, 255, 0.18);
-    outline: none;
-}
-
-.shorts-story-arrow:disabled {
-    opacity: 0.28;
-    cursor: default;
-    background: rgba(0, 0, 0, 0.18);
-}
-
 .shorts-layout.shorts-story-account-slide-next .shorts-container {
     animation: story-account-slide-next 240ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }

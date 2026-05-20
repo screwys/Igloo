@@ -286,8 +286,6 @@ if (layout) {
       var total = state.cards.length
       var current = state.currentIndex >= 0 ? state.currentIndex : 0
       var progress = q('.shorts-story-progress', chrome)
-      var prev = q('.shorts-story-arrow-prev', chrome)
-      var next = q('.shorts-story-arrow-next', chrome)
       if (progress && progress.getAttribute('data-total') !== String(total)) {
         progress.replaceChildren()
         progress.setAttribute('data-total', String(total))
@@ -303,15 +301,6 @@ if (layout) {
           segment.classList.toggle('is-complete', idx < current)
           segment.classList.toggle('is-current', idx === current)
         })
-      }
-      if (prev) prev.disabled = current <= 0
-      if (next) {
-        var hasNextChannel = state.storyQueue && state.storyQueueIndex >= 0 && state.storyQueueIndex < state.storyQueue.length - 1
-        next.disabled = !(current < total - 1 || hasNextChannel)
-      }
-      if (prev) {
-        var hasPrevChannel = state.storyQueue && state.storyQueueIndex > 0
-        prev.disabled = !(current > 0 || hasPrevChannel)
       }
       chrome.classList.toggle('hidden', total <= 0)
     }
@@ -1410,25 +1399,6 @@ if (layout) {
       switchShortsTab(tab)
     }
 
-    function onStoryPlayerControlClick(event) {
-      if (event.defaultPrevented) return
-      if (event.button && event.button !== 0) return
-      var control = event.target && event.target.closest ? event.target.closest('[data-story-action]') : null
-      if (!control) return
-      var chrome = control.closest ? control.closest('[data-story-chrome]') : null
-      if (!chrome || !state.storyMode) return
-      event.preventDefault()
-      event.stopPropagation()
-      var action = control.getAttribute('data-story-action')
-      if (action === 'prev') {
-        goStoryPrevManual()
-      } else if (action === 'next') {
-        goStoryNextManual()
-      } else if (action === 'close') {
-        showGrid()
-      }
-    }
-
     function onStoryAvatarClick(event) {
       if (event.defaultPrevented) return
       var trigger = event.target && event.target.closest ? event.target.closest('[data-story-channel-id][data-story-first-video-id]') : null
@@ -1476,7 +1446,9 @@ if (layout) {
       goNext: goNext,
       updateCurrentActionButtons: updateCurrentActionButtons,
       currentData: currentData,
-      openStoryChannel: openStoryChannel
+      openStoryChannel: openStoryChannel,
+      goStoryNext: goStoryNextManual,
+      goStoryPrev: goStoryPrevManual
     })
 
     // ── Buttons + events ──
@@ -1495,7 +1467,6 @@ if (layout) {
     function initEvents() {
       sourceContainer.addEventListener('click', onGridClick)
       doc.addEventListener('click', onTabClick)
-      doc.addEventListener('click', onStoryPlayerControlClick)
       doc.addEventListener('click', onStoryAvatarClick)
       doc.addEventListener('keydown', onStoryAvatarClick)
       doc.addEventListener('keydown', onLayoutKeydown)

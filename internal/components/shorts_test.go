@@ -219,6 +219,58 @@ func TestShortsStoryModeDoesNotForceAutoplay(t *testing.T) {
 	}
 }
 
+func TestShortsStoryClicksNavigateWithoutVisualArrowButtons(t *testing.T) {
+	indexBytes, err := os.ReadFile("../../static/js/src/shorts/index.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	itemsBytes, err := os.ReadFile("../../static/js/src/shorts/items.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cssBytes, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexSrc := string(indexBytes)
+	itemsSrc := string(itemsBytes)
+	css := string(cssBytes)
+
+	for _, check := range []string{
+		"function navigateStoryFromClick(entry, event)",
+		"if (!_state || !_state.storyMode || !_fns) return false",
+		"if (navigateStoryFromClick(entryObj, e)) return",
+		"if (typeof _fns.goStoryPrev === 'function') _fns.goStoryPrev()",
+		"if (typeof _fns.goStoryNext === 'function')",
+	} {
+		if !strings.Contains(itemsSrc, check) {
+			t.Errorf("story click navigation missing %q", check)
+		}
+	}
+	for _, check := range []string{
+		"goStoryNext: goStoryNextManual",
+		"goStoryPrev: goStoryPrevManual",
+		"if (state.storyMode && event.key === 'ArrowRight')",
+		"if (state.storyMode && event.key === 'ArrowLeft')",
+	} {
+		if !strings.Contains(indexSrc, check) {
+			t.Errorf("story navigation wiring missing %q", check)
+		}
+	}
+	if !strings.Contains(itemsSrc, "toggleShortPlayback(entryObj)") {
+		t.Fatal("normal moments should keep click-to-toggle playback")
+	}
+	for _, forbidden := range []string{
+		"shorts-story-arrow",
+		"data-story-action",
+		"onStoryPlayerControlClick",
+	} {
+		if strings.Contains(indexSrc, forbidden) || strings.Contains(itemsSrc, forbidden) || strings.Contains(css, forbidden) {
+			t.Errorf("story visual arrow control should be removed; found %q", forbidden)
+		}
+	}
+}
+
 func TestShortsMomentViewSyncRefreshesStorySurfaces(t *testing.T) {
 	srcBytes, err := os.ReadFile("../../static/js/src/shorts/index.js")
 	if err != nil {
