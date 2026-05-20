@@ -154,13 +154,27 @@ func (c *Client) FetchUser(ctx context.Context, handle string) (*User, error) {
 		VerifiedType: raw.User.Verification.Type,
 		Protected:    raw.User.Protected,
 	}
-	if s, ok := raw.User.Website.(string); ok {
-		u.Website = s
-	}
+	u.Website = websiteFromAny(raw.User.Website)
 	if t, err := time.Parse("Mon Jan 02 15:04:05 -0700 2006", raw.User.Joined); err == nil {
 		u.Joined = t.UTC()
 	}
 	return u, nil
+}
+
+func websiteFromAny(value any) string {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case map[string]any:
+		for _, key := range []string{"url", "display_url"} {
+			if s, ok := v[key].(string); ok {
+				if trimmed := strings.TrimSpace(s); trimmed != "" {
+					return trimmed
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // FetchTweet queries fxtwitter for a single tweet by handle + ID. Returns

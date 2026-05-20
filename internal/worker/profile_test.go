@@ -1897,6 +1897,143 @@ func TestRefreshFeedProfileCompletenessBacksOffFailedInstagramAvatarFallback(t *
 	}
 }
 
+func TestRefreshFeedProfileCompletenessDoesNotRefetchAfterFailedInstagramStoredAvatar(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	avatarServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	defer avatarServer.Close()
+	oldLookup := lookupStoredMediaHost
+	t.Cleanup(func() { lookupStoredMediaHost = oldLookup })
+	lookupStoredMediaHost = func(host string) ([]netip.Addr, error) {
+		if host != "cdn.example" {
+			t.Fatalf("unexpected DNS lookup for %q", host)
+		}
+		return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+	}
+
+	now := time.Now().UTC()
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_sample_author",
+		Platform:    "instagram",
+		Handle:      "sample_author",
+		DisplayName: "Sample Author",
+		AvatarURL:   "https://cdn.example/avatar.png",
+		FetchedAt:   &now,
+	}); err != nil {
+		t.Fatalf("seed profile: %v", err)
+	}
+
+	fetches := 0
+	m := &Manager{
+		db:         d,
+		cfg:        testCfg(dir),
+		downloader: testTwimgAvatarDownloader(avatarServer),
+		instagramProfileFetch: func(context.Context, string, string) (*model.ChannelProfile, error) {
+			fetches++
+			return &model.ChannelProfile{
+				ChannelID:   "instagram_sample_author",
+				Platform:    "instagram",
+				Handle:      "sample_author",
+				DisplayName: "Sample Author",
+				AvatarURL:   avatarServer.URL + "/avatar-new.png",
+			}, nil
+		},
+	}
+	avDir, bnDir := filepath.Join(dir, "avatars"), filepath.Join(dir, "banners")
+	_ = os.MkdirAll(avDir, 0o755)
+	_ = os.MkdirAll(bnDir, 0o755)
+
+	if worked := m.refreshFeedProfileCompletenessIDs(context.Background(), newFakeFetcher().Fetch, avDir, bnDir, []string{"instagram_sample_author"}, 1); !worked {
+		t.Fatal("expected failed stored avatar attempt to count as work")
+	}
+	if fetches != 0 {
+		t.Fatalf("profile fetches = %d, want no duplicate refresh after stored avatar failure", fetches)
+	}
+	got, err := d.GetChannelProfile("instagram_sample_author")
+	if err != nil {
+		t.Fatalf("GetChannelProfile: %v", err)
+	}
+	if got == nil || got.NextRetryAt == nil || !got.NextRetryAt.After(time.Now()) {
+		t.Fatalf("NextRetryAt = %v, want instagram avatar backoff", got)
+	}
+	if got.FailCount == 0 {
+		t.Fatalf("FailCount = %d, want failed stored avatar recorded", got.FailCount)
+	}
+}
+
+func TestRefreshFeedProfileCompletenessRefreshesStaleInstagramAfterStoredAvatarFailure(t *testing.T) {
+	d := newTestWorkerDB(t)
+	dir := t.TempDir()
+	avatarServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/avatar-new.png" {
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(testProfilePNGBytes())
+			return
+		}
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	defer avatarServer.Close()
+	oldLookup := lookupStoredMediaHost
+	t.Cleanup(func() { lookupStoredMediaHost = oldLookup })
+	lookupStoredMediaHost = func(host string) ([]netip.Addr, error) {
+		if host != "cdn.example" {
+			t.Fatalf("unexpected DNS lookup for %q", host)
+		}
+		return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+	}
+
+	stale := time.Now().Add(-2 * profileTTL).UTC()
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID:   "instagram_sample_profile",
+		Platform:    "instagram",
+		Handle:      "sample_profile",
+		DisplayName: "Sample Profile",
+		AvatarURL:   "https://cdn.example/avatar.png",
+		FetchedAt:   &stale,
+	}); err != nil {
+		t.Fatalf("seed profile: %v", err)
+	}
+
+	fetches := 0
+	m := &Manager{
+		db:         d,
+		cfg:        testCfg(dir),
+		downloader: testTwimgAvatarDownloader(avatarServer),
+		instagramProfileFetch: func(context.Context, string, string) (*model.ChannelProfile, error) {
+			fetches++
+			return &model.ChannelProfile{
+				ChannelID:   "instagram_sample_profile",
+				Platform:    "instagram",
+				Handle:      "sample_profile",
+				DisplayName: "Sample Profile Updated",
+				AvatarURL:   "https://cdn.example/avatar-new.png",
+			}, nil
+		},
+	}
+	avDir, bnDir := filepath.Join(dir, "avatars"), filepath.Join(dir, "banners")
+	_ = os.MkdirAll(avDir, 0o755)
+	_ = os.MkdirAll(bnDir, 0o755)
+
+	if worked := m.refreshFeedProfileCompletenessIDs(context.Background(), newFakeFetcher().Fetch, avDir, bnDir, []string{"instagram_sample_profile"}, 1); !worked {
+		t.Fatal("expected stale profile refresh to count as work")
+	}
+	if fetches != 1 {
+		t.Fatalf("profile fetches = %d, want stale profile refresh after stored avatar failure", fetches)
+	}
+	got, err := d.GetChannelProfile("instagram_sample_profile")
+	if err != nil {
+		t.Fatalf("GetChannelProfile: %v", err)
+	}
+	if got == nil || got.DisplayName != "Sample Profile Updated" || got.AvatarURL != "https://cdn.example/avatar-new.png" {
+		t.Fatalf("profile = %+v, want refreshed metadata", got)
+	}
+	if !hasConventionalMediaFile(avDir, "instagram_sample_profile") {
+		t.Fatal("expected refreshed avatar file")
+	}
+}
+
 func installGalleryDLAvatarStub(t *testing.T, dir string) {
 	t.Helper()
 	binDir := filepath.Join(dir, "bin")

@@ -177,9 +177,18 @@ func (m *Manager) refreshFeedProfileCompletenessIDs(ctx context.Context, fetch f
 		if existing == nil || existing.Tombstone || !profileRetryDue(existing, now) {
 			continue
 		}
+		storedInstagramAvatarAttempt := strings.HasPrefix(channelID, "instagram_") &&
+			!hasConventionalMediaFile(avDir, channelID) &&
+			canDownloadStoredAvatar(channelID, existing.AvatarURL)
 		downloaded, attempted := m.downloadStoredProfileMedia(ctx, channelID, existing, avDir, bnDir)
 		if downloaded {
 			worked = true
+			continue
+		}
+		if attempted && storedInstagramAvatarAttempt && !profileFetchDue(existing, now) {
+			m.recordInstagramAvatarFallbackError(channelID, existing, errors.New("stored instagram profile media download failed"), now)
+			worked = true
+			attempts++
 			continue
 		}
 		if attempts >= limit {

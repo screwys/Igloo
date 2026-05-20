@@ -134,10 +134,10 @@ func (c *Client) enrichStatuses(ctx context.Context, parsed *ParseResult) error 
 			continue
 		}
 		seen[key] = true
-		c.deferStatusEnrichment(StatusEnrichmentRequest{
+		req := StatusEnrichmentRequest{
 			Kind: StatusEnrichmentMissingQuoteParent,
 			Ref:  ref,
-		})
+		}
 		if fallback, ok := c.fallbackFeedItem(ctx, ref.Handle, ref.TweetID); ok {
 			parsed.Merge(ParseResult{Items: []FeedItem{fallback}})
 			if parent := parsed.Find(ref.TweetID); parent != nil && parent.QuoteTweetID != "" {
@@ -145,6 +145,7 @@ func (c *Client) enrichStatuses(ctx context.Context, parsed *ParseResult) error 
 			}
 		}
 		if hasTweetFallback {
+			c.deferStatusEnrichment(req)
 			continue
 		}
 		status, err := c.FetchStatus(ctx, ref.Handle, ref.TweetID)
@@ -154,6 +155,7 @@ func (c *Client) enrichStatuses(ctx context.Context, parsed *ParseResult) error 
 				continue
 			}
 		}
+		c.deferStatusEnrichment(req)
 	}
 
 	for i := range parsed.Items {
@@ -175,16 +177,19 @@ func (c *Client) enrichStatuses(ctx context.Context, parsed *ParseResult) error 
 		}
 		seen[key] = true
 		ref := StatusRef{Handle: item.AuthorHandle, TweetID: item.CanonicalTweetID}
-		c.deferStatusEnrichment(StatusEnrichmentRequest{
+		req := StatusEnrichmentRequest{
 			Kind:          StatusEnrichmentRetweetQuote,
 			Ref:           ref,
 			TargetTweetID: item.TweetID,
-		})
-		if fallback, ok := c.fallbackFeedItem(ctx, item.AuthorHandle, item.CanonicalTweetID); ok && fallback.QuoteTweetID != "" {
-			copyQuoteFields(item, fallback)
+		}
+		if fallback, ok := c.fallbackFeedItem(ctx, item.AuthorHandle, item.CanonicalTweetID); ok {
+			if fallback.QuoteTweetID != "" {
+				copyQuoteFields(item, fallback)
+			}
 			continue
 		}
 		if hasTweetFallback {
+			c.deferStatusEnrichment(req)
 			continue
 		}
 		status, err := c.FetchStatus(ctx, item.AuthorHandle, item.CanonicalTweetID)
@@ -193,7 +198,9 @@ func (c *Client) enrichStatuses(ctx context.Context, parsed *ParseResult) error 
 				copyQuoteFields(item, *rich)
 				continue
 			}
+			continue
 		}
+		c.deferStatusEnrichment(req)
 	}
 	return nil
 }

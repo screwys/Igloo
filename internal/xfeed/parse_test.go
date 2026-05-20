@@ -262,10 +262,7 @@ func TestClientFetchTimelineUsesFXTwitterBeforeGalleryDLForMissingQuoteParent(t 
 	if err != nil {
 		t.Fatalf("FetchTimeline: %v", err)
 	}
-	if len(deferred) != 1 ||
-		deferred[0].Kind != StatusEnrichmentMissingQuoteParent ||
-		deferred[0].Ref.Handle != "sample_source" ||
-		deferred[0].Ref.TweetID != "9000000000000000100" {
+	if len(deferred) != 0 {
 		t.Fatalf("deferred status enrichment = %#v", deferred)
 	}
 	if len(items) != 1 {
@@ -328,11 +325,7 @@ func TestClientFetchTimelineUsesFXTwitterBeforeGalleryDLForRetweetQuote(t *testi
 	if err != nil {
 		t.Fatalf("FetchTimeline: %v", err)
 	}
-	if len(deferred) != 1 ||
-		deferred[0].Kind != StatusEnrichmentRetweetQuote ||
-		deferred[0].Ref.Handle != "sample_author" ||
-		deferred[0].Ref.TweetID != "9000000000000000300" ||
-		deferred[0].TargetTweetID != "9000000000000000400" {
+	if len(deferred) != 0 {
 		t.Fatalf("deferred status enrichment = %#v", deferred)
 	}
 	if len(items) != 1 {
@@ -345,5 +338,140 @@ func TestClientFetchTimelineUsesFXTwitterBeforeGalleryDLForRetweetQuote(t *testi
 	}
 	if len(item.QuoteMedia) != 1 || item.QuoteMedia[0].URL == "" {
 		t.Fatalf("quote media = %#v", item.QuoteMedia)
+	}
+}
+
+func TestClientFetchTimelineDefersMissingQuoteParentWhenFXTwitterLacksQuote(t *testing.T) {
+	runner := func(_ context.Context, args []string) ([]byte, error) {
+		joined := strings.Join(args, " ")
+		switch {
+		case strings.Contains(joined, "/sample_source/with_replies"):
+			return []byte(`[
+				[2, {"tweet_id":"9000000000000000200","content":"quoted text","date":"2026-05-09 09:00:00","quote_by":"sample_source","quote_id":"9000000000000000100","author":{"name":"sample_quote","nick":"Sample Quote"},"user":{"name":"sample_source","nick":"Sample Source"},"retweet_id":0}]
+			]`), nil
+		case strings.Contains(joined, "/status/"):
+			t.Fatalf("status gallery-dl should not be called before deferred enrichment: %v", args)
+			return nil, nil
+		default:
+			t.Fatalf("unexpected gallery-dl args: %v", args)
+			return nil, nil
+		}
+	}
+	fallback := fakeTweetFallback{fetch: func(_ context.Context, handle, tweetID string) (*fxtwitter.Tweet, error) {
+		if handle != "sample_source" || tweetID != "9000000000000000100" {
+			t.Fatalf("fallback fetch = %s/%s", handle, tweetID)
+		}
+		return &fxtwitter.Tweet{
+			ID:                "9000000000000000100",
+			AuthorHandle:      "sample_source",
+			AuthorDisplayName: "Sample Source",
+			Text:              "parent without quote",
+		}, nil
+	}}
+
+	var deferred []StatusEnrichmentRequest
+	client := &Client{
+		Runner:        runner,
+		TweetFallback: fallback,
+		StatusEnrichmentSink: func(req StatusEnrichmentRequest) {
+			deferred = append(deferred, req)
+		},
+	}
+	if _, err := client.FetchTimeline(context.Background(), "sample_source", 1); err != nil {
+		t.Fatalf("FetchTimeline: %v", err)
+	}
+	if len(deferred) != 1 ||
+		deferred[0].Kind != StatusEnrichmentMissingQuoteParent ||
+		deferred[0].Ref.Handle != "sample_source" ||
+		deferred[0].Ref.TweetID != "9000000000000000100" {
+		t.Fatalf("deferred status enrichment = %#v", deferred)
+	}
+}
+
+func TestClientFetchTimelineDefersRetweetQuoteWhenFXTwitterFails(t *testing.T) {
+	runner := func(_ context.Context, args []string) ([]byte, error) {
+		joined := strings.Join(args, " ")
+		switch {
+		case strings.Contains(joined, "/sample_source/with_replies"):
+			return []byte(`[
+				[2, {"tweet_id":"9000000000000000400","retweet_id":"9000000000000000300","content":"RT @sample_author: original parent text","author":{"name":"sample_author","nick":"Sample Author"},"user":{"name":"sample_source","nick":"Sample Source"},"quote_id":0,"reply_id":0}]
+			]`), nil
+		case strings.Contains(joined, "/status/"):
+			t.Fatalf("status gallery-dl should not be called before deferred enrichment: %v", args)
+			return nil, nil
+		default:
+			t.Fatalf("unexpected gallery-dl args: %v", args)
+			return nil, nil
+		}
+	}
+	fallback := fakeTweetFallback{fetch: func(context.Context, string, string) (*fxtwitter.Tweet, error) {
+		return nil, errors.New("temporary fxtwitter failure")
+	}}
+
+	var deferred []StatusEnrichmentRequest
+	client := &Client{
+		Runner:        runner,
+		TweetFallback: fallback,
+		StatusEnrichmentSink: func(req StatusEnrichmentRequest) {
+			deferred = append(deferred, req)
+		},
+	}
+	if _, err := client.FetchTimeline(context.Background(), "sample_source", 1); err != nil {
+		t.Fatalf("FetchTimeline: %v", err)
+	}
+	if len(deferred) != 1 ||
+		deferred[0].Kind != StatusEnrichmentRetweetQuote ||
+		deferred[0].Ref.Handle != "sample_author" ||
+		deferred[0].Ref.TweetID != "9000000000000000300" ||
+		deferred[0].TargetTweetID != "9000000000000000400" {
+		t.Fatalf("deferred status enrichment = %#v", deferred)
+	}
+}
+
+func TestClientFetchTimelineDoesNotDeferPlainRetweetAfterFXTwitter(t *testing.T) {
+	runner := func(_ context.Context, args []string) ([]byte, error) {
+		joined := strings.Join(args, " ")
+		switch {
+		case strings.Contains(joined, "/sample_source/with_replies"):
+			return []byte(`[
+				[2, {"tweet_id":"9000000000000000400","retweet_id":"9000000000000000300","content":"RT @sample_author: original parent text","author":{"name":"sample_author","nick":"Sample Author"},"user":{"name":"sample_source","nick":"Sample Source"},"quote_id":0,"reply_id":0}]
+			]`), nil
+		case strings.Contains(joined, "/status/"):
+			t.Fatalf("status gallery-dl should not be called after fxtwitter returns a plain retweet: %v", args)
+			return nil, nil
+		default:
+			t.Fatalf("unexpected gallery-dl args: %v", args)
+			return nil, nil
+		}
+	}
+	fallback := fakeTweetFallback{fetch: func(_ context.Context, handle, tweetID string) (*fxtwitter.Tweet, error) {
+		if handle != "sample_author" || tweetID != "9000000000000000300" {
+			t.Fatalf("fallback fetch = %s/%s", handle, tweetID)
+		}
+		return &fxtwitter.Tweet{
+			ID:                "9000000000000000300",
+			AuthorHandle:      "sample_author",
+			AuthorDisplayName: "Sample Author",
+			Text:              "original parent text",
+		}, nil
+	}}
+
+	var deferred []StatusEnrichmentRequest
+	client := &Client{
+		Runner:        runner,
+		TweetFallback: fallback,
+		StatusEnrichmentSink: func(req StatusEnrichmentRequest) {
+			deferred = append(deferred, req)
+		},
+	}
+	items, err := client.FetchTimeline(context.Background(), "sample_source", 1)
+	if err != nil {
+		t.Fatalf("FetchTimeline: %v", err)
+	}
+	if len(deferred) != 0 {
+		t.Fatalf("deferred status enrichment = %#v", deferred)
+	}
+	if len(items) != 1 || items[0].QuoteTweetID != "" {
+		t.Fatalf("items = %#v", items)
 	}
 }

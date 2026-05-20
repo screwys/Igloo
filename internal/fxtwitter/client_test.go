@@ -22,7 +22,7 @@ func TestFetchUserSuccess(t *testing.T) {
 			"media_count":4,"likes":5,
 			"avatar_url":"https://pbs.twimg.com/profile_images/x_normal.jpg",
 			"banner_url":"https://pbs.twimg.com/profile_banners/1001/1",
-			"location":"","website":null,
+			"location":"","website":{"url":"https://example.test","display_url":"example.test"},
 			"joined":"Tue Jun 02 20:12:29 +0000 2009",
 			"protected":false,
 			"verification":{"verified":true,"type":"individual"}
@@ -40,6 +40,30 @@ func TestFetchUserSuccess(t *testing.T) {
 	}
 	if u.Joined.Year() != 2009 {
 		t.Fatalf("joined parse failed: %v", u.Joined)
+	}
+	if u.Website != "https://example.test" {
+		t.Fatalf("website = %q, want object url", u.Website)
+	}
+}
+
+func TestFetchUserStringWebsite(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":200,"user":{
+			"screen_name":"test_user","id":"1001","name":"Test User",
+			"website":"https://example.test",
+			"verification":{"verified":false}
+		}}`))
+	}))
+	defer srv.Close()
+
+	c := &Client{BaseURL: srv.URL, HTTP: srv.Client(), Timeout: 5 * time.Second}
+	u, err := c.FetchUser(context.Background(), "test_user")
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if u.Website != "https://example.test" {
+		t.Fatalf("website = %q, want string website", u.Website)
 	}
 }
 
