@@ -28,6 +28,25 @@ func TestListFeedItemsPage(t *testing.T) {
 	}
 }
 
+func TestListFeedItemsPageExcludesGhostRows(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UTC()
+	if _, err := d.UpsertFeedItems([]model.FeedItem{
+		{TweetID: "visible_item", AuthorHandle: "sample_author", BodyText: "visible", PublishedAt: &now, FetchedAt: now, ContentHash: "hash_visible"},
+		{TweetID: "context_parent", AuthorHandle: "sample_parent", BodyText: "context", IsGhost: true, PublishedAt: &now, FetchedAt: now, ContentHash: "hash_context"},
+	}); err != nil {
+		t.Fatalf("seed feed items: %v", err)
+	}
+
+	items, err := d.ListFeedItemsPage(10, nil, "")
+	if err != nil {
+		t.Fatalf("ListFeedItemsPage: %v", err)
+	}
+	if len(items) != 1 || items[0].TweetID != "visible_item" {
+		t.Fatalf("items = %+v, want only visible_item", items)
+	}
+}
+
 func TestGetFeedItemsForTweetIDs(t *testing.T) {
 	d := openTestDB(t)
 	var tweetID string

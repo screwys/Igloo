@@ -123,6 +123,7 @@ func (db *DB) ListRankedFeedItems(username string, limit int, offset int) ([]mod
 
 	var where []string
 	var args []any
+	where = append(where, feedPrimaryItemPredicate("fi"))
 
 	// Exclude muted accounts
 	muted, _ := db.GetMutedAccounts()

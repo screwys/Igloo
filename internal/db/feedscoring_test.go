@@ -35,3 +35,33 @@ func TestUpdateAlgoInterestStoresScoredAtInMilliseconds(t *testing.T) {
 		t.Fatalf("algo_scored_at = %d, want between %d and %d", scoredAt, before, after)
 	}
 }
+
+func TestListRankedFeedItemsExcludesGhostRows(t *testing.T) {
+	d := openWritableTestDB(t)
+	publishedAt := time.Now().UnixMilli()
+
+	for _, row := range []struct {
+		id      string
+		isGhost int
+		score   float64
+	}{
+		{id: "visible_item", score: 10},
+		{id: "context_parent", isGhost: 1, score: 100},
+	} {
+		if _, err := d.conn.Exec(`INSERT INTO feed_items
+			(tweet_id, author_handle, body_text, is_ghost, published_at, fetched_at, algo_interest, algo_scored_at)
+			VALUES (?, 'sample_author', 'body', ?, ?, ?, ?, 1)`,
+			row.id, row.isGhost, publishedAt, publishedAt, row.score,
+		); err != nil {
+			t.Fatalf("insert %s: %v", row.id, err)
+		}
+	}
+
+	items, err := d.ListRankedFeedItems("", 10, 0)
+	if err != nil {
+		t.Fatalf("ListRankedFeedItems: %v", err)
+	}
+	if len(items) != 1 || items[0].TweetID != "visible_item" {
+		t.Fatalf("items = %+v, want only visible_item", items)
+	}
+}

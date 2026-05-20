@@ -183,6 +183,41 @@ func TestListSnapshotPage_ExcludesSeenContentHashSiblings(t *testing.T) {
 	}
 }
 
+func TestListSnapshotPageExcludesGhostRows(t *testing.T) {
+	d := openWritableTestDB(t)
+	user := "alice"
+	now := time.Now().UnixMilli()
+
+	for _, row := range []struct {
+		id      string
+		isGhost int
+	}{
+		{id: "context_parent", isGhost: 1},
+		{id: "visible_item"},
+	} {
+		if _, err := d.conn.Exec(`INSERT INTO feed_items
+			(tweet_id, author_handle, body_text, is_ghost, published_at, algo_interest, algo_scored_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			row.id, "author_"+row.id, "body", row.isGhost, now, 1.0, 0); err != nil {
+			t.Fatalf("insert %s: %v", row.id, err)
+		}
+	}
+	if err := d.ReplaceFeedRankSnapshot(user, []SnapshotRow{
+		{TweetID: "context_parent", RankPosition: 1, FinalScore: 9},
+		{TweetID: "visible_item", RankPosition: 2, FinalScore: 5},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := d.ListSnapshotPage(user, 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 || out[0].Item.TweetID != "visible_item" {
+		t.Fatalf("rows = %+v, want only visible_item", out)
+	}
+}
+
 func TestListSnapshotPage_SkipsItemsWithoutFeedItem(t *testing.T) {
 	// Snapshot points at "ghost" but no row in feed_items — should be absent.
 	d := openWritableTestDB(t)

@@ -24,6 +24,7 @@ func (db *DB) GetFeedSnapshotHealth(username string) (FeedSnapshotHealth, error)
 	out.SnapshotAtMs = snapshotAt
 
 	where := []string{
+		feedPrimaryItemPredicate("fi"),
 		"fi.published_at > 0",
 		"(fi.canonical_tweet_id IS NULL OR fi.canonical_tweet_id = '' OR fi.canonical_tweet_id = fi.tweet_id)",
 		retweetFilterClause("fi"),

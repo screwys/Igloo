@@ -619,6 +619,42 @@ func TestListPreDiversityRankedIncludesNonCanonicalPureReposts(t *testing.T) {
 	}
 }
 
+func TestListPreDiversityRankedExcludesGhostRows(t *testing.T) {
+	d := openWritableTestDB(t)
+	publishedAt := time.Now().Add(-time.Hour).UnixMilli()
+
+	for _, row := range []struct {
+		id      string
+		isGhost int
+		score   float64
+	}{
+		{id: "visible_item", score: 10},
+		{id: "context_parent", isGhost: 1, score: 100},
+	} {
+		if _, err := d.conn.Exec(`INSERT INTO feed_items
+				(tweet_id, author_handle, canonical_tweet_id, is_ghost,
+				 content_hash, body_text, published_at, fetched_at,
+				 algo_interest, algo_scored_at)
+				VALUES (?, 'sample_author', ?, ?, ?, 'body', ?, ?, ?, 1)`,
+			row.id, row.id, row.isGhost, "hash_"+row.id, publishedAt, publishedAt, row.score,
+		); err != nil {
+			t.Fatalf("insert %s: %v", row.id, err)
+		}
+	}
+
+	rows, err := d.ListPreDiversityRanked("")
+	if err != nil {
+		t.Fatalf("ListPreDiversityRanked: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, row := range rows {
+		ids[row.TweetID] = true
+	}
+	if !ids["visible_item"] || ids["context_parent"] {
+		t.Fatalf("ranked ids = %v, want visible_item without context_parent", ids)
+	}
+}
+
 func TestFeedRelatedSeenCountSQLUsesPrecomputedSet(t *testing.T) {
 	relatedExpr := feedRelatedSeenCountSelect("fi")
 	if strings.Contains(strings.ToUpper(relatedExpr), "SELECT COUNT") {

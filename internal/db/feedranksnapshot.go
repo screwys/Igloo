@@ -336,6 +336,7 @@ func (db *DB) ListPreDiversityRanked(username string) ([]PreDiversitySnapshotRow
 func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string) ([]PreDiversitySnapshotRow, error) {
 	var where []string
 	var args []any
+	where = append(where, feedPrimaryItemPredicate("fi"))
 
 	muted, _ := db.GetMutedAccounts()
 	if len(muted) > 0 {
@@ -488,6 +489,7 @@ func (db *DB) ListSnapshotPage(username string, afterPos int, limit int) ([]Snap
 		JOIN feed_items fi ON fi.tweet_id = s.tweet_id
 		WHERE s.username = ?
 		  AND s.rank_position > ?
+		  AND `+feedPrimaryItemPredicate("fi")+`
 		  AND `+feedUnseenPredicateForUser("fi", "s.username")+`
 		ORDER BY s.rank_position ASC
 		LIMIT ?

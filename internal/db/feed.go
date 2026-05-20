@@ -19,6 +19,7 @@ func (db *DB) ListFeedItemsPage(limit int, cursor *model.FeedCursor, username st
 
 	var where []string
 	var args []any
+	where = append(where, feedPrimaryItemPredicate("feed_items"))
 
 	muted, _ := db.GetMutedAccounts()
 	if len(muted) > 0 {
@@ -1448,6 +1449,7 @@ func (db *DB) ListFeedItemsFiltered(limit int, cursor *model.FeedCursor, sourceH
 
 	var where []string
 	var args []any
+	where = append(where, feedPrimaryItemPredicate("feed_items"))
 
 	muted, _ := db.GetMutedAccounts()
 	if len(muted) > 0 {
@@ -1545,6 +1547,7 @@ func (db *DB) ListFeedItemsBySourceID(sourceID string, limit int) ([]model.FeedI
 		FROM feed_item_sources fis
 		JOIN feed_items f ON f.tweet_id = fis.tweet_id
 		WHERE fis.source_id = ?
+		  AND `+feedPrimaryItemPredicate("f")+`
 		ORDER BY f.published_at DESC, f.tweet_id DESC
 		LIMIT ?
 	`, sourceID, limit)
