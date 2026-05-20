@@ -128,7 +128,48 @@ func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.Snapshot
 		recentSources.push(c.sourceLower)
 		recentRelated.push(c.relatedLower)
 	}
-	return mergeNearbyOriginalsIntoPureReposts(out, in)
+	out = mergeNearbyOriginalsIntoPureReposts(out, in)
+	return compactThreadRoots(out, in)
+}
+
+func compactThreadRoots(rows []db.SnapshotRow, meta []db.PreDiversitySnapshotRow) []db.SnapshotRow {
+	if len(rows) < 2 || len(meta) == 0 {
+		return rows
+	}
+	metadata := make(map[string]db.PreDiversitySnapshotRow, len(meta))
+	for _, row := range meta {
+		metadata[row.TweetID] = row
+	}
+
+	rootIndex := make(map[string]int, len(rows))
+	out := make([]db.SnapshotRow, 0, len(rows))
+	for _, row := range rows {
+		rowMeta, ok := metadata[row.TweetID]
+		if !ok {
+			out = append(out, row)
+			continue
+		}
+		rootID := strings.ToLower(strings.TrimSpace(rowMeta.ThreadRootID))
+		if rootID == "" {
+			out = append(out, row)
+			continue
+		}
+		existingIndex, exists := rootIndex[rootID]
+		if !exists {
+			rootIndex[rootID] = len(out)
+			out = append(out, row)
+			continue
+		}
+		existingMeta := metadata[out[existingIndex].TweetID]
+		if !existingMeta.IsReply && rowMeta.IsReply {
+			row.RankPosition = out[existingIndex].RankPosition
+			out[existingIndex] = row
+		}
+	}
+	for i := range out {
+		out[i].RankPosition = i + 1
+	}
+	return out
 }
 
 func mergeNearbyOriginalsIntoPureReposts(rows []db.SnapshotRow, meta []db.PreDiversitySnapshotRow) []db.SnapshotRow {

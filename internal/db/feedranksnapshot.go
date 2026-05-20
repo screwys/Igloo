@@ -311,7 +311,9 @@ type PreDiversitySnapshotRow struct {
 	RelatedContentKey string
 	ContentHash       string
 	IsRetweet         bool
+	IsReply           bool
 	QuoteTweetID      string
+	ThreadRootID      string
 	PublishedAtMs     int64
 	BaseScore         float64
 	DecayFactor       float64
@@ -399,6 +401,7 @@ func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string
 				       %s AS related_content_key,
 				       COALESCE(fi.content_hash, '') AS content_hash,
 				       COALESCE(fi.is_retweet, 0) AS is_retweet,
+				       COALESCE(fi.is_reply, 0) AS is_reply,
 				       COALESCE(fi.quote_tweet_id, '') AS quote_tweet_id,
 				       fi.published_at,
 				       %s AS base,
@@ -422,16 +425,85 @@ func (db *DB) ListPreDiversityRankedContext(ctx context.Context, username string
 	out := make([]PreDiversitySnapshotRow, 0, snapshotMaxItems)
 	for rows.Next() {
 		var r PreDiversitySnapshotRow
-		var isRetweet int
+		var isRetweet, isReply int
 		if err := rows.Scan(&r.TweetID, &r.AuthorHandle, &r.SourceHandle,
-			&r.RelatedContentKey, &r.ContentHash, &isRetweet, &r.QuoteTweetID, &r.PublishedAtMs,
+			&r.RelatedContentKey, &r.ContentHash, &isRetweet, &isReply, &r.QuoteTweetID, &r.PublishedAtMs,
 			&r.BaseScore, &r.DecayFactor, &r.FreshnessBonus, &r.ReplyPenalty); err != nil {
 			return nil, err
 		}
 		r.IsRetweet = isRetweet != 0
+		r.IsReply = isReply != 0
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(out))
+	for _, row := range out {
+		ids = append(ids, row.TweetID)
+	}
+	roots, err := db.threadRootIDsForTweetIDsContext(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if rootID := roots[out[i].TweetID]; rootID != "" {
+			out[i].ThreadRootID = rootID
+		}
+	}
+	return out, nil
+}
+
+func (db *DB) threadRootIDsForTweetIDsContext(ctx context.Context, tweetIDs []string) (map[string]string, error) {
+	if len(tweetIDs) == 0 {
+		return map[string]string{}, nil
+	}
+	placeholders := strings.Repeat("?,", len(tweetIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, 0, len(tweetIDs))
+	for _, id := range tweetIDs {
+		args = append(args, id)
+	}
+
+	rows, err := db.conn.QueryContext(ctx, `
+		WITH RECURSIVE chain(seed_id, tweet_id, reply_to_status, depth) AS (
+			SELECT tweet_id, tweet_id, COALESCE(reply_to_status, ''), 0
+			FROM feed_items
+			WHERE tweet_id IN (`+placeholders+`)
+			UNION ALL
+			SELECT chain.seed_id, parent.tweet_id, COALESCE(parent.reply_to_status, ''), chain.depth + 1
+			FROM chain
+			JOIN feed_items parent ON parent.tweet_id = chain.reply_to_status
+			WHERE chain.reply_to_status != ''
+			  AND chain.depth < 50
+		),
+		root_depth AS (
+			SELECT seed_id, MAX(depth) AS max_depth
+			FROM chain
+			GROUP BY seed_id
+		)
+		SELECT chain.seed_id, chain.tweet_id
+		FROM chain
+		JOIN root_depth
+		  ON root_depth.seed_id = chain.seed_id
+		 AND root_depth.max_depth = chain.depth
+	`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	roots := make(map[string]string, len(tweetIDs))
+	for rows.Next() {
+		var tweetID, rootID string
+		if err := rows.Scan(&tweetID, &rootID); err != nil {
+			return nil, err
+		}
+		roots[tweetID] = rootID
+	}
+	return roots, rows.Err()
 }
 
 // SnapshotPageItem joins a snapshot row with the underlying feed_item.

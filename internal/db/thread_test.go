@@ -140,7 +140,7 @@ func TestGetThreadChainMissingParent(t *testing.T) {
 	}
 }
 
-func TestGetThreadTreeReturnsRootAndSelectedReplyBranch(t *testing.T) {
+func TestGetThreadTreeReturnsRootAndAllReplyBranches(t *testing.T) {
 	d := openWritableTestDB(t)
 	rootAt := time.Unix(100, 0).UTC()
 	bAt := time.Unix(110, 0).UTC()
@@ -169,8 +169,8 @@ func TestGetThreadTreeReturnsRootAndSelectedReplyBranch(t *testing.T) {
 		gotIDs = append(gotIDs, item.TweetID)
 		gotDepths = append(gotDepths, item.ThreadDepth)
 	}
-	wantIDs := []string{"root", "reply_b", "reply_b_child", "reply_b_sibling"}
-	wantDepths := []int{0, 1, 2, 2}
+	wantIDs := []string{"root", "reply_b", "reply_b_child", "reply_b_sibling", "reply_c", "reply_c_child"}
+	wantDepths := []int{0, 1, 2, 2, 1, 2}
 	if !equalStringSlices(gotIDs, wantIDs) {
 		t.Fatalf("tree IDs = %v, want %v", gotIDs, wantIDs)
 	}

@@ -567,6 +567,45 @@ func TestListPreDiversityRankedSetsRelatedContentKey(t *testing.T) {
 	}
 }
 
+func TestListPreDiversityRankedSetsThreadRootID(t *testing.T) {
+	d := openWritableTestDB(t)
+	rootAt := time.Now().Add(-2 * time.Hour)
+	replyAAt := rootAt.Add(time.Minute)
+	replyBAt := rootAt.Add(2 * time.Minute)
+	if _, err := d.conn.Exec(`INSERT INTO feed_items
+		(tweet_id, author_handle, source_handle, body_text, is_reply, reply_to_status,
+		 canonical_tweet_id, content_hash, published_at, fetched_at, algo_interest, algo_scored_at)
+		VALUES
+		('thread_root', 'sample_root', 'sample_root', 'root', 0, '', 'thread_root', 'hash_root', ?, ?, 30, 1),
+		('thread_reply_a', 'sample_reply_a', 'sample_reply_a', 'reply a', 1, 'thread_root', 'thread_reply_a', 'hash_reply_a', ?, ?, 30, 1),
+		('thread_reply_b', 'sample_reply_b', 'sample_reply_b', 'reply b', 1, 'thread_reply_a', 'thread_reply_b', 'hash_reply_b', ?, ?, 30, 1)`,
+		rootAt.UnixMilli(), rootAt.UnixMilli(),
+		replyAAt.UnixMilli(), replyAAt.UnixMilli(),
+		replyBAt.UnixMilli(), replyBAt.UnixMilli(),
+	); err != nil {
+		t.Fatalf("insert thread rows: %v", err)
+	}
+
+	rows, err := d.ListPreDiversityRanked("")
+	if err != nil {
+		t.Fatalf("ListPreDiversityRanked: %v", err)
+	}
+	rootByID := map[string]string{}
+	isReplyByID := map[string]bool{}
+	for _, row := range rows {
+		rootByID[row.TweetID] = row.ThreadRootID
+		isReplyByID[row.TweetID] = row.IsReply
+	}
+	for _, tweetID := range []string{"thread_root", "thread_reply_a", "thread_reply_b"} {
+		if got := rootByID[tweetID]; got != "thread_root" {
+			t.Fatalf("%s thread root = %q, want thread_root", tweetID, got)
+		}
+	}
+	if isReplyByID["thread_root"] || !isReplyByID["thread_reply_a"] || !isReplyByID["thread_reply_b"] {
+		t.Fatalf("is_reply map = %v", isReplyByID)
+	}
+}
+
 func TestListPreDiversityRankedIncludesNonCanonicalPureReposts(t *testing.T) {
 	d := openWritableTestDB(t)
 	publishedAt := time.Now().Add(-time.Hour).UnixMilli()

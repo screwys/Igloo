@@ -142,6 +142,25 @@ func TestBuildSnapshot_KeepsOriginalForQuoteRetweet(t *testing.T) {
 	}
 }
 
+func TestBuildSnapshotCompactsConversationRoots(t *testing.T) {
+	in := []db.PreDiversitySnapshotRow{
+		{TweetID: "thread_root", AuthorHandle: "sample_root_author", ThreadRootID: "thread_root", BaseScore: 100, DecayFactor: 1},
+		{TweetID: "thread_reply_a", AuthorHandle: "sample_reply_author_a", ThreadRootID: "thread_root", IsReply: true, BaseScore: 90, DecayFactor: 1},
+		{TweetID: "thread_reply_b", AuthorHandle: "sample_reply_author_b", ThreadRootID: "thread_root", IsReply: true, BaseScore: 80, DecayFactor: 1},
+		{TweetID: "other_thread", AuthorHandle: "sample_author_c", ThreadRootID: "other_thread", BaseScore: 70, DecayFactor: 1},
+	}
+
+	out := BuildSnapshot(in, time.Unix(0, 0))
+	if got, want := snapshotIDs(out), []string{"thread_reply_a", "other_thread"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshot IDs = %v, want %v", got, want)
+	}
+	for i, row := range out {
+		if row.RankPosition != i+1 {
+			t.Fatalf("row %d rank_position = %d, want %d", i, row.RankPosition, i+1)
+		}
+	}
+}
+
 func TestBuildSnapshot_EmptyInput(t *testing.T) {
 	out := BuildSnapshot(nil, time.Unix(0, 0))
 	if out != nil {
