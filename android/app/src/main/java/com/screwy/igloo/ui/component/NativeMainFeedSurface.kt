@@ -103,6 +103,7 @@ internal val NativeFeedPrimaryActions = listOf(
 )
 
 internal const val NativeFeedBodyCollapsedLines = 15
+internal const val NativeFeedParentBodyCollapsedLines = 9
 internal const val NativeFeedQuoteCollapsedLines = 2
 
 @Composable

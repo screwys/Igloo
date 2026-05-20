@@ -286,7 +286,7 @@ internal class NativeFeedViewHolder(
                 bodyText(views.root.context).apply {
                     setTextColor(colors.onSurface)
                     bindMentionText(this, body, colors, callbacks)
-                    maxLines = NativeFeedBodyCollapsedLines
+                    maxLines = NativeFeedParentBodyCollapsedLines
                     ellipsize = TextUtils.TruncateAt.END
                 },
             )

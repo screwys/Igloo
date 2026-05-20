@@ -80,7 +80,11 @@ internal fun PlayerSurface(
     ) {
         PlayerPoster(thumbnailUri = posterUri, modifier = Modifier.fillMaxSize())
         if (streamUri !is MediaUri.Missing) {
-            VideoSurface(player = player, modifier = Modifier.fillMaxSize())
+            VideoSurface(
+                player = player,
+                onTap = { onControlsVisibleChange(!controlsVisible) },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
         PlayerGestures(
             player = player,
@@ -142,7 +146,11 @@ internal fun playerSubtitleBottomPaddingDp(fullscreen: Boolean, controlsVisible:
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
-private fun VideoSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
+private fun VideoSurface(
+    player: ExoPlayer,
+    onTap: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val playerView = remember {
         PlayerView(context).apply {
@@ -154,6 +162,7 @@ private fun VideoSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
         factory = { playerView },
         update = { view ->
             if (view.player !== player) view.player = player
+            setPlayerViewTapHandler(view, onTap)
         },
         modifier = modifier,
     )
@@ -162,6 +171,11 @@ private fun VideoSurface(player: ExoPlayer, modifier: Modifier = Modifier) {
             playerView.player = null
         }
     }
+}
+
+internal fun setPlayerViewTapHandler(view: PlayerView, onTap: () -> Unit) {
+    view.isClickable = true
+    view.setOnClickListener { onTap() }
 }
 
 @Composable

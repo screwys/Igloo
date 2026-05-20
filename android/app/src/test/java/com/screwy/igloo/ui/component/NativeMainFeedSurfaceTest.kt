@@ -283,6 +283,11 @@ class NativeMainFeedSurfaceTest {
         assertTrue(cardViewsText.contains("val threadCapsuleAvatars: LinearLayout"))
         assertTrue(cardViewsText.contains("val threadCapsuleText: TextView"))
         assertTrue(threadText.contains("stripReplyPrefix(item, item.bodyText.orEmpty())"))
+        assertEquals(
+            (NativeFeedBodyCollapsedLines * 0.6).toInt(),
+            NativeFeedParentBodyCollapsedLines,
+        )
+        assertTrue(ancestorText.contains("maxLines = NativeFeedParentBodyCollapsedLines"))
         assertTrue(controllerText.contains("chainPosts = threaded.chain.map"))
         assertTrue(ancestorText.contains("post.media.grid.mediaCount > 0"))
         assertTrue(ancestorText.contains("bindMediaGrid("))

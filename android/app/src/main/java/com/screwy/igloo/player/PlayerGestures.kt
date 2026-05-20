@@ -8,9 +8,11 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -98,6 +100,12 @@ fun PlayerGestures(
     onBrightnessChange: (level: Float) -> Unit = { _ -> },
     onVolumeChange: (level: Float) -> Unit = { _ -> },
 ) {
+    val currentOnTap by rememberUpdatedState(onTap)
+    val currentOnScrubStart by rememberUpdatedState(onScrubStart)
+    val currentOnScrubUpdate by rememberUpdatedState(onScrubUpdate)
+    val currentOnScrubEnd by rememberUpdatedState(onScrubEnd)
+    val currentOnBrightnessChange by rememberUpdatedState(onBrightnessChange)
+    val currentOnVolumeChange by rememberUpdatedState(onVolumeChange)
     val context = LocalContext.current
     val activity = context.findActivity()
     val audioManager = remember(context) {
@@ -120,7 +128,7 @@ fun PlayerGestures(
             }
             .pointerInput(player) {
                 detectTapGestures(
-                    onTap = { onTap() },
+                    onTap = { currentOnTap() },
                     onDoubleTap = { offset ->
                         val widthPx = surfaceWidthPx.value
                         val isLeft = widthPx > 0f && offset.x < widthPx / 2f
@@ -169,7 +177,7 @@ fun PlayerGestures(
                             PlayerDragMode.Scrub -> {
                                 if (!scrubbing.value) {
                                     scrubbing.value = true
-                                    onScrubStart()
+                                    currentOnScrubStart()
                                 }
                                 val widthPx = surfaceWidthPx.value
                                 val duration = player.duration.coerceAtLeast(0L)
@@ -179,7 +187,7 @@ fun PlayerGestures(
                                     widthPx = widthPx,
                                     durationMs = duration,
                                 )
-                                onScrubUpdate(scrubTarget.value)
+                                currentOnScrubUpdate(scrubTarget.value)
                             }
                             PlayerDragMode.Brightness -> {
                                 if (verticalDragPx.floatValue == 0f) {
@@ -191,7 +199,7 @@ fun PlayerGestures(
                                     dragPx = verticalDragPx.floatValue,
                                     heightPx = surfaceHeightPx.value,
                                 ).coerceAtLeast(MIN_BRIGHTNESS)
-                                setBrightness(activity, level)?.let(onBrightnessChange)
+                                setBrightness(activity, level)?.let(currentOnBrightnessChange)
                             }
                             PlayerDragMode.Volume -> {
                                 if (verticalDragPx.floatValue == 0f) {
@@ -203,14 +211,14 @@ fun PlayerGestures(
                                     dragPx = verticalDragPx.floatValue,
                                     heightPx = surfaceHeightPx.value,
                                 )
-                                setVolumeFraction(audioManager, level)?.let(onVolumeChange)
+                                setVolumeFraction(audioManager, level)?.let(currentOnVolumeChange)
                             }
                         }
                     },
                     onDragEnd = {
                         if (scrubbing.value) {
                             player.seekTo(scrubTarget.value)
-                            onScrubEnd(scrubTarget.value)
+                            currentOnScrubEnd(scrubTarget.value)
                             scrubbing.value = false
                         }
                         dragMode.value = null
