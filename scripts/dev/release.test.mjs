@@ -176,8 +176,9 @@ test("container release publishes signed provenance attestation", () => {
   assert.match(workflow, /subject-name: ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/igloo/);
   assert.match(workflow, /subject-digest: \$\{\{ steps\.build\.outputs\.digest \}\}/);
   assert.match(workflow, /push-to-registry: true/);
-  assert.match(workflow, shaPinnedAction("softprops/action-gh-release", "v3"));
-  assert.match(workflow, /files: release-artifacts\/\*/);
+  assert.doesNotMatch(workflow, /Attach container security artifacts to GitHub Release/);
+  assert.doesNotMatch(workflow, shaPinnedAction("softprops/action-gh-release", "v3"));
+  assert.doesNotMatch(workflow, /files: release-artifacts\/\*/);
   assert.doesNotMatch(workflow, /go test \.\/\.\.\./);
   assert.doesNotMatch(workflow, /scripts\/dev\/test-full\.sh/);
   assert.doesNotMatch(workflow, /actions\/setup-go/);

@@ -126,9 +126,3 @@ jobs:
           subject-name: ghcr.io/${{ github.repository_owner }}/igloo
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
-
-      - name: Attach container security artifacts to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
-        with:
-          files: release-artifacts/*
