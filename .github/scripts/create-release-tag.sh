@@ -6,7 +6,9 @@ usage() {
 Usage: .github/scripts/create-release-tag.sh [--push] <patch|minor|major> SUMMARY
 
 Prepares release metadata, commits it, and creates a signed annotated release
-tag. SUMMARY becomes the first paragraph of the GitHub release notes.
+tag. With --push, it also pushes main and the tag, creates the GitHub Release,
+and dispatches release artifact workflows. SUMMARY becomes the first paragraph
+of the GitHub release notes.
 
 Examples:
   .github/scripts/create-release-tag.sh --push minor "Add Android offline sync"
@@ -92,4 +94,14 @@ git show "$tag" --no-patch
 
 if [[ "$push_release" == "1" ]]; then
   git push --atomic origin HEAD:main "refs/tags/$tag"
+  if gh release view "$tag" >/dev/null 2>&1; then
+    echo "release already exists: $tag"
+  else
+    gh release create "$tag" \
+      --title "$tag" \
+      --notes-file "$notes_file" \
+      --verify-tag
+  fi
+  gh workflow run container-release.yml --ref "$tag"
+  gh workflow run android-release.yml --ref "$tag"
 fi

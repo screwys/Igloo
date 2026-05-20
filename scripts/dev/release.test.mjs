@@ -124,6 +124,19 @@ test("release workflow gates signed releases on the full quality suite", () => {
   );
 });
 
+test("local release script publishes a GitHub release on push", () => {
+  const script = readFileSync(
+    new URL("../../.github/scripts/create-release-tag.sh", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(script, /git push --atomic origin HEAD:main "refs\/tags\/\$tag"/);
+  assert.match(script, /gh release create "\$tag"/);
+  assert.match(script, /--notes-file "\$notes_file"/);
+  assert.match(script, /gh workflow run container-release\.yml --ref "\$tag"/);
+  assert.match(script, /gh workflow run android-release\.yml --ref "\$tag"/);
+});
+
 test("container release publishes signed provenance attestation", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/container-release.yml", import.meta.url),
