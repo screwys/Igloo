@@ -8,6 +8,7 @@ import { attachShortVideoDebug } from './debug.js'
 var _state = null
 var _fns = null
 var momentActionsSheet = null
+var momentActionsWrapper = null
 var momentActionsKeyHandler = null
 
 // initItems sets up module-level refs.
@@ -20,8 +21,55 @@ export function initItems(stateRef, fns) {
 function closeMomentActions() {
   if (momentActionsSheet && momentActionsSheet.parentNode) momentActionsSheet.remove()
   momentActionsSheet = null
+  if (momentActionsWrapper) momentActionsWrapper.classList.remove('moment-actions-open')
+  momentActionsWrapper = null
   if (momentActionsKeyHandler) document.removeEventListener('keydown', momentActionsKeyHandler)
   momentActionsKeyHandler = null
+}
+
+function shortShareUrl(entryData) {
+  var shareUrl = String(entryData.originalUrl || '').trim()
+  var platform = String(entryData.platform || '').trim().toLowerCase()
+
+  if (!shareUrl) {
+    shareUrl = window.location.origin + '/shorts?video=' + encodeURIComponent(entryData.id)
+    if (platform === 'tiktok') {
+      var handle = String(entryData.channelName || entryData.channelId || '').trim()
+      var cleanHandle = handle ? (handle.startsWith('@') ? handle : ('@' + handle)) : '@user'
+      shareUrl = 'https://www.tiktok.com/' + cleanHandle + '/video/' + encodeURIComponent(entryData.id)
+    } else if (platform === 'instagram') {
+      var isPost = /^instagram_post_/.test(String(entryData.id || ''))
+      var shortcode = String(entryData.id || '').replace(/^instagram_(post|reel)_/, '')
+      shareUrl = 'https://www.instagram.com/' + (isPost ? 'p' : 'reel') + '/' + encodeURIComponent(shortcode) + '/'
+    } else if (platform === 'youtube') {
+      shareUrl = 'https://www.youtube.com/shorts/' + encodeURIComponent(entryData.id)
+    }
+  }
+
+  return toFxTwitterUrl(shareUrl)
+}
+
+function shareShort(entryData, btn) {
+  return copyText(shortShareUrl(entryData)).then(function () {
+    showToast(t('shorts_link_copied', 'Short link copied'))
+    if (!btn) return
+    btn.classList.add('active')
+    safeSetMarkup(btn, iconSvg('check'))
+    setTimeout(function () {
+      safeSetMarkup(btn, iconSvg('share', false))
+      btn.classList.remove('active')
+    }, 1200)
+  }).catch(function () {
+    showToast(t('error_copy_link_failed', 'Failed to copy link'))
+  })
+}
+
+function momentAccountHandleLabel(channelID, rawHandle) {
+  var handle = String(rawHandle || '').trim().replace(/^@+/, '')
+  if (!handle) {
+    handle = String(channelID || '').trim().replace(/^(tiktok|instagram|youtube|twitter|x)_/i, '')
+  }
+  return handle ? ('@' + handle) : String(channelID || '').trim()
 }
 
 function advanceMomentsAfterAction(entry) {
@@ -43,8 +91,8 @@ function applyMomentAction(entry, action) {
   if (!data) return
   var reposterID = String(data.repostChannelId || '').trim()
   var authorID = String(data.channelId || '').trim()
-  var reposterLabel = String(data.repostDisplayName || data.repostHandle || reposterID).trim()
-  var authorLabel = String(data.channelName || authorID).trim()
+  var reposterLabel = momentAccountHandleLabel(reposterID, data.repostHandle)
+  var authorLabel = momentAccountHandleLabel(authorID)
   var now = Date.now()
 
   if (action === 'disable_reposts' && reposterID) {
@@ -73,6 +121,21 @@ function applyMomentAction(entry, action) {
     return
   }
 
+  if (action === 'share') {
+    shareShort(data)
+    return
+  }
+
+  if (action === 'visit_author' && authorID) {
+    window.location.assign('/channels/' + encodeURIComponent(authorID))
+    return
+  }
+
+  if (action === 'visit_reposter' && reposterID) {
+    window.location.assign('/channels/' + encodeURIComponent(reposterID))
+    return
+  }
+
   if (action === 'unfollow_reposter' && reposterID) {
     askConfirm({
       title: t('confirm_unfollow_channel_title', 'Unfollow Channel'),
@@ -91,12 +154,34 @@ function applyMomentAction(entry, action) {
     }).catch(function (err) {
       showToast((err && err.payload && err.payload.error) || t('error_unfollow_failed', 'Failed to unfollow'))
     })
+    return
+  }
+
+  if (action === 'unfollow_author' && authorID) {
+    askConfirm({
+      title: t('confirm_unfollow_channel_title', 'Unfollow Channel'),
+      body: tf('confirm_unfollow_channel_body', 'Unfollow %1$s?', authorLabel),
+      confirmLabel: t('action_unfollow', 'Unfollow'),
+      cancelLabel: t('action_cancel', 'Cancel'),
+      danger: true
+    }).then(function (confirmed) {
+      if (!confirmed) return
+      return apiFetch('/api/mutations/follow', {
+        method: 'POST',
+        body: JSON.stringify({ channel_id: authorID, action: 'clear', updated_at_ms: Date.now() })
+      }).then(function () {
+        finishMomentUnfollow(entry, authorID, authorLabel)
+      })
+    }).catch(function (err) {
+      showToast((err && err.payload && err.payload.error) || t('error_unfollow_failed', 'Failed to unfollow'))
+    })
   }
 }
 
 function openMomentActions(entry) {
   var data = entry && entry.data
-  if (!data || !data.repostIntroduced || !String(data.repostChannelId || '').trim()) return false
+  var wrapper = entry && entry.refs && entry.refs.wrapper
+  if (!data || !wrapper) return false
   closeMomentActions()
 
   var overlay = document.createElement('div')
@@ -109,13 +194,30 @@ function openMomentActions(entry) {
   sheet.setAttribute('aria-label', t('action_more', 'More'))
   overlay.appendChild(sheet)
 
-  var reposterLabel = String(data.repostDisplayName || data.repostHandle || data.repostChannelId).trim()
-  var authorLabel = String(data.channelName || data.channelId).trim()
-  var actions = [
-    { key: 'disable_reposts', label: tf('action_turn_off_reposts_for_account', 'Turn off reposts for %1$s', reposterLabel) },
-    { key: 'mute_author', label: tf('action_mute_account_label', 'Mute %1$s', authorLabel) },
-    { key: 'unfollow_reposter', label: tf('action_unfollow_account_label', 'Unfollow %1$s', reposterLabel), danger: true }
-  ]
+  var reposterID = String(data.repostChannelId || '').trim()
+  var authorID = String(data.channelId || '').trim()
+  var reposterLabel = momentAccountHandleLabel(reposterID, data.repostHandle)
+  var authorLabel = momentAccountHandleLabel(authorID)
+  var isRepost = !!data.repostIntroduced && !!reposterID
+  var actions = []
+  if (isRepost) {
+    actions.push({ key: 'disable_reposts', label: tf('action_turn_off_reposts_for_account', 'Turn off reposts for %1$s', reposterLabel) })
+  }
+  actions.push({ key: 'share', label: t('action_share', 'Share') })
+  if (isRepost) {
+    actions.push({ key: 'visit_reposter', label: tf('action_visit_profile_of_account', 'Visit profile of %1$s', reposterLabel) })
+  }
+  if (authorID && authorID !== reposterID) {
+    actions.push({ key: 'visit_author', label: tf('action_visit_profile_of_account', 'Visit profile of %1$s', authorLabel) })
+  }
+  if (!isRepost && authorID) {
+    actions.push({ key: 'mute_author', label: tf('action_mute_account_label', 'Mute %1$s', authorLabel) })
+  }
+  if (isRepost) {
+    actions.push({ key: 'unfollow_reposter', label: tf('action_unfollow_account_label', 'Unfollow %1$s', reposterLabel), danger: true })
+  } else if (data.channelFollowed && authorID) {
+    actions.push({ key: 'unfollow_author', label: tf('action_unfollow_account_label', 'Unfollow %1$s', authorLabel), danger: true })
+  }
   actions.forEach(function (action) {
     var button = document.createElement('button')
     button.type = 'button'
@@ -140,15 +242,17 @@ function openMomentActions(entry) {
     if (event.key === 'Escape') closeMomentActions()
   }
   document.addEventListener('keydown', momentActionsKeyHandler)
-  document.body.appendChild(overlay)
+  wrapper.classList.add('moment-actions-open')
+  wrapper.appendChild(overlay)
   momentActionsSheet = overlay
+  momentActionsWrapper = wrapper
   requestAnimationFrame(function () { overlay.classList.add('visible') })
   return true
 }
 
 function bindMomentLongPress(entry) {
   var wrapper = entry && entry.refs && entry.refs.wrapper
-  if (!wrapper || !entry.data || !entry.data.repostIntroduced || !entry.data.repostChannelId) return
+  if (!wrapper || !entry.data) return
   var timer = 0
   var startX = 0
   var startY = 0
@@ -875,37 +979,7 @@ export function makeShortItem(entryData, existingEl) {
       return
     }
     if (action === 'share') {
-      var shareUrl = String(entryData.originalUrl || '').trim()
-      var platform = String(entryData.platform || '').trim().toLowerCase()
-
-      if (!shareUrl) {
-        shareUrl = window.location.origin + '/shorts?video=' + encodeURIComponent(entryData.id)
-        if (platform === 'tiktok') {
-          var handle = String(entryData.channelName || entryData.channelId || '').trim()
-          var cleanHandle = handle ? (handle.startsWith('@') ? handle : ('@' + handle)) : '@user'
-          shareUrl = 'https://www.tiktok.com/' + cleanHandle + '/video/' + encodeURIComponent(entryData.id)
-        } else if (platform === 'instagram') {
-          var isPost = /^instagram_post_/.test(String(entryData.id || ''))
-          var shortcode = String(entryData.id || '').replace(/^instagram_(post|reel)_/, '')
-          shareUrl = 'https://www.instagram.com/' + (isPost ? 'p' : 'reel') + '/' + encodeURIComponent(shortcode) + '/'
-        } else if (platform === 'youtube') {
-          shareUrl = 'https://www.youtube.com/shorts/' + encodeURIComponent(entryData.id)
-        }
-      }
-
-      shareUrl = toFxTwitterUrl(shareUrl)
-
-      copyText(shareUrl).then(function () {
-        showToast(t('shorts_link_copied', 'Short link copied'))
-        btn.classList.add('active')
-        safeSetMarkup(btn, iconSvg('check'))
-        setTimeout(function () {
-          safeSetMarkup(btn, iconSvg('share', false))
-          btn.classList.remove('active')
-        }, 1200)
-      }).catch(function () {
-        showToast(t('error_copy_link_failed', 'Failed to copy link'))
-      })
+      shareShort(entryData, btn)
       return
     }
     if (action === 'bookmark') {

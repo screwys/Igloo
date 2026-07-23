@@ -176,6 +176,7 @@ internal fun MomentPage(
     onRequestMomentActions: (MomentItem) -> Unit,
     onSwipeLeftToChannel: (channelId: String) -> Unit,
     onSwipeRightFromEdge: () -> Unit,
+    chromeVisible: Boolean = true,
     logger: Logger,
     sharedVideoPlayer: ExoPlayer? = null,
     sharedPlayerView: PlayerView? = null,
@@ -208,8 +209,6 @@ internal fun MomentPage(
     val isBookmarked = bookmarkRow != null
     val bookmarkItem =
         if (isBookmarked == item.isBookmarked) item else item.copy(isBookmarked = isBookmarked)
-    val actionAvailability = momentActionAvailability(item)
-
     val pageModifier =
         if (storyMode || mediaMode == MomentMediaMode.Slideshow) {
             Modifier.fillMaxSize().background(Color.Black)
@@ -253,7 +252,7 @@ internal fun MomentPage(
                         if (storyMode) null else ({ onSwipeLeftToChannel(item.channelId) }),
                     onTap = if (storyMode) ({ manualSlideAdvanceTick++ }) else null,
                     onLongPress =
-                        if (!storyMode && actionAvailability.canToggleReposts) {
+                        if (!storyMode) {
                             { onRequestMomentActions(item) }
                         } else {
                             null
@@ -274,11 +273,7 @@ internal fun MomentPage(
                     autoSwipe = autoSwipe,
                     onAutoAdvance = onAutoAdvance,
                     onLongPress =
-                        if (actionAvailability.canToggleReposts) {
-                            { onRequestMomentActions(item) }
-                        } else {
-                            null
-                        },
+                        { onRequestMomentActions(item) },
                     logger = logger,
                     storyMode = storyMode,
                     sharedVideoPlayer = sharedVideoPlayer,
@@ -290,8 +285,7 @@ internal fun MomentPage(
 
         if (
             !storyMode &&
-                mediaMode == MomentMediaMode.Image &&
-                actionAvailability.canToggleReposts
+                mediaMode == MomentMediaMode.Image
         ) {
             MomentRepostLongPressLayer(
                 onLongPress = { onRequestMomentActions(item) },
@@ -306,118 +300,115 @@ internal fun MomentPage(
             )
         }
 
-        // Top dim gradient keeps the TikTok-style tab row legible against any thumbnail.
-        Box(
-            modifier =
-                Modifier.fillMaxWidth()
-                    .height(96.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent)
+        if (chromeVisible) {
+            // Top dim gradient keeps the TikTok-style tab row legible against any thumbnail.
+            Box(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .height(96.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent)
+                            )
                         )
+            )
+
+            if (mediaMode != MomentMediaMode.Video) {
+                MomentBottomScrim(modifier = Modifier.align(Alignment.BottomCenter))
+            }
+
+            // Right-edge action rail — avatar/follow state plus mute / autoplay / bookmark / share.
+            // The rail sits lower than before so the avatar occupies the social-action position and
+            // the first control starts where the older middle controls used to sit.
+            //
+            // Play/pause is not a side-action: tap the video surface to toggle. The
+            // auto-swipe button controls whether the player advances to the next
+            // short or loops the current one when it ends.
+            Column(
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 164.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                val muteLabel = stringResource(R.string.action_mute)
+                val unmuteLabel = stringResource(R.string.action_unmute)
+                val autoSwipeStateLabel =
+                    stringResource(
+                        R.string.moments_auto_swipe_state,
+                        stringResource(if (autoSwipe) R.string.state_on else R.string.state_off),
                     )
-        )
-
-        if (mediaMode != MomentMediaMode.Video) {
-            MomentBottomScrim(modifier = Modifier.align(Alignment.BottomCenter))
-        }
-
-        // Right-edge action rail — avatar/follow state plus mute / autoplay / bookmark / share.
-        // The rail sits lower than before so the avatar occupies the social-action position and
-        // the first control starts where the older middle controls used to sit.
-        //
-        // Play/pause is not a side-action: tap the video surface to toggle. The
-        // auto-swipe button controls whether the player advances to the next
-        // short or loops the current one when it ends.
-        Column(
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 164.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            val muteLabel = stringResource(R.string.action_mute)
-            val unmuteLabel = stringResource(R.string.action_unmute)
-            val autoSwipeStateLabel =
-                stringResource(
-                    R.string.moments_auto_swipe_state,
-                    stringResource(if (autoSwipe) R.string.state_on else R.string.state_off),
+                val manageBookmarkLabel = stringResource(R.string.action_manage_bookmark)
+                val addBookmarkLabel = stringResource(R.string.action_bookmark)
+                val shareLabel = stringResource(R.string.action_share)
+                MomentRailAvatar(
+                    item = item,
+                    onChannelClick = onChannelClick,
+                    onStoryClick = onStoryClick,
+                    onFollowChannel = onFollowChannel,
+                    onRequestUnfollowChannel = onRequestUnfollowChannel,
+                    colors = colors,
                 )
-            val manageBookmarkLabel = stringResource(R.string.action_manage_bookmark)
-            val addBookmarkLabel = stringResource(R.string.action_bookmark)
-            val shareLabel = stringResource(R.string.action_share)
-            MomentRailAvatar(
-                item = item,
-                onChannelClick = onChannelClick,
-                onStoryClick = onStoryClick,
-                onFollowChannel = onFollowChannel,
-                onRequestUnfollowChannel = onRequestUnfollowChannel,
-                colors = colors,
-            )
-            ShadowIcon(
-                if (muted) Icons.AutoMirrored.Filled.VolumeOff
-                else Icons.AutoMirrored.Filled.VolumeUp,
-                if (muted) unmuteLabel else muteLabel,
-                onMuteToggle,
-                muted,
-                colors.primary,
-            )
-            if (showAutoSwipeControl) {
                 ShadowIcon(
-                    if (autoSwipe) Icons.Filled.PlayCircle else Icons.Outlined.PlayCircleOutline,
-                    autoSwipeStateLabel,
-                    onAutoSwipeToggle,
-                    autoSwipe,
+                    if (muted) Icons.AutoMirrored.Filled.VolumeOff
+                    else Icons.AutoMirrored.Filled.VolumeUp,
+                    if (muted) unmuteLabel else muteLabel,
+                    onMuteToggle,
+                    muted,
+                    colors.primary,
+                )
+                if (showAutoSwipeControl) {
+                    ShadowIcon(
+                        if (autoSwipe) Icons.Filled.PlayCircle else Icons.Outlined.PlayCircleOutline,
+                        autoSwipeStateLabel,
+                        onAutoSwipeToggle,
+                        autoSwipe,
+                        colors.primary,
+                    )
+                }
+                ShadowIcon(
+                    if (isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                    if (isBookmarked) manageBookmarkLabel else addBookmarkLabel,
+                    { onRequestBookmarkSheet(bookmarkItem) },
+                    isBookmarked,
+                    colors.primary,
+                )
+                ShadowIcon(
+                    Icons.Filled.Share,
+                    shareLabel,
+                    { onShare(bookmarkItem) },
+                    false,
                     colors.primary,
                 )
             }
-            ShadowIcon(
-                if (isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
-                if (isBookmarked) manageBookmarkLabel else addBookmarkLabel,
-                { onRequestBookmarkSheet(bookmarkItem) },
-                isBookmarked,
-                colors.primary,
-            )
-            ShadowIcon(
-                Icons.Filled.Share,
-                shareLabel,
-                { onShare(bookmarkItem) },
-                false,
-                colors.primary,
-            )
-        }
 
-        // Keep the drawer's left-edge gesture below the caption. Otherwise its
-        // full-height hit target wins over the repost author's profile link.
-        if (!storyMode) {
-            MomentDrawerGestureHandle(
-                onOpenDrawer = onSwipeRightFromEdge,
-                onLongPress =
-                    if (actionAvailability.canToggleReposts) {
-                        { onRequestMomentActions(item) }
-                    } else {
-                        null
-                    },
-            )
-        }
-
-        // Bottom overlay — timestamp + description. Tapping overflowing text
-        // only changes the description line limit; the caption stays anchored.
-        val captionBaseBottomPadding = momentCaptionBaseBottomPaddingDp(mediaMode).dp
-        val captionBottomPadding =
-            if (storyMode) {
-                storyCaptionBottomPadding(captionBaseBottomPadding)
-            } else {
-                captionBaseBottomPadding
+            // Keep the drawer's left-edge gesture below the caption. Otherwise its
+            // full-height hit target wins over the repost author's profile link.
+            if (!storyMode) {
+                MomentDrawerGestureHandle(
+                    onOpenDrawer = onSwipeRightFromEdge,
+                    onLongPress = { onRequestMomentActions(item) },
+                )
             }
-        CollapsedDescription(
-            item = item,
-            expanded = expanded,
-            onMentionClick = onMentionClick,
-            onChannelClick = onChannelClick,
-            onReposterChannelClick = onChannelClick,
-            onExpandedChange = { expanded = it },
-            modifier = Modifier.align(Alignment.BottomStart).padding(bottom = captionBottomPadding),
-        )
 
+            // Bottom overlay — timestamp + description. Tapping overflowing text
+            // only changes the description line limit; the caption stays anchored.
+            val captionBaseBottomPadding = momentCaptionBaseBottomPaddingDp(mediaMode).dp
+            val captionBottomPadding =
+                if (storyMode) {
+                    storyCaptionBottomPadding(captionBaseBottomPadding)
+                } else {
+                    captionBaseBottomPadding
+                }
+            CollapsedDescription(
+                item = item,
+                expanded = expanded,
+                onMentionClick = onMentionClick,
+                onChannelClick = onChannelClick,
+                onReposterChannelClick = onChannelClick,
+                onExpandedChange = { expanded = it },
+                modifier =
+                    Modifier.align(Alignment.BottomStart).padding(bottom = captionBottomPadding),
+            )
+        }
     }
 }
 

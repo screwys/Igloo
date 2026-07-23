@@ -534,7 +534,6 @@ class MomentsViewModel(
     }
 
     fun requestMomentActions(item: PlayerMomentItem) {
-        if (!item.repostIntroduced || item.reposterChannelId.isNullOrBlank()) return
         _pendingMomentActions.value = item
     }
 

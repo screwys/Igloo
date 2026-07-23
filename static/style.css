@@ -2266,7 +2266,7 @@ select.input:focus {
     transform: translateY(0);
 }
 .moment-actions-overlay {
-    position: fixed;
+    position: absolute;
     inset: 0;
     z-index: 42001;
     display: flex;
@@ -2275,9 +2275,10 @@ select.input:focus {
     padding: 12px;
     background: rgba(0, 0, 0, 0.55);
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.18s ease;
 }
-.moment-actions-overlay.visible { opacity: 1; }
+.moment-actions-overlay.visible { opacity: 1; pointer-events: auto; }
 .moment-actions-sheet {
     width: min(100%, 480px);
     overflow: hidden;
@@ -2304,6 +2305,9 @@ select.input:focus {
 .moment-actions-sheet-item:last-child { border-bottom: 0; }
 .moment-actions-sheet-item:hover { background: rgba(var(--accent-primary-rgb), 0.12); }
 .moment-actions-sheet-item.danger { color: var(--status-error); }
+.shorts-video-wrapper.moment-actions-open > :not(.native-short-video):not(.shorts-video-poster-frame):not(.slideshow-container):not(.slideshow-audio):not(.moment-actions-overlay) {
+    visibility: hidden;
+}
 .bookmark-sheet.expanded {
     max-height: min(88vh, 900px);
 }

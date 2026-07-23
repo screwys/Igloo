@@ -134,6 +134,7 @@ fun ShortsRoute(
                         }
                     }
                 },
+                chromeVisible = pendingMomentActions == null,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -171,6 +172,12 @@ fun ShortsRoute(
             onRepostsEnabledChanged = vm::setRepostsEnabled,
             onChannelMutedChanged = vm::setChannelMuted,
             onUnfollowChannel = vm::unfollowChannel,
+            onShare = { item ->
+                sharePlainText(context, item.canonicalUrl, useEmbedFriendlyShareLinks)
+            },
+            onVisitChannel = { cid ->
+                navigator.openChannel(cid, IglooNavigationSource.Moments)
+            },
         )
     }
 }

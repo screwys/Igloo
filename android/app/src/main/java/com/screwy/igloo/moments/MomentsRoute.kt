@@ -116,6 +116,7 @@ fun MomentsRoute(
                         vm.setActiveTab(tab)
                     }
                 },
+                chromeVisible = pendingMomentActions == null,
             )
         }
         StoryTray(
@@ -152,6 +153,14 @@ fun MomentsRoute(
             onRepostsEnabledChanged = vm::setRepostsEnabled,
             onChannelMutedChanged = vm::setChannelMuted,
             onUnfollowChannel = vm::unfollowChannel,
+            onShare = { item ->
+                scope.launch {
+                    sharePlainText(context, item.canonicalUrl, useEmbedFriendlyShareLinks)
+                }
+            },
+            onVisitChannel = { cid ->
+                navigator.openChannel(cid, IglooNavigationSource.Moments)
+            },
         )
     }
 }

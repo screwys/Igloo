@@ -139,7 +139,7 @@ class MomentsPlayerTest {
     }
 
     @Test
-    fun repost_actions_unfollow_the_reposter_and_mute_only_an_unfollowed_author() {
+    fun moment_actions_open_for_all_items_and_mute_only_direct_authors() {
         val direct = storyItem("direct", "tiktok_author")
         val repostFromUnfollowedAuthor =
             direct.copy(
@@ -152,16 +152,20 @@ class MomentsPlayerTest {
         assertEquals(
             MomentActionAvailability(
                 canToggleReposts = false,
-                canToggleMute = false,
-                canUnfollowReposter = false,
+                canToggleMute = true,
+                canUnfollowChannel = true,
+                canVisitAuthor = true,
+                canVisitReposter = false,
             ),
             momentActionAvailability(direct),
         )
         assertEquals(
             MomentActionAvailability(
                 canToggleReposts = true,
-                canToggleMute = true,
-                canUnfollowReposter = true,
+                canToggleMute = false,
+                canUnfollowChannel = true,
+                canVisitAuthor = true,
+                canVisitReposter = true,
             ),
             momentActionAvailability(repostFromUnfollowedAuthor),
         )
@@ -169,12 +173,14 @@ class MomentsPlayerTest {
             MomentActionAvailability(
                 canToggleReposts = true,
                 canToggleMute = false,
-                canUnfollowReposter = true,
+                canUnfollowChannel = true,
+                canVisitAuthor = true,
+                canVisitReposter = true,
             ),
             momentActionAvailability(repostFromFollowedAuthor),
         )
         assertEquals("tiktok_sample_reposter", momentUnfollowTarget(repostFromUnfollowedAuthor))
-        assertNull(momentUnfollowTarget(direct))
+        assertEquals("tiktok_author", momentUnfollowTarget(direct))
     }
 
     @Test
@@ -189,7 +195,7 @@ class MomentsPlayerTest {
             )
 
         assertEquals(
-            MomentActionAccountLabels(reposter = "Account A", author = "@sample_author"),
+            MomentActionAccountLabels(reposter = "@sample_reposter", author = "@sample_author"),
             momentActionAccountLabels(item),
         )
     }
@@ -214,7 +220,7 @@ class MomentsPlayerTest {
             )
 
         assertEquals(
-            MomentActionAccountLabels(reposter = "@sample_reposter", author = "Account B"),
+            MomentActionAccountLabels(reposter = "@sample_reposter", author = "@sample_author"),
             momentActionAccountLabels(tiktok),
         )
         assertEquals(

@@ -216,6 +216,7 @@ fun MomentsPlayer(
     onStoryClick: (channelId: String, firstVideoId: String) -> Unit = { _, _ -> },
     activeTab: String? = null,
     onTabSelected: ((String) -> Unit)? = null,
+    chromeVisible: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
@@ -450,6 +451,7 @@ fun MomentsPlayer(
                 onRequestMomentActions = onRequestMomentActions,
                 onSwipeLeftToChannel = onSwipeLeftToChannel,
                 onSwipeRightFromEdge = drawerController::open,
+                chromeVisible = chromeVisible,
                 logger = logger,
             )
         }
@@ -484,7 +486,7 @@ fun MomentsPlayer(
                         .zIndex(3f)
                         .padding(top = overlayIdentityTopPadding()),
             )
-        } else if (activeTab != null && onTabSelected != null) {
+        } else if (chromeVisible && activeTab != null && onTabSelected != null) {
             MomentsTabControl(
                 activeTab = activeTab,
                 onTabSelected = onTabSelected,

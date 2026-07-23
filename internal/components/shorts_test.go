@@ -91,12 +91,21 @@ func TestShortsPlayerLongPressUsesMomentMutationOwners(t *testing.T) {
 	src := string(srcBytes)
 	for _, check := range []string{
 		"function bindMomentLongPress(entry)",
-		"if (!wrapper || !entry.data || !entry.data.repostIntroduced || !entry.data.repostChannelId) return",
+		"if (!wrapper || !entry.data) return",
 		"/api/mutations/channel_setting",
 		"field: 'include_reposts'",
 		"/api/mutations/mute",
 		"/api/mutations/follow",
 		"function openMomentActions(entry)",
+		"function momentAccountHandleLabel(channelID, rawHandle)",
+		"momentAccountHandleLabel(reposterID, data.repostHandle)",
+		"momentAccountHandleLabel(authorID)",
+		"action_visit_profile_of_account",
+		"if (!isRepost && authorID)",
+		"wrapper.appendChild(overlay)",
+		"wrapper.classList.add('moment-actions-open')",
+		"shareShort(data)",
+		"else if (data.channelFollowed && authorID)",
 		"advanceMomentsAfterAction(entry)",
 		"function finishMomentUnfollow(entry, channelId, label, message)",
 		"finishMomentUnfollow(entry, reposterID, reposterLabel)",
@@ -110,6 +119,22 @@ func TestShortsPlayerLongPressUsesMomentMutationOwners(t *testing.T) {
 	}
 	if strings.Contains(src, "window.location.reload") {
 		t.Fatal("Moment actions should advance without reloading the page")
+	}
+
+	cssBytes, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssBytes)
+	overlayBody := cssRuleBody(t, css, ".moment-actions-overlay")
+	for _, check := range []string{"position: absolute", "inset: 0"} {
+		if !strings.Contains(overlayBody, check) {
+			t.Errorf("Moment actions should stay centered inside the media frame; missing %q in %s", check, overlayBody)
+		}
+	}
+	chromeSelector := ".shorts-video-wrapper.moment-actions-open > :not(.native-short-video):not(.shorts-video-poster-frame):not(.slideshow-container):not(.slideshow-audio):not(.moment-actions-overlay)"
+	if chromeBody := cssRuleBody(t, css, chromeSelector); !strings.Contains(chromeBody, "visibility: hidden") {
+		t.Errorf("Moment actions should hide the player chrome: %s", chromeBody)
 	}
 
 	indexBytes, err := os.ReadFile("../../static/js/src/shorts/index.js")

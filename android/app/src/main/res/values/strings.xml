@@ -125,6 +125,7 @@
     <string name="action_update_credentials">Update Credentials</string>
     <string name="action_upload_file">Upload File</string>
     <string name="action_view_logs">View logs</string>
+    <string name="action_visit_profile_of_account">Visit profile of %1$s</string>
     <string name="app_name" translatable="false">Igloo</string>
     <string name="auth_signed_out_by_admin">Signed out by admin</string>
     <string name="auth_signed_out_security_event">Signed out — security event</string>

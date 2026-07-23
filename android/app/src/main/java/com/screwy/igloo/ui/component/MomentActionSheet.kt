@@ -30,20 +30,28 @@ import org.koin.compose.koinInject
 internal data class MomentActionAvailability(
     val canToggleReposts: Boolean,
     val canToggleMute: Boolean,
-    val canUnfollowReposter: Boolean,
+    val canUnfollowChannel: Boolean,
+    val canVisitAuthor: Boolean,
+    val canVisitReposter: Boolean,
 )
 
 internal fun momentActionAvailability(item: MomentItem): MomentActionAvailability {
     val isRepost = item.repostIntroduced && !item.reposterChannelId.isNullOrBlank()
     return MomentActionAvailability(
         canToggleReposts = isRepost,
-        canToggleMute = isRepost && !item.isAuthorFollowed,
-        canUnfollowReposter = isRepost,
+        canToggleMute = !isRepost && item.channelId.isNotBlank(),
+        canUnfollowChannel = isRepost || item.isAuthorFollowed,
+        canVisitAuthor = item.channelId.isNotBlank(),
+        canVisitReposter = isRepost,
     )
 }
 
 internal fun momentUnfollowTarget(item: MomentItem): String? =
-    item.reposterChannelId?.takeIf { momentActionAvailability(item).canUnfollowReposter }
+    when {
+        !momentActionAvailability(item).canUnfollowChannel -> null
+        item.repostIntroduced && !item.reposterChannelId.isNullOrBlank() -> item.reposterChannelId
+        else -> item.channelId.takeIf { it.isNotBlank() }
+    }
 
 /** A display target for the account affected by a moment action. */
 internal data class MomentActionAccountLabels(
@@ -54,28 +62,28 @@ internal data class MomentActionAccountLabels(
 /**
  * Keeps action labels meaningful across TikTok, Instagram, and X identifiers.
  *
- * The preferred values come from the prepared profile row. If that row has not arrived yet,
- * use a readable platform identifier rather than losing the account-specific action entirely.
+ * Prefer handles from the item or canonical channel ID so every row in this menu names accounts
+ * the same way. Display names remain a fallback only when no usable handle is available.
  */
 internal fun momentActionAccountLabels(item: MomentItem): MomentActionAccountLabels {
     val reposterId = item.reposterChannelId.orEmpty().trim()
     val reposter =
-        item.repostAuthorLabel?.trim()?.takeIf { it.isNotBlank() }
-            ?: momentAccountHandleLabel(
+        momentAccountHandleLabel(
                 platform = platformKeyFromChannelId(reposterId),
                 raw = stripPlatformPrefix(reposterId),
             )
+            ?: item.repostAuthorLabel?.trim()?.takeIf { it.isNotBlank() }
             ?: stripPlatformPrefix(reposterId)
     val author =
         momentAccountHandleLabel(
             platform = platformKeyFromChannelId(item.channelId),
             raw = item.authorHandle,
         )
-            ?: item.authorDisplayName?.trim()?.takeIf { it.isNotBlank() }
             ?: momentAccountHandleLabel(
                 platform = platformKeyFromChannelId(item.channelId),
                 raw = stripPlatformPrefix(item.channelId),
             )
+            ?: item.authorDisplayName?.trim()?.takeIf { it.isNotBlank() }
             ?: stripPlatformPrefix(item.channelId)
     return MomentActionAccountLabels(reposter = reposter, author = author)
 }
@@ -96,24 +104,37 @@ internal fun MomentActionSheet(
     onRepostsEnabledChanged: (channelId: String, enabled: Boolean) -> Unit,
     onChannelMutedChanged: (channelId: String, muted: Boolean) -> Unit,
     onUnfollowChannel: (channelId: String) -> Unit,
+    onShare: (MomentItem) -> Unit,
+    onVisitChannel: (channelId: String) -> Unit,
 ) {
     val actions = momentActionAvailability(item)
-    if (!actions.canToggleReposts && !actions.canToggleMute && !actions.canUnfollowReposter) return
 
     val db: IglooDatabase = koinInject()
     val reposterChannelId = item.reposterChannelId.orEmpty()
     val unfollowChannelId = momentUnfollowTarget(item)
-    val reposterSetting by
-        db.channelSettingDao()
-            .getByIdFlow(reposterChannelId)
-            .collectAsState(initial = null)
-    val mutedAuthor by
-        db.mutedChannelDao()
-            .getByIdFlow(item.channelId)
-            .collectAsState(initial = null)
+    val reposterSetting =
+        if (actions.canToggleReposts) {
+            db.channelSettingDao()
+                .getByIdFlow(reposterChannelId)
+                .collectAsState(initial = null)
+                .value
+        } else {
+            null
+        }
+    val mutedAuthor =
+        if (actions.canToggleMute) {
+            db.mutedChannelDao()
+                .getByIdFlow(item.channelId)
+                .collectAsState(initial = null)
+                .value
+        } else {
+            null
+        }
     val repostsEnabled = reposterSetting?.includeReposts != 0
     val authorMuted = mutedAuthor != null
     val accountLabels = momentActionAccountLabels(item)
+    val unfollowLabel =
+        if (actions.canVisitReposter) accountLabels.reposter else accountLabels.author
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     var showUnfollowConfirmation by remember(item.videoId, reposterChannelId) { mutableStateOf(false) }
 
@@ -132,7 +153,43 @@ internal fun MomentActionSheet(
                             else R.string.action_turn_on_reposts_for_account,
                             accountLabels.reposter,
                         ),
-                    onClick = { onRepostsEnabledChanged(reposterChannelId, !repostsEnabled) },
+                    onClick = {
+                        onDismissRequest()
+                        onRepostsEnabledChanged(reposterChannelId, !repostsEnabled)
+                    },
+                )
+            }
+            MomentActionRow(
+                label = stringResource(R.string.action_share),
+                onClick = {
+                    onDismissRequest()
+                    onShare(item)
+                },
+            )
+            if (actions.canVisitReposter) {
+                MomentActionRow(
+                    label =
+                        stringResource(
+                            R.string.action_visit_profile_of_account,
+                            accountLabels.reposter,
+                        ),
+                    onClick = {
+                        onDismissRequest()
+                        onVisitChannel(reposterChannelId)
+                    },
+                )
+            }
+            if (actions.canVisitAuthor && item.channelId != reposterChannelId) {
+                MomentActionRow(
+                    label =
+                        stringResource(
+                            R.string.action_visit_profile_of_account,
+                            accountLabels.author,
+                        ),
+                    onClick = {
+                        onDismissRequest()
+                        onVisitChannel(item.channelId)
+                    },
                 )
             }
             if (actions.canToggleMute) {
@@ -143,12 +200,15 @@ internal fun MomentActionSheet(
                             else R.string.action_mute_account_label,
                             accountLabels.author,
                         ),
-                    onClick = { onChannelMutedChanged(item.channelId, !authorMuted) },
+                    onClick = {
+                        onDismissRequest()
+                        onChannelMutedChanged(item.channelId, !authorMuted)
+                    },
                 )
             }
             if (unfollowChannelId != null) {
                 MomentActionRow(
-                    label = stringResource(R.string.action_unfollow_account_label, accountLabels.reposter),
+                    label = stringResource(R.string.action_unfollow_account_label, unfollowLabel),
                     onClick = { showUnfollowConfirmation = true },
                 )
             }
@@ -156,7 +216,7 @@ internal fun MomentActionSheet(
     }
     if (showUnfollowConfirmation) {
         MomentUnfollowConfirmation(
-            accountLabel = accountLabels.reposter,
+            accountLabel = unfollowLabel,
             onDismissRequest = { showUnfollowConfirmation = false },
             onConfirm = {
                 showUnfollowConfirmation = false
