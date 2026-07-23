@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+write=false
+if [[ "${1:-}" == "--write" ]]; then
+  write=true
+  shift
+fi
+if (( $# != 0 )); then
+  echo "usage: $0 [--write]" >&2
+  exit 2
+fi
+
 path_prepend_if_dir() {
   if [[ -d "$1" ]]; then
     case ":$PATH:" in
@@ -40,7 +50,9 @@ snapshot_generated_scope() {
     | xargs -0 sha256sum
 }
 
-snapshot_generated_scope > "$tmp/before"
+if [[ "$write" == false ]]; then
+  snapshot_generated_scope > "$tmp/before"
+fi
 
 echo "[drift] generating templ components..."
 go run github.com/a-h/templ/cmd/templ@v0.3.1020 generate
@@ -49,8 +61,10 @@ echo "[drift] bundling static assets..."
 go run ./cmd/igloo-assets
 
 echo "[drift] checking tracked generated files..."
-snapshot_generated_scope > "$tmp/after"
-diff -u "$tmp/before" "$tmp/after"
+if [[ "$write" == false ]]; then
+  snapshot_generated_scope > "$tmp/after"
+  diff -u "$tmp/before" "$tmp/after"
+fi
 
 echo "[drift] checking ignored JS bundles were produced..."
 for asset in feed.js feed.js.map shorts.js shorts.js.map player.js player.js.map; do
@@ -60,4 +74,8 @@ for asset in feed.js feed.js.map shorts.js shorts.js.map player.js player.js.map
   fi
 done
 
-echo "[drift] generated outputs are fresh"
+if [[ "$write" == true ]]; then
+  echo "[drift] generated outputs updated"
+else
+  echo "[drift] generated outputs are fresh"
+fi

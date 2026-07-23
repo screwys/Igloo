@@ -27,6 +27,9 @@ func TestShortsPageRendersFullSkeletonListWithoutPaging(t *testing.T) {
 		t.Fatal(err)
 	}
 	html := buf.String()
+	if strings.Contains(html, `close-shorts-btn`) {
+		t.Fatal("Moments should use the mode-aware Grid control instead of a second close button")
+	}
 
 	if strings.Contains(html, `class="js-infinite-scroll"`) || strings.Contains(html, `data-next-url`) {
 		t.Fatal("shorts page should not use scroll pagination")
@@ -465,10 +468,14 @@ func TestShortsVerticalMomentsUseControlledDeckLayout(t *testing.T) {
 	css := string(cssBytes)
 	overlaySrc := string(overlayBytes)
 	indexSrc := string(indexBytes)
+	layoutBody := cssRuleBody(t, css, ".shorts-layout")
 	containerBody := cssRuleBody(t, css, ".shorts-container")
 	itemBody := cssRuleBody(t, css, ".shorts-item")
 	storyContainerBody := cssRuleBody(t, css, ".shorts-layout.shorts-story-mode .shorts-container")
 	storyItemBody := cssRuleBody(t, css, ".shorts-layout.shorts-story-mode .shorts-item")
+	if !strings.Contains(layoutBody, "left: var(--sidebar-width)") {
+		t.Errorf("Moments should center inside the space after the sidebar: %s", layoutBody)
+	}
 
 	for _, check := range []string{
 		"overflow: hidden",
@@ -534,6 +541,98 @@ func TestShortsVerticalMomentsUseControlledDeckLayout(t *testing.T) {
 		if !strings.Contains(indexSrc, check) {
 			t.Errorf("desktop/touch deck input guard missing %q", check)
 		}
+	}
+}
+
+func TestShortsStoryTrayKeepsNativeWheelScrolling(t *testing.T) {
+	indexBytes, err := os.ReadFile("../../static/js/src/shorts/index.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cssBytes, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexSrc := string(indexBytes)
+	wheelStart := strings.Index(indexSrc, "function onWheel(event)")
+	wheelEnd := strings.Index(indexSrc[wheelStart:], "function onTouchStart(event)")
+	if wheelStart < 0 || wheelEnd < 0 {
+		t.Fatal("missing Moments wheel handler")
+	}
+	wheelHandler := indexSrc[wheelStart : wheelStart+wheelEnd]
+	trayGuard := strings.Index(wheelHandler, "event.target.closest('.shorts-story-tray')")
+	preventDefault := strings.Index(wheelHandler, "event.preventDefault()")
+	if trayGuard < 0 || preventDefault < 0 || trayGuard > preventDefault {
+		t.Fatalf("story tray wheel events should bypass Moments navigation before preventDefault:\n%s", wheelHandler)
+	}
+	trayBody := cssRuleBody(t, string(cssBytes), ".shorts-story-tray-body")
+	if !strings.Contains(trayBody, "overflow-y: auto") {
+		t.Fatalf("story tray body should remain a native vertical scroller: %s", trayBody)
+	}
+}
+
+func TestShortsStoryTrayUsesRemainingWidthBeforeCompactingItsContents(t *testing.T) {
+	cssBytes, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssBytes)
+	compactStart := strings.Index(css, "@container story-tray (max-width: 320px) {")
+	if compactStart < 0 {
+		t.Fatal("missing story tray compact layout boundary")
+	}
+	compactEnd := strings.Index(css[compactStart:], "/* Lightweight placeholder poster")
+	if compactEnd < 0 {
+		t.Fatal("missing end of story tray compact layout")
+	}
+	compactRules := css[compactStart : compactStart+compactEnd]
+	for _, check := range []string{
+		".shorts-story-tray-header h2",
+		".shorts-story-tray-body .story-channel-meta",
+		"grid-template-columns: 48px minmax(0, 1fr)",
+	} {
+		if !strings.Contains(compactRules, check) {
+			t.Errorf("story tray compact layout missing %q", check)
+		}
+	}
+	for _, check := range []string{
+		"--shorts-story-tray-width: clamp(76px, calc(100vw - var(--sidebar-width) - 750px - 2rem), 390px)",
+		"width: min(var(--shorts-story-tray-width), 92vw)",
+		"body.shorts-open:has(.shorts-story-tray.open) .shorts-layout",
+		"right: var(--shorts-story-tray-width)",
+		"container-name: story-tray",
+		"shorts-story-tray-resize-handle",
+		"top: calc(max(0.5rem, env(safe-area-inset-top)) + 58px)",
+		"flex: 0 0 58px",
+		"min-height: 58px",
+		".shorts-story-tray-header h2 {\n    display: flex;\n    align-items: center;\n    height: 42px",
+	} {
+		if !strings.Contains(css, check) {
+			t.Errorf("fluid story tray layout missing %q", check)
+		}
+	}
+
+	indexBytes, err := os.ReadFile("../../static/js/src/shorts/index.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexSrc := string(indexBytes)
+	for _, check := range []string{
+		"igloo.story-tray.width.v1",
+		"function setStoryTrayWidth(width, persist)",
+		"setPointerCapture(event.pointerId)",
+		"window.innerWidth - event.clientX",
+	} {
+		if !strings.Contains(indexSrc, check) {
+			t.Errorf("resizable story tray missing %q", check)
+		}
+	}
+	if strings.Contains(compactRules, ".shorts-story-grid-btn {") ||
+		strings.Contains(compactRules, ".shorts-story-grid-btn span") {
+		t.Fatal("Grid should keep its full size outside the resizable story tray")
+	}
+	if strings.Contains(css, "story-tray-compact") || strings.Contains(indexSrc, "story-tray-compact") {
+		t.Fatal("resizing the story tray should not hide global header controls")
 	}
 }
 

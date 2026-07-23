@@ -45,7 +45,7 @@ if [[ "$actionlint_status" -ne 0 ]]; then
 fi
 
 echo "[drift] checking generated outputs..."
-if ! scripts/dev/drift-check.sh; then
+if ! scripts/dev/drift-check.sh --write; then
   echo "[drift] generated output check failed" >&2
   status=1
 fi

@@ -52,6 +52,10 @@ if (layout) {
     var observedGridImages = new WeakSet()
     var tabGridCache = new Map()
     var switchingTabs = false
+    var STORY_TRAY_MIN_WIDTH = 76
+    var STORY_TRAY_MAX_WIDTH = 520
+    var storyTrayStorageKey = 'igloo.story-tray.width.v1'
+    var storyTrayResizePointerId = null
 
     if (!sourceContainer || !shortsContainer) return
 
@@ -91,6 +95,8 @@ if (layout) {
       storyQueueIndex: -1,
       storyContinueAcrossAccounts: false,
       storyTray: null,
+      storyTrayWidth: 0,
+      storyTrayUserSized: false,
       storyTrayRefreshTimer: 0,
       storySurfaceRefreshTimer: 0,
       viewedIds: new Set(),
@@ -413,6 +419,77 @@ if (layout) {
       if (text) text.textContent = label
     }
 
+    function storyTrayMaxWidth() {
+      var sidebarWidth = parseFloat(getComputedStyle(doc.documentElement).getPropertyValue('--sidebar-width')) || 0
+      return Math.max(STORY_TRAY_MIN_WIDTH, Math.min(STORY_TRAY_MAX_WIDTH, window.innerWidth - sidebarWidth - 320))
+    }
+
+    function defaultStoryTrayWidth() {
+      var sidebarWidth = parseFloat(getComputedStyle(doc.documentElement).getPropertyValue('--sidebar-width')) || 0
+      return Math.min(390, Math.max(STORY_TRAY_MIN_WIDTH, window.innerWidth - sidebarWidth - 750 - 32))
+    }
+
+    function normalizedStoryTrayWidth(width) {
+      var value = Number(width)
+      if (!Number.isFinite(value)) value = defaultStoryTrayWidth()
+      return Math.round(Math.min(storyTrayMaxWidth(), Math.max(STORY_TRAY_MIN_WIDTH, value)))
+    }
+
+    function setStoryTrayWidth(width, persist) {
+      var normalized = normalizedStoryTrayWidth(width)
+      state.storyTrayWidth = normalized
+      doc.body.style.setProperty('--shorts-story-tray-width', normalized + 'px')
+      var handle = state.storyTray && q('.shorts-story-tray-resize-handle', state.storyTray)
+      if (handle) {
+        handle.setAttribute('aria-valuemax', String(storyTrayMaxWidth()))
+        handle.setAttribute('aria-valuenow', String(normalized))
+      }
+      if (!persist) return
+      state.storyTrayUserSized = true
+      try { window.localStorage.setItem(storyTrayStorageKey, String(normalized)) } catch (_) {}
+    }
+
+    function initializeStoryTrayWidth() {
+      var stored = NaN
+      try { stored = Number(window.localStorage.getItem(storyTrayStorageKey)) } catch (_) {}
+      state.storyTrayUserSized = Number.isFinite(stored) && stored > 0
+      setStoryTrayWidth(state.storyTrayUserSized ? stored : defaultStoryTrayWidth(), false)
+    }
+
+    function bindStoryTrayResize(handle) {
+      if (!handle) return
+      handle.addEventListener('pointerdown', function (event) {
+        if (event.button !== 0) return
+        event.preventDefault()
+        storyTrayResizePointerId = event.pointerId
+        handle.setPointerCapture(event.pointerId)
+        doc.documentElement.classList.add('story-tray-resizing')
+      })
+      handle.addEventListener('pointermove', function (event) {
+        if (event.pointerId !== storyTrayResizePointerId) return
+        setStoryTrayWidth(window.innerWidth - event.clientX, false)
+      })
+      function finishResize(event) {
+        if (event.pointerId !== storyTrayResizePointerId) return
+        setStoryTrayWidth(event.type === 'pointerup' ? window.innerWidth - event.clientX : state.storyTrayWidth, true)
+        storyTrayResizePointerId = null
+        doc.documentElement.classList.remove('story-tray-resizing')
+        if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId)
+      }
+      handle.addEventListener('pointerup', finishResize)
+      handle.addEventListener('pointercancel', finishResize)
+      handle.addEventListener('keydown', function (event) {
+        var nextWidth = state.storyTrayWidth
+        if (event.key === 'Home') nextWidth = STORY_TRAY_MIN_WIDTH
+        else if (event.key === 'End') nextWidth = storyTrayMaxWidth()
+        else if (event.key === 'ArrowLeft') nextWidth += 16
+        else if (event.key === 'ArrowRight') nextWidth -= 16
+        else return
+        event.preventDefault()
+        setStoryTrayWidth(nextWidth, true)
+      })
+    }
+
     function showStoryTray() {
       var tray = ensureStoryTray()
       updateStoryGridButton()
@@ -449,7 +526,9 @@ if (layout) {
       tray.setAttribute('aria-hidden', 'true')
       var gridLabel = storyGridButtonLabel()
       var closeLabel = t('action_close', 'Close')
+      var resizeLabel = t('action_resize_sidebar', 'Resize sidebar')
       tray.innerHTML = '' +
+        '<div class="shorts-story-tray-resize-handle" role="separator" title="' + escapeHtml(resizeLabel) + '" aria-label="' + escapeHtml(resizeLabel) + '" aria-orientation="vertical" aria-valuemin="' + STORY_TRAY_MIN_WIDTH + '" tabindex="0"></div>' +
         '<button class="shorts-story-grid-btn" type="button" title="' + escapeHtml(gridLabel) + '" aria-label="' + escapeHtml(gridLabel) + '">' +
         iconSvg('grid') +
         '<span>' + escapeHtml(gridLabel) + '</span>' +
@@ -479,6 +558,8 @@ if (layout) {
       })
       layout.appendChild(tray)
       state.storyTray = tray
+      initializeStoryTrayWidth()
+      bindStoryTrayResize(q('.shorts-story-tray-resize-handle', tray))
       updateStoryGridButton()
       return tray
     }
@@ -1405,6 +1486,7 @@ if (layout) {
     function onWheel(event) {
       if (!state.overlayOpen) return
       if (event.target && event.target.closest && event.target.closest('.bookmark-sheet-overlay')) return
+      if (event.target && event.target.closest && event.target.closest('.shorts-story-tray')) return
       event.preventDefault()
       function keepWheelLocked() {
         state.wheelLocked = true
@@ -1561,6 +1643,10 @@ if (layout) {
       window.addEventListener('popstate', function () {
         var params = new URLSearchParams(window.location.search)
         switchShortsTab(normalizeShortsTab(params.get('tab')), { push: false })
+      })
+      window.addEventListener('resize', function () {
+        if (!state.storyTray) return
+        setStoryTrayWidth(state.storyTrayUserSized ? state.storyTrayWidth : defaultStoryTrayWidth(), false)
       })
       layout.addEventListener('wheel', onWheel, { passive: false })
       layout.addEventListener('touchstart', onTouchStart, { passive: true })

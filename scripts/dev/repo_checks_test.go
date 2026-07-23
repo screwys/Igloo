@@ -110,6 +110,33 @@ exec /usr/bin/git "$@"
 	}
 }
 
+func TestLocalDriftRecipesWriteGeneratedOutputs(t *testing.T) {
+	root := repoRoot(t)
+	justfile, err := os.ReadFile(filepath.Join(root, "Justfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(justfile), `scripts/dev/drift-check.sh --write`) {
+		t.Fatal("check-drift recipe should update generated outputs")
+	}
+
+	fullTest, err := os.ReadFile(filepath.Join(root, "scripts/dev/test-full.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(fullTest), `scripts/dev/drift-check.sh --write`) {
+		t.Fatal("full local test should update generated outputs")
+	}
+
+	workflow, err := os.ReadFile(filepath.Join(root, ".github/workflows/ci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(workflow), `scripts/dev/drift-check.sh --write`) {
+		t.Fatal("CI should reject generated drift instead of writing it")
+	}
+}
+
 func TestGitHubActionsWorkflowDependenciesAreSHAPinned(t *testing.T) {
 	workflowsDir := filepath.Join(repoRoot(t), ".github", "workflows")
 	entries, err := os.ReadDir(workflowsDir)

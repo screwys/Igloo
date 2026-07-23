@@ -65,12 +65,15 @@ func TestSettingsToAPIFormat_DefaultsShareEmbedFriendlyLinksOff(t *testing.T) {
 	}
 }
 
-func TestShortcutDefaultsIncludeCinemaAndSidebar(t *testing.T) {
+func TestShortcutDefaultsIncludeCinemaSidebarAndSettings(t *testing.T) {
 	if got := defaultShortcutConfig()["player.cinema"]; got != "c" {
 		t.Fatalf("default cinema shortcut = %q, want c", got)
 	}
 	if got := defaultShortcutConfig()["global.sidebar"]; got != "z" {
 		t.Fatalf("default sidebar shortcut = %q, want z", got)
+	}
+	if got := defaultShortcutConfig()["global.settings"]; got != "g" {
+		t.Fatalf("default settings shortcut = %q, want g", got)
 	}
 	settings := settingsToAPIFormat(nil)
 	shortcuts, ok := settings["shortcuts"].(map[string]string)
@@ -82,6 +85,9 @@ func TestShortcutDefaultsIncludeCinemaAndSidebar(t *testing.T) {
 	}
 	if got := shortcuts["global.sidebar"]; got != "z" {
 		t.Fatalf("settings sidebar shortcut = %q, want z", got)
+	}
+	if got := shortcuts["global.settings"]; got != "g" {
+		t.Fatalf("settings settings shortcut = %q, want g", got)
 	}
 }
 

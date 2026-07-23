@@ -5,6 +5,7 @@
     'shorts.mute': 'm', 'shorts.autoplay': 'a', 'shorts.bookmark': 'b', 'shorts.share': 's', 'shorts.grid': 'c',
     'player.fullscreen': 'f', 'player.cinema': 'c', 'player.bookmark': 'b', 'player.share': 's', 'player.autoplay': 'a',
     'global.sidebar': 'z',
+    'global.settings': 'g',
     'global.logs': 'o',
     'global.search': 'h'
   };
@@ -1955,6 +1956,20 @@
     if (logsModal.classList.contains('hidden') && q('.modal:not(.hidden)')) return;
     event.preventDefault();
     toggleLogsModal();
+  });
+
+  // Global shortcut to toggle preferences (default "G")
+  doc.addEventListener('keydown', function (event) {
+    if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
+    var tag = (event.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    if (event.target.isContentEditable) return;
+    if (!window.cfShortcuts.match('global.settings', event.key)) return;
+    if (!prefsModal) return;
+    if (prefsModal.classList.contains('hidden') && q('.modal:not(.hidden)')) return;
+    event.preventDefault();
+    if (prefsModal.classList.contains('hidden')) openModal(prefsModal);
+    else closeModal(prefsModal);
   });
 
   // -- Zen-style centered search overlay (default "H") --

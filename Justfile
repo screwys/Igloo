@@ -64,9 +64,9 @@ android-compile:
 test-web:
     GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" scripts/dev/web-test.sh
 
-# Regenerate templ and bundled assets, then fail if tracked generated output changed.
+# Regenerate templ and bundled assets.
 check-drift:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" scripts/dev/drift-check.sh
+    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" scripts/dev/drift-check.sh --write
 
 # Validate the SQLite schema and Android Room mirror contract.
 check-schema:

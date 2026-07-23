@@ -104,6 +104,7 @@ var shortcutDefaults = map[string]string{
 	"shorts.autoplay": "a", "shorts.bookmark": "b", "shorts.share": "s", "shorts.grid": "c",
 	"player.fullscreen": "f", "player.cinema": "c", "player.bookmark": "b", "player.share": "s", "player.autoplay": "a",
 	"global.sidebar": "z",
+	"global.settings": "g",
 	"global.logs":    "l",
 }
 

@@ -40,7 +40,6 @@ templ ShortsPage(p PageProps, videos []model.Video, storyChannels []model.StoryC
 			data-hydrate-batch-size={ strconv.Itoa(shortsHydrateBatchSize(hydrateBatchSize)) }
 			tabindex="-1"
 		>
-			<button id="close-shorts-btn" class="shorts-close-btn" title={ L(p, "action_close_shorts_mode", "Close Shorts mode") }>&#x2715;</button>
 			<div id="shorts-container" class="shorts-container"></div>
 			<div id="shorts-uptodate-overlay" class="shorts-uptodate-overlay hidden">
 				<div class="uptodate-content"><span>{ L(p, "status_up_to_date", "You're up to date!") }</span></div>

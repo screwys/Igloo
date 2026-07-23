@@ -369,6 +369,67 @@ func TestCookieBrowserSelectSizingOverridesGlobalInputWidth(t *testing.T) {
 	}
 }
 
+func TestWideModalsUseTheSameCenteredDesktopScale(t *testing.T) {
+	css, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(css)
+	for _, tc := range []struct {
+		selector string
+		start    string
+	}{
+		{selector: ".modal-wide", start: ".modal-wide {"},
+		{selector: ".prefs-modal-content", start: ".prefs-modal-content {\n    position: relative;"},
+	} {
+		start := strings.Index(text, tc.start)
+		if start < 0 {
+			t.Fatalf("missing %s desktop sizing rule", tc.selector)
+		}
+		rule := text[start:]
+		if end := strings.Index(rule, "}"); end >= 0 {
+			rule = rule[:end]
+		}
+		if !strings.Contains(rule, "--wide-modal-width: min(88vw, 1725px);") ||
+			!strings.Contains(rule, "width: var(--wide-modal-width);") ||
+			!strings.Contains(rule, "height: min(calc(var(--wide-modal-width) * 10 / 16), 95vh);") {
+			t.Fatalf("%s should use the shared centered desktop scale, got:\n%s", tc.selector, rule)
+		}
+	}
+
+	for _, check := range []string{
+		"body.shorts-open .modal-wide",
+		"body.shorts-open .prefs-modal-content",
+		"calc(100vw - var(--shorts-story-tray-width) - var(--shorts-story-tray-width) - 2rem)",
+	} {
+		if !strings.Contains(text, check) {
+			t.Errorf("wide Moments modals should stay centered inside the story rail clearance; missing %q", check)
+		}
+	}
+}
+
+func TestHeaderSearchResizesConsistentlyAcrossPages(t *testing.T) {
+	css, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(css)
+	for _, check := range []string{
+		".header-search {\n    width: clamp(84px, 8vw, 140px)",
+		".header-search.is-expanded {\n    width: min(520px, 42vw)",
+		"body.shorts-mode .floating-header",
+		"top: max(0.5rem, env(safe-area-inset-top))",
+	} {
+		if !strings.Contains(text, check) {
+			t.Errorf("shared responsive header search sizing missing %q", check)
+		}
+	}
+	if strings.Contains(text, "body.shorts-mode .header-search:not(.is-expanded)") ||
+		strings.Contains(text, "body.shorts-mode .header-search.is-expanded") {
+		t.Fatal("Moments should not resize the shared header search to fit the story tray")
+	}
+}
+
 func TestSidebarNavPlatforms(t *testing.T) {
 	t.Run("all platforms", func(t *testing.T) {
 		p := newTestPageProps()
@@ -555,6 +616,9 @@ func TestPrefsPlatformSettingsTabOwnsPlatformDefaults(t *testing.T) {
 	}
 	if !strings.Contains(html, `data-shortcuts-sub="feed-shorts" type="button">Feed</button>`) {
 		t.Fatalf("shortcuts Feed subtab should stay labeled Feed:\n%s", html)
+	}
+	if !strings.Contains(html, `data-sc="global.settings"`) {
+		t.Fatalf("shortcuts should include the settings binding:\n%s", html)
 	}
 
 	platformPanel := strings.Index(html, `data-prefs-panel="feed"`)
