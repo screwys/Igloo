@@ -56,7 +56,8 @@ COPY --from=build /out/igloo-adduser /usr/local/bin/igloo-adduser
 COPY --from=build /out/locales /app/locales
 COPY --from=build /out/static /app/static
 
-RUN mkdir -p /igloo/data /igloo/config \
+RUN chmod -R a+rX /app/locales /app/static \
+    && mkdir -p /igloo/data /igloo/config \
     && : > /igloo/data/.igloo-state-root \
     && chown -R 10001:10001 /igloo
 

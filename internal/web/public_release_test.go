@@ -414,6 +414,28 @@ func TestFirstInstallSetupRejectsForwardedRemoteRequest(t *testing.T) {
 	}
 }
 
+func TestFirstInstallSetupAllowsLocalhostThroughContainerBridge(t *testing.T) {
+	handler, _ := newFirstInstallTestHandler(t)
+	req := httptest.NewRequest("GET", "http://localhost:5001/setup", nil)
+	req.RemoteAddr = "172.18.0.1:5555"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestFirstInstallSetupRejectsRemoteRequestWithLocalhostHost(t *testing.T) {
+	handler, _ := newFirstInstallTestHandler(t)
+	req := httptest.NewRequest("GET", "http://localhost:5001/setup", nil)
+	req.RemoteAddr = "198.51.100.10:5555"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestFirstInstallSetupRejectsForwardedRemoteSubmit(t *testing.T) {
 	handler, authPath := newFirstInstallTestHandler(t)
 

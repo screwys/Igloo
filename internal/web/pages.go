@@ -432,10 +432,10 @@ func (s *Server) normalizeSetupPlatforms(raw []string) ([]string, error) {
 }
 
 func isLoopbackRequest(r *http.Request) bool {
-	if !isLoopbackAddr(r.RemoteAddr) {
-		return false
-	}
 	if hasForwardedClientHeaders(r) {
+		if !isLoopbackAddr(r.RemoteAddr) {
+			return false
+		}
 		ips, ok := forwardedClientIPs(r)
 		if !ok || len(ips) == 0 {
 			return false
@@ -447,7 +447,8 @@ func isLoopbackRequest(r *http.Request) bool {
 		}
 		return true
 	}
-	return isLoopbackHost(r.Host)
+	return isLoopbackAddr(r.RemoteAddr) ||
+		(isPrivateAddr(r.RemoteAddr) && isLoopbackHost(r.Host))
 }
 
 func hasForwardedClientHeaders(r *http.Request) bool {
@@ -515,6 +516,11 @@ func parseForwardedFor(part string) (net.IP, bool) {
 func isLoopbackAddr(addr string) bool {
 	ip, ok := parseClientIP(addr)
 	return ok && ip.IsLoopback()
+}
+
+func isPrivateAddr(addr string) bool {
+	ip, ok := parseClientIP(addr)
+	return ok && (ip.IsPrivate() || ip.IsLinkLocalUnicast())
 }
 
 func isLoopbackHost(host string) bool {

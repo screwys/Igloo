@@ -18,11 +18,15 @@ port="${IGLOO_CONTAINER_CHECK_PORT:-5011}"
 name="igloo-container-check-$$"
 tmp="$(mktemp -d)"
 state_volume="${name}-state"
+adduser_volume="${name}-adduser-state"
 build_image="${IGLOO_CONTAINER_CHECK_BUILD:-1}"
+base_url="http://localhost:${port}"
+curl_local=(--resolve "localhost:${port}:127.0.0.1")
 
 cleanup() {
   "$runtime" rm -f "$name" >/dev/null 2>&1 || true
   "$runtime" volume rm -f "$state_volume" >/dev/null 2>&1 || true
+  "$runtime" volume rm -f "$adduser_volume" >/dev/null 2>&1 || true
   rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -32,10 +36,11 @@ if [[ "$build_image" != "0" ]]; then
 fi
 
 "$runtime" volume create "$state_volume" >/dev/null
+"$runtime" volume create "$adduser_volume" >/dev/null
 
 "$runtime" run --rm \
   -e IGLOO_ENABLED_PLATFORMS=all \
-  -v "$state_volume:/igloo" \
+  -v "$adduser_volume:/igloo" \
   "$image" \
   /usr/local/bin/igloo-adduser -username check -password check-pass -platforms youtube >/dev/null
 
@@ -46,29 +51,48 @@ fi
   "$image" >/dev/null
 
 for _ in $(seq 1 60); do
-  if curl -fsS "http://127.0.0.1:${port}/api/health/live" >/dev/null; then
+  if curl -fsS "${curl_local[@]}" "$base_url/api/health/live" >/dev/null; then
     break
   fi
   sleep 1
 done
 
-curl -fsS "http://127.0.0.1:${port}/api/health/live" >/dev/null
-curl -fsS "http://127.0.0.1:${port}/static/style.css" >/dev/null
-login_html="$(curl -fsS -c "$tmp/igloo-check-cookies.txt" "http://127.0.0.1:${port}/login")"
+curl -fsS "${curl_local[@]}" "$base_url/api/health/live" >/dev/null
+setup_html="$(curl -fsS "${curl_local[@]}" -c "$tmp/igloo-check-cookies.txt" "$base_url/setup")"
+csrf="$(printf '%s\n' "$setup_html" | sed -n 's/.*name="_csrf_token" value="\([^"]*\)".*/\1/p' | head -n1)"
+if [[ -z "$csrf" ]]; then
+  echo "setup page did not include CSRF token" >&2
+  exit 1
+fi
+status="$(curl -fsS "${curl_local[@]}" -b "$tmp/igloo-check-cookies.txt" -c "$tmp/igloo-check-cookies.txt" \
+  --data-urlencode "_csrf_token=$csrf" \
+  --data-urlencode "username=check" \
+  --data-urlencode "password=check-pass" \
+  --data-urlencode "password_confirm=check-pass" \
+  --data-urlencode "platforms=youtube" \
+  -o /dev/null -w '%{http_code}' \
+  "$base_url/setup")"
+if [[ "$status" != "303" ]]; then
+  echo "setup POST returned HTTP $status, want 303" >&2
+  exit 1
+fi
+
+curl -fsS "${curl_local[@]}" "$base_url/static/style.css" >/dev/null
+login_html="$(curl -fsS "${curl_local[@]}" -c "$tmp/igloo-login-cookies.txt" "$base_url/login")"
 csrf="$(printf '%s\n' "$login_html" | sed -n 's/.*name="_csrf_token" value="\([^"]*\)".*/\1/p' | head -n1)"
 if [[ -z "$csrf" ]]; then
- echo "login page did not include CSRF token" >&2
- exit 1
+  echo "login page did not include CSRF token" >&2
+  exit 1
 fi
-status="$(curl -fsS -b "$tmp/igloo-check-cookies.txt" -c "$tmp/igloo-check-cookies.txt" \
+status="$(curl -fsS "${curl_local[@]}" -b "$tmp/igloo-login-cookies.txt" -c "$tmp/igloo-login-cookies.txt" \
   --data-urlencode "_csrf_token=$csrf" \
   --data-urlencode "username=check" \
   --data-urlencode "password=check-pass" \
   -o /dev/null -w '%{http_code}' \
-  "http://127.0.0.1:${port}/login")"
+  "$base_url/login")"
 if [[ "$status" != "303" ]]; then
   echo "login POST returned HTTP $status, want 303" >&2
   exit 1
 fi
 
-echo "container check ok on http://127.0.0.1:${port}"
+echo "container check ok on $base_url"
