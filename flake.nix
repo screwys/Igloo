@@ -264,6 +264,7 @@
             extraCommands = ''
               mkdir -p app usr/local/bin igloo/data igloo/config tmp
               chmod 1777 tmp
+              : > igloo/data/.igloo-state-root
 
               ln -s ${igloo}/share/igloo/static app/static
               ln -s ${igloo}/share/igloo/locales app/locales

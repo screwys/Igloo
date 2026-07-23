@@ -74,6 +74,13 @@ jobs:
       - name: Load Nix container image
         run: docker load < result
 
+      - name: Check fresh container setup
+        env:
+          CONTAINER_RUNTIME: docker
+          IGLOO_CONTAINER_CHECK_BUILD: "0"
+          IGLOO_CONTAINER_CHECK_IMAGE: ghcr.io/screwys/igloo:latest
+        run: scripts/dev/container-check.sh
+
       - name: Push container image
         id: build
         env:
