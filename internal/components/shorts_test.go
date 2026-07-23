@@ -104,6 +104,7 @@ func TestShortsPlayerLongPressUsesMomentMutationOwners(t *testing.T) {
 		"if (!isRepost && authorID)",
 		"wrapper.appendChild(overlay)",
 		"wrapper.classList.add('moment-actions-open')",
+		"if (event.target !== overlay) return\n    event.preventDefault()\n    event.stopPropagation()\n    closeMomentActions()",
 		"shareShort(data)",
 		"else if (data.channelFollowed && authorID)",
 		"advanceMomentsAfterAction(entry)",

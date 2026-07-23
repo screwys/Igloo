@@ -236,7 +236,10 @@ function openMomentActions(entry) {
   cancel.addEventListener('click', closeMomentActions)
   sheet.appendChild(cancel)
   overlay.addEventListener('click', function (event) {
-    if (event.target === overlay) closeMomentActions()
+    if (event.target !== overlay) return
+    event.preventDefault()
+    event.stopPropagation()
+    closeMomentActions()
   })
   momentActionsKeyHandler = function (event) {
     if (event.key === 'Escape') closeMomentActions()
