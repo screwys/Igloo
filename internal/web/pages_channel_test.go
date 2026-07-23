@@ -64,6 +64,65 @@ func TestHandlePageChannelRendersProfileOnlyTikTok(t *testing.T) {
 	assertInactiveNav(t, html, "/videos")
 }
 
+func TestHandlePageChannelSeparatesAuthoredMomentsAndRepostsWithoutFullPageSwap(t *testing.T) {
+	srv := newTestServer(t)
+	srv.staticV = func(path string) string { return "/static/" + path }
+	if err := srv.db.ExecRaw(`
+		INSERT INTO channels (channel_id, source_id, name, platform) VALUES
+			('tiktok_sample_profile', 'sample_profile', 'Sample Profile', 'tiktok'),
+			('tiktok_sample_author', 'sample_author', 'Sample Author', 'tiktok');
+		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at) VALUES
+			('sample_authored', 'tiktok_sample_profile', 'tiktok_video', 'Authored moment', 100),
+			('sample_reposted', 'tiktok_sample_author', 'tiktok_video', 'Reposted moment', 200)
+	`); err != nil {
+		t.Fatalf("seed channel content: %v", err)
+	}
+	if err := srv.db.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID: "tiktok_sample_profile", Platform: "tiktok",
+		Handle: "sample_profile", DisplayName: "Sample Profile",
+	}); err != nil {
+		t.Fatalf("UpsertChannelProfile: %v", err)
+	}
+	if _, err := srv.db.UpsertVideoRepostSources([]model.VideoRepostSource{{
+		VideoID: "sample_reposted", ReposterChannelID: "tiktok_sample_profile",
+		ReposterHandle: "sample_profile", RepostedAtMs: 300,
+	}}); err != nil {
+		t.Fatalf("UpsertVideoRepostSources: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/channels/tiktok_sample_profile?section=reposts", nil)
+	req.SetPathValue("channelID", "tiktok_sample_profile")
+	rec := httptest.NewRecorder()
+	srv.handlePageChannel(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reposts status = %d", rec.Code)
+	}
+	html := rec.Body.String()
+	if !strings.Contains(html, "Reposted moment") || strings.Contains(html, "Authored moment") {
+		t.Fatalf("reposts section rendered the wrong owner set:\n%s", html)
+	}
+	if !strings.Contains(html, `aria-selected="1">Reposts`) {
+		t.Fatalf("reposts tab is not active:\n%s", html)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/channels/tiktok_sample_profile", nil)
+	req.Header.Set("HX-Request", "true")
+	req.SetPathValue("channelID", "tiktok_sample_profile")
+	rec = httptest.NewRecorder()
+	srv.handlePageChannel(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("moments partial status = %d", rec.Code)
+	}
+	html = rec.Body.String()
+	if !strings.Contains(html, `id="channel-video-section"`) ||
+		!strings.Contains(html, "Authored moment") || strings.Contains(html, "Reposted moment") {
+		t.Fatalf("moments partial rendered the wrong section:\n%s", html)
+	}
+	if strings.Contains(html, `profile-card--hero`) || strings.Contains(html, `id="shorts-layout"`) {
+		t.Fatalf("section swap should not replace the full page:\n%s", html)
+	}
+}
+
 func TestHandlePageChannelRendersTwitterChannelWithChannelsNavActive(t *testing.T) {
 	srv := newTestServer(t)
 	srv.staticV = func(path string) string { return "/static/" + path }

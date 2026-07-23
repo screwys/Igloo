@@ -706,6 +706,7 @@ func (s *Server) handlePageChannel(w http.ResponseWriter, r *http.Request) {
 		page = 1
 	}
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	section := normalizeChannelVideoSection(r.URL.Query().Get("section"))
 	perPage := 40
 
 	channel, err := s.db.GetChannel(channelID)
@@ -750,17 +751,22 @@ func (s *Server) handlePageChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	opts := db.GetVideosOpts{
-		ChannelID:       channelID,
 		Search:          q,
 		Limit:           perPage,
 		ExcludeMetadata: true,
+	}
+	usesShorts := channel.Platform == "tiktok" || channel.Platform == "instagram"
+	if usesShorts && section == "reposts" {
+		opts.RepostedByChannelID = channelID
+		opts.Platform = "shorts"
+	} else {
+		opts.ChannelID = channelID
 	}
 	count, _ := s.db.GetVideoCount(opts)
 	pager := model.Pager{Page: page, PerPage: perPage, Total: count}
 	opts.Offset = pager.Offset()
 	videos, _ := s.db.GetVideos(opts)
 
-	usesShorts := channel.Platform == "tiktok" || channel.Platform == "instagram"
 	if usesShorts {
 		nowMs := time.Now().UnixMilli()
 		if err := s.db.AttachStoryStatusToVideos(videos, nowMs); err != nil {
@@ -795,12 +801,23 @@ func (s *Server) handlePageChannel(w http.ResponseWriter, r *http.Request) {
 	// HTMX request — return video cards + next trigger for infinite scroll
 	if r.Header.Get("HX-Request") != "" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = components.VideoGrid(p, videos, *channel, pager, q, usesShorts, true).Render(r.Context(), w)
+		if usesShorts && page == 1 {
+			_ = components.ChannelVideoSection(p, videos, *channel, pager, q, usesShorts, section).Render(r.Context(), w)
+		} else {
+			_ = components.VideoGrid(p, videos, *channel, pager, q, usesShorts, section, true).Render(r.Context(), w)
+		}
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = components.ChannelPage(p, *channel, profile, videos, pager, q, channel.AvatarURL, usesShorts).Render(r.Context(), w)
+	_ = components.ChannelPage(p, *channel, profile, videos, pager, q, channel.AvatarURL, usesShorts, section).Render(r.Context(), w)
+}
+
+func normalizeChannelVideoSection(raw string) string {
+	if strings.EqualFold(strings.TrimSpace(raw), "reposts") {
+		return "reposts"
+	}
+	return "moments"
 }
 
 func channelFromProfileOnly(channelID string, profile *model.ChannelProfile, url string) *model.Channel {

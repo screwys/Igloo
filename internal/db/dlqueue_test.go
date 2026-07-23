@@ -260,7 +260,7 @@ func TestVideoDesireFreshnessIgnoresObservationTime(t *testing.T) {
 	if freshness["sample_canonical_old"] != 100 || freshness["sample_canonical_new"] != 200 {
 		t.Fatalf("window freshness = %+v", freshness)
 	}
-	if err := d.EnforceVideoDesireLimit(source, 1); err != nil {
+	if err := d.EnforceVideoDesireLimits(source, 1, 0); err != nil {
 		t.Fatal(err)
 	}
 	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = ? AND video_id = 'sample_canonical_new'`, source); got != 1 {

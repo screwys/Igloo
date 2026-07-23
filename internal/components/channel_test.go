@@ -239,7 +239,7 @@ func TestVideoGridEmpty(t *testing.T) {
 	pager := model.Pager{Page: 1, PerPage: 40, Total: 0}
 
 	var buf bytes.Buffer
-	err := VideoGrid(newTestPageProps(), nil, ch, pager, "", false, false).Render(context.Background(), &buf)
+	err := VideoGrid(newTestPageProps(), nil, ch, pager, "", false, "moments", false).Render(context.Background(), &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +258,7 @@ func TestVideoGridEmptyPartial(t *testing.T) {
 	pager := model.Pager{Page: 1, PerPage: 40, Total: 0}
 
 	var buf bytes.Buffer
-	err := VideoGrid(newTestPageProps(), nil, ch, pager, "", false, true).Render(context.Background(), &buf)
+	err := VideoGrid(newTestPageProps(), nil, ch, pager, "", false, "moments", true).Render(context.Background(), &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +278,7 @@ func TestVideoGridInfiniteScroll(t *testing.T) {
 	pager := model.Pager{Page: 1, PerPage: 2, Total: 5}
 
 	var buf bytes.Buffer
-	err := VideoGrid(newTestPageProps(), videos, ch, pager, "", false, false).Render(context.Background(), &buf)
+	err := VideoGrid(newTestPageProps(), videos, ch, pager, "", false, "moments", false).Render(context.Background(), &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestVideoGridNoInfiniteScrollOnLastPage(t *testing.T) {
 	pager := model.Pager{Page: 1, PerPage: 40, Total: 1}
 
 	var buf bytes.Buffer
-	err := VideoGrid(newTestPageProps(), videos, ch, pager, "", false, false).Render(context.Background(), &buf)
+	err := VideoGrid(newTestPageProps(), videos, ch, pager, "", false, "moments", false).Render(context.Background(), &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,13 +320,14 @@ func TestVideoGridInfiniteScrollWithSearch(t *testing.T) {
 	pager := model.Pager{Page: 1, PerPage: 1, Total: 3}
 
 	var buf bytes.Buffer
-	err := VideoGrid(newTestPageProps(), videos, ch, pager, "test query", false, false).Render(context.Background(), &buf)
+	err := VideoGrid(newTestPageProps(), videos, ch, pager, "test query", false, "moments", false).Render(context.Background(), &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
 	html := buf.String()
 
-	if !strings.Contains(html, `hx-get="/channels/youtube_chan1?page=2&amp;q=test query"`) {
+	if !strings.Contains(html, `hx-get="/channels/youtube_chan1?page=2&amp;q=test&#43;query"`) &&
+		!strings.Contains(html, `hx-get="/channels/youtube_chan1?page=2&amp;q=test+query"`) {
 		t.Error("expected search query in infinite scroll URL")
 	}
 }
@@ -349,7 +350,7 @@ func TestChannelPageStructure(t *testing.T) {
 	pager := model.Pager{Page: 1, PerPage: 40, Total: 1}
 
 	var buf bytes.Buffer
-	err := ChannelPage(p, ch, nil, videos, pager, "", "/api/media/avatar/youtube_testchan", false).Render(context.Background(), &buf)
+	err := ChannelPage(p, ch, nil, videos, pager, "", "/api/media/avatar/youtube_testchan", false, "moments").Render(context.Background(), &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,7 +394,7 @@ func TestChannelPageShortsMode(t *testing.T) {
 	pager := model.Pager{Page: 1, PerPage: 40, Total: 0}
 
 	var buf bytes.Buffer
-	err := ChannelPage(p, ch, profile, nil, pager, "", "/api/media/avatar/tt_testchan", true).Render(context.Background(), &buf)
+	err := ChannelPage(p, ch, profile, nil, pager, "", "/api/media/avatar/tt_testchan", true, "moments").Render(context.Background(), &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,6 +430,18 @@ func TestChannelPageShortsMode(t *testing.T) {
 	if !strings.Contains(html, `id="shorts-layout"`) {
 		t.Error("expected shorts layout div")
 	}
+	for _, want := range []string{
+		`id="channel-video-section"`,
+		`href="/channels/tt_testchan"`,
+		`href="/channels/tt_testchan?section=reposts"`,
+		`hx-target="#channel-video-section"`,
+		`aria-selected="1">Moments`,
+		`aria-selected="0">Reposts`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("expected profile tabs to contain %q", want)
+		}
+	}
 	// Shorts mode should load shorts_page.js
 	if !strings.Contains(html, "shorts_page.js") {
 		t.Error("expected shorts_page.js script")
@@ -445,7 +458,7 @@ func TestChannelPageNonShortsNoShortsLayout(t *testing.T) {
 	pager := model.Pager{Page: 1, PerPage: 40, Total: 0}
 
 	var buf bytes.Buffer
-	err := ChannelPage(p, ch, nil, nil, pager, "", "/api/media/avatar/youtube_testchan", false).Render(context.Background(), &buf)
+	err := ChannelPage(p, ch, nil, nil, pager, "", "/api/media/avatar/youtube_testchan", false, "moments").Render(context.Background(), &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,6 +466,9 @@ func TestChannelPageNonShortsNoShortsLayout(t *testing.T) {
 
 	if strings.Contains(html, `id="shorts-layout"`) {
 		t.Error("non-shorts channel should not have shorts layout")
+	}
+	if strings.Contains(html, `class="channel-profile-tabs"`) {
+		t.Error("non-shorts channel should not have Moments/Reposts tabs")
 	}
 	if strings.Contains(html, "shorts_page.js") {
 		t.Error("non-shorts channel should not load shorts_page.js")
@@ -480,7 +496,7 @@ func TestChannelPageYouTubeUsesProfileHero(t *testing.T) {
 	pager := model.Pager{Page: 1, PerPage: 40, Total: 0}
 
 	var buf bytes.Buffer
-	err := ChannelPage(p, ch, profile, nil, pager, "", "/api/media/avatar/youtube_UCtestchan", false).Render(context.Background(), &buf)
+	err := ChannelPage(p, ch, profile, nil, pager, "", "/api/media/avatar/youtube_UCtestchan", false, "moments").Render(context.Background(), &buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -514,7 +530,7 @@ func TestChannelPageTwitterUsesProfileHero(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := ChannelPage(p, ch, profile, nil, model.Pager{Page: 1, PerPage: 40}, "", "", false).Render(context.Background(), &buf); err != nil {
+	if err := ChannelPage(p, ch, profile, nil, model.Pager{Page: 1, PerPage: 40}, "", "", false, "moments").Render(context.Background(), &buf); err != nil {
 		t.Fatal(err)
 	}
 	html := buf.String()

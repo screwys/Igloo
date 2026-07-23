@@ -67,6 +67,25 @@ func TestVideoRepostSourcesReplaceAndMomentsTabs(t *testing.T) {
 		t.Fatalf("unexpected repost metadata: %+v", allOn[1])
 	}
 
+	profileReposts, err := d.GetVideos(GetVideosOpts{
+		Platform: "shorts", RepostedByChannelID: "tiktok_followed", Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("GetVideos profile reposts: %v", err)
+	}
+	if got := videoIDs(profileReposts); len(got) != 1 || got[0] != "repost_1" {
+		t.Fatalf("profile repost ids = %v, want [repost_1]", got)
+	}
+	if !profileReposts[0].RepostIntroduced || profileReposts[0].ReposterChannelID != "tiktok_followed" || profileReposts[0].EffectiveMomentAtMs != 2000 {
+		t.Fatalf("profile repost metadata = %+v", profileReposts[0])
+	}
+	profileCount, err := d.GetVideoCount(GetVideosOpts{
+		Platform: "shorts", RepostedByChannelID: "tiktok_followed",
+	})
+	if err != nil || profileCount != 1 {
+		t.Fatalf("profile repost count = %d, err=%v", profileCount, err)
+	}
+
 	if err := d.ReplaceVideoRepostSources("repost_1", nil); err != nil {
 		t.Fatalf("ReplaceVideoRepostSources clear: %v", err)
 	}

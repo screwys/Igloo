@@ -11,18 +11,19 @@ import (
 
 // GetVideosOpts holds filtering/pagination options for video queries.
 type GetVideosOpts struct {
-	ChannelID        string
-	Limit            int
-	Offset           int
-	Search           string
-	Platform         string
-	SourceKind       string
-	ExcludeMetadata  bool
-	UnwatchedOnly    bool
-	IncludeTemp      bool
-	OrderAsc         bool // true = oldest first, false = newest first (default)
-	MomentsMode      string
-	PublishedAfterMs int64
+	ChannelID           string
+	RepostedByChannelID string
+	Limit               int
+	Offset              int
+	Search              string
+	Platform            string
+	SourceKind          string
+	ExcludeMetadata     bool
+	UnwatchedOnly       bool
+	IncludeTemp         bool
+	OrderAsc            bool // true = oldest first, false = newest first (default)
+	MomentsMode         string
+	PublishedAfterMs    int64
 }
 
 func includeUndownloadedVideoRows(opts GetVideosOpts) bool {
@@ -317,10 +318,15 @@ func (db *DB) GetVideos(opts GetVideosOpts) ([]model.Video, error) {
 	includeMomentReposts := isMomentsQuery && momentsMode == "all" && db.MomentsIncludeRepostsEnabled()
 	includeInstagramTagged := isMomentsQuery && momentsMode == "all" && db.InstagramIncludeTaggedEnabled()
 	includeSourceWindows := includeMomentReposts || includeInstagramTagged
+	profileRepostQuery := strings.TrimSpace(opts.RepostedByChannelID) != ""
 
 	if opts.ChannelID != "" {
 		where = append(where, "v.channel_id = ?")
 		args = append(args, opts.ChannelID)
+	}
+	if profileRepostQuery {
+		where = append(where, "profile_repost.reposter_channel_id = ?")
+		args = append(args, strings.TrimSpace(opts.RepostedByChannelID))
 	}
 	if opts.SourceKind != "" {
 		where = append(where, "COALESCE(v.source_kind, '') = ?")
@@ -395,7 +401,17 @@ func (db *DB) GetVideos(opts GetVideosOpts) ([]model.Video, error) {
 		       0 AS repost_introduced,
 		       COALESCE(v.published_at, 0) AS effective_moment_at_ms`
 	orderExpr := "v.published_at"
-	if includeSourceWindows {
+	if profileRepostQuery {
+		repostJoin = "LEFT JOIN video_repost_sources_resolved profile_repost ON profile_repost.video_id = v.video_id"
+		repostCols = `
+		       COALESCE(profile_repost.reposter_channel_id, '') AS reposter_channel_id,
+		       COALESCE(profile_repost.reposter_handle, '') AS reposter_handle,
+		       COALESCE(profile_repost.reposter_display_name, '') AS reposter_display_name,
+		       1 AS repost_count,
+		       1 AS repost_introduced,
+		       ` + momentRepostTimeSQL("profile_repost", "v") + ` AS effective_moment_at_ms`
+		orderExpr = "effective_moment_at_ms"
+	} else if includeSourceWindows {
 		withClause = `
 		WITH allowed_moment_reposts AS (
 			SELECT vrs.*,
@@ -666,10 +682,15 @@ func (db *DB) GetVideoCount(opts GetVideosOpts) (int, error) {
 	includeMomentReposts := isMomentsQuery && momentsMode == "all" && db.MomentsIncludeRepostsEnabled()
 	includeInstagramTagged := isMomentsQuery && momentsMode == "all" && db.InstagramIncludeTaggedEnabled()
 	includeSourceWindows := includeMomentReposts || includeInstagramTagged
+	profileRepostQuery := strings.TrimSpace(opts.RepostedByChannelID) != ""
 
 	if opts.ChannelID != "" {
 		where = append(where, "v.channel_id = ?")
 		args = append(args, opts.ChannelID)
+	}
+	if profileRepostQuery {
+		where = append(where, "profile_repost.reposter_channel_id = ?")
+		args = append(args, strings.TrimSpace(opts.RepostedByChannelID))
 	}
 	if opts.SourceKind != "" {
 		where = append(where, "COALESCE(v.source_kind, '') = ?")
@@ -723,13 +744,18 @@ func (db *DB) GetVideoCount(opts GetVideosOpts) (int, error) {
 		whereClause = "WHERE " + strings.Join(where, " AND ")
 	}
 
+	repostJoin := ""
+	if profileRepostQuery {
+		repostJoin = "LEFT JOIN video_repost_sources profile_repost ON profile_repost.video_id = v.video_id"
+	}
 	query := fmt.Sprintf(`
 		SELECT COUNT(*)
 		FROM videos v
 		LEFT JOIN channels c ON v.channel_id = c.channel_id
 		LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id
 		%s
-	`, whereClause)
+		%s
+	`, repostJoin, whereClause)
 
 	var count int
 	err := db.conn.QueryRow(query, args...).Scan(&count)

@@ -566,6 +566,14 @@ func TestPrefsPlatformSettingsTabOwnsPlatformDefaults(t *testing.T) {
 	if youtubeSetting < platformPanel || youtubeSetting > sponsorPanel {
 		t.Fatalf("youtube settings should render inside Platform Settings panel:\n%s", html)
 	}
+	for _, want := range []string{
+		`name="instagram_repost_max_videos" class="input" min="1" max="300" value="15"`,
+		`name="tiktok_repost_max_videos" class="input" min="1" max="300" value="15"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing default repost storage input %q:\n%s", want, html)
+		}
+	}
 }
 
 func TestPrefsBodyAllowsThreeSecondFetchDelay(t *testing.T) {

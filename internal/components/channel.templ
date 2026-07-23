@@ -2,12 +2,13 @@ package components
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"github.com/screwys/igloo/internal/model"
 )
 
 // ChannelPage renders the full single-channel page wrapped in Base layout.
-templ ChannelPage(p PageProps, channel model.Channel, profile *model.ChannelProfile, videos []model.Video, pager model.Pager, search string, avatarURL string, usesShorts bool) {
+templ ChannelPage(p PageProps, channel model.Channel, profile *model.ChannelProfile, videos []model.Video, pager model.Pager, search string, avatarURL string, usesShorts bool, section string) {
 	@Base(p) {
 		if usesProfileHero(channel.Platform) && profile != nil {
 			@ProfileCard(p, profile, "hero", channel.IsSubscribed, channel.IsStarred)
@@ -36,17 +37,7 @@ templ ChannelPage(p PageProps, channel model.Channel, profile *model.ChannelProf
 				>{ L(p, "action_unsubscribe", "Unsubscribe") }</button>
 			</div>
 		}
-		<div
-			id="video-grid"
-			if usesShorts {
-				class="video-grid shorts-grid"
-				style="grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap:1.25rem;"
-			} else {
-				class="video-grid"
-			}
-		>
-			@VideoGrid(p, videos, channel, pager, search, usesShorts, false)
-		</div>
+		@ChannelVideoSection(p, videos, channel, pager, search, usesShorts, section)
 		if usesShorts {
 			<div id="shorts-layout" class="shorts-layout hidden" data-auto-open="0" data-persist-history="0" data-source-container-selector="#video-grid" data-source-card-selector="a.video-card" data-infinite-container-selector="#video-grid" tabindex="-1">
 				<button id="close-shorts-btn" class="shorts-close-btn" title={ L(p, "action_close_shorts_mode", "Close Shorts mode") }>&#x2715;</button>
@@ -57,6 +48,52 @@ templ ChannelPage(p PageProps, channel model.Channel, profile *model.ChannelProf
 			</div>
 		}
 	}
+}
+
+templ ChannelVideoSection(p PageProps, videos []model.Video, channel model.Channel, pager model.Pager, search string, usesShorts bool, section string) {
+	<div id="channel-video-section">
+		if usesShorts {
+			@ChannelVideoTabs(p, channel.ChannelID, section)
+		}
+		<div
+			id="video-grid"
+			if usesShorts {
+				class="video-grid shorts-grid"
+				style="grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap:1.25rem;"
+			} else {
+				class="video-grid"
+			}
+		>
+			@VideoGrid(p, videos, channel, pager, search, usesShorts, section, false)
+		</div>
+	</div>
+}
+
+templ ChannelVideoTabs(p PageProps, channelID string, active string) {
+	<div class="channel-profile-tabs">
+		<div class="shorts-tabs" role="tablist" aria-label={ L(p, "profile_content_tabs_aria", "Profile content") }>
+			<a
+				class={ shortsTabClass(active, "moments") }
+				href={ channelSectionURL(channelID, "moments") }
+				hx-get={ channelSectionURL(channelID, "moments") }
+				hx-target="#channel-video-section"
+				hx-swap="outerHTML"
+				hx-push-url="true"
+				role="tab"
+				aria-selected={ boolDataAttr(active == "moments") }
+			>{ L(p, "nav_moments", "Moments") }</a>
+			<a
+				class={ shortsTabClass(active, "reposts") }
+				href={ channelSectionURL(channelID, "reposts") }
+				hx-get={ channelSectionURL(channelID, "reposts") }
+				hx-target="#channel-video-section"
+				hx-swap="outerHTML"
+				hx-push-url="true"
+				role="tab"
+				aria-selected={ boolDataAttr(active == "reposts") }
+			>{ L(p, "profile_reposts", "Reposts") }</a>
+		</div>
+	</div>
 }
 
 // channelPlatformOrDefault returns the platform or "youtube" as default.
@@ -73,13 +110,13 @@ func usesProfileHero(platform string) bool {
 
 // VideoGrid renders the video cards and an infinite scroll trigger if there are more pages.
 // When isPartial is true, the outer container div is NOT rendered (cards are injected into existing grid).
-templ VideoGrid(p PageProps, videos []model.Video, channel model.Channel, pager model.Pager, search string, usesShorts bool, isPartial bool) {
+templ VideoGrid(p PageProps, videos []model.Video, channel model.Channel, pager model.Pager, search string, usesShorts bool, section string, isPartial bool) {
 	if len(videos) > 0 {
 		for _, v := range videos {
 			@VideoCard(p, v)
 		}
 		if pager.HasNext() {
-			@InfiniteScrollTrigger(nextPageURL(channel.ChannelID, pager.Page+1, search))
+			@InfiniteScrollTrigger(nextPageURL(channel.ChannelID, pager.Page+1, search, section))
 		}
 	} else {
 		if !isPartial {
@@ -212,10 +249,20 @@ templ VideoGridInfiniteScrollTrigger(nextURL string) {
 }
 
 // nextPageURL builds the URL for the next page of channel videos.
-func nextPageURL(channelID string, page int, search string) string {
+func nextPageURL(channelID string, page int, search string, section string) string {
 	u := fmt.Sprintf("/channels/%s?page=%d", channelID, page)
 	if search != "" {
-		u += "&q=" + search
+		u += "&q=" + url.QueryEscape(search)
+	}
+	if section == "reposts" {
+		u += "&section=reposts"
 	}
 	return u
+}
+
+func channelSectionURL(channelID, section string) string {
+	if section == "reposts" {
+		return "/channels/" + channelID + "?section=reposts"
+	}
+	return "/channels/" + channelID
 }

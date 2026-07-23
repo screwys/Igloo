@@ -46,7 +46,11 @@ func (m *Manager) enforceVideoRetention(channels []model.Channel) error {
 		if settings == nil {
 			continue
 		}
-		if err := m.db.EnforceVideoDesireLimit(channel.ChannelID, settings.MaxVideos); err != nil {
+		if err := m.db.EnforceVideoDesireLimits(
+			channel.ChannelID,
+			settings.MaxVideos,
+			m.getChannelRepostMaxVideos(channel),
+		); err != nil {
 			enforceErrors = append(enforceErrors, fmt.Errorf("enforce %s retention: %w", channel.ChannelID, err))
 		}
 	}

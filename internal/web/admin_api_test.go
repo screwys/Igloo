@@ -1012,6 +1012,7 @@ func TestSettingsFromForm_PersistsInstagramGlobals(t *testing.T) {
 	form := url.Values{}
 	form.Set("instagram_fetch_delay", "5")
 	form.Set("instagram_max_videos", "37")
+	form.Set("instagram_repost_max_videos", "13")
 	form.Set("instagram_include_tagged_default", "true")
 	req := httptest.NewRequest("POST", "/api/settings", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -1025,6 +1026,9 @@ func TestSettingsFromForm_PersistsInstagramGlobals(t *testing.T) {
 	}
 	if got := body["instagram_max_videos"]; got != "37" {
 		t.Errorf("instagram_max_videos = %q, want 37", got)
+	}
+	if got := body["instagram_repost_max_videos"]; got != "13" {
+		t.Errorf("instagram_repost_max_videos = %q, want 13", got)
 	}
 	if got := body["instagram_include_tagged_default"]; got != "true" {
 		t.Errorf("instagram_include_tagged_default = %q, want true", got)

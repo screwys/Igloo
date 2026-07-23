@@ -302,16 +302,32 @@ func disjointComponents(left, right map[string]struct{}) bool {
 	return len(left) > 0 && len(right) > 0
 }
 
-// EnforceVideoDesireLimit keeps the newest desired videos for one followed
-// source across its retained video components. Ephemeral stories expire by
-// time and do not consume the normal video limit.
-func (db *DB) EnforceVideoDesireLimit(sourceChannelID string, limit int) error {
+// EnforceVideoDesireLimits keeps authored posts and introduced reposts in
+// separate storage budgets. Ephemeral stories expire by time and consume
+// neither budget.
+func (db *DB) EnforceVideoDesireLimits(sourceChannelID string, authoredLimit, repostLimit int) error {
 	sourceChannelID = strings.TrimSpace(sourceChannelID)
-	if sourceChannelID == "" || limit <= 0 {
+	if sourceChannelID == "" {
 		return nil
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+		for _, budget := range []struct {
+			limit      int
+			introduced bool
+		}{
+			{limit: authoredLimit},
+			{limit: repostLimit, introduced: true},
+		} {
+			if budget.limit <= 0 {
+				continue
+			}
+			componentPredicate := "desired.source_component NOT IN ('stories', 'reposts', 'tagged')"
+			deletePredicate := "source_component NOT IN ('stories', 'reposts', 'tagged')"
+			if budget.introduced {
+				componentPredicate = "desired.source_component IN ('reposts', 'tagged')"
+				deletePredicate = "source_component IN ('reposts', 'tagged')"
+			}
+			_, err := tx.Exec(`
 			WITH introduced AS (
 				SELECT video_id,
 				       MAX(COALESCE(NULLIF(reposted_at_ms, 0), 0)) AS freshness_at_ms
@@ -325,7 +341,7 @@ func (db *DB) EnforceVideoDesireLimit(sourceChannelID string, limit int) error {
 				LEFT JOIN videos stored ON stored.video_id = desired.video_id
 				LEFT JOIN introduced ON introduced.video_id = desired.video_id
 				WHERE desired.source_channel_id = ?
-				  AND desired.source_component != 'stories'
+				  AND `+componentPredicate+`
 				GROUP BY desired.video_id
 				ORDER BY
 					MAX(CASE WHEN COALESCE(
@@ -346,11 +362,12 @@ func (db *DB) EnforceVideoDesireLimit(sourceChannelID string, limit int) error {
 			)
 			DELETE FROM video_desires
 			WHERE source_channel_id = ?
-			  AND source_component != 'stories'
+			  AND `+deletePredicate+`
 			  AND video_id NOT IN (SELECT video_id FROM kept)
-		`, sourceChannelID, sourceChannelID, limit, sourceChannelID)
-		if err != nil {
-			return err
+		`, sourceChannelID, sourceChannelID, budget.limit, sourceChannelID)
+			if err != nil {
+				return err
+			}
 		}
 		return pruneVideoRepostSourcesForDesiresTx(tx, sourceChannelID)
 	})
@@ -375,6 +392,7 @@ func pruneVideoRepostSourcesForDesiresTx(tx *sql.Tx, sourceChannelID string) err
 			FROM video_desires desired
 			WHERE desired.source_channel_id = ?
 			  AND desired.video_id = video_repost_sources.video_id
+			  AND desired.source_component IN ('reposts', 'tagged')
 		  )
 	`, sourceChannelID, sourceChannelID)
 	return err

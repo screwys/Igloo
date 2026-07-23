@@ -279,7 +279,8 @@ func discoveryPlatforms() []string {
 }
 
 func (m *Manager) checkChannel(ctx context.Context, channel model.Channel) (download.SourceSnapshot, error) {
-	limit := m.getChannelMaxVideos(channel)
+	authoredLimit := m.getChannelMaxVideos(channel)
+	repostLimit := m.getChannelRepostMaxVideos(channel)
 	if m.downloader == nil {
 		return download.SourceSnapshot{}, errors.New("download service is unavailable")
 	}
@@ -301,13 +302,13 @@ func (m *Manager) checkChannel(ctx context.Context, channel model.Channel) (down
 			}}, errors.New("instagram channel handle is empty")
 		}
 		cookiesFile, cookiesBrowser := m.cookieFileAndBrowserFor("instagram")
-		snapshot, channelErr := m.downloader.GalleryDL.InstagramChannel(ctx, handle, limit, cookiesFile, cookiesBrowser)
+		snapshot, channelErr := m.downloader.GalleryDL.InstagramChannel(ctx, handle, authoredLimit, cookiesFile, cookiesBrowser)
 		snapshot = ensureSourceWindows(snapshot, download.SourceComponentReels, download.SourceComponentPosts)
 
 		taggedWindow := download.SourceWindow{Component: sourceComponentTagged, Complete: true}
 		var taggedErr error
 		if m.db.InstagramIncludeTaggedForChannel(channel.ChannelID) {
-			taggedWindow.Refs, taggedErr = m.downloader.GalleryDL.InstagramTagged(ctx, handle, limit, cookiesFile, cookiesBrowser)
+			taggedWindow.Refs, taggedErr = m.downloader.GalleryDL.InstagramTagged(ctx, handle, repostLimit, cookiesFile, cookiesBrowser)
 			taggedWindow.Complete = taggedErr == nil
 			setIntroducerMetadata(taggedWindow.Refs, channel, handle)
 		}
@@ -322,9 +323,9 @@ func (m *Manager) checkChannel(ctx context.Context, channel model.Channel) (down
 	if channel.Platform == "youtube" && !strings.HasSuffix(url, "/videos") {
 		url = strings.TrimRight(url, "/") + "/videos"
 	}
-	snapshot, channelErr := m.downloader.YtDlp.ChannelCheck(ctx, url, limit)
+	snapshot, channelErr := m.downloader.YtDlp.ChannelCheck(ctx, url, authoredLimit)
 	if channelErr != nil && channel.Platform == "youtube" && strings.HasSuffix(url, "/videos") && len(snapshot.FlattenRefs(1)) == 0 {
-		fallback, fallbackErr := m.downloader.YtDlp.ChannelCheck(ctx, strings.TrimSuffix(url, "/videos"), limit)
+		fallback, fallbackErr := m.downloader.YtDlp.ChannelCheck(ctx, strings.TrimSuffix(url, "/videos"), authoredLimit)
 		if fallbackErr == nil {
 			snapshot, channelErr = fallback, nil
 		} else {
@@ -346,7 +347,7 @@ func (m *Manager) checkChannel(ctx context.Context, channel model.Channel) (down
 			} else {
 				handle := tiktokHandleForChannel(channel)
 				cookiesFile, _ := m.cookiesFor("tiktok")
-				repostWindow.Refs, repostErr = m.downloader.GalleryDL.Reposts(ctx, handle, limit, cookiesFile)
+				repostWindow.Refs, repostErr = m.downloader.GalleryDL.Reposts(ctx, handle, repostLimit, cookiesFile)
 				repostWindow.Complete = repostErr == nil
 				setIntroducerMetadata(repostWindow.Refs, channel, handle)
 			}
@@ -496,8 +497,19 @@ func (m *Manager) getChannelMaxVideos(channel model.Channel) int {
 	return m.db.IntSetting(key)
 }
 
+func (m *Manager) getChannelRepostMaxVideos(channel model.Channel) int {
+	if channel.Platform == "tiktok" {
+		return m.db.IntSetting("tiktok_repost_max_videos")
+	}
+	if channel.Platform == "instagram" {
+		return m.db.IntSetting("instagram_repost_max_videos")
+	}
+	return 0
+}
+
 func (m *Manager) reconcileSourceSnapshot(channel model.Channel, snapshot download.SourceSnapshot) (int, error) {
-	limit := m.getChannelMaxVideos(channel)
+	authoredLimit := m.getChannelMaxVideos(channel)
+	repostLimit := m.getChannelRepostMaxVideos(channel)
 	owners := desiredOwnersForSnapshot(channel, snapshot)
 	for _, owner := range owners {
 		if owner.channelID == channel.ChannelID {
@@ -525,7 +537,7 @@ func (m *Manager) reconcileSourceSnapshot(channel model.Channel, snapshot downlo
 		}
 		plans = append(plans, plan)
 	}
-	plans = boundSourceWindowPlans(plans, limit)
+	plans = boundSourceWindowPlans(plans, authoredLimit, repostLimit)
 	components := make([]db.VideoDesireSnapshot, 0, len(plans))
 	for _, plan := range plans {
 		components = append(components, db.VideoDesireSnapshot{
@@ -707,12 +719,17 @@ func (m *Manager) buildSourceWindowPlan(
 	return plan, nil
 }
 
-func boundSourceWindowPlans(plans []sourceWindowPlan, limit int) []sourceWindowPlan {
+func boundSourceWindowPlans(plans []sourceWindowPlan, authoredLimit, repostLimit int) []sourceWindowPlan {
 	for index := range plans {
 		if plans[index].window.Component == sourceComponentStories && len(plans[index].items) > nativeStoryFetchLimit {
 			plans[index].items = plans[index].items[:nativeStoryFetchLimit]
 		}
 	}
+	plans = boundSourceWindowGroup(plans, authoredLimit, false)
+	return boundSourceWindowGroup(plans, repostLimit, true)
+}
+
+func boundSourceWindowGroup(plans []sourceWindowPlan, limit int, introduced bool) []sourceWindowPlan {
 	if limit <= 0 {
 		return plans
 	}
@@ -724,7 +741,7 @@ func boundSourceWindowPlans(plans []sourceWindowPlan, limit int) []sourceWindowP
 	}
 	candidatesByID := make(map[string]candidate)
 	for componentOrder, plan := range plans {
-		if plan.window.Component == sourceComponentStories {
+		if plan.window.Component == sourceComponentStories || plan.introduced != introduced {
 			continue
 		}
 		for _, item := range plan.items {
@@ -775,7 +792,7 @@ func boundSourceWindowPlans(plans []sourceWindowPlan, limit int) []sourceWindowP
 		kept[candidate.videoID] = struct{}{}
 	}
 	for planIndex := range plans {
-		if plans[planIndex].window.Component == sourceComponentStories {
+		if plans[planIndex].window.Component == sourceComponentStories || plans[planIndex].introduced != introduced {
 			continue
 		}
 		items := plans[planIndex].items[:0]

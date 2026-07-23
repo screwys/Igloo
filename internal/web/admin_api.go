@@ -230,6 +230,10 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		"tiktok":    s.db.IntSetting("shorts_max_videos"),
 		"instagram": s.db.IntSetting("instagram_max_videos"),
 	}
+	previousRepostLimits := map[string]int{
+		"tiktok":    s.db.IntSetting("tiktok_repost_max_videos"),
+		"instagram": s.db.IntSetting("instagram_repost_max_videos"),
+	}
 	previousXMediaLimit := s.db.IntSetting("media_download_limit_default")
 	previousTiktokReposts := s.db.MomentsIncludeRepostsEnabled()
 	previousInstagramTagged := s.db.InstagramIncludeTaggedEnabled()
@@ -244,22 +248,28 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.workers != nil {
 		changes := []struct {
-			platform, settingKey string
-			extraChanged         bool
+			platform, settingKey, repostSettingKey string
+			extraChanged                           bool
 		}{
-			{"youtube", "youtube_max_videos", false},
-			{"tiktok", "shorts_max_videos", previousTiktokReposts != s.db.MomentsIncludeRepostsEnabled()},
-			{"instagram", "instagram_max_videos", previousInstagramTagged != s.db.InstagramIncludeTaggedEnabled()},
+			{"youtube", "youtube_max_videos", "", false},
+			{"tiktok", "shorts_max_videos", "tiktok_repost_max_videos", previousTiktokReposts != s.db.MomentsIncludeRepostsEnabled()},
+			{"instagram", "instagram_max_videos", "instagram_repost_max_videos", previousInstagramTagged != s.db.InstagramIncludeTaggedEnabled()},
 		}
 		var refresh []string
 		for _, change := range changes {
 			currentLimit := s.db.IntSetting(change.settingKey)
-			if currentLimit < previousLimits[change.platform] {
+			currentRepostLimit := previousRepostLimits[change.platform]
+			if change.repostSettingKey != "" {
+				currentRepostLimit = s.db.IntSetting(change.repostSettingKey)
+			}
+			if currentLimit < previousLimits[change.platform] ||
+				currentRepostLimit < previousRepostLimits[change.platform] {
 				if err := s.workers.EnforceVideoRetentionForPlatform(change.platform); err != nil {
 					slog.Error("EnforceVideoRetentionForPlatform", "platform", change.platform, "err", err)
 				}
 			}
-			if currentLimit != previousLimits[change.platform] || change.extraChanged {
+			if currentLimit != previousLimits[change.platform] ||
+				currentRepostLimit != previousRepostLimits[change.platform] || change.extraChanged {
 				refresh = append(refresh, change.platform)
 			}
 		}
@@ -367,8 +377,8 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 		"web_theme_id", "web_theme_accent",
 		"quality", "youtube_fetch_delay", "youtube_max_videos",
 		"youtube_default_playback_speed",
-		"tiktok_fetch_delay", "shorts_max_videos",
-		"instagram_fetch_delay", "instagram_max_videos",
+		"tiktok_fetch_delay", "shorts_max_videos", "tiktok_repost_max_videos",
+		"instagram_fetch_delay", "instagram_max_videos", "instagram_repost_max_videos",
 		"moments_default_tab", "stories_window_hours",
 		"media_download_limit_default", "x_feed_fetch_delay",
 		"translate_target_lang", "translate_backend",

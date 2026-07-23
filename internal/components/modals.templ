@@ -577,6 +577,10 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 					<label for="global-setting-instagram-max-videos">{ L(p, "settings_max_videos", "Max Videos") }</label>
 					<input type="number" id="global-setting-instagram-max-videos" name="instagram_max_videos" class="input" min="1" max="300" value={ prefs.Str("instagram_max_videos", "20") }/>
 				</div>
+				<div class="form-group">
+					<label for="global-setting-instagram-repost-max-videos">{ L(p, "settings_repost_storage", "Repost storage") }</label>
+					<input type="number" id="global-setting-instagram-repost-max-videos" name="instagram_repost_max_videos" class="input" min="1" max="300" value={ prefs.Str("instagram_repost_max_videos", "15") }/>
+				</div>
 				<div class="form-group checkbox-group">
 					<label>
 						if prefs.Bool("instagram_include_tagged_default") {
@@ -595,6 +599,10 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 				<div class="form-group">
 					<label for="global-setting-shorts-max-videos">{ L(p, "settings_max_videos", "Max Videos") }</label>
 					<input type="number" id="global-setting-shorts-max-videos" name="shorts_max_videos" class="input" min="1" max="300" value={ prefs.Str("shorts_max_videos", "20") }/>
+				</div>
+				<div class="form-group">
+					<label for="global-setting-tiktok-repost-max-videos">{ L(p, "settings_repost_storage", "Repost storage") }</label>
+					<input type="number" id="global-setting-tiktok-repost-max-videos" name="tiktok_repost_max_videos" class="input" min="1" max="300" value={ prefs.Str("tiktok_repost_max_videos", "15") }/>
 				</div>
 				<div class="form-group">
 					<label for="global-setting-moments-default-tab">{ L(p, "settings_moments_default_tab", "Moments default tab") }</label>

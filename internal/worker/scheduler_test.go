@@ -166,6 +166,56 @@ func TestInitialMultiComponentRetentionUsesContentTime(t *testing.T) {
 	}
 }
 
+func TestRepostRetentionDoesNotDisplaceAuthoredMoments(t *testing.T) {
+	database := newTestWorkerDB(t)
+	const sourceID = "tiktok_sample_source"
+	if err := database.ExecRaw(`
+		INSERT INTO channels (channel_id, source_id, name, platform, created_at)
+		VALUES (?, 'sample_source', 'Sample Source', 'tiktok', 1);
+		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
+	`, sourceID, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetSetting("shorts_max_videos", "3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetSetting("tiktok_repost_max_videos", "2"); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := &Manager{db: database, cfg: testCfg(t.TempDir()), profileKick: make(chan struct{}, 1)}
+	channel := model.Channel{ChannelID: sourceID, Name: "Sample Source", Platform: "tiktok"}
+	if _, err := manager.reconcileSourceSnapshot(channel, download.SourceSnapshot{Windows: []download.SourceWindow{
+		{Component: download.SourceComponentDirect, Complete: true, Refs: []download.VideoRef{
+			{VideoID: "sample_authored_new", PublishedAtMs: 300},
+			{VideoID: "sample_authored_kept", PublishedAtMs: 200},
+			{VideoID: "sample_authored_old", PublishedAtMs: 100},
+		}},
+		{Component: sourceComponentReposts, Complete: true, Refs: []download.VideoRef{
+			{VideoID: "sample_repost_new", ChannelID: "tiktok_sample_author_new", AuthorHandle: "sample_author_new", RepostedAtMs: 500},
+			{VideoID: "sample_repost_old", ChannelID: "tiktok_sample_author_old", AuthorHandle: "sample_author_old", RepostedAtMs: 400},
+		}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetSetting("shorts_max_videos", "2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetSetting("tiktok_repost_max_videos", "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.EnforceVideoRetentionForChannel(sourceID); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := desireIDs(desireWindow(t, database, sourceID, download.SourceComponentDirect)); fmt.Sprint(got) != "[sample_authored_new sample_authored_kept]" {
+		t.Fatalf("authored retention = %v", got)
+	}
+	if got := desireIDs(desireWindow(t, database, sourceID, sourceComponentReposts)); fmt.Sprint(got) != "[sample_repost_new]" {
+		t.Fatalf("repost retention = %v", got)
+	}
+}
+
 func TestStoryDesiresStayCurrentOutsideVideoLimit(t *testing.T) {
 	database := newTestWorkerDB(t)
 	const sourceID = "tiktok_sample_source"
@@ -210,7 +260,7 @@ func TestStoryDesiresStayCurrentOutsideVideoLimit(t *testing.T) {
 			t.Fatalf("story %s lane = %q, want current", item.VideoID, item.Lane)
 		}
 	}
-	if err := database.EnforceVideoDesireLimit(sourceID, 1); err != nil {
+	if err := database.EnforceVideoDesireLimits(sourceID, 1, 15); err != nil {
 		t.Fatal(err)
 	}
 	if got := len(desireWindow(t, database, sourceID, sourceComponentStories)); got != nativeStoryFetchLimit {
@@ -497,6 +547,9 @@ func TestPartialIntroducedSnapshotsPruneProvenanceWithDesire(t *testing.T) {
 	if err := database.SetSetting("shorts_max_videos", "1"); err != nil {
 		t.Fatalf("set retention limit: %v", err)
 	}
+	if err := database.SetSetting("tiktok_repost_max_videos", "1"); err != nil {
+		t.Fatalf("set repost retention limit: %v", err)
+	}
 
 	manager := &Manager{
 		db:          database,
@@ -709,6 +762,9 @@ func TestInstagramUsesOwnGlobalSchedulerSettings(t *testing.T) {
 	if err := database.SetSetting("instagram_max_videos", "45"); err != nil {
 		t.Fatalf("SetSetting instagram_max_videos: %v", err)
 	}
+	if err := database.SetSetting("instagram_repost_max_videos", "13"); err != nil {
+		t.Fatalf("SetSetting instagram_repost_max_videos: %v", err)
+	}
 
 	manager := &Manager{db: database, cfg: testCfg(t.TempDir())}
 	channel := model.Channel{ChannelID: "instagram_sample", Platform: "instagram"}
@@ -717,6 +773,9 @@ func TestInstagramUsesOwnGlobalSchedulerSettings(t *testing.T) {
 	}
 	if got := manager.getChannelMaxVideos(channel); got != 45 {
 		t.Fatalf("instagram max videos = %d, want 45", got)
+	}
+	if got := manager.getChannelRepostMaxVideos(channel); got != 13 {
+		t.Fatalf("instagram repost max videos = %d, want 13", got)
 	}
 }
 

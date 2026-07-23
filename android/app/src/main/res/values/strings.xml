@@ -489,9 +489,11 @@
     <string name="player_video_deleted">Video deleted</string>
     <string name="player_volume">Volume</string>
     <string name="player_volume_percent">Volume %1$d%%</string>
+    <string name="profile_content_tabs_aria">Profile content</string>
     <string name="profile_followers">Followers</string>
     <string name="profile_following">Following</string>
     <string name="profile_protected_account">Protected account</string>
+    <string name="profile_reposts">Reposts</string>
     <string name="profile_subscribers">Subscribers</string>
     <string name="search_channels_found_many">%1$s channels found</string>
     <string name="search_channels_found_single">%1$s channel found</string>
@@ -569,6 +571,7 @@
     <string name="settings_quality_best_available">Best Available</string>
     <string name="settings_quality_default">Default Quality</string>
     <string name="settings_quality_global_default">Global (default)</string>
+    <string name="settings_repost_storage">Repost storage</string>
     <string name="settings_retention_days">%1$d days</string>
     <string name="settings_retention_help">Keep items newer than N days; older items are pruned and not re-downloaded. Bookmarked and liked content is never pruned.</string>
     <string name="settings_retention_one_day">1 day</string>

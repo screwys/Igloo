@@ -1792,6 +1792,11 @@ select.input:focus {
     text-decoration: none;
 }
 
+.channel-profile-tabs {
+    display: flex;
+    justify-content: center;
+}
+
 /* Channels Overview — per-channel sections with video grids */
 .channels-overview {
     padding: 0.5rem 1.5rem 1.5rem;
