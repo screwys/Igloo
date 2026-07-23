@@ -7,8 +7,3 @@ ignore:
       name: ffmpeg
       version: 8.0.1
       type: UnknownPackage
-  - vulnerability: CVE-2026-31789
-    package:
-      name: openssl
-      version: 3.6.1
-      type: nix
