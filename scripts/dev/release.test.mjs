@@ -306,7 +306,9 @@ test("container images run as non-root by default", () => {
   assert.match(flake, /User = "10001:10001";/);
   assert.match(flake, /"HOME=\/tmp"/);
   assert.match(flake, /chown -R 10001:10001 igloo/);
-  assert.match(compose, /user: "\$\{IGLOO_UID:-1000\}:\$\{IGLOO_GID:-1000\}"/);
+  assert.doesNotMatch(compose, /^\s+user:/m);
+  assert.match(compose, /- igloo-state:\/igloo/);
+  assert.match(compose, /name: "\$\{IGLOO_STATE_VOLUME:-igloo-state\}"/);
   assert.match(compose, /read_only: true/);
   assert.match(compose, /\/tmp:size=256m,mode=1777/);
   assert.match(compose, /cap_drop:\n\s+- ALL/);

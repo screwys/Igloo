@@ -104,32 +104,34 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
 IGLOO_VERSION=vX.Y.Z
 docker pull "ghcr.io/screwys/igloo:${IGLOO_VERSION}"
 docker run -d --name igloo --restart unless-stopped \
-  --user "$(id -u):$(id -g)" \
   -p 5001:5001 \
-  -v "YOUR_DIRECTORY:/igloo" \
+  -v igloo-state:/igloo \
   "ghcr.io/screwys/igloo:${IGLOO_VERSION}"
 ```
 
 Use `-p 127.0.0.1:5001:5001` instead if you only want same-machine browser access.
 If you serve Igloo only over HTTPS, set `IGLOO_SESSION_COOKIE_SECURE=true`.
 
-You can use `latest` or a release tag such as `vX.Y.Z`. The `--user` flag keeps bind-mounted files owned by your current user. By default, this will create `data` and `config` inside `YOUR_DIRECTORY`. You can configure bookmarks through web; use `/igloo/bookmarks/<folder>` to keep
-them under the same folder or reuse one folder for multiple categories. To keep
-bookmark archives elsewhere, add `-v "YOUR_BOOKMARKS_DIRECTORY:/bookmarks"` and
-use `/bookmarks/<folder>`; make that folder writable by your user with
-`sudo chown -R "$(id -u):$(id -g)" YOUR_BOOKMARKS_DIRECTORY`.
+You can use `latest` or a release tag such as `vX.Y.Z`. The image runs as the
+unprivileged user `10001:10001`, and the container runtime prepares the
+`igloo-state` volume for that user on its first start. Replace `docker` with
+`podman` to use Podman. If your `docker` command is provided by Podman, use the
+commands as written.
 
-Without `--user`, the image runs as the unprivileged user
-`10001:10001`; so you would need to make mounted folders writable too.
+You can configure bookmarks through web; use `/igloo/bookmarks/<folder>` to
+keep them in the state volume or reuse one folder for multiple categories. To
+keep bookmark archives in a separate runtime-managed volume, add
+`-v igloo-bookmarks:/bookmarks` and use `/bookmarks/<folder>`.
 
 To build the image locally instead:
 
 ```bash
 git clone https://github.com/screwys/igloo
 cd igloo
-mkdir -p igloo
-IGLOO_UID="$(id -u)" IGLOO_GID="$(id -g)" docker compose up -d --build
+docker compose up -d --build
 ```
+
+Use `podman compose up -d --build` with Podman.
 
 Then open Igloo and create the first admin account in the setup screen:
 
@@ -137,12 +139,18 @@ Then open Igloo and create the first admin account in the setup screen:
 http://<server-ip>:5001
 ```
 
-By default, data is at:
+The `igloo-state` volume persists across container restarts, recreation, and
+normal `docker compose down` / `docker compose up` cycles. Inside the volume,
+state is stored at:
 
 ```text
-./igloo/data
-./igloo/config
+/igloo/data
+/igloo/config
 ```
+
+`docker compose down --volumes` deletes the state volume and starts Igloo
+clean the next time. Podman and Docker keep separate volume stores, so use
+Igloo's full export/import before changing runtimes.
 
 ## Back Ups
 

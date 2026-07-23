@@ -1,10 +1,9 @@
 services:
   igloo:
-    image: ghcr.io/screwys/igloo:latest
+    image: "${IGLOO_IMAGE:-ghcr.io/screwys/igloo:latest}"
     build:
       context: .
     restart: unless-stopped
-    user: "${IGLOO_UID:-1000}:${IGLOO_GID:-1000}"
     read_only: true
     tmpfs:
       - /tmp:size=256m,mode=1777
@@ -21,4 +20,8 @@ services:
       IGLOO_ENABLED_PLATFORMS: ${IGLOO_ENABLED_PLATFORMS:-}
       IGLOO_PUBLISHED_SERVER_URL: ${IGLOO_PUBLISHED_SERVER_URL:-}
     volumes:
-      - ./igloo:/igloo
+      - igloo-state:/igloo
+
+volumes:
+  igloo-state:
+    name: "${IGLOO_STATE_VOLUME:-igloo-state}"

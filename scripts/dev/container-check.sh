@@ -13,6 +13,14 @@ if [[ -z "$runtime" ]]; then
   fi
 fi
 
+runtime_is_podman() {
+  local candidate="$1"
+
+  [[ "$(basename "$candidate")" == "podman" ]] \
+    || "$candidate" --version 2>/dev/null | grep -qi podman
+}
+
+repo_root="$(git rev-parse --show-toplevel)"
 image="${IGLOO_CONTAINER_CHECK_IMAGE:-ghcr.io/screwys/igloo:container-check}"
 port="${IGLOO_CONTAINER_CHECK_PORT:-5011}"
 name="igloo-container-check-$$"
@@ -23,19 +31,31 @@ build_image="${IGLOO_CONTAINER_CHECK_BUILD:-1}"
 base_url="http://localhost:${port}"
 curl_local=(--resolve "localhost:${port}:127.0.0.1")
 
+compose() {
+  IGLOO_ENABLED_PLATFORMS=all \
+    IGLOO_IMAGE="$image" \
+    IGLOO_PORT="$port" \
+    IGLOO_STATE_VOLUME="$state_volume" \
+    "$runtime" compose --project-name "$name" --file "$repo_root/compose.yaml" "$@"
+}
+
 cleanup() {
-  "$runtime" rm -f "$name" >/dev/null 2>&1 || true
+  compose down --volumes --remove-orphans >/dev/null 2>&1 || true
   "$runtime" volume rm -f "$state_volume" >/dev/null 2>&1 || true
   "$runtime" volume rm -f "$adduser_volume" >/dev/null 2>&1 || true
   rm -rf "$tmp"
 }
 trap cleanup EXIT
 
-if [[ "$build_image" != "0" ]]; then
-  "$runtime" build -t "$image" .
+if ! "$runtime" compose version >/dev/null 2>&1; then
+  echo "$runtime compose is required" >&2
+  exit 1
 fi
 
-"$runtime" volume create "$state_volume" >/dev/null
+if [[ "$build_image" != "0" ]]; then
+  "$runtime" build -t "$image" "$repo_root"
+fi
+
 "$runtime" volume create "$adduser_volume" >/dev/null
 
 "$runtime" run --rm \
@@ -44,20 +64,45 @@ fi
   "$image" \
   /usr/local/bin/igloo-adduser -username check -password check-pass -platforms youtube >/dev/null
 
-"$runtime" run -d --name "$name" \
-  -e IGLOO_ENABLED_PLATFORMS=all \
-  -v "$state_volume:/igloo" \
-  -p "127.0.0.1:${port}:5001" \
-  "$image" >/dev/null
+start_server() {
+  compose up -d --pull never >/dev/null
+}
 
-for _ in $(seq 1 60); do
-  if curl -fsS "${curl_local[@]}" "$base_url/api/health/live" >/dev/null; then
-    break
+wait_for_server() {
+  for _ in $(seq 1 60); do
+    if curl -fsS "${curl_local[@]}" "$base_url/api/health/live" >/dev/null 2>&1; then
+      return
+    fi
+    sleep 1
+  done
+
+  curl -fsS "${curl_local[@]}" "$base_url/api/health/live" >/dev/null
+}
+
+login() {
+  local cookie_file="$1"
+  local login_html csrf status
+
+  login_html="$(curl -fsS "${curl_local[@]}" -c "$cookie_file" "$base_url/login")"
+  csrf="$(printf '%s\n' "$login_html" | sed -n 's/.*name="_csrf_token" value="\([^"]*\)".*/\1/p' | head -n1)"
+  if [[ -z "$csrf" ]]; then
+    echo "login page did not include CSRF token" >&2
+    exit 1
   fi
-  sleep 1
-done
+  status="$(curl -fsS "${curl_local[@]}" -b "$cookie_file" -c "$cookie_file" \
+    --data-urlencode "_csrf_token=$csrf" \
+    --data-urlencode "username=check" \
+    --data-urlencode "password=check-pass" \
+    -o /dev/null -w '%{http_code}' \
+    "$base_url/login")"
+  if [[ "$status" != "303" ]]; then
+    echo "login POST returned HTTP $status, want 303" >&2
+    exit 1
+  fi
+}
 
-curl -fsS "${curl_local[@]}" "$base_url/api/health/live" >/dev/null
+start_server
+wait_for_server
 setup_html="$(curl -fsS "${curl_local[@]}" -c "$tmp/igloo-check-cookies.txt" "$base_url/setup")"
 csrf="$(printf '%s\n' "$setup_html" | sed -n 's/.*name="_csrf_token" value="\([^"]*\)".*/\1/p' | head -n1)"
 if [[ -z "$csrf" ]]; then
@@ -78,21 +123,15 @@ if [[ "$status" != "303" ]]; then
 fi
 
 curl -fsS "${curl_local[@]}" "$base_url/static/style.css" >/dev/null
-login_html="$(curl -fsS "${curl_local[@]}" -c "$tmp/igloo-login-cookies.txt" "$base_url/login")"
-csrf="$(printf '%s\n' "$login_html" | sed -n 's/.*name="_csrf_token" value="\([^"]*\)".*/\1/p' | head -n1)"
-if [[ -z "$csrf" ]]; then
-  echo "login page did not include CSRF token" >&2
-  exit 1
-fi
-status="$(curl -fsS "${curl_local[@]}" -b "$tmp/igloo-login-cookies.txt" -c "$tmp/igloo-login-cookies.txt" \
-  --data-urlencode "_csrf_token=$csrf" \
-  --data-urlencode "username=check" \
-  --data-urlencode "password=check-pass" \
-  -o /dev/null -w '%{http_code}' \
-  "$base_url/login")"
-if [[ "$status" != "303" ]]; then
-  echo "login POST returned HTTP $status, want 303" >&2
-  exit 1
-fi
+login "$tmp/igloo-login-cookies.txt"
 
-echo "container check ok on $base_url"
+compose down >/dev/null
+start_server
+wait_for_server
+login "$tmp/igloo-recreated-login-cookies.txt"
+
+if runtime_is_podman "$runtime"; then
+  echo "container check ok on $base_url using Podman through $runtime"
+else
+  echo "container check ok on $base_url using Docker through $runtime"
+fi
