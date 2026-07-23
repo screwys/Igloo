@@ -39,7 +39,7 @@ internal fun momentActionAvailability(item: MomentItem): MomentActionAvailabilit
     val isRepost = item.repostIntroduced && !item.reposterChannelId.isNullOrBlank()
     return MomentActionAvailability(
         canToggleReposts = isRepost,
-        canToggleMute = !isRepost && item.channelId.isNotBlank(),
+        canToggleMute = !item.isAuthorFollowed && item.channelId.isNotBlank(),
         canUnfollowChannel = isRepost || item.isAuthorFollowed,
         canVisitAuthor = item.channelId.isNotBlank(),
         canVisitReposter = isRepost,

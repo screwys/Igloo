@@ -210,7 +210,7 @@ function openMomentActions(entry) {
   if (authorID && authorID !== reposterID) {
     actions.push({ key: 'visit_author', label: tf('action_visit_profile_of_account', 'Visit profile of %1$s', authorLabel) })
   }
-  if (!isRepost && authorID) {
+  if (!data.channelFollowed && authorID) {
     actions.push({ key: 'mute_author', label: tf('action_mute_account_label', 'Mute %1$s', authorLabel) })
   }
   if (isRepost) {
@@ -292,6 +292,7 @@ function bindMomentLongPress(entry) {
   wrapper.addEventListener('click', function (event) {
     if (!suppressClick) return
     suppressClick = false
+    if (event.target && event.target.closest && event.target.closest('.moment-actions-overlay')) return
     event.preventDefault()
     event.stopPropagation()
   }, true)

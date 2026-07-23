@@ -139,30 +139,41 @@ class MomentsPlayerTest {
     }
 
     @Test
-    fun moment_actions_open_for_all_items_and_mute_only_direct_authors() {
-        val direct = storyItem("direct", "tiktok_author")
+    fun moment_actions_mute_unfollowed_original_authors_including_reposts() {
+        val followedDirect = storyItem("followed_direct", "tiktok_author")
+        val unfollowedDirect =
+            storyItem("unfollowed_direct", "tiktok_author").copy(isAuthorFollowed = false)
         val repostFromUnfollowedAuthor =
-            direct.copy(
+            unfollowedDirect.copy(
                 repostIntroduced = true,
                 reposterChannelId = "tiktok_sample_reposter",
-                isAuthorFollowed = false,
             )
         val repostFromFollowedAuthor = repostFromUnfollowedAuthor.copy(isAuthorFollowed = true)
 
         assertEquals(
             MomentActionAvailability(
                 canToggleReposts = false,
-                canToggleMute = true,
+                canToggleMute = false,
                 canUnfollowChannel = true,
                 canVisitAuthor = true,
                 canVisitReposter = false,
             ),
-            momentActionAvailability(direct),
+            momentActionAvailability(followedDirect),
+        )
+        assertEquals(
+            MomentActionAvailability(
+                canToggleReposts = false,
+                canToggleMute = true,
+                canUnfollowChannel = false,
+                canVisitAuthor = true,
+                canVisitReposter = false,
+            ),
+            momentActionAvailability(unfollowedDirect),
         )
         assertEquals(
             MomentActionAvailability(
                 canToggleReposts = true,
-                canToggleMute = false,
+                canToggleMute = true,
                 canUnfollowChannel = true,
                 canVisitAuthor = true,
                 canVisitReposter = true,
@@ -180,7 +191,8 @@ class MomentsPlayerTest {
             momentActionAvailability(repostFromFollowedAuthor),
         )
         assertEquals("tiktok_sample_reposter", momentUnfollowTarget(repostFromUnfollowedAuthor))
-        assertEquals("tiktok_author", momentUnfollowTarget(direct))
+        assertEquals("tiktok_author", momentUnfollowTarget(followedDirect))
+        assertNull(momentUnfollowTarget(unfollowedDirect))
     }
 
     @Test
