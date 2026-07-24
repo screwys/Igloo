@@ -112,7 +112,7 @@ func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel b
 	if err := m.downloader.RunMedia(ctx, download.MediaLaneBulkForeground, func() error { return os.MkdirAll(tempDir, 0o755) }); err != nil {
 		return TempDownloadResult{Message: fmt.Sprintf("Create storage directory: %v", err)}
 	}
-	outputID, err := tempDownloadOutputID(platform, videoID)
+	outputID, err := downloadOutputID(videoID)
 	if err != nil {
 		return TempDownloadResult{Message: fmt.Sprintf("Download output: %v", err)}
 	}

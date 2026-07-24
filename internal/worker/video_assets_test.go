@@ -137,20 +137,6 @@ func TestDownloadOutputIDUsesTheStableVideoID(t *testing.T) {
 	}
 }
 
-func TestTempDownloadOutputIDScopesTheStableVideoIDToItsPlatform(t *testing.T) {
-	youtube, err := tempDownloadOutputID("youtube", "sample_video")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tiktok, err := tempDownloadOutputID("tiktok", "sample_video")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if youtube != "youtube_sample_video" || tiktok != "tiktok_sample_video" || youtube == tiktok {
-		t.Fatalf("temp output ids = %q, %q", youtube, tiktok)
-	}
-}
-
 func TestDownloadVideoPublishesPrimaryAndQueuesSubtitleBeforeBlockedThumbnail(t *testing.T) {
 	root := t.TempDir()
 	database := newTestWorkerDBAt(t, root)

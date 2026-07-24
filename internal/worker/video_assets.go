@@ -308,18 +308,6 @@ func downloadOutputID(videoID string) (string, error) {
 	return videoID, nil
 }
 
-func tempDownloadOutputID(platform, videoID string) (string, error) {
-	platform, err := safeVideoFileName(platform)
-	if err != nil {
-		return "", err
-	}
-	videoID, err = downloadOutputID(videoID)
-	if err != nil {
-		return "", err
-	}
-	return platform + "_" + videoID, nil
-}
-
 func canonicalImageExtension(path string) string {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".jpg", ".jpeg", ".image":
