@@ -98,6 +98,10 @@ func ClassifyError(err error, output []byte) string {
 	if IsTransportFailure(err, output) {
 		return ErrorKindTemporary
 	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return ErrorKindTemporary
+	}
 	if containsAuthSignal(text) {
 		return ErrorKindAuth
 	}
@@ -113,15 +117,19 @@ func ClassifyError(err error, output []byte) string {
 	if containsAny(text, "invalid character", "unexpected eof", "parse", "decode", "unmarshal") {
 		return ErrorKindParse
 	}
+	if containsAny(text, "timeout", "temporary", "temporarily", "connection reset", "connection refused", "tls handshake", "i/o timeout", "deadline exceeded") {
+		return ErrorKindTemporary
+	}
 	if err != nil {
 		return ErrorKindUnknown
 	}
 	return ""
 }
 
-// IsTransportFailure reports failures that say the network path failed rather
-// than the remote account, item, credentials, or response. Callers use this to
-// avoid charging shared connectivity outages to individual jobs.
+// IsTransportFailure reports high-confidence failures of the local network
+// path. Request deadlines and endpoint failures remain ordinary temporary
+// failures because one slow or unavailable service does not mean Igloo is
+// offline.
 func IsTransportFailure(err error, output []byte) bool {
 	if err == nil {
 		return false
@@ -129,31 +137,17 @@ func IsTransportFailure(err error, output []byte) bool {
 	if errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return true
-	}
-	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return true
-	}
 	text := strings.ToLower(err.Error() + "\n" + string(output))
 	return containsAny(text,
 		"network is unreachable",
 		"network unreachable",
+		"network is down",
 		"no route to host",
 		"temporary failure in name resolution",
 		"name or service not known",
+		"no such host",
 		"could not resolve host",
 		"failed to resolve",
-		"connection refused",
-		"connection reset",
-		"connection aborted",
-		"connection timed out",
-		"connect timeout",
-		"read timeout",
-		"i/o timeout",
-		"tls handshake timeout",
-		"deadline exceeded",
 	)
 }
 

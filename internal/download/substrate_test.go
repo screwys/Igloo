@@ -114,6 +114,8 @@ func TestClassifyErrorPatterns(t *testing.T) {
 		{"no_video_formats", errors.New("[Instagram] ABC123: No video formats found!"), nil, ErrorKindEmptyResult},
 		{"parse", errors.New("invalid character '<' looking for beginning of value"), nil, ErrorKindParse},
 		{"canceled", context.Canceled, nil, ErrorKindCanceled},
+		{"deadline", context.DeadlineExceeded, nil, ErrorKindTemporary},
+		{"connection_refused", errors.New("dial tcp: connection refused"), nil, ErrorKindTemporary},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -132,7 +134,10 @@ func TestIsTransportFailureSeparatesConnectivityFromSourceFailures(t *testing.T)
 	}{
 		{"dns", errors.New("Temporary failure in name resolution"), true},
 		{"route", errors.New("network is unreachable"), true},
-		{"timeout", context.DeadlineExceeded, true},
+		{"deadline", context.DeadlineExceeded, false},
+		{"endpoint_refused", errors.New("dial tcp: connection refused"), false},
+		{"endpoint_reset", errors.New("connection reset by peer"), false},
+		{"tls_timeout", errors.New("TLS handshake timeout"), false},
 		{"rate_limit", errors.New("HTTP 429: Too Many Requests"), false},
 		{"not_found", errors.New("Requested post not available"), false},
 		{"auth", errors.New("login required"), false},

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func TestExternalNetworkStatePausesWithoutExtendingCorrelatedFailures(t *testing
 		t.Fatal("work allowed during connectivity backoff")
 	}
 
-	_, opened, _, secondRetryAt := state.finish(now.Add(time.Second), errors.New("connection refused"))
+	_, opened, _, secondRetryAt := state.finish(now.Add(time.Second), errors.New("no route to host"))
 	if opened || !secondRetryAt.Equal(retryAt) {
 		t.Fatalf("correlated failure extended backoff: opened=%t retryAt=%s", opened, secondRetryAt)
 	}
@@ -32,6 +33,18 @@ func TestExternalNetworkStatePausesWithoutExtendingCorrelatedFailures(t *testing
 	}
 	if delay := state.retryDelay(retryAt); delay != externalNetworkProbePoll {
 		t.Fatalf("probe poll delay = %s", delay)
+	}
+}
+
+func TestExternalNetworkStateIgnoresSourceDeadline(t *testing.T) {
+	var state externalNetworkState
+	now := time.Unix(1000, 0)
+	transport, opened, recovered, retryAt := state.finish(now, context.DeadlineExceeded)
+	if transport || opened || recovered || !retryAt.IsZero() {
+		t.Fatalf("deadline = transport %t opened %t recovered %t retryAt %s", transport, opened, recovered, retryAt)
+	}
+	if state.isUnavailable() {
+		t.Fatal("source deadline opened the shared network circuit")
 	}
 }
 
