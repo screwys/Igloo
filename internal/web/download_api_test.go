@@ -32,3 +32,22 @@ func TestWriteQuickDownloadJSONWithKeepaliveKeepsResponseParseable(t *testing.T)
 		t.Fatalf("video_id = %v, body=%q", payload["video_id"], body)
 	}
 }
+
+func TestWriteQuickDownloadHTMLWithKeepalivePreservesFailureState(t *testing.T) {
+	rec := httptest.NewRecorder()
+	results := make(chan worker.TempDownloadResult, 1)
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		results <- worker.TempDownloadResult{Message: "upstream failed"}
+	}()
+
+	writeQuickDownloadHTMLWithKeepalive(rec, results, time.Millisecond)
+
+	body := rec.Body.String()
+	if !strings.HasPrefix(body, "\n") {
+		t.Fatalf("expected keepalive whitespace before final HTML, got %q", body)
+	}
+	if !strings.Contains(body, `data-download-success="false"`) || !strings.Contains(body, "upstream failed") {
+		t.Fatalf("failure body = %q", body)
+	}
+}

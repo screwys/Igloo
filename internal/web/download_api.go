@@ -86,21 +86,11 @@ func (s *Server) handleQuickDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := s.workers.DownloadTemp(r.Context(), rawURL, false)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if result.Success && result.VideoID != "" {
-		_, _ = fmt.Fprintf(w, `Downloaded. <a href="/player/%s?autoplay=1" style="text-decoration:underline">Watch</a>`,
-			template.HTMLEscapeString(template.URLQueryEscaper(result.VideoID)))
-	} else if result.Success {
-		_, _ = fmt.Fprint(w, `Download complete`)
-	} else {
-		msg := result.Message
-		if msg == "" {
-			msg = "Download failed"
-		}
-		w.WriteHeader(422)
-		_, _ = fmt.Fprint(w, template.HTMLEscapeString(msg))
-	}
+	results := make(chan worker.TempDownloadResult, 1)
+	go func() {
+		results <- s.workers.DownloadTemp(r.Context(), rawURL, false)
+	}()
+	writeQuickDownloadHTMLWithKeepalive(w, results, 25*time.Second)
 }
 
 func writeQuickDownloadJSONWithKeepalive(w http.ResponseWriter, results <-chan worker.TempDownloadResult, interval time.Duration) {
@@ -136,6 +126,47 @@ func writeQuickDownloadJSONResult(w http.ResponseWriter, result worker.TempDownl
 		"video_id":    result.VideoID,
 		"playlist_id": result.PlaylistID,
 	})
+}
+
+func writeQuickDownloadHTMLWithKeepalive(w http.ResponseWriter, results <-chan worker.TempDownloadResult, interval time.Duration) {
+	if interval <= 0 {
+		interval = 25 * time.Second
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	flusher, _ := w.(http.Flusher)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case result := <-results:
+			_, _ = fmt.Fprint(w, quickDownloadHTMLResult(result))
+			if flusher != nil {
+				flusher.Flush()
+			}
+			return
+		case <-ticker.C:
+			_, _ = fmt.Fprint(w, "\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+	}
+}
+
+func quickDownloadHTMLResult(result worker.TempDownloadResult) string {
+	if result.Success && result.VideoID != "" {
+		return fmt.Sprintf(`<span data-download-success="true">Downloaded. <a href="/player/%s?autoplay=1" style="text-decoration:underline">Watch</a></span>`,
+			template.HTMLEscapeString(template.URLQueryEscaper(result.VideoID)))
+	}
+	if result.Success {
+		return `<span data-download-success="true">Download complete</span>`
+	}
+	message := result.Message
+	if message == "" {
+		message = "Download failed"
+	}
+	return fmt.Sprintf(`<span data-download-success="false">%s</span>`, template.HTMLEscapeString(message))
 }
 
 func (s *Server) handleCancelDownload(w http.ResponseWriter, r *http.Request) {
