@@ -39,6 +39,7 @@ type Manager struct {
 	wg                sync.WaitGroup
 	mediaCurrentKick  chan struct{} // buffered(1): coalescing kick for current media
 	mediaBackfillKick chan struct{} // buffered(1): coalescing kick for historical media
+	tempDownloadKick  chan struct{} // buffered(1): durable user-download wake-up
 	discoveryKick     chan struct{} // buffered(1): coalescing kick for platform discovery
 	profileKick       chan struct{} // buffered(1): durable profile job wake-up
 	xStatusEnrich     chan xfeed.StatusEnrichmentRequest
@@ -118,6 +119,7 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 		cancel:                 cancel,
 		mediaCurrentKick:       make(chan struct{}, 1),
 		mediaBackfillKick:      make(chan struct{}, 1),
+		tempDownloadKick:       make(chan struct{}, 1),
 		discoveryKick:          make(chan struct{}, 1),
 		profileKick:            make(chan struct{}, 1),
 		xStatusEnrich:          make(chan xfeed.StatusEnrichmentRequest, 1024),
@@ -160,6 +162,9 @@ func (m *Manager) StartAll() {
 	if err := m.db.ResetExpiredIngestBackoff(); err != nil {
 		log.Printf("[worker] ResetExpiredIngestBackoff: %v", err)
 	}
+	if err := m.db.ResetTempDownloadWork(); err != nil {
+		log.Printf("[temp-download] recover interrupted work: %v", err)
+	}
 	log.Printf("[worker] startup recovery completed in %s", time.Since(startupStarted).Round(time.Millisecond))
 
 	// One-shot startup tasks — not tracked in status map.
@@ -168,6 +173,7 @@ func (m *Manager) StartAll() {
 	m.launch("x_status_enrichment", m.runXStatusEnrichmentLoop)
 	m.launch("media_current", m.runMediaCurrentLoop)
 	m.launch("media_backfill", m.runMediaBackfillLoop)
+	m.launch("temp_download", m.runTempDownloadLoop)
 	m.launch("profile_refresh", m.runProfileJobLoop)
 	m.launch("scheduler", m.runScheduler)
 	m.launch("feed_scoring", m.runFeedScoringWorker)

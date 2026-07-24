@@ -70,6 +70,36 @@ func TestMediaExecutorRunsForegroundAlongsideBackground(t *testing.T) {
 	}
 }
 
+func TestMediaExecutorRunsInteractiveWorkAheadOfOtherBulkLanes(t *testing.T) {
+	executor := NewMediaExecutor()
+	foregroundEntered := make(chan struct{})
+	releaseForeground := make(chan struct{})
+	foregroundDone := runBulkTestWork(executor, MediaLaneBulkForeground, func() error {
+		close(foregroundEntered)
+		<-releaseForeground
+		return nil
+	})
+	<-foregroundEntered
+
+	interactiveEntered := make(chan struct{})
+	interactiveDone := runBulkTestWork(executor, MediaLaneBulkInteractive, func() error {
+		close(interactiveEntered)
+		return nil
+	})
+	select {
+	case <-interactiveEntered:
+	case <-time.After(time.Second):
+		t.Fatal("interactive work waited behind feed media")
+	}
+	if err := <-interactiveDone; err != nil {
+		t.Fatal(err)
+	}
+	close(releaseForeground)
+	if err := <-foregroundDone; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMediaExecutorSerializesBackgroundWork(t *testing.T) {
 	executor := NewMediaExecutor()
 	firstEntered := make(chan struct{})

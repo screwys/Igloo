@@ -16,10 +16,11 @@ import (
 type MediaLane = storage.MediaLane
 
 const (
-	MediaLaneState          = storage.MediaLaneState
-	MediaLaneBulkForeground = storage.MediaLaneBulkForeground
-	MediaLaneBulkRegular    = storage.MediaLaneBulkRegular
-	MediaLaneBulkBackground = storage.MediaLaneBulkBackground
+	MediaLaneState           = storage.MediaLaneState
+	MediaLaneBulkInteractive = storage.MediaLaneBulkInteractive
+	MediaLaneBulkForeground  = storage.MediaLaneBulkForeground
+	MediaLaneBulkRegular     = storage.MediaLaneBulkRegular
+	MediaLaneBulkBackground  = storage.MediaLaneBulkBackground
 )
 
 const (

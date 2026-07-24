@@ -1,53 +1,29 @@
 package web
 
 import (
-	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/screwys/igloo/internal/worker"
 )
 
-func TestWriteQuickDownloadJSONWithKeepaliveKeepsResponseParseable(t *testing.T) {
+func TestQuickDownloadQueuesDurableWork(t *testing.T) {
+	srv := newTestServer(t)
+	const rawURL = "https://www.youtube.com/watch?v=sample_video"
+	req := httptest.NewRequest(http.MethodPost, "/api/quick-download", strings.NewReader(`{"url":"`+rawURL+`"}`))
+	req = req.WithContext(contextWithUser(req, "admin", "admin"))
 	rec := httptest.NewRecorder()
-	results := make(chan worker.TempDownloadResult, 1)
-	go func() {
-		time.Sleep(5 * time.Millisecond)
-		results <- worker.TempDownloadResult{Success: true, VideoID: "video123", Message: "done"}
-	}()
 
-	writeQuickDownloadJSONWithKeepalive(rec, results, time.Millisecond)
+	srv.handleQuickDownload(rec, req)
 
-	body := rec.Body.String()
-	if !strings.HasPrefix(body, "\n") {
-		t.Fatalf("expected keepalive whitespace before final JSON, got %q", body)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(body), &payload); err != nil {
-		t.Fatalf("response should remain valid JSON with leading keepalive whitespace: %v, body=%q", err, body)
+	var platform, status string
+	if err := srv.db.QueryRow(`SELECT platform, status FROM temp_download_queue WHERE url = ?`, rawURL).Scan(&platform, &status); err != nil {
+		t.Fatal(err)
 	}
-	if payload["video_id"] != "video123" {
-		t.Fatalf("video_id = %v, body=%q", payload["video_id"], body)
-	}
-}
-
-func TestWriteQuickDownloadHTMLWithKeepalivePreservesFailureState(t *testing.T) {
-	rec := httptest.NewRecorder()
-	results := make(chan worker.TempDownloadResult, 1)
-	go func() {
-		time.Sleep(5 * time.Millisecond)
-		results <- worker.TempDownloadResult{Message: "upstream failed"}
-	}()
-
-	writeQuickDownloadHTMLWithKeepalive(rec, results, time.Millisecond)
-
-	body := rec.Body.String()
-	if !strings.HasPrefix(body, "\n") {
-		t.Fatalf("expected keepalive whitespace before final HTML, got %q", body)
-	}
-	if !strings.Contains(body, `data-download-success="false"`) || !strings.Contains(body, "upstream failed") {
-		t.Fatalf("failure body = %q", body)
+	if platform != "youtube" || status != "pending" {
+		t.Fatalf("queued work = platform=%q status=%q", platform, status)
 	}
 }

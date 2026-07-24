@@ -45,5 +45,19 @@ func schemaQueueStatements() []string {
 			added_at_ms        INTEGER NOT NULL DEFAULT 0,
 			started_at_ms      INTEGER NOT NULL DEFAULT 0
 		)`,
+
+		`CREATE TABLE IF NOT EXISTS temp_download_queue (
+			url                TEXT PRIMARY KEY,
+			platform           TEXT NOT NULL,
+			status             TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')),
+			retry_count        INTEGER NOT NULL DEFAULT 0,
+			next_attempt_at_ms INTEGER NOT NULL DEFAULT 0,
+			last_error_kind    TEXT NOT NULL DEFAULT '',
+			last_error         TEXT NOT NULL DEFAULT '',
+			lease_owner        TEXT NOT NULL DEFAULT '',
+			lease_until_ms     INTEGER NOT NULL DEFAULT 0,
+			added_at_ms        INTEGER NOT NULL DEFAULT 0,
+			started_at_ms      INTEGER NOT NULL DEFAULT 0
+		)`,
 	}
 }

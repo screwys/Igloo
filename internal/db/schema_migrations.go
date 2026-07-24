@@ -24,9 +24,34 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260724_add_temp_download_queue",
+		apply: addTempDownloadQueue,
+	},
+	{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addTempDownloadQueue(tx *sql.Tx) error {
+	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS temp_download_queue (
+		url TEXT PRIMARY KEY,
+		platform TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')),
+		retry_count INTEGER NOT NULL DEFAULT 0,
+		next_attempt_at_ms INTEGER NOT NULL DEFAULT 0,
+		last_error_kind TEXT NOT NULL DEFAULT '',
+		last_error TEXT NOT NULL DEFAULT '',
+		lease_owner TEXT NOT NULL DEFAULT '',
+		lease_until_ms INTEGER NOT NULL DEFAULT 0,
+		added_at_ms INTEGER NOT NULL DEFAULT 0,
+		started_at_ms INTEGER NOT NULL DEFAULT 0
+	)`)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_temp_download_queue_ready ON temp_download_queue(status, next_attempt_at_ms, lease_until_ms, added_at_ms)`)
+	return err
 }
 
 // ApplySchemaMigrations advances an existing database through the ordered,

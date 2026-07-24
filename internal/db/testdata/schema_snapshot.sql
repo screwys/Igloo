@@ -130,6 +130,9 @@ CREATE INDEX idx_moment_views_date ON moment_views(viewed_at DESC);
 -- index: idx_profile_jobs_claim on profile_jobs
 CREATE INDEX idx_profile_jobs_claim ON profile_jobs(requested_at_ms DESC, channel_id, next_attempt_at_ms, lease_until_ms, lease_owner) WHERE requested_revision > completed_revision;
 
+-- index: idx_temp_download_queue_ready on temp_download_queue
+CREATE INDEX idx_temp_download_queue_ready ON temp_download_queue(status, next_attempt_at_ms, lease_until_ms, added_at_ms);
+
 -- index: idx_translation_jobs_ready on translation_jobs
 CREATE INDEX idx_translation_jobs_ready ON translation_jobs(target_lang, status, priority DESC, updated_at, tweet_id, field, next_attempt_at);
 
@@ -312,6 +315,9 @@ CREATE TABLE sponsorblock_checked ( video_id TEXT PRIMARY KEY, checked_at INTEGE
 
 -- table: sponsorblock_segments on sponsorblock_segments
 CREATE TABLE sponsorblock_segments ( video_id TEXT NOT NULL, start_time REAL NOT NULL, end_time REAL NOT NULL, category TEXT NOT NULL, PRIMARY KEY (video_id, start_time) );
+
+-- table: temp_download_queue on temp_download_queue
+CREATE TABLE temp_download_queue ( url TEXT PRIMARY KEY, platform TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')), retry_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER NOT NULL DEFAULT 0, last_error_kind TEXT NOT NULL DEFAULT '', last_error TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL DEFAULT '', lease_until_ms INTEGER NOT NULL DEFAULT 0, added_at_ms INTEGER NOT NULL DEFAULT 0, started_at_ms INTEGER NOT NULL DEFAULT 0 );
 
 -- table: translation_jobs on translation_jobs
 CREATE TABLE translation_jobs ( tweet_id TEXT NOT NULL, field TEXT NOT NULL, target_lang TEXT NOT NULL, source_hash TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'queued', priority INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at INTEGER NOT NULL DEFAULT 0, last_error_kind TEXT NOT NULL DEFAULT '', last_error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (tweet_id, field, target_lang) );

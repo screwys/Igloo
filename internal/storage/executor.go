@@ -8,28 +8,31 @@ import (
 type MediaLane string
 
 const (
-	MediaLaneState          MediaLane = "state_ssd"
-	MediaLaneBulkForeground MediaLane = "bulk_foreground"
-	MediaLaneBulkRegular    MediaLane = "bulk_regular"
-	MediaLaneBulkBackground MediaLane = "bulk_background"
+	MediaLaneState           MediaLane = "state_ssd"
+	MediaLaneBulkInteractive MediaLane = "bulk_interactive"
+	MediaLaneBulkForeground  MediaLane = "bulk_foreground"
+	MediaLaneBulkRegular     MediaLane = "bulk_regular"
+	MediaLaneBulkBackground  MediaLane = "bulk_background"
 )
 
 const mediaStateConcurrency = 2
 
 // MediaExecutor is the single admission owner for file-producing work. One
-// foreground and one background bulk producer may run; work within either lane
-// remains serial. Small state assets converge independently.
+// interactive, foreground, and background bulk producers may run; work within
+// each lane remains serial. Small state assets converge independently.
 type MediaExecutor struct {
-	state      chan struct{}
-	foreground chan struct{}
-	background chan struct{}
+	state       chan struct{}
+	interactive chan struct{}
+	foreground  chan struct{}
+	background  chan struct{}
 }
 
 func NewMediaExecutor() *MediaExecutor {
 	return &MediaExecutor{
-		state:      make(chan struct{}, mediaStateConcurrency),
-		foreground: make(chan struct{}, 1),
-		background: make(chan struct{}, 1),
+		state:       make(chan struct{}, mediaStateConcurrency),
+		interactive: make(chan struct{}, 1),
+		foreground:  make(chan struct{}, 1),
+		background:  make(chan struct{}, 1),
 	}
 }
 
@@ -40,6 +43,8 @@ func (e *MediaExecutor) Run(ctx context.Context, lane MediaLane, work func() err
 	switch lane {
 	case MediaLaneState:
 		return e.run(ctx, e.state, work)
+	case MediaLaneBulkInteractive:
+		return e.run(ctx, e.interactive, work)
 	case MediaLaneBulkForeground:
 		return e.run(ctx, e.foreground, work)
 	case MediaLaneBulkRegular, MediaLaneBulkBackground:

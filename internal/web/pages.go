@@ -1507,20 +1507,30 @@ func (s *Server) handlePageTempWatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	owner, ok := s.videoAssetOwner(videoID)
-	if ok && s.canonicalStreamAsset(owner) != nil {
-		http.Redirect(w, r, "/player/"+videoID, http.StatusSeeOther)
-		return
+	youtubeURL := "https://www.youtube.com/watch?v=" + videoID
+	downloadState, _, err := s.db.TempDownloadState(youtubeURL)
+	if err != nil {
+		slog.Error("TempDownloadState", "video_id", videoID, "err", err)
+	}
+	// A queued job owns readiness until its synchronous comment and metadata
+	// work is complete. Its media asset can exist before then, but the temporary
+	// watch redirect must not expose a partial result.
+	if downloadState.Status == "" {
+		owner, ok := s.videoAssetOwner(videoID)
+		if ok && s.canonicalStreamAsset(owner) != nil {
+			http.Redirect(w, r, "/player/"+videoID, http.StatusSeeOther)
+			return
+		}
 	}
 
-	// Video not downloaded yet — render downloading page.
+	// Video is not ready yet — render the queue-aware downloading page.
 	p := s.pageProps(w, r)
 	p.PageTitle = "Downloading..."
 	p.ActiveNav = "videos"
 	p.Sidebar = s.mustBuildSidebar(r)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = components.TempDownloadPage(p, videoID, "https://www.youtube.com/watch?v="+videoID).Render(r.Context(), w)
+	_ = components.TempDownloadPage(p, videoID, youtubeURL, downloadState.Status, downloadState.Error).Render(r.Context(), w)
 }
 
 func boolToInt(b bool) int {

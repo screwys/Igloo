@@ -1,16 +1,13 @@
 package web
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/screwys/igloo/internal/components"
 	"github.com/screwys/igloo/internal/subscribe"
-	"github.com/screwys/igloo/internal/worker"
 )
 
 func (s *Server) registerDownloadAPIRoutes(mux *http.ServeMux) {
@@ -77,96 +74,24 @@ func (s *Server) handleQuickDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isHTMX {
-		results := make(chan worker.TempDownloadResult, 1)
-		go func() {
-			results <- s.workers.DownloadTemp(r.Context(), rawURL, false)
-		}()
-		writeQuickDownloadJSONWithKeepalive(w, results, 25*time.Second)
+	_, err := s.workers.EnqueueTempDownload(rawURL)
+	if err != nil {
+		msg := fmt.Sprintf("Queue download: %v", err)
+		if isHTMX {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = fmt.Fprint(w, template.HTMLEscapeString(msg))
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "error": msg})
 		return
 	}
-
-	results := make(chan worker.TempDownloadResult, 1)
-	go func() {
-		results <- s.workers.DownloadTemp(r.Context(), rawURL, false)
-	}()
-	writeQuickDownloadHTMLWithKeepalive(w, results, 25*time.Second)
-}
-
-func writeQuickDownloadJSONWithKeepalive(w http.ResponseWriter, results <-chan worker.TempDownloadResult, interval time.Duration) {
-	if interval <= 0 {
-		interval = 25 * time.Second
+	if isHTMX {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = fmt.Fprint(w, `<span data-download-success="true">Queued for download</span>`)
+		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	flusher, _ := w.(http.Flusher)
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case result := <-results:
-			writeQuickDownloadJSONResult(w, result)
-			if flusher != nil {
-				flusher.Flush()
-			}
-			return
-		case <-ticker.C:
-			_, _ = fmt.Fprint(w, "\n")
-			if flusher != nil {
-				flusher.Flush()
-			}
-		}
-	}
-}
-
-func writeQuickDownloadJSONResult(w http.ResponseWriter, result worker.TempDownloadResult) {
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"success":     result.Success,
-		"message":     result.Message,
-		"video_id":    result.VideoID,
-		"playlist_id": result.PlaylistID,
-	})
-}
-
-func writeQuickDownloadHTMLWithKeepalive(w http.ResponseWriter, results <-chan worker.TempDownloadResult, interval time.Duration) {
-	if interval <= 0 {
-		interval = 25 * time.Second
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	flusher, _ := w.(http.Flusher)
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case result := <-results:
-			_, _ = fmt.Fprint(w, quickDownloadHTMLResult(result))
-			if flusher != nil {
-				flusher.Flush()
-			}
-			return
-		case <-ticker.C:
-			_, _ = fmt.Fprint(w, "\n")
-			if flusher != nil {
-				flusher.Flush()
-			}
-		}
-	}
-}
-
-func quickDownloadHTMLResult(result worker.TempDownloadResult) string {
-	if result.Success && result.VideoID != "" {
-		return fmt.Sprintf(`<span data-download-success="true">Downloaded. <a href="/player/%s?autoplay=1" style="text-decoration:underline">Watch</a></span>`,
-			template.HTMLEscapeString(template.URLQueryEscaper(result.VideoID)))
-	}
-	if result.Success {
-		return `<span data-download-success="true">Download complete</span>`
-	}
-	message := result.Message
-	if message == "" {
-		message = "Download failed"
-	}
-	return fmt.Sprintf(`<span data-download-success="false">%s</span>`, template.HTMLEscapeString(message))
+	writeJSON(w, http.StatusAccepted, map[string]any{"success": true, "queued": true})
 }
 
 func (s *Server) handleCancelDownload(w http.ResponseWriter, r *http.Request) {

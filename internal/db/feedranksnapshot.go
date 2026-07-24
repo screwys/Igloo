@@ -485,17 +485,20 @@ func (db *DB) ListPreDiversityRankedCandidatesContext(
 			ids = append(ids, targetID)
 		}
 	}
-	roots, err := db.threadRootIDsForTweetIDsContext(ctx, ids)
+	threads, err := db.threadMetadataForTweetIDsContext(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
 	for i := range out {
-		if rootID := roots[out[i].TweetID]; rootID != "" {
-			out[i].ThreadRootID = rootID
+		if thread := threads[out[i].TweetID]; thread.RootID != "" {
+			out[i].ThreadRootID = thread.RootID
+			if out[i].IsReply && thread.RelatedContentKey != "" {
+				out[i].RelatedContentKey = thread.RelatedContentKey
+			}
 		}
 		if targetID := repostTargetByTweetID[out[i].TweetID]; targetID != "" {
-			if rootID := roots[targetID]; rootID != "" {
-				out[i].RepostTargetThreadRootID = rootID
+			if thread := threads[targetID]; thread.RootID != "" {
+				out[i].RepostTargetThreadRootID = thread.RootID
 			}
 		}
 	}
@@ -530,9 +533,14 @@ func (db *DB) CountVisibleFeedRankSnapshotContext(ctx context.Context) (int, err
 	return count, err
 }
 
-func (db *DB) threadRootIDsForTweetIDsContext(ctx context.Context, tweetIDs []string) (map[string]string, error) {
+type threadSnapshotMetadata struct {
+	RootID            string
+	RelatedContentKey string
+}
+
+func (db *DB) threadMetadataForTweetIDsContext(ctx context.Context, tweetIDs []string) (map[string]threadSnapshotMetadata, error) {
 	if len(tweetIDs) == 0 {
-		return map[string]string{}, nil
+		return map[string]threadSnapshotMetadata{}, nil
 	}
 	placeholders := strings.Repeat("?,", len(tweetIDs))
 	placeholders = placeholders[:len(placeholders)-1]
@@ -558,11 +566,17 @@ func (db *DB) threadRootIDsForTweetIDsContext(ctx context.Context, tweetIDs []st
 			FROM chain
 			GROUP BY seed_id
 		)
-		SELECT chain.seed_id, chain.tweet_id
+		SELECT chain.seed_id, chain.tweet_id,
+		       CASE
+		           WHEN NULLIF(TRIM(COALESCE(root.quote_tweet_id, '')), '') IS NOT NULL
+		               THEN 'tweet:' || LOWER(TRIM(root.quote_tweet_id))
+		           ELSE ''
+		       END
 		FROM chain
 		JOIN root_depth
 		  ON root_depth.seed_id = chain.seed_id
 		 AND root_depth.max_depth = chain.depth
+		JOIN feed_items root ON root.tweet_id = chain.tweet_id
 	`, args...)
 	if err != nil {
 		return nil, err
@@ -571,15 +585,16 @@ func (db *DB) threadRootIDsForTweetIDsContext(ctx context.Context, tweetIDs []st
 		_ = rows.Close()
 	}()
 
-	roots := make(map[string]string, len(tweetIDs))
+	threads := make(map[string]threadSnapshotMetadata, len(tweetIDs))
 	for rows.Next() {
-		var tweetID, rootID string
-		if err := rows.Scan(&tweetID, &rootID); err != nil {
+		var tweetID string
+		var thread threadSnapshotMetadata
+		if err := rows.Scan(&tweetID, &thread.RootID, &thread.RelatedContentKey); err != nil {
 			return nil, err
 		}
-		roots[tweetID] = rootID
+		threads[tweetID] = thread
 	}
-	return roots, rows.Err()
+	return threads, rows.Err()
 }
 
 // SnapshotPageItem joins a snapshot row with the underlying feed_item.
