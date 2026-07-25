@@ -171,7 +171,37 @@ func TestHandleChannelAvatarServes(t *testing.T) {
 	if rr.Code != 200 {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-	if got := rr.Header().Get("Cache-Control"); got != "public, no-cache" {
+	if got := rr.Header().Get("Cache-Control"); got != profileMediaCacheControl {
+		t.Fatalf("Cache-Control = %q", got)
+	}
+}
+
+func TestHandleCommentAuthorAvatarUsesProfileMediaCachePolicy(t *testing.T) {
+	srv := newTestServer(t)
+	const ownerID = "sample_comment_author"
+	relPath := filepath.Join("thumbnails", "avatars", ownerID+".jpg")
+	absPath := filepath.Join(srv.cfg.Storage.StateRoot(), relPath)
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(absPath, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.StoreReadyAsset(db.Asset{
+		AssetID:     db.BuildAssetID("youtube", "comment_author", ownerID, "avatar", 0),
+		AssetKind:   "avatar",
+		OwnerKind:   "comment_author",
+		OwnerID:     ownerID,
+		MediaIndex:  0,
+		FilePath:    relPath,
+		ContentType: "image/jpeg",
+	}, time.Now().UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, httptest.NewRequest("GET", "/api/media/comment-avatar/"+ownerID, nil))
+	if got := rr.Header().Get("Cache-Control"); got != profileMediaCacheControl {
 		t.Fatalf("Cache-Control = %q", got)
 	}
 }

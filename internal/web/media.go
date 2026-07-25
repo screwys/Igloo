@@ -11,6 +11,8 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
+const profileMediaCacheControl = "public, max-age=300, stale-while-revalidate=86400"
+
 // Profile media is read-only at request time. A miss is a pipeline fact, not
 // a signal to fetch, scan directories, or mutate inventory.
 func (s *Server) handleChannelAvatar(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +30,7 @@ func (s *Server) handleCommentAuthorAvatar(w http.ResponseWriter, r *http.Reques
 		http.NotFound(w, r)
 		return
 	}
-	cacheControl := "public, no-cache"
+	cacheControl := profileMediaCacheControl
 	w.Header().Set("Cache-Control", cacheControl)
 	w.Header().Set("Content-Type", file.asset.ContentType)
 	if s.serveDataFileViaXAccel(w, r, file.path, file.asset.ContentType, cacheControl) {
@@ -70,7 +72,7 @@ func (s *Server) serveProfileAsset(w http.ResponseWriter, r *http.Request, chann
 		http.NotFound(w, r)
 		return
 	}
-	cacheControl := "public, no-cache"
+	cacheControl := profileMediaCacheControl
 	w.Header().Set("Cache-Control", cacheControl)
 	w.Header().Set("Content-Type", contentType)
 	if s.serveDataFileViaXAccel(w, r, path, contentType, cacheControl) {
