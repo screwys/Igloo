@@ -175,6 +175,35 @@ func TestBuildSnapshotCompactsConversationRoots(t *testing.T) {
 	}
 }
 
+func TestBuildSnapshotCompactsNearbyThreadsQuotingTheSamePost(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	publishedAt := now.Add(-time.Hour).UnixMilli()
+	in := []db.PreDiversitySnapshotRow{
+		{TweetID: "thread_a", ChannelID: "sample_author", RelatedContentKey: "tweet:sample_original", ThreadRootID: "quote_a", IsReply: true, PublishedAtMs: publishedAt, BaseScore: 100, DecayFactor: 1},
+		{TweetID: "thread_b", ChannelID: "sample_author", RelatedContentKey: "tweet:sample_original", ThreadRootID: "quote_b", IsReply: true, PublishedAtMs: publishedAt + int64(time.Hour/time.Millisecond), BaseScore: 99, DecayFactor: 1},
+		{TweetID: "other", ChannelID: "sample_other", RelatedContentKey: "tweet:other", ThreadRootID: "other", IsReply: true, PublishedAtMs: publishedAt, BaseScore: 98, DecayFactor: 1},
+	}
+
+	out := BuildSnapshot(in, now)
+	if got, want := snapshotIDs(out), []string{"thread_a", "other"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshot IDs = %v, want %v", got, want)
+	}
+}
+
+func TestBuildSnapshotKeepsRelatedThreadsOutsideNearbyWindow(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	publishedAt := now.Add(-24 * time.Hour).UnixMilli()
+	in := []db.PreDiversitySnapshotRow{
+		{TweetID: "thread_a", ChannelID: "sample_author", RelatedContentKey: "tweet:sample_original", ThreadRootID: "quote_a", IsReply: true, PublishedAtMs: publishedAt, BaseScore: 100, DecayFactor: 1},
+		{TweetID: "thread_b", ChannelID: "sample_author", RelatedContentKey: "tweet:sample_original", ThreadRootID: "quote_b", IsReply: true, PublishedAtMs: publishedAt + int64(nearbyRepostMergeWindow/time.Millisecond) + 1, BaseScore: 99, DecayFactor: 1},
+	}
+
+	out := BuildSnapshot(in, now)
+	if got, want := snapshotIDs(out), []string{"thread_a", "thread_b"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshot IDs = %v, want %v", got, want)
+	}
+}
+
 func TestBuildSnapshotCompactsPureRepostIntoThreadAtBestRank(t *testing.T) {
 	in := []db.PreDiversitySnapshotRow{
 		{TweetID: "sample_repost", ChannelID: "sample_root_author", SourceChannelID: "sample_reposter", ContentHash: "same_content", IsRetweet: true, RepostTargetThreadRootID: "thread_root", BaseScore: 100, DecayFactor: 1},

@@ -130,7 +130,46 @@ func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.Snapshot
 	}
 	out = mergeNearbyOriginalsIntoPureReposts(out, in)
 	out = compactThreadRoots(out, in)
+	out = compactNearbyRelatedThreads(out, in)
 	return compactPureRepostsIntoThreadRepresentatives(out, in)
+}
+
+func compactNearbyRelatedThreads(rows []db.SnapshotRow, meta []db.PreDiversitySnapshotRow) []db.SnapshotRow {
+	if len(rows) < 2 || len(meta) == 0 {
+		return rows
+	}
+	metadata := make(map[string]db.PreDiversitySnapshotRow, len(meta))
+	for _, row := range meta {
+		metadata[row.TweetID] = row
+	}
+
+	keptByRelated := make(map[string][]db.PreDiversitySnapshotRow)
+	out := make([]db.SnapshotRow, 0, len(rows))
+	for _, row := range rows {
+		rowMeta, ok := metadata[row.TweetID]
+		relatedKey := strings.ToLower(strings.TrimSpace(rowMeta.RelatedContentKey))
+		if !ok || !rowMeta.IsReply || relatedKey == "" {
+			out = append(out, row)
+			continue
+		}
+		nearby := false
+		for _, kept := range keptByRelated[relatedKey] {
+			if kept.ThreadRootID != rowMeta.ThreadRootID &&
+				withinNearbyRepostWindow(kept.PublishedAtMs, rowMeta.PublishedAtMs) {
+				nearby = true
+				break
+			}
+		}
+		if nearby {
+			continue
+		}
+		keptByRelated[relatedKey] = append(keptByRelated[relatedKey], rowMeta)
+		out = append(out, row)
+	}
+	for i := range out {
+		out[i].RankPosition = i + 1
+	}
+	return out
 }
 
 func compactThreadRoots(rows []db.SnapshotRow, meta []db.PreDiversitySnapshotRow) []db.SnapshotRow {
