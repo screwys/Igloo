@@ -1,7 +1,7 @@
 package components
 
 // TempDownloadPage renders the temp download / watch page wrapped in the Base layout.
-templ TempDownloadPage(p PageProps, videoID string, youtubeURL string, downloadStatus string, downloadError string) {
+templ TempDownloadPage(p PageProps, videoID string, youtubeURL string) {
 	@Base(p) {
 		<div style="display:flex;align-items:center;justify-content:center;min-height:60vh;">
 			<div style="text-align:center;max-width:500px;padding:2rem;">
@@ -9,8 +9,6 @@ templ TempDownloadPage(p PageProps, videoID string, youtubeURL string, downloadS
 					id="temp-dl-config"
 					data-video-id={ videoID }
 					data-youtube-url={ youtubeURL }
-					data-download-status={ downloadStatus }
-					data-download-error={ downloadError }
 					data-title-cancelled={ L(p, "temp_download_title_cancelled", "Download cancelled") }
 					data-status-cancelled={ L(p, "temp_download_status_cancelled", "Cancelled.") }
 					data-action-back-to-videos={ L(p, "temp_download_action_back_to_videos", "Back to videos") }
@@ -36,8 +34,6 @@ templ TempDownloadPage(p PageProps, videoID string, youtubeURL string, downloadS
   var cfg = document.getElementById('temp-dl-config');
   var videoID = cfg ? cfg.dataset.videoId : '';
   var youtubeUrl = cfg ? cfg.dataset.youtubeUrl : '';
-	var downloadStatus = cfg ? cfg.dataset.downloadStatus : '';
-	var downloadError = cfg ? cfg.dataset.downloadError : '';
   var titleCancelled = cfg ? cfg.dataset.titleCancelled : '';
   var statusCancelled = cfg ? cfg.dataset.statusCancelled : '';
   var actionBackToVideos = cfg ? cfg.dataset.actionBackToVideos : '';
@@ -51,7 +47,6 @@ templ TempDownloadPage(p PageProps, videoID string, youtubeURL string, downloadS
   var statusEl = document.getElementById('temp-dl-status');
   var cancelBtn = document.getElementById('temp-dl-cancel-btn');
   var cancelled = false;
-  var queued = new URLSearchParams(window.location.search).get('queued') === '1';
   var downloadedVideoId = null;
   var requestController = window.AbortController ? new AbortController() : null;
   function stopSpinner() {
@@ -73,18 +68,44 @@ templ TempDownloadPage(p PageProps, videoID string, youtubeURL string, downloadS
     if (titleEl) titleEl.textContent = titleFailed;
     if (statusEl) statusEl.textContent = message || statusFailed;
   }
-  function waitForReady() {
+  function scheduleStatusPoll() {
     window.setTimeout(function(){
-      if (!cancelled) window.location.reload();
+      if (!cancelled) pollStatus();
     }, 2000);
   }
-  if (queued) {
-	if (downloadStatus === 'blocked') {
-	  setFailedState(downloadError || statusFailed);
-	  return;
-	}
-    waitForReady();
-    return;
+  function pollStatus() {
+    fetch('/api/temp-download-status?url=' + encodeURIComponent(youtubeUrl))
+    .then(function(r){
+      return r.text().then(function(text){
+        var data = {};
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch (parseErr) {
+            data = {success: false, message: parseErr.message};
+          }
+        }
+        if (!r.ok && !data.error && !data.message) {
+          data.message = (r.status ? r.status + ' ' : '') + (r.statusText || statusFailed);
+        }
+        return data;
+      });
+    })
+    .then(function(data){
+      if (cancelled) return;
+      if (data.status === 'blocked') {
+        setFailedState(data.error || data.message || statusFailed);
+        return;
+      }
+      if (data.success && data.complete) {
+        window.location.href = '/temp/watch?v=' + encodeURIComponent(videoID);
+        return;
+      }
+      scheduleStatusPoll();
+    })
+    .catch(function(){
+      if (!cancelled) scheduleStatusPoll();
+    });
   }
   var requestOptions = {
     method: 'POST',
@@ -117,7 +138,7 @@ templ TempDownloadPage(p PageProps, videoID string, youtubeURL string, downloadS
   .then(function(data){
     if (cancelled) return;
     if (data.success && data.queued) {
-      window.location.replace('/temp/watch?v=' + encodeURIComponent(videoID) + '&queued=1');
+      pollStatus();
       return;
     }
     if (data.success && data.video_id) {

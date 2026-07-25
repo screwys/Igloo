@@ -19,14 +19,14 @@ func TestTempWatchWaitsForQueuedJobAfterMediaIsStored(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := attachTestAuth(httptest.NewRequest(http.MethodGet, "/temp/watch?v="+videoID+"&queued=1", nil), "viewer")
+	req := attachTestAuth(httptest.NewRequest(http.MethodGet, "/temp/watch?v="+videoID, nil), "viewer")
 	rec := httptest.NewRecorder()
 	srv.handlePageTempWatch(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; location=%q", rec.Code, http.StatusOK, rec.Header().Get("Location"))
 	}
-	if !strings.Contains(rec.Body.String(), `data-download-status="pending"`) {
+	if !strings.Contains(rec.Body.String(), "/api/temp-download-status?url=") {
 		t.Fatalf("page must retain queued ownership until comments and metadata are complete: %s", rec.Body.String())
 	}
 }

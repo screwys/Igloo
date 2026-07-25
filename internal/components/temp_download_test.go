@@ -10,7 +10,7 @@ import (
 func TestTempDownloadPageCancelAbortsRequestAndStopsSpinner(t *testing.T) {
 	p := newTestPageProps()
 	var buf bytes.Buffer
-	if err := TempDownloadPage(p, "video123", "https://www.youtube.com/watch?v=video123", "", "").Render(context.Background(), &buf); err != nil {
+	if err := TempDownloadPage(p, "video123", "https://www.youtube.com/watch?v=video123").Render(context.Background(), &buf); err != nil {
 		t.Fatalf("TempDownloadPage render failed: %v", err)
 	}
 	html := buf.String()
@@ -31,7 +31,7 @@ func TestTempDownloadPageCancelAbortsRequestAndStopsSpinner(t *testing.T) {
 func TestTempDownloadPageHandlesNonJSONDownloadErrors(t *testing.T) {
 	p := newTestPageProps()
 	var buf bytes.Buffer
-	if err := TempDownloadPage(p, "video123", "https://www.youtube.com/watch?v=video123", "", "").Render(context.Background(), &buf); err != nil {
+	if err := TempDownloadPage(p, "video123", "https://www.youtube.com/watch?v=video123").Render(context.Background(), &buf); err != nil {
 		t.Fatalf("TempDownloadPage render failed: %v", err)
 	}
 	html := buf.String()
@@ -50,23 +50,25 @@ func TestTempDownloadPageHandlesNonJSONDownloadErrors(t *testing.T) {
 	}
 }
 
-func TestTempDownloadPageWaitsForQueuedDownload(t *testing.T) {
+func TestTempDownloadPagePollsQueuedDownloadWithoutReloading(t *testing.T) {
 	p := newTestPageProps()
 	var buf bytes.Buffer
-	if err := TempDownloadPage(p, "video123", "https://www.youtube.com/watch?v=video123", "", "").Render(context.Background(), &buf); err != nil {
+	if err := TempDownloadPage(p, "video123", "https://www.youtube.com/watch?v=video123").Render(context.Background(), &buf); err != nil {
 		t.Fatalf("TempDownloadPage render failed: %v", err)
 	}
 	html := buf.String()
 
 	for _, want := range []string{
 		`data-video-id="video123"`,
-		"data-download-status",
 		"data.queued",
-		"queued=1",
-		"window.location.reload()",
+		"/api/temp-download-status?url=",
+		"scheduleStatusPoll()",
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("expected queued download page to contain %q", want)
 		}
+	}
+	if strings.Contains(html, "window.location.reload()") {
+		t.Fatal("queued temporary downloads must not refresh the whole page while waiting")
 	}
 }

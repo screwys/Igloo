@@ -12,6 +12,7 @@ import (
 
 func (s *Server) registerDownloadAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/quick-download", s.handleQuickDownload)
+	mux.HandleFunc("GET /api/temp-download-status", s.handleTempDownloadStatus)
 	mux.HandleFunc("POST /api/cancel-download", s.handleCancelDownload)
 	mux.HandleFunc("POST /api/stop", s.handleStop)
 	mux.HandleFunc("POST /api/resume", s.handleResume)
@@ -92,6 +93,35 @@ func (s *Server) handleQuickDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"success": true, "queued": true})
+}
+
+func (s *Server) handleTempDownloadStatus(w http.ResponseWriter, r *http.Request) {
+	user := userFromContext(r.Context())
+	if user == nil || user.Role != "admin" {
+		writeJSONError(w, http.StatusForbidden, "forbidden", "Quick download is restricted to admins")
+		return
+	}
+	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
+	platform := subscribe.DetectPlatform(rawURL, "")
+	if rawURL == "" || subscribe.ValidateInput(rawURL, platform) != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "supported YouTube, TikTok, or X URL required"})
+		return
+	}
+	state, found, err := s.db.TempDownloadState(rawURL)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "temporary_download_status", "Could not read download status")
+		return
+	}
+	if !found {
+		writeJSON(w, http.StatusOK, map[string]any{"success": true, "complete": true})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":  true,
+		"complete": false,
+		"status":   state.Status,
+		"error":    state.Error,
+	})
 }
 
 func (s *Server) handleCancelDownload(w http.ResponseWriter, r *http.Request) {

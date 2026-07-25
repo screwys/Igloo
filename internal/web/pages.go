@@ -1530,7 +1530,7 @@ func (s *Server) handlePageTempWatch(w http.ResponseWriter, r *http.Request) {
 	p.Sidebar = s.mustBuildSidebar(r)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = components.TempDownloadPage(p, videoID, youtubeURL, downloadState.Status, downloadState.Error).Render(r.Context(), w)
+	_ = components.TempDownloadPage(p, videoID, youtubeURL).Render(r.Context(), w)
 }
 
 func boolToInt(b bool) int {
