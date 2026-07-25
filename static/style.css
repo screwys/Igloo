@@ -427,9 +427,11 @@ body.feed-media-overlay-open {
 }
 
 .channel-item {
+    --channel-actions-width: 86px;
     display: flex;
     align-items: center;
     gap: 0.55rem;
+    position: relative;
     padding: 0.35rem 0.5rem;
     color: var(--text-secondary);
     text-decoration: none;
@@ -448,6 +450,11 @@ body.feed-media-overlay-open {
     flex: 1 1 auto;
     color: inherit;
     text-decoration: none;
+    transition: margin-right var(--transition-fast);
+}
+
+.channel-item:hover .channel-item-link {
+    margin-right: var(--channel-actions-width);
 }
 
 @media (max-width: 768px) {
@@ -540,6 +547,7 @@ body.feed-media-overlay-open {
     background: rgba(255, 255, 255, 0.05);
     white-space: nowrap;
     line-height: 1.4;
+    transform: translateY(-1px);
 }
 
 .channel-item:hover .channel-platform-label {
@@ -566,25 +574,36 @@ body.feed-media-overlay-open {
     background: rgba(29, 155, 240, 0.15);
 }
 
-.channel-actions {
+.channel-item > .channel-actions {
     display: flex;
     gap: 2px;
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    width: var(--channel-actions-width);
+    height: 20px;
+    transform: translateY(calc(-50% - 1px));
 }
 
 .channel-btn {
     display: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
     background: transparent;
     border: 1px solid transparent;
     color: var(--text-muted);
     font-size: 0.7rem;
-    padding: 0.2rem;
+    line-height: 1;
+    padding: 0;
     cursor: pointer;
     border-radius: 4px;
     transition: all var(--transition-fast);
 }
 
 .channel-item:hover .channel-btn {
-    display: block;
+    display: inline-flex;
 }
 
 .channel-btn:hover {

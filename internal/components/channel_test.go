@@ -638,6 +638,63 @@ func TestShortsAuthorHoverTargetDoesNotStretchAcrossOverlay(t *testing.T) {
 	}
 }
 
+func TestSidebarChannelHoverActionsDoNotChangeRowGeometry(t *testing.T) {
+	cssBytes, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssBytes)
+
+	itemBody := cssRuleBody(t, css, ".channel-item")
+	for _, check := range []string{
+		"--channel-actions-width: 86px",
+		"position: relative",
+	} {
+		if !strings.Contains(itemBody, check) {
+			t.Errorf("sidebar channel row should own its hover action layout; missing %q", check)
+		}
+	}
+
+	linkBody := cssRuleBody(t, css, ".channel-item-link")
+	if !strings.Contains(linkBody, "transition: margin-right var(--transition-fast)") {
+		t.Fatal("sidebar channel text should animate when it makes room for hover actions")
+	}
+	hoverLinkBody := cssRuleBody(t, css, ".channel-item:hover .channel-item-link")
+	if !strings.Contains(hoverLinkBody, "margin-right: var(--channel-actions-width)") {
+		t.Fatal("sidebar channel text should make room for hover actions horizontally")
+	}
+
+	badgeBody := cssRuleBody(t, css, ".channel-platform-label")
+	if !strings.Contains(badgeBody, "transform: translateY(-1px)") {
+		t.Fatal("sidebar platform badge should share the text's optical centerline")
+	}
+
+	actionsBody := cssRuleBody(t, css, ".channel-item > .channel-actions")
+	for _, check := range []string{
+		"position: absolute",
+		"top: 50%",
+		"width: var(--channel-actions-width)",
+		"height: 20px",
+		"transform: translateY(calc(-50% - 1px))",
+	} {
+		if !strings.Contains(actionsBody, check) {
+			t.Errorf("sidebar hover actions should not participate in row layout; missing %q", check)
+		}
+	}
+
+	buttonBody := cssRuleBody(t, css, ".channel-btn")
+	for _, check := range []string{
+		"width: 20px",
+		"height: 20px",
+		"line-height: 1",
+		"padding: 0",
+	} {
+		if !strings.Contains(buttonBody, check) {
+			t.Errorf("sidebar hover button should match the 20px row content height; missing %q", check)
+		}
+	}
+}
+
 func cssRuleBody(t *testing.T, css, selector string) string {
 	t.Helper()
 	start := strings.Index(css, selector+" {")
