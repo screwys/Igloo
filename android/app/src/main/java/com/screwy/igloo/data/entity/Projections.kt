@@ -80,6 +80,7 @@ data class MutedChannelDisplay(
     @Embedded val muted: MutedChannelEntity,
     @ColumnInfo(name = "handle") val handle: String?,
     @ColumnInfo(name = "display_name") val displayName: String?,
+    @ColumnInfo(name = "platform") val platform: String?,
 )
 
 /** Shorts/moments grid item — TikTok + Instagram. */

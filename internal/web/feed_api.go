@@ -268,9 +268,13 @@ func (s *Server) handleFeedMutedList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if muted == nil {
-		muted = []string{}
+		muted = []model.MutedAccount{}
 	}
-	writeJSON(w, 200, map[string]any{"muted": muted})
+	handles := make([]string, len(muted))
+	for i, account := range muted {
+		handles[i] = account.Handle
+	}
+	writeJSON(w, 200, map[string]any{"muted": handles})
 }
 
 func (s *Server) renderMutedAccountsHTML(w http.ResponseWriter, r *http.Request) {
@@ -281,7 +285,7 @@ func (s *Server) renderMutedAccountsHTML(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if muted == nil {
-		muted = []string{}
+		muted = []model.MutedAccount{}
 	}
 	_ = components.MutedAccountsList(s.pageProps(w, r), muted).Render(r.Context(), w)
 }

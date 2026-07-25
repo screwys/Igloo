@@ -425,7 +425,7 @@ private fun chipColors(platform: String?): ChipColors = when (platform) {
 }
 
 @Composable
-private fun PlatformChip(platform: String?) {
+internal fun PlatformChip(platform: String?) {
     val label = platformLabel(platform)
     if (label.isEmpty()) return
     val c = chipColors(platform)

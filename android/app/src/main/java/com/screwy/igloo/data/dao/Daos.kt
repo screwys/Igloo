@@ -560,7 +560,8 @@ interface MutedChannelDao {
 
     @Query(
         """
-        SELECT mc.*, cp.handle, COALESCE(NULLIF(cp.display_name, ''), c.name) AS display_name
+        SELECT mc.*, cp.handle, COALESCE(NULLIF(cp.display_name, ''), c.name) AS display_name,
+               COALESCE(NULLIF(cp.platform, ''), NULLIF(c.platform, '')) AS platform
         FROM muted_channels mc
         LEFT JOIN channel_profiles cp ON cp.channel_id = mc.channel_id
         LEFT JOIN channels c ON c.channel_id = mc.channel_id

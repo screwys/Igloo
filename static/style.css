@@ -554,6 +554,10 @@ body.feed-media-overlay-open {
     display: inline-block;
 }
 
+.muted-account-platform-label {
+    display: inline-block;
+}
+
 .channel-platform-label.plat-youtube {
     color: #ff5252;
     background: rgba(255, 82, 82, 0.12);

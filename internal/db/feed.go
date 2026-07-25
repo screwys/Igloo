@@ -471,12 +471,15 @@ func (db *DB) GetMutedChannelIDs() ([]string, error) {
 	return channelIDs, rows.Err()
 }
 
-// GetMutedAccounts returns presentation handles for the settings UI.
-func (db *DB) GetMutedAccounts() ([]string, error) {
+// GetMutedAccounts returns the stored identities shown in settings.
+func (db *DB) GetMutedAccounts() ([]model.MutedAccount, error) {
 	rows, err := db.reader().Query(`
-		SELECT coalesce(nullif(profile.handle, ''), muted.channel_id)
+		SELECT muted.channel_id,
+		       coalesce(nullif(profile.handle, ''), muted.channel_id),
+		       coalesce(nullif(profile.platform, ''), nullif(channel.platform, ''), '')
 		FROM muted_channels muted
 		LEFT JOIN channel_profiles profile ON profile.channel_id = muted.channel_id
+		LEFT JOIN channels channel ON channel.channel_id = muted.channel_id
 		ORDER BY lower(coalesce(nullif(profile.handle, ''), muted.channel_id))
 	`)
 	if err != nil {
@@ -486,15 +489,15 @@ func (db *DB) GetMutedAccounts() ([]string, error) {
 		_ = rows.Close()
 	}()
 
-	var handles []string
+	var accounts []model.MutedAccount
 	for rows.Next() {
-		var h string
-		if err := rows.Scan(&h); err != nil {
+		var account model.MutedAccount
+		if err := rows.Scan(&account.ChannelID, &account.Handle, &account.Platform); err != nil {
 			return nil, err
 		}
-		handles = append(handles, h)
+		accounts = append(accounts, account)
 	}
-	return handles, rows.Err()
+	return accounts, rows.Err()
 }
 
 // GetFeedLikedPage returns liked items with cursor-based pagination.

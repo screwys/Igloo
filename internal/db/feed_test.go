@@ -129,12 +129,28 @@ func TestGetFeedLikesForTweetIDs(t *testing.T) {
 }
 
 func TestGetMutedAccounts(t *testing.T) {
-	d := openTestDB(t)
+	d := openWritableTestDB(t)
+	if err := d.ExecRaw(`
+		INSERT INTO channel_profiles (channel_id, platform, handle)
+		VALUES ('tiktok_sample_account', 'tiktok', 'sample_account');
+		INSERT INTO muted_channels (channel_id, muted_at)
+		VALUES ('tiktok_sample_account', 1);
+	`); err != nil {
+		t.Fatalf("seed muted account: %v", err)
+	}
+
 	muted, err := d.GetMutedAccounts()
 	if err != nil {
 		t.Fatalf("GetMutedAccounts: %v", err)
 	}
-	_ = muted
+	if len(muted) != 1 {
+		t.Fatalf("muted accounts = %+v, want one account", muted)
+	}
+	if got := muted[0]; got.ChannelID != "tiktok_sample_account" ||
+		got.Handle != "sample_account" ||
+		got.Platform != "tiktok" {
+		t.Fatalf("muted account = %+v", got)
+	}
 }
 
 func TestGetFeedLikedPage(t *testing.T) {

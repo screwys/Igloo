@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -31,6 +32,36 @@ func TestHandleFeedMute_AuthedSucceeds(t *testing.T) {
 	srv.mux.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Errorf("post authed: got %d — %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleFeedMutedListKeepsHandleArrayContract(t *testing.T) {
+	srv := newTestServer(t)
+	if err := srv.db.ExecRaw(`
+		INSERT INTO channel_profiles (channel_id, platform, handle)
+		VALUES ('tiktok_sample_account', 'tiktok', 'sample_account');
+		INSERT INTO muted_channels (channel_id, muted_at)
+		VALUES ('tiktok_sample_account', 1);
+	`); err != nil {
+		t.Fatalf("seed muted account: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/feed/muted", nil)
+	req = attachTestAuth(req, "sample_user")
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET /api/feed/muted: got %d — %s", rr.Code, rr.Body.String())
+	}
+
+	var body struct {
+		Muted []string `json:"muted"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.Muted) != 1 || body.Muted[0] != "sample_account" {
+		t.Fatalf("muted = %#v, want handle array", body.Muted)
 	}
 }
 

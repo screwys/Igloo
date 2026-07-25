@@ -45,6 +45,13 @@ type Channel struct {
 	AvatarURL  string
 }
 
+// MutedAccount is the identity shape shown in settings.
+type MutedAccount struct {
+	ChannelID string
+	Handle    string
+	Platform  string
+}
+
 // Pager holds pagination state.
 type Pager struct {
 	Page    int

@@ -5,6 +5,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/screwys/igloo/internal/model"
 )
 
 func TestFeedDashboardUnfollowButtonRemovesRowAndFormatsConfirm(t *testing.T) {
@@ -38,5 +40,31 @@ func TestFeedDashboardUnfollowButtonRemovesRowAndFormatsConfirm(t *testing.T) {
 	}
 	if strings.Contains(html, "%1$s") {
 		t.Fatalf("FeedDashboard confirm prompt still contains raw placeholder:\n%s", html)
+	}
+}
+
+func TestMutedAccountsListUsesSidebarPlatformBadge(t *testing.T) {
+	var buf bytes.Buffer
+	if err := MutedAccountsList(newTestPageProps(), []model.MutedAccount{
+		{
+			ChannelID: "tiktok_sample_account",
+			Handle:    "sample_account",
+			Platform:  "tiktok",
+		},
+	}).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("MutedAccountsList render: %v", err)
+	}
+
+	html := buf.String()
+	for _, want := range []string{
+		`@sample_account`,
+		`channel-platform-label`,
+		`muted-account-platform-label`,
+		`plat-tiktok`,
+		`TikTok`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("MutedAccountsList missing %q:\n%s", want, html)
+		}
 	}
 }

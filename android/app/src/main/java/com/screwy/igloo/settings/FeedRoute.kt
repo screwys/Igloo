@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -29,6 +30,7 @@ import com.screwy.igloo.settings.components.SectionHeader
 import com.screwy.igloo.settings.components.SettingsSubScreen
 import com.screwy.igloo.settings.components.SettingsSwitchRow
 import com.screwy.igloo.settings.components.TextActionRow
+import com.screwy.igloo.ui.component.PlatformChip
 import com.screwy.igloo.ui.theme.iglooColors
 import org.koin.androidx.compose.koinViewModel
 
@@ -72,7 +74,11 @@ fun FeedRoute(
             )
         } else {
             mutedChannels.forEach { channel ->
-                MutedAccountRow(label = channel.label(), onUnmute = { pendingUnmute = channel })
+                MutedAccountRow(
+                    label = channel.label(),
+                    platform = channel.platform,
+                    onUnmute = { pendingUnmute = channel },
+                )
             }
             TextActionRow(label = stringResource(R.string.action_clear_muted_accounts)) { confirmClearMuted = true }
         }
@@ -127,7 +133,7 @@ fun FeedRoute(
 }
 
 @Composable
-private fun MutedAccountRow(label: String, onUnmute: () -> Unit) {
+private fun MutedAccountRow(label: String, platform: String?, onUnmute: () -> Unit) {
     val colors = MaterialTheme.iglooColors
     Row(
         modifier = Modifier
@@ -136,11 +142,21 @@ private fun MutedAccountRow(label: String, onUnmute: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = colors.onSurface,
-        )
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            PlatformChip(platform)
+        }
         IconButton(onClick = onUnmute) {
             Icon(
                 imageVector = Icons.Default.Close,
