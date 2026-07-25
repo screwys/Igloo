@@ -8,11 +8,9 @@ templ Header(p PageProps) {
 			<button type="button" id="global-search-clear" class="input-clear-btn hidden" aria-label={ L(p, "action_clear", "Clear") } data-i18n-aria-label="action_clear">&times;</button>
 			<div id="search-dropdown" class="search-dropdown hidden"></div>
 		</div>
-		<div id="stop-play-container"
-			hx-get="/api/stop-play-btn"
-			hx-trigger="load"
-			hx-swap="innerHTML"
-		></div>
+		<div id="stop-play-container">
+			@StopPlayButton(p, p.DownloadsStopped)
+		</div>
 		<button id="prefs-btn" class="btn-prefs" title={ L(p, "action_preferences", "Preferences") } data-i18n-title="action_preferences" type="button">&#x2699;</button>
 	</div>
 }

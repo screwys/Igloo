@@ -57,6 +57,7 @@ type PageProps struct {
 	SupportedLanguages      []LanguageChoice
 	Sidebar                 model.SidebarContext
 	ShareEmbedFriendlyLinks bool
+	DownloadsStopped        bool
 	StaticV                 func(string) string
 	PageScripts             []string // JS files to include after base scripts.
 	ESBundle                string   // esbuild bundle to load (e.g. "js/dist/feed.js")

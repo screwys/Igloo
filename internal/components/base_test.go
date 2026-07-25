@@ -815,6 +815,12 @@ func TestHeaderElements(t *testing.T) {
 			t.Errorf("expected header element %q", c)
 		}
 	}
+	if !strings.Contains(html, `id="stop-play-btn"`) {
+		t.Error("expected the download toggle to be present in the initial page")
+	}
+	if strings.Contains(html, `hx-get="/api/stop-play-btn"`) {
+		t.Error("expected the initial page to render the download toggle without a follow-up request")
+	}
 }
 
 func TestLogsModalTabs(t *testing.T) {

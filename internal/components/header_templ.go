@@ -56,20 +56,28 @@ func Header(p PageProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" data-i18n-aria-label=\"action_clear\">&times;</button><div id=\"search-dropdown\" class=\"search-dropdown hidden\"></div></div><div id=\"stop-play-container\" hx-get=\"/api/stop-play-btn\" hx-trigger=\"load\" hx-swap=\"innerHTML\"></div><button id=\"prefs-btn\" class=\"btn-prefs\" title=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" data-i18n-aria-label=\"action_clear\">&times;</button><div id=\"search-dropdown\" class=\"search-dropdown hidden\"></div></div><div id=\"stop-play-container\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = StopPlayButton(p, p.DownloadsStopped).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div><button id=\"prefs-btn\" class=\"btn-prefs\" title=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_preferences", "Preferences"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/header.templ`, Line: 16, Col: 92}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/header.templ`, Line: 14, Col: 92}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" data-i18n-title=\"action_preferences\" type=\"button\">&#x2699;</button></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" data-i18n-title=\"action_preferences\" type=\"button\">&#x2699;</button></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
