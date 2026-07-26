@@ -23,6 +23,31 @@ test("desktop sidebar can be resized down to the compact rail", () => {
   assert.doesNotMatch(css, /html\.sidebar-collapsed \.sidebar\s*\{[^}]*translateX\(-100%\)/);
 });
 
+test("the resize handle does not cover the sidebar scrollbar", () => {
+  const handleRule = [...css.matchAll(/\.sidebar-resize-handle\s*\{([^}]*)\}/g)]
+    .find((match) => /\bwidth:\s*\d+px;/.test(match[1]));
+  assert.ok(handleRule);
+
+  const width = Number(handleRule[1].match(/\bwidth:\s*(\d+)px;/)?.[1]);
+  const right = Number(handleRule[1].match(/\bright:\s*(-?\d+)px;/)?.[1]);
+  assert.ok(Number.isFinite(width));
+  assert.ok(Number.isFinite(right));
+  assert.ok(right <= -width);
+
+  const edgeRule = css.match(/\.sidebar-resize-handle::after\s*\{([^}]*)\}/);
+  assert.ok(edgeRule);
+  assert.match(edgeRule[1], /\bleft:\s*-1px;/);
+  assert.match(edgeRule[1], /\bwidth:\s*2px;/);
+});
+
+test("site scrollbars leave space beside the resize edge", () => {
+  const scrollbarRules = [...css.matchAll(/^::-webkit-scrollbar\s*\{([^}]*)\}/gm)];
+  assert.equal(scrollbarRules.length, 1);
+  assert.match(scrollbarRules[0][1], /\bwidth:\s*16px;/);
+  assert.match(css, /::-webkit-scrollbar-thumb:vertical\s*\{[^}]*\bborder-right:\s*4px solid transparent;/);
+  assert.match(css, /::-webkit-scrollbar-thumb\s*\{[^}]*\bbackground-clip:\s*padding-box;/);
+});
+
 test("dragging owns compact snapping and persisted custom widths", () => {
   assert.match(baseTemplate, /igloo\.sidebar\.width\.v1/);
   assert.doesNotMatch(baseTemplate, /igloo\.sidebar\.collapsed\.v1/);
