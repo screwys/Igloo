@@ -585,8 +585,6 @@ func (m *Manager) recordDownloadPlatformBackoff(job db.DownloadWork, classificat
 		if delay <= 0 {
 			delay = time.Hour
 		}
-	case download.ErrorKindAuth:
-		delay = downloadAuthBackoff
 	default:
 		return
 	}

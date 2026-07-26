@@ -558,6 +558,45 @@ func TestDownloadPlatformBackoffSkipsDueWork(t *testing.T) {
 	}
 }
 
+func TestDownloadAuthenticationFailureDoesNotPausePlatform(t *testing.T) {
+	d := newTestWorkerDB(t)
+	now := time.Now()
+	firstID := "sample_member_video"
+	secondID := "sample_public_video"
+	if err := d.FollowChannel("youtube_sample_channel"); err != nil {
+		t.Fatalf("FollowChannel: %v", err)
+	}
+	_, err := d.ReconcileVideoDesires(db.VideoDesireSnapshot{
+		SourceChannelID: "youtube_sample_channel",
+		Component:       "direct",
+		Items: []db.VideoDesire{
+			{VideoID: firstID, OwnerChannelID: "youtube_sample_channel", SourcePosition: 0, Lane: db.DownloadLaneCurrent},
+			{VideoID: secondID, OwnerChannelID: "youtube_sample_channel", SourcePosition: 1, Lane: db.DownloadLaneCurrent},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ReconcileVideoDesires: %v", err)
+	}
+
+	m := &Manager{db: d}
+	first, ok, err := m.claimDownloadWorkInLane("download-current", db.DownloadLaneCurrent, now)
+	if err != nil {
+		t.Fatalf("claim first work: %v", err)
+	}
+	if !ok || first.VideoID != firstID {
+		t.Fatalf("first claim = (%q, %t), want %q", first.VideoID, ok, firstID)
+	}
+	m.failDownloadJob(first, errors.New("login required; cookies are no longer valid"))
+
+	claimed, ok, err := m.claimDownloadWorkInLane("download-current", db.DownloadLaneCurrent, now.Add(time.Second))
+	if err != nil {
+		t.Fatalf("claim after authentication failure: %v", err)
+	}
+	if !ok || claimed.VideoID != secondID {
+		t.Fatalf("claim after authentication failure = (%q, %t), want %q", claimed.VideoID, ok, secondID)
+	}
+}
+
 func TestClaimDownloadWorkExcludesDisabledPlatforms(t *testing.T) {
 	d := newTestWorkerDB(t)
 	now := time.Now()

@@ -30,9 +30,9 @@ test:
 test-go:
     GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" go test ./...
 
-# Run Go tests for one package, for example: just test-go-package ./internal/web
-test-go-package package:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" go test {{ quote(package) }}
+# Run Go tests for one package, optionally matching a test-name regexp.
+test-go-package package filter="":
+    if [ -n {{ quote(filter) }} ]; then GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" go test {{ quote(package) }} -run {{ quote(filter) }} -count=1; else GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" go test {{ quote(package) }}; fi
 
 # Run Android JVM tests, optionally for one class: just test-android com.example.Test
 test-android filter="":

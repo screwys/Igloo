@@ -51,20 +51,25 @@ if ! scripts/dev/drift-check.sh --write; then
 fi
 
 echo "[go] running tests..."
-go test -json ./... | tee "$go_json"
-go_status=${PIPESTATUS[0]}
+go test -json ./... >"$go_json"
+go_status=$?
 if [[ "$go_status" -ne 0 ]]; then
   echo "[go] tests failed with exit code $go_status" >&2
   status=1
 fi
 
-if ! python3 - "$go_json" <<'PY'
+if ! python3 - "$go_json" "$go_status" <<'PY'
 import json
 import sys
 
 path = sys.argv[1]
+go_status = int(sys.argv[2])
 skips = []
 bad_lines = 0
+finished_tests = 0
+failed_tests = set()
+failed_packages = set()
+events = []
 
 with open(path, encoding="utf-8") as fh:
     for line_no, line in enumerate(fh, 1):
@@ -76,8 +81,41 @@ with open(path, encoding="utf-8") as fh:
             print(f"[go] invalid JSON at line {line_no}: {exc}", file=sys.stderr)
             bad_lines += 1
             continue
-        if event.get("Action") == "skip" and event.get("Test"):
-            skips.append((event.get("Package", ""), event["Test"]))
+        events.append(event)
+        action = event.get("Action")
+        package = event.get("Package", "")
+        test = event.get("Test", "")
+        if test and action in {"pass", "fail", "skip"}:
+            finished_tests += 1
+        if action == "skip" and test:
+            skips.append((package, test))
+        if action == "fail":
+            if test:
+                failed_tests.add((package, test))
+            elif package:
+                failed_packages.add(package)
+
+print(
+    f"[go] JSON summary: {finished_tests} completed tests, "
+    f"{len(skips)} skipped, {len(failed_tests)} failed"
+)
+
+if go_status:
+    print("[go] failed test output:", file=sys.stderr)
+    wrote_output = False
+    for event in events:
+        if event.get("Action") != "output":
+            continue
+        package = event.get("Package", "")
+        test = event.get("Test", "")
+        if (package, test) not in failed_tests and not (not test and package in failed_packages):
+            continue
+        output = event.get("Output", "")
+        if output:
+            print(output, end="", file=sys.stderr)
+            wrote_output = True
+    if not wrote_output:
+        print("  no structured failure output was produced", file=sys.stderr)
 
 if skips:
     print("[go] skipped tests:", file=sys.stderr)
