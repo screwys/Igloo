@@ -640,6 +640,28 @@ func (m *Manager) buildSourceWindowPlan(
 		previousByID[item.VideoID] = item
 		previousIDs = append(previousIDs, item.VideoID)
 	}
+	if plan.introduced {
+		incomingIDs := make([]string, 0, len(window.Refs))
+		for _, ref := range window.Refs {
+			incomingIDs = append(incomingIDs, ref.VideoID)
+		}
+		fetched, err := m.db.FetchedVideoIDs(incomingIDs)
+		if err != nil {
+			return plan, fmt.Errorf("get fetched %s window for %s: %w", window.Component, channel.ChannelID, err)
+		}
+		filtered := make([]download.VideoRef, 0, len(window.Refs))
+		for _, ref := range window.Refs {
+			videoID := strings.TrimSpace(ref.VideoID)
+			_, wasFetched := fetched[videoID]
+			_, alreadyInWindow := previousByID[videoID]
+			if wasFetched && !alreadyInWindow {
+				continue
+			}
+			filtered = append(filtered, ref)
+		}
+		window.Refs = filtered
+		plan.window.Refs = filtered
+	}
 	lanes := classifySourceWindowLanes(previousIDs, window.Refs)
 	refsByID := make(map[string]download.VideoRef, len(window.Refs))
 	incomingIDs := make([]string, 0, len(window.Refs))

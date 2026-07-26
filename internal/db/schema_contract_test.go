@@ -108,6 +108,55 @@ func TestOpenMigratesKnownSchemaChange(t *testing.T) {
 	}
 }
 
+func TestOpenBackfillsVideoFetchHistory(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "igloo.db")
+	store, err := OpenPath(path, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ExecRaw(`
+		INSERT INTO videos (video_id, channel_id, owner_kind, downloaded_at)
+		VALUES ('sample_fetched', 'tiktok_sample', 'tiktok_video', 1234)
+	`); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`
+		DROP TABLE video_fetch_history;
+		DELETE FROM schema_migrations WHERE name = '20260727_add_video_fetch_history'
+	`); err != nil {
+		_ = conn.Close()
+		t.Fatal(err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = OpenPath(path, root)
+	if err != nil {
+		t.Fatalf("OpenPath legacy schema: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	var fetchedAtMs int64
+	if err := store.QueryRow(`
+		SELECT fetched_at_ms FROM video_fetch_history WHERE video_id = 'sample_fetched'
+	`).Scan(&fetchedAtMs); err != nil {
+		t.Fatalf("read fetch history: %v", err)
+	}
+	if fetchedAtMs != 1234 {
+		t.Fatalf("fetched_at_ms = %d, want 1234", fetchedAtMs)
+	}
+}
+
 func TestEnsureSchemaCanRunTwice(t *testing.T) {
 	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {

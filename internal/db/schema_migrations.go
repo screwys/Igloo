@@ -24,6 +24,10 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260727_add_video_fetch_history",
+		apply: addVideoFetchHistory,
+	},
+	{
 		name:  "20260724_add_temp_download_queue",
 		apply: addTempDownloadQueue,
 	},
@@ -31,6 +35,22 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addVideoFetchHistory(tx *sql.Tx) error {
+	if _, err := tx.Exec(`CREATE TABLE IF NOT EXISTS video_fetch_history (
+		video_id TEXT PRIMARY KEY,
+		fetched_at_ms INTEGER NOT NULL DEFAULT 0
+	) WITHOUT ROWID`); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`
+		INSERT OR IGNORE INTO video_fetch_history (video_id, fetched_at_ms)
+		SELECT video_id, downloaded_at
+		FROM videos
+		WHERE downloaded_at > 0
+	`)
+	return err
 }
 
 func addTempDownloadQueue(tx *sql.Tx) error {

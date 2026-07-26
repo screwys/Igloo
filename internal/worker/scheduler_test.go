@@ -216,6 +216,68 @@ func TestRepostRetentionDoesNotDisplaceAuthoredMoments(t *testing.T) {
 	}
 }
 
+func TestFetchedRepostCannotEnterAnotherSourceWindow(t *testing.T) {
+	database := newTestWorkerDB(t)
+	const (
+		firstSource  = "tiktok_sample_first"
+		secondSource = "tiktok_sample_second"
+		videoID      = "sample_video"
+	)
+	if err := database.ExecRaw(`
+		INSERT INTO channels (channel_id, source_id, name, platform, created_at) VALUES
+			(?, 'sample_first', 'Sample First', 'tiktok', 1),
+			(?, 'sample_second', 'Sample Second', 'tiktok', 1);
+		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1), (?, 1)
+	`, firstSource, secondSource, firstSource, secondSource); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetSetting("tiktok_repost_max_videos", "15"); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{db: database, cfg: testCfg(t.TempDir()), profileKick: make(chan struct{}, 1)}
+	ref := download.VideoRef{
+		VideoID: videoID, ChannelID: "tiktok_sample_author", AuthorHandle: "sample_author",
+		IsRepost: true, RepostedAtMs: 100,
+	}
+	reconcile := func(sourceID string, refs []download.VideoRef) {
+		t.Helper()
+		channel := model.Channel{ChannelID: sourceID, Name: sourceID, Platform: "tiktok"}
+		if _, err := manager.reconcileSourceSnapshot(channel, download.SourceSnapshot{Windows: []download.SourceWindow{{
+			Component: sourceComponentReposts,
+			Complete:  true,
+			Refs:      refs,
+		}}}); err != nil {
+			t.Fatalf("reconcile %s: %v", sourceID, err)
+		}
+	}
+
+	reconcile(firstSource, []download.VideoRef{ref})
+	if err := database.ExecRaw(`
+		INSERT INTO video_fetch_history (video_id, fetched_at_ms) VALUES (?, 200)
+	`, videoID); err != nil {
+		t.Fatal(err)
+	}
+	reconcile(firstSource, []download.VideoRef{ref})
+	if got := desireIDs(desireWindow(t, database, firstSource, sourceComponentReposts)); fmt.Sprint(got) != "[sample_video]" {
+		t.Fatalf("active source lost fetched item: %v", got)
+	}
+
+	reconcile(secondSource, []download.VideoRef{ref})
+	if got := desireWindow(t, database, secondSource, sourceComponentReposts); len(got) != 0 {
+		t.Fatalf("second source reintroduced fetched item: %#v", got)
+	}
+	rows, err := database.GetVideoRepostSources(videoID)
+	if err != nil || len(rows) != 1 || rows[0].ReposterChannelID != firstSource {
+		t.Fatalf("repost provenance = %#v, err=%v", rows, err)
+	}
+
+	reconcile(firstSource, nil)
+	reconcile(firstSource, []download.VideoRef{ref})
+	if got := desireWindow(t, database, firstSource, sourceComponentReposts); len(got) != 0 {
+		t.Fatalf("expired source reintroduced fetched item: %#v", got)
+	}
+}
+
 func TestStoryDesiresStayCurrentOutsideVideoLimit(t *testing.T) {
 	database := newTestWorkerDB(t)
 	const sourceID = "tiktok_sample_source"

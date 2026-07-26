@@ -135,6 +135,11 @@ func schemaArchiveStatements() []string {
 			PRIMARY KEY (video_id, reposter_channel_id)
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS video_fetch_history (
+			video_id TEXT PRIMARY KEY,
+			fetched_at_ms INTEGER NOT NULL DEFAULT 0
+		) WITHOUT ROWID`,
+
 		`CREATE TABLE IF NOT EXISTS channel_profiles (
 			channel_id     TEXT PRIMARY KEY,
 			platform       TEXT NOT NULL,

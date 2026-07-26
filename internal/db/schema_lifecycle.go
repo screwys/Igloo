@@ -70,6 +70,7 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 	"translation_jobs":            schemaLifecycleQueue,
 	"translations":                schemaLifecycleDerivedCache,
 	"video_comments":              schemaLifecycleArchive,
+	"video_fetch_history":         schemaLifecycleArchive,
 	"video_repost_sources":        schemaLifecycleArchive,
 	"videos":                      schemaLifecycleArchive,
 	"watch_history":               schemaLifecycleUserState,

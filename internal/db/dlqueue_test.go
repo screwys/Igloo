@@ -362,6 +362,32 @@ func TestCompleteDownloadWorkRequiresReadyMediaAndOwnedLease(t *testing.T) {
 	if got := testRowCount(t, d, `SELECT COUNT(*) FROM download_queue WHERE video_id = ?`, video); got != 0 {
 		t.Fatalf("completed rows = %d", got)
 	}
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_fetch_history WHERE video_id = ?`, video); got != 1 {
+		t.Fatalf("fetch history rows = %d", got)
+	}
+}
+
+func TestReadyVideoReconciliationRecordsFetchHistory(t *testing.T) {
+	d := openWritableTestDB(t)
+	const (
+		source = "tiktok_sample_source"
+		video  = "sample_ready"
+	)
+	seedVideoDesireChannels(t, d, source)
+	seedTestVideo(t, d, video, source)
+	if _, err := d.ReconcileVideoDesires(VideoDesireSnapshot{
+		SourceChannelID: source,
+		Component:       "reposts",
+		Items: []VideoDesire{{
+			VideoID: video, OwnerChannelID: source,
+			SourcePosition: 0, Lane: DownloadLaneCurrent,
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_fetch_history WHERE video_id = ?`, video); got != 1 {
+		t.Fatalf("fetch history rows = %d", got)
+	}
 }
 
 func TestMaintainVideoRetentionOwnsQueueAndCanonicalCleanup(t *testing.T) {

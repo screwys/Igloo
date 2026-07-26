@@ -331,6 +331,9 @@ CREATE TABLE video_comments ( video_id TEXT NOT NULL, comment_id TEXT NOT NULL, 
 -- table: video_desires on video_desires
 CREATE TABLE video_desires ( source_channel_id TEXT NOT NULL, source_component TEXT NOT NULL, video_id TEXT NOT NULL, source_position INTEGER NOT NULL DEFAULT 0, lane TEXT NOT NULL CHECK(lane IN ('current', 'backfill')), PRIMARY KEY (source_channel_id, source_component, video_id) ) WITHOUT ROWID;
 
+-- table: video_fetch_history on video_fetch_history
+CREATE TABLE video_fetch_history ( video_id TEXT PRIMARY KEY, fetched_at_ms INTEGER NOT NULL DEFAULT 0 ) WITHOUT ROWID;
+
 -- table: video_repost_sources on video_repost_sources
 CREATE TABLE video_repost_sources ( video_id TEXT NOT NULL, reposter_channel_id TEXT NOT NULL, reposted_at_ms INTEGER NOT NULL DEFAULT 0, first_seen_at_ms INTEGER NOT NULL DEFAULT 0, updated_at_ms INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (video_id, reposter_channel_id) );
 

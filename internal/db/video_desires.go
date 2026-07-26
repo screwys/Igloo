@@ -111,6 +111,42 @@ func (db *DB) GetVideoDesireWindow(sourceChannelID, component string) ([]VideoDe
 	return items, rows.Err()
 }
 
+// FetchedVideoIDs returns canonical video IDs whose download completed at
+// least once. The history survives normal video retention.
+func (db *DB) FetchedVideoIDs(videoIDs []string) (map[string]struct{}, error) {
+	unique := make(map[string]struct{}, len(videoIDs))
+	for _, videoID := range videoIDs {
+		if videoID = strings.TrimSpace(videoID); videoID != "" {
+			unique[videoID] = struct{}{}
+		}
+	}
+	if len(unique) == 0 {
+		return map[string]struct{}{}, nil
+	}
+	ids := make([]string, 0, len(unique))
+	for videoID := range unique {
+		ids = append(ids, videoID)
+	}
+	rows, err := db.reader().Query(`
+		SELECT video_id
+		FROM video_fetch_history
+		WHERE video_id IN (`+placeholders(len(ids))+`)
+	`, stringsToAny(ids)...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	fetched := make(map[string]struct{}, len(ids))
+	for rows.Next() {
+		var videoID string
+		if err := rows.Scan(&videoID); err != nil {
+			return nil, err
+		}
+		fetched[videoID] = struct{}{}
+	}
+	return fetched, rows.Err()
+}
+
 func (db *DB) ReconcileVideoDesires(snapshot VideoDesireSnapshot) (int, error) {
 	return db.ReconcileVideoDesireSource(VideoDesireSourceSnapshot{
 		SourceChannelID: snapshot.SourceChannelID,
@@ -249,6 +285,9 @@ func (db *DB) ReconcileVideoDesireSource(snapshot VideoDesireSourceSnapshot) (in
 				}
 				processed[item.VideoID] = struct{}{}
 				if ready {
+					if err := recordVideoFetchHistoryTx(tx, item.VideoID, nowMs); err != nil {
+						return err
+					}
 					if _, err := tx.Exec(`
 						DELETE FROM download_queue
 						WHERE video_id = ?
@@ -713,12 +752,16 @@ func (db *DB) WakeDownloadAuthRetriesForPlatform(platform string) (int, error) {
 
 func (db *DB) CompleteDownloadWork(videoID, owner string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		ready, err := isReadyVideoTx(tx, strings.TrimSpace(videoID))
+		videoID = strings.TrimSpace(videoID)
+		ready, err := isReadyVideoTx(tx, videoID)
 		if err != nil {
 			return err
 		}
 		if !ready {
 			return ErrDownloadNotReady
+		}
+		if err := recordVideoFetchHistoryTx(tx, videoID, time.Now().UnixMilli()); err != nil {
+			return err
 		}
 		res, err := tx.Exec(`
 			DELETE FROM download_queue
@@ -729,6 +772,17 @@ func (db *DB) CompleteDownloadWork(videoID, owner string) error {
 		}
 		return requireQueueLeaseUpdate(res, "download_queue", videoID, owner)
 	})
+}
+
+func recordVideoFetchHistoryTx(tx *sql.Tx, videoID string, fallbackAtMs int64) error {
+	_, err := tx.Exec(`
+		INSERT INTO video_fetch_history (video_id, fetched_at_ms)
+		SELECT video_id, COALESCE(NULLIF(downloaded_at, 0), ?)
+		FROM videos
+		WHERE video_id = ?
+		ON CONFLICT(video_id) DO NOTHING
+	`, fallbackAtMs, strings.TrimSpace(videoID))
+	return err
 }
 
 func (db *DB) RenewDownloadWorkLease(videoID, owner string, nowMs int64, lease time.Duration) error {
