@@ -10,7 +10,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -53,6 +52,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -401,27 +402,22 @@ private fun MomentRepostAttribution(
         return
     }
     val annotated =
-        remember(label, authorRange, channelId) {
-            androidx.compose.ui.text.buildAnnotatedString {
+        remember(label, authorRange, channelId, onReposterChannelClick) {
+            buildAnnotatedString {
                 append(label)
-                addStringAnnotation(
-                    tag = MomentReposterAnnotationTag,
-                    annotation = channelId,
+                addLink(
+                    LinkAnnotation.Clickable(
+                        tag = MomentReposterAnnotationTag,
+                        linkInteractionListener = {
+                            onReposterChannelClick(channelId)
+                        },
+                    ),
                     start = authorRange.first,
                     end = authorRange.last + 1,
                 )
             }
         }
-    ClickableText(
-        text = annotated,
-        style = style,
-        onClick = { offset ->
-            annotated
-                .getStringAnnotations(MomentReposterAnnotationTag, offset, offset)
-                .firstOrNull()
-                ?.let { onReposterChannelClick(it.item) }
-        },
-    )
+    Text(text = annotated, style = style)
 }
 
 internal fun repostAuthorRange(label: String, author: String): IntRange? {
