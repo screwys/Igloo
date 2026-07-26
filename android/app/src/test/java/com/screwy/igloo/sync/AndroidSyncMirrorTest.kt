@@ -189,6 +189,61 @@ class AndroidSyncMirrorTest {
     }
 
     @Test
+    fun priorityStateAppliesUserStateWithoutWaitingForContentCatchUp() = runBlocking {
+        db.androidSyncDao().upsertSyncState(changesState("content-cursor"))
+        val requests = mutableListOf<String>()
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/state" -> {
+                    requests += requireNotNull(request.url.parameters["after"])
+                    respondJson(
+                        page(
+                            listOf(
+                                feedLikeChange("sample_post"),
+                                upsertChange(
+                                    ownerKind = "watch_history",
+                                    ownerId = "sample_video",
+                                    payload = buildJsonObject {
+                                        put("video_id", "sample_video")
+                                        put("playback_position", 42.0)
+                                        put("duration", 100.0)
+                                        put("updated_at_ms", nowMs)
+                                    },
+                                ),
+                                upsertChange(
+                                    ownerKind = "moments_cursor",
+                                    ownerId = "all",
+                                    payload = buildJsonObject {
+                                        put("scope", "all")
+                                        put("video_id", "sample_moment")
+                                        put("position_ms", 42000L)
+                                        put("sort_at_ms", nowMs)
+                                        put("updated_at_ms", nowMs)
+                                    },
+                                ),
+                            ),
+                            "state-cursor",
+                        )
+                    )
+                }
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        buildMirror(engine).syncPriorityStateOnce()
+
+        assertEquals(listOf("content-cursor"), requests)
+        assertTrue(db.feedLikeDao().exists("sample_post"))
+        assertEquals(42.0, db.watchHistoryDao().getById("sample_video")?.playbackPosition)
+        assertEquals("sample_moment", db.momentsCursorDao().get("all")?.videoId)
+        assertEquals(
+            "state-cursor",
+            db.preferenceDao().getValue("android_sync_priority_state_cursor"),
+        )
+        assertEquals("content-cursor", db.androidSyncDao().syncState()?.cursor)
+    }
+
+    @Test
     fun assetDrainBoundsRetriesAndReturnsChangedMetadataPromptly() = runBlocking {
         db.androidSyncDao().upsertAsset(readyAsset("sample_retry_asset"))
         var attempts = 0

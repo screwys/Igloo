@@ -170,6 +170,7 @@ type androidSyncHealthBytes struct {
 func (s *Server) registerAndroidSyncAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/android/sync/bootstrap", s.handleAndroidSyncBootstrap)
 	mux.HandleFunc("GET /api/android/sync/changes", s.handleAndroidSyncChanges)
+	mux.HandleFunc("GET /api/android/sync/state", s.handleAndroidSyncPriorityState)
 	mux.HandleFunc("GET /api/android/sync/assets/{assetID}/file", s.handleAndroidSyncAssetFile)
 	mux.HandleFunc("POST /api/android/sync/health", s.handleAndroidSyncHealth)
 }

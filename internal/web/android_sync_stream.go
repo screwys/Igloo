@@ -22,6 +22,7 @@ const (
 	androidSyncLegacyModelVersion = 1
 	androidSyncModelVersion       = 2
 	androidSyncChangePageSize     = 500
+	androidSyncPriorityPageSize   = 500
 	androidSyncBootstrapPageSize  = 250
 	androidSyncSessionLifetime    = 30 * time.Minute
 	androidSyncMaxSessions        = 4
@@ -308,6 +309,88 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 	next, err := encodeAndroidSyncCursor(androidSyncCursor{
 		Version: cursor.Version, Mode: "changes", Epoch: cursor.Epoch,
 		Revision: nextRevision, Session: nextSession, Retention: retentionHash,
+	})
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "cursor_failed", "sync cursor failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"changes": changes, "next_cursor": next, "end_of_stream": finished,
+	})
+}
+
+func (s *Server) handleAndroidSyncPriorityState(w http.ResponseWriter, r *http.Request) {
+	if userFromContext(r.Context()) == nil {
+		writeJSONError(w, http.StatusUnauthorized, "unauthenticated", "authentication required")
+		return
+	}
+	cursor, err := decodeAndroidSyncCursor(strings.TrimSpace(r.URL.Query().Get("after")))
+	if err != nil || (cursor.Mode != "changes" && cursor.Mode != "state") ||
+		!androidSyncModelVersionSupported(cursor.Version) || cursor.Revision < 0 {
+		writeAndroidSyncResetRequired(w)
+		return
+	}
+
+	changes := []model.AndroidSyncChange{}
+	var nextRevision int64
+	var finished bool
+	err = s.db.WithReadSnapshot(func(snapshot *db.DB) error {
+		clock, err := snapshot.GetAndroidSyncClock()
+		if err != nil {
+			return err
+		}
+		if clock.Epoch != cursor.Epoch || cursor.Revision > clock.Revision {
+			return errAndroidSyncResetRequired
+		}
+		heads, err := snapshot.ListAndroidSyncHeadsThroughForKinds(
+			cursor.Revision,
+			clock.Revision,
+			androidSyncPriorityPageSize+1,
+			androidSyncPriorityStateOwnerKinds(),
+		)
+		if err != nil {
+			return err
+		}
+		finished = len(heads) <= androidSyncPriorityPageSize
+		if !finished {
+			heads = heads[:androidSyncPriorityPageSize]
+		}
+
+		wanted := make(map[string]map[string]struct{})
+		for _, head := range heads {
+			if wanted[head.OwnerKind] == nil {
+				wanted[head.OwnerKind] = make(map[string]struct{})
+			}
+			wanted[head.OwnerKind][head.OwnerID] = struct{}{}
+		}
+		changes, err = s.androidSyncStateChanges(
+			snapshot,
+			newAndroidSyncMaterializationPlan(nil),
+			wanted,
+		)
+		if err != nil {
+			return err
+		}
+		if finished {
+			nextRevision = clock.Revision
+		} else {
+			nextRevision = heads[len(heads)-1].Revision
+		}
+		return nil
+	})
+	if err != nil {
+		if err == errAndroidSyncResetRequired {
+			writeAndroidSyncResetRequired(w)
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "state_sync_failed", err.Error())
+		return
+	}
+	next, err := encodeAndroidSyncCursor(androidSyncCursor{
+		Version:  cursor.Version,
+		Mode:     "state",
+		Epoch:    cursor.Epoch,
+		Revision: nextRevision,
 	})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "cursor_failed", "sync cursor failed")

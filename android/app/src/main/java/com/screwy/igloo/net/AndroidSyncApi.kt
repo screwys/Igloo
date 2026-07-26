@@ -48,6 +48,12 @@ class AndroidSyncApi(
             parameter("after", after)
         }.decodeSyncResponse("changes")
 
+    suspend fun priorityState(after: String): AndroidSyncPageResponse =
+        client.get(baseUrlProvider() + "/api/android/sync/state") {
+            syncMetadataTimeout()
+            parameter("after", after)
+        }.decodeSyncResponse("state")
+
     suspend fun health(req: AndroidSyncHealthRequest): HttpResponse =
         client.post(baseUrlProvider() + "/api/android/sync/health") {
             syncMetadataTimeout()

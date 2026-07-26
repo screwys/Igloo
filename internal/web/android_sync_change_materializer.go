@@ -401,7 +401,7 @@ func (s *Server) androidSyncStateChanges(database *db.DB, plan *androidSyncMater
 			plan.Desired.Channels[row.ChannelID] = struct{}{}
 		}
 	}
-	var changes []model.AndroidSyncChange
+	changes := make([]model.AndroidSyncChange, 0)
 	for _, kind := range androidSyncStateOwnerKinds() {
 		for _, id := range sortedMapKeys(wanted[kind]) {
 			row, ok := rowByKey[kind+"\x00"+id]
@@ -627,6 +627,14 @@ func androidSyncVideoEffectiveRecency(projection db.AndroidSyncVideoProjection) 
 func androidSyncStateOwnerKinds() []string {
 	return []string{
 		"feed_like", "bookmark", "bookmark_category", "feed_seen", "moment_view",
+		"watch_history", "muted_channel", "channel_follow", "channel_star",
+		"channel_setting", "moments_cursor",
+	}
+}
+
+func androidSyncPriorityStateOwnerKinds() []string {
+	return []string{
+		"feed_like", "bookmark", "bookmark_category", "moment_view",
 		"watch_history", "muted_channel", "channel_follow", "channel_star",
 		"channel_setting", "moments_cursor",
 	}

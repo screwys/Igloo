@@ -7,12 +7,15 @@ import com.screwy.igloo.outbox.OutboxDrain
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -38,6 +41,7 @@ class SyncCoordinator(
                 if (foreground) trigger()
             }
         }
+        jobs += scope.launch { pollPriorityStateWhileForeground() }
         jobs += scope.launch {
             var previous = reachability.state.value
             reachability.state.collect { current ->
@@ -92,5 +96,41 @@ class SyncCoordinator(
         val outboxResult = outbox.runOnce()
         if (outboxResult.reconcileMutations) mirror.requestBootstrap()
         mirror.syncOnce(protectionChanged = outboxResult.protectionChanged)
+    }
+
+    private suspend fun pollPriorityStateWhileForeground() = coroutineScope {
+        var pollingJob: Job? = null
+        try {
+            foregroundFlow.collect { foreground ->
+                pollingJob?.cancel()
+                pollingJob =
+                    if (foreground) {
+                        launch {
+                            while (isActive) {
+                                try {
+                                    mirror.syncPriorityStateOnce()
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    if (e.isLikelyTransportFailure()) reachability.downgrade()
+                                    logger.info(
+                                        "priority_state_sync_failed",
+                                        mapOf("error" to (e.message ?: e::class.simpleName.orEmpty())),
+                                    )
+                                }
+                                delay(PRIORITY_STATE_POLL_MS)
+                            }
+                        }
+                    } else {
+                        null
+                    }
+            }
+        } finally {
+            pollingJob?.cancel()
+        }
+    }
+
+    private companion object {
+        const val PRIORITY_STATE_POLL_MS = 5_000L
     }
 }

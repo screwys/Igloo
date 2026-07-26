@@ -71,6 +71,66 @@ func TestAndroidSyncFlatStreamConvergesChangedAndDeletedOwners(t *testing.T) {
 	}
 }
 
+func TestAndroidSyncPriorityStateBypassesContentBacklog(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	seedAndroidSyncContent(t, srv)
+	bootstrap := requestAndroidSyncPage(t, srv, "/api/android/sync/bootstrap?"+androidSyncTestRetentionQuery)
+
+	if err := srv.db.ExecRaw(`
+		UPDATE feed_items SET body_text = 'Content can wait' WHERE tweet_id = 'sample_tweet';
+		INSERT INTO feed_seen (tweet_id, seen_at) VALUES ('sample_seen', 10);
+		INSERT INTO feed_likes (tweet_id, liked_at) VALUES ('sample_tweet', 20);
+		INSERT INTO watch_history (
+			video_id, playback_position, duration, updated_at_ms
+		) VALUES ('sample_video', 42, 100, 30);
+		INSERT INTO moments_cursors (
+			scope, video_id, position_ms, sort_at_ms, updated_at_ms
+		) VALUES ('all', 'sample_video', 42000, 40, 50);
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	page := requestAndroidSyncPage(
+		t,
+		srv,
+		"/api/android/sync/state?after="+bootstrap.NextCursor,
+	)
+	for _, key := range [][2]string{
+		{"feed_like", "sample_tweet"},
+		{"watch_history", "sample_video"},
+		{"moments_cursor", "all"},
+	} {
+		if findAndroidSyncChange(page.Changes, key[0], key[1]) == nil {
+			t.Fatalf("priority state missing %v in %+v", key, androidSyncChangeKeys(page.Changes))
+		}
+	}
+	for _, kind := range []string{"feed", "feed_seen"} {
+		if findAndroidSyncChange(page.Changes, kind, "") != nil {
+			t.Fatalf("priority state included %q: %+v", kind, androidSyncChangeKeys(page.Changes))
+		}
+	}
+	cursor, err := decodeAndroidSyncCursor(page.NextCursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cursor.Mode != "state" || cursor.Revision <= 0 {
+		t.Fatalf("priority cursor = %+v", cursor)
+	}
+
+	if err := srv.db.ExecRaw(`DELETE FROM feed_likes WHERE tweet_id = 'sample_tweet'`); err != nil {
+		t.Fatal(err)
+	}
+	page = requestAndroidSyncPage(t, srv, "/api/android/sync/state?after="+page.NextCursor)
+	deleted := findAndroidSyncChange(page.Changes, "feed_like", "sample_tweet")
+	if deleted == nil || deleted.Operation != model.AndroidSyncOperationDelete {
+		t.Fatalf("priority state delete = %+v in %+v", deleted, androidSyncChangeKeys(page.Changes))
+	}
+	page = requestAndroidSyncPage(t, srv, "/api/android/sync/state?after="+page.NextCursor)
+	if page.Changes == nil || len(page.Changes) != 0 {
+		t.Fatalf("empty priority state page = %+v", page.Changes)
+	}
+}
+
 func TestAndroidSyncFullYoutubeMetadataIsOptInAndCursorBound(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	old := time.Now().Add(-365 * 24 * time.Hour).UnixMilli()

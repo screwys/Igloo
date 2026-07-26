@@ -88,6 +88,45 @@ class AndroidSyncMirror(
         healthReporter.report(requireChangesState().cursor, retention)
     }
 
+    suspend fun syncPriorityStateOnce() {
+        if (reachability.state.value is Reachability.State.Offline) return
+        val mainState = dao.syncState()?.takeIf { it.mode == MODE_CHANGES } ?: return
+        var cursor =
+            db.preferenceDao().getValue(PRIORITY_STATE_CURSOR_KEY)
+                ?.takeIf(String::isNotBlank)
+                ?: mainState.cursor
+        var resetAttempted = false
+        while (true) {
+            val page =
+                try {
+                    api.priorityState(cursor)
+                } catch (e: AndroidSyncHttpException) {
+                    if (!e.isSyncResetRequired || resetAttempted) throw e
+                    db.preferenceDao().delete(PRIORITY_STATE_CURSOR_KEY)
+                    cursor = dao.syncState()?.takeIf { it.mode == MODE_CHANGES }?.cursor ?: return
+                    resetAttempted = true
+                    continue
+                }
+            page.validate(cursor)
+            require(page.changes.all { it.owner_kind in PRIORITY_STATE_OWNER_KINDS }) {
+                "priority state response contained a non-state owner"
+            }
+            db.withTransaction {
+                val overlay = PendingMutationOverlay.capture(db.outboxDao().pendingRows())
+                val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
+                page.changes.forEach { applyThinState(it, deletedAssets) }
+                overlay.restore(db)
+                db.preferenceDao().put(
+                    PRIORITY_STATE_CURSOR_KEY,
+                    page.next_cursor,
+                    serverNowMsProvider(),
+                )
+            }
+            cursor = page.next_cursor
+            if (page.end_of_stream) return
+        }
+    }
+
     suspend fun prune() {
         prune(retentionProvider().validated(), sweepHeadlessContent = true)
     }
@@ -714,6 +753,7 @@ class AndroidSyncMirror(
     private companion object {
         const val MODE_BOOTSTRAP = "bootstrap"
         const val MODE_CHANGES = "changes"
+        const val PRIORITY_STATE_CURSOR_KEY = "android_sync_priority_state_cursor"
         const val OP_UPSERT = "upsert"
         const val OP_DELETE = "delete"
         const val PRUNE_BATCH_SIZE = 400
@@ -746,6 +786,19 @@ class AndroidSyncMirror(
                     "moments_cursors.scope",
                     "moments_cursors.scope != 'stories'",
                 ),
+            )
+        val PRIORITY_STATE_OWNER_KINDS =
+            setOf(
+                "feed_like",
+                "bookmark",
+                "bookmark_category",
+                "moment_view",
+                "watch_history",
+                "muted_channel",
+                "channel_follow",
+                "channel_star",
+                "channel_setting",
+                "moments_cursor",
             )
     }
 }

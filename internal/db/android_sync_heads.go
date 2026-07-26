@@ -30,6 +30,26 @@ func (db *DB) ListAndroidSyncHeads(afterRevision int64, limit int) ([]model.Andr
 }
 
 func (db *DB) ListAndroidSyncHeadsThrough(afterRevision, throughRevision int64, limit int) ([]model.AndroidSyncHead, error) {
+	return db.listAndroidSyncHeadsThrough(afterRevision, throughRevision, limit, nil)
+}
+
+func (db *DB) ListAndroidSyncHeadsThroughForKinds(
+	afterRevision, throughRevision int64,
+	limit int,
+	ownerKinds []string,
+) ([]model.AndroidSyncHead, error) {
+	ownerKinds = uniqueStrings(ownerKinds)
+	if len(ownerKinds) == 0 {
+		return nil, nil
+	}
+	return db.listAndroidSyncHeadsThrough(afterRevision, throughRevision, limit, ownerKinds)
+}
+
+func (db *DB) listAndroidSyncHeadsThrough(
+	afterRevision, throughRevision int64,
+	limit int,
+	ownerKinds []string,
+) ([]model.AndroidSyncHead, error) {
 	if afterRevision < 0 {
 		afterRevision = 0
 	}
@@ -42,6 +62,10 @@ func (db *DB) ListAndroidSyncHeadsThrough(afterRevision, throughRevision int64, 
 		WHERE revision > ?
 	`
 	args := []any{afterRevision}
+	if len(ownerKinds) > 0 {
+		query += ` AND owner_kind IN (` + placeholders(len(ownerKinds)) + `)`
+		args = append(args, stringsToAny(ownerKinds)...)
+	}
 	if throughRevision >= 0 {
 		query += ` AND revision <= ?`
 		args = append(args, throughRevision)
