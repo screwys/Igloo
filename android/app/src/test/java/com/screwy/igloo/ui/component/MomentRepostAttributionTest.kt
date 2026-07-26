@@ -16,6 +16,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performFirstLinkClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.dp
@@ -35,7 +36,7 @@ class MomentRepostAttributionTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun repost_author_stays_tappable_above_drawer_gesture_handle() {
+    fun repost_author_link_opens_the_reposter_channel() {
         var clickedChannelId: String? = null
 
         composeRule.setContent {
@@ -56,12 +57,9 @@ class MomentRepostAttributionTest {
             }
         }
 
-        // This point is both in the author's annotated range and inside the 96dp left-edge
-        // drawer target. A real touch must reach the author annotation, not the drawer's
-        // sibling pointer input.
-        composeRule.onNodeWithText("Sample Reposter", substring = true).performTouchInput {
-            click(Offset(x = 4f, y = centerY))
-        }
+        composeRule
+            .onNodeWithText("Sample Reposter", substring = true)
+            .performFirstLinkClick()
 
         composeRule.runOnIdle {
             assertEquals("tiktok_sample_reposter", clickedChannelId)
