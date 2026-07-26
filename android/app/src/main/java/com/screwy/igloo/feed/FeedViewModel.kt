@@ -109,6 +109,22 @@ class FeedViewModel(
                     db.feedReadDao().actionStateFlow(tweetIds).collect(::applyActionStates)
                 }
         }
+        viewModelScope.launch {
+            activeRows
+                .map { rows ->
+                    rows
+                        .flatMap { threaded -> threaded.chain + threaded.row }
+                        .map { it.item.tweetId }
+                        .distinct()
+                }
+                .distinctUntilChanged()
+                .collectLatest { tweetIds ->
+                    if (tweetIds.isEmpty()) return@collectLatest
+                    db.feedReadDao().feedRowsByTweetIdsFlow(tweetIds).collect { freshRows ->
+                        activeRows.value = mergePinnedFeedRows(activeRows.value, freshRows)
+                    }
+                }
+        }
     }
 
     fun refresh() {
@@ -442,5 +458,34 @@ class FeedViewModel(
         const val FEED_LIMIT: Int = 200
         private const val INITIAL_MEDIA_MODEL_ROWS: Int = 16
         private const val NEW_POST_SCAN_LIMIT: Int = 80
+    }
+}
+
+internal fun mergePinnedFeedRows(
+    pinnedRows: List<ThreadedFeedRow>,
+    freshRows: List<FeedRow>,
+): List<ThreadedFeedRow> {
+    if (pinnedRows.isEmpty() || freshRows.isEmpty()) return pinnedRows
+    val freshById = freshRows.associateBy { it.item.tweetId }
+
+    fun refresh(pinned: FeedRow): FeedRow {
+        val fresh = freshById[pinned.item.tweetId] ?: return pinned
+        return fresh.copy(
+            isLiked = pinned.isLiked,
+            likedAt = pinned.likedAt,
+            isBookmarked = pinned.isBookmarked,
+            bookmarkCategoryId = pinned.bookmarkCategoryId,
+            bookmarkCustomTitle = pinned.bookmarkCustomTitle,
+            bookmarkedAt = pinned.bookmarkedAt,
+            bookmarkAccountHandles = pinned.bookmarkAccountHandles,
+            bookmarkMediaIndices = pinned.bookmarkMediaIndices,
+        )
+    }
+
+    return pinnedRows.map { threaded ->
+        threaded.copy(
+            row = refresh(threaded.row),
+            chain = threaded.chain.map(::refresh),
+        )
     }
 }

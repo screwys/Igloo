@@ -82,7 +82,7 @@ internal class NativeFeedViewHolder(
         val post = adapterRow.post
         val row = adapterRow.threaded.row
         val item = row.item
-        val shareUrl = feedShareUrl(item).trim()
+        val shareUrl = feedShareUrl(row).trim()
         val bodyTranslation = item.bodyTranslation?.takeIf { it.isNotBlank() }
         val quoteTranslation = item.quoteTranslation?.takeIf { it.isNotBlank() }
         val bodyText =
@@ -175,7 +175,7 @@ internal class NativeFeedViewHolder(
         bindActions(
             row = row,
             post = adapterRow.post,
-            shareUrl = feedShareUrl(row.item).trim(),
+            shareUrl = feedShareUrl(row).trim(),
             colors = getColors(),
             callbacks = getCallbacks(),
         )
@@ -585,7 +585,7 @@ internal class NativeFeedViewHolder(
     private fun showMenu(
         row: FeedRow,
         post: SocialPostModel,
-        shareUrl: String = feedShareUrl(row.item).trim(),
+        shareUrl: String = feedShareUrl(row).trim(),
     ) {
         showMenu(views.menu, row, post, shareUrl)
     }
@@ -594,7 +594,7 @@ internal class NativeFeedViewHolder(
         anchor: View,
         row: FeedRow,
         post: SocialPostModel,
-        shareUrl: String = feedShareUrl(row.item).trim(),
+        shareUrl: String = feedShareUrl(row).trim(),
     ) {
         val callbacks = getCallbacks()
         val context = views.root.context
@@ -653,7 +653,7 @@ internal class NativeFeedViewHolder(
     ): LinearLayout {
         val context = views.root.context
         val row = post.row
-        val shareUrl = feedShareUrl(row.item).trim()
+        val shareUrl = feedShareUrl(row).trim()
         val menu = ImageButton(context)
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL

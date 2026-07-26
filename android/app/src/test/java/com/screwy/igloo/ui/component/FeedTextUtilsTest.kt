@@ -127,13 +127,35 @@ class FeedTextUtilsTest {
     @Test
     fun feed_share_url_prefers_server_canonical_url() {
         val item = FeedItemEntity(tweetId = "123", canonicalUrl = "https://x.com/alice/status/123")
-        assertEquals("https://x.com/alice/status/123", feedShareUrl(item))
+        assertEquals(
+            "https://x.com/alice/status/123",
+            feedShareUrl(feedRow(item = item, authorHandle = "alice")),
+        )
     }
 
     @Test
-    fun feed_share_url_stays_blank_when_canonical_url_is_blank() {
-        val item = FeedItemEntity(tweetId = "123", canonicalUrl = " ")
-        assertEquals("", feedShareUrl(item))
+    fun feed_share_url_uses_the_rendered_x_handle_when_the_server_url_is_handleless() {
+        val item =
+            FeedItemEntity(
+                tweetId = "123",
+                channelId = "twitter_sample_author",
+                canonicalUrl = "https://x.com/i/status/123",
+            )
+
+        assertEquals(
+            "https://x.com/sample_author/status/123",
+            feedShareUrl(feedRow(item = item, authorHandle = "sample_author")),
+        )
+    }
+
+    @Test
+    fun feed_share_url_uses_the_rendered_x_handle_when_canonical_url_is_blank() {
+        val item = FeedItemEntity(tweetId = "123", channelId = "twitter_sample_author")
+
+        assertEquals(
+            "https://x.com/sample_author/status/123",
+            feedShareUrl(feedRow(item = item, authorHandle = "sample_author")),
+        )
     }
 
     @Test

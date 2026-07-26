@@ -265,7 +265,7 @@ interface FeedReadDao {
         WHERE fi.tweet_id IN (:tweetIds)
         """
     )
-    suspend fun getFeedRowsByTweetIds(tweetIds: List<String>): List<FeedRow>
+    fun feedRowsByTweetIdsFlow(tweetIds: List<String>): Flow<List<FeedRow>>
 
     @Query(
         """

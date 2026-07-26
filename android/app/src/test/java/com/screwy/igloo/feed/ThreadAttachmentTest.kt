@@ -180,7 +180,7 @@ class ThreadAttachmentTest {
                 }
             )
 
-        val leaf = db.feedReadDao().getFeedRowsByTweetIds(listOf("sample_thread_50"))
+        val leaf = db.feedReadDao().feedRowsByTweetIdsFlow(listOf("sample_thread_50")).first()
         val threaded = attachThreadChains(db.feedReadDao(), leaf)
 
         assertEquals(1, threaded.size)

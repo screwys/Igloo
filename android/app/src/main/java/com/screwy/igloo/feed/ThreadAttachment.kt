@@ -3,6 +3,7 @@ package com.screwy.igloo.feed
 import com.screwy.igloo.data.dao.FeedReadDao
 import com.screwy.igloo.data.entity.FeedRow
 import com.screwy.igloo.data.entity.ThreadedFeedRow
+import kotlinx.coroutines.flow.first
 
 /**
  * Attach server-owned conversation context to feed leaves. Standalone rows that
@@ -25,12 +26,13 @@ suspend fun attachThreadChains(
         return rows.map { ThreadedFeedRow(row = it, chain = emptyList()) }
     }
 
-    val ancestorRowsById = dao.getFeedRowsByTweetIds(
-        contextsByLeaf.values
-            .flatten()
-            .map { it.ancestorTweetId }
-            .distinct(),
-    ).associateBy { it.item.tweetId }
+    val ancestorRowsById =
+        dao.feedRowsByTweetIdsFlow(
+            contextsByLeaf.values
+                .flatten()
+                .map { it.ancestorTweetId }
+                .distinct(),
+        ).first().associateBy { it.item.tweetId }
 
     val chainsByLeaf = mutableMapOf<String, List<FeedRow>>()
     val rootIdsByLeaf = mutableMapOf<String, String>()

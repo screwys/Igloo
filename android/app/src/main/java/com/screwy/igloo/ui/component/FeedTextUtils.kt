@@ -8,6 +8,7 @@ import com.screwy.igloo.R
 import com.screwy.igloo.data.entity.FeedItemEntity
 import com.screwy.igloo.data.entity.FeedRow
 import com.screwy.igloo.feed.canonicalTweetUrl
+import java.net.URI
 import java.util.concurrent.TimeUnit
 
 internal data class FeedMuteMenuAction(
@@ -182,8 +183,29 @@ internal fun displayNameLooksLikeHandle(raw: String?): String {
         .orEmpty()
 }
 
-internal fun feedShareUrl(item: FeedItemEntity): String =
-    canonicalTweetUrl(item)
+internal fun feedShareUrl(row: FeedRow): String {
+    val canonical = canonicalTweetUrl(row.item)
+    if (canonical.isNotBlank() && !canonical.matches(HandlelessXStatusUrl)) return canonical
+
+    val platform = row.channelPlatform?.trim()?.lowercase().orEmpty()
+    val channelId = row.item.channelId?.trim()?.lowercase().orEmpty()
+    if (platform != "twitter" && platform != "x" && !channelId.startsWith("twitter_")) {
+        return canonical
+    }
+    val handle = normalizeHandle(row.authorHandle)
+    val statusId =
+        row.item.canonicalTweetId
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: row.item.tweetId.trim()
+    if (handle.isBlank() || statusId.isBlank()) return canonical
+    return runCatching {
+        URI("https", "x.com", "/$handle/status/$statusId", null).toString()
+    }.getOrDefault(canonical)
+}
+
+private val HandlelessXStatusUrl =
+    Regex("""https?://(?:www\.)?(?:x|twitter)\.com/i/status/[^/?#]+(?:[/?#].*)?""", RegexOption.IGNORE_CASE)
 
 internal fun stripReplyPrefix(row: FeedRow, text: String): String {
     if (!row.item.isReply || text.isBlank()) return text
