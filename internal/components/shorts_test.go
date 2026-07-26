@@ -614,7 +614,6 @@ func TestShortsStoryTrayUsesRemainingWidthBeforeCompactingItsContents(t *testing
 	}
 	compactRules := css[compactStart : compactStart+compactEnd]
 	for _, check := range []string{
-		".shorts-story-tray-header h2",
 		".shorts-story-tray-body .story-channel-meta",
 		"grid-template-columns: 48px minmax(0, 1fr)",
 	} {
@@ -649,6 +648,11 @@ func TestShortsStoryTrayUsesRemainingWidthBeforeCompactingItsContents(t *testing
 		"function setStoryTrayWidth(width, persist)",
 		"setPointerCapture(event.pointerId)",
 		"window.innerWidth - event.clientX",
+		"function updateStoryTrayTitleCollision()",
+		"function observeStoryTrayHeader(tray)",
+		"state.storyTrayHeaderObserver.observe(tray)",
+		"state.storyTrayHeaderObserver.observe(floatingHeader)",
+		"titleRight + clearance >= floatingHeaderRect.left",
 	} {
 		if !strings.Contains(indexSrc, check) {
 			t.Errorf("resizable story tray missing %q", check)
@@ -660,6 +664,15 @@ func TestShortsStoryTrayUsesRemainingWidthBeforeCompactingItsContents(t *testing
 	}
 	if strings.Contains(css, "story-tray-compact") || strings.Contains(indexSrc, "story-tray-compact") {
 		t.Fatal("resizing the story tray should not hide global header controls")
+	}
+	collisionRule := cssRuleBody(t, css, ".shorts-story-tray.story-title-collides .shorts-story-tray-header h2")
+	for _, check := range []string{"position: absolute", "width: 1px", "clip-path: inset(50%)"} {
+		if !strings.Contains(collisionRule, check) {
+			t.Errorf("colliding Stories title should hide without moving its header; missing %q in %s", check, collisionRule)
+		}
+	}
+	if strings.Contains(compactRules, ".shorts-story-tray-header h2") {
+		t.Fatal("Stories title visibility should follow measured header collision, not a fixed tray width")
 	}
 }
 

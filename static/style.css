@@ -5940,6 +5940,19 @@ html.story-tray-resizing .shorts-story-tray {
     font-weight: 900;
 }
 
+.shorts-story-tray.story-title-collides .shorts-story-tray-header h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
 .shorts-story-tray-close {
     margin-left: auto;
     width: 2rem;
@@ -5991,7 +6004,6 @@ html.story-tray-resizing .shorts-story-tray {
 
 /* Keep identity text while the rail narrows; only secondary metadata drops out. */
 @container story-tray (max-width: 320px) {
-    .shorts-story-tray-header h2,
     .shorts-story-tray-body .story-channel-meta {
         position: absolute;
         width: 1px;

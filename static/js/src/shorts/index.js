@@ -95,6 +95,7 @@ if (layout) {
       storyQueueIndex: -1,
       storyContinueAcrossAccounts: false,
       storyTray: null,
+      storyTrayHeaderObserver: null,
       storyTrayWidth: 0,
       storyTrayUserSized: false,
       storyTrayRefreshTimer: 0,
@@ -490,11 +491,41 @@ if (layout) {
       })
     }
 
+    function updateStoryTrayTitleCollision() {
+      var tray = state.storyTray
+      if (!tray) return
+      var trayHeader = q('.shorts-story-tray-header', tray)
+      var title = q('h2', trayHeader)
+      var floatingHeader = q('.floating-header')
+      if (!trayHeader || !title || !floatingHeader || !tray.classList.contains('open')) {
+        tray.classList.remove('story-title-collides')
+        return
+      }
+      var trayRect = tray.getBoundingClientRect()
+      var floatingHeaderRect = floatingHeader.getBoundingClientRect()
+      var trayHeaderStyle = getComputedStyle(trayHeader)
+      var floatingHeaderStyle = getComputedStyle(floatingHeader)
+      var titleLeft = trayRect.left + (parseFloat(trayHeaderStyle.paddingLeft) || 0)
+      var titleRight = titleLeft + title.scrollWidth
+      var clearance = parseFloat(floatingHeaderStyle.gap) || 0
+      tray.classList.toggle('story-title-collides', titleRight + clearance >= floatingHeaderRect.left)
+    }
+
+    function observeStoryTrayHeader(tray) {
+      if (!tray || typeof ResizeObserver === 'undefined') return
+      if (state.storyTrayHeaderObserver) state.storyTrayHeaderObserver.disconnect()
+      var floatingHeader = q('.floating-header')
+      state.storyTrayHeaderObserver = new ResizeObserver(updateStoryTrayTitleCollision)
+      state.storyTrayHeaderObserver.observe(tray)
+      if (floatingHeader) state.storyTrayHeaderObserver.observe(floatingHeader)
+    }
+
     function showStoryTray() {
       var tray = ensureStoryTray()
       updateStoryGridButton()
       tray.classList.add('open')
       tray.setAttribute('aria-hidden', 'false')
+      window.requestAnimationFrame(updateStoryTrayTitleCollision)
       return tray
     }
 
@@ -560,6 +591,7 @@ if (layout) {
       state.storyTray = tray
       initializeStoryTrayWidth()
       bindStoryTrayResize(q('.shorts-story-tray-resize-handle', tray))
+      observeStoryTrayHeader(tray)
       updateStoryGridButton()
       return tray
     }
