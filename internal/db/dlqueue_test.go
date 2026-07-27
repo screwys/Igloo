@@ -390,6 +390,62 @@ func TestReadyVideoReconciliationRecordsFetchHistory(t *testing.T) {
 	}
 }
 
+func TestDownloadCompletionKeepsOnlyFirstIntroducedSource(t *testing.T) {
+	d := openWritableTestDB(t)
+	const (
+		author = "tiktok_sample_author"
+		first  = "tiktok_sample_first"
+		later  = "tiktok_sample_later"
+		video  = "sample_shared_repost"
+	)
+	seedVideoDesireChannels(t, d, author, first, later)
+	for _, source := range []string{first, later} {
+		if _, err := d.ReconcileVideoDesires(VideoDesireSnapshot{
+			SourceChannelID: source,
+			Component:       "reposts",
+			Items: []VideoDesire{{
+				VideoID: video, OwnerChannelID: author,
+				SourcePosition: 0, Lane: DownloadLaneCurrent,
+			}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := d.ExecRaw(`
+		INSERT INTO video_repost_sources (
+			video_id, reposter_channel_id, first_seen_at_ms, updated_at_ms
+		) VALUES
+			(?, ?, 100, 100),
+			(?, ?, 200, 200)
+	`, video, first, video, later); err != nil {
+		t.Fatal(err)
+	}
+	job, ok, err := d.ClaimDownloadWork("worker-a", DownloadLaneCurrent, "tiktok", 300, time.Second)
+	if err != nil || !ok {
+		t.Fatalf("claim = %+v, %v, %v", job, ok, err)
+	}
+	seedTestVideo(t, d, video, author)
+	if err := d.CompleteDownloadWork(video, job.LeaseOwner); err != nil {
+		t.Fatal(err)
+	}
+	for table, sourceColumn := range map[string]string{
+		"video_desires":        "source_channel_id",
+		"video_repost_sources": "reposter_channel_id",
+	} {
+		var got string
+		if err := d.QueryRow(`
+			SELECT `+sourceColumn+`
+			FROM `+table+`
+			WHERE video_id = ?
+		`, video).Scan(&got); err != nil {
+			t.Fatalf("read %s: %v", table, err)
+		}
+		if got != first {
+			t.Fatalf("%s source = %q, want %q", table, got, first)
+		}
+	}
+}
+
 func TestMaintainVideoRetentionOwnsQueueAndCanonicalCleanup(t *testing.T) {
 	d := openWritableTestDB(t)
 	const source = "youtube_sample_source"

@@ -775,13 +775,89 @@ func (db *DB) CompleteDownloadWork(videoID, owner string) error {
 }
 
 func recordVideoFetchHistoryTx(tx *sql.Tx, videoID string, fallbackAtMs int64) error {
-	_, err := tx.Exec(`
+	videoID = strings.TrimSpace(videoID)
+	if _, err := tx.Exec(`
 		INSERT INTO video_fetch_history (video_id, fetched_at_ms)
 		SELECT video_id, COALESCE(NULLIF(downloaded_at, 0), ?)
 		FROM videos
 		WHERE video_id = ?
 		ON CONFLICT(video_id) DO NOTHING
-	`, fallbackAtMs, strings.TrimSpace(videoID))
+	`, fallbackAtMs, videoID); err != nil {
+		return err
+	}
+	return collapseFetchedIntroducedSourcesTx(tx, videoID)
+}
+
+// collapseFetchedIntroducedSourcesTx keeps the first source that introduced a
+// fetched canonical video and removes every later source. The kept source may
+// remain in its current window, but once it expires the fetch ledger prevents
+// any source from introducing the video again.
+func collapseFetchedIntroducedSourcesTx(tx *sql.Tx, videoID string) error {
+	videoID = strings.TrimSpace(videoID)
+	scope := ""
+	var args []any
+	if videoID != "" {
+		scope = " AND desired.video_id = ?"
+		args = append(args, videoID)
+	}
+	if _, err := tx.Exec(`
+		WITH ranked AS (
+			SELECT desired.source_channel_id,
+			       desired.source_component,
+			       desired.video_id,
+			       ROW_NUMBER() OVER (
+			           PARTITION BY desired.video_id
+			           ORDER BY
+			               COALESCE(NULLIF(provenance.first_seen_at_ms, 0),
+			                        NULLIF(provenance.reposted_at_ms, 0),
+			                        fetched.fetched_at_ms),
+			               desired.source_channel_id,
+			               desired.source_component
+			       ) AS source_rank
+			FROM video_desires desired
+			INNER JOIN video_fetch_history fetched
+			  ON fetched.video_id = desired.video_id
+			LEFT JOIN video_repost_sources provenance
+			  ON provenance.video_id = desired.video_id
+			 AND provenance.reposter_channel_id = desired.source_channel_id
+			WHERE desired.source_component IN ('reposts', 'tagged')
+			`+scope+`
+		)
+		DELETE FROM video_desires
+		WHERE EXISTS (
+			SELECT 1
+			FROM ranked
+			WHERE ranked.source_rank > 1
+			  AND ranked.source_channel_id = video_desires.source_channel_id
+			  AND ranked.source_component = video_desires.source_component
+			  AND ranked.video_id = video_desires.video_id
+		)
+	`, args...); err != nil {
+		return err
+	}
+
+	provenanceScope := ""
+	args = nil
+	if videoID != "" {
+		provenanceScope = " AND video_repost_sources.video_id = ?"
+		args = append(args, videoID)
+	}
+	_, err := tx.Exec(`
+		DELETE FROM video_repost_sources
+		WHERE EXISTS (
+			SELECT 1
+			FROM video_fetch_history fetched
+			WHERE fetched.video_id = video_repost_sources.video_id
+		)
+		`+provenanceScope+`
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM video_desires desired
+			WHERE desired.video_id = video_repost_sources.video_id
+			  AND desired.source_channel_id = video_repost_sources.reposter_channel_id
+			  AND desired.source_component IN ('reposts', 'tagged')
+		  )
+	`, args...)
 	return err
 }
 

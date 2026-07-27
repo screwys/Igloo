@@ -28,6 +28,10 @@ var schemaMigrations = []schemaMigration{
 		apply: addVideoFetchHistory,
 	},
 	{
+		name:  "20260727_collapse_fetched_introduced_sources",
+		apply: collapseFetchedIntroducedSources,
+	},
+	{
 		name:  "20260724_add_temp_download_queue",
 		apply: addTempDownloadQueue,
 	},
@@ -51,6 +55,10 @@ func addVideoFetchHistory(tx *sql.Tx) error {
 		WHERE downloaded_at > 0
 	`)
 	return err
+}
+
+func collapseFetchedIntroducedSources(tx *sql.Tx) error {
+	return collapseFetchedIntroducedSourcesTx(tx, "")
 }
 
 func addTempDownloadQueue(tx *sql.Tx) error {

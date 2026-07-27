@@ -157,6 +157,72 @@ func TestOpenBackfillsVideoFetchHistory(t *testing.T) {
 	}
 }
 
+func TestOpenCollapsesFetchedIntroducedSources(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "igloo.db")
+	store, err := OpenPath(path, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ExecRaw(`
+		INSERT INTO channels (channel_id, source_id, name, platform, created_at) VALUES
+			('tiktok_sample_author', 'sample_author', 'Sample Author', 'tiktok', 1),
+			('tiktok_sample_first', 'sample_first', 'Sample First', 'tiktok', 1),
+			('tiktok_sample_later', 'sample_later', 'Sample Later', 'tiktok', 1);
+		INSERT INTO videos (
+			video_id, channel_id, owner_kind, published_at, downloaded_at
+		) VALUES (
+			'sample_fetched_repost', 'tiktok_sample_author', 'tiktok_video', 100, 500
+		);
+		INSERT INTO video_fetch_history (video_id, fetched_at_ms)
+		VALUES ('sample_fetched_repost', 500);
+		INSERT INTO video_desires (
+			source_channel_id, source_component, video_id, source_position, lane
+		) VALUES
+			('tiktok_sample_first', 'reposts', 'sample_fetched_repost', 3, 'backfill'),
+			('tiktok_sample_later', 'reposts', 'sample_fetched_repost', 1, 'backfill');
+		INSERT INTO video_repost_sources (
+			video_id, reposter_channel_id, first_seen_at_ms, updated_at_ms
+		) VALUES
+			('sample_fetched_repost', 'tiktok_sample_first', 200, 200),
+			('sample_fetched_repost', 'tiktok_sample_later', 300, 300);
+		DELETE FROM schema_migrations
+		WHERE name = '20260727_collapse_fetched_introduced_sources'
+	`); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = OpenPath(path, root)
+	if err != nil {
+		t.Fatalf("OpenPath legacy source windows: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	for table, want := range map[string]string{
+		"video_desires":        "tiktok_sample_first",
+		"video_repost_sources": "tiktok_sample_first",
+	} {
+		var got string
+		column := "source_channel_id"
+		if table == "video_repost_sources" {
+			column = "reposter_channel_id"
+		}
+		if err := store.QueryRow(`
+			SELECT ` + column + `
+			FROM ` + table + `
+			WHERE video_id = 'sample_fetched_repost'
+		`).Scan(&got); err != nil {
+			t.Fatalf("read %s: %v", table, err)
+		}
+		if got != want {
+			t.Fatalf("%s source = %q, want %q", table, got, want)
+		}
+	}
+}
+
 func TestEnsureSchemaCanRunTwice(t *testing.T) {
 	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
