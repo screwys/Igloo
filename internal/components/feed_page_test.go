@@ -41,3 +41,14 @@ func TestFeedKeyboardNavigationShortcuts(t *testing.T) {
 		}
 	}
 }
+
+func TestQuoteOverlayBookmarkUsesQuotedPostAccount(t *testing.T) {
+	srcBytes, err := os.ReadFile("../../static/js/src/feed/index.js")
+	if err != nil {
+		t.Fatalf("read feed source: %v", err)
+	}
+	src := string(srcBytes)
+	if !strings.Contains(src, "qCard2.getAttribute('data-quote-author-handle')") {
+		t.Fatal("quote overlay bookmark should read the account from the quoted post")
+	}
+}

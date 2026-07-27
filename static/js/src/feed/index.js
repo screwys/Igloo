@@ -1041,7 +1041,9 @@ document.addEventListener('click', function (event) {
           syntheticRoot.setAttribute('data-tweet-id', overlayQuoteTweetId)
           syntheticRoot.setAttribute('data-bookmarked', qCard2 ? (qCard2.getAttribute('data-quote-bookmarked') || '0') : '0')
           syntheticRoot.setAttribute('data-bookmark-category-id', '')
-          var qAuthor = parentRoot ? (parentRoot.getAttribute('data-quote-author-handle') || '') : ''
+          var qAuthor = qCard2
+            ? (qCard2.getAttribute('data-quote-author-handle') || '')
+            : parentRoot ? (parentRoot.getAttribute('data-quote-author-handle') || '') : ''
           syntheticRoot.setAttribute('data-author-handle', qAuthor)
           syntheticRoot.setAttribute('data-source-handle', qAuthor)
           syntheticRoot.setAttribute('data-feed-is-retweet', '0')
