@@ -5057,6 +5057,10 @@ select.input.themed-select-native {
     width: min(520px, 42vw);
 }
 
+.compact-header-search-btn {
+    display: none;
+}
+
 body.shorts-mode .floating-header {
     top: max(0.5rem, env(safe-area-inset-top));
 }
@@ -5664,6 +5668,47 @@ body.shorts-open:has(.shorts-story-tray.open) .shorts-layout {
     /* Handled in main media query at bottom of file */
 }
 
+@media (max-width: 420px) {
+    body.shorts-mode {
+        --shorts-compact-header-height: max(58px, calc(env(safe-area-inset-top) + 50px));
+    }
+
+    body.shorts-mode .header-search {
+        display: none;
+    }
+
+    body.shorts-mode .compact-header-search-btn {
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        color: var(--text-primary);
+        background: rgba(var(--surface-soft-rgb), 0.75);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+    body.shorts-mode .compact-header-search-btn svg {
+        width: 19px;
+        height: 19px;
+    }
+
+    body.shorts-mode.shorts-open:has(.shorts-story-tray.open) .floating-header {
+        right: calc(var(--shorts-story-tray-width) + 0.5rem);
+    }
+
+    body.shorts-mode .shorts-layout {
+        top: var(--shorts-compact-header-height);
+        height: calc(100dvh - var(--shorts-compact-header-height));
+    }
+
+}
+
 .shorts-layout.hidden {
     display: none;
 }
@@ -5882,12 +5927,22 @@ html.story-tray-resizing .shorts-story-tray {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.shorts-story-grid-btn {
-    position: absolute;
+.shorts-story-tray-controls {
+    position: fixed;
     top: calc(max(0.5rem, env(safe-area-inset-top)) + 58px);
-    left: -0.72rem;
-    transform: translateX(-100%);
-    z-index: 2;
+    right: 0.72rem;
+    z-index: 372;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    transition: right 220ms ease;
+}
+
+body.shorts-open:has(.shorts-story-tray.open) .shorts-story-tray-controls {
+    right: calc(var(--shorts-story-tray-width) + 0.72rem);
+}
+
+.shorts-story-grid-btn {
     min-width: 0;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 999px;
@@ -5905,6 +5960,38 @@ html.story-tray-resizing .shorts-story-tray {
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
 }
 
+.shorts-story-tray-toggle {
+    width: 2rem;
+    height: 2rem;
+    flex: 0 0 2rem;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+.shorts-story-tray-toggle svg {
+    transform: scaleX(-1);
+}
+
+.shorts-story-tray-toggle[hidden] {
+    display: none !important;
+}
+
+.shorts-story-tray-toggle:hover,
+.shorts-story-tray-toggle:focus-visible {
+    color: var(--text-primary);
+    border-color: rgba(var(--accent-primary-rgb), 0.55);
+    background: rgba(var(--accent-primary-rgb), 0.18);
+    outline: none;
+}
+
 .shorts-story-grid-btn svg {
     width: 0.96rem;
     height: 0.96rem;
@@ -5915,6 +6002,21 @@ html.story-tray-resizing .shorts-story-tray {
     border-color: rgba(var(--accent-primary-rgb), 0.55);
     background: rgba(var(--accent-primary-rgb), 0.18);
     outline: none;
+}
+
+@media (max-width: 420px) {
+    body.shorts-mode .shorts-story-tray-controls {
+        top: calc(var(--shorts-compact-header-height) + 57px);
+        right: 0.75rem;
+    }
+
+    body.shorts-mode.shorts-open:has(.shorts-story-tray.open) .shorts-story-tray-controls {
+        right: calc(var(--shorts-story-tray-width) + 0.75rem);
+    }
+
+    body.shorts-mode .shorts-story-tray-toggle {
+        display: inline-flex;
+    }
 }
 
 .shorts-story-tray-header h2 {
@@ -9925,7 +10027,6 @@ body.shorts-mode .sidebar {
     }
     .shorts-layout {
         left: 0;
-        width: 100vw;
     }
 
     .shorts-tabs {

@@ -106,6 +106,7 @@ if (layout) {
       storyQueueIndex: -1,
       storyContinueAcrossAccounts: false,
       storyTray: null,
+      storyTrayControls: null,
       storyTrayHeaderObserver: null,
       storyTrayWidth: 0,
       storyTrayUserSized: false,
@@ -443,8 +444,8 @@ if (layout) {
     }
 
     function updateStoryGridButton() {
-      if (!state.storyTray) return
-      var gridBtn = q('.shorts-story-grid-btn', state.storyTray)
+      if (!state.storyTrayControls) return
+      var gridBtn = q('.shorts-story-grid-btn', state.storyTrayControls)
       if (!gridBtn) return
       var label = storyGridButtonLabel()
       gridBtn.title = label
@@ -452,6 +453,24 @@ if (layout) {
       var text = q('span', gridBtn)
       if (text) text.textContent = label
     }
+
+    function updateStoryTrayToggle() {
+      if (!state.storyTray || !state.storyTrayControls) return
+      var toggle = q('.shorts-story-tray-toggle', state.storyTrayControls)
+      if (!toggle) return
+      var expanded = state.storyTray.classList.contains('open')
+      var label = t('shorts_tab_stories', 'Stories')
+      toggle.hidden = expanded
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false')
+      toggle.title = label
+      toggle.setAttribute('aria-label', label)
+    }
+
+    function storyTrayCompactMode() {
+      return !!(window.matchMedia && window.matchMedia('(max-width: 420px)').matches)
+    }
+
+    var storyTrayWasCompact = storyTrayCompactMode()
 
     function storyTrayMaxWidth() {
       var sidebarWidth = parseFloat(getComputedStyle(doc.documentElement).getPropertyValue('--sidebar-width')) || 0
@@ -558,6 +577,7 @@ if (layout) {
       updateStoryGridButton()
       tray.classList.add('open')
       tray.setAttribute('aria-hidden', 'false')
+      updateStoryTrayToggle()
       window.requestAnimationFrame(updateStoryTrayTitleCollision)
       return tray
     }
@@ -590,25 +610,37 @@ if (layout) {
       tray.setAttribute('aria-hidden', 'true')
       var gridLabel = storyGridButtonLabel()
       var closeLabel = t('action_close', 'Close')
+      var storiesLabel = t('shorts_tab_stories', 'Stories')
       var resizeLabel = t('action_resize_sidebar', 'Resize sidebar')
-      tray.innerHTML = '' +
-        '<div class="shorts-story-tray-resize-handle" role="separator" title="' + escapeHtml(resizeLabel) + '" aria-label="' + escapeHtml(resizeLabel) + '" aria-orientation="vertical" aria-valuemin="' + STORY_TRAY_MIN_WIDTH + '" tabindex="0"></div>' +
+      var controls = doc.createElement('div')
+      controls.className = 'shorts-story-tray-controls'
+      controls.innerHTML = '' +
         '<button class="shorts-story-grid-btn" type="button" title="' + escapeHtml(gridLabel) + '" aria-label="' + escapeHtml(gridLabel) + '">' +
         iconSvg('grid') +
         '<span>' + escapeHtml(gridLabel) + '</span>' +
         '</button>' +
+        '<button class="shorts-story-tray-toggle" type="button" title="' + escapeHtml(storiesLabel) + '" aria-label="' + escapeHtml(storiesLabel) + '" aria-controls="shorts-story-tray" aria-expanded="false">' + iconSvg('tray-right') + '</button>'
+      tray.id = 'shorts-story-tray'
+      tray.innerHTML = '' +
+        '<div class="shorts-story-tray-resize-handle" role="separator" title="' + escapeHtml(resizeLabel) + '" aria-label="' + escapeHtml(resizeLabel) + '" aria-orientation="vertical" aria-valuemin="' + STORY_TRAY_MIN_WIDTH + '" tabindex="0"></div>' +
         '<div class="shorts-story-tray-header">' +
         '<h2>' + escapeHtml(t('shorts_tab_stories', 'Stories')) + '</h2>' +
         '<button class="shorts-story-tray-close" type="button" title="' + escapeHtml(closeLabel) + '" aria-label="' + escapeHtml(closeLabel) + '">' + iconSvg('tray-right') + '</button>' +
         '</div>' +
         '<div class="shorts-story-tray-body"></div>'
-      tray.addEventListener('click', function (event) {
+      controls.addEventListener('click', function (event) {
         var gridBtn = event.target && event.target.closest ? event.target.closest('.shorts-story-grid-btn') : null
         if (gridBtn) {
           event.preventDefault()
           activateStoryGridButton()
           return
         }
+        var toggle = event.target && event.target.closest ? event.target.closest('.shorts-story-tray-toggle') : null
+        if (!toggle) return
+        event.preventDefault()
+        openStoryTray()
+      })
+      tray.addEventListener('click', function (event) {
         var closeBtn = event.target && event.target.closest ? event.target.closest('.shorts-story-tray-close') : null
         if (closeBtn) {
           event.preventDefault()
@@ -620,12 +652,15 @@ if (layout) {
         event.preventDefault()
         openStoryRow(row, { continueAcrossAccounts: true })
       })
+      layout.appendChild(controls)
       layout.appendChild(tray)
+      state.storyTrayControls = controls
       state.storyTray = tray
       initializeStoryTrayWidth()
       bindStoryTrayResize(q('.shorts-story-tray-resize-handle', tray))
       observeStoryTrayHeader(tray)
       updateStoryGridButton()
+      updateStoryTrayToggle()
       return tray
     }
 
@@ -724,6 +759,7 @@ if (layout) {
       if (!state.storyTray) return
       state.storyTray.classList.remove('open')
       state.storyTray.setAttribute('aria-hidden', 'true')
+      updateStoryTrayToggle()
       if (state.storyTrayRefreshTimer) {
         clearInterval(state.storyTrayRefreshTimer)
         state.storyTrayRefreshTimer = 0
@@ -738,6 +774,8 @@ if (layout) {
 
     function openDefaultStoryTray() {
       if (currentTab === 'stories' || state.storyMode || !state.overlayOpen) return
+      ensureStoryTray()
+      if (storyTrayCompactMode()) return
       if (state.storyTray && state.storyTray.classList.contains('open')) return
       openStoryTray()
     }
@@ -1733,6 +1771,11 @@ if (layout) {
       window.addEventListener('resize', function () {
         if (!state.storyTray) return
         setStoryTrayWidth(state.storyTrayUserSized ? state.storyTrayWidth : defaultStoryTrayWidth(), false)
+        var compact = storyTrayCompactMode()
+        if (compact === storyTrayWasCompact) return
+        storyTrayWasCompact = compact
+        if (compact && state.storyTray.classList.contains('open')) closeStoryTray()
+        else if (!compact && state.overlayOpen && currentTab !== 'stories' && !state.storyMode) openStoryTray()
       })
       window.addEventListener('pagehide', function () {
         state.momentsCursorWrites.flushLatest()

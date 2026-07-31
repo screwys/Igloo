@@ -2018,6 +2018,14 @@
     _soActiveIdx = -1;
   }
 
+  var compactSearchButton = q('#compact-search-btn');
+  if (compactSearchButton) {
+    compactSearchButton.addEventListener('click', function () {
+      if (q('.modal:not(.hidden)')) return;
+      openSearchOverlay();
+    });
+  }
+
   function renderOverlayResults(channels, videos) {
     if (!searchOverlayResults) return;
     var html = '';

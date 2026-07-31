@@ -16,6 +16,7 @@
 ## Evidence
 
 - Start from local evidence: files, DB rows, logs, running DOM, device/app state, then code.
+- The canonical local browser target is `https://localhost:8443`. Use it directly for live web and DOM checks; do not rediscover Igloo from listening ports or substitute another local URL.
 - When the Igloo MCP is available, prefer its read-only tools for first-pass
   orientation and runtime evidence: `doctor_status`, `server_query`,
   `db_schema`, `list_logs`, `read_log`, `recent_errors`, `pipeline_status`,

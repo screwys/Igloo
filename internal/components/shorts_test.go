@@ -183,6 +183,9 @@ func TestShortsStoryTrayOpensByDefaultForNormalMoments(t *testing.T) {
 	for _, check := range []string{
 		"function openDefaultStoryTray()",
 		"if (currentTab === 'stories' || state.storyMode || !state.overlayOpen) return",
+		"function storyTrayCompactMode()",
+		"ensureStoryTray()",
+		"if (storyTrayCompactMode()) return",
 		"afterOverlayOpen: openDefaultStoryTray",
 	} {
 		if !strings.Contains(indexSrc, check) {
@@ -204,6 +207,7 @@ func TestShortsStoryGridButtonLabelsStoryPlaybackAsMoments(t *testing.T) {
 		"function storyGridButtonLabel()",
 		"state.storyMode ? t('nav_moments', 'Moments') : t('action_grid', 'Grid')",
 		"function updateStoryGridButton()",
+		"state.storyTrayControls",
 		"function activateStoryGridButton()",
 		"exitStoryMode({ restore: true })",
 		"updateStoryGridButton()",
@@ -629,6 +633,9 @@ func TestShortsStoryTrayUsesRemainingWidthBeforeCompactingItsContents(t *testing
 		"right: var(--shorts-story-tray-width)",
 		"container-name: story-tray",
 		"shorts-story-tray-resize-handle",
+		"shorts-story-tray-controls",
+		"shorts-story-tray-toggle",
+		".shorts-story-tray-toggle[hidden] {\n    display: none !important",
 		"top: calc(max(0.5rem, env(safe-area-inset-top)) + 58px)",
 		"flex: 0 0 58px",
 		"min-height: 58px",
@@ -650,6 +657,9 @@ func TestShortsStoryTrayUsesRemainingWidthBeforeCompactingItsContents(t *testing
 		"setPointerCapture(event.pointerId)",
 		"window.innerWidth - event.clientX",
 		"function updateStoryTrayTitleCollision()",
+		"function updateStoryTrayToggle()",
+		"toggle.hidden = expanded",
+		"aria-expanded",
 		"function observeStoryTrayHeader(tray)",
 		"state.storyTrayHeaderObserver.observe(tray)",
 		"state.storyTrayHeaderObserver.observe(floatingHeader)",
@@ -663,8 +673,15 @@ func TestShortsStoryTrayUsesRemainingWidthBeforeCompactingItsContents(t *testing
 		strings.Contains(compactRules, ".shorts-story-grid-btn span") {
 		t.Fatal("Grid should keep its full size outside the resizable story tray")
 	}
+	if strings.Contains(indexSrc, "classList.toggle('is-open', expanded)") ||
+		strings.Contains(indexSrc, "contains('open')) closeStoryTray()\n        else openStoryTray()") {
+		t.Fatal("the compact tray control should only expand Stories; the tray owns its close action")
+	}
 	if strings.Contains(css, "story-tray-compact") || strings.Contains(indexSrc, "story-tray-compact") {
 		t.Fatal("resizing the story tray should not hide global header controls")
+	}
+	if strings.Contains(css, ".shorts-layout {\n        left: 0;\n        width: 100vw;") {
+		t.Fatal("the mobile layout width must come from its left and right edges so the open story tray keeps its clearance")
 	}
 	collisionRule := cssRuleBody(t, css, ".shorts-story-tray.story-title-collides .shorts-story-tray-header h2")
 	for _, check := range []string{"position: absolute", "width: 1px", "clip-path: inset(50%)"} {
