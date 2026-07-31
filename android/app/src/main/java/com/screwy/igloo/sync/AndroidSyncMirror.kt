@@ -330,6 +330,7 @@ class AndroidSyncMirror(
         val protectedChannels = dao.protectedChannelIds().toHashSet()
         val retainedAssetOwners = dao.retainedAssetOwnerIds().toHashSet()
         dao.unseenHeads().forEach { head ->
+            if (removeAndroidLocalCursorHead(head)) return@forEach
             deleteOwner(
                 ownerKind = head.ownerKind,
                 ownerId = head.ownerId,
@@ -389,7 +390,8 @@ class AndroidSyncMirror(
                 db.channelSettingDao().upsert(AndroidSyncChangeDecoder.channelSetting(change))
             }
             "moments_cursor" ->
-                db.momentsCursorDao().upsert(AndroidSyncChangeDecoder.momentsCursor(change))
+                db.momentsCursorDao()
+                    .upsertIfNotOlder(AndroidSyncChangeDecoder.momentsCursor(change))
             "setting" -> AndroidSyncChangeDecoder.setting(change)
             else -> error("unknown thin Android sync owner: ${change.owner_kind}")
         }
@@ -517,6 +519,12 @@ class AndroidSyncMirror(
         dao.upsertAsset(next)
     }
 
+    private suspend fun removeAndroidLocalCursorHead(head: AndroidSyncHeadEntity): Boolean {
+        if (head.ownerKind != "moments_cursor" || head.ownerId != "stories") return false
+        dao.deleteHead(head.ownerKind, head.ownerId)
+        return true
+    }
+
     private suspend fun deleteOwner(
         ownerKind: String,
         ownerId: String,
@@ -623,6 +631,7 @@ class AndroidSyncMirror(
                     val protectedChannels = dao.protectedChannelIds().toHashSet()
                     val retainedAssetOwners = dao.retainedAssetOwnerIds().toHashSet()
                     expired.forEach { head ->
+                        if (removeAndroidLocalCursorHead(head)) return@forEach
                         deleteOwner(
                             ownerKind = head.ownerKind,
                             ownerId = head.ownerId,

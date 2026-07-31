@@ -150,7 +150,7 @@ async function loadOverlay() {
   const runnable = src
     .replace(/^import .*$/gm, '')
     .replace(/\bexport\s+/g, '') +
-    '\nObject.assign(globalThis, { initOverlay, scrollToIndex, activateIndex, openOverlayAtIndex, goNext, goPrev, ensureContainerScrollBehavior });';
+    '\nObject.assign(globalThis, { initOverlay, scrollToIndex, activateIndex, openOverlayAtIndex, openOverlayByVideoId, goNext, goPrev, ensureContainerScrollBehavior });';
 
   const timers = [];
   const calls = {
@@ -263,6 +263,7 @@ function initBasicOverlay(overlay, options = {}) {
     byId: new Map(),
     cardIndexById: new Map(cards.map((el, index) => [String(el.getAttribute('data-video-id')), index])),
     currentIndex: -1,
+    openRequestSeq: 0,
     overlayOpen: false,
     storyMode: false,
     renderedStart: -1,
@@ -297,6 +298,10 @@ function initBasicOverlay(overlay, options = {}) {
     setLastViewedShortId(id) { persisted.push({ type: 'id', id }); },
     setLastViewedShortResume(id, index) { persisted.push({ type: 'resume', id, index }); },
     markShortViewed(id) { persisted.push({ type: 'viewed', id }); },
+    beginOpenRequest() {
+      state.openRequestSeq += 1;
+      return state.openRequestSeq;
+    },
     getShortsInfiniteController() { return null; },
     parseCardData(el) {
       const id = String(el.getAttribute('data-video-id') || '');
@@ -406,6 +411,95 @@ test('vertical deck does not let late skeleton hydration navigate away from the 
   await flush();
 
   assert.equal(state.currentIndex, 1);
+});
+
+test('late skeleton open is abandoned after a newer navigation request', async () => {
+  const overlay = await loadOverlay();
+  const hydration = deferred();
+  const { state, persisted } = initBasicOverlay(overlay, {
+    skeleton: 1,
+    hydrateCardElement(el) {
+      return hydration.promise.then(() => {
+        el.setAttribute('data-shorts-card-skeleton', '0');
+        return el;
+      });
+    },
+  });
+
+  overlay.openOverlayAtIndex(1, true);
+  overlay.goNext({ explicit: true });
+  assert.equal(state.openRequestSeq, 1);
+  hydration.resolve();
+  await flush();
+  await flush();
+
+  assert.equal(state.currentIndex, 0);
+  assert.equal(state.overlayOpen, false);
+  assert.deepEqual(persisted.map((row) => row.id), ['v0', 'v0', 'v0']);
+});
+
+test('late skeleton open follows the requested video after the grid reorders', async () => {
+  const overlay = await loadOverlay();
+  const hydration = deferred();
+  const { state, cards, sourceContainer, persisted } = initBasicOverlay(overlay, {
+    skeleton: 1,
+    hydrateCardElement(el) {
+      return hydration.promise.then(() => {
+        el.setAttribute('data-shorts-card-skeleton', '0');
+        return el;
+      });
+    },
+  });
+
+  overlay.openOverlayAtIndex(1, true);
+  sourceContainer.replaceChildren(cards[0], cards[2], cards[1], cards[3], cards[4]);
+  hydration.resolve();
+  await flush();
+  await flush();
+
+  assert.equal(state.currentIndex, 2);
+  assert.equal(state.items[2].data.id, 'v1');
+  assert.deepEqual(persisted.map((row) => row.id), ['v1', 'v1', 'v1']);
+});
+
+test('explicit next and previous navigation invalidate pending open requests', async () => {
+  const overlay = await loadOverlay();
+  const { state } = initBasicOverlay(overlay);
+
+  overlay.openOverlayAtIndex(1, true, { persistCursor: false });
+  assert.equal(state.openRequestSeq, 0);
+
+  overlay.goNext({ explicit: true });
+  assert.equal(state.openRequestSeq, 1);
+  overlay.goPrev({ explicit: true });
+  assert.equal(state.openRequestSeq, 2);
+});
+
+test('restoring an existing moment records its view without rewriting cursor history', async () => {
+  const overlay = await loadOverlay();
+  const { state, persisted } = initBasicOverlay(overlay, { skeleton: 1 });
+
+  assert.equal(overlay.openOverlayByVideoId('v1', true, { persistCursor: false }), true);
+  await flush();
+  await flush();
+
+  assert.deepEqual(persisted, [
+    { type: 'viewed', id: 'v1' },
+  ]);
+  assert.equal(state.openRequestSeq, 0);
+});
+
+test('explicitly opening a moment still records cursor history', async () => {
+  const overlay = await loadOverlay();
+  const { persisted } = initBasicOverlay(overlay);
+
+  assert.equal(overlay.openOverlayByVideoId('v1', true), true);
+
+  assert.deepEqual(persisted.map((row) => [row.type, row.id, row.index]), [
+    ['viewed', 'v1', undefined],
+    ['id', 'v1', undefined],
+    ['resume', 'v1', 1],
+  ]);
 });
 
 test('vertical deck transition ignores additional navigation until landing', async () => {

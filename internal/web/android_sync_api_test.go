@@ -131,6 +131,31 @@ func TestAndroidSyncPriorityStateBypassesContentBacklog(t *testing.T) {
 	}
 }
 
+func TestAndroidSyncStateMaterializationIgnoresLocalStoriesCursor(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	if err := srv.db.ExecRaw(`
+		INSERT INTO moments_cursors (
+			scope, video_id, position_ms, sort_at_ms, updated_at_ms
+		) VALUES ('stories', 'sample_story', 10, 100, 1000)
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	changes, err := srv.androidSyncStateChanges(
+		srv.db,
+		newAndroidSyncMaterializationPlan(nil),
+		map[string]map[string]struct{}{
+			"moments_cursor": {"stories": {}},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 0 {
+		t.Fatalf("Android-local stories cursor materialized as changes: %+v", androidSyncChangeKeys(changes))
+	}
+}
+
 func TestAndroidSyncFullYoutubeMetadataIsOptInAndCursorBound(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	old := time.Now().Add(-365 * 24 * time.Hour).UnixMilli()

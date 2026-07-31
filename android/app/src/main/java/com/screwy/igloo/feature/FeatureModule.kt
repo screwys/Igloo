@@ -1,5 +1,6 @@
 package com.screwy.igloo.feature
 
+import androidx.lifecycle.SavedStateHandle
 import com.screwy.igloo.bookmarks.BookmarksViewModel
 import com.screwy.igloo.channel.ChannelViewModel
 import com.screwy.igloo.data.IglooDatabase
@@ -78,15 +79,22 @@ val iglooFeatureModule = module {
             resolvers = get(),
         )
     }
-    viewModel { (playlistSpec: ShortsPlaylistSpec, startVideoId: String) ->
+    viewModel { params ->
+        val playlistSpec: ShortsPlaylistSpec = params.get()
+        val startVideoId: String = params.get()
+        val initialSelectionExplicit: Boolean = params.get()
+        // Koin's Android ViewModel holder supplies this from CreationExtras.
+        val savedStateHandle: SavedStateHandle = params.get()
         ShortsRouteViewModel(
             playlistSpec = playlistSpec,
             startVideoId = startVideoId,
+            initialSelectionExplicit = initialSelectionExplicit,
             db = get<IglooDatabase>(),
             outboxWriter = get(),
             prefs = get(),
             uiEffects = get(),
             baseUrlProvider = get(),
+            savedStateHandle = savedStateHandle,
         )
     }
     viewModel { (channelId: String) ->

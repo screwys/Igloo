@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -12,7 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.ui.UiStateSwitch
@@ -32,6 +38,7 @@ fun ShortsRoute(
     playlistType: String,
     playlistId: String,
     videoId: String,
+    initialSelectionExplicit: Boolean,
     navController: NavController,
     modifier: Modifier = Modifier,
 ) {
@@ -39,8 +46,24 @@ fun ShortsRoute(
         ShortsPlaylistSpec.decode(playlistType, playlistId) ?: ShortsPlaylistSpec.allMoments()
     }
     val vm: ShortsRouteViewModel = koinViewModel(
-        parameters = { parametersOf(spec, videoId) },
+        parameters = { parametersOf(spec, videoId, initialSelectionExplicit) },
     )
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(vm, lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) vm.cancelPendingInitialMomentsSelection()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            vm.cancelPendingInitialMomentsSelection()
+        }
+    }
+    LaunchedEffect(vm, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            vm.consumePendingInitialMomentsSelection()
+        }
+    }
     val items by vm.items.collectAsStateWithLifecycle()
     val startIndex by vm.startIndex.collectAsStateWithLifecycle()
     val uiState by vm.uiState.collectAsStateWithLifecycle()
@@ -130,6 +153,7 @@ fun ShortsRoute(
                                 playlistId = ShortsPlaylistSpec.RootPlaylistId,
                                 videoId = currentVideoId.ifBlank { videoId },
                                 source = IglooNavigationSource.Moments,
+                                explicitInitialSelection = false,
                             )
                         }
                     }

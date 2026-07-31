@@ -17,7 +17,7 @@ var DECK_TRANSITION_MS = 340
 //          sourceCardSelector, doc }
 //   fns: { closeBookmarkMenu, ensureGridThumbnails, updateTopControls,
 //          updateCurrentActionButtons, setLastViewedShortId, setLastViewedShortResume,
-//          getShortsInfiniteController, makeShortItem, parseCardData, iconSvg }
+//          beginOpenRequest, getShortsInfiniteController, makeShortItem, parseCardData, iconSvg }
 export function initOverlay(stateRef, dom, fns) {
   _state = stateRef
   _dom = dom
@@ -174,11 +174,21 @@ function hydrateCardAtIndex(index, opts) {
   var card = _state.cards[index]
   if (!isSkeletonCard(card) || typeof _state.hydrateCardElement !== 'function') return false
   _state.hydrateCardElement(card).then(function () {
+    if (opts && opts.open && Number(_state.openRequestSeq || 0) !== Number(opts.openRequestSeq || 0)) return
+    if (opts && opts.open && !String(opts.openVideoId || '').trim()) return
     appendNewItemsFromGrid()
-    var hydrated = _state.cards[index]
+    var hydratedIndex = index
+    if (opts && opts.open) {
+      hydratedIndex = _state.cardIndexById.get(String(opts.openVideoId || '').trim())
+      if (hydratedIndex === undefined) return
+    }
+    var hydrated = _state.cards[hydratedIndex]
     if (!hydrated || isSkeletonCard(hydrated)) return
     if (opts && opts.open) {
-      openOverlayAtIndex(index, opts.immediate)
+      if (String(hydrated.getAttribute('data-video-id') || '').trim() !== String(opts.openVideoId || '').trim()) return
+      openOverlayAtIndex(hydratedIndex, opts.immediate, {
+        persistCursor: opts.persistCursor !== false
+      })
       return
     }
     if (!_state.overlayOpen) return
@@ -462,7 +472,8 @@ export function requestMoreIfNeeded() {
   }
 }
 
-export function goNext() {
+export function goNext(options) {
+  if (options && options.explicit && _fns && typeof _fns.beginOpenRequest === 'function') _fns.beginOpenRequest()
   if (scrollToIndex(_state.currentIndex + 1, _state.storyMode ? 'instant' : 'smooth')) return
   if (_state.storyMode) {
     if (_fns && typeof _fns.handleStoryEnd === 'function' && _fns.handleStoryEnd()) return
@@ -473,7 +484,8 @@ export function goNext() {
   showUpToDateOverlay()
 }
 
-export function goPrev() {
+export function goPrev(options) {
+  if (options && options.explicit && _fns && typeof _fns.beginOpenRequest === 'function') _fns.beginOpenRequest()
   scrollToIndex(_state.currentIndex - 1, 'smooth')
 }
 
@@ -517,6 +529,12 @@ function persistShortPosition(index, entry) {
   _fns.setLastViewedShortResume(entry.data.id, index, entry.data.page, entry.data.sortAtMs)
 }
 
+function recordShortView(index, entry) {
+  if (!entry || !_state || _state.currentIndex !== index) return
+  if (_state.items[index] !== entry) return
+  if (typeof _fns.markShortViewed === 'function') _fns.markShortViewed(entry.data.id)
+}
+
 function activateVisibleShort(index) {
   if (_state.storyMode) {
     activateIndex(index, { force: false })
@@ -552,6 +570,7 @@ export function activateIndex(index, options) {
   pauseAllShorts(entry.data.id)
   _state.lastVisibleId = entry.data.id
   if (shouldPersist) persistShortPosition(index, entry)
+  else if (opts.recordView) recordShortView(index, entry)
   updateUrlForCurrent()
   requestMoreIfNeeded()
   updateCurrentActionButtons()
@@ -768,29 +787,42 @@ export function showGrid() {
   setOverlayVisible(false)
 }
 
-export function openOverlayAtIndex(index, immediate) {
+export function openOverlayAtIndex(index, immediate, options) {
+  var opts = options || {}
   ensureOverlayHydrated()
   if (!Number.isFinite(index)) index = 0
   if (index < 0) index = 0
   var total = _state.cards.length
   if (index >= total) index = total - 1
   if (index < 0) return
-  if (hydrateCardAtIndex(index, { open: true, immediate: immediate !== false })) return
+  var targetCard = _state.cards[index]
+  if (hydrateCardAtIndex(index, {
+    open: true,
+    immediate: immediate !== false,
+    persistCursor: opts.persistCursor !== false,
+    openRequestSeq: Number(_state.openRequestSeq || 0),
+    openVideoId: String(targetCard && targetCard.getAttribute('data-video-id') || '').trim()
+  })) return
   var wasOpen = _state.overlayOpen
   renderShortsWindow(index)
   setOverlayVisible(true)
-  activateIndex(index, { force: true, play: true, persist: true })
+  activateIndex(index, {
+    force: true,
+    play: true,
+    persist: opts.persistCursor !== false,
+    recordView: true
+  })
   if (_state.storyMode) ensureCurrentVisible(index, true)
   if (!wasOpen && _fns && typeof _fns.afterOverlayOpen === 'function') _fns.afterOverlayOpen()
 }
 
-export function openOverlayByVideoId(videoId, immediate) {
+export function openOverlayByVideoId(videoId, immediate, options) {
   ensureOverlayHydrated()
   var id = String(videoId || '').trim()
   if (!id) return false
   var cardIndex = _state.cardIndexById.get(id)
   if (cardIndex !== undefined) {
-    openOverlayAtIndex(cardIndex, immediate !== false)
+    openOverlayAtIndex(cardIndex, immediate !== false, options)
     return true
   }
   return false

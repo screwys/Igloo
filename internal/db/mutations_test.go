@@ -114,6 +114,80 @@ func TestMomentsCursorMutationKeepsNewerClientTimestamp(t *testing.T) {
 	}
 }
 
+func TestMomentsCursorMutationAllowsNewerExplicitBackwardSelection(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	if err := d.ApplyMomentsCursorMutationWithSortAt("sample_later", 0, 1_000, "all", 20_000); err != nil {
+		t.Fatalf("later cursor mutation: %v", err)
+	}
+	result, err := d.MutateMomentsCursor("sample_earlier", 0, 2_000, "all", 10_000)
+	if err != nil {
+		t.Fatalf("newer explicit backward mutation: %v", err)
+	}
+	if !result.Applied {
+		t.Fatalf("newer explicit backward mutation result = %+v, want applied", result)
+	}
+
+	cursor, found, err := d.GetMomentsCursor("all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found || cursor.VideoID != "sample_earlier" || cursor.SortAtMs != 10_000 || cursor.UpdatedAtMs != 2_000 {
+		t.Fatalf("cursor after explicit backward selection = %+v, %v", cursor, found)
+	}
+}
+
+func TestMomentsCursorMutationKeepsNewerReselectionClock(t *testing.T) {
+	d := openWritableTestDB(t)
+
+	if err := d.ApplyMomentsCursorMutationWithSortAt("sample_a", 40, 100, "all", 10_000); err != nil {
+		t.Fatalf("initial cursor mutation: %v", err)
+	}
+	var revision int64
+	if err := d.QueryRow(`
+		SELECT revision FROM android_sync_heads
+		WHERE owner_kind = 'moments_cursor' AND owner_id = 'all'
+	`).Scan(&revision); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := d.MutateMomentsCursor("sample_a", 40, 300, "all", 10_000)
+	if err != nil {
+		t.Fatalf("newer explicit reselection: %v", err)
+	}
+	if !result.Applied {
+		t.Fatalf("newer explicit reselection result = %+v, want applied", result)
+	}
+	cursor, found, err := d.GetMomentsCursor("all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found || cursor.VideoID != "sample_a" || cursor.UpdatedAtMs != 300 {
+		t.Fatalf("cursor after explicit reselection = %+v, %v; want sample_a at 300", cursor, found)
+	}
+	var reselectionRevision int64
+	if err := d.QueryRow(`
+		SELECT revision FROM android_sync_heads
+		WHERE owner_kind = 'moments_cursor' AND owner_id = 'all'
+	`).Scan(&reselectionRevision); err != nil {
+		t.Fatal(err)
+	}
+	if reselectionRevision <= revision {
+		t.Fatalf("explicit reselection revision = %d, want after %d", reselectionRevision, revision)
+	}
+
+	if _, err := d.MutateMomentsCursor("sample_b", 0, 200, "all", 20_000); !IsStaleMutation(err) {
+		t.Fatalf("delayed cursor mutation error = %v, want stale mutation", err)
+	}
+	cursor, found, err = d.GetMomentsCursor("all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found || cursor.VideoID != "sample_a" || cursor.UpdatedAtMs != 300 {
+		t.Fatalf("cursor after delayed mutation = %+v, %v; want sample_a at 300", cursor, found)
+	}
+}
+
 func TestProgressMutationRejectsStaleAndDoesNotReviseExactRetry(t *testing.T) {
 	d := openWritableTestDB(t)
 	if _, err := d.MutateProgress("sample_video", 30, 120, 2_000); err != nil {

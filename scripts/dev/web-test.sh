@@ -13,7 +13,10 @@ require_cmd() {
 
 require_cmd curl
 require_cmd go
+require_cmd node
 require_cmd python3
+
+node --test static/js/*.test.mjs
 
 tmp="$(mktemp -d)"
 server_pid=""

@@ -110,7 +110,7 @@ internal suspend fun applyOptimisticMutation(db: IglooDatabase, row: OutboxEntit
                 )
         OutboxKind.CODE_MOMENTS_CURSOR ->
             db.momentsCursorDao()
-                .upsert(
+                .upsertIfNewer(
                     MomentsCursorEntity(
                         scope = itemId,
                         videoId = payload.text("video_id").orEmpty(),

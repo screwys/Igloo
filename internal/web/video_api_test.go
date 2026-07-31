@@ -86,6 +86,21 @@ func TestHandleShortsHistoryReadsAndroidMomentsCursor(t *testing.T) {
 	}
 }
 
+func TestHandleShortsHistoryDoesNotReportDatabaseFailureAsEmptyHistory(t *testing.T) {
+	srv := newTestServer(t)
+	if err := srv.db.ExecRaw(`DROP TABLE moments_cursors`); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/shorts/history?tab=all", nil)
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusInternalServerError, rr.Body.String())
+	}
+}
+
 func TestHandleShortsHistoryReadsStoriesScope(t *testing.T) {
 	srv := newTestServer(t)
 
@@ -234,6 +249,53 @@ func TestHandleShortsHistoryFallsBackToNearestVisibleWhenCursorHidden(t *testing
 	}
 	if resp.UpdatedAtMs != 123456789 {
 		t.Fatalf("updated_at_ms=%d, want original cursor timestamp", resp.UpdatedAtMs)
+	}
+}
+
+func TestHandleShortsHistoryDerivesLegacyZeroSortAndUsesVideoIDTie(t *testing.T) {
+	srv := newTestServer(t)
+	if err := srv.db.ExecRaw(`
+		INSERT INTO channels (channel_id, source_id, name, platform) VALUES
+			('tiktok_visible', 'visible', 'Visible', 'tiktok'),
+			('tiktok_hidden', 'hidden', 'Hidden', 'tiktok');
+		INSERT INTO channel_follows (channel_id, followed_at)
+		VALUES ('tiktok_visible', 1);
+		INSERT INTO videos (
+			video_id, channel_id, owner_kind, title, duration, published_at
+		) VALUES
+			('sample_a', 'tiktok_visible', 'tiktok_video', 'A', 0, 1000),
+			('sample_m', 'tiktok_hidden', 'tiktok_video', 'M', 0, 1000),
+			('sample_z', 'tiktok_visible', 'tiktok_video', 'Z', 0, 1000);
+		INSERT INTO moments_cursors (
+			scope, video_id, position_ms, sort_at_ms, updated_at_ms
+		) VALUES ('all', 'sample_m', 0, 0, 2000);
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/shorts/history?tab=all", nil)
+	req = attachTestAuth(req, "alice")
+	rr := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d - %s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		VideoID           string `json:"video_id"`
+		FallbackForVideo string `json:"fallback_for_video_id"`
+		Page              int    `json:"page"`
+		Index             int    `json:"index"`
+		UpdatedAtMs       int64  `json:"updated_at_ms"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.VideoID != "sample_z" || resp.FallbackForVideo != "sample_m" {
+		t.Fatalf("legacy zero-sort fallback = %+v, want sample_m -> sample_z", resp)
+	}
+	if resp.Page != 1 || resp.Index != 1 || resp.UpdatedAtMs != 2000 {
+		t.Fatalf("legacy zero-sort cursor metadata = %+v, want page 1 index 1 timestamp 2000", resp)
 	}
 }
 

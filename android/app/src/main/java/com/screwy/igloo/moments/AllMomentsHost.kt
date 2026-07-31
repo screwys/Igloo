@@ -9,17 +9,14 @@ import com.screwy.igloo.ui.UiStateSwitch
 import com.screwy.igloo.ui.nav.IglooNavigationSource
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
 import org.koin.androidx.compose.koinViewModel
-import org.koin.compose.koinInject
 
 /**
  * Hosts [AllMomentsRoute] against the nav-graph-scoped [MomentsViewModel]. Kept
  * separate from `AllMomentsRoute` so the composable stays pure (testable with a
  * canned items list) while this host owns the wiring concerns.
  *
- * Tap-to-resume flow: grid cell → `vm.selectResumeVideoId(videoId)` (writes the
- * MomentsCursor outbox kind, which in turn updates prefs + re-fires [startIndex]),
- * then `popBackStack()` back to the player. The player recomposes with the new
- * startIndex so the tapped video is the active page.
+ * A grid tap opens the standalone player with the selected video in its route.
+ * That route owns recording the explicit selection after its Room playlist loads.
  */
 @Composable
 fun AllMomentsHost(
@@ -29,33 +26,30 @@ fun AllMomentsHost(
     val backStackEntry = rememberMomentsGraphBackStackEntry(navController) ?: return
     val vm: MomentsViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
 
-    val items by vm.items.collectAsStateWithLifecycle()
-    val startIndex by vm.startIndex.collectAsStateWithLifecycle()
-    val uiState by vm.uiState.collectAsStateWithLifecycle()
-    val activeTab by vm.activeTab.collectAsStateWithLifecycle()
-    val storyChannels by vm.storyChannels.collectAsStateWithLifecycle()
+    val routeState by vm.gridRouteState.collectAsStateWithLifecycle()
     val navigator = rememberIglooNavigator(navController)
 
-    UiStateSwitch(state = uiState, modifier = modifier) {
+    UiStateSwitch(state = routeState.uiState, modifier = modifier) {
         AllMomentsRoute(
-            items = items,
-            initialIndex = startIndex,
+            items = routeState.items,
+            initialIndex = routeState.startIndex,
             onMomentClick = { videoId ->
-				navigator.openShorts(
-                    playlistType = if (activeTab == "following") {
-                        ShortsPlaylistType.Moments.routeValue
-                    } else {
-                        ShortsPlaylistType.AllMoments.routeValue
-                    },
+                navigator.openShorts(
+                    playlistType =
+                        if (routeState.scope == "following") {
+                            ShortsPlaylistType.Moments.routeValue
+                        } else {
+                            ShortsPlaylistType.AllMoments.routeValue
+                        },
                     playlistId = ShortsPlaylistSpec.RootPlaylistId,
                     videoId = videoId,
                     source = IglooNavigationSource.AllMoments,
-				)
+                )
             },
             onChannelClick = { cid ->
                 navigator.openChannel(cid, IglooNavigationSource.AllMoments)
             },
-            storyChannels = storyChannels,
+            storyChannels = routeState.storyChannels,
             onStoryClick = { _, firstVideoId ->
                 navigator.openShorts(
                     playlistType = ShortsPlaylistType.StoryTray.routeValue,
@@ -64,7 +58,7 @@ fun AllMomentsHost(
                     source = IglooNavigationSource.AllMoments,
                 )
             },
-            activeTab = activeTab,
+            activeTab = routeState.scope,
             onTabSelected = vm::setActiveTab,
             onBack = { navController.popBackStack() },
         )

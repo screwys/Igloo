@@ -8,6 +8,11 @@ import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.media.OwnerKind
 import java.io.File
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -136,6 +141,82 @@ class MomentsPlayerTest {
                 lastAppliedStartRequest = followingRequest,
             )
         )
+    }
+
+    @Test
+    fun cancelled_start_scroll_remains_pending_and_retries() = runBlocking {
+        val items = listOf(storyItem("older", "tiktok_a"), storyItem("active", "tiktok_b"))
+        val request = momentPagerStartRequest(scope = "all", startVideoId = "active")!!
+        val tracker = MomentPagerSettlementTracker()
+        tracker.recordSettledVideo("older")
+        val scrollStarted = CompletableDeferred<Unit>()
+        var lastApplied: MomentPagerStartRequest? = null
+        val cancelledScroll =
+            launch {
+                lastApplied =
+                    applyMomentPagerStartRequest(
+                        startRequest = request,
+                        requestedPage = 1,
+                        currentPage = 0,
+                        requestedVideoId = "active",
+                        settlementTracker = tracker,
+                        scrollToPage = {
+                            scrollStarted.complete(Unit)
+                            awaitCancellation()
+                        },
+                    )
+            }
+
+        scrollStarted.await()
+        cancelledScroll.cancelAndJoin()
+
+        assertNull(lastApplied)
+        assertFalse(tracker.consumePassiveStartTarget("active"))
+        assertEquals(
+            1,
+            pendingMomentPagerStartIndex(
+                items = items,
+                startRequest = request,
+                lastAppliedStartRequest = lastApplied,
+            ),
+        )
+
+        var retryScrolls = 0
+        lastApplied =
+            applyMomentPagerStartRequest(
+                startRequest = request,
+                requestedPage = 1,
+                currentPage = 1,
+                requestedVideoId = "active",
+                settlementTracker = tracker,
+                scrollToPage = { retryScrolls += 1 },
+            )
+
+        assertEquals(request, lastApplied)
+        assertEquals(0, retryScrolls)
+        assertTrue(tracker.consumePassiveStartTarget("active"))
+    }
+
+    @Test
+    fun same_page_start_already_reported_does_not_leave_a_passive_target() = runBlocking {
+        val request = momentPagerStartRequest(scope = "following", startVideoId = "active")!!
+        val tracker = MomentPagerSettlementTracker()
+        tracker.recordSettledVideo("active")
+        var scrolls = 0
+
+        val applied =
+            applyMomentPagerStartRequest(
+                startRequest = request,
+                requestedPage = 1,
+                currentPage = 1,
+                requestedVideoId = "active",
+                settlementTracker = tracker,
+                scrollToPage = { scrolls += 1 },
+            )
+
+        assertEquals(request, applied)
+        assertEquals(0, scrolls)
+        assertFalse(tracker.consumePassiveStartTarget("active"))
     }
 
     @Test

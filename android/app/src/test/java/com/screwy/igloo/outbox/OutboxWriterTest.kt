@@ -4,6 +4,7 @@ import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.RoomTestSupport
 import com.screwy.igloo.data.entity.FeedLikeEntity
+import com.screwy.igloo.data.entity.MomentsCursorEntity
 import com.screwy.igloo.data.entity.MutedChannelEntity
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
@@ -173,6 +174,90 @@ class OutboxWriterTest {
         val payload = Json.parseToJsonElement(row.payloadJson).jsonObject
         assertEquals(1_500L, row.createdAtMs)
         assertEquals(1_500L, payload.getValue("updated_at_ms").jsonPrimitive.content.toLong())
+    }
+
+    @Test
+    fun momentsCursorTimestampAdvancesPastRoomAndSameClockWrites() = runBlocking {
+        db.momentsCursorDao()
+            .upsert(MomentsCursorEntity("following", "first", updatedAtMs = 10_000L))
+
+        writer.recordMomentsCursor("second", 0L, "following", sortAtMs = 200L)
+        writer.recordMomentsCursor("third", 0L, "following", sortAtMs = 300L)
+
+        val cursor = requireNotNull(db.momentsCursorDao().get("following"))
+        val row = db.outboxDao().pendingRows().single()
+        val payload = Json.parseToJsonElement(row.payloadJson).jsonObject
+        assertEquals("third", cursor.videoId)
+        assertEquals(10_002L, cursor.updatedAtMs)
+        assertEquals(10_002L, row.createdAtMs)
+        assertEquals("third", payload.getValue("video_id").jsonPrimitive.content)
+        assertEquals(
+            10_002L,
+            payload.getValue("updated_at_ms").jsonPrimitive.content.toLong(),
+        )
+    }
+
+    @Test
+    fun conditionalMomentsCursorWriteCannotReplaceAChangedRoomCursor() = runBlocking {
+        val expected = MomentsCursorEntity("all", "baseline", updatedAtMs = 10_000L)
+        val newer = MomentsCursorEntity("all", "newer", updatedAtMs = 10_001L)
+        db.momentsCursorDao().upsert(expected)
+        db.momentsCursorDao().upsert(newer)
+
+        val recorded =
+            writer.recordMomentsCursorIfUnchanged(
+                expectedCursor = expected,
+                videoId = "stale_route",
+                positionMs = 0L,
+                scope = "all",
+                sortAtMs = 200L,
+            )
+
+        assertFalse(recorded)
+        assertEquals(newer, db.momentsCursorDao().get("all"))
+        assertTrue(db.outboxDao().pendingRows().isEmpty())
+    }
+
+    @Test
+    fun storiesCursorIsMonotonicWithoutEnteringTheOutbox() = runBlocking {
+        db.momentsCursorDao()
+            .upsert(MomentsCursorEntity("stories", "first", updatedAtMs = 10_000L))
+
+        writer.recordMomentsCursor("second", 0L, "stories", sortAtMs = 200L)
+
+        assertEquals(
+            MomentsCursorEntity(
+                scope = "stories",
+                videoId = "second",
+                positionMs = 0L,
+                sortAtMs = 200L,
+                updatedAtMs = 10_001L,
+            ),
+            db.momentsCursorDao().get("stories"),
+        )
+        assertTrue(db.outboxDao().pendingRows().isEmpty())
+    }
+
+    @Test
+    fun pendingMomentsCursorOverlayKeepsTheNewerTimestamp() = runBlocking {
+        writer.recordMomentsCursor("pending", 0L, "all", sortAtMs = 100L)
+        val pending = db.outboxDao().pendingRows().single()
+
+        val newerServer = MomentsCursorEntity("all", "server_newer", updatedAtMs = 2_000L)
+        db.momentsCursorDao().upsert(newerServer)
+        applyOptimisticMutation(db, pending)
+        assertEquals(newerServer, db.momentsCursorDao().get("all"))
+
+        val equalServer = MomentsCursorEntity("all", "server_equal", updatedAtMs = 1_000L)
+        db.momentsCursorDao().upsert(equalServer)
+        applyOptimisticMutation(db, pending)
+        assertEquals(equalServer, db.momentsCursorDao().get("all"))
+
+        db.momentsCursorDao()
+            .upsert(MomentsCursorEntity("all", "server_older", updatedAtMs = 500L))
+        applyOptimisticMutation(db, pending)
+        assertEquals("pending", db.momentsCursorDao().get("all")?.videoId)
+        assertEquals(1_000L, db.momentsCursorDao().get("all")?.updatedAtMs)
     }
 
     @Test

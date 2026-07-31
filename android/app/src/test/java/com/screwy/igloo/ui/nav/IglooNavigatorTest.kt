@@ -235,4 +235,47 @@ class IglooNavigatorTest {
             ),
         )
     }
+
+    @Test
+    fun explicitShortsSelectionDoesNotRestoreAnOlderPlayerEntry() {
+        val intent =
+            IglooNavigationIntent.OpenShorts(
+                playlistType = "all_moments",
+                playlistId = "_",
+                videoId = "selected_video",
+                source = IglooNavigationSource.AllMoments,
+            )
+
+        assertTrue(
+            IglooNavigation.shouldLaunchSingleTop(
+                currentRoute = RouteRegistry.AllMoments.route,
+                intent = intent,
+            )
+        )
+        assertFalse(
+            IglooNavigation.shouldRestoreState(
+                currentRoute = RouteRegistry.AllMoments.route,
+                intent = intent,
+            )
+        )
+    }
+
+    @Test
+    fun passiveShortsHandoffCanRestoreItsPlayerEntry() {
+        val intent =
+            IglooNavigationIntent.OpenShorts(
+                playlistType = "moments",
+                playlistId = "_",
+                videoId = "carried_video",
+                source = IglooNavigationSource.Moments,
+                explicitInitialSelection = false,
+            )
+
+        assertTrue(
+            IglooNavigation.shouldRestoreState(
+                currentRoute = RouteRegistry.Moments.route,
+                intent = intent,
+            )
+        )
+    }
 }

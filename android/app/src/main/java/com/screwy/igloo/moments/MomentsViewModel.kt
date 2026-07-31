@@ -7,6 +7,7 @@ import com.screwy.igloo.channel.ChannelRouteResolver
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.entity.MomentItem as DbMomentItem
+import com.screwy.igloo.data.entity.MomentsCursorEntity
 import com.screwy.igloo.data.entity.StoryChannelItem
 import com.screwy.igloo.data.entity.durationMs
 import com.screwy.igloo.data.stripPlatformPrefix
@@ -27,8 +28,11 @@ import com.screwy.igloo.ui.component.MomentThumbnailItem
 import com.screwy.igloo.ui.component.StoryRingState
 import com.screwy.igloo.ui.component.storyRingState
 import com.screwy.igloo.ui.component.toBookmarkState
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,17 +42,129 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+internal data class ScopedShortsSnapshot<T>(
+    val scope: String,
+    val rows: List<T>?,
+    val selection: VisibleShortsSelection,
+)
+
+internal data class MomentsPlayerRouteState(
+    val scope: String,
+    val items: List<PlayerMomentItem>,
+    val selection: VisibleShortsSelection,
+    val uiState: UiState<Unit>,
+)
+
+internal fun <T> momentsPlayerRouteState(
+    snapshot: ScopedShortsSnapshot<T>,
+    itemsForRows: (List<T>) -> List<PlayerMomentItem>,
+): MomentsPlayerRouteState {
+    val rows = snapshot.rows
+    val items = rows?.let(itemsForRows).orEmpty()
+    val uiState: UiState<Unit> =
+        when {
+            rows == null -> UiState.Loading
+            rows.isEmpty() -> UiState.Empty
+            else -> UiState.Data(Unit)
+        }
+    if (uiState is UiState.Data) {
+        check(items.any { item -> item.videoId == snapshot.selection.videoId }) {
+            "moments player selection must belong to its items"
+        }
+    }
+    return MomentsPlayerRouteState(
+        scope = snapshot.scope,
+        items = items,
+        selection = snapshot.selection,
+        uiState = uiState,
+    )
+}
+
+internal data class MomentsGridRouteState(
+    val scope: String,
+    val items: List<MomentThumbnailItem>,
+    val startIndex: Int,
+    val storyChannels: List<MomentsViewModel.StoryChannelUiItem>,
+    val uiState: UiState<Unit>,
+)
+
+internal fun <T> momentsGridRouteState(
+    snapshot: ScopedShortsSnapshot<T>,
+    storyChannels: List<MomentsViewModel.StoryChannelUiItem>,
+    itemsForRows: (List<T>) -> List<MomentThumbnailItem>,
+): MomentsGridRouteState {
+    val rows = snapshot.rows
+    val items = rows?.let(itemsForRows).orEmpty()
+    val uiState: UiState<Unit> =
+        when {
+            rows == null -> UiState.Loading
+            snapshot.scope == "stories" -> UiState.Data(Unit)
+            rows.isEmpty() -> UiState.Empty
+            else -> UiState.Data(Unit)
+        }
+    if (uiState is UiState.Data && snapshot.scope != "stories") {
+        check(items.any { item -> item.videoId == snapshot.selection.videoId }) {
+            "moments grid selection must belong to its items"
+        }
+    }
+    return MomentsGridRouteState(
+        scope = snapshot.scope,
+        items = items,
+        startIndex = if (snapshot.scope == "stories") 0 else snapshot.selection.index,
+        storyChannels = storyChannels,
+        uiState = uiState,
+    )
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+internal fun <T> scopedShortsSnapshotFlow(
+    activeTab: Flow<String>,
+    rowsForScope: (String) -> Flow<List<T>>,
+    cursorForScope: (String) -> Flow<MomentsCursorEntity?>,
+    startItem: (T) -> ShortsStartItem,
+    scopeForTab: (String) -> String = ::momentsPlayerScope,
+): Flow<ScopedShortsSnapshot<T>> =
+    activeTab
+        .map(scopeForTab)
+        .distinctUntilChanged()
+        .flatMapLatest { scope ->
+            combine(rowsForScope(scope), cursorForScope(scope)) { rows, cursor ->
+                ScopedShortsSnapshot(
+                    scope = scope,
+                    rows = rows,
+                    selection =
+                        visibleShortsSelection(
+                            items = rows.map(startItem),
+                            requestedVideoId = cursor?.videoId,
+                            fallbackSortAtMs = cursor?.sortAtMs?.takeIf { it > 0L },
+                        ),
+                )
+            }
+                .onStart {
+                    emit(
+                        ScopedShortsSnapshot(
+                            scope = scope,
+                            rows = null,
+                            selection = VisibleShortsSelection(videoId = null, index = 0),
+                        )
+                    )
+                }
+        }
+
+internal fun momentsPlayerScope(tab: String): String =
+    if (PreferencesRepo.Defaults.normalizeMomentsTab(tab) == "following") "following" else "all"
+
 /**
  * Nav-graph-scoped ViewModel shared by `MomentsRoute` (the TikTok-style player) and
- * `AllMomentsRoute` (the 3-column grid). Both routes live in the `moments-graph` nested nav graph;
- * the route composables resolve this VM against that graph's `NavBackStackEntry` ViewModelStore so
- * tapping a cell in the grid seeds the player's startIndex through [selectResumeVideoId]. Resolver
- * note: the grid thumbnails are still resolved eagerly here because the all-moments grid is a
- * thumbnail surface. The player list is intentionally cheap: it emits metadata only, and the player
- * resolves stream/thumbnail/bookmark state lazily for the current and neighboring pages.
+ * `AllMomentsRoute` (the 3-column grid). Both routes live in the `moments-graph` nested nav graph and
+ * resolve this VM against that graph's `NavBackStackEntry` ViewModelStore. The grid thumbnails are
+ * still resolved eagerly here because the all-moments grid is a thumbnail surface. The player list
+ * is intentionally cheap: it emits metadata only, and the player resolves
+ * stream/thumbnail/bookmark state lazily for the current and neighboring pages.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MomentsViewModel(
@@ -60,12 +176,6 @@ class MomentsViewModel(
     private val resolvers: MediaResolvers,
 ) : ViewModel() {
     private data class RepostMeta(val authorLabel: String, val otherCount: Int)
-
-    private data class ActiveCursor(
-        val videoId: String,
-        val sortAtMs: Long?,
-        val scope: String,
-    )
 
     data class StoryChannelUiItem(
         val channelId: String,
@@ -133,26 +243,37 @@ class MomentsViewModel(
                 initialValue = emptyList(),
             )
 
-    /**
-     * Raw Room projection — the single source-of-truth for both grid and player. `null` until the
-     * first Room emission so `uiState` can paint Loading.
-     */
-    private val rowsRaw: StateFlow<List<DbMomentItem>?> =
-        activeTab
-            .flatMapLatest { tab ->
-                if (tab == "stories") {
-                    flowOf(emptyList())
-                } else if (tab == "following") {
-                    db.momentReadDao().momentsFollowingFlow()
-                } else {
-                    db.momentReadDao().momentsAllFlow()
+    /** Grid rows and their cursor switch together, with a loading boundary for each new tab. */
+    private val gridScopeSnapshot: StateFlow<ScopedShortsSnapshot<DbMomentItem>> =
+        scopedShortsSnapshotFlow(
+            activeTab = activeTab,
+            rowsForScope = { scope ->
+                when (scope) {
+                    "stories" -> flowOf(emptyList())
+                    "following" -> db.momentReadDao().momentsFollowingFlow()
+                    else -> db.momentReadDao().momentsAllFlow()
                 }
-            }
-            .map<List<DbMomentItem>, List<DbMomentItem>?> { rows -> rows }
+            },
+            cursorForScope = { scope ->
+                if (scope == "stories") flowOf(null) else resolvedMomentsCursorFlow(scope)
+            },
+            startItem = { row ->
+                ShortsStartItem(
+                    videoId = row.video.videoId,
+                    sortAtMs = momentSortAtMs(row),
+                )
+            },
+            scopeForTab = { tab -> PreferencesRepo.Defaults.normalizeMomentsTab(tab) },
+        )
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = null,
+                initialValue =
+                    ScopedShortsSnapshot(
+                        scope = PreferencesRepo.Defaults.MOMENTS_DEFAULT_TAB,
+                        rows = null,
+                        selection = VisibleShortsSelection(videoId = null, index = 0),
+                    ),
             )
 
     /**
@@ -160,200 +281,96 @@ class MomentsViewModel(
      * swipe. It still observes `videos` and `channels`, so new shorts, prunes, and channel/unfollow
      * effects continue to update the player.
      */
-    private val playerRowsRaw: StateFlow<List<DbMomentItem>?> =
-        activeTab
-            .flatMapLatest { tab ->
-                if (tab == "following") {
+    private val playerScopeSnapshot: StateFlow<ScopedShortsSnapshot<DbMomentItem>> =
+        scopedShortsSnapshotFlow(
+            activeTab = activeTab,
+            rowsForScope = { scope ->
+                if (scope == "following") {
                     db.momentReadDao().playerMomentsFollowingFlow()
                 } else {
                     db.momentReadDao().playerMomentsAllFlow()
                 }
-            }
-            .map<List<DbMomentItem>, List<DbMomentItem>?> { rows -> rows }
+            },
+            cursorForScope = ::resolvedMomentsCursorFlow,
+            startItem = { row ->
+                ShortsStartItem(
+                    videoId = row.video.videoId,
+                    sortAtMs = momentSortAtMs(row),
+                )
+            },
+        )
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = null,
+                initialValue =
+                    ScopedShortsSnapshot(
+                        scope = momentsPlayerScope(PreferencesRepo.Defaults.MOMENTS_DEFAULT_TAB),
+                        rows = null,
+                        selection = VisibleShortsSelection(videoId = null, index = 0),
+                    ),
+            )
+
+    /** One atomic grid presentation; stale cards are never clickable under a new tab label. */
+    internal val gridRouteState: StateFlow<MomentsGridRouteState> =
+        combine(gridScopeSnapshot, storyChannels) { snapshot, stories ->
+            momentsGridRouteState(snapshot, stories) { rows ->
+                rows.map(::toMomentThumbnailItem)
+            }
+        }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000L),
+                initialValue =
+                    MomentsGridRouteState(
+                        scope = PreferencesRepo.Defaults.MOMENTS_DEFAULT_TAB,
+                        items = emptyList(),
+                        startIndex = 0,
+                        storyChannels = emptyList(),
+                        uiState = UiState.Loading,
+                    ),
             )
 
     /**
-     * Grid-shaped items for `AllMomentsRoute`. `MomentThumbnailItem` carries a resolved
-     * [com.screwy.igloo.media.MediaUri] — we resolve per row per emission via
-     * `transformLatest`-style map inside a coroutine block.
+     * One atomic player presentation. Scope, rows, cursor selection, and loading state move
+     * together so tab changes cannot pair a new playlist with the previous scope's selection.
      */
-    val items: StateFlow<List<MomentThumbnailItem>> =
-        rowsRaw
-            .map { rows ->
-                if (rows == null) emptyList()
-                else
-                    rows.map { row ->
-                        val handle = momentHandle(row.channelSourceId, row.video.channelId)
-                        MomentThumbnailItem(
-                            videoId = row.video.videoId,
-                            channelId = row.video.channelId,
-                            ownerKind = ownerKindFromAssetOwnerKind(row.video.ownerKind),
-                            mediaKind = row.video.mediaKind,
-                            slideCount = row.video.slideCount,
-                            durationMs = row.video.durationMs(),
-                            publishedAt = row.video.publishedAt,
-                            isViewed = row.isViewed == 1,
-                            authorDisplayName = row.channelName?.takeIf { it.isNotBlank() },
-                            authorHandle = if (handle.isNotBlank()) "@$handle" else "",
-                        )
-                    }
+    internal val playerRouteState: StateFlow<MomentsPlayerRouteState> =
+        combine(playerScopeSnapshot, storyStatusByChannel) { snapshot, storyStatuses ->
+            momentsPlayerRouteState(snapshot) { rows ->
+                rows.map { row -> toPlayerMomentItem(row, storyStatuses) }
             }
+        }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = emptyList(),
+                initialValue =
+                    MomentsPlayerRouteState(
+                        scope = momentsPlayerScope(PreferencesRepo.Defaults.MOMENTS_DEFAULT_TAB),
+                        items = emptyList(),
+                        selection = VisibleShortsSelection(videoId = null, index = 0),
+                        uiState = UiState.Loading,
+                    ),
             )
 
-    /**
-     * Player-shaped items for `MomentsRoute`. Keep this projection cheap so the route can render
-     * immediately even when the moments dataset is large. Stream URIs, thumbnails, and bookmark
-     * state are resolved lazily in the player.
-     */
-    val playerItems: StateFlow<List<PlayerMomentItem>> =
-        combine(playerRowsRaw, storyStatusByChannel) { rows, storyStatuses ->
-                if (rows == null) emptyList()
-                else
-                    rows.map { row ->
-                        val video = row.video
-                        val handle = momentHandle(row.channelSourceId, video.channelId)
-                        val storyStatus = storyStatuses[video.channelId]
-                        val repost = repostMeta(row)
-                        PlayerMomentItem(
-                            videoId = video.videoId,
-                            channelId = video.channelId,
-                            canonicalUrl = video.canonicalUrl.orEmpty(),
-                            authorDisplayName = row.channelName?.takeIf { it.isNotBlank() },
-                            authorHandle = if (handle.isNotBlank()) "@$handle" else "",
-                            description = momentDisplayText(video.description, video.title),
-                            likeCount = null,
-                            isLiked = false,
-                            isBookmarked = false,
-                            mediaKind = video.mediaKind,
-                            slideCount = video.slideCount,
-                            ownerKind = ownerKindFromAssetOwnerKind(video.ownerKind),
-                            publishedAt = video.publishedAt,
-                            isAuthorFollowed = row.channelIsFollowed == 1,
-                            repostIntroduced = row.repostIntroduced == 1,
-                            reposterChannelId = row.reposterChannelId?.takeIf { it.isNotBlank() },
-                            repostAuthorLabel = repost?.authorLabel,
-                            repostOtherCount = repost?.otherCount ?: 0,
-                            sortAtMs = momentSortAtMs(row),
-                            storyRingState = storyStatus.storyRingState(),
-                            storyFirstVideoId = storyStatus?.startVideoId().orEmpty(),
-                        )
-                    }
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = emptyList(),
-            )
-
-    /** Player route state. Keep this off the grid query so swipes do not wake the grid flow. */
-    val playerUiState: StateFlow<UiState<Unit>> =
-        playerRowsRaw
-            .map { list ->
-                when {
-                    list == null -> UiState.Loading
-                    list.isEmpty() -> UiState.Empty
-                    else -> UiState.Data(Unit)
-                }
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = UiState.Loading,
-            )
-
-    /**
-     * Grid route state. Loading until the grid Room flow emits; stories render their own list even
-     * though the thumbnail grid rows are intentionally empty.
-     */
-    val uiState: StateFlow<UiState<Unit>> =
-        combine(activeTab, rowsRaw, storyChannels) { tab, list, _ ->
-                when {
-                    list == null -> UiState.Loading
-                    tab == "stories" -> UiState.Data(Unit)
-                    list.isEmpty() -> UiState.Empty
-                    else -> UiState.Data(Unit)
-                }
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = UiState.Loading,
-            )
-
-    private val activeCursor = MutableStateFlow<ActiveCursor?>(null)
-    private val scopedResumeVideoId: StateFlow<String?> =
-        activeTab
-            .flatMapLatest {
-                db.momentsCursorDao().flow(PreferencesRepo.Defaults.normalizeMomentsTab(it))
-            }
-            .map { it?.videoId }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
-    private val scopedResumeStoredSortAtMs: StateFlow<Long?> =
-        activeTab
-            .flatMapLatest {
-                db.momentsCursorDao().flow(PreferencesRepo.Defaults.normalizeMomentsTab(it))
-            }
-            .map { it?.sortAtMs?.takeIf { value -> value > 0L } }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
-    private val scopedResumeVideoSortAtMs: StateFlow<Long?> =
-        scopedResumeVideoId
-            .flatMapLatest { videoId ->
-                val target = videoId?.trim()?.takeIf { it.isNotEmpty() }
-                if (target == null) flowOf(null) else db.momentReadDao().momentSortAtFlow(target)
-            }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
-    private val scopedResumeSortAtMs: StateFlow<Long?> =
-        combine(scopedResumeStoredSortAtMs, scopedResumeVideoSortAtMs) { stored, current ->
-                stored?.takeIf { it > 0L } ?: current
-            }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
-
-    val startVideoId: StateFlow<String?> =
-        combine(activeCursor, scopedResumeVideoId, activeTab) { active, resumeId, tab ->
-                active?.takeIf { it.scope == tab }?.videoId ?: resumeId
-            }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
-    /**
-     * Index of the active moments cursor inside the rows list. The in-memory cursor updates
-     * immediately on page changes and grid taps; Room remains the durable fallback for cold start /
-     * process death.
-     */
-    val startIndex: StateFlow<Int> =
-        combine(
-                playerRowsRaw,
-                activeCursor,
-                scopedResumeVideoId,
-                scopedResumeSortAtMs,
-                activeTab,
-            ) { rows, active, resumeId, resumeSortAtMs, tab ->
-                val activeForTab = active?.takeIf { it.scope == tab }
-                val targetVideoId = activeForTab?.videoId ?: resumeId
-                if (rows == null || targetVideoId.isNullOrEmpty()) 0
-                else
-                    shortsStartIndex(
-                        rows.map { row ->
-                            ShortsStartItem(
-                                videoId = row.video.videoId,
-                                sortAtMs = momentSortAtMs(row),
+    private fun resolvedMomentsCursorFlow(
+        cursorScope: String,
+    ): Flow<MomentsCursorEntity?> =
+        db.momentsCursorDao()
+            .flow(cursorScope)
+            .flatMapLatest { cursor ->
+                val cursorVideoId = cursor?.videoId?.trim().orEmpty()
+                if (cursor == null || cursor.sortAtMs > 0L || cursorVideoId.isEmpty()) {
+                    flowOf(cursor)
+                } else {
+                    db.momentReadDao()
+                        .momentSortAtFlow(cursorVideoId, cursorScope)
+                        .map { currentSortAtMs ->
+                            cursor.copy(
+                                sortAtMs = currentSortAtMs?.takeIf { it > 0L } ?: 0L,
                             )
-                        },
-                        targetVideoId,
-                        fallbackSortAtMs = activeForTab?.sortAtMs ?: resumeSortAtMs,
-                    )
+                        }
+                }
             }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000L),
-                initialValue = 0,
-            )
 
     /** Global moments/bookmarks playback toggles from Preferences. */
     val autoplayEnabled: StateFlow<Boolean> =
@@ -392,13 +409,16 @@ class MomentsViewModel(
 
     /** Settled page changed — record the cursor so moments resume at the selected short. */
     fun onIndexChange(item: PlayerMomentItem) {
-        viewModelScope.launch {
-            val scope = activeTab.value
-            val sortAtMs = item.sortAtMs.takeIf { it > 0L } ?: item.publishedAt
-            activeCursor.value =
-                ActiveCursor(videoId = item.videoId, sortAtMs = sortAtMs, scope = scope)
-            outboxWriter.recordMomentsCursor(item.videoId, 0L, scope, sortAtMs)
-        }
+        val routeState = playerRouteState.value
+        val requestedScope = momentsPlayerScope(sessionTabOverride.value ?: activeTab.value)
+        if (routeState.scope != requestedScope) return
+        if (routeState.items.none { current -> current.videoId == item.videoId }) return
+        viewModelScope.launchMomentsCursorWrite(
+            outboxWriter = outboxWriter,
+            videoId = item.videoId,
+            sortAtMs = item.sortAtMs.takeIf { it > 0L } ?: item.publishedAt,
+            activeTab = routeState.scope,
+        )
     }
 
     /** One-per-video FIFO log of "this was shown on screen". */
@@ -496,24 +516,6 @@ class MomentsViewModel(
             outboxWriter.enqueue(
                 OutboxKind.CreateCategory(name = name, provisionalId = provisionalId)
             )
-        }
-    }
-
-    /**
-     * Tapping a grid cell writes the resume cursor so the player's `startIndex` recomputes to land
-     * on the tapped video. Mirrors the MomentsCursor outbox kind so the server learns about the
-     * jump too.
-     */
-    fun selectResumeVideoId(videoId: String) {
-        viewModelScope.launch {
-            val scope = activeTab.value
-            val sortAtMs =
-                playerRowsRaw.value
-                    ?.firstOrNull { it.video.videoId == videoId }
-                    ?.let(::momentSortAtMs)
-            activeCursor.value =
-                ActiveCursor(videoId = videoId, sortAtMs = sortAtMs, scope = scope)
-            outboxWriter.recordMomentsCursor(videoId, 0L, scope, sortAtMs)
         }
     }
 
@@ -620,6 +622,56 @@ class MomentsViewModel(
     private fun momentHandle(channelSourceId: String?, channelId: String): String =
         channelSourceId?.takeIf { it.isNotBlank() } ?: stripPlatformPrefix(channelId)
 
+    private fun toMomentThumbnailItem(row: DbMomentItem): MomentThumbnailItem {
+        val video = row.video
+        val handle = momentHandle(row.channelSourceId, video.channelId)
+        return MomentThumbnailItem(
+            videoId = video.videoId,
+            channelId = video.channelId,
+            ownerKind = ownerKindFromAssetOwnerKind(video.ownerKind),
+            mediaKind = video.mediaKind,
+            slideCount = video.slideCount,
+            durationMs = video.durationMs(),
+            publishedAt = video.publishedAt,
+            isViewed = row.isViewed == 1,
+            authorDisplayName = row.channelName?.takeIf { it.isNotBlank() },
+            authorHandle = if (handle.isNotBlank()) "@$handle" else "",
+        )
+    }
+
+    private fun toPlayerMomentItem(
+        row: DbMomentItem,
+        storyStatuses: Map<String, StoryChannelItem>,
+    ): PlayerMomentItem {
+        val video = row.video
+        val handle = momentHandle(row.channelSourceId, video.channelId)
+        val storyStatus = storyStatuses[video.channelId]
+        val repost = repostMeta(row)
+        return PlayerMomentItem(
+            videoId = video.videoId,
+            channelId = video.channelId,
+            canonicalUrl = video.canonicalUrl.orEmpty(),
+            authorDisplayName = row.channelName?.takeIf { it.isNotBlank() },
+            authorHandle = if (handle.isNotBlank()) "@$handle" else "",
+            description = momentDisplayText(video.description, video.title),
+            likeCount = null,
+            isLiked = false,
+            isBookmarked = false,
+            mediaKind = video.mediaKind,
+            slideCount = video.slideCount,
+            ownerKind = ownerKindFromAssetOwnerKind(video.ownerKind),
+            publishedAt = video.publishedAt,
+            isAuthorFollowed = row.channelIsFollowed == 1,
+            repostIntroduced = row.repostIntroduced == 1,
+            reposterChannelId = row.reposterChannelId?.takeIf { it.isNotBlank() },
+            repostAuthorLabel = repost?.authorLabel,
+            repostOtherCount = repost?.otherCount ?: 0,
+            sortAtMs = momentSortAtMs(row),
+            storyRingState = storyStatus.storyRingState(),
+            storyFirstVideoId = storyStatus?.startVideoId().orEmpty(),
+        )
+    }
+
     private fun momentSortAtMs(row: DbMomentItem): Long =
         row.effectiveMomentAtMs.takeIf { it > 0L } ?: row.video.publishedAt
 
@@ -629,5 +681,18 @@ class MomentsViewModel(
             authorLabel = row.repostAuthorLabel?.takeIf { it.isNotBlank() } ?: return null,
             otherCount = (row.repostCount - 1).coerceAtLeast(0),
         )
+    }
+}
+
+/** Captures the current tab before dispatch so a later tab switch cannot redirect this write. */
+internal fun CoroutineScope.launchMomentsCursorWrite(
+    outboxWriter: OutboxWriter,
+    videoId: String,
+    sortAtMs: Long,
+    activeTab: String,
+): Job {
+    val cursorScope = PreferencesRepo.Defaults.normalizeMomentsTab(activeTab)
+    return launch {
+        outboxWriter.recordMomentsCursor(videoId, 0L, cursorScope, sortAtMs)
     }
 }

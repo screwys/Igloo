@@ -208,7 +208,14 @@ interface MomentReadDao {
         repost_heads AS (
             SELECT * FROM allowed_reposts WHERE rn = 1
         )
-        SELECT CASE WHEN rh.video_id IS NOT NULL AND cf.channel_id IS NULL
+        SELECT CASE WHEN :scope = 'following'
+                    THEN COALESCE(v.published_at, 0)
+                    WHEN NOT EXISTS (
+                             SELECT 1 FROM muted_channels mc WHERE mc.channel_id = v.channel_id
+                         )
+                         AND (cf.channel_id IS NOT NULL OR rh.video_id IS NOT NULL)
+                         AND rh.video_id IS NOT NULL
+                         AND cf.channel_id IS NULL
                     THEN COALESCE(NULLIF(rh.reposted_at_ms, 0), NULLIF(rh.first_seen_at_ms, 0), v.published_at)
                     ELSE COALESCE(v.published_at, 0)
                 END
@@ -218,12 +225,10 @@ interface MomentReadDao {
         WHERE v.video_id = :videoId
           AND (v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
           AND COALESCE(v.source_kind, '') != 'story'
-          AND (cf.channel_id IS NOT NULL OR rh.video_id IS NOT NULL)
-          AND NOT EXISTS (SELECT 1 FROM muted_channels mc WHERE mc.channel_id = v.channel_id)
         LIMIT 1
         """
     )
-    fun momentSortAtFlow(videoId: String): Flow<Long?>
+    fun momentSortAtFlow(videoId: String, scope: String): Flow<Long?>
 
     @RewriteQueriesToDropUnusedColumns
     @Query(

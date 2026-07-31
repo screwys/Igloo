@@ -24,6 +24,14 @@ import {
   parseCardData,
   makeShortItem
 } from './items.js'
+import {
+  readMomentsCursor,
+  reconcileMomentsCursorRead,
+  observeMomentsCursorTimestamp,
+  advanceMomentsCursorTimestamp,
+  createMomentsCursorWriteQueue,
+  momentsResumeVideoId
+} from './cursor.js'
 import { initShortsDebug } from './debug.js'
 
 var doc = document
@@ -66,6 +74,9 @@ if (layout) {
       cardIndexById: new Map(),
       currentIndex: -1,
       openRequestSeq: 0,
+      momentsServerTimeOffsetMs: null,
+      momentsCursorClock: new Map(),
+      momentsCursorWrites: createMomentsCursorWriteQueue(),
       overlayOpen: false,
       autoPlayNext: localStorage.getItem('shortsAutoPlayNext') !== 'false',
       muted: localStorage.getItem('shortsMuted') === 'true',
@@ -122,6 +133,10 @@ if (layout) {
 
     function isOpenRequestCurrent(seq) {
       return Number(seq || 0) === Number(state.openRequestSeq || 0)
+    }
+
+    function isScopedOpenRequestCurrent(seq, tab) {
+      return currentTab === tab && isOpenRequestCurrent(seq)
     }
 
     function normalizeShortsTab(tab) {
@@ -190,64 +205,82 @@ if (layout) {
       }
       pg = Math.max(1, pg)
       var sortAt = Math.max(0, parseInt(sortAtMs, 10) || 0)
-      try {
-        var nowMs = Date.now()
-        var resume = { videoId: clean, page: pg, index: idx, ts: nowMs, scope: currentTab }
-        if (sortAt > 0) resume.sortAtMs = sortAt
-        writeStoredShortResume(resume)
-        var body = { video_id: clean, scope: currentTab, updated_at_ms: nowMs }
-        if (sortAt > 0) body.sort_at_ms = sortAt
-        apiFetch('/api/sync/moments-cursor', {
+      var priorResume = null
+      try { priorResume = readStoredShortResume() } catch (_) {}
+      var clockOffsetMs = Number(state.momentsServerTimeOffsetMs)
+      var correctedNowMs = Date.now()
+      if (Number.isFinite(clockOffsetMs)) correctedNowMs += clockOffsetMs
+      var nowMs = advanceMomentsCursorTimestamp(
+        state.momentsCursorClock,
+        currentTab,
+        correctedNowMs,
+        priorResume
+      )
+      var resume = { videoId: clean, page: pg, index: idx, ts: nowMs, scope: currentTab }
+      if (sortAt > 0) resume.sortAtMs = sortAt
+      try { writeStoredShortResume(resume) } catch (_) {}
+      var body = { video_id: clean, scope: currentTab, updated_at_ms: nowMs }
+      if (sortAt > 0) body.sort_at_ms = sortAt
+      beginOpenRequest()
+      state.momentsCursorWrites.enqueue(currentTab, function () {
+        return apiFetch('/api/sync/moments-cursor', {
           method: 'POST',
+          keepalive: true,
           body: JSON.stringify(body)
-		}).catch(function () {})
-      } catch (_) { }
+        })
+      }).catch(function () {})
     }
 
     function setLastViewedShortId(videoId) {
       if (!state.persistLastViewed) return
+      if (currentTab !== 'all') return
       var clean = String(videoId || '').trim()
       if (!clean) return
       try { localStorage.setItem('shortsLastViewedIdV1', clean) } catch (_) { }
     }
 
-    function fetchShortsCursorFromServer() {
-      return new Promise(function (resolve) {
-        if (currentTab === 'stories') {
-          resolve(null)
-          return
-        }
-        var t = setTimeout(function () { resolve(null) }, 1500)
-        try {
-          apiFetch('/api/shorts/history?tab=' + encodeURIComponent(currentTab)).then(function (data) {
-            clearTimeout(t)
-            resolve((data && data.video_id) ? data : null)
-          }).catch(function () { clearTimeout(t); resolve(null) })
-        } catch (_) { clearTimeout(t); resolve(null) }
+    function fetchShortsCursorFromServer(tab) {
+      var requestTab = normalizeShortsTab(tab === undefined ? currentTab : tab)
+      if (requestTab === 'stories') {
+        return Promise.resolve({ authoritative: false, cursor: null })
+      }
+      return readMomentsCursor(function () {
+        return state.momentsCursorWrites.afterWrites(requestTab, function () {
+          return apiFetch('/api/shorts/history?tab=' + encodeURIComponent(requestTab))
+        })
+      }, {
+        timeoutMs: 1500
       })
     }
 
-    function mergeShortsCursorWithServer(serverCursor) {
-      if (!serverCursor || !serverCursor.video_id) return
+    function applyShortsCursorServerRead(serverRead) {
+      var serverTimeMs = Math.max(0, Number(serverRead && serverRead.serverTimeMs || 0))
+      if (serverRead && serverRead.authoritative && serverTimeMs > 0) {
+        state.momentsServerTimeOffsetMs = serverTimeMs - Date.now()
+      }
+      var localResume = null
+      if (!serverRead || !serverRead.authoritative) {
+        try { localResume = readStoredShortResume() } catch (_) {}
+      }
+      var reconciled = reconcileMomentsCursorRead(serverRead, localResume, currentTab)
+      if (!reconciled.apply) return
+      observeMomentsCursorTimestamp(
+        state.momentsCursorClock,
+        currentTab,
+        reconciled.resume && reconciled.resume.ts
+      )
       try {
-        var local = readStoredShortResume()
-        var localTs = Number((local && local.ts) || 0)
-        var serverTs = Number(serverCursor.updated_at_ms || 0)
-        var serverPage = parseInt(serverCursor.page, 10) || 0
-        var serverIndex = Math.max(0, parseInt(serverCursor.index, 10) || 0)
-        var serverSortAt = Math.max(0, parseInt(serverCursor.sort_at_ms, 10) || 0)
-        if (serverPage <= 0) return
-        var localPage = Math.max(1, parseInt(local && local.page, 10) || 1)
-        var sameVideo = local && String(local.videoId || '') === String(serverCursor.video_id)
-        var serverRebased = serverCursor.fallback_for_video_id && local && String(local.videoId || '') === String(serverCursor.fallback_for_video_id)
-        if (serverTs > localTs || serverRebased || (sameVideo && localPage !== serverPage)) {
-          var merged = {
-            videoId: String(serverCursor.video_id),
-            page: serverPage, index: serverIndex, ts: Math.max(serverTs, localTs), scope: currentTab
+        var resume = reconciled.resume
+        if (resume === null) {
+          localStorage.removeItem(shortsResumeStorageKey())
+          if (currentTab === 'all') {
+            localStorage.removeItem('shortsLastResumeV2')
+            localStorage.removeItem('shortsLastViewedIdV1')
           }
-          if (serverSortAt > 0) merged.sortAtMs = serverSortAt
-          writeStoredShortResume(merged)
+          return
         }
+        writeStoredShortResume(resume)
+        if (currentTab === 'all') localStorage.setItem('shortsLastViewedIdV1', resume.videoId)
       } catch (_) {}
     }
 
@@ -711,7 +744,7 @@ if (layout) {
 
     function goStoryNextManual() {
       if (!state.storyMode) {
-        goNext()
+        goNext({ explicit: true })
         return
       }
       if (state.currentIndex < state.cards.length - 1) {
@@ -724,7 +757,7 @@ if (layout) {
 
     function goStoryPrevManual() {
       if (!state.storyMode) {
-        goPrev()
+        goPrev({ explicit: true })
         return
       }
       if (state.currentIndex > 0) {
@@ -860,21 +893,24 @@ if (layout) {
     function advanceAfterMomentAction(entry) {
       var entryID = String(entry && entry.data && entry.data.id || '').trim()
       var keepOverlayOpen = state.overlayOpen
+      var requestTab = currentTab
+      var openSeq = beginOpenRequest()
 
-      tabGridCache.delete(currentTab)
+      tabGridCache.delete(requestTab)
       return Promise.all([
-        loadTabSnapshot(currentTab),
-        fetchShortsCursorFromServer()
+        loadTabSnapshot(requestTab),
+        fetchShortsCursorFromServer(requestTab)
       ]).then(function (results) {
+        if (switchingTabs || !isScopedOpenRequestCurrent(openSeq, requestTab)) return false
         var snapshot = results[0]
-        var cursor = results[1]
+        var cursor = results[1] && results[1].cursor
         var targetID = String(cursor && cursor.video_id || '').trim()
         if (keepOverlayOpen && !targetID) {
           goNext()
           return false
         }
 
-        resetTabState(currentTab, snapshot)
+        resetTabState(requestTab, snapshot)
         if (!keepOverlayOpen || !state.cards.length) {
           showGrid()
           return true
@@ -892,9 +928,10 @@ if (layout) {
           showGrid()
           return true
         }
-        openOverlayAtIndex(nextIndex, true)
+        openOverlayAtIndex(nextIndex, true, { persistCursor: false })
         return true
       }).catch(function () {
+        if (switchingTabs || !isScopedOpenRequestCurrent(openSeq, requestTab)) return false
         if (keepOverlayOpen) goNext()
         return false
       })
@@ -904,25 +941,40 @@ if (layout) {
       var openSeq = beginOpenRequest()
       if (currentTab === 'stories') {
         showGrid()
-        return
+        return Promise.resolve(false)
       }
-      var resumeInfo = getLastViewedShortResume()
-      var restoreVideoId = (resumeInfo && resumeInfo.videoId) || getLastViewedShortId()
-      if (restoreVideoId) {
-        var restoreCard = findCardByVideoId(restoreVideoId)
-        if (isSkeletonCard(restoreCard)) {
-          hydrateCardElement(restoreCard).then(function () {
-            if (!isOpenRequestCurrent(openSeq)) return
-            appendNewItemsFromGrid()
-            if (!openOverlayByVideoId(restoreVideoId, true)) openOverlayAtIndex(0)
-          })
-          return
+      return fetchShortsCursorFromServer().then(function (serverRead) {
+        if (!isOpenRequestCurrent(openSeq)) return false
+        applyShortsCursorServerRead(serverRead)
+        var resumeInfo = getLastViewedShortResume()
+        var restoreVideoId = momentsResumeVideoId(
+          resumeInfo,
+          getLastViewedShortId(),
+          currentTab
+        )
+        if (restoreVideoId) {
+          var restoreCard = findCardByVideoId(restoreVideoId)
+          if (isSkeletonCard(restoreCard)) {
+            return hydrateCardElement(restoreCard).then(function () {
+              if (!isOpenRequestCurrent(openSeq)) return false
+              appendNewItemsFromGrid()
+              if (!openOverlayByVideoId(restoreVideoId, true, { persistCursor: false })) {
+                openOverlayAtIndex(0, true, { persistCursor: false })
+              }
+              return true
+            })
+          }
+          if (restoreCard && openOverlayByVideoId(restoreVideoId, true, { persistCursor: false })) {
+            return true
+          }
+          openOverlayAtIndex(0, true, { persistCursor: false })
+          return true
         }
-        if (restoreCard && openOverlayByVideoId(restoreVideoId, true)) {
-          return
-        }
-      }
-      openOverlayAtIndex(0)
+        openOverlayAtIndex(0, true, {
+          persistCursor: serverRead.authoritative && !serverRead.cursor
+        })
+        return true
+      })
     }
 
     function switchShortsTab(tab, options) {
@@ -930,6 +982,7 @@ if (layout) {
       if (nextTab === currentTab || switchingTabs) return Promise.resolve(false)
       var opts = options || {}
       var keepOverlayOpen = state.overlayOpen
+      beginOpenRequest()
       switchingTabs = true
       if (keepOverlayOpen) layout.classList.add('is-switching-tabs')
       saveCurrentTabSnapshot()
@@ -943,7 +996,7 @@ if (layout) {
           window.history.pushState({ shortsTab: nextTab }, '', nextURL.pathname + '?' + nextURL.searchParams.toString())
         }
         if (keepOverlayOpen) {
-          openCurrentTabDefault()
+          return openCurrentTabDefault().then(function () { return true })
         } else {
           showGrid()
         }
@@ -1199,7 +1252,7 @@ if (layout) {
       if (opts.restore === false) return false
       if (returnState && returnState.overlayOpen && state.cards.length) {
         var idx = Math.max(0, Math.min(state.cards.length - 1, Number(returnState.currentIndex || 0)))
-        openOverlayAtIndex(idx, true)
+        openOverlayAtIndex(idx, true, { persistCursor: false })
         if (returnState.videoTime > 0) {
           requestAnimationFrame(function () {
             var restored = state.currentIndex >= 0 && state.items[state.currentIndex] ? state.items[state.currentIndex] : null
@@ -1454,12 +1507,12 @@ if (layout) {
       }
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        goNext()
+        goNext({ explicit: true })
         return
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault()
-        goPrev()
+        goPrev({ explicit: true })
         return
       }
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
@@ -1541,7 +1594,7 @@ if (layout) {
       keepWheelLocked()
       if (state.storyMode) {
         if (primaryDelta > 0) goStoryNextManual(); else goStoryPrevManual()
-      } else if (primaryDelta > 0) goNext(); else goPrev()
+      } else if (primaryDelta > 0) goNext({ explicit: true }); else goPrev({ explicit: true })
     }
 
     function onTouchStart(event) {
@@ -1571,7 +1624,7 @@ if (layout) {
       }
       var diff = diffY
       if (Math.abs(diff) < 65) return
-      if (diff > 0) goNext(); else goPrev()
+      if (diff > 0) goNext({ explicit: true }); else goPrev({ explicit: true })
     }
 
     function onTabClick(event) {
@@ -1634,6 +1687,7 @@ if (layout) {
       setLastViewedShortId: setLastViewedShortId,
       setLastViewedShortResume: setLastViewedShortResume,
       markShortViewed: markShortViewed,
+      beginOpenRequest: beginOpenRequest,
       getShortsInfiniteController: getShortsInfiniteController,
       makeShortItem: makeShortItem,
       parseCardData: parseCardData,
@@ -1660,10 +1714,10 @@ if (layout) {
       if (closeBtn) closeBtn.addEventListener('click', function (e) { e.preventDefault(); showGrid() })
       if (reopenBtn) reopenBtn.addEventListener('click', function () {
         if (!state.items.length) return
-        openOverlayAtIndex(state.currentIndex >= 0 ? state.currentIndex : 0)
+        openOverlayAtIndex(state.currentIndex >= 0 ? state.currentIndex : 0, true, { persistCursor: false })
       })
-      if (prevBtn) prevBtn.addEventListener('click', function (e) { e.preventDefault(); goPrev() })
-      if (nextBtn) nextBtn.addEventListener('click', function (e) { e.preventDefault(); goNext() })
+      if (prevBtn) prevBtn.addEventListener('click', function (e) { e.preventDefault(); goPrev({ explicit: true }) })
+      if (nextBtn) nextBtn.addEventListener('click', function (e) { e.preventDefault(); goNext({ explicit: true }) })
     }
 
     function initEvents() {
@@ -1679,6 +1733,9 @@ if (layout) {
       window.addEventListener('resize', function () {
         if (!state.storyTray) return
         setStoryTrayWidth(state.storyTrayUserSized ? state.storyTrayWidth : defaultStoryTrayWidth(), false)
+      })
+      window.addEventListener('pagehide', function () {
+        state.momentsCursorWrites.flushLatest()
       })
       layout.addEventListener('wheel', onWheel, { passive: false })
       layout.addEventListener('touchstart', onTouchStart, { passive: true })
@@ -1708,16 +1765,16 @@ if (layout) {
             hydrateCardElement(card).then(function () {
               if (!isOpenRequestCurrent(openSeq)) return
               appendNewItemsFromGrid()
-              openOverlayByVideoId(videoId, immediate !== false)
+              openOverlayByVideoId(videoId, immediate !== false, { persistCursor: false })
             })
             return false
           }
-          if (openOverlayByVideoId(videoId, immediate !== false)) return true
+          if (openOverlayByVideoId(videoId, immediate !== false, { persistCursor: false })) return true
           var wanted = String(videoId || '').trim()
           if (!wanted) return false
           loadUntilVideoId(wanted, 10).then(function (found) {
             if (!isOpenRequestCurrent(openSeq)) return
-            if (found) openOverlayByVideoId(wanted, true)
+            if (found) openOverlayByVideoId(wanted, true, { persistCursor: false })
           })
           return false
         },
@@ -1744,9 +1801,15 @@ if (layout) {
       var pathname = String(window.location.pathname || '')
       var currentPageParam = Math.max(1, parseInt(params.get('page') || '', 10) || state.initialPage || 1)
       var explicitVideoId = String(layout.getAttribute('data-video-hint') || params.get('video') || '').trim()
-      if (state.persistLastViewed && !explicitVideoId) {
-        mergeShortsCursorWithServer(await fetchShortsCursorFromServer())
+      var initRequestTab = currentTab
+      var initOpenSeq = beginOpenRequest()
+      var serverRead = { authoritative: false, cursor: null }
+      if (state.persistLastViewed) {
+        serverRead = await fetchShortsCursorFromServer(initRequestTab)
+        if (switchingTabs || !isScopedOpenRequestCurrent(initOpenSeq, initRequestTab)) return
+        applyShortsCursorServerRead(serverRead)
       }
+      if (switchingTabs || !isScopedOpenRequestCurrent(initOpenSeq, initRequestTab)) return
       var resumeInfo = getLastViewedShortResume()
       if (!autoOpenDefault) {
         if (gridShell) gridShell.classList.remove('hidden')
@@ -1754,36 +1817,44 @@ if (layout) {
         ensureGridThumbnails()
         return
       }
-      var initOpenSeq = beginOpenRequest()
-      var restoreVideoId = explicitVideoId || (resumeInfo && resumeInfo.videoId) || getLastViewedShortId()
+      var restoreVideoId = explicitVideoId || momentsResumeVideoId(
+        resumeInfo,
+        getLastViewedShortId(),
+        currentTab
+      )
+      var restorePersistsCursor = !!explicitVideoId
       if (restoreVideoId) {
         var restoreCard = findCardByVideoId(restoreVideoId)
         if (isSkeletonCard(restoreCard)) {
           hydrateCardElement(restoreCard).then(function () {
             if (!isOpenRequestCurrent(initOpenSeq)) return
             appendNewItemsFromGrid()
-            if (!openOverlayByVideoId(restoreVideoId, true)) openOverlayAtIndex(0)
+            if (!openOverlayByVideoId(restoreVideoId, true, { persistCursor: restorePersistsCursor })) {
+              openOverlayAtIndex(0, true, { persistCursor: false })
+            }
           })
           return
         }
       }
-      if (restoreVideoId && openOverlayByVideoId(restoreVideoId, true)) {
+      if (restoreVideoId && openOverlayByVideoId(restoreVideoId, true, { persistCursor: restorePersistsCursor })) {
         return
       }
       if (!explicitVideoId && restoreVideoId) {
         loadUntilVideoId(restoreVideoId, 5).then(function (found) {
           if (!isOpenRequestCurrent(initOpenSeq)) return
-          if (found && openOverlayByVideoId(restoreVideoId, true)) return
+          if (found && openOverlayByVideoId(restoreVideoId, true, { persistCursor: false })) return
           try {
             localStorage.removeItem(shortsResumeStorageKey())
             if (currentTab === 'all') localStorage.removeItem('shortsLastResumeV2')
           } catch (_) { }
           try { localStorage.removeItem('shortsLastViewedIdV1') } catch (_) { }
-          openOverlayAtIndex(0)
+          openOverlayAtIndex(0, true, { persistCursor: false })
         })
         return
       }
-      openOverlayAtIndex(0)
+      openOverlayAtIndex(0, true, {
+        persistCursor: serverRead.authoritative && !serverRead.cursor
+      })
     }
 
     init()

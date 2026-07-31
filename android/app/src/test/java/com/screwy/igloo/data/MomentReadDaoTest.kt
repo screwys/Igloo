@@ -76,7 +76,7 @@ class MomentReadDaoTest {
     }
 
     @Test
-    fun mutedCanonicalOwnerIsHiddenFromEveryMomentsListAndResumeLookup() = runBlocking {
+    fun mutedCanonicalOwnerIsHiddenButKeepsItsFollowingTimelineSort() = runBlocking {
         seedRepostedMoment(
             videoId = "tiktok_video",
             ownerId = "tiktok_author",
@@ -90,11 +90,14 @@ class MomentReadDaoTest {
         assertVisibleVideoIds(emptyList())
         assertTrue(db.momentReadDao().momentsFollowingFlow().first().isEmpty())
         assertTrue(db.momentReadDao().playerMomentsFollowingFlow().first().isEmpty())
-        assertNull(db.momentReadDao().momentSortAtFlow("tiktok_video").first())
+        assertEquals(
+            1L,
+            db.momentReadDao().momentSortAtFlow("tiktok_video", "following").first(),
+        )
     }
 
     @Test
-    fun mutedSoleReposterHidesItsMomentAndResumeLookup() = runBlocking {
+    fun mutedSoleReposterFallsBackToTheOriginalAllTimelineSort() = runBlocking {
         seedRepostedMoment(
             videoId = "instagram_video",
             ownerId = "instagram_author",
@@ -105,7 +108,32 @@ class MomentReadDaoTest {
         db.mutedChannelDao().upsert(MutedChannelEntity("instagram_reposter", 2L))
 
         assertVisibleVideoIds(emptyList())
-        assertNull(db.momentReadDao().momentSortAtFlow("instagram_video").first())
+        assertEquals(
+            1L,
+            db.momentReadDao().momentSortAtFlow("instagram_video", "all").first(),
+        )
+    }
+
+    @Test
+    fun allTimelineUsesVisibleRepostTimeAndHiddenOwnerFallsBackToPublishTime() = runBlocking {
+        seedRepostedMoment(
+            videoId = "tiktok_video",
+            ownerId = "tiktok_author",
+            reposterId = "tiktok_reposter",
+            platform = "tiktok",
+            repostedAtMs = 100L,
+        )
+
+        assertEquals(
+            1L,
+            db.momentReadDao().momentSortAtFlow("tiktok_video", "following").first(),
+        )
+        assertEquals(100L, db.momentReadDao().momentSortAtFlow("tiktok_video", "all").first())
+
+        db.mutedChannelDao().upsert(MutedChannelEntity("tiktok_author", 200L))
+
+        assertVisibleVideoIds(emptyList())
+        assertEquals(1L, db.momentReadDao().momentSortAtFlow("tiktok_video", "all").first())
     }
 
     @Test
@@ -139,7 +167,10 @@ class MomentReadDaoTest {
         assertEquals(1, grid.repostCount)
         assertEquals(200L, grid.effectiveMomentAtMs)
         assertEquals(grid, player)
-        assertEquals(200L, db.momentReadDao().momentSortAtFlow("instagram_video").first())
+        assertEquals(
+            200L,
+            db.momentReadDao().momentSortAtFlow("instagram_video", "all").first(),
+        )
     }
 
     @Test
@@ -160,7 +191,11 @@ class MomentReadDaoTest {
         assertEquals(1, grid.repostIntroduced)
         assertEquals(1L, grid.effectiveMomentAtMs)
         assertEquals(grid, player)
-        assertEquals(1L, db.momentReadDao().momentSortAtFlow("tiktok_video").first())
+        assertEquals(
+            1L,
+            db.momentReadDao().momentSortAtFlow("tiktok_video", "following").first(),
+        )
+        assertEquals(1L, db.momentReadDao().momentSortAtFlow("tiktok_video", "all").first())
     }
 
     @Test
@@ -190,7 +225,7 @@ class MomentReadDaoTest {
 
         assertEquals("tiktok_explicit_reposter", grid.reposterChannelId)
         assertEquals(100L, grid.effectiveMomentAtMs)
-        assertEquals(100L, db.momentReadDao().momentSortAtFlow("tiktok_video").first())
+        assertEquals(100L, db.momentReadDao().momentSortAtFlow("tiktok_video", "all").first())
     }
 
     @Test

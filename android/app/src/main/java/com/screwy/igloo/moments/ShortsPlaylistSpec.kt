@@ -81,6 +81,21 @@ internal data class ShortsStartItem(
     val sortAtMs: Long,
 )
 
+internal data class VisibleShortsSelection(
+    val videoId: String?,
+    val index: Int,
+)
+
+internal fun visibleShortsSelection(
+    items: List<ShortsStartItem>,
+    requestedVideoId: String?,
+    fallbackSortAtMs: Long? = null,
+): VisibleShortsSelection {
+    if (items.isEmpty()) return VisibleShortsSelection(videoId = null, index = 0)
+    val index = shortsStartIndex(items, requestedVideoId, fallbackSortAtMs)
+    return VisibleShortsSelection(videoId = items[index].videoId, index = index)
+}
+
 internal fun shortsStartIndex(
     items: List<ShortsStartItem>,
     requestedVideoId: String?,
@@ -93,7 +108,10 @@ internal fun shortsStartIndex(
     if (exact >= 0 && items[exact].sortAtMs == sortAt) return exact
     if (items.isEmpty()) return 0
     return items.withIndex()
-        .firstOrNull { it.value.sortAtMs >= sortAt }
+        .firstOrNull {
+            it.value.sortAtMs > sortAt ||
+                (it.value.sortAtMs == sortAt && it.value.videoId >= target)
+        }
         ?.index
         ?: items.lastIndex
 }

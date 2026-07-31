@@ -212,6 +212,8 @@ func (s *Server) handleShortsHistory(w http.ResponseWriter, r *http.Request) {
 	cursor, _, err := s.db.GetMomentsCursor(scope)
 	if err != nil {
 		slog.Error("GetMomentsCursor", "scope", scope, "err", err)
+		writeJSONError(w, http.StatusInternalServerError, "db_error", "moments history lookup failed")
+		return
 	}
 	videoID := cursor.VideoID
 	updatedAtMs := cursor.UpdatedAtMs

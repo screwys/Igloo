@@ -522,6 +522,18 @@ interface MomentsCursorDao {
     @Upsert suspend fun upsert(row: MomentsCursorEntity)
     @Upsert suspend fun upsert(rows: List<MomentsCursorEntity>)
 
+    @Transaction
+    suspend fun upsertIfNewer(row: MomentsCursorEntity) {
+        val current = get(row.scope)
+        if (current == null || row.updatedAtMs > current.updatedAtMs) upsert(row)
+    }
+
+    @Transaction
+    suspend fun upsertIfNotOlder(row: MomentsCursorEntity) {
+        val current = get(row.scope)
+        if (current == null || row.updatedAtMs >= current.updatedAtMs) upsert(row)
+    }
+
     @Query("SELECT * FROM moments_cursors WHERE scope = :scope")
     suspend fun get(scope: String): MomentsCursorEntity?
 

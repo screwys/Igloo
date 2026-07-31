@@ -124,10 +124,14 @@ fun AppNavHost() {
         }
 
         scaffoldDestination(navController, RouteRegistry.Shorts) { entry ->
+            val explicitInitialSelection = remember(entry) {
+                navController.consumeShortsInitialSelectionExplicitFromPrevious()
+            }
             ShortsRoute(
                 playlistType = entry.arguments!!.getString("playlist_type")!!,
                 playlistId = entry.arguments!!.getString("playlist_id")!!,
                 videoId = entry.arguments!!.getString("video_id")!!,
+                initialSelectionExplicit = explicitInitialSelection,
                 navController = navController,
             )
         }

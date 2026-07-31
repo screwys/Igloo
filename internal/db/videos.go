@@ -863,9 +863,10 @@ func (db *DB) GetShortsOrdinal(videoID, momentsMode string) (int, bool, error) {
 
 // GetNearestShortsCursorTarget returns the visible Moments row closest to the
 // hidden cursor target's timeline position. Forward progress is preferred: the
-// first visible item at or after the old cursor wins, otherwise the previous
-// visible item is used. This keeps stale cursors from falling back to the oldest
-// row when an account is unfollowed or a source-window row disappears.
+// first visible (sort_at_ms, video_id) tuple at or after the old cursor wins,
+// otherwise the previous visible item is used. This keeps stale cursors from
+// falling back to the oldest row when an account is unfollowed or a
+// source-window row disappears.
 func (db *DB) GetNearestShortsCursorTarget(videoID, momentsMode string, sortAtHint int64) (string, int, bool, error) {
 	sortAt := sortAtHint
 	if sortAt <= 0 {
@@ -876,7 +877,7 @@ func (db *DB) GetNearestShortsCursorTarget(videoID, momentsMode string, sortAtHi
 			return "", 0, false, err
 		}
 	}
-	return db.GetNearestShortsOrdinal(sortAt, momentsMode)
+	return db.GetNearestShortsOrdinal(sortAt, videoID, momentsMode)
 }
 
 func (db *DB) GetShortsVisibleSortAt(videoID, momentsMode string) (int64, bool, error) {
@@ -921,16 +922,22 @@ func (db *DB) GetShortsCursorSortAt(videoID, momentsMode string) (int64, bool, e
 	return sortAt, true, nil
 }
 
-func (db *DB) GetNearestShortsOrdinal(sortAt int64, momentsMode string) (string, int, bool, error) {
+func (db *DB) GetNearestShortsOrdinal(sortAt int64, cursorVideoID, momentsMode string) (string, int, bool, error) {
 	query := db.shortsVisibleCTE(momentsMode) + `
-		, candidate AS (
-			SELECT video_id, effective_moment_at_ms
+		, ordered AS (
+			SELECT video_id, effective_moment_at_ms,
+			       effective_moment_at_ms > ?
+			        OR (effective_moment_at_ms = ? AND video_id >= ?) AS at_or_after
 			FROM visible
-			ORDER BY CASE WHEN effective_moment_at_ms >= ? THEN 0 ELSE 1 END,
-			         CASE WHEN effective_moment_at_ms >= ? THEN effective_moment_at_ms END ASC,
-			         CASE WHEN effective_moment_at_ms < ? THEN effective_moment_at_ms END DESC,
-			         CASE WHEN effective_moment_at_ms >= ? THEN video_id END ASC,
-			         CASE WHEN effective_moment_at_ms < ? THEN video_id END DESC
+		),
+		candidate AS (
+			SELECT video_id, effective_moment_at_ms
+			FROM ordered
+			ORDER BY at_or_after DESC,
+			         CASE WHEN at_or_after THEN effective_moment_at_ms END ASC,
+			         CASE WHEN at_or_after THEN video_id END ASC,
+			         CASE WHEN NOT at_or_after THEN effective_moment_at_ms END DESC,
+			         CASE WHEN NOT at_or_after THEN video_id END DESC
 			LIMIT 1
 		)
 		SELECT c.video_id, COUNT(*)
@@ -938,16 +945,16 @@ func (db *DB) GetNearestShortsOrdinal(sortAt int64, momentsMode string) (string,
 		JOIN visible v ON v.effective_moment_at_ms < c.effective_moment_at_ms
 		              OR (v.effective_moment_at_ms = c.effective_moment_at_ms AND v.video_id <= c.video_id)
 		GROUP BY c.video_id`
-	var videoID string
+	var targetVideoID string
 	var ordinal int
-	err := db.conn.QueryRow(query, sortAt, sortAt, sortAt, sortAt, sortAt).Scan(&videoID, &ordinal)
+	err := db.conn.QueryRow(query, sortAt, sortAt, cursorVideoID).Scan(&targetVideoID, &ordinal)
 	if err == sql.ErrNoRows {
 		return "", 0, false, nil
 	}
 	if err != nil {
 		return "", 0, false, err
 	}
-	return videoID, ordinal, ordinal > 0, nil
+	return targetVideoID, ordinal, ordinal > 0, nil
 }
 
 func (db *DB) shortsVisibleCTE(momentsMode string) string {

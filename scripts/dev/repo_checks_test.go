@@ -137,6 +137,16 @@ func TestLocalDriftRecipesWriteGeneratedOutputs(t *testing.T) {
 	}
 }
 
+func TestWebGateRunsJavaScriptBehaviorTests(t *testing.T) {
+	webTest, err := os.ReadFile(filepath.Join(repoRoot(t), "scripts/dev/web-test.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(webTest), `node --test static/js/*.test.mjs`) {
+		t.Fatal("web test gate should run the JavaScript behavior tests")
+	}
+}
+
 func TestGitHubActionsWorkflowDependenciesAreSHAPinned(t *testing.T) {
 	workflowsDir := filepath.Join(repoRoot(t), ".github", "workflows")
 	entries, err := os.ReadDir(workflowsDir)

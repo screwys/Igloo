@@ -37,9 +37,11 @@ import io.ktor.serialization.kotlinx.json.json
 import java.io.File
 import java.io.IOException
 import java.util.Collections
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
@@ -191,6 +193,8 @@ class AndroidSyncMirrorTest {
     @Test
     fun priorityStateAppliesUserStateWithoutWaitingForContentCatchUp() = runBlocking {
         db.androidSyncDao().upsertSyncState(changesState("content-cursor"))
+        db.momentsCursorDao()
+            .upsert(MomentsCursorEntity("all", "local_equal", updatedAtMs = nowMs))
         val requests = mutableListOf<String>()
         val engine = MockEngine { request ->
             when (request.url.encodedPath) {
@@ -241,6 +245,72 @@ class AndroidSyncMirrorTest {
             db.preferenceDao().getValue("android_sync_priority_state_cursor"),
         )
         assertEquals("content-cursor", db.androidSyncDao().syncState()?.cursor)
+    }
+
+    @Test
+    fun delayedPriorityCursorCannotReplaceANewerAcknowledgedCursor() = runBlocking {
+        db.androidSyncDao().upsertSyncState(changesState("content-cursor"))
+        val requestStarted = CompletableDeferred<Unit>()
+        val releaseOldResponse = CompletableDeferred<Unit>()
+        val stalePage =
+            page(
+                listOf(
+                    upsertChange(
+                        ownerKind = "moments_cursor",
+                        ownerId = "all",
+                        payload = buildJsonObject {
+                            put("scope", "all")
+                            put("video_id", "server_older")
+                            put("position_ms", 0L)
+                            put("sort_at_ms", 100L)
+                            put("updated_at_ms", nowMs)
+                        },
+                    )
+                ),
+                "state-cursor",
+            )
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/state" -> {
+                    requestStarted.complete(Unit)
+                    releaseOldResponse.await()
+                    respondJson(stalePage)
+                }
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+        val sync = async { buildMirror(engine).syncPriorityStateOnce() }
+        requestStarted.await()
+
+        val acknowledgedAt = nowMs + 1L
+        val pendingId =
+            db.outboxDao()
+                .insert(
+                    OutboxEntity(
+                        kind = OutboxKind.CODE_MOMENTS_CURSOR,
+                        itemId = "all",
+                        payloadJson =
+                            """{"scope":"all","video_id":"acknowledged_newer","position_ms":0,"sort_at_ms":200,"updated_at_ms":$acknowledgedAt}""",
+                        createdAtMs = acknowledgedAt,
+                    )
+                )
+        db.momentsCursorDao()
+            .upsert(
+                MomentsCursorEntity(
+                    scope = "all",
+                    videoId = "acknowledged_newer",
+                    sortAtMs = 200L,
+                    updatedAtMs = acknowledgedAt,
+                )
+            )
+        db.outboxDao().completeAndDelete(pendingId)
+
+        releaseOldResponse.complete(Unit)
+        sync.await()
+
+        assertTrue(db.outboxDao().pendingRows().isEmpty())
+        assertEquals("acknowledged_newer", db.momentsCursorDao().get("all")?.videoId)
+        assertEquals(acknowledgedAt, db.momentsCursorDao().get("all")?.updatedAtMs)
     }
 
     @Test
@@ -425,6 +495,8 @@ class AndroidSyncMirrorTest {
         db.feedLikeDao().upsert(FeedLikeEntity("sample_rejected_post", nowMs))
         db.momentsCursorDao()
             .upsert(MomentsCursorEntity("stories", "sample_story", updatedAtMs = nowMs))
+        db.androidSyncDao()
+            .upsertHead(AndroidSyncHeadEntity("moments_cursor", "stories", "story", nowMs))
         db.channelSettingDao()
             .upsert(
                 ChannelSettingEntity(
@@ -489,9 +561,24 @@ class AndroidSyncMirrorTest {
         assertTrue(db.feedLikeDao().exists("sample_existing_post"))
         assertFalse(db.feedLikeDao().exists("sample_rejected_post"))
         assertEquals("sample_story", db.momentsCursorDao().get("stories")?.videoId)
+        assertFalse(db.androidSyncDao().headIds("moments_cursor").contains("stories"))
         assertEquals(0, db.channelSettingDao().getById("sample_channel")?.mediaOnly)
         assertEquals(7, db.channelSettingDao().getById("sample_channel")?.maxVideos)
         assertEquals(2, db.outboxDao().countByState("pending"))
+    }
+
+    @Test
+    fun ordinaryPruneDropsLegacyStoriesHeadWithoutDeletingLocalCursor() = runBlocking {
+        db.momentsCursorDao()
+            .upsert(MomentsCursorEntity("stories", "sample_story", updatedAtMs = nowMs))
+        db.androidSyncDao()
+            .upsertHead(AndroidSyncHeadEntity("moments_cursor", "stories", "story", 0L))
+        val engine = MockEngine { request -> error("Unexpected request ${request.url}") }
+
+        buildMirror(engine).prune()
+
+        assertEquals("sample_story", db.momentsCursorDao().get("stories")?.videoId)
+        assertFalse(db.androidSyncDao().headIds("moments_cursor").contains("stories"))
     }
 
     @Test

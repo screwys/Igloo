@@ -43,6 +43,15 @@ class OutboxWriter(
     // ─── Enqueue ───────────────────────────────────────────────────────────────
 
     suspend fun enqueue(kind: OutboxKind) {
+        if (kind is OutboxKind.MomentsCursor) {
+            recordMomentsCursor(
+                videoId = kind.videoId,
+                positionMs = kind.positionMs,
+                scope = kind.scope,
+                sortAtMs = kind.sortAtMs,
+            )
+            return
+        }
         val nowMs = serverCorrectedNowMs()
         db.withTransaction {
             val row = buildOutboxRow(kind, nowMs)
@@ -64,21 +73,60 @@ class OutboxWriter(
         scope: String,
         sortAtMs: Long? = null,
     ) {
-        val normalized = PreferencesRepo.Defaults.normalizeMomentsTab(scope)
-        if (normalized != "stories") {
-            enqueue(OutboxKind.MomentsCursor(videoId, positionMs, normalized, sortAtMs))
-            return
+        writeMomentsCursor(videoId, positionMs, scope, sortAtMs) { true }
+    }
+
+    internal suspend fun recordMomentsCursorIfUnchanged(
+        expectedCursor: MomentsCursorEntity?,
+        videoId: String,
+        positionMs: Long,
+        scope: String,
+        sortAtMs: Long? = null,
+    ): Boolean =
+        writeMomentsCursor(videoId, positionMs, scope, sortAtMs) { current ->
+            current == expectedCursor
         }
-        db.momentsCursorDao()
-            .upsert(
-                MomentsCursorEntity(
-                    normalized,
-                    videoId,
-                    positionMs,
-                    sortAtMs ?: 0L,
-                    serverCorrectedNowMs(),
-                )
-            )
+
+    private suspend fun writeMomentsCursor(
+        videoId: String,
+        positionMs: Long,
+        scope: String,
+        sortAtMs: Long?,
+        acceptsCurrent: (MomentsCursorEntity?) -> Boolean,
+    ): Boolean {
+        val normalized = PreferencesRepo.Defaults.normalizeMomentsTab(scope)
+        val queued =
+            db.withTransaction {
+                val cursorDao = db.momentsCursorDao()
+                val current = cursorDao.get(normalized)
+                if (!acceptsCurrent(current)) return@withTransaction false
+
+                val updatedAtMs = nextMomentsCursorTimestamp(current?.updatedAtMs)
+                val next =
+                    MomentsCursorEntity(
+                        scope = normalized,
+                        videoId = videoId,
+                        positionMs = positionMs,
+                        sortAtMs = sortAtMs ?: 0L,
+                        updatedAtMs = updatedAtMs,
+                    )
+                if (normalized == "stories") {
+                    cursorDao.upsert(next)
+                } else {
+                    val kind =
+                        OutboxKind.MomentsCursor(
+                            videoId = videoId,
+                            positionMs = positionMs,
+                            scope = normalized,
+                            sortAtMs = sortAtMs,
+                        )
+                    db.outboxDao().coalesceAndInsert(buildOutboxRow(kind, updatedAtMs))
+                    cursorDao.upsert(next)
+                }
+                true
+            }
+        if (queued && normalized != "stories") _debounceSignal.tryEmit(Unit)
+        return queued
     }
 
     // ─── Row construction ──────────────────────────────────────────────────────
@@ -198,6 +246,16 @@ class OutboxWriter(
     // ─── Internal helpers ─────────────────────────────────────────────────────
 
     private fun serverCorrectedNowMs(): Long = nowMsProvider() + prefs.serverTimeOffsetMsSync()
+
+    private fun nextMomentsCursorTimestamp(currentUpdatedAtMs: Long?): Long {
+        val afterCurrent =
+            when (currentUpdatedAtMs) {
+                null -> Long.MIN_VALUE
+                Long.MAX_VALUE -> Long.MAX_VALUE
+                else -> currentUpdatedAtMs + 1L
+            }
+        return maxOf(serverCorrectedNowMs(), afterCurrent)
+    }
 
     private fun JsonObjectBuilder.putJsonObject(key: String, block: JsonObjectBuilder.() -> Unit) {
         put(key, buildJsonObject(block))

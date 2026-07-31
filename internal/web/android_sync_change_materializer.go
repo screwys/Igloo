@@ -387,6 +387,9 @@ func (s *Server) androidSyncStateChanges(database *db.DB, plan *androidSyncMater
 	keys := make([]db.AndroidSyncStateKey, 0)
 	for _, kind := range androidSyncStateOwnerKinds() {
 		for _, id := range sortedMapKeys(wanted[kind]) {
+			if !androidSyncStateOwnerSharedWithAndroid(kind, id) {
+				continue
+			}
 			keys = append(keys, db.AndroidSyncStateKey{OwnerKind: kind, OwnerID: id})
 		}
 	}
@@ -404,6 +407,9 @@ func (s *Server) androidSyncStateChanges(database *db.DB, plan *androidSyncMater
 	changes := make([]model.AndroidSyncChange, 0)
 	for _, kind := range androidSyncStateOwnerKinds() {
 		for _, id := range sortedMapKeys(wanted[kind]) {
+			if !androidSyncStateOwnerSharedWithAndroid(kind, id) {
+				continue
+			}
 			row, ok := rowByKey[kind+"\x00"+id]
 			if !ok {
 				changes = append(changes, androidSyncDeleteChange(kind, id))
@@ -630,6 +636,10 @@ func androidSyncStateOwnerKinds() []string {
 		"watch_history", "muted_channel", "channel_follow", "channel_star",
 		"channel_setting", "moments_cursor",
 	}
+}
+
+func androidSyncStateOwnerSharedWithAndroid(kind, id string) bool {
+	return kind != "moments_cursor" || id == "all" || id == "following"
 }
 
 func androidSyncPriorityStateOwnerKinds() []string {

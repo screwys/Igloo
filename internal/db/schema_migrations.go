@@ -24,6 +24,10 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260731_repair_android_moments_cursor_heads",
+		apply: repairAndroidMomentsCursorHeads,
+	},
+	{
 		name:  "20260727_add_video_fetch_history",
 		apply: addVideoFetchHistory,
 	},

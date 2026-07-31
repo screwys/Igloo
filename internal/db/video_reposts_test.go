@@ -614,6 +614,31 @@ func TestReplaceVideoRepostSourcesForReposterOnlyReplacesThatSource(t *testing.T
 	}
 }
 
+func TestNearestShortsCursorTargetUsesVideoIDToBreakTimelineTies(t *testing.T) {
+	d := openWritableTestDB(t)
+	if err := d.ExecRaw(`
+		INSERT INTO channels (channel_id, source_id, name, platform) VALUES
+			('tiktok_visible', 'visible', 'Visible', 'tiktok'),
+			('tiktok_hidden', 'hidden', 'Hidden', 'tiktok');
+		INSERT INTO channel_follows (channel_id, followed_at)
+		VALUES ('tiktok_visible', 1);
+		INSERT INTO videos (video_id, channel_id, owner_kind, published_at) VALUES
+			('sample_a', 'tiktok_visible', 'tiktok_video', 1000),
+			('sample_m', 'tiktok_hidden', 'tiktok_video', 1000),
+			('sample_z', 'tiktok_visible', 'tiktok_video', 1000);
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	targetID, ordinal, found, err := d.GetNearestShortsCursorTarget("sample_m", "all", 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found || targetID != "sample_z" || ordinal != 2 {
+		t.Fatalf("nearest tied target = %q, %d, %v; want sample_z, 2, true", targetID, ordinal, found)
+	}
+}
+
 func videoIDs(videos []model.Video) []string {
 	ids := make([]string, len(videos))
 	for i := range videos {

@@ -32,9 +32,8 @@ import org.koin.compose.koinInject
  * Moments tab: TikTok-style vertical video pager.
  *
  * Shares a nav-graph-scoped [MomentsViewModel] with [AllMomentsHost]: both routes
- * resolve the VM against the `moments-graph` back-stack entry so seeding the
- * resume cursor from the grid (via [MomentsViewModel.selectResumeVideoId]) flows
- * straight into the player's [MomentsViewModel.startIndex].
+ * resolve the VM against the `moments-graph` back-stack entry so the active tab
+ * and durable resume cursor stay consistent between the player and grid.
  */
 @Composable
 fun MomentsRoute(
@@ -44,23 +43,17 @@ fun MomentsRoute(
     val backStackEntry = rememberMomentsGraphBackStackEntry(navController) ?: return
     val vm: MomentsViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
 
-    val items by vm.playerItems.collectAsStateWithLifecycle()
-    val startIndex by vm.startIndex.collectAsStateWithLifecycle()
-    val startVideoId by vm.startVideoId.collectAsStateWithLifecycle()
+    val playerRouteState by vm.playerRouteState.collectAsStateWithLifecycle()
     val autoplayEnabled by vm.autoplayEnabled.collectAsStateWithLifecycle()
     val muted by vm.muted.collectAsStateWithLifecycle()
-    val uiState by vm.playerUiState.collectAsStateWithLifecycle()
     val pendingBookmark by vm.pendingBookmark.collectAsStateWithLifecycle()
     val pendingMomentActions by vm.pendingMomentActions.collectAsStateWithLifecycle()
     val categories by vm.bookmarkCategories.collectAsStateWithLifecycle()
-    val activeTab by vm.activeTab.collectAsStateWithLifecycle()
     val storyChannels by vm.storyChannels.collectAsStateWithLifecycle()
     val prefs: PreferencesRepo = koinInject()
     val useEmbedFriendlyShareLinks by prefs.shareEmbedFriendlyLinks()
         .collectAsStateWithLifecycle(initialValue = PreferencesRepo.Defaults.SHARE_EMBED_FRIENDLY_LINKS)
     var showStoryTray by remember { mutableStateOf(false) }
-    val playerActiveTab = if (activeTab == "stories") "all" else activeTab
-
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val navigator = rememberIglooNavigator(navController)
@@ -70,11 +63,11 @@ fun MomentsRoute(
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        UiStateSwitch(state = uiState, modifier = Modifier.fillMaxSize()) {
+        UiStateSwitch(state = playerRouteState.uiState, modifier = Modifier.fillMaxSize()) {
             MomentsPlayer(
-                items = items,
-                startIndex = startIndex,
-                startVideoId = startVideoId,
+                items = playerRouteState.items,
+                startIndex = playerRouteState.selection.index,
+                startVideoId = playerRouteState.selection.videoId,
                 autoSwipeDefault = autoplayEnabled,
                 muteDefault = muted,
                 onAutoSwipeChanged = vm::setAutoplayEnabled,
@@ -108,7 +101,7 @@ fun MomentsRoute(
                     navigator.openDestination(IglooDestination.AllMoments, IglooNavigationSource.Moments)
                 },
                 onEndReached = vm::notifyUpToDate,
-                activeTab = playerActiveTab,
+                activeTab = playerRouteState.scope,
                 onTabSelected = { tab ->
                     if (tab == "stories") {
                         showStoryTray = true

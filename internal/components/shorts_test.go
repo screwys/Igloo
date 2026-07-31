@@ -146,14 +146,14 @@ func TestShortsPlayerLongPressUsesMomentMutationOwners(t *testing.T) {
 	indexSrc := string(indexBytes)
 	for _, check := range []string{
 		"function advanceAfterMomentAction(entry)",
-		"tabGridCache.delete(currentTab)",
-		"loadTabSnapshot(currentTab)",
-		"fetchShortsCursorFromServer()",
+		"tabGridCache.delete(requestTab)",
+		"loadTabSnapshot(requestTab)",
+		"fetchShortsCursorFromServer(requestTab)",
 		"var targetID = String(cursor && cursor.video_id || '').trim()",
 		"if (nextIndex >= 0 && targetID === entryID) nextIndex += 1",
 		"if (nextIndex < 0) {",
 		"showGrid()",
-		"openOverlayAtIndex(nextIndex, true)",
+		"openOverlayAtIndex(nextIndex, true, { persistCursor: false })",
 	} {
 		if !strings.Contains(indexSrc, check) {
 			t.Errorf("Moment action advance wiring missing %q", check)

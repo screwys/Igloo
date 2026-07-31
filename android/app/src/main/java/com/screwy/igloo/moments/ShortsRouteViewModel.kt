@@ -1,5 +1,6 @@
 package com.screwy.igloo.moments
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.screwy.igloo.bookmarks.bookmarkFilterFromPlaylistId
@@ -7,8 +8,9 @@ import com.screwy.igloo.bookmarks.bookmarkMomentPlaylistItems
 import com.screwy.igloo.channel.ChannelRouteResolver
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
-import com.screwy.igloo.data.stripPlatformPrefix
+import com.screwy.igloo.data.entity.MomentsCursorEntity
 import com.screwy.igloo.data.entity.StoryChannelItem
+import com.screwy.igloo.data.stripPlatformPrefix
 import com.screwy.igloo.media.ownerKindFromAssetOwnerKind
 import com.screwy.igloo.net.ServerBaseUrlProvider
 import com.screwy.igloo.outbox.OutboxKind
@@ -23,14 +25,17 @@ import com.screwy.igloo.ui.component.BookmarkTarget
 import com.screwy.igloo.ui.component.storyRingState
 import com.screwy.igloo.ui.component.toBookmarkState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -41,48 +46,100 @@ import com.screwy.igloo.ui.component.MomentItem as PlayerMomentItem
 class ShortsRouteViewModel(
     private val playlistSpec: ShortsPlaylistSpec,
     startVideoId: String,
+    initialSelectionExplicit: Boolean = true,
     private val db: IglooDatabase,
     private val outboxWriter: OutboxWriter,
     private val prefs: PreferencesRepo,
     private val uiEffects: UiEffects,
     baseUrlProvider: ServerBaseUrlProvider,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private data class RepostMeta(
         val authorLabel: String,
         val otherCount: Int,
     )
+    private data class StartSelection(
+        val videoId: String,
+        val index: Int,
+    )
+    private data class PendingInitialSelectionResolution(
+        val item: PlayerMomentItem? = null,
+        val cursorSuperseded: Boolean = false,
+    )
+    private enum class InitialSelectionKind {
+        Explicit,
+        Passive,
+    }
 
     private val baseUrl = baseUrlProvider.baseUrl()
     private val initialVideoId = startVideoId.trim()
-    private val activeVideoId = MutableStateFlow(initialVideoId)
-    val currentVideoId: StateFlow<String> = activeVideoId.asStateFlow()
+    private val initialSelectionKind = claimInitialMomentsSelection(initialSelectionExplicit)
+    private var initialMomentsSelectionPending = initialSelectionKind != null
+    private val activeVideoId =
+        MutableStateFlow(
+            if (!playlistSpec.recordsMomentsCursor || initialSelectionKind != null) {
+                initialVideoId
+            } else {
+                ""
+            }
+        )
     private val momentsCursorScope: String =
         if (playlistSpec.type == ShortsPlaylistType.Moments) "following" else "all"
     private val recordsMomentViews: Boolean =
         playlistSpec.type != ShortsPlaylistType.Bookmarks
     private val bookmarkFilter = bookmarkFilterFromPlaylistId(playlistSpec.playlistId)
+    private val rawScopedResumeCursor: Flow<MomentsCursorEntity?> =
+        if (playlistSpec.recordsMomentsCursor) {
+            db.momentsCursorDao().flow(momentsCursorScope)
+        } else {
+            flowOf(null)
+        }
+    private val scopedResumeCursor: Flow<MomentsCursorEntity?> =
+        rawScopedResumeCursor.flatMapLatest { cursor ->
+            val cursorVideoId = cursor?.videoId?.trim().orEmpty()
+            if (cursor == null || cursor.sortAtMs > 0L || cursorVideoId.isEmpty()) {
+                flowOf(cursor)
+            } else {
+                db.momentReadDao()
+                    .momentSortAtFlow(cursorVideoId, momentsCursorScope)
+                    .map { currentSortAtMs ->
+                        cursor.copy(sortAtMs = currentSortAtMs?.takeIf { it > 0L } ?: 0L)
+                    }
+            }
+        }
 
-    private val storyStatusByChannel: StateFlow<Map<String, StoryChannelItem>> = prefs.storiesWindowHours()
-        .flatMapLatest { hours -> db.momentReadDao().storyStatusesFlow(storyCutoffMillis(hours)) }
-        .map { rows -> rows.associateBy { it.channelId } }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = emptyMap(),
-        )
-    val storyChannels: StateFlow<List<StoryChannelItem>> = prefs.storiesWindowHours()
-        .flatMapLatest { hours -> db.momentReadDao().storyChannelsFlow(storyCutoffMillis(hours)) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = emptyList(),
-        )
+    private val storyStatusByChannel: StateFlow<Map<String, StoryChannelItem>> =
+        prefs.storiesWindowHours()
+            .flatMapLatest { hours ->
+                db.momentReadDao().storyStatusesFlow(storyCutoffMillis(hours))
+            }
+            .map { rows -> rows.associateBy { it.channelId } }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000L),
+                initialValue = emptyMap(),
+            )
+    val storyChannels: StateFlow<List<StoryChannelItem>> =
+        prefs.storiesWindowHours()
+            .flatMapLatest { hours ->
+                db.momentReadDao().storyChannelsFlow(storyCutoffMillis(hours))
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000L),
+                initialValue = emptyList(),
+            )
 
-    private val rawItems: StateFlow<List<PlayerMomentItem>?> = combine(playlistFlow(), storyStatusByChannel) { rows, storyStatuses ->
+    private val rawItems: StateFlow<List<PlayerMomentItem>?> =
+        combine(playlistFlow(), storyStatusByChannel) { rows, storyStatuses ->
             rows.map { item ->
                 val storyStatus = storyStatuses[item.channelId]
                 item.copy(
-                    storyRingState = storyRingState(storyStatus?.storyCount ?: 0, storyStatus?.unseenCount ?: 0),
+                    storyRingState =
+                        storyRingState(
+                            storyStatus?.storyCount ?: 0,
+                            storyStatus?.unseenCount ?: 0,
+                        ),
                     storyFirstVideoId = storyStatus?.startVideoId().orEmpty(),
                 )
             }
@@ -94,6 +151,67 @@ class ShortsRouteViewModel(
             initialValue = null,
         )
 
+    /**
+     * A route argument can be an explicit selection, a passive tab handoff, or a restored
+     * back-stack entry. Claim it once in entry-owned saved state before observing Room so
+     * reconstruction cannot turn either kind into a new explicit selection.
+     */
+    private fun claimInitialMomentsSelection(explicit: Boolean): InitialSelectionKind? {
+        if (!playlistSpec.recordsMomentsCursor || initialVideoId.isEmpty()) return null
+        if (savedStateHandle.get<Boolean>(InitialMomentsSelectionClaimedKey) == true) return null
+        savedStateHandle[InitialMomentsSelectionClaimedKey] = true
+        return if (explicit) InitialSelectionKind.Explicit else InitialSelectionKind.Passive
+    }
+
+    /**
+     * A passive handoff resolves against the first Room playlist and never writes a cursor. An
+     * explicit selection may publish only while this route is visible. Its initial cursor is the
+     * causal baseline: any later cursor wins, even if the requested Room row appears afterward.
+     */
+    internal suspend fun consumePendingInitialMomentsSelection(
+        onBaselineCaptured: () -> Unit = {},
+    ) {
+        if (!initialMomentsSelectionPending) return
+        try {
+            if (initialSelectionKind == InitialSelectionKind.Passive) {
+                val initialItems = rawItems.filterNotNull().first()
+                if (initialItems.none { it.videoId == initialVideoId }) activeVideoId.value = ""
+                initialMomentsSelectionPending = false
+                return
+            }
+
+            val baselineCursor = db.momentsCursorDao().get(momentsCursorScope)
+            onBaselineCaptured()
+            val resolution =
+                combine(rawItems.filterNotNull(), rawScopedResumeCursor) { currentItems, cursor ->
+                    PendingInitialSelectionResolution(
+                        item = currentItems.firstOrNull { it.videoId == initialVideoId },
+                        cursorSuperseded = cursor != baselineCursor,
+                    )
+                }
+                    .first { it.item != null || it.cursorSuperseded }
+            val requestedItem = resolution.item ?: return
+            if (!initialMomentsSelectionPending) return
+            val recorded =
+                outboxWriter.recordMomentsCursorIfUnchanged(
+                    expectedCursor = baselineCursor,
+                    videoId = requestedItem.videoId,
+                    positionMs = 0L,
+                    scope = momentsCursorScope,
+                    sortAtMs = requestedItem.sortAtMs.takeIf { it > 0L } ?: requestedItem.publishedAt,
+                )
+            if (recorded) initialMomentsSelectionPending = false
+        } finally {
+            cancelPendingInitialMomentsSelection()
+        }
+    }
+
+    internal fun cancelPendingInitialMomentsSelection() {
+        if (!initialMomentsSelectionPending) return
+        initialMomentsSelectionPending = false
+        if (activeVideoId.value == initialVideoId) activeVideoId.value = ""
+    }
+
     val items: StateFlow<List<PlayerMomentItem>> = rawItems
         .map { it.orEmpty() }
         .stateIn(
@@ -102,13 +220,31 @@ class ShortsRouteViewModel(
             initialValue = emptyList(),
         )
 
-    val startIndex: StateFlow<Int> = combine(items, activeVideoId) { currentItems, targetId ->
-        shortsStartIndex(currentItems.map { it.videoId }, targetId)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000L),
-        initialValue = 0,
-    )
+    private val startSelection: StateFlow<StartSelection> =
+        combine(items, activeVideoId, scopedResumeCursor) { currentItems, targetId, cursor ->
+            resolveStartSelection(currentItems, targetId, cursor)
+        }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000L),
+                initialValue = StartSelection(initialVideoId, 0),
+            )
+
+    val currentVideoId: StateFlow<String> = startSelection
+        .map { it.videoId }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = initialVideoId,
+        )
+
+    val startIndex: StateFlow<Int> = startSelection
+        .map { it.index }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = 0,
+        )
 
     val uiState: StateFlow<UiState<Unit>> = rawItems
         .map { list ->
@@ -155,16 +291,21 @@ class ShortsRouteViewModel(
     }
 
     fun onIndexChange(item: PlayerMomentItem) {
+        initialMomentsSelectionPending = false
         activeVideoId.value = item.videoId
         if (!playlistSpec.recordsMomentsCursor) return
         viewModelScope.launch {
-            outboxWriter.recordMomentsCursor(
-                item.videoId,
-                0L,
-                momentsCursorScope,
-                item.sortAtMs.takeIf { it > 0L } ?: item.publishedAt,
-            )
+            recordMomentsCursor(item)
         }
+    }
+
+    private suspend fun recordMomentsCursor(item: PlayerMomentItem) {
+        outboxWriter.recordMomentsCursor(
+            item.videoId,
+            0L,
+            momentsCursorScope,
+            item.sortAtMs.takeIf { it > 0L } ?: item.publishedAt,
+        )
     }
 
     fun onViewEvent(videoId: String) {
@@ -172,6 +313,34 @@ class ShortsRouteViewModel(
         viewModelScope.launch {
             outboxWriter.enqueue(OutboxKind.MomentView(videoId = videoId))
         }
+    }
+
+    private fun resolveStartSelection(
+        items: List<PlayerMomentItem>,
+        requestedVideoId: String,
+        cursor: MomentsCursorEntity?,
+    ): StartSelection {
+        if (items.isEmpty()) return StartSelection(requestedVideoId, 0)
+        val requested = requestedVideoId.trim()
+        val requestedIndex = items.indexOfFirst { it.videoId == requested }
+        if (requestedIndex >= 0) return StartSelection(requested, requestedIndex)
+
+        val cursorRow = cursor
+        val cursorVideoId = cursorRow?.videoId?.trim().orEmpty()
+        if (cursorVideoId.isNotEmpty()) {
+            val cursorIndex =
+                shortsStartIndex(
+                    items.map { ShortsStartItem(it.videoId, it.sortAtMs) },
+                    cursorVideoId,
+                    fallbackSortAtMs = cursorRow?.sortAtMs?.takeIf { it > 0L },
+                )
+            return StartSelection(items[cursorIndex].videoId, cursorIndex)
+        }
+        val passiveRouteIndex = items.indexOfFirst { it.videoId == initialVideoId }
+        if (passiveRouteIndex >= 0) {
+            return StartSelection(initialVideoId, passiveRouteIndex)
+        }
+        return StartSelection(items.first().videoId, 0)
     }
 
     fun toggleBookmark(item: PlayerMomentItem) {
@@ -402,3 +571,6 @@ class ShortsRouteViewModel(
         )
     }
 }
+
+private const val InitialMomentsSelectionClaimedKey =
+    "igloo.shorts.initial_moments_selection_claimed"

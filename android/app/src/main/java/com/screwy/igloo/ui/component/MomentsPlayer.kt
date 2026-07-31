@@ -47,6 +47,7 @@ import com.screwy.igloo.net.auth.AuthTokenProvider
 import com.screwy.igloo.player.buildIglooPlayer
 import com.screwy.igloo.ui.nav.LocalDrawerController
 import kotlin.math.abs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -251,6 +252,7 @@ fun MomentsPlayer(
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { pagerItems.size })
     val currentIndex = pagerState.currentPage.coerceIn(0, pagerItems.lastIndex)
     var lastAppliedStartRequest by remember { mutableStateOf<MomentPagerStartRequest?>(null) }
+    val settlementTracker = remember { MomentPagerSettlementTracker() }
     var settledVideoId by remember { mutableStateOf(pagerItems[initialPage].videoId) }
     val storyMode = exitOnEnd
     val storyProgressWindow =
@@ -265,7 +267,11 @@ fun MomentsPlayer(
         val startRequest = momentPagerStartRequest(activeTab, startVideoId)
         if (startRequest == null) {
             lastAppliedStartRequest = null
+            settlementTracker.clearPassiveStartTarget()
             return@LaunchedEffect
+        }
+        if (startRequest != lastAppliedStartRequest) {
+            settlementTracker.clearPassiveStartTarget()
         }
         val requestedPage =
             pendingMomentPagerStartIndex(
@@ -274,10 +280,15 @@ fun MomentsPlayer(
                 lastAppliedStartRequest = lastAppliedStartRequest,
             )
         if (requestedPage != null) {
-            lastAppliedStartRequest = startRequest
-            if (pagerState.currentPage != requestedPage) {
-                pagerState.scrollToPage(requestedPage)
-            }
+            lastAppliedStartRequest =
+                applyMomentPagerStartRequest(
+                    startRequest = startRequest,
+                    requestedPage = requestedPage,
+                    currentPage = pagerState.currentPage,
+                    requestedVideoId = pagerItems[requestedPage].videoId,
+                    settlementTracker = settlementTracker,
+                    scrollToPage = { page -> pagerState.scrollToPage(page) },
+                )
         }
     }
 
@@ -304,9 +315,12 @@ fun MomentsPlayer(
     MomentPagerSettlementEffect(
         pagerState = pagerState,
         items = pagerItems,
-        onSettled = { item ->
+        settlementTracker = settlementTracker,
+        onSettled = { item, origin ->
             settledVideoId = item.videoId
-            onIndexChange(item)
+            if (origin == MomentPagerSettlementOrigin.Navigation) {
+                onIndexChange(item)
+            }
             onViewEvent(item.videoId)
         },
     )
@@ -545,22 +559,25 @@ internal fun mergeMomentPagerSessionItems(
 }
 
 /**
- * Reports actual pager settlements without treating a Room playlist update as a page change.
+ * Reports restored pages separately from actual pager navigation.
  *
  * Pager keys move the current page to keep its video anchored when rows are inserted or reordered.
  * Restarting the observer for the new list can run before that key remap and pair the old page number
  * with a different row. Keep one observer for the pager lifetime and read the latest list only when
- * the pager itself settles at a different page.
+ * the pager itself settles at a different page. The first page and a page selected by a start request
+ * are restores; later user or auto-advance settlements are navigation.
  */
 @Composable
 internal fun MomentPagerSettlementEffect(
     pagerState: PagerState,
     items: List<MomentItem>,
-    onSettled: (MomentItem) -> Unit,
+    settlementTracker: MomentPagerSettlementTracker,
+    onSettled: (MomentItem, MomentPagerSettlementOrigin) -> Unit,
 ) {
     val latestItems by rememberUpdatedState(items)
     val latestOnSettled by rememberUpdatedState(onSettled)
     var lastSettledVideoId by remember { mutableStateOf<String?>(null) }
+    var reportedInitialSettlement by remember { mutableStateOf(false) }
 
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
@@ -569,10 +586,59 @@ internal fun MomentPagerSettlementEffect(
                 val item = latestItems.getOrNull(page) ?: return@collect
                 if (lastSettledVideoId == item.videoId) return@collect
 
+                val isInitial = !reportedInitialSettlement
+                val isPassiveStartTarget =
+                    settlementTracker.consumePassiveStartTarget(item.videoId)
+                val isPlaylistReconciliation =
+                    lastSettledVideoId != null &&
+                        latestItems.none { it.videoId == lastSettledVideoId }
                 lastSettledVideoId = item.videoId
-                latestOnSettled(item)
+                reportedInitialSettlement = true
+                settlementTracker.recordSettledVideo(item.videoId)
+                latestOnSettled(
+                    item,
+                    when {
+                        isInitial || isPassiveStartTarget -> MomentPagerSettlementOrigin.Restore
+                        isPlaylistReconciliation -> MomentPagerSettlementOrigin.Reconciliation
+                        else -> MomentPagerSettlementOrigin.Navigation
+                    },
+                )
             }
     }
+}
+
+internal class MomentPagerSettlementTracker {
+    private var passiveStartTargetVideoId: String? = null
+    private var lastReportedSettledVideoId: String? = null
+
+    fun expectPassiveStartTarget(videoId: String) {
+        passiveStartTargetVideoId = videoId
+    }
+
+    fun clearPassiveStartTarget() {
+        passiveStartTargetVideoId = null
+    }
+
+    fun expectPassiveStartTargetIfUnreported(videoId: String) {
+        if (lastReportedSettledVideoId != videoId) expectPassiveStartTarget(videoId)
+    }
+
+    fun recordSettledVideo(videoId: String) {
+        lastReportedSettledVideoId = videoId
+        if (passiveStartTargetVideoId != videoId) passiveStartTargetVideoId = null
+    }
+
+    fun consumePassiveStartTarget(videoId: String): Boolean {
+        if (passiveStartTargetVideoId != videoId) return false
+        passiveStartTargetVideoId = null
+        return true
+    }
+}
+
+internal enum class MomentPagerSettlementOrigin {
+    Restore,
+    Reconciliation,
+    Navigation,
 }
 
 internal fun momentPagerStartIndex(
@@ -612,4 +678,31 @@ internal fun pendingMomentPagerStartIndex(
 ): Int? {
     if (startRequest == lastAppliedStartRequest) return null
     return items.indexOfFirst { it.videoId == startRequest.videoId }.takeIf { it >= 0 }
+}
+
+/**
+ * Applies one pager start request and returns it only after any required scroll completes.
+ * A Room emission can cancel the caller while [scrollToPage] is suspended; leaving the request
+ * unconsumed lets the restarted effect retry against the new pager items.
+ */
+internal suspend fun applyMomentPagerStartRequest(
+    startRequest: MomentPagerStartRequest,
+    requestedPage: Int,
+    currentPage: Int,
+    requestedVideoId: String,
+    settlementTracker: MomentPagerSettlementTracker,
+    scrollToPage: suspend (Int) -> Unit,
+): MomentPagerStartRequest {
+    if (currentPage == requestedPage) {
+        settlementTracker.expectPassiveStartTargetIfUnreported(requestedVideoId)
+        return startRequest
+    }
+    settlementTracker.expectPassiveStartTarget(requestedVideoId)
+    try {
+        scrollToPage(requestedPage)
+    } catch (cancelled: CancellationException) {
+        settlementTracker.clearPassiveStartTarget()
+        throw cancelled
+    }
+    return startRequest
 }

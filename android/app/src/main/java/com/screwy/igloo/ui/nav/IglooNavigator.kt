@@ -60,6 +60,7 @@ sealed interface IglooNavigationIntent {
         val playlistId: String?,
         val videoId: String?,
         override val source: IglooNavigationSource,
+        val explicitInitialSelection: Boolean = true,
     ) : IglooNavigationIntent
 
     data class OpenMedia(
@@ -196,6 +197,15 @@ object IglooNavigation {
         return currentRoute != routePatternFor(intent)
     }
 
+    fun shouldRestoreState(
+        currentRoute: String?,
+        intent: IglooNavigationIntent,
+    ): Boolean {
+        val launchSingleTop = shouldLaunchSingleTop(currentRoute, intent)
+        return launchSingleTop &&
+            (intent !is IglooNavigationIntent.OpenShorts || !intent.explicitInitialSelection)
+    }
+
     private fun routePatternFor(intent: IglooNavigationIntent): String =
         when (intent) {
             is IglooNavigationIntent.OpenChannel -> RouteRegistry.Channel.route
@@ -254,8 +264,17 @@ class IglooNavigator internal constructor(
         playlistId: String?,
         videoId: String?,
         source: IglooNavigationSource,
+        explicitInitialSelection: Boolean = true,
     ) {
-        open(IglooNavigationIntent.OpenShorts(playlistType, playlistId, videoId, source))
+        open(
+            IglooNavigationIntent.OpenShorts(
+                playlistType,
+                playlistId,
+                videoId,
+                source,
+                explicitInitialSelection,
+            )
+        )
     }
 
     fun openMedia(
@@ -298,13 +317,27 @@ class IglooNavigator internal constructor(
             return
         }
         target.profileOpenSnapshot?.let(navController::prepareProfileOpenSnapshotForNext)
+        if (intent is IglooNavigationIntent.OpenShorts) {
+            navController.prepareShortsInitialSelectionForNext(intent.explicitInitialSelection)
+        }
         val launchSingleTop = IglooNavigation.shouldLaunchSingleTop(currentRoute, intent)
         navController.navigate(target.route) {
             this.launchSingleTop = launchSingleTop
-            restoreState = launchSingleTop
+            restoreState = IglooNavigation.shouldRestoreState(currentRoute, intent)
         }
     }
 }
+
+private const val ShortsInitialSelectionExplicitKey =
+    "igloo.shorts.initial_selection_explicit"
+
+private fun NavController.prepareShortsInitialSelectionForNext(explicit: Boolean) {
+    currentBackStackEntry?.savedStateHandle?.set(ShortsInitialSelectionExplicitKey, explicit)
+}
+
+internal fun NavController.consumeShortsInitialSelectionExplicitFromPrevious(): Boolean =
+    previousBackStackEntry?.savedStateHandle?.remove<Boolean>(ShortsInitialSelectionExplicitKey)
+        ?: true
 
 @Composable
 fun rememberIglooNavigator(

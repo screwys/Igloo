@@ -83,4 +83,36 @@ class ShortsPlaylistSpecTest {
 
         assertEquals(1, shortsStartIndex(items, "moved", fallbackSortAtMs = 250))
     }
+
+    @Test
+    fun startIndexUsesVideoIdAsTheTimelineTieBreaker() {
+        val items = listOf(
+            ShortsStartItem(videoId = "a", sortAtMs = 100),
+            ShortsStartItem(videoId = "c", sortAtMs = 100),
+            ShortsStartItem(videoId = "d", sortAtMs = 200),
+        )
+
+        assertEquals(1, shortsStartIndex(items, "b", fallbackSortAtMs = 100))
+    }
+
+    @Test
+    fun visibleSelectionReturnsOneCoherentPlaylistPair() {
+        val items = listOf(
+            ShortsStartItem(videoId = "old", sortAtMs = 100),
+            ShortsStartItem(videoId = "next", sortAtMs = 300),
+        )
+
+        assertEquals(
+            VisibleShortsSelection(videoId = "next", index = 1),
+            visibleShortsSelection(items, "hidden", fallbackSortAtMs = 200),
+        )
+        assertEquals(
+            VisibleShortsSelection(videoId = "old", index = 0),
+            visibleShortsSelection(items, requestedVideoId = null),
+        )
+        assertEquals(
+            VisibleShortsSelection(videoId = null, index = 0),
+            visibleShortsSelection(emptyList(), "hidden", fallbackSortAtMs = 200),
+        )
+    }
 }
