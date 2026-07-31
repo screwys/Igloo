@@ -130,11 +130,11 @@ func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.Snapshot
 	}
 	out = mergeNearbyOriginalsIntoPureReposts(out, in)
 	out = compactThreadRoots(out, in)
-	out = compactNearbyRelatedThreads(out, in)
+	out = compactNearbyRelatedConversations(out, in)
 	return compactPureRepostsIntoThreadRepresentatives(out, in)
 }
 
-func compactNearbyRelatedThreads(rows []db.SnapshotRow, meta []db.PreDiversitySnapshotRow) []db.SnapshotRow {
+func compactNearbyRelatedConversations(rows []db.SnapshotRow, meta []db.PreDiversitySnapshotRow) []db.SnapshotRow {
 	if len(rows) < 2 || len(meta) == 0 {
 		return rows
 	}
@@ -148,7 +148,7 @@ func compactNearbyRelatedThreads(rows []db.SnapshotRow, meta []db.PreDiversitySn
 	for _, row := range rows {
 		rowMeta, ok := metadata[row.TweetID]
 		relatedKey := strings.ToLower(strings.TrimSpace(rowMeta.RelatedContentKey))
-		if !ok || !rowMeta.IsReply || relatedKey == "" {
+		if !ok || !isRelatedConversationSnapshotRow(rowMeta) || relatedKey == "" {
 			out = append(out, row)
 			continue
 		}
@@ -170,6 +170,12 @@ func compactNearbyRelatedThreads(rows []db.SnapshotRow, meta []db.PreDiversitySn
 		out[i].RankPosition = i + 1
 	}
 	return out
+}
+
+func isRelatedConversationSnapshotRow(row db.PreDiversitySnapshotRow) bool {
+	return row.IsReply ||
+		isPureRepostSnapshotRow(row) ||
+		(!row.IsRetweet && strings.TrimSpace(row.QuoteTweetID) != "")
 }
 
 func compactThreadRoots(rows []db.SnapshotRow, meta []db.PreDiversitySnapshotRow) []db.SnapshotRow {
