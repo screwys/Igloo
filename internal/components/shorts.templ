@@ -7,7 +7,7 @@ import (
 )
 
 // ShortsPage renders the shorts page wrapped in the Base layout.
-templ ShortsPage(p PageProps, videos []model.Video, storyChannels []model.StoryChannel, hasUnseenStories bool, pager model.Pager, videoHint string, tab string, hydratedCount int, hydrateBatchSize int) {
+templ ShortsPage(p PageProps, videos []model.Video, storyChannels []model.StoryChannel, hasUnseenStories bool, pager model.Pager, videoHint string, tab string, hydrateBatchSize int) {
 	@Base(p) {
 		<div id="shorts-grid-shell" class="hidden">
 			@ShortsTabs(p, tab, hasUnseenStories)
@@ -17,7 +17,7 @@ templ ShortsPage(p PageProps, videos []model.Video, storyChannels []model.StoryC
 				} else {
 					if len(videos) > 0 {
 						for i, v := range videos {
-							if shortsShouldHydrateCard(v, videoHint, i, hydratedCount) {
+							if shortsCardIsHydrated(v) {
 								@VideoCard(p, v)
 							} else {
 								@ShortsSkeletonCard(v, i)
@@ -95,16 +95,7 @@ templ ShortsSkeletonCard(v model.Video, index int) {
 		data-card-hydrated="0"
 		data-card-index={ strconv.Itoa(index) }
 		aria-busy="true"
-	>
-		<div class="video-thumbnail shorts-card-skeleton-thumb"></div>
-		<div class="video-info">
-			<div class="video-title shorts-card-skeleton-line"></div>
-			<div class="video-meta">
-				<span class="shorts-card-skeleton-avatar"></span>
-				<span class="shorts-card-skeleton-line shorts-card-skeleton-line-short"></span>
-			</div>
-		</div>
-	</a>
+	></a>
 }
 
 templ ShortsTabs(p PageProps, active string, hasUnseenStories bool) {
@@ -132,11 +123,8 @@ func shortsPageURL(page int, tab string) string {
 	return u
 }
 
-func shortsShouldHydrateCard(v model.Video, videoHint string, index int, hydratedCount int) bool {
-	if hydratedCount < 1 {
-		hydratedCount = 1
-	}
-	return index < hydratedCount || (videoHint != "" && v.VideoID == videoHint)
+func shortsCardIsHydrated(v model.Video) bool {
+	return v.ChannelID != ""
 }
 
 // shortsInitialPage returns the initial page number, defaulting to 1.

@@ -898,6 +898,32 @@ func (db *DB) GetShortsVisibleSortAt(videoID, momentsMode string) (int64, bool, 
 	return 0, false, nil
 }
 
+// ListShortsVideoIDs returns the complete visible Moments timeline in the same
+// oldest-to-newest order used by card hydration and cursor ordinals. The web
+// grid uses this lightweight index to avoid loading and enriching every card
+// body before it is visible.
+func (db *DB) ListShortsVideoIDs(momentsMode string) ([]string, error) {
+	query := db.shortsVisibleCTE(momentsMode) + `
+		SELECT video_id
+		FROM visible
+		ORDER BY effective_moment_at_ms ASC, video_id ASC`
+	rows, err := db.conn.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var videoIDs []string
+	for rows.Next() {
+		var videoID string
+		if err := rows.Scan(&videoID); err != nil {
+			return nil, err
+		}
+		videoIDs = append(videoIDs, videoID)
+	}
+	return videoIDs, rows.Err()
+}
+
 func (db *DB) GetShortsCursorSortAt(videoID, momentsMode string) (int64, bool, error) {
 	sortAt, ok, err := db.GetShortsVisibleSortAt(videoID, momentsMode)
 	if err != nil || ok {

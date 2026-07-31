@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	shortsPageSize         = 10_000
+	momentsCursorPageSize  = 10_000
 	shortsInitialCardLimit = 96
 	shortsHydrateBatchSize = 96
 	bookmarksPageSize      = 200

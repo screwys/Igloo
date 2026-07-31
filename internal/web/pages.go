@@ -1229,31 +1229,52 @@ func (s *Server) handlePageShorts(w http.ResponseWriter, r *http.Request) {
 	}
 	nowMs := time.Now().UnixMilli()
 	storyChannels, hasUnseenStories, _ := s.db.ListStoryChannels(nowMs, 200)
-	perPage := shortsPageSize
-
 	opts := db.GetVideosOpts{
 		Platform: "shorts",
-		Limit:    perPage,
 		// Moments scroll oldest -> newest so new items append at the end.
 		// Keep this aligned with /api/shorts/cards, GetShortsOrdinal, and Android MomentReadDao.
 		OrderAsc:        true,
 		MomentsMode:     tab,
 		ExcludeMetadata: true,
 	}
-	count, _ := s.db.GetVideoCount(opts)
-	pager := model.Pager{Page: 1, PerPage: perPage, Total: count}
-	opts.Offset = 0
 
 	var shorts []model.Video
+	count := 0
 	if tab != "stories" {
-		shorts, _ = s.db.GetVideos(opts)
-		if err := s.db.AttachStoryStatusToVideos(shorts, nowMs); err != nil {
-			slog.Error("AttachStoryStatusToVideos shorts page", "err", err, "tab", tab)
+		videoIDs, err := s.db.ListShortsVideoIDs(tab)
+		if err != nil {
+			slog.Error("ListShortsVideoIDs shorts page", "err", err, "tab", tab)
+		}
+		count = len(videoIDs)
+		shorts = make([]model.Video, len(videoIDs))
+		for i, videoID := range videoIDs {
+			shorts[i].VideoID = videoID
+		}
+
+		var hydrated []model.Video
+		if count > 0 {
+			opts.Limit = min(shortsInitialCardLimit, count)
+			hydrated, err = s.db.GetVideos(opts)
+			if err != nil {
+				slog.Error("GetVideos initial shorts cards", "err", err, "tab", tab)
+			}
+			if err := s.db.AttachStoryStatusToVideos(hydrated, nowMs); err != nil {
+				slog.Error("AttachStoryStatusToVideos shorts page", "err", err, "tab", tab)
+			}
+		}
+		hydratedByID := make(map[string]model.Video, len(hydrated))
+		for _, video := range hydrated {
+			hydratedByID[video.VideoID] = video
+		}
+		for i := range shorts {
+			if video, ok := hydratedByID[shorts[i].VideoID]; ok {
+				shorts[i] = video
+			}
 		}
 	} else {
 		count = len(storyChannels)
-		pager.Total = count
 	}
+	pager := model.Pager{Page: 1, PerPage: momentsCursorPageSize, Total: count}
 
 	p := s.pageProps(w, r)
 	p.PageTitle = p.T("nav_moments", "Moments")
@@ -1263,11 +1284,10 @@ func (s *Server) handlePageShorts(w http.ResponseWriter, r *http.Request) {
 	} else {
 		p.PageBadge = fmt.Sprintf("%d videos", count)
 	}
-	p.PageScripts = []string{"js/infinite_page.js"}
 	p.ESBundle = "js/dist/shorts.js"
 	p.Sidebar = s.mustBuildSidebar(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = components.ShortsPage(p, shorts, storyChannels, hasUnseenStories, pager, videoHint, tab, shortsInitialCardLimit, shortsHydrateBatchSize).Render(r.Context(), w)
+	_ = components.ShortsPage(p, shorts, storyChannels, hasUnseenStories, pager, videoHint, tab, shortsHydrateBatchSize).Render(r.Context(), w)
 }
 
 func (s *Server) handlePageBookmarks(w http.ResponseWriter, r *http.Request) {

@@ -3,6 +3,7 @@ package components
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -14,16 +15,15 @@ func TestShortsPageRendersFullSkeletonListWithoutPaging(t *testing.T) {
 	p := newTestPageProps()
 	p.ActiveNav = "shorts"
 	p.ESBundle = "js/dist/shorts.js"
-	p.PageScripts = []string{"js/infinite_page.js"}
 	videos := []model.Video{
-		{VideoID: "short_001", Title: "Short 001", Platform: "tiktok"},
+		{VideoID: "short_001", ChannelID: "tiktok_sample", Title: "Short 001", Platform: "tiktok"},
 		{VideoID: "short_002", Title: "Short 002", Platform: "tiktok"},
 		{VideoID: "short_003", Title: "Short 003", Platform: "tiktok"},
 	}
 	pager := model.Pager{Page: 1, PerPage: 10000, Total: 3}
 
 	var buf bytes.Buffer
-	if err := ShortsPage(p, videos, nil, false, pager, "", "following", 1, 2).Render(context.Background(), &buf); err != nil {
+	if err := ShortsPage(p, videos, nil, false, pager, "", "following", 2).Render(context.Background(), &buf); err != nil {
 		t.Fatal(err)
 	}
 	html := buf.String()
@@ -40,8 +40,10 @@ func TestShortsPageRendersFullSkeletonListWithoutPaging(t *testing.T) {
 	if !strings.Contains(html, `data-video-id="short_001"`) || !strings.Contains(html, `data-video-title="Short 001"`) {
 		t.Fatal("initial hydrated card missing")
 	}
-	for _, id := range []string{"short_002", "short_003"} {
-		if !strings.Contains(html, `data-video-id="`+id+`"`) || !strings.Contains(html, `data-shorts-card-skeleton="1"`) {
+	for i, id := range []string{"short_002", "short_003"} {
+		if !strings.Contains(html, `data-video-id="`+id+`"`) ||
+			!strings.Contains(html, `data-shorts-card-skeleton="1"`) ||
+			!strings.Contains(html, fmt.Sprintf(`data-card-index="%d"`, i+1)) {
 			t.Fatalf("missing skeleton card for %s", id)
 		}
 	}
@@ -51,11 +53,10 @@ func TestShortsPageRendersStoriesTabTrigger(t *testing.T) {
 	p := newTestPageProps()
 	p.ActiveNav = "shorts"
 	p.ESBundle = "js/dist/shorts.js"
-	p.PageScripts = []string{"js/infinite_page.js"}
 	pager := model.Pager{Page: 1, PerPage: 10000, Total: 0}
 
 	var buf bytes.Buffer
-	if err := ShortsPage(p, nil, nil, true, pager, "", "all", 1, 2).Render(context.Background(), &buf); err != nil {
+	if err := ShortsPage(p, nil, nil, true, pager, "", "all", 2).Render(context.Background(), &buf); err != nil {
 		t.Fatal(err)
 	}
 	html := buf.String()

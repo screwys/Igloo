@@ -155,6 +155,13 @@ func TestMomentsRepostOrderingUsesActualTimestampOrFirstSeenTime(t *testing.T) {
 	if got := videoIDs(all); len(got) != 3 || got[0] != "sample_orig_newer" || got[1] != "sample_repost_older" || got[2] != "sample_repost_dated" {
 		t.Fatalf("all ids = %v, want [sample_orig_newer sample_repost_older sample_repost_dated]", got)
 	}
+	indexedIDs, err := d.ListShortsVideoIDs("all")
+	if err != nil {
+		t.Fatalf("ListShortsVideoIDs all: %v", err)
+	}
+	if want := videoIDs(all); !slices.Equal(indexedIDs, want) {
+		t.Fatalf("lightweight Moments index = %v, want %v", indexedIDs, want)
+	}
 	if all[1].EffectiveMomentAtMs != 5000 {
 		t.Fatalf("unknown-date repost effective time = %d, want discovery time 5000", all[1].EffectiveMomentAtMs)
 	}

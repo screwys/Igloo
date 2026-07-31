@@ -15,7 +15,7 @@ import (
 )
 
 // ShortsPage renders the shorts page wrapped in the Base layout.
-func ShortsPage(p PageProps, videos []model.Video, storyChannels []model.StoryChannel, hasUnseenStories bool, pager model.Pager, videoHint string, tab string, hydratedCount int, hydrateBatchSize int) templ.Component {
+func ShortsPage(p PageProps, videos []model.Video, storyChannels []model.StoryChannel, hasUnseenStories bool, pager model.Pager, videoHint string, tab string, hydrateBatchSize int) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -68,7 +68,7 @@ func ShortsPage(p PageProps, videos []model.Video, storyChannels []model.StoryCh
 			} else {
 				if len(videos) > 0 {
 					for i, v := range videos {
-						if shortsShouldHydrateCard(v, videoHint, i, hydratedCount) {
+						if shortsCardIsHydrated(v) {
 							templ_7745c5c3_Err = VideoCard(p, v).Render(ctx, templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
@@ -467,7 +467,7 @@ func ShortsSkeletonCard(v model.Video, index int) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" aria-busy=\"true\"><div class=\"video-thumbnail shorts-card-skeleton-thumb\"></div><div class=\"video-info\"><div class=\"video-title shorts-card-skeleton-line\"></div><div class=\"video-meta\"><span class=\"shorts-card-skeleton-avatar\"></span> <span class=\"shorts-card-skeleton-line shorts-card-skeleton-line-short\"></span></div></div></a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" aria-busy=\"true\"></a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -503,7 +503,7 @@ func ShortsTabs(p PageProps, active string, hasUnseenStories bool) templ.Compone
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "shorts_timeline_tabs_aria", "Moments timeline"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 111, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 102, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 		if templ_7745c5c3_Err != nil {
@@ -538,7 +538,7 @@ func ShortsTabs(p PageProps, active string, hasUnseenStories bool) templ.Compone
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolDataAttr(active == "all"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 112, Col: 124}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 103, Col: 124}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
@@ -551,7 +551,7 @@ func ShortsTabs(p PageProps, active string, hasUnseenStories bool) templ.Compone
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shorts_tab_all", "All"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 112, Col: 158}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 103, Col: 158}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 		if templ_7745c5c3_Err != nil {
@@ -586,7 +586,7 @@ func ShortsTabs(p PageProps, active string, hasUnseenStories bool) templ.Compone
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolDataAttr(active == "following"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 113, Col: 142}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 104, Col: 142}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 		if templ_7745c5c3_Err != nil {
@@ -599,7 +599,7 @@ func ShortsTabs(p PageProps, active string, hasUnseenStories bool) templ.Compone
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shorts_tab_following", "Following"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 113, Col: 188}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 104, Col: 188}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 		if templ_7745c5c3_Err != nil {
@@ -634,7 +634,7 @@ func ShortsTabs(p PageProps, active string, hasUnseenStories bool) templ.Compone
 		var templ_7745c5c3_Var38 string
 		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolDataAttr(active == "stories"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 114, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 105, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
@@ -647,7 +647,7 @@ func ShortsTabs(p PageProps, active string, hasUnseenStories bool) templ.Compone
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shorts_tab_stories", "Stories"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 115, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 106, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 		if templ_7745c5c3_Err != nil {
@@ -676,11 +676,8 @@ func shortsPageURL(page int, tab string) string {
 	return u
 }
 
-func shortsShouldHydrateCard(v model.Video, videoHint string, index int, hydratedCount int) bool {
-	if hydratedCount < 1 {
-		hydratedCount = 1
-	}
-	return index < hydratedCount || (videoHint != "" && v.VideoID == videoHint)
+func shortsCardIsHydrated(v model.Video) bool {
+	return v.ChannelID != ""
 }
 
 // shortsInitialPage returns the initial page number, defaulting to 1.

@@ -39,21 +39,35 @@ func main() {
 	opts := db.GetVideosOpts{Platform: "shorts", Limit: 10000, OrderAsc: true, MomentsMode: "all"}
 
 	t := time.Now()
-	count, _ := d.GetVideoCount(opts)
-	fmt.Printf("  GetVideoCount(shorts):       %6dms  (%d)\n", time.Since(t).Milliseconds(), count)
+	shortIDs, _ := d.ListShortsVideoIDs("all")
+	count := len(shortIDs)
+	fmt.Printf("  ListShortsVideoIDs:          %6dms  (%d)\n", time.Since(t).Milliseconds(), count)
 
 	t = time.Now()
 	shorts, _ := d.GetVideos(opts)
 	fmt.Printf("  GetVideos(shorts):           %6dms  (%d rows)\n", time.Since(t).Milliseconds(), len(shorts))
 
-	pageOpts := db.GetVideosOpts{Platform: "shorts", Limit: 10000, OrderAsc: true, MomentsMode: "all", ExcludeMetadata: true}
+	pageOpts := db.GetVideosOpts{Platform: "shorts", Limit: 96, OrderAsc: true, MomentsMode: "all", ExcludeMetadata: true}
 	t = time.Now()
-	shortsPage, _ := d.GetVideos(pageOpts)
-	fmt.Printf("  GetVideos(shorts page):      %6dms  (%d rows)\n", time.Since(t).Milliseconds(), len(shortsPage))
+	hydratedShorts, _ := d.GetVideos(pageOpts)
+	fmt.Printf("  GetVideos(initial cards):    %6dms  (%d rows)\n", time.Since(t).Milliseconds(), len(hydratedShorts))
+	shortsPage := make([]model.Video, len(shortIDs))
+	for i, videoID := range shortIDs {
+		shortsPage[i].VideoID = videoID
+	}
+	hydratedByID := make(map[string]model.Video, len(hydratedShorts))
+	for _, video := range hydratedShorts {
+		hydratedByID[video.VideoID] = video
+	}
+	for i := range shortsPage {
+		if video, ok := hydratedByID[shortsPage[i].VideoID]; ok {
+			shortsPage[i] = video
+		}
+	}
 
 	t = time.Now()
 	var shortsHTML bytes.Buffer
-	_ = components.ShortsPage(benchPageProps("Moments", "shorts"), shortsPage, nil, false, model.Pager{Page: 1, PerPage: 10000, Total: count}, "", "all", 96, 96).Render(context.Background(), &shortsHTML)
+	_ = components.ShortsPage(benchPageProps("Moments", "shorts"), shortsPage, nil, false, model.Pager{Page: 1, PerPage: 10000, Total: count}, "", "all", 96).Render(context.Background(), &shortsHTML)
 	fmt.Printf("  Render ShortsPage:           %6dms  (%d KB)\n", time.Since(t).Milliseconds(), shortsHTML.Len()/1024)
 
 	fmt.Println()

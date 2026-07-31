@@ -229,9 +229,9 @@ func (s *Server) handleShortsHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	if videoID != "" {
 		setPageHint := func(ordinal int) {
-			body["page"] = ((ordinal - 1) / shortsPageSize) + 1
-			body["index"] = (ordinal - 1) % shortsPageSize
-			body["page_size"] = shortsPageSize
+			body["page"] = ((ordinal - 1) / momentsCursorPageSize) + 1
+			body["index"] = (ordinal - 1) % momentsCursorPageSize
+			body["page_size"] = momentsCursorPageSize
 		}
 		resolved := false
 		if sortAtMs > 0 {

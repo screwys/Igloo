@@ -1537,35 +1537,22 @@ html.sidebar-resizing .sidebar-resize-handle::after {
     box-shadow: none;
 }
 
-.shorts-card-skeleton-thumb,
-.shorts-card-skeleton-line,
-.shorts-card-skeleton-avatar {
+.shorts-card-skeleton::before,
+.shorts-card-skeleton::after {
+    content: "";
     display: block;
     border-radius: 7px;
     background: linear-gradient(90deg, rgba(255,255,255,0.055), rgba(255,255,255,0.11), rgba(255,255,255,0.055));
-    background-size: 220% 100%;
-    animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }
 
-.shorts-card-skeleton-line {
-    height: 0.8rem;
-    width: 100%;
+.shorts-card-skeleton::before {
+    aspect-ratio: 9/16;
+    border-radius: 0;
 }
 
-.shorts-card-skeleton-line-short {
-    width: 54%;
-}
-
-.shorts-card-skeleton-avatar {
-    width: 22px;
-    height: 22px;
-    border-radius: 999px;
-    flex: 0 0 auto;
-}
-
-@keyframes skeleton-shimmer {
-    0% { background-position: 120% 0; }
-    100% { background-position: -120% 0; }
+.shorts-card-skeleton::after {
+    height: 2.6rem;
+    margin: 0.75rem 0.8rem 0.8rem;
 }
 
 .video-card .video-info {
