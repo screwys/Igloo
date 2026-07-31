@@ -8,7 +8,6 @@
     "github-actions",
     "dockerfile",
     "nix",
-    "pip_requirements",
     "custom.regex"
   ],
   "dependencyDashboard": false,
@@ -45,13 +44,13 @@
     },
     {
       "customType": "regex",
-      "description": "Update Nix PyPI source hashes for runtime downloader tools.",
-      "managerFilePatterns": ["/(^|/)flake\\.nix$/"],
+      "description": "Update runtime downloader versions and Nix source hashes together.",
+      "managerFilePatterns": ["/(^|/)requirements-runtime\\.txt$/"],
       "matchStrings": [
-        "# renovate: packageName=(?<packageName>[^\\s]+) depName=(?<depName>[^\\s]+) versioning=(?<versioning>[^\\s]+)\\s+\"(?<depKey>[^\"]+)\" = \\{\\s+pypiName = \"(?<pypiName>[^\"]+)\";\\s+version = \"(?<currentValue>[^\"]+)\";\\s+sha256 = \"(?<currentDigest>[a-f0-9]+)\";"
+        "# renovate: packageName=(?<packageName>[^\\s]+) pypiName=(?<pypiName>[^\\s]+) versioning=(?<versioning>[^\\s]+) sha256=(?<currentDigest>[a-f0-9]+)\\s+(?<depName>[^=\\s]+)==(?<currentValue>[^\\s]+)"
       ],
       "datasourceTemplate": "custom.pypi-sdist",
-      "autoReplaceStringTemplate": "# renovate: packageName={{{packageName}}} depName={{{depName}}} versioning={{{versioning}}}\n            \"{{{depKey}}}\" = {\n              pypiName = \"{{{pypiName}}}\";\n              version = \"{{{newValue}}}\";\n              sha256 = \"{{{newDigest}}}\";"
+      "autoReplaceStringTemplate": "# renovate: packageName={{{packageName}}} pypiName={{{pypiName}}} versioning={{{versioning}}} sha256={{{newDigest}}}\n{{{depName}}}=={{{newValue}}}"
     }
   ],
   "packageRules": [
@@ -88,7 +87,7 @@
     },
     {
       "description": "yt-dlp and gallery-dl updates are most of the time urgent.",
-      "matchManagers": ["pip_requirements", "custom.regex"],
+      "matchManagers": ["custom.regex"],
       "matchPackageNames": ["yt-dlp", "gallery-dl"],
       "minimumReleaseAge": null,
       "automerge": true,

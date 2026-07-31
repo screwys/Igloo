@@ -78,35 +78,37 @@
           go = goFor system pkgs;
           buildGoModule = pkgs.buildGoModule.override { inherit go; };
           pythonPackages = pkgs.python3Packages;
-          runtimeTools = {
-            # renovate: packageName=yt-dlp depName=yt-dlp versioning=pep440
-            "yt-dlp" = {
-              pypiName = "yt_dlp";
-              version = "2026.7.4";
-              sha256 = "b094813404f87a9dd2186f00815231df32e5fd8a5403be0f807b3bb2d21a4432";
-            };
-            # renovate: packageName=gallery-dl depName=gallery-dl versioning=pep440
-            "gallery-dl" = {
-              pypiName = "gallery_dl";
-              version = "1.32.1";
-              sha256 = "b59f1c3b58783c9c904d38ba24cb64e2004341c84100903564913340fb97767f";
-            };
-          };
           runtimeRequirementLines = lib.splitString "\n" (builtins.readFile ./requirements-runtime.txt);
-          runtimeToolVersion =
+          runtimeToolMetadata =
             package:
             let
-              prefix = "${package}==";
-              matches = builtins.filter (line: lib.hasPrefix prefix line) runtimeRequirementLines;
-              requirementVersion = lib.removePrefix prefix (builtins.head matches);
-              tool = runtimeTools.${package} or (throw "expected ${package} metadata in flake.nix");
+              requirementPrefix = "${package}==";
+              requirementMatches = builtins.filter (
+                line: lib.hasPrefix requirementPrefix line
+              ) runtimeRequirementLines;
+              metadataPrefix = "# renovate: packageName=${package} ";
+              metadataMatches = builtins.filter (
+                line: lib.hasPrefix metadataPrefix line
+              ) runtimeRequirementLines;
+              metadataFields = builtins.match (
+                "# renovate: packageName=[^ ]+ pypiName=([^ ]+) versioning=[^ ]+ sha256=([a-f0-9]+)"
+              ) (builtins.head metadataMatches);
             in
-            if builtins.length matches != 1 then
+            if builtins.length requirementMatches != 1 then
               throw "expected exactly one ${package} pin in requirements-runtime.txt"
-            else if requirementVersion != tool.version then
-              throw "expected ${package} requirement ${requirementVersion} to match flake metadata ${tool.version}"
+            else if builtins.length metadataMatches != 1 || metadataFields == null then
+              throw "expected exactly one valid ${package} metadata line in requirements-runtime.txt"
             else
-              requirementVersion;
+              {
+                pypiName = builtins.elemAt metadataFields 0;
+                version = lib.removePrefix requirementPrefix (builtins.head requirementMatches);
+                sha256 = builtins.elemAt metadataFields 1;
+              };
+          runtimeTools = lib.genAttrs [
+            "yt-dlp"
+            "gallery-dl"
+          ] runtimeToolMetadata;
+          runtimeToolVersion = package: runtimeTools.${package}.version;
           runtimeToolPypiName = package: runtimeTools.${package}.pypiName;
           runtimeToolSha256 = package: runtimeTools.${package}.sha256;
 
