@@ -207,9 +207,8 @@ func compactThreadRoots(rows []db.SnapshotRow, meta []db.PreDiversitySnapshotRow
 			continue
 		}
 		existingMeta := metadata[out[existingIndex].TweetID]
-		if !existingMeta.IsReply && rowMeta.IsReply {
-			row.RankPosition = out[existingIndex].RankPosition
-			out[existingIndex] = row
+		if rowMeta.ThreadDepth > existingMeta.ThreadDepth {
+			out[existingIndex].TweetID = row.TweetID
 		}
 	}
 	for i := range out {

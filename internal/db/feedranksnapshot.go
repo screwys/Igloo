@@ -298,6 +298,7 @@ type PreDiversitySnapshotRow struct {
 	IsReply                  bool
 	QuoteTweetID             string
 	ThreadRootID             string
+	ThreadDepth              int
 	RepostTargetThreadRootID string
 	PublishedAtMs            int64
 	BaseScore                float64
@@ -492,6 +493,7 @@ func (db *DB) ListPreDiversityRankedCandidatesContext(
 	for i := range out {
 		if thread := threads[out[i].TweetID]; thread.RootID != "" {
 			out[i].ThreadRootID = thread.RootID
+			out[i].ThreadDepth = thread.Depth
 			if out[i].IsReply && thread.RelatedContentKey != "" {
 				out[i].RelatedContentKey = thread.RelatedContentKey
 			}
@@ -536,6 +538,7 @@ func (db *DB) CountVisibleFeedRankSnapshotContext(ctx context.Context) (int, err
 type threadSnapshotMetadata struct {
 	RootID            string
 	RelatedContentKey string
+	Depth             int
 }
 
 func (db *DB) threadMetadataForTweetIDsContext(ctx context.Context, tweetIDs []string) (map[string]threadSnapshotMetadata, error) {
@@ -571,7 +574,8 @@ func (db *DB) threadMetadataForTweetIDsContext(ctx context.Context, tweetIDs []s
 		           WHEN NULLIF(TRIM(COALESCE(root.quote_tweet_id, '')), '') IS NOT NULL
 		               THEN 'tweet:' || LOWER(TRIM(root.quote_tweet_id))
 		           ELSE ''
-		       END
+		       END,
+		       root_depth.max_depth
 		FROM chain
 		JOIN root_depth
 		  ON root_depth.seed_id = chain.seed_id
@@ -589,7 +593,7 @@ func (db *DB) threadMetadataForTweetIDsContext(ctx context.Context, tweetIDs []s
 	for rows.Next() {
 		var tweetID string
 		var thread threadSnapshotMetadata
-		if err := rows.Scan(&tweetID, &thread.RootID, &thread.RelatedContentKey); err != nil {
+		if err := rows.Scan(&tweetID, &thread.RootID, &thread.RelatedContentKey, &thread.Depth); err != nil {
 			return nil, err
 		}
 		threads[tweetID] = thread

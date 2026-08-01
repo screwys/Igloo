@@ -159,8 +159,8 @@ func TestBuildSnapshot_KeepsOriginalForQuoteRetweet(t *testing.T) {
 func TestBuildSnapshotCompactsConversationRoots(t *testing.T) {
 	in := []db.PreDiversitySnapshotRow{
 		{TweetID: "thread_root", ChannelID: "sample_root_author", ThreadRootID: "thread_root", BaseScore: 100, DecayFactor: 1},
-		{TweetID: "thread_reply_a", ChannelID: "sample_reply_author_a", ThreadRootID: "thread_root", IsReply: true, BaseScore: 90, DecayFactor: 1},
-		{TweetID: "thread_reply_b", ChannelID: "sample_reply_author_b", ThreadRootID: "thread_root", IsReply: true, BaseScore: 80, DecayFactor: 1},
+		{TweetID: "thread_reply_a", ChannelID: "sample_reply_author_a", ThreadRootID: "thread_root", ThreadDepth: 1, IsReply: true, BaseScore: 90, DecayFactor: 1},
+		{TweetID: "thread_reply_b", ChannelID: "sample_reply_author_b", ThreadRootID: "thread_root", ThreadDepth: 1, IsReply: true, BaseScore: 80, DecayFactor: 1},
 		{TweetID: "other_thread", ChannelID: "sample_author_c", ThreadRootID: "other_thread", BaseScore: 70, DecayFactor: 1},
 	}
 
@@ -172,6 +172,23 @@ func TestBuildSnapshotCompactsConversationRoots(t *testing.T) {
 		if row.RankPosition != i+1 {
 			t.Fatalf("row %d rank_position = %d, want %d", i, row.RankPosition, i+1)
 		}
+	}
+}
+
+func TestBuildSnapshotUsesDeepestReplyAsConversationRepresentative(t *testing.T) {
+	in := []db.PreDiversitySnapshotRow{
+		{TweetID: "thread_root", ChannelID: "sample_root_author", ThreadRootID: "thread_root", BaseScore: 100, DecayFactor: 1},
+		{TweetID: "thread_reply", ChannelID: "sample_reply_author", ThreadRootID: "thread_root", ThreadDepth: 1, IsReply: true, BaseScore: 90, DecayFactor: 1},
+		{TweetID: "thread_leaf", ChannelID: "sample_leaf_author", ThreadRootID: "thread_root", ThreadDepth: 2, IsReply: true, BaseScore: 10, DecayFactor: 1},
+		{TweetID: "other_thread", ChannelID: "sample_other_author", ThreadRootID: "other_thread", BaseScore: 80, DecayFactor: 1},
+	}
+
+	out := BuildSnapshot(in, time.Unix(0, 0))
+	if got, want := snapshotIDs(out), []string{"thread_leaf", "other_thread"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshot IDs = %v, want %v", got, want)
+	}
+	if out[0].FinalScore < 99 {
+		t.Fatalf("thread final score = %.3f, want the conversation's best score", out[0].FinalScore)
 	}
 }
 

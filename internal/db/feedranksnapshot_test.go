@@ -56,8 +56,9 @@ func TestListPreDiversityRankedUsesPersistedIdentitiesAndThreadState(t *testing.
 		) VALUES
 			('thread_root', 'twitter_sample_source', 'twitter_sample_root', 'root', 0, '', 'thread_root', 'root_hash', ?, ?, 10, 1),
 			('thread_reply', 'twitter_sample_source', 'twitter_sample_reply', 'reply', 1, 'thread_root', 'thread_reply', 'reply_hash', ?, ?, 10, 1),
+			('thread_leaf', 'twitter_sample_source', 'twitter_sample_leaf', 'leaf', 1, 'thread_reply', 'thread_leaf', 'leaf_hash', ?, ?, 10, 1),
 			('context_only', 'twitter_sample_source', 'twitter_sample_context', 'ghost', 0, '', 'context_only', 'ghost_hash', ?, ?, 10, 1)
-	`, now-2, now-2, now-1, now-1, now, now); err != nil {
+	`, now-3, now-3, now-2, now-2, now-1, now-1, now, now); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.ExecRaw(`UPDATE feed_items SET is_ghost = 1 WHERE tweet_id = 'context_only'`); err != nil {
@@ -66,7 +67,7 @@ func TestListPreDiversityRankedUsesPersistedIdentitiesAndThreadState(t *testing.
 
 	rows, err := d.ListPreDiversityRankedCandidatesContext(
 		context.Background(),
-		[]string{"thread_root", "thread_reply", "context_only"},
+		[]string{"thread_root", "thread_reply", "thread_leaf", "context_only"},
 		0,
 	)
 	if err != nil {
@@ -81,14 +82,18 @@ func TestListPreDiversityRankedUsesPersistedIdentitiesAndThreadState(t *testing.
 	}
 	root, rootOK := byID["thread_root"]
 	reply, replyOK := byID["thread_reply"]
-	if !rootOK || !replyOK {
+	leaf, leafOK := byID["thread_leaf"]
+	if !rootOK || !replyOK || !leafOK {
 		t.Fatalf("ranked rows = %+v", rows)
 	}
 	if root.ChannelID != "twitter_sample_root" || root.SourceChannelID != "twitter_sample_source" {
 		t.Fatalf("root identities = %+v", root)
 	}
-	if root.ThreadRootID != "thread_root" || reply.ThreadRootID != "thread_root" {
-		t.Fatalf("thread roots root=%q reply=%q", root.ThreadRootID, reply.ThreadRootID)
+	if root.ThreadRootID != "thread_root" || reply.ThreadRootID != "thread_root" || leaf.ThreadRootID != "thread_root" {
+		t.Fatalf("thread roots root=%q reply=%q leaf=%q", root.ThreadRootID, reply.ThreadRootID, leaf.ThreadRootID)
+	}
+	if root.ThreadDepth != 0 || reply.ThreadDepth != 1 || leaf.ThreadDepth != 2 {
+		t.Fatalf("thread depths root=%d reply=%d leaf=%d", root.ThreadDepth, reply.ThreadDepth, leaf.ThreadDepth)
 	}
 	if !reply.IsReply || reply.ReplyPenalty <= 0 {
 		t.Fatalf("reply state = %+v", reply)
