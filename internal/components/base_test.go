@@ -214,6 +214,21 @@ func TestPrefsBodyRendersInstagramTaggedToggleInRightColumn(t *testing.T) {
 	}
 }
 
+func TestYouTubeChannelSettingsRenderMemberOnlyOverride(t *testing.T) {
+	p := newTestPageProps()
+	var buf bytes.Buffer
+	if err := ChannelSettingsForm(p, "youtube_sample_channel", "youtube", ChannelSettingsData{
+		IncludeMemberOnly: true,
+	}).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	if !strings.Contains(html, `name="include_member_only" value="true" checked`) ||
+		!strings.Contains(html, `Include member-only content`) {
+		t.Fatalf("YouTube channel settings missing enabled member-only override:\n%s", html)
+	}
+}
+
 func TestPrefsBodyGeneralTabGroupsEmbedsAndMovesBackupsLeft(t *testing.T) {
 	p := newTestPageProps()
 	prefs := PrefsData{Settings: map[string]any{
@@ -673,6 +688,8 @@ func TestPrefsPlatformSettingsTabOwnsPlatformDefaults(t *testing.T) {
 		t.Fatalf("youtube settings should render inside Platform Settings panel:\n%s", html)
 	}
 	for _, want := range []string{
+		`name="youtube_include_member_only" value="true"`,
+		`Include member-only content`,
 		`name="instagram_repost_max_videos" class="input" min="1" max="300" value="15"`,
 		`name="tiktok_repost_max_videos" class="input" min="1" max="300" value="15"`,
 	} {

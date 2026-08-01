@@ -192,7 +192,7 @@ func (s SourceSnapshot) FlattenRefs(limit int) []VideoRef {
 
 // ChannelCheck fetches recent video IDs from a channel URL.
 // Returns up to limit VideoRef entries.
-func (y *YtDlpWrapper) ChannelCheck(ctx context.Context, url string, limit int) (SourceSnapshot, error) {
+func (y *YtDlpWrapper) ChannelCheck(ctx context.Context, url string, limit int, includeMemberOnly bool) (SourceSnapshot, error) {
 	start := time.Now()
 	snapshot := SourceSnapshot{Windows: []SourceWindow{{Component: SourceComponentDirect}}}
 	result, err := ytdlp.New().
@@ -222,6 +222,9 @@ func (y *YtDlpWrapper) ChannelCheck(ctx context.Context, url string, limit int) 
 
 	var refs []VideoRef
 	for _, info := range infos {
+		if !includeMemberOnly && info.Availability != nil && *info.Availability == ytdlp.ExtractedAvailabilitySubscriberOnly {
+			continue
+		}
 		var r VideoRef
 		r.VideoID = info.ID
 		if r.VideoID == "" {

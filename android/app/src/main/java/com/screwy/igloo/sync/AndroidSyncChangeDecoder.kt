@@ -95,7 +95,7 @@ internal object AndroidSyncChangeDecoder {
             require(
                 row.mediaOnly != null || row.includeReposts != null ||
                     row.mediaDownloadLimit != null || row.maxVideos != null ||
-                    row.downloadSubtitles != null
+                    row.downloadSubtitles != null || row.includeMemberOnly != null
             ) { "empty channel setting upsert" }
         }
     fun momentsCursor(change: AndroidSyncChangeDto): MomentsCursorEntity = change.row { it.scope }

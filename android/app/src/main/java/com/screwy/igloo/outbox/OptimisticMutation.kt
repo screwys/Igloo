@@ -147,6 +147,7 @@ private fun ChannelSettingEntity.withField(
         "media_download_limit" -> copy(mediaDownloadLimit = intValue, updatedAt = updatedAt)
         "max_videos" -> copy(maxVideos = intValue, updatedAt = updatedAt)
         "download_subtitles" -> copy(downloadSubtitles = intValue, updatedAt = updatedAt)
+        "include_member_only" -> copy(includeMemberOnly = intValue, updatedAt = updatedAt)
         else -> this
     }
 }

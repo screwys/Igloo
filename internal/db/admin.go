@@ -104,13 +104,14 @@ type exportedChannelSettings struct {
 	mediaOnly          *bool
 	mediaDownloadLimit *int
 	includeReposts     *bool
+	includeMemberOnly  *bool
 }
 
 // exportChannelSettingsMap loads every row of channel_settings keyed by channel_id.
 func (db *DB) exportChannelSettingsMap() (map[string]exportedChannelSettings, error) {
 	rows, err := db.reader().Query(`
 		SELECT channel_id, max_videos, download_subtitles,
-		       media_only, media_download_limit, include_reposts
+		       media_only, media_download_limit, include_reposts, include_member_only
 		FROM channel_settings
 	`)
 	if err != nil {
@@ -122,9 +123,9 @@ func (db *DB) exportChannelSettingsMap() (map[string]exportedChannelSettings, er
 	out := make(map[string]exportedChannelSettings)
 	for rows.Next() {
 		var channelID string
-		var maxVideos, downloadSubtitles, mediaOnly, mediaDownloadLimit, includeReposts sql.NullInt64
+		var maxVideos, downloadSubtitles, mediaOnly, mediaDownloadLimit, includeReposts, includeMemberOnly sql.NullInt64
 		if err := rows.Scan(&channelID, &maxVideos, &downloadSubtitles,
-			&mediaOnly, &mediaDownloadLimit, &includeReposts); err != nil {
+			&mediaOnly, &mediaDownloadLimit, &includeReposts, &includeMemberOnly); err != nil {
 			return nil, err
 		}
 		s := exportedChannelSettings{}
@@ -146,6 +147,10 @@ func (db *DB) exportChannelSettingsMap() (map[string]exportedChannelSettings, er
 			v := includeReposts.Int64 != 0
 			s.includeReposts = &v
 		}
+		if includeMemberOnly.Valid {
+			v := includeMemberOnly.Int64 != 0
+			s.includeMemberOnly = &v
+		}
 		out[channelID] = s
 	}
 	return out, rows.Err()
@@ -163,6 +168,7 @@ type ChannelExport struct {
 	MediaOnly          *bool  `json:"media_only,omitempty"`
 	MediaDownloadLimit *int   `json:"media_download_limit,omitempty"`
 	IncludeReposts     *bool  `json:"include_reposts,omitempty"`
+	IncludeMemberOnly  *bool  `json:"include_member_only,omitempty"`
 }
 
 // LikedPostExport is a compact liked post for full data export.
@@ -253,6 +259,7 @@ func (db *DB) exportSubscriptions() ([]ChannelExport, error) {
 			ce.MediaOnly = s.mediaOnly
 			ce.MediaDownloadLimit = s.mediaDownloadLimit
 			ce.IncludeReposts = s.includeReposts
+			ce.IncludeMemberOnly = s.includeMemberOnly
 		}
 		out = append(out, ce)
 	}
@@ -507,9 +514,9 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 				if _, err := tx.Exec(`
 					INSERT INTO channel_settings (
 						channel_id, max_videos, download_subtitles,
-						media_only, media_download_limit, include_reposts, updated_at
+						media_only, media_download_limit, include_reposts, include_member_only, updated_at
 					)
-					SELECT cf.channel_id, NULL, NULL, NULL, NULL, NULL,
+					SELECT cf.channel_id, NULL, NULL, NULL, NULL, NULL, NULL,
 					       CASE
 					         WHEN COALESCE(cs.updated_at, 0) >= ? THEN COALESCE(cs.updated_at, 0) + 1
 					         ELSE ?
@@ -523,6 +530,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 						media_only = NULL,
 						media_download_limit = NULL,
 						include_reposts = NULL,
+						include_member_only = NULL,
 						updated_at = excluded.updated_at
 				`, ownerAtMs, ownerAtMs); err != nil {
 					return err
@@ -693,7 +701,8 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 			}
 
 			hasSettings := ch.MaxVideos > 0 || ch.DownloadSubtitles ||
-				ch.MediaOnly != nil || ch.MediaDownloadLimit != nil || ch.IncludeReposts != nil
+				ch.MediaOnly != nil || ch.MediaDownloadLimit != nil || ch.IncludeReposts != nil ||
+				ch.IncludeMemberOnly != nil
 			if hasSettings || replace {
 				if _, err := mutateChannelSettingsTx(tx, ch.ChannelID, map[string]any{
 					"max_videos":           intToNullInt(ch.MaxVideos),
@@ -701,6 +710,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 					"media_only":           nilBoolPtr(ch.MediaOnly),
 					"media_download_limit": nilIntPtr(ch.MediaDownloadLimit),
 					"include_reposts":      nilBoolPtr(ch.IncludeReposts),
+					"include_member_only":  nilBoolPtr(ch.IncludeMemberOnly),
 				}, followedAt, false); err != nil {
 					return err
 				}

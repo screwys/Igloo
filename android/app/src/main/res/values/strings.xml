@@ -662,6 +662,7 @@
     <string name="settings_unmute_title">Unmute @%1$s?</string>
     <string name="settings_video_quality">Video Quality</string>
     <string name="settings_wifi_only">Wi-Fi only</string>
+    <string name="settings_youtube_include_member_only">Include member-only content</string>
     <string name="settings_youtube_max_videos">Default YouTube Max Videos</string>
     <string name="settings_youtube_only">YouTube only.</string>
     <string name="settings_youtube_playback_speed">Default YouTube Playback Speed</string>

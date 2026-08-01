@@ -19,6 +19,7 @@ func schemaUserStateStatements() []string {
 			media_download_limit INTEGER,
 			max_videos           INTEGER,
 			download_subtitles   INTEGER,
+			include_member_only  INTEGER,
 			updated_at           INTEGER NOT NULL DEFAULT 0
 		)`,
 

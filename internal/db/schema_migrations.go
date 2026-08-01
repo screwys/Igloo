@@ -24,6 +24,10 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260801_add_youtube_member_only_channel_setting",
+		apply: addYouTubeMemberOnlyChannelSetting,
+	},
+	{
 		name:  "20260731_repair_android_moments_cursor_heads",
 		apply: repairAndroidMomentsCursorHeads,
 	},
@@ -43,6 +47,22 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addYouTubeMemberOnlyChannelSetting(tx *sql.Tx) error {
+	hasColumn, err := schemaColumnExists(tx, "channel_settings", "include_member_only")
+	if err != nil {
+		return err
+	}
+	if !hasColumn {
+		if _, err := tx.Exec(`ALTER TABLE channel_settings ADD COLUMN include_member_only INTEGER`); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`DROP TRIGGER IF EXISTS android_sync_head_channel_settings_update`); err != nil {
+		return err
+	}
+	return ensureAndroidSyncHeadTriggers(tx)
 }
 
 func addVideoFetchHistory(tx *sql.Tx) error {

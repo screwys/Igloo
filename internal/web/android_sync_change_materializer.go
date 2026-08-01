@@ -64,6 +64,16 @@ func (s *Server) buildAndroidSyncBootstrapSelection(
 		return nil, db.AndroidSyncDesiredSets{}, err
 	}
 	for _, key := range stateKeys {
+		if key.OwnerKind == "feed_seen" {
+			if _, selected := sets.Tweets[key.OwnerID]; !selected {
+				continue
+			}
+		}
+		if key.OwnerKind == "moment_view" {
+			if _, selected := sets.Videos[key.OwnerID]; !selected {
+				continue
+			}
+		}
 		heads = append(heads, model.AndroidSyncHead{OwnerKind: key.OwnerKind, OwnerID: key.OwnerID})
 	}
 	for _, key := range androidSyncRelevantSettingKeys() {

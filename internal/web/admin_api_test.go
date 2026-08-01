@@ -58,6 +58,29 @@ func TestSettingsFromForm_PersistsShareEmbedFriendlyLinks(t *testing.T) {
 	}
 }
 
+func TestSettingsFromFormPersistsYouTubeMemberOnlyToggle(t *testing.T) {
+	srv := newTestServer(t)
+	form := url.Values{}
+	form.Set("youtube_include_member_only", "true")
+	req := httptest.NewRequest("POST", "/api/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := req.ParseForm(); err != nil {
+		t.Fatalf("ParseForm: %v", err)
+	}
+
+	body := srv.settingsFromForm(req)
+	if got := body["youtube_include_member_only"]; got != "true" {
+		t.Fatalf("youtube_include_member_only = %q, want true", got)
+	}
+}
+
+func TestSettingsToAPIFormatDefaultsYouTubeMemberOnlyOff(t *testing.T) {
+	got := settingsToAPIFormat(nil)
+	if got["youtube_include_member_only"] != false {
+		t.Fatalf("youtube_include_member_only = %#v, want false", got["youtube_include_member_only"])
+	}
+}
+
 func TestSettingsToAPIFormat_DefaultsShareEmbedFriendlyLinksOff(t *testing.T) {
 	got := settingsToAPIFormat(nil)
 	if got["share_embed_friendly_links"] != false {

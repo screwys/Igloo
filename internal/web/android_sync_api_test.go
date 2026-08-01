@@ -156,6 +156,78 @@ func TestAndroidSyncStateMaterializationIgnoresLocalStoriesCursor(t *testing.T) 
 	}
 }
 
+func TestAndroidSyncReconcileReturnsOnlyRequestedAuthoritativeState(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	if err := srv.db.ExecRaw(`
+		INSERT INTO moments_cursors (
+			scope, video_id, position_ms, sort_at_ms, updated_at_ms
+		) VALUES ('all', 'sample_video', 1200, 100, 200)
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := requestAndroidSync(t, srv, http.MethodPost, "/api/android/sync/reconcile", map[string]any{
+		"owners": []map[string]string{
+			{"owner_kind": "moments_cursor", "owner_id": "all"},
+			{"owner_kind": "feed_like", "owner_id": "sample_missing"},
+		},
+	}, true)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reconcile status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Changes []model.AndroidSyncChange `json:"changes"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	cursor := findAndroidSyncChange(response.Changes, "moments_cursor", "all")
+	if cursor == nil || cursor.Operation != model.AndroidSyncOperationUpsert {
+		t.Fatalf("authoritative cursor = %+v in %+v", cursor, androidSyncChangeKeys(response.Changes))
+	}
+	missing := findAndroidSyncChange(response.Changes, "feed_like", "sample_missing")
+	if missing == nil || missing.Operation != model.AndroidSyncOperationDelete {
+		t.Fatalf("missing state = %+v in %+v", missing, androidSyncChangeKeys(response.Changes))
+	}
+	assertAndroidSyncChangesUnique(t, response.Changes)
+}
+
+func TestAndroidSyncBootstrapKeepsEphemeralStateWithinSelectedContent(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	seedAndroidSyncContent(t, srv)
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_seen (tweet_id, seen_at) VALUES
+			('sample_tweet', 1), ('sample_old_tweet', 2);
+		INSERT INTO moment_views (video_id, viewed_at) VALUES
+			('sample_video', 3), ('sample_old_video', 4);
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	heads, err := srv.buildAndroidSyncBootstrapHeads(
+		srv.db,
+		db.AndroidRetentionSettings{FeedDays: 7, YoutubeDays: 7, MomentsDays: 7, StoryHours: 48},
+		time.Now().UnixMilli(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := make(map[[2]string]struct{}, len(heads))
+	for _, head := range heads {
+		keys[[2]string{head.OwnerKind, head.OwnerID}] = struct{}{}
+	}
+	for _, key := range [][2]string{{"feed_seen", "sample_tweet"}, {"moment_view", "sample_video"}} {
+		if _, ok := keys[key]; !ok {
+			t.Fatalf("selected state missing: %v", key)
+		}
+	}
+	for _, key := range [][2]string{{"feed_seen", "sample_old_tweet"}, {"moment_view", "sample_old_video"}} {
+		if _, ok := keys[key]; ok {
+			t.Fatalf("state outside selected content entered bootstrap: %v", key)
+		}
+	}
+}
+
 func TestAndroidSyncFullYoutubeMetadataIsOptInAndCursorBound(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	old := time.Now().Add(-365 * 24 * time.Hour).UnixMilli()
@@ -687,7 +759,7 @@ func TestAndroidSyncBootstrapFinalPageCanBeRetried(t *testing.T) {
 			UNION ALL
 			SELECT n + 1 FROM seq WHERE n < 1001
 		)
-		INSERT INTO feed_seen (tweet_id, seen_at)
+		INSERT INTO feed_likes (tweet_id, liked_at)
 		SELECT printf('sample_post_%04d', n), n FROM seq
 	`); err != nil {
 		t.Fatal(err)

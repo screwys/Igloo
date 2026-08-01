@@ -29,6 +29,13 @@ exit 1
 	t.Setenv("IGLOO_YTDLP_CALLS", calls)
 
 	database := newTestWorkerDB(t)
+	if err := database.ExecRaw(`
+		INSERT INTO channels (channel_id, name, url, platform, created_at)
+		VALUES ('youtube_sample_source', 'Sample Source',
+		        'https://www.youtube.com/channel/UCEXAMPLE000000000000001', 'youtube', 1)
+	`); err != nil {
+		t.Fatal(err)
+	}
 	manager := &Manager{
 		db:         database,
 		downloader: &download.Downloader{YtDlp: &download.YtDlpWrapper{}},
@@ -44,6 +51,83 @@ exit 1
 	}
 	if string(rawCalls) != "call\n" {
 		t.Fatalf("yt-dlp calls = %q, want one call", rawCalls)
+	}
+}
+
+func TestYouTubeDiscoveryIncludesMemberOnlyVideosOnlyWhenEnabled(t *testing.T) {
+	bin := t.TempDir()
+	script := `#!/bin/sh
+printf '{"_type":"url","id":"sample_public","title":"Public item","availability":"public"}\n'
+printf '{"_type":"url","id":"sample_member","title":"Member item","availability":"subscriber_only"}\n'
+`
+	if err := os.WriteFile(filepath.Join(bin, "yt-dlp"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	database := newTestWorkerDB(t)
+	manager := &Manager{
+		db:         database,
+		downloader: &download.Downloader{YtDlp: &download.YtDlpWrapper{}},
+	}
+	channel := model.Channel{
+		ChannelID: "youtube_sample_source",
+		Platform:  "youtube",
+		URL:       "https://www.youtube.com/channel/UCEXAMPLE000000000000001",
+	}
+	if err := database.ExecRaw(`
+		INSERT INTO channels (channel_id, name, url, platform, created_at)
+		VALUES (?, 'Sample Source', ?, 'youtube', 1)
+	`, channel.ChannelID, channel.URL); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := manager.checkChannel(context.Background(), channel)
+	if err != nil {
+		t.Fatalf("default YouTube discovery: %v", err)
+	}
+	refs := snapshot.FlattenRefs(0)
+	if len(refs) != 1 || refs[0].VideoID != "sample_public" {
+		t.Fatalf("default YouTube refs = %#v", refs)
+	}
+
+	if err := database.SetSetting("youtube_include_member_only", "true"); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = manager.checkChannel(context.Background(), channel)
+	if err != nil {
+		t.Fatalf("enabled YouTube discovery: %v", err)
+	}
+	refs = snapshot.FlattenRefs(0)
+	if len(refs) != 2 || refs[1].VideoID != "sample_member" {
+		t.Fatalf("enabled YouTube refs = %#v", refs)
+	}
+
+	if err := database.UpdateChannelSettings(channel.ChannelID, map[string]any{"include_member_only": 0}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = manager.checkChannel(context.Background(), channel)
+	if err != nil {
+		t.Fatalf("disabled channel override discovery: %v", err)
+	}
+	refs = snapshot.FlattenRefs(0)
+	if len(refs) != 1 || refs[0].VideoID != "sample_public" {
+		t.Fatalf("disabled channel override refs = %#v", refs)
+	}
+
+	if err := database.SetSetting("youtube_include_member_only", "false"); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.UpdateChannelSettings(channel.ChannelID, map[string]any{"include_member_only": 1}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = manager.checkChannel(context.Background(), channel)
+	if err != nil {
+		t.Fatalf("enabled channel override discovery: %v", err)
+	}
+	refs = snapshot.FlattenRefs(0)
+	if len(refs) != 2 || refs[1].VideoID != "sample_member" {
+		t.Fatalf("enabled channel override refs = %#v", refs)
 	}
 }
 

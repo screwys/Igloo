@@ -103,9 +103,9 @@ var shortcutDefaults = map[string]string{
 	"feed.like": "l", "feed.bookmark": "b", "feed.share": "s", "feed.translate": "t", "feed.media": "f",
 	"shorts.autoplay": "a", "shorts.bookmark": "b", "shorts.share": "s", "shorts.grid": "c",
 	"player.fullscreen": "f", "player.cinema": "c", "player.bookmark": "b", "player.share": "s", "player.autoplay": "a",
-	"global.sidebar": "z",
+	"global.sidebar":  "z",
 	"global.settings": "g",
-	"global.logs":    "l",
+	"global.logs":     "l",
 }
 
 var settingsInternalKeys = map[string]bool{
@@ -236,6 +236,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		"instagram": s.db.IntSetting("instagram_repost_max_videos"),
 	}
 	previousXMediaLimit := s.db.IntSetting("media_download_limit_default")
+	previousYouTubeMemberOnly := s.db.BoolSetting("youtube_include_member_only")
 	previousTiktokReposts := s.db.MomentsIncludeRepostsEnabled()
 	previousInstagramTagged := s.db.InstagramIncludeTaggedEnabled()
 	if err := s.db.UpdateSettings(body); err != nil {
@@ -252,7 +253,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			platform, settingKey, repostSettingKey string
 			extraChanged                           bool
 		}{
-			{"youtube", "youtube_max_videos", "", false},
+			{"youtube", "youtube_max_videos", "", previousYouTubeMemberOnly != s.db.BoolSetting("youtube_include_member_only")},
 			{"tiktok", "shorts_max_videos", "tiktok_repost_max_videos", previousTiktokReposts != s.db.MomentsIncludeRepostsEnabled()},
 			{"instagram", "instagram_max_videos", "instagram_repost_max_videos", previousInstagramTagged != s.db.InstagramIncludeTaggedEnabled()},
 		}
@@ -401,7 +402,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 
 	// Checkboxes: present=true, absent=false.
 	checkboxFields := []string{
-		"download_subtitles", "media_only_default",
+		"youtube_include_member_only", "download_subtitles", "media_only_default",
 		"archive_bookmarks", "backup_enabled",
 		"algorithmic_feed_enabled", "moments_include_reposts_default",
 		"instagram_include_tagged_default", "share_embed_friendly_links",

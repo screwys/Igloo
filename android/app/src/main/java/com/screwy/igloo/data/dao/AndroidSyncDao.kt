@@ -460,6 +460,7 @@ interface AndroidSyncDao {
                  OR media_download_limit IS NOT NULL
                  OR max_videos IS NOT NULL
                  OR download_subtitles IS NOT NULL
+                 OR include_member_only IS NOT NULL
         UNION SELECT channel_id FROM videos
         UNION SELECT channel_id FROM feed_items WHERE channel_id IS NOT NULL
         UNION SELECT source_channel_id FROM feed_items WHERE source_channel_id IS NOT NULL
@@ -499,6 +500,7 @@ interface AndroidSyncDao {
                  OR media_download_limit IS NOT NULL
                  OR max_videos IS NOT NULL
                  OR download_subtitles IS NOT NULL
+                 OR include_member_only IS NOT NULL
         """,
     )
     suspend fun retainedAssetOwnerIds(): List<String>

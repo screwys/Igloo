@@ -15,10 +15,13 @@ import com.screwy.igloo.net.AndroidSyncAssetDto
 import com.screwy.igloo.net.AndroidSyncChangeDto
 import com.screwy.igloo.net.AndroidSyncDecodeException
 import com.screwy.igloo.net.AndroidSyncHttpException
+import com.screwy.igloo.net.AndroidSyncOwnerRequest
 import com.screwy.igloo.net.AndroidSyncPageResponse
+import com.screwy.igloo.net.AndroidSyncReconcileResponse
 import com.screwy.igloo.net.AndroidSyncRetentionRequest
 import com.screwy.igloo.net.Reachability
 import com.screwy.igloo.net.ServerBaseUrlProvider
+import com.screwy.igloo.outbox.OutboxRejectedMutation
 import io.ktor.client.HttpClient
 import java.io.File
 import java.io.IOException
@@ -127,12 +130,29 @@ class AndroidSyncMirror(
         }
     }
 
-    suspend fun prune() {
-        prune(retentionProvider().validated(), sweepHeadlessContent = true)
+    suspend fun reconcileRejected(rejected: List<OutboxRejectedMutation>) {
+        if (rejected.isEmpty()) return
+        val owners =
+            rejected
+                .map { AndroidSyncOwnerRequest(it.ownerKind, it.ownerId) }
+                .distinctBy { it.owner_kind to it.owner_id }
+        val response = withMetadataRetry("reconcile") { api.reconcile(owners) }
+        response.validate(owners)
+        db.withTransaction {
+            db.outboxDao().completeAndDeleteAll(rejected.map(OutboxRejectedMutation::rowId))
+            val overlay = PendingMutationOverlay.capture(db.outboxDao().pendingRows())
+            val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
+            response.changes.forEach { applyThinState(it, deletedAssets) }
+            overlay.restore(db)
+        }
+        logger.info(
+            event = "outbox_owners_reconciled",
+            fields = mapOf("count" to owners.size.toString()),
+        )
     }
 
-    suspend fun requestBootstrap() {
-        dao.syncState()?.let { dao.upsertSyncState(it.copy(bootstrapRequired = true)) }
+    suspend fun prune() {
+        prune(retentionProvider().validated(), sweepHeadlessContent = true)
     }
 
     private suspend fun syncMetadata(retention: AndroidSyncRetentionRequest) {
@@ -853,6 +873,18 @@ private fun AndroidSyncPageResponse.validate(previousCursor: String) {
     if (!end_of_stream) require(next_cursor != previousCursor) { "Android sync cursor stalled" }
     require(changes.map { it.owner_kind to it.owner_id }.toSet().size == changes.size) {
         "duplicate Android sync owner in page"
+    }
+    changes.forEach(AndroidSyncChangeDto::validate)
+}
+
+private fun AndroidSyncReconcileResponse.validate(owners: List<AndroidSyncOwnerRequest>) {
+    val expected = owners.map { it.owner_kind to it.owner_id }.toSet()
+    require(changes.size == expected.size) { "reconciliation did not return every owner" }
+    require(changes.map { it.owner_kind to it.owner_id }.toSet() == expected) {
+        "reconciliation returned different owners"
+    }
+    require(changes.all(AndroidSyncChangeDto::isThinState)) {
+        "reconciliation returned a non-state owner"
     }
     changes.forEach(AndroidSyncChangeDto::validate)
 }

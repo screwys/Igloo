@@ -23,7 +23,8 @@ const (
 	androidSyncModelVersion       = 2
 	androidSyncChangePageSize     = 500
 	androidSyncPriorityPageSize   = 500
-	androidSyncBootstrapPageSize  = 250
+	androidSyncBootstrapPageSize  = 1000
+	androidSyncReconcileMaxOwners = 500
 	androidSyncSessionLifetime    = 30 * time.Minute
 	androidSyncMaxSessions        = 4
 )

@@ -176,6 +176,7 @@ func (s *Server) handleChannelSettingsGet(w http.ResponseWriter, r *http.Request
 			DownloadSubtitles:  settings.DownloadSubtitles,
 			MediaOnly:          settings.MediaOnly,
 			MediaDownloadLimit: settings.MediaDownloadLimit,
+			IncludeMemberOnly:  settings.IncludeMemberOnly,
 		}
 		w.Header().Set("Content-Type", "text/html")
 		_ = components.ChannelSettingsForm(s.pageProps(w, r), channelID, platform, cs).Render(r.Context(), w)
@@ -218,6 +219,9 @@ func (s *Server) handleChannelSettingsPost(w http.ResponseWriter, r *http.Reques
 			}
 		}
 		body["download_subtitles"] = r.FormValue("download_subtitles") != ""
+		if r.FormValue("include_member_only_present") != "" {
+			body["include_member_only"] = r.FormValue("include_member_only") != ""
+		}
 		body["media_only"] = r.FormValue("media_only") != ""
 		if v := r.FormValue("media_download_limit"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil {
@@ -250,8 +254,9 @@ func (s *Server) handleChannelSettingsPost(w http.ResponseWriter, r *http.Reques
 
 	// Convert bool values to 0/1 integers.
 	boolToIntFields := map[string]bool{
-		"media_only":      true,
-		"include_reposts": true,
+		"media_only":          true,
+		"include_reposts":     true,
+		"include_member_only": true,
 	}
 	for field := range boolToIntFields {
 		if val, ok := body[field]; ok {
@@ -313,6 +318,7 @@ func (s *Server) handleChannelSettingsPost(w http.ResponseWriter, r *http.Reques
 				DownloadSubtitles:  updated.DownloadSubtitles,
 				MediaOnly:          updated.MediaOnly,
 				MediaDownloadLimit: updated.MediaDownloadLimit,
+				IncludeMemberOnly:  updated.IncludeMemberOnly,
 			}
 		}
 		w.Header().Set("Content-Type", "text/html")
@@ -344,7 +350,9 @@ func (s *Server) applyChannelSettingEffects(channelID string, previous *db.Chann
 		if err := s.workers.ExpandXMediaRetentionForChannel(channelID); err != nil {
 			slog.Error("ExpandXMediaRetentionForChannel", "channel", channelID, "err", err)
 		}
-	} else if previous.MaxVideos != updated.MaxVideos || previous.IncludeReposts != updated.IncludeReposts {
+	}
+	if previous.MaxVideos != updated.MaxVideos || previous.IncludeReposts != updated.IncludeReposts ||
+		previous.IncludeMemberOnly != updated.IncludeMemberOnly {
 		s.workers.TriggerChannelCheck(channelID)
 	}
 	return updated

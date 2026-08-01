@@ -113,6 +113,17 @@ templ ChannelSettingsForm(p PageProps, channelID string, platform string, cs Cha
 				</div>
 			}
 		if isYouTubePlatform(platform) {
+			<input type="hidden" name="include_member_only_present" value="true"/>
+			<div class="form-group checkbox-group">
+				<label>
+					if cs.IncludeMemberOnly {
+						<input type="checkbox" name="include_member_only" value="true" checked/>
+					} else {
+						<input type="checkbox" name="include_member_only" value="true"/>
+					}
+					{ L(p, "settings_youtube_include_member_only", "Include member-only content") }
+				</label>
+			</div>
 			<div class="form-group checkbox-group">
 				<label>
 					if cs.DownloadSubtitles {
@@ -445,6 +456,16 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 				<div class="form-group">
 					<label for="global-setting-youtube-max-videos">{ L(p, "settings_youtube_max_videos", "Default YouTube Max Videos") }</label>
 					<input type="number" id="global-setting-youtube-max-videos" name="youtube_max_videos" class="input" min="1" max="300" value={ prefs.Str("youtube_max_videos", "12") }/>
+				</div>
+				<div class="form-group checkbox-group">
+					<label>
+						if prefs.Bool("youtube_include_member_only") {
+							<input type="checkbox" name="youtube_include_member_only" value="true" checked/>
+						} else {
+							<input type="checkbox" name="youtube_include_member_only" value="true"/>
+						}
+						{ L(p, "settings_youtube_include_member_only", "Include member-only content") }
+					</label>
 				</div>
 				<div class="form-group checkbox-group">
 					<label>

@@ -371,6 +371,7 @@ data class ChannelSettingEntity(
     @ColumnInfo(name = "media_download_limit") val mediaDownloadLimit: Int? = null,
     @ColumnInfo(name = "max_videos") val maxVideos: Int? = null,
     @ColumnInfo(name = "download_subtitles") val downloadSubtitles: Int? = null,
+    @ColumnInfo(name = "include_member_only") val includeMemberOnly: Int? = null,
     @ColumnInfo(name = "updated_at") val updatedAt: Long = 0,
 )
 

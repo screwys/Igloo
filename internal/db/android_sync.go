@@ -336,7 +336,7 @@ func (db *DB) ListAndroidSyncDesiredSetsForMode(
 			SELECT channel_id FROM channel_settings
 			WHERE media_only IS NOT NULL OR include_reposts IS NOT NULL
 			   OR media_download_limit IS NOT NULL OR max_videos IS NOT NULL
-			   OR download_subtitles IS NOT NULL
+			   OR download_subtitles IS NOT NULL OR include_member_only IS NOT NULL
 		)
 		SELECT desired.channel_id
 		FROM desired

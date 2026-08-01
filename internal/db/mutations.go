@@ -615,6 +615,8 @@ func channelSettingMutationColumn(field string) (string, bool) {
 		return "max_videos", true
 	case "download_subtitles":
 		return "download_subtitles", true
+	case "include_member_only":
+		return "include_member_only", true
 	default:
 		return "", false
 	}

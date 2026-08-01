@@ -349,7 +349,7 @@ func (s *Server) addTikTokReportRows(ctx context.Context, dl *download.Downloade
 		if channelURL == "" {
 			channelURL = "https://www.tiktok.com/@" + handle
 		}
-		snapshot, err := dl.YtDlp.ChannelCheck(ctx, channelURL, 5)
+		snapshot, err := dl.YtDlp.ChannelCheck(ctx, channelURL, 5, true)
 		refs := snapshot.FlattenRefs(5)
 		if len(refs) > 0 {
 			if refs[0].URL != "" {

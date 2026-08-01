@@ -787,6 +787,7 @@ type ChannelSettingsData struct {
 	DownloadSubtitles  bool
 	MediaOnly          bool
 	MediaDownloadLimit int
+	IncludeMemberOnly  bool
 }
 
 // isXPlatform returns true for twitter/x platforms.

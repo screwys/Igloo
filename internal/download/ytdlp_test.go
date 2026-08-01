@@ -25,7 +25,7 @@ exit 1
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	snapshot, err := (&YtDlpWrapper{}).ChannelCheck(context.Background(), "https://example.invalid/channel", 20)
+	snapshot, err := (&YtDlpWrapper{}).ChannelCheck(context.Background(), "https://example.invalid/channel", 20, false)
 	if err == nil {
 		t.Fatal("ChannelCheck returned nil error after the command failed")
 	}
@@ -54,13 +54,40 @@ exit 0
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	snapshot, err := (&YtDlpWrapper{}).ChannelCheck(context.Background(), "https://example.invalid/channel", 20)
+	snapshot, err := (&YtDlpWrapper{}).ChannelCheck(context.Background(), "https://example.invalid/channel", 20, false)
 	if err != nil {
 		t.Fatalf("ChannelCheck: %v", err)
 	}
 	if len(snapshot.Windows) != 1 || snapshot.Windows[0].Component != SourceComponentDirect ||
 		!snapshot.Windows[0].Complete || len(snapshot.Windows[0].Refs) != 0 {
 		t.Fatalf("empty snapshot = %#v", snapshot)
+	}
+}
+
+func TestChannelCheckExcludesMemberOnlyVideosUnlessEnabled(t *testing.T) {
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "yt-dlp"), `#!/bin/sh
+printf '{"_type":"url","id":"sample_public","title":"Public item","availability":"public"}\n'
+printf '{"_type":"url","id":"sample_member","title":"Member item","availability":"subscriber_only"}\n'
+`)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	withoutMembers, err := (&YtDlpWrapper{}).ChannelCheck(context.Background(), "https://example.invalid/channel", 20, false)
+	if err != nil {
+		t.Fatalf("ChannelCheck without member-only content: %v", err)
+	}
+	refs := withoutMembers.FlattenRefs(0)
+	if len(refs) != 1 || refs[0].VideoID != "sample_public" {
+		t.Fatalf("refs without member-only content = %#v", refs)
+	}
+
+	withMembers, err := (&YtDlpWrapper{}).ChannelCheck(context.Background(), "https://example.invalid/channel", 20, true)
+	if err != nil {
+		t.Fatalf("ChannelCheck with member-only content: %v", err)
+	}
+	refs = withMembers.FlattenRefs(0)
+	if len(refs) != 2 || refs[0].VideoID != "sample_public" || refs[1].VideoID != "sample_member" {
+		t.Fatalf("refs with member-only content = %#v", refs)
 	}
 }
 

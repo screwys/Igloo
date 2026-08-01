@@ -162,6 +162,35 @@ class IglooDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration42To43KeepsChannelSettingsAndAddsMemberOnlyOverride() {
+        helper.createDatabase(DATABASE_NAME, 42).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO channel_settings (channel_id, max_videos, updated_at)
+                VALUES (?, ?, ?)
+                """.trimIndent(),
+                arrayOf<Any?>("youtube_sample_channel", 7, 123L),
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            DATABASE_NAME,
+            43,
+            true,
+            IglooMigrations.MIGRATION_42_43,
+        ).use { db ->
+            db.query(
+                "SELECT max_videos, include_member_only, updated_at FROM channel_settings",
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(7, cursor.getInt(0))
+                assertTrue(cursor.isNull(1))
+                assertEquals(123L, cursor.getLong(2))
+            }
+        }
+    }
+
     private companion object {
         const val DATABASE_NAME = "igloo-migration-test"
     }

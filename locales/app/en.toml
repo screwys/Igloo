@@ -667,6 +667,7 @@ settings_unmute_help = "Their posts can appear in your feed again after sync cat
 settings_unmute_title = "Unmute @%1$s?"
 settings_video_quality = "Video Quality"
 settings_wifi_only = "Wi-Fi only"
+settings_youtube_include_member_only = "Include member-only content"
 settings_youtube_max_videos = "Default YouTube Max Videos"
 settings_youtube_only = "YouTube only."
 settings_youtube_playback_speed = "Default YouTube Playback Speed"

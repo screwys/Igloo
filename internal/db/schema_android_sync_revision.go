@@ -50,7 +50,7 @@ var androidSyncHeadTables = []androidSyncHeadTable{
 	{table: "muted_channels", ownerKind: "muted_channel", idColumn: "channel_id", updateColumns: "channel_id, muted_at"},
 	{table: "channel_follows", ownerKind: "channel_follow", idColumn: "channel_id", updateColumns: "channel_id, followed_at"},
 	{table: "channel_stars", ownerKind: "channel_star", idColumn: "channel_id", updateColumns: "channel_id, starred_at"},
-	{table: "channel_settings", ownerKind: "channel_setting", idColumn: "channel_id", updateColumns: "channel_id, media_only, include_reposts, media_download_limit, max_videos, download_subtitles, updated_at"},
+	{table: "channel_settings", ownerKind: "channel_setting", idColumn: "channel_id", updateColumns: "channel_id, media_only, include_reposts, media_download_limit, max_videos, download_subtitles, include_member_only, updated_at"},
 	{table: "moments_cursors", ownerKind: "moments_cursor", idColumn: "scope", updateColumns: "scope, video_id, position_ms, sort_at_ms, updated_at_ms"},
 }
 
@@ -74,7 +74,11 @@ func schemaAndroidSyncRevisionStatements() []string {
 	}
 }
 
-func ensureAndroidSyncHeadTriggers(conn *sql.DB) error {
+type schemaExecer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+func ensureAndroidSyncHeadTriggers(conn schemaExecer) error {
 	for _, spec := range androidSyncHeadTables {
 		id := spec.idColumn
 		insert := fmt.Sprintf(

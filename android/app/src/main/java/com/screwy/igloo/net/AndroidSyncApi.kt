@@ -54,6 +54,13 @@ class AndroidSyncApi(
             parameter("after", after)
         }.decodeSyncResponse("state")
 
+    suspend fun reconcile(owners: List<AndroidSyncOwnerRequest>): AndroidSyncReconcileResponse =
+        client.post(baseUrlProvider() + "/api/android/sync/reconcile") {
+            syncMetadataTimeout()
+            contentType(ContentType.Application.Json)
+            setBody(AndroidSyncReconcileRequest(owners))
+        }.decodeSyncResponse("reconcile")
+
     suspend fun health(req: AndroidSyncHealthRequest): HttpResponse =
         client.post(baseUrlProvider() + "/api/android/sync/health") {
             syncMetadataTimeout()
@@ -144,6 +151,16 @@ data class AndroidSyncPageResponse(
     val next_cursor: String,
     val end_of_stream: Boolean,
 )
+
+@Serializable
+data class AndroidSyncOwnerRequest(
+    val owner_kind: String,
+    val owner_id: String,
+)
+
+@Serializable private data class AndroidSyncReconcileRequest(val owners: List<AndroidSyncOwnerRequest>)
+
+@Serializable data class AndroidSyncReconcileResponse(val changes: List<AndroidSyncChangeDto>)
 
 @Serializable
 data class AndroidSyncChangeDto(

@@ -1,6 +1,44 @@
 package db
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestAndroidSyncProjectsMemberOnlyChannelOverride(t *testing.T) {
+	d := openWritableTestDB(t)
+	seedTestChannel(t, d, "youtube_member_sync_channel")
+	if err := d.UpdateChannelSettings("youtube_member_sync_channel", map[string]any{"include_member_only": 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	keys, err := d.ListAndroidSyncStateKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantKey := AndroidSyncStateKey{OwnerKind: "channel_setting", OwnerID: "youtube_member_sync_channel"}
+	found := false
+	for _, key := range keys {
+		found = found || key == wantKey
+	}
+	if !found {
+		t.Fatalf("state keys missing member-only override: %+v", keys)
+	}
+
+	rows, err := d.ListAndroidSyncStateProjections([]AndroidSyncStateKey{wantKey})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("state projection = %+v / %v", rows, err)
+	}
+	var payload struct {
+		IncludeMemberOnly *int `json:"include_member_only"`
+	}
+	if err := json.Unmarshal(rows[0].Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.IncludeMemberOnly == nil || *payload.IncludeMemberOnly != 1 {
+		t.Fatalf("member-only projection payload = %s", rows[0].Payload)
+	}
+}
 
 func TestAndroidSyncMomentsCursorStateExcludesLocalStoriesScope(t *testing.T) {
 	d := openWritableTestDB(t)

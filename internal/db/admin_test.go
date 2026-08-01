@@ -210,7 +210,9 @@ func TestExportSubscriptionsUsesFollowRows(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("AddChannel followed: %v", err)
 	}
-	if err := d.UpdateChannelSettings("youtube_sample_followed", map[string]any{"max_videos": 12}); err != nil {
+	if err := d.UpdateChannelSettings("youtube_sample_followed", map[string]any{
+		"max_videos": 12, "include_member_only": 1,
+	}); err != nil {
 		t.Fatalf("UpdateChannelSettings followed: %v", err)
 	}
 	if err := d.AddChannel(model.Channel{
@@ -233,7 +235,8 @@ func TestExportSubscriptionsUsesFollowRows(t *testing.T) {
 		t.Fatalf("subscriptions = %#v, want one followed channel", cfg.Subscriptions)
 	}
 	got := cfg.Subscriptions[0]
-	if got.ChannelID != "youtube_sample_followed" || !got.IsStarred || got.MaxVideos != 12 {
+	if got.ChannelID != "youtube_sample_followed" || !got.IsStarred || got.MaxVideos != 12 ||
+		got.IncludeMemberOnly == nil || !*got.IncludeMemberOnly {
 		t.Fatalf("exported subscription = %#v", got)
 	}
 	if cfg.Settings != nil || cfg.Bookmarks != nil || cfg.BookmarkCategories != nil {
@@ -299,7 +302,7 @@ func TestImportConfigReplaceSubscriptionsClearsStaleFollows(t *testing.T) {
 	if err := d.QueryRow(`
 		SELECT max_videos IS NULL AND download_subtitles IS NULL
 		   AND media_only IS NULL AND media_download_limit IS NULL
-		   AND include_reposts IS NULL,
+		   AND include_reposts IS NULL AND include_member_only IS NULL,
 		       updated_at
 		FROM channel_settings WHERE channel_id = 'youtube_sample_old'
 	`).Scan(&oldSettingsNull, &oldSettingsAt); err != nil {

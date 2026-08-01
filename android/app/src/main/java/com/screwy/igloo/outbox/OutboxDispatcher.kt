@@ -44,7 +44,7 @@ import kotlinx.serialization.json.longOrNull
  *   provisional→real ID remap.
  * - 401 → `AuthRefresh` — caller waits for auth refresh + retries.
  * - 408/429/5xx / network → `Retry(err)` — caller schedules backoff.
- * - other 4xx → `Dead(err)` — caller discards the row and refreshes state.
+ * - other 4xx → `Rejected(err)` — caller restores that owner's authoritative state.
  */
 class OutboxDispatcher(
     private val api: OutboxApi,
@@ -55,13 +55,11 @@ class OutboxDispatcher(
     sealed interface Result {
         data object Ack : Result
 
-        data object Reconcile : Result
-
         data object AuthRefresh : Result
 
         data class Retry(val error: IglooError) : Result
 
-        data class Dead(val error: IglooError) : Result
+        data class Rejected(val error: IglooError) : Result
     }
 
     /**
@@ -89,12 +87,15 @@ class OutboxDispatcher(
                 else ->
                     batch.associate {
                         it.id to
-                            Result.Dead(
+                            Result.Rejected(
                                 IglooError.Dead(-1, "unknown_kind", "no recipe for $kindCode")
                             )
                     }
             }
-        if (kindCode in REJECTED_MUTATION_TOAST_KINDS && results.values.any { it is Result.Dead }) {
+        if (
+            kindCode in REJECTED_MUTATION_TOAST_KINDS &&
+                results.values.any { it is Result.Rejected }
+        ) {
             uiEffects.emit(
                 UiEffect.ToastRes(
                     R.string.outbox_could_not_save_kind,
@@ -290,7 +291,7 @@ class OutboxDispatcher(
         val parsed = runCatching { response.body<CreateCategoryResponse>() }
         val ok = parsed.getOrNull()
         if (ok == null)
-            return Result.Dead(IglooError.Malformed("create_category response parse failed"))
+            return Result.Rejected(IglooError.Malformed("create_category response parse failed"))
 
         // Cascade provisional → real: update both tables in one tx.
         db.withTransaction {
@@ -347,10 +348,9 @@ class OutboxDispatcher(
 
     private fun classificationToResult(err: IglooError): Result =
         when {
-            err.status == 409 && err.errorCode == "stale_mutation" -> Result.Reconcile
             err.requiresRefresh -> Result.AuthRefresh
             err.isTransient -> Result.Retry(err)
-            else -> Result.Dead(err)
+            else -> Result.Rejected(err)
         }
 
     // ─── Payload / JSON accessors ─────────────────────────────────────────────

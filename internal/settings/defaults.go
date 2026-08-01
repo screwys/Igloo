@@ -119,6 +119,7 @@ var Defaults = map[string]any{
 	"share_embed_friendly_links":       false,
 	"youtube_fetch_delay":              120,
 	"youtube_max_videos":               12,
+	"youtube_include_member_only":      false,
 	"download_subtitles":               false,
 	"tiktok_fetch_delay":               60,
 	"shorts_max_videos":                20,

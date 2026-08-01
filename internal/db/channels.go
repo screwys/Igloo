@@ -20,6 +20,7 @@ type ChannelSettings struct {
 	MediaOnly          bool   `json:"media_only"`
 	MediaDownloadLimit int    `json:"media_download_limit"`
 	IncludeReposts     bool   `json:"include_reposts"`
+	IncludeMemberOnly  bool   `json:"include_member_only"`
 }
 
 // GetSubscribedChannels returns every followed channel.
@@ -403,7 +404,8 @@ func (db *DB) GetChannelSettings(channelID string) (*ChannelSettings, error) {
 	row := db.conn.QueryRow(`
 		SELECT COALESCE(c.quality,''), COALESCE(c.platform,''),
 		       cs.max_videos, cs.download_subtitles,
-		       cs.media_only, cs.media_download_limit, cs.include_reposts
+		       cs.media_only, cs.media_download_limit, cs.include_reposts,
+		       cs.include_member_only
 		FROM channels c
 		LEFT JOIN channel_settings cs ON cs.channel_id = c.channel_id
 		WHERE c.channel_id = ?
@@ -412,13 +414,13 @@ func (db *DB) GetChannelSettings(channelID string) (*ChannelSettings, error) {
 	var s ChannelSettings
 	var platform string
 	var maxVideos, downloadSubtitles sql.NullInt64
-	var mediaOnly, includeReposts sql.NullInt64
+	var mediaOnly, includeReposts, includeMemberOnly sql.NullInt64
 	var mediaDownloadLimit sql.NullInt64
 
 	err := row.Scan(
 		&s.Quality, &platform,
 		&maxVideos, &downloadSubtitles,
-		&mediaOnly, &mediaDownloadLimit, &includeReposts,
+		&mediaOnly, &mediaDownloadLimit, &includeReposts, &includeMemberOnly,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -466,6 +468,12 @@ func (db *DB) GetChannelSettings(channelID string) (*ChannelSettings, error) {
 		s.IncludeReposts = parseBoolSetting("include_reposts_default", "1")
 	}
 
+	if includeMemberOnly.Valid {
+		s.IncludeMemberOnly = includeMemberOnly.Int64 != 0
+	} else if platform == "youtube" {
+		s.IncludeMemberOnly = db.BoolSetting("youtube_include_member_only")
+	}
+
 	return &s, nil
 }
 
@@ -483,7 +491,7 @@ func channelMaxVideosSettingKey(platform string) string {
 // UpdateChannelSettings updates provided fields for a channel. Channel-level
 // columns (quality) are written to `channels`; per-channel
 // settings (max_videos, download_subtitles, media_only, media_download_limit,
-// include_reposts) are UPSERTed into `channel_settings`.
+// include_reposts, include_member_only) are UPSERTed into `channel_settings`.
 func (db *DB) UpdateChannelSettings(channelID string, fields map[string]any) error {
 	channelCols := map[string]bool{
 		"quality": true,
@@ -494,6 +502,7 @@ func (db *DB) UpdateChannelSettings(channelID string, fields map[string]any) err
 		"media_only":           true,
 		"media_download_limit": true,
 		"include_reposts":      true,
+		"include_member_only":  true,
 	}
 
 	var chClauses []string
@@ -535,8 +544,8 @@ func (db *DB) UpdateChannelSettings(channelID string, fields map[string]any) err
 
 // AddChannel inserts a new channel. Returns an error if channel_id already
 // exists. Per-channel settings (max_videos, download_subtitles, media_*,
-// include_reposts) are written to the channel_settings side table via
-// UpdateChannelSettings once the channel exists.
+// include_reposts, include_member_only) are written to the channel_settings
+// side table via UpdateChannelSettings once the channel exists.
 func (db *DB) AddChannel(ch model.Channel) error {
 	nowMs := time.Now().UnixMilli()
 	return db.WithWrite(func(tx *sql.Tx) error {
@@ -693,6 +702,7 @@ func (db *DB) ClearChannelSettings(channelID string) error {
 			"media_download_limit": nil,
 			"max_videos":           nil,
 			"download_subtitles":   nil,
+			"include_member_only":  nil,
 		}, time.Now().UnixMilli(), false)
 		if err != nil || !changed {
 			return err

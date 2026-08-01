@@ -1220,7 +1220,8 @@ func (db *DB) GetPlaybackPositions(videoIDs []string) (map[string]float64, error
 }
 
 // GetChannel returns a single channel by channel_id. Per-channel settings
-// (max_videos, download_subtitles, media_*, include_reposts) live in
+// (max_videos, download_subtitles, media_*, include_reposts,
+// include_member_only) live in
 // channel_settings and are fetched separately via GetChannelSettings.
 func (db *DB) GetChannel(channelID string) (*model.Channel, error) {
 	row := db.conn.QueryRow(`

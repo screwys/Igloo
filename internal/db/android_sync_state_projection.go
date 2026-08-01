@@ -32,7 +32,7 @@ func (db *DB) ListAndroidSyncStateKeys() ([]AndroidSyncStateKey, error) {
 			FROM channel_settings
 			WHERE media_only IS NOT NULL OR include_reposts IS NOT NULL
 			   OR media_download_limit IS NOT NULL OR max_videos IS NOT NULL
-			   OR download_subtitles IS NOT NULL
+			   OR download_subtitles IS NOT NULL OR include_member_only IS NOT NULL
 			UNION ALL
 			SELECT 'moments_cursor', scope
 			FROM moments_cursors
@@ -123,12 +123,13 @@ func (db *DB) ListAndroidSyncStateProjections(keys []AndroidSyncStateKey) ([]And
 			       json_object('channel_id', s.channel_id, 'media_only', s.media_only,
 			         'include_reposts', s.include_reposts, 'media_download_limit', s.media_download_limit,
 			         'max_videos', s.max_videos, 'download_subtitles', s.download_subtitles,
+			         'include_member_only', s.include_member_only,
 			         'updated_at', s.updated_at)
 			FROM channel_settings s
 			JOIN wanted w ON w.owner_kind = 'channel_setting' AND w.owner_id = s.channel_id
 			WHERE s.media_only IS NOT NULL OR s.include_reposts IS NOT NULL
 			   OR s.media_download_limit IS NOT NULL OR s.max_videos IS NOT NULL
-			   OR s.download_subtitles IS NOT NULL
+			   OR s.download_subtitles IS NOT NULL OR s.include_member_only IS NOT NULL
 			UNION ALL
 			SELECT 'moments_cursor', s.scope, '',
 			       json_object('scope', s.scope, 'video_id', s.video_id, 'position_ms', s.position_ms,

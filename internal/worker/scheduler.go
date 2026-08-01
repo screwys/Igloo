@@ -323,9 +323,17 @@ func (m *Manager) checkChannel(ctx context.Context, channel model.Channel) (down
 	if channel.Platform == "youtube" && !strings.HasSuffix(url, "/videos") {
 		url = strings.TrimRight(url, "/") + "/videos"
 	}
-	snapshot, channelErr := m.downloader.YtDlp.ChannelCheck(ctx, url, authoredLimit)
+	includeMemberOnly := true
+	if channel.Platform == "youtube" {
+		includeMemberOnly = m.db.BoolSetting("youtube_include_member_only")
+		settings, err := m.db.GetChannelSettings(channel.ChannelID)
+		if err == nil && settings != nil {
+			includeMemberOnly = settings.IncludeMemberOnly
+		}
+	}
+	snapshot, channelErr := m.downloader.YtDlp.ChannelCheck(ctx, url, authoredLimit, includeMemberOnly)
 	if channelErr != nil && channel.Platform == "youtube" && strings.HasSuffix(url, "/videos") && len(snapshot.FlattenRefs(1)) == 0 {
-		fallback, fallbackErr := m.downloader.YtDlp.ChannelCheck(ctx, strings.TrimSuffix(url, "/videos"), authoredLimit)
+		fallback, fallbackErr := m.downloader.YtDlp.ChannelCheck(ctx, strings.TrimSuffix(url, "/videos"), authoredLimit, includeMemberOnly)
 		if fallbackErr == nil {
 			snapshot, channelErr = fallback, nil
 		} else {

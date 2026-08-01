@@ -108,6 +108,87 @@ func TestOpenMigratesKnownSchemaChange(t *testing.T) {
 	}
 }
 
+func TestOpenMigratesYouTubeMemberOnlyChannelSettingAndSyncTrigger(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "igloo.db")
+	store, err := OpenPath(path, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ExecRaw(`
+		INSERT INTO channel_settings (channel_id, max_videos)
+		VALUES ('sample_channel', 25)
+	`); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`DELETE FROM schema_migrations WHERE name = '20260801_add_youtube_member_only_channel_setting'`,
+		`DROP TRIGGER android_sync_head_channel_settings_update`,
+		`ALTER TABLE channel_settings DROP COLUMN include_member_only`,
+		`CREATE TRIGGER android_sync_head_channel_settings_update
+		 AFTER UPDATE OF max_videos ON channel_settings
+		 BEGIN SELECT 1; END`,
+	} {
+		if _, err := conn.Exec(statement); err != nil {
+			_ = conn.Close()
+			t.Fatalf("prepare legacy channel settings schema: %v", err)
+		}
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = OpenPath(path, root)
+	if err != nil {
+		t.Fatalf("OpenPath legacy channel settings schema: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	var triggerSQL string
+	if err := store.QueryRow(`
+		SELECT sql FROM sqlite_schema
+		WHERE type = 'trigger' AND name = 'android_sync_head_channel_settings_update'
+	`).Scan(&triggerSQL); err != nil {
+		t.Fatalf("read migrated channel settings trigger: %v", err)
+	}
+	if !strings.Contains(triggerSQL, "include_member_only") {
+		t.Fatalf("migrated channel settings trigger = %q, want include_member_only", triggerSQL)
+	}
+
+	var beforeRevision int64
+	if err := store.QueryRow(`
+		SELECT revision FROM android_sync_heads
+		WHERE owner_kind = 'channel_setting' AND owner_id = 'sample_channel'
+	`).Scan(&beforeRevision); err != nil {
+		t.Fatalf("read channel settings revision before update: %v", err)
+	}
+	if err := store.ExecRaw(`
+		UPDATE channel_settings SET include_member_only = 1
+		WHERE channel_id = 'sample_channel'
+	`); err != nil {
+		t.Fatalf("update migrated member-only setting: %v", err)
+	}
+	var afterRevision int64
+	if err := store.QueryRow(`
+		SELECT revision FROM android_sync_heads
+		WHERE owner_kind = 'channel_setting' AND owner_id = 'sample_channel'
+	`).Scan(&afterRevision); err != nil {
+		t.Fatalf("read channel settings revision after update: %v", err)
+	}
+	if afterRevision <= beforeRevision {
+		t.Fatalf("channel settings revision = %d, want greater than %d", afterRevision, beforeRevision)
+	}
+}
+
 func TestOpenBackfillsVideoFetchHistory(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")

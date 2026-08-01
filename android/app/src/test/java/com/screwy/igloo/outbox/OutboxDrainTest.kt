@@ -75,7 +75,7 @@ class OutboxDrainTest {
 
         val result = buildDrain(MockEngine { respondOk() }).runOnce()
 
-        assertFalse(result.reconcileMutations)
+        assertTrue(result.rejectedMutations.isEmpty())
         assertEquals(0, db.outboxDao().countByState("pending"))
         assertTrue(db.feedLikeDao().exists("item-1"))
     }
@@ -109,13 +109,14 @@ class OutboxDrainTest {
 
         val result = drain.runOnce()
 
-        assertFalse(result.reconcileMutations)
+        assertEquals(1, result.rejectedMutations.size)
+        assertEquals("feed_like", result.rejectedMutations.single().ownerKind)
         assertTrue(db.feedLikeDao().exists("item-1"))
-        assertEquals(0, db.outboxDao().countByState("pending"))
+        assertEquals(1, db.outboxDao().countByState("pending"))
     }
 
     @Test
-    fun rejectedSetRequestsSnapshotReconciliation() = runBlocking {
+    fun rejectedSetRequestsOwnerReconciliation() = runBlocking {
         db.feedLikeDao().upsert(FeedLikeEntity("item-1", nowMs))
         db.outboxDao().insert(pendingLike("item-1", "set"))
         val drain =
@@ -131,13 +132,14 @@ class OutboxDrainTest {
 
         val result = drain.runOnce()
 
-        assertTrue(result.reconcileMutations)
+        assertEquals(1, result.rejectedMutations.size)
+        assertEquals("feed_like", result.rejectedMutations.single().ownerKind)
         assertTrue(db.feedLikeDao().exists("item-1"))
-        assertEquals(0, db.outboxDao().countByState("pending"))
+        assertEquals(1, db.outboxDao().countByState("pending"))
     }
 
     @Test
-    fun staleMutationDeletesOnlyQueueRowAndRequestsSnapshotReconciliation() = runBlocking {
+    fun staleMutationKeepsQueueRowUntilOwnerReconciliation() = runBlocking {
         db.feedLikeDao().upsert(FeedLikeEntity("item-1", nowMs))
         db.outboxDao().insert(pendingLike("item-1", "clear"))
         val drain =
@@ -155,9 +157,10 @@ class OutboxDrainTest {
 
         val result = drain.runOnce()
 
-        assertTrue(result.reconcileMutations)
+        assertEquals(1, result.rejectedMutations.size)
+        assertEquals("feed_like", result.rejectedMutations.single().ownerKind)
         assertTrue(db.feedLikeDao().exists("item-1"))
-        assertEquals(0, db.outboxDao().countByState("pending"))
+        assertEquals(1, db.outboxDao().countByState("pending"))
     }
 
     @Test

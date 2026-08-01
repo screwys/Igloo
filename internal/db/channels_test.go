@@ -167,6 +167,55 @@ func TestGetAndUpdateChannelSettings(t *testing.T) {
 	}
 }
 
+func TestYouTubeMemberOnlyChannelSettingOverridesGlobalDefault(t *testing.T) {
+	d := openWritableTestDB(t)
+	const channelID = "youtube_member_setting_fixture"
+	seedTestFollowedChannel(t, d, channelID)
+
+	settings, err := d.GetChannelSettings(channelID)
+	if err != nil || settings == nil {
+		t.Fatalf("GetChannelSettings default: %v / %+v", err, settings)
+	}
+	if settings.IncludeMemberOnly {
+		t.Fatal("member-only content should be disabled by default")
+	}
+
+	if err := d.SetSetting("youtube_include_member_only", "true"); err != nil {
+		t.Fatal(err)
+	}
+	settings, _ = d.GetChannelSettings(channelID)
+	if !settings.IncludeMemberOnly {
+		t.Fatal("channel without an override should inherit the enabled global setting")
+	}
+
+	if err := d.UpdateChannelSettings(channelID, map[string]any{"include_member_only": 0}); err != nil {
+		t.Fatal(err)
+	}
+	settings, _ = d.GetChannelSettings(channelID)
+	if settings.IncludeMemberOnly {
+		t.Fatal("disabled channel override should win over the enabled global setting")
+	}
+
+	if err := d.SetSetting("youtube_include_member_only", "false"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.UpdateChannelSettings(channelID, map[string]any{"include_member_only": 1}); err != nil {
+		t.Fatal(err)
+	}
+	settings, _ = d.GetChannelSettings(channelID)
+	if !settings.IncludeMemberOnly {
+		t.Fatal("enabled channel override should win over the disabled global setting")
+	}
+
+	if err := d.ClearChannelSettings(channelID); err != nil {
+		t.Fatal(err)
+	}
+	settings, _ = d.GetChannelSettings(channelID)
+	if settings.IncludeMemberOnly {
+		t.Fatal("cleared channel override should inherit the disabled global setting")
+	}
+}
+
 func TestResolveSubscribeURL(t *testing.T) {
 	d := openWritableTestDB(t)
 
@@ -417,7 +466,7 @@ func TestChannelSettingsOverrideChain(t *testing.T) {
 	if err := d.QueryRow(`
 		SELECT max_videos IS NULL AND download_subtitles IS NULL
 		   AND media_only IS NULL AND media_download_limit IS NULL
-		   AND include_reposts IS NULL,
+		   AND include_reposts IS NULL AND include_member_only IS NULL,
 		       updated_at
 		FROM channel_settings WHERE channel_id = 'twitter_sample_channel'
 	`).Scan(&allNull, &clearedAt); err != nil {

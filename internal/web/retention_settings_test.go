@@ -25,6 +25,41 @@ func TestGlobalRetentionDecreasePrunesExistingDemandImmediately(t *testing.T) {
 	assertWebRetentionCount(t, srv, "youtube_global_source", 1)
 }
 
+func TestYouTubeMemberOnlySettingQueuesPlatformRefresh(t *testing.T) {
+	srv := newTestServer(t)
+	seedWebRetentionSource(t, srv, "youtube_member_refresh_source", "youtube", 1)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/settings", strings.NewReader(`{"youtube_include_member_only":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = attachTestAuthRole(req, "sample_admin", "admin")
+	rec := httptest.NewRecorder()
+	srv.handleUpdateSettings(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("settings status = %d: %s", rec.Code, rec.Body.String())
+	}
+	assertChannelRefreshQueued(t, srv, "youtube_member_refresh_source")
+}
+
+func TestYouTubeMemberOnlyChannelSettingQueuesChannelRefresh(t *testing.T) {
+	srv := newTestServer(t)
+	const channelID = "youtube_member_channel_source"
+	seedWebRetentionSource(t, srv, channelID, "youtube", 1)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/channels/"+channelID+"/settings", strings.NewReader(`{"include_member_only":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("channelID", channelID)
+	rec := httptest.NewRecorder()
+	srv.handleChannelSettingsPost(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("channel settings status = %d: %s", rec.Code, rec.Body.String())
+	}
+	settings, err := srv.db.GetChannelSettings(channelID)
+	if err != nil || settings == nil || !settings.IncludeMemberOnly {
+		t.Fatalf("channel member-only setting = %+v / %v", settings, err)
+	}
+	assertChannelRefreshQueued(t, srv, channelID)
+}
+
 func TestChannelRetentionChangesPruneDecreasesAndRefreshIncreases(t *testing.T) {
 	srv := newTestServer(t)
 	if err := srv.db.SetSetting("youtube_max_videos", "3"); err != nil {

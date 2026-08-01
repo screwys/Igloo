@@ -264,9 +264,11 @@ class OutboxWriterTest {
     fun differentChannelSettingFieldsRemainIndependent() = runBlocking {
         writer.enqueue(OutboxKind.ChannelSetting("channel-1", "media_only", 1))
         writer.enqueue(OutboxKind.ChannelSetting("channel-1", "max_videos", 50))
+        writer.enqueue(OutboxKind.ChannelSetting("channel-1", "include_member_only", 1))
 
-        assertEquals(2, db.outboxDao().countByState("pending"))
+        assertEquals(3, db.outboxDao().countByState("pending"))
         assertEquals(1, db.channelSettingDao().getById("channel-1")?.mediaOnly)
         assertEquals(50, db.channelSettingDao().getById("channel-1")?.maxVideos)
+        assertEquals(1, db.channelSettingDao().getById("channel-1")?.includeMemberOnly)
     }
 }

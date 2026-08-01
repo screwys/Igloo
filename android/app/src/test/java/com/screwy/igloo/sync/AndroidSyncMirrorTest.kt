@@ -20,11 +20,13 @@ import com.screwy.igloo.net.AndroidSyncApi
 import com.screwy.igloo.net.AndroidSyncAssetDto
 import com.screwy.igloo.net.AndroidSyncChangeDto
 import com.screwy.igloo.net.AndroidSyncPageResponse
+import com.screwy.igloo.net.AndroidSyncReconcileResponse
 import com.screwy.igloo.net.AndroidSyncRetentionRequest
 import com.screwy.igloo.net.Reachability
 import com.screwy.igloo.net.ServerBaseUrlProvider
 import com.screwy.igloo.net.iglooJson
 import com.screwy.igloo.outbox.OutboxKind
+import com.screwy.igloo.outbox.OutboxRejectedMutation
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -714,6 +716,7 @@ class AndroidSyncMirrorTest {
                                     mediaOnly = 0,
                                     maxVideos = 5,
                                     includeReposts = 0,
+                                    includeMemberOnly = 1,
                                 )
                             ),
                             "cursor-b",
@@ -729,7 +732,62 @@ class AndroidSyncMirrorTest {
 
         assertEquals(listOf("changes:cursor-a"), requests)
         assertEquals(0, db.channelSettingDao().getById("sample_channel")?.includeReposts)
+        assertEquals(1, db.channelSettingDao().getById("sample_channel")?.includeMemberOnly)
         assertFalse(requireNotNull(db.androidSyncDao().syncState()).bootstrapRequired)
+    }
+
+    @Test
+    fun rejectedMutationReconcilesItsOwnerBeforeDeletingTheOutboxRow() = runBlocking {
+        db.momentsCursorDao()
+            .upsert(MomentsCursorEntity("all", "sample_local", positionMs = 10, updatedAtMs = 100))
+        val rowId =
+            db.outboxDao()
+                .insert(
+                    OutboxEntity(
+                        kind = OutboxKind.CODE_MOMENTS_CURSOR,
+                        itemId = "all",
+                        payloadJson = "{}",
+                        state = "pending",
+                        createdAtMs = 100,
+                    )
+                )
+        val authoritative =
+            upsertChange(
+                ownerKind = "moments_cursor",
+                ownerId = "all",
+                payload =
+                    buildJsonObject {
+                        put("scope", "all")
+                        put("video_id", "sample_server")
+                        put("position_ms", 20)
+                        put("sort_at_ms", 200)
+                        put("updated_at_ms", 200)
+                    },
+            )
+        val engine =
+            MockEngine { request ->
+                when (request.url.encodedPath) {
+                    "/api/android/sync/reconcile" ->
+                        respondJson(AndroidSyncReconcileResponse(listOf(authoritative)))
+                    else -> error("Unexpected request ${request.url}")
+                }
+            }
+
+        buildMirror(engine)
+            .reconcileRejected(
+                listOf(
+                    OutboxRejectedMutation(
+                        rowId = rowId,
+                        ownerKind = "moments_cursor",
+                        ownerId = "all",
+                    )
+                )
+            )
+
+        assertEquals(0, db.outboxDao().countByState("pending"))
+        val cursor = db.momentsCursorDao().get("all")
+        assertEquals("sample_server", cursor?.videoId)
+        assertEquals(200L, cursor?.updatedAtMs)
     }
 
     private fun buildMirror(engine: MockEngine): AndroidSyncMirror {
@@ -1080,6 +1138,7 @@ class AndroidSyncMirrorTest {
         mediaOnly: Int,
         maxVideos: Int,
         includeReposts: Int? = null,
+        includeMemberOnly: Int? = null,
     ) =
         upsertChange(
             ownerKind = "channel_setting",
@@ -1089,6 +1148,7 @@ class AndroidSyncMirrorTest {
                 put("media_only", mediaOnly)
                 put("max_videos", maxVideos)
                 includeReposts?.let { put("include_reposts", it) }
+                includeMemberOnly?.let { put("include_member_only", it) }
                 put("updated_at", nowMs)
             },
         )

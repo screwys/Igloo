@@ -93,9 +93,14 @@ class SyncCoordinator(
     }
 
     private suspend fun executePass() {
-        val outboxResult = outbox.runOnce()
-        if (outboxResult.reconcileMutations) mirror.requestBootstrap()
-        mirror.syncOnce(protectionChanged = outboxResult.protectionChanged)
+        var protectionChanged = false
+        while (true) {
+            val outboxResult = outbox.runOnce()
+            protectionChanged = protectionChanged || outboxResult.protectionChanged
+            if (outboxResult.rejectedMutations.isEmpty()) break
+            mirror.reconcileRejected(outboxResult.rejectedMutations)
+        }
+        mirror.syncOnce(protectionChanged = protectionChanged)
     }
 
     private suspend fun pollPriorityStateWhileForeground() = coroutineScope {

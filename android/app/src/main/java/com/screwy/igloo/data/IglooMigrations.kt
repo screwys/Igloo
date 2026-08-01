@@ -105,4 +105,13 @@ object IglooMigrations {
                 )
             }
         }
+
+    val MIGRATION_42_43 =
+        object : Migration(42, 43) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `channel_settings` ADD COLUMN `include_member_only` INTEGER",
+                )
+            }
+        }
 }

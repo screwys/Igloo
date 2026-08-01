@@ -149,6 +149,10 @@ type androidSyncHealthRequest struct {
 	Bytes        androidSyncHealthBytes     `json:"bytes"`
 }
 
+type androidSyncReconcileRequest struct {
+	Owners []db.AndroidSyncStateKey `json:"owners"`
+}
+
 type androidSyncHealthRetention struct {
 	FeedDays    int `json:"feed_days"`
 	YoutubeDays int `json:"youtube_days"`
@@ -171,8 +175,63 @@ func (s *Server) registerAndroidSyncAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/android/sync/bootstrap", s.handleAndroidSyncBootstrap)
 	mux.HandleFunc("GET /api/android/sync/changes", s.handleAndroidSyncChanges)
 	mux.HandleFunc("GET /api/android/sync/state", s.handleAndroidSyncPriorityState)
+	mux.HandleFunc("POST /api/android/sync/reconcile", s.handleAndroidSyncReconcile)
 	mux.HandleFunc("GET /api/android/sync/assets/{assetID}/file", s.handleAndroidSyncAssetFile)
 	mux.HandleFunc("POST /api/android/sync/health", s.handleAndroidSyncHealth)
+}
+
+func (s *Server) handleAndroidSyncReconcile(w http.ResponseWriter, r *http.Request) {
+	if userFromContext(r.Context()) == nil {
+		writeJSONError(w, http.StatusUnauthorized, "unauthenticated", "authentication required")
+		return
+	}
+	var body androidSyncReconcileRequest
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "body_too_large", requestBodyTooLargeMessage)
+			return
+		}
+		writeJSONError(w, http.StatusBadRequest, "bad_json", "invalid reconciliation payload")
+		return
+	}
+	if len(body.Owners) == 0 || len(body.Owners) > androidSyncReconcileMaxOwners {
+		writeJSONError(w, http.StatusBadRequest, "invalid_owners", "owner count is out of range")
+		return
+	}
+	validKinds := stringSet(androidSyncStateOwnerKinds())
+	wanted := make(map[string]map[string]struct{})
+	seen := make(map[string]struct{}, len(body.Owners))
+	for _, owner := range body.Owners {
+		owner.OwnerKind = strings.TrimSpace(owner.OwnerKind)
+		owner.OwnerID = strings.TrimSpace(owner.OwnerID)
+		key := owner.OwnerKind + "\x00" + owner.OwnerID
+		_, validKind := validKinds[owner.OwnerKind]
+		if !validKind || owner.OwnerID == "" || !androidSyncStateOwnerSharedWithAndroid(owner.OwnerKind, owner.OwnerID) {
+			writeJSONError(w, http.StatusBadRequest, "invalid_owner", "owner is not Android state")
+			return
+		}
+		if _, duplicate := seen[key]; duplicate {
+			writeJSONError(w, http.StatusBadRequest, "duplicate_owner", "owner is duplicated")
+			return
+		}
+		seen[key] = struct{}{}
+		if wanted[owner.OwnerKind] == nil {
+			wanted[owner.OwnerKind] = make(map[string]struct{})
+		}
+		wanted[owner.OwnerKind][owner.OwnerID] = struct{}{}
+	}
+
+	var changes []model.AndroidSyncChange
+	err := s.db.WithReadSnapshot(func(snapshot *db.DB) error {
+		var err error
+		changes, err = s.androidSyncStateChanges(snapshot, newAndroidSyncMaterializationPlan(nil), wanted)
+		return err
+	})
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "reconcile_failed", "state reconciliation failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"changes": changes})
 }
 
 func (s *Server) tryAcquireAndroidSyncAssetServeSlot() bool {
