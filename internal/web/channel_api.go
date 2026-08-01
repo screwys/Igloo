@@ -87,8 +87,7 @@ func (s *Server) handleChannelStar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.db.InvalidateFeedWindowByChannelID(channelID)
-	s.workers.KickFeedScoring()
+	s.wakeFeedOrderInvalidation()
 
 	// If HTMX request, return the updated star button HTML
 	if r.Header.Get("HX-Request") != "" {
@@ -131,6 +130,7 @@ func (s *Server) handleChannelSubscribe(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "error": "db error"})
 			return
 		}
+		s.wakeFeedOrderInvalidation()
 		if s.workers != nil {
 			s.workers.Emit("system", fmt.Sprintf("Subscribed: %s (%s)", ch.Name, ch.Platform), "done")
 		}
@@ -305,6 +305,7 @@ func (s *Server) handleChannelSettingsPost(w http.ResponseWriter, r *http.Reques
 		}
 		return
 	}
+	s.wakeFeedOrderInvalidation()
 	updated := s.applyChannelSettingEffects(channelID, previousSettings)
 
 	if isHTMX {

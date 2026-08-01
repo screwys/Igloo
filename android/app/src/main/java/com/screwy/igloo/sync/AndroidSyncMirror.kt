@@ -27,6 +27,8 @@ import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class AndroidSyncMirror(
     private val db: IglooDatabase,
@@ -49,6 +51,7 @@ class AndroidSyncMirror(
     private val serverNowMsProvider: () -> Long = { System.currentTimeMillis() },
     private val metadataRetryDelaysMs: List<Long> = METADATA_RETRY_DELAYS_MS,
 ) {
+    private val metadataPageMutex = Mutex()
     private val healthReporter =
         AndroidSyncHealthReporter(
             dao = dao,
@@ -70,80 +73,125 @@ class AndroidSyncMirror(
         )
 
     suspend fun syncOnce(protectionChanged: Boolean = false) {
+        syncMetadataOnce(protectionChanged)
+        syncAssetsOnce()
+    }
+
+    suspend fun syncMetadataOnce(protectionChanged: Boolean = false) {
+        syncMetadataAndPrune(protectionChanged)
+    }
+
+    private suspend fun syncMetadataAndPrune(protectionChanged: Boolean) {
         val retention = retentionProvider().validated()
         syncMetadata(retention)
         prune(retention, protectionChanged)
 
-        var state = requireChangesState()
+        val state = requireChangesState()
         healthReporter.report(state.cursor, retention)
-        try {
-            assetDrainer.drain(youtubeCutoffMs(retention))
-        } catch (e: AndroidSyncAssetChangedException) {
-            syncMetadata(retention)
-            prune(retention, sweepHeadlessContent = false)
-            state = requireChangesState()
+    }
+
+    suspend fun syncAssetsOnce(): AssetSyncResult {
+        val retention = retentionProvider().validated()
+        val state = requireChangesState()
+        val result = try {
             assetDrainer.drain(youtubeCutoffMs(retention))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
+            if (e is AndroidSyncAssetChangedException) throw e
             healthReporter.report(state.cursor, retention)
             throw e
         }
         healthReporter.report(requireChangesState().cursor, retention)
+        return result
     }
 
-    suspend fun syncPriorityStateOnce() {
-        if (reachability.state.value is Reachability.State.Offline) return
-        val mainState = dao.syncState()?.takeIf { it.mode == MODE_CHANGES } ?: return
+    suspend fun syncPriorityStateOnce(): PriorityStateSyncResult = syncPriorityState()
+
+    private suspend fun syncPriorityState(): PriorityStateSyncResult {
+        if (reachability.state.value is Reachability.State.Offline) {
+            return PriorityStateSyncResult()
+        }
+        val mainState =
+            dao.syncState()?.takeIf { it.mode == MODE_CHANGES }
+                ?: return PriorityStateSyncResult()
+        val retention = retentionProvider().validated()
         var cursor =
             db.preferenceDao().getValue(PRIORITY_STATE_CURSOR_KEY)
                 ?.takeIf(String::isNotBlank)
                 ?: mainState.cursor
         var resetAttempted = false
+        var metadataRequired = false
         while (true) {
-            val page =
+            val applied =
                 try {
-                    api.priorityState(cursor)
+                    metadataPageMutex.withLock {
+                        if (dao.syncState()?.mode != MODE_CHANGES) return@withLock null
+                        val fetched = api.priorityState(retention, cursor)
+                        fetched.validate(cursor)
+                        require(
+                            fetched.changes.all { it.owner_kind in PRIORITY_STATE_OWNER_KINDS }
+                        ) {
+                            "priority state response contained a non-state owner"
+                        }
+                        val pageNeedsMetadata = db.withTransaction {
+                            val pendingRows = db.outboxDao().pendingRows()
+                            val overlay = PendingMutationOverlay.capture(pendingRows)
+                            val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
+                            val selectionExpanded = expandsSelection(fetched.changes)
+                            fetched.changes.forEach { applyThinState(it, deletedAssets) }
+                            overlay.restore(db)
+                            if (selectionExpanded) markBootstrapRequired()
+                            db.preferenceDao().put(
+                                PRIORITY_STATE_CURSOR_KEY,
+                                fetched.next_cursor,
+                                serverNowMsProvider(),
+                            )
+                            selectionExpanded ||
+                                fetched.changes.any(AndroidSyncChangeDto::protectsContent) ||
+                                dao.syncState()?.bootstrapRequired == true
+                        }
+                        PriorityPageResult(fetched, pageNeedsMetadata)
+                    }
                 } catch (e: AndroidSyncHttpException) {
                     if (!e.isSyncResetRequired || resetAttempted) throw e
-                    db.preferenceDao().delete(PRIORITY_STATE_CURSOR_KEY)
-                    cursor = dao.syncState()?.takeIf { it.mode == MODE_CHANGES }?.cursor ?: return
+                    cursor =
+                        metadataPageMutex.withLock {
+                            db.preferenceDao().delete(PRIORITY_STATE_CURSOR_KEY)
+                            dao.syncState()?.takeIf { it.mode == MODE_CHANGES }?.cursor
+                        } ?: return PriorityStateSyncResult(metadataRequired)
                     resetAttempted = true
                     continue
                 }
-            page.validate(cursor)
-            require(page.changes.all { it.owner_kind in PRIORITY_STATE_OWNER_KINDS }) {
-                "priority state response contained a non-state owner"
-            }
-            db.withTransaction {
-                val overlay = PendingMutationOverlay.capture(db.outboxDao().pendingRows())
-                val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
-                page.changes.forEach { applyThinState(it, deletedAssets) }
-                overlay.restore(db)
-                db.preferenceDao().put(
-                    PRIORITY_STATE_CURSOR_KEY,
-                    page.next_cursor,
-                    serverNowMsProvider(),
-                )
-            }
+            if (applied == null) return PriorityStateSyncResult(metadataRequired)
+            val page = applied.page
+            metadataRequired = metadataRequired || applied.metadataRequired
             cursor = page.next_cursor
-            if (page.end_of_stream) return
+            if (page.end_of_stream) return PriorityStateSyncResult(metadataRequired)
         }
     }
 
     suspend fun reconcileRejected(rejected: List<OutboxRejectedMutation>) {
+        reconcileRejectedOwners(rejected)
+    }
+
+    private suspend fun reconcileRejectedOwners(rejected: List<OutboxRejectedMutation>) {
         if (rejected.isEmpty()) return
         val owners =
             rejected
                 .map { AndroidSyncOwnerRequest(it.ownerKind, it.ownerId) }
                 .distinctBy { it.owner_kind to it.owner_id }
-        val response = withMetadataRetry("reconcile") { api.reconcile(owners) }
-        response.validate(owners)
-        db.withTransaction {
-            db.outboxDao().completeAndDeleteAll(rejected.map(OutboxRejectedMutation::rowId))
-            val overlay = PendingMutationOverlay.capture(db.outboxDao().pendingRows())
-            val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
-            response.changes.forEach { applyThinState(it, deletedAssets) }
-            overlay.restore(db)
+        withMetadataRetry("reconcile") {
+            metadataPageMutex.withLock {
+                val response = api.reconcile(owners)
+                response.validate(owners)
+                db.withTransaction {
+                    db.outboxDao().completeAndDeleteAll(rejected.map(OutboxRejectedMutation::rowId))
+                    val overlay = PendingMutationOverlay.capture(db.outboxDao().pendingRows())
+                    val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
+                    response.changes.forEach { applyThinState(it, deletedAssets) }
+                    overlay.restore(db)
+                }
+            }
         }
         logger.info(
             event = "outbox_owners_reconciled",
@@ -184,18 +232,20 @@ class AndroidSyncMirror(
     }
 
     private suspend fun beginBootstrap(retention: AndroidSyncRetentionRequest) {
-        db.withTransaction {
-            dao.markHeadsUnseen()
-            dao.upsertSyncState(
-                AndroidSyncStateEntity(
-                    mode = MODE_BOOTSTRAP,
-                    cursor = "",
-                    feedDays = retention.feedDays,
-                    youtubeDays = retention.youtubeDays,
-                    momentsDays = retention.momentsDays,
-                    storyHours = retention.storyHours,
+        metadataPageMutex.withLock {
+            db.withTransaction {
+                dao.markHeadsUnseen()
+                dao.upsertSyncState(
+                    AndroidSyncStateEntity(
+                        mode = MODE_BOOTSTRAP,
+                        cursor = "",
+                        feedDays = retention.feedDays,
+                        youtubeDays = retention.youtubeDays,
+                        momentsDays = retention.momentsDays,
+                        storyHours = retention.storyHours,
+                    )
                 )
-            )
+            }
         }
     }
 
@@ -206,16 +256,21 @@ class AndroidSyncMirror(
     ) {
         var state = initial
         while (true) {
-            val page =
+            val applied =
                 withMetadataRetry(if (bootstrap) "bootstrap" else "changes") {
-                    if (bootstrap) {
-                        api.bootstrap(retention, state.cursor.ifEmpty { null })
-                    } else {
-                        api.changes(retention, state.cursor)
+                    metadataPageMutex.withLock {
+                        val page =
+                            if (bootstrap) {
+                                api.bootstrap(retention, state.cursor.ifEmpty { null })
+                            } else {
+                                api.changes(retention, state.cursor)
+                            }
+                        page.validate(state.cursor)
+                        page to applyPage(state, page, retention, bootstrap)
                     }
                 }
-            page.validate(state.cursor)
-            deleteFiles(applyPage(state, page, retention, bootstrap))
+            val (page, deletedAssets) = applied
+            deleteFiles(deletedAssets)
             if (page.end_of_stream) return
             state = requireNotNull(dao.syncState())
         }
@@ -229,17 +284,10 @@ class AndroidSyncMirror(
     ): List<AndroidSyncAssetEntity> =
         db.withTransaction {
             val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
-            val overlay = PendingMutationOverlay.capture(db.outboxDao().pendingRows())
+            val pendingRows = db.outboxDao().pendingRows()
+            val overlay = PendingMutationOverlay.capture(pendingRows)
 
-            var selectionExpanded = false
-            if (!bootstrap) {
-                for (change in page.changes) {
-                    if (change.isThinState() && expandsSelection(change)) {
-                        selectionExpanded = true
-                        break
-                    }
-                }
-            }
+            val selectionExpanded = !bootstrap && expandsSelection(page.changes)
 
             page.changes.filter(AndroidSyncChangeDto::isThinState).forEach { change ->
                 applyThinState(change, deletedAssets)
@@ -309,12 +357,13 @@ class AndroidSyncMirror(
                 )
             }
 
+            val durableReplayRequired = dao.syncState()?.bootstrapRequired == true
             val nextState =
                 if (bootstrap && page.end_of_stream) {
                     state.copy(
                         mode = MODE_CHANGES,
                         cursor = page.next_cursor,
-                        bootstrapRequired = false,
+                        bootstrapRequired = durableReplayRequired,
                     )
                 } else {
                     state.copy(
@@ -323,17 +372,33 @@ class AndroidSyncMirror(
                         youtubeDays = retention.youtubeDays,
                         momentsDays = retention.momentsDays,
                         storyHours = retention.storyHours,
-                        bootstrapRequired = state.bootstrapRequired || selectionExpanded,
+                        bootstrapRequired =
+                            state.bootstrapRequired || durableReplayRequired || selectionExpanded,
                     )
                 }
             if (nextState != state) dao.upsertSyncState(nextState)
             deletedAssets
         }
 
-    private suspend fun expandsSelection(change: AndroidSyncChangeDto): Boolean =
+    private suspend fun expandsSelection(changes: List<AndroidSyncChangeDto>): Boolean {
+        val followHeads =
+            if (changes.any { it.owner_kind == "channel_follow" }) {
+                dao.headIds("channel_follow").toHashSet()
+            } else {
+                emptySet()
+            }
+        return changes.any { change ->
+            change.isThinState() && expandsSelection(change, followHeads)
+        }
+    }
+
+    private suspend fun expandsSelection(
+        change: AndroidSyncChangeDto,
+        followHeads: Set<String>,
+    ): Boolean =
         when (change.owner_kind) {
             "channel_follow" ->
-                change.operation == OP_UPSERT && !db.channelFollowDao().exists(change.owner_id)
+                change.operation == OP_UPSERT && change.owner_id !in followHeads
             "channel_setting" -> {
                 val previous = db.channelSettingDao().getById(change.owner_id)?.includeReposts
                 val next =
@@ -345,21 +410,30 @@ class AndroidSyncMirror(
             else -> false
         }
 
-    private suspend fun sweepBootstrap(deletedAssets: MutableList<AndroidSyncAssetEntity>) {
-        val protectedContent = dao.protectedContentIds().toHashSet()
-        val protectedChannels = dao.protectedChannelIds().toHashSet()
-        val retainedAssetOwners = dao.retainedAssetOwnerIds().toHashSet()
-        dao.unseenHeads().forEach { head ->
-            if (removeAndroidLocalCursorHead(head)) return@forEach
-            deleteOwner(
-                ownerKind = head.ownerKind,
-                ownerId = head.ownerId,
-                protectedContent = protectedContent,
-                protectedChannels = protectedChannels,
-                retainedAssetOwners = retainedAssetOwners,
-                deletedAssets = deletedAssets,
-            )
+    private suspend fun markBootstrapRequired() {
+        val state = dao.syncState() ?: return
+        if (!state.bootstrapRequired) {
+            dao.upsertSyncState(state.copy(bootstrapRequired = true))
         }
+    }
+
+    private suspend fun sweepBootstrap(deletedAssets: MutableList<AndroidSyncAssetEntity>) {
+        dao.unseenTemporaryVideoIds().forEach { id ->
+            db.videoDao().getById(id)?.let { purgeTemporaryVideo(it, deletedAssets) }
+        }
+        dao.unseenHeadIds("retweet_sources").chunked(PRUNE_BATCH_SIZE).forEach {
+            db.retweetSourceDao().deleteForContentHashes(it)
+        }
+        dao.unseenHeadIds("feed_rank").chunked(PRUNE_BATCH_SIZE).forEach {
+            db.feedRankDao().deleteForTweets(it)
+        }
+        while (true) {
+            val staleAssets = dao.unseenUncachedAssets(PRUNE_BATCH_SIZE)
+            if (staleAssets.isEmpty()) break
+            deletedAssets += staleAssets
+            dao.deleteAssets(staleAssets.map(AndroidSyncAssetEntity::assetId))
+        }
+        dao.deleteUnseenHeads()
     }
 
     private fun sweepHeadlessThinState() {
@@ -839,6 +913,11 @@ private data class MirroredThinState(
     val predicate: String = "1",
 )
 
+private data class PriorityPageResult(
+    val page: AndroidSyncPageResponse,
+    val metadataRequired: Boolean,
+)
+
 internal fun Throwable.isLikelyTransportFailure(): Boolean {
     generateSequence(this) { it.cause }.forEach { cause ->
         if (cause is AndroidSyncHttpException && cause.downgradesReachability) return true
@@ -899,6 +978,9 @@ private fun AndroidSyncChangeDto.validate() {
 private fun AndroidSyncChangeDto.isThinState(): Boolean = owner_kind in THIN_OWNER_KINDS
 
 private fun AndroidSyncChangeDto.isPrimaryContent(): Boolean = owner_kind == "feed" || owner_kind == "video"
+
+private fun AndroidSyncChangeDto.protectsContent(): Boolean =
+    operation == "upsert" && (owner_kind == "feed_like" || owner_kind == "bookmark")
 
 private fun AndroidSyncChangeDto.releasesProtection(): Boolean =
     operation == "delete" && (owner_kind == "feed_like" || owner_kind == "bookmark")

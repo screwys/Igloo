@@ -6,6 +6,7 @@ import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.ServerBaseUrlProvider
 import com.screwy.igloo.net.ServerDiscovery
 import com.screwy.igloo.net.auth.AuthTokenProvider
+import com.screwy.igloo.sync.PeriodicSyncScheduler
 import com.screwy.igloo.sync.SyncCoordinator
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
@@ -38,6 +39,7 @@ val iglooAuthModule = module {
             applicationScope = get(named("applicationScope")),
             authApiProvider = { get() },
             stopReconcilersOnLogout = {
+                get<PeriodicSyncScheduler>().cancel()
                 AppRuntime.onLogout()
                 get<SyncCoordinator>().stopAll()
             },

@@ -26,8 +26,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 
-class AndroidSyncAssetChangedException :
-    IllegalStateException("Android asset descriptor changed while downloading")
+class AndroidSyncAssetChangedException(
+    val nextAttemptAtMs: Long? = null,
+) : IllegalStateException("Android asset descriptor changed while downloading")
 
 internal class AndroidSyncAssetDrainer(
     private val dao: AndroidSyncDao,
@@ -41,7 +42,7 @@ internal class AndroidSyncAssetDrainer(
 ) {
     private val syncRoot = File(mediaRoot, "sync").apply { mkdirs() }
 
-    suspend fun drain(youtubeCutoffMs: Long) {
+    suspend fun drain(youtubeCutoffMs: Long): AssetSyncResult {
         var downloaded = 0
         var verifiedExisting = 0
         var deferred = 0
@@ -94,17 +95,21 @@ internal class AndroidSyncAssetDrainer(
         } finally {
             if (promoted) foregroundPromoter.finishedBatch(listOf(SYNC_DRAIN_TOKEN))
         }
-        if (!promoted) return
-        logger.info(
-            event = "android_sync_asset_drain_done",
-            fields =
-                mapOf(
-                    "downloaded" to downloaded,
-                    "verified_existing" to verifiedExisting,
-                    "deferred" to deferred,
-                ),
-        )
-        if (stale) throw AndroidSyncAssetChangedException()
+        val nextAttemptAtMs =
+            dao.earliestAssetAttemptAfter(claimableBeforeMs, youtubeCutoffMs)
+        if (promoted) {
+            logger.info(
+                event = "android_sync_asset_drain_done",
+                fields =
+                    mapOf(
+                        "downloaded" to downloaded,
+                        "verified_existing" to verifiedExisting,
+                        "deferred" to deferred,
+                    ),
+            )
+        }
+        if (stale) throw AndroidSyncAssetChangedException(nextAttemptAtMs)
+        return AssetSyncResult(nextAttemptAtMs)
     }
 
     fun deleteFilesForAssets(

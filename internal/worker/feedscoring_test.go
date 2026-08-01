@@ -10,6 +10,55 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
+func TestActionScoringSignalBypassesTheOrdinaryKickDelay(t *testing.T) {
+	ready := make(chan struct{})
+	close(ready)
+	m := &Manager{
+		feedOrderReady:          ready,
+		feedScoringKick:         make(chan struct{}, 1),
+		feedScoringPriorityKick: make(chan struct{}, 1),
+	}
+	type scoringCall struct {
+		forceRerank bool
+		forceRefill bool
+	}
+	calls := make(chan scoringCall, 2)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		m.runFeedScoringLoop(ctx, func(_ context.Context, forceRerank, forceRefill bool) {
+			calls <- scoringCall{forceRerank: forceRerank, forceRefill: forceRefill}
+		})
+		close(done)
+	}()
+
+	select {
+	case call := <-calls:
+		if !call.forceRerank || !call.forceRefill {
+			t.Fatalf("initial scoring call = %+v, want forced snapshot", call)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("initial scoring call did not run")
+	}
+
+	m.kickFeedScoringAfterAction()
+	select {
+	case call := <-calls:
+		if call.forceRerank || call.forceRefill {
+			t.Fatalf("action scoring call = %+v, want dirty-state refresh", call)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("action scoring signal waited behind the ordinary kick delay")
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("feed scoring loop did not stop")
+	}
+}
+
 func TestRankSnapshotPublishesOnlyCompleteReplyChains(t *testing.T) {
 	d := newTestWorkerDB(t)
 	now := time.Now().UTC()

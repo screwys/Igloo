@@ -139,6 +139,7 @@ func (s *Server) handleBookmarkAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	if result.Applied {
 		s.requestXStatusRecovery(result.CanonicalID, true)
+		s.wakeFeedOrderInvalidation()
 	}
 
 	categoryName := category.Name
@@ -154,18 +155,15 @@ func (s *Server) handleBookmarkAdd(w http.ResponseWriter, r *http.Request) {
 		"category_name": categoryName,
 	})
 
-	// Side effects past the response: feed_seen + algo_invalidate + archive.
-	// None affect the response payload, and each previously added a write-mutex
-	// acquisition to the hot path; keeping them off the critical path lets the
-	// menu close immediately even while the feed-scoring worker holds the lock
-	// for a snapshot rebuild.
+	// Seeing the saved item and writing its archive remain past the response.
+	// Feed ordering has its own coalescing worker queue.
 	if result.Applied {
 		go func() {
 			_, _ = s.db.MutateSeen([]string{result.CanonicalID}, 0)
-			_ = s.db.InvalidateAlgoScore(result.CanonicalID)
-			s.workers.KickFeedScoring()
 			if result.Affected > 0 {
-				s.workers.KickMediaWork()
+				if s.workers != nil {
+					s.workers.KickMediaWork()
+				}
 				s.archiveBookmark(result.CanonicalID, archivePath, body.CustomTitle, accountHandlesJSON, body.MediaIndices)
 			}
 		}()
@@ -199,8 +197,7 @@ func (s *Server) handleBookmarkRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.Applied {
-		_ = s.db.InvalidateAlgoScore(result.CanonicalID)
-		s.workers.KickFeedScoring()
+		s.wakeFeedOrderInvalidation()
 	}
 
 	writeJSON(w, 200, map[string]any{

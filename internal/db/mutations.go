@@ -93,14 +93,19 @@ func claimMutationClockTx(tx *sql.Tx, kind, itemKey, action string, updatedAtMs 
 			}
 		}
 	}
-	_, err = tx.Exec(`
+	if _, err = tx.Exec(`
 		INSERT INTO mutation_clocks (kind, item_key, action, updated_at_ms)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT(kind, item_key) DO UPDATE SET
 		  action = excluded.action,
 		  updated_at_ms = excluded.updated_at_ms
-	`, kind, itemKey, action, updatedAtMs)
-	return err == nil, err
+	`, kind, itemKey, action, updatedAtMs); err != nil {
+		return false, err
+	}
+	if err := enqueueFeedOrderInvalidationForMutationTx(tx, kind, itemKey); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func advanceMutationClockTx(tx *sql.Tx, kind, itemKey, action string, updatedAtMs int64) (int64, error) {
@@ -125,7 +130,13 @@ func advanceMutationClockTx(tx *sql.Tx, kind, itemKey, action string, updatedAtM
 		  END
 		RETURNING updated_at_ms
 	`, kind, itemKey, action, updatedAtMs).Scan(&resolved)
-	return resolved, err
+	if err != nil {
+		return 0, err
+	}
+	if err := enqueueFeedOrderInvalidationForMutationTx(tx, kind, itemKey); err != nil {
+		return 0, err
+	}
+	return resolved, nil
 }
 
 func advanceMutationClocksTx(tx *sql.Tx, kind, action, itemsQuery string, args ...any) error {
@@ -149,8 +160,10 @@ func advanceMutationClocksTx(tx *sql.Tx, kind, action, itemsQuery string, args .
 	queryArgs := make([]any, 0, len(args)+2)
 	queryArgs = append(queryArgs, kind, action)
 	queryArgs = append(queryArgs, args...)
-	_, err := tx.Exec(query, queryArgs...)
-	return err
+	if _, err := tx.Exec(query, queryArgs...); err != nil {
+		return err
+	}
+	return enqueueFeedOrderInvalidationsForMutationQueryTx(tx, kind, itemsQuery, args...)
 }
 
 // ── like (toggle) ────────────────────────────────────────────────────
@@ -599,8 +612,13 @@ func mutateChannelSettingsTx(tx *sql.Tx, channelID string, fields map[string]any
 		VALUES (?, %s, ?)
 		ON CONFLICT(channel_id) DO UPDATE SET %s, updated_at = excluded.updated_at
 	`, strings.Join(columns, ", "), strings.Join(placeholders, ", "), strings.Join(updates, ", "))
-	_, err = tx.Exec(query, args...)
-	return err == nil, err
+	if _, err = tx.Exec(query, args...); err != nil {
+		return false, err
+	}
+	if err := enqueueFeedOrderInvalidationTx(tx, "channel", channelID); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func channelSettingMutationColumn(field string) (string, bool) {

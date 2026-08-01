@@ -151,7 +151,7 @@ var _ = []string{
 	N("settings_sponsorblock_section", "SponsorBlock"),
 	N("settings_sponsorblock_description", "Skip segments in YouTube videos using community data."),
 	N("settings_storage_sync", "Storage & sync"),
-	N("settings_sync_description", "Pulls new feed rows, mutations, and the media mirror from your server. Wi-Fi only avoids metered data; intervals apply to periodic catch-up."),
+	N("settings_sync_description", "Actions are sent immediately when connected. Live keeps this device current while Igloo is open; timed intervals and Wi-Fi only control periodic catch-up."),
 	N("settings_syncing", "Syncing…"),
 	N("settings_theme_accent_invalid", "Use #rrggbb"),
 	N("settings_unmute_help", "Their posts can appear in your feed again after sync catches up."),

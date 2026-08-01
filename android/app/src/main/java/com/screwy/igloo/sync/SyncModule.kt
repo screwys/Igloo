@@ -5,7 +5,9 @@ import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.net.AndroidSyncRetentionRequest
 import com.screwy.igloo.outbox.OutboxDispatcher
 import com.screwy.igloo.outbox.OutboxDrain
+import com.screwy.igloo.outbox.OutboxDrainer
 import com.screwy.igloo.outbox.OutboxWriter
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
@@ -26,7 +28,7 @@ val iglooSyncModule = module {
             db = get<IglooDatabase>(),
             prefs = get(),
             scope = get(named("applicationScope")),
-            onDrainRequested = { get<SyncCoordinator>().trigger() },
+            onDrainRequested = get<SyncCoordinator>()::triggerActions,
         )
     }
 
@@ -47,7 +49,7 @@ val iglooSyncModule = module {
             reachability = get(),
             logger = get(),
         )
-    }
+    } bind OutboxDrainer::class
 
     single {
         val prefs = get<PreferencesRepo>()
@@ -75,12 +77,24 @@ val iglooSyncModule = module {
         )
     }
 
+    single<SyncMirror> { AndroidSyncMirrorRunner(get()) }
+
     single {
+        val prefs = get<PreferencesRepo>()
         SyncCoordinator(
             scope = get(named("applicationScope")),
-            outbox = get(),
-            mirror = get(),
-            prefs = get(),
+            outbox = get<OutboxDrainer>(),
+            mirror = get<SyncMirror>(),
+            syncIntervalMinutes = prefs.syncIntervalMinutes(),
+            retentionSettings =
+                combine(
+                    prefs.retentionDaysFeed(),
+                    prefs.retentionDaysMoments(),
+                    prefs.retentionDaysYoutube(),
+                    prefs.storiesWindowHours(),
+                ) { feed, moments, youtube, stories ->
+                    listOf(feed, moments, youtube, stories)
+                },
             reachability = get(),
             foregroundFlow = get<com.screwy.igloo.net.ForegroundLifecycleFlow>().flow,
             logger = get(),

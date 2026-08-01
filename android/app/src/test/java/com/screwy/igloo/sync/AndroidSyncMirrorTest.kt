@@ -10,9 +10,11 @@ import com.screwy.igloo.data.entity.AndroidSyncStateEntity
 import com.screwy.igloo.data.entity.ChannelSettingEntity
 import com.screwy.igloo.data.entity.FeedItemEntity
 import com.screwy.igloo.data.entity.FeedLikeEntity
+import com.screwy.igloo.data.entity.FeedRankEntity
 import com.screwy.igloo.data.entity.FeedSeenEntity
 import com.screwy.igloo.data.entity.MomentsCursorEntity
 import com.screwy.igloo.data.entity.OutboxEntity
+import com.screwy.igloo.data.entity.RetweetSourceEntity
 import com.screwy.igloo.log.InMemoryLogSink
 import com.screwy.igloo.log.Logger
 import com.screwy.igloo.media.ForegroundPromoter
@@ -27,6 +29,7 @@ import com.screwy.igloo.net.ServerBaseUrlProvider
 import com.screwy.igloo.net.iglooJson
 import com.screwy.igloo.outbox.OutboxKind
 import com.screwy.igloo.outbox.OutboxRejectedMutation
+import com.screwy.igloo.outbox.applyOptimisticMutation
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -195,6 +198,7 @@ class AndroidSyncMirrorTest {
     @Test
     fun priorityStateAppliesUserStateWithoutWaitingForContentCatchUp() = runBlocking {
         db.androidSyncDao().upsertSyncState(changesState("content-cursor"))
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_post"))
         db.momentsCursorDao()
             .upsert(MomentsCursorEntity("all", "local_equal", updatedAtMs = nowMs))
         val requests = mutableListOf<String>()
@@ -236,7 +240,7 @@ class AndroidSyncMirrorTest {
             }
         }
 
-        buildMirror(engine).syncPriorityStateOnce()
+        val result = buildMirror(engine).syncPriorityStateOnce()
 
         assertEquals(listOf("content-cursor"), requests)
         assertTrue(db.feedLikeDao().exists("sample_post"))
@@ -247,6 +251,207 @@ class AndroidSyncMirrorTest {
             db.preferenceDao().getValue("android_sync_priority_state_cursor"),
         )
         assertEquals("content-cursor", db.androidSyncDao().syncState()?.cursor)
+        assertTrue(result.metadataRequired)
+    }
+
+    @Test
+    fun prioritySelectionWideningSurvivesTheNextMainPageAndStartsReplay() = runBlocking {
+        db.androidSyncDao().upsertSyncState(changesState("cursor-a"))
+        val firstMetadataStarted = CompletableDeferred<Unit>()
+        val releaseFirstMetadata = CompletableDeferred<Unit>()
+        val laterMetadataStarted = CompletableDeferred<Unit>()
+        val releaseLaterMetadata = CompletableDeferred<Unit>()
+        val requests = Collections.synchronizedList(mutableListOf<String>())
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/changes" -> {
+                    val after = requireNotNull(request.url.parameters["after"])
+                    requests += "changes:$after"
+                    when (after) {
+                        "cursor-a" -> {
+                            firstMetadataStarted.complete(Unit)
+                            releaseFirstMetadata.await()
+                            respondJson(page(emptyList(), "cursor-b", end = false))
+                        }
+                        "cursor-b" -> {
+                            laterMetadataStarted.complete(Unit)
+                            releaseLaterMetadata.await()
+                            respondJson(page(emptyList(), "cursor-c"))
+                        }
+                        "cursor-replayed" -> respondJson(page(emptyList(), "cursor-replayed"))
+                        else -> error("Unexpected changes cursor $after")
+                    }
+                }
+                "/api/android/sync/state" -> {
+                    requests += "priority"
+                    respondJson(
+                        page(listOf(channelFollowChange("sample_channel")), "priority-cursor")
+                    )
+                }
+                "/api/android/sync/bootstrap" -> {
+                    requests += "bootstrap"
+                    respondJson(
+                        page(
+                            listOf(channelFollowChange("sample_channel")),
+                            "cursor-replayed",
+                        )
+                    )
+                }
+                "/api/android/sync/health" -> respondOk()
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+        val mirror = buildMirror(engine)
+        val metadata = async { mirror.syncMetadataOnce() }
+        firstMetadataStarted.await()
+        val priority = async { mirror.syncPriorityStateOnce() }
+
+        releaseFirstMetadata.complete(Unit)
+        laterMetadataStarted.await()
+        assertTrue(priority.await().metadataRequired)
+        releaseLaterMetadata.complete(Unit)
+        metadata.await()
+
+        assertTrue("bootstrap" in requests)
+        assertEquals("cursor-replayed", db.androidSyncDao().syncState()?.cursor)
+        assertTrue(db.channelFollowDao().exists("sample_channel"))
+    }
+
+    @Test
+    fun pendingOptimisticFollowCannotHideAuthoritativePriorityWidening() = runBlocking {
+        db.androidSyncDao().upsertSyncState(changesState("content-cursor"))
+        val pending =
+            OutboxEntity(
+                kind = OutboxKind.CODE_FOLLOW,
+                itemId = "sample_channel",
+                payloadJson =
+                    """{"channel_id":"sample_channel","action":"set","updated_at_ms":$nowMs}""",
+                createdAtMs = nowMs,
+            )
+        db.outboxDao().insert(pending)
+        applyOptimisticMutation(db, db.outboxDao().pendingRows().single())
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/state" ->
+                    respondJson(
+                        page(listOf(channelFollowChange("sample_channel")), "priority-cursor")
+                    )
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        val result = buildMirror(engine).syncPriorityStateOnce()
+
+        assertTrue(result.metadataRequired)
+        assertTrue(requireNotNull(db.androidSyncDao().syncState()).bootstrapRequired)
+        assertTrue(db.channelFollowDao().exists("sample_channel"))
+    }
+
+    @Test
+    fun unacknowledgedSelectionMarkerDoesNotStartReplay() = runBlocking {
+        db.androidSyncDao().upsertSyncState(changesState("content-cursor"))
+        db.outboxDao()
+            .insert(
+                OutboxEntity(
+                    kind = OutboxKind.CODE_FOLLOW,
+                    itemId = "sample_channel",
+                    payloadJson =
+                        """{"channel_id":"sample_channel","action":"set","updated_at_ms":$nowMs,"selection_widening":true,"selection_baseline":0}""",
+                    createdAtMs = nowMs,
+                )
+            )
+        val requests = mutableListOf<String>()
+        val engine = MockEngine { request ->
+            requests += request.url.encodedPath
+            when (request.url.encodedPath) {
+                "/api/android/sync/changes" ->
+                    respondJson(page(emptyList(), "content-cursor"))
+                "/api/android/sync/health" -> respondOk()
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+
+        buildMirror(engine).syncMetadataOnce()
+
+        assertFalse(requireNotNull(db.androidSyncDao().syncState()).bootstrapRequired)
+        assertFalse(requests.contains("/api/android/sync/bootstrap"))
+    }
+
+    @Test
+    fun promotedSelectionMarkerStartsExactlyOneReplay() = runBlocking {
+        db.androidSyncDao()
+            .upsertSyncState(changesState("content-cursor").copy(bootstrapRequired = true))
+        var bootstrapCalls = 0
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/changes" ->
+                    respondJson(
+                        page(
+                            emptyList(),
+                            request.url.parameters["after"] ?: "content-cursor",
+                        )
+                    )
+                "/api/android/sync/bootstrap" -> {
+                    bootstrapCalls++
+                    respondJson(page(emptyList(), "replayed-cursor"))
+                }
+                "/api/android/sync/health" -> respondOk()
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+        val mirror = buildMirror(engine)
+
+        mirror.syncMetadataOnce()
+        mirror.syncMetadataOnce()
+
+        assertEquals(1, bootstrapCalls)
+        assertEquals("replayed-cursor", db.androidSyncDao().syncState()?.cursor)
+        assertFalse(requireNotNull(db.androidSyncDao().syncState()).bootstrapRequired)
+    }
+
+    @Test
+    fun priorityStateRunsBetweenBoundedMetadataPages() = runBlocking {
+        db.androidSyncDao().upsertSyncState(changesState("content-cursor"))
+        val firstMetadataStarted = CompletableDeferred<Unit>()
+        val releaseFirstMetadata = CompletableDeferred<Unit>()
+        val laterMetadataStarted = CompletableDeferred<Unit>()
+        val releaseLaterMetadata = CompletableDeferred<Unit>()
+        val engine = MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/changes" ->
+                    when (request.url.parameters["after"]) {
+                        "content-cursor" -> {
+                            firstMetadataStarted.complete(Unit)
+                            releaseFirstMetadata.await()
+                            respondJson(page(emptyList(), "next-content-cursor", end = false))
+                        }
+                        "next-content-cursor" -> {
+                            laterMetadataStarted.complete(Unit)
+                            releaseLaterMetadata.await()
+                            respondJson(page(emptyList(), "next-content-cursor"))
+                        }
+                        else -> error("Unexpected cursor ${request.url}")
+                    }
+                "/api/android/sync/state" ->
+                    respondJson(page(listOf(feedLikeChange("sample_priority_post")), "state-cursor"))
+                "/api/android/sync/health" -> respondOk()
+                else -> error("Unexpected request ${request.url}")
+            }
+        }
+        val mirror = buildMirror(engine)
+        val metadata = async { mirror.syncMetadataOnce() }
+        firstMetadataStarted.await()
+        val priority = async { mirror.syncPriorityStateOnce() }
+
+        releaseFirstMetadata.complete(Unit)
+        laterMetadataStarted.await()
+
+        priority.await()
+        assertTrue(db.feedLikeDao().exists("sample_priority_post"))
+        assertFalse(releaseLaterMetadata.isCompleted)
+
+        releaseLaterMetadata.complete(Unit)
+        metadata.await()
     }
 
     @Test
@@ -324,11 +529,11 @@ class AndroidSyncMirrorTest {
             assertEquals(1, attempts)
             respond("", HttpStatusCode.ServiceUnavailable)
         }
-        buildAssetDrainer(retryEngine) {
-            nowMs += 31_000
-            nowMs
-        }.drain(youtubeCutoffMs = Long.MIN_VALUE)
+        val retryResult =
+            buildAssetDrainer(retryEngine) { nowMs }
+                .drain(youtubeCutoffMs = Long.MIN_VALUE)
         assertEquals(1, attempts)
+        assertEquals(nowMs + 30_000L, retryResult.nextAttemptAtMs)
 
         db.androidSyncDao().deleteAsset("sample_retry_asset")
         repeat(65) { index ->
@@ -352,6 +557,21 @@ class AndroidSyncMirrorTest {
         assertTrue(failure is AndroidSyncAssetChangedException)
         assertEquals(64, requested.size)
         assertTrue("sample_changed_asset_064" !in requested)
+    }
+
+    @Test
+    fun assetDrainKeepsADeferredWakeWhenTheDeadlinePassesDuringTheBatch() = runBlocking {
+        db.androidSyncDao().upsertAsset(readyAsset("sample_slow_retry_asset"))
+        var clockReads = 0
+        val drainer =
+            buildAssetDrainer(MockEngine { respond("", HttpStatusCode.ServiceUnavailable) }) {
+                clockReads++
+                if (clockReads <= 2) nowMs else nowMs + 31_000L
+            }
+
+        val result = drainer.drain(youtubeCutoffMs = Long.MIN_VALUE)
+
+        assertEquals(nowMs + 30_000L, result.nextAttemptAtMs)
     }
 
     @Test
@@ -490,11 +710,63 @@ class AndroidSyncMirrorTest {
     fun resetBootstrapSweepsAbsentOwnersAndRestoresPendingState() = runBlocking {
         db.androidSyncDao().upsertSyncState(changesState("old-cursor"))
         db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_deleted_post"))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_existing_post"))
+        db.feedItemDao()
+            .upsert(
+                FeedItemEntity(
+                    tweetId = "sample_existing_post",
+                    contentHash = "hash-sample_existing_post",
+                )
+            )
         db.androidSyncDao().upsertHead(AndroidSyncHeadEntity("feed", "sample_deleted_post", "feed", nowMs))
         db.androidSyncDao().upsertHead(AndroidSyncHeadEntity("feed", "sample_existing_post", "feed", nowMs))
+        db.feedRankDao().upsert(listOf(FeedRankEntity("sample_existing_post", 1, nowMs)))
+        db.androidSyncDao()
+            .upsertHead(AndroidSyncHeadEntity("feed_rank", "sample_existing_post", "feed", nowMs))
+        db.retweetSourceDao()
+            .upsert(
+                listOf(
+                    RetweetSourceEntity(
+                        contentHash = "hash-sample_existing_post",
+                        retweeterChannelId = "sample_reposter",
+                        tweetId = "sample_existing_post",
+                        publishedAt = nowMs,
+                    )
+                )
+            )
+        db.androidSyncDao()
+            .upsertHead(
+                AndroidSyncHeadEntity(
+                    "retweet_sources",
+                    "hash-sample_existing_post",
+                    "feed",
+                    nowMs,
+                )
+            )
         db.feedLikeDao().upsert(FeedLikeEntity("sample_existing_post", nowMs))
         db.feedLikeDao().upsert(FeedLikeEntity("sample_rejected_post", nowMs))
+        val cachedAssetFile = temporaryFolder.newFile("sample_cached_asset.jpg").apply {
+            writeBytes(byteArrayOf(1))
+        }
+        db.androidSyncDao()
+            .upsertAsset(
+                readyAsset("sample_uncached_asset")
+                    .copy(ownerId = "sample_existing_post")
+            )
+        db.androidSyncDao()
+            .upsertAsset(
+                readyAsset("sample_cached_asset")
+                    .copy(
+                        ownerId = "sample_existing_post",
+                        localPath = cachedAssetFile.absolutePath,
+                        verifiedAtMs = nowMs,
+                    )
+            )
+        db.androidSyncDao()
+            .upsertHead(
+                AndroidSyncHeadEntity("asset", "sample_uncached_asset", "feed", nowMs)
+            )
+        db.androidSyncDao()
+            .upsertHead(AndroidSyncHeadEntity("asset", "sample_cached_asset", "feed", nowMs))
         db.momentsCursorDao()
             .upsert(MomentsCursorEntity("stories", "sample_story", updatedAtMs = nowMs))
         db.androidSyncDao()
@@ -560,8 +832,16 @@ class AndroidSyncMirrorTest {
 
         assertNull(db.feedItemDao().getById("sample_deleted_post"))
         assertNotNull(db.feedItemDao().getById("sample_existing_post"))
+        assertEquals(0, db.feedRankDao().count())
+        assertEquals(0, db.retweetSourceDao().countForContentHash("hash-sample_existing_post"))
         assertTrue(db.feedLikeDao().exists("sample_existing_post"))
         assertFalse(db.feedLikeDao().exists("sample_rejected_post"))
+        assertNull(db.androidSyncDao().asset("sample_uncached_asset"))
+        assertEquals(
+            cachedAssetFile.absolutePath,
+            db.androidSyncDao().asset("sample_cached_asset")?.localPath,
+        )
+        assertTrue(cachedAssetFile.exists())
         assertEquals("sample_story", db.momentsCursorDao().get("stories")?.videoId)
         assertFalse(db.androidSyncDao().headIds("moments_cursor").contains("stories"))
         assertEquals(0, db.channelSettingDao().getById("sample_channel")?.mediaOnly)

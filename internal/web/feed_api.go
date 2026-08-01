@@ -97,8 +97,7 @@ func (s *Server) handleFeedLike(w http.ResponseWriter, r *http.Request) {
 	}
 	if result.Applied {
 		s.requestXStatusRecovery(result.CanonicalID, false)
-		_ = s.db.InvalidateAlgoScore(result.CanonicalID)
-		s.workers.KickFeedScoring()
+		s.wakeFeedOrderInvalidation()
 	}
 
 	if r.Header.Get("HX-Request") != "" {
@@ -127,8 +126,7 @@ func (s *Server) handleFeedUnlike(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.Applied {
-		_ = s.db.InvalidateAlgoScore(result.CanonicalID)
-		s.workers.KickFeedScoring()
+		s.wakeFeedOrderInvalidation()
 	}
 
 	if r.Header.Get("HX-Request") != "" {
@@ -206,8 +204,7 @@ func (s *Server) handleFeedMute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if result.Applied {
-		_ = s.db.InvalidateFeedWindowByChannelID(channelID)
-		s.workers.KickFeedScoring()
+		s.wakeFeedOrderInvalidation()
 	}
 
 	if r.Header.Get("HX-Request") != "" {
@@ -239,8 +236,7 @@ func (s *Server) handleFeedUnmute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if result.Applied {
-		_ = s.db.InvalidateFeedWindowByChannelID(channelID)
-		s.workers.KickFeedScoring()
+		s.wakeFeedOrderInvalidation()
 	}
 
 	if r.Header.Get("HX-Request") != "" {
@@ -347,8 +343,11 @@ func (s *Server) handleFeedInteraction(w http.ResponseWriter, r *http.Request) {
 	case "mute":
 		handle, _ := body.Item["source_handle"].(string)
 		if handle != "" {
-			if _, err := s.db.MutateMute(model.TwitterChannelIDFromHandle(handle), "set", 0); err != nil {
+			result, err := s.db.MutateMute(model.TwitterChannelIDFromHandle(handle), "set", 0)
+			if err != nil {
 				slog.Error("MuteAccount", "handle", handle, "err", err)
+			} else if result.Applied {
+				s.wakeFeedOrderInvalidation()
 			}
 		}
 		writeJSON(w, 200, map[string]any{"success": true, "action": "mute"})
@@ -365,6 +364,7 @@ func (s *Server) handleFeedInteraction(w http.ResponseWriter, r *http.Request) {
 				slog.Error("MutateLike", "tweet", body.TweetID, "err", err)
 			} else if result.Applied {
 				s.requestXStatusRecovery(result.CanonicalID, false)
+				s.wakeFeedOrderInvalidation()
 			}
 		}
 		writeJSON(w, 200, map[string]any{"success": true, "action": "like"})

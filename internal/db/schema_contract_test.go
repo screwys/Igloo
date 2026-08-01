@@ -189,6 +189,105 @@ func TestOpenMigratesYouTubeMemberOnlyChannelSettingAndSyncTrigger(t *testing.T)
 	}
 }
 
+func TestOpenMigratesFeedOrderInvalidationQueue(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "igloo.db")
+	store, err := OpenPath(path, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`
+		DROP TABLE feed_order_invalidations;
+		DELETE FROM schema_migrations
+		WHERE name = '20260801_add_feed_order_invalidation_queue';
+	`); err != nil {
+		_ = conn.Close()
+		t.Fatal(err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = OpenPath(path, root)
+	if err != nil {
+		t.Fatalf("OpenPath schema without feed-order queue: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	if err := store.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, body_text)
+		VALUES ('sample_item', 'body')
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.MutateLike(LikeMutation{
+		TweetID: "sample_item", Action: "set", UpdatedAtMs: 10,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var queued int
+	if err := store.QueryRow(`
+		SELECT COUNT(*) FROM feed_order_invalidations
+		WHERE owner_kind = 'tweet' AND owner_id = 'sample_item'
+	`).Scan(&queued); err != nil {
+		t.Fatal(err)
+	}
+	if queued != 1 {
+		t.Fatalf("migrated feed-order invalidations = %d, want 1", queued)
+	}
+}
+
+func TestOpenInstallsAndroidSyncPeerTriggersBeforeSchemaValidation(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "igloo.db")
+	store, err := OpenPath(path, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`
+		DROP TRIGGER android_sync_head_bookmarks_peers_delete;
+		DELETE FROM schema_migrations
+		WHERE name = '20260802_install_android_sync_peer_triggers';
+	`); err != nil {
+		_ = conn.Close()
+		t.Fatal(err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = OpenPath(path, root)
+	if err != nil {
+		t.Fatalf("OpenPath schema without Android sync peer trigger: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	var installed int
+	if err := store.QueryRow(`
+		SELECT COUNT(*) FROM sqlite_schema
+		WHERE type = 'trigger' AND name = 'android_sync_head_bookmarks_peers_delete'
+	`).Scan(&installed); err != nil {
+		t.Fatal(err)
+	}
+	if installed != 1 {
+		t.Fatalf("installed Android sync peer triggers = %d, want 1", installed)
+	}
+}
+
 func TestOpenBackfillsVideoFetchHistory(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")

@@ -173,8 +173,67 @@ func TestHandleFeedInteraction_BookmarkActionRejected(t *testing.T) {
 	}
 }
 
+func TestHandleFeedInteractionQueuesAppliedFeedOrderChanges(t *testing.T) {
+	srv := newTestServer(t)
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_items (
+			tweet_id, channel_id, source_channel_id, body_text, published_at, fetched_at, algo_scored_at
+		) VALUES
+			('sample_interaction_like', 'twitter_other', 'twitter_other', 'like', 2, 2, 810),
+			('sample_interaction_mute', 'twitter_sample_action', 'twitter_sample_action', 'mute', 1, 1, 820)
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, body := range []string{
+		`{"action":"like","tweet_id":"sample_interaction_like","item":{}}`,
+		`{"action":"mute","item":{"source_handle":"sample_action"}}`,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/api/feed/interaction", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = attachTestAuth(req, "sample")
+		rec := httptest.NewRecorder()
+		srv.mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("body %s status = %d response = %s", body, rec.Code, rec.Body.String())
+		}
+	}
+
+	_ = mutationOwnerRevision(t, srv, "feed_like", "sample_interaction_like")
+	_ = mutationOwnerRevision(t, srv, "muted_channel", "twitter_sample_action")
+	for tweetID, want := range map[string]int64{
+		"sample_interaction_like": 810,
+		"sample_interaction_mute": 820,
+	} {
+		var scoredAt int64
+		if err := srv.db.QueryRow(`SELECT algo_scored_at FROM feed_items WHERE tweet_id = ?`, tweetID).Scan(&scoredAt); err != nil {
+			t.Fatal(err)
+		}
+		if scoredAt != want {
+			t.Fatalf("%s response-path algo_scored_at = %d, want %d", tweetID, scoredAt, want)
+		}
+	}
+
+	processQueuedFeedOrderInvalidations(t, srv)
+	for _, tweetID := range []string{"sample_interaction_like", "sample_interaction_mute"} {
+		var scoredAt int64
+		if err := srv.db.QueryRow(`SELECT algo_scored_at FROM feed_items WHERE tweet_id = ?`, tweetID).Scan(&scoredAt); err != nil {
+			t.Fatal(err)
+		}
+		if scoredAt != 0 {
+			t.Fatalf("%s queued algo_scored_at = %d, want 0", tweetID, scoredAt)
+		}
+	}
+}
+
 func TestHandleFeedLikePublishesItsStateOwners(t *testing.T) {
 	srv := newTestServer(t)
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, body_text, algo_scored_at)
+		VALUES ('sample_like_once', 'body', 456)
+	`); err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest("POST", "/api/feed/like/sample_like_once", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -196,6 +255,24 @@ func TestHandleFeedLikePublishesItsStateOwners(t *testing.T) {
 	}
 	if liked != 1 || seen != 1 {
 		t.Fatalf("like state = liked %d seen %d", liked, seen)
+	}
+	var scoredAt int64
+	if err := srv.db.QueryRow(`
+		SELECT algo_scored_at FROM feed_items WHERE tweet_id = 'sample_like_once'
+	`).Scan(&scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if scoredAt != 456 {
+		t.Fatalf("response-path algo_scored_at = %d, want 456", scoredAt)
+	}
+	processQueuedFeedOrderInvalidations(t, srv)
+	if err := srv.db.QueryRow(`
+		SELECT algo_scored_at FROM feed_items WHERE tweet_id = 'sample_like_once'
+	`).Scan(&scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if scoredAt != 0 {
+		t.Fatalf("queued algo_scored_at = %d, want 0", scoredAt)
 	}
 }
 

@@ -59,5 +59,15 @@ func schemaQueueStatements() []string {
 			added_at_ms        INTEGER NOT NULL DEFAULT 0,
 			started_at_ms      INTEGER NOT NULL DEFAULT 0
 		)`,
+
+		feedOrderInvalidationQueueStatement(),
 	}
+}
+
+func feedOrderInvalidationQueueStatement() string {
+	return `CREATE TABLE IF NOT EXISTS feed_order_invalidations (
+		owner_kind TEXT NOT NULL CHECK (owner_kind IN ('tweet', 'channel')),
+		owner_id TEXT NOT NULL CHECK (TRIM(owner_id) != ''),
+		PRIMARY KEY (owner_kind, owner_id)
+	) WITHOUT ROWID`
 }

@@ -9,6 +9,56 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
+func TestChannelStarCommitsBeforeQueuedFeedWindowInvalidation(t *testing.T) {
+	srv := newTestServer(t)
+	const channelID = "twitter_sample_star"
+	if err := srv.db.AddChannel(model.Channel{
+		ChannelID: channelID,
+		SourceID:  "sample_star",
+		Name:      "Sample Star",
+		Platform:  "twitter",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_items (
+			tweet_id, channel_id, source_channel_id, body_text, published_at, fetched_at, algo_scored_at
+		) VALUES ('sample_star_item', ?, ?, 'body', 1, 1, 789)
+	`, channelID, channelID); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/channels/"+channelID+"/star", nil)
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if !srv.db.IsChannelStarred(channelID) {
+		t.Fatal("channel star was not committed before the response")
+	}
+	_ = mutationOwnerRevision(t, srv, "channel_star", channelID)
+	var scoredAt int64
+	if err := srv.db.QueryRow(`
+		SELECT algo_scored_at FROM feed_items WHERE tweet_id = 'sample_star_item'
+	`).Scan(&scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if scoredAt != 789 {
+		t.Fatalf("response-path algo_scored_at = %d, want 789", scoredAt)
+	}
+
+	processQueuedFeedOrderInvalidations(t, srv)
+	if err := srv.db.QueryRow(`
+		SELECT algo_scored_at FROM feed_items WHERE tweet_id = 'sample_star_item'
+	`).Scan(&scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if scoredAt != 0 {
+		t.Fatalf("queued algo_scored_at = %d, want 0", scoredAt)
+	}
+}
+
 func TestChannelSubscribeRouteFollowsExistingTempChannel(t *testing.T) {
 	srv := newTestServer(t)
 	const channelID = "youtube_UCtempchannel"
@@ -21,6 +71,13 @@ func TestChannelSubscribeRouteFollowsExistingTempChannel(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("AddChannel: %v", err)
 	}
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_items (
+			tweet_id, channel_id, source_channel_id, body_text, published_at, fetched_at, algo_scored_at
+		) VALUES ('sample_follow_item', ?, ?, 'body', 1, 1, 901)
+	`, channelID, channelID); err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest("POST", "/api/channels/"+channelID+"/subscribe", nil)
 	rec := httptest.NewRecorder()
@@ -32,6 +89,25 @@ func TestChannelSubscribeRouteFollowsExistingTempChannel(t *testing.T) {
 	}
 	if !srv.db.IsChannelFollowed(channelID) {
 		t.Fatal("expected existing temp channel to gain a follow row")
+	}
+	_ = mutationOwnerRevision(t, srv, "channel_follow", channelID)
+	var scoredAt int64
+	if err := srv.db.QueryRow(`
+		SELECT algo_scored_at FROM feed_items WHERE tweet_id = 'sample_follow_item'
+	`).Scan(&scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if scoredAt != 901 {
+		t.Fatalf("response-path algo_scored_at = %d, want 901", scoredAt)
+	}
+	processQueuedFeedOrderInvalidations(t, srv)
+	if err := srv.db.QueryRow(`
+		SELECT algo_scored_at FROM feed_items WHERE tweet_id = 'sample_follow_item'
+	`).Scan(&scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if scoredAt != 0 {
+		t.Fatalf("queued algo_scored_at = %d, want 0", scoredAt)
 	}
 	var body struct {
 		Success    bool   `json:"success"`

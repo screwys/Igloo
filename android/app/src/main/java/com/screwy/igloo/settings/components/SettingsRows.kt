@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.screwy.igloo.R
+import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.settings.SponsorBlockSettings
 import com.screwy.igloo.ui.nav.RouteRegistry
 import com.screwy.igloo.ui.theme.iglooColors
@@ -49,15 +52,18 @@ internal fun retentionDaysLabel(days: Int): String = when {
     else -> stringResource(R.string.settings_retention_days, days)
 }
 
-internal val syncIntervalOptions = listOf(30, 60, 120, 240)
+internal val syncIntervalOptions =
+    listOf(PreferencesRepo.Defaults.SYNC_INTERVAL_LIVE, 30, 60, 120, 240)
 internal val storiesWindowHourOptions = listOf(24, 48, 72, 168)
 
 @Composable
 internal fun syncIntervalLabel(minutes: Int): String =
-    if (minutes > 0 && minutes % 60 == 0) {
-        stringResource(R.string.settings_sync_hours, minutes / 60)
-    } else {
-        stringResource(R.string.settings_sync_minutes, minutes)
+    when {
+        minutes == PreferencesRepo.Defaults.SYNC_INTERVAL_LIVE ->
+            stringResource(R.string.settings_sync_live)
+        minutes > 0 && minutes % 60 == 0 ->
+            stringResource(R.string.settings_sync_hours, minutes / 60)
+        else -> stringResource(R.string.settings_sync_minutes, minutes)
     }
 
 @Composable
@@ -396,6 +402,7 @@ internal fun LanguageRow(
 // ─── Sync interval chips ───────────────────────────────────────────────────
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun SyncIntervalRow(selected: Int, onSelect: (Int) -> Unit) {
     val colors = MaterialTheme.iglooColors
     Column {
@@ -405,9 +412,11 @@ internal fun SyncIntervalRow(selected: Int, onSelect: (Int) -> Unit) {
             color = colors.onSurface,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         )
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp),
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            maxItemsInEachRow = 3,
         ) {
             syncIntervalOptions.forEach { opt ->
                 val isSelected = opt == selected

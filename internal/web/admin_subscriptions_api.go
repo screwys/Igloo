@@ -119,7 +119,7 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	s.kickFeedOrderForChannelID(ch.ChannelID)
+	s.wakeFeedOrderInvalidation()
 
 	s.workers.Emit("system", fmt.Sprintf("Subscribed: %s (%s)", ch.Name, ch.Platform), "done")
 
@@ -157,7 +157,7 @@ func (s *Server) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.Applied {
-		s.kickFeedOrderForChannelID(result.CanonicalID)
+		s.wakeFeedOrderInvalidation()
 	}
 
 	s.workers.Emit("system", fmt.Sprintf("Unsubscribed: %s", channelID), "info")

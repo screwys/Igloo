@@ -77,7 +77,7 @@ func TestListAndroidSyncFeedProjectionUsesStableIdentityOwnersAndCanonicalChildr
 	}
 }
 
-func TestListAndroidSyncFeedHydrationIDsIncludesPeersQuotesAndAncestors(t *testing.T) {
+func TestListAndroidSyncFeedHydrationIDsIncludesQuotesAndAncestorsWithoutPeerFanout(t *testing.T) {
 	d := openWritableTestDB(t)
 	if err := d.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, content_hash, quote_tweet_id, reply_to_status, published_at, fetched_at) VALUES
@@ -96,8 +96,7 @@ func TestListAndroidSyncFeedHydrationIDsIncludesPeersQuotesAndAncestors(t *testi
 		t.Fatal(err)
 	}
 	want := []string{
-		"sample_peer", "sample_peer_quote", "sample_quote", "sample_quote_root",
-		"sample_reply_root", "sample_requested",
+		"sample_quote", "sample_quote_root", "sample_reply_root", "sample_requested",
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("hydration ids = %v, want %v", got, want)

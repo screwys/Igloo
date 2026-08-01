@@ -43,8 +43,41 @@ interface AndroidSyncDao {
     @Query("UPDATE android_sync_heads SET bootstrap_seen = 0")
     suspend fun markHeadsUnseen()
 
-    @Query("SELECT * FROM android_sync_heads WHERE bootstrap_seen = 0 ORDER BY owner_kind, owner_id")
-    suspend fun unseenHeads(): List<AndroidSyncHeadEntity>
+    @Query(
+        "SELECT owner_id FROM android_sync_heads " +
+            "WHERE bootstrap_seen = 0 AND owner_kind = :ownerKind ORDER BY owner_id"
+    )
+    suspend fun unseenHeadIds(ownerKind: String): List<String>
+
+    @Query(
+        """
+        SELECT h.owner_id
+        FROM android_sync_heads h
+        JOIN videos v ON v.video_id = h.owner_id
+        WHERE h.bootstrap_seen = 0
+          AND h.owner_kind = 'video'
+          AND v.is_temp = 1
+        ORDER BY h.owner_id
+        """
+    )
+    suspend fun unseenTemporaryVideoIds(): List<String>
+
+    @Query(
+        """
+        SELECT asa.*
+        FROM android_sync_assets asa
+        JOIN android_sync_heads h
+          ON h.owner_kind = 'asset' AND h.owner_id = asa.asset_id
+        WHERE h.bootstrap_seen = 0
+          AND asa.local_path IS NULL
+        ORDER BY asa.asset_id
+        LIMIT :limit
+        """,
+    )
+    suspend fun unseenUncachedAssets(limit: Int): List<AndroidSyncAssetEntity>
+
+    @Query("DELETE FROM android_sync_heads WHERE bootstrap_seen = 0")
+    suspend fun deleteUnseenHeads(): Int
 
     @Query(
         """
@@ -316,6 +349,39 @@ interface AndroidSyncDao {
         youtubeCutoffMs: Long,
         limit: Int,
     ): List<AndroidSyncAssetEntity>
+
+    @Query(
+        """
+        SELECT MIN(asa.next_attempt_at_ms)
+        FROM android_sync_assets asa
+        WHERE asa.state = 'ready'
+          AND asa.local_path IS NULL
+          AND asa.next_attempt_at_ms > :nowMs
+          AND (
+            NOT ${youtubeVideoPrimaryAssetSql}
+            OR asa.owner_kind != 'youtube_video'
+            OR EXISTS (
+              SELECT 1 FROM offline_video_downloads saved
+              WHERE saved.video_id = asa.owner_id
+                AND saved.state IN ('requested', 'downloaded')
+            )
+            OR (
+              NOT EXISTS (
+                SELECT 1 FROM offline_video_downloads removed
+                WHERE removed.video_id = asa.owner_id AND removed.state = 'removed'
+              )
+              AND EXISTS (
+                SELECT 1
+                FROM videos v
+                WHERE v.video_id = asa.owner_id
+                  AND COALESCE(v.is_temp, 0) = 0
+                  AND v.published_at >= :youtubeCutoffMs
+              )
+            )
+          )
+        """,
+    )
+    suspend fun earliestAssetAttemptAfter(nowMs: Long, youtubeCutoffMs: Long): Long?
 
     @Query(
         """

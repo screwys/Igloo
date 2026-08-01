@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,56 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestMutationResponseCommitsBeforeQueuedFeedOrderInvalidation(t *testing.T) {
+	srv := newTestServer(t)
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, body_text, algo_scored_at)
+		VALUES ('sample_queued_like', 'body', 123)
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	status, body := mutationRequest(t, srv, http.MethodPost, "/api/mutations/like", `{
+	  "tweet_id":"sample_queued_like", "action":"set", "updated_at_ms":100
+	}`)
+	if status != http.StatusOK {
+		t.Fatalf("like status = %d body %v", status, body)
+	}
+	var liked, scoredAt int
+	if err := srv.db.QueryRow(`
+		SELECT EXISTS(SELECT 1 FROM feed_likes WHERE tweet_id = 'sample_queued_like'),
+		       algo_scored_at
+		FROM feed_items WHERE tweet_id = 'sample_queued_like'
+	`).Scan(&liked, &scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if liked != 1 {
+		t.Fatal("like was not committed before the response")
+	}
+	if revision := mutationOwnerRevision(t, srv, "feed_like", "sample_queued_like"); revision <= 0 {
+		t.Fatalf("Android sync revision = %d, want a committed revision", revision)
+	}
+	if scoredAt != 123 {
+		t.Fatalf("derived feed score was invalidated in the response path: %d", scoredAt)
+	}
+
+	processed, err := srv.workers.ProcessFeedOrderInvalidations(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !processed {
+		t.Fatal("mutation did not queue feed-order invalidation")
+	}
+	if err := srv.db.QueryRow(`
+		SELECT algo_scored_at FROM feed_items WHERE tweet_id = 'sample_queued_like'
+	`).Scan(&scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if scoredAt != 0 {
+		t.Fatalf("queued feed score = %d, want invalidated", scoredAt)
+	}
+}
 
 func TestMutationErrorDoesNotExposeInternalFailure(t *testing.T) {
 	rec := httptest.NewRecorder()
@@ -230,6 +281,17 @@ func mutationOwnerRevision(t *testing.T, srv *testServer, ownerKind, ownerID str
 		t.Fatal(err)
 	}
 	return revision
+}
+
+func processQueuedFeedOrderInvalidations(t *testing.T, srv *testServer) {
+	t.Helper()
+	processed, err := srv.workers.ProcessFeedOrderInvalidations(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !processed {
+		t.Fatal("expected queued feed-order invalidation")
+	}
 }
 
 func mutationRequest(t *testing.T, srv *testServer, method, path, body string) (int, map[string]any) {

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -42,23 +43,40 @@ func (s *Server) buildAndroidSyncBootstrapSelection(
 	if err != nil {
 		return nil, db.AndroidSyncDesiredSets{}, err
 	}
-	heads := make([]model.AndroidSyncHead, 0, len(sets.Tweets)+len(sets.Videos)+len(sets.Channels))
-	appendOwners := func(kind string, ids []string) {
-		for _, id := range ids {
-			heads = append(heads, model.AndroidSyncHead{OwnerKind: kind, OwnerID: id})
-		}
-	}
-	appendOwners("feed", sets.SortedTweets())
-	appendOwners("video", sets.SortedVideos())
-	appendOwners("channel", sets.SortedChannels())
-
-	_, ranks, err := database.ListAndroidSyncFeedRankRows(sets.SortedTweets(), androidSyncFeedRankMaxRows)
+	retweetHashes, err := database.ListAndroidSyncRetweetSourceHashesForFeedIDs(sets.SortedTweets())
 	if err != nil {
 		return nil, db.AndroidSyncDesiredSets{}, err
 	}
-	for _, rank := range ranks {
-		heads = append(heads, model.AndroidSyncHead{OwnerKind: "feed_rank", OwnerID: rank.TweetID})
+	assets, _, err := s.buildAndroidSyncAssets(database, sets)
+	if err != nil {
+		return nil, db.AndroidSyncDesiredSets{}, err
 	}
+
+	heads := make([]model.AndroidSyncHead, 0,
+		len(sets.Tweets)+len(sets.Videos)+len(sets.Channels)+len(retweetHashes)+len(assets),
+	)
+	seen := make(map[string]struct{}, cap(heads))
+	appendOwner := func(kind, id string) {
+		kind = strings.TrimSpace(kind)
+		id = strings.TrimSpace(id)
+		if kind == "" || id == "" {
+			return
+		}
+		key := kind + "\x00" + id
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		heads = append(heads, model.AndroidSyncHead{OwnerKind: kind, OwnerID: id})
+	}
+	appendOwners := func(kind string, ids []string) {
+		for _, id := range ids {
+			appendOwner(kind, id)
+		}
+	}
+
+	// User state arrives first so protection and interaction state is present
+	// before the larger content and asset mirror is filled.
 	stateKeys, err := database.ListAndroidSyncStateKeys()
 	if err != nil {
 		return nil, db.AndroidSyncDesiredSets{}, err
@@ -74,23 +92,36 @@ func (s *Server) buildAndroidSyncBootstrapSelection(
 				continue
 			}
 		}
-		heads = append(heads, model.AndroidSyncHead{OwnerKind: key.OwnerKind, OwnerID: key.OwnerID})
+		appendOwner(key.OwnerKind, key.OwnerID)
 	}
+
+	appendOwners("feed", sets.SortedTweets())
+	appendOwners("video", sets.SortedVideos())
+	appendOwners("retweet_sources", retweetHashes)
+
+	_, ranks, err := database.ListAndroidSyncFeedRankRows(sets.SortedTweets(), androidSyncFeedRankMaxRows)
+	if err != nil {
+		return nil, db.AndroidSyncDesiredSets{}, err
+	}
+	rankIDs := make([]string, 0, len(ranks))
+	for _, rank := range ranks {
+		rankIDs = append(rankIDs, rank.TweetID)
+	}
+	appendOwners("feed_rank", sortedNonEmpty(rankIDs))
+	appendOwners("channel", sets.SortedChannels())
+
 	for _, key := range androidSyncRelevantSettingKeys() {
 		row, err := database.GetAndroidSyncSetting(key)
 		if err != nil {
 			return nil, db.AndroidSyncDesiredSets{}, err
 		}
 		if row != nil {
-			heads = append(heads, model.AndroidSyncHead{OwnerKind: "setting", OwnerID: key})
+			appendOwner("setting", key)
 		}
 	}
-	sort.Slice(heads, func(i, j int) bool {
-		if heads[i].OwnerKind != heads[j].OwnerKind {
-			return heads[i].OwnerKind < heads[j].OwnerKind
-		}
-		return heads[i].OwnerID < heads[j].OwnerID
-	})
+	for _, asset := range assets {
+		appendOwner("asset", asset.AssetID)
+	}
 	return heads, sets, nil
 }
 
@@ -113,14 +144,8 @@ func (s *Server) buildAndroidSyncChangeSelection(
 	if err := s.addAndroidSyncDependentVideoOwners(database, byKind); err != nil {
 		return db.AndroidSyncDesiredSets{}, err
 	}
-	feedIDs := sortedNonEmpty(byKind["feed"])
-	if hashes := sortedNonEmpty(byKind["retweet_sources"]); len(hashes) > 0 {
-		peers, err := database.ListAndroidSyncFeedIDsByContentHashes(hashes)
-		if err != nil {
-			return db.AndroidSyncDesiredSets{}, err
-		}
-		feedIDs = append(feedIDs, peers...)
-	}
+	feedIDs := append(sortedNonEmpty(byKind["feed"]), byKind["feed_seen"]...)
+	feedIDs = sortedNonEmpty(feedIDs)
 	if len(feedIDs) > 0 {
 		hydrated, err := database.ListAndroidSyncFeedHydrationIDs(feedIDs)
 		if err != nil {
@@ -128,8 +153,10 @@ func (s *Server) buildAndroidSyncChangeSelection(
 		}
 		feedIDs = hydrated
 	}
+	videoIDs := append(sortedNonEmpty(byKind["video"]), byKind["moment_view"]...)
+	videoIDs = sortedNonEmpty(videoIDs)
 	selection, err := database.ListAndroidSyncDesiredContentAmongForMode(
-		retention, nowMs, feedIDs, byKind["video"], fullYoutubeMetadata,
+		retention, nowMs, feedIDs, videoIDs, fullYoutubeMetadata,
 	)
 	if err != nil {
 		return db.AndroidSyncDesiredSets{}, err
@@ -153,15 +180,7 @@ func (s *Server) materializeAndroidSyncHeads(database *db.DB, heads []model.Andr
 	}
 	plan := newAndroidSyncMaterializationPlan(desired)
 
-	// A changed retweet group can add or remove every same-hash feed owner.
 	retweetHeadHashes := sortedNonEmpty(byKind["retweet_sources"])
-	if len(retweetHeadHashes) > 0 {
-		feedIDs, err := database.ListAndroidSyncFeedIDsByContentHashes(retweetHeadHashes)
-		if err != nil {
-			return nil, err
-		}
-		byKind["feed"] = append(byKind["feed"], feedIDs...)
-	}
 
 	changes := make([]model.AndroidSyncChange, 0)
 	if desired != nil {
@@ -186,6 +205,8 @@ func (s *Server) materializeAndroidSyncHeads(database *db.DB, heads []model.Andr
 		}
 		filterContent("feed", desired.Tweets)
 		filterContent("video", desired.Videos)
+		filterContent("feed_seen", desired.Tweets)
+		filterContent("moment_view", desired.Videos)
 		if len(byKind["feed_rank"]) > 0 {
 			selectedRanks := desired.FeedRanks
 			if selectedRanks == nil {
@@ -252,6 +273,102 @@ func (s *Server) materializeAndroidSyncHeads(database *db.DB, heads []model.Andr
 		return nil, err
 	}
 	return dedupeAndroidSyncChanges(changes), nil
+}
+
+// materializeAndroidSyncBootstrapHeads materializes only the owners named by
+// the frozen bootstrap inventory. Incremental pages use materializeAndroidSyncHeads
+// because a changed owner still needs its current dependency closure.
+func (s *Server) materializeAndroidSyncBootstrapHeads(
+	database *db.DB,
+	heads []model.AndroidSyncHead,
+	desired *db.AndroidSyncDesiredSets,
+) ([]model.AndroidSyncChange, error) {
+	byKind := make(map[string][]string)
+	expected := make(map[string]struct{}, len(heads))
+	for _, head := range heads {
+		key := head.OwnerKind + "\x00" + head.OwnerID
+		if _, exists := expected[key]; exists {
+			return nil, fmt.Errorf("bootstrap inventory contains duplicate owners")
+		}
+		expected[key] = struct{}{}
+		byKind[head.OwnerKind] = append(byKind[head.OwnerKind], head.OwnerID)
+	}
+
+	changes := make([]model.AndroidSyncChange, 0, len(heads))
+	appendChanges := func(rows []model.AndroidSyncChange, err error) error {
+		if err != nil {
+			return err
+		}
+		changes = append(changes, rows...)
+		return nil
+	}
+
+	if err := appendChanges(s.androidSyncFeedChanges(
+		database,
+		newAndroidSyncMaterializationPlan(desired),
+		byKind["feed"],
+	)); err != nil {
+		return nil, err
+	}
+	if err := appendChanges(s.androidSyncVideoChanges(
+		database,
+		newAndroidSyncMaterializationPlan(desired),
+		byKind["video"],
+	)); err != nil {
+		return nil, err
+	}
+	stateWanted := make(map[string]map[string]struct{})
+	for _, kind := range androidSyncStateOwnerKinds() {
+		if len(byKind[kind]) > 0 {
+			stateWanted[kind] = stringSet(byKind[kind])
+		}
+	}
+	if err := appendChanges(s.androidSyncStateChanges(
+		database,
+		newAndroidSyncMaterializationPlan(nil),
+		stateWanted,
+	)); err != nil {
+		return nil, err
+	}
+
+	retweetPlan := newAndroidSyncMaterializationPlan(nil)
+	for _, hash := range sortedNonEmpty(byKind["retweet_sources"]) {
+		retweetPlan.RetweetHashes[hash] = struct{}{}
+	}
+	if err := appendChanges(s.androidSyncRetweetSourceChanges(database, retweetPlan)); err != nil {
+		return nil, err
+	}
+	if err := appendChanges(s.androidSyncFeedRankChanges(database, byKind["feed_rank"])); err != nil {
+		return nil, err
+	}
+	if err := appendChanges(s.androidSyncSettingChanges(database, byKind["setting"])); err != nil {
+		return nil, err
+	}
+	if err := appendChanges(s.androidSyncChannelChanges(
+		database,
+		newAndroidSyncMaterializationPlan(nil),
+		byKind["channel"],
+	)); err != nil {
+		return nil, err
+	}
+	if err := appendChanges(s.androidSyncAssetChanges(database, byKind["asset"])); err != nil {
+		return nil, err
+	}
+	for _, change := range changes {
+		key := change.OwnerKind + "\x00" + change.OwnerID
+		if _, ok := expected[key]; !ok {
+			return nil, fmt.Errorf(
+				"bootstrap materialized owner outside its frozen inventory: %s/%s",
+				change.OwnerKind,
+				change.OwnerID,
+			)
+		}
+		delete(expected, key)
+	}
+	if len(expected) != 0 {
+		return nil, fmt.Errorf("bootstrap did not materialize %d frozen owners", len(expected))
+	}
+	return changes, nil
 }
 
 func (s *Server) addAndroidSyncDependentVideoOwners(database *db.DB, byKind map[string][]string) error {

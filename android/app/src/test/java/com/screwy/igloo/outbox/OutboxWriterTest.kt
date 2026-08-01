@@ -3,16 +3,25 @@ package com.screwy.igloo.outbox
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.RoomTestSupport
+import com.screwy.igloo.data.entity.ChannelFollowEntity
+import com.screwy.igloo.data.entity.ChannelSettingEntity
 import com.screwy.igloo.data.entity.FeedLikeEntity
 import com.screwy.igloo.data.entity.MomentsCursorEntity
 import com.screwy.igloo.data.entity.MutedChannelEntity
+import com.screwy.igloo.data.entity.OutboxEntity
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
+import kotlinx.coroutines.test.TestScope
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -28,6 +37,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], manifest = Config.NONE)
+@OptIn(ExperimentalCoroutinesApi::class)
 class OutboxWriterTest {
     private lateinit var db: IglooDatabase
     private lateinit var scope: CoroutineScope
@@ -125,6 +135,58 @@ class OutboxWriterTest {
     }
 
     @Test
+    fun selectionWideningIsPersistedWithTheOptimisticOutboxIntent() = runBlocking {
+        writer.enqueue(OutboxKind.Follow("new_channel", OutboxKind.Action.Set))
+
+        assertTrue(db.outboxDao().pendingRows().single().selectionWidening())
+
+        db.channelSettingDao()
+            .upsert(ChannelSettingEntity("existing_channel", includeReposts = 0, updatedAt = 1L))
+
+        writer.enqueue(
+            OutboxKind.ChannelSetting("existing_channel", "include_reposts", 1)
+        )
+
+        assertTrue(
+            db.outboxDao().pendingRows()
+                .single { it.kind == OutboxKind.CODE_CHANNEL_SETTING }
+                .selectionWidening()
+        )
+    }
+
+    @Test
+    fun unchangedAndNarrowingSelectionMutationsDoNotRequestReplay() = runBlocking {
+        db.channelFollowDao().upsert(ChannelFollowEntity("existing_channel", 1L))
+        db.channelSettingDao()
+            .upsert(ChannelSettingEntity("existing_channel", includeReposts = 1, updatedAt = 1L))
+
+        writer.enqueue(OutboxKind.Follow("existing_channel", OutboxKind.Action.Set))
+        writer.enqueue(
+            OutboxKind.ChannelSetting("existing_channel", "include_reposts", 1)
+        )
+        writer.enqueue(
+            OutboxKind.ChannelSetting("existing_channel", "include_reposts", 0)
+        )
+
+        assertTrue(db.outboxDao().pendingRows().none(OutboxEntity::selectionWidening))
+    }
+
+    @Test
+    fun coalescedSelectionMarkerFollowsTheFinalIntentAgainstTheOriginalBaseline() = runBlocking {
+        writer.enqueue(OutboxKind.Follow("new_channel", OutboxKind.Action.Set))
+        assertTrue(db.outboxDao().pendingRows().single().selectionWidening())
+
+        writer.enqueue(OutboxKind.Follow("new_channel", OutboxKind.Action.Clear))
+        assertFalse(db.outboxDao().pendingRows().single().selectionWidening())
+
+        writer.enqueue(OutboxKind.Follow("new_channel", OutboxKind.Action.Set))
+        assertTrue(db.outboxDao().pendingRows().single().selectionWidening())
+
+        writer.enqueue(OutboxKind.Follow("new_channel", OutboxKind.Action.Clear))
+        assertFalse(db.outboxDao().pendingRows().single().selectionWidening())
+    }
+
+    @Test
     fun categoryCreatePersistsItsRequestId() = runBlocking {
         writer.enqueue(
             OutboxKind.CreateCategory(
@@ -158,6 +220,45 @@ class OutboxWriterTest {
         writer.enqueue(OutboxKind.Seen("item-1"))
         delay(20L)
         assertEquals(1, drainRequests.get())
+    }
+
+    @Test
+    fun interactiveActionsWakeImmediatelyWhilePassiveStateWaitsForDebounce() = runBlocking {
+        val localDb = RoomTestSupport.freshDb()
+        val scheduler = TestCoroutineScheduler()
+        val testScope = TestScope(StandardTestDispatcher(scheduler))
+        try {
+            val requests = mutableListOf<Boolean>()
+            val localPrefs = PreferencesRepo(localDb.preferenceDao(), testScope) { 1_000L }
+            val localWriter =
+                OutboxWriter(
+                    db = localDb,
+                    prefs = localPrefs,
+                    scope = testScope,
+                    onDrainRequested = requests::add,
+                    nowMsProvider = { 1_000L },
+                    writeDebounceMs = 3_000L,
+                )
+            testScope.runCurrent()
+
+            localWriter.enqueue(OutboxKind.Like("item-action", OutboxKind.Action.Set))
+            assertEquals(listOf(true), requests)
+
+            localWriter.enqueue(OutboxKind.Seen("item-passive"))
+            testScope.runCurrent()
+            assertEquals(listOf(true), requests)
+
+            scheduler.advanceTimeBy(2_999L)
+            testScope.runCurrent()
+            assertEquals(listOf(true), requests)
+
+            scheduler.advanceTimeBy(1L)
+            testScope.runCurrent()
+            assertEquals(listOf(true, false), requests)
+        } finally {
+            testScope.cancel()
+            localDb.close()
+        }
     }
 
     @Test
@@ -271,4 +372,5 @@ class OutboxWriterTest {
         assertEquals(50, db.channelSettingDao().getById("channel-1")?.maxVideos)
         assertEquals(1, db.channelSettingDao().getById("channel-1")?.includeMemberOnly)
     }
+
 }

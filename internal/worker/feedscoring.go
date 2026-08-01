@@ -13,7 +13,21 @@ import (
 )
 
 func (m *Manager) runFeedScoringWorker(ctx context.Context) {
+	m.runFeedScoringLoop(ctx, m.scoreFeedItems)
+}
+
+func (m *Manager) runFeedScoringLoop(
+	ctx context.Context,
+	score func(context.Context, bool, bool),
+) {
 	log.Printf("[feed_scoring] worker started")
+	if m.feedOrderReady != nil {
+		select {
+		case <-ctx.Done():
+			return
+		case <-m.feedOrderReady:
+		}
+	}
 	periodic := time.NewTicker(time.Hour)
 	defer periodic.Stop()
 
@@ -39,7 +53,7 @@ func (m *Manager) runFeedScoringWorker(ctx context.Context) {
 
 	runNow := func(forceRerank, forceRefill bool) {
 		stopKickTimer()
-		m.scoreFeedItems(ctx, forceRerank, forceRefill)
+		score(ctx, forceRerank, forceRefill)
 		lastRun = time.Now()
 	}
 	scheduleKick := func() {
@@ -61,6 +75,8 @@ func (m *Manager) runFeedScoringWorker(ctx context.Context) {
 			return
 		case <-m.feedScoringKick:
 			scheduleKick()
+		case <-m.feedScoringPriorityKick:
+			runNow(false, false)
 		case <-kickTimerC:
 			runNow(false, false)
 		case <-periodic.C:

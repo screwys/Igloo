@@ -32,12 +32,18 @@ class PeriodicSyncWorker(appContext: Context, params: WorkerParameters) :
     override suspend fun doWork(): ListenableWorker.Result {
         return try {
             val prepared = AppRuntime.prepareLocalSession(applicationContext as Application)
-            if (!prepared) return ListenableWorker.Result.success()
+            if (!prepared) {
+                cancel(applicationContext)
+                return ListenableWorker.Result.success()
+            }
 
             val koin = GlobalContext.get()
             val authRepo: AuthRepo = koin.get()
             authRepo.onAppStart()
-            if (!authRepo.hasSessionSync()) return ListenableWorker.Result.success()
+            if (!authRepo.hasSessionSync()) {
+                cancel(applicationContext)
+                return ListenableWorker.Result.success()
+            }
 
             val prefs: PreferencesRepo = koin.get()
             if (!prefs.syncEnabled().first()) {
@@ -46,10 +52,11 @@ class PeriodicSyncWorker(appContext: Context, params: WorkerParameters) :
             }
 
             setForeground(getForegroundInfo())
-            koin.get<ForegroundPromoter>().acquireExternalForegroundLease().use {
+            val completed =
+                koin.get<ForegroundPromoter>().acquireExternalForegroundLease().use {
                 koin.get<SyncCoordinator>().pass()
             }
-            ListenableWorker.Result.success()
+            if (completed) ListenableWorker.Result.success() else ListenableWorker.Result.retry()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -120,7 +127,7 @@ class PeriodicSyncWorker(appContext: Context, params: WorkerParameters) :
                 return
             }
             val interval =
-                prefs.syncIntervalMinutes().first().toLong().coerceAtLeast(MIN_INTERVAL_MINUTES)
+                periodicSyncIntervalMinutes(prefs.syncIntervalMinutes().first())
             val request =
                 PeriodicWorkRequestBuilder<PeriodicSyncWorker>(interval, TimeUnit.MINUTES)
                     .setConstraints(constraintsFor(prefs.syncWifiOnly().first()))
@@ -141,15 +148,30 @@ class PeriodicSyncWorker(appContext: Context, params: WorkerParameters) :
     }
 }
 
+internal fun periodicSyncIntervalMinutes(configuredMinutes: Int): Long =
+    configuredMinutes.toLong().coerceAtLeast(PeriodicSyncWorker.MIN_INTERVAL_MINUTES)
+
 interface PeriodicSyncScheduler {
+    suspend fun ensureScheduled()
+
     suspend fun applyPreferences()
+
+    fun cancel()
 }
 
 internal class WorkManagerPeriodicSyncScheduler(
     private val context: Context,
     private val prefs: PreferencesRepo,
 ) : PeriodicSyncScheduler {
+    override suspend fun ensureScheduled() {
+        PeriodicSyncWorker.enqueue(context, prefs)
+    }
+
     override suspend fun applyPreferences() {
         PeriodicSyncWorker.enqueue(context, prefs, ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE)
+    }
+
+    override fun cancel() {
+        PeriodicSyncWorker.cancel(context)
     }
 }

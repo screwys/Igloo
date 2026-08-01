@@ -3,6 +3,7 @@ package com.screwy.igloo.outbox
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.RoomTestSupport
+import com.screwy.igloo.data.entity.AndroidSyncStateEntity
 import com.screwy.igloo.data.entity.FeedLikeEntity
 import com.screwy.igloo.data.entity.OutboxEntity
 import com.screwy.igloo.log.InMemoryLogSink
@@ -90,6 +91,91 @@ class OutboxDrainTest {
         assertTrue(result.protectionChanged)
         assertFalse(db.feedLikeDao().exists("item-1"))
         assertEquals(0, db.outboxDao().countByState("pending"))
+    }
+
+    @Test
+    fun acknowledgedSelectionWideningPromotesItsDurableReplayMarker() = runBlocking {
+        db.androidSyncDao().upsertSyncState(changesState())
+        db.outboxDao().insert(pendingSelectionWidening())
+
+        val result = buildDrain(MockEngine { respondOk() }).runOnce()
+
+        assertTrue(result.selectionExpanded)
+        assertTrue(requireNotNull(db.androidSyncDao().syncState()).bootstrapRequired)
+        assertTrue(db.outboxDao().pendingRows().isEmpty())
+    }
+
+    @Test
+    fun retryKeepsSelectionWideningPendingWithoutStartingReplay() = runBlocking {
+        db.androidSyncDao().upsertSyncState(changesState())
+        db.outboxDao().insert(pendingSelectionWidening())
+
+        val result =
+            buildDrain(
+                    MockEngine {
+                        respond(
+                            ByteReadChannel("""{"error_code":"busy"}"""),
+                            HttpStatusCode.ServiceUnavailable,
+                            jsonHeaders(),
+                        )
+                    }
+                )
+                .runOnce()
+
+        assertFalse(result.selectionExpanded)
+        assertFalse(requireNotNull(db.androidSyncDao().syncState()).bootstrapRequired)
+        assertTrue(db.outboxDao().pendingRows().single().selectionWidening())
+    }
+
+    @Test
+    fun rejectedSelectionWideningDoesNotStartReplay() = runBlocking {
+        db.androidSyncDao().upsertSyncState(changesState())
+        db.outboxDao().insert(pendingSelectionWidening())
+
+        val result =
+            buildDrain(
+                    MockEngine {
+                        respond(
+                            ByteReadChannel("""{"error_code":"bad_target"}"""),
+                            HttpStatusCode.BadRequest,
+                            jsonHeaders(),
+                        )
+                    }
+                )
+                .runOnce()
+
+        assertFalse(result.selectionExpanded)
+        assertFalse(requireNotNull(db.androidSyncDao().syncState()).bootstrapRequired)
+        assertEquals("channel_follow", result.rejectedMutations.single().ownerKind)
+    }
+
+    @Test
+    fun supersededSelectionAckUsesTheCurrentCoalescedIntent() = runBlocking {
+        db.androidSyncDao().upsertSyncState(changesState())
+        db.outboxDao().insert(pendingSelectionWidening())
+        val drain =
+            buildDrain(
+                MockEngine {
+                    db.outboxDao()
+                        .coalesceAndInsert(
+                            OutboxEntity(
+                                kind = OutboxKind.CODE_FOLLOW,
+                                itemId = "new_channel",
+                                payloadJson =
+                                    """{"channel_id":"new_channel","action":"clear","updated_at_ms":$nowMs,"selection_baseline":0}""",
+                                createdAtMs = nowMs + 1L,
+                            )
+                        )
+                    respondOk()
+                }
+            )
+
+        val result = drain.runOnce()
+
+        assertFalse(result.selectionExpanded)
+        assertFalse(requireNotNull(db.androidSyncDao().syncState()).bootstrapRequired)
+        val current = db.outboxDao().pendingRows().single()
+        assertTrue(current.payloadJson.contains("\"action\":\"clear\""))
     }
 
     @Test
@@ -226,6 +312,61 @@ class OutboxDrainTest {
     }
 
     @Test
+    fun interactiveRowsDispatchBeforeOlderPassiveStateAndLogs() = runBlocking {
+        val paths = mutableListOf<String>()
+        db.outboxDao().insert(pendingSeen("item-passive", 1L))
+        db.outboxDao()
+            .insert(
+                OutboxEntity(
+                    kind = OutboxKind.CODE_LOG,
+                    payloadJson =
+                        """{"level":"info","event":"sample","timestamp_ms":2}""",
+                    state = "pending",
+                    createdAtMs = 2L,
+                )
+            )
+        db.outboxDao().insert(pendingLike("item-action", "set").copy(createdAtMs = 3L))
+        val drain =
+            buildDrain(
+                MockEngine { request ->
+                    paths += request.url.encodedPath
+                    respondOk()
+                }
+            )
+
+        drain.runOnce()
+
+        assertEquals(
+            listOf(
+                "/api/mutations/like",
+                "/api/mutations/seen",
+                "/api/logs/server",
+            ),
+            paths,
+        )
+    }
+
+    @Test
+    fun retryResultReportsTheNextOwnedAttempt() = runBlocking {
+        db.outboxDao().insert(pendingLike("item-1", "set"))
+        val drain =
+            buildDrain(
+                MockEngine {
+                    respond(
+                        ByteReadChannel("""{"error_code":"busy"}"""),
+                        HttpStatusCode.ServiceUnavailable,
+                        jsonHeaders(),
+                    )
+                }
+            )
+
+        val result = drain.runOnce()
+
+        assertEquals(nowMs + 30_000L, result.nextAttemptAtMs)
+        assertEquals(nowMs + 30_000L, db.outboxDao().pendingRows().single().nextAttemptAtMs)
+    }
+
+    @Test
     fun offlinePassLeavesQueueUntouched() = runBlocking {
         db.outboxDao().insert(pendingLike("item-1", "set"))
         val drain = buildDrain(MockEngine { error("Unexpected request") }, online = false)
@@ -276,6 +417,26 @@ class OutboxDrainTest {
             payloadJson = """{"tweet_id":"$itemId","updated_at_ms":$createdAtMs}""",
             state = "pending",
             createdAtMs = createdAtMs,
+        )
+
+    private fun pendingSelectionWidening() =
+        OutboxEntity(
+            kind = OutboxKind.CODE_FOLLOW,
+            itemId = "new_channel",
+            payloadJson =
+                """{"channel_id":"new_channel","action":"set","updated_at_ms":$nowMs,"selection_widening":true,"selection_baseline":0}""",
+            state = "pending",
+            createdAtMs = nowMs,
+        )
+
+    private fun changesState() =
+        AndroidSyncStateEntity(
+            mode = "changes",
+            cursor = "content-cursor",
+            feedDays = 2,
+            youtubeDays = 7,
+            momentsDays = 3,
+            storyHours = 48,
         )
 
     private fun MockRequestHandleScope.respondOk() =

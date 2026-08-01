@@ -48,9 +48,16 @@ class AndroidSyncApi(
             parameter("after", after)
         }.decodeSyncResponse("changes")
 
-    suspend fun priorityState(after: String): AndroidSyncPageResponse =
+    suspend fun priorityState(
+        retention: AndroidSyncRetentionRequest,
+        after: String,
+    ): AndroidSyncPageResponse =
         client.get(baseUrlProvider() + "/api/android/sync/state") {
             syncMetadataTimeout()
+            parameter("feed_days", retention.feedDays)
+            parameter("youtube_days", retention.youtubeDays)
+            parameter("moments_days", retention.momentsDays)
+            parameter("story_hours", retention.storyHours)
             parameter("after", after)
         }.decodeSyncResponse("state")
 

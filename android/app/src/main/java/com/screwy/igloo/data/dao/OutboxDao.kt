@@ -62,18 +62,36 @@ interface OutboxDao {
     // ─── Claim + drain path ───────────────────────────────────────────────────
 
     /**
-     * Pending rows eligible for drain, FIFO by `created_at_ms`. Drain claims a
-     * bounded batch, defaulting to 100.
+     * Pending rows eligible for drain. Interactive actions lead passive state and logs,
+     * and logs trail both. Rows remain FIFO within each dispatch group.
      */
     @Query(
         """
         SELECT * FROM outbox
         WHERE state = 'pending' AND next_attempt_at_ms <= :nowMs
-        ORDER BY created_at_ms
+        ORDER BY
+          CASE
+            WHEN kind IN (
+              'like', 'bookmark', 'follow', 'star', 'mute',
+              'channel_setting', 'create_category'
+            ) THEN 0
+            WHEN kind IN ('log', 'log_debug') THEN 2
+            ELSE 1
+          END,
+          created_at_ms,
+          id
         LIMIT :limit
         """
     )
     suspend fun claimPending(nowMs: Long, limit: Int = 100): List<OutboxEntity>
+
+    @Query(
+        """
+        SELECT MIN(next_attempt_at_ms) FROM outbox
+        WHERE state = 'pending'
+        """
+    )
+    suspend fun earliestPendingAttemptAtMs(): Long?
 
     /**
      * All pending rows for a given kind (e.g., drain batches all pending `seen` / `log`
@@ -92,6 +110,9 @@ interface OutboxDao {
 
     @Query("SELECT * FROM outbox WHERE state = 'pending' ORDER BY created_at_ms, id")
     suspend fun pendingRows(): List<OutboxEntity>
+
+    @Query("SELECT * FROM outbox WHERE id IN (:ids)")
+    suspend fun rowsByIds(ids: List<Long>): List<OutboxEntity>
 
     /**
      * Pending feed actions are rendered immediately, including clears that keep their

@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Server-specific reachability state machine.
@@ -43,6 +45,7 @@ class Reachability(
 
     private var probeJob: Job? = null
     private var supervisorJob: Job? = null
+    private val probeMutex = Mutex()
     @Volatile private var foreground: Boolean = false
 
     /** Start the state machine. Idempotent — calling twice is a no-op. */
@@ -52,11 +55,7 @@ class Reachability(
             foregroundFlow.distinctUntilChanged().collect { inForeground ->
                 foreground = inForeground
                 if (inForeground) {
-                    // Immediate probe on foreground, then enter/exit the loop based on
-                    // the result.
-                    val ok = runCatching { probe() }.getOrDefault(false)
-                    setState(if (ok) State.Online else State.Offline)
-                    if (!ok) startOfflineLoop() else stopOfflineLoop()
+                    probeNow()
                 } else {
                     // Background: stop active probing. State retained so reconcilers
                     // can read `Online`/`Offline` last-known value.
@@ -84,6 +83,19 @@ class Reachability(
         stopOfflineLoop()
     }
 
+    /** Probe the Igloo server now, including when the last-known state is Offline. */
+    suspend fun probeNow(): Boolean =
+        probeMutex.withLock {
+            val ok = runCatching { probe() }.getOrDefault(false)
+            setState(if (ok) State.Online else State.Offline)
+            if (ok) {
+                stopOfflineLoop()
+            } else if (foreground) {
+                startOfflineLoop()
+            }
+            ok
+        }
+
     private fun setState(next: State) {
         _state.value = next
     }
@@ -93,11 +105,7 @@ class Reachability(
         probeJob = scope.launch {
             while (isActive) {
                 delay(offlineProbeIntervalMs)
-                val ok = runCatching { probe() }.getOrDefault(false)
-                if (ok) {
-                    setState(State.Online)
-                    break
-                }
+                if (probeNow()) break
             }
         }
     }

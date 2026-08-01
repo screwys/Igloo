@@ -1,10 +1,19 @@
 package com.screwy.igloo.settings
 
+import com.screwy.igloo.data.PreferencesRepo
+import com.screwy.igloo.settings.components.syncIntervalOptions
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import com.screwy.igloo.R
 
 class StorageRouteTest {
+
+    @Test fun syncIntervals_offerLiveBeforePeriodicCatchUp() {
+        assertEquals(
+            listOf(PreferencesRepo.Defaults.SYNC_INTERVAL_LIVE, 30, 60, 120, 240),
+            syncIntervalOptions,
+        )
+    }
 
     @Test fun cacheBucketLabelResource_usesProductNames() {
         assertEquals(R.string.cache_feed_items, cacheBucketLabelResource("feed_items"))

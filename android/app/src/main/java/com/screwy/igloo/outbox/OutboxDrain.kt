@@ -17,6 +17,8 @@ import kotlinx.serialization.json.jsonObject
 data class OutboxPassResult(
     val rejectedMutations: List<OutboxRejectedMutation> = emptyList(),
     val protectionChanged: Boolean = false,
+    val selectionExpanded: Boolean = false,
+    val nextAttemptAtMs: Long? = null,
 )
 
 data class OutboxRejectedMutation(
@@ -24,6 +26,10 @@ data class OutboxRejectedMutation(
     val ownerKind: String,
     val ownerId: String,
 )
+
+interface OutboxDrainer {
+    suspend fun runOnce(): OutboxPassResult
+}
 
 class OutboxDrain(
     private val outboxDao: OutboxDao,
@@ -33,12 +39,15 @@ class OutboxDrain(
     private val reachability: Reachability,
     private val logger: Logger,
     private val nowMsProvider: () -> Long = { System.currentTimeMillis() },
-) {
-    suspend fun runOnce(): OutboxPassResult {
+) : OutboxDrainer {
+    override suspend fun runOnce(): OutboxPassResult {
         dropPendingDebugLogsWhenDisabled()
-        if (reachability.state.value is Reachability.State.Offline) return OutboxPassResult()
+        if (reachability.state.value is Reachability.State.Offline) {
+            return result(protectionChanged = false)
+        }
 
         var protectionChanged = false
+        var selectionExpanded = false
         var authRefreshRequired = false
         while (true) {
             val nowMs = nowMsProvider()
@@ -47,7 +56,7 @@ class OutboxDrain(
             for (group in groupForDispatch(batch, nowMs)) {
                 val results = dispatcher.dispatch(group)
                 val acked = group.filter { results[it.id] == OutboxDispatcher.Result.Ack }
-                applyAcks(acked)
+                if (applyAcks(acked)) selectionExpanded = true
                 if (acked.any(OutboxEntity::isProtectionClear)) protectionChanged = true
                 val rejected = mutableListOf<OutboxRejectedMutation>()
                 for (row in group) {
@@ -59,8 +68,8 @@ class OutboxDrain(
                             if (owner == null) {
                                 discardRejected(row, result.error)
                             } else {
-                                logger.error(
-                                    event = "outbox_row_rejected",
+                                logger.info(
+                                    event = "outbox_owner_reconcile_required",
                                     fields =
                                         mapOf(
                                             "id" to row.id.toString(),
@@ -81,14 +90,33 @@ class OutboxDrain(
                     }
                 }
                 if (rejected.isNotEmpty()) {
-                    return OutboxPassResult(rejected, protectionChanged)
+                    return result(rejected, protectionChanged, selectionExpanded)
                 }
                 if (authRefreshRequired) break
             }
             if (authRefreshRequired) break
             if (batch.size < CLAIM_LIMIT) break
         }
-        return OutboxPassResult(protectionChanged = protectionChanged)
+        return result(
+            protectionChanged = protectionChanged,
+            selectionExpanded = selectionExpanded,
+        )
+    }
+
+    private suspend fun result(
+        rejectedMutations: List<OutboxRejectedMutation> = emptyList(),
+        protectionChanged: Boolean,
+        selectionExpanded: Boolean = false,
+    ): OutboxPassResult {
+        val nowMs = nowMsProvider()
+        val earliest = outboxDao.earliestPendingAttemptAtMs()
+        return OutboxPassResult(
+            rejectedMutations = rejectedMutations,
+            protectionChanged = protectionChanged,
+            selectionExpanded = selectionExpanded,
+            nextAttemptAtMs =
+                earliest?.let { if (it <= nowMs) nowMs + RETRY_WAKE_FLOOR_MS else it },
+        )
     }
 
     private suspend fun groupForDispatch(
@@ -109,23 +137,35 @@ class OutboxDrain(
             } else emptyList()
         val batched = (seenBatch + logBatch + debugBatch).mapTo(hashSetOf()) { it.id }
         return buildList {
+            firstClaim.filter { it.id !in batched }.forEach { add(listOf(it)) }
             if (seenBatch.isNotEmpty()) add(seenBatch)
             if (logBatch.isNotEmpty()) add(logBatch)
             if (debugBatch.isNotEmpty()) add(debugBatch)
-            firstClaim.filter { it.id !in batched }.forEach { add(listOf(it)) }
         }
     }
 
-    private suspend fun applyAcks(rows: List<OutboxEntity>) {
-        if (rows.isEmpty()) return
+    private suspend fun applyAcks(rows: List<OutboxEntity>): Boolean {
+        if (rows.isEmpty()) return false
+        var selectionExpanded = false
         db.withTransaction {
-            rows.filter(OutboxEntity::isClear).forEach { finalizeClear(it) }
-            rows
+            val currentIds = outboxDao.rowsByIds(rows.map(OutboxEntity::id)).mapTo(hashSetOf()) { it.id }
+            val currentRows = rows.filter { it.id in currentIds }
+            selectionExpanded = currentRows.any(OutboxEntity::selectionWidening)
+            if (selectionExpanded) {
+                db.androidSyncDao().syncState()?.let { state ->
+                    if (!state.bootstrapRequired) {
+                        db.androidSyncDao()
+                            .upsertSyncState(state.copy(bootstrapRequired = true))
+                    }
+                }
+            }
+            currentRows.filter(OutboxEntity::isClear).forEach { finalizeClear(it) }
+            currentRows
                 .filterNot(OutboxEntity::isLogKind)
                 .map(OutboxEntity::id)
                 .takeIf(List<Long>::isNotEmpty)
                 ?.let { outboxDao.completeAndDeleteAll(it) }
-            rows
+            currentRows
                 .filter(OutboxEntity::isLogKind)
                 .map(OutboxEntity::id)
                 .takeIf(List<Long>::isNotEmpty)
@@ -134,6 +174,7 @@ class OutboxDrain(
                     outboxDao.trimAckedLogs(LOGS_INSPECTOR_CAP)
                 }
         }
+        return selectionExpanded
     }
 
     private suspend fun finalizeClear(row: OutboxEntity) {
@@ -194,6 +235,7 @@ class OutboxDrain(
         const val SEEN_BATCH_LIMIT = 500
         const val LOG_BATCH_LIMIT = 100
         const val LOGS_INSPECTOR_CAP = 500
+        const val RETRY_WAKE_FLOOR_MS = 30_000L
     }
 }
 

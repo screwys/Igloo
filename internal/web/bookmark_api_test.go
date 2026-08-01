@@ -14,6 +14,12 @@ import (
 
 func TestHandleBookmarkAddAndRemoveAdvanceBookmarkOwner(t *testing.T) {
 	srv := newTestServer(t)
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, body_text, algo_scored_at)
+		VALUES ('vid_dup_add', 'body', 567)
+	`); err != nil {
+		t.Fatal(err)
+	}
 
 	body := strings.NewReader(`{"category_id":0}`)
 	req := httptest.NewRequest("POST", "/api/bookmark/vid_dup_add", body)
@@ -26,6 +32,21 @@ func TestHandleBookmarkAddAndRemoveAdvanceBookmarkOwner(t *testing.T) {
 	}
 
 	afterAdd := mutationOwnerRevision(t, srv, "bookmark", "vid_dup_add")
+	var scoredAt int64
+	if err := srv.db.QueryRow(`
+		SELECT algo_scored_at FROM feed_items WHERE tweet_id = 'vid_dup_add'
+	`).Scan(&scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if scoredAt != 567 {
+		t.Fatalf("add response-path algo_scored_at = %d, want 567", scoredAt)
+	}
+	processQueuedFeedOrderInvalidations(t, srv)
+	if err := srv.db.ExecRaw(`
+		UPDATE feed_items SET algo_scored_at = 678 WHERE tweet_id = 'vid_dup_add'
+	`); err != nil {
+		t.Fatal(err)
+	}
 
 	req = httptest.NewRequest("DELETE", "/api/bookmark/vid_dup_add", nil)
 	req = attachTestAuth(req, "alice")
@@ -36,6 +57,23 @@ func TestHandleBookmarkAddAndRemoveAdvanceBookmarkOwner(t *testing.T) {
 	}
 	if afterRemove := mutationOwnerRevision(t, srv, "bookmark", "vid_dup_add"); afterRemove <= afterAdd {
 		t.Fatalf("remove revision = %d, want greater than %d", afterRemove, afterAdd)
+	}
+	if err := srv.db.QueryRow(`
+		SELECT algo_scored_at FROM feed_items WHERE tweet_id = 'vid_dup_add'
+	`).Scan(&scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if scoredAt != 678 {
+		t.Fatalf("remove response-path algo_scored_at = %d, want 678", scoredAt)
+	}
+	processQueuedFeedOrderInvalidations(t, srv)
+	if err := srv.db.QueryRow(`
+		SELECT algo_scored_at FROM feed_items WHERE tweet_id = 'vid_dup_add'
+	`).Scan(&scoredAt); err != nil {
+		t.Fatal(err)
+	}
+	if scoredAt != 0 {
+		t.Fatalf("remove queued algo_scored_at = %d, want 0", scoredAt)
 	}
 }
 

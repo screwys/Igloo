@@ -79,6 +79,14 @@ type schemaExecer interface {
 }
 
 func ensureAndroidSyncHeadTriggers(conn schemaExecer) error {
+	for _, name := range []string{
+		"android_sync_head_feed_old_hash_update",
+		"android_sync_head_feed_old_hash_delete",
+	} {
+		if _, err := conn.Exec(`DROP TRIGGER IF EXISTS ` + name); err != nil {
+			return fmt.Errorf("replace Android sync peer trigger %s: %w", name, err)
+		}
+	}
 	for _, spec := range androidSyncHeadTables {
 		id := spec.idColumn
 		insert := fmt.Sprintf(
@@ -195,24 +203,143 @@ func androidSyncAuxiliaryHeadTriggers() []string {
 	}
 	triggers = append(triggers, androidSyncProtectionHydrationTriggers("feed_likes", "tweet_id")...)
 	triggers = append(triggers, androidSyncProtectionHydrationTriggers("bookmarks", "video_id")...)
-	return append(triggers, androidSyncFeedOldEdgeTriggers()...)
+	triggers = append(triggers, androidSyncProtectionPeerHeadTriggers("feed_likes", "tweet_id")...)
+	triggers = append(triggers, androidSyncProtectionPeerHeadTriggers("bookmarks", "video_id")...)
+	triggers = append(triggers, androidSyncFeedOldEdgeTriggers()...)
+	triggers = append(triggers, androidSyncFeedPeerHeadTriggers()...)
+	triggers = append(triggers, androidSyncQuoteTargetPeerHeadTriggers()...)
+	return append(triggers, androidSyncRetweetSourcePeerHeadTriggers()...)
+}
+
+func androidSyncProtectionPeerHeadTriggers(table, idColumn string) []string {
+	type event struct {
+		name, operation, owner, when string
+	}
+	events := []event{
+		{name: "insert", operation: "INSERT", owner: "NEW." + idColumn, when: "1"},
+		{name: "delete", operation: "DELETE", owner: "OLD." + idColumn, when: "1"},
+		{name: "update_old", operation: "UPDATE OF " + idColumn, owner: "OLD." + idColumn, when: "OLD." + idColumn + " IS NOT NEW." + idColumn},
+		{name: "update_new", operation: "UPDATE OF " + idColumn, owner: "NEW." + idColumn, when: "OLD." + idColumn + " IS NOT NEW." + idColumn},
+	}
+	out := make([]string, 0, len(events))
+	for _, event := range events {
+		contentHash := "(SELECT content_hash FROM feed_items WHERE tweet_id = " + event.owner + ")"
+		out = append(out, androidSyncFeedPeerHeadTrigger(
+			table+"_peers_"+event.name,
+			event.operation,
+			table,
+			"("+event.when+") AND COALESCE("+contentHash+", '') != ''",
+			contentHash,
+		))
+	}
+	return out
+}
+
+func androidSyncFeedPeerHeadTriggers() []string {
+	changed := "OLD.content_hash IS NOT NEW.content_hash OR OLD.published_at IS NOT NEW.published_at"
+	return []string{
+		androidSyncFeedPeerHeadTrigger(
+			"feed_peers_insert", "INSERT", "feed_items",
+			"COALESCE(NEW.content_hash, '') != ''", "NEW.content_hash",
+		),
+		androidSyncFeedPeerHeadTrigger(
+			"feed_peers_update_new", "UPDATE OF content_hash, published_at", "feed_items",
+			"("+changed+") AND COALESCE(NEW.content_hash, '') != ''", "NEW.content_hash",
+		),
+		androidSyncFeedPeerHeadTrigger(
+			"feed_peers_update_old", "UPDATE OF content_hash", "feed_items",
+			"OLD.content_hash IS NOT NEW.content_hash AND COALESCE(OLD.content_hash, '') != ''", "OLD.content_hash",
+		),
+		androidSyncFeedPeerHeadTrigger(
+			"feed_peers_delete", "DELETE", "feed_items",
+			"COALESCE(OLD.content_hash, '') != ''", "OLD.content_hash",
+		),
+	}
+}
+
+func androidSyncRetweetSourcePeerHeadTriggers() []string {
+	changed := androidSyncColumnsChanged("content_hash, retweeter_channel_id, tweet_id, published_at")
+	return []string{
+		androidSyncFeedPeerHeadTrigger(
+			"retweet_source_peers_insert", "INSERT", "retweet_sources",
+			"COALESCE(NEW.content_hash, '') != ''", "NEW.content_hash",
+		),
+		androidSyncFeedPeerHeadTrigger(
+			"retweet_source_peers_update_new",
+			"UPDATE OF content_hash, retweeter_channel_id, tweet_id, published_at", "retweet_sources",
+			"("+changed+") AND COALESCE(NEW.content_hash, '') != ''", "NEW.content_hash",
+		),
+		androidSyncFeedPeerHeadTrigger(
+			"retweet_source_peers_update_old", "UPDATE OF content_hash", "retweet_sources",
+			"OLD.content_hash IS NOT NEW.content_hash AND COALESCE(OLD.content_hash, '') != ''", "OLD.content_hash",
+		),
+		androidSyncFeedPeerHeadTrigger(
+			"retweet_source_peers_delete", "DELETE", "retweet_sources",
+			"COALESCE(OLD.content_hash, '') != ''", "OLD.content_hash",
+		),
+	}
+}
+
+func androidSyncQuoteTargetPeerHeadTriggers() []string {
+	contentHash := func(owner string) string {
+		return "(SELECT content_hash FROM feed_items WHERE tweet_id = " + owner + ")"
+	}
+	return []string{
+		androidSyncFeedPeerHeadTrigger(
+			"quote_target_peers_insert", "INSERT", "feed_items",
+			"COALESCE(NEW.quote_tweet_id, '') != ''",
+			contentHash("NEW.quote_tweet_id"),
+		),
+		androidSyncFeedPeerHeadTrigger(
+			"quote_target_peers_update_new", "UPDATE OF quote_tweet_id, published_at", "feed_items",
+			"(OLD.quote_tweet_id IS NOT NEW.quote_tweet_id OR OLD.published_at IS NOT NEW.published_at) "+
+				"AND COALESCE(NEW.quote_tweet_id, '') != ''",
+			contentHash("NEW.quote_tweet_id"),
+		),
+		androidSyncFeedPeerHeadTrigger(
+			"quote_target_peers_update_old", "UPDATE OF quote_tweet_id", "feed_items",
+			"OLD.quote_tweet_id IS NOT NEW.quote_tweet_id AND COALESCE(OLD.quote_tweet_id, '') != ''",
+			contentHash("OLD.quote_tweet_id"),
+		),
+		androidSyncFeedPeerHeadTrigger(
+			"quote_target_peers_delete", "DELETE", "feed_items",
+			"COALESCE(OLD.quote_tweet_id, '') != ''",
+			contentHash("OLD.quote_tweet_id"),
+		),
+	}
+}
+
+func androidSyncFeedPeerHeadTrigger(name, event, table, when, contentHash string) string {
+	return fmt.Sprintf(
+		`CREATE TRIGGER IF NOT EXISTS android_sync_head_%s
+		 AFTER %s ON %s
+		 WHEN %s
+		 BEGIN
+		   UPDATE android_sync_clock
+		   SET revision = revision + (
+		     SELECT COUNT(*) FROM feed_items WHERE content_hash = %s
+		   )
+		   WHERE id = 1;
+		   INSERT INTO android_sync_heads (owner_kind, owner_id, revision)
+		   SELECT 'feed', peers.tweet_id,
+		          (SELECT revision FROM android_sync_clock WHERE id = 1) - peers.peer_count + peers.position
+		   FROM (
+		     SELECT tweet_id,
+		            ROW_NUMBER() OVER (ORDER BY tweet_id) AS position,
+		            COUNT(*) OVER () AS peer_count
+		     FROM feed_items
+		     WHERE content_hash = %s
+		   ) peers
+		   WHERE 1
+		   ON CONFLICT(owner_kind, owner_id) DO UPDATE SET
+		     revision = excluded.revision;
+		 END`,
+		name, event, table, when, contentHash, contentHash,
+	)
 }
 
 func androidSyncFeedOldEdgeTriggers() []string {
-	hashUpdateWhere := "peer.content_hash = OLD.content_hash AND peer.tweet_id != OLD.tweet_id"
-	hashDeleteWhere := "peer.content_hash = OLD.content_hash"
 	return []string{
-		androidSyncFeedOldEdgeTrigger(
-			"hash_update", "UPDATE OF content_hash",
-			"OLD.content_hash IS NOT NEW.content_hash AND COALESCE(OLD.content_hash, '') != ''",
-			"(SELECT MIN(peer.tweet_id) FROM feed_items peer WHERE "+hashUpdateWhere+")",
-			"SELECT 1 FROM feed_items peer WHERE "+hashUpdateWhere,
-		),
-		androidSyncFeedOldEdgeTrigger(
-			"hash_delete", "DELETE", "COALESCE(OLD.content_hash, '') != ''",
-			"(SELECT MIN(peer.tweet_id) FROM feed_items peer WHERE "+hashDeleteWhere+")",
-			"SELECT 1 FROM feed_items peer WHERE "+hashDeleteWhere,
-		),
 		androidSyncFeedOldEdgeTrigger(
 			"quote_update", "UPDATE OF quote_tweet_id",
 			"OLD.quote_tweet_id IS NOT NEW.quote_tweet_id AND COALESCE(OLD.quote_tweet_id, '') != ''",

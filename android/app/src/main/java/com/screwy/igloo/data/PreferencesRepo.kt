@@ -95,6 +95,7 @@ class PreferencesRepo(
         const val BUILTIN_SERVER_URL         = "http://igloo.local:5001"
         val SERVER_URL                       = defaultServerUrl()
         const val SYNC_ENABLED               = true
+        const val SYNC_INTERVAL_LIVE         = 0
         const val SYNC_INTERVAL_MINUTES      = 30
         const val SYNC_WIFI_ONLY             = false
         const val THEME_ID                   = "occult-umbral"

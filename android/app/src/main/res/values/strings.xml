@@ -618,9 +618,10 @@
     <string name="settings_starting_page">Starting Page</string>
     <string name="settings_storage_sync">Storage &amp; sync</string>
     <string name="settings_stories_window_hours">Stories window (hours)</string>
-    <string name="settings_sync_description">Pulls new feed rows, mutations, and the media mirror from your server. Wi-Fi only avoids metered data; intervals apply to periodic catch-up.</string>
+    <string name="settings_sync_description">Actions are sent immediately when connected. Live keeps this device current while Igloo is open; timed intervals and Wi-Fi only control periodic catch-up.</string>
     <string name="settings_sync_hours">%1$dh</string>
     <string name="settings_sync_interval">Sync interval</string>
+    <string name="settings_sync_live">Live</string>
     <string name="settings_sync_minutes">%1$dm</string>
     <string name="settings_syncing">Syncing…</string>
     <string name="settings_tab_account">Account</string>

@@ -90,6 +90,57 @@ func TestAndroidSyncHeadsMapAttachmentsAndStateToOwners(t *testing.T) {
 	_ = requireAndroidSyncHead(t, d, "retweet_sources", "sample_hash")
 }
 
+func TestAndroidSyncRetweetChangesPageSameHashFeedHeads(t *testing.T) {
+	d := openWritableTestDB(t)
+	if err := d.ExecRaw(`
+		WITH RECURSIVE seq(n) AS (
+			VALUES (1)
+			UNION ALL
+			SELECT n + 1 FROM seq WHERE n < 600
+		)
+		INSERT INTO feed_items (tweet_id, content_hash, published_at, fetched_at)
+		SELECT printf('sample_peer_%03d', n), 'sample_hash', 1, 1 FROM seq;
+		INSERT INTO retweet_sources (content_hash, retweeter_channel_id, tweet_id, published_at)
+		VALUES ('sample_hash', 'twitter_sample', 'sample_peer_001', 1)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	before, err := d.GetAndroidSyncClock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ExecRaw(`
+		UPDATE retweet_sources SET published_at = 2
+		WHERE content_hash = 'sample_hash' AND retweeter_channel_id = 'twitter_sample'
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	seen := make(map[string]struct{}, 600)
+	after := before.Revision
+	for pageNumber := 0; pageNumber < 3; pageNumber++ {
+		heads, err := d.ListAndroidSyncHeads(after, 500)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(heads) > 500 {
+			t.Fatalf("head page %d has %d owners", pageNumber+1, len(heads))
+		}
+		for _, head := range heads {
+			if head.OwnerKind == "feed" {
+				seen[head.OwnerID] = struct{}{}
+			}
+			after = head.Revision
+		}
+		if len(heads) < 500 {
+			break
+		}
+	}
+	if len(seen) != 600 {
+		t.Fatalf("paged same-hash feed heads = %d, want 600", len(seen))
+	}
+}
+
 func TestAndroidSyncHeadsTrackTemporaryVideoTransitions(t *testing.T) {
 	t.Run("completed video upsert", func(t *testing.T) {
 		d := openWritableTestDB(t)

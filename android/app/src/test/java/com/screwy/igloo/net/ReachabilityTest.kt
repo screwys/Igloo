@@ -79,6 +79,21 @@ class ReachabilityTest {
         assertEquals(Reachability.State.Offline, reachability.state.value)
     }
 
+    @Test fun explicitProbe_recoversStaleOfflineStateImmediately() = runBlocking {
+        val attempts = AtomicInteger()
+        val reachability = Reachability(
+            scope = scope,
+            probe = { attempts.incrementAndGet(); true },
+            foregroundFlow = kotlinx.coroutines.flow.emptyFlow(),
+        )
+        reachability.downgrade()
+
+        assertTrue(reachability.probeNow())
+
+        assertEquals(1, attempts.get())
+        assertEquals(Reachability.State.Online, reachability.state.value)
+    }
+
     @Test fun offlineProbeLoop_recoversWhenProbeSucceeds() = runBlocking {
         val foreground = MutableSharedFlow<Boolean>(replay = 1, extraBufferCapacity = 4)
         val succeedAfter = AtomicInteger(3) // first 3 probes fail, then succeed

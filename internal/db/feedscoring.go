@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -86,21 +87,38 @@ func (db *DB) InvalidateAlgoScore(tweetIDs ...string) error {
 	if len(tweetIDs) == 0 {
 		return nil
 	}
+	return db.WithWrite(func(tx *sql.Tx) error {
+		return invalidateAlgoScoreTx(context.Background(), tx, tweetIDs...)
+	})
+}
+
+func invalidateAlgoScoreTx(ctx context.Context, tx *sql.Tx, tweetIDs ...string) error {
+	if len(tweetIDs) == 0 {
+		return nil
+	}
 	ph := strings.Repeat("?,", len(tweetIDs))
 	ph = ph[:len(ph)-1]
 	args := make([]any, len(tweetIDs))
 	for i, id := range tweetIDs {
 		args[i] = id
 	}
-	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec("UPDATE feed_items SET algo_scored_at = 0 WHERE tweet_id IN ("+ph+")", args...)
-		return err
-	})
+	_, err := tx.ExecContext(ctx, "UPDATE feed_items SET algo_scored_at = 0 WHERE tweet_id IN ("+ph+")", args...)
+	return err
 }
 
 const feedWindowChannelCandidateLimit = 2000
 
 func (db *DB) InvalidateFeedWindowByChannelID(channelID string) error {
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return nil
+	}
+	return db.WithWrite(func(tx *sql.Tx) error {
+		return invalidateFeedWindowByChannelIDTx(context.Background(), tx, channelID)
+	})
+}
+
+func invalidateFeedWindowByChannelIDTx(ctx context.Context, tx *sql.Tx, channelID string) error {
 	channelID = strings.TrimSpace(channelID)
 	if channelID == "" {
 		return nil
@@ -146,11 +164,9 @@ func (db *DB) InvalidateFeedWindowByChannelID(channelID string) error {
 		SET algo_scored_at = 0
 		WHERE tweet_id IN (SELECT tweet_id FROM candidates)
 	`, feedWindowChannelCandidateLimit, feedWindowChannelCandidateLimit, feedWindowChannelCandidateLimit)
-	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(query,
-			channelID, channelID, channelID,
-			channelID, channelID, channelID,
-		)
-		return err
-	})
+	_, err := tx.ExecContext(ctx, query,
+		channelID, channelID, channelID,
+		channelID, channelID, channelID,
+	)
+	return err
 }

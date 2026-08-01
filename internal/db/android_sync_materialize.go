@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"sort"
 )
 
@@ -254,9 +255,9 @@ func (db *DB) ListAndroidSyncFeedClosureIDs(leafIDs []string) ([]string, error) 
 	return out, nil
 }
 
-// ListAndroidSyncFeedHydrationIDs returns the canonical owner plus every row
-// whose admission depends on it: same-hash peers, quoted targets, and reply
-// ancestors for each selected row.
+// ListAndroidSyncFeedHydrationIDs returns the canonical owner plus its quoted
+// targets and reply ancestors. Same-hash peers receive their own revision heads
+// when the shared retention inputs change, so they remain page-bounded here.
 func (db *DB) ListAndroidSyncFeedHydrationIDs(tweetIDs []string) ([]string, error) {
 	tweetIDs = uniqueStrings(tweetIDs)
 	if len(tweetIDs) == 0 {
@@ -267,15 +268,13 @@ func (db *DB) ListAndroidSyncFeedHydrationIDs(tweetIDs []string) ([]string, erro
 		queued[id] = struct{}{}
 	}
 	seen := make(map[string]struct{}, len(tweetIDs))
-	expandedHashes := make(map[string]struct{})
 	frontier := tweetIDs
 	for len(frontier) > 0 {
 		var linkedIDs []string
-		var contentHashes []string
 		for _, chunk := range stringChunks(frontier, androidSyncProjectionChunkSize) {
 			rows, err := db.reader().Query(`
-				SELECT tweet_id, COALESCE(content_hash, ''),
-				       COALESCE(quote_tweet_id, ''), COALESCE(reply_to_status, '')
+				SELECT tweet_id, COALESCE(quote_tweet_id, ''),
+				       COALESCE(reply_to_status, '')
 				FROM feed_items
 				WHERE tweet_id IN (`+placeholders(len(chunk))+`)
 			`, stringsToAny(chunk)...)
@@ -283,19 +282,13 @@ func (db *DB) ListAndroidSyncFeedHydrationIDs(tweetIDs []string) ([]string, erro
 				return nil, err
 			}
 			for rows.Next() {
-				var id, contentHash, quoteID, parentID string
-				if err := rows.Scan(&id, &contentHash, &quoteID, &parentID); err != nil {
+				var id, quoteID, parentID string
+				if err := rows.Scan(&id, &quoteID, &parentID); err != nil {
 					_ = rows.Close()
 					return nil, err
 				}
 				seen[id] = struct{}{}
 				linkedIDs = append(linkedIDs, quoteID, parentID)
-				if contentHash != "" {
-					if _, expanded := expandedHashes[contentHash]; !expanded {
-						expandedHashes[contentHash] = struct{}{}
-						contentHashes = append(contentHashes, contentHash)
-					}
-				}
 			}
 			if err := rows.Err(); err != nil {
 				_ = rows.Close()
@@ -305,12 +298,6 @@ func (db *DB) ListAndroidSyncFeedHydrationIDs(tweetIDs []string) ([]string, erro
 				return nil, err
 			}
 		}
-
-		peers, err := db.ListAndroidSyncFeedIDsByContentHashes(contentHashes)
-		if err != nil {
-			return nil, err
-		}
-		linkedIDs = append(linkedIDs, peers...)
 		frontier = frontier[:0]
 		for _, id := range uniqueStrings(linkedIDs) {
 			if _, exists := queued[id]; exists {
@@ -328,37 +315,42 @@ func (db *DB) ListAndroidSyncFeedHydrationIDs(tweetIDs []string) ([]string, erro
 	return out, nil
 }
 
-func (db *DB) ListAndroidSyncFeedIDsByContentHashes(contentHashes []string) ([]string, error) {
-	var out []string
-	for _, chunk := range stringChunks(uniqueStrings(contentHashes), androidSyncProjectionChunkSize) {
-		rows, err := db.reader().Query(`
-			SELECT tweet_id
-			FROM feed_items INDEXED BY idx_feed_items_content_hash
-			WHERE content_hash IS NOT NULL
-			  AND content_hash != ''
-			  AND content_hash IN (`+placeholders(len(chunk))+`)
-			ORDER BY tweet_id
-		`, stringsToAny(chunk)...)
-		if err != nil {
-			return nil, err
-		}
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err != nil {
-				_ = rows.Close()
-				return nil, err
-			}
-			out = append(out, id)
-		}
-		if err := rows.Err(); err != nil {
-			_ = rows.Close()
-			return nil, err
-		}
-		if err := rows.Close(); err != nil {
-			return nil, err
-		}
+// ListAndroidSyncRetweetSourceHashesForFeedIDs returns the existing retweet
+// groups referenced by the selected feed rows.
+func (db *DB) ListAndroidSyncRetweetSourceHashesForFeedIDs(tweetIDs []string) ([]string, error) {
+	tweetIDs = uniqueStrings(tweetIDs)
+	if len(tweetIDs) == 0 {
+		return nil, nil
 	}
-	return uniqueStrings(out), nil
+	rawIDs, err := json.Marshal(tweetIDs)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := db.reader().Query(`
+		WITH desired(tweet_id) AS (SELECT value FROM json_each(?))
+		SELECT DISTINCT fi.content_hash
+		FROM desired d
+		JOIN feed_items fi ON fi.tweet_id = d.tweet_id
+		WHERE fi.content_hash IS NOT NULL
+		  AND fi.content_hash != ''
+		  AND EXISTS (
+			SELECT 1 FROM retweet_sources rs WHERE rs.content_hash = fi.content_hash
+		  )
+		ORDER BY fi.content_hash
+	`, string(rawIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var hashes []string
+	for rows.Next() {
+		var hash string
+		if err := rows.Scan(&hash); err != nil {
+			return nil, err
+		}
+		hashes = append(hashes, hash)
+	}
+	return hashes, rows.Err()
 }
 
 func (db *DB) ListAndroidSyncFeedRankProjections(tweetIDs []string) (map[string]AndroidSyncFeedRankProjection, error) {

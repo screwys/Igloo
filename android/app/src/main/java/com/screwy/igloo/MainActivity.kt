@@ -20,6 +20,7 @@ import com.screwy.igloo.log.iglooLogModule
 import com.screwy.igloo.media.iglooMediaModule
 import com.screwy.igloo.net.Reachability
 import com.screwy.igloo.net.iglooNetModule
+import com.screwy.igloo.sync.PeriodicSyncScheduler
 import com.screwy.igloo.sync.SyncCoordinator
 import com.screwy.igloo.sync.iglooSyncModule
 import com.screwy.igloo.ui.iglooUiModule
@@ -121,6 +122,7 @@ object AppRuntime {
             authRepo.onAppStart()
             if (authRepo.hasSessionSync()) {
                 scheduler.start()
+                koin.get<PeriodicSyncScheduler>().ensureScheduled()
             }
         }
     }

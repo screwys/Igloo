@@ -172,7 +172,7 @@ func (s *Server) writeAndroidSyncBootstrapPage(w http.ResponseWriter, cursor and
 		if clock.Epoch != session.Epoch {
 			return errAndroidSyncResetRequired
 		}
-		changes, err = s.materializeAndroidSyncHeads(snapshot, heads, session.Selection)
+		changes, err = s.materializeAndroidSyncBootstrapHeads(snapshot, heads, session.Selection)
 		return err
 	})
 	if err != nil {
@@ -242,6 +242,7 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 	var changes []model.AndroidSyncChange
 	var nextRevision int64
 	var finished bool
+	var caughtUp bool
 	err = s.db.WithReadSnapshot(func(snapshot *db.DB) error {
 		clock, err := snapshot.GetAndroidSyncClock()
 		if err != nil {
@@ -271,24 +272,28 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 		if !finished {
 			heads = heads[:androidSyncChangePageSize]
 		}
-		selection := emptyAndroidSyncDesiredSets()
-		if len(heads) > 0 {
-			selection, err = s.buildAndroidSyncChangeSelection(
-				snapshot, retention, time.Now().UnixMilli(), heads,
-				androidSyncFullYoutubeMetadataForVersion(session.Version),
-			)
-			if err != nil {
-				return err
-			}
-		}
-		changes, err = s.materializeAndroidSyncHeads(snapshot, heads, &selection)
+		var processed int
+		processed, changes, err = s.materializeAndroidSyncChangePage(
+			snapshot,
+			retention,
+			time.Now().UnixMilli(),
+			session.Version,
+			heads,
+		)
 		if err != nil {
 			return err
 		}
+		if processed < len(heads) {
+			heads = heads[:processed]
+			finished = false
+		}
 		if finished {
 			nextRevision = session.Through
-		} else {
+			caughtUp = clock.Revision == session.Through
+		} else if len(heads) > 0 {
 			nextRevision = heads[len(heads)-1].Revision
+		} else {
+			return fmt.Errorf("changes page made no cursor progress")
 		}
 		return nil
 	})
@@ -316,8 +321,55 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"changes": changes, "next_cursor": next, "end_of_stream": finished,
+		"changes": changes, "next_cursor": next, "end_of_stream": finished && caughtUp,
 	})
+}
+
+func (s *Server) materializeAndroidSyncChangePage(
+	database *db.DB,
+	retention db.AndroidRetentionSettings,
+	nowMs int64,
+	version int,
+	heads []model.AndroidSyncHead,
+) (int, []model.AndroidSyncChange, error) {
+	if len(heads) == 0 {
+		return 0, []model.AndroidSyncChange{}, nil
+	}
+	count := len(heads)
+	for {
+		pageHeads := heads[:count]
+		selection, err := s.buildAndroidSyncChangeSelection(
+			database,
+			retention,
+			nowMs,
+			pageHeads,
+			androidSyncFullYoutubeMetadataForVersion(version),
+		)
+		if err != nil {
+			return 0, nil, err
+		}
+		changes, err := s.materializeAndroidSyncHeads(database, pageHeads, &selection)
+		if err != nil {
+			return 0, nil, err
+		}
+		if len(changes) <= androidSyncChangePageSize {
+			return count, changes, nil
+		}
+		if count == 1 {
+			return 0, nil, fmt.Errorf(
+				"android sync owner %s/%s materialized %d changes, limit %d",
+				pageHeads[0].OwnerKind,
+				pageHeads[0].OwnerID,
+				len(changes),
+				androidSyncChangePageSize,
+			)
+		}
+		next := count * androidSyncChangePageSize / len(changes)
+		if next >= count {
+			next = count - 1
+		}
+		count = max(1, next)
+	}
 }
 
 func (s *Server) handleAndroidSyncPriorityState(w http.ResponseWriter, r *http.Request) {
@@ -326,6 +378,11 @@ func (s *Server) handleAndroidSyncPriorityState(w http.ResponseWriter, r *http.R
 		return
 	}
 	cursor, err := decodeAndroidSyncCursor(strings.TrimSpace(r.URL.Query().Get("after")))
+	retention, retentionErr := androidSyncRetentionSettingsFromRequest(r, s.androidSyncRetentionFallback())
+	if retentionErr != nil {
+		writeJSONError(w, http.StatusBadRequest, "bad_retention", retentionErr.Error())
+		return
+	}
 	if err != nil || (cursor.Mode != "changes" && cursor.Mode != "state") ||
 		!androidSyncModelVersionSupported(cursor.Version) || cursor.Revision < 0 {
 		writeAndroidSyncResetRequired(w)
@@ -364,7 +421,26 @@ func (s *Server) handleAndroidSyncPriorityState(w http.ResponseWriter, r *http.R
 			}
 			wanted[head.OwnerKind][head.OwnerID] = struct{}{}
 		}
-		changes, err = s.androidSyncStateChanges(
+		momentIDs := sortedMapKeys(wanted["moment_view"])
+		if len(momentIDs) > 0 {
+			selection, selectionErr := snapshot.ListAndroidSyncDesiredContentAmongForMode(
+				retention,
+				time.Now().UnixMilli(),
+				nil,
+				momentIDs,
+				androidSyncFullYoutubeMetadataForVersion(cursor.Version),
+			)
+			if selectionErr != nil {
+				return selectionErr
+			}
+			for _, id := range momentIDs {
+				if _, selected := selection.Videos[id]; !selected {
+					delete(wanted["moment_view"], id)
+					changes = append(changes, androidSyncDeleteChange("moment_view", id))
+				}
+			}
+		}
+		stateChanges, err := s.androidSyncStateChanges(
 			snapshot,
 			newAndroidSyncMaterializationPlan(nil),
 			wanted,
@@ -372,6 +448,7 @@ func (s *Server) handleAndroidSyncPriorityState(w http.ResponseWriter, r *http.R
 		if err != nil {
 			return err
 		}
+		changes = append(changes, stateChanges...)
 		if finished {
 			nextRevision = clock.Revision
 		} else {

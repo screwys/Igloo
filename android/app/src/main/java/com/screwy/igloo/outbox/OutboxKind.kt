@@ -149,3 +149,16 @@ sealed class OutboxKind {
         override val coalesceKey = CoalesceKey.Fifo
     }
 }
+
+internal val OutboxKind.isInteractiveAction: Boolean
+    get() =
+        when (this) {
+            is OutboxKind.Like,
+            is OutboxKind.Bookmark,
+            is OutboxKind.Follow,
+            is OutboxKind.Star,
+            is OutboxKind.Mute,
+            is OutboxKind.ChannelSetting,
+            is OutboxKind.CreateCategory -> true
+            else -> false
+        }

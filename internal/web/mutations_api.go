@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/screwys/igloo/internal/db"
 )
@@ -23,20 +22,11 @@ func (s *Server) registerMutationAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/mutations/moments_cursor", s.handleMutationMomentsCursor)
 }
 
-func (s *Server) kickFeedOrderForTweetIDs(tweetIDs ...string) {
-	if len(tweetIDs) == 0 {
+func (s *Server) wakeFeedOrderInvalidation() {
+	if s == nil || s.workers == nil {
 		return
 	}
-	_ = s.db.InvalidateAlgoScore(tweetIDs...)
-	s.workers.KickFeedScoring()
-}
-
-func (s *Server) kickFeedOrderForChannelID(channelID string) {
-	if strings.TrimSpace(channelID) == "" {
-		return
-	}
-	_ = s.db.InvalidateFeedWindowByChannelID(channelID)
-	s.workers.KickFeedScoring()
+	s.workers.WakeFeedOrderInvalidation()
 }
 
 // ── handlers ─────────────────────────────────────────────────────────
@@ -83,7 +73,7 @@ func (s *Server) handleMutationLike(w http.ResponseWriter, r *http.Request) {
 		if body.Action == "set" {
 			s.requestXStatusRecovery(result.CanonicalID, false)
 		}
-		s.kickFeedOrderForTweetIDs(result.CanonicalID)
+		s.wakeFeedOrderInvalidation()
 	}
 	writeJSON(w, 200, map[string]any{})
 }
@@ -140,7 +130,7 @@ func (s *Server) handleMutationBookmark(w http.ResponseWriter, r *http.Request) 
 				go s.startMutationBookmarkArchive(user, result.CanonicalID)
 			}
 		}
-		s.kickFeedOrderForTweetIDs(result.CanonicalID)
+		s.wakeFeedOrderInvalidation()
 	}
 	writeJSON(w, 200, map[string]any{})
 }
@@ -191,17 +181,17 @@ func (s *Server) handleMutationFollow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.Applied {
-		s.kickFeedOrderForChannelID(result.CanonicalID)
+		s.wakeFeedOrderInvalidation()
 	}
 	writeJSON(w, 200, map[string]any{})
 }
 
 func (s *Server) handleMutationStar(w http.ResponseWriter, r *http.Request) {
-	s.applyToggleMutation(w, r, s.db.MutateStar, "channel_id", s.kickFeedOrderForChannelID)
+	s.applyToggleMutation(w, r, s.db.MutateStar, "channel_id", s.wakeFeedOrderInvalidation)
 }
 
 func (s *Server) handleMutationMute(w http.ResponseWriter, r *http.Request) {
-	s.applyToggleMutation(w, r, s.db.MutateMute, "channel_id", s.kickFeedOrderForChannelID)
+	s.applyToggleMutation(w, r, s.db.MutateMute, "channel_id", s.wakeFeedOrderInvalidation)
 }
 
 // applyToggleMutation shares the body-shape for the three simple
@@ -211,7 +201,7 @@ func (s *Server) applyToggleMutation(
 	r *http.Request,
 	apply func(id, action string, ts int64) (db.MutationResult, error),
 	idField string,
-	after func(id string),
+	after func(),
 ) {
 	user := userFromContext(r.Context())
 	if user == nil {
@@ -235,7 +225,7 @@ func (s *Server) applyToggleMutation(
 		return
 	}
 	if result.Applied && after != nil {
-		after(result.CanonicalID)
+		after()
 	}
 	writeJSON(w, 200, map[string]any{})
 }
@@ -262,7 +252,9 @@ func (s *Server) handleMutationSeen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.Affected > 0 {
-		s.workers.KickFeedScoring()
+		if s.workers != nil {
+			s.workers.KickFeedScoring()
+		}
 	}
 	writeJSON(w, 200, map[string]any{})
 }
@@ -336,7 +328,7 @@ func (s *Server) handleMutationChannelSetting(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if result.Applied {
-		s.kickFeedOrderForChannelID(result.CanonicalID)
+		s.wakeFeedOrderInvalidation()
 		s.applyChannelSettingEffects(result.CanonicalID, previousSettings)
 	}
 	writeJSON(w, 200, map[string]any{})

@@ -31,33 +31,36 @@ type WorkerStatus struct {
 
 // Manager owns all background goroutines.
 type Manager struct {
-	db                *db.DB
-	cfg               *config.Config
-	downloader        *download.Downloader
-	ctx               context.Context
-	cancel            context.CancelFunc
-	wg                sync.WaitGroup
-	mediaCurrentKick  chan struct{} // buffered(1): coalescing kick for current media
-	mediaBackfillKick chan struct{} // buffered(1): coalescing kick for historical media
-	tempDownloadKick  chan struct{} // buffered(1): durable user-download wake-up
-	discoveryKick     chan struct{} // buffered(1): coalescing kick for platform discovery
-	profileKick       chan struct{} // buffered(1): durable profile job wake-up
-	xStatusEnrich     chan xfeed.StatusEnrichmentRequest
-	ingestKick        chan struct{} // buffered(1): trigger immediate ingest
-	feedScoringKick   chan struct{} // buffered(1): trigger immediate scoring
-	ingestPaused      int32         // atomic: 1 = paused
-	ingestRunning     int32         // atomic: 1 = cycle in progress
-	ingestCycleTotal  int32         // atomic: channels to fetch in current cycle
-	ingestCycleDone   int32         // atomic: channels fetched so far in current cycle
-	stopRequested     int32         // atomic: 1 = stop requested
-	statuses          map[string]*atomic.Value
-	statusMu          sync.RWMutex
-	activity          *ActivityRing // general server activity (200 items)
-	dlActivity        *ActivityRing // download-specific activity (100 items)
-	feedActivity      *ActivityRing // x_ingest/feed_media per-item activity (200 items)
-	externalNetwork   externalNetworkState
-	externalWakeMu    sync.Mutex
-	externalWake      *time.Timer
+	db                      *db.DB
+	cfg                     *config.Config
+	downloader              *download.Downloader
+	ctx                     context.Context
+	cancel                  context.CancelFunc
+	wg                      sync.WaitGroup
+	mediaCurrentKick        chan struct{} // buffered(1): coalescing kick for current media
+	mediaBackfillKick       chan struct{} // buffered(1): coalescing kick for historical media
+	tempDownloadKick        chan struct{} // buffered(1): durable user-download wake-up
+	discoveryKick           chan struct{} // buffered(1): coalescing kick for platform discovery
+	profileKick             chan struct{} // buffered(1): durable profile job wake-up
+	xStatusEnrich           chan xfeed.StatusEnrichmentRequest
+	ingestKick              chan struct{} // buffered(1): trigger immediate ingest
+	feedScoringKick         chan struct{} // buffered(1): rate-limited feed refresh
+	feedScoringPriorityKick chan struct{} // buffered(1): committed action-state refresh
+	feedOrderKick           chan struct{} // buffered(1): coalescing feed-order invalidation
+	feedOrderReady          chan struct{} // closed after persisted invalidations drain at startup
+	ingestPaused            int32         // atomic: 1 = paused
+	ingestRunning           int32         // atomic: 1 = cycle in progress
+	ingestCycleTotal        int32         // atomic: channels to fetch in current cycle
+	ingestCycleDone         int32         // atomic: channels fetched so far in current cycle
+	stopRequested           int32         // atomic: 1 = stop requested
+	statuses                map[string]*atomic.Value
+	statusMu                sync.RWMutex
+	activity                *ActivityRing // general server activity (200 items)
+	dlActivity              *ActivityRing // download-specific activity (100 items)
+	feedActivity            *ActivityRing // x_ingest/feed_media per-item activity (200 items)
+	externalNetwork         externalNetworkState
+	externalWakeMu          sync.Mutex
+	externalWake            *time.Timer
 
 	dlSessionCompleted       int32        // atomic
 	dlSessionFailed          int32        // atomic
@@ -112,26 +115,29 @@ type sponsorblockFetcher interface {
 func NewManager(database *db.DB, cfg *config.Config) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &Manager{
-		db:                     database,
-		cfg:                    cfg,
-		downloader:             download.NewDownloader(cfg.CookiesDir),
-		ctx:                    ctx,
-		cancel:                 cancel,
-		mediaCurrentKick:       make(chan struct{}, 1),
-		mediaBackfillKick:      make(chan struct{}, 1),
-		tempDownloadKick:       make(chan struct{}, 1),
-		discoveryKick:          make(chan struct{}, 1),
-		profileKick:            make(chan struct{}, 1),
-		xStatusEnrich:          make(chan xfeed.StatusEnrichmentRequest, 1024),
-		ingestKick:             make(chan struct{}, 1),
-		feedScoringKick:        make(chan struct{}, 1),
-		statuses:               make(map[string]*atomic.Value),
-		activity:               NewActivityRing(200),
-		dlActivity:             NewActivityRing(100),
-		feedActivity:           NewActivityRing(200),
-		youtubeEnrichmentSlots: make(chan struct{}, 2),
-		xStatusQueued:          make(map[string]time.Time),
-		downloadBackoff:        make(map[string]downloadPlatformBackoff),
+		db:                      database,
+		cfg:                     cfg,
+		downloader:              download.NewDownloader(cfg.CookiesDir),
+		ctx:                     ctx,
+		cancel:                  cancel,
+		mediaCurrentKick:        make(chan struct{}, 1),
+		mediaBackfillKick:       make(chan struct{}, 1),
+		tempDownloadKick:        make(chan struct{}, 1),
+		discoveryKick:           make(chan struct{}, 1),
+		profileKick:             make(chan struct{}, 1),
+		xStatusEnrich:           make(chan xfeed.StatusEnrichmentRequest, 1024),
+		ingestKick:              make(chan struct{}, 1),
+		feedScoringKick:         make(chan struct{}, 1),
+		feedScoringPriorityKick: make(chan struct{}, 1),
+		feedOrderKick:           make(chan struct{}, 1),
+		feedOrderReady:          make(chan struct{}),
+		statuses:                make(map[string]*atomic.Value),
+		activity:                NewActivityRing(200),
+		dlActivity:              NewActivityRing(100),
+		feedActivity:            NewActivityRing(200),
+		youtubeEnrichmentSlots:  make(chan struct{}, 2),
+		xStatusQueued:           make(map[string]time.Time),
+		downloadBackoff:         make(map[string]downloadPlatformBackoff),
 		downloadPlatformAt: map[db.DownloadLane]int{
 			db.DownloadLaneCurrent:  0,
 			db.DownloadLaneBackfill: 0,
@@ -176,6 +182,7 @@ func (m *Manager) StartAll() {
 	m.launch("temp_download", m.runTempDownloadLoop)
 	m.launch("profile_refresh", m.runProfileJobLoop)
 	m.launch("scheduler", m.runScheduler)
+	m.launch("feed_order_invalidation", m.runFeedOrderInvalidationLoop)
 	m.launch("feed_scoring", m.runFeedScoringWorker)
 	m.launchDelayed("downloader_operation_prune", 5*time.Minute, m.runDownloaderOperationPruner)
 	m.launchDelayed("backup", 5*time.Minute, m.runBackupWorker)
@@ -268,8 +275,21 @@ func (m *Manager) KickIngest() {
 
 // KickFeedScoring sends a non-blocking signal to trigger immediate feed rescoring.
 func (m *Manager) KickFeedScoring() {
+	if m == nil || m.feedScoringKick == nil {
+		return
+	}
 	select {
 	case m.feedScoringKick <- struct{}{}:
+	default:
+	}
+}
+
+func (m *Manager) kickFeedScoringAfterAction() {
+	if m == nil || m.feedScoringPriorityKick == nil {
+		return
+	}
+	select {
+	case m.feedScoringPriorityKick <- struct{}{}:
 	default:
 	}
 }

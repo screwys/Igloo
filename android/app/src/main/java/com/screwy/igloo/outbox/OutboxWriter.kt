@@ -8,6 +8,7 @@ import com.screwy.igloo.data.entity.OutboxEntity
 import com.screwy.igloo.log.LogEntry
 import com.screwy.igloo.log.LogLevel
 import com.screwy.igloo.log.LogSink
+import com.screwy.igloo.net.iglooJson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.BufferOverflow
@@ -15,7 +16,10 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 
 /** Persists user mutations and applies safe optimistic sets in one Room transaction. */
@@ -24,7 +28,7 @@ class OutboxWriter(
     private val db: IglooDatabase,
     private val prefs: PreferencesRepo,
     private val scope: CoroutineScope,
-    private val onDrainRequested: () -> Unit = {},
+    private val onDrainRequested: (probeIfOffline: Boolean) -> Unit = {},
     private val nowMsProvider: () -> Long = { System.currentTimeMillis() },
     private val writeDebounceMs: Long = WRITE_DEBOUNCE_MS,
 ) {
@@ -37,7 +41,11 @@ class OutboxWriter(
         )
 
     init {
-        scope.launch { _debounceSignal.debounce(writeDebounceMs).collect { onDrainRequested() } }
+        scope.launch {
+            _debounceSignal.debounce(writeDebounceMs).collect {
+                onDrainRequested(false)
+            }
+        }
     }
 
     // ─── Enqueue ───────────────────────────────────────────────────────────────
@@ -54,15 +62,22 @@ class OutboxWriter(
         }
         val nowMs = serverCorrectedNowMs()
         db.withTransaction {
-            val row = buildOutboxRow(kind, nowMs)
             val outbox = db.outboxDao()
+            val previousPending = outbox.pendingRows().firstOrNull { it.matches(kind) }
+            val selectionBaseline =
+                previousPending?.selectionBaseline() ?: selectionBaseline(kind)
+            val selectionWidening = selectionBaseline?.expandsTo(kind) == true
+            val row =
+                buildOutboxRow(kind, nowMs, selectionWidening, selectionBaseline)
             when (kind.coalesceKey) {
                 OutboxKind.CoalesceKey.ByKindItemField -> outbox.coalesceAndInsert(row)
                 OutboxKind.CoalesceKey.Fifo -> outbox.insert(row)
             }
             applyOptimisticMutation(db, row)
         }
-        if (kind !is OutboxKind.Log && kind !is OutboxKind.LogDebug) {
+        if (kind.isInteractiveAction) {
+            onDrainRequested(true)
+        } else if (kind !is OutboxKind.Log && kind !is OutboxKind.LogDebug) {
             _debounceSignal.tryEmit(Unit)
         }
     }
@@ -131,8 +146,13 @@ class OutboxWriter(
 
     // ─── Row construction ──────────────────────────────────────────────────────
 
-    private fun buildOutboxRow(kind: OutboxKind, nowMs: Long): OutboxEntity {
-        val payload = buildPayload(kind, nowMs)
+    private fun buildOutboxRow(
+        kind: OutboxKind,
+        nowMs: Long,
+        selectionWidening: Boolean = false,
+        selectionBaseline: SelectionBaseline? = null,
+    ): OutboxEntity {
+        val payload = buildPayload(kind, nowMs, selectionWidening, selectionBaseline)
         return OutboxEntity(
             kind = kind.code,
             itemId = kind.itemId,
@@ -147,9 +167,16 @@ class OutboxWriter(
         )
     }
 
-    private fun buildPayload(kind: OutboxKind, nowMs: Long): String {
+    private fun buildPayload(
+        kind: OutboxKind,
+        nowMs: Long,
+        selectionWidening: Boolean,
+        selectionBaseline: SelectionBaseline?,
+    ): String {
         val obj = buildJsonObject {
             put("updated_at_ms", nowMs)
+            if (selectionWidening) put(SELECTION_WIDENING_KEY, true)
+            selectionBaseline?.let { put(SELECTION_BASELINE_KEY, it.value) }
             when (kind) {
                 is OutboxKind.Like -> {
                     put("tweet_id", kind.tweetId)
@@ -247,6 +274,21 @@ class OutboxWriter(
 
     private fun serverCorrectedNowMs(): Long = nowMsProvider() + prefs.serverTimeOffsetMsSync()
 
+    private suspend fun selectionBaseline(kind: OutboxKind): SelectionBaseline? =
+        when (kind) {
+            is OutboxKind.Follow ->
+                SelectionBaseline(if (db.channelFollowDao().exists(kind.channelId)) 1 else 0)
+            is OutboxKind.ChannelSetting -> {
+                if (kind.settingField != "include_reposts") {
+                    null
+                } else {
+                    val previous = db.channelSettingDao().getById(kind.channelId)?.includeReposts
+                    SelectionBaseline(previous ?: SELECTION_INHERIT_VALUE)
+                }
+            }
+            else -> null
+        }
+
     private fun nextMomentsCursorTimestamp(currentUpdatedAtMs: Long?): Long {
         val afterCurrent =
             when (currentUpdatedAtMs) {
@@ -269,3 +311,41 @@ class OutboxWriter(
         const val WRITE_DEBOUNCE_MS: Long = 3_000L
     }
 }
+
+internal const val SELECTION_WIDENING_KEY = "selection_widening"
+private const val SELECTION_BASELINE_KEY = "selection_baseline"
+private const val SELECTION_INHERIT_VALUE = -1
+
+private data class SelectionBaseline(val value: Int) {
+    fun expandsTo(kind: OutboxKind): Boolean =
+        when (kind) {
+            is OutboxKind.Follow -> value == 0 && kind.action == OutboxKind.Action.Set
+            is OutboxKind.ChannelSetting -> {
+                if (kind.settingField != "include_reposts") return false
+                val previous = value.takeUnless { it == SELECTION_INHERIT_VALUE }
+                val next = kind.value?.toInt()
+                (previous == 0 && next != 0) || (previous == null && next == 1)
+            }
+            else -> false
+        }
+}
+
+internal fun OutboxEntity.selectionWidening(): Boolean =
+    runCatching {
+            val payload = iglooJson.parseToJsonElement(payloadJson).jsonObject
+            (payload[SELECTION_WIDENING_KEY] as? JsonPrimitive)?.booleanOrNull == true
+        }
+        .getOrDefault(false)
+
+private fun OutboxEntity.matches(kind: OutboxKind): Boolean =
+    this.kind == kind.code && itemId == kind.itemId && field == kind.field
+
+private fun OutboxEntity.selectionBaseline(): SelectionBaseline? =
+    runCatching {
+            val payload = iglooJson.parseToJsonElement(payloadJson).jsonObject
+            (payload[SELECTION_BASELINE_KEY] as? JsonPrimitive)
+                ?.content
+                ?.toIntOrNull()
+                ?.let(::SelectionBaseline)
+        }
+        .getOrNull()

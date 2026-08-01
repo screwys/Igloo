@@ -24,6 +24,14 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260802_install_android_sync_peer_triggers",
+		apply: installAndroidSyncPeerTriggers,
+	},
+	{
+		name:  "20260801_add_feed_order_invalidation_queue",
+		apply: addFeedOrderInvalidationQueue,
+	},
+	{
 		name:  "20260801_add_youtube_member_only_channel_setting",
 		apply: addYouTubeMemberOnlyChannelSetting,
 	},
@@ -47,6 +55,15 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func installAndroidSyncPeerTriggers(tx *sql.Tx) error {
+	return ensureAndroidSyncHeadTriggers(tx)
+}
+
+func addFeedOrderInvalidationQueue(tx *sql.Tx) error {
+	_, err := tx.Exec(feedOrderInvalidationQueueStatement())
+	return err
 }
 
 func addYouTubeMemberOnlyChannelSetting(tx *sql.Tx) error {
