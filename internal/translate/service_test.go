@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/screwys/igloo/internal/model"
 	"github.com/screwys/igloo/internal/settings"
 )
 
@@ -314,6 +315,46 @@ func TestProtectOnlyTokensProducesPlaceholdersOnly(t *testing.T) {
 	}
 	if len(originals) != 2 {
 		t.Fatalf("expected 2 originals, got %d", len(originals))
+	}
+}
+
+func TestFeedTextAllowsManualShortTranslation(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"translations":[{"translatedText":"example 💙","detectedSourceLanguage":"da"}]}}`))
+	}))
+	defer srv.Close()
+
+	d := openTranslateTestDB(t)
+	if _, err := d.UpsertFeedItems([]model.FeedItem{{
+		TweetID:      "short_manual_translation",
+		AuthorHandle: "sample_author",
+		BodyText:     "sampleword 💙",
+		Lang:         "da",
+	}}); err != nil {
+		t.Fatalf("UpsertFeedItems: %v", err)
+	}
+	if err := d.SetSetting("translate_backend", settings.TranslateBackendGoogle); err != nil {
+		t.Fatalf("SetSetting translate_backend: %v", err)
+	}
+	if err := d.SetSetting("translate_api_site", srv.URL); err != nil {
+		t.Fatalf("SetSetting translate_api_site: %v", err)
+	}
+	if err := d.SetSetting("translate_api_key", "test-key"); err != nil {
+		t.Fatalf("SetSetting translate_api_key: %v", err)
+	}
+
+	result, err := FeedText(context.Background(), d, "short_manual_translation", "body", "en")
+	if err != nil {
+		t.Fatalf("FeedText: %v", err)
+	}
+	if result.TranslatedText != "example 💙" {
+		t.Fatalf("TranslatedText = %q, want %q", result.TranslatedText, "example 💙")
+	}
+	if requests != 1 {
+		t.Fatalf("provider requests = %d, want 1", requests)
 	}
 }
 

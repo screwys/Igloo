@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/language"
@@ -24,6 +25,7 @@ const (
 	translateBackgroundBatchSize      = 10
 	translateBackgroundMaxErrors      = translateBackgroundBatchSize
 	translateBackgroundProviderDelay  = 1500 * time.Millisecond
+	autoTranslateMinimumWords         = 3
 )
 
 var translateSkipScriptPatterns = map[string]*regexp.Regexp{
@@ -507,25 +509,49 @@ func shouldAutoTranslateCandidate(sourceLang, sourceText, targetLang string, ski
 	if targetLang == "" {
 		targetLang = "en"
 	}
+	cleanSource, _ := protectForTranslate(sourceText)
+	if !hasMinimumAutoTranslateWords(cleanSource) || hasSkippedLanguageScript(cleanSource, skipSet) {
+		return false
+	}
 	if !language.IsUnknown(sourceLang) {
 		if sourceLanguageMatchesTarget(sourceLang, targetLang) || language.InSet(sourceLang, skipSet) {
 			return false
 		}
-		cleanSource, _ := protectForTranslate(sourceText)
-		if hasSkippedLanguageScript(cleanSource, skipSet) {
-			return false
-		}
-		return hasTranslatableContent(cleanSource)
+		return true
 	}
 
-	cleanSource, _ := protectForTranslate(sourceText)
-	if hasSkippedLanguageScript(cleanSource, skipSet) {
-		return false
-	}
 	if looksAlreadyReadableInTarget(cleanSource, targetLang) {
 		return false
 	}
-	return hasTranslatableContent(cleanSource)
+	return true
+}
+
+func hasMinimumAutoTranslateWords(protected string) bool {
+	text := reSentinel.ReplaceAllString(protected, "")
+	words := 0
+	unspacedLetters := 0
+	for _, field := range strings.Fields(text) {
+		hasWord := false
+		for _, r := range field {
+			if !unicode.IsLetter(r) && !unicode.IsNumber(r) {
+				continue
+			}
+			hasWord = true
+			if unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Thai, unicode.Lao, unicode.Khmer, unicode.Myanmar) {
+				unspacedLetters++
+				if unspacedLetters >= autoTranslateMinimumWords {
+					return true
+				}
+			}
+		}
+		if hasWord {
+			words++
+			if words >= autoTranslateMinimumWords {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func hasSkippedLanguageScript(sourceText string, skipSet map[string]bool) bool {

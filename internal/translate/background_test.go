@@ -42,9 +42,15 @@ func TestShouldAutoTranslateCandidate(t *testing.T) {
 		want       bool
 	}{
 		{
-			name:       "known foreign language latin text still translates",
+			name:       "two word known foreign language is too ambiguous",
 			sourceLang: "tr",
 			text:       "Merhaba dunya",
+			want:       false,
+		},
+		{
+			name:       "three word known foreign language still translates",
+			sourceLang: "tr",
+			text:       "Merhaba dunya yine",
 			want:       true,
 		},
 		{
@@ -96,10 +102,10 @@ func TestShouldAutoTranslateCandidate(t *testing.T) {
 			want:       false,
 		},
 		{
-			name:       "empty language with non skipped non latin text",
+			name:       "short unknown language text is too ambiguous",
 			sourceLang: "",
 			text:       "안녕하세요",
-			want:       true,
+			want:       false,
 		},
 		{
 			name:       "known non skipped language with latin text",
@@ -110,7 +116,7 @@ func TestShouldAutoTranslateCandidate(t *testing.T) {
 		{
 			name:       "known foreign language caption remains translatable",
 			sourceLang: "sk",
-			text:       "sample caption #tag 💜\n@sample_user",
+			text:       "sample foreign caption #tag 💜\n@sample_user",
 			want:       true,
 		},
 		{
@@ -207,14 +213,14 @@ func TestTranslateBackgroundBatchesSameLanguageThreadBodies(t *testing.T) {
 		{
 			TweetID:      "thread_root_translate",
 			AuthorHandle: "sample_author_root",
-			BodyText:     "루트 본문",
+			BodyText:     "루트 샘플 본문",
 			Lang:         "ko",
 			PublishedAt:  &base,
 		},
 		{
 			TweetID:       "thread_reply_translate",
 			AuthorHandle:  "sample_author_reply",
-			BodyText:      "답글 본문",
+			BodyText:      "답글 샘플 본문",
 			Lang:          "ko",
 			IsReply:       true,
 			ReplyToStatus: "thread_root_translate",
@@ -248,7 +254,7 @@ func TestTranslateBackgroundBatchesSameLanguageThreadBodies(t *testing.T) {
 	if requests != 1 {
 		t.Fatalf("provider requests = %d, want 1", requests)
 	}
-	if len(gotTexts) != 2 || gotTexts[0] != "루트 본문" || gotTexts[1] != "답글 본문" {
+	if len(gotTexts) != 2 || gotTexts[0] != "루트 샘플 본문" || gotTexts[1] != "답글 샘플 본문" {
 		t.Fatalf("q texts = %#v", gotTexts)
 	}
 	for tweetID, want := range map[string]string{
@@ -288,14 +294,14 @@ func TestTranslateBackgroundRetriesOnlyRejectedBatchItem(t *testing.T) {
 		{
 			TweetID:      "sample_root",
 			AuthorHandle: "sample_author_root",
-			BodyText:     "루트 본문",
+			BodyText:     "루트 샘플 본문",
 			Lang:         "ko",
 			PublishedAt:  &base,
 		},
 		{
 			TweetID:       "sample_reply",
 			AuthorHandle:  "sample_author_reply",
-			BodyText:      "답글 #태그",
+			BodyText:      "답글 샘플 본문 #태그",
 			Lang:          "ko",
 			IsReply:       true,
 			ReplyToStatus: "sample_root",
@@ -358,7 +364,7 @@ func TestTranslateBackgroundSplitsMixedLanguageThreadBodies(t *testing.T) {
 		gotBatches = append(gotBatches, texts)
 		w.Header().Set("Content-Type", "application/json")
 		switch texts[0] {
-		case "루트 본문":
+		case "루트 샘플 본문":
 			_, _ = w.Write([]byte(`{"data":{"translations":[{"translatedText":"root translated","detectedSourceLanguage":"ko"}]}}`))
 		case "回复正文":
 			_, _ = w.Write([]byte(`{"data":{"translations":[{"translatedText":"reply translated","detectedSourceLanguage":"zh"}]}}`))
@@ -374,7 +380,7 @@ func TestTranslateBackgroundSplitsMixedLanguageThreadBodies(t *testing.T) {
 		{
 			TweetID:      "mixed_thread_root",
 			AuthorHandle: "sample_author_root",
-			BodyText:     "루트 본문",
+			BodyText:     "루트 샘플 본문",
 			Lang:         "ko",
 			PublishedAt:  &base,
 		},
@@ -436,7 +442,7 @@ func TestTranslateBackgroundReusesRetweetBodyTranslation(t *testing.T) {
 		{
 			TweetID:          "sample_repost_source",
 			AuthorHandle:     "sample_author_original",
-			BodyText:         "안녕하세요",
+			BodyText:         "안녕하세요 좋은 하루",
 			Lang:             "ko",
 			ContentHash:      "sample_same_repost_hash",
 			CanonicalTweetID: "sample_repost_source",
@@ -445,7 +451,7 @@ func TestTranslateBackgroundReusesRetweetBodyTranslation(t *testing.T) {
 		{
 			TweetID:          "sample_repost_dup",
 			AuthorHandle:     "sample_author_repost",
-			BodyText:         "안녕하세요",
+			BodyText:         "안녕하세요 좋은 하루",
 			Lang:             "ko",
 			IsRetweet:        true,
 			ContentHash:      "sample_same_repost_hash",
@@ -501,7 +507,7 @@ func TestTranslateBackgroundReusesMergedRetweetSiblingAfterFirstProviderCall(t *
 			t.Fatalf("decode request: %v", err)
 		}
 		texts := googleBatchTexts(t, gotBody)
-		if len(texts) != 1 || texts[0] != "안녕하세요" {
+		if len(texts) != 1 || texts[0] != "안녕하세요 좋은 하루" {
 			t.Fatalf("q texts = %#v", texts)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -515,7 +521,7 @@ func TestTranslateBackgroundReusesMergedRetweetSiblingAfterFirstProviderCall(t *
 		{
 			TweetID:          "sample_duplicate_repost_a",
 			AuthorHandle:     "sample_author_a",
-			BodyText:         "안녕하세요",
+			BodyText:         "안녕하세요 좋은 하루",
 			Lang:             "ko",
 			IsRetweet:        true,
 			ContentHash:      "sample_same_merged_hash",
@@ -525,7 +531,7 @@ func TestTranslateBackgroundReusesMergedRetweetSiblingAfterFirstProviderCall(t *
 		{
 			TweetID:          "sample_duplicate_repost_b",
 			AuthorHandle:     "sample_author_b",
-			BodyText:         "안녕하세요",
+			BodyText:         "안녕하세요 좋은 하루",
 			Lang:             "ko",
 			IsRetweet:        true,
 			ContentHash:      "sample_same_merged_hash",
@@ -585,7 +591,7 @@ func TestTranslateBackgroundReusesQuoteWrapperTranslation(t *testing.T) {
 		{
 			TweetID:      "quoted_translation_source",
 			AuthorHandle: "sample_author_quoted",
-			BodyText:     "고마워요",
+			BodyText:     "고마워요 정말 좋아요",
 			Lang:         "ko",
 			PublishedAt:  &now,
 		},
@@ -595,7 +601,7 @@ func TestTranslateBackgroundReusesQuoteWrapperTranslation(t *testing.T) {
 			BodyText:      "wrapper",
 			Lang:          "en",
 			QuoteTweetID:  "quoted_translation_source",
-			QuoteBodyText: "고마워요",
+			QuoteBodyText: "고마워요 정말 좋아요",
 			QuoteLang:     "ko",
 			PublishedAt:   ptrTime(now.Add(time.Minute)),
 		},
@@ -768,14 +774,14 @@ func TestTranslateBackgroundStopsBatchOnKagiRateLimit(t *testing.T) {
 		{
 			TweetID:      "tweet-kagi-rate-limited-newer",
 			AuthorHandle: "author_newer",
-			BodyText:     "안녕하세요",
+			BodyText:     "안녕하세요 좋은 하루",
 			Lang:         "ko",
 			PublishedAt:  &base,
 		},
 		{
 			TweetID:      "tweet-kagi-rate-limited-older",
 			AuthorHandle: "author_older",
-			BodyText:     "你好",
+			BodyText:     "你好世界",
 			Lang:         "zh",
 			PublishedAt:  ptrTime(base.Add(-time.Minute)),
 		},
