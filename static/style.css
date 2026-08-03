@@ -7278,7 +7278,11 @@ body.shorts-mode .sidebar {
 }
 #logs-modal .err-item:last-child { border-bottom: none; }
 #logs-modal .err-time { color: var(--text-muted); font-size: 0.58rem; white-space: nowrap; flex-shrink: 0; }
-#logs-modal .err-msg { font-size: 0.63rem; }
+#logs-modal .err-msg {
+    min-width: 0;
+    font-size: 0.63rem;
+    overflow-wrap: anywhere;
+}
 #logs-modal .err-msg.error { color: var(--status-error); }
 #logs-modal .err-msg.warning { color: var(--status-warning); }
 

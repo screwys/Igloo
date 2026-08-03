@@ -385,6 +385,26 @@ func TestCookieBrowserSelectSizingOverridesGlobalInputWidth(t *testing.T) {
 	}
 }
 
+func TestLogsErrorMessagesWrapWithinTheirPanel(t *testing.T) {
+	css, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ruleStart := strings.Index(string(css), "#logs-modal .err-msg {")
+	if ruleStart < 0 {
+		t.Fatal("missing logs error message rule")
+	}
+	rule := string(css)[ruleStart:]
+	if end := strings.Index(rule, "}"); end >= 0 {
+		rule = rule[:end]
+	}
+	for _, want := range []string{"min-width: 0;", "overflow-wrap: anywhere;"} {
+		if !strings.Contains(rule, want) {
+			t.Errorf("logs error message rule missing %q:\n%s", want, rule)
+		}
+	}
+}
+
 func TestWideModalsUseTheSameCenteredDesktopScale(t *testing.T) {
 	css, err := os.ReadFile("../../static/style.css")
 	if err != nil {
