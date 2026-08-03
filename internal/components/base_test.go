@@ -405,7 +405,7 @@ func TestLogsErrorMessagesWrapWithinTheirPanel(t *testing.T) {
 	}
 }
 
-func TestWideModalsUseTheSameCenteredDesktopScale(t *testing.T) {
+func TestWideModalsUseTheSameDesktopScaleOnMoments(t *testing.T) {
 	css, err := os.ReadFile("../../static/style.css")
 	if err != nil {
 		t.Fatal(err)
@@ -433,13 +433,12 @@ func TestWideModalsUseTheSameCenteredDesktopScale(t *testing.T) {
 		}
 	}
 
-	for _, check := range []string{
+	for _, selector := range []string{
 		"body.shorts-open .modal-wide",
 		"body.shorts-open .prefs-modal-content",
-		"calc(100vw - var(--shorts-story-tray-width) - var(--shorts-story-tray-width) - 2rem)",
 	} {
-		if !strings.Contains(text, check) {
-			t.Errorf("wide Moments modals should stay centered inside the story rail clearance; missing %q", check)
+		if strings.Contains(text, selector) {
+			t.Errorf("Moments should use the shared modal sizing; found %q", selector)
 		}
 	}
 }

@@ -5640,11 +5640,6 @@ body.shorts-open {
     --shorts-story-tray-width: clamp(76px, calc(100vw - var(--sidebar-width) - 750px - 2rem), 390px);
 }
 
-body.shorts-open .modal-wide,
-body.shorts-open .prefs-modal-content {
-    --wide-modal-width: min(88vw, 1725px, calc(100vw - var(--shorts-story-tray-width) - var(--shorts-story-tray-width) - 2rem));
-}
-
 .shorts-layout {
     position: fixed;
     top: 0;
