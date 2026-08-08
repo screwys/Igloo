@@ -76,6 +76,9 @@ CREATE INDEX idx_feed_items_fetched ON feed_items(fetched_at DESC, tweet_id DESC
 -- index: idx_feed_items_media_author on feed_items
 CREATE INDEX idx_feed_items_media_author ON feed_items(channel_id, published_at DESC) WHERE media_json IS NOT NULL AND media_json != '' AND media_json != '[]' AND is_retweet = 0;
 
+-- index: idx_feed_items_pinned_author on feed_items
+CREATE INDEX idx_feed_items_pinned_author ON feed_items(channel_id, published_at DESC) WHERE is_pinned = 1 AND is_retweet = 0;
+
 -- index: idx_feed_items_published on feed_items
 CREATE INDEX idx_feed_items_published ON feed_items(published_at DESC, tweet_id DESC);
 
@@ -221,7 +224,7 @@ CREATE TABLE downloader_operations ( id INTEGER PRIMARY KEY AUTOINCREMENT, opera
 CREATE TABLE feed_item_sources ( tweet_id TEXT NOT NULL, source_id TEXT NOT NULL, first_seen_at INTEGER NOT NULL DEFAULT 0, last_seen_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (tweet_id, source_id), FOREIGN KEY (source_id) REFERENCES feed_sources(source_id) ON DELETE CASCADE );
 
 -- table: feed_items on feed_items
-CREATE TABLE feed_items ( tweet_id TEXT PRIMARY KEY, source_channel_id TEXT, channel_id TEXT, body_text TEXT, lang TEXT, is_retweet INTEGER DEFAULT 0, quote_tweet_id TEXT, quote_channel_id TEXT, quote_body_text TEXT, quote_lang TEXT, quote_media_json TEXT, media_json TEXT, canonical_url TEXT, reply_channel_id TEXT, reply_to_status TEXT, reposter_channel_id TEXT, is_reply INTEGER DEFAULT 0, is_ghost INTEGER DEFAULT 0, quote_published_at INTEGER NOT NULL DEFAULT 0, views INTEGER, likes INTEGER, retweets INTEGER, published_at INTEGER NOT NULL DEFAULT 0, fetched_at INTEGER NOT NULL DEFAULT 0, content_hash TEXT, canonical_tweet_id TEXT, algo_interest REAL DEFAULT 0, algo_scored_at INTEGER DEFAULT 0 );
+CREATE TABLE feed_items ( tweet_id TEXT PRIMARY KEY, source_channel_id TEXT, channel_id TEXT, body_text TEXT, lang TEXT, is_retweet INTEGER DEFAULT 0, is_pinned INTEGER DEFAULT 0, quote_tweet_id TEXT, quote_channel_id TEXT, quote_body_text TEXT, quote_lang TEXT, quote_media_json TEXT, media_json TEXT, canonical_url TEXT, reply_channel_id TEXT, reply_to_status TEXT, reposter_channel_id TEXT, is_reply INTEGER DEFAULT 0, is_ghost INTEGER DEFAULT 0, quote_published_at INTEGER NOT NULL DEFAULT 0, views INTEGER, likes INTEGER, retweets INTEGER, published_at INTEGER NOT NULL DEFAULT 0, fetched_at INTEGER NOT NULL DEFAULT 0, content_hash TEXT, canonical_tweet_id TEXT, algo_interest REAL DEFAULT 0, algo_scored_at INTEGER DEFAULT 0 );
 
 -- table: feed_likes on feed_likes
 CREATE TABLE feed_likes ( tweet_id TEXT PRIMARY KEY, liked_at INTEGER NOT NULL DEFAULT 0 );

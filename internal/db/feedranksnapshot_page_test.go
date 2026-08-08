@@ -9,9 +9,9 @@ func TestListSnapshotPageUsesRankCursor(t *testing.T) {
 	}
 	for _, id := range []string{"first", "second", "third"} {
 		if err := d.ExecRaw(`
-			INSERT INTO feed_items (tweet_id, channel_id, body_text, published_at, fetched_at)
-			VALUES (?, 'twitter_sample_author', 'body', 1, 1)
-		`, id); err != nil {
+			INSERT INTO feed_items (tweet_id, channel_id, body_text, is_pinned, published_at, fetched_at)
+			VALUES (?, 'twitter_sample_author', 'body', ?, 1, 1)
+		`, id, id == "first"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -33,6 +33,9 @@ func TestListSnapshotPageUsesRankCursor(t *testing.T) {
 	}
 	if len(page) != 2 || page[0].Item.TweetID != "first" || page[1].Item.TweetID != "second" {
 		t.Fatalf("first page = %+v", page)
+	}
+	if !page[0].Item.IsPinned || page[1].Item.IsPinned {
+		t.Fatalf("first page pin state = [%t %t]", page[0].Item.IsPinned, page[1].Item.IsPinned)
 	}
 	page, err = d.ListSnapshotPage(snapshotAt, page[1].RankPosition, 2)
 	if err != nil {

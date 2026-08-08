@@ -29,6 +29,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+server_bin="$tmp/igloo"
+go build -o "$server_bin" ./cmd/igloo
+
 port="$(
   python3 - <<'PY'
 import socket
@@ -48,7 +51,7 @@ IGLOO_CONFIG_DIR="$tmp/config" \
 IGLOO_REPO_DIR="$ROOT" \
 IGLOO_PORT="$port" \
 IGLOO_ENABLED_PLATFORMS=all \
-  go run ./cmd/igloo >"$server_log" 2>&1 &
+  "$server_bin" >"$server_log" 2>&1 &
 server_pid="$!"
 
 for _ in $(seq 1 60); do

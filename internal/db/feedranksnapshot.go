@@ -665,6 +665,7 @@ func (db *DB) ListSnapshotPage(snapshotAt int64, afterPos int, limit int) ([]Sna
 			&p.Item.AuthorDisplayName, &p.Item.AuthorAvatarURL,
 			&p.Item.BodyText, &p.Item.Lang,
 			&p.Item.IsRetweet, &p.Item.RetweetedByHandle,
+			&p.Item.IsPinned,
 			&p.Item.RetweetedByDisplayName,
 			&p.Item.QuoteTweetID, &p.Item.QuoteAuthorHandle,
 			&p.Item.QuoteAuthorDisplayName, &p.Item.QuoteAuthorAvatarURL,
