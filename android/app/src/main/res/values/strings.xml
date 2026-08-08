@@ -502,7 +502,7 @@
     <string name="search_failed">Search failed</string>
     <string name="search_global_placeholder">Search</string>
     <string name="search_no_results">No results</string>
-    <string name="search_no_results_press_enter_to_search_youtube">No results — press Enter to search YouTube</string>
+    <string name="search_no_results_press_enter_to_search_youtube">No results, press Enter to search YouTube</string>
     <string name="search_nothing_found_for">Nothing found for %1$s</string>
     <string name="search_overlay_placeholder">Search channels, videos...</string>
     <string name="search_press_enter_to_search_youtube">Press Enter to search YouTube</string>

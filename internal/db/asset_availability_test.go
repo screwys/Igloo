@@ -17,6 +17,26 @@ func TestTweetMediaAvailabilityDoesNotCrossOwnerKinds(t *testing.T) {
 	}
 }
 
+func TestTweetMediaAvailabilityMarksPrunedAssets(t *testing.T) {
+	d := openWritableTestDB(t)
+	publishAssetMetadataForTest(t, d, Asset{
+		AssetID: "pruned-tweet-media", AssetKind: "post_media", OwnerKind: "tweet", OwnerID: "sample_pruned",
+		FilePath: "media/twitter/sample/pruned.jpg", ContentType: "image/jpeg",
+	}, 1)
+	if err := d.ExecRaw(`UPDATE assets SET lifecycle_state = 'pruned' WHERE asset_id = 'pruned-tweet-media'`); err != nil {
+		t.Fatal(err)
+	}
+
+	availability, err := d.GetTweetMediaAssetAvailability([]string{"sample_pruned"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := availability["sample_pruned"]
+	if !got.Declared || !got.Pruned || got.ReadyMedia || got.Pending || got.Failed {
+		t.Fatalf("pruned tweet availability = %+v", got)
+	}
+}
+
 func TestAndroidInventoryUsesPersistedTweetOwner(t *testing.T) {
 	d := openWritableTestDB(t)
 	if err := d.ExecRaw(`

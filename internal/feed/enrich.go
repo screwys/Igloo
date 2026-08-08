@@ -178,8 +178,8 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool) 
 			}
 		}
 
-		item.MediaSlideURLs = indexedReadyMediaURLs(item.TweetID, len(item.Media), mediaURLs)
-		item.QuoteMediaSlideURLs = indexedReadyMediaURLs(item.QuoteTweetID, len(item.QuoteMedia), mediaURLs)
+		item.MediaSlideURLs = indexedMediaURLs(item.TweetID, item.Media, mediaURLs, mediaAssets[item.TweetID].Pruned)
+		item.QuoteMediaSlideURLs = indexedMediaURLs(item.QuoteTweetID, item.QuoteMedia, mediaURLs, mediaAssets[item.QuoteTweetID].Pruned)
 
 		// Retweet grouping
 		if item.ContentHash != "" {
@@ -268,17 +268,34 @@ func readyTweetMediaURLs(database *db.DB, ownerIDs []string) map[string]map[int]
 	return out
 }
 
-func indexedReadyMediaURLs(ownerID string, count int, urls map[string]map[int]string) []string {
-	if ownerID == "" || count <= 0 {
+func indexedMediaURLs(ownerID string, refs []model.MediaRef, urls map[string]map[int]string, pruned bool) []string {
+	if ownerID == "" || len(refs) == 0 {
 		return nil
 	}
-	out := make([]string, count)
+	out := make([]string, len(refs))
 	for index, url := range urls[ownerID] {
-		if index >= 0 && index < count {
+		if index >= 0 && index < len(refs) {
 			out[index] = url
 		}
 	}
+	if !pruned {
+		return out
+	}
+	for index, ref := range refs {
+		if out[index] == "" && !isVideoMedia(ref) {
+			out[index] = ref.URL
+		}
+	}
 	return out
+}
+
+func isVideoMedia(ref model.MediaRef) bool {
+	switch strings.ToLower(strings.TrimSpace(ref.Type)) {
+	case "video", "gif", "animated_gif":
+		return true
+	default:
+		return false
+	}
 }
 
 func splitTranslateSkipSet(raw string) map[string]bool {

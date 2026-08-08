@@ -194,6 +194,7 @@ type MediaAssetAvailability struct {
 	ReadyPreview bool
 	Pending      bool
 	Failed       bool
+	Pruned       bool
 }
 
 // GetTweetMediaAssetAvailability projects presentation state for X content
@@ -241,6 +242,8 @@ func (db *DB) GetTweetMediaAssetAvailability(ownerIDs []string) (map[string]Medi
 				availability.Pending = true
 			case AssetStateFailed, AssetStatePermanentMissing:
 				availability.Failed = true
+			case AssetStatePruned:
+				availability.Pruned = true
 			}
 			out[ownerID] = availability
 		}

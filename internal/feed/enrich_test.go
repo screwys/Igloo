@@ -106,6 +106,35 @@ func TestEnrichFeedItemsProjectsOnlyReadyCanonicalMediaURLs(t *testing.T) {
 	}
 }
 
+func TestEnrichFeedItemsUsesCDNImagesForPrunedPostAndQuoteAssets(t *testing.T) {
+	d := openWritableFeedTestDB(t)
+	for _, ownerID := range []string{"sample_pruned_post", "sample_pruned_quote"} {
+		if err := d.DeclareAsset(db.Asset{
+			AssetID:   db.BuildAssetID("twitter", "tweet", ownerID, "post_media", 0),
+			AssetKind: "post_media", OwnerKind: "tweet", OwnerID: ownerID, MediaIndex: 0,
+			SourceURL: "https://cdn.example/" + ownerID + ".jpg", ContentType: "image/jpeg", RequiredReason: "retention",
+		}, 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := d.ExecRaw(`UPDATE assets SET lifecycle_state = 'pruned' WHERE owner_kind = 'tweet' AND owner_id = ?`, ownerID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := EnrichFeedItemsPreserveRows(d, []model.FeedItem{{
+		TweetID:      "sample_pruned_post",
+		QuoteTweetID: "sample_pruned_quote",
+		Media:        []model.MediaRef{{Type: "photo", URL: "https://cdn.example/post.jpg"}},
+		QuoteMedia:   []model.MediaRef{{Type: "photo", URL: "https://cdn.example/quote.jpg"}},
+	}})[0]
+	if want := []string{"https://cdn.example/post.jpg"}; !reflect.DeepEqual(got.MediaSlideURLs, want) {
+		t.Fatalf("post MediaSlideURLs = %#v, want %#v", got.MediaSlideURLs, want)
+	}
+	if want := []string{"https://cdn.example/quote.jpg"}; !reflect.DeepEqual(got.QuoteMediaSlideURLs, want) {
+		t.Fatalf("quote QuoteMediaSlideURLs = %#v, want %#v", got.QuoteMediaSlideURLs, want)
+	}
+}
+
 func TestEnrichFeedItemsTypesTweetVideoMediaURLs(t *testing.T) {
 	d, stateRoot := openWritableFeedTestDBAt(t)
 	const (
