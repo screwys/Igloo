@@ -49,6 +49,7 @@ func markDBTestStateRoot(t *testing.T, stateRoot string) {
 
 func openTestDB(t *testing.T) *DB {
 	t.Helper()
+	t.Parallel()
 	path, stateRoot := openReadOnlyFixtureDB(t)
 	d, err := OpenReadOnly(path, stateRoot)
 	if err != nil {
@@ -88,6 +89,7 @@ func openReadOnlyFixtureDB(t *testing.T) (string, string) {
 // Does not copy production data — tests write their own fixtures.
 func openWritableTestDB(t *testing.T) *DB {
 	t.Helper()
+	t.Parallel()
 	tmpFile, err := os.CreateTemp("", "igloo-test-*.db")
 	if err != nil {
 		t.Fatalf("create temp db: %v", err)
@@ -113,6 +115,7 @@ func openWritableTestDB(t *testing.T) *DB {
 // location used by tests that need to inspect the database path directly.
 func openFreshTestDB(t *testing.T) *DB {
 	t.Helper()
+	t.Parallel()
 	tmpDir := t.TempDir()
 	markDBTestStateRoot(t, tmpDir)
 	d, err := OpenPath(filepath.Join(tmpDir, "test.db"), tmpDir)

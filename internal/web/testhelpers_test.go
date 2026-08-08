@@ -60,6 +60,7 @@ type testServer struct {
 
 func newTestServer(t *testing.T) *testServer {
 	t.Helper()
+	t.Parallel()
 
 	tmp, err := os.CreateTemp("", "igloo-test-*.db")
 	if err != nil {
