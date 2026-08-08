@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/screwys/igloo/internal/download"
 )
@@ -76,17 +77,17 @@ func parseTikTokAvatar(handle string, out []byte) (*Profile, error) {
 		return nil, ErrNotFound
 	}
 	p := &Profile{
-		ChannelID:   "tiktok_" + handle,
-		Platform:    "tiktok",
-		Handle:      strOf(user, "uniqueId"),
-		DisplayName: strOf(user, "nickname"),
-		Bio:         strOf(user, "signature"),
-		AvatarURL:   strOf(user, "avatarLarger"),
-		Verified:    boolOf(user, "verified"),
+		ChannelID: "tiktok_" + handle,
+		Platform:  "tiktok",
+		Handle:    strOf(user, "uniqueId"),
+		Bio:       strOf(user, "signature"),
+		AvatarURL: strOf(user, "avatarLarger"),
+		Verified:  boolOf(user, "verified"),
 	}
 	if p.Handle == "" {
 		p.Handle = handle
 	}
+	p.DisplayName = displayNameOrHandle(strOf(user, "nickname"), p.Handle)
 	if bl, ok := user["bioLink"].(map[string]any); ok {
 		p.Website = normalizeURL(strOf(bl, "link"))
 	}
@@ -101,6 +102,15 @@ func strOf(m map[string]any, k string) string {
 		return v
 	}
 	return ""
+}
+
+func displayNameOrHandle(name, handle string) string {
+	for _, r := range name {
+		if unicode.IsGraphic(r) && !unicode.IsSpace(r) {
+			return name
+		}
+	}
+	return handle
 }
 
 func boolOf(m map[string]any, k string) bool {

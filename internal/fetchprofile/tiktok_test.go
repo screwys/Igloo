@@ -46,6 +46,16 @@ func TestParseTikTokAvatarAcceptsConcatenatedGalleryOutput(t *testing.T) {
 	}
 }
 
+func TestParseTikTokAvatarFallsBackToHandleForInvisibleNickname(t *testing.T) {
+	p, err := parseTikTokAvatar("user_alpha", []byte(`[[1,{"type":"avatar","uniqueId":"user_alpha","nickname":"\uFFF4 \uFFF4"}]]`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if p.DisplayName != "user_alpha" {
+		t.Fatalf("display_name: got %q, want handle", p.DisplayName)
+	}
+}
+
 func TestParseTikTokEmpty(t *testing.T) {
 	if _, err := parseTikTokAvatar("ghost", []byte("[]")); err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)
