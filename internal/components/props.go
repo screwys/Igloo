@@ -342,10 +342,32 @@ func Linkify(s string) string {
 // the account namespace that owns the text.
 func LinkifyForPlatform(s, platform string) string {
 	escaped := html.EscapeString(s)
-	escaped = urlRe.ReplaceAllString(escaped, `<a href="$1" class="feed-inline-link" target="_blank" rel="noopener">$1</a>`)
+	escaped = urlRe.ReplaceAllStringFunc(escaped, func(raw string) string {
+		url := trimURLTrailingPunctuation(raw)
+		return `<a href="` + url + `" class="feed-inline-link" target="_blank" rel="noopener">` + url + `</a>` + raw[len(url):]
+	})
 	escaped = linkifyMentionsForPlatform(escaped, platform)
 	escaped = strings.ReplaceAll(escaped, "\n", "<br>\n")
 	return escaped
+}
+
+func trimURLTrailingPunctuation(raw string) string {
+	trimmed := strings.TrimRight(raw, ".,!?;:")
+	for {
+		if strings.HasSuffix(trimmed, ")") && strings.Count(trimmed, ")") > strings.Count(trimmed, "(") {
+			trimmed = strings.TrimSuffix(trimmed, ")")
+			continue
+		}
+		if strings.HasSuffix(trimmed, "]") && strings.Count(trimmed, "]") > strings.Count(trimmed, "[") {
+			trimmed = strings.TrimSuffix(trimmed, "]")
+			continue
+		}
+		if strings.HasSuffix(trimmed, "}") && strings.Count(trimmed, "}") > strings.Count(trimmed, "{") {
+			trimmed = strings.TrimSuffix(trimmed, "}")
+			continue
+		}
+		return trimmed
+	}
 }
 
 // linkifyMentions replaces @handles with profile links, skipping matches that

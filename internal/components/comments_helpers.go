@@ -143,7 +143,7 @@ func RenderCommentRichText(text string) string {
 		if loc[0] > 0 && text[loc[0]-1] == '@' {
 			continue
 		}
-		raw := trimCommentURLMatch(text[loc[0]:loc[1]])
+		raw := trimURLTrailingPunctuation(text[loc[0]:loc[1]])
 		if raw == "" {
 			continue
 		}
@@ -193,25 +193,6 @@ func RenderCommentRichText(text string) string {
 	}
 	b.WriteString(escapeWithBreaks(text[pos:]))
 	return b.String()
-}
-
-func trimCommentURLMatch(raw string) string {
-	trimmed := strings.TrimRight(raw, ".,!?;:")
-	for {
-		if strings.HasSuffix(trimmed, ")") && strings.Count(trimmed, ")") > strings.Count(trimmed, "(") {
-			trimmed = strings.TrimSuffix(trimmed, ")")
-			continue
-		}
-		if strings.HasSuffix(trimmed, "]") && strings.Count(trimmed, "]") > strings.Count(trimmed, "[") {
-			trimmed = strings.TrimSuffix(trimmed, "]")
-			continue
-		}
-		if strings.HasSuffix(trimmed, "}") && strings.Count(trimmed, "}") > strings.Count(trimmed, "{") {
-			trimmed = strings.TrimSuffix(trimmed, "}")
-			continue
-		}
-		return trimmed
-	}
 }
 
 func commentURLHref(raw string) string {

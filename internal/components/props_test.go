@@ -188,6 +188,14 @@ func TestLinkify(t *testing.T) {
 	}
 }
 
+func TestLinkifyKeepsSentencePunctuationOutsideURL(t *testing.T) {
+	got := Linkify("Visit http://TatamiMonitor.com.")
+	want := `<a href="http://TatamiMonitor.com" class="feed-inline-link" target="_blank" rel="noopener">http://TatamiMonitor.com</a>.`
+	if !strings.Contains(got, want) {
+		t.Fatalf("expected sentence punctuation outside URL link, got %s", got)
+	}
+}
+
 func TestLinkifyDoesNotLinkMentionsInsideURLs(t *testing.T) {
 	got := Linkify("hii\n\nhttps://www.tiktok.com/@nixie")
 	want := `<a href="https://www.tiktok.com/@nixie" class="feed-inline-link" target="_blank" rel="noopener">https://www.tiktok.com/@nixie</a>`
