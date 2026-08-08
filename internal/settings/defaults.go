@@ -92,6 +92,20 @@ func ClampBackupKeepCount(n int) int {
 	return n
 }
 
+const MaxXProfileHistoryLimit = 10000
+
+// ClampXProfileHistoryLimit bounds X profile history to a practical database
+// and fetch window while still allowing a complete local profile view.
+func ClampXProfileHistoryLimit(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > MaxXProfileHistoryLimit {
+		return MaxXProfileHistoryLimit
+	}
+	return n
+}
+
 // SponsorBlockCategoriesDefault is the canonical default category policy shared by
 // server-side settings, rendered pages, and UI fallbacks.
 const SponsorBlockCategoriesDefault = "sponsor:silent,selfpromo:silent,interaction:silent,intro:ask,outro:ask,preview:ask,filler:ask,music_offtopic:ask"
@@ -133,6 +147,7 @@ var Defaults = map[string]any{
 	"stories_window_hours":             48,
 	"media_only_default":               false,
 	"media_download_limit_default":     20,
+	"x_profile_history_limit":          1000,
 	"x_feed_fetch_delay":               10,
 	"translate_target_lang":            "en",
 	"translate_skip_langs":             "",

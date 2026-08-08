@@ -877,22 +877,32 @@ func (s *Server) renderTwitterChannelFeed(w http.ResponseWriter, r *http.Request
 			offset = n
 		}
 	}
-	pageSize := 40
+	tab := normalizeXProfileTab(r.URL.Query().Get("tab"))
 
-	items, _ := s.db.GetFeedThreadItemsByAuthorPage(handle, pageSize+1, offset)
-	hasMore := len(items) > pageSize
-	if hasMore {
-		items = items[:pageSize]
-	}
-	nextOffset := offset + len(items)
-	items = feed.EnrichFeedItems(s.db, items)
+	var items []model.FeedItem
+	hasMore := false
 	nextPageURL := ""
-	if hasMore {
-		nextPageURL = fmt.Sprintf("/channels/%s?offset=%d", url.PathEscape(channelID), nextOffset)
+	if tab == "media" {
+		// Like Moments, a profile media grid has one bounded collection rather
+		// than user-driven pagination. Grid images stay lazy, so this avoids a
+		// second navigation model without eagerly loading their media files.
+		items, _ = s.db.GetFeedMediaItemsByAuthorPage(handle, xProfileMediaItemLimit, 0)
+	} else {
+		const pageSize = 40
+		items, _ = s.db.GetFeedThreadItemsByAuthorPageWithoutPinned(handle, pageSize+1, offset)
+		hasMore = len(items) > pageSize
+		if hasMore {
+			items = items[:pageSize]
+		}
+		nextOffset := offset + len(items)
+		if hasMore {
+			nextPageURL = fmt.Sprintf("/channels/%s?offset=%d", url.PathEscape(channelID), nextOffset)
+		}
 	}
+	items = feed.EnrichFeedItems(s.db, items)
 
 	p := s.pageProps(w, r)
-	if r.Header.Get("HX-Request") != "" {
+	if r.Header.Get("HX-Request") != "" && tab != "media" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = components.FeedItemsPartial(p, items).Render(r.Context(), w)
 		_ = components.FeedScrollSentinel(nextPageURL).Render(r.Context(), w)
@@ -936,19 +946,37 @@ func (s *Server) renderTwitterChannelFeed(w http.ResponseWriter, r *http.Request
 		IsFollowing: isFollowing,
 		IsStarred:   isStarred,
 		Profile:     profile,
+		ActiveTab:   tab,
+	}
+	if tab == "posts" {
+		if pinned, err := s.db.GetPinnedFeedItemByAuthor(handle); err == nil && pinned != nil {
+			enriched := feed.EnrichFeedItems(s.db, []model.FeedItem{*pinned})
+			if len(enriched) == 1 {
+				xCh.PinnedItem = &enriched[0]
+			}
+		}
 	}
 
 	p.PageTitle = displayName
-	if count, err := s.db.CountFeedItemsByAuthor(handle); err == nil {
-		p.PageBadge = fmt.Sprintf("%d posts", count)
-	} else {
-		p.PageBadge = fmt.Sprintf("%d posts", len(items))
+	if tab != "media" {
+		if count, err := s.db.CountFeedItemsByAuthor(handle); err == nil {
+			p.PageBadge = fmt.Sprintf("%d posts", count)
+		} else {
+			p.PageBadge = fmt.Sprintf("%d posts", len(items))
+		}
 	}
 	p.ESBundle = "js/dist/feed.js"
 	p.Sidebar = s.mustBuildSidebar(r)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = components.FeedPage(p, items, hasMore, nextPageURL, false, false, xCh, "").Render(r.Context(), w)
+}
+
+func normalizeXProfileTab(raw string) string {
+	if strings.EqualFold(strings.TrimSpace(raw), "media") {
+		return "media"
+	}
+	return "posts"
 }
 
 func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {

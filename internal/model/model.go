@@ -443,15 +443,20 @@ func MediaMode(mediaKind string, slideCount int) string {
 
 // FeedItem represents an X/Twitter post from X ingest.
 type FeedItem struct {
-	TweetID                string
-	SourceHandle           string
-	SourceChannelID        string
-	AuthorHandle           string
-	AuthorDisplayName      string
-	AuthorAvatarURL        string
-	BodyText               string
-	Lang                   string
-	IsRetweet              bool
+	TweetID           string
+	SourceHandle      string
+	SourceChannelID   string
+	AuthorHandle      string
+	AuthorDisplayName string
+	AuthorAvatarURL   string
+	BodyText          string
+	Lang              string
+	IsRetweet         bool
+	IsPinned          bool
+	// PinStateKnown is set only by a complete profile timeline fetch. It lets
+	// storage clear a stale pin without treating list/source observations as
+	// evidence that a post is not pinned.
+	PinStateKnown          bool
 	RetweetedByHandle      string
 	RetweetedByDisplayName string
 	QuoteTweetID           string

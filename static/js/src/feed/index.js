@@ -453,8 +453,9 @@ function resolveFeedRootForActionNode(node) {
   var overlay = node && node.closest ? node.closest('.feed-media-overlay[data-feed-overlay-tweet-id]') : null
   if (!overlay) return null
   var tweetId = String(overlay.getAttribute('data-feed-overlay-tweet-id') || '').trim()
-  if (!tweetId || !feedList) return null
-  return feedList.querySelector('[data-feed-item][data-tweet-id="' + cssEscape(tweetId) + '"]')
+  if (!tweetId) return null
+  var scope = feedList || document
+  return scope.querySelector('[data-feed-item][data-tweet-id="' + cssEscape(tweetId) + '"]')
 }
 
 // ── Action handlers (JSON API for keyboard shortcuts + overlay) ──
@@ -1121,6 +1122,10 @@ document.addEventListener('click', function (event) {
   if (event.target.closest && event.target.closest('.feed-media-overlay')) return
 
   event.preventDefault(); event.stopPropagation()
+  if (mediaTrigger.hasAttribute('data-x-profile-media')) {
+    openMediaOverlay(mediaTrigger, mediaTrigger)
+    return
+  }
   var mediaKind = String(mediaTrigger.getAttribute('data-feed-media-kind') || '').trim().toLowerCase()
   if (mediaKind === 'video') {
     var isInGrid = mediaTrigger.closest && mediaTrigger.closest('.feed-media-wrap-grid')

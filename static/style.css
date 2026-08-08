@@ -1816,6 +1816,89 @@ select.input:focus {
     justify-content: center;
 }
 
+.x-profile-content {
+    width: 100%;
+    min-width: 0;
+    max-width: 920px;
+    margin: 0 auto;
+}
+
+.x-profile-tabs {
+    display: flex;
+    gap: 0.35rem;
+    padding: 0.85rem 1rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.x-profile-tab {
+    color: var(--text-secondary);
+    padding: 0.55rem 0.8rem;
+    border-radius: 0.5rem 0.5rem 0 0;
+    font-weight: 600;
+}
+
+.x-profile-tab.active {
+    color: var(--accent-primary);
+    box-shadow: inset 0 -2px 0 var(--accent-primary);
+}
+
+.x-profile-pinned-post {
+    padding: 1rem 1rem 0;
+}
+
+.x-profile-pinned-label {
+    color: var(--text-secondary);
+    font-size: 0.84rem;
+    font-weight: 600;
+    margin: 0 0 0.45rem 0.2rem;
+}
+
+.x-profile-pinned-post .feed-card {
+    margin: 0;
+}
+
+.x-profile-media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 2px;
+    padding: 1rem;
+}
+
+.x-profile-media-tile {
+    aspect-ratio: 1;
+    background: var(--bg-tertiary);
+    border: 0;
+    overflow: hidden;
+    padding: 0;
+    position: relative;
+    cursor: pointer;
+}
+
+.x-profile-media-tile img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.x-profile-media-tile:hover img {
+    opacity: 0.82;
+}
+
+.x-profile-media-tile:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+    z-index: 1;
+}
+
+.x-profile-media-video {
+    position: absolute;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    color: white;
+    text-shadow: 0 1px 3px black;
+}
+
 /* Channels Overview — per-channel sections with video grids */
 .channels-overview {
     padding: 0.5rem 1.5rem 1.5rem;
@@ -8899,6 +8982,7 @@ body.shorts-mode .sidebar {
     justify-content: flex-start;
     flex-wrap: wrap;
 }
+
 
 .feed-media-overlay-bottom .feed-quote-card {
     margin-top: 0;

@@ -88,6 +88,17 @@ func TestPrefsData_VideoThumbURL(t *testing.T) {
 	}
 }
 
+func TestXProfileMediaThumbnailUsesServerProjection(t *testing.T) {
+	item := model.FeedItem{
+		Media:           []model.MediaRef{{Type: "video", ThumbnailURL: "https://cdn.example/source.jpg"}},
+		MediaPreviewURL: "/api/media/thumbnail/sample_video?owner_kind=tweet",
+		MediaSlideURLs:  []string{"/api/media/slide/sample_video/0?owner_kind=tweet"},
+	}
+	if got, want := xProfileMediaThumbnail(item), item.MediaPreviewURL; got != want {
+		t.Fatalf("xProfileMediaThumbnail() = %q, want %q", got, want)
+	}
+}
+
 func TestStoryChannelMetaFormatsIndexedCount(t *testing.T) {
 	p := PageProps{
 		Text: map[string]string{

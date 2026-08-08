@@ -12,6 +12,7 @@ import (
 
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/model"
+	"github.com/screwys/igloo/internal/settings"
 	"github.com/screwys/igloo/internal/xfeed"
 )
 
@@ -251,7 +252,7 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 		}
 		m.EmitFeed(xIngestActivitySource, fmt.Sprintf("Fetching @%s", handle), "info")
 		fetchStart := time.Now()
-		items, fetchErr := m.fetchXTimeline(ctx, ch.ChannelID, xTimelineLimit(settings))
+		items, fetchErr := m.fetchXTimeline(ctx, ch.ChannelID, m.xTimelineLimit())
 		latencyMs := float64(time.Since(fetchStart).Milliseconds())
 
 		atomic.AddInt32(&m.ingestCycleDone, 1)
@@ -347,11 +348,14 @@ func (m *Manager) fetchXTimeline(ctx context.Context, handle string, limit int) 
 	return m.xFeedClient().FetchTimeline(ctx, handle, limit)
 }
 
-func xTimelineLimit(settings *db.ChannelSettings) int {
-	if settings != nil && settings.MediaDownloadLimit > 0 {
-		return settings.MediaDownloadLimit
+// xTimelineLimit is deliberately independent from media retention. It bounds
+// the post-history window acquired for each X profile; media lifecycle remains
+// owned by the separate media-download setting.
+func (m *Manager) xTimelineLimit() int {
+	if m == nil || m.db == nil {
+		return settings.IntDefault("x_profile_history_limit")
 	}
-	return 100
+	return settings.ClampXProfileHistoryLimit(m.db.IntSetting("x_profile_history_limit"))
 }
 
 func filterTimelineItemsForSource(source string, items []model.FeedItem) []model.FeedItem {
@@ -414,7 +418,7 @@ func (m *Manager) FetchOneChannel(ctx context.Context, channelID string) (int, e
 	}
 
 	settings, _ := m.db.GetChannelSettings(channelID)
-	items, err := m.fetchXTimeline(ctx, channelID, xTimelineLimit(settings))
+	items, err := m.fetchXTimeline(ctx, channelID, m.xTimelineLimit())
 	if err != nil {
 		if m.ReportExternalResult(err) {
 			return 0, err

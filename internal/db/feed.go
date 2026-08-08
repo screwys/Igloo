@@ -14,6 +14,7 @@ func feedItemSelectSQL(alias string) string {
 		COALESCE(%[1]s.author_display_name,''), COALESCE(%[1]s.author_avatar_url,''),
 		COALESCE(%[1]s.body_text,''), COALESCE(%[1]s.lang,''),
 		COALESCE(%[1]s.is_retweet,0), COALESCE(%[1]s.retweeted_by_handle,''),
+		COALESCE(%[1]s.is_pinned,0),
 		COALESCE(%[1]s.retweeted_by_display_name,''),
 		COALESCE(%[1]s.quote_tweet_id,''), COALESCE(%[1]s.quote_author_handle,''),
 		COALESCE(%[1]s.quote_author_display_name,''), COALESCE(%[1]s.quote_author_avatar_url,''),
@@ -758,6 +759,17 @@ func (db *DB) GetFeedItemsByAuthorPage(handle string, limit int, offset int) ([]
 // newest matching row so profile infinite scroll cannot render the same thread
 // again on a later page.
 func (db *DB) GetFeedThreadItemsByAuthorPage(handle string, limit int, offset int) ([]model.FeedItem, error) {
+	return db.getFeedThreadItemsByAuthorPage(handle, limit, offset, false)
+}
+
+// GetFeedThreadItemsByAuthorPageWithoutPinned returns normal profile posts.
+// A current pin is rendered separately in the profile header and must not be
+// duplicated in the chronological timeline.
+func (db *DB) GetFeedThreadItemsByAuthorPageWithoutPinned(handle string, limit int, offset int) ([]model.FeedItem, error) {
+	return db.getFeedThreadItemsByAuthorPage(handle, limit, offset, true)
+}
+
+func (db *DB) getFeedThreadItemsByAuthorPage(handle string, limit int, offset int, withoutPinned bool) ([]model.FeedItem, error) {
 	channelID := model.TwitterChannelIDFromHandle(handle)
 	if channelID == "" {
 		return nil, nil
@@ -768,6 +780,10 @@ func (db *DB) GetFeedThreadItemsByAuthorPage(handle string, limit int, offset in
 	if offset < 0 {
 		offset = 0
 	}
+	pinnedFilter := ""
+	if withoutPinned {
+		pinnedFilter = " AND COALESCE(is_pinned, 0) = 0"
+	}
 	rows, err := db.reader().Query(`
 		WITH RECURSIVE
 		matched(tweet_id) AS (
@@ -775,6 +791,7 @@ func (db *DB) GetFeedThreadItemsByAuthorPage(handle string, limit int, offset in
 			FROM feed_items
 			WHERE (channel_id = ? OR source_channel_id = ? OR quote_channel_id = ?)
 			  AND `+feedPrimaryItemPredicate("feed_items")+`
+			  `+pinnedFilter+`
 		),
 		chain(seed_id, tweet_id, reply_to_status, depth) AS (
 			SELECT m.tweet_id, f.tweet_id, COALESCE(f.reply_to_status, ''), 0
@@ -822,6 +839,64 @@ func (db *DB) GetFeedThreadItemsByAuthorPage(handle string, limit int, offset in
 	return scanFeedItems(rows)
 }
 
+// GetPinnedFeedItemByAuthor returns the current original pinned post for an X
+// profile. Pins are profile metadata, so this reader deliberately does not
+// require an active follow/source owner.
+func (db *DB) GetPinnedFeedItemByAuthor(handle string) (*model.FeedItem, error) {
+	channelID := model.TwitterChannelIDFromHandle(handle)
+	if channelID == "" {
+		return nil, nil
+	}
+	row := db.reader().QueryRow(`
+		SELECT `+feedItemSelectSQL("feed_items")+`
+		FROM feed_items_resolved AS feed_items
+		WHERE channel_id = ?
+		  AND COALESCE(is_pinned, 0) = 1
+		  AND COALESCE(is_retweet, 0) = 0
+		  AND `+feedPrimaryItemPredicate("feed_items")+`
+		ORDER BY published_at DESC, tweet_id DESC
+		LIMIT 1
+	`, channelID)
+	item, err := scanFeedItem(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+// GetFeedMediaItemsByAuthorPage returns posts whose author published their own
+// media. It excludes reposts and quoted-only media, matching X's Media tab.
+func (db *DB) GetFeedMediaItemsByAuthorPage(handle string, limit int, offset int) ([]model.FeedItem, error) {
+	channelID := model.TwitterChannelIDFromHandle(handle)
+	if channelID == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 40
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := db.reader().Query(`
+		SELECT `+feedItemSelectSQL("feed_items")+`
+		FROM feed_items_resolved AS feed_items
+		WHERE channel_id = ?
+		  AND COALESCE(is_retweet, 0) = 0
+		  AND COALESCE(media_json, '') NOT IN ('', '[]')
+		  AND `+feedPrimaryItemPredicate("feed_items")+`
+		ORDER BY published_at DESC, tweet_id DESC
+		LIMIT ? OFFSET ?
+	`, channelID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	return scanFeedItems(rows)
+}
+
 // scanFeedItems scans rows into FeedItem structs.
 func scanFeedItems(rows *sql.Rows) ([]model.FeedItem, error) {
 	var items []model.FeedItem
@@ -846,7 +921,7 @@ func scanFeedItem(row feedItemScanner) (model.FeedItem, error) {
 		&f.TweetID, &f.SourceHandle, &f.AuthorHandle,
 		&f.AuthorDisplayName, &f.AuthorAvatarURL,
 		&f.BodyText, &f.Lang,
-		&f.IsRetweet, &f.RetweetedByHandle, &f.RetweetedByDisplayName,
+		&f.IsRetweet, &f.RetweetedByHandle, &f.IsPinned, &f.RetweetedByDisplayName,
 		&f.QuoteTweetID, &f.QuoteAuthorHandle,
 		&f.QuoteAuthorDisplayName, &f.QuoteAuthorAvatarURL,
 		&f.QuoteBodyText, &f.QuoteLang,
@@ -869,6 +944,13 @@ func scanFeedItem(row feedItemScanner) (model.FeedItem, error) {
 	}
 	f.ParseMedia()
 	return f, nil
+}
+
+func pinnedColumnValue(item model.FeedItem) any {
+	if !item.PinStateKnown {
+		return nil
+	}
+	return boolToInt(item.IsPinned)
 }
 
 // InsertFeedLike creates or updates a feed like record.
@@ -1103,7 +1185,7 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 		stmt, err := tx.Prepare(`
 			INSERT INTO feed_items (
 				tweet_id, source_channel_id, channel_id,
-				body_text, lang, is_retweet,
+				body_text, lang, is_retweet, is_pinned,
 				quote_tweet_id, quote_channel_id,
 				quote_body_text, quote_lang, quote_media_json,
 				media_json, canonical_url, reply_channel_id, reply_to_status,
@@ -1113,7 +1195,7 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 				content_hash, canonical_tweet_id
 			) VALUES (
 				?, ?, ?,
-				?, ?, ?,
+				?, ?, ?, ?,
 				?, ?,
 				?, ?, ?,
 				?, ?, ?, ?,
@@ -1141,6 +1223,10 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 					ELSE feed_items.lang
 				END,
 				media_json = COALESCE(excluded.media_json, feed_items.media_json),
+				is_pinned = CASE
+					WHEN excluded.is_pinned IS NULL THEN feed_items.is_pinned
+					ELSE excluded.is_pinned
+				END,
 				canonical_url = CASE
 					WHEN excluded.canonical_url IS NOT NULL
 					 AND excluded.canonical_url != ''
@@ -1226,6 +1312,8 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 			       AND feed_items.lang IS NOT excluded.lang)
 			   OR (excluded.media_json IS NOT NULL
 			       AND feed_items.media_json IS NOT excluded.media_json)
+			   OR (excluded.is_pinned IS NOT NULL
+			       AND feed_items.is_pinned IS NOT excluded.is_pinned)
 			   OR (excluded.canonical_url IS NOT NULL AND excluded.canonical_url != ''
 			       AND (COALESCE(feed_items.canonical_url, '') = ''
 			            OR LOWER(feed_items.canonical_url) LIKE '%/unknown/status/%'
@@ -1302,6 +1390,7 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 				nilIfEmpty(item.BodyText),
 				nilIfEmpty(item.Lang),
 				boolToInt(item.IsRetweet),
+				pinnedColumnValue(item),
 				nilIfEmpty(item.QuoteTweetID),
 				nilIfEmpty(item.QuoteChannelID),
 				nilIfEmpty(item.QuoteBodyText),

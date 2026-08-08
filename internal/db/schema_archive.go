@@ -42,6 +42,7 @@ func schemaArchiveStatements() []string {
 			body_text TEXT,
 			lang TEXT,
 			is_retweet INTEGER DEFAULT 0,
+			is_pinned INTEGER DEFAULT 0,
 			quote_tweet_id TEXT,
 			quote_channel_id TEXT,
 			quote_body_text TEXT,

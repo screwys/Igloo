@@ -70,6 +70,7 @@ func (c *Client) FetchTimeline(ctx context.Context, handle string, limit int) ([
 		return nil, err
 	}
 	parsed := ParseDump(output, handle)
+	markTimelinePinStateKnown(parsed.Items, handle)
 	if err := c.enrichStatuses(ctx, &parsed); err != nil {
 		return nil, err
 	}
@@ -481,8 +482,18 @@ func galleryDLArgs(rawURL string, limit int) []string {
 		"-o", "extractor.twitter.text-tweets=true",
 		"-o", "extractor.twitter.retweets=true",
 		"-o", "extractor.twitter.quoted=true",
+		"-o", "extractor.twitter.pinned=true",
 		"--range", "1-" + strconv.Itoa(limit),
 		rawURL,
+	}
+}
+
+func markTimelinePinStateKnown(items []FeedItem, handle string) {
+	handle = NormalizeHandle(handle)
+	for i := range items {
+		if !items[i].IsRetweet && strings.EqualFold(NormalizeHandle(items[i].AuthorHandle), handle) {
+			items[i].PinStateKnown = true
+		}
 	}
 }
 

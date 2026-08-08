@@ -106,6 +106,42 @@ func TestGetFeedItemsForTweetIDs(t *testing.T) {
 	}
 }
 
+func TestXProfileReadersKeepPinsAndLimitMediaToOriginalPosts(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UTC()
+	items := []model.FeedItem{
+		{TweetID: "pinned_original", SourceHandle: "sample_artist", AuthorHandle: "sample_artist", BodyText: "Pinned original", MediaJSON: `[{"url":"https://cdn.example/pinned.jpg","type":"photo"}]`, PublishedAt: &now, FetchedAt: now, ContentHash: "pinned", IsPinned: true, PinStateKnown: true},
+		{TweetID: "original_media", SourceHandle: "sample_artist", AuthorHandle: "sample_artist", BodyText: "Original media", MediaJSON: `[{"url":"https://cdn.example/original.jpg","type":"photo"}]`, PublishedAt: &now, FetchedAt: now, ContentHash: "original"},
+		{TweetID: "reposted_media", SourceHandle: "sample_artist", AuthorHandle: "another_artist", BodyText: "Repost", MediaJSON: `[{"url":"https://cdn.example/repost.jpg","type":"photo"}]`, IsRetweet: true, PublishedAt: &now, FetchedAt: now, ContentHash: "repost"},
+	}
+	if _, err := d.UpsertFeedItems(items); err != nil {
+		t.Fatalf("UpsertFeedItems: %v", err)
+	}
+
+	pinned, err := d.GetPinnedFeedItemByAuthor("sample_artist")
+	if err != nil || pinned == nil || pinned.TweetID != "pinned_original" {
+		t.Fatalf("pinned item = %#v, err=%v", pinned, err)
+	}
+	media, err := d.GetFeedMediaItemsByAuthorPage("sample_artist", 10, 0)
+	if err != nil {
+		t.Fatalf("GetFeedMediaItemsByAuthorPage: %v", err)
+	}
+	if len(media) != 2 || media[0].TweetID != "pinned_original" || media[1].TweetID != "original_media" {
+		t.Fatalf("authored media = %#v", media)
+	}
+
+	if _, err := d.UpsertFeedItems([]model.FeedItem{{
+		TweetID: "pinned_original", SourceHandle: "sample_artist", AuthorHandle: "sample_artist",
+		PublishedAt: &now, FetchedAt: now, ContentHash: "pinned", IsPinned: false, PinStateKnown: true,
+	}}); err != nil {
+		t.Fatalf("clear pin: %v", err)
+	}
+	pinned, err = d.GetPinnedFeedItemByAuthor("sample_artist")
+	if err != nil || pinned != nil {
+		t.Fatalf("cleared pin = %#v, err=%v", pinned, err)
+	}
+}
+
 func TestGetSeenTweetIDs(t *testing.T) {
 	d := openTestDB(t)
 	seen, err := d.GetSeenTweetIDs([]string{"fake_id"})

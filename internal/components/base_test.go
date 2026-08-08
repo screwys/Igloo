@@ -735,6 +735,22 @@ func TestPrefsBodyAllowsThreeSecondFetchDelay(t *testing.T) {
 	}
 }
 
+func TestPrefsBodyRendersXProfileHistoryLimit(t *testing.T) {
+	p := newTestPageProps()
+	prefs := PrefsData{Settings: map[string]any{"x_profile_history_limit": "1250"}}
+	var buf bytes.Buffer
+	if err := PrefsBody(p, prefs).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	if !strings.Contains(html, `id="global-setting-x-profile-history-limit" name="x_profile_history_limit" class="input" min="1" max="10000" value="1250"`) {
+		t.Fatalf("X profile history input should preserve its value:\n%s", html)
+	}
+	if !strings.Contains(html, "Doesn&#39;t affect the media purge limit, except video thumbnails.") {
+		t.Fatalf("X profile history input should explain media retention:\n%s", html)
+	}
+}
+
 func TestServerDashboardKeepsRawServerLogOutsideLivePoll(t *testing.T) {
 	p := newTestPageProps()
 	data := ServerDashboardData{

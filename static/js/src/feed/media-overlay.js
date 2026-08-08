@@ -141,9 +141,54 @@ function extractSlidesFromRoot(rootEl) {
   }
 }
 
+function extractProfileMediaSlides(rootEl) {
+  if (!rootEl || !rootEl.hasAttribute || !rootEl.hasAttribute('data-x-profile-media')) return null
+  var nodes = rootEl.querySelectorAll('[data-x-profile-media-slide]')
+  var slides = []
+  nodes.forEach(function (node) {
+    var kind = String(node.getAttribute('data-feed-media-kind') || 'image').trim().toLowerCase()
+    var url = String(node.getAttribute('data-feed-media-url') || '').trim()
+    var streamUrl = String(node.getAttribute('data-feed-media-stream') || '').trim()
+    var posterUrl = String(node.getAttribute('data-feed-media-preview') || '').trim()
+    if (!url && !streamUrl) return
+    slides.push({ kind: kind, url: url, streamUrl: streamUrl, posterUrl: posterUrl })
+  })
+  if (!slides.length) return null
+  var only = slides[0]
+  return {
+    slides: slides,
+    singleVideo: slides.length === 1 && only.kind === 'video' && only.streamUrl
+      ? { streamUrl: only.streamUrl, posterUrl: only.posterUrl }
+      : null,
+  }
+}
+
 function getMediaSources(card, clickedEl) {
   const root = itemRootFromNode(card) || card
   if (!root) return null
+  const profileExtract = extractProfileMediaSlides(root)
+  if (profileExtract) {
+    const profileSlides = profileExtract.slides.map(function (slide) { return Object.assign({}, slide, { source: 'parent' }) })
+    const only = profileSlides[0]
+    if (profileSlides.length === 1 && only.kind === 'video' && profileExtract.singleVideo) {
+      return {
+        kind: 'video',
+        streamUrl: profileExtract.singleVideo.streamUrl,
+        posterUrl: profileExtract.singleVideo.posterUrl,
+        urls: [],
+        slides: profileSlides,
+        startIndex: 0,
+      }
+    }
+    return {
+      kind: profileSlides.some(function (slide) { return slide.kind === 'video' }) || profileSlides.length > 1 ? 'mixed' : 'image',
+      slides: profileSlides,
+      urls: profileSlides.map(function (slide) { return slide.url }),
+      streamUrl: '',
+      posterUrl: '',
+      startIndex: 0,
+    }
+  }
   const trigger = clickedEl && clickedEl.closest ? clickedEl.closest('[data-feed-media]') : null
   const triggerInQuote = !!(trigger && trigger.closest && trigger.closest('.feed-quote-card'))
 
@@ -487,6 +532,17 @@ export function openMediaOverlay(root, triggerEl) {
         // Static SVG — no user input
         openX.innerHTML = getFeedActionIconSvg('link') // eslint-disable-line no-unsanitized/property
         actionsWrap.appendChild(openX)
+      }
+      var threadHref = String(article.getAttribute('data-feed-thread-href') || '').trim()
+      if (threadHref.startsWith('/') && !threadHref.startsWith('//')) {
+        var openPost = document.createElement('a')
+        openPost.className = 'feed-action-btn'
+        openPost.href = threadHref
+        openPost.title = t('profile_open_post', 'Open post')
+        openPost.setAttribute('aria-label', openPost.title)
+        // Static SVG — no user input
+        openPost.innerHTML = getFeedActionIconSvg('open') // eslint-disable-line no-unsanitized/property
+        actionsWrap.appendChild(openPost)
       }
       bottom.appendChild(actionsWrap)
       syncFeedActionIcons(bottom)

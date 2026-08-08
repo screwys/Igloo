@@ -220,6 +220,25 @@ func TestHandleUpdateSettingsClampsBackupKeepCount(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateSettingsClampsXProfileHistoryLimit(t *testing.T) {
+	srv := newTestServer(t)
+	form := url.Values{}
+	form.Set("x_profile_history_limit", "12000")
+	req := httptest.NewRequest("POST", "/api/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(contextWithUser(req, "admin", "admin"))
+	rec := httptest.NewRecorder()
+
+	srv.handleUpdateSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got, _ := srv.db.GetSetting("x_profile_history_limit", ""); got != "10000" {
+		t.Fatalf("stored x_profile_history_limit = %q, want 10000", got)
+	}
+}
+
 func TestHandleUpdateSettingsRejectsNonAdmin(t *testing.T) {
 	srv := newTestServer(t)
 	if err := srv.db.SetSetting("web_theme_id", "dracula"); err != nil {

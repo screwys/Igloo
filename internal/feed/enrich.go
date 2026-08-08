@@ -162,18 +162,20 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool) 
 			}
 		}
 
-		// Media stream URLs for local video playback
-		if availability := mediaAssets[item.TweetID]; availability.ReadyVideo {
-			item.MediaStreamURL = "/api/media/stream/" + item.TweetID + "?owner_kind=tweet"
-			if availability.ReadyPreview {
-				item.MediaPreviewURL = "/api/media/thumbnail/" + item.TweetID + "?owner_kind=tweet"
+		// Every ready X post exposes one server-owned thumbnail route. The route
+		// resolves a generated video frame when present and otherwise an image's
+		// canonical media asset, so renderers never choose a source-specific URL.
+		if availability := mediaAssets[item.TweetID]; availability.ReadyMedia || availability.ReadyPreview {
+			item.MediaPreviewURL = "/api/media/thumbnail/" + item.TweetID + "?owner_kind=tweet"
+			if availability.ReadyVideo {
+				item.MediaStreamURL = "/api/media/stream/" + item.TweetID + "?owner_kind=tweet"
 			}
 		}
 		if item.QuoteTweetID != "" {
-			if availability := mediaAssets[item.QuoteTweetID]; availability.ReadyVideo {
-				item.QuoteMediaStreamURL = "/api/media/stream/" + item.QuoteTweetID + "?owner_kind=tweet"
-				if availability.ReadyPreview {
-					item.QuoteMediaPreviewURL = "/api/media/thumbnail/" + item.QuoteTweetID + "?owner_kind=tweet"
+			if availability := mediaAssets[item.QuoteTweetID]; availability.ReadyMedia || availability.ReadyPreview {
+				item.QuoteMediaPreviewURL = "/api/media/thumbnail/" + item.QuoteTweetID + "?owner_kind=tweet"
+				if availability.ReadyVideo {
+					item.QuoteMediaStreamURL = "/api/media/stream/" + item.QuoteTweetID + "?owner_kind=tweet"
 				}
 			}
 		}

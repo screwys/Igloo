@@ -493,6 +493,13 @@
     <string name="profile_content_tabs_aria">Profile content</string>
     <string name="profile_followers">Followers</string>
     <string name="profile_following">Following</string>
+    <string name="profile_media">Media</string>
+    <string name="profile_media_empty">No original media posts found.</string>
+    <string name="profile_media_empty_title">No media</string>
+    <string name="profile_open_post">Open post</string>
+    <string name="profile_pinned">Pinned</string>
+    <string name="profile_pinned_post">Pinned post</string>
+    <string name="profile_posts">Posts</string>
     <string name="profile_protected_account">Protected account</string>
     <string name="profile_reposts">Reposts</string>
     <string name="profile_subscribers">Subscribers</string>
@@ -663,6 +670,8 @@
     <string name="settings_unmute_title">Unmute @%1$s?</string>
     <string name="settings_video_quality">Video Quality</string>
     <string name="settings_wifi_only">Wi-Fi only</string>
+    <string name="settings_x_profile_history_limit">Number of posts to keep in the database</string>
+    <string name="settings_x_profile_history_limit_hint">Doesn\'t affect the media purge limit, except video thumbnails.</string>
     <string name="settings_youtube_include_member_only">Include member-only content</string>
     <string name="settings_youtube_max_videos">Default YouTube Max Videos</string>
     <string name="settings_youtube_only">YouTube only.</string>

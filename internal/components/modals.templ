@@ -501,6 +501,11 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 					<input type="number" id="global-setting-x-media-limit" name="media_download_limit_default" class="input" min="1" max="300" value={ prefs.Str("media_download_limit_default", "20") }/>
 				</div>
 				<div class="form-group">
+					<label for="global-setting-x-profile-history-limit">{ L(p, "settings_x_profile_history_limit", "Number of posts to keep in the database") }</label>
+					<input type="number" id="global-setting-x-profile-history-limit" name="x_profile_history_limit" class="input" min="1" max="10000" value={ prefs.Str("x_profile_history_limit", "1000") }/>
+					<small class="form-hint">{ L(p, "settings_x_profile_history_limit_hint", "Doesn't affect the media purge limit, except video thumbnails.") }</small>
+				</div>
+				<div class="form-group">
 					<label for="global-setting-x-feed-fetch-delay">{ L(p, "settings_fetch_delay_seconds", "Fetch Delay (seconds)") }</label>
 					<input type="number" id="global-setting-x-feed-fetch-delay" name="x_feed_fetch_delay" class="input" min="3" max="300" value={ prefs.Str("x_feed_fetch_delay", "10") }/>
 				</div>

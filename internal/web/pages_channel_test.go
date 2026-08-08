@@ -148,6 +148,70 @@ func TestHandlePageChannelRendersTwitterChannelWithChannelsNavActive(t *testing.
 	assertInactiveNav(t, html, "/feed")
 }
 
+func TestHandlePageTwitterProfileSeparatesPinnedPostAndOriginalMedia(t *testing.T) {
+	srv := newTestServer(t)
+	srv.staticV = func(path string) string { return "/static/" + path }
+	if err := srv.db.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID: "twitter_sample_artist", Platform: "twitter", Handle: "sample_artist", DisplayName: "Sample Artist",
+	}); err != nil {
+		t.Fatalf("UpsertChannelProfile: %v", err)
+	}
+	now := time.UnixMilli(1_700_000_000_000)
+	if _, err := srv.db.UpsertFeedItems([]model.FeedItem{
+		{TweetID: "pinned_original", SourceHandle: "sample_artist", AuthorHandle: "sample_artist", AuthorDisplayName: "Sample Artist", BodyText: "Pinned original", MediaJSON: `[{"url":"https://cdn.example/pinned.jpg","type":"photo"}]`, PublishedAt: &now, FetchedAt: now, ContentHash: "pinned", IsPinned: true, PinStateKnown: true},
+		{TweetID: "original_media", SourceHandle: "sample_artist", AuthorHandle: "sample_artist", AuthorDisplayName: "Sample Artist", BodyText: "Original media", MediaJSON: `[{"url":"https://cdn.example/original.jpg","type":"photo"}]`, PublishedAt: &now, FetchedAt: now, ContentHash: "original"},
+		{TweetID: "reposted_media", SourceHandle: "sample_artist", AuthorHandle: "other_artist", AuthorDisplayName: "Other Artist", BodyText: "Reposted media", MediaJSON: `[{"url":"https://cdn.example/repost.jpg","type":"photo"}]`, IsRetweet: true, PublishedAt: &now, FetchedAt: now, ContentHash: "repost"},
+	}); err != nil {
+		t.Fatalf("UpsertFeedItems: %v", err)
+	}
+	storeReadyMediaAsset(t, srv, "twitter", "tweet", "pinned_original", "post_media", 0, "media/pinned.jpg", "image/jpeg", testJPEGBytes())
+	storeReadyMediaAsset(t, srv, "twitter", "tweet", "original_media", "post_media", 0, "media/original.jpg", "image/jpeg", testJPEGBytes())
+
+	req := httptest.NewRequest(http.MethodGet, "/channels/twitter_sample_artist", nil)
+	req.SetPathValue("channelID", "twitter_sample_artist")
+	rec := httptest.NewRecorder()
+	srv.handlePageChannel(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("posts status = %d", rec.Code)
+	}
+	html := rec.Body.String()
+	for _, want := range []string{
+		`class="x-profile-content"`, `class="x-profile-tabs"`, `>Posts</a>`, `?tab=media`, `class="x-profile-pinned-post"`, `Pinned original`, `Original media`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("posts page missing %q\n%s", want, html)
+		}
+	}
+	if got := strings.Count(html, `data-tweet-id="pinned_original"`); got != 1 {
+		t.Fatalf("pinned post should be rendered once, got %d\n%s", got, html)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/channels/twitter_sample_artist?tab=media", nil)
+	req.SetPathValue("channelID", "twitter_sample_artist")
+	rec = httptest.NewRecorder()
+	srv.handlePageChannel(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("media status = %d", rec.Code)
+	}
+	html = rec.Body.String()
+	for _, want := range []string{
+		`class="x-profile-content"`, `class="x-profile-media-grid"`, `data-x-profile-media`, `data-feed-thread-href="/thread/pinned_original?return=%2Fchannels%2Ftwitter_sample_artist%3Ftab%3Dmedia"`, `data-feed-thread-href="/thread/original_media?return=%2Fchannels%2Ftwitter_sample_artist%3Ftab%3Dmedia"`, `data-x-profile-media-slide`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("media page missing %q\n%s", want, html)
+		}
+	}
+	if strings.Contains(html, `<a class="x-profile-media-tile"`) {
+		t.Fatalf("media tiles should open the overlay instead of navigating to a thread\n%s", html)
+	}
+	if strings.Contains(html, "reposted_media") || strings.Contains(html, "Reposted media") || strings.Contains(html, `x-profile-pinned-post`) {
+		t.Fatalf("media page should exclude reposts and separate pin card\n%s", html)
+	}
+	if strings.Contains(html, `x-profile-media-more`) || strings.Contains(html, `>Show more<`) {
+		t.Fatalf("media page should not expose manual pagination\n%s", html)
+	}
+}
+
 func TestHandlePageTwitterChannelFeedPaginatesPastFirstChunk(t *testing.T) {
 	srv := newTestServer(t)
 	srv.staticV = func(path string) string { return "/static/" + path }

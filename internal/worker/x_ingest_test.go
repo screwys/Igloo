@@ -149,8 +149,8 @@ func TestFetchOneChannelUsesXFeedFetcherAndQueuesMedia(t *testing.T) {
 				if handle != "sample_user" {
 					t.Fatalf("handle = %q, want sample_user", handle)
 				}
-				if limit != 100 {
-					t.Fatalf("limit = %d, want 100", limit)
+				if limit != 1000 {
+					t.Fatalf("limit = %d, want 1000", limit)
 				}
 				return []model.FeedItem{{
 					TweetID:          "1000000000000000100",
@@ -704,10 +704,17 @@ func TestFetchOneFeedSourceUsesGlobalLimitAndPrunesPreviousWindow(t *testing.T) 
 	}
 }
 
-func TestXTimelineLimitUsesMediaRetentionSetting(t *testing.T) {
-	settings := &db.ChannelSettings{MediaDownloadLimit: 7, MaxVideos: 200}
-	if got := xTimelineLimit(settings); got != 7 {
-		t.Fatalf("x timeline limit = %d, want 7", got)
+func TestXTimelineLimitUsesProfileHistorySetting(t *testing.T) {
+	d := newTestWorkerDB(t)
+	m := &Manager{db: d}
+	if got := m.xTimelineLimit(); got != 1000 {
+		t.Fatalf("default x timeline limit = %d, want 1000", got)
+	}
+	if err := d.SetSetting("x_profile_history_limit", "1250"); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.xTimelineLimit(); got != 1250 {
+		t.Fatalf("x timeline limit = %d, want 1250", got)
 	}
 }
 

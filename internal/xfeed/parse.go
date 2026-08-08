@@ -247,6 +247,7 @@ func feedItemFromMeta(d map[string]any, fallbackSourceHandle string, media []mod
 		BodyText:               body,
 		Lang:                   firstString(d, "lang"),
 		IsRetweet:              isRetweet,
+		IsPinned:               firstBool(d, "pinned"),
 		RetweetedByHandle:      "",
 		RetweetedByDisplayName: "",
 		MediaJSON:              mediaJSON,
@@ -328,6 +329,10 @@ func mergeItem(base, next FeedItem) FeedItem {
 	if base.ContentHash == "" {
 		base.ContentHash = next.ContentHash
 	}
+	if next.IsPinned {
+		base.IsPinned = true
+	}
+	base.PinStateKnown = base.PinStateKnown || next.PinStateKnown
 	base.ParseMedia()
 	return base
 }
@@ -622,6 +627,26 @@ func firstInt64(item map[string]any, keys ...string) int64 {
 		}
 	}
 	return 0
+}
+
+func firstBool(item map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		v, ok := item[key]
+		if !ok {
+			continue
+		}
+		switch value := v.(type) {
+		case bool:
+			return value
+		case json.Number:
+			return value.String() == "1"
+		case float64:
+			return value != 0
+		case string:
+			return strings.EqualFold(strings.TrimSpace(value), "true") || strings.TrimSpace(value) == "1"
+		}
+	}
+	return false
 }
 
 func firstTime(item map[string]any, keys ...string) *time.Time {

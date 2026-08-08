@@ -720,6 +720,32 @@ type XChannelInfo struct {
 	IsFollowing bool
 	IsStarred   bool
 	Profile     *model.ChannelProfile
+	ActiveTab   string
+	PinnedItem  *model.FeedItem
+}
+
+func xProfileTabClass(active, tab string) string {
+	classes := "x-profile-tab"
+	if active == tab {
+		classes += " active"
+	}
+	return classes
+}
+
+func xProfileTabURL(channelID, tab string) string {
+	base := "/channels/" + url.PathEscape(channelID)
+	if tab == "media" {
+		return base + "?tab=media"
+	}
+	return base
+}
+
+func xProfileMediaPostHref(channelID, tweetID string) string {
+	return "/thread/" + url.PathEscape(tweetID) + "?return=" + url.QueryEscape(xProfileTabURL(channelID, "media"))
+}
+
+func xProfileMediaThumbnail(item model.FeedItem) string {
+	return item.MediaPreviewURL
 }
 
 // UserDisplay holds data for rendering a user row in the admin panel.

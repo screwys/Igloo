@@ -236,6 +236,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		"instagram": s.db.IntSetting("instagram_repost_max_videos"),
 	}
 	previousXMediaLimit := s.db.IntSetting("media_download_limit_default")
+	previousXProfileHistoryLimit := s.db.IntSetting("x_profile_history_limit")
 	previousYouTubeMemberOnly := s.db.BoolSetting("youtube_include_member_only")
 	previousTiktokReposts := s.db.MomentsIncludeRepostsEnabled()
 	previousInstagramTagged := s.db.InstagramIncludeTaggedEnabled()
@@ -287,6 +288,9 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			if err := s.workers.ExpandXMediaRetention(); err != nil {
 				slog.Error("ExpandXMediaRetention", "err", err)
 			}
+		}
+		if s.db.IntSetting("x_profile_history_limit") != previousXProfileHistoryLimit {
+			s.workers.TriggerPlatformRefresh("twitter")
 		}
 	}
 
@@ -341,6 +345,13 @@ func normalizeSettingsUpdate(body map[string]string) {
 		}
 		body["stories_window_hours"] = strconv.Itoa(db.NormalizeStoriesWindowHours(n))
 	}
+	if v, ok := body["x_profile_history_limit"]; ok {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			n = settings.IntDefault("x_profile_history_limit")
+		}
+		body["x_profile_history_limit"] = strconv.Itoa(settings.ClampXProfileHistoryLimit(n))
+	}
 }
 
 func validateSettingsUpdate(body map[string]string) error {
@@ -382,7 +393,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 		"tiktok_fetch_delay", "shorts_max_videos", "tiktok_repost_max_videos",
 		"instagram_fetch_delay", "instagram_max_videos", "instagram_repost_max_videos",
 		"moments_default_tab", "stories_window_hours",
-		"media_download_limit_default", "x_feed_fetch_delay",
+		"media_download_limit_default", "x_profile_history_limit", "x_feed_fetch_delay",
 		"translate_target_lang", "translate_backend",
 		"translate_auto_mode", "translate_auto_lookahead",
 		"backup_dir", "backup_keep_count", "starting_page",

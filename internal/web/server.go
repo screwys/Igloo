@@ -21,6 +21,7 @@ import (
 
 const (
 	momentsCursorPageSize  = 10_000
+	xProfileMediaItemLimit = 10_000
 	shortsInitialCardLimit = 96
 	shortsHydrateBatchSize = 96
 	bookmarksPageSize      = 200
@@ -346,7 +347,7 @@ func defaultShortcutConfig() map[string]string {
 		"feed.like": "l", "feed.bookmark": "b", "feed.share": "s", "feed.translate": "t", "feed.media": "f",
 		"shorts.autoplay": "a", "shorts.bookmark": "b", "shorts.share": "s", "shorts.grid": "c",
 		"player.fullscreen": "f", "player.cinema": "c", "player.bookmark": "b", "player.share": "s", "player.autoplay": "a",
-		"global.sidebar": "z",
+		"global.sidebar":  "z",
 		"global.settings": "g",
 	}
 }
