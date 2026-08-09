@@ -1842,21 +1842,6 @@ select.input:focus {
     box-shadow: inset 0 -2px 0 var(--accent-primary);
 }
 
-.x-profile-pinned-post {
-    padding: 1rem 1rem 0;
-}
-
-.x-profile-pinned-label {
-    color: var(--text-secondary);
-    font-size: 0.84rem;
-    font-weight: 600;
-    margin: 0 0 0.45rem 0.2rem;
-}
-
-.x-profile-pinned-post .feed-card {
-    margin: 0;
-}
-
 .x-profile-media-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

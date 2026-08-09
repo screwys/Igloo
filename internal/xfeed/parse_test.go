@@ -626,29 +626,23 @@ func TestClientFetchTimelineDoesNotDeferPlainRetweetAfterFXTwitter(t *testing.T)
 	}
 }
 
-func TestParseDumpMarksPinnedTweet(t *testing.T) {
-	parsed := ParseDump([]byte(`[
-		[2, {"tweet_id":"1000000000000000999","content":"Pinned update","pinned":true,"author":{"name":"sample_artist","nick":"Sample Artist"},"user":{"name":"sample_artist","nick":"Sample Artist"}}]
-	]`), "sample_artist")
-	if len(parsed.Items) != 1 || !parsed.Items[0].IsPinned {
-		t.Fatalf("parsed pinned item = %#v", parsed.Items)
-	}
-}
-
-func TestFetchTimelineMarksProfilePinStateKnown(t *testing.T) {
+func TestClientFetchTimelineDoesNotRequestPinnedTweets(t *testing.T) {
 	client := &Client{Runner: func(_ context.Context, args []string) ([]byte, error) {
-		if !strings.Contains(strings.Join(args, " "), "extractor.twitter.pinned=true") {
-			t.Fatalf("timeline args do not enable pinned tweets: %v", args)
+		for _, arg := range args {
+			if strings.Contains(arg, "twitter.pinned") {
+				t.Fatalf("timeline args request pinned tweets: %v", args)
+			}
 		}
 		return []byte(`[
 			[2, {"tweet_id":"1000000000000000998","content":"Timeline update","author":{"name":"sample_artist","nick":"Sample Artist"},"user":{"name":"sample_artist","nick":"Sample Artist"}}]
 		]`), nil
 	}}
+
 	items, err := client.FetchTimeline(context.Background(), "sample_artist", 1)
 	if err != nil {
 		t.Fatalf("FetchTimeline: %v", err)
 	}
-	if len(items) != 1 || !items[0].PinStateKnown || items[0].IsPinned {
-		t.Fatalf("timeline pin state = %#v", items)
+	if len(items) != 1 {
+		t.Fatalf("timeline items = %#v", items)
 	}
 }

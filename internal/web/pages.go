@@ -889,7 +889,7 @@ func (s *Server) renderTwitterChannelFeed(w http.ResponseWriter, r *http.Request
 		items, _ = s.db.GetFeedMediaItemsByAuthorPage(handle, xProfileMediaItemLimit, 0)
 	} else {
 		const pageSize = 40
-		items, _ = s.db.GetFeedThreadItemsByAuthorPageWithoutPinned(handle, pageSize+1, offset)
+		items, _ = s.db.GetFeedThreadItemsByAuthorPage(handle, pageSize+1, offset)
 		hasMore = len(items) > pageSize
 		if hasMore {
 			items = items[:pageSize]
@@ -947,14 +947,6 @@ func (s *Server) renderTwitterChannelFeed(w http.ResponseWriter, r *http.Request
 		IsStarred:   isStarred,
 		Profile:     profile,
 		ActiveTab:   tab,
-	}
-	if tab == "posts" {
-		if pinned, err := s.db.GetPinnedFeedItemByAuthor(handle); err == nil && pinned != nil {
-			enriched := feed.EnrichFeedItems(s.db, []model.FeedItem{*pinned})
-			if len(enriched) == 1 {
-				xCh.PinnedItem = &enriched[0]
-			}
-		}
 	}
 
 	p.PageTitle = displayName

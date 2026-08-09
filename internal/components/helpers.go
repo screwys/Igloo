@@ -721,7 +721,6 @@ type XChannelInfo struct {
 	IsStarred   bool
 	Profile     *model.ChannelProfile
 	ActiveTab   string
-	PinnedItem  *model.FeedItem
 }
 
 func xProfileTabClass(active, tab string) string {

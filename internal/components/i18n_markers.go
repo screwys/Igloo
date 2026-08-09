@@ -118,8 +118,6 @@ var _ = []string{
 	N("profile_media_empty", "No original media posts found."),
 	N("profile_media_empty_title", "No media"),
 	N("profile_open_post", "Open post"),
-	N("profile_pinned", "Pinned"),
-	N("profile_pinned_post", "Pinned post"),
 	N("profile_posts", "Posts"),
 	N("profile_protected_account", "Protected account"),
 	N("profile_subscribers", "Subscribers"),

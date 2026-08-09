@@ -30,9 +30,6 @@ templ FeedPage(p PageProps, items []model.FeedItem, hasMore bool, nextPageURL st
 templ XProfileContent(p PageProps, items []model.FeedItem, nextPageURL string, showControls bool, serverReranked bool, xChannel *XChannelInfo) {
 	<div class="x-profile-content">
 		@XProfileTabs(p, xChannel)
-		if xChannel.ActiveTab == "posts" && xChannel.PinnedItem != nil {
-			@XProfilePinnedPost(p, *xChannel.PinnedItem)
-		}
 		if xChannel.ActiveTab == "media" {
 			@XProfileMediaGrid(p, items, xChannel.ChannelID)
 		} else {
@@ -69,13 +66,6 @@ templ XProfileTabs(p PageProps, xChannel *XChannelInfo) {
 		<a class={ xProfileTabClass(xChannel.ActiveTab, "posts") } href={ xProfileTabURL(xChannel.ChannelID, "posts") } role="tab" aria-selected={ boolDataAttr(xChannel.ActiveTab == "posts") }>{ L(p, "profile_posts", "Posts") }</a>
 		<a class={ xProfileTabClass(xChannel.ActiveTab, "media") } href={ xProfileTabURL(xChannel.ChannelID, "media") } role="tab" aria-selected={ boolDataAttr(xChannel.ActiveTab == "media") }>{ L(p, "profile_media", "Media") }</a>
 	</div>
-}
-
-templ XProfilePinnedPost(p PageProps, item model.FeedItem) {
-	<section class="x-profile-pinned-post" aria-label={ L(p, "profile_pinned_post", "Pinned post") }>
-		<div class="x-profile-pinned-label">{ L(p, "profile_pinned", "Pinned") }</div>
-		@FeedItem(p, item)
-	</section>
 }
 
 templ XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) {

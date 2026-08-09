@@ -96,6 +96,7 @@ templ feedThreadCard(p PageProps, item model.FeedItem, collapsed bool) {
 		data-feed-date={ feedPublishedAtStr(item.PublishedAt) }
 		data-feed-published={ feedPublishedAtStr(item.PublishedAt) }
 		data-media-count={ fmt.Sprintf("%d", len(item.Media)) }
+		data-quote-media-count={ fmt.Sprintf("%d", len(item.QuoteMedia)) }
 	>
 		@feedHeader(p, item, authorLabel, pure)
 		if item.BodyText != "" {

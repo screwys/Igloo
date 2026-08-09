@@ -124,6 +124,45 @@ func TestFeedItemTwoPostThreadOmitsCapsule(t *testing.T) {
 	}
 }
 
+func TestFeedItemThreadRowCarriesQuotedMediaCountForBookmarks(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:      "leaf_1",
+		AuthorHandle: "sample_leaf_author",
+		BodyText:     "reply body",
+		ThreadChain: []model.FeedItem{{
+			TweetID:      "root_1",
+			AuthorHandle: "sample_root_author",
+			BodyText:     "root body",
+			Media:        []model.MediaRef{{Type: "photo"}},
+			QuoteTweetID: "quote_1",
+			QuoteMedia:   []model.MediaRef{{Type: "photo"}},
+		}},
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+	rootAt := strings.Index(html, `data-tweet-id="root_1"`)
+	if rootAt < 0 {
+		t.Fatalf("missing root thread row: %s", html)
+	}
+	rootEnd := strings.Index(html[rootAt:], `</article>`)
+	if rootEnd < 0 {
+		t.Fatalf("root thread row is not closed: %s", html)
+	}
+	rootHTML := html[rootAt : rootAt+rootEnd]
+	for _, want := range []string{
+		`data-media-count="1"`,
+		`data-quote-media-count="1"`,
+	} {
+		if !strings.Contains(rootHTML, want) {
+			t.Fatalf("root thread row missing %q: %s", want, rootHTML)
+		}
+	}
+}
+
 func TestFeedItemThreadPreviewUsesRootAndLeaf(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:           "leaf_1",

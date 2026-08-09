@@ -497,8 +497,6 @@
     <string name="profile_media_empty">No original media posts found.</string>
     <string name="profile_media_empty_title">No media</string>
     <string name="profile_open_post">Open post</string>
-    <string name="profile_pinned">Pinned</string>
-    <string name="profile_pinned_post">Pinned post</string>
     <string name="profile_posts">Posts</string>
     <string name="profile_protected_account">Protected account</string>
     <string name="profile_reposts">Reposts</string>

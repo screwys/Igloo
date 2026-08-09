@@ -24,8 +24,8 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
-		name:  "20260808_add_feed_items_is_pinned",
-		apply: addFeedItemsPinnedColumn,
+		name:  "20260809_retire_feed_items_pin",
+		apply: retireFeedItemsPin,
 	},
 	{
 		name:  "20260802_install_android_sync_peer_triggers",
@@ -61,17 +61,18 @@ var schemaMigrations = []schemaMigration{
 	},
 }
 
-func addFeedItemsPinnedColumn(tx *sql.Tx) error {
+func retireFeedItemsPin(tx *sql.Tx) error {
+	if _, err := tx.Exec(`DROP INDEX IF EXISTS idx_feed_items_pinned_author`); err != nil {
+		return err
+	}
 	hasColumn, err := schemaColumnExists(tx, "feed_items", "is_pinned")
 	if err != nil {
 		return err
 	}
 	if !hasColumn {
-		if _, err := tx.Exec(`ALTER TABLE feed_items ADD COLUMN is_pinned INTEGER DEFAULT 0`); err != nil {
-			return err
-		}
+		return nil
 	}
-	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_feed_items_pinned_author ON feed_items(channel_id, published_at DESC) WHERE is_pinned = 1 AND is_retweet = 0`)
+	_, err = tx.Exec(`ALTER TABLE feed_items DROP COLUMN is_pinned`)
 	return err
 }
 

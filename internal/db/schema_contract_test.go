@@ -108,6 +108,72 @@ func TestOpenMigratesKnownSchemaChange(t *testing.T) {
 	}
 }
 
+func TestOpenRetiresFeedItemPinSchema(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "igloo.db")
+	store, err := OpenPath(path, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, body_text, published_at, fetched_at)
+		VALUES ('sample_post', 'Sample post', 1, 1)
+	`); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`DELETE FROM schema_migrations WHERE name = '20260809_retire_feed_items_pin'`,
+		`ALTER TABLE feed_items ADD COLUMN is_pinned INTEGER DEFAULT 0`,
+		`UPDATE feed_items SET is_pinned = 1 WHERE tweet_id = 'sample_post'`,
+		`CREATE INDEX idx_feed_items_pinned_author ON feed_items(channel_id, published_at DESC) WHERE is_pinned = 1 AND is_retweet = 0`,
+	} {
+		if _, err := conn.Exec(statement); err != nil {
+			_ = conn.Close()
+			t.Fatalf("prepare pin schema: %v", err)
+		}
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = OpenPath(path, root)
+	if err != nil {
+		t.Fatalf("OpenPath pin schema: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	var body string
+	if err := store.QueryRow(`SELECT body_text FROM feed_items WHERE tweet_id = 'sample_post'`).Scan(&body); err != nil {
+		t.Fatalf("read retained post: %v", err)
+	}
+	if body != "Sample post" {
+		t.Fatalf("retained post body = %q", body)
+	}
+	hasColumn, err := schemaColumnExists(store.conn, "feed_items", "is_pinned")
+	if err != nil {
+		t.Fatalf("check retired pin column: %v", err)
+	}
+	if hasColumn {
+		t.Fatal("feed_items.is_pinned still exists after migration")
+	}
+	var indexCount int
+	if err := store.QueryRow(`SELECT COUNT(*) FROM sqlite_schema WHERE type = 'index' AND name = 'idx_feed_items_pinned_author'`).Scan(&indexCount); err != nil {
+		t.Fatalf("check retired pin index: %v", err)
+	}
+	if indexCount != 0 {
+		t.Fatalf("retired pin index count = %d", indexCount)
+	}
+}
+
 func TestOpenMigratesYouTubeMemberOnlyChannelSettingAndSyncTrigger(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
