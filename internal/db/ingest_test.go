@@ -393,8 +393,8 @@ func TestResetExpiredIngestBackoffKeepsActiveBackoff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetIngestState expired: %v", err)
 	}
-	if expiredState.FailCount != 0 {
-		t.Errorf("expired backoff fail_count = %d, want 0", expiredState.FailCount)
+	if expiredState.FailCount != 3 {
+		t.Errorf("expired backoff fail_count = %d, want 3", expiredState.FailCount)
 	}
 	if expiredState.NextRetryAt != 0 {
 		t.Errorf("expired next_retry_at = %f, want 0", expiredState.NextRetryAt)

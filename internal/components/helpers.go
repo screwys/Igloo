@@ -1409,6 +1409,7 @@ type FeedActivityEntry struct {
 
 // FeedSourceEntry is a row in the feed sources diagnostics table.
 type FeedSourceEntry struct {
+	ChannelID      string
 	Handle         string
 	Status         string // "ok", "cooling", "failing", "degraded", "pending"
 	LastSuccessAt  int64

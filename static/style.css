@@ -7274,6 +7274,23 @@ body.shorts-mode .sidebar {
     border-color: var(--border-color);
 }
 
+#logs-modal .feed-source-toolbar,
+#logs-modal .feed-source-filters {
+    display: flex;
+    align-items: center;
+}
+#logs-modal .feed-source-toolbar {
+    gap: 6px;
+    margin-left: auto;
+}
+#logs-modal .feed-source-filters { gap: 2px; }
+#logs-modal .feed-source-toolbar .log-filter {
+    font-size: 0.7rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+#logs-modal .feed-remove-failing:not(:disabled) { color: var(--status-error); }
+
 /* ── Copy log button ── */
 #logs-modal .copy-log {
     font-size: 0.6rem; color: var(--text-secondary); background: rgba(var(--text-primary-rgb), 0.05);

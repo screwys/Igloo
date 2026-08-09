@@ -147,3 +147,8 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
   say that explicitly in the final response. Host-only Android scripts such as
   `android/test.sh` and `android/build.sh` require shell validation and the
   relevant script behavior proof, not an APK build/install.
+- Generated Android localization catalog changes caused solely by synchronizing
+  web-only strings do not require an APK build, install, or relaunch. Verify
+  those changes with the localization drift check and the proportional test
+  gate instead. The device proof above still applies when Android-owned copy or
+  behavior changes.

@@ -79,6 +79,7 @@
     <string name="action_remove">Remove</string>
     <string name="action_remove_bookmark">Remove bookmark</string>
     <string name="action_remove_channel_and_files">Remove Channel &amp; Files</string>
+    <string name="action_remove_failing">Remove failing</string>
     <string name="action_rename">Rename</string>
     <string name="action_replace">Replace</string>
     <string name="action_resize_sidebar">Resize sidebar</string>
@@ -190,6 +191,7 @@
     <string name="confirm_logout_body">Log out of Igloo on this device? You can sign in again later.</string>
     <string name="confirm_logout_title">Log out?</string>
     <string name="confirm_remove_channel_and_files">Remove channel and files for %1$s?</string>
+    <string name="confirm_remove_failing_feed_sources">Unfollow all failing feed sources?</string>
     <string name="confirm_unfollow_account_body">This unfollows the account on the server, removes it from your followed list, and its synced videos can be pruned on Android.</string>
     <string name="confirm_unfollow_account_title">Unfollow account?</string>
     <string name="confirm_unfollow_channel_body">Unfollow %1$s?</string>

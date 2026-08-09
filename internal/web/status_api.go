@@ -59,7 +59,23 @@ const (
 	serverDashboardInventoryRefreshInterval = 15 * time.Minute
 	serverDashboardInventoryCacheKey        = "server-dashboard-inventory-v1.json"
 	serverDashboardInventoryCacheVersion    = 1
+	feedSourceDegradedAfter                 = 48 * time.Hour
 )
+
+func feedSourceStatus(st model.IngestState, now time.Time) string {
+	switch {
+	case st.FailCount > 3:
+		return "failing"
+	case st.LastSuccessAt > 0 && now.Sub(time.Unix(int64(st.LastSuccessAt), 0)) > feedSourceDegradedAfter:
+		return "degraded"
+	case st.FailCount > 0:
+		return "cooling"
+	case st.LastSuccessAt > 0:
+		return "ok"
+	default:
+		return "pending"
+	}
+}
 
 type serverDashboardInventoryFile struct {
 	Version   int                            `json:"version"`
@@ -80,8 +96,43 @@ func (s *Server) registerStatusAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/stats", s.handleStats)
 	mux.HandleFunc("GET /api/feed/head", s.handleFeedHead)
 	mux.HandleFunc("GET /api/feed/status", s.handleFeedStatus)
+	mux.HandleFunc("DELETE /api/feed/failing-sources", s.handleRemoveFailingFeedSources)
 	mux.HandleFunc("GET /api/downloads/status", s.handleDownloadsStatus)
 	mux.HandleFunc("GET /api/server/status", s.handleServerStatus)
+}
+
+func (s *Server) handleRemoveFailingFeedSources(w http.ResponseWriter, r *http.Request) {
+	filter := r.URL.Query().Get("filter")
+	if filter == "" {
+		filter = "all"
+	}
+	sources, _ := s.buildFeedSources()
+	removed := 0
+	for _, source := range sources {
+		if !components.FeedSourceIsFailed(source.Status) {
+			continue
+		}
+		result, err := s.db.MutateFollow(source.ChannelID, "clear", 0)
+		if err != nil {
+			slog.Error("remove failing feed source", "channel", source.ChannelID, "err", err)
+			http.Error(w, "db error", http.StatusInternalServerError)
+			return
+		}
+		if result.Applied {
+			removed++
+		}
+	}
+	if removed > 0 {
+		s.wakeFeedOrderInvalidation()
+		s.workers.Emit("system", fmt.Sprintf("Unsubscribed from %d failing feed sources", removed), "info")
+	}
+
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = components.FeedDashboardSources(s.pageProps(w, r), s.feedDashboardSourcesData(filter)).Render(r.Context(), w)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "removed": removed})
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -892,25 +943,15 @@ func (s *Server) buildFeedSources() ([]components.FeedSourceEntry, string) {
 		LastError      string
 		LastHTTPStatus int
 	}, len(states))
+	now := time.Now()
 	for _, st := range states {
-		status := "unknown"
-		switch {
-		case st.FailCount == 0 && st.LastSuccessAt > 0:
-			status = "ok"
-		case st.FailCount > 0 && st.FailCount <= 3:
-			status = "cooling"
-		case st.FailCount > 3:
-			status = "failing"
-		case st.LastSuccessAt > 0:
-			status = "degraded"
-		}
 		key := strings.TrimPrefix(st.Handle, "twitter_")
 		stateMap[key] = struct {
 			Status         string
 			LastSuccessAt  int64
 			LastError      string
 			LastHTTPStatus int
-		}{status, int64(st.LastSuccessAt), st.LastError, st.LastHTTPStatus}
+		}{feedSourceStatus(st, now), int64(st.LastSuccessAt), st.LastError, st.LastHTTPStatus}
 	}
 
 	itemCounts, _ := s.db.CountFeedItemsBySourceChannel()
@@ -918,7 +959,7 @@ func (s *Server) buildFeedSources() ([]components.FeedSourceEntry, string) {
 	var sources []components.FeedSourceEntry
 	for _, source := range sourceChannels {
 		handle := source.Handle
-		entry := components.FeedSourceEntry{Handle: handle, Status: "pending"}
+		entry := components.FeedSourceEntry{ChannelID: source.ChannelID, Handle: handle, Status: "pending"}
 		if st, ok := stateMap[handle]; ok {
 			entry.Status = st.Status
 			entry.LastSuccessAt = st.LastSuccessAt

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -29,6 +30,27 @@ func TestTwitterSourceHandleFallsBackToChannelID(t *testing.T) {
 	})
 	if got != "user_b" {
 		t.Fatalf("twitterSourceHandle = %q; want user_b", got)
+	}
+}
+
+func TestFeedSourceStatusUsesTwoDayStalenessBoundary(t *testing.T) {
+	now := time.Unix(2_000_000, 0)
+	for _, tt := range []struct {
+		name  string
+		state model.IngestState
+		want  string
+	}{
+		{"recent success", model.IngestState{LastSuccessAt: float64(now.Add(-47 * time.Hour).Unix())}, "ok"},
+		{"stale success", model.IngestState{LastSuccessAt: float64(now.Add(-49 * time.Hour).Unix())}, "degraded"},
+		{"cooling recent source", model.IngestState{FailCount: 2, LastSuccessAt: float64(now.Add(-time.Hour).Unix())}, "cooling"},
+		{"stale cooling source", model.IngestState{FailCount: 2, LastSuccessAt: float64(now.Add(-13 * 24 * time.Hour).Unix())}, "degraded"},
+		{"repeated failures", model.IngestState{FailCount: 4, LastSuccessAt: float64(now.Add(-time.Hour).Unix())}, "failing"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := feedSourceStatus(tt.state, now); got != tt.want {
+				t.Fatalf("feedSourceStatus() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -233,5 +255,63 @@ func TestFeedStatusSeparatesLiveAndSourcesFragments(t *testing.T) {
 	}
 	if strings.Contains(sourcesBody, `id="feed-live-content"`) {
 		t.Fatalf("sources fragment should not replace live activity:\n%s", sourcesBody)
+	}
+}
+
+func TestRemoveFailingFeedSourcesOnlyUnfollowsRedSources(t *testing.T) {
+	srv := newTestServer(t)
+	for _, source := range []struct {
+		channelID     string
+		failures      int
+		lastSuccessAt time.Time
+	}{
+		{"twitter_sample_failing", 4, time.Time{}},
+		{"twitter_sample_stale", 0, time.Now().Add(-72 * time.Hour)},
+		{"twitter_sample_cooling", 2, time.Time{}},
+		{"twitter_sample_ok", 0, time.Now()},
+	} {
+		if err := srv.db.AddChannel(model.Channel{
+			ChannelID:    source.channelID,
+			SourceID:     strings.TrimPrefix(source.channelID, "twitter_"),
+			Name:         source.channelID,
+			Platform:     "twitter",
+			URL:          "https://x.com/" + strings.TrimPrefix(source.channelID, "twitter_"),
+			IsSubscribed: true,
+		}); err != nil {
+			t.Fatalf("AddChannel(%s): %v", source.channelID, err)
+		}
+		if source.failures == 0 {
+			if err := srv.db.RecordIngestSuccess(source.channelID, float64(source.lastSuccessAt.Unix()), 10); err != nil {
+				t.Fatalf("RecordIngestSuccess(%s): %v", source.channelID, err)
+			}
+			continue
+		}
+		for i := 0; i < source.failures; i++ {
+			if err := srv.db.RecordIngestFailure(source.channelID, "source failed", 0); err != nil {
+				t.Fatalf("RecordIngestFailure(%s): %v", source.channelID, err)
+			}
+		}
+	}
+
+	req := httptest.NewRequest("DELETE", "/api/feed/failing-sources?filter=all", nil)
+	req.Header.Set("HX-Request", "true")
+	req = attachTestAuth(req, "sample_admin")
+	rec := httptest.NewRecorder()
+	srv.handleRemoveFailingFeedSources(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DELETE status = %d: %s", rec.Code, rec.Body.String())
+	}
+	for _, channelID := range []string{"twitter_sample_failing", "twitter_sample_stale"} {
+		if srv.db.IsChannelFollowed(channelID) {
+			t.Fatalf("red source %s is still followed", channelID)
+		}
+	}
+	for _, channelID := range []string{"twitter_sample_cooling", "twitter_sample_ok"} {
+		if !srv.db.IsChannelFollowed(channelID) {
+			t.Fatalf("non-red source %s was unfollowed", channelID)
+		}
+	}
+	if strings.Contains(rec.Body.String(), "sample_failing") || strings.Contains(rec.Body.String(), "sample_stale") {
+		t.Fatalf("refreshed source list still contains removed source:\n%s", rec.Body.String())
 	}
 }

@@ -135,14 +135,14 @@ func (db *DB) ResetIngestBackoff() error {
 	})
 }
 
-// ResetExpiredIngestBackoff clears backoff rows whose retry time has already
-// passed. Active backoffs are preserved so restarts do not immediately retry
-// the same failing sources at the front of the ingest cycle.
+// ResetExpiredIngestBackoff makes expired retries immediately eligible without
+// erasing the consecutive failure count. Only a successful fetch clears a
+// source's failure history.
 func (db *DB) ResetExpiredIngestBackoff() error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			UPDATE ingest_state
-			SET fail_count = 0, next_retry_at = 0
+			SET next_retry_at = 0
 			WHERE next_retry_at > 0 AND next_retry_at <= ?
 		`, float64(time.Now().Unix()))
 		return err

@@ -2127,15 +2127,17 @@ templ feedDashboardSourcesCard(p PageProps, d FeedDashboardData) {
 			<div class="glass-col-header">
 				<div class="glass-col-title">{ L(p, "logs_stat_sources", "Sources") }</div>
 				<input id="feed-source-search" class="feed-source-search" type="search" placeholder={ L(p, "action_filter", "Filter...") } autocomplete="off"/>
-				<div style="margin-left:auto;">
-					for _, f := range []struct{ Key, Label string }{{"all",L(p, "logs_filter_all", "All")},{"failed",L(p, "logs_status_failed", "Failed")},{"cooling",L(p, "logs_status_cooling", "Cooling")},{"ok",L(p, "logs_status_ok", "OK")}} {
-						<button
-							class={ "log-filter" + dlFilterActiveClass(d.Filter, f.Key) }
-							type="button"
-							hx-get={ "/api/feed/status?fmt=html&part=sources&filter=" + f.Key }
-							hx-target="#feed-sources-content"
-							hx-swap="outerHTML"
-							>{ f.Label + " (" + fmt.Sprintf("%d", FeedSourceFilterCount(d.Sources, f.Key)) + ")" }</button>
+				<div class="feed-source-toolbar">
+					<div class="feed-source-filters">
+						for _, f := range []struct{ Key, Label string }{{"all",L(p, "logs_filter_all", "All")},{"failed",L(p, "logs_status_failed", "Failed")},{"cooling",L(p, "logs_status_cooling", "Cooling")},{"ok",L(p, "logs_status_ok", "OK")}} {
+							<button
+								class={ "log-filter" + dlFilterActiveClass(d.Filter, f.Key) }
+								type="button"
+								data-filter={ f.Key }
+								hx-get={ "/api/feed/status?fmt=html&part=sources&filter=" + f.Key }
+								hx-target="#feed-sources-content"
+								hx-swap="outerHTML"
+								>{ f.Label + " (" + fmt.Sprintf("%d", FeedSourceFilterCount(d.Sources, f.Key)) + ")" }</button>
 						}
 					</div>
 					<button class="glass-btn" type="button"
@@ -2143,6 +2145,15 @@ templ feedDashboardSourcesCard(p PageProps, d FeedDashboardData) {
 						hx-target="#feed-sources-content"
 						hx-swap="outerHTML"
 					>{ L(p, "action_refresh", "Refresh") }</button>
+					<button class="glass-btn feed-remove-failing" type="button"
+						hx-delete={ "/api/feed/failing-sources?filter=" + d.Filter }
+						hx-target="#feed-sources-content"
+						hx-swap="outerHTML"
+						hx-confirm={ L(p, "confirm_remove_failing_feed_sources", "Unfollow all failing feed sources?") }
+						hx-on::after-request="if(event.detail.successful&&window.MpaSiteBase)MpaSiteBase.showToast(window.IglooI18n&&window.IglooI18n.t?window.IglooI18n.t('toast_failing_feed_sources_removed','Failing feed sources removed'):'Failing feed sources removed')"
+						disabled?={ FeedSourceFilterCount(d.Sources, "failed") == 0 }
+					>{ L(p, "action_remove_failing", "Remove failing") }</button>
+				</div>
 			</div>
 			<div class="glass-col-body" id="feed-sources-body">
 				if len(d.Sources) > 0 {
