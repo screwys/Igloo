@@ -6,6 +6,30 @@ import (
 	"time"
 )
 
+const xProfileHistoryRetentionItemsQuery = `
+		SELECT fi.tweet_id,
+		       CASE WHEN EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = fi.tweet_id)
+		              OR EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = fi.tweet_id)
+		              OR EXISTS (SELECT 1 FROM feed_item_sources fis WHERE fis.tweet_id = fi.tweet_id)
+		              OR EXISTS (
+		                   SELECT 1 FROM feed_items reply
+		                   WHERE reply.reply_to_status IS NOT NULL
+		                     AND reply.reply_to_status != ''
+		                     AND reply.reply_to_status = fi.tweet_id
+		                 )
+		              OR EXISTS (
+		                   SELECT 1 FROM feed_items quote
+		                   WHERE quote.quote_tweet_id IS NOT NULL
+		                     AND quote.quote_tweet_id != ''
+		                     AND quote.quote_tweet_id = fi.tweet_id
+		                 )
+		              OR (? > 0 AND fi.published_at >= ?)
+		            THEN 1 ELSE 0 END
+		FROM feed_items fi
+		WHERE fi.source_channel_id = ?
+		ORDER BY fi.published_at DESC, fi.tweet_id DESC
+	`
+
 // PruneXProfileHistory bounds the ordinary timeline rows owned by one X
 // profile. Saved posts and rows still owned by another feed surface or thread
 // remain in the database and do not consume the profile's history window.
@@ -47,21 +71,7 @@ func (db *DB) PruneXProfileHistory(channelID string, limit int, nowMs int64) (XM
 }
 
 func (db *DB) xProfileHistoryRetentionItems(channelID string, androidCutoffMs int64) ([]xRetentionItem, error) {
-	rows, err := db.conn.Query(`
-		SELECT fi.tweet_id,
-		       CASE WHEN EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = fi.tweet_id)
-		              OR EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = fi.tweet_id)
-		              OR EXISTS (SELECT 1 FROM feed_item_sources fis WHERE fis.tweet_id = fi.tweet_id)
-		              OR EXISTS (
-		                   SELECT 1 FROM feed_items child
-		                   WHERE child.reply_to_status = fi.tweet_id OR child.quote_tweet_id = fi.tweet_id
-		                 )
-		              OR (? > 0 AND fi.published_at >= ?)
-		            THEN 1 ELSE 0 END
-		FROM feed_items fi
-		WHERE fi.source_channel_id = ?
-		ORDER BY fi.published_at DESC, fi.tweet_id DESC
-	`, androidCutoffMs, androidCutoffMs, channelID)
+	rows, err := db.conn.Query(xProfileHistoryRetentionItemsQuery, androidCutoffMs, androidCutoffMs, channelID)
 	if err != nil {
 		return nil, err
 	}

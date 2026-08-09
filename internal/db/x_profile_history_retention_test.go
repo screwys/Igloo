@@ -1,6 +1,34 @@
 package db
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestXProfileHistoryRetentionPlanUsesThreadIndexes(t *testing.T) {
+	d := openFreshTestDB(t)
+	rows, err := d.conn.Query("EXPLAIN QUERY PLAN "+xProfileHistoryRetentionItemsQuery, 0, 0, "twitter_sample_profile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var details []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		details = append(details, detail)
+	}
+	plan := strings.Join(details, "\n")
+	if strings.Contains(plan, "SCAN reply") || strings.Contains(plan, "SCAN quote") {
+		t.Fatalf("profile history retention scans feed_items for thread references: %s", plan)
+	}
+	if !strings.Contains(plan, "idx_feed_items_reply_parent") || !strings.Contains(plan, "idx_feed_items_quote") {
+		t.Fatalf("profile history retention plan = %s", plan)
+	}
+}
 
 func TestPruneXProfileHistoryKeepsSavedAndSharedRows(t *testing.T) {
 	d := openWritableTestDB(t)
