@@ -2,8 +2,13 @@
   function closeFilter(root) {
     var panel = root.querySelector('[data-bookmark-label-panel]');
     var toggle = root.querySelector('[data-bookmark-label-toggle]');
+    var input = root.querySelector('[data-bookmark-label-search]');
     if (panel) panel.classList.add('hidden');
     if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    if (input) {
+      input.setAttribute('aria-expanded', 'false');
+      input.setAttribute('aria-activedescendant', '');
+    }
   }
 
   function openFilter(root) {
@@ -12,11 +17,30 @@
     var input = root.querySelector('[data-bookmark-label-search]');
     if (panel) panel.classList.remove('hidden');
     if (toggle) toggle.setAttribute('aria-expanded', 'true');
+    if (input) input.setAttribute('aria-expanded', 'true');
     if (input) {
       input.value = '';
       filterRows(root, '');
       setTimeout(function () { input.focus(); }, 0);
     }
+  }
+
+  function visibleRows(root) {
+    return Array.prototype.slice.call(root.querySelectorAll('[data-bookmark-label-row]')).filter(function (row) {
+      return !row.classList.contains('hidden');
+    });
+  }
+
+  function setKeyboardActiveRow(root, activeRow) {
+    var input = root.querySelector('[data-bookmark-label-search]');
+    var rows = visibleRows(root);
+    rows.forEach(function (row) {
+      var active = row === activeRow;
+      row.classList.toggle('keyboard-active', active);
+      row.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    if (input) input.setAttribute('aria-activedescendant', activeRow ? activeRow.id : '');
+    if (activeRow) activeRow.scrollIntoView({ block: 'nearest' });
   }
 
   function filterRows(root, query) {
@@ -31,6 +55,7 @@
       if (show) visible += 1;
     });
     if (empty) empty.classList.toggle('hidden', visible > 0);
+    setKeyboardActiveRow(root, null);
   }
 
   function init() {
@@ -48,6 +73,26 @@
       }
       if (input) {
         input.addEventListener('input', function () { filterRows(root, input.value); });
+        input.addEventListener('keydown', function (event) {
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Enter') return;
+          var rows = visibleRows(root);
+          if (!rows.length) return;
+
+          if (event.key === 'Enter') {
+            var activeRow = rows.find(function (row) { return row.classList.contains('keyboard-active'); });
+            if (!activeRow) return;
+            event.preventDefault();
+            activeRow.click();
+            return;
+          }
+
+          event.preventDefault();
+          var activeIndex = rows.findIndex(function (row) { return row.classList.contains('keyboard-active'); });
+          var nextIndex;
+          if (activeIndex === -1) nextIndex = event.key === 'ArrowDown' ? 0 : rows.length - 1;
+          else nextIndex = (activeIndex + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+          setKeyboardActiveRow(root, rows[nextIndex]);
+        });
       }
     });
 

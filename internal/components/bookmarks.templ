@@ -94,13 +94,21 @@ templ bookmarkLabelFilter(p PageProps, labelCounts []db.BookmarkLabelCountRow, s
 				type="search"
 				placeholder={ L(p, "bookmark_filter_search_labels", "Search labels") }
 				autocomplete="off"
+				role="combobox"
+				aria-autocomplete="list"
+				aria-controls="bookmark-label-results"
+				aria-expanded="false"
+				aria-activedescendant=""
 				data-bookmark-label-search
 			/>
-			<div class="bookmark-label-result-list" data-bookmark-label-list>
-				for _, row := range labelCounts {
+			<div id="bookmark-label-results" class="bookmark-label-result-list" role="listbox" data-bookmark-label-list>
+				for index, row := range labelCounts {
 					<a
+						id={ fmt.Sprintf("bookmark-label-result-%d", index) }
 						class={ "bookmark-label-result-row", templ.KV("active", bookmarkLabelRowSelected(row, selectedLabel)) }
 						href={ templ.SafeURL(bookmarkLabelURL(row)) }
+						role="option"
+						aria-selected="false"
 						data-bookmark-label-row
 						data-label={ bookmarkLabelDisplay(p, row) }
 					>

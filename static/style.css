@@ -2203,7 +2203,8 @@ select.input:focus {
     font-size: 0.84rem;
 }
 .bookmark-label-result-row:hover,
-.bookmark-label-result-row.active {
+.bookmark-label-result-row.active,
+.bookmark-label-result-row.keyboard-active {
     background: rgba(var(--accent-primary-rgb), 0.14);
     color: var(--text-primary);
 }
