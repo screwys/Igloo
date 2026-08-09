@@ -252,6 +252,69 @@ func TestBuildSnapshotCompactsNearbyQuotePostAndPureRepost(t *testing.T) {
 	}
 }
 
+func TestBuildSnapshotCompactsNearbyOriginalAndQuotePost(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	publishedAt := now.Add(-time.Hour).UnixMilli()
+	in := []db.PreDiversitySnapshotRow{
+		{
+			TweetID:           "sample_original",
+			ChannelID:         "sample_original_author",
+			RelatedContentKey: "tweet:sample_original",
+			ThreadRootID:      "sample_original",
+			PublishedAtMs:     publishedAt,
+			BaseScore:         90,
+			DecayFactor:       1,
+		},
+		{
+			TweetID:           "sample_quote",
+			ChannelID:         "sample_quote_author",
+			RelatedContentKey: "tweet:sample_original",
+			QuoteTweetID:      "sample_original",
+			ThreadRootID:      "sample_quote",
+			PublishedAtMs:     publishedAt + int64(time.Hour/time.Millisecond),
+			BaseScore:         100,
+			DecayFactor:       1,
+		},
+	}
+
+	out := BuildSnapshot(in, now)
+	if got, want := snapshotIDs(out), []string{"sample_quote"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshot IDs = %v, want %v", got, want)
+	}
+}
+
+func TestBuildSnapshotCompactsOriginalAndThreadContainingItsQuote(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	publishedAt := now.Add(-time.Hour).UnixMilli()
+	in := []db.PreDiversitySnapshotRow{
+		{
+			TweetID:           "sample_original",
+			ChannelID:         "sample_original_author",
+			RelatedContentKey: "tweet:sample_original",
+			ThreadRootID:      "sample_original",
+			PublishedAtMs:     publishedAt,
+			BaseScore:         90,
+			DecayFactor:       1,
+		},
+		{
+			TweetID:           "sample_thread_reply",
+			ChannelID:         "sample_reply_author",
+			RelatedContentKey: "tweet:sample_original",
+			ThreadRootID:      "sample_quote",
+			ThreadDepth:       1,
+			IsReply:           true,
+			PublishedAtMs:     publishedAt + int64(time.Hour/time.Millisecond),
+			BaseScore:         100,
+			DecayFactor:       1,
+		},
+	}
+
+	out := BuildSnapshot(in, now)
+	if got, want := snapshotIDs(out), []string{"sample_thread_reply"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshot IDs = %v, want %v", got, want)
+	}
+}
+
 func TestBuildSnapshotKeepsRelatedThreadsOutsideNearbyWindow(t *testing.T) {
 	now := time.Unix(1700000000, 0)
 	publishedAt := now.Add(-24 * time.Hour).UnixMilli()

@@ -148,13 +148,14 @@ func compactNearbyRelatedConversations(rows []db.SnapshotRow, meta []db.PreDiver
 	for _, row := range rows {
 		rowMeta, ok := metadata[row.TweetID]
 		relatedKey := strings.ToLower(strings.TrimSpace(rowMeta.RelatedContentKey))
-		if !ok || !isRelatedConversationSnapshotRow(rowMeta) || relatedKey == "" {
+		if !ok || relatedKey == "" {
 			out = append(out, row)
 			continue
 		}
 		nearby := false
 		for _, kept := range keptByRelated[relatedKey] {
 			if kept.ThreadRootID != rowMeta.ThreadRootID &&
+				shouldCompactRelatedConversationRows(kept, rowMeta) &&
 				withinNearbyRepostWindow(kept.PublishedAtMs, rowMeta.PublishedAtMs) {
 				nearby = true
 				break
@@ -170,6 +171,23 @@ func compactNearbyRelatedConversations(rows []db.SnapshotRow, meta []db.PreDiver
 		out[i].RankPosition = i + 1
 	}
 	return out
+}
+
+func shouldCompactRelatedConversationRows(left, right db.PreDiversitySnapshotRow) bool {
+	if isRelatedConversationSnapshotRow(left) && isRelatedConversationSnapshotRow(right) {
+		return true
+	}
+	return isOriginalContainedByRelatedConversation(left, right) ||
+		isOriginalContainedByRelatedConversation(right, left)
+}
+
+func isOriginalContainedByRelatedConversation(original, related db.PreDiversitySnapshotRow) bool {
+	if !isRelatedConversationSnapshotRow(related) || isPureRepostSnapshotRow(related) {
+		return false
+	}
+	originalID := strings.ToLower(strings.TrimSpace(original.TweetID))
+	return originalID != "" &&
+		strings.ToLower(strings.TrimSpace(related.RelatedContentKey)) == "tweet:"+originalID
 }
 
 func isRelatedConversationSnapshotRow(row db.PreDiversitySnapshotRow) bool {
