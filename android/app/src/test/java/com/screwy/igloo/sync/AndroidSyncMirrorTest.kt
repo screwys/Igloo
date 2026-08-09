@@ -47,7 +47,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -94,8 +93,7 @@ class AndroidSyncMirrorTest {
     @After
     fun tearDown() {
         if (::client.isInitialized) client.close()
-        scope.cancel()
-        db.close()
+        RoomTestSupport.closeAfterScope(scope, db)
     }
 
     @Test

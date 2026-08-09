@@ -72,8 +72,7 @@ class ShortsRouteViewModelTest {
 
     @After fun tearDown() {
         viewModels.clearAll()
-        scope.cancel()
-        db.close()
+        RoomTestSupport.closeAfterScope(scope, db)
         Dispatchers.resetMain()
     }
 

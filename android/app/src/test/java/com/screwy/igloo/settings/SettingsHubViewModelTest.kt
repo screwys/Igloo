@@ -10,7 +10,6 @@ import com.screwy.igloo.testutil.ViewModelTestTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
@@ -51,8 +50,7 @@ class SettingsHubViewModelTest {
 
     @After fun tearDown() {
         viewModels.clearAll()
-        scope.cancel()
-        db.close()
+        RoomTestSupport.closeAfterScope(scope, db)
         Dispatchers.resetMain()
     }
 

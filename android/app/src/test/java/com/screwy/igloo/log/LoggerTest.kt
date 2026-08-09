@@ -1,11 +1,11 @@
 package com.screwy.igloo.log
 
+import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.RoomTestSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -28,6 +28,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], manifest = Config.NONE)
 class LoggerTest {
 
+    private lateinit var db: IglooDatabase
     private lateinit var scope: CoroutineScope
     private lateinit var prefs: PreferencesRepo
     private lateinit var sink: InMemoryLogSink
@@ -35,7 +36,7 @@ class LoggerTest {
     private var now: Long = 1_000L
 
     @Before fun setUp() {
-        val db = RoomTestSupport.freshDb()
+        db = RoomTestSupport.freshDb()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         prefs = PreferencesRepo(db.preferenceDao(), scope, nowMsProvider = { now })
         sink = InMemoryLogSink()
@@ -43,7 +44,7 @@ class LoggerTest {
     }
 
     @After fun tearDown() {
-        scope.cancel()
+        RoomTestSupport.closeAfterScope(scope, db)
     }
 
     private suspend fun waitForSize(expected: Int, timeoutMs: Long = 3_000L) {

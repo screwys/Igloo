@@ -16,7 +16,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -52,8 +51,7 @@ class EnvelopeParserTest {
 
     @After
     fun tearDown() {
-        scope.cancel()
-        db.close()
+        RoomTestSupport.closeAfterScope(scope, db)
     }
 
     private fun buildClient(

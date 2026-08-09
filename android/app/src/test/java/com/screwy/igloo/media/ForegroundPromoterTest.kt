@@ -10,7 +10,6 @@ import com.screwy.igloo.log.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -38,8 +37,7 @@ class ForegroundPromoterTest {
     }
 
     @After fun tearDown() {
-        scope.cancel()
-        db.close()
+        RoomTestSupport.closeAfterScope(scope, db)
     }
 
     @Test fun externalForegroundLeaseSuppressesMediaServiceStart() {

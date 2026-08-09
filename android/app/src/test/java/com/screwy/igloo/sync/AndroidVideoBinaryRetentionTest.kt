@@ -40,7 +40,6 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
@@ -80,8 +79,7 @@ class AndroidVideoBinaryRetentionTest {
     @After
     fun tearDown() {
         clients.forEach(HttpClient::close)
-        scope.cancel()
-        db.close()
+        RoomTestSupport.closeAfterScope(scope, db)
     }
 
     @Test

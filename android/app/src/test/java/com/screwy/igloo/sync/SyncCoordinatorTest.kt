@@ -15,7 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
@@ -725,8 +724,7 @@ class SyncCoordinatorTest {
         val logger = Logger(prefs, InMemoryLogSink(), scope) { 0L }
 
         fun close() {
-            scope.cancel()
-            db.close()
+            RoomTestSupport.closeAfterScope(scope, db)
         }
     }
 }

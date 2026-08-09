@@ -12,9 +12,7 @@ import com.screwy.igloo.ui.component.MediaItem
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -41,10 +39,7 @@ class FeedMediaModelStoreTest {
 
     @After
     fun tearDown() {
-        runBlocking {
-            scope.coroutineContext[Job]?.cancelAndJoin()
-        }
-        db.close()
+        RoomTestSupport.closeAfterScope(scope, db)
     }
 
     @Test

@@ -11,10 +11,10 @@ import com.screwy.igloo.data.entity.MutedChannelEntity
 import com.screwy.igloo.data.entity.OutboxEntity
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceTimeBy
@@ -64,8 +64,7 @@ class OutboxWriterTest {
 
     @After
     fun tearDown() {
-        scope.cancel()
-        db.close()
+        RoomTestSupport.closeAfterScope(scope, db)
     }
 
     @Test
