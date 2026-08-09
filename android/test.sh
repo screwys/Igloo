@@ -25,6 +25,9 @@ if [ "${IGLOO_ANDROID_SCRIPT_LOCK_HELD:-}" != "1" ]; then
 fi
 
 test_args=(":app:testDevtestUnitTest")
+if [ "${IGLOO_ANDROID_RERUN_TASKS:-0}" = "1" ]; then
+    test_args+=("--rerun-tasks")
+fi
 if [ $# -gt 0 ]; then
     test_args+=("--tests" "$@")
 fi
@@ -42,6 +45,15 @@ set +e
 gradle_status="${PIPESTATUS[0]}"
 set -e
 if [ "$gradle_status" -ne 0 ]; then
+    test_results_dir="$SCRIPT_DIR/app/build/test-results/testDevtestUnitTest"
+    while IFS= read -r -d '' result_file; do
+        if ! grep -q '<failure' "$result_file"; then
+            continue
+        fi
+        echo "" >&2
+        echo "❌ Failure details from ${result_file#"$SCRIPT_DIR/"}:" >&2
+        sed -n '/<failure/,/<\/failure>/p' "$result_file" >&2
+    done < <(find "$test_results_dir" -name 'TEST-*.xml' -print0 2>/dev/null)
     exit "$gradle_status"
 fi
 

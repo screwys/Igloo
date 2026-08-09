@@ -4,12 +4,24 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-mapfile -t changed < <(
-  {
-    git diff --name-only --diff-filter=ACMR HEAD
-    git ls-files --others --exclude-standard
-  } | sed '/^$/d' | sort -u
-)
+if [[ -n "${IGLOO_TEST_BASE:-}" || -n "${IGLOO_TEST_HEAD:-}" ]]; then
+  if [[ -z "${IGLOO_TEST_BASE:-}" || -z "${IGLOO_TEST_HEAD:-}" ]]; then
+    echo "IGLOO_TEST_BASE and IGLOO_TEST_HEAD must be set together" >&2
+    exit 2
+  fi
+  mapfile -t changed < <(
+    git diff --name-only --diff-filter=ACMR "$IGLOO_TEST_BASE" "$IGLOO_TEST_HEAD" |
+      sed '/^$/d' |
+      sort -u
+  )
+else
+  mapfile -t changed < <(
+    {
+      git diff --name-only --diff-filter=ACMR HEAD
+      git ls-files --others --exclude-standard
+    } | sed '/^$/d' | sort -u
+  )
+fi
 
 if [[ "${#changed[@]}" -eq 0 ]]; then
   echo "[test] no changed files; use 'just test-full' for the exhaustive gate"
@@ -133,7 +145,11 @@ fi
 
 if [[ "$android_changed" -eq 1 ]]; then
   echo "[android] running JVM tests"
-  android/test.sh
+  if [[ -n "${IGLOO_TEST_BASE:-}" ]]; then
+    IGLOO_ANDROID_RERUN_TASKS=1 android/test.sh
+  else
+    android/test.sh
+  fi
 fi
 
 git diff --check
