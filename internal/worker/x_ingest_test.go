@@ -704,17 +704,45 @@ func TestFetchOneFeedSourceUsesGlobalLimitAndPrunesPreviousWindow(t *testing.T) 
 	}
 }
 
-func TestXTimelineLimitUsesProfileHistorySetting(t *testing.T) {
+func TestXFeedTimelineLimitUsesChannelMediaLimit(t *testing.T) {
+	if got := xFeedTimelineLimit(nil); got != 100 {
+		t.Fatalf("default X timeline limit = %d, want 100", got)
+	}
+	if got := xFeedTimelineLimit(&db.ChannelSettings{MediaDownloadLimit: 25}); got != 25 {
+		t.Fatalf("channel X timeline limit = %d, want 25", got)
+	}
+	if got := xFeedTimelineLimit(&db.ChannelSettings{}); got != 100 {
+		t.Fatalf("empty channel X timeline limit = %d, want 100", got)
+	}
+}
+
+func TestXProfileHistoryLimitUsesSetting(t *testing.T) {
 	d := newTestWorkerDB(t)
 	m := &Manager{db: d}
-	if got := m.xTimelineLimit(); got != 1000 {
-		t.Fatalf("default x timeline limit = %d, want 1000", got)
+	if got := m.xProfileHistoryLimit(); got != 1000 {
+		t.Fatalf("default X profile history limit = %d, want 1000", got)
 	}
 	if err := d.SetSetting("x_profile_history_limit", "1250"); err != nil {
 		t.Fatal(err)
 	}
-	if got := m.xTimelineLimit(); got != 1250 {
-		t.Fatalf("x timeline limit = %d, want 1250", got)
+	if got := m.xProfileHistoryLimit(); got != 1250 {
+		t.Fatalf("X profile history limit = %d, want 1250", got)
+	}
+}
+
+func TestNewXProfileHistoryTweetIDsKeepsFeedWindowAndExistingRowsUnchanged(t *testing.T) {
+	newest := time.Unix(300, 0)
+	middle := time.Unix(200, 0)
+	oldest := time.Unix(100, 0)
+	items := []model.FeedItem{
+		{TweetID: "middle_existing", PublishedAt: &middle},
+		{TweetID: "oldest_new", PublishedAt: &oldest},
+		{TweetID: "newest_new", PublishedAt: &newest},
+	}
+	existing := map[string]model.FeedItem{"middle_existing": {TweetID: "middle_existing"}}
+	got := newXProfileHistoryTweetIDs(items, existing, 1)
+	if len(got) != 1 || got[0] != "oldest_new" {
+		t.Fatalf("profile-history-only IDs = %v, want [oldest_new]", got)
 	}
 }
 

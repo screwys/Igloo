@@ -91,6 +91,9 @@ func videoToJSON(v model.Video) map[string]any {
 			m["like_count"] = meta.LikeCount
 			m["like_count_label"] = model.CompactCountLabel(meta.LikeCount)
 		}
+		if meta.CommentCount >= 0 {
+			m["comment_count"] = meta.CommentCount
+		}
 	}
 	m["media_kind"] = v.MediaKind
 	m["media_mode"] = model.MediaMode(v.MediaKind, v.MediaSlideCount)

@@ -42,6 +42,7 @@ type Manager struct {
 	tempDownloadKick        chan struct{} // buffered(1): durable user-download wake-up
 	discoveryKick           chan struct{} // buffered(1): coalescing kick for platform discovery
 	profileKick             chan struct{} // buffered(1): durable profile job wake-up
+	videoMetadataKick       chan struct{} // buffered(1): durable YouTube metadata wake-up
 	xStatusEnrich           chan xfeed.StatusEnrichmentRequest
 	ingestKick              chan struct{} // buffered(1): trigger immediate ingest
 	feedScoringKick         chan struct{} // buffered(1): rate-limited feed refresh
@@ -71,7 +72,6 @@ type Manager struct {
 	downloadPlatformAt       map[db.DownloadLane]int
 	mediaCurrentTurn         uint64
 	mediaBackgroundTurn      uint64
-	youtubeEnrichmentSlots   chan struct{}
 	previewMu                sync.Mutex
 	previewHints             map[string]struct{}
 	previewRetry             map[string]previewRetryState
@@ -100,6 +100,7 @@ type Manager struct {
 	// The download-complete hook co-fetches both APIs because they share
 	// sponsor.ajay.app.
 	sponsorblockClient sponsorblockFetcher
+	youtubeMetadata    youtubeMetadataFetcher
 
 	instagramProfileFetch instagramProfileFetchFn
 }
@@ -109,6 +110,10 @@ type Manager struct {
 // real package.
 type sponsorblockFetcher interface {
 	Fetch(ctx context.Context, videoID string) ([]sponsorblock.Segment, error)
+}
+
+type youtubeMetadataFetcher interface {
+	FetchVideoMetadata(context.Context, string, int, download.Opts) (db.VideoMetadataRefreshResult, error)
 }
 
 // NewManager creates a Manager; call StartAll to launch goroutines.
@@ -125,6 +130,7 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 		tempDownloadKick:        make(chan struct{}, 1),
 		discoveryKick:           make(chan struct{}, 1),
 		profileKick:             make(chan struct{}, 1),
+		videoMetadataKick:       make(chan struct{}, 1),
 		xStatusEnrich:           make(chan xfeed.StatusEnrichmentRequest, 1024),
 		ingestKick:              make(chan struct{}, 1),
 		feedScoringKick:         make(chan struct{}, 1),
@@ -135,7 +141,6 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 		activity:                NewActivityRing(200),
 		dlActivity:              NewActivityRing(100),
 		feedActivity:            NewActivityRing(200),
-		youtubeEnrichmentSlots:  make(chan struct{}, 2),
 		xStatusQueued:           make(map[string]time.Time),
 		downloadBackoff:         make(map[string]downloadPlatformBackoff),
 		downloadPlatformAt: map[db.DownloadLane]int{
@@ -155,6 +160,7 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 		ThumbDir: filepath.Join(cfg.Storage.StateRoot(), "thumbnails", "dearrow"),
 	}
 	m.sponsorblockClient = sponsorblock.NewClient(sponsorblock.DefaultBaseURL)
+	m.youtubeMetadata = m.downloader.YtDlp
 	m.downloader.SetMediaExecutor(cfg.Storage.MediaExecutor())
 	m.downloader.SetOperationSink(database)
 	return m
@@ -181,6 +187,7 @@ func (m *Manager) StartAll() {
 	m.launch("media_backfill", m.runMediaBackfillLoop)
 	m.launch("temp_download", m.runTempDownloadLoop)
 	m.launch("profile_refresh", m.runProfileJobLoop)
+	m.launch("video_metadata", m.runVideoMetadataLoop)
 	m.launch("scheduler", m.runScheduler)
 	m.launch("feed_order_invalidation", m.runFeedOrderInvalidationLoop)
 	m.launch("feed_scoring", m.runFeedScoringWorker)

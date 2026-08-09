@@ -1,4 +1,4 @@
-# renovate: packageName=yt-dlp pypiName=yt_dlp versioning=pep440 sha256=b094813404f87a9dd2186f00815231df32e5fd8a5403be0f807b3bb2d21a4432
-yt-dlp==2026.7.4
+# renovate: packageName=yt-dlp pypiName=yt_dlp versioning=pep440 sha256=776bf1ca11985dfb9a3ba3f7fbda021720c70a064e1125bca51e76d5f456dd1c
+yt-dlp==2026.8.4.234419.dev0
 # renovate: packageName=gallery-dl pypiName=gallery_dl versioning=pep440 sha256=b59f1c3b58783c9c904d38ba24cb64e2004341c84100903564913340fb97767f
 gallery-dl==1.32.1

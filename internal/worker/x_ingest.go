@@ -252,7 +252,7 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 		}
 		m.EmitFeed(xIngestActivitySource, fmt.Sprintf("Fetching @%s", handle), "info")
 		fetchStart := time.Now()
-		items, fetchErr := m.fetchXTimeline(ctx, ch.ChannelID, m.xTimelineLimit())
+		items, fetchErr := m.fetchXTimeline(ctx, ch.ChannelID, xFeedTimelineLimit(settings))
 		latencyMs := float64(time.Since(fetchStart).Milliseconds())
 
 		atomic.AddInt32(&m.ingestCycleDone, 1)
@@ -294,6 +294,9 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 					log.Printf("[x_ingest] %v", err)
 				} else {
 					m.KickMediaWork()
+				}
+				if err := m.EnforceXProfileHistoryRetentionForChannel(ch.ChannelID); err != nil {
+					log.Printf("[x_ingest] %v", err)
 				}
 				m.KickFeedScoring()
 			}
@@ -348,10 +351,14 @@ func (m *Manager) fetchXTimeline(ctx context.Context, handle string, limit int) 
 	return m.xFeedClient().FetchTimeline(ctx, handle, limit)
 }
 
-// xTimelineLimit is deliberately independent from media retention. It bounds
-// the post-history window acquired for each X profile; media lifecycle remains
-// owned by the separate media-download setting.
-func (m *Manager) xTimelineLimit() int {
+func xFeedTimelineLimit(settings *db.ChannelSettings) int {
+	if settings != nil && settings.MediaDownloadLimit > 0 {
+		return settings.MediaDownloadLimit
+	}
+	return 100
+}
+
+func (m *Manager) xProfileHistoryLimit() int {
 	if m == nil || m.db == nil {
 		return settings.IntDefault("x_profile_history_limit")
 	}
@@ -418,7 +425,7 @@ func (m *Manager) FetchOneChannel(ctx context.Context, channelID string) (int, e
 	}
 
 	settings, _ := m.db.GetChannelSettings(channelID)
-	items, err := m.fetchXTimeline(ctx, channelID, m.xTimelineLimit())
+	items, err := m.fetchXTimeline(ctx, channelID, m.xProfileHistoryLimit())
 	if err != nil {
 		if m.ReportExternalResult(err) {
 			return 0, err
@@ -435,6 +442,15 @@ func (m *Manager) FetchOneChannel(ctx context.Context, channelID string) (int, e
 	if len(filtered) == 0 {
 		return 0, nil
 	}
+	tweetIDs := make([]string, 0, len(filtered))
+	for _, item := range filtered {
+		tweetIDs = append(tweetIDs, item.TweetID)
+	}
+	existing, err := m.db.GetFeedItemsForTweetIDs(tweetIDs)
+	if err != nil {
+		return 0, fmt.Errorf("read existing profile history: %w", err)
+	}
+	profileHistoryOnly := newXProfileHistoryTweetIDs(filtered, existing, xFeedTimelineLimit(settings))
 
 	for i := range filtered {
 		filtered[i].ParseMedia()
@@ -447,9 +463,46 @@ func (m *Manager) FetchOneChannel(ctx context.Context, channelID string) (int, e
 	if err := m.reconcileXMediaRetentionChanges(result.XMediaRetentionChanges); err != nil {
 		return result.Processed, err
 	}
+	if _, err := m.db.MarkXProfileHistorySeen(profileHistoryOnly, time.Now().UnixMilli()); err != nil {
+		return result.Processed, fmt.Errorf("suppress profile history from feed: %w", err)
+	}
+	if err := m.EnforceXProfileHistoryRetentionForChannel(channelID); err != nil {
+		return result.Processed, err
+	}
 	m.KickMediaWork()
 	m.KickFeedScoring()
 	return result.Processed, nil
+}
+
+func newXProfileHistoryTweetIDs(items []model.FeedItem, existing map[string]model.FeedItem, feedLimit int) []string {
+	if feedLimit < 0 {
+		feedLimit = 0
+	}
+	ordered := append([]model.FeedItem(nil), items...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		left, right := ordered[i].PublishedAt, ordered[j].PublishedAt
+		if left == nil || left.IsZero() {
+			return false
+		}
+		if right == nil || right.IsZero() {
+			return true
+		}
+		if left.Equal(*right) {
+			return ordered[i].TweetID > ordered[j].TweetID
+		}
+		return left.After(*right)
+	})
+	var out []string
+	for index, item := range ordered {
+		if index < feedLimit {
+			continue
+		}
+		if _, alreadyStored := existing[item.TweetID]; alreadyStored {
+			continue
+		}
+		out = append(out, item.TweetID)
+	}
+	return out
 }
 
 // FetchOneFeedSource fetches one X list/community source through gallery-dl and

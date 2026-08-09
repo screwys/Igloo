@@ -547,27 +547,64 @@ func extractFilenamesFromRaw(result *ytdlp.Result) []string {
 	return paths
 }
 
-// FetchComments fetches comments for a URL via yt-dlp without re-downloading media.
-// Returns up to maxComments comments mapped to CommentInput for DB insertion.
+// FetchVideoMetadata fetches changing video metadata and comments without
+// re-downloading media. One yt-dlp call owns the consistent snapshot.
+func (y *YtDlpWrapper) FetchVideoMetadata(ctx context.Context, url string, maxComments int, opts Opts) (db.VideoMetadataRefreshResult, error) {
+	return y.fetchVideoMetadata(ctx, url, maxComments, opts, "youtube.metadata")
+}
+
+// FetchComments is the explicit comments-only API used by manual refresh and
+// diagnostics. Normal background refresh uses FetchVideoMetadata.
 func (y *YtDlpWrapper) FetchComments(ctx context.Context, url string, maxComments int, opts Opts) ([]db.CommentInput, error) {
+	result, err := y.fetchVideoMetadata(ctx, url, maxComments, opts, "youtube.comments")
+	return result.Comments, err
+}
+
+func (y *YtDlpWrapper) fetchVideoMetadata(ctx context.Context, url string, maxComments int, opts Opts, operation string) (db.VideoMetadataRefreshResult, error) {
 	start := time.Now()
 	result, err := fetchCommentsCommand(maxComments, opts).Run(ctx, url)
 	if err != nil {
-		y.recordYtDlpOperationWithCounts(ctx, "youtube.comments", url, start, err, opts, 0, 0, 0)
-		return nil, fmt.Errorf("yt-dlp comments: %w", err)
+		y.recordYtDlpOperationWithCounts(ctx, operation, url, start, err, opts, 0, 0, 0)
+		return db.VideoMetadataRefreshResult{}, fmt.Errorf("yt-dlp metadata: %w", err)
 	}
 
 	infos, err := result.GetExtractedInfo()
 	if err != nil || len(infos) == 0 {
 		if err == nil {
-			err = fmt.Errorf("yt-dlp comments: no results")
+			err = fmt.Errorf("yt-dlp metadata: no results")
 		}
-		y.recordYtDlpOperationWithCounts(ctx, "youtube.comments", url, start, err, opts, 0, 0, 0)
-		return nil, fmt.Errorf("yt-dlp comments: no results")
+		y.recordYtDlpOperationWithCounts(ctx, operation, url, start, err, opts, 0, 0, 0)
+		return db.VideoMetadataRefreshResult{}, fmt.Errorf("yt-dlp metadata: no results")
 	}
+	metadata := videoMetadataRefreshResult(infos[0])
+	if metadata.CommentCount != nil && *metadata.CommentCount > 0 && len(metadata.Comments) == 0 {
+		err := fmt.Errorf("yt-dlp metadata: expected comments but received none")
+		y.recordYtDlpOperationWithCounts(ctx, operation, url, start, err, opts, 0, 0, 0)
+		return db.VideoMetadataRefreshResult{}, err
+	}
+	y.recordYtDlpOperationWithCounts(ctx, operation, url, start, nil, opts, len(metadata.Comments), 0, 0)
+	return metadata, nil
+}
 
+func videoMetadataRefreshResult(info *ytdlp.ExtractedInfo) db.VideoMetadataRefreshResult {
+	var result db.VideoMetadataRefreshResult
+	if info == nil {
+		return result
+	}
+	if info.ViewCount != nil {
+		value := int64(*info.ViewCount)
+		result.ViewCount = &value
+	}
+	if info.LikeCount != nil {
+		value := int64(*info.LikeCount)
+		result.LikeCount = &value
+	}
+	if info.CommentCount != nil {
+		value := int64(*info.CommentCount)
+		result.CommentCount = &value
+	}
 	var out []db.CommentInput
-	for _, c := range infos[0].Comments {
+	for _, c := range info.Comments {
 		if c == nil {
 			continue
 		}
@@ -601,8 +638,8 @@ func (y *YtDlpWrapper) FetchComments(ctx context.Context, url string, maxComment
 		}
 		out = append(out, ci)
 	}
-	y.recordYtDlpOperationWithCounts(ctx, "youtube.comments", url, start, nil, opts, len(out), 0, 0)
-	return out, nil
+	result.Comments = out
+	return result
 }
 
 func (y *YtDlpWrapper) recordYtDlpOperationWithCounts(ctx context.Context, operation, url string, start time.Time, err error, opts Opts, items, files int, bytes int64) {

@@ -488,47 +488,10 @@ func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadWork, platfo
 		Timestamp: time.Now().Unix(),
 	})
 	if platform == "youtube" {
-		m.startYoutubePostDownloadEnrichment(sourceURL, job.VideoID, files.primaryKey, opts)
-	}
-}
-
-func (m *Manager) startYoutubePostDownloadEnrichment(sourceURL, videoID, videoPath string, opts download.Opts) {
-	if m == nil || m.youtubeEnrichmentSlots == nil {
-		return
-	}
-	parent := m.ctx
-	if parent == nil {
-		parent = context.Background()
-	}
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
-		select {
-		case m.youtubeEnrichmentSlots <- struct{}{}:
-		case <-parent.Done():
-			return
+		if err := m.QueueVideoMetadataRefresh(job.VideoID); err != nil {
+			log.Printf("[video-metadata] queue %s: %v", job.VideoID, err)
 		}
-		defer func() { <-m.youtubeEnrichmentSlots }()
-
-		enrichCtx, enrichCancel := context.WithTimeout(parent, time.Minute)
-		m.triggerYoutubeEnrichFetch(enrichCtx, videoID, videoPath, "youtube")
-		enrichCancel()
-
-		commentsCtx, commentsCancel := context.WithTimeout(parent, 2*time.Minute)
-		comments, err := m.downloader.YtDlp.FetchComments(commentsCtx, sourceURL, download.DefaultCommentFetchLimit, opts)
-		commentsCancel()
-		if err != nil {
-			log.Printf("[downloadpool] comments fetch failed for %s: %v", videoID, err)
-			return
-		}
-		inserted, err := m.db.AddComments(videoID, comments)
-		if err != nil {
-			log.Printf("[downloadpool] store comments for %s: %v", videoID, err)
-			return
-		}
-		m.KickMediaWork()
-		log.Printf("[downloadpool] fetched %d comments for %s", inserted, videoID)
-	}()
+	}
 }
 
 func (m *Manager) failDownloadJob(job db.DownloadWork, err error) {

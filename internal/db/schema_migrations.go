@@ -24,6 +24,14 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260809_add_video_metadata_jobs",
+		apply: addVideoMetadataJobs,
+	},
+	{
+		name:  "20260809_hide_x_profile_history_from_feed",
+		apply: hideXProfileHistoryFromFeed,
+	},
+	{
 		name:  "20260809_retire_feed_items_pin",
 		apply: retireFeedItemsPin,
 	},
@@ -59,6 +67,59 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addVideoMetadataJobs(tx *sql.Tx) error {
+	if _, err := tx.Exec(videoMetadataJobsTableStatement()); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DROP INDEX IF EXISTS idx_video_metadata_jobs_ready`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_video_metadata_jobs_ready ON video_metadata_jobs(status, next_attempt_at_ms, lease_until_ms, requested_at_ms)`); err != nil {
+		return err
+	}
+	nowMs := time.Now().UnixMilli()
+	_, err := tx.Exec(`
+		INSERT OR IGNORE INTO video_metadata_jobs (
+			video_id, status, next_attempt_at_ms, requested_at_ms, updated_at_ms
+		)
+		SELECT video_id, 'pending', 0, ?, ?
+		FROM videos
+		WHERE owner_kind = 'youtube_video'
+		  AND downloaded_at >= ?
+	`, nowMs, nowMs, nowMs-int64(48*time.Hour/time.Millisecond))
+	return err
+}
+
+func hideXProfileHistoryFromFeed(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		WITH ranked AS (
+			SELECT fi.tweet_id,
+			       ROW_NUMBER() OVER (
+			         PARTITION BY fi.source_channel_id, fi.fetched_at
+			         ORDER BY fi.published_at DESC, fi.tweet_id DESC
+			       ) AS batch_position,
+			       COUNT(*) OVER (
+			         PARTITION BY fi.source_channel_id, fi.fetched_at
+			       ) AS batch_size,
+			       COALESCE(
+			         NULLIF(cs.media_download_limit, 0),
+			         NULLIF(CAST((SELECT value FROM settings WHERE key = 'media_download_limit_default') AS INTEGER), 0),
+			         20
+			       ) AS feed_limit
+			FROM feed_items fi
+			LEFT JOIN channel_settings cs ON cs.channel_id = fi.source_channel_id
+			WHERE fi.source_channel_id LIKE 'twitter_%'
+			  AND fi.fetched_at >= 1786177380000
+		)
+		INSERT INTO feed_seen (tweet_id, seen_at)
+		SELECT tweet_id, ?
+		FROM ranked
+		WHERE batch_size > feed_limit AND batch_position > feed_limit
+		ON CONFLICT(tweet_id) DO NOTHING
+	`, time.Now().UnixMilli())
+	return err
 }
 
 func retireFeedItemsPin(tx *sql.Tx) error {

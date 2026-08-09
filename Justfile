@@ -2,15 +2,15 @@ set default-list
 
 # Build the server binary and generated web assets without restarting it.
 build:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" scripts/dev/build.sh
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/build.sh
 
 # Build the server and restart the local service.
 restart:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" scripts/dev/build.sh restart
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/build.sh restart
 
 # Build the server, reload its systemd unit, and restart the local service.
 restart-daemon:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" scripts/dev/build.sh full
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/build.sh full
 
 # Build server assets and install/relaunch the Android app on a connected device.
 build-android-with-server:
@@ -22,17 +22,21 @@ restart-and-build-android:
     just restart
     just build-android
 
-# Run every repository gate; stale generated files may be regenerated before the check.
+# Run the proportional local gate for files changed from HEAD.
 test:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" scripts/dev/test-full.sh
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/test-changed.sh
+
+# Run every repository gate; stale generated files may be regenerated before the check.
+test-full:
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/test-full.sh
 
 # Run the Go test suite only.
 test-go:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" go test ./...
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test ./...
 
 # Run Go tests for one package, optionally matching a test-name regexp.
 test-go-package package filter="":
-    if [ -n {{ quote(filter) }} ]; then GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" go test {{ quote(package) }} -run {{ quote(filter) }} -count=1; else GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" go test {{ quote(package) }}; fi
+    if [ -n {{ quote(filter) }} ]; then GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test {{ quote(package) }} -run {{ quote(filter) }} -count=1; else GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test {{ quote(package) }}; fi
 
 # Run Android JVM tests, optionally for one class: just test-android com.example.Test
 test-android filter="":
@@ -62,15 +66,15 @@ android-compile:
 
 # Run the throwaway-server web test.
 test-web:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" scripts/dev/web-test.sh
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/web-test.sh
 
 # Regenerate templ and bundled assets.
 check-drift:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" scripts/dev/drift-check.sh --write
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/drift-check.sh --write
 
 # Validate the SQLite schema and Android Room mirror contract.
 check-schema:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" scripts/dev/schema-check.sh
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/schema-check.sh
 
 # Build an image and exercise its basic container runtime contract.
 check-container:
@@ -78,15 +82,15 @@ check-container:
 
 # Verify that the shared catalog and generated Android resources are current.
 i18n-check:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" go test ./scripts/dev/i18n_sync_catalog -run TestGeneratedCatalogOutputsAreCurrent -count=1
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test ./scripts/dev/i18n_sync_catalog -run TestGeneratedCatalogOutputsAreCurrent -count=1
 
 # Regenerate the shared catalog and Android string resources.
 i18n-sync:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" go run ./scripts/dev/i18n_sync_catalog
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go run ./scripts/dev/i18n_sync_catalog
 
 # Report runtime paths, cache state, and local health through the Igloo doctor.
 doctor:
-    GOCACHE="${GOCACHE:-/tmp/igloo-go-cache}" scripts/dev/doctor.sh
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/doctor.sh
 
 # Check the working-tree diff for whitespace errors.
 diff-check:

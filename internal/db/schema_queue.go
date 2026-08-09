@@ -60,8 +60,27 @@ func schemaQueueStatements() []string {
 			started_at_ms      INTEGER NOT NULL DEFAULT 0
 		)`,
 
+		videoMetadataJobsTableStatement(),
+
 		feedOrderInvalidationQueueStatement(),
 	}
+}
+
+func videoMetadataJobsTableStatement() string {
+	return `CREATE TABLE IF NOT EXISTS video_metadata_jobs (
+		video_id            TEXT PRIMARY KEY,
+		status              TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'done', 'blocked')),
+		checked_at_ms       INTEGER NOT NULL DEFAULT 0,
+		video_age_at_check  TEXT NOT NULL DEFAULT '',
+		attempts            INTEGER NOT NULL DEFAULT 0,
+		next_attempt_at_ms  INTEGER NOT NULL DEFAULT 0,
+		last_error          TEXT NOT NULL DEFAULT '',
+		lease_owner         TEXT NOT NULL DEFAULT '',
+		lease_until_ms      INTEGER NOT NULL DEFAULT 0,
+		requested_at_ms     INTEGER NOT NULL DEFAULT 0,
+		updated_at_ms       INTEGER NOT NULL DEFAULT 0,
+		FOREIGN KEY (video_id) REFERENCES videos(video_id) ON DELETE CASCADE
+	)`
 }
 
 func feedOrderInvalidationQueueStatement() string {

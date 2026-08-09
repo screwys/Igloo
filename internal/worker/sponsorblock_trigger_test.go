@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/screwys/igloo/internal/dearrow"
 	"github.com/screwys/igloo/internal/sponsorblock"
@@ -66,6 +67,11 @@ func TestYoutubeDownloadEnrichmentFetchesDearrowAndSponsorBlock(t *testing.T) {
 	if err != nil || checked == nil {
 		t.Fatalf("GetSponsorBlockChecked: %v (checked=%v)", err, checked)
 	}
+
+	m.triggerYoutubeEnrichFetch(t.Context(), "v1", "", "youtube")
+	if daClient.calls() != 1 || sbStub.calls() != 1 {
+		t.Fatalf("fresh component checks repeated: dearrow=%d sponsorblock=%d", daClient.calls(), sbStub.calls())
+	}
 }
 
 func TestFetchSponsorBlockMarksCheckedOnError(t *testing.T) {
@@ -94,5 +100,25 @@ func TestFetchSponsorBlockSkipsNilClient(t *testing.T) {
 	checked, _ := m.db.GetSponsorBlockChecked("v1")
 	if checked != nil {
 		t.Error("SB-checked row written despite nil client")
+	}
+}
+
+func TestVideoMetadataComponentFreshnessStopsAfterFinalOldCheck(t *testing.T) {
+	now := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	published := now.Add(-72 * time.Hour).UnixMilli()
+	if !videoMetadataComponentDue(0, published, now.UnixMilli()) {
+		t.Fatal("unchecked old component should get one fetch")
+	}
+	if videoMetadataComponentDue(now.Add(-time.Hour).UnixMilli(), published, now.UnixMilli()) {
+		t.Fatal("component checked after the video became old should be terminal")
+	}
+
+	recentPublished := now.Add(-30 * time.Hour).UnixMilli()
+	checked := now.Add(-25 * time.Hour).UnixMilli()
+	if !videoMetadataComponentDue(checked, recentPublished, now.UnixMilli()) {
+		t.Fatal("young component should refresh after 24 hours")
+	}
+	if videoMetadataComponentDue(now.Add(-time.Hour).UnixMilli(), recentPublished, now.UnixMilli()) {
+		t.Fatal("recent component check should not refresh yet")
 	}
 }

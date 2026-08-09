@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -400,6 +401,62 @@ func TestOpenBackfillsVideoFetchHistory(t *testing.T) {
 	}
 	if fetchedAtMs != 1234 {
 		t.Fatalf("fetched_at_ms = %d, want 1234", fetchedAtMs)
+	}
+}
+
+func TestOpenQueuesRecentYouTubeMetadata(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "igloo.db")
+	store, err := OpenPath(path, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nowMs := time.Now().UnixMilli()
+	if err := store.ExecRaw(`
+		INSERT INTO videos (video_id, channel_id, owner_kind, downloaded_at) VALUES
+			('sample_recent_video', 'youtube_sample', 'youtube_video', ?),
+			('sample_old_video', 'youtube_sample', 'youtube_video', ?),
+			('sample_other_video', 'tiktok_sample', 'tiktok_video', ?)
+	`, nowMs, nowMs-int64(7*24*time.Hour/time.Millisecond), nowMs); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`DROP TABLE video_metadata_jobs`); err != nil {
+		_ = conn.Close()
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`DELETE FROM schema_migrations WHERE name = '20260809_add_video_metadata_jobs'`); err != nil {
+		_ = conn.Close()
+		t.Fatal(err)
+	}
+	var remaining int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE name = '20260809_add_video_metadata_jobs'`).Scan(&remaining); err != nil || remaining != 0 {
+		_ = conn.Close()
+		t.Fatalf("clear video metadata migration ledger = (%d, %v)", remaining, err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = OpenPath(path, root)
+	if err != nil {
+		t.Fatalf("OpenPath legacy metadata schema: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	var videoID string
+	if err := store.QueryRow(`SELECT video_id FROM video_metadata_jobs`).Scan(&videoID); err != nil {
+		t.Fatal(err)
+	}
+	if videoID != "sample_recent_video" {
+		t.Fatalf("queued metadata video = %q, want sample_recent_video", videoID)
 	}
 }
 

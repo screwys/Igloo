@@ -4374,6 +4374,7 @@ select.input.themed-select-native {
 .player-comments-refresh-btn:disabled { opacity: 0.6; cursor: wait; }
 .player-comments-refresh-btn svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .player-comment-card { position: relative; border-color: rgba(255,255,255,0.12) !important; background: var(--bg-primary) !important; box-shadow: none; }
+.player-comment-card:hover { transform: none; }
 .player-comment-card .player-channel-avatar-wrap { width: 24px !important; height: 24px !important; border-radius: 50%; overflow: hidden; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 24px; }
 .player-comment-card .player-channel-avatar { width: 100%; height: 100%; object-fit: cover; display: block; }
 .player-comment-card .player-channel-avatar-fallback { width: 100%; height: 100%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; line-height: 1; color: var(--text-primary); background: rgba(var(--accent-primary-rgb), 0.16); border-radius: 50%; }

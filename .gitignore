@@ -32,6 +32,7 @@ __pycache__/
 # Local tool state
 .codex
 .mcp.local.json
+/.local/go-cache/
 .agents/*
 !.agents/skills/
 .agents/skills/*

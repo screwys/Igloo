@@ -922,6 +922,40 @@ func (db *DB) MarkSeen(tweetIDs []string) (int, error) {
 	return result.Affected, err
 }
 
+// MarkXProfileHistorySeen keeps posts acquired only for profile history out of
+// the ordinary feed without expanding the seen state across their threads.
+func (db *DB) MarkXProfileHistorySeen(tweetIDs []string, seenAtMs int64) (int, error) {
+	tweetIDs = uniqueStrings(tweetIDs)
+	if len(tweetIDs) == 0 {
+		return 0, nil
+	}
+	seenAtMs = normalizeNowMs(seenAtMs)
+	affected := 0
+	for _, chunk := range stringChunks(tweetIDs, 400) {
+		err := db.WithWrite(func(tx *sql.Tx) error {
+			stmt, err := tx.Prepare(`
+				INSERT INTO feed_seen (tweet_id, seen_at) VALUES (?, ?)
+				ON CONFLICT(tweet_id) DO UPDATE SET seen_at = MAX(feed_seen.seen_at, excluded.seen_at)
+			`)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = stmt.Close() }()
+			for _, tweetID := range chunk {
+				if _, err := stmt.Exec(tweetID, seenAtMs); err != nil {
+					return err
+				}
+				affected++
+			}
+			return nil
+		})
+		if err != nil {
+			return affected, err
+		}
+	}
+	return affected, nil
+}
+
 func expandSeenConversationIDsTx(tx *sql.Tx, tweetIDs []string) ([]string, error) {
 	if len(tweetIDs) == 0 {
 		return nil, nil

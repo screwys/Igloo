@@ -33,6 +33,7 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 	"channels":                    schemaLifecycleArchive,
 	"download_queue":              schemaLifecycleQueue,
 	"temp_download_queue":         schemaLifecycleQueue,
+	"video_metadata_jobs":         schemaLifecycleQueue,
 	"video_desires":               schemaLifecycleMaintainedState,
 	"downloader_operations":       schemaLifecycleDiagnostic,
 	"feed_item_sources":           schemaLifecycleArchive,

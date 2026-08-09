@@ -7,29 +7,30 @@ import (
 
 func TestStripVideoMetadata(t *testing.T) {
 	raw := map[string]any{
-		"duration":     30.0,
-		"width":        1080,
-		"height":       1920,
-		"vcodec":       "h264",
-		"view_count":   5000.0,
-		"like_count":   100.0,
-		"webpage_url":  "https://example.com/video",
-		"upload_date":  "20260101",
-		"slides":       []any{map[string]any{"path": "a.jpg"}},
-		"coauthors":    []any{map[string]any{"username": "collab_one", "full_name": "Collab One"}},
-		"tagged_users": []any{map[string]any{"username": "tagged_one", "full_name": "Tagged One"}},
-		"formats":      []any{"a", "b"},
-		"thumbnails":   []any{"x"},
-		"http_headers": map[string]any{"User-Agent": "test"},
-		"description":  "long text",
-		"_type":        "video",
-		"channel":      "someone",
+		"duration":      30.0,
+		"width":         1080,
+		"height":        1920,
+		"vcodec":        "h264",
+		"view_count":    5000.0,
+		"like_count":    100.0,
+		"comment_count": 25.0,
+		"webpage_url":   "https://example.com/video",
+		"upload_date":   "20260101",
+		"slides":        []any{map[string]any{"path": "a.jpg"}},
+		"coauthors":     []any{map[string]any{"username": "collab_one", "full_name": "Collab One"}},
+		"tagged_users":  []any{map[string]any{"username": "tagged_one", "full_name": "Tagged One"}},
+		"formats":       []any{"a", "b"},
+		"thumbnails":    []any{"x"},
+		"http_headers":  map[string]any{"User-Agent": "test"},
+		"description":   "long text",
+		"_type":         "video",
+		"channel":       "someone",
 	}
 
 	stripped := StripVideoMetadata(raw)
 
-	if len(stripped) != 11 {
-		t.Errorf("expected 11 keys, got %d", len(stripped))
+	if len(stripped) != 12 {
+		t.Errorf("expected 12 keys, got %d", len(stripped))
 	}
 	if stripped["duration"] != 30.0 {
 		t.Errorf("duration = %v", stripped["duration"])

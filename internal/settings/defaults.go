@@ -95,7 +95,7 @@ func ClampBackupKeepCount(n int) int {
 const MaxXProfileHistoryLimit = 10000
 
 // ClampXProfileHistoryLimit bounds X profile history to a practical database
-// and fetch window while still allowing a complete local profile view.
+// window while still allowing a complete local profile view.
 func ClampXProfileHistoryLimit(n int) int {
 	if n < 1 {
 		return 1

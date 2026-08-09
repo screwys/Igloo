@@ -10,7 +10,7 @@
 
 - Run routine build, test, generated-output, Android, and release workflows through `just` from the repository root. Bare `just` lists the recipes and their side effects.
 - Recipes delegate to the existing scripts; do not reconstruct script combinations by hand. Use a raw command only for installer bootstrap, read-only evidence, an exact CI reproduction, a partial-release recovery, or a narrowly scoped proof that has no recipe.
-- `just test` is the full completion gate. `just restart` verifies the local server path but does not replace tests. `just build-android` builds, installs, and relaunches the app, so never use it as a generic Android test command.
+- `just test` is the proportional local gate for files changed from `HEAD`. Use `just test-full` only for broad or cross-client changes, releases, publication, an explicit full-suite request, or when focused evidence leaves a concrete integration risk. `just restart` verifies the local server path but does not replace tests. `just build-android` builds, installs, and relaunches the app, so never use it as a generic Android test command.
 - Release recipes remain explicit: only run `just release <patch|minor|major> "<user summary>"` or `just release-local ...` after the user has supplied both the requested bump and exact summary. Never invent public release text.
 
 ## Evidence
@@ -73,12 +73,12 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 
 ## Test Gates
 
-- Use focused tests while developing or proving a narrow change, but use
-  `just test` for full-suite completion claims.
+- Use focused tests while developing or proving a narrow change, then run
+  `just test` for the proportional changed-file gate.
 - For full-suite verification, do not treat raw `go test ./...` or Android
   `BUILD SUCCESSFUL` output as enough. Check for skipped tests and ignored
   errors explicitly.
-- Run `just test` for full-suite verification. It runs Go tests
+- Run `just test-full` for full-suite verification. It runs Go tests
   with JSON output, fails/reports real skipped Go tests, runs the pinned
   static and security checks, runs the Android warning-aware test wrapper,
   inspects Android XML for failures/errors/skips, and reports Kotlin/JVM
@@ -121,7 +121,7 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 - For web UI bugs, inspect the live DOM before source: element HTML, computed visibility, layout box, inline style, and classes.
 - For missing avatars, banners, names, bios, or hover profile cards, separate presentation bugs from readiness bugs. A presentation fix is valid only when the DB row and cached file already existed before render; otherwise fix the source path: parser, ingest batch, identity seed, profile refresh candidate query, worker queue/backfill, or failed download retry.
 - After server, web, static, or component changes that affect the running app, run `just restart`.
-- For Go changes, run `just test-go`; for full-suite claims, use `just test`.
+- For narrow Go changes, run focused package tests and `just test`. Use `just test-go` when all Go packages need test execution, and `just test-full` only for the exhaustive cross-client gate.
 
 ## Android
 
@@ -136,12 +136,14 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 - Treat Android JVM final-field mutation warnings as test failures. Replace
   concrete-class mocks with fakes/interfaces rather than adding JVM flags to
   silence the warning.
-- Do not run a separate full `just test-android` after `just test`
+- Do not run a separate full `just test-android` after `just test-full`
   just to duplicate full-suite proof; run it separately when debugging Android
   failures or when Android-only output is needed.
-- If any file under `android/` changes, `just build-android` is the required final
+- If Android app source, resources, manifest, Gradle build configuration, or Room schema changes, `just build-android` is the required final
   Android proof before final response or commit. It builds, installs, and
   relaunches the app on the device. Do not treat `just test-android`, a focused
   Gradle test, or `BUILD SUCCESSFUL` from compilation as a substitute. If
   `just build-android` cannot run because no device or Android tool is available,
-  say that explicitly in the final response.
+  say that explicitly in the final response. Host-only Android scripts such as
+  `android/test.sh` and `android/build.sh` require shell validation and the
+  relevant script behavior proof, not an APK build/install.

@@ -21,7 +21,7 @@ mkdir -p "$GRADLE_USER_HOME"
 if [ "${IGLOO_ANDROID_SCRIPT_LOCK_HELD:-}" != "1" ]; then
     mkdir -p "$SCRIPT_DIR/.gradle-home"
     export IGLOO_ANDROID_SCRIPT_LOCK_HELD=1
-    exec flock "$SCRIPT_DIR/.gradle-home/igloo-android.lock" "$SCRIPT_DIR/$(basename "$0")" "$@"
+    exec flock --close "$SCRIPT_DIR/.gradle-home/igloo-android.lock" "$SCRIPT_DIR/$(basename "$0")" "$@"
 fi
 
 test_args=(":app:testDevtestUnitTest")

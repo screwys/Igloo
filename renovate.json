@@ -94,6 +94,13 @@
       "prPriority": 10,
       "groupName": "downloader runtime dependencies",
       "groupSlug": "downloader-runtime"
+    },
+    {
+      "description": "Follow yt-dlp nightly releases.",
+      "matchManagers": ["custom.regex"],
+      "matchPackageNames": ["yt-dlp"],
+      "ignoreUnstable": false,
+      "respectLatest": false
     }
   ]
 }

@@ -2,6 +2,7 @@ package download
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -267,5 +268,31 @@ func TestParseCommentsJSONPreservesRepliesAndLikes(t *testing.T) {
 	}
 	if comments[1].LikeCount != 7 {
 		t.Fatalf("reply like count = %d, want 7", comments[1].LikeCount)
+	}
+}
+
+func TestVideoMetadataRefreshResultKeepsCountsAndCommentsTogether(t *testing.T) {
+	var info ytdlp.ExtractedInfo
+	if err := json.Unmarshal([]byte(`{
+		"view_count":1234,
+		"like_count":56,
+		"comment_count":1,
+		"comments":[{"id":"sample_comment","author":"Sample","text":"hello","like_count":3}]
+	}`), &info); err != nil {
+		t.Fatal(err)
+	}
+
+	result := videoMetadataRefreshResult(&info)
+	if result.ViewCount == nil || *result.ViewCount != 1234 {
+		t.Fatalf("view count = %v", result.ViewCount)
+	}
+	if result.LikeCount == nil || *result.LikeCount != 56 {
+		t.Fatalf("like count = %v", result.LikeCount)
+	}
+	if result.CommentCount == nil || *result.CommentCount != 1 {
+		t.Fatalf("comment count = %v", result.CommentCount)
+	}
+	if len(result.Comments) != 1 || result.Comments[0].CommentID != "sample_comment" {
+		t.Fatalf("comments = %+v", result.Comments)
 	}
 }

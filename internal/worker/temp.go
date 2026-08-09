@@ -292,19 +292,25 @@ func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel b
 	// creating a synchronous render-time identity path.
 	m.KickProfileJobs()
 
-	// Synchronously fetch comments so they appear on first player page load.
-	commentsCtx, commentsCancel := context.WithTimeout(ctx, 2*time.Minute)
-	comments, commentsErr := m.downloader.YtDlp.FetchComments(commentsCtx, rawURL, download.DefaultCommentFetchLimit, opts)
-	commentsCancel()
-	if commentsErr != nil {
-		log.Printf("[temp] comments fetch failed for %s: %v", videoID, commentsErr)
-	} else if len(comments) > 0 {
-		inserted, err := m.db.AddComments(videoID, comments)
-		if err != nil {
-			log.Printf("[temp] store comments for %s: %v", videoID, err)
-		} else {
-			m.KickMediaWork()
-			log.Printf("[temp] fetched %d comments for %s", inserted, videoID)
+	if platform == "youtube" {
+		if err := m.QueueVideoMetadataRefresh(videoID); err != nil {
+			log.Printf("[video-metadata] queue temp video %s: %v", videoID, err)
+		}
+	} else {
+		// TikTok does not use the YouTube metadata owner.
+		commentsCtx, commentsCancel := context.WithTimeout(ctx, 2*time.Minute)
+		comments, commentsErr := m.downloader.YtDlp.FetchComments(commentsCtx, rawURL, download.DefaultCommentFetchLimit, opts)
+		commentsCancel()
+		if commentsErr != nil {
+			log.Printf("[temp] comments fetch failed for %s: %v", videoID, commentsErr)
+		} else if len(comments) > 0 {
+			inserted, err := m.db.AddComments(videoID, comments)
+			if err != nil {
+				log.Printf("[temp] store comments for %s: %v", videoID, err)
+			} else {
+				m.KickMediaWork()
+				log.Printf("[temp] fetched %d comments for %s", inserted, videoID)
+			}
 		}
 	}
 

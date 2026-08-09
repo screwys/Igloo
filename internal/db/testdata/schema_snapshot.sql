@@ -142,6 +142,9 @@ CREATE INDEX idx_video_desires_source_position ON video_desires(source_channel_i
 -- index: idx_video_desires_video on video_desires
 CREATE INDEX idx_video_desires_video ON video_desires(video_id, lane, source_position);
 
+-- index: idx_video_metadata_jobs_ready on video_metadata_jobs
+CREATE INDEX idx_video_metadata_jobs_ready ON video_metadata_jobs(status, next_attempt_at_ms, lease_until_ms, requested_at_ms);
+
 -- index: idx_video_repost_sources_reposter on video_repost_sources
 CREATE INDEX idx_video_repost_sources_reposter ON video_repost_sources(reposter_channel_id);
 
@@ -336,6 +339,9 @@ CREATE TABLE video_desires ( source_channel_id TEXT NOT NULL, source_component T
 
 -- table: video_fetch_history on video_fetch_history
 CREATE TABLE video_fetch_history ( video_id TEXT PRIMARY KEY, fetched_at_ms INTEGER NOT NULL DEFAULT 0 ) WITHOUT ROWID;
+
+-- table: video_metadata_jobs on video_metadata_jobs
+CREATE TABLE video_metadata_jobs ( video_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'done', 'blocked')), checked_at_ms INTEGER NOT NULL DEFAULT 0, video_age_at_check TEXT NOT NULL DEFAULT '', attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL DEFAULT '', lease_until_ms INTEGER NOT NULL DEFAULT 0, requested_at_ms INTEGER NOT NULL DEFAULT 0, updated_at_ms INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (video_id) REFERENCES videos(video_id) ON DELETE CASCADE );
 
 -- table: video_repost_sources on video_repost_sources
 CREATE TABLE video_repost_sources ( video_id TEXT NOT NULL, reposter_channel_id TEXT NOT NULL, reposted_at_ms INTEGER NOT NULL DEFAULT 0, first_seen_at_ms INTEGER NOT NULL DEFAULT 0, updated_at_ms INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (video_id, reposter_channel_id) );

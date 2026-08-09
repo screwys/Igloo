@@ -289,8 +289,10 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				slog.Error("ExpandXMediaRetention", "err", err)
 			}
 		}
-		if s.db.IntSetting("x_profile_history_limit") != previousXProfileHistoryLimit {
-			s.workers.TriggerPlatformRefresh("twitter")
+		if s.db.IntSetting("x_profile_history_limit") < previousXProfileHistoryLimit {
+			if err := s.workers.EnforceXProfileHistoryRetention(); err != nil {
+				slog.Error("EnforceXProfileHistoryRetention", "err", err)
+			}
 		}
 	}
 

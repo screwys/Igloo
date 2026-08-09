@@ -38,6 +38,11 @@ test("runtime downloader tool versions come from shared requirements", () => {
 
   assert.match(requirements, /^yt-dlp==[^\s]+$/m);
   assert.match(requirements, /^gallery-dl==[^\s]+$/m);
+  assert.match(
+    runtimeVersion("yt-dlp"),
+    /\.dev0$/,
+    "yt-dlp must stay on the nightly PyPI release channel",
+  );
   assert.match(dockerfile, /COPY requirements-runtime\.txt \/tmp\/requirements-runtime\.txt/);
   assert.match(dockerfile, /pip install --no-cache-dir -r \/tmp\/requirements-runtime\.txt/);
   assert.doesNotMatch(dockerfile, /ARG YT_DLP_VERSION|ARG GALLERY_DL_VERSION/);
@@ -82,4 +87,13 @@ test("runtime downloader tool versions come from shared requirements", () => {
       },
     ],
   );
+  const ytDlpNightlyRule = renovate.packageRules.find(
+    (rule) =>
+      rule.matchManagers?.includes("custom.regex") &&
+      rule.matchPackageNames?.length === 1 &&
+      rule.matchPackageNames[0] === "yt-dlp",
+  );
+  assert.ok(ytDlpNightlyRule, "Renovate must carry a yt-dlp nightly rule");
+  assert.equal(ytDlpNightlyRule.ignoreUnstable, false);
+  assert.equal(ytDlpNightlyRule.respectLatest, false);
 });

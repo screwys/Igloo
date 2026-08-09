@@ -242,6 +242,7 @@ type VideoMetadata struct {
 	ViewCountLabel string             `json:"view_count_label"`
 	LikeCount      int64              `json:"like_count"`
 	LikeCountLabel string             `json:"like_count_label"`
+	CommentCount   int64              `json:"comment_count"`
 	Duration       int                `json:"duration"`
 	Width          int                `json:"width"`
 	Height         int                `json:"height"`
@@ -391,7 +392,7 @@ func StripVideoMetadata(raw map[string]any) map[string]any {
 	}
 	keep := []string{
 		"duration", "width", "height", "vcodec",
-		"view_count", "view_count_label", "like_count", "like_count_label", "webpage_url", "upload_date", "slides",
+		"view_count", "view_count_label", "like_count", "like_count_label", "comment_count", "webpage_url", "upload_date", "slides",
 		"coauthors", "tagged_users",
 	}
 	stripped := make(map[string]any, len(keep))

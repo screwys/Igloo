@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/download"
 )
 
@@ -72,22 +73,37 @@ func (m *Manager) triggerDearrowFetch(ctx context.Context, videoID, videoRelPath
 	}
 }
 
-// triggerYoutubeEnrichFetch runs both a DeArrow and SponsorBlock fetch for
-// videoID. Called from the download-complete hook so a freshly downloaded
-// YouTube video gets both kinds of data populated under a single rate limit.
-// Silently no-ops for non-YouTube platforms.
+// triggerYoutubeEnrichFetch runs the DeArrow and SponsorBlock parts of the
+// durable video-metadata pass. Silently no-ops for non-YouTube platforms.
 func (m *Manager) triggerYoutubeEnrichFetch(ctx context.Context, videoID, videoRelPath, platform string) {
 	if platform != "youtube" {
 		return
 	}
-	m.triggerDearrowFetch(ctx, videoID, videoRelPath, platform)
-
-	// Only fetch SB if we don't already have a record for this video.
-	if existing, _ := m.db.GetSponsorBlockChecked(videoID); existing == nil {
-		var publishedAtMs int64
-		if v, err := m.db.GetVideo(videoID); err == nil && v != nil && v.PublishedAt != nil {
-			publishedAtMs = v.PublishedAt.UnixMilli()
+	var dearrowCheckedAtMs int64
+	var publishedAtMs int64
+	if v, err := m.db.GetVideo(videoID); err == nil && v != nil && v.PublishedAt != nil {
+		publishedAtMs = v.PublishedAt.UnixMilli()
+		if v.DearrowCheckedAtMs != nil {
+			dearrowCheckedAtMs = *v.DearrowCheckedAtMs
 		}
+	}
+	nowMs := time.Now().UnixMilli()
+	if videoMetadataComponentDue(dearrowCheckedAtMs, publishedAtMs, nowMs) {
+		m.triggerDearrowFetch(ctx, videoID, videoRelPath, platform)
+	}
+
+	checked, _ := m.db.GetSponsorBlockChecked(videoID)
+	if checked == nil || (checked.VideoAgeAtCheck != "old" && nowMs-checked.CheckedAtMs >= db.VideoMetadataRefresh.Milliseconds()) {
 		m.fetchSponsorBlockFor(ctx, videoID, publishedAtMs)
 	}
+}
+
+func videoMetadataComponentDue(checkedAtMs, publishedAtMs, nowMs int64) bool {
+	if checkedAtMs <= 0 {
+		return true
+	}
+	if publishedAtMs <= 0 || checkedAtMs-publishedAtMs >= db.VideoMetadataYoungAge.Milliseconds() {
+		return false
+	}
+	return nowMs-checkedAtMs >= db.VideoMetadataRefresh.Milliseconds()
 }

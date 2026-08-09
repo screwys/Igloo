@@ -55,6 +55,39 @@ func (m *Manager) enforceXFeedSourceLimit(sourceID string, limit int) error {
 	return nil
 }
 
+func (m *Manager) EnforceXProfileHistoryRetentionForChannel(channelID string) error {
+	if m == nil || m.db == nil {
+		return nil
+	}
+	m.xRetentionMu.Lock()
+	defer m.xRetentionMu.Unlock()
+	result, err := m.db.PruneXProfileHistory(channelID, m.xProfileHistoryLimit(), time.Now().UnixMilli())
+	if err != nil {
+		return fmt.Errorf("prune X profile history %s: %w", channelID, err)
+	}
+	m.finishXMediaRetention(result)
+	return nil
+}
+
+func (m *Manager) EnforceXProfileHistoryRetention() error {
+	if m == nil || m.db == nil {
+		return nil
+	}
+	channels, err := m.db.GetSubscribedChannels()
+	if err != nil {
+		return err
+	}
+	for _, channel := range channels {
+		if channel.Platform != "twitter" {
+			continue
+		}
+		if err := m.EnforceXProfileHistoryRetentionForChannel(channel.ChannelID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *Manager) EnforceXMediaRetentionForChannel(channelID string) error {
 	if m == nil || m.db == nil {
 		return nil

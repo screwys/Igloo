@@ -48,6 +48,7 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 		"CREATE INDEX IF NOT EXISTS idx_download_queue_ready ON download_queue(status, next_attempt_at_ms, lease_until_ms, added_at_ms)",
 		"CREATE INDEX IF NOT EXISTS idx_download_queue_lease ON download_queue(status, lease_until_ms)",
 		"CREATE INDEX IF NOT EXISTS idx_temp_download_queue_ready ON temp_download_queue(status, next_attempt_at_ms, lease_until_ms, added_at_ms)",
+		"CREATE INDEX IF NOT EXISTS idx_video_metadata_jobs_ready ON video_metadata_jobs(status, next_attempt_at_ms, lease_until_ms, requested_at_ms)",
 		"CREATE INDEX IF NOT EXISTS idx_translation_jobs_ready ON translation_jobs(target_lang, status, priority DESC, updated_at, tweet_id, field, next_attempt_at)",
 		"CREATE INDEX IF NOT EXISTS idx_feed_items_author_fetched ON feed_items(channel_id, fetched_at DESC, published_at DESC, tweet_id DESC) WHERE channel_id IS NOT NULL AND channel_id != ''",
 		"CREATE INDEX IF NOT EXISTS idx_feed_items_fetched ON feed_items(fetched_at DESC, tweet_id DESC)",
@@ -175,7 +176,7 @@ func schemaSignature(conn *sql.DB) ([]string, error) {
 			signature = append(signature, strings.Join([]string{"object", objectType, name, table}, "\x00"))
 			tableDefinitions[name] = definition
 		} else {
-			signature = append(signature, strings.Join([]string{"object", objectType, name, table, strings.TrimSpace(definition)}, "\x00"))
+			signature = append(signature, strings.Join([]string{"object", objectType, name, table, normalizeSchemaDefinition(definition)}, "\x00"))
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -194,6 +195,50 @@ func schemaSignature(conn *sql.DB) ([]string, error) {
 	}
 	sort.Strings(signature)
 	return signature, nil
+}
+
+func normalizeSchemaDefinition(definition string) string {
+	var normalized strings.Builder
+	normalized.Grow(len(definition))
+	pendingSpace := false
+	var quote byte
+
+	for i := 0; i < len(definition); i++ {
+		char := definition[i]
+		if quote != 0 {
+			normalized.WriteByte(char)
+			if quote == '[' {
+				if char == ']' {
+					quote = 0
+				}
+				continue
+			}
+			if char == quote {
+				if i+1 < len(definition) && definition[i+1] == quote {
+					i++
+					normalized.WriteByte(definition[i])
+				} else {
+					quote = 0
+				}
+			}
+			continue
+		}
+
+		switch char {
+		case ' ', '\t', '\n', '\r', '\f':
+			pendingSpace = normalized.Len() > 0
+			continue
+		case '\'', '"', '`', '[':
+			quote = char
+		}
+		if pendingSpace {
+			normalized.WriteByte(' ')
+			pendingSpace = false
+		}
+		normalized.WriteByte(char)
+	}
+
+	return normalized.String()
 }
 
 // logicalTableSignature deliberately reads SQLite's schema pragmas rather
