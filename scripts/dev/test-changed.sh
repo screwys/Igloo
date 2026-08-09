@@ -53,7 +53,7 @@ for path in "${changed[@]}"; do
   esac
 
   case "$path" in
-    android/app/*|android/build.gradle*|android/settings.gradle*|android/gradle/*|android/gradle.properties)
+    android/*|.github/workflows/ci.yml)
       android_changed=1
       ;;
   esac

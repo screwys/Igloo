@@ -54,5 +54,17 @@ if [ -n "$final_field_warnings" ]; then
     exit 1
 fi
 
+test_results_dir="$SCRIPT_DIR/app/build/test-results/testDevtestUnitTest"
+async_teardown_errors="$({
+    grep -R -E 'UncaughtExceptionsBeforeTest|Cannot perform this operation because the connection pool has been closed' \
+        "$test_results_dir" --include='*.xml' 2>/dev/null || true
+} | head -20)"
+if [ -n "$async_teardown_errors" ]; then
+    echo "" >&2
+    echo "❌ Android tests left an asynchronous failure after test teardown." >&2
+    printf '%s\n' "$async_teardown_errors" >&2
+    exit 1
+fi
+
 echo ""
 echo "✅ All tests passed!"
