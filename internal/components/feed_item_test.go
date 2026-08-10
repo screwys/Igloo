@@ -3,11 +3,28 @@ package components
 import (
 	"bytes"
 	"context"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/screwys/igloo/internal/model"
 )
+
+func TestFeedMediaOverlayTextCannotCreateHorizontalScroller(t *testing.T) {
+	cssBytes, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(cssBytes)
+	topRule := cssRuleBody(t, css, ".feed-media-overlay-top")
+	if !strings.Contains(topRule, "overflow-x: hidden;") {
+		t.Fatalf("media overlay top must suppress horizontal scrolling; rule=%s", topRule)
+	}
+	textRule := cssRuleBody(t, css, ".feed-overlay-text")
+	if !strings.Contains(textRule, "overflow-wrap: anywhere;") {
+		t.Fatalf("media overlay text must wrap unbroken content; rule=%s", textRule)
+	}
+}
 
 func TestFeedItemThreadRendersCapsuleBelowReply(t *testing.T) {
 	item := model.FeedItem{

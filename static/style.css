@@ -8819,7 +8819,7 @@ body.shorts-mode .sidebar {
 .feed-media-overlay-top {
     flex: 1 1 auto;
     overflow-y: auto;
-    overflow-x: visible;
+    overflow-x: hidden;
     overscroll-behavior: contain;
     padding: 0.85rem 0.9rem 0.5rem;
     min-height: 0;
@@ -8972,6 +8972,7 @@ body.shorts-mode .sidebar {
 .feed-overlay-text {
     color: var(--text-primary);
     margin-bottom: 0.65rem;
+    overflow-wrap: anywhere;
 }
 
 .feed-overlay-summary {
