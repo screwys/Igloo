@@ -968,61 +968,52 @@ func expandSeenConversationIDsTx(tx *sql.Tx, tweetIDs []string) ([]string, error
 	rows, err := tx.Query(`
 		WITH RECURSIVE
 		seed(tweet_id) AS (VALUES `+placeholders+`),
-		resolved_seed(tweet_id) AS (
-			SELECT tweet_id FROM seed
-			UNION
-			SELECT fi.canonical_tweet_id
+		related(tweet_id) AS (
+			SELECT tweet_id
 			FROM seed
-			CROSS JOIN feed_items fi ON fi.tweet_id = seed.tweet_id
-			WHERE COALESCE(fi.is_retweet, 0) = 1
-			  AND COALESCE(fi.quote_tweet_id, '') = ''
-			  AND COALESCE(fi.canonical_tweet_id, '') != ''
-		),
-		up(seed_id, tweet_id, reply_to_status, depth) AS (
-			SELECT fi.tweet_id, fi.tweet_id, COALESCE(fi.reply_to_status, ''), 0
-			FROM resolved_seed
-			CROSS JOIN feed_items fi ON fi.tweet_id = resolved_seed.tweet_id
 			UNION
-			SELECT up.seed_id, parent.tweet_id, COALESCE(parent.reply_to_status, ''), up.depth + 1
-			FROM up
-			JOIN feed_items parent ON parent.tweet_id = up.reply_to_status
-			WHERE up.reply_to_status != ''
-			  AND up.depth < 50
-		),
-		root_depth AS (
-			SELECT seed_id, MAX(depth) AS max_depth
-			FROM up
-			GROUP BY seed_id
-		),
-		roots(root_id) AS (
-			SELECT DISTINCT up.tweet_id
-			FROM up
-			JOIN root_depth
-			  ON root_depth.seed_id = up.seed_id
-			 AND root_depth.max_depth = up.depth
-		),
-		down(tweet_id, depth) AS (
-			SELECT root_id, 0 FROM roots
+			SELECT item.reply_to_status
+			FROM related
+			JOIN feed_items item ON item.tweet_id = related.tweet_id
+			WHERE item.reply_to_status IS NOT NULL
+			  AND item.reply_to_status != ''
 			UNION
-			SELECT child.tweet_id, down.depth + 1
-			FROM down
-			JOIN feed_items child ON child.reply_to_status = down.tweet_id
+			SELECT child.tweet_id
+			FROM related
+			JOIN feed_items child INDEXED BY idx_feed_items_reply_parent
+			  ON child.reply_to_status = related.tweet_id
 			WHERE child.reply_to_status IS NOT NULL
 			  AND child.reply_to_status != ''
-			  AND down.depth < 50
+			UNION
+			SELECT item.quote_tweet_id
+			FROM related
+			JOIN feed_items item ON item.tweet_id = related.tweet_id
+			WHERE item.quote_tweet_id IS NOT NULL
+			  AND item.quote_tweet_id != ''
+			UNION
+			SELECT quote.tweet_id
+			FROM related
+			JOIN feed_items quote INDEXED BY idx_feed_items_quote
+			  ON quote.quote_tweet_id = related.tweet_id
+			WHERE quote.quote_tweet_id IS NOT NULL
+			  AND quote.quote_tweet_id != ''
+			UNION
+			SELECT item.canonical_tweet_id
+			FROM related
+			JOIN feed_items item ON item.tweet_id = related.tweet_id
+			WHERE COALESCE(item.is_retweet, 0) = 1
+			  AND item.canonical_tweet_id IS NOT NULL
+			  AND item.canonical_tweet_id != ''
+			UNION
+			SELECT repost.tweet_id
+			FROM related
+			JOIN feed_items repost INDEXED BY idx_feed_items_canonical_tweet
+			  ON repost.canonical_tweet_id = related.tweet_id
+			WHERE COALESCE(repost.is_retweet, 0) = 1
+			  AND repost.canonical_tweet_id IS NOT NULL
+			  AND repost.canonical_tweet_id != ''
 		)
-		SELECT tweet_id FROM seed
-		UNION
-		SELECT tweet_id FROM down
-		UNION
-		SELECT repost.tweet_id
-		FROM down
-		CROSS JOIN feed_items repost INDEXED BY idx_feed_items_canonical_tweet
-		  ON repost.canonical_tweet_id = down.tweet_id
-		WHERE COALESCE(repost.is_retweet, 0) = 1
-		  AND COALESCE(repost.quote_tweet_id, '') = ''
-		  AND repost.canonical_tweet_id IS NOT NULL
-		  AND repost.canonical_tweet_id != ''
+		SELECT tweet_id FROM related
 	`, args...)
 	if err != nil {
 		return nil, err
