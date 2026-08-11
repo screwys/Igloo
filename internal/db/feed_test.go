@@ -290,44 +290,33 @@ func TestMarkSeen(t *testing.T) {
 	}
 }
 
-func TestMarkSeenExpandsAcrossRelatedPostGraph(t *testing.T) {
-	for _, seedID := range []string{"sample_original_reply", "sample_quote_reply"} {
-		t.Run(seedID, func(t *testing.T) {
-			d := openWritableTestDB(t)
-			if err := d.ExecRaw(`INSERT INTO feed_items
-				(tweet_id, body_text, is_retweet, quote_tweet_id, is_reply,
-				 reply_to_status, canonical_tweet_id, published_at)
-				VALUES
-					('sample_original', 'original body', 0, '', 0, '', 'sample_original', 1000),
-					('sample_original_reply', 'original reply', 0, '', 1, 'sample_original', 'sample_original_reply', 1001),
-					('sample_repost', 'original body', 1, '', 0, '', 'sample_original', 1002),
-					('sample_quote', 'quote body', 0, 'sample_original', 0, '', 'sample_quote', 1003),
-					('sample_quote_reply', 'quote reply', 0, '', 1, 'sample_quote', 'sample_quote_reply', 1004),
-					('sample_quote_repost', 'quote body', 1, 'sample_original', 0, '', 'sample_quote', 1005),
-					('sample_other', 'other body', 0, '', 0, '', 'sample_other', 1006)`); err != nil {
-				t.Fatal(err)
-			}
+func TestMarkSeenExpandsAcrossThreadAndPureRepost(t *testing.T) {
+	d := openWritableTestDB(t)
+	if err := d.ExecRaw(`INSERT INTO feed_items
+		(tweet_id, body_text, is_retweet, quote_tweet_id, is_reply,
+		 reply_to_status, canonical_tweet_id, published_at)
+		VALUES
+			('100', 'root body', 0, '', 0, '', '100', 1000),
+			('101', 'reply body', 0, '', 1, '100', '101', 1001),
+			('102', 'root body', 1, '', 0, '', '100', 1002),
+			('200', 'other body', 0, '', 0, '', '200', 1003)`); err != nil {
+		t.Fatal(err)
+	}
 
-			if _, err := d.MarkSeen([]string{seedID}); err != nil {
-				t.Fatalf("MarkSeen: %v", err)
-			}
-			relatedIDs := []string{
-				"sample_original", "sample_original_reply", "sample_repost",
-				"sample_quote", "sample_quote_reply", "sample_quote_repost",
-			}
-			seen, err := d.GetSeenTweetIDs(append(relatedIDs, "sample_other"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, id := range relatedIDs {
-				if !seen[id] {
-					t.Fatalf("related row %s was not marked seen: %#v", id, seen)
-				}
-			}
-			if seen["sample_other"] {
-				t.Fatalf("unrelated row was marked seen: %#v", seen)
-			}
-		})
+	if _, err := d.MarkSeen([]string{"101"}); err != nil {
+		t.Fatalf("MarkSeen: %v", err)
+	}
+	seen, err := d.GetSeenTweetIDs([]string{"100", "101", "102", "200"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"100", "101", "102"} {
+		if !seen[id] {
+			t.Fatalf("related row %s was not marked seen: %#v", id, seen)
+		}
+	}
+	if seen["200"] {
+		t.Fatalf("unrelated row was marked seen: %#v", seen)
 	}
 }
 

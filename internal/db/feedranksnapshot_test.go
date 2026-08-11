@@ -100,7 +100,7 @@ func TestListPreDiversityRankedUsesPersistedIdentitiesAndThreadState(t *testing.
 	}
 }
 
-func TestListPreDiversityRankedUsesThreadRootQuoteForReplyDiversity(t *testing.T) {
+func TestListPreDiversityRankedUsesContainedRootPostForReplyDiversity(t *testing.T) {
 	d := openWritableTestDB(t)
 	now := time.Now().UnixMilli()
 	if _, err := d.MutateFollow("twitter_sample_source", "set", now-10); err != nil {
@@ -112,27 +112,31 @@ func TestListPreDiversityRankedUsesThreadRootQuoteForReplyDiversity(t *testing.T
 			quote_tweet_id, reply_to_status, canonical_tweet_id, content_hash,
 			published_at, fetched_at, algo_interest, algo_scored_at
 		) VALUES
+			('sample_original', '', 'twitter_sample_original', 'original', 0,
+			 '', '', 'sample_original', 'original_hash', ?, ?, 10, 1),
 			('sample_quote_a', '', 'twitter_sample_quote_a', 'quote a', 0,
 			 'sample_original', '', 'sample_quote_a', 'quote_hash_a', ?, ?, 10, 1),
 			('sample_quote_b', '', 'twitter_sample_quote_b', 'quote b', 0,
 			 'sample_original', '', 'sample_quote_b', 'quote_hash_b', ?, ?, 10, 1),
+			('sample_original_reply', 'twitter_sample_source', 'twitter_sample_source', 'original reply', 1,
+			 '', 'sample_original', 'sample_original_reply', 'original_reply_hash', ?, ?, 10, 1),
 			('sample_reply_a', 'twitter_sample_source', 'twitter_sample_source', 'reply a', 1,
 			 '', 'sample_quote_a', 'sample_reply_a', 'reply_hash_a', ?, ?, 10, 1),
 			('sample_reply_b', 'twitter_sample_source', 'twitter_sample_source', 'reply b', 1,
 			 '', 'sample_quote_b', 'sample_reply_b', 'reply_hash_b', ?, ?, 10, 1)
-	`, now-4, now-4, now-3, now-3, now-2, now-2, now-1, now-1); err != nil {
+	`, now-6, now-6, now-5, now-5, now-4, now-4, now-3, now-3, now-2, now-2, now-1, now-1); err != nil {
 		t.Fatal(err)
 	}
 
 	rows, err := d.ListPreDiversityRankedCandidatesContext(
 		context.Background(),
-		[]string{"sample_reply_a", "sample_reply_b"},
+		[]string{"sample_original_reply", "sample_reply_a", "sample_reply_b"},
 		0,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 2 {
+	if len(rows) != 3 {
 		t.Fatalf("ranked rows = %+v", rows)
 	}
 	for _, row := range rows {

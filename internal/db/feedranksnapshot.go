@@ -573,7 +573,7 @@ func (db *DB) threadMetadataForTweetIDsContext(ctx context.Context, tweetIDs []s
 		       CASE
 		           WHEN NULLIF(TRIM(COALESCE(root.quote_tweet_id, '')), '') IS NOT NULL
 		               THEN 'tweet:' || LOWER(TRIM(root.quote_tweet_id))
-		           ELSE ''
+		           ELSE 'tweet:' || LOWER(TRIM(root.tweet_id))
 		       END,
 		       root_depth.max_depth
 		FROM chain

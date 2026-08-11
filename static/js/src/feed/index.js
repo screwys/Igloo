@@ -374,12 +374,16 @@ function syncFeedButtons(root) {
 }
 
 function syncSiblingCards(root) {
-  if (!root || !feedList) return
+  if (!root) return
+  var tweetId = String(root.getAttribute('data-tweet-id') || '').trim()
   var hash = String(root.getAttribute('data-content-hash') || '').trim()
-  if (!hash) return
+  if (!tweetId && !hash) return
   var isLiked = stateBool(root, 'liked')
   var isBookmarked = stateBool(root, 'bookmarked')
-  var siblings = feedList.querySelectorAll('[data-feed-item][data-content-hash="' + CSS.escape(hash) + '"]')
+  var selectors = []
+  if (tweetId) selectors.push('[data-feed-item][data-tweet-id="' + cssEscape(tweetId) + '"]')
+  if (hash) selectors.push('[data-feed-item][data-content-hash="' + cssEscape(hash) + '"]')
+  var siblings = document.querySelectorAll(selectors.join(','))
   for (var i = 0; i < siblings.length; i++) {
     if (siblings[i] === root) continue
     setStateBool(siblings[i], 'liked', isLiked)
