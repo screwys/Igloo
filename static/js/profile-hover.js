@@ -134,7 +134,6 @@
 		const rect = anchor.getBoundingClientRect();
 		const cardWidth = card.offsetWidth || 320;
 		const cardHeight = card.offsetHeight || 260;
-		const margin = 6;
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 
@@ -144,14 +143,13 @@
 		}
 		left = Math.max(8, left);
 
-		// Prefer below; flip above only when below would overflow the viewport.
-		// When flipping, anchor the card's BOTTOM just above the trigger so the
-		// card never overlaps the username/avatar that opened it.
+		// Keep the card flush with its trigger so moving into it cannot cross an
+		// underlying profile trigger. Flip above only when below would overflow.
 		let top;
-		if (rect.bottom + margin + cardHeight <= vh) {
-			top = rect.bottom + window.scrollY + margin;
+		if (rect.bottom + cardHeight <= vh) {
+			top = rect.bottom + window.scrollY;
 		} else {
-			top = rect.top + window.scrollY - cardHeight - margin;
+			top = rect.top + window.scrollY - cardHeight;
 		}
 
 		card.style.left = left + 'px';

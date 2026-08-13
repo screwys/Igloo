@@ -118,6 +118,16 @@ class FakeElement {
 	}
 
 	getBoundingClientRect() {
+		const left = Number.parseFloat(this.style.left);
+		const top = Number.parseFloat(this.style.top);
+		if (Number.isFinite(left) && Number.isFinite(top) && this.offsetWidth && this.offsetHeight) {
+			return {
+				left,
+				top,
+				right: left + this.offsetWidth,
+				bottom: top + this.offsetHeight,
+			};
+		}
 		return this.rect;
 	}
 
@@ -319,6 +329,19 @@ test('profile hover ignores underlying triggers when the pointer is inside the o
 	assert.deepEqual(requests, ['/api/profile-card/twitter_reposter']);
 
 	document.dispatch('mousemove', mouseEvent(author, 120, 120, repost));
+	await flush();
+
+	assert.deepEqual(requests, ['/api/profile-card/twitter_reposter']);
+});
+
+test('profile hover has no trigger gap between a repost and its open card', async () => {
+	const { document, requests } = await loadProfileHover();
+	const { repost, author } = addFeedTargets(document);
+
+	document.dispatch('mousemove', mouseEvent(repost, 12, 18));
+	await flush();
+
+	document.dispatch('mousemove', mouseEvent(author, 20, 30, repost));
 	await flush();
 
 	assert.deepEqual(requests, ['/api/profile-card/twitter_reposter']);
