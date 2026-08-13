@@ -2,8 +2,6 @@
 // Opens a fullscreen overlay with image/video media + tweet info sidebar.
 
 import {
-  makeDraggableSeekbar,
-  attachSeekTooltip,
   itemRootFromNode,
   stateBool,
   getFeedActionIconSvg,
@@ -12,6 +10,7 @@ import {
   formatAbsolute,
   t,
 } from '../utils.js'
+import { bindFeedVideoControls, createFeedVideoControls } from './video-controls.js'
 
 // ── Helpers ──
 
@@ -587,20 +586,9 @@ export function openMediaOverlay(root, triggerEl) {
         if (v.paused) v.play().catch(function () {}); else v.pause()
       })
 
-      var bar = document.createElement('div')
-      bar.className = 'feed-video-progress feed-overlay-progress'
-      var fill = document.createElement('div')
-      fill.className = 'feed-video-progress-fill'
-      bar.appendChild(fill)
-      v.addEventListener('timeupdate', function () {
-        var pct = v.duration > 0 ? (v.currentTime / v.duration) * 100 : 0
-        fill.style.width = pct + '%'
-      })
-      makeDraggableSeekbar(bar, fill, v)
-      attachSeekTooltip(bar, v)
-
       mixedWrap.appendChild(v)
-      mixedWrap.appendChild(bar)
+      mixedWrap.appendChild(createFeedVideoControls())
+      bindFeedVideoControls(mixedWrap, v)
       host.appendChild(mixedWrap)
     } else if (isVideo) {
       var videoWrap = document.createElement('div')
@@ -619,43 +607,14 @@ export function openMediaOverlay(root, triggerEl) {
       v.muted = false
       overlay._overlayVideo = v
 
-      // Static SVG markup for mute/unmute icons
-      var svgUnmuted = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>'
-      var svgMuted = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>'
-      var muteBtn = document.createElement('button')
-      muteBtn.className = 'feed-overlay-mute-btn'
-      muteBtn.type = 'button'
-      muteBtn.setAttribute('aria-label', t('action_mute', 'Mute'))
-      muteBtn.innerHTML = svgUnmuted // eslint-disable-line no-unsanitized/property
-      muteBtn.addEventListener('click', function (e) {
-        e.stopPropagation()
-        v.muted = !v.muted
-        muteBtn.innerHTML = v.muted ? svgMuted : svgUnmuted // eslint-disable-line no-unsanitized/property
-        muteBtn.setAttribute('aria-label', v.muted ? t('action_unmute', 'Unmute') : t('action_mute', 'Mute'))
-      })
-
-      var progressBar = document.createElement('div')
-      progressBar.className = 'feed-video-progress feed-overlay-progress'
-      var progressFill = document.createElement('div')
-      progressFill.className = 'feed-video-progress-fill'
-      progressBar.appendChild(progressFill)
-      v.addEventListener('timeupdate', function () {
-        var dur = Number(v.duration || 0)
-        var cur = Number(v.currentTime || 0)
-        var pct = dur > 0 ? Math.max(0, Math.min(100, (cur / dur) * 100)) : 0
-        progressFill.style.width = pct + '%'
-      })
-      makeDraggableSeekbar(progressBar, progressFill, v)
-      attachSeekTooltip(progressBar, v)
-
       v.addEventListener('click', function (e) {
         e.stopPropagation()
         if (v.paused) v.play().catch(function () {}); else v.pause()
       })
 
       videoWrap.appendChild(v)
-      videoWrap.appendChild(muteBtn)
-      videoWrap.appendChild(progressBar)
+      videoWrap.appendChild(createFeedVideoControls())
+      bindFeedVideoControls(videoWrap, v)
 
       // Sync with inline video — pick up playback position
       var feedList = document.getElementById('feed-list')

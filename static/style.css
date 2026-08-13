@@ -8472,15 +8472,13 @@ body.shorts-mode .sidebar {
 }
 
 .feed-video-progress {
-    position: absolute;
-    left: 0.4rem;
-    right: 0.4rem;
-    bottom: 0;
-    height: 6px;
+    position: relative;
+    flex: 1;
+    min-width: 2.5rem;
+    height: 4px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.28);
     cursor: pointer;
-    z-index: 2;
 }
 
 .feed-video-progress::before {
@@ -8488,36 +8486,205 @@ body.shorts-mode .sidebar {
     position: absolute;
     left: 0;
     right: 0;
-    top: -14px;
-    bottom: -8px;
+    top: -10px;
+    bottom: -10px;
     cursor: pointer;
 }
 
-.feed-video-expand-btn {
+.feed-video-controls {
     position: absolute;
-    top: 0.45rem;
-    right: 0.45rem;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.2rem;
+    border-radius: 0 0 12px 12px;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(12, 14, 18, 0.62);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    z-index: 4;
+    opacity: 0.88;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+.feed-overlay-video-wrap .feed-video-controls {
+    border-radius: 0 0 4px 4px;
+}
+
+.feed-media-wrap:hover .feed-video-controls,
+.feed-media-wrap:focus-within .feed-video-controls,
+.feed-overlay-video-wrap:hover .feed-video-controls,
+.feed-overlay-video-wrap:focus-within .feed-video-controls {
+    opacity: 1;
+    background: rgba(12, 14, 18, 0.74);
+}
+
+.feed-media-wrap .feed-video-controls[data-feed-video-controls-visible="0"],
+.feed-overlay-video-wrap .feed-video-controls[data-feed-video-controls-visible="0"] {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.feed-video-control-btn {
     width: 28px;
     height: 28px;
+    flex: 0 0 28px;
+    border: 0;
     border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    background: rgba(0, 0, 0, 0.55);
-    color: var(--text-primary);
-    font-size: 0.85rem;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.88);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0;
-    transition: opacity 0.15s;
-    z-index: 4;
-    line-height: 1;
     padding: 0;
+    transition: color 0.15s, background 0.15s;
 }
 
-.feed-media-wrap:hover .feed-video-expand-btn,
-.feed-media-wrap:focus-within .feed-video-expand-btn {
+.feed-video-control-btn:hover,
+.feed-video-control-btn:focus-visible {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.feed-video-control-btn svg {
+    display: block;
+    pointer-events: none;
+}
+
+.feed-video-speed-menu-wrap {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    display: flex;
+    align-items: center;
+}
+
+.feed-video-speed-btn {
+    padding-bottom: 1px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.feed-video-speed-btn[aria-expanded="true"] {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.feed-video-speed-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 0.35rem);
+    display: grid;
+    gap: 0.12rem;
+    min-width: 92px;
+    max-height: min(50vh, 320px);
+    overflow-y: auto;
+    padding: 0.3rem;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 10px;
+    background: rgba(12, 14, 18, 0.94);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 6;
+}
+
+.feed-video-speed-option {
+    appearance: none;
+    width: 100%;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.88);
+    padding: 0.4rem 0.5rem;
+    text-align: left;
+    font: inherit;
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+}
+
+.feed-video-speed-option:hover,
+.feed-video-speed-option:focus-visible {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+    outline: none;
+}
+
+.feed-video-speed-option.is-active,
+.feed-video-speed-option[aria-checked="true"] {
+    color: var(--accent-secondary);
+    background: rgba(var(--accent-primary-rgb), 0.2);
+}
+
+.feed-video-volume-control {
+    position: relative;
+    flex: 0 0 28px;
+    display: flex;
+}
+
+.feed-video-volume-popover {
+    --feed-volume-height: 0px;
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 0.2rem);
+    width: 16px;
+    height: 86px;
+    transform: translateX(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 5px;
+    background: rgba(12, 14, 18, 0.78);
+    box-shadow: 0 3px 9px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.15s, visibility 0.15s;
+}
+
+.feed-video-volume-popover::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 5px;
+    width: 6px;
+    height: var(--feed-volume-height);
+    transform: translateX(-50%);
+    border-radius: 2px;
+    background: var(--accent-secondary);
+    pointer-events: none;
+}
+
+.feed-video-volume-control:hover .feed-video-volume-popover,
+.feed-video-volume-control:focus-within .feed-video-volume-popover {
     opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.feed-video-volume-slider {
+    position: absolute;
+    left: 50%;
+    top: 5px;
+    width: 24px;
+    height: 76px;
+    margin: 0;
+    transform: translateX(-50%);
+    writing-mode: vertical-lr;
+    direction: rtl;
+    opacity: 0;
+    cursor: pointer;
 }
 
 .feed-video-progress-fill {
@@ -8924,30 +9091,6 @@ body.shorts-mode .sidebar {
     border-radius: 4px;
     cursor: pointer;
 }
-.feed-overlay-mute-btn {
-    position: absolute;
-    top: 0.5rem;
-    left: 0.5rem;
-    background: none;
-    border: none;
-    color: rgba(255,255,255,0.7);
-    font-size: 1.1rem;
-    cursor: pointer;
-    padding: 4px;
-    line-height: 1;
-    opacity: 0.6;
-    transition: opacity 0.15s;
-    z-index: 1;
-}
-.feed-overlay-mute-btn:hover { opacity: 1; }
-.feed-overlay-progress {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    border-radius: 0 0 4px 4px;
-}
-
 .feed-overlay-repost {
     color: var(--text-muted);
     font-size: 0.82rem;

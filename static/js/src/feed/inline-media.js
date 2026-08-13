@@ -1,7 +1,7 @@
 // Inline media module — extracted from feed_page.js
 // IntersectionObserver-based autoplay/pause for inline feed videos.
 
-import { makeDraggableSeekbar, attachSeekTooltip } from '../utils.js'
+import { bindFeedVideoControls } from './video-controls.js'
 
 let observer = null
 let preloadObserver = null
@@ -51,19 +51,7 @@ function bindVideo(video) {
   if (video.dataset.feedBound === '1') return false
   video.dataset.feedBound = '1'
   const wrap = video.closest('.feed-media-wrap')
-  const progress = wrap && wrap.querySelector ? wrap.querySelector('[data-feed-progress]') : null
-  const fill = wrap && wrap.querySelector ? wrap.querySelector('[data-feed-progress-fill]') : null
-
-  video.addEventListener('timeupdate', function () {
-    if (!fill) return
-    const dur = Number(video.duration || 0)
-    const cur = Number(video.currentTime || 0)
-    const pct = dur > 0 ? Math.max(0, Math.min(100, (cur / dur) * 100)) : 0
-    fill.style.width = pct + '%'
-  })
-
-  makeDraggableSeekbar(progress, fill, video)
-  attachSeekTooltip(progress, video)
+  bindFeedVideoControls(wrap, video)
 
   ensurePreloadObserver().observe(video)
   ensureObserver().observe(video)

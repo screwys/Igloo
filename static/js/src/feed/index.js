@@ -1156,6 +1156,7 @@ document.addEventListener('click', function (event) {
 document.addEventListener('keydown', function (event) {
   var mediaTrigger = event.target && event.target.closest ? event.target.closest('[data-feed-media]') : null
   if (!mediaTrigger) return
+  if (event.target.closest && event.target.closest('[data-feed-video-control], [data-feed-progress]')) return
   if (event.key !== 'Enter' && event.key !== ' ') return
   event.preventDefault()
   openMediaOverlay(mediaTrigger, mediaTrigger)

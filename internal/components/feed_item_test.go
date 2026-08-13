@@ -725,3 +725,47 @@ func TestFeedItemTranslatedPillUsesTranslatorSourceLabel(t *testing.T) {
 		t.Fatalf("translated pill should render translator source label; html=%s", html)
 	}
 }
+
+func TestFeedVideoRendersUnifiedPlaybackControls(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:            "sample_video_post",
+		AuthorHandle:        "sample_author",
+		AuthorDisplayName:   "Sample Author",
+		Media:               []model.MediaRef{{Type: "video"}},
+		MediaSlideURLs:      []string{"/api/media/slide/sample_video_post/0"},
+		MediaStreamURL:      "/api/media/stream/sample_video_post",
+		QuoteTweetID:        "sample_quote",
+		QuoteAuthorHandle:   "sample_quote_author",
+		QuoteMedia:          []model.MediaRef{{Type: "video"}},
+		QuoteMediaStreamURL: "/api/media/stream/sample_quote",
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+
+	if got := strings.Count(html, `data-feed-video-controls`); got != 2 {
+		t.Fatalf("video control bar count = %d, want parent and quote bars; html=%s", got, html)
+	}
+	for _, control := range []string{
+		`data-feed-video-play`,
+		`data-feed-progress role="slider"`,
+		`data-feed-video-mute`,
+		`data-feed-video-volume>`,
+		`data-feed-video-speed-button>`,
+		`data-feed-video-speed-menu>`,
+		`data-feed-video-expand`,
+	} {
+		if got := strings.Count(html, control); got != 2 {
+			t.Fatalf("%s count = %d, want 2; html=%s", control, got, html)
+		}
+	}
+	if strings.Contains(html, `feed-video-expand-btn`) {
+		t.Fatalf("separate fullscreen button should not remain; html=%s", html)
+	}
+	if strings.Contains(html, `feed-video-speed-select`) {
+		t.Fatalf("feed speed control should use the custom player menu, not a native select; html=%s", html)
+	}
+}

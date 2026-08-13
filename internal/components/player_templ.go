@@ -1001,7 +1001,7 @@ func playerSeekBackButton(p PageProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 2v6h6"/><path d="M2.5 8a10 10 0 1 1 1.28 5"/><text x="12" y="15.5" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" font-family="system-ui">10</text></svg>`).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(1.8 1.8) scale(.85)"><path d="M2.5 2v6h6"/><path d="M2.5 8a10 10 0 1 1 1.28 5"/></g><text x="12" y="12" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="system-ui">10</text></svg>`).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1065,7 +1065,7 @@ func playerSeekForwardButton(p PageProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6"/><path d="M21.5 8A10 10 0 1 0 20.22 13"/><text x="12" y="15.5" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" font-family="system-ui">10</text></svg>`).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(1.8 1.8) scale(.85)"><path d="M21.5 2v6h-6"/><path d="M21.5 8A10 10 0 1 0 20.22 13"/></g><text x="12" y="12" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="system-ui">10</text></svg>`).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

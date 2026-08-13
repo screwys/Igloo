@@ -4,6 +4,7 @@ import { initSponsorBlock } from './sponsorblock.js'
 import { initPreviewHover } from './preview.js'
 import { initProgress } from './progress.js'
 import { initCinemaView } from './cinema.js'
+import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
 
 const doc = document
 const root = doc.getElementById('player-root')
@@ -172,96 +173,20 @@ if (root && video) {
   function setupPlayerControlsVisibility() {
     var controller = doc.getElementById('main-media-controller')
     if (!controller || !playerWrapper) return null
-
-    var pointerInside = false
-    var keyboardNavigation = false
-    var hideTimer = 0
-    var readyAttr = 'data-player-controls-ready'
-    var visibleAttr = 'data-player-controls-visible'
-
-    function menuOpen() {
-      return !!(speedMenu && !speedMenu.classList.contains('hidden'))
-    }
-
-    function dispatchVisibilityChange(visible) {
-      controller.dispatchEvent(new CustomEvent('playercontrolsvisibilitychange', {
-        bubbles: true,
-        detail: { visible: visible },
-      }))
-    }
-
-    function setVisible(visible) {
-      var current = controller.getAttribute(visibleAttr) === '1'
-      if (current === visible && controller.hasAttribute(readyAttr)) return
-      controller.setAttribute(readyAttr, '1')
-      if (visible) {
-        controller.setAttribute(visibleAttr, '1')
-        controller.removeAttribute('userinactive')
-      } else {
-        controller.setAttribute(visibleAttr, '0')
-        controller.setAttribute('userinactive', '')
-      }
-      dispatchVisibilityChange(visible)
-    }
-
-    function clearHideTimer() {
-      if (!hideTimer) return
-      window.clearTimeout(hideTimer)
-      hideTimer = 0
-    }
-
-    function scheduleHide() {
-      clearHideTimer()
-      hideTimer = window.setTimeout(function () {
-        hideTimer = 0
-        if (!pointerInside && !menuOpen()) setVisible(false)
-      }, 80)
-    }
-
-    playerWrapper.addEventListener('pointerenter', function () {
-      pointerInside = true
-      keyboardNavigation = false
-      clearHideTimer()
-      setVisible(true)
+    return bindVideoControlsVisibility({
+      stateElement: controller,
+      surface: playerWrapper,
+      popupElements: [speedMenu],
+      readyAttribute: 'data-player-controls-ready',
+      visibleAttribute: 'data-player-controls-visible',
+      inactiveAttribute: 'userinactive',
+      onVisibilityChange: function (visible) {
+        controller.dispatchEvent(new CustomEvent('playercontrolsvisibilitychange', {
+          bubbles: true,
+          detail: { visible: visible },
+        }))
+      },
     })
-    playerWrapper.addEventListener('pointermove', function () {
-      pointerInside = true
-      keyboardNavigation = false
-      clearHideTimer()
-      setVisible(true)
-    }, { passive: true })
-    playerWrapper.addEventListener('pointerleave', function () {
-      pointerInside = false
-      scheduleHide()
-    })
-    playerWrapper.addEventListener('pointerdown', function () {
-      keyboardNavigation = false
-    }, true)
-    playerWrapper.addEventListener('focusin', function () {
-      if (keyboardNavigation) setVisible(true)
-    })
-    playerWrapper.addEventListener('focusout', function () {
-      if (!pointerInside) scheduleHide()
-    })
-    if (speedMenu) {
-      speedMenu.addEventListener('pointerenter', function () {
-        pointerInside = true
-        clearHideTimer()
-        setVisible(true)
-      })
-      speedMenu.addEventListener('pointerleave', function () {
-        pointerInside = false
-        scheduleHide()
-      })
-    }
-    doc.addEventListener('keydown', function (event) {
-      if (event.key === 'Tab') keyboardNavigation = true
-    }, true)
-
-    setVisible(false)
-    return {
-      isVisible: function () { return controller.getAttribute(visibleAttr) === '1' },
-    }
   }
 
   function controllerControlsVisible(controller) {

@@ -18,7 +18,7 @@ class FakeVideo {
 async function loadInlineMedia() {
   const source = await readFile(new URL('./src/feed/inline-media.js', import.meta.url), 'utf8')
   const runnable = source
-    .replace(/^import .*$/m, 'const makeDraggableSeekbar = () => {}; const attachSeekTooltip = () => {};')
+    .replace(/^import .*$/m, 'const bindFeedVideoControls = () => {};')
     .replace(/\bexport\s+/g, '') +
     '\nObject.assign(globalThis, { initInlineMedia });'
 

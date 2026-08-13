@@ -249,14 +249,14 @@ func commentAuthorName(p PageProps, c model.Comment) string {
 // playerSeekBackButton renders the seek-back-10-seconds button with SVG.
 templ playerSeekBackButton(p PageProps) {
 	<button id="player-seek-back-10-btn" class="mc-custom-btn mc-seek-btn" type="button" title={ L(p, "player_back_10_seconds", "Back 10 seconds") } aria-label={ L(p, "player_seek_backward_10_seconds", "Seek backward 10 seconds") }>
-		@templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 2v6h6"/><path d="M2.5 8a10 10 0 1 1 1.28 5"/><text x="12" y="15.5" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" font-family="system-ui">10</text></svg>`)
+		@templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(1.8 1.8) scale(.85)"><path d="M2.5 2v6h6"/><path d="M2.5 8a10 10 0 1 1 1.28 5"/></g><text x="12" y="12" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="system-ui">10</text></svg>`)
 	</button>
 }
 
 // playerSeekForwardButton renders the seek-forward-10-seconds button with SVG.
 templ playerSeekForwardButton(p PageProps) {
 	<button id="player-seek-forward-10-btn" class="mc-custom-btn mc-seek-btn" type="button" title={ L(p, "player_forward_10_seconds", "Forward 10 seconds") } aria-label={ L(p, "player_seek_forward_10_seconds", "Seek forward 10 seconds") }>
-		@templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6"/><path d="M21.5 8A10 10 0 1 0 20.22 13"/><text x="12" y="15.5" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" font-family="system-ui">10</text></svg>`)
+		@templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(1.8 1.8) scale(.85)"><path d="M21.5 2v6h-6"/><path d="M21.5 8A10 10 0 1 0 20.22 13"/></g><text x="12" y="12" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="system-ui">10</text></svg>`)
 	</button>
 }
 
