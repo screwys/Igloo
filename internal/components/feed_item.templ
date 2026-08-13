@@ -91,6 +91,9 @@ templ feedThreadCard(p PageProps, item model.FeedItem, collapsed bool) {
 		data-bookmarked={ boolDataAttr(item.IsBookmarked) }
 		data-source-handle={ item.SourceHandle }
 		data-author-handle={ item.AuthorHandle }
+		if item.QuoteAuthorHandle != "" {
+			data-quote-author-handle={ item.QuoteAuthorHandle }
+		}
 		data-channel-name={ authorLabel }
 		data-channel-platform="twitter"
 		data-feed-date={ feedPublishedAtStr(item.PublishedAt) }

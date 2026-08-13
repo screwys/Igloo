@@ -96,6 +96,37 @@ func TestFeedItemThreadRendersCapsuleBelowReply(t *testing.T) {
 	}
 }
 
+func TestFeedItemThreadAncestorBookmarkIncludesQuotedAccount(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:      "leaf_1",
+		AuthorHandle: "sample_reply_author",
+		BodyText:     "reply body",
+		ThreadChain: []model.FeedItem{
+			{
+				TweetID:           "root_1",
+				AuthorHandle:      "sample_root_author",
+				QuoteTweetID:      "quote_1",
+				QuoteAuthorHandle: "sample_quoted_author",
+				QuoteBodyText:     "quoted body",
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+	rootAt := strings.Index(html, `data-tweet-id="root_1"`)
+	if rootAt < 0 {
+		t.Fatalf("thread ancestor missing: %s", html)
+	}
+	openingTagEnd := strings.Index(html[rootAt:], ">")
+	if openingTagEnd < 0 || !strings.Contains(html[rootAt:rootAt+openingTagEnd], `data-quote-author-handle="sample_quoted_author"`) {
+		t.Fatalf("thread ancestor should expose its quoted account to the bookmark menu: %s", html)
+	}
+}
+
 func TestFeedItemTwoPostThreadOmitsCapsule(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:           "leaf_1",
