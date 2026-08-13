@@ -165,6 +165,7 @@ test('vertical volume control changes volume without toggling feed playback', as
 
   media.bindFeedVideoControls(wrap, video)
   const slider = controls.querySelector('[data-feed-video-volume]')
+  const volumeControl = controls.querySelector('[data-feed-video-volume-control]')
   const popover = controls.querySelector('.feed-video-volume-popover')
 
   assert.equal(slider.value, '0')
@@ -175,6 +176,11 @@ test('vertical volume control changes volume without toggling feed playback', as
   assert.equal(video.muted, false)
   assert.equal(video.paused, true)
   assert.equal(popover.style.values.get('--feed-volume-height'), '27px')
+
+  let corridorClickStopped = false
+  volumeControl.dispatch('click', { stopPropagation() { corridorClickStopped = true } })
+  assert.equal(corridorClickStopped, true)
+  assert.equal(video.paused, true)
 
   const speedButton = controls.querySelector('[data-feed-video-speed-button]')
   const speedMenu = controls.querySelector('[data-feed-video-speed-menu]')

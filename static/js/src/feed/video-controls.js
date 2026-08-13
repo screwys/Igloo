@@ -121,6 +121,7 @@ export function bindFeedVideoControls(wrap, video, options) {
   const play = controls.querySelector('[data-feed-video-play]')
   const mute = controls.querySelector('[data-feed-video-mute]')
   const volume = controls.querySelector('[data-feed-video-volume]')
+  const volumeControl = controls.querySelector('[data-feed-video-volume-control]')
   const volumePopover = controls.querySelector('.feed-video-volume-popover')
   const expand = controls.querySelector('[data-feed-video-expand]')
   const speed = controls.querySelector('[data-feed-video-speed]')
@@ -199,6 +200,11 @@ export function bindFeedVideoControls(wrap, video, options) {
     volume.addEventListener('click', function (event) { event.stopPropagation() })
     volume.addEventListener('mousedown', function (event) { event.stopPropagation() })
     volume.addEventListener('touchstart', function (event) { event.stopPropagation() })
+  }
+  if (volumeControl) {
+    volumeControl.addEventListener('click', function (event) { event.stopPropagation() })
+    volumeControl.addEventListener('mousedown', function (event) { event.stopPropagation() })
+    volumeControl.addEventListener('touchstart', function (event) { event.stopPropagation() })
   }
   if (speed && speedButton && speedMenu) {
     speedButton.addEventListener('click', function (event) {

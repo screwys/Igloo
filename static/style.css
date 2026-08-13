@@ -8628,18 +8628,36 @@ body.shorts-mode .sidebar {
 }
 
 .feed-video-volume-control {
+    --feed-volume-popover-height: 86px;
+    --feed-volume-popover-gap: 0.2rem;
     position: relative;
     flex: 0 0 28px;
     display: flex;
+}
+
+.feed-video-volume-control::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    width: 100px;
+    height: calc(var(--feed-volume-popover-height) + var(--feed-volume-popover-gap));
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.feed-video-volume-control:hover::before,
+.feed-video-volume-control:focus-within::before {
+    pointer-events: auto;
 }
 
 .feed-video-volume-popover {
     --feed-volume-height: 0px;
     position: absolute;
     left: 50%;
-    bottom: calc(100% + 0.2rem);
+    bottom: calc(100% + var(--feed-volume-popover-gap));
     width: 16px;
-    height: 86px;
+    height: var(--feed-volume-popover-height);
     transform: translateX(-50%);
     border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 5px;
@@ -8647,6 +8665,7 @@ body.shorts-mode .sidebar {
     box-shadow: 0 3px 9px rgba(0, 0, 0, 0.2);
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
+    z-index: 1;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
