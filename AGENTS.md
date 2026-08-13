@@ -2,7 +2,7 @@
 
 ## Project
 
-- Igloo is a Go/SQLite server with web and Android clients.
+- Igloo is a Go/SQLite server with web and Android clients. In Igloo requests, unqualified "mobile" means the Android app; use the web client only when the user says web, browser, mobile web, or names a browser viewport.
 - `android/` is the current Android app.
 - Runtime/config defaults: native `~/.local/share/igloo/` and `~/.config/igloo/`; container `/igloo/data` and `/igloo/config`; bundled container assets `/app/static`.
 

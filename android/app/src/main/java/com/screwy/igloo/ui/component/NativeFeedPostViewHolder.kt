@@ -171,13 +171,16 @@ internal class NativeFeedViewHolder(
             return
         }
         boundRow = adapterRow
+        val colors = getColors()
+        val callbacks = getCallbacks()
+        bindThreadActionState(adapterRow, colors, callbacks)
         val row = adapterRow.threaded.row
         bindActions(
             row = row,
             post = adapterRow.post,
             shareUrl = feedShareUrl(row).trim(),
-            colors = getColors(),
-            callbacks = getCallbacks(),
+            colors = colors,
+            callbacks = callbacks,
         )
     }
 
@@ -245,6 +248,29 @@ internal class NativeFeedViewHolder(
                     callbacks = callbacks,
                 ),
                 params,
+            )
+        }
+    }
+
+    private fun bindThreadActionState(
+        adapterRow: NativeFeedAdapterItem.Post,
+        colors: NativeFeedColors,
+        callbacks: NativeFeedCallbacks,
+    ) {
+        nativeThreadActionPosts(adapterRow).forEach { post ->
+            val actions =
+                views.thread.findViewWithTag<LinearLayout>(
+                    nativeThreadActionsTag(post.row.item.tweetId)
+                ) ?: return@forEach
+            val menu = actions.getChildAt(0) as? ImageButton ?: ImageButton(views.root.context)
+            bindActionRow(
+                container = actions,
+                menu = menu,
+                row = post.row,
+                post = post,
+                shareUrl = feedShareUrl(post.row).trim(),
+                colors = colors,
+                callbacks = callbacks,
             )
         }
     }
@@ -656,6 +682,7 @@ internal class NativeFeedViewHolder(
         val shareUrl = feedShareUrl(row).trim()
         val menu = ImageButton(context)
         return LinearLayout(context).apply {
+            tag = nativeThreadActionsTag(row.item.tweetId)
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             bindActionRow(

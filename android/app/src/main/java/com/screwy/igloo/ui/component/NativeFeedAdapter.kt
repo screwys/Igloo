@@ -12,6 +12,7 @@ import com.screwy.igloo.data.entity.FeedRow
 import com.screwy.igloo.data.entity.ThreadedFeedRow
 import com.screwy.igloo.feed.FeedMediaGridModel
 import com.screwy.igloo.feed.SocialPostModel
+import com.screwy.igloo.feed.buildSocialPostModel
 import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
@@ -219,3 +220,12 @@ private fun FeedRow.withoutLikeBookmarkState(): FeedRow =
         bookmarkAccountHandles = null,
         bookmarkMediaIndices = null,
     )
+
+internal fun nativeThreadActionPosts(item: NativeFeedAdapterItem.Post): List<SocialPostModel> {
+    val postsByTweetId = item.chainPosts.associateBy { it.row.item.tweetId }
+    return nativeThreadPreviewAncestors(item.threaded.chain).map { row ->
+        postsByTweetId[row.item.tweetId] ?: buildSocialPostModel(row, emptyMap())
+    }
+}
+
+internal fun nativeThreadActionsTag(tweetId: String): String = "thread-actions:$tweetId"

@@ -362,6 +362,37 @@ class NativeMainFeedSurfaceTest {
     }
 
     @Test
+    fun thread_action_payload_includes_the_visible_ancestor_state() {
+        val ancestor = feedRow("sample_ancestor")
+        val leaf = feedRow("sample_reply")
+        val original =
+            adapterPost("sample_reply").copy(
+                threaded = ThreadedFeedRow(row = leaf, chain = listOf(ancestor)),
+                chainPosts = listOf(post("sample_ancestor")),
+            )
+        val likedAncestor = ancestor.copy(isLiked = 1, likedAt = 1_000L)
+        val updated =
+            original.copy(
+                threaded = original.threaded.copy(chain = listOf(likedAncestor)),
+                chainPosts =
+                    listOf(
+                        post("sample_ancestor").let { post ->
+                            post.copy(
+                                row = likedAncestor,
+                                actions = post.actions.copy(isLiked = true),
+                            )
+                        }
+                    ),
+            )
+
+        assertTrue(nativeFeedLikeBookmarkOnlyChange(original, updated))
+        assertEquals(
+            listOf("sample_ancestor" to true),
+            nativeThreadActionPosts(updated).map { it.row.item.tweetId to it.actions.isLiked },
+        )
+    }
+
+    @Test
     fun pending_clear_updates_actions_without_changing_feed_media_rows() {
         val target =
             feedRow("post_1").copy(
