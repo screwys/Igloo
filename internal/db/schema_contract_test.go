@@ -302,6 +302,45 @@ func TestOpenMigratesYouTubeMemberOnlyChannelSettingAndSyncTrigger(t *testing.T)
 	}
 }
 
+func TestOpenReplacesAndroidFeedPeerTriggersWithIndexedQueries(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "igloo.db")
+	store, err := OpenPath(path, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ExecRaw(`
+		DROP TRIGGER android_sync_head_feed_peers_delete;
+		CREATE TRIGGER android_sync_head_feed_peers_delete
+		AFTER DELETE ON feed_items BEGIN SELECT 1; END;
+		DELETE FROM schema_migrations
+		WHERE name = '20260814_index_android_sync_peer_triggers';
+	`); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = OpenPath(path, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	var triggerSQL string
+	if err := store.QueryRow(`
+		SELECT sql FROM sqlite_schema
+		WHERE type = 'trigger' AND name = 'android_sync_head_feed_peers_delete'
+	`).Scan(&triggerSQL); err != nil {
+		t.Fatal(err)
+	}
+	const indexedPredicate = "content_hash IS NOT NULL AND content_hash != '' AND content_hash = OLD.content_hash"
+	if strings.Count(triggerSQL, indexedPredicate) != 2 {
+		t.Fatalf("feed peer delete trigger does not use the partial content-hash index: %s", triggerSQL)
+	}
+}
+
 func TestOpenMigratesFeedOrderInvalidationQueue(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")

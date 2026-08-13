@@ -911,6 +911,30 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 	var retiredKeys []string
 	collected := 0
 	err := db.WithWrite(func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`
+			DELETE FROM video_desires
+			WHERE source_channel_id IN (
+				SELECT c.channel_id
+				FROM channels c
+				LEFT JOIN channel_follows followed ON followed.channel_id = c.channel_id
+				WHERE c.platform IN ('tiktok', 'instagram')
+				  AND followed.channel_id IS NULL
+			)
+		`); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`
+			DELETE FROM video_repost_sources
+			WHERE reposter_channel_id IN (
+				SELECT c.channel_id
+				FROM channels c
+				LEFT JOIN channel_follows followed ON followed.channel_id = c.channel_id
+				WHERE c.platform IN ('tiktok', 'instagram')
+				  AND followed.channel_id IS NULL
+			)
+		`); err != nil {
+			return err
+		}
 		if storyCutoffMs > 0 {
 			if _, err := tx.Exec(`
 				DELETE FROM video_desires

@@ -352,6 +352,7 @@ func (db *DB) MutateFollow(channelID, action string, updatedAtMs int64) (Mutatio
 	channelID = strings.TrimSpace(channelID)
 	updatedAtMs = mutationTimestamp(updatedAtMs)
 	result := MutationResult{CanonicalID: channelID}
+	var retiredFileKeys []string
 	if action == "set" {
 		if looksLikeBareYouTubeChannelID(channelID) {
 			return result, invalidMutation("invalid channel_id")
@@ -400,9 +401,18 @@ func (db *DB) MutateFollow(channelID, action string, updatedAtMs int64) (Mutatio
 					return err
 				}
 			}
+
+			keys, err := cleanupUnfollowedChannelContentTx(tx, channelID, updatedAtMs)
+			if err != nil {
+				return err
+			}
+			retiredFileKeys = append(retiredFileKeys, keys...)
 		}
 		return nil
 	})
+	if err == nil {
+		db.removeRetiredCanonicalFiles(retiredFileKeys, nil)
+	}
 	return result, err
 }
 

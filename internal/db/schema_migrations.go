@@ -24,6 +24,10 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260814_index_android_sync_peer_triggers",
+		apply: installAndroidSyncPeerTriggers,
+	},
+	{
 		name:  "20260813_add_feed_related_anchor_indexes",
 		apply: addFeedRelatedAnchorIndexes,
 	},

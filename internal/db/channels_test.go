@@ -249,7 +249,7 @@ func TestResolveSubscribeURL(t *testing.T) {
 	}
 }
 
-func TestUnfollowKeepsVideoHistoryAndProfile(t *testing.T) {
+func TestUnfollowCollectsVideoAndKeepsProfile(t *testing.T) {
 	d := openWritableTestDB(t)
 	if err := d.AddChannel(model.Channel{
 		ChannelID: "tiktok_sample_reposter", SourceID: "sample_reposter", Name: "Sample Reposter", Platform: "tiktok",
@@ -302,14 +302,14 @@ func TestUnfollowKeepsVideoHistoryAndProfile(t *testing.T) {
 	if err := d.QueryRow(`SELECT COUNT(*) FROM video_repost_sources WHERE reposter_channel_id='tiktok_sample_reposter'`).Scan(&count); err != nil {
 		t.Fatalf("count source provenance: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("unfollow changed source provenance before maintenance: %d", count)
+	if count != 0 {
+		t.Fatalf("unfollowed source provenance remained: %d", count)
 	}
 	if err := d.QueryRow(`SELECT COUNT(*) FROM videos WHERE video_id='test_short'`).Scan(&count); err != nil {
 		t.Fatalf("count video: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("video was removed before maintenance")
+	if count != 0 {
+		t.Fatalf("unreferenced video remained: %d", count)
 	}
 	collected, err := d.MaintainVideoRetention(100)
 	if err != nil {
@@ -321,20 +321,20 @@ func TestUnfollowKeepsVideoHistoryAndProfile(t *testing.T) {
 	if err := d.QueryRow(`SELECT COUNT(*) FROM videos WHERE video_id='test_short'`).Scan(&count); err != nil {
 		t.Fatalf("count maintained video: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("historical video was removed by maintenance")
+	if count != 0 {
+		t.Fatalf("unreferenced video returned after maintenance: %d", count)
 	}
 	if err := d.QueryRow(`SELECT COUNT(*) FROM video_repost_sources WHERE reposter_channel_id='tiktok_sample_reposter'`).Scan(&count); err != nil {
 		t.Fatalf("count maintained source provenance: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("historical source provenance was removed: %d", count)
+	if count != 0 {
+		t.Fatalf("unfollowed source provenance returned: %d", count)
 	}
 	if err := d.QueryRow(`SELECT COUNT(*) FROM video_desires WHERE source_channel_id='tiktok_sample_reposter' AND video_id='test_short'`).Scan(&count); err != nil {
 		t.Fatalf("count historical desire: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("historical desire was removed: %d", count)
+	if count != 0 {
+		t.Fatalf("unfollowed source desire remained: %d", count)
 	}
 	if err := d.QueryRow(`SELECT COUNT(*) FROM channels WHERE channel_id='tiktok_sample_reposter'`).Scan(&count); err != nil {
 		t.Fatalf("count channel: %v", err)
@@ -348,12 +348,12 @@ func TestUnfollowKeepsVideoHistoryAndProfile(t *testing.T) {
 	if avatar, err := d.GetAssetByOwnerIdentity("avatar", "channel", "tiktok_sample_reposter", 0); err != nil || avatar == nil {
 		t.Fatalf("profile avatar should survive unfollow: %+v / %v", avatar, err)
 	}
-	if media, err := d.GetAssetByOwnerIdentity("video_stream", "tiktok_video", "test_short", 0); err != nil || media == nil {
-		t.Fatalf("video media should survive unfollow: %+v / %v", media, err)
+	if media, err := d.GetAssetByOwnerIdentity("video_stream", "tiktok_video", "test_short", 0); err != nil || media != nil {
+		t.Fatalf("unreferenced video media remained: %+v / %v", media, err)
 	}
 }
 
-func TestUnfollowDoesNotDeleteHistoricalFeedContent(t *testing.T) {
+func TestUnfollowRollsBackWhenContentCleanupFails(t *testing.T) {
 	d := openWritableTestDB(t)
 	if err := d.ExecRaw(`
 		INSERT INTO channels (channel_id, name, platform)
@@ -384,21 +384,21 @@ func TestUnfollowDoesNotDeleteHistoricalFeedContent(t *testing.T) {
 		t.Fatalf("create trigger: %v", err)
 	}
 
-	if err := d.UnfollowChannel("twitter_drop_fail"); err != nil {
-		t.Fatalf("UnfollowChannel: %v", err)
+	if err := d.UnfollowChannel("twitter_drop_fail"); err == nil {
+		t.Fatal("UnfollowChannel succeeded despite content cleanup failure")
 	}
 	var count int
 	if err := d.QueryRow(`SELECT COUNT(*) FROM channel_follows WHERE channel_id='twitter_drop_fail'`).Scan(&count); err != nil {
 		t.Fatalf("count follow: %v", err)
 	}
-	if count != 0 {
-		t.Fatalf("follow remained after unfollow, count=%d", count)
+	if count != 1 {
+		t.Fatalf("follow changed despite cleanup rollback, count=%d", count)
 	}
 	if err := d.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id='tw_drop_fail'`).Scan(&count); err != nil {
 		t.Fatalf("count feed item: %v", err)
 	}
 	if count != 1 {
-		t.Fatalf("unfollow deleted stored feed history, count=%d", count)
+		t.Fatalf("cleanup failure changed stored feed content, count=%d", count)
 	}
 }
 

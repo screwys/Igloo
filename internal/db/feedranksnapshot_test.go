@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -288,12 +289,9 @@ func TestFeedOwnershipAfterFollowClearKeepsActiveRepostWrapper(t *testing.T) {
 		t.Fatalf("rank candidates after clear = %#v", preIDs)
 	}
 
-	page, err := d.ListSnapshotPage(snapshotAt, 0, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(page) != 0 {
-		t.Fatalf("stale snapshot page after clear = %#v", page)
+	_, err = d.ListSnapshotPage(snapshotAt, 0, 10)
+	if !errors.Is(err, ErrFeedSnapshotExpired) {
+		t.Fatalf("stale snapshot error after clear = %v, want %v", err, ErrFeedSnapshotExpired)
 	}
 
 	if err := d.ReplaceFeedRankSnapshot([]SnapshotRow{
@@ -305,7 +303,7 @@ func TestFeedOwnershipAfterFollowClearKeepsActiveRepostWrapper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err = d.ListSnapshotPage(rebuiltAt, 0, 10)
+	page, err := d.ListSnapshotPage(rebuiltAt, 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}

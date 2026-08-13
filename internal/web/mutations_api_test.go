@@ -224,7 +224,7 @@ func TestMutationSeenUsesConversationOwner(t *testing.T) {
 	}
 }
 
-func TestMutationFollowChangesStateWithoutDeletingStoredContent(t *testing.T) {
+func TestMutationUnfollowCollectsUnreferencedContentAndKeepsChannel(t *testing.T) {
 	srv := newTestServer(t)
 	if err := srv.db.ExecRaw(`
 		INSERT INTO channels (channel_id, source_id, name, platform)
@@ -251,8 +251,11 @@ func TestMutationFollowChangesStateWithoutDeletingStoredContent(t *testing.T) {
 	if err := srv.db.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id = 'sample_tweet'`).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
-	if stored != 1 {
+	if stored != 0 {
 		t.Fatalf("stored content after unfollow = %d", stored)
+	}
+	if channel, err := srv.db.GetChannel("twitter_sample_author"); err != nil || channel == nil {
+		t.Fatalf("stored channel after unfollow = %+v, %v", channel, err)
 	}
 }
 

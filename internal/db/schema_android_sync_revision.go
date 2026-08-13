@@ -82,6 +82,26 @@ func ensureAndroidSyncHeadTriggers(conn schemaExecer) error {
 	for _, name := range []string{
 		"android_sync_head_feed_old_hash_update",
 		"android_sync_head_feed_old_hash_delete",
+		"android_sync_head_feed_peers_insert",
+		"android_sync_head_feed_peers_update_new",
+		"android_sync_head_feed_peers_update_old",
+		"android_sync_head_feed_peers_delete",
+		"android_sync_head_retweet_source_peers_insert",
+		"android_sync_head_retweet_source_peers_update_new",
+		"android_sync_head_retweet_source_peers_update_old",
+		"android_sync_head_retweet_source_peers_delete",
+		"android_sync_head_quote_target_peers_insert",
+		"android_sync_head_quote_target_peers_update_new",
+		"android_sync_head_quote_target_peers_update_old",
+		"android_sync_head_quote_target_peers_delete",
+		"android_sync_head_feed_likes_peers_insert",
+		"android_sync_head_feed_likes_peers_delete",
+		"android_sync_head_feed_likes_peers_update_old",
+		"android_sync_head_feed_likes_peers_update_new",
+		"android_sync_head_bookmarks_peers_insert",
+		"android_sync_head_bookmarks_peers_delete",
+		"android_sync_head_bookmarks_peers_update_old",
+		"android_sync_head_bookmarks_peers_update_new",
 	} {
 		if _, err := conn.Exec(`DROP TRIGGER IF EXISTS ` + name); err != nil {
 			return fmt.Errorf("replace Android sync peer trigger %s: %w", name, err)
@@ -317,7 +337,8 @@ func androidSyncFeedPeerHeadTrigger(name, event, table, when, contentHash string
 		 BEGIN
 		   UPDATE android_sync_clock
 		   SET revision = revision + (
-		     SELECT COUNT(*) FROM feed_items WHERE content_hash = %s
+		     SELECT COUNT(*) FROM feed_items
+		     WHERE content_hash IS NOT NULL AND content_hash != '' AND content_hash = %s
 		   )
 		   WHERE id = 1;
 		   INSERT INTO android_sync_heads (owner_kind, owner_id, revision)
@@ -328,7 +349,7 @@ func androidSyncFeedPeerHeadTrigger(name, event, table, when, contentHash string
 		            ROW_NUMBER() OVER (ORDER BY tweet_id) AS position,
 		            COUNT(*) OVER () AS peer_count
 		     FROM feed_items
-		     WHERE content_hash = %s
+		     WHERE content_hash IS NOT NULL AND content_hash != '' AND content_hash = %s
 		   ) peers
 		   WHERE 1
 		   ON CONFLICT(owner_kind, owner_id) DO UPDATE SET
