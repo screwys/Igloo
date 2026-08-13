@@ -207,6 +207,7 @@ type SnapshotRow struct {
 	Jitter             float64
 	DiversityDemotedBy float64
 	FinalScore         float64
+	RelatedAnchor      bool
 }
 
 // ReplaceFeedRankSnapshot replaces the snapshot atomically.
@@ -253,11 +254,13 @@ func (db *DB) ReplaceFeedRankSnapshot(rows []SnapshotRow) error {
 			); err != nil {
 				return fmt.Errorf("insert row %s: %w", r.TweetID, err)
 			}
-			if _, err := historyStmt.Exec(
-				now, r.TweetID, r.RankPosition, r.BaseScore, r.DecayFactor,
-				r.FreshnessBonus, r.Jitter, r.DiversityDemotedBy, r.FinalScore,
-			); err != nil {
-				return fmt.Errorf("insert snapshot history row %s: %w", r.TweetID, err)
+			if !r.RelatedAnchor {
+				if _, err := historyStmt.Exec(
+					now, r.TweetID, r.RankPosition, r.BaseScore, r.DecayFactor,
+					r.FreshnessBonus, r.Jitter, r.DiversityDemotedBy, r.FinalScore,
+				); err != nil {
+					return fmt.Errorf("insert snapshot history row %s: %w", r.TweetID, err)
+				}
 			}
 		}
 		if _, err := tx.Exec(
@@ -305,6 +308,15 @@ type PreDiversitySnapshotRow struct {
 	DecayFactor              float64
 	FreshnessBonus           float64
 	ReplyPenalty             float64
+}
+
+// RelatedContentAnchor keeps a recently displayed snapshot representative
+// available to later snapshot builds without making it visible again.
+type RelatedContentAnchor struct {
+	TweetID           string
+	RelatedContentKey string
+	ThreadRootID      string
+	PublishedAtMs     int64
 }
 
 const feedSnapshotMaxItems = 2000
@@ -599,6 +611,86 @@ func (db *DB) threadMetadataForTweetIDsContext(ctx context.Context, tweetIDs []s
 		threads[tweetID] = thread
 	}
 	return threads, rows.Err()
+}
+
+// ListRecentSnapshotRelatedAnchorsContext returns recently seen rows that were
+// snapshot representatives. Current rows carry anchors between builds; recent
+// history restores representatives removed before the first corrected build.
+func (db *DB) ListRecentSnapshotRelatedAnchorsContext(ctx context.Context, seenSinceMs int64) ([]RelatedContentAnchor, error) {
+	rows, err := db.reader().QueryContext(ctx, fmt.Sprintf(`
+		WITH representative_ids(tweet_id, source_order, rank_position) AS (
+			SELECT snapshot.tweet_id, 0, snapshot.rank_position
+			FROM feed_rank_snapshot snapshot
+			JOIN feed_seen fs ON fs.tweet_id = snapshot.tweet_id
+			WHERE fs.seen_at >= ?
+			UNION ALL
+			SELECT history.tweet_id, 1, MIN(history.rank_position)
+			FROM feed_seen fs INDEXED BY idx_feed_seen_at
+			JOIN feed_rank_snapshot_history history INDEXED BY idx_feed_rank_snapshot_history_tweet
+			  ON history.tweet_id = fs.tweet_id
+			WHERE fs.seen_at >= ?
+			  AND history.computed_at <= fs.seen_at
+			GROUP BY history.tweet_id
+		),
+		representatives(tweet_id, source_order, rank_position) AS (
+			SELECT tweet_id, MIN(source_order), MIN(rank_position)
+			FROM representative_ids
+			GROUP BY tweet_id
+		)
+		SELECT fi.tweet_id,
+		       COALESCE(fi.is_reply, 0),
+		       %s,
+		       fi.published_at
+		FROM representatives
+		JOIN feed_items fi ON fi.tweet_id = representatives.tweet_id
+		WHERE fi.published_at > 0
+		ORDER BY representatives.source_order, representatives.rank_position
+	`, feedRelatedContentKeySQL("fi")), seenSinceMs, seenSinceMs)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	type anchorRow struct {
+		RelatedContentAnchor
+		isReply bool
+	}
+	anchorRows := make([]anchorRow, 0)
+	ids := make([]string, 0)
+	for rows.Next() {
+		var row anchorRow
+		var isReply int
+		if err := rows.Scan(
+			&row.TweetID, &isReply, &row.RelatedContentKey, &row.PublishedAtMs,
+		); err != nil {
+			return nil, err
+		}
+		row.isReply = isReply != 0
+		anchorRows = append(anchorRows, row)
+		ids = append(ids, row.TweetID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	threads, err := db.threadMetadataForTweetIDsContext(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	anchors := make([]RelatedContentAnchor, 0, len(anchorRows))
+	for _, row := range anchorRows {
+		anchor := row.RelatedContentAnchor
+		if thread := threads[anchor.TweetID]; thread.RootID != "" {
+			anchor.ThreadRootID = thread.RootID
+			if row.isReply && thread.RelatedContentKey != "" {
+				anchor.RelatedContentKey = thread.RelatedContentKey
+			}
+		}
+		if strings.TrimSpace(anchor.RelatedContentKey) != "" {
+			anchors = append(anchors, anchor)
+		}
+	}
+	return anchors, nil
 }
 
 // SnapshotPageItem joins a snapshot row with the underlying feed_item.

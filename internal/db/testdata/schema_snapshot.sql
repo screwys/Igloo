@@ -106,11 +106,17 @@ CREATE INDEX idx_feed_items_unscored ON feed_items(algo_scored_at) WHERE algo_sc
 -- index: idx_feed_rank_snapshot_at on feed_rank_snapshot
 CREATE INDEX idx_feed_rank_snapshot_at ON feed_rank_snapshot(computed_at);
 
+-- index: idx_feed_rank_snapshot_history_tweet on feed_rank_snapshot_history
+CREATE INDEX idx_feed_rank_snapshot_history_tweet ON feed_rank_snapshot_history(tweet_id, computed_at);
+
 -- index: idx_feed_rank_snapshot_pos on feed_rank_snapshot
 CREATE INDEX idx_feed_rank_snapshot_pos ON feed_rank_snapshot(rank_position);
 
 -- index: idx_feed_rank_snapshot_score on feed_rank_snapshot
 CREATE INDEX idx_feed_rank_snapshot_score ON feed_rank_snapshot(final_score DESC);
+
+-- index: idx_feed_seen_at on feed_seen
+CREATE INDEX idx_feed_seen_at ON feed_seen(seen_at, tweet_id);
 
 -- index: idx_feed_sources_platform on feed_sources
 CREATE INDEX idx_feed_sources_platform ON feed_sources(platform, enabled);

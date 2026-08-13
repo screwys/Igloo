@@ -146,6 +146,63 @@ func TestListPreDiversityRankedUsesContainedRootPostForReplyDiversity(t *testing
 	}
 }
 
+func TestListRecentSnapshotRelatedAnchorsUsesDisplayedRepresentative(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UnixMilli()
+	if err := d.ExecRaw(`
+		INSERT INTO feed_items (
+			tweet_id, source_channel_id, channel_id, body_text, is_reply,
+			quote_tweet_id, reply_to_status, canonical_tweet_id, content_hash,
+			published_at, fetched_at, algo_interest, algo_scored_at
+		) VALUES
+			('sample_original', '', 'twitter_sample_original', 'original', 0,
+			 '', '', 'sample_original', 'original_hash', ?, ?, 10, 1),
+			('sample_quote', 'twitter_sample_source', 'twitter_sample_quote', 'quote', 0,
+			 'sample_original', '', 'sample_quote', 'quote_hash', ?, ?, 10, 1),
+			('sample_reply', 'twitter_sample_source', 'twitter_sample_reply', 'reply', 1,
+			 '', 'sample_quote', 'sample_reply', 'reply_hash', ?, ?, 10, 1),
+			('sample_old', 'twitter_sample_source', 'twitter_sample_old', 'old', 0,
+			 '', '', 'sample_old', 'old_hash', ?, ?, 10, 1)
+	`, now-4, now-4, now-3, now-3, now-2, now-2, now-1, now-1); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ReplaceFeedRankSnapshot([]SnapshotRow{
+		{TweetID: "sample_reply", RankPosition: 1},
+		{TweetID: "sample_old", RankPosition: 2},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	snapshotAt, err := d.SnapshotComputedAt()
+	if err != nil {
+		t.Fatal(err)
+	}
+	seenAt := snapshotAt + 1
+	if _, err := d.MutateSeen([]string{"sample_reply"}, seenAt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.MutateSeen([]string{"sample_old"}, seenAt-int64(13*time.Hour/time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ReplaceFeedRankSnapshot([]SnapshotRow{{TweetID: "sample_old", RankPosition: 1}}); err != nil {
+		t.Fatal(err)
+	}
+
+	anchors, err := d.ListRecentSnapshotRelatedAnchorsContext(
+		context.Background(), seenAt-int64(12*time.Hour/time.Millisecond),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(anchors) != 1 {
+		t.Fatalf("anchors = %+v", anchors)
+	}
+	anchor := anchors[0]
+	if anchor.TweetID != "sample_reply" || anchor.ThreadRootID != "sample_quote" ||
+		anchor.RelatedContentKey != "tweet:sample_original" || anchor.PublishedAtMs != now-2 {
+		t.Fatalf("anchor = %+v", anchor)
+	}
+}
+
 func TestFeedSeenRankingProjectionUsesCoveringIndex(t *testing.T) {
 	d := openFreshTestDB(t)
 	rows, err := d.conn.Query(`EXPLAIN QUERY PLAN

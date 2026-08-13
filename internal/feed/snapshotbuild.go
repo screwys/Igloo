@@ -19,7 +19,8 @@ const (
 	jitterRangePerTweet = 0.38 // total spread; per-tweet jitter is centered in ±half
 
 	nearbyRepostMergeRankDistance = 150
-	nearbyRepostMergeWindow       = 12 * time.Hour
+	// RelatedContentMergeWindow bounds when wrappers count as the same appearance.
+	RelatedContentMergeWindow = 12 * time.Hour
 )
 
 // BuildSnapshot turns a pre-diversity ranked list into the final snapshot rows
@@ -27,8 +28,19 @@ const (
 // deterministic per-hour jitter. The returned rows are in final rank order
 // with rank_position assigned 1..N.
 func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.SnapshotRow {
+	return BuildSnapshotWithRelatedAnchors(in, nil, now)
+}
+
+// BuildSnapshotWithRelatedAnchors also keeps recently displayed related-post
+// representatives in the persisted snapshot. They remain hidden by feed_seen,
+// but prevent sibling quote and reply threads from replacing them on rebuild.
+func BuildSnapshotWithRelatedAnchors(
+	in []db.PreDiversitySnapshotRow,
+	anchors []db.RelatedContentAnchor,
+	now time.Time,
+) []db.SnapshotRow {
 	if len(in) == 0 {
-		return nil
+		return appendRelatedContentAnchors(nil, anchors)
 	}
 	hourSalt := strconv.FormatInt(now.Truncate(time.Hour).Unix(), 10)
 
@@ -130,12 +142,17 @@ func BuildSnapshot(in []db.PreDiversitySnapshotRow, now time.Time) []db.Snapshot
 	}
 	out = mergeNearbyOriginalsIntoPureReposts(out, in)
 	out = compactThreadRoots(out, in)
-	out = compactNearbyRelatedConversations(out, in)
-	return compactPureRepostsIntoThreadRepresentatives(out, in)
+	out = compactNearbyRelatedConversations(out, in, anchors)
+	out = compactPureRepostsIntoThreadRepresentatives(out, in)
+	return appendRelatedContentAnchors(out, anchors)
 }
 
-func compactNearbyRelatedConversations(rows []db.SnapshotRow, meta []db.PreDiversitySnapshotRow) []db.SnapshotRow {
-	if len(rows) < 2 || len(meta) == 0 {
+func compactNearbyRelatedConversations(
+	rows []db.SnapshotRow,
+	meta []db.PreDiversitySnapshotRow,
+	anchors []db.RelatedContentAnchor,
+) []db.SnapshotRow {
+	if len(rows) == 0 || len(meta) == 0 {
 		return rows
 	}
 	metadata := make(map[string]db.PreDiversitySnapshotRow, len(meta))
@@ -144,6 +161,13 @@ func compactNearbyRelatedConversations(rows []db.SnapshotRow, meta []db.PreDiver
 	}
 
 	keptByRelated := make(map[string][]db.PreDiversitySnapshotRow)
+	anchorsByRelated := make(map[string][]db.RelatedContentAnchor)
+	for _, anchor := range anchors {
+		relatedKey := strings.ToLower(strings.TrimSpace(anchor.RelatedContentKey))
+		if relatedKey != "" {
+			anchorsByRelated[relatedKey] = append(anchorsByRelated[relatedKey], anchor)
+		}
+	}
 	out := make([]db.SnapshotRow, 0, len(rows))
 	for _, row := range rows {
 		rowMeta, ok := metadata[row.TweetID]
@@ -153,7 +177,16 @@ func compactNearbyRelatedConversations(rows []db.SnapshotRow, meta []db.PreDiver
 			continue
 		}
 		nearby := false
+		for _, anchor := range anchorsByRelated[relatedKey] {
+			if withinNearbyRepostWindow(anchor.PublishedAtMs, rowMeta.PublishedAtMs) {
+				nearby = true
+				break
+			}
+		}
 		for _, kept := range keptByRelated[relatedKey] {
+			if nearby {
+				break
+			}
 			if kept.ThreadRootID != rowMeta.ThreadRootID &&
 				withinNearbyRepostWindow(kept.PublishedAtMs, rowMeta.PublishedAtMs) {
 				nearby = true
@@ -170,6 +203,28 @@ func compactNearbyRelatedConversations(rows []db.SnapshotRow, meta []db.PreDiver
 		out[i].RankPosition = i + 1
 	}
 	return out
+}
+
+func appendRelatedContentAnchors(rows []db.SnapshotRow, anchors []db.RelatedContentAnchor) []db.SnapshotRow {
+	if len(anchors) == 0 {
+		return rows
+	}
+	seen := make(map[string]bool, len(rows)+len(anchors))
+	for _, row := range rows {
+		seen[row.TweetID] = true
+	}
+	for _, anchor := range anchors {
+		if strings.TrimSpace(anchor.TweetID) == "" || seen[anchor.TweetID] {
+			continue
+		}
+		seen[anchor.TweetID] = true
+		rows = append(rows, db.SnapshotRow{
+			TweetID:       anchor.TweetID,
+			RankPosition:  len(rows) + 1,
+			RelatedAnchor: true,
+		})
+	}
+	return rows
 }
 
 func compactThreadRoots(rows []db.SnapshotRow, meta []db.PreDiversitySnapshotRow) []db.SnapshotRow {
@@ -360,7 +415,7 @@ func withinNearbyRepostWindow(leftMs, rightMs int64) bool {
 	if leftMs <= 0 || rightMs <= 0 {
 		return false
 	}
-	return time.Duration(absInt64(leftMs-rightMs))*time.Millisecond <= nearbyRepostMergeWindow
+	return time.Duration(absInt64(leftMs-rightMs))*time.Millisecond <= RelatedContentMergeWindow
 }
 
 // jitterFor produces a deterministic ±jitterRangePerTweet/2 value for a

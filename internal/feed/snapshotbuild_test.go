@@ -101,7 +101,7 @@ func TestBuildSnapshot_KeepsOriginalWhenPureRepostIsOutsideTimeWindow(t *testing
 	publishedAt := now.Add(-12 * time.Hour).UnixMilli()
 	in := []db.PreDiversitySnapshotRow{
 		{TweetID: "original", ChannelID: "sample_author", SourceChannelID: "sample_author", ContentHash: "same_content", PublishedAtMs: publishedAt, BaseScore: 100, DecayFactor: 1},
-		{TweetID: "sample_repost_later", ChannelID: "sample_author", SourceChannelID: "sample_reposter", ContentHash: "same_content", IsRetweet: true, PublishedAtMs: publishedAt + int64(nearbyRepostMergeWindow/time.Millisecond) + 1, BaseScore: 99, DecayFactor: 1},
+		{TweetID: "sample_repost_later", ChannelID: "sample_author", SourceChannelID: "sample_reposter", ContentHash: "same_content", IsRetweet: true, PublishedAtMs: publishedAt + int64(RelatedContentMergeWindow/time.Millisecond) + 1, BaseScore: 99, DecayFactor: 1},
 	}
 	out := BuildSnapshot(in, now)
 	if !snapshotHasID(out, "original") || !snapshotHasID(out, "sample_repost_later") {
@@ -203,6 +203,54 @@ func TestBuildSnapshotCompactsNearbyThreadsQuotingTheSamePost(t *testing.T) {
 
 	out := BuildSnapshot(in, now)
 	if got, want := snapshotIDs(out), []string{"thread_a", "other"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshot IDs = %v, want %v", got, want)
+	}
+}
+
+func TestBuildSnapshotKeepsSeenRelatedPostHiddenAcrossRebuilds(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	publishedAt := now.Add(-time.Hour).UnixMilli()
+	in := []db.PreDiversitySnapshotRow{
+		{TweetID: "sample_later_reply", ChannelID: "sample_author", RelatedContentKey: "tweet:sample_original", ThreadRootID: "sample_later_quote", IsReply: true, PublishedAtMs: publishedAt + int64(time.Hour/time.Millisecond), BaseScore: 100, DecayFactor: 1},
+		{TweetID: "sample_other", ChannelID: "sample_other", RelatedContentKey: "tweet:sample_other", ThreadRootID: "sample_other", PublishedAtMs: publishedAt, BaseScore: 90, DecayFactor: 1},
+	}
+	anchors := []db.RelatedContentAnchor{{
+		TweetID:           "sample_seen_reply",
+		RelatedContentKey: "tweet:sample_original",
+		ThreadRootID:      "sample_first_quote",
+		PublishedAtMs:     publishedAt,
+	}}
+
+	out := BuildSnapshotWithRelatedAnchors(in, anchors, now)
+	if snapshotHasID(out, "sample_later_reply") {
+		t.Fatalf("later related reply remained in snapshot: %v", snapshotIDs(out))
+	}
+	if got, want := snapshotIDs(out), []string{"sample_other", "sample_seen_reply"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshot IDs = %v, want %v", got, want)
+	}
+}
+
+func TestBuildSnapshotAllowsSeenRelatedPostOutsideNearbyWindow(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	publishedAt := now.Add(-24 * time.Hour).UnixMilli()
+	in := []db.PreDiversitySnapshotRow{{
+		TweetID:           "sample_later_quote",
+		ChannelID:         "sample_author",
+		RelatedContentKey: "tweet:sample_original",
+		ThreadRootID:      "sample_later_quote",
+		PublishedAtMs:     publishedAt + int64(RelatedContentMergeWindow/time.Millisecond) + 1,
+		BaseScore:         100,
+		DecayFactor:       1,
+	}}
+	anchors := []db.RelatedContentAnchor{{
+		TweetID:           "sample_seen_quote",
+		RelatedContentKey: "tweet:sample_original",
+		ThreadRootID:      "sample_first_quote",
+		PublishedAtMs:     publishedAt,
+	}}
+
+	out := BuildSnapshotWithRelatedAnchors(in, anchors, now)
+	if got, want := snapshotIDs(out), []string{"sample_later_quote", "sample_seen_quote"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("snapshot IDs = %v, want %v", got, want)
 	}
 }
@@ -320,7 +368,7 @@ func TestBuildSnapshotKeepsRelatedThreadsOutsideNearbyWindow(t *testing.T) {
 	publishedAt := now.Add(-24 * time.Hour).UnixMilli()
 	in := []db.PreDiversitySnapshotRow{
 		{TweetID: "thread_a", ChannelID: "sample_author", RelatedContentKey: "tweet:sample_original", ThreadRootID: "quote_a", IsReply: true, PublishedAtMs: publishedAt, BaseScore: 100, DecayFactor: 1},
-		{TweetID: "thread_b", ChannelID: "sample_author", RelatedContentKey: "tweet:sample_original", ThreadRootID: "quote_b", IsReply: true, PublishedAtMs: publishedAt + int64(nearbyRepostMergeWindow/time.Millisecond) + 1, BaseScore: 99, DecayFactor: 1},
+		{TweetID: "thread_b", ChannelID: "sample_author", RelatedContentKey: "tweet:sample_original", ThreadRootID: "quote_b", IsReply: true, PublishedAtMs: publishedAt + int64(RelatedContentMergeWindow/time.Millisecond) + 1, BaseScore: 99, DecayFactor: 1},
 	}
 
 	out := BuildSnapshot(in, now)

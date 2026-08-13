@@ -261,7 +261,16 @@ func (m *Manager) runSnapshotPhaseStats(
 	}
 
 	buildStart := time.Now()
-	snapshot := feed.BuildSnapshot(pre, time.Now())
+	now := time.Now()
+	anchors, err := m.db.ListRecentSnapshotRelatedAnchorsContext(
+		snapCtx, now.Add(-feed.RelatedContentMergeWindow).UnixMilli(),
+	)
+	if err != nil {
+		log.Printf("[feed_scoring] ListRecentSnapshotRelatedAnchors: %v", err)
+		stats.totalDur = time.Since(snapStart).Round(time.Millisecond)
+		return stats
+	}
+	snapshot := feed.BuildSnapshotWithRelatedAnchors(pre, anchors, now)
 	stats.buildDur = time.Since(buildStart).Round(time.Millisecond)
 
 	writeStart := time.Now()
@@ -273,7 +282,7 @@ func (m *Manager) runSnapshotPhaseStats(
 	}
 	stats.writeDur = time.Since(writeStart).Round(time.Millisecond)
 	stats.totalDur = time.Since(snapStart).Round(time.Millisecond)
-	stats.count = len(snapshot)
+	stats.count = visibleSnapshotCount(snapshot)
 	stats.top = snapshotTop10(snapshot)
 	return stats
 }
@@ -371,13 +380,25 @@ func (m *Manager) prepareRankCandidateReplies(
 // snapshotTop10 returns a compact "tweet_id(final_score)" summary for the first
 // up-to-10 rows, for logging + debugging.
 func snapshotTop10(rows []db.SnapshotRow) string {
-	n := len(rows)
-	if n > 10 {
-		n = 10
-	}
-	parts := make([]string, n)
-	for i := 0; i < n; i++ {
-		parts[i] = fmt.Sprintf("%s(%.2f)", rows[i].TweetID, rows[i].FinalScore)
+	parts := make([]string, 0, 10)
+	for _, row := range rows {
+		if row.RelatedAnchor {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s(%.2f)", row.TweetID, row.FinalScore))
+		if len(parts) == 10 {
+			break
+		}
 	}
 	return "[" + strings.Join(parts, ",") + "]"
+}
+
+func visibleSnapshotCount(rows []db.SnapshotRow) int {
+	count := 0
+	for _, row := range rows {
+		if !row.RelatedAnchor {
+			count++
+		}
+	}
+	return count
 }
