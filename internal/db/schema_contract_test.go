@@ -109,6 +109,52 @@ func TestOpenMigratesKnownSchemaChange(t *testing.T) {
 	}
 }
 
+func TestOpenAddsFeedRelatedAnchorIndexes(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "igloo.db")
+	store, err := OpenPath(path, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`
+		DROP INDEX idx_feed_seen_at;
+		DROP INDEX idx_feed_rank_snapshot_history_tweet;
+		DELETE FROM schema_migrations WHERE name = '20260813_add_feed_related_anchor_indexes';
+	`); err != nil {
+		_ = conn.Close()
+		t.Fatal(err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err = OpenPath(path, root)
+	if err != nil {
+		t.Fatalf("OpenPath legacy feed indexes: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	var indexes int
+	if err := store.QueryRow(`
+		SELECT COUNT(*)
+		FROM sqlite_schema
+		WHERE type = 'index'
+		  AND name IN ('idx_feed_seen_at', 'idx_feed_rank_snapshot_history_tweet')
+	`).Scan(&indexes); err != nil {
+		t.Fatal(err)
+	}
+	if indexes != 2 {
+		t.Fatalf("feed related anchor indexes = %d, want 2", indexes)
+	}
+}
+
 func TestOpenRetiresFeedItemPinSchema(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")

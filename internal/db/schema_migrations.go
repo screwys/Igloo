@@ -24,6 +24,10 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260813_add_feed_related_anchor_indexes",
+		apply: addFeedRelatedAnchorIndexes,
+	},
+	{
 		name:  "20260809_add_video_metadata_jobs",
 		apply: addVideoMetadataJobs,
 	},
@@ -67,6 +71,14 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addFeedRelatedAnchorIndexes(tx *sql.Tx) error {
+	if _, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_feed_seen_at ON feed_seen(seen_at, tweet_id)`); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_feed_rank_snapshot_history_tweet ON feed_rank_snapshot_history(tweet_id, computed_at)`)
+	return err
 }
 
 func addVideoMetadataJobs(tx *sql.Tx) error {
