@@ -22,8 +22,8 @@ func compileFTSQuery(q string) string {
 	return strings.Join(parts, " AND ")
 }
 
-// SearchChannelsFast searches channels using FTS5 index.
-func (db *DB) SearchChannelsFast(q string, limit int) ([]model.Channel, error) {
+// SearchChannels searches followed channels using the FTS5 index.
+func (db *DB) SearchChannels(q string, limit int) ([]model.Channel, error) {
 	fts := compileFTSQuery(q)
 	if fts == "" {
 		return nil, nil
@@ -41,6 +41,7 @@ func (db *DB) SearchChannelsFast(q string, limit int) ([]model.Channel, error) {
 		       COALESCE(cp.handle, '') AS handle,
 		       COALESCE(cp.display_name, '') AS profile_display_name
 		FROM search_channels_fts f
+		JOIN channel_follows cf ON cf.channel_id = f.channel_id_pk
 		LEFT JOIN channels c ON c.channel_id = f.channel_id_pk
 		LEFT JOIN channel_stars cs ON cs.channel_id = f.channel_id_pk
 		LEFT JOIN channel_profiles cp ON cp.channel_id = f.channel_id_pk AND cp.tombstone = 0

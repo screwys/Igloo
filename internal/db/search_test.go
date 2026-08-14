@@ -10,6 +10,12 @@ func TestSearchFTSTriggersKeepReadyIndexCurrent(t *testing.T) {
 	d := openFreshTestDB(t)
 
 	seedSearchChannel(t, d, "tiktok_sample_channel", "tiktok")
+	if err := d.ExecRaw(
+		`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`,
+		"tiktok_sample_channel",
+	); err != nil {
+		t.Fatalf("insert follow: %v", err)
+	}
 	if err := d.UpsertChannelProfile(model.ChannelProfile{
 		ChannelID:   "tiktok_sample_channel",
 		Platform:    "tiktok",
@@ -24,9 +30,9 @@ func TestSearchFTSTriggersKeepReadyIndexCurrent(t *testing.T) {
 		t.Fatalf("SetDearrowData: %v", err)
 	}
 
-	channels, err := d.SearchChannelsFast("fresh", 10)
+	channels, err := d.SearchChannels("fresh", 10)
 	if err != nil {
-		t.Fatalf("SearchChannelsFast: %v", err)
+		t.Fatalf("SearchChannels: %v", err)
 	}
 	if len(channels) != 1 || channels[0].ChannelID != "tiktok_sample_channel" {
 		t.Fatalf("channels = %+v, want tiktok_sample_channel", channels)
@@ -82,11 +88,11 @@ func seedSearchVideo(t *testing.T, d *DB, videoID, channelID, title string) {
 	}
 }
 
-func TestSearchChannelsFast(t *testing.T) {
+func TestSearchChannels(t *testing.T) {
 	d := openTestDB(t)
-	results, err := d.SearchChannelsFast("test", 10)
+	results, err := d.SearchChannels("test", 10)
 	if err != nil {
-		t.Fatalf("SearchChannelsFast: %v", err)
+		t.Fatalf("SearchChannels: %v", err)
 	}
 	_ = results
 }

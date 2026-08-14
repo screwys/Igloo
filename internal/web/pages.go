@@ -1387,7 +1387,7 @@ func (s *Server) handlePageSearch(w http.ResponseWriter, r *http.Request) {
 	var xPosts []model.FeedItem
 
 	if q != "" {
-		allChannels, _ := s.db.SearchChannelsFast(q, 50)
+		allChannels, _ := s.db.SearchChannels(q, 50)
 		for _, ch := range allChannels {
 			switch ch.Platform {
 			case "tiktok":

@@ -32,7 +32,7 @@ func (s *Server) handleSearchSuggest(w http.ResponseWriter, r *http.Request) {
 	dearrowMode, _ := s.db.GetSetting("dearrow_mode", "off")
 	dearrowMode = settings.NormalizeDearrowMode(dearrowMode)
 
-	channels, _ := s.db.SearchChannelsFast(q, channelLimit)
+	channels, _ := s.db.SearchChannels(q, channelLimit)
 	videos, _ := s.db.SearchVideosFast(q, videoLimit)
 
 	chResult := make([]map[string]any, 0, len(channels))
