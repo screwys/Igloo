@@ -428,6 +428,11 @@
     <string name="media_type_image">Single image</string>
     <string name="media_type_slideshow">Slideshow</string>
     <string name="media_type_video">Video</string>
+    <string name="mini_player_browsing_view">Igloo browsing view</string>
+    <string name="mini_player_close">Close mini player</string>
+    <string name="mini_player_resize">Resize mini player</string>
+    <string name="mini_player_return_to_video">Return to video</string>
+    <string name="mini_player_title">Mini player</string>
     <string name="moments_auto_swipe_state">Auto swipe: %1$s</string>
     <string name="moments_empty">No moments</string>
     <string name="moments_label_all">All</string>
@@ -548,6 +553,7 @@
     <string name="settings_dont_auto_translate">Don\'t auto-translate</string>
     <string name="settings_dont_auto_translate_help">Posts in these languages won\'t be auto-translated. Empty list translates everything except your target language.</string>
     <string name="settings_download_english_subtitles">Download English Subtitles</string>
+    <string name="settings_enable_mini_player">Enable mini player</string>
     <string name="settings_endpoint_override">Endpoint Override</string>
     <string name="settings_endpoint_override_help">Leave blank for Google Basic or DeepL defaults. OpenAI-compatible defaults to local Ollama at http://127.0.0.1:11434.</string>
     <string name="settings_endpoint_override_placeholder">optional; defaults by provider</string>
@@ -561,6 +567,8 @@
     <string name="settings_media_only_default">Media-only by default</string>
     <string name="settings_media_only_feed">Media-only feed</string>
     <string name="settings_media_only_x">Media only (X)</string>
+    <string name="settings_mini_player_feed_help">Automatically move a playing Feed video into the mini player when you browse away.</string>
+    <string name="settings_mini_player_videos_help">Automatically move a playing YouTube video into the mini player when you browse away.</string>
     <string name="settings_mode_casual">Casual</string>
     <string name="settings_mode_community">Community</string>
     <string name="settings_mode_off">Off</string>

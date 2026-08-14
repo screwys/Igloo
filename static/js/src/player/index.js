@@ -363,20 +363,31 @@ if (root && video) {
 
   function isPlayerLayoutFullscreen() {
     var fsEl = doc.fullscreenElement || doc.webkitFullscreenElement
-    return fsEl === playerLayout
+    return fsEl === playerFullscreenTarget()
+  }
+
+  function playerFullscreenTarget() {
+    var miniPlayer = window.IglooMiniPlayer
+    if (miniPlayer && typeof miniPlayer.fullscreenTarget === 'function') {
+      return miniPlayer.fullscreenTarget(playerLayout) || playerLayout
+    }
+    return playerLayout
   }
 
   function toggleFullscreen() {
     var isFs = doc.fullscreenElement || doc.webkitFullscreenElement
     if (!isFs) {
-      playerLayout.classList.add('fullscreen-immersive')
-      playerLayout.classList.remove('fullscreen-browse')
-      playerLayout.scrollTop = 0
-      window.scrollTo(0, 0)
-      var fsReq = playerLayout.requestFullscreen || playerLayout.webkitRequestFullscreen
+      var target = playerFullscreenTarget()
+      if (target === playerLayout) {
+        playerLayout.classList.add('fullscreen-immersive')
+        playerLayout.classList.remove('fullscreen-browse')
+        playerLayout.scrollTop = 0
+        window.scrollTo(0, 0)
+      }
+      var fsReq = target.requestFullscreen || target.webkitRequestFullscreen
       if (fsReq) {
-        fsReq.call(playerLayout).catch(function () {
-          playerLayout.classList.remove('fullscreen-immersive')
+        fsReq.call(target).catch(function () {
+          if (target === playerLayout) playerLayout.classList.remove('fullscreen-immersive')
         })
       }
       return
@@ -405,10 +416,13 @@ if (root && video) {
 
     function onFullscreenChange() {
       if (isPlayerLayoutFullscreen()) {
-        setFullscreenMode('immersive')
-        playerLayout.scrollTop = 0
-        if (speedMenu && speedMenu.parentNode !== playerLayout) playerLayout.appendChild(speedMenu)
-        if (cinemaView) cinemaBeforeFullscreen = cinemaView.suspendForFullscreen()
+        var target = playerFullscreenTarget()
+        if (target === playerLayout) {
+          setFullscreenMode('immersive')
+          playerLayout.scrollTop = 0
+          if (cinemaView) cinemaBeforeFullscreen = cinemaView.suspendForFullscreen()
+        }
+        if (speedMenu && speedMenu.parentNode !== target) target.appendChild(speedMenu)
       } else if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
         playerLayout.classList.remove('fullscreen-immersive', 'fullscreen-browse')
         playerLayout.scrollTop = 0
@@ -426,7 +440,7 @@ if (root && video) {
     doc.addEventListener('webkitfullscreenchange', onFullscreenChange)
 
     function handleFullscreenWheel(e) {
-      if (!isPlayerLayoutFullscreen()) return
+      if (!isPlayerLayoutFullscreen() || playerFullscreenTarget() !== playerLayout) return
       var deltaY = normalizeWheelDeltaY(e)
       if (Math.abs(deltaY) < 0.01) return
 
@@ -923,6 +937,12 @@ if (root && video) {
     doc.addEventListener('keydown', function (event) {
       if (event.key === 'Escape') { closeAllPlayerMenus(null); return }
       if (event.ctrlKey || event.metaKey || event.altKey) return
+      var miniPlayer = window.IglooMiniPlayer
+      if (miniPlayer && miniPlayer.isMini && miniPlayer.isMini()) {
+        var miniShell = event.target && event.target.closest ? event.target.closest('#mini-player-shell') : null
+        if (!miniShell) return
+        if (event.target && event.target.closest && event.target.closest('button')) return
+      }
       var activeEl = doc.activeElement
       if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) return
 

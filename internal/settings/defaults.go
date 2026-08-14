@@ -159,6 +159,8 @@ var Defaults = map[string]any{
 	"translate_model":                  "",
 	"ui_language":                      "en",
 	"youtube_default_playback_speed":   "1",
+	"mini_player_videos_enabled":       true,
+	"mini_player_feed_enabled":         false,
 	"archive_bookmarks":                false,
 	"backup_enabled":                   false,
 	"backup_dir":                       "",

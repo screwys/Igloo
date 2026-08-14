@@ -6,6 +6,7 @@ const videoControlIcons = {
   pause: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>',
   muted: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6M16 9l6 6"/></svg>',
   unmuted: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>',
+  mini: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="11" y="11" width="8" height="6" rx="1" fill="currentColor" stroke="none"/></svg>',
   expand: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>'
 }
 
@@ -106,6 +107,9 @@ export function createFeedVideoControls(options) {
 
   controls.appendChild(makeSpeedControl())
   controls.appendChild(makeVolumeControl())
+  const miniButton = makeControlButton('data-feed-video-mini', t('mini_player_title', 'Mini player'), 'mini')
+  miniButton.setAttribute('aria-pressed', 'false')
+  controls.appendChild(miniButton)
   if (options && typeof options.onExpand === 'function') {
     controls.appendChild(makeControlButton('data-feed-video-expand', t('action_enter_fullscreen', 'Enter fullscreen'), 'expand'))
   }
@@ -123,6 +127,7 @@ export function bindFeedVideoControls(wrap, video, options) {
   const volume = controls.querySelector('[data-feed-video-volume]')
   const volumeControl = controls.querySelector('[data-feed-video-volume-control]')
   const volumePopover = controls.querySelector('.feed-video-volume-popover')
+  const mini = controls.querySelector('[data-feed-video-mini]')
   const expand = controls.querySelector('[data-feed-video-expand]')
   const speed = controls.querySelector('[data-feed-video-speed]')
   const speedButton = controls.querySelector('[data-feed-video-speed-button]')
@@ -205,6 +210,21 @@ export function bindFeedVideoControls(wrap, video, options) {
     volumeControl.addEventListener('click', function (event) { event.stopPropagation() })
     volumeControl.addEventListener('mousedown', function (event) { event.stopPropagation() })
     volumeControl.addEventListener('touchstart', function (event) { event.stopPropagation() })
+  }
+  if (mini) {
+    mini.addEventListener('click', function (event) {
+      event.preventDefault()
+      event.stopPropagation()
+      let manager = null
+      try { manager = window.top && window.top.IglooMiniPlayer } catch (_) {}
+      if (!manager || typeof manager.toggleSurface !== 'function') return
+      manager.toggleSurface({
+        element: wrap,
+        video: video,
+        button: mini,
+        kind: 'feed',
+      })
+    })
   }
   if (speed && speedButton && speedMenu) {
     speedButton.addEventListener('click', function (event) {

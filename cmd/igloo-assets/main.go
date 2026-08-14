@@ -12,6 +12,7 @@ func main() {
 			{InputPath: "static/js/src/feed/index.js", OutputPath: "feed"},
 			{InputPath: "static/js/src/shorts/index.js", OutputPath: "shorts"},
 			{InputPath: "static/js/src/player/index.js", OutputPath: "player"},
+			{InputPath: "static/js/src/mini-player.js", OutputPath: "mini-player"},
 		},
 		Bundle:    true,
 		Format:    api.FormatIIFE,

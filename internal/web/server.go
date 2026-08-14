@@ -240,6 +240,8 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 		Text:                    s.catalog().Messages(lang),
 		SupportedLanguages:      langs,
 		ShareEmbedFriendlyLinks: s.boolSetting("share_embed_friendly_links"),
+		MiniPlayerVideosEnabled: s.boolSetting("mini_player_videos_enabled"),
+		MiniPlayerFeedEnabled:   s.boolSetting("mini_player_feed_enabled"),
 		DownloadsStopped:        s.workers.IsStopRequested(),
 		StaticV:                 s.staticV,
 		Prefs: components.PrefsData{Settings: map[string]any{

@@ -295,10 +295,19 @@
 
     var form = doc.getElementById('prefs-form');
     var shareEmbedFriendly = form && form.querySelector('[name=share_embed_friendly_links]');
+    var miniPlayerVideos = form && form.querySelector('[name=mini_player_videos_enabled]');
+    var miniPlayerFeed = form && form.querySelector('[name=mini_player_feed_enabled]');
     if (form) {
       window.IglooPreferences = Object.assign({}, window.IglooPreferences || {}, {
-        shareEmbedFriendlyLinks: !!(shareEmbedFriendly && shareEmbedFriendly.checked)
+        shareEmbedFriendlyLinks: !!(shareEmbedFriendly && shareEmbedFriendly.checked),
+        miniPlayerVideosEnabled: !!(miniPlayerVideos && miniPlayerVideos.checked),
+        miniPlayerFeedEnabled: !!(miniPlayerFeed && miniPlayerFeed.checked)
       });
+      try {
+        if (window.top !== window && window.top.IglooMiniPlayer) {
+          window.top.IglooPreferences = Object.assign({}, window.top.IglooPreferences || {}, window.IglooPreferences);
+        }
+      } catch (e) {}
     }
     var lang = form && form.querySelector('[name=ui_language]');
     var previousLang = form ? form.dataset.persistedUiLanguage : '';

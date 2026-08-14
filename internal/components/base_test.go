@@ -102,11 +102,17 @@ func TestBaseRendersStructure(t *testing.T) {
 		{"confirm-modal", `id="confirm-modal"`},
 		{"search-overlay", `id="search-overlay"`},
 		{"modal-container", `id="modal-container"`},
+		{"mini player shell", `id="mini-player-shell"`},
+		{"mini player media host", `id="mini-player-media-host"`},
+		{"mini player return", `id="mini-player-return"`},
+		{"mini player close", `id="mini-player-close"`},
+		{"mini player browse frame", `id="mini-player-browse-frame"`},
 		{"i18n config", `window.IglooI18n`},
 		{"shortcut config", `window._cfShortcutConfig`},
 		{"web_theme.js", `js/web_theme.js?v=test123`},
 		{"site_base.js", `js/site_base.js?v=test123`},
 		{"video_cards.js", `js/video_cards.js?v=test123`},
+		{"mini player bundle", `js/dist/mini-player.js?v=test123`},
 	}
 
 	for _, c := range checks {
@@ -130,6 +136,40 @@ func TestBaseEmbedsSharePreferenceConfig(t *testing.T) {
 	html = renderBase(t, p)
 	if !strings.Contains(html, `"shareEmbedFriendlyLinks":true`) {
 		t.Fatalf("base config should expose enabled shareEmbedFriendlyLinks:\n%s", html)
+	}
+}
+
+func TestBaseEmbedsMiniPlayerPreferenceConfig(t *testing.T) {
+	p := newTestPageProps()
+	p.MiniPlayerVideosEnabled = true
+	p.MiniPlayerFeedEnabled = false
+	html := renderBase(t, p)
+
+	if !strings.Contains(html, `"miniPlayerVideosEnabled":true`) {
+		t.Fatalf("base config should expose the Videos mini-player preference:\n%s", html)
+	}
+	if !strings.Contains(html, `"miniPlayerFeedEnabled":false`) {
+		t.Fatalf("base config should expose the Feed mini-player preference:\n%s", html)
+	}
+}
+
+func TestPrefsBodyRendersMiniPlayerSettings(t *testing.T) {
+	p := newTestPageProps()
+	prefs := PrefsData{Settings: map[string]any{
+		"mini_player_videos_enabled": true,
+		"mini_player_feed_enabled":   false,
+	}}
+	var buf bytes.Buffer
+	if err := PrefsBody(p, prefs).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+
+	if !strings.Contains(html, `name="mini_player_videos_enabled" value="true" checked`) {
+		t.Fatalf("Videos mini-player setting should render enabled:\n%s", html)
+	}
+	if !strings.Contains(html, `name="mini_player_feed_enabled" value="true"`) || strings.Contains(html, `name="mini_player_feed_enabled" value="true" checked`) {
+		t.Fatalf("Feed mini-player setting should render disabled:\n%s", html)
 	}
 }
 

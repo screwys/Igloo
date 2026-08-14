@@ -88,6 +88,35 @@ func TestSettingsToAPIFormat_DefaultsShareEmbedFriendlyLinksOff(t *testing.T) {
 	}
 }
 
+func TestSettingsToAPIFormatDefaultsAutomaticMiniPlayerOnlyForVideos(t *testing.T) {
+	got := settingsToAPIFormat(nil)
+	if got["mini_player_videos_enabled"] != true {
+		t.Fatalf("mini_player_videos_enabled = %#v, want true", got["mini_player_videos_enabled"])
+	}
+	if got["mini_player_feed_enabled"] != false {
+		t.Fatalf("mini_player_feed_enabled = %#v, want false", got["mini_player_feed_enabled"])
+	}
+}
+
+func TestSettingsFromFormPersistsMiniPlayerDestinationToggles(t *testing.T) {
+	srv := newTestServer(t)
+	form := url.Values{}
+	form.Set("mini_player_videos_enabled", "true")
+	req := httptest.NewRequest("POST", "/api/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := req.ParseForm(); err != nil {
+		t.Fatalf("ParseForm: %v", err)
+	}
+
+	body := srv.settingsFromForm(req)
+	if got := body["mini_player_videos_enabled"]; got != "true" {
+		t.Fatalf("mini_player_videos_enabled = %q, want true", got)
+	}
+	if got := body["mini_player_feed_enabled"]; got != "false" {
+		t.Fatalf("mini_player_feed_enabled = %q, want false", got)
+	}
+}
+
 func TestShortcutDefaultsIncludeCinemaSidebarAndSettings(t *testing.T) {
 	if got := defaultShortcutConfig()["player.cinema"]; got != "c" {
 		t.Fatalf("default cinema shortcut = %q, want c", got)

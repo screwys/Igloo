@@ -57,6 +57,8 @@ type PageProps struct {
 	SupportedLanguages      []LanguageChoice
 	Sidebar                 model.SidebarContext
 	ShareEmbedFriendlyLinks bool
+	MiniPlayerVideosEnabled bool
+	MiniPlayerFeedEnabled   bool
 	DownloadsStopped        bool
 	StaticV                 func(string) string
 	PageScripts             []string // JS files to include after base scripts.
@@ -123,6 +125,8 @@ func (p PageProps) ShortcutConfigJSON() string {
 func (p PageProps) PreferencesConfigJSON() string {
 	b, _ := json.Marshal(map[string]any{
 		"shareEmbedFriendlyLinks": p.ShareEmbedFriendlyLinks,
+		"miniPlayerVideosEnabled": p.MiniPlayerVideosEnabled,
+		"miniPlayerFeedEnabled":   p.MiniPlayerFeedEnabled,
 	})
 	return "window.IglooPreferences = " + string(b) + ";"
 }

@@ -48,6 +48,7 @@ templ Base(p PageProps) {
 				{ children... }
 			</main>
 		</div>
+		@MiniPlayerShell(p)
 		@ChannelSettingsPopover(p)
 		@AddSubModal(p)
 		@PrefsModal(p)
@@ -63,6 +64,7 @@ templ Base(p PageProps) {
 		<script src={ p.StaticV("js/web_theme.js") }></script>
 		<script src={ p.StaticV("js/site_base.js") }></script>
 		<script src={ p.StaticV("js/video_cards.js") }></script>
+		<script defer src={ p.StaticV("js/dist/mini-player.js") }></script>
 		<script type="module" src={ p.StaticV("js/profile-hover.js") }></script>
 		<script type="module" src={ p.StaticV("js/profile-image-overlay.js") }></script>
 		for _, script := range p.PageScripts {

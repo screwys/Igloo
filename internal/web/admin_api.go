@@ -416,6 +416,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 	// Checkboxes: present=true, absent=false.
 	checkboxFields := []string{
 		"youtube_include_member_only", "download_subtitles", "media_only_default",
+		"mini_player_videos_enabled", "mini_player_feed_enabled",
 		"archive_bookmarks", "backup_enabled",
 		"algorithmic_feed_enabled", "moments_include_reposts_default",
 		"instagram_include_tagged_default", "share_embed_friendly_links",

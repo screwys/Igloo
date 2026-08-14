@@ -756,6 +756,7 @@ func TestFeedVideoRendersUnifiedPlaybackControls(t *testing.T) {
 		`data-feed-video-volume>`,
 		`data-feed-video-speed-button>`,
 		`data-feed-video-speed-menu>`,
+		`data-feed-video-mini`,
 		`data-feed-video-expand`,
 	} {
 		if got := strings.Count(html, control); got != 2 {

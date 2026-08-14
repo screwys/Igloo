@@ -144,6 +144,7 @@ async function loadVideoControls() {
       pendingTimer = null
     },
   }
+  window.top = window
   const document = new FakeElement('document')
   document.createElement = (tagName) => new FakeElement(tagName)
   const context = vm.createContext({ document, window, HTMLVideoElement: FakeVideo })
@@ -222,4 +223,28 @@ test('feed controls reuse player pointer and focus auto-hide behavior', async ()
   wrap.dispatch('focusout')
   media.runPendingTimer()
   assert.equal(controls.getAttribute('data-feed-video-controls-visible'), '0')
+})
+
+test('feed controls always offer manual mini-player docking', async () => {
+  const media = await loadVideoControls()
+  const wrap = new FakeElement('div')
+  const controls = media.createFeedVideoControls()
+  const video = new FakeVideo()
+  wrap.appendChild(video)
+  wrap.appendChild(controls)
+
+  let surface = null
+  media.window.IglooMiniPlayer = {
+    toggleSurface(next) { surface = next },
+  }
+  media.bindFeedVideoControls(wrap, video)
+
+  const mini = controls.querySelector('[data-feed-video-mini]')
+  assert.ok(mini)
+  mini.dispatch('click')
+  assert.equal(surface.element, wrap)
+  assert.equal(surface.video, video)
+  assert.equal(surface.kind, 'feed')
+  assert.equal(surface.title, undefined)
+  assert.equal(video.paused, true)
 })

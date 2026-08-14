@@ -1,0 +1,67 @@
+package components
+
+// MiniPlayerShell owns the persistent surface used while the original player
+// page stays alive behind an isolated browsing view. JavaScript moves the live
+// player wrapper into this host; it never creates a second video element.
+templ MiniPlayerShell(p PageProps) {
+	<iframe
+		id="mini-player-browse-frame"
+		class="mini-player-browse-frame hidden"
+		title={ L(p, "mini_player_browsing_view", "Igloo browsing view") }
+		aria-hidden="true"
+	></iframe>
+	<section
+		id="mini-player-shell"
+		class="mini-player-shell hidden"
+		aria-label={ L(p, "mini_player_title", "Mini player") }
+		aria-hidden="true"
+	>
+		<header class="mini-player-header">
+			<div id="mini-player-title" class="mini-player-title"></div>
+			<div class="mini-player-header-actions">
+				<button
+					id="mini-player-return"
+					class="mini-player-header-btn"
+					type="button"
+					title={ L(p, "mini_player_return_to_video", "Return to video") }
+					aria-label={ L(p, "mini_player_return_to_video", "Return to video") }
+				>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M8 3H3v5"></path>
+						<path d="M3 3l7 7"></path>
+						<rect x="7" y="7" width="14" height="14" rx="2"></rect>
+					</svg>
+				</button>
+				<button
+					id="mini-player-close"
+					class="mini-player-header-btn"
+					type="button"
+					title={ L(p, "mini_player_close", "Close mini player") }
+					aria-label={ L(p, "mini_player_close", "Close mini player") }
+				>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+						<path d="M6 6l12 12M18 6L6 18"></path>
+					</svg>
+				</button>
+			</div>
+		</header>
+		<div
+			id="mini-player-resize-handle"
+			class="mini-player-resize-handle mini-player-resize-target"
+			data-mini-player-resize="left"
+			role="separator"
+			tabindex="0"
+			aria-orientation="vertical"
+			aria-valuemin="300"
+			aria-valuemax="780"
+			aria-valuenow="630"
+			title={ L(p, "mini_player_resize", "Resize mini player") }
+			aria-label={ L(p, "mini_player_resize", "Resize mini player") }
+		></div>
+		<div class="mini-player-resize-corner mini-player-resize-corner-top-left mini-player-resize-target" data-mini-player-resize="top-left" aria-hidden="true"></div>
+		<div class="mini-player-resize-corner mini-player-resize-corner-top-right mini-player-resize-target" data-mini-player-resize="top-right" aria-hidden="true"></div>
+		<div class="mini-player-resize-corner mini-player-resize-corner-bottom-left mini-player-resize-target" data-mini-player-resize="bottom-left" aria-hidden="true"></div>
+		<div class="mini-player-resize-corner mini-player-resize-corner-bottom-right mini-player-resize-target" data-mini-player-resize="bottom-right" aria-hidden="true"></div>
+		<div id="mini-player-media-host" class="mini-player-media-host"></div>
+	</section>
+}

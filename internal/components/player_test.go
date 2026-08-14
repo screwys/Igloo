@@ -65,3 +65,45 @@ func TestPlayerControlLabelsEscapeLocalizedAttributes(t *testing.T) {
 		t.Fatalf("expected escaped delete label in output")
 	}
 }
+
+func TestYouTubePlayerRendersMiniPlayerHandoff(t *testing.T) {
+	p := newTestPageProps()
+	video := model.Video{
+		VideoID:   "sample_video",
+		ChannelID: "youtube_sample_channel",
+		Title:     "Sample video",
+		Platform:  "youtube",
+	}
+
+	var buf bytes.Buffer
+	if err := PlayerPage(p, video, nil, nil, nil, "").Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	for _, want := range []string{
+		`id="player-mini-btn"`,
+		`aria-pressed="false"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("YouTube player missing %q:\n%s", want, html)
+		}
+	}
+}
+
+func TestNonYouTubePlayerDoesNotRenderMiniPlayerHandoff(t *testing.T) {
+	p := newTestPageProps()
+	video := model.Video{
+		VideoID:   "sample_video",
+		ChannelID: "tiktok_sample_channel",
+		Title:     "Sample video",
+		Platform:  "tiktok",
+	}
+
+	var buf bytes.Buffer
+	if err := PlayerPage(p, video, nil, nil, nil, "").Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	if html := buf.String(); strings.Contains(html, `id="player-mini-btn"`) {
+		t.Fatalf("non-YouTube player should not render the mini-player handoff:\n%s", html)
+	}
+}
