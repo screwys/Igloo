@@ -64,6 +64,28 @@ function setFeedMediaOverlayOpen(open) {
   document.body.classList.toggle('feed-media-overlay-open', !!open)
 }
 
+function handoffInlineVideoPlayback(overlay, overlayVideo, activeStreamUrl) {
+  var sourceVideo = null
+  document.querySelectorAll('video[data-feed-inline-video]').forEach(function (video) {
+    var wrap = video.closest && video.closest('[data-feed-media]')
+    if (!sourceVideo && wrap && wrap.getAttribute('data-feed-media-stream') === activeStreamUrl) {
+      sourceVideo = video
+    }
+    try { video.pause() } catch (_) { }
+  })
+
+  overlay._sourceVideo = sourceVideo
+  overlay._overlayVideo = overlayVideo
+  if (!sourceVideo) return
+
+  var startTime = sourceVideo.currentTime
+  if (startTime > 0) {
+    overlayVideo.addEventListener('loadedmetadata', function () {
+      overlayVideo.currentTime = startTime
+    }, { once: true })
+  }
+}
+
 // ── Media source extraction ──
 
 // Extract slide list from any feed item subtree (parent article or quote card).
@@ -554,6 +576,7 @@ export function openMediaOverlay(root, triggerEl) {
     renderSidebar(activeSource)
     if (!host) return
     while (host.firstChild) host.removeChild(host.firstChild)
+    overlay._sourceVideo = null
     overlay._overlayVideo = null
     var slideInfo = (media.kind === 'mixed' && media.slides && media.slides[currentIndex]) || null
     var isMixedVideo = slideInfo && slideInfo.kind === 'video' && slideInfo.streamUrl
@@ -589,6 +612,7 @@ export function openMediaOverlay(root, triggerEl) {
       mixedWrap.appendChild(v)
       mixedWrap.appendChild(createFeedVideoControls())
       bindFeedVideoControls(mixedWrap, v)
+      handoffInlineVideoPlayback(overlay, v, activeStreamUrl)
       host.appendChild(mixedWrap)
     } else if (isVideo) {
       var videoWrap = document.createElement('div')
@@ -605,7 +629,6 @@ export function openMediaOverlay(root, triggerEl) {
       source.type = 'video/mp4'
       v.appendChild(source)
       v.muted = false
-      overlay._overlayVideo = v
 
       v.addEventListener('click', function (e) {
         e.stopPropagation()
@@ -615,28 +638,7 @@ export function openMediaOverlay(root, triggerEl) {
       videoWrap.appendChild(v)
       videoWrap.appendChild(createFeedVideoControls())
       bindFeedVideoControls(videoWrap, v)
-
-      // Sync with inline video — pick up playback position
-      var feedList = document.getElementById('feed-list')
-      var allTriggers = feedList ? feedList.querySelectorAll('[data-feed-media][data-feed-media-kind="video"]') : []
-      var inlineTrigger = null
-      for (var ti = 0; ti < allTriggers.length; ti++) {
-        if (allTriggers[ti].getAttribute('data-feed-media-stream') === activeStreamUrl) {
-          inlineTrigger = allTriggers[ti]
-          break
-        }
-      }
-      var inlineVid = inlineTrigger ? inlineTrigger.querySelector('video[data-feed-inline-video]') : null
-      if (inlineVid) {
-        overlay._sourceVideo = inlineVid
-        inlineVid.pause()
-        var startTime = inlineVid.currentTime
-        if (startTime > 0) {
-          v.addEventListener('loadedmetadata', function () {
-            v.currentTime = startTime
-          }, { once: true })
-        }
-      }
+      handoffInlineVideoPlayback(overlay, v, activeStreamUrl)
       host.appendChild(videoWrap)
     } else {
       const urls = Array.isArray(media.urls) ? media.urls : []
