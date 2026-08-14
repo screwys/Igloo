@@ -600,7 +600,7 @@ function initMiniPlayer() {
         if (candidate && shouldAutomaticallyMini(candidate.kind, preferences())) dockSurface(candidate)
       }
       navigateBrowse(target.href)
-    }, true)
+    })
 
     frameDocument.addEventListener('submit', function (event) {
       if (!browseActive) return
@@ -776,7 +776,7 @@ function initMiniPlayer() {
     if (!candidate || !shouldAutomaticallyMini(candidate.kind, preferences())) return
     event.preventDefault()
     if (dockSurface(candidate)) navigateBrowse(anchor.href)
-  }, true)
+  })
 
   if (returnButton) returnButton.addEventListener('click', returnToSurface)
   if (closeButton) closeButton.addEventListener('click', closeMiniPlayer)

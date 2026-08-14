@@ -125,6 +125,19 @@ test('navigation retains a browse frame that owns the live mini-player source', 
   assert.match(css, /\.mini-player-source-frame\s*\{[\s\S]*?pointer-events:\s*none/)
 })
 
+test('page-owned link interactions run before mini-player navigation', async () => {
+  const source = await readFile(new URL('./src/mini-player.js', import.meta.url), 'utf8')
+  assert.match(source, /if \(event\.defaultPrevented \|\| event\.button !== 0\) return null/)
+  const frameClickStart = source.indexOf("frameDocument.addEventListener('click'")
+  const frameClickEnd = source.indexOf("frameDocument.addEventListener('submit'", frameClickStart)
+  const pageClickStart = source.indexOf("doc.addEventListener('click'")
+  const pageClickEnd = source.indexOf("if (returnButton)", pageClickStart)
+  assert.ok(frameClickStart >= 0 && frameClickEnd > frameClickStart)
+  assert.ok(pageClickStart >= 0 && pageClickEnd > pageClickStart)
+  assert.doesNotMatch(source.slice(frameClickStart, frameClickEnd), /\}, true\)/)
+  assert.doesNotMatch(source.slice(pageClickStart, pageClickEnd), /\}, true\)/)
+})
+
 test('feed mini-player titles use the visible account name', () => {
   const inlineAuthor = { textContent: '  Sample account  ' }
   const overlayAuthor = { textContent: '  Overlay account  ' }
