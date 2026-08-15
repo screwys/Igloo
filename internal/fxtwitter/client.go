@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 const DefaultBaseURL = "https://api.fxtwitter.com"
@@ -54,6 +55,7 @@ type Tweet struct {
 	ReplyToStatus     string // "" if not a reply
 	CreatedAt         time.Time
 	MediaJSON         string // serialized []model.MediaRef, "" if no media
+	MentionHandles    []string
 	Quote             *Tweet
 }
 
@@ -235,11 +237,19 @@ type rawTweet struct {
 		Name       string `json:"name"`
 		AvatarURL  string `json:"avatar_url"`
 	} `json:"author"`
-	ReplyingTo       string    `json:"replying_to"`
-	ReplyingToStatus string    `json:"replying_to_status"`
-	CreatedAt        string    `json:"created_at"`
-	Media            *rawMedia `json:"media"`
-	Quote            *rawTweet `json:"quote"`
+	ReplyingTo       string `json:"replying_to"`
+	ReplyingToStatus string `json:"replying_to_status"`
+	RawText          struct {
+		Text             string `json:"text"`
+		DisplayTextRange []int  `json:"display_text_range"`
+		Facets           []struct {
+			Type     string `json:"type"`
+			Original string `json:"original"`
+		} `json:"facets"`
+	} `json:"raw_text"`
+	CreatedAt string    `json:"created_at"`
+	Media     *rawMedia `json:"media"`
+	Quote     *rawTweet `json:"quote"`
 }
 
 type rawMedia struct {
@@ -255,15 +265,23 @@ func tweetFromRaw(raw *rawTweet) *Tweet {
 	if raw == nil {
 		return nil
 	}
+	visibleText := visibleTweetText(raw.Text, raw.RawText.Text, raw.RawText.DisplayTextRange)
+	mentionHandles := make([]string, 0, len(raw.RawText.Facets))
+	for _, facet := range raw.RawText.Facets {
+		if facet.Type == "mention" && strings.TrimSpace(facet.Original) != "" {
+			mentionHandles = append(mentionHandles, strings.TrimPrefix(strings.TrimSpace(facet.Original), "@"))
+		}
+	}
 	out := &Tweet{
 		ID:                raw.ID,
 		AuthorHandle:      raw.Author.ScreenName,
 		AuthorDisplayName: raw.Author.Name,
 		AuthorAvatarURL:   raw.Author.AvatarURL,
-		Text:              raw.Text,
+		Text:              visibleText,
 		Lang:              raw.Lang,
 		ReplyToHandle:     raw.ReplyingTo,
 		ReplyToStatus:     raw.ReplyingToStatus,
+		MentionHandles:    mentionHandles,
 	}
 	if t, err := time.Parse("Mon Jan 02 15:04:05 -0700 2006", raw.CreatedAt); err == nil {
 		out.CreatedAt = t.UTC()
@@ -296,6 +314,35 @@ func tweetFromRaw(raw *rawTweet) *Tweet {
 	out.Quote = tweetFromRaw(raw.Quote)
 
 	return out
+}
+
+func visibleTweetText(text, rawText string, displayRange []int) string {
+	if rawText == "" || len(displayRange) != 2 {
+		return text
+	}
+	visible, ok := sliceUTF16(rawText, displayRange[0], displayRange[1])
+	if !ok {
+		return text
+	}
+	if text == rawText {
+		return visible
+	}
+	hiddenPrefix, ok := sliceUTF16(rawText, 0, displayRange[0])
+	if ok && hiddenPrefix != "" && strings.HasPrefix(text, hiddenPrefix) {
+		return strings.TrimPrefix(text, hiddenPrefix)
+	}
+	return text
+}
+
+func sliceUTF16(value string, start, end int) (string, bool) {
+	if value == "" || start < 0 || end < start {
+		return "", false
+	}
+	encoded := utf16.Encode([]rune(value))
+	if end > len(encoded) {
+		return "", false
+	}
+	return string(utf16.Decode(encoded[start:end])), true
 }
 
 // UpgradeBannerURL appends the 1500x500 size suffix that twimg banner URLs

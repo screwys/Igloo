@@ -220,6 +220,103 @@ func (db *DB) GetThreadTree(tweetID string) ([]model.FeedItem, error) {
 	return out, nil
 }
 
+type ThreadSummary struct {
+	PostCount   int
+	PeopleCount int
+}
+
+// GetThreadSummaries returns full-tree totals for each seed tweet. Reply roots
+// are resolved once, then sibling branches are traversed through the indexed
+// reply_to_status relationship.
+func (db *DB) GetThreadSummaries(tweetIDs []string) (map[string]ThreadSummary, error) {
+	if len(tweetIDs) == 0 {
+		return map[string]ThreadSummary{}, nil
+	}
+	encoded, err := json.Marshal(tweetIDs)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := db.reader().Query(`
+		WITH RECURSIVE
+		candidate_ids(seed_id) AS MATERIALIZED (
+			SELECT DISTINCT TRIM(CAST(value AS TEXT))
+			FROM json_each(?)
+			WHERE TRIM(CAST(value AS TEXT)) != ''
+		),
+		up(seed_id, tweet_id, reply_to_status, depth) AS (
+			SELECT candidate_ids.seed_id, item.tweet_id,
+			       COALESCE(item.reply_to_status, ''), 0
+			FROM candidate_ids
+			JOIN feed_items item ON item.tweet_id = candidate_ids.seed_id
+			UNION ALL
+			SELECT up.seed_id, parent.tweet_id,
+			       COALESCE(parent.reply_to_status, ''), up.depth + 1
+			FROM up
+			JOIN feed_items parent ON parent.tweet_id = up.reply_to_status
+			WHERE up.reply_to_status != ''
+			  AND up.depth < 50
+		),
+		root_depths AS (
+			SELECT seed_id, MAX(depth) AS max_depth
+			FROM up
+			GROUP BY seed_id
+		),
+		root_seeds AS (
+			SELECT up.seed_id, up.tweet_id AS root_id
+			FROM up
+			JOIN root_depths
+			  ON root_depths.seed_id = up.seed_id
+			 AND root_depths.max_depth = up.depth
+		),
+		unique_roots(root_id) AS (
+			SELECT DISTINCT root_id FROM root_seeds
+		),
+		subtree(root_id, tweet_id, depth) AS (
+			SELECT root_id, root_id, 0 FROM unique_roots
+			UNION ALL
+			SELECT subtree.root_id, child.tweet_id, subtree.depth + 1
+			FROM subtree
+			JOIN feed_items child ON child.reply_to_status = subtree.tweet_id
+			WHERE child.reply_to_status IS NOT NULL
+			  AND child.reply_to_status != ''
+			  AND subtree.depth < 50
+		),
+		summaries AS (
+			SELECT subtree.root_id, COUNT(*) AS post_count,
+			       COUNT(DISTINCT NULLIF(item.channel_id, '')) AS people_count
+			FROM subtree
+			JOIN feed_items item ON item.tweet_id = subtree.tweet_id
+			GROUP BY subtree.root_id
+		)
+		SELECT root_seeds.seed_id, summaries.post_count, summaries.people_count
+		FROM root_seeds
+		JOIN summaries ON summaries.root_id = root_seeds.root_id
+		ORDER BY root_seeds.seed_id
+	`, string(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("get thread summaries: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make(map[string]ThreadSummary, len(tweetIDs))
+	for rows.Next() {
+		var seedID string
+		var summary ThreadSummary
+		if err := rows.Scan(
+			&seedID,
+			&summary.PostCount,
+			&summary.PeopleCount,
+		); err != nil {
+			return nil, err
+		}
+		out[seedID] = summary
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 type IncompleteReplyChain struct {
 	SeedTweetID string
 	Item        model.FeedItem

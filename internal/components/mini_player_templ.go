@@ -110,7 +110,7 @@ func MiniPlayerShell(p PageProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M6 6l12 12M18 6L6 18\"></path></svg></button></div></header><div id=\"mini-player-resize-handle\" class=\"mini-player-resize-handle mini-player-resize-target\" data-mini-player-resize=\"left\" role=\"separator\" tabindex=\"0\" aria-orientation=\"vertical\" aria-valuemin=\"300\" aria-valuemax=\"780\" aria-valuenow=\"630\" title=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M6 6l12 12M18 6L6 18\"></path></svg></button></div></header><div id=\"mini-player-resize-handle\" class=\"mini-player-resize-handle mini-player-resize-target\" data-mini-player-resize=\"left\" role=\"separator\" tabindex=\"0\" aria-orientation=\"vertical\" aria-valuemin=\"300\" aria-valuemax=\"1040\" aria-valuenow=\"630\" title=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -136,7 +136,7 @@ func MiniPlayerShell(p PageProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-top-left mini-player-resize-target\" data-mini-player-resize=\"top-left\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-top-right mini-player-resize-target\" data-mini-player-resize=\"top-right\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-bottom-left mini-player-resize-target\" data-mini-player-resize=\"bottom-left\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-bottom-right mini-player-resize-target\" data-mini-player-resize=\"bottom-right\" aria-hidden=\"true\"></div><div id=\"mini-player-media-host\" class=\"mini-player-media-host\"></div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\"></div><div class=\"mini-player-resize-edge-top mini-player-resize-target\" data-mini-player-resize=\"top\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-top-left mini-player-resize-target\" data-mini-player-resize=\"top-left\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-top-right mini-player-resize-target\" data-mini-player-resize=\"top-right\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-bottom-left mini-player-resize-target\" data-mini-player-resize=\"bottom-left\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-bottom-right mini-player-resize-target\" data-mini-player-resize=\"bottom-right\" aria-hidden=\"true\"></div><div id=\"mini-player-media-host\" class=\"mini-player-media-host\"></div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

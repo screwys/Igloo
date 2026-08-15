@@ -22,7 +22,7 @@ templ FeedItem(p PageProps, item model.FeedItem) {
 				}
 			}
 			@feedLeafCard(p, stripThreadNoise(item))
-			if threadCapsuleVisible(item.ThreadChain) {
+			if threadCapsuleVisible(item) {
 				@feedThreadCapsule(p, item)
 			}
 		</div>

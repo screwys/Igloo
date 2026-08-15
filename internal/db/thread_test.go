@@ -180,6 +180,33 @@ func TestGetThreadTreeReturnsRootAndAllReplyBranches(t *testing.T) {
 	}
 }
 
+func TestGetThreadSummariesIncludesEveryReplyBranch(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UTC()
+	if _, err := d.UpsertFeedItems([]model.FeedItem{
+		{TweetID: "sample_root", AuthorHandle: "sample_author_a", PublishedAt: &now, FetchedAt: now, ContentHash: "summary_root"},
+		{TweetID: "sample_reply_a", AuthorHandle: "sample_author_b", IsReply: true, ReplyToHandle: "sample_author_a", ReplyToStatus: "sample_root", PublishedAt: &now, FetchedAt: now, ContentHash: "summary_a"},
+		{TweetID: "sample_leaf_a", AuthorHandle: "sample_author_a", IsReply: true, ReplyToHandle: "sample_author_b", ReplyToStatus: "sample_reply_a", PublishedAt: &now, FetchedAt: now, ContentHash: "summary_leaf_a"},
+		{TweetID: "sample_reply_b", AuthorHandle: "sample_author_c", IsReply: true, ReplyToHandle: "sample_author_a", ReplyToStatus: "sample_root", PublishedAt: &now, FetchedAt: now, ContentHash: "summary_b"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	summaries, err := d.GetThreadSummaries([]string{"sample_leaf_a", "sample_reply_b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, seedID := range []string{"sample_leaf_a", "sample_reply_b"} {
+		summary, ok := summaries[seedID]
+		if !ok {
+			t.Fatalf("missing summary for %s: %+v", seedID, summaries)
+		}
+		if summary.PostCount != 4 || summary.PeopleCount != 3 {
+			t.Fatalf("summary[%s] = %+v, want 4 posts across 3 people", seedID, summary)
+		}
+	}
+}
+
 func TestListIncompleteReplyChainsFindsMissingAncestor(t *testing.T) {
 	d := openWritableTestDB(t)
 	now := time.Now().UTC()

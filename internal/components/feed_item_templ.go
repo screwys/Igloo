@@ -81,7 +81,7 @@ func FeedItem(p PageProps, item model.FeedItem) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if threadCapsuleVisible(item.ThreadChain) {
+			if threadCapsuleVisible(item) {
 				templ_7745c5c3_Err = feedThreadCapsule(p, item).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err

@@ -224,11 +224,17 @@ func feedItemFromMeta(d map[string]any, fallbackSourceHandle string, media []mod
 		canonicalTweetID = retweetID
 	}
 
+	replyToHandle := NormalizeHandle(firstString(d, "reply_to"))
+	replyToStatus := nonZeroID(firstString(d, "reply_id"))
+	mentionHandles := mentionHandlesFromMeta(d)
 	body := firstString(d, "content", "text", "description", "full_text")
 	if isRetweet {
 		body = stripRetweetPrefix(body)
 	}
 	body = stripTrailingTcoURL(body)
+	if replyToStatus != "" || replyToHandle != "" {
+		body = stripStructuredReplyMentionPrefix(body, mentionHandles)
+	}
 
 	media = dedupeMediaRefs(media)
 	mediaJSON := mediaJSON(media)
@@ -251,8 +257,9 @@ func feedItemFromMeta(d map[string]any, fallbackSourceHandle string, media []mod
 		RetweetedByDisplayName: "",
 		MediaJSON:              mediaJSON,
 		CanonicalURL:           "https://x.com/" + author + "/status/" + canonicalTweetID,
-		ReplyToHandle:          NormalizeHandle(firstString(d, "reply_to")),
-		ReplyToStatus:          nonZeroID(firstString(d, "reply_id")),
+		ReplyToHandle:          replyToHandle,
+		ReplyToStatus:          replyToStatus,
+		MentionHandles:         mentionHandles,
 		Views:                  firstInt64(d, "view_count", "views"),
 		Likes:                  firstInt64(d, "favorite_count", "like_count", "likes"),
 		Retweets:               firstInt64(d, "retweet_count", "retweets"),
@@ -285,7 +292,11 @@ func applyQuote(item *FeedItem, quote map[string]any, media []model.MediaRef) {
 	if qid == "" {
 		return
 	}
+	quoteMentions := mentionHandlesFromMeta(quote)
 	qbody := stripTrailingTcoURL(firstString(quote, "content", "text", "description", "full_text"))
+	if nonZeroID(firstString(quote, "reply_id")) != "" || NormalizeHandle(firstString(quote, "reply_to")) != "" {
+		qbody = stripStructuredReplyMentionPrefix(qbody, quoteMentions)
+	}
 	media = dedupeMediaRefs(media)
 	item.QuoteTweetID = qid
 	item.QuoteAuthorHandle = authorHandle(quote)
@@ -301,6 +312,7 @@ func applyQuote(item *FeedItem, quote map[string]any, media []model.MediaRef) {
 		item.QuotePublishedAt = tweetSnowflakeTime(qid)
 	}
 	item.QuoteMediaJSON = mediaJSON(media)
+	item.MentionHandles = mergeMentionHandles(item.MentionHandles, quoteMentions)
 }
 
 func mergeItem(base, next FeedItem) FeedItem {
@@ -328,8 +340,88 @@ func mergeItem(base, next FeedItem) FeedItem {
 	if base.ContentHash == "" {
 		base.ContentHash = next.ContentHash
 	}
+	base.MentionHandles = mergeMentionHandles(base.MentionHandles, next.MentionHandles)
 	base.ParseMedia()
 	return base
+}
+
+func mergeMentionHandles(groups ...[]string) []string {
+	var handles []string
+	seen := make(map[string]bool)
+	for _, group := range groups {
+		for _, raw := range group {
+			handle := NormalizeHandle(raw)
+			key := strings.ToLower(handle)
+			if !ValidHandle(handle) || seen[key] {
+				continue
+			}
+			seen[key] = true
+			handles = append(handles, handle)
+		}
+	}
+	return handles
+}
+
+func mentionHandlesFromMeta(d map[string]any) []string {
+	values, ok := d["mentions"].([]any)
+	if !ok {
+		return nil
+	}
+	seen := make(map[string]bool, len(values))
+	handles := make([]string, 0, len(values))
+	for _, value := range values {
+		mention, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		handle := NormalizeHandle(firstString(mention, "name", "screen_name", "username", "original"))
+		key := strings.ToLower(handle)
+		if !ValidHandle(handle) || seen[key] {
+			continue
+		}
+		seen[key] = true
+		handles = append(handles, handle)
+	}
+	return handles
+}
+
+func stripStructuredReplyMentionPrefix(body string, mentionHandles []string) string {
+	if body == "" || len(mentionHandles) == 0 {
+		return body
+	}
+	allowed := make(map[string]bool, len(mentionHandles))
+	for _, handle := range mentionHandles {
+		allowed[strings.ToLower(NormalizeHandle(handle))] = true
+	}
+
+	position := 0
+	removedEnd := 0
+	for position < len(body) {
+		for position < len(body) && (body[position] == ' ' || body[position] == '\t' || body[position] == '\n' || body[position] == '\r') {
+			position++
+		}
+		if position >= len(body) || body[position] != '@' {
+			break
+		}
+		start := position + 1
+		position = start
+		for position < len(body) && ((body[position] >= 'A' && body[position] <= 'Z') ||
+			(body[position] >= 'a' && body[position] <= 'z') ||
+			(body[position] >= '0' && body[position] <= '9') || body[position] == '_') {
+			position++
+		}
+		if position == start || !allowed[strings.ToLower(body[start:position])] {
+			break
+		}
+		if position < len(body) && body[position] != ' ' && body[position] != '\t' && body[position] != '\n' && body[position] != '\r' {
+			break
+		}
+		removedEnd = position
+	}
+	if removedEnd == 0 {
+		return body
+	}
+	return strings.TrimSpace(body[removedEnd:])
 }
 
 func authorMap(d map[string]any) map[string]any {

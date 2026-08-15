@@ -357,11 +357,11 @@ func TestEnrichFeedItemsCollapsesSiblingReplyBranchesToFirstRankedLeaf(t *testin
 	leafBAt := time.Unix(140, 0).UTC()
 
 	_, err := d.UpsertFeedItems([]model.FeedItem{
-		{TweetID: "thread_root", AuthorHandle: "sample_author_root", BodyText: "root", PublishedAt: &rootAt, FetchedAt: rootAt, ContentHash: "hash_thread_root", CanonicalTweetID: "thread_root"},
-		{TweetID: "thread_parent_a", AuthorHandle: "sample_author_parent", BodyText: "parent a", IsReply: true, ReplyToHandle: "sample_author_root", ReplyToStatus: "thread_root", PublishedAt: &parentAAt, FetchedAt: parentAAt, ContentHash: "hash_thread_parent_a", CanonicalTweetID: "thread_parent_a"},
-		{TweetID: "thread_leaf_a", AuthorHandle: "sample_author_leaf_a", BodyText: "leaf a", IsReply: true, ReplyToHandle: "sample_author_parent", ReplyToStatus: "thread_parent_a", PublishedAt: &leafAAt, FetchedAt: leafAAt, ContentHash: "hash_thread_leaf_a", CanonicalTweetID: "thread_leaf_a"},
-		{TweetID: "thread_parent_b", AuthorHandle: "sample_author_parent", BodyText: "parent b", IsReply: true, ReplyToHandle: "sample_author_root", ReplyToStatus: "thread_root", PublishedAt: &parentBAt, FetchedAt: parentBAt, ContentHash: "hash_thread_parent_b", CanonicalTweetID: "thread_parent_b"},
-		{TweetID: "thread_leaf_b", AuthorHandle: "sample_author_leaf_b", BodyText: "leaf b", IsReply: true, ReplyToHandle: "sample_author_parent", ReplyToStatus: "thread_parent_b", PublishedAt: &leafBAt, FetchedAt: leafBAt, ContentHash: "hash_thread_leaf_b", CanonicalTweetID: "thread_leaf_b"},
+		{TweetID: "thread_root", AuthorHandle: "author_root", BodyText: "root", PublishedAt: &rootAt, FetchedAt: rootAt, ContentHash: "hash_thread_root", CanonicalTweetID: "thread_root"},
+		{TweetID: "thread_parent_a", AuthorHandle: "author_parent", BodyText: "parent a", IsReply: true, ReplyToHandle: "author_root", ReplyToStatus: "thread_root", PublishedAt: &parentAAt, FetchedAt: parentAAt, ContentHash: "hash_thread_parent_a", CanonicalTweetID: "thread_parent_a"},
+		{TweetID: "thread_leaf_a", AuthorHandle: "author_leaf_a", BodyText: "leaf a", IsReply: true, ReplyToHandle: "author_parent", ReplyToStatus: "thread_parent_a", PublishedAt: &leafAAt, FetchedAt: leafAAt, ContentHash: "hash_thread_leaf_a", CanonicalTweetID: "thread_leaf_a"},
+		{TweetID: "thread_parent_b", AuthorHandle: "author_parent", BodyText: "parent b", IsReply: true, ReplyToHandle: "author_root", ReplyToStatus: "thread_root", PublishedAt: &parentBAt, FetchedAt: parentBAt, ContentHash: "hash_thread_parent_b", CanonicalTweetID: "thread_parent_b"},
+		{TweetID: "thread_leaf_b", AuthorHandle: "author_leaf_b", BodyText: "leaf b", IsReply: true, ReplyToHandle: "author_parent", ReplyToStatus: "thread_parent_b", PublishedAt: &leafBAt, FetchedAt: leafBAt, ContentHash: "hash_thread_leaf_b", CanonicalTweetID: "thread_leaf_b"},
 	})
 	if err != nil {
 		t.Fatalf("UpsertFeedItems: %v", err)
@@ -400,6 +400,9 @@ func TestEnrichFeedItemsCollapsesSiblingReplyBranchesToFirstRankedLeaf(t *testin
 	}
 	if want := []string{"thread_root", "thread_parent_b"}; !reflect.DeepEqual(gotChainIDs, want) {
 		t.Fatalf("thread chain IDs = %v, want %v", gotChainIDs, want)
+	}
+	if got[0].ThreadPostCount != 5 || got[0].ThreadPeopleCount != 4 {
+		t.Fatalf("thread summary = %d posts across %d people, want 5 across 4", got[0].ThreadPostCount, got[0].ThreadPeopleCount)
 	}
 }
 

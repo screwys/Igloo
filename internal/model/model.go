@@ -477,8 +477,9 @@ type FeedItem struct {
 	ContentHash            string
 	CanonicalTweetID       string
 	// Parsed at runtime
-	Media      []MediaRef
-	QuoteMedia []MediaRef
+	Media          []MediaRef
+	QuoteMedia     []MediaRef
+	MentionHandles []string
 	// Persisted role identities. Enrichment may attach follow/star state, but
 	// these IDs are assigned transactionally when the feed row is ingested.
 	ChannelID         string
@@ -499,6 +500,10 @@ type FeedItem struct {
 	// The leaf (this FeedItem itself) is NOT included. Populated by
 	// feed.EnrichFeedItems for replies.
 	ThreadChain []FeedItem
+	// Thread totals cover the full stored reply tree, including sibling branches
+	// omitted from the inline preview.
+	ThreadPostCount   int
+	ThreadPeopleCount int
 	// ThreadDepth is presentation metadata for full thread views. Root posts are
 	// depth 0; direct replies are depth 1.
 	ThreadDepth int

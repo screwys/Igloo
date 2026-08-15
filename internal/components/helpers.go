@@ -518,16 +518,14 @@ func threadPreviewAncestorVisible(index int, chain []model.FeedItem) bool {
 	return len(chain) > 0 && index == 0
 }
 
-func threadCapsuleVisible(chain []model.FeedItem) bool {
-	for i := range chain {
-		if !threadPreviewAncestorVisible(i, chain) {
-			return true
-		}
-	}
-	return false
+func threadCapsuleVisible(item model.FeedItem) bool {
+	return threadCapsulePostCount(item) > 2
 }
 
 func threadCapsulePostCount(item model.FeedItem) int {
+	if item.ThreadPostCount > 0 {
+		return item.ThreadPostCount
+	}
 	return len(item.ThreadChain) + 1
 }
 
@@ -558,6 +556,9 @@ func threadCapsuleParticipants(item model.FeedItem) []threadCapsuleParticipant {
 }
 
 func threadCapsulePeopleCount(item model.FeedItem) int {
+	if item.ThreadPeopleCount > 0 {
+		return item.ThreadPeopleCount
+	}
 	seen := make(map[string]bool)
 	add := func(handle string) {
 		handle = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(handle)), "@")

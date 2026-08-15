@@ -46,6 +46,93 @@ func TestParseDumpFoldsParentAndQuoteMedia(t *testing.T) {
 	}
 }
 
+func TestParseDumpHidesStructuredReplyMentionPrefix(t *testing.T) {
+	output := []byte(`[
+		[2, {
+			"tweet_id":"1000000000000000101",
+			"content":"@sample_parent @tool_account visible reply with @body_mention",
+			"author":{"name":"sample_author","nick":"Sample Author"},
+			"user":{"name":"sample_author","nick":"Sample Author"},
+			"reply_id":"1000000000000000100",
+			"reply_to":"sample_parent",
+			"mentions":[
+				{"name":"sample_parent"},
+				{"name":"tool_account"},
+				{"name":"body_mention"}
+			]
+		}]
+	]`)
+
+	items := ParseDump(output, "sample_author").Items
+	if len(items) != 1 {
+		t.Fatalf("items = %d, want 1", len(items))
+	}
+	if got := items[0].BodyText; got != "visible reply with @body_mention" {
+		t.Fatalf("BodyText = %q", got)
+	}
+	wantMentions := []string{"sample_parent", "tool_account", "body_mention"}
+	if strings.Join(items[0].MentionHandles, ",") != strings.Join(wantMentions, ",") {
+		t.Fatalf("MentionHandles = %v, want %v", items[0].MentionHandles, wantMentions)
+	}
+}
+
+func TestParseDumpKeepsLeadingMentionsOnNonReply(t *testing.T) {
+	output := []byte(`[
+		[2, {
+			"tweet_id":"1000000000000000102",
+			"content":"@tool_account visible root mention",
+			"author":{"name":"sample_author","nick":"Sample Author"},
+			"user":{"name":"sample_author","nick":"Sample Author"},
+			"mentions":[{"name":"tool_account"}]
+		}]
+	]`)
+
+	items := ParseDump(output, "sample_author").Items
+	if len(items) != 1 || items[0].BodyText != "@tool_account visible root mention" {
+		t.Fatalf("items = %+v", items)
+	}
+}
+
+func TestStripStructuredReplyMentionPrefixKeepsUnmatchedMention(t *testing.T) {
+	got := stripStructuredReplyMentionPrefix("@visible_author authored mention", []string{"reply_recipient"})
+	if got != "@visible_author authored mention" {
+		t.Fatalf("visible mention was stripped: %q", got)
+	}
+}
+
+func TestParseDumpHidesStructuredReplyMentionPrefixInQuote(t *testing.T) {
+	output := []byte(`[
+		[2, {
+			"tweet_id":"1000000000000000110",
+			"content":"parent post",
+			"author":{"name":"sample_author","nick":"Sample Author"},
+			"user":{"name":"sample_author","nick":"Sample Author"},
+			"quote_id":0
+		}],
+		[2, {
+			"tweet_id":"1000000000000000111",
+			"content":"@sample_parent quoted reply",
+			"author":{"name":"quote_author","nick":"Quote Author"},
+			"user":{"name":"sample_author","nick":"Sample Author"},
+			"reply_id":"1000000000000000109",
+			"reply_to":"sample_parent",
+			"mentions":[{"name":"sample_parent"}],
+			"quote_id":"1000000000000000110"
+		}]
+	]`)
+
+	items := ParseDump(output, "sample_author").Items
+	if len(items) != 1 {
+		t.Fatalf("items = %+v", items)
+	}
+	if items[0].QuoteBodyText != "quoted reply" {
+		t.Fatalf("QuoteBodyText = %q", items[0].QuoteBodyText)
+	}
+	if strings.Join(items[0].MentionHandles, ",") != "sample_parent" {
+		t.Fatalf("MentionHandles = %v", items[0].MentionHandles)
+	}
+}
+
 func TestParseDumpKeepsSourceAuthoredQuoteExpansionAsDirectItem(t *testing.T) {
 	output := []byte(`[
 		[2, {"tweet_id":"9000000000000000100","content":"foreign quote","date":"2026-05-09 10:27:49","author":{"name":"sample_parent","nick":"Sample Parent"},"user":{"name":"sample_source","nick":"Sample Source"},"quote_id":0,"reply_id":0,"retweet_id":0}],

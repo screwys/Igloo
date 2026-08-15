@@ -241,6 +241,7 @@ func applyFallbackDetails(item *FeedItem, fallback FeedItem) {
 	if item.BodyText == "" {
 		item.BodyText = fallback.BodyText
 	}
+	item.MentionHandles = mergeMentionHandles(item.MentionHandles, fallback.MentionHandles)
 	if item.MediaJSON == "" {
 		item.MediaJSON = fallback.MediaJSON
 		item.Media = fallback.Media
@@ -260,6 +261,7 @@ func copyQuoteFields(dst *FeedItem, src FeedItem) {
 	dst.QuotePublishedAt = src.QuotePublishedAt
 	dst.QuoteMediaJSON = src.QuoteMediaJSON
 	dst.QuoteMedia = src.QuoteMedia
+	dst.MentionHandles = mergeMentionHandles(dst.MentionHandles, src.MentionHandles)
 }
 
 func feedItemFromFallbackTweet(tweet *fxtwitter.Tweet, sourceHandle string) FeedItem {
@@ -292,6 +294,7 @@ func feedItemFromFallbackTweet(tweet *fxtwitter.Tweet, sourceHandle string) Feed
 		PublishedAt:       publishedAt,
 		FetchedAt:         now,
 		CanonicalTweetID:  tweet.ID,
+		MentionHandles:    append([]string(nil), tweet.MentionHandles...),
 	}
 	item.IsReply = item.ReplyToStatus != "" || item.ReplyToHandle != ""
 	if language.IsUnknown(item.Lang) {
@@ -325,6 +328,7 @@ func applyFallbackQuote(item *FeedItem, quote *fxtwitter.Tweet) {
 	}
 	item.QuotePublishedAt = timePtr(quote.CreatedAt)
 	item.QuoteMediaJSON = mediaJSON(media)
+	item.MentionHandles = mergeMentionHandles(item.MentionHandles, quote.MentionHandles)
 	item.ParseMedia()
 }
 

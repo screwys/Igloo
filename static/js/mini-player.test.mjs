@@ -44,7 +44,7 @@ test('the mini-player defaults to one and a half times its previous width', asyn
   const css = await readFile(new URL('../style.css', import.meta.url), 'utf8')
   const source = await readFile(new URL('./src/mini-player.js', import.meta.url), 'utf8')
   assert.match(css, /width:\s*clamp\(480px, 42vw, 630px\)/)
-  assert.match(css, /max-width:\s*min\(780px, calc\(100vw - 2rem\)\)/)
+  assert.match(css, /max-width:\s*min\(1040px, calc\(100vw - 2rem\)\)/)
   assert.match(source, /igloo\.mini-player\.width\.v2/)
   assert.match(css, /media-volume-range\s*\+\s*\.mc-custom-btn/)
 })
@@ -52,6 +52,7 @@ test('the mini-player defaults to one and a half times its previous width', asyn
 test('saved mini-player width migrates once and then remains exact', () => {
   assert.equal(preferredShellWidth(0, 420, 1400), 630)
   assert.equal(preferredShellWidth(555, 420, 1400), 555)
+  assert.equal(preferredShellWidth(1000, 420, 1400), 1000)
   assert.equal(preferredShellWidth(0, 0, 1400), 0)
 })
 
@@ -61,6 +62,8 @@ test('mini-player width remains horizontally resizable and persisted', async () 
   const template = await readFile(new URL('../../internal/components/mini_player.templ', import.meta.url), 'utf8')
   assert.doesNotMatch(css, /resize:\s*horizontal/)
   assert.match(template, /id="mini-player-resize-handle"[\s\S]*?role="separator"/)
+  assert.match(template, /aria-valuemax="1040"/)
+  assert.match(template, /class="mini-player-resize-edge-top mini-player-resize-target"[\s\S]*?data-mini-player-resize="top"/)
   for (const corner of ['top-left', 'top-right', 'bottom-left', 'bottom-right']) {
     assert.match(template, new RegExp(`data-mini-player-resize="${corner}"`))
   }
@@ -73,6 +76,13 @@ test('mini-player width remains horizontally resizable and persisted', async () 
   assert.match(handleRule[1], /\bcursor:\s*(?:ew|col)-resize/)
   assert.doesNotMatch(handleRule[1], /\bheight:/)
   assert.doesNotMatch(handleRule[1], /\btransform:/)
+  const topEdgeRule = css.match(/\.mini-player-resize-edge-top\s*\{([^}]*)\}/)
+  assert.ok(topEdgeRule)
+  assert.match(topEdgeRule[1], /\btop:\s*-8px;/)
+  assert.match(topEdgeRule[1], /\bleft:\s*0;/)
+  assert.match(topEdgeRule[1], /\bright:\s*0;/)
+  assert.match(topEdgeRule[1], /\bheight:\s*9px;/)
+  assert.match(topEdgeRule[1], /\bcursor:\s*(?:ns|row)-resize/)
   assert.doesNotMatch(css, /\.mini-player-resize-handle::after/)
   const shellRule = css.match(/\.mini-player-shell\s*\{([^}]*)\}/)
   assert.ok(shellRule)
@@ -92,6 +102,11 @@ test('each rounded corner resizes in its natural diagonal direction', () => {
   assert.equal(resizedShellWidth('bottom-left', 600, 300, -40, 20), 640)
   assert.equal(resizedShellWidth('bottom-right', 600, 300, 40, 20), 640)
   assert.equal(resizedShellWidth('bottom-right', 600, 300, -40, -20), 560)
+})
+
+test('the top edge resizes vertically and ignores horizontal pointer drift', () => {
+  assert.equal(resizedShellWidth('top', 600, 300, 100, -20), 640)
+  assert.equal(resizedShellWidth('top', 600, 300, -100, 20), 560)
 })
 
 test('mini-player title and actions overlay the video on hover', async () => {

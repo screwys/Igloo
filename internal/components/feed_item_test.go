@@ -172,6 +172,38 @@ func TestFeedItemTwoPostThreadOmitsCapsule(t *testing.T) {
 	}
 }
 
+func TestFeedItemDirectReplyShowsFullTreeCapsule(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:           "leaf_1",
+		AuthorHandle:      "sample_author_b",
+		BodyText:          "selected reply",
+		IsReply:           true,
+		ReplyToHandle:     "sample_author_a",
+		ReplyToStatus:     "root_1",
+		ThreadPostCount:   4,
+		ThreadPeopleCount: 3,
+		ThreadChain: []model.FeedItem{{
+			TweetID:      "root_1",
+			AuthorHandle: "sample_author_a",
+			BodyText:     "root body",
+		}},
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	for _, want := range []string{
+		`data-feed-thread-capsule`,
+		`4 posts across 3 people`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing %q in html: %s", want, html)
+		}
+	}
+}
+
 func TestFeedItemThreadRowCarriesQuotedMediaCountForBookmarks(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:      "leaf_1",
@@ -728,7 +760,7 @@ func TestFeedItemTranslatedPillUsesTranslatorSourceLabel(t *testing.T) {
 
 func TestFeedVideoRendersUnifiedPlaybackControls(t *testing.T) {
 	item := model.FeedItem{
-		TweetID:            "sample_video_post",
+		TweetID:             "sample_video_post",
 		AuthorHandle:        "sample_author",
 		AuthorDisplayName:   "Sample Author",
 		Media:               []model.MediaRef{{Type: "video"}},

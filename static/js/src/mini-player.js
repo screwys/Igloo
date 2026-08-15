@@ -1,12 +1,12 @@
 const SHELL_WIDTH_KEY = 'igloo.mini-player.width.v2'
 const LEGACY_SHELL_WIDTH_KEY = 'igloo.mini-player.width.v1'
 const SHELL_MIN_WIDTH = 300
-const SHELL_MAX_WIDTH = 780
+const SHELL_MAX_WIDTH = 1040
 
 export function preferredShellWidth(savedValue, legacyValue, viewportWidth) {
   const saved = Number(savedValue || 0)
   const legacy = Number(legacyValue || 0)
-  const width = saved >= 300 && saved <= 800
+  const width = saved >= 300 && saved <= SHELL_MAX_WIDTH
     ? saved
     : legacy >= 300 && legacy <= 800
       ? legacy * 1.5
@@ -16,10 +16,13 @@ export function preferredShellWidth(savedValue, legacyValue, viewportWidth) {
 }
 
 export function resizedShellWidth(direction, startWidth, startHeight, deltaX, deltaY) {
+  const hasHorizontalEdge = direction.includes('left') || direction.includes('right')
+  const hasVerticalEdge = direction.includes('top') || direction.includes('bottom')
   const horizontal = direction.includes('left') ? -deltaX : deltaX
-  if (!direction.includes('top') && !direction.includes('bottom')) return startWidth + horizontal
+  if (!hasVerticalEdge) return startWidth + horizontal
   const aspectRatio = startHeight > 0 ? startWidth / startHeight : 1
   const vertical = (direction.includes('top') ? -deltaY : deltaY) * aspectRatio
+  if (!hasHorizontalEdge) return startWidth + vertical
   return startWidth + (Math.abs(horizontal) >= Math.abs(vertical) ? horizontal : vertical)
 }
 
@@ -705,7 +708,7 @@ function initMiniPlayer() {
         )
         setShellWidth(width, false)
         const nextRect = shell.getBoundingClientRect()
-        const left = direction.includes('left') ? startRect.right - nextRect.width : startRect.left
+        const left = direction.includes('right') ? startRect.left : startRect.right - nextRect.width
         const top = direction.includes('bottom') ? startRect.top : startRect.bottom - nextRect.height
         shell.style.left = Math.round(left) + 'px'
         shell.style.top = Math.round(top) + 'px'

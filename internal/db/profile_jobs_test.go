@@ -122,7 +122,10 @@ func TestUpsertFeedItemsQueuesLinkedMentionIdentities(t *testing.T) {
 		ReplyToHandle: "Sample_Reply",
 		BodyText:      "with @Sample_Body and @sample_collection and sample_local@sample_domain.test https://x.com/@sample_url/status/1",
 		QuoteBodyText: "quoted @Sample_Quote and @sample_domain.test",
-		PublishedAt:   &now,
+		MentionHandles: []string{
+			"Sample_Hidden",
+		},
+		PublishedAt: &now,
 	}}); err != nil {
 		t.Fatalf("UpsertFeedItems: %v", err)
 	}
@@ -131,6 +134,7 @@ func TestUpsertFeedItemsQueuesLinkedMentionIdentities(t *testing.T) {
 		"twitter_sample_reply",
 		"twitter_sample_body",
 		"twitter_sample_quote",
+		"twitter_sample_hidden",
 	} {
 		var handle string
 		var requested, completed int64

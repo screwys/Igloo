@@ -403,6 +403,20 @@ func attachThreadChains(database *db.DB, items []model.FeedItem) []model.FeedIte
 		}
 		items[i].ThreadChain = chain
 	}
+	threadIDs := make([]string, 0, len(chainsByLeaf))
+	for tweetID := range chainsByLeaf {
+		threadIDs = append(threadIDs, tweetID)
+	}
+	if summaries, err := database.GetThreadSummaries(threadIDs); err == nil {
+		for i := range items {
+			summary, ok := summaries[items[i].TweetID]
+			if !ok {
+				continue
+			}
+			items[i].ThreadPostCount = summary.PostCount
+			items[i].ThreadPeopleCount = summary.PeopleCount
+		}
+	}
 
 	// Phase 4: drop standalone items that are an ancestor of another reply in
 	// this same page. The leaf will render them as part of its chain.

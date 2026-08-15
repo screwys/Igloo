@@ -3602,7 +3602,7 @@ body.mini-player-browsing {
     z-index: 30000;
     width: clamp(480px, 42vw, 630px);
     min-width: 300px;
-    max-width: min(780px, calc(100vw - 2rem));
+    max-width: min(1040px, calc(100vw - 2rem));
     overflow: visible;
     border: 1px solid rgba(var(--accent-primary-rgb), 0.42);
     border-radius: 14px;
@@ -3625,6 +3625,17 @@ body.mini-player-browsing {
     cursor: ew-resize;
     touch-action: none;
     outline: none;
+}
+
+.mini-player-resize-edge-top {
+    position: absolute;
+    top: -8px;
+    right: 0;
+    left: 0;
+    z-index: 70;
+    height: 9px;
+    cursor: ns-resize;
+    touch-action: none;
 }
 
 .mini-player-resize-corner {

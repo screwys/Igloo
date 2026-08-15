@@ -169,6 +169,63 @@ func TestFetchTweetReply(t *testing.T) {
 	}
 }
 
+func TestFetchTweetUsesVisibleTextRange(t *testing.T) {
+	const fixture = `{
+		"code": 200, "message": "OK",
+		"tweet": {
+			"id": "1000000000000000011",
+			"text": "@user_beta @tool_account visible reply",
+			"raw_text": {
+				"text": "@user_beta @tool_account visible reply",
+				"display_text_range": [25, 38],
+				"facets": [
+					{"type": "mention", "original": "user_beta"},
+					{"type": "mention", "original": "tool_account"}
+				]
+			},
+			"author": {"screen_name": "user_alpha", "name": "User Alpha"},
+			"replying_to": "user_beta",
+			"replying_to_status": "1000000000000000010"
+		}
+	}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(fixture))
+	}))
+	defer srv.Close()
+
+	c := &Client{BaseURL: srv.URL, HTTP: srv.Client(), Timeout: 2 * time.Second}
+	tw, err := c.FetchTweet(context.Background(), "user_alpha", "1000000000000000011")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tw.Text != "visible reply" {
+		t.Fatalf("Text = %q, want visible reply", tw.Text)
+	}
+	wantMentions := []string{"user_beta", "tool_account"}
+	if len(tw.MentionHandles) != len(wantMentions) {
+		t.Fatalf("MentionHandles = %v, want %v", tw.MentionHandles, wantMentions)
+	}
+	for i, want := range wantMentions {
+		if tw.MentionHandles[i] != want {
+			t.Fatalf("MentionHandles[%d] = %q, want %q", i, tw.MentionHandles[i], want)
+		}
+	}
+}
+
+func TestVisibleTweetTextPreservesProcessedURLs(t *testing.T) {
+	got := visibleTweetText(
+		"@user_beta see https://example.test/article",
+		"@user_beta see https://t.co/sample",
+		[]int{11, 34},
+	)
+	if got != "see https://example.test/article" {
+		t.Fatalf("visible text = %q", got)
+	}
+	if got := visibleTweetText("@user_beta 😀 reply", "@user_beta 😀 reply", []int{11, 19}); got != "😀 reply" {
+		t.Fatalf("UTF-16 visible text = %q", got)
+	}
+}
+
 func TestFetchTweetNonReply(t *testing.T) {
 	const fixture = `{"code": 200, "message": "OK", "tweet": {
 		"id": "2000000000000000001",

@@ -1606,6 +1606,9 @@ func collectFeedProfileObservations(items []model.FeedItem, observedAt int64) []
 			}
 			add(item.ReposterChannelID, handle, item.RetweetedByDisplayName, "", seenAt)
 		}
+		for _, handle := range item.MentionHandles {
+			add(model.TwitterChannelIDFromHandle(handle), handle, "", "", seenAt)
+		}
 		for _, body := range []string{item.BodyText, item.QuoteBodyText} {
 			for _, mention := range model.LinkableTwitterMentions(body) {
 				add(model.TwitterChannelIDFromHandle(mention.Handle), mention.Handle, "", "", seenAt)
