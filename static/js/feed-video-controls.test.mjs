@@ -217,6 +217,7 @@ test('feed volume popover closes after pointer adjustment and stays closed when 
   const slider = controls.querySelector('[data-feed-video-volume]')
   const volumeControl = controls.querySelector('[data-feed-video-volume-control]')
 
+  wrap.dispatch('pointerenter')
   volumeControl.dispatch('pointerenter')
   assert.equal(volumeControl.hasAttribute('data-feed-video-volume-open'), true)
 
