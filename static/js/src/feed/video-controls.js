@@ -136,12 +136,21 @@ export function bindFeedVideoControls(wrap, video, options) {
   const progress = controls.querySelector('[data-feed-progress]')
   const fill = controls.querySelector('[data-feed-progress-fill]')
 
+  function setVolumeOpen(open) {
+    if (!volumeControl) return
+    if (open) volumeControl.setAttribute('data-feed-video-volume-open', '')
+    else volumeControl.removeAttribute('data-feed-video-volume-open')
+  }
+
   bindVideoControlsVisibility({
     stateElement: controls,
     surface: wrap,
     popupElements: [speedMenu],
     readyAttribute: 'data-feed-video-controls-ready',
     visibleAttribute: 'data-feed-video-controls-visible',
+    onVisibilityChange: function (visible) {
+      if (!visible) setVolumeOpen(false)
+    },
   })
 
   function syncPlay() {
@@ -205,8 +214,23 @@ export function bindFeedVideoControls(wrap, video, options) {
     volume.addEventListener('click', function (event) { event.stopPropagation() })
     volume.addEventListener('mousedown', function (event) { event.stopPropagation() })
     volume.addEventListener('touchstart', function (event) { event.stopPropagation() })
+    volume.addEventListener('pointerup', function (event) {
+      event.stopPropagation()
+      setVolumeOpen(false)
+      volume.blur()
+    })
+    volume.addEventListener('pointercancel', function () {
+      setVolumeOpen(false)
+      volume.blur()
+    })
   }
   if (volumeControl) {
+    volumeControl.addEventListener('pointerenter', function () { setVolumeOpen(true) })
+    volumeControl.addEventListener('pointerleave', function () { setVolumeOpen(false) })
+    volumeControl.addEventListener('focusin', function () { setVolumeOpen(true) })
+    volumeControl.addEventListener('focusout', function (event) {
+      if (!volumeControl.contains(event.relatedTarget)) setVolumeOpen(false)
+    })
     volumeControl.addEventListener('click', function (event) { event.stopPropagation() })
     volumeControl.addEventListener('mousedown', function (event) { event.stopPropagation() })
     volumeControl.addEventListener('touchstart', function (event) { event.stopPropagation() })

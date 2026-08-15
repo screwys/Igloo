@@ -40,6 +40,7 @@ class FakeElement {
     this.dataset = {}
     this.listeners = new Map()
     this.value = ''
+    this.blurred = false
     this.classList = new FakeClassList(this)
     this.style = {
       values: new Map(),
@@ -71,6 +72,10 @@ class FakeElement {
   addEventListener(name, listener) {
     if (!this.listeners.has(name)) this.listeners.set(name, [])
     this.listeners.get(name).push(listener)
+  }
+
+  blur() {
+    this.blurred = true
   }
 
   dispatch(name, details = {}) {
@@ -199,6 +204,38 @@ test('vertical volume control changes volume without toggling feed playback', as
   assert.equal(speedOption.getAttribute('aria-checked'), 'true')
   assert.equal(speedMenu.classList.contains('hidden'), true)
   assert.equal(video.paused, true)
+})
+
+test('feed volume popover closes after pointer adjustment and stays closed when controls return', async () => {
+  const media = await loadVideoControls()
+  const wrap = new FakeElement('div')
+  const controls = media.createFeedVideoControls()
+  const video = new FakeVideo()
+  wrap.appendChild(controls)
+
+  media.bindFeedVideoControls(wrap, video)
+  const slider = controls.querySelector('[data-feed-video-volume]')
+  const volumeControl = controls.querySelector('[data-feed-video-volume-control]')
+
+  volumeControl.dispatch('pointerenter')
+  assert.equal(volumeControl.hasAttribute('data-feed-video-volume-open'), true)
+
+  slider.dispatch('pointerup')
+  assert.equal(volumeControl.hasAttribute('data-feed-video-volume-open'), false)
+  assert.equal(slider.blurred, true)
+
+  volumeControl.dispatch('pointerenter')
+  assert.equal(volumeControl.hasAttribute('data-feed-video-volume-open'), true)
+  wrap.dispatch('pointerleave')
+  media.runPendingTimer()
+  assert.equal(volumeControl.hasAttribute('data-feed-video-volume-open'), false)
+  wrap.dispatch('pointerenter')
+  assert.equal(volumeControl.hasAttribute('data-feed-video-volume-open'), false)
+
+  volumeControl.dispatch('focusin')
+  assert.equal(volumeControl.hasAttribute('data-feed-video-volume-open'), true)
+  volumeControl.dispatch('focusout', { relatedTarget: null })
+  assert.equal(volumeControl.hasAttribute('data-feed-video-volume-open'), false)
 })
 
 test('feed controls reuse player pointer and focus auto-hide behavior', async () => {

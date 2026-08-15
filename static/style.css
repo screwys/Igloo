@@ -8971,8 +8971,7 @@ body.shorts-mode .sidebar {
     pointer-events: none;
 }
 
-.feed-video-volume-control:hover::before,
-.feed-video-volume-control:focus-within::before {
+.feed-video-volume-control[data-feed-video-volume-open]::before {
     pointer-events: auto;
 }
 
@@ -9010,8 +9009,7 @@ body.shorts-mode .sidebar {
     pointer-events: none;
 }
 
-.feed-video-volume-control:hover .feed-video-volume-popover,
-.feed-video-volume-control:focus-within .feed-video-volume-popover {
+.feed-video-volume-control[data-feed-video-volume-open] .feed-video-volume-popover {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
