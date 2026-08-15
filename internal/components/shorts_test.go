@@ -683,6 +683,10 @@ func TestShortsStoryTrayUsesRemainingWidthBeforeCompactingItsContents(t *testing
 	if strings.Contains(css, ".shorts-layout {\n        left: 0;\n        width: 100vw;") {
 		t.Fatal("the mobile layout width must come from its left and right edges so the open story tray keeps its clearance")
 	}
+	resizeRule := cssRuleBody(t, css, "html.story-tray-resizing .shorts-story-tray,\nhtml.story-tray-resizing .shorts-story-tray-controls")
+	if !strings.Contains(resizeRule, "transition: none") {
+		t.Fatal("the story tray and Grid control should track the resize handle without animation")
+	}
 	collisionRule := cssRuleBody(t, css, ".shorts-story-tray.story-title-collides .shorts-story-tray-header h2")
 	for _, check := range []string{"position: absolute", "width: 1px", "clip-path: inset(50%)"} {
 		if !strings.Contains(collisionRule, check) {

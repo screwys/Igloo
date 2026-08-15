@@ -6292,7 +6292,8 @@ html.story-tray-resizing * {
     user-select: none !important;
 }
 
-html.story-tray-resizing .shorts-story-tray {
+html.story-tray-resizing .shorts-story-tray,
+html.story-tray-resizing .shorts-story-tray-controls {
     transition: none;
 }
 
