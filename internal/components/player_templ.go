@@ -311,7 +311,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<span class=\"mc-separator\" aria-hidden=\"true\"></span> <media-time-range id=\"main-player-time-range\"></media-time-range> <media-time-display show-duration></media-time-display> <span class=\"mc-separator\" aria-hidden=\"true\"></span> <button id=\"player-cc-btn\" class=\"mc-custom-btn hidden\" type=\"button\" title=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<span class=\"mc-separator\" aria-hidden=\"true\"></span> <media-time-range id=\"main-player-time-range\"></media-time-range> <media-time-display show-duration></media-time-display> <span class=\"mc-separator\" aria-hidden=\"true\"></span> <button id=\"player-cc-btn\" class=\"mc-custom-btn mc-label-btn hidden\" type=\"button\" title=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -337,27 +337,27 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" style=\"font-size:0.72rem;font-weight:700;letter-spacing:0.03em;\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "player_subtitles_abbrev", "CC"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 64, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 63, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</button><div id=\"player-speed-menu-wrap\" class=\"mc-speed-menu-wrap\"><button id=\"player-speed-menu-btn\" class=\"mc-custom-btn mc-speed-btn\" type=\"button\" title=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</button><div id=\"player-speed-menu-wrap\" class=\"mc-speed-menu-wrap\"><button id=\"player-speed-menu-btn\" class=\"mc-custom-btn mc-label-btn mc-speed-btn\" type=\"button\" title=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_playback_speed", "Playback speed"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 66, Col: 147}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 65, Col: 160}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 			if templ_7745c5c3_Err != nil {
@@ -370,7 +370,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_playback_speed", "Playback speed"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 66, Col: 210}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 65, Col: 223}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 			if templ_7745c5c3_Err != nil {
@@ -383,7 +383,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_playback_speed_menu", "Playback speed menu"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 67, Col: 147}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 66, Col: 147}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 			if templ_7745c5c3_Err != nil {
@@ -406,7 +406,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_cinema_view", "Cinema view"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 78, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 77, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 			if templ_7745c5c3_Err != nil {
@@ -419,7 +419,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_cinema_view", "Cinema view"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 79, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 78, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 			if templ_7745c5c3_Err != nil {
@@ -432,7 +432,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var29 string
 			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_toggle_fullscreen", "Toggle fullscreen"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 90, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 89, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 			if templ_7745c5c3_Err != nil {
@@ -445,7 +445,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var30 string
 			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_toggle_fullscreen", "Toggle fullscreen"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 91, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 90, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 			if templ_7745c5c3_Err != nil {
@@ -458,7 +458,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(p.Prefs.VideoTitle(video))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 103, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 102, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 			if templ_7745c5c3_Err != nil {
@@ -471,7 +471,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(videoAvatarURL(video))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 106, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 105, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 			if templ_7745c5c3_Err != nil {
@@ -484,7 +484,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(channelInitial(video))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 107, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 106, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 			if templ_7745c5c3_Err != nil {
@@ -497,7 +497,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var34 templ.SafeURL
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/channels/" + video.ChannelID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 109, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 108, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 			if templ_7745c5c3_Err != nil {
@@ -510,7 +510,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var35 string
 			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(videoChannelName(video))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 109, Col: 111}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 108, Col: 111}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 			if templ_7745c5c3_Err != nil {
@@ -553,7 +553,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(publishedAtStr(video.PublishedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 121, Col: 102}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 120, Col: 102}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 				if templ_7745c5c3_Err != nil {
@@ -566,7 +566,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 				var templ_7745c5c3_Var37 string
 				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(RelativeTimeText(p, video.PublishedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 121, Col: 145}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 120, Col: 145}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 				if templ_7745c5c3_Err != nil {
@@ -618,7 +618,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 					var templ_7745c5c3_Var38 string
 					templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(int64Str(video.Metadata.LikeCount))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 137, Col: 105}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 136, Col: 105}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 					if templ_7745c5c3_Err != nil {
@@ -645,7 +645,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 					var templ_7745c5c3_Var39 string
 					templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(int64Str(video.Metadata.ViewCount))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 143, Col: 105}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 142, Col: 105}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 					if templ_7745c5c3_Err != nil {
@@ -698,7 +698,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var42 string
 			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(video.Description)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 157, Col: 104}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 156, Col: 104}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 			if templ_7745c5c3_Err != nil {
@@ -711,7 +711,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var43 string
 			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_show_more", "Show more"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 159, Col: 131}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 158, Col: 131}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
@@ -724,7 +724,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var44 string
 			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(video.VideoID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 162, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 161, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 			if templ_7745c5c3_Err != nil {
@@ -737,7 +737,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "player_comments_heading", "Comments"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 164, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 163, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {
@@ -750,7 +750,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var46 string
 			templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/videos/" + video.VideoID + "/comments/refresh?fmt=html")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 169, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 168, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 			if templ_7745c5c3_Err != nil {
@@ -763,7 +763,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var47 string
 			templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_refresh", "Refresh"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 174, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 173, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 			if templ_7745c5c3_Err != nil {
@@ -776,7 +776,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var48 string
 			templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/videos/" + video.VideoID + "/comments?fmt=html&all=1")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 179, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 178, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 			if templ_7745c5c3_Err != nil {
@@ -789,7 +789,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading_comments", "Loading comments..."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 183, Col: 126}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 182, Col: 126}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 			if templ_7745c5c3_Err != nil {
@@ -812,7 +812,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 					var templ_7745c5c3_Var50 string
 					templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(commentAuthorName(p, c))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 190, Col: 44}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 189, Col: 44}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 					if templ_7745c5c3_Err != nil {
@@ -825,7 +825,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 					var templ_7745c5c3_Var51 string
 					templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(c.Text)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 191, Col: 53}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 190, Col: 53}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 					if templ_7745c5c3_Err != nil {
@@ -853,7 +853,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 				var templ_7745c5c3_Var52 string
 				templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "player_next_in_line", "Next in line"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 202, Col: 55}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 201, Col: 55}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 				if templ_7745c5c3_Err != nil {
@@ -880,7 +880,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 				var templ_7745c5c3_Var53 string
 				templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "player_more_from_channel", "More videos from this channel"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 208, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 207, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 				if templ_7745c5c3_Err != nil {
@@ -908,7 +908,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			var templ_7745c5c3_Var54 string
 			templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.StaticV("js/media-chrome-loader.js"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 217, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 216, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var54)
 			if templ_7745c5c3_Err != nil {
@@ -988,7 +988,7 @@ func playerSeekBackButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var56 string
 		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_back_10_seconds", "Back 10 seconds"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 254, Col: 143}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 253, Col: 143}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
 		if templ_7745c5c3_Err != nil {
@@ -1001,7 +1001,7 @@ func playerSeekBackButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var57 string
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_seek_backward_10_seconds", "Seek backward 10 seconds"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 254, Col: 226}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 253, Col: 226}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
 		if templ_7745c5c3_Err != nil {
@@ -1011,7 +1011,7 @@ func playerSeekBackButton(p PageProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(1.8 1.8) scale(.85)"><path d="M2.5 2v6h6"/><path d="M2.5 8a10 10 0 1 1 1.28 5"/></g><text x="12" y="12" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="system-ui">10</text></svg>`).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templ.Raw(`<svg class="mc-seek-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="translate(1.8 1.8) scale(.85)" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15A9 9 0 1 0 5.64 5.64L1 10"/></g></svg>`).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1052,7 +1052,7 @@ func playerSeekForwardButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var59 string
 		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_forward_10_seconds", "Forward 10 seconds"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 261, Col: 152}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 260, Col: 152}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 		if templ_7745c5c3_Err != nil {
@@ -1065,7 +1065,7 @@ func playerSeekForwardButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var60 string
 		templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_seek_forward_10_seconds", "Seek forward 10 seconds"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 261, Col: 233}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 260, Col: 233}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 		if templ_7745c5c3_Err != nil {
@@ -1075,7 +1075,7 @@ func playerSeekForwardButton(p PageProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(1.8 1.8) scale(.85)"><path d="M21.5 2v6h-6"/><path d="M21.5 8A10 10 0 1 0 20.22 13"/></g><text x="12" y="12" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="system-ui">10</text></svg>`).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templ.Raw(`<svg class="mc-seek-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="translate(24 0) scale(-1 1)"><g transform="translate(1.8 1.8) scale(.85)" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15A9 9 0 1 0 5.64 5.64L1 10"/></g></g></svg>`).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1136,7 +1136,7 @@ func PlayerStarButton(p PageProps, channelID string, isStarred bool) templ.Compo
 		var templ_7745c5c3_Var64 string
 		templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(playerStarTitle(p, isStarred))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 274, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 273, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 		if templ_7745c5c3_Err != nil {
@@ -1149,7 +1149,7 @@ func PlayerStarButton(p PageProps, channelID string, isStarred bool) templ.Compo
 		var templ_7745c5c3_Var65 string
 		templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.ResolveAttributeValue(playerStarTitle(p, isStarred))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 275, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 274, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var65)
 		if templ_7745c5c3_Err != nil {
@@ -1162,7 +1162,7 @@ func PlayerStarButton(p PageProps, channelID string, isStarred bool) templ.Compo
 		var templ_7745c5c3_Var66 string
 		templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/channels/" + channelID + "/star?ctx=player")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 276, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 275, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var66)
 		if templ_7745c5c3_Err != nil {
@@ -1234,7 +1234,7 @@ func playerSubButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_subscribe_channel", "Subscribe to channel"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 308, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 307, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var68)
 		if templ_7745c5c3_Err != nil {
@@ -1247,7 +1247,7 @@ func playerSubButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var69 string
 		templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_subscribe_channel", "Subscribe to channel"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 309, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 308, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var69)
 		if templ_7745c5c3_Err != nil {
@@ -1298,7 +1298,7 @@ func playerUnsubButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var71 string
 		templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_unsubscribe_channel", "Unsubscribe channel"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 321, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 320, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var71)
 		if templ_7745c5c3_Err != nil {
@@ -1311,7 +1311,7 @@ func playerUnsubButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var72 string
 		templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_unsubscribe_channel", "Unsubscribe channel"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 322, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 321, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var72)
 		if templ_7745c5c3_Err != nil {
@@ -1412,7 +1412,7 @@ func PlayerPinButton(p PageProps, videoID string, isPinned, isTemp bool) templ.C
 		var templ_7745c5c3_Var77 string
 		templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.ResolveAttributeValue(playerPinTitle(p, isPinned))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 341, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 340, Col: 37}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var77)
 		if templ_7745c5c3_Err != nil {
@@ -1425,7 +1425,7 @@ func PlayerPinButton(p PageProps, videoID string, isPinned, isTemp bool) templ.C
 		var templ_7745c5c3_Var78 string
 		templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.ResolveAttributeValue(playerPinTitle(p, isPinned))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 342, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 341, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var78)
 		if templ_7745c5c3_Err != nil {
@@ -1438,7 +1438,7 @@ func PlayerPinButton(p PageProps, videoID string, isPinned, isTemp bool) templ.C
 		var templ_7745c5c3_Var79 string
 		templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/videos/" + videoID + "/pin?ctx=player")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 343, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 342, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var79)
 		if templ_7745c5c3_Err != nil {
@@ -1514,7 +1514,7 @@ func playerShareButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var81 string
 		templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_copy_link", "Copy link"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 379, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 378, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var81)
 		if templ_7745c5c3_Err != nil {
@@ -1527,7 +1527,7 @@ func playerShareButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var82 string
 		templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_copy_link", "Copy link"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 380, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 379, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var82)
 		if templ_7745c5c3_Err != nil {
@@ -1596,7 +1596,7 @@ func playerBookmarkButton(p PageProps, bookmarked bool) templ.Component {
 		var templ_7745c5c3_Var86 string
 		templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_bookmark", "Bookmark"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 392, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 391, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var86)
 		if templ_7745c5c3_Err != nil {
@@ -1609,7 +1609,7 @@ func playerBookmarkButton(p PageProps, bookmarked bool) templ.Component {
 		var templ_7745c5c3_Var87 string
 		templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_bookmark", "Bookmark"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 393, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 392, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var87)
 		if templ_7745c5c3_Err != nil {
@@ -1674,7 +1674,7 @@ func playerAutoplayButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var89 string
 		templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_autoplay_next", "Auto-play next"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 416, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 415, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var89)
 		if templ_7745c5c3_Err != nil {
@@ -1687,7 +1687,7 @@ func playerAutoplayButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var90 string
 		templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_autoplay_next", "Auto-play next"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 417, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 416, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var90)
 		if templ_7745c5c3_Err != nil {
@@ -1738,7 +1738,7 @@ func playerDeleteButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var92 string
 		templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_delete_video_title", "Delete video"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 429, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 428, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var92)
 		if templ_7745c5c3_Err != nil {
@@ -1751,7 +1751,7 @@ func playerDeleteButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var93 string
 		templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "player_delete_video_title", "Delete video"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 430, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 429, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var93)
 		if templ_7745c5c3_Err != nil {
@@ -1801,7 +1801,7 @@ func playerMiniButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var95 string
 		templ_7745c5c3_Var95, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "mini_player_title", "Mini player"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 441, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 440, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var95)
 		if templ_7745c5c3_Err != nil {
@@ -1814,7 +1814,7 @@ func playerMiniButton(p PageProps) templ.Component {
 		var templ_7745c5c3_Var96 string
 		templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "mini_player_title", "Mini player"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 442, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/player.templ`, Line: 441, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var96)
 		if templ_7745c5c3_Err != nil {

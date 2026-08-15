@@ -56,14 +56,13 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							<span class="mc-separator" aria-hidden="true"></span>
 							<button
 								id="player-cc-btn"
-								class="mc-custom-btn hidden"
+								class="mc-custom-btn mc-label-btn hidden"
 								type="button"
 								title={ L(p, "player_subtitles", "Subtitles") }
 								aria-label={ L(p, "player_subtitles", "Subtitles") }
-								style="font-size:0.72rem;font-weight:700;letter-spacing:0.03em;"
 								>{ L(p, "player_subtitles_abbrev", "CC") }</button>
 							<div id="player-speed-menu-wrap" class="mc-speed-menu-wrap">
-								<button id="player-speed-menu-btn" class="mc-custom-btn mc-speed-btn" type="button" title={ L(p, "player_playback_speed", "Playback speed") } aria-label={ L(p, "player_playback_speed", "Playback speed") } aria-haspopup="menu" aria-expanded="false">1x</button>
+								<button id="player-speed-menu-btn" class="mc-custom-btn mc-label-btn mc-speed-btn" type="button" title={ L(p, "player_playback_speed", "Playback speed") } aria-label={ L(p, "player_playback_speed", "Playback speed") } aria-haspopup="menu" aria-expanded="false">1x</button>
 								<div id="player-speed-menu" class="mc-speed-menu hidden" role="menu" aria-label={ L(p, "player_playback_speed_menu", "Playback speed menu") }></div>
 							</div>
 						<media-mute-button></media-mute-button>
@@ -252,14 +251,14 @@ func commentAuthorName(p PageProps, c model.Comment) string {
 // playerSeekBackButton renders the seek-back-10-seconds button with SVG.
 templ playerSeekBackButton(p PageProps) {
 	<button id="player-seek-back-10-btn" class="mc-custom-btn mc-seek-btn" type="button" title={ L(p, "player_back_10_seconds", "Back 10 seconds") } aria-label={ L(p, "player_seek_backward_10_seconds", "Seek backward 10 seconds") }>
-		@templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(1.8 1.8) scale(.85)"><path d="M2.5 2v6h6"/><path d="M2.5 8a10 10 0 1 1 1.28 5"/></g><text x="12" y="12" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="system-ui">10</text></svg>`)
+		@templ.Raw(`<svg class="mc-seek-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="translate(1.8 1.8) scale(.85)" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15A9 9 0 1 0 5.64 5.64L1 10"/></g></svg>`)
 	</button>
 }
 
 // playerSeekForwardButton renders the seek-forward-10-seconds button with SVG.
 templ playerSeekForwardButton(p PageProps) {
 	<button id="player-seek-forward-10-btn" class="mc-custom-btn mc-seek-btn" type="button" title={ L(p, "player_forward_10_seconds", "Forward 10 seconds") } aria-label={ L(p, "player_seek_forward_10_seconds", "Seek forward 10 seconds") }>
-		@templ.Raw(`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(1.8 1.8) scale(.85)"><path d="M21.5 2v6h-6"/><path d="M21.5 8A10 10 0 1 0 20.22 13"/></g><text x="12" y="12" fill="currentColor" stroke="none" font-size="7.5" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="system-ui">10</text></svg>`)
+		@templ.Raw(`<svg class="mc-seek-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="translate(24 0) scale(-1 1)"><g transform="translate(1.8 1.8) scale(.85)" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15A9 9 0 1 0 5.64 5.64L1 10"/></g></g></svg>`)
 	</button>
 }
 

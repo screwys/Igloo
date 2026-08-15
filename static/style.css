@@ -4265,6 +4265,11 @@ html.mini-player-resizing {
     min-width: var(--player-control-size);
 }
 
+.dashboard-media-controller:not(.dashboard-media-controller-mini) .mc-custom-btn .mc-seek-icon {
+    width: 20px;
+    height: 20px;
+}
+
 .dashboard-media-controller:not(.dashboard-media-controller-mini) .mc-speed-menu-wrap {
     position: relative;
     display: inline-flex;
@@ -4272,16 +4277,20 @@ html.mini-player-resizing {
     flex: 0 0 auto;
 }
 
+.dashboard-media-controller:not(.dashboard-media-controller-mini) .mc-label-btn {
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+}
+
 .dashboard-media-controller:not(.dashboard-media-controller-mini) .mc-speed-btn {
     min-width: 50px;
     padding-inline: 0.45rem;
-    font-size: 0.82rem;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
 }
 
 .dashboard-media-controller:not(.dashboard-media-controller-mini) .mc-speed-btn[aria-expanded="true"] {
-    background: rgba(var(--accent-primary-rgb), 0.18);
+    background: rgba(var(--accent-primary-rgb), 0.22);
     color: var(--accent-secondary);
 }
 
