@@ -20,7 +20,7 @@ templ threadRoute(p PageProps, items []model.FeedItem, returnHref string, listID
 			if len(items) > 0 {
 				<div class="thread-tree" data-thread-tree data-thread-root-id={ items[0].TweetID }>
 					<div class="thread-root-card" data-thread-root>
-						@feedLeafCard(p, stripThreadNoise(items[0]))
+						@feedLeafCard(p, stripThreadNoise(items[0]), false)
 					</div>
 					if len(items) > 1 {
 						<div class="thread-replies" data-thread-replies>
@@ -44,6 +44,6 @@ templ threadReplyCard(p PageProps, item model.FeedItem) {
 		data-thread-depth={ threadDepthAttr(item.ThreadDepth) }
 		style={ templ.SafeCSS(threadDepthStyle(item.ThreadDepth)) }
 	>
-		@feedLeafCard(p, item)
+		@feedLeafCard(p, item, false)
 	</div>
 }

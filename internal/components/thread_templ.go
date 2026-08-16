@@ -176,7 +176,7 @@ func threadRoute(p PageProps, items []model.FeedItem, returnHref string, listID 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = feedLeafCard(p, stripThreadNoise(items[0])).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = feedLeafCard(p, stripThreadNoise(items[0]), false).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -282,7 +282,7 @@ func threadReplyCard(p PageProps, item model.FeedItem) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = feedLeafCard(p, item).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = feedLeafCard(p, item, false).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

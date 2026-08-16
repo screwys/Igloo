@@ -8,6 +8,14 @@ import (
 )
 
 templ FeedItem(p PageProps, item model.FeedItem) {
+	@feedItem(p, item, false)
+}
+
+templ feedDeferredItem(p PageProps, item model.FeedItem) {
+	@feedItem(p, item, true)
+}
+
+templ feedItem(p PageProps, item model.FeedItem, deferMedia bool) {
 	if len(item.ThreadChain) > 0 {
 		{{ repostList := repostEntries(item) }}
 		<div class="feed-thread" data-feed-thread data-leaf-tweet-id={ item.TweetID }>
@@ -18,16 +26,16 @@ templ FeedItem(p PageProps, item model.FeedItem) {
 			}
 			for i, ancestor := range item.ThreadChain {
 				if threadPreviewAncestorVisible(i, item.ThreadChain) {
-					@feedThreadCard(p, stripThreadNoise(ancestor), false)
+					@feedThreadCard(p, stripThreadNoise(ancestor), false, deferMedia)
 				}
 			}
-			@feedLeafCard(p, stripThreadNoise(item))
+			@feedLeafCard(p, stripThreadNoise(item), deferMedia)
 			if threadCapsuleVisible(item) {
 				@feedThreadCapsule(p, item)
 			}
 		</div>
 	} else {
-		@feedLeafCard(p, item)
+		@feedLeafCard(p, item, deferMedia)
 	}
 }
 
@@ -69,7 +77,7 @@ templ feedThreadCapsule(p PageProps, item model.FeedItem) {
 // feedThreadCard renders an ancestor in a thread chain. Same as FeedItem but
 // flagged with data-feed-thread-row so CSS can draw the connector line and
 // dim non-followed ghost rows.
-templ feedThreadCard(p PageProps, item model.FeedItem, collapsed bool) {
+templ feedThreadCard(p PageProps, item model.FeedItem, collapsed bool, deferMedia bool) {
 	{{ authorLabel := feedAuthorLabel(item) }}
 	{{ externalURL := feedExternalURL(item) }}
 	{{ pure := isPureRepost(item) }}
@@ -106,10 +114,10 @@ templ feedThreadCard(p PageProps, item model.FeedItem, collapsed bool) {
 			@feedBodyText(p, item)
 		}
 		if len(item.Media) > 0 {
-			@feedMedia(p, item)
+			@feedMedia(p, item, deferMedia)
 		}
 		if item.QuoteTweetID != "" {
-			@feedQuoteCard(p, item)
+			@feedQuoteCard(p, item, deferMedia)
 		}
 		if len(item.TaggedAccounts) > 0 {
 			@feedTaggedAccounts(p, item)
@@ -121,7 +129,7 @@ templ feedThreadCard(p PageProps, item model.FeedItem, collapsed bool) {
 
 // feedLeafCard is the original feed card body. Extracted from FeedItem so the
 // thread wrapper above can compose it with ancestors.
-templ feedLeafCard(p PageProps, item model.FeedItem) {
+templ feedLeafCard(p PageProps, item model.FeedItem, deferMedia bool) {
 	{{ authorLabel := feedAuthorLabel(item) }}
 	{{ externalURL := feedExternalURL(item) }}
 	{{ pure := isPureRepost(item) }}
@@ -168,10 +176,10 @@ templ feedLeafCard(p PageProps, item model.FeedItem) {
 			@feedBodyText(p, item)
 		}
 		if len(item.Media) > 0 {
-			@feedMedia(p, item)
+			@feedMedia(p, item, deferMedia)
 		}
 		if item.QuoteTweetID != "" {
-			@feedQuoteCard(p, item)
+			@feedQuoteCard(p, item, deferMedia)
 		}
 		if len(item.TaggedAccounts) > 0 {
 			@feedTaggedAccounts(p, item)
@@ -482,7 +490,7 @@ templ feedBodyText(p PageProps, item model.FeedItem) {
 	</div>
 }
 
-templ feedMedia(p PageProps, item model.FeedItem) {
+templ feedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 	{{ mediaCount := len(item.Media) }}
 	{{ readyMediaCount := feedReadyMediaCount(item.MediaSlideURLs) }}
 	if mediaCount == 1 && feedMediaRefIsVideo(item.Media[0]) {
@@ -528,14 +536,21 @@ templ feedMedia(p PageProps, item model.FeedItem) {
 			tabindex="0"
 			aria-label={ L(p, "action_open_media", "Open media") }
 		>
-			<img class="feed-media-image" src={ mediaURL } alt={ L(p, "feed_post_media", "Post media") }/>
+			<img
+				class="feed-media-image"
+				src={ mediaURL }
+				if deferMedia {
+					loading="lazy"
+				}
+				alt={ L(p, "feed_post_media", "Post media") }
+			/>
 		</div>
 	} else if readyMediaCount > 0 {
 		<div class="feed-media-wrap feed-media-wrap-grid">
 			<div class={ fmt.Sprintf("feed-media-grid count-%d", readyMediaCount) }>
 				for i, m := range item.Media {
 					if i < 4 && feedMediaURLAt(item.MediaSlideURLs, i) != "" {
-						@feedMediaTile(p, i, m, mediaCount, item.MediaStreamURL, item.MediaPreviewURL, feedMediaURLAt(item.MediaSlideURLs, i))
+						@feedMediaTile(p, i, m, mediaCount, item.MediaStreamURL, item.MediaPreviewURL, feedMediaURLAt(item.MediaSlideURLs, i), deferMedia)
 					}
 				}
 			</div>
@@ -543,7 +558,7 @@ templ feedMedia(p PageProps, item model.FeedItem) {
 	}
 }
 
-templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, streamURL string, previewURL string, slideURL string) {
+templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, streamURL string, previewURL string, slideURL string, deferMedia bool) {
 	{{ ariaLabel := fmt.Sprintf(L(p, "feed_open_media_index", "Open media %d"), index+1) }}
 	if feedMediaRefIsVideo(m) {
 		{{ tileStreamURL := streamURL }}
@@ -580,7 +595,14 @@ templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, st
 					</video>
 				}
 			} else {
-				<img class="feed-media-image" src={ slideURL } alt={ fmt.Sprintf(L(p, "feed_post_media_index", "Post media %d"), index+1) }/>
+				<img
+					class="feed-media-image"
+					src={ slideURL }
+					if deferMedia {
+						loading="lazy"
+					}
+					alt={ fmt.Sprintf(L(p, "feed_post_media_index", "Post media %d"), index+1) }
+				/>
 			}
 			if index == 3 && mediaCount > 4 {
 				<span class="feed-media-more">+{ fmt.Sprintf("%d", mediaCount-4) }</span>
@@ -595,7 +617,14 @@ templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, st
 			data-feed-media-url={ slideURL }
 			aria-label={ ariaLabel }
 		>
-			<img class="feed-media-image" src={ slideURL } alt={ fmt.Sprintf(L(p, "feed_post_media_index", "Post media %d"), index+1) }/>
+			<img
+				class="feed-media-image"
+				src={ slideURL }
+				if deferMedia {
+					loading="lazy"
+				}
+				alt={ fmt.Sprintf(L(p, "feed_post_media_index", "Post media %d"), index+1) }
+			/>
 			if index == 3 && mediaCount > 4 {
 				<span class="feed-media-more">+{ fmt.Sprintf("%d", mediaCount-4) }</span>
 			}
@@ -603,7 +632,7 @@ templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, st
 	}
 }
 
-templ feedQuoteCard(p PageProps, item model.FeedItem) {
+templ feedQuoteCard(p PageProps, item model.FeedItem, deferMedia bool) {
 	{{ qLabel := feedQuoteLabel(item) }}
 	{{ qMediaCount := len(item.QuoteMedia) }}
 	{{ quoteExternalURL := safeExternalHTTPURL(item.QuoteCanonicalURL) }}
@@ -700,11 +729,11 @@ templ feedQuoteCard(p PageProps, item model.FeedItem) {
 				<button class="feed-text-toggle hidden" type="button" data-feed-text-toggle aria-expanded="false">{ L(p, "action_read_more", "Read more") }</button>
 			</div>
 		}
-		@feedQuoteMedia(p, item, qMediaCount)
+		@feedQuoteMedia(p, item, qMediaCount, deferMedia)
 	</div>
 }
 
-templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int) {
+templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMedia bool) {
 	{{ readyMediaCount := feedReadyMediaCount(item.QuoteMediaSlideURLs) }}
 	if qMediaCount == 1 && feedMediaRefIsVideo(item.QuoteMedia[0]) && item.QuoteMediaStreamURL != "" {
 		<div
@@ -732,14 +761,21 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int) {
 			tabindex="0"
 			aria-label={ L(p, "action_open_media", "Open media") }
 		>
-			<img class="feed-media-image" src={ mediaURL } alt={ L(p, "feed_quoted_post_media", "Quoted post media") }/>
+			<img
+				class="feed-media-image"
+				src={ mediaURL }
+				if deferMedia {
+					loading="lazy"
+				}
+				alt={ L(p, "feed_quoted_post_media", "Quoted post media") }
+			/>
 		</div>
 	} else if qMediaCount > 1 && readyMediaCount > 0 {
 		<div class="feed-media-wrap feed-media-wrap-grid">
 			<div class={ fmt.Sprintf("feed-media-grid count-%d", readyMediaCount) }>
 				for i, qm := range item.QuoteMedia {
 					if i < 4 && feedMediaURLAt(item.QuoteMediaSlideURLs, i) != "" {
-						@feedQuoteMediaTile(p, i, qm, qMediaCount, item.QuoteMediaStreamURL, item.QuoteMediaPreviewURL, feedMediaURLAt(item.QuoteMediaSlideURLs, i))
+						@feedQuoteMediaTile(p, i, qm, qMediaCount, item.QuoteMediaStreamURL, item.QuoteMediaPreviewURL, feedMediaURLAt(item.QuoteMediaSlideURLs, i), deferMedia)
 					}
 				}
 			</div>
@@ -749,7 +785,7 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int) {
 	}
 }
 
-templ feedQuoteMediaTile(p PageProps, index int, qm model.MediaRef, qMediaCount int, streamURL string, previewURL string, slideURL string) {
+templ feedQuoteMediaTile(p PageProps, index int, qm model.MediaRef, qMediaCount int, streamURL string, previewURL string, slideURL string, deferMedia bool) {
 	{{ ariaLabel := fmt.Sprintf(L(p, "feed_open_media_index", "Open media %d"), index+1) }}
 	if feedMediaRefIsVideo(qm) {
 		{{ tileStreamURL := streamURL }}
@@ -786,7 +822,14 @@ templ feedQuoteMediaTile(p PageProps, index int, qm model.MediaRef, qMediaCount 
 					</video>
 				}
 			} else {
-				<img class="feed-media-image" src={ slideURL } alt={ fmt.Sprintf(L(p, "feed_quoted_post_media_index", "Quoted post media %d"), index+1) }/>
+				<img
+					class="feed-media-image"
+					src={ slideURL }
+					if deferMedia {
+						loading="lazy"
+					}
+					alt={ fmt.Sprintf(L(p, "feed_quoted_post_media_index", "Quoted post media %d"), index+1) }
+				/>
 			}
 			if index == 3 && qMediaCount > 4 {
 				<span class="feed-media-more">+{ fmt.Sprintf("%d", qMediaCount-4) }</span>
@@ -801,7 +844,14 @@ templ feedQuoteMediaTile(p PageProps, index int, qm model.MediaRef, qMediaCount 
 			data-feed-media-url={ slideURL }
 			aria-label={ ariaLabel }
 		>
-			<img class="feed-media-image" src={ slideURL } alt={ fmt.Sprintf(L(p, "feed_quoted_post_media_index", "Quoted post media %d"), index+1) }/>
+			<img
+				class="feed-media-image"
+				src={ slideURL }
+				if deferMedia {
+					loading="lazy"
+				}
+				alt={ fmt.Sprintf(L(p, "feed_quoted_post_media_index", "Quoted post media %d"), index+1) }
+			/>
 			if index == 3 && qMediaCount > 4 {
 				<span class="feed-media-more">+{ fmt.Sprintf("%d", qMediaCount-4) }</span>
 			}

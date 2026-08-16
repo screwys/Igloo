@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/screwys/igloo/internal/model"
 )
 
 func TestFeedPageDoesNotRenderFeedSourceRail(t *testing.T) {
@@ -18,6 +20,34 @@ func TestFeedPageDoesNotRenderFeedSourceRail(t *testing.T) {
 	}
 	if strings.Contains(buf.String(), `class="feed-source-rail"`) {
 		t.Fatal("source rail should not render inside the feed page")
+	}
+}
+
+func TestFeedPagePrioritizesOnlyInitialPostMedia(t *testing.T) {
+	items := make([]model.FeedItem, 4)
+	for i := range items {
+		id := string(rune('a' + i))
+		items[i] = model.FeedItem{
+			TweetID:        "tweet_" + id,
+			AuthorHandle:   "author_" + id,
+			Media:          []model.MediaRef{{Type: "photo"}},
+			MediaSlideURLs: []string{"/api/media/slide/tweet_" + id + "/0?owner_kind=tweet"},
+		}
+	}
+
+	p := newTestPageProps()
+	var buf bytes.Buffer
+	if err := FeedPage(p, items, false, "", true, true, nil, "anchor").Render(context.Background(), &buf); err != nil {
+		t.Fatalf("FeedPage render: %v", err)
+	}
+	html := buf.String()
+	for _, id := range []string{"a", "b", "c"} {
+		if strings.Contains(html, `src="/api/media/slide/tweet_`+id+`/0?owner_kind=tweet" loading="lazy"`) {
+			t.Fatalf("initial post %s media was deferred; html=%s", id, html)
+		}
+	}
+	if !strings.Contains(html, `src="/api/media/slide/tweet_d/0?owner_kind=tweet" loading="lazy"`) {
+		t.Fatalf("fourth post media was not deferred; html=%s", html)
 	}
 }
 

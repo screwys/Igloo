@@ -51,8 +51,12 @@ templ FeedList(p PageProps, items []model.FeedItem, nextPageURL string, showCont
 		}
 	>
 		if len(items) > 0 {
-			for _, item := range items {
-				@FeedItem(p, item)
+			for i, item := range items {
+				if showControls && i >= 3 {
+					@feedDeferredItem(p, item)
+				} else {
+					@FeedItem(p, item)
+				}
 			}
 		} else {
 			<div class="empty-state"><h3>{ L(p, "feed_empty_title", "No posts") }</h3><p>{ L(p, "feed_empty_items", "No feed items available.") }</p></div>

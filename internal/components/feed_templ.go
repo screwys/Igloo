@@ -187,10 +187,17 @@ func FeedList(p PageProps, items []model.FeedItem, nextPageURL string, showContr
 			return templ_7745c5c3_Err
 		}
 		if len(items) > 0 {
-			for _, item := range items {
-				templ_7745c5c3_Err = FeedItem(p, item).Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
+			for i, item := range items {
+				if showControls && i >= 3 {
+					templ_7745c5c3_Err = feedDeferredItem(p, item).Render(ctx, templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = FeedItem(p, item).Render(ctx, templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
 				}
 			}
 		} else {
@@ -201,7 +208,7 @@ func FeedList(p PageProps, items []model.FeedItem, nextPageURL string, showContr
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "feed_empty_title", "No posts"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 58, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 62, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -214,7 +221,7 @@ func FeedList(p PageProps, items []model.FeedItem, nextPageURL string, showContr
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "feed_empty_items", "No feed items available."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 58, Col: 134}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 62, Col: 134}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -265,7 +272,7 @@ func XProfileTabs(p PageProps, xChannel *XChannelInfo) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "profile_content_tabs_aria", "Profile content"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 65, Col: 109}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 69, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {
@@ -300,7 +307,7 @@ func XProfileTabs(p PageProps, xChannel *XChannelInfo) templ.Component {
 		var templ_7745c5c3_Var11 templ.SafeURL
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinURLErrs(xProfileTabURL(xChannel.ChannelID, "posts"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 66, Col: 111}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 70, Col: 111}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -313,7 +320,7 @@ func XProfileTabs(p PageProps, xChannel *XChannelInfo) templ.Component {
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolDataAttr(xChannel.ActiveTab == "posts"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 66, Col: 184}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 70, Col: 184}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 		if templ_7745c5c3_Err != nil {
@@ -326,7 +333,7 @@ func XProfileTabs(p PageProps, xChannel *XChannelInfo) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "profile_posts", "Posts"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 66, Col: 219}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 70, Col: 219}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -361,7 +368,7 @@ func XProfileTabs(p PageProps, xChannel *XChannelInfo) templ.Component {
 		var templ_7745c5c3_Var16 templ.SafeURL
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinURLErrs(xProfileTabURL(xChannel.ChannelID, "media"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 67, Col: 111}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 71, Col: 111}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
@@ -374,7 +381,7 @@ func XProfileTabs(p PageProps, xChannel *XChannelInfo) templ.Component {
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolDataAttr(xChannel.ActiveTab == "media"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 67, Col: 184}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 71, Col: 184}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 		if templ_7745c5c3_Err != nil {
@@ -387,7 +394,7 @@ func XProfileTabs(p PageProps, xChannel *XChannelInfo) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "profile_media", "Media"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 67, Col: 219}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 71, Col: 219}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
@@ -429,7 +436,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "profile_media", "Media"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 72, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 76, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 		if templ_7745c5c3_Err != nil {
@@ -450,7 +457,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var21 string
 				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(item.TweetID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 83, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 87, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 				if templ_7745c5c3_Err != nil {
@@ -463,7 +470,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var22 string
 				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(xProfileMediaPostHref(channelID, item.TweetID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 84, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 88, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 				if templ_7745c5c3_Err != nil {
@@ -476,7 +483,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var23 string
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(feedExternalURL(item))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 85, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 89, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 				if templ_7745c5c3_Err != nil {
@@ -489,7 +496,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var24 string
 				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(item.ContentHash)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 86, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 90, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 				if templ_7745c5c3_Err != nil {
@@ -502,7 +509,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolDataAttr(item.IsRetweet))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 87, Col: 56}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 91, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 				if templ_7745c5c3_Err != nil {
@@ -515,7 +522,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolDataAttr(item.IsLiked))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 88, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 92, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 				if templ_7745c5c3_Err != nil {
@@ -528,7 +535,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(boolDataAttr(item.IsBookmarked))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 89, Col: 54}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 93, Col: 54}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 				if templ_7745c5c3_Err != nil {
@@ -541,7 +548,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(item.ChannelID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 90, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 94, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 				if templ_7745c5c3_Err != nil {
@@ -554,7 +561,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var29 string
 				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(authorLabel)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 91, Col: 36}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 95, Col: 36}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 				if templ_7745c5c3_Err != nil {
@@ -567,7 +574,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var30 string
 				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(item.AuthorHandle)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 93, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 97, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 				if templ_7745c5c3_Err != nil {
@@ -580,7 +587,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var31 string
 				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(item.SourceHandle)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 94, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 98, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 				if templ_7745c5c3_Err != nil {
@@ -593,7 +600,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var32 string
 				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(feedPublishedAtStr(item.PublishedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 95, Col: 58}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 99, Col: 58}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 				if templ_7745c5c3_Err != nil {
@@ -606,7 +613,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var33 string
 				templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(item.Media[0].Type)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 96, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 100, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 				if templ_7745c5c3_Err != nil {
@@ -619,7 +626,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var34 string
 				templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(feedMediaURLAt(item.MediaSlideURLs, 0))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 97, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 101, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 				if templ_7745c5c3_Err != nil {
@@ -632,7 +639,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var35 string
 				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_open_media", "Open media"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 98, Col: 57}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 102, Col: 57}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 				if templ_7745c5c3_Err != nil {
@@ -645,7 +652,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(thumbnail)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 100, Col: 25}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 104, Col: 25}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 				if templ_7745c5c3_Err != nil {
@@ -658,7 +665,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var37 string
 				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "feed_post_media", "Post media"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 100, Col: 71}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 104, Col: 71}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 				if templ_7745c5c3_Err != nil {
@@ -681,7 +688,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 				var templ_7745c5c3_Var38 string
 				templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(authorLabel)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 105, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 109, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 				if templ_7745c5c3_Err != nil {
@@ -699,7 +706,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 					var templ_7745c5c3_Var39 string
 					templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs("@" + item.AuthorHandle)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 107, Col: 65}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 111, Col: 65}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 					if templ_7745c5c3_Err != nil {
@@ -718,7 +725,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 					var templ_7745c5c3_Var40 string
 					templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(item.BodyText)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 110, Col: 51}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 114, Col: 51}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 					if templ_7745c5c3_Err != nil {
@@ -743,7 +750,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 						var templ_7745c5c3_Var41 string
 						templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(media.Type)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 121, Col: 42}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 125, Col: 42}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 						if templ_7745c5c3_Err != nil {
@@ -756,7 +763,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 						var templ_7745c5c3_Var42 string
 						templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(slideURL)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 122, Col: 39}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 126, Col: 39}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 						if templ_7745c5c3_Err != nil {
@@ -774,7 +781,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 							var templ_7745c5c3_Var43 string
 							templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(streamURL)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 124, Col: 44}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 128, Col: 44}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 							if templ_7745c5c3_Err != nil {
@@ -787,7 +794,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 							var templ_7745c5c3_Var44 string
 							templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(slideURL)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 125, Col: 44}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 129, Col: 44}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 							if templ_7745c5c3_Err != nil {
@@ -822,7 +829,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "profile_media_empty_title", "No media"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 136, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 140, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {
@@ -835,7 +842,7 @@ func XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) te
 			var templ_7745c5c3_Var46 string
 			templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "profile_media_empty", "No original media posts found."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 136, Col: 151}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 140, Col: 151}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 			if templ_7745c5c3_Err != nil {
@@ -903,7 +910,7 @@ func LikedPage(p PageProps, items []model.FeedItem, hasMore bool, nextPageURL st
 				var templ_7745c5c3_Var49 string
 				templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "feed_empty_title", "No posts"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 154, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 158, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 				if templ_7745c5c3_Err != nil {
@@ -916,7 +923,7 @@ func LikedPage(p PageProps, items []model.FeedItem, hasMore bool, nextPageURL st
 				var templ_7745c5c3_Var50 string
 				templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "feed_empty_items", "No feed items available."))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 154, Col: 136}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 158, Col: 136}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 				if templ_7745c5c3_Err != nil {
@@ -980,7 +987,7 @@ func FeedScrollSentinel(nextPageURL string) templ.Component {
 			var templ_7745c5c3_Var52 string
 			templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.ResolveAttributeValue(nextPageURL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 169, Col: 23}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 173, Col: 23}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 			if templ_7745c5c3_Err != nil {
@@ -1056,7 +1063,7 @@ func RetweetersDialog(p PageProps) templ.Component {
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "feed_reposted_by", "Reposted by"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 187, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 191, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 		if templ_7745c5c3_Err != nil {
@@ -1119,7 +1126,7 @@ func FeedNewPostsBar(p PageProps, hasNew bool, anchorTweetID string, avatars []m
 		var templ_7745c5c3_Var59 string
 		templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(anchorTweetID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 202, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 206, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 		if templ_7745c5c3_Err != nil {
@@ -1132,7 +1139,7 @@ func FeedNewPostsBar(p PageProps, hasNew bool, anchorTweetID string, avatars []m
 		var templ_7745c5c3_Var60 string
 		templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_show_new_posts", "Show new posts"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 203, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 207, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 		if templ_7745c5c3_Err != nil {
@@ -1145,7 +1152,7 @@ func FeedNewPostsBar(p PageProps, hasNew bool, anchorTweetID string, avatars []m
 		var templ_7745c5c3_Var61 string
 		templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.ResolveAttributeValue(`js:{known_head: (document.getElementById("feed-new-posts-bar")?.getAttribute("data-feed-head-anchor") || "")}`)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 208, Col: 123}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 212, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var61)
 		if templ_7745c5c3_Err != nil {
@@ -1168,7 +1175,7 @@ func FeedNewPostsBar(p PageProps, hasNew bool, anchorTweetID string, avatars []m
 				var templ_7745c5c3_Var62 string
 				templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.ResolveAttributeValue(a.AuthorAvatarURL)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 219, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 223, Col: 29}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var62)
 				if templ_7745c5c3_Err != nil {
@@ -1181,7 +1188,7 @@ func FeedNewPostsBar(p PageProps, hasNew bool, anchorTweetID string, avatars []m
 				var templ_7745c5c3_Var63 string
 				templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.ResolveAttributeValue(a.AuthorHandle)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 220, Col: 26}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 224, Col: 26}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var63)
 				if templ_7745c5c3_Err != nil {
@@ -1199,7 +1206,7 @@ func FeedNewPostsBar(p PageProps, hasNew bool, anchorTweetID string, avatars []m
 			var templ_7745c5c3_Var64 string
 			templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "feed_new_posts_posted", "posted"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 226, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 230, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 			if templ_7745c5c3_Err != nil {
@@ -1217,7 +1224,7 @@ func FeedNewPostsBar(p PageProps, hasNew bool, anchorTweetID string, avatars []m
 			var templ_7745c5c3_Var65 string
 			templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "feed_new_posts", "New posts"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 228, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/feed.templ`, Line: 232, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 			if templ_7745c5c3_Err != nil {
