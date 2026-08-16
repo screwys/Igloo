@@ -34,6 +34,7 @@ function ensureObserver() {
     entries.forEach(function (entry) {
       const video = entry.target
       if (!(video instanceof HTMLVideoElement)) return
+      if (video.hasAttribute('data-feed-overlay-active')) return
       if (entry.isIntersecting && entry.intersectionRatio >= 0.55) {
         video.muted = true
         preloadVideo(video)

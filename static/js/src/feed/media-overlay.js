@@ -64,26 +64,54 @@ function setFeedMediaOverlayOpen(open) {
   document.body.classList.toggle('feed-media-overlay-open', !!open)
 }
 
-function handoffInlineVideoPlayback(overlay, overlayVideo, activeStreamUrl) {
+function takeOverInlineVideoPlayback(overlay, activeStreamUrl) {
   var sourceVideo = null
   document.querySelectorAll('video[data-feed-inline-video]').forEach(function (video) {
     var wrap = video.closest && video.closest('[data-feed-media]')
     if (!sourceVideo && wrap && wrap.getAttribute('data-feed-media-stream') === activeStreamUrl) {
       sourceVideo = video
+      return
     }
     try { video.pause() } catch (_) { }
   })
 
-  overlay._sourceVideo = sourceVideo
-  overlay._overlayVideo = overlayVideo
-  if (!sourceVideo) return
+  if (!sourceVideo || !sourceVideo.parentNode) return null
+  var placeholder = document.createElement('div')
+  var bounds = sourceVideo.getBoundingClientRect()
+  placeholder.style.width = bounds.width + 'px'
+  placeholder.style.height = bounds.height + 'px'
+  sourceVideo.parentNode.replaceChild(placeholder, sourceVideo)
 
-  var startTime = sourceVideo.currentTime
-  if (startTime > 0) {
-    overlayVideo.addEventListener('loadedmetadata', function () {
-      overlayVideo.currentTime = startTime
-    }, { once: true })
+  overlay._sourceVideo = sourceVideo
+  overlay._sourcePlaceholder = placeholder
+  overlay._sourceClassName = sourceVideo.className
+  overlay._sourceMuted = sourceVideo.muted
+  sourceVideo.setAttribute('data-feed-overlay-active', '1')
+  sourceVideo.classList.add('feed-overlay-video')
+  sourceVideo.muted = false
+  return sourceVideo
+}
+
+function restoreInlineVideoPlayback(overlay, keepPlaying) {
+  var sourceVideo = overlay && overlay._sourceVideo
+  var placeholder = overlay && overlay._sourcePlaceholder
+  if (!sourceVideo || !placeholder || !placeholder.parentNode) return
+  if (!keepPlaying) {
+    try { sourceVideo.pause() } catch (_) { }
   }
+  if (overlay._videoClickHandler) sourceVideo.removeEventListener('click', overlay._videoClickHandler)
+  if (overlay._videoControlsCleanup) overlay._videoControlsCleanup()
+  sourceVideo.className = overlay._sourceClassName
+  sourceVideo.muted = overlay._sourceMuted
+  sourceVideo.removeAttribute('data-feed-overlay-active')
+  placeholder.parentNode.replaceChild(sourceVideo, placeholder)
+  overlay._sourceVideo = null
+  overlay._sourcePlaceholder = null
+  overlay._sourceClassName = ''
+  overlay._sourceMuted = false
+  overlay._overlayVideo = null
+  overlay._videoClickHandler = null
+  overlay._videoControlsCleanup = null
 }
 
 // ── Media source extraction ──
@@ -274,12 +302,7 @@ function getMediaSources(card, clickedEl) {
 
 export function closeMediaOverlay() {
   if (overlayEl) {
-    var srcVid = overlayEl._sourceVideo
-    var ovVid = overlayEl._overlayVideo
-    if (srcVid && ovVid) {
-      try { srcVid.currentTime = ovVid.currentTime } catch (_) { }
-      srcVid.play().catch(function () { })
-    }
+    restoreInlineVideoPlayback(overlayEl, true)
     if (overlayEl.parentNode) overlayEl.remove()
   }
   overlayEl = null
@@ -570,13 +593,46 @@ export function openMediaOverlay(root, triggerEl) {
     }
   }
 
+  function renderVideo(activeStreamUrl, activePosterUrl) {
+    var videoWrap = document.createElement('div')
+    videoWrap.className = 'feed-overlay-video-wrap'
+
+    var v = takeOverInlineVideoPlayback(overlay, activeStreamUrl)
+    if (!v) {
+      v = document.createElement('video')
+      v.className = 'feed-overlay-video'
+      v.autoplay = true
+      v.playsInline = true
+      v.loop = true
+      if (activePosterUrl) v.poster = activePosterUrl
+      var source = document.createElement('source')
+      source.src = activeStreamUrl
+      source.type = 'video/mp4'
+      v.appendChild(source)
+      v.muted = false
+    }
+
+    var togglePlayback = function (event) {
+      event.stopPropagation()
+      if (v.paused) v.play().catch(function () {}); else v.pause()
+    }
+    v.addEventListener('click', togglePlayback)
+    overlay._overlayVideo = v
+    overlay._videoClickHandler = togglePlayback
+
+    videoWrap.appendChild(v)
+    videoWrap.appendChild(createFeedVideoControls())
+    overlay._videoControlsCleanup = bindFeedVideoControls(videoWrap, v)
+    return videoWrap
+  }
+
   function render() {
     var activeSlide = (media.slides && media.slides[currentIndex]) || null
     var activeSource = activeSlide ? activeSlide.source : (isQuoteMedia ? 'quote' : 'parent')
     renderSidebar(activeSource)
     if (!host) return
+    restoreInlineVideoPlayback(overlay, false)
     while (host.firstChild) host.removeChild(host.firstChild)
-    overlay._sourceVideo = null
     overlay._overlayVideo = null
     var slideInfo = (media.kind === 'mixed' && media.slides && media.slides[currentIndex]) || null
     var isMixedVideo = slideInfo && slideInfo.kind === 'video' && slideInfo.streamUrl
@@ -585,61 +641,8 @@ export function openMediaOverlay(root, triggerEl) {
     var activeStreamUrl = slideInfo ? slideInfo.streamUrl : media.streamUrl
     var activePosterUrl = slideInfo ? (slideInfo.posterUrl || slideInfo.url) : media.posterUrl
 
-    if (isMixedVideo) {
-      // Wrap the video in a sized container so the seekbar sits flush against
-      // the video's bottom edge (not at the bottom of the host's padding box).
-      // Same pattern as the pure-video case below — keeps both seekbars
-      // visually identical regardless of slideshow context.
-      var mixedWrap = document.createElement('div')
-      mixedWrap.className = 'feed-overlay-video-wrap'
-
-      var v = document.createElement('video')
-      v.className = 'feed-overlay-image'
-      v.autoplay = true
-      v.playsInline = true
-      v.loop = true
-      v.muted = false
-      if (activePosterUrl) v.poster = activePosterUrl
-      var source = document.createElement('source')
-      source.src = activeStreamUrl
-      source.type = 'video/mp4'
-      v.appendChild(source)
-      v.addEventListener('click', function (e) {
-        e.stopPropagation()
-        if (v.paused) v.play().catch(function () {}); else v.pause()
-      })
-
-      mixedWrap.appendChild(v)
-      mixedWrap.appendChild(createFeedVideoControls())
-      bindFeedVideoControls(mixedWrap, v)
-      handoffInlineVideoPlayback(overlay, v, activeStreamUrl)
-      host.appendChild(mixedWrap)
-    } else if (isVideo) {
-      var videoWrap = document.createElement('div')
-      videoWrap.className = 'feed-overlay-video-wrap'
-
-      const v = document.createElement('video')
-      v.className = 'feed-overlay-video'
-      v.autoplay = true
-      v.playsInline = true
-      v.loop = true
-      if (activePosterUrl) v.poster = activePosterUrl
-      const source = document.createElement('source')
-      source.src = activeStreamUrl
-      source.type = 'video/mp4'
-      v.appendChild(source)
-      v.muted = false
-
-      v.addEventListener('click', function (e) {
-        e.stopPropagation()
-        if (v.paused) v.play().catch(function () {}); else v.pause()
-      })
-
-      videoWrap.appendChild(v)
-      videoWrap.appendChild(createFeedVideoControls())
-      bindFeedVideoControls(videoWrap, v)
-      handoffInlineVideoPlayback(overlay, v, activeStreamUrl)
-      host.appendChild(videoWrap)
+    if (isVideo) {
+      host.appendChild(renderVideo(activeStreamUrl, activePosterUrl))
     } else {
       const urls = Array.isArray(media.urls) ? media.urls : []
       const img = document.createElement('img')

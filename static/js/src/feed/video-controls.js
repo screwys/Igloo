@@ -182,6 +182,14 @@ export function bindFeedVideoControls(wrap, video, options) {
     })
   }
 
+  function syncProgress() {
+    if (!fill) return
+    const duration = Number(video.duration || 0)
+    const current = Number(video.currentTime || 0)
+    const percent = duration > 0 ? Math.max(0, Math.min(100, (current / duration) * 100)) : 0
+    fill.style.width = percent + '%'
+  }
+
   function closeSpeedMenu() {
     if (!speedMenu || !speedButton) return
     speedMenu.classList.add('hidden')
@@ -289,17 +297,18 @@ export function bindFeedVideoControls(wrap, video, options) {
   video.addEventListener('pause', syncPlay)
   video.addEventListener('volumechange', syncMute)
   video.addEventListener('ratechange', syncSpeed)
-  video.addEventListener('timeupdate', function () {
-    if (!fill) return
-    const duration = Number(video.duration || 0)
-    const current = Number(video.currentTime || 0)
-    const percent = duration > 0 ? Math.max(0, Math.min(100, (current / duration) * 100)) : 0
-    fill.style.width = percent + '%'
-  })
+  video.addEventListener('timeupdate', syncProgress)
 
   makeDraggableSeekbar(progress, fill, video)
   attachSeekTooltip(progress, video)
   syncPlay()
   syncMute()
   syncSpeed()
+  return function () {
+    video.removeEventListener('play', syncPlay)
+    video.removeEventListener('pause', syncPlay)
+    video.removeEventListener('volumechange', syncMute)
+    video.removeEventListener('ratechange', syncSpeed)
+    video.removeEventListener('timeupdate', syncProgress)
+  }
 }
