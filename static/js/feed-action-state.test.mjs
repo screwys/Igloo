@@ -55,3 +55,94 @@ test('bookmark state reaches another projection of the same post', async () => {
   assert.equal(threadCopy.dataset.bookmarked, '1')
   assert.equal(relatedCopy.dataset.bookmarked, '1')
 })
+
+test('double-clicking a playing feed video opens its overlay still playing', async () => {
+  var source = await readFile(new URL('./src/feed/index.js', import.meta.url), 'utf8')
+  var opened = false
+  var pendingClick = null
+  var video = {
+    muted: false,
+    paused: false,
+    playCount: 0,
+    play() {
+      this.paused = false
+      this.playCount++
+      return Promise.resolve()
+    },
+    pause() { this.paused = true },
+  }
+  var mediaTrigger = {
+    querySelector(selector) {
+      assert.equal(selector, 'video')
+      return video
+    },
+    setAttribute() {},
+  }
+  var context = vm.createContext({
+    window: {
+      setTimeout(callback, delay) {
+        assert.equal(delay, 250)
+        pendingClick = callback
+        return 1
+      },
+      clearTimeout() { pendingClick = null },
+    },
+    openMediaOverlay(root, trigger) {
+      assert.equal(root, mediaTrigger)
+      assert.equal(trigger, mediaTrigger)
+      opened = true
+    },
+  })
+  vm.runInContext(
+    extractFunction(source, 'clearPendingInlineVideoClick') + '\n' +
+      extractFunction(source, 'handleInlineVideoClick') +
+      '\nthis.handleInlineVideoClick = handleInlineVideoClick',
+    context,
+  )
+
+  context.handleInlineVideoClick(mediaTrigger, { detail: 1 })
+  assert.equal(video.paused, false)
+  assert.ok(pendingClick)
+
+  context.handleInlineVideoClick(mediaTrigger, { detail: 2 })
+  assert.equal(opened, true)
+  assert.equal(video.paused, false)
+  assert.equal(video.playCount, 0)
+  assert.equal(pendingClick, null)
+})
+
+test('single-clicking a playing feed video pauses after the double-click window', async () => {
+  var source = await readFile(new URL('./src/feed/index.js', import.meta.url), 'utf8')
+  var pendingClick = null
+  var video = {
+    muted: false,
+    paused: false,
+    play() { return Promise.resolve() },
+    pause() { this.paused = true },
+  }
+  var mediaTrigger = {
+    querySelector() { return video },
+    setAttribute() {},
+  }
+  var context = vm.createContext({
+    window: {
+      setTimeout(callback) {
+        pendingClick = callback
+        return 1
+      },
+      clearTimeout() { pendingClick = null },
+    },
+    openMediaOverlay() {},
+  })
+  vm.runInContext(
+    extractFunction(source, 'clearPendingInlineVideoClick') + '\n' +
+      extractFunction(source, 'handleInlineVideoClick') +
+      '\nthis.handleInlineVideoClick = handleInlineVideoClick',
+    context,
+  )
+
+  context.handleInlineVideoClick(mediaTrigger, { detail: 1 })
+  assert.equal(video.paused, false)
+  pendingClick()
+  assert.equal(video.paused, true)
+})

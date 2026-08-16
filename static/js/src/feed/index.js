@@ -1112,12 +1112,44 @@ window.addEventListener('popstate', function (event) {
 
 // ── Media overlay click delegation ──
 
+function clearPendingInlineVideoClick(mediaTrigger) {
+  if (!mediaTrigger || !mediaTrigger._feedVideoClickTimer) return
+  window.clearTimeout(mediaTrigger._feedVideoClickTimer)
+  mediaTrigger._feedVideoClickTimer = 0
+}
+
+function handleInlineVideoClick(mediaTrigger, event) {
+  var inlineVideo = mediaTrigger.querySelector('video')
+  if (event.detail >= 2) {
+    clearPendingInlineVideoClick(mediaTrigger)
+    openMediaOverlay(mediaTrigger, mediaTrigger)
+    return
+  }
+  clearPendingInlineVideoClick(mediaTrigger)
+  mediaTrigger._feedVideoClickTimer = window.setTimeout(function () {
+    mediaTrigger._feedVideoClickTimer = 0
+    if (inlineVideo && inlineVideo.muted) {
+      inlineVideo.muted = false
+      inlineVideo.play().catch(function () {})
+      mediaTrigger.setAttribute('data-feed-video-unmuted', '1')
+      return
+    }
+    if (inlineVideo) {
+      if (inlineVideo.paused) inlineVideo.play().catch(function () {})
+      else inlineVideo.pause()
+    }
+  }, 250)
+}
+
 document.addEventListener('click', function (event) {
   var expandBtn = event.target && event.target.closest ? event.target.closest('[data-feed-video-expand]') : null
   if (expandBtn) {
     event.preventDefault(); event.stopPropagation()
     var wrap = expandBtn.closest('[data-feed-media]')
-    if (wrap) openMediaOverlay(wrap, wrap)
+    if (wrap) {
+      clearPendingInlineVideoClick(wrap)
+      openMediaOverlay(wrap, wrap)
+    }
     return
   }
 
@@ -1134,18 +1166,7 @@ document.addEventListener('click', function (event) {
   if (mediaKind === 'video') {
     var isInGrid = mediaTrigger.closest && mediaTrigger.closest('.feed-media-wrap-grid')
     if (isInGrid) { openMediaOverlay(mediaTrigger, mediaTrigger); return }
-    if (event.detail >= 2) { openMediaOverlay(mediaTrigger, mediaTrigger); return }
-    var inlineVideo = mediaTrigger.querySelector('video')
-    if (inlineVideo && inlineVideo.muted) {
-      inlineVideo.muted = false
-      inlineVideo.play().catch(function () {})
-      mediaTrigger.setAttribute('data-feed-video-unmuted', '1')
-      return
-    }
-    if (inlineVideo) {
-      if (inlineVideo.paused) inlineVideo.play().catch(function () {})
-      else inlineVideo.pause()
-    }
+    handleInlineVideoClick(mediaTrigger, event)
     return
   }
   openMediaOverlay(mediaTrigger, mediaTrigger)
@@ -1159,6 +1180,7 @@ document.addEventListener('keydown', function (event) {
   if (event.target.closest && event.target.closest('[data-feed-video-control], [data-feed-progress]')) return
   if (event.key !== 'Enter' && event.key !== ' ') return
   event.preventDefault()
+  clearPendingInlineVideoClick(mediaTrigger)
   openMediaOverlay(mediaTrigger, mediaTrigger)
 })
 
