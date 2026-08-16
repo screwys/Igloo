@@ -820,7 +820,7 @@ if (root && video) {
             return cues
           }
           function subtitleTextHtml(text) {
-            return escapeHtml(sanitizeVttCueText(text)).replace(/\r?\n/g, '<br>')
+            return escapeHtml(sanitizeVttCueText(text).replace(/\s*\r?\n\s*/g, ' '))
           }
           function sanitizeVttCueText(text) {
             return decodeVttEntities(
