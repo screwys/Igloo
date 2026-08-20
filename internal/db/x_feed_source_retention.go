@@ -161,15 +161,17 @@ func (db *DB) xAssetOwnerIDsForTweets(tweetIDs []string) ([]string, error) {
 	return sortedKeys(owners), nil
 }
 
-func (db *DB) xPrunedAssetOwnerIDs(ownerIDs []string) ([]string, error) {
+func (db *DB) xRestorableAssetOwnerIDs(ownerIDs []string) ([]string, error) {
 	var out []string
 	for _, chunk := range stringChunks(uniqueStrings(ownerIDs), 400) {
 		rows, err := db.conn.Query(`
-			SELECT DISTINCT owner_id
-			FROM assets
-			WHERE owner_kind = 'tweet' AND lifecycle_state = 'pruned'
-			  AND asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
-			  AND owner_id IN (`+placeholders(len(chunk))+`)
+			SELECT DISTINCT a.owner_id
+			FROM assets a
+			JOIN media_objects desired ON desired.object_id = a.desired_object_id
+			WHERE a.owner_kind = 'tweet'
+			  AND a.asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
+			  AND a.owner_id IN (`+placeholders(len(chunk))+`)
+			  AND (a.lifecycle_state = 'pruned' OR desired.job_state = 'pruned')
 		`, stringsToAny(chunk)...)
 		if err != nil {
 			return nil, err
@@ -192,7 +194,7 @@ func (db *DB) xPrunedAssetOwnerIDs(ownerIDs []string) ([]string, error) {
 }
 
 func (db *DB) restorePrunedXMediaOwners(ownerIDs []string, lane DownloadLane, nowMs int64) (int, error) {
-	ownerIDs, err := db.xPrunedAssetOwnerIDs(ownerIDs)
+	ownerIDs, err := db.xRestorableAssetOwnerIDs(ownerIDs)
 	if err != nil || len(ownerIDs) == 0 {
 		return 0, err
 	}
@@ -202,7 +204,19 @@ func (db *DB) restorePrunedXMediaOwners(ownerIDs []string, lane DownloadLane, no
 	restored := 0
 	for _, chunk := range stringChunks(ownerIDs, 400) {
 		err := db.WithWrite(func(tx *sql.Tx) error {
-			res, err := tx.Exec(`
+			var chunkRestored int
+			if err := tx.QueryRow(`
+				SELECT COUNT(*)
+				FROM assets a
+				JOIN media_objects desired ON desired.object_id = a.desired_object_id
+				WHERE a.owner_kind = 'tweet'
+				  AND a.owner_id IN (`+placeholders(len(chunk))+`)
+				  AND a.asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
+				  AND (a.lifecycle_state = 'pruned' OR desired.job_state = 'pruned')
+			`, stringsToAny(chunk)...).Scan(&chunkRestored); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(`
 				UPDATE assets
 				SET lifecycle_state = 'active', object_id = desired_object_id,
 				    revision = revision + 1, updated_at_ms = ?
@@ -210,16 +224,11 @@ func (db *DB) restorePrunedXMediaOwners(ownerIDs []string, lane DownloadLane, no
 				  AND owner_id IN (`+placeholders(len(chunk))+`)
 				  AND asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 				  AND lifecycle_state = 'pruned'
-			`, append([]any{nowMs}, stringsToAny(chunk)...)...)
-			if err != nil {
+			`, append([]any{nowMs}, stringsToAny(chunk)...)...); err != nil {
 				return err
 			}
-			n, err := res.RowsAffected()
-			restored += int(n)
-			if err != nil {
-				return err
-			}
-			_, err = tx.Exec(`
+			restored += chunkRestored
+			_, err := tx.Exec(`
 				UPDATE media_objects AS mo
 				SET job_state = 'queued',
 				    download_lane = CASE WHEN EXISTS (

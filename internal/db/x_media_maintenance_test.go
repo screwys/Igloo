@@ -278,6 +278,58 @@ func TestRepeatedXMediaObservationPreservesPrunedWork(t *testing.T) {
 	}
 }
 
+func TestXMediaRetentionChangeRestoresPrunedObjectForNewOwner(t *testing.T) {
+	d := openFreshTestDB(t)
+	channelID, sourceHandle := seedXRetentionChannel(t, d, 1)
+	oldShared := xRetentionFeedItem("sample_shared_old", sourceHandle, 100)
+	current := xRetentionFeedItem("sample_current", sourceHandle, 200)
+	if _, err := d.UpsertFeedItemsDetailed([]model.FeedItem{current, oldShared}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.PruneXMediaRetentionForChannel(channelID, XMediaRetentionOptions{NowMs: 3000}); err != nil {
+		t.Fatal(err)
+	}
+	if asset := readXRetentionAsset(t, d, oldShared.TweetID); asset.State != AssetStatePruned {
+		t.Fatalf("shared object was not pruned: %+v", asset)
+	}
+
+	newShared := xRetentionFeedItem("sample_shared_new", sourceHandle, 300)
+	newShared.MediaJSON = oldShared.MediaJSON
+	upsert, err := d.UpsertFeedItemsDetailed([]model.FeedItem{newShared})
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := upsert.XMediaRetentionChanges[channelID]
+	if len(changed) != 1 || changed[0] != newShared.TweetID {
+		t.Fatalf("retention changes = %+v", upsert.XMediaRetentionChanges)
+	}
+	var lifecycle string
+	if err := d.QueryRow(`
+		SELECT lifecycle_state FROM assets
+		WHERE asset_kind = 'post_media' AND owner_kind = 'tweet'
+		  AND owner_id = ? AND media_index = 0
+	`, newShared.TweetID).Scan(&lifecycle); err != nil {
+		t.Fatal(err)
+	}
+	if lifecycle != "active" {
+		t.Fatalf("new shared asset lifecycle = %q, want active", lifecycle)
+	}
+	if asset := readXRetentionAsset(t, d, newShared.TweetID); asset.State != AssetStatePruned {
+		t.Fatalf("new owner did not reuse the pruned object: %+v", asset)
+	}
+
+	result, err := d.ReconcileXMediaRetentionChanges(channelID, changed, XMediaRetentionOptions{NowMs: 4000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AssetsRestored != 1 {
+		t.Fatalf("restored assets = %d, want 1; result=%+v", result.AssetsRestored, result)
+	}
+	if asset := readXRetentionAsset(t, d, newShared.TweetID); asset.State != AssetStateQueued {
+		t.Fatalf("retained new owner did not restore shared work: %+v", asset)
+	}
+}
+
 func TestXMediaRetentionChangeReconcilesOnlyNewAndBoundaryOwners(t *testing.T) {
 	d := openFreshTestDB(t)
 	channelID, sourceHandle := seedXRetentionChannel(t, d, 2)
