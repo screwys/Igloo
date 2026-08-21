@@ -40,6 +40,36 @@ func TestRepostEntries_SingleLegacyField(t *testing.T) {
 	}
 }
 
+func TestRepostEntries_HidesSelfRepostAttribution(t *testing.T) {
+	item := model.FeedItem{
+		IsRetweet:         true,
+		ChannelID:         "twitter_sample_author",
+		AuthorHandle:      "sample_author",
+		ReposterChannelID: "twitter_sample_author",
+		RetweetedByHandle: "sample_author",
+	}
+	if got := repostEntries(item); got != nil {
+		t.Fatalf("self repost entries = %+v, want nil", got)
+	}
+}
+
+func TestRepostEntries_LeavesOtherRepostersWhenGroupedWithSelf(t *testing.T) {
+	item := model.FeedItem{
+		IsRetweet:    true,
+		ChannelID:    "twitter_sample_author",
+		AuthorHandle: "sample_author",
+		Retweeters: []model.RetweeterInfo{
+			{Handle: "sample_author", ChannelID: "twitter_sample_author"},
+			{Handle: "sample_reader", ChannelID: "twitter_sample_reader"},
+		},
+	}
+	got := repostEntries(item)
+	want := []repostEntry{{Label: "sample_reader", Handle: "sample_reader", ChannelID: "twitter_sample_reader"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("repostEntries mismatch:\n got=%+v\nwant=%+v", got, want)
+	}
+}
+
 func TestRepostEntries_SingleLegacyHandleOnly(t *testing.T) {
 	item := model.FeedItem{
 		IsRetweet:         true,

@@ -389,7 +389,7 @@ internal class NativeFeedViewHolder(
         colors: NativeFeedColors,
     ) {
         val item = row.item
-        if (!item.isRetweet) {
+        if (!shouldShowRepostAttribution(row)) {
             views.retweeter.visibility = View.GONE
             views.retweeter.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
             return

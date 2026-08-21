@@ -448,6 +448,9 @@ func repostEntries(item model.FeedItem) []repostEntry {
 	if len(item.Retweeters) > 0 {
 		out := make([]repostEntry, 0, len(item.Retweeters))
 		for _, rt := range item.Retweeters {
+			if isSelfRepostAttribution(item, rt.ChannelID, rt.Handle) {
+				continue
+			}
 			out = append(out, repostEntry{
 				Label:     retweeterLabel(rt),
 				Handle:    normalizeHandle(rt.Handle),
@@ -457,6 +460,9 @@ func repostEntries(item model.FeedItem) []repostEntry {
 		return out
 	}
 	if !item.IsRetweet {
+		return nil
+	}
+	if isSelfRepostAttribution(item, item.ReposterChannelID, item.RetweetedByHandle) {
 		return nil
 	}
 	label := feedRepostedLabel(item)
@@ -472,6 +478,28 @@ func repostEntries(item model.FeedItem) []repostEntry {
 		Handle:    normalizeHandle(handle),
 		ChannelID: item.ReposterChannelID,
 	}}
+}
+
+// isSelfRepostAttribution reports whether the reposting identity is the post
+// author. Channel IDs are authoritative; handles keep legacy rows readable.
+func isSelfRepostAttribution(item model.FeedItem, reposterChannelID, reposterHandle string) bool {
+	if !item.IsRetweet {
+		return false
+	}
+	authorChannelID := strings.TrimSpace(item.ChannelID)
+	reposterChannelID = strings.TrimSpace(reposterChannelID)
+	if authorChannelID != "" && reposterChannelID != "" {
+		return strings.EqualFold(authorChannelID, reposterChannelID)
+	}
+	if reposterHandle == "" {
+		reposterHandle = item.RetweetedByHandle
+	}
+	if reposterHandle == "" {
+		reposterHandle = item.SourceHandle
+	}
+	authorHandle := normalizeHandle(item.AuthorHandle)
+	reposterHandle = normalizeHandle(reposterHandle)
+	return authorHandle != "" && reposterHandle != "" && strings.EqualFold(authorHandle, reposterHandle)
 }
 
 // splitRepostCap returns (visible, hidden) where visible is the first capN

@@ -129,6 +129,23 @@ internal fun localizedRelativeTime(
 internal fun normalizeHandle(raw: String?): String =
     raw?.trim()?.removePrefix("@")?.trim()?.takeIf { it.isNotBlank() } ?: ""
 
+/** Self-reposts are one card for the author's post, not repost attribution. */
+internal fun shouldShowRepostAttribution(row: FeedRow): Boolean {
+    val item = row.item
+    if (!item.isRetweet) return false
+
+    val authorChannelId = item.channelId?.trim().orEmpty()
+    val reposterChannelId = item.reposterChannelId?.trim().orEmpty()
+    if (authorChannelId.isNotBlank() && reposterChannelId.isNotBlank()) {
+        return !authorChannelId.equals(reposterChannelId, ignoreCase = true)
+    }
+
+    val authorHandle = normalizeHandle(row.authorHandle)
+    val reposterHandle = normalizeHandle(row.reposterHandle ?: row.sourceHandle)
+    return authorHandle.isBlank() || reposterHandle.isBlank() ||
+        !authorHandle.equals(reposterHandle, ignoreCase = true)
+}
+
 internal fun platformHandleCandidate(platform: String?, raw: String?): String {
     val handle = normalizeHandle(raw)
     return if (platform.equals("tiktok", ignoreCase = true)) {

@@ -318,6 +318,42 @@ class FeedTextUtilsTest {
     }
 
     @Test
+    fun self_repost_hides_repost_attribution() {
+        val row =
+            feedRow(
+                item =
+                    FeedItemEntity(
+                        tweetId = "tweet_self_repost",
+                        isRetweet = true,
+                        channelId = "twitter_sample_author",
+                        reposterChannelId = "twitter_sample_author",
+                    ),
+                authorHandle = "sample_author",
+                reposterHandle = "sample_author",
+            )
+
+        assertEquals(false, shouldShowRepostAttribution(row))
+    }
+
+    @Test
+    fun another_account_repost_keeps_repost_attribution() {
+        val row =
+            feedRow(
+                item =
+                    FeedItemEntity(
+                        tweetId = "tweet_repost",
+                        isRetweet = true,
+                        channelId = "twitter_sample_author",
+                        reposterChannelId = "twitter_sample_reposter",
+                    ),
+                authorHandle = "sample_author",
+                reposterHandle = "sample_reposter",
+            )
+
+        assertEquals(true, shouldShowRepostAttribution(row))
+    }
+
+    @Test
     fun display_name_that_is_really_handle_can_supply_quote_handle() {
         assertEquals("unusual_whales", displayNameLooksLikeHandle("unusual_whales"))
         assertEquals("", displayNameLooksLikeHandle("Unusual Whales"))
@@ -328,6 +364,7 @@ class FeedTextUtilsTest {
         authorHandle: String? = null,
         quoteAuthorHandle: String? = null,
         replyHandle: String? = null,
+        reposterHandle: String? = null,
         quoteChannelIsFollowed: Int = 0,
     ) =
         FeedRow(
@@ -346,5 +383,6 @@ class FeedTextUtilsTest {
             channelIsFollowed = 0,
             channelIsStarred = 0,
             quoteChannelIsFollowed = quoteChannelIsFollowed,
+            reposterHandle = reposterHandle,
         )
 }
