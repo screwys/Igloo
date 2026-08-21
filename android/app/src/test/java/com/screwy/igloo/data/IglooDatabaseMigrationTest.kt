@@ -238,6 +238,36 @@ class IglooDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration44To45KeepsSyncStateAndDefersNoCleanup() {
+        helper.createDatabase(DATABASE_NAME, 44).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO android_sync_state (
+                    id, mode, cursor, feed_days, youtube_days, moments_days,
+                    story_hours, bootstrap_required
+                ) VALUES (1, 'changes', 'sample_cursor', 2, 3, 7, 48, 0)
+                """.trimIndent(),
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            DATABASE_NAME,
+            45,
+            true,
+            IglooMigrations.MIGRATION_44_45,
+        ).use { db ->
+            db.query(
+                "SELECT mode, cursor, cleanup_required FROM android_sync_state WHERE id = 1",
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("changes", cursor.getString(0))
+                assertEquals("sample_cursor", cursor.getString(1))
+                assertEquals(0, cursor.getInt(2))
+            }
+        }
+    }
+
     private companion object {
         const val DATABASE_NAME = "igloo-migration-test"
     }

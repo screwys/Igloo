@@ -37,6 +37,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import java.io.File
@@ -592,6 +593,68 @@ class AndroidSyncMirrorTest {
         val truncated = requireNotNull(db.androidSyncDao().asset("sample_truncated_asset"))
         assertNull(truncated.localPath)
         assertTrue(truncated.nextAttemptAtMs > nowMs)
+
+        nowMs += 31_000L
+        buildAssetDrainer(
+            MockEngine { request ->
+                assertEquals("bytes=2-", request.headers[HttpHeaders.Range])
+                respond(
+                    "c",
+                    HttpStatusCode.PartialContent,
+                    headersOf(HttpHeaders.ContentRange, "bytes 2-2/3"),
+                )
+            }
+        ) { nowMs }.drain(youtubeCutoffMs = Long.MIN_VALUE)
+
+        val resumed = requireNotNull(db.androidSyncDao().asset("sample_truncated_asset"))
+        assertEquals("abc", File(requireNotNull(resumed.localPath)).readText())
+    }
+
+    @Test
+    fun assetDrainUsesOneBoundedPackForSmallPresentationAssets() = runBlocking {
+        val first =
+            readyAsset("sample_avatar_first", sizeBytes = 3).copy(
+                assetKind = "avatar",
+                ownerId = "sample_channel_first",
+                ownerKind = "channel",
+                bucket = "avatars",
+            )
+        val second =
+            readyAsset("sample_avatar_second", sizeBytes = 3).copy(
+                assetKind = "avatar",
+                ownerId = "sample_channel_second",
+                ownerKind = "channel",
+                bucket = "avatars",
+            )
+        db.androidSyncDao().upsertAsset(first)
+        db.androidSyncDao().upsertAsset(second)
+        var requests = 0
+        val engine = MockEngine { request ->
+            requests++
+            assertEquals("/api/android/sync/assets/pack", request.url.encodedPath)
+            respond(
+                buildString {
+                    append("IGLOO-ASSET-PACK-1\n")
+                    append("{\"asset_id\":\"sample_avatar_first\",\"revision\":1,\"size_bytes\":3,\"content_type\":\"image/jpeg\"}\n")
+                    append("abc")
+                    append("{\"asset_id\":\"sample_avatar_second\",\"revision\":1,\"size_bytes\":3,\"content_type\":\"image/jpeg\"}\n")
+                    append("def")
+                },
+                HttpStatusCode.OK,
+            )
+        }
+
+        buildAssetDrainer(engine) { nowMs }.drain(youtubeCutoffMs = Long.MIN_VALUE)
+
+        assertEquals(1, requests)
+        assertEquals(
+            "abc",
+            File(requireNotNull(db.androidSyncDao().asset(first.assetId)?.localPath)).readText(),
+        )
+        assertEquals(
+            "def",
+            File(requireNotNull(db.androidSyncDao().asset(second.assetId)?.localPath)).readText(),
+        )
     }
 
     @Test
@@ -1145,7 +1208,11 @@ class AndroidSyncMirrorTest {
         nowMsProvider: () -> Long,
     ): AndroidSyncAssetDrainer {
         if (::client.isInitialized) client.close()
-        client = HttpClient(engine) { expectSuccess = false }
+        client =
+            HttpClient(engine) {
+                expectSuccess = false
+                install(ContentNegotiation) { json(iglooJson) }
+            }
         val reachability =
             Reachability(
                 scope = scope,

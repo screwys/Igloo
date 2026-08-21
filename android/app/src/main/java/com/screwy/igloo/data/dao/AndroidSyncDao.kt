@@ -40,6 +40,8 @@ interface AndroidSyncDao {
 
     @Upsert suspend fun upsertHead(row: AndroidSyncHeadEntity)
 
+    @Upsert suspend fun upsertHeads(rows: List<AndroidSyncHeadEntity>)
+
     @Query("UPDATE android_sync_heads SET bootstrap_seen = 0")
     suspend fun markHeadsUnseen()
 
@@ -150,6 +152,8 @@ interface AndroidSyncDao {
     suspend fun hasContentHash(contentHash: String): Boolean
 
     @Upsert suspend fun upsertAsset(row: AndroidSyncAssetEntity)
+
+    @Upsert suspend fun upsertAssets(rows: List<AndroidSyncAssetEntity>)
 
     @Query("SELECT * FROM android_sync_assets WHERE asset_id = :assetId")
     suspend fun asset(assetId: String): AndroidSyncAssetEntity?
@@ -595,5 +599,33 @@ interface AndroidSyncDao {
         """,
     )
     suspend fun retainedAssetOwnerIds(): List<String>
+
+    @Query(
+        """
+        SELECT EXISTS (
+            SELECT 1 FROM feed_items
+                WHERE tweet_id = :ownerId OR quote_tweet_id = :ownerId OR canonical_tweet_id = :ownerId
+                   OR channel_id = :ownerId OR source_channel_id = :ownerId
+                   OR quote_channel_id = :ownerId OR reply_channel_id = :ownerId
+                   OR reposter_channel_id = :ownerId
+            UNION SELECT 1 FROM feed_likes WHERE tweet_id = :ownerId
+            UNION SELECT 1 FROM bookmarks WHERE video_id = :ownerId
+            UNION SELECT 1 FROM videos WHERE video_id = :ownerId
+            UNION SELECT 1 FROM channels WHERE channel_id = :ownerId
+            UNION SELECT 1 FROM channel_profiles WHERE channel_id = :ownerId
+            UNION SELECT 1 FROM video_repost_sources WHERE reposter_channel_id = :ownerId
+            UNION SELECT 1 FROM retweet_sources WHERE retweeter_channel_id = :ownerId
+            UNION SELECT 1 FROM video_comments WHERE author_id = :ownerId
+            UNION SELECT 1 FROM channel_follows WHERE channel_id = :ownerId
+            UNION SELECT 1 FROM channel_stars WHERE channel_id = :ownerId
+            UNION SELECT 1 FROM muted_channels WHERE channel_id = :ownerId
+            UNION SELECT 1 FROM channel_settings WHERE channel_id = :ownerId
+                AND (media_only IS NOT NULL OR include_reposts IS NOT NULL
+                    OR media_download_limit IS NOT NULL OR max_videos IS NOT NULL
+                    OR download_subtitles IS NOT NULL OR include_member_only IS NOT NULL)
+        )
+        """,
+    )
+    suspend fun isAssetOwnerRetained(ownerId: String): Boolean
 
 }

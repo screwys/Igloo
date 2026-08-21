@@ -27,6 +27,7 @@ import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -272,6 +273,7 @@ class AndroidSyncMirror(
             val (page, deletedAssets) = applied
             deleteFiles(deletedAssets)
             if (page.end_of_stream) return
+            yield()
             state = requireNotNull(dao.syncState())
         }
     }
@@ -300,47 +302,84 @@ class AndroidSyncMirror(
                 } else {
                     emptySet()
                 }
-            page.changes.filter(AndroidSyncChangeDto::isPrimaryContent).forEach { change ->
+            val primaryChanges = page.changes.filter(AndroidSyncChangeDto::isPrimaryContent)
+            val feedUpserts =
+                primaryChanges.filter { it.owner_kind == "feed" && it.operation == OP_UPSERT }
+            if (feedUpserts.isNotEmpty()) {
+                db.feedItemDao().upsert(feedUpserts.map(AndroidSyncChangeDecoder::feed))
+                dao.upsertHeads(feedUpserts.map(AndroidSyncChangeDto::toHead))
+            }
+            val videoUpserts =
+                primaryChanges.filter { it.owner_kind == "video" && it.operation == OP_UPSERT }
+            if (videoUpserts.isNotEmpty()) applyVideoBatch(videoUpserts)
+            primaryChanges.filterNot {
+                it.operation == OP_UPSERT && (it.owner_kind == "feed" || it.owner_kind == "video")
+            }.forEach { change ->
                 applyPrimary(change, protectedContent, deletedAssets)
             }
 
-            page.changes.filter { it.owner_kind == "retweet_sources" }.forEach { change ->
+            val retweetChanges = page.changes.filter { it.owner_kind == "retweet_sources" }
+            val retweetUpserts = retweetChanges.filter { it.operation == OP_UPSERT }
+            if (retweetUpserts.isNotEmpty()) {
+                val hashes = retweetUpserts.map(AndroidSyncChangeDto::owner_id)
+                db.retweetSourceDao().deleteForContentHashes(hashes)
+                val rows = retweetUpserts.flatMap(AndroidSyncChangeDecoder::retweetSources)
+                if (rows.isNotEmpty()) db.retweetSourceDao().upsert(rows)
+                dao.upsertHeads(retweetUpserts.map(AndroidSyncChangeDto::toHead))
+            }
+            retweetChanges.filter { it.operation == OP_DELETE }.forEach { change ->
                 applySecondary(change, emptySet(), emptySet(), false, deletedAssets)
             }
 
-            val protectedChannels =
-                if (
-                    page.changes.any {
-                        it.owner_kind == "channel" && (!bootstrap || it.operation == OP_DELETE)
-                    }
-                ) {
-                    dao.protectedChannelIds().toHashSet()
-                } else {
-                    emptySet()
-                }
-            page.changes
+            val protectedChannels = emptySet<String>()
+            val secondaryChanges =
+                page.changes
                 .filterNot {
                     it.isThinState() || it.isPrimaryContent() ||
                         it.owner_kind == "retweet_sources" || it.owner_kind == "asset"
                 }
-                .forEach { change ->
+            val channelUpserts =
+                secondaryChanges.filter {
+                    it.owner_kind == "channel" && it.operation == OP_UPSERT
+                }
+            if (channelUpserts.isNotEmpty()) applyChannelBatch(channelUpserts)
+            secondaryChanges.filterNot {
+                it.owner_kind == "channel" && it.operation == OP_UPSERT
+            }.forEach { change ->
                     applySecondary(change, protectedChannels, emptySet(), bootstrap, deletedAssets)
                 }
 
-            val retainedAssetOwners =
-                if (
-                    page.changes.any {
-                        it.owner_kind == "asset" && (!bootstrap || it.operation == OP_DELETE)
-                    }
-                ) {
-                    dao.retainedAssetOwnerIds().toHashSet()
-                } else {
-                    emptySet()
+            val retainedAssetOwners = emptySet<String>()
+            val assetChanges = page.changes.filter { it.owner_kind == "asset" }
+            val assetUpserts = assetChanges.filter { it.operation == OP_UPSERT }
+            if (assetUpserts.isNotEmpty()) {
+                val decoded = assetUpserts.map { it to AndroidSyncChangeDecoder.asset(it) }
+                if (decoded.isNotEmpty()) {
+                    val existing =
+                        dao.assets(decoded.map { (_, asset) -> asset.asset_id })
+                            .associateBy(AndroidSyncAssetEntity::assetId)
+                    val nextRows =
+                        decoded.map { (_, asset) ->
+                            asset.validate()
+                            val previous = existing[asset.asset_id]
+                            asset.toEntity(previous).also { next ->
+                                if (previous?.localPath != null && next.localPath == null) {
+                                    deletedAssets += previous
+                                }
+                            }
+                        }
+                    dao.upsertAssets(nextRows)
+                    dao.upsertHeads(decoded.map { (change, _) -> change.toHead() })
                 }
-            page.changes.filter { it.owner_kind == "asset" }.forEach { change ->
+            }
+            assetChanges.filter { it.operation == OP_DELETE }.forEach { change ->
                 applySecondary(change, protectedChannels, retainedAssetOwners, bootstrap, deletedAssets)
             }
 
+            val cleanupRequired =
+                state.cleanupRequired ||
+                    (!bootstrap &&
+                        page.changes.any { it.operation == OP_DELETE || it.replacesDependencies() })
             if (bootstrap) {
                 if (page.end_of_stream) {
                     sweepBootstrap(deletedAssets)
@@ -348,12 +387,10 @@ class AndroidSyncMirror(
                     overlay.restore(db)
                     cleanupOrphans(deletedAssets, sweepHeadlessContent = true)
                 }
-            } else if (
-                page.changes.any { it.operation == OP_DELETE || it.replacesDependencies() }
-            ) {
+            } else if (page.end_of_stream && cleanupRequired) {
                 cleanupOrphans(
                     deletedAssets,
-                    sweepHeadlessContent = page.changes.any(AndroidSyncChangeDto::releasesProtection),
+                    sweepHeadlessContent = true,
                 )
             }
 
@@ -364,6 +401,7 @@ class AndroidSyncMirror(
                         mode = MODE_CHANGES,
                         cursor = page.next_cursor,
                         bootstrapRequired = durableReplayRequired,
+                        cleanupRequired = false,
                     )
                 } else {
                     state.copy(
@@ -374,6 +412,7 @@ class AndroidSyncMirror(
                         storyHours = retention.storyHours,
                         bootstrapRequired =
                             state.bootstrapRequired || durableReplayRequired || selectionExpanded,
+                        cleanupRequired = if (page.end_of_stream) false else cleanupRequired,
                     )
                 }
             if (nextState != state) dao.upsertSyncState(nextState)
@@ -598,6 +637,25 @@ class AndroidSyncMirror(
         decoded.sponsorBlockChecked?.let { db.sponsorBlockCheckedDao().upsert(it) }
     }
 
+    private suspend fun applyVideoBatch(changes: List<AndroidSyncChangeDto>) {
+        val rows = changes.map(AndroidSyncChangeDecoder::video)
+        val videoIds = rows.map { it.item.videoId }
+        db.videoDao().upsert(rows.map { it.item })
+        db.videoCommentDao().deleteForVideos(videoIds)
+        db.videoRepostSourceDao().deleteForVideos(videoIds)
+        db.sponsorBlockSegmentDao().deleteForVideos(videoIds)
+        db.sponsorBlockCheckedDao().deleteForVideos(videoIds)
+        val comments = rows.flatMap { it.comments }
+        val reposts = rows.flatMap { it.repostSources }
+        val segments = rows.flatMap { it.sponsorBlockSegments }
+        val checks = rows.mapNotNull { it.sponsorBlockChecked }
+        if (comments.isNotEmpty()) db.videoCommentDao().upsert(comments)
+        if (reposts.isNotEmpty()) db.videoRepostSourceDao().upsert(reposts)
+        if (segments.isNotEmpty()) db.sponsorBlockSegmentDao().upsert(segments)
+        if (checks.isNotEmpty()) db.sponsorBlockCheckedDao().upsert(checks)
+        dao.upsertHeads(changes.map(AndroidSyncChangeDto::toHead))
+    }
+
     private suspend fun applyChannelBundle(decoded: AndroidChannelUpsert) {
         decoded.channel?.let { db.channelDao().upsert(it) }
         if (decoded.profile == null) {
@@ -605,6 +663,19 @@ class AndroidSyncMirror(
         } else {
             db.channelProfileDao().upsert(decoded.profile)
         }
+    }
+
+    private suspend fun applyChannelBatch(changes: List<AndroidSyncChangeDto>) {
+        val rows = changes.map(AndroidSyncChangeDecoder::channel)
+        val channels = rows.mapNotNull { it.channel }
+        val profiles = rows.mapNotNull { it.profile }
+        val removedProfiles =
+            rows.filter { it.channel != null && it.profile == null }
+                .map { requireNotNull(it.channel).channelId }
+        if (channels.isNotEmpty()) db.channelDao().upsert(channels)
+        if (removedProfiles.isNotEmpty()) db.channelProfileDao().deleteByIds(removedProfiles)
+        if (profiles.isNotEmpty()) db.channelProfileDao().upsert(profiles)
+        dao.upsertHeads(changes.map(AndroidSyncChangeDto::toHead))
     }
 
     private suspend fun replaceRetweetSources(
@@ -675,7 +746,10 @@ class AndroidSyncMirror(
             "feed_rank" -> db.feedRankDao().deleteForTweets(listOf(ownerId))
             "asset" -> {
                 val row = dao.asset(ownerId)
-                if (row == null || row.localPath == null || row.ownerId !in retainedAssetOwners) {
+                val retained =
+                    row?.localPath != null &&
+                        (row.ownerId in retainedAssetOwners || dao.isAssetOwnerRetained(row.ownerId))
+                if (!retained) {
                     if (row != null) deletedAssets += row
                     dao.deleteAsset(ownerId)
                 }
@@ -994,9 +1068,6 @@ private fun AndroidSyncChangeDto.isPrimaryContent(): Boolean = owner_kind == "fe
 
 private fun AndroidSyncChangeDto.protectsContent(): Boolean =
     operation == "upsert" && (owner_kind == "feed_like" || owner_kind == "bookmark")
-
-private fun AndroidSyncChangeDto.releasesProtection(): Boolean =
-    operation == "delete" && (owner_kind == "feed_like" || owner_kind == "bookmark")
 
 private fun AndroidSyncChangeDto.replacesDependencies(): Boolean =
     operation == "upsert" && owner_kind in DEPENDENCY_REPLACING_OWNER_KINDS

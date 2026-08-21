@@ -7,15 +7,22 @@ import com.screwy.igloo.media.ForegroundPromoter
 import com.screwy.igloo.net.Reachability
 import com.screwy.igloo.net.ServerBaseUrlProvider
 import com.screwy.igloo.net.AndroidSyncHttpException
+import com.screwy.igloo.net.ANDROID_SYNC_ASSET_PACK_PATH
 import com.screwy.igloo.net.androidSyncAssetPath
+import com.screwy.igloo.net.iglooJson
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.prepareGet
+import io.ktor.client.request.preparePost
+import io.ktor.client.request.header
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
+import io.ktor.utils.io.readLine
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -25,10 +32,18 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.contentType
 
 class AndroidSyncAssetChangedException(
     val nextAttemptAtMs: Long? = null,
 ) : IllegalStateException("Android asset descriptor changed while downloading")
+
+private const val ASSET_PACK_MAX_ENTRY_BYTES = 1L shl 20
+private const val ASSET_PACK_MAX_BYTES = 16L shl 20
 
 internal class AndroidSyncAssetDrainer(
     private val dao: AndroidSyncDao,
@@ -63,12 +78,20 @@ internal class AndroidSyncAssetDrainer(
                     promoted = true
                 }
                 coroutineScope {
+                    val packAssets = assets.filter(AndroidSyncAssetEntity::isPackEligible)
+                    val directAssets = assets.filterNot(AndroidSyncAssetEntity::isPackEligible)
                     val work = Channel<AndroidSyncAssetEntity>(ASSET_WORKER_COUNT * 2)
                     val results = Channel<DrainResult>(ASSET_WORKER_COUNT * 2)
                     val producer =
                         launch(Dispatchers.IO) {
-                            assets.forEach { work.send(it) }
+                            directAssets.forEach { work.send(it) }
                             work.close()
+                        }
+                    val packWorker =
+                        launch(Dispatchers.IO) {
+                            for (batch in packAssets.boundedPackBatches()) {
+                                downloadPack(batch).forEach { results.send(it) }
+                            }
                         }
                     val workers =
                         List(ASSET_WORKER_COUNT) {
@@ -79,6 +102,7 @@ internal class AndroidSyncAssetDrainer(
                     val closer = launch {
                         producer.join()
                         workers.joinAll()
+                        packWorker.join()
                         results.close()
                     }
                     for (result in results) {
@@ -165,7 +189,8 @@ internal class AndroidSyncAssetDrainer(
 
         finalFile.parentFile?.mkdirs()
         val partFile = File(finalFile.parentFile, finalFile.name + ".part")
-        partFile.delete()
+        if (partFile.length() > asset.sizeBytes) partFile.delete()
+        var resumeAt = partFile.takeIf(File::isFile)?.length() ?: 0L
         try {
             val url =
                 baseUrlProvider.baseUrl().trimEnd('/') +
@@ -177,11 +202,16 @@ internal class AndroidSyncAssetDrainer(
                         connectTimeoutMillis = ASSET_CONNECT_TIMEOUT_MS
                         socketTimeoutMillis = ASSET_SOCKET_TIMEOUT_MS
                     }
+                    if (resumeAt > 0) header(HttpHeaders.Range, "bytes=$resumeAt-")
                 }
                 .execute { response ->
                     when (val status = response.status.value) {
-                        404 -> defer(asset, changed = true)
+                        404 -> {
+                            partFile.delete()
+                            defer(asset, changed = true)
+                        }
                         409 -> {
+                            partFile.delete()
                             val error = AndroidSyncHttpException(
                                 label = "asset:${asset.assetId}",
                                 statusCode = status,
@@ -191,10 +221,31 @@ internal class AndroidSyncAssetDrainer(
                         }
                         408,
                         429 -> defer(asset)
+                        416 -> {
+                            partFile.delete()
+                            defer(asset)
+                        }
                         in 500..599 -> defer(asset)
                         !in 200..299 -> defer(asset)
                         else -> {
-                            copyAssetBodyToFile(response.bodyAsChannel(), partFile, asset.sizeBytes)
+                            if (status == 206) {
+                                val contentRange = response.headers[HttpHeaders.ContentRange].orEmpty()
+                                if (!contentRange.startsWith("bytes $resumeAt-") ||
+                                    !contentRange.endsWith("/${asset.sizeBytes}")
+                                ) {
+                                    partFile.delete()
+                                    return@execute defer(asset, changed = true)
+                                }
+                            } else if (resumeAt > 0) {
+                                partFile.delete()
+                                resumeAt = 0
+                            }
+                            copyAssetBodyToFile(
+                                response.bodyAsChannel(),
+                                partFile,
+                                asset.sizeBytes,
+                                resumeAt,
+                            )
                             if (!verifyFile(partFile, asset)) {
                                 partFile.delete()
                                 defer(asset, changed = true)
@@ -212,13 +263,124 @@ internal class AndroidSyncAssetDrainer(
                     }
                 }
         } catch (e: CancellationException) {
-            partFile.delete()
             throw e
         } catch (e: Exception) {
-            partFile.delete()
             if (e is IOException || e.isLikelyTransportFailure()) reachability.downgrade()
             return defer(asset)
         }
+    }
+
+    private suspend fun downloadPack(assets: List<AndroidSyncAssetEntity>): List<DrainResult> {
+        if (assets.isEmpty()) return emptyList()
+        val results = mutableListOf<DrainResult>()
+        val pending = mutableListOf<AndroidSyncAssetEntity>()
+        for (asset in assets) {
+            val finalFile = finalFileFor(asset)
+            if (finalFile.exists() && verifyFile(finalFile, asset)) {
+                markVerified(asset, finalFile)
+                results += DrainResult.VerifiedExisting
+            } else {
+                if (finalFile.isFile) finalFile.delete()
+                pending += asset
+            }
+        }
+        if (pending.isEmpty()) return results
+
+        val incomplete = pending.toMutableSet()
+        try {
+            val url = baseUrlProvider.baseUrl().trimEnd('/') + ANDROID_SYNC_ASSET_PACK_PATH
+            client.preparePost(url) {
+                timeout {
+                    requestTimeoutMillis = ASSET_REQUEST_TIMEOUT_MS
+                    connectTimeoutMillis = ASSET_CONNECT_TIMEOUT_MS
+                    socketTimeoutMillis = ASSET_SOCKET_TIMEOUT_MS
+                }
+                contentType(ContentType.Application.Json)
+                setBody(
+                    AssetPackRequest(
+                        pending.map { AssetPackRef(asset_id = it.assetId, revision = it.revision) }
+                    )
+                )
+            }.execute { response ->
+                val status = response.status.value
+                if (status !in 200..299) {
+                    val changed =
+                        status == 409 &&
+                            AndroidSyncHttpException(
+                                label = "asset-pack",
+                                statusCode = status,
+                                body = response.bodyAsText(),
+                            ).isAssetChanged
+                    for (asset in incomplete) results += defer(asset, changed)
+                    return@execute
+                }
+                val channel = response.bodyAsChannel()
+                require(channel.readLine() == ASSET_PACK_MAGIC) { "invalid asset pack" }
+                for (asset in pending) {
+                    val header =
+                        iglooJson.decodeFromString<AssetPackHeader>(
+                            requireNotNull(channel.readLine()) { "truncated asset pack header" }
+                        )
+                    require(
+                        header.asset_id == asset.assetId && header.revision == asset.revision &&
+                            header.size_bytes == asset.sizeBytes && header.content_type == asset.contentType
+                    ) { "asset pack descriptor changed" }
+                    val finalFile = finalFileFor(asset)
+                    finalFile.parentFile?.mkdirs()
+                    val partFile = File(finalFile.parentFile, finalFile.name + ".part")
+                    partFile.delete()
+                    copyExactAssetBodyToFile(channel, partFile, asset.sizeBytes)
+                    Files.move(
+                        partFile.toPath(),
+                        finalFile.toPath(),
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING,
+                    )
+                    markVerified(asset, finalFile)
+                    incomplete.remove(asset)
+                    results += DrainResult.Downloaded
+                }
+                logger.info(
+                    event = "android_sync_asset_pack_done",
+                    fields =
+                        mapOf(
+                            "assets" to pending.size,
+                            "bytes" to pending.sumOf(AndroidSyncAssetEntity::sizeBytes),
+                        ),
+                )
+            }
+        } catch (e: CancellationException) {
+            incomplete.forEach { partFileFor(it).delete() }
+            throw e
+        } catch (e: Exception) {
+            incomplete.forEach { partFileFor(it).delete() }
+            if (e is IOException || e.isLikelyTransportFailure()) reachability.downgrade()
+            for (asset in incomplete) results += defer(asset, changed = e is IllegalArgumentException)
+        }
+        return results
+    }
+
+    private suspend fun copyExactAssetBodyToFile(
+        channel: ByteReadChannel,
+        file: File,
+        expectedBytes: Long,
+    ) {
+        var remaining = expectedBytes
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        file.outputStream().use { output ->
+            while (remaining > 0) {
+                val read = channel.readAvailable(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                if (read == -1) throw IOException("asset pack entry is truncated")
+                if (read == 0) continue
+                output.write(buffer, 0, read)
+                remaining -= read
+            }
+        }
+    }
+
+    private fun partFileFor(asset: AndroidSyncAssetEntity): File {
+        val finalFile = finalFileFor(asset)
+        return File(finalFile.parentFile, finalFile.name + ".part")
     }
 
     private suspend fun markVerified(asset: AndroidSyncAssetEntity, file: File) {
@@ -241,10 +403,11 @@ internal class AndroidSyncAssetDrainer(
         channel: ByteReadChannel,
         file: File,
         expectedBytes: Long,
+        initialBytes: Long = 0,
     ) {
-        var total = 0L
+        var total = initialBytes
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        file.outputStream().use { output ->
+        FileOutputStream(file, initialBytes > 0).use { output ->
             while (true) {
                 val read = channel.readAvailable(buffer, 0, buffer.size)
                 if (read == -1) break
@@ -294,6 +457,7 @@ internal class AndroidSyncAssetDrainer(
         const val ASSET_SOCKET_TIMEOUT_MS = 2 * 60 * 1000L
         const val ASSET_RETRY_MS = 30_000L
         const val SYNC_DRAIN_TOKEN = "__android_sync_drain__"
+        const val ASSET_PACK_MAGIC = "IGLOO-ASSET-PACK-1"
 
         fun extFor(contentType: String?): String =
             when (contentType?.substringBefore(";")?.trim()?.lowercase()) {
@@ -318,5 +482,50 @@ internal class AndroidSyncAssetDrainer(
                 .joinToString("")
     }
 }
+
+private fun AndroidSyncAssetEntity.isPackEligible(): Boolean =
+    sizeBytes in 1..ASSET_PACK_MAX_ENTRY_BYTES &&
+        when (assetKind) {
+            "avatar",
+            "banner",
+            "post_thumbnail",
+            "dearrow_thumbnail",
+            "subtitle",
+            "preview_track_json",
+            "preview_sprite" -> true
+            else -> false
+        }
+
+private fun List<AndroidSyncAssetEntity>.boundedPackBatches(): List<List<AndroidSyncAssetEntity>> {
+    if (isEmpty()) return emptyList()
+    val batches = mutableListOf<List<AndroidSyncAssetEntity>>()
+    var batch = mutableListOf<AndroidSyncAssetEntity>()
+    var bytes = 0L
+    for (asset in this) {
+        if (batch.isNotEmpty() && bytes + asset.sizeBytes > ASSET_PACK_MAX_BYTES) {
+            batches += batch
+            batch = mutableListOf()
+            bytes = 0
+        }
+        batch += asset
+        bytes += asset.sizeBytes
+    }
+    if (batch.isNotEmpty()) batches += batch
+    return batches
+}
+
+@Serializable
+private data class AssetPackRequest(val assets: List<AssetPackRef>)
+
+@Serializable
+private data class AssetPackRef(val asset_id: String, val revision: Long)
+
+@Serializable
+private data class AssetPackHeader(
+    val asset_id: String,
+    val revision: Long,
+    val size_bytes: Long,
+    val content_type: String,
+)
 
 internal data class AssetFileDeleteStats(val files: Int = 0, val bytes: Long = 0)

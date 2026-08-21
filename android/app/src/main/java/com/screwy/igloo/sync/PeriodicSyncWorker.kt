@@ -20,7 +20,6 @@ import com.screwy.igloo.AppRuntime
 import com.screwy.igloo.R
 import com.screwy.igloo.auth.AuthRepo
 import com.screwy.igloo.data.PreferencesRepo
-import com.screwy.igloo.media.ForegroundPromoter
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
@@ -52,11 +51,8 @@ class PeriodicSyncWorker(appContext: Context, params: WorkerParameters) :
             }
 
             setForeground(getForegroundInfo())
-            val completed =
-                koin.get<ForegroundPromoter>().acquireExternalForegroundLease().use {
-                koin.get<SyncCoordinator>().pass()
-            }
-            if (completed) ListenableWorker.Result.success() else ListenableWorker.Result.retry()
+            BackgroundSyncService.start(applicationContext)
+            ListenableWorker.Result.success()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -137,6 +133,7 @@ class PeriodicSyncWorker(appContext: Context, params: WorkerParameters) :
 
         fun cancel(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+            BackgroundSyncService.stop(context)
         }
 
         private fun constraintsFor(wifiOnly: Boolean): Constraints =
@@ -165,10 +162,20 @@ internal class WorkManagerPeriodicSyncScheduler(
 ) : PeriodicSyncScheduler {
     override suspend fun ensureScheduled() {
         PeriodicSyncWorker.enqueue(context, prefs)
+        if (prefs.syncEnabled().first() &&
+            prefs.syncIntervalMinutes().first() == PreferencesRepo.Defaults.SYNC_INTERVAL_LIVE
+        ) {
+            BackgroundSyncService.start(context)
+        }
     }
 
     override suspend fun applyPreferences() {
         PeriodicSyncWorker.enqueue(context, prefs, ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE)
+        if (prefs.syncEnabled().first() &&
+            prefs.syncIntervalMinutes().first() == PreferencesRepo.Defaults.SYNC_INTERVAL_LIVE
+        ) {
+            BackgroundSyncService.start(context)
+        }
     }
 
     override fun cancel() {

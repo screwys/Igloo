@@ -1,9 +1,11 @@
 package web
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1247,6 +1249,65 @@ func TestAndroidSyncAssetFileIsAuthenticatedAndRevisionBound(t *testing.T) {
 	stalePath := "/api/android/sync/assets/" + asset.AssetID + "/file?revision=" + jsonNumber(descriptor.Revision+1)
 	if rec := requestAndroidSync(t, srv, http.MethodGet, stalePath, nil, true); rec.Code != http.StatusConflict {
 		t.Fatalf("stale descriptor status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAndroidSyncAssetPackStreamsBoundedRevisionMatchedEntries(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	assets := make([]db.Asset, 0, 2)
+	for index, raw := range []string{"first-avatar", "second-avatar"} {
+		path := filepath.Join("thumbnails", fmt.Sprintf("sample-pack-%d.jpg", index))
+		mustWriteFile(t, filepath.Join(srv.cfg.Storage.StateRoot(), path), []byte(raw))
+		assets = append(assets, storeReadyWebTestAsset(t, srv, db.Asset{
+			AssetID: fmt.Sprintf("sample_pack_%d", index), AssetKind: "avatar",
+			OwnerKind: "channel", OwnerID: fmt.Sprintf("sample_channel_%d", index),
+			FilePath: path, ContentType: "image/jpeg",
+		}))
+	}
+	body := androidSyncAssetPackRequest{Assets: []androidSyncAssetPackRef{
+		{AssetID: assets[0].AssetID, Revision: assets[0].Revision},
+		{AssetID: assets[1].AssetID, Revision: assets[1].Revision},
+	}}
+	rec := requestAndroidSync(t, srv, http.MethodPost, "/api/android/sync/assets/pack", body, true)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("asset pack status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	reader := bufio.NewReader(rec.Body)
+	magic, err := reader.ReadString('\n')
+	if err != nil || strings.TrimSpace(magic) != androidSyncAssetPackMagic {
+		t.Fatalf("asset pack magic = %q / %v", magic, err)
+	}
+	for index, want := range []string{"first-avatar", "second-avatar"} {
+		headerLine, err := reader.ReadBytes('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		var header androidSyncAssetPackHeader
+		if err := json.Unmarshal(bytes.TrimSpace(headerLine), &header); err != nil {
+			t.Fatal(err)
+		}
+		if header.AssetID != assets[index].AssetID || header.Revision != assets[index].Revision ||
+			header.SizeBytes != int64(len(want)) {
+			t.Fatalf("asset pack header %d = %+v", index, header)
+		}
+		got := make([]byte, header.SizeBytes)
+		if _, err := io.ReadFull(reader, got); err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != want {
+			t.Fatalf("asset pack bytes %d = %q, want %q", index, got, want)
+		}
+	}
+	if reader.Buffered() != 0 {
+		t.Fatalf("asset pack has %d trailing buffered bytes", reader.Buffered())
+	}
+
+	staleBody := androidSyncAssetPackRequest{Assets: []androidSyncAssetPackRef{{
+		AssetID: assets[0].AssetID, Revision: assets[0].Revision + 1,
+	}}}
+	stale := requestAndroidSync(t, srv, http.MethodPost, "/api/android/sync/assets/pack", staleBody, true)
+	if stale.Code != http.StatusConflict || !strings.Contains(stale.Body.String(), "asset_changed") {
+		t.Fatalf("stale asset pack = %d %s", stale.Code, stale.Body.String())
 	}
 }
 

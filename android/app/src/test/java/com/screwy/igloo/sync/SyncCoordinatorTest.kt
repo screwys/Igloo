@@ -630,6 +630,39 @@ class SyncCoordinatorTest {
         }
     }
 
+    @Test
+    fun scheduledSnapshotRetriesAssetsWithoutRecapturingMetadata() = runTest {
+        val logs = LoggerFixture()
+        val events = mutableListOf<String>()
+        val mirror =
+            FakeMirror(
+                events = events,
+                assetResult = { call ->
+                    if (call == 1) AssetSyncResult(nextAttemptAtMs = 100L) else AssetSyncResult()
+                },
+            )
+        val coordinator =
+            coordinator(
+                backgroundScope,
+                FakeOutbox { events += "actions"; OutboxPassResult() },
+                mirror,
+                reachability(backgroundScope),
+                MutableStateFlow(false),
+                logs.logger,
+                nowMsProvider = { testScheduler.currentTime },
+            )
+        try {
+            assertTrue(coordinator.convergeScheduledSnapshot())
+
+            assertEquals(listOf("actions", "metadata", "assets", "assets"), events)
+            assertEquals(1, mirror.metadataCalls.get())
+            assertEquals(100L, testScheduler.currentTime)
+        } finally {
+            coordinator.stopAll()
+            logs.close()
+        }
+    }
+
     private fun coordinator(
         scope: CoroutineScope,
         outbox: OutboxDrainer,

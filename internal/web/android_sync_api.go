@@ -176,6 +176,7 @@ func (s *Server) registerAndroidSyncAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/android/sync/changes", s.handleAndroidSyncChanges)
 	mux.HandleFunc("GET /api/android/sync/state", s.handleAndroidSyncPriorityState)
 	mux.HandleFunc("POST /api/android/sync/reconcile", s.handleAndroidSyncReconcile)
+	mux.HandleFunc("POST /api/android/sync/assets/pack", s.handleAndroidSyncAssetPack)
 	mux.HandleFunc("GET /api/android/sync/assets/{assetID}/file", s.handleAndroidSyncAssetFile)
 	mux.HandleFunc("POST /api/android/sync/health", s.handleAndroidSyncHealth)
 }

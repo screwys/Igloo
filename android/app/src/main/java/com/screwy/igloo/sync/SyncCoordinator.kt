@@ -152,6 +152,28 @@ class SyncCoordinator(
         return true
     }
 
+    /**
+     * Captures one scheduled metadata snapshot, then keeps retrying only that snapshot's asset
+     * work until it converges. New server work waits for the next configured timer.
+     */
+    suspend fun convergeScheduledSnapshot(): Boolean {
+        val actionPass = actionMutex.withLock { executeActionPass(probeIfOffline = true) }
+        if (!actionPass.canReachServer) return false
+        metadataPassMutex.withLock { executeMetadataPass() }
+        assetRetryWake.cancel()
+        while (true) {
+            val result =
+                try {
+                    assetMutex.withLock { mirror.syncAssetsOnce() }
+                } catch (e: AndroidSyncAssetChangedException) {
+                    metadataPassMutex.withLock { executeMetadataPass() }
+                    continue
+                }
+            val retryAt = result.nextAttemptAtMs ?: return true
+            delay((retryAt - nowMsProvider()).coerceAtLeast(0L))
+        }
+    }
+
     private fun triggerMetadata() {
         metadataTriggers.trySend(Unit)
     }

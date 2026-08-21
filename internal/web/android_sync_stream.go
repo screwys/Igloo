@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -254,6 +255,7 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 	}
 	var changes []model.AndroidSyncChange
 	var nextRevision int64
+	var headCount int
 	var finished bool
 	var caughtUp bool
 	err = s.db.WithReadSnapshot(func(snapshot *db.DB) error {
@@ -321,6 +323,7 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 			heads = heads[:processed]
 			finished = false
 		}
+		headCount = len(heads)
 		if finished {
 			nextRevision = session.Through
 			caughtUp = clock.Revision == session.Through
@@ -366,7 +369,36 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 	if cursor.Version >= androidSyncModelVersion {
 		response["newer_available"] = newerAvailable
 	}
+	slog.Info(
+		"android_sync_changes_page",
+		"version", cursor.Version,
+		"heads", headCount,
+		"changes", len(changes),
+		"kinds", androidSyncChangeKindCounts(changes),
+		"deletes", androidSyncDeleteCount(changes),
+		"finished", finished,
+		"end_of_stream", endOfStream,
+		"newer_available", newerAvailable,
+	)
 	writeJSON(w, http.StatusOK, response)
+}
+
+func androidSyncDeleteCount(changes []model.AndroidSyncChange) int {
+	count := 0
+	for _, change := range changes {
+		if change.Operation == model.AndroidSyncOperationDelete {
+			count++
+		}
+	}
+	return count
+}
+
+func androidSyncChangeKindCounts(changes []model.AndroidSyncChange) map[string]int {
+	counts := make(map[string]int)
+	for _, change := range changes {
+		counts[change.OwnerKind]++
+	}
+	return counts
 }
 
 func (s *Server) materializeAndroidSyncChangePage(

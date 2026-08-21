@@ -3,9 +3,9 @@
 # Single :app module. Builds on host (JDK + Gradle), installs via host adb.
 #
 # Usage:
-#   ./build.sh                              # clean + assembleDebug + install on device
+#   ./build.sh                              # assembleDebug + install on device
 #   ./build.sh compile                      # compileDebugKotlin only (no APK)
-#   ./build.sh apk                          # clean + assembleDebug, no install
+#   ./build.sh apk                          # assembleDebug, no install
 #   ./build.sh test [ClassName]             # devtest JVM unit tests (optionally filtered)
 #   ./build.sh androidTest [Class]          # connectedDevtestAndroidTest (devtest build type)
 
@@ -53,7 +53,7 @@ fi
 
 if [ "${1:-}" = "apk" ]; then
     echo "📦 Building APK (no install)..."
-    ./gradlew clean :app:assembleDebug
+    ./gradlew :app:assembleDebug
     echo "✅ Build successful!"
     exit 0
 fi
@@ -73,7 +73,7 @@ fi
 
 # ── Default: Build APK + Install ──
 
-./gradlew clean :app:assembleDebug
+./gradlew :app:assembleDebug
 echo ""
 echo "✅ Build successful!"
 

@@ -385,6 +385,7 @@ data class AndroidSyncStateEntity(
     @ColumnInfo(name = "moments_days") val momentsDays: Int,
     @ColumnInfo(name = "story_hours") val storyHours: Int,
     @ColumnInfo(name = "bootstrap_required") val bootstrapRequired: Boolean = false,
+    @ColumnInfo(name = "cleanup_required") val cleanupRequired: Boolean = false,
 )
 
 @Entity(

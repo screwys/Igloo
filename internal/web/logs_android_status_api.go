@@ -270,6 +270,9 @@ func androidStatusSyncState(clock db.AndroidSyncClock, health *db.AndroidSyncHea
 	if health.MissingAssets > 0 {
 		return fmt.Sprintf("%d missing assets", health.MissingAssets)
 	}
+	if health.PendingAssets > 0 {
+		return fmt.Sprintf("%d assets pending", health.PendingAssets)
+	}
 	if pending := max(int64(0), clock.Revision-cursor.Revision); pending > 0 {
 		return fmt.Sprintf("%d revisions behind", pending)
 	}

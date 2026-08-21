@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/screwys/igloo/internal/db"
 )
 
 // #12 — appendClientLog writes one JSON line per entry to the named
@@ -280,6 +282,27 @@ func TestAndroidStatusRendersPersistentSyncHealth(t *testing.T) {
 	}
 	if strings.Contains(body, "Never") {
 		t.Fatalf("dashboard should not render transient Never state:\n%s", body)
+	}
+}
+
+func TestAndroidStatusDoesNotCallAnIncompleteAssetSnapshotCurrent(t *testing.T) {
+	srv := newTestServer(t)
+	clock, err := srv.db.GetAndroidSyncClock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor, err := encodeAndroidSyncCursor(androidSyncCursor{
+		Version: androidSyncModelVersion, Mode: "changes", Epoch: clock.Epoch,
+		Revision: clock.Revision, Retention: androidSyncRetentionHash(srv.androidSyncRetentionFallback()),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	health := &db.AndroidSyncHealthReport{
+		Cursor: cursor, ReportedAtMs: time.Now().UnixMilli(), PendingAssets: 25,
+	}
+	if got := androidStatusSyncState(clock, health, time.Now()); got != "25 assets pending" {
+		t.Fatalf("sync state = %q, want pending assets", got)
 	}
 }
 

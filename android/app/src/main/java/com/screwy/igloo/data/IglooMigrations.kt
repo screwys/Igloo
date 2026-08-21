@@ -123,4 +123,13 @@ object IglooMigrations {
                 )
             }
         }
+
+    val MIGRATION_44_45 =
+        object : Migration(44, 45) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `android_sync_state` ADD COLUMN `cleanup_required` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
 }
