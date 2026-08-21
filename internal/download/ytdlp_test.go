@@ -65,6 +65,32 @@ exit 0
 	}
 }
 
+func TestChannelInfoUsesFlatPlaylistChannelIdentity(t *testing.T) {
+	bin := t.TempDir()
+	writeExecutable(t, filepath.Join(bin, "yt-dlp"), `#!/bin/sh
+case " $* " in
+  *" --flat-playlist "*) ;;
+  *) exit 2 ;;
+esac
+printf '%s\n' '{"_type":"url","id":"sample_video","title":"Sample video","playlist_channel_id":"UCsampleChannel123","playlist_channel":"Sample Channel","playlist_webpage_url":"https://www.youtube.com/@samplechannel/videos"}'
+`)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	info, err := (&YtDlpWrapper{}).ChannelInfo(context.Background(), "https://www.youtube.com/@samplechannel")
+	if err != nil {
+		t.Fatalf("ChannelInfo: %v", err)
+	}
+	if info.ID != "youtube_UCsampleChannel123" {
+		t.Fatalf("channel ID = %q", info.ID)
+	}
+	if info.Name != "Sample Channel" {
+		t.Fatalf("channel name = %q", info.Name)
+	}
+	if info.URL != "https://www.youtube.com/@samplechannel/videos" {
+		t.Fatalf("channel URL = %q", info.URL)
+	}
+}
+
 func TestChannelCheckExcludesMemberOnlyVideosUnlessEnabled(t *testing.T) {
 	bin := t.TempDir()
 	writeExecutable(t, filepath.Join(bin, "yt-dlp"), `#!/bin/sh

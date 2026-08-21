@@ -76,6 +76,12 @@ func (y *YtDlpWrapper) ChannelInfo(ctx context.Context, url string) (ChannelInfo
 	if res.URL == "" && info.WebpageURL != nil {
 		res.URL = *info.WebpageURL
 	}
+	for _, log := range result.OutputLogs {
+		if log.JSON == nil {
+			continue
+		}
+		applyFlatPlaylistChannelInfo(&res, *log.JSON)
+	}
 	if isYouTubeURL(url) || isYouTubeURL(res.URL) {
 		res.ID = CanonicalizeYouTubeChannelID(res.ID, res.URL, url)
 		if res.URL == "" && strings.HasPrefix(res.ID, "youtube_UC") {
@@ -89,6 +95,26 @@ func (y *YtDlpWrapper) ChannelInfo(ctx context.Context, url string) (ChannelInfo
 	}
 	y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, nil, Opts{}, 1, 0, 0)
 	return res, nil
+}
+
+func applyFlatPlaylistChannelInfo(res *ChannelInfoResult, raw json.RawMessage) {
+	var playlist struct {
+		ChannelID  string `json:"playlist_channel_id"`
+		Channel    string `json:"playlist_channel"`
+		WebpageURL string `json:"playlist_webpage_url"`
+	}
+	if err := json.Unmarshal(raw, &playlist); err != nil {
+		return
+	}
+	if res.ID == "" {
+		res.ID = playlist.ChannelID
+	}
+	if res.Name == "" {
+		res.Name = playlist.Channel
+	}
+	if res.URL == "" {
+		res.URL = playlist.WebpageURL
+	}
 }
 
 // CanonicalizeYouTubeChannelID normalizes yt-dlp's mixed YouTube identity
