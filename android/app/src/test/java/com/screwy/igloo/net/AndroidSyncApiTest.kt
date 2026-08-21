@@ -36,11 +36,17 @@ class AndroidSyncApiTest {
 
             assertEquals(
                 listOf(
-                    "/api/android/sync/bootstrap" to "1",
-                    "/api/android/sync/changes" to "1",
-                    "/api/android/sync/state" to null,
+                    Triple("/api/android/sync/bootstrap", "1", "3"),
+                    Triple("/api/android/sync/changes", "1", "3"),
+                    Triple("/api/android/sync/state", null, "3"),
                 ),
-                requests.map { it.encodedPath to it.parameters["full_youtube_metadata"] },
+                requests.map {
+                    Triple(
+                        it.encodedPath,
+                        it.parameters["full_youtube_metadata"],
+                        it.parameters["model_version"],
+                    )
+                },
             )
             val priority = requests.last().parameters
             assertEquals("7", priority["feed_days"])

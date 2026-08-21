@@ -436,6 +436,7 @@ data class AndroidSyncAssetEntity(
     @ColumnInfo(name = "revision") val revision: Long,
     @ColumnInfo(name = "subtitle_is_auto") val subtitleIsAuto: Boolean = true,
     @ColumnInfo(name = "state") val state: String = "ready",
+    @ColumnInfo(name = "transfer_required") val transferRequired: Boolean = true,
     @ColumnInfo(name = "local_path") val localPath: String? = null,
     @ColumnInfo(name = "verified_at_ms") val verifiedAtMs: Long? = null,
     @ColumnInfo(name = "next_attempt_at_ms") val nextAttemptAtMs: Long = 0,

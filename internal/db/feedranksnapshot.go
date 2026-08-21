@@ -269,7 +269,7 @@ func (db *DB) ReplaceFeedRankSnapshot(rows []SnapshotRow) error {
 		); err != nil {
 			return fmt.Errorf("prune snapshot history: %w", err)
 		}
-		return nil
+		return touchAndroidSyncHeadTx(tx, "feed_rank_snapshot", "main")
 	})
 }
 

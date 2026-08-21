@@ -20,13 +20,15 @@ import (
 )
 
 type androidSyncPageResponse struct {
-	Changes     []model.AndroidSyncChange `json:"changes"`
-	NextCursor  string                    `json:"next_cursor"`
-	EndOfStream bool                      `json:"end_of_stream"`
+	Changes        []model.AndroidSyncChange `json:"changes"`
+	NextCursor     string                    `json:"next_cursor"`
+	EndOfStream    bool                      `json:"end_of_stream"`
+	NewerAvailable bool                      `json:"newer_available"`
 }
 
 const androidSyncTestRetentionQuery = "feed_days=7&youtube_days=7&moments_days=7&story_hours=48"
 const androidSyncTestFullYoutubeMetadataQuery = androidSyncTestRetentionQuery + "&full_youtube_metadata=1"
+const androidSyncTestV3Query = androidSyncTestFullYoutubeMetadataQuery + "&model_version=3"
 
 func TestAndroidSyncFlatStreamConvergesChangedAndDeletedOwners(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
@@ -337,7 +339,7 @@ func TestAndroidSyncFullYoutubeMetadataIsOptInAndCursorBound(t *testing.T) {
 	full := requestAndroidSyncPage(t, srv,
 		"/api/android/sync/bootstrap?"+androidSyncTestFullYoutubeMetadataQuery)
 	fullCursor, err := decodeAndroidSyncCursor(full.NextCursor)
-	if err != nil || fullCursor.Version != androidSyncModelVersion {
+	if err != nil || fullCursor.Version != androidSyncPreviousModelVersion {
 		t.Fatalf("full bootstrap cursor = %+v / %v", fullCursor, err)
 	}
 	if change := findAndroidSyncChange(full.Changes, "video", "sample_old_video"); change == nil || change.Operation != model.AndroidSyncOperationUpsert {
@@ -349,7 +351,7 @@ func TestAndroidSyncFullYoutubeMetadataIsOptInAndCursorBound(t *testing.T) {
 	fullChanges := requestAndroidSyncPage(t, srv,
 		"/api/android/sync/changes?"+androidSyncTestRetentionQuery+"&after="+full.NextCursor)
 	fullChangesCursor, err := decodeAndroidSyncCursor(fullChanges.NextCursor)
-	if err != nil || fullChangesCursor.Version != androidSyncModelVersion {
+	if err != nil || fullChangesCursor.Version != androidSyncPreviousModelVersion {
 		t.Fatalf("v2 cursor without flag = %+v / %v", fullChangesCursor, err)
 	}
 }
@@ -380,13 +382,21 @@ func TestAndroidSyncMetadataOnlyYoutubeVideoKeepsStreamDescriptor(t *testing.T) 
 		FilePath: audioPath, ContentType: "audio/mp4",
 	})
 
-	page := requestAndroidSyncPage(t, srv, "/api/android/sync/bootstrap?"+androidSyncTestFullYoutubeMetadataQuery)
+	page := requestAndroidSyncPage(t, srv, "/api/android/sync/bootstrap?"+androidSyncTestV3Query)
 	if change := findAndroidSyncChange(page.Changes, "video", "sample_old_video"); change == nil || change.Operation != model.AndroidSyncOperationUpsert {
 		t.Fatalf("metadata-only video change = %+v in %+v", change, androidSyncChangeKeys(page.Changes))
 	}
 	for _, assetID := range []string{stream.AssetID, audio.AssetID} {
-		if change := findAndroidSyncChange(page.Changes, "asset", assetID); change == nil || change.Operation != model.AndroidSyncOperationUpsert {
+		change := findAndroidSyncChange(page.Changes, "asset", assetID)
+		if change == nil || change.Operation != model.AndroidSyncOperationUpsert {
 			t.Fatalf("metadata-only video primary descriptor %q = %+v in %+v", assetID, change, androidSyncChangeKeys(page.Changes))
+		}
+		var descriptor model.AndroidSyncAsset
+		if err := json.Unmarshal(change.PayloadJSON, &descriptor); err != nil {
+			t.Fatal(err)
+		}
+		if descriptor.TransferRequired {
+			t.Fatalf("metadata-only video primary descriptor %q requires transfer: %+v", assetID, descriptor)
 		}
 	}
 }
@@ -1071,6 +1081,115 @@ func TestAndroidSyncChangesSessionBoundsPagesWithoutRetainingWholeSelection(t *t
 	removed := findAndroidSyncChange(next.Changes, "feed", "sample_session_feed")
 	if removed == nil || removed.Operation != model.AndroidSyncOperationDelete {
 		t.Fatalf("continued stream did not apply changed selection: %+v", androidSyncChangeKeys(next.Changes))
+	}
+}
+
+func TestAndroidSyncV3CompletesFrozenChangesSnapshotBeforeNewerRevisions(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	bootstrap := requestAndroidSyncPage(t, srv, "/api/android/sync/bootstrap?"+androidSyncTestV3Query)
+	bootstrapCursor, err := decodeAndroidSyncCursor(bootstrap.NextCursor)
+	if err != nil || bootstrapCursor.Version != androidSyncModelVersion {
+		t.Fatalf("v3 bootstrap cursor = %+v / %v", bootstrapCursor, err)
+	}
+	if err := srv.db.ExecRaw(`
+		WITH RECURSIVE seq(n) AS (
+			VALUES (1)
+			UNION ALL
+			SELECT n + 1 FROM seq WHERE n < 501
+		)
+		INSERT INTO feed_seen (tweet_id, seen_at)
+		SELECT printf('sample_v3_seen_%04d', n), n FROM seq
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	first := requestAndroidSyncPage(t, srv,
+		"/api/android/sync/changes?"+androidSyncTestRetentionQuery+"&after="+bootstrap.NextCursor)
+	if first.EndOfStream {
+		t.Fatalf("first v3 changes page unexpectedly ended: %+v", androidSyncChangeKeys(first.Changes))
+	}
+	if err := srv.db.ExecRaw(`
+		INSERT INTO feed_seen (tweet_id, seen_at) VALUES ('sample_v3_after_through', 1000)
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	final := requestAndroidSyncPage(t, srv,
+		"/api/android/sync/changes?"+androidSyncTestRetentionQuery+"&after="+first.NextCursor)
+	if !final.EndOfStream || !final.NewerAvailable {
+		t.Fatalf("frozen v3 snapshot did not finish independently: %+v", final)
+	}
+	if findAndroidSyncChange(final.Changes, "feed_seen", "sample_v3_after_through") != nil {
+		t.Fatalf("post-through head leaked into frozen v3 snapshot: %+v", androidSyncChangeKeys(final.Changes))
+	}
+
+	next := requestAndroidSyncPage(t, srv,
+		"/api/android/sync/changes?"+androidSyncTestRetentionQuery+"&after="+final.NextCursor)
+	if findAndroidSyncChange(next.Changes, "feed_seen", "sample_v3_after_through") == nil {
+		t.Fatalf("deferred v3 revision missing from next snapshot: %+v", androidSyncChangeKeys(next.Changes))
+	}
+}
+
+func TestAndroidSyncV3RequestResetsAnOlderOpaqueCursor(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	legacy := requestAndroidSyncPage(t, srv,
+		"/api/android/sync/bootstrap?"+androidSyncTestFullYoutubeMetadataQuery)
+	cursor, err := decodeAndroidSyncCursor(legacy.NextCursor)
+	if err != nil || cursor.Version != androidSyncPreviousModelVersion {
+		t.Fatalf("v2 bridge cursor = %+v / %v", cursor, err)
+	}
+
+	rec := requestAndroidSync(t, srv, http.MethodGet,
+		"/api/android/sync/changes?"+androidSyncTestV3Query+"&after="+legacy.NextCursor,
+		nil, true)
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "sync_reset_required") {
+		t.Fatalf("v3 upgrade response = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAndroidSyncV3TransfersFeedRankingAsOneSnapshotDocument(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	now := time.Now().UnixMilli()
+	if err := srv.db.ExecRaw(`
+		INSERT INTO channel_follows (channel_id, followed_at)
+		VALUES ('twitter_sample_rank_source', 1);
+		INSERT INTO feed_items (tweet_id, source_channel_id, channel_id, published_at, fetched_at)
+		VALUES
+			('sample_rank_first', 'twitter_sample_rank_source', 'twitter_sample_rank_source', ?, ?),
+			('sample_rank_second', 'twitter_sample_rank_source', 'twitter_sample_rank_source', ?, ?)
+	`, now, now, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ReplaceFeedRankSnapshot([]db.SnapshotRow{
+		{TweetID: "sample_rank_second", RankPosition: 2},
+		{TweetID: "sample_rank_first", RankPosition: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	bootstrap := requestAndroidSyncPage(t, srv, "/api/android/sync/bootstrap?"+androidSyncTestV3Query)
+	var snapshotChanges []model.AndroidSyncChange
+	for _, change := range bootstrap.Changes {
+		if change.OwnerKind == "feed_rank" {
+			t.Fatalf("v3 bootstrap exposed per-row rank owner: %+v", androidSyncChangeKeys(bootstrap.Changes))
+		}
+		if change.OwnerKind == androidSyncFeedRankSnapshotOwnerKind {
+			snapshotChanges = append(snapshotChanges, change)
+		}
+	}
+	if len(snapshotChanges) != 1 || snapshotChanges[0].OwnerID != androidSyncFeedRankSnapshotOwnerID {
+		t.Fatalf("v3 rank snapshot changes = %+v", androidSyncChangeKeys(snapshotChanges))
+	}
+	var payload androidSyncFeedRankSnapshotPayload
+	if err := json.Unmarshal(snapshotChanges[0].PayloadJSON, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.SnapshotAt <= 0 || payload.Digest == "" || len(payload.Rows) != 2 {
+		t.Fatalf("v3 rank snapshot payload = %+v", payload)
+	}
+	if payload.Rows[0].TweetID != "sample_rank_first" || payload.Rows[0].RankPosition != 1 ||
+		payload.Rows[1].TweetID != "sample_rank_second" || payload.Rows[1].RankPosition != 2 {
+		t.Fatalf("v3 rank snapshot ordering = %+v", payload.Rows)
 	}
 }
 

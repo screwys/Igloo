@@ -380,6 +380,12 @@ interface FeedLikeDao {
 interface FeedRankDao {
     @Upsert suspend fun upsert(rows: List<FeedRankEntity>)
 
+    @Transaction
+    suspend fun replaceSnapshot(rows: List<FeedRankEntity>) {
+        deleteAll()
+        if (rows.isNotEmpty()) upsert(rows)
+    }
+
     @Query("SELECT COALESCE(MAX(snapshot_at), 0) FROM feed_rank")
     suspend fun currentSnapshotAt(): Long
 

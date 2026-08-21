@@ -1,8 +1,11 @@
 package web
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/screwys/igloo/internal/db"
@@ -11,6 +14,22 @@ import (
 
 type androidSyncRetweetSourcesPayload struct {
 	Rows []androidSyncRetweetSource `json:"rows"`
+}
+
+const (
+	androidSyncFeedRankSnapshotOwnerKind = "feed_rank_snapshot"
+	androidSyncFeedRankSnapshotOwnerID   = "main"
+)
+
+type androidSyncFeedRankSnapshotRow struct {
+	TweetID      string `json:"tweet_id"`
+	RankPosition int    `json:"rank_position"`
+}
+
+type androidSyncFeedRankSnapshotPayload struct {
+	SnapshotAt int64                            `json:"snapshot_at"`
+	Digest     string                           `json:"digest"`
+	Rows       []androidSyncFeedRankSnapshotRow `json:"rows"`
 }
 
 type androidSyncMaterializationPlan struct {
@@ -37,8 +56,9 @@ func (s *Server) buildAndroidSyncBootstrapSelection(
 	database *db.DB,
 	retention db.AndroidRetentionSettings,
 	nowMs int64,
-	fullYoutubeMetadata bool,
+	version int,
 ) ([]model.AndroidSyncHead, db.AndroidSyncDesiredSets, error) {
+	fullYoutubeMetadata := androidSyncFullYoutubeMetadataForVersion(version)
 	sets, err := database.ListAndroidSyncDesiredSetsForMode(retention, nowMs, fullYoutubeMetadata)
 	if err != nil {
 		return nil, db.AndroidSyncDesiredSets{}, err
@@ -107,7 +127,12 @@ func (s *Server) buildAndroidSyncBootstrapSelection(
 	for _, rank := range ranks {
 		rankIDs = append(rankIDs, rank.TweetID)
 	}
-	appendOwners("feed_rank", sortedNonEmpty(rankIDs))
+	if version >= androidSyncModelVersion {
+		sets.FeedRanks = stringSet(rankIDs)
+		appendOwner(androidSyncFeedRankSnapshotOwnerKind, androidSyncFeedRankSnapshotOwnerID)
+	} else {
+		appendOwners("feed_rank", sortedNonEmpty(rankIDs))
+	}
 	appendOwners("channel", sets.SortedChannels())
 
 	for _, key := range androidSyncRelevantSettingKeys() {
@@ -126,8 +151,32 @@ func (s *Server) buildAndroidSyncBootstrapSelection(
 }
 
 func (s *Server) buildAndroidSyncBootstrapHeads(database *db.DB, retention db.AndroidRetentionSettings, nowMs int64) ([]model.AndroidSyncHead, error) {
-	heads, _, err := s.buildAndroidSyncBootstrapSelection(database, retention, nowMs, true)
+	heads, _, err := s.buildAndroidSyncBootstrapSelection(database, retention, nowMs, androidSyncModelVersion)
 	return heads, err
+}
+
+func (s *Server) buildAndroidSyncV3Selection(
+	database *db.DB,
+	retention db.AndroidRetentionSettings,
+	nowMs int64,
+) (db.AndroidSyncDesiredSets, error) {
+	sets, err := database.ListAndroidSyncDesiredSetsForMode(retention, nowMs, true)
+	if err != nil {
+		return db.AndroidSyncDesiredSets{}, err
+	}
+	_, ranks, err := database.ListAndroidSyncFeedRankRows(
+		sets.SortedTweets(),
+		androidSyncFeedRankMaxRows,
+	)
+	if err != nil {
+		return db.AndroidSyncDesiredSets{}, err
+	}
+	rankIDs := make([]string, 0, len(ranks))
+	for _, rank := range ranks {
+		rankIDs = append(rankIDs, rank.TweetID)
+	}
+	sets.FeedRanks = stringSet(rankIDs)
+	return sets, nil
 }
 
 func (s *Server) buildAndroidSyncChangeSelection(
@@ -135,8 +184,9 @@ func (s *Server) buildAndroidSyncChangeSelection(
 	retention db.AndroidRetentionSettings,
 	nowMs int64,
 	heads []model.AndroidSyncHead,
-	fullYoutubeMetadata bool,
+	version int,
 ) (db.AndroidSyncDesiredSets, error) {
+	fullYoutubeMetadata := androidSyncFullYoutubeMetadataForVersion(version)
 	byKind := make(map[string][]string)
 	for _, head := range heads {
 		byKind[head.OwnerKind] = append(byKind[head.OwnerKind], head.OwnerID)
@@ -161,9 +211,32 @@ func (s *Server) buildAndroidSyncChangeSelection(
 	if err != nil {
 		return db.AndroidSyncDesiredSets{}, err
 	}
-	selection.FeedRanks, err = database.ListAndroidSyncDesiredFeedRanksAmong(
-		retention.FeedDays, nowMs, byKind["feed_rank"], androidSyncFeedRankMaxRows,
-	)
+	if version >= androidSyncModelVersion && len(byKind[androidSyncFeedRankSnapshotOwnerKind]) > 0 {
+		fullSelection, fullErr := database.ListAndroidSyncDesiredContentForMode(
+			retention,
+			nowMs,
+			fullYoutubeMetadata,
+		)
+		if fullErr != nil {
+			return db.AndroidSyncDesiredSets{}, fullErr
+		}
+		_, ranks, rankErr := database.ListAndroidSyncFeedRankRows(
+			fullSelection.SortedTweets(),
+			androidSyncFeedRankMaxRows,
+		)
+		if rankErr != nil {
+			return db.AndroidSyncDesiredSets{}, rankErr
+		}
+		rankIDs := make([]string, 0, len(ranks))
+		for _, rank := range ranks {
+			rankIDs = append(rankIDs, rank.TweetID)
+		}
+		selection.FeedRanks = stringSet(rankIDs)
+	} else {
+		selection.FeedRanks, err = database.ListAndroidSyncDesiredFeedRanksAmong(
+			retention.FeedDays, nowMs, byKind["feed_rank"], androidSyncFeedRankMaxRows,
+		)
+	}
 	if err != nil {
 		return db.AndroidSyncDesiredSets{}, err
 	}
@@ -171,6 +244,20 @@ func (s *Server) buildAndroidSyncChangeSelection(
 }
 
 func (s *Server) materializeAndroidSyncHeads(database *db.DB, heads []model.AndroidSyncHead, desired *db.AndroidSyncDesiredSets) ([]model.AndroidSyncChange, error) {
+	return s.materializeAndroidSyncHeadsForVersion(
+		database,
+		heads,
+		desired,
+		androidSyncPreviousModelVersion,
+	)
+}
+
+func (s *Server) materializeAndroidSyncHeadsForVersion(
+	database *db.DB,
+	heads []model.AndroidSyncHead,
+	desired *db.AndroidSyncDesiredSets,
+	version int,
+) ([]model.AndroidSyncChange, error) {
 	byKind := make(map[string][]string)
 	for _, head := range heads {
 		byKind[head.OwnerKind] = append(byKind[head.OwnerKind], head.OwnerID)
@@ -253,7 +340,11 @@ func (s *Server) materializeAndroidSyncHeads(database *db.DB, heads []model.Andr
 	if err := appendChanges(s.androidSyncRetweetSourceChanges(database, plan)); err != nil {
 		return nil, err
 	}
-	if err := appendChanges(s.androidSyncFeedRankChanges(database, byKind["feed_rank"])); err != nil {
+	if version >= androidSyncModelVersion && len(byKind[androidSyncFeedRankSnapshotOwnerKind]) > 0 {
+		if err := appendChanges(s.androidSyncFeedRankSnapshotChange(database, desired)); err != nil {
+			return nil, err
+		}
+	} else if err := appendChanges(s.androidSyncFeedRankChanges(database, byKind["feed_rank"])); err != nil {
 		return nil, err
 	}
 	if err := appendChanges(s.androidSyncSettingChanges(database, byKind["setting"])); err != nil {
@@ -262,7 +353,11 @@ func (s *Server) materializeAndroidSyncHeads(database *db.DB, heads []model.Andr
 	if err := appendChanges(s.androidSyncChannelChanges(database, plan, byKind["channel"])); err != nil {
 		return nil, err
 	}
-	if err := appendChanges(s.androidSyncAssetChanges(database, byKind["asset"])); err != nil {
+	var assetSelection *db.AndroidSyncDesiredSets
+	if version >= androidSyncModelVersion {
+		assetSelection = &plan.Desired
+	}
+	if err := appendChanges(s.androidSyncAssetChanges(database, byKind["asset"], assetSelection)); err != nil {
 		return nil, err
 	}
 	assets, _, err := s.buildAndroidSyncAssets(database, plan.Desired)
@@ -282,6 +377,7 @@ func (s *Server) materializeAndroidSyncBootstrapHeads(
 	database *db.DB,
 	heads []model.AndroidSyncHead,
 	desired *db.AndroidSyncDesiredSets,
+	version int,
 ) ([]model.AndroidSyncChange, error) {
 	byKind := make(map[string][]string)
 	expected := make(map[string]struct{}, len(heads))
@@ -338,7 +434,11 @@ func (s *Server) materializeAndroidSyncBootstrapHeads(
 	if err := appendChanges(s.androidSyncRetweetSourceChanges(database, retweetPlan)); err != nil {
 		return nil, err
 	}
-	if err := appendChanges(s.androidSyncFeedRankChanges(database, byKind["feed_rank"])); err != nil {
+	if version >= androidSyncModelVersion && len(byKind[androidSyncFeedRankSnapshotOwnerKind]) > 0 {
+		if err := appendChanges(s.androidSyncFeedRankSnapshotChange(database, desired)); err != nil {
+			return nil, err
+		}
+	} else if err := appendChanges(s.androidSyncFeedRankChanges(database, byKind["feed_rank"])); err != nil {
 		return nil, err
 	}
 	if err := appendChanges(s.androidSyncSettingChanges(database, byKind["setting"])); err != nil {
@@ -351,7 +451,11 @@ func (s *Server) materializeAndroidSyncBootstrapHeads(
 	)); err != nil {
 		return nil, err
 	}
-	if err := appendChanges(s.androidSyncAssetChanges(database, byKind["asset"])); err != nil {
+	var assetSelection *db.AndroidSyncDesiredSets
+	if version >= androidSyncModelVersion {
+		assetSelection = desired
+	}
+	if err := appendChanges(s.androidSyncAssetChanges(database, byKind["asset"], assetSelection)); err != nil {
 		return nil, err
 	}
 	for _, change := range changes {
@@ -642,7 +746,75 @@ func (s *Server) androidSyncFeedRankChanges(database *db.DB, ids []string) ([]mo
 	return changes, nil
 }
 
-func (s *Server) androidSyncAssetChanges(database *db.DB, ids []string) ([]model.AndroidSyncChange, error) {
+func (s *Server) androidSyncFeedRankSnapshotChange(
+	database *db.DB,
+	desired *db.AndroidSyncDesiredSets,
+) ([]model.AndroidSyncChange, error) {
+	var tweetIDs []string
+	if desired != nil {
+		tweetIDs = sortedMapKeys(desired.FeedRanks)
+	}
+	snapshotAt, ranks, err := database.ListAndroidSyncFeedRankRows(
+		tweetIDs,
+		androidSyncFeedRankMaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if snapshotAt == 0 {
+		return []model.AndroidSyncChange{
+			androidSyncDeleteChange(
+				androidSyncFeedRankSnapshotOwnerKind,
+				androidSyncFeedRankSnapshotOwnerID,
+			),
+		}, nil
+	}
+	rows := make([]androidSyncFeedRankSnapshotRow, 0, len(ranks))
+	for _, rank := range ranks {
+		rows = append(rows, androidSyncFeedRankSnapshotRow{
+			TweetID:      rank.TweetID,
+			RankPosition: rank.RankPosition,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].RankPosition != rows[j].RankPosition {
+			return rows[i].RankPosition < rows[j].RankPosition
+		}
+		return rows[i].TweetID < rows[j].TweetID
+	})
+	change, err := marshalAndroidSyncChange(
+		androidSyncFeedRankSnapshotOwnerKind,
+		androidSyncFeedRankSnapshotOwnerID,
+		"feed",
+		snapshotAt,
+		androidSyncFeedRankSnapshotPayload{
+			SnapshotAt: snapshotAt,
+			Digest:     androidSyncFeedRankSnapshotDigest(rows),
+			Rows:       rows,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return []model.AndroidSyncChange{change}, nil
+}
+
+func androidSyncFeedRankSnapshotDigest(rows []androidSyncFeedRankSnapshotRow) string {
+	hash := sha256.New()
+	for _, row := range rows {
+		_, _ = hash.Write([]byte(row.TweetID))
+		_, _ = hash.Write([]byte{0})
+		_, _ = hash.Write([]byte(strconv.Itoa(row.RankPosition)))
+		_, _ = hash.Write([]byte{'\n'})
+	}
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
+func (s *Server) androidSyncAssetChanges(
+	database *db.DB,
+	ids []string,
+	desired *db.AndroidSyncDesiredSets,
+) ([]model.AndroidSyncChange, error) {
 	ids = sortedNonEmpty(ids)
 	if len(ids) == 0 {
 		return nil, nil
@@ -658,7 +830,11 @@ func (s *Server) androidSyncAssetChanges(database *db.DB, ids []string) ([]model
 			changes = append(changes, androidSyncDeleteChange("asset", id))
 			continue
 		}
-		change, err := marshalAndroidSyncChange("asset", id, "", 0, s.androidSyncAssetFromInventory(row))
+		asset := s.androidSyncAssetFromInventory(row)
+		if desired != nil {
+			asset.TransferRequired = androidSyncInventoryAssetTransferRequired(row, *desired)
+		}
+		change, err := marshalAndroidSyncChange("asset", id, "", 0, asset)
 		if err != nil {
 			return nil, err
 		}

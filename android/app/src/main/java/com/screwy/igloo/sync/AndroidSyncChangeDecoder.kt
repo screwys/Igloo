@@ -24,6 +24,7 @@ import com.screwy.igloo.data.entity.WatchHistoryEntity
 import com.screwy.igloo.net.AndroidSyncAssetDto
 import com.screwy.igloo.net.AndroidSyncChangeDto
 import com.screwy.igloo.net.iglooJson
+import java.security.MessageDigest
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -42,6 +43,11 @@ internal data class AndroidVideoUpsert(
 internal data class AndroidChannelUpsert(
     val channel: ChannelEntity?,
     val profile: ChannelProfileEntity?,
+)
+
+internal data class AndroidFeedRankSnapshot(
+    val snapshotAt: Long,
+    val rows: List<FeedRankEntity>,
 )
 
 internal object AndroidSyncChangeDecoder {
@@ -76,6 +82,32 @@ internal object AndroidSyncChangeDecoder {
 
     fun feedRank(change: AndroidSyncChangeDto): FeedRankEntity =
         change.decode<FeedRankEntity>().also { require(it.tweetId == change.owner_id) }
+
+    fun feedRankSnapshot(change: AndroidSyncChangeDto): AndroidFeedRankSnapshot {
+        require(change.owner_id == "main") { "feed rank snapshot owner id mismatch" }
+        val payload = change.decode<FeedRankSnapshotPayload>()
+        require(payload.snapshotAt > 0) { "feed rank snapshot time is missing" }
+        require(payload.rows.size <= 5_000) { "feed rank snapshot exceeds the row limit" }
+        val rows =
+            payload.rows.map { row ->
+                require(row.tweetId.isNotBlank()) { "feed rank snapshot has an empty owner" }
+                require(row.rankPosition >= 0) { "feed rank snapshot has a negative position" }
+                FeedRankEntity(row.tweetId, row.rankPosition, payload.snapshotAt)
+            }
+        require(rows.map(FeedRankEntity::tweetId).distinct().size == rows.size) {
+            "feed rank snapshot has duplicate owners"
+        }
+        require(
+            rows.zipWithNext().all { (before, after) ->
+                before.rankPosition < after.rankPosition ||
+                    (before.rankPosition == after.rankPosition && before.tweetId < after.tweetId)
+            }
+        ) { "feed rank snapshot is not ordered" }
+        require(payload.digest == feedRankSnapshotDigest(rows)) {
+            "feed rank snapshot digest mismatch"
+        }
+        return AndroidFeedRankSnapshot(payload.snapshotAt, rows)
+    }
 
     fun asset(change: AndroidSyncChangeDto): AndroidSyncAssetDto =
         change.decode<AndroidSyncAssetDto>().also { require(it.asset_id == change.owner_id) }
@@ -175,7 +207,25 @@ private data class ChannelPayload(
 )
 
 @Serializable private data class RetweetSourcesPayload(val rows: List<RetweetSourceEntity>)
+@Serializable
+private data class FeedRankSnapshotPayload(
+    val snapshotAt: Long,
+    val digest: String,
+    val rows: List<FeedRankSnapshotRow>,
+)
+@Serializable private data class FeedRankSnapshotRow(val tweetId: String, val rankPosition: Int)
 @Serializable private data class SettingPayload(val key: String, val value: String?)
+
+internal fun feedRankSnapshotDigest(rows: List<FeedRankEntity>): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    rows.forEach { row ->
+        digest.update(row.tweetId.toByteArray(Charsets.UTF_8))
+        digest.update(0.toByte())
+        digest.update(row.rankPosition.toString().toByteArray(Charsets.UTF_8))
+        digest.update('\n'.code.toByte())
+    }
+    return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+}
 
 private fun FeedItemEntity.cleaned() =
     copy(

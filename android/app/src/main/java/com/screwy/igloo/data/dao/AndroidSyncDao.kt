@@ -87,6 +87,9 @@ interface AndroidSyncDao {
     )
     suspend fun deleteHead(ownerKind: String, ownerId: String)
 
+    @Query("DELETE FROM android_sync_heads WHERE owner_kind = :ownerKind")
+    suspend fun deleteHeadsByKind(ownerKind: String)
+
     @Query("DELETE FROM android_sync_heads WHERE owner_id = :ownerId")
     suspend fun deleteHeadsForOwnerId(ownerId: String)
 
@@ -311,6 +314,14 @@ interface AndroidSyncDao {
           AND asa.local_path IS NULL
           AND asa.next_attempt_at_ms <= :nowMs
           AND (
+            asa.transfer_required = 1
+            OR EXISTS (
+              SELECT 1 FROM offline_video_downloads requested_transfer
+              WHERE requested_transfer.video_id = asa.owner_id
+                AND requested_transfer.state IN ('requested', 'downloaded')
+            )
+          )
+          AND (
             NOT ${youtubeVideoPrimaryAssetSql}
             OR asa.owner_kind != 'youtube_video'
             OR EXISTS (
@@ -357,6 +368,14 @@ interface AndroidSyncDao {
         WHERE asa.state = 'ready'
           AND asa.local_path IS NULL
           AND asa.next_attempt_at_ms > :nowMs
+          AND (
+            asa.transfer_required = 1
+            OR EXISTS (
+              SELECT 1 FROM offline_video_downloads requested_transfer
+              WHERE requested_transfer.video_id = asa.owner_id
+                AND requested_transfer.state IN ('requested', 'downloaded')
+            )
+          )
           AND (
             NOT ${youtubeVideoPrimaryAssetSql}
             OR asa.owner_kind != 'youtube_video'
@@ -480,11 +499,17 @@ interface AndroidSyncDao {
     @Query(
         """
         SELECT COUNT(*) AS total,
-               SUM(CASE WHEN state = 'ready' AND local_path IS NOT NULL THEN 1 ELSE 0 END) AS verified,
-               SUM(CASE WHEN state = 'ready' AND local_path IS NULL THEN 1 ELSE 0 END) AS pending,
-               SUM(CASE WHEN state = 'server_missing' THEN 1 ELSE 0 END) AS missing,
-               COALESCE(SUM(CASE WHEN local_path IS NOT NULL THEN size_bytes ELSE 0 END), 0) AS verifiedBytes
-        FROM android_sync_assets
+               SUM(CASE WHEN asa.state = 'ready' AND asa.local_path IS NOT NULL THEN 1 ELSE 0 END) AS verified,
+               SUM(CASE WHEN asa.state = 'ready' AND asa.local_path IS NULL THEN 1 ELSE 0 END) AS pending,
+               SUM(CASE WHEN asa.state = 'server_missing' THEN 1 ELSE 0 END) AS missing,
+               COALESCE(SUM(CASE WHEN asa.local_path IS NOT NULL THEN asa.size_bytes ELSE 0 END), 0) AS verifiedBytes
+        FROM android_sync_assets asa
+        WHERE asa.transfer_required = 1
+           OR EXISTS (
+             SELECT 1 FROM offline_video_downloads requested_transfer
+             WHERE requested_transfer.video_id = asa.owner_id
+               AND requested_transfer.state IN ('requested', 'downloaded')
+           )
         """,
     )
     suspend fun healthCounts(): AndroidSyncHealthCounts

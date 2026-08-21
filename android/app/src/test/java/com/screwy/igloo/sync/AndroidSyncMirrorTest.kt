@@ -53,6 +53,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
@@ -705,6 +706,41 @@ class AndroidSyncMirrorTest {
     }
 
     @Test
+    fun v3FeedRankSnapshotAtomicallyReplacesRowsAndLegacyHeads() = runBlocking {
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_rank_old"))
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_rank_first"))
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_rank_second"))
+        db.feedRankDao().upsert(listOf(FeedRankEntity("sample_rank_old", 1, nowMs)))
+        db.androidSyncDao()
+            .upsertHead(AndroidSyncHeadEntity("feed_rank", "sample_rank_old", "feed", nowMs))
+        val snapshotAt = nowMs + 10
+        val rows =
+            listOf(
+                FeedRankEntity("sample_rank_first", 1, snapshotAt),
+                FeedRankEntity("sample_rank_second", 2, snapshotAt),
+            )
+        val engine =
+            bootstrapEngine(
+                listOf(
+                    feedChange("sample_rank_first"),
+                    feedChange("sample_rank_second"),
+                    feedRankSnapshotChange(rows, snapshotAt),
+                ),
+                "cursor-ranks",
+            )
+
+        buildMirror(engine).syncOnce()
+
+        assertEquals(2, db.feedRankDao().count())
+        assertEquals(snapshotAt, db.feedRankDao().currentSnapshotAt())
+        assertTrue(db.androidSyncDao().headIds("feed_rank").isEmpty())
+        assertEquals(
+            listOf("main"),
+            db.androidSyncDao().headIds("feed_rank_snapshot"),
+        )
+    }
+
+    @Test
     fun resetBootstrapSweepsAbsentOwnersAndRestoresPendingState() = runBlocking {
         db.androidSyncDao().upsertSyncState(changesState("old-cursor"))
         db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_deleted_post"))
@@ -1188,6 +1224,33 @@ class AndroidSyncMirrorTest {
             retentionBucket = "feed",
             retainAt = retainAt,
             payload = buildJsonObject { put("item", feedItemPayload(id, channelId, replyTo, publishedAt)) },
+        )
+
+    private fun feedRankSnapshotChange(
+        rows: List<FeedRankEntity>,
+        snapshotAt: Long,
+    ) =
+        upsertChange(
+            ownerKind = "feed_rank_snapshot",
+            ownerId = "main",
+            payload =
+                buildJsonObject {
+                    put("snapshot_at", snapshotAt)
+                    put("digest", feedRankSnapshotDigest(rows))
+                    put(
+                        "rows",
+                        buildJsonArray {
+                            rows.forEach { row ->
+                                add(
+                                    buildJsonObject {
+                                        put("tweet_id", row.tweetId)
+                                        put("rank_position", row.rankPosition)
+                                    }
+                                )
+                            }
+                        },
+                    )
+                },
         )
 
     private fun feedItemPayload(

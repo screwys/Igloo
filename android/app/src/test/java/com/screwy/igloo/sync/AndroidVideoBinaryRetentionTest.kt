@@ -89,11 +89,11 @@ class AndroidVideoBinaryRetentionTest {
         db.bookmarkDao().upsert(BookmarkEntity(videoId = "sample_old_video", bookmarkedAt = nowMs))
         db.feedLikeDao().upsert(FeedLikeEntity(tweetId = "sample_old_video", likedAt = nowMs))
         for (asset in listOf(
-                youtubeAsset("sample_old_stream", "sample_old_video", "video_stream"),
+                youtubeAsset("sample_old_stream", "sample_old_video", "video_stream", transferRequired = false),
                 youtubeAsset("sample_old_thumbnail", "sample_old_video", "thumbnail"),
                 youtubeAsset("sample_old_preview", "sample_old_video", "post_media", contentType = "image/jpeg"),
                 youtubeAsset("sample_old_subtitle", "sample_old_video", "subtitle"),
-                youtubeAsset("sample_temp_stream", "sample_temp_video", "video_stream"),
+                youtubeAsset("sample_temp_stream", "sample_temp_video", "video_stream", transferRequired = false),
                 youtubeAsset("sample_temp_thumbnail", "sample_temp_video", "thumbnail"),
                 youtubeAsset("sample_temp_preview", "sample_temp_video", "post_media", contentType = "image/jpeg"),
                 youtubeAsset("sample_temp_subtitle", "sample_temp_video", "subtitle"),
@@ -119,6 +119,9 @@ class AndroidVideoBinaryRetentionTest {
             ),
             claimable.map(AndroidSyncAssetEntity::assetId).toSet(),
         )
+        val health = db.androidSyncDao().healthCounts()
+        assertEquals(6, health.total)
+        assertEquals(6, health.pending)
     }
 
     @Test
@@ -132,6 +135,7 @@ class AndroidVideoBinaryRetentionTest {
                 assetKind = "post_audio",
                 sizeBytes = 6,
                 nextAttemptAtMs = Long.MAX_VALUE,
+                transferRequired = false,
             ),
         )
         var syncTriggers = 0
@@ -159,6 +163,9 @@ class AndroidVideoBinaryRetentionTest {
                 )
                 .map(AndroidSyncAssetEntity::assetId),
         )
+        val health = db.androidSyncDao().healthCounts()
+        assertEquals(1, health.total)
+        assertEquals(1, health.pending)
 
         buildAssetDrainer(MockEngine { respond("stream", HttpStatusCode.OK) })
             .drain(youtubeCutoffMs = nowMs - RETENTION.youtubeDays * DAY_MS)
@@ -390,6 +397,7 @@ class AndroidVideoBinaryRetentionTest {
         contentType: String? = null,
         localPath: String? = null,
         nextAttemptAtMs: Long = 0,
+        transferRequired: Boolean = true,
     ) =
         AndroidSyncAssetEntity(
             assetId = assetId,
@@ -406,6 +414,7 @@ class AndroidVideoBinaryRetentionTest {
                 },
             sizeBytes = sizeBytes,
             revision = 1,
+            transferRequired = transferRequired,
             localPath = localPath,
             verifiedAtMs = localPath?.let { nowMs },
             nextAttemptAtMs = nextAttemptAtMs,

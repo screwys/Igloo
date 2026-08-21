@@ -19,14 +19,15 @@ import (
 )
 
 const (
-	androidSyncLegacyModelVersion = 1
-	androidSyncModelVersion       = 2
-	androidSyncChangePageSize     = 500
-	androidSyncPriorityPageSize   = 500
-	androidSyncBootstrapPageSize  = 1000
-	androidSyncReconcileMaxOwners = 500
-	androidSyncSessionLifetime    = 30 * time.Minute
-	androidSyncMaxSessions        = 4
+	androidSyncLegacyModelVersion   = 1
+	androidSyncPreviousModelVersion = 2
+	androidSyncModelVersion         = 3
+	androidSyncChangePageSize       = 500
+	androidSyncPriorityPageSize     = 500
+	androidSyncBootstrapPageSize    = 1000
+	androidSyncReconcileMaxOwners   = 500
+	androidSyncSessionLifetime      = 30 * time.Minute
+	androidSyncMaxSessions          = 4
 )
 
 type androidSyncCursor struct {
@@ -72,16 +73,18 @@ func (s *Server) handleAndroidSyncBootstrap(w http.ResponseWriter, r *http.Reque
 				return
 			}
 		}
-		version := androidSyncLegacyModelVersion
-		if fullYoutubeMetadata {
-			version = androidSyncModelVersion
+		version, versionErr := androidSyncRequestedModelVersion(r, fullYoutubeMetadata)
+		if versionErr != nil {
+			writeJSONError(w, http.StatusBadRequest, "bad_model_version", versionErr.Error())
+			return
 		}
 		s.startAndroidSyncBootstrap(w, retention, version)
 		return
 	}
 	cursor, err := decodeAndroidSyncCursor(after)
 	if err != nil || cursor.Mode != "bootstrap" || !androidSyncModelVersionSupported(cursor.Version) ||
-		(fullYoutubeMetadata && cursor.Version != androidSyncModelVersion) {
+		!androidSyncRequestedCursorVersionMatches(r, cursor.Version) ||
+		(fullYoutubeMetadata && !androidSyncFullYoutubeMetadataForVersion(cursor.Version)) {
 		writeAndroidSyncResetRequired(w)
 		return
 	}
@@ -96,7 +99,7 @@ func (s *Server) startAndroidSyncBootstrap(w http.ResponseWriter, retention db.A
 			return err
 		}
 		heads, selection, err := s.buildAndroidSyncBootstrapSelection(
-			snapshot, retention, time.Now().UnixMilli(), androidSyncFullYoutubeMetadataForVersion(version),
+			snapshot, retention, time.Now().UnixMilli(), version,
 		)
 		if err != nil {
 			return err
@@ -172,7 +175,12 @@ func (s *Server) writeAndroidSyncBootstrapPage(w http.ResponseWriter, cursor and
 		if clock.Epoch != session.Epoch {
 			return errAndroidSyncResetRequired
 		}
-		changes, err = s.materializeAndroidSyncBootstrapHeads(snapshot, heads, session.Selection)
+		changes, err = s.materializeAndroidSyncBootstrapHeads(
+			snapshot,
+			heads,
+			session.Selection,
+			session.Version,
+		)
 		return err
 	})
 	if err != nil {
@@ -188,9 +196,13 @@ func (s *Server) writeAndroidSyncBootstrapPage(w http.ResponseWriter, cursor and
 		writeJSONError(w, http.StatusInternalServerError, "cursor_failed", "sync cursor failed")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	response := map[string]any{
 		"changes": changes, "next_cursor": encoded, "end_of_stream": finished,
-	})
+	}
+	if session.Version >= androidSyncModelVersion {
+		response["newer_available"] = false
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +219,8 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 	}
 	retentionHash := androidSyncRetentionHash(retention)
 	if err != nil || cursor.Mode != "changes" || !androidSyncModelVersionSupported(cursor.Version) ||
-		(fullYoutubeMetadata && cursor.Version != androidSyncModelVersion) ||
+		!androidSyncRequestedCursorVersionMatches(r, cursor.Version) ||
+		(fullYoutubeMetadata && !androidSyncFullYoutubeMetadataForVersion(cursor.Version)) ||
 		cursor.Revision < 0 || cursor.Retention != retentionHash {
 		writeAndroidSyncResetRequired(w)
 		return
@@ -260,11 +273,31 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 				RetentionHash: retentionHash,
 				CreatedAt:     time.Now(),
 			}
+			if cursor.Version >= androidSyncModelVersion {
+				selection, selectionErr := s.buildAndroidSyncV3Selection(
+					snapshot,
+					retention,
+					time.Now().UnixMilli(),
+				)
+				if selectionErr != nil {
+					return selectionErr
+				}
+				session.Selection = &selection
+			}
 		}
 		if cursor.Revision > session.Through {
 			return errAndroidSyncResetRequired
 		}
-		heads, err := snapshot.ListAndroidSyncHeadsThrough(cursor.Revision, session.Through, androidSyncChangePageSize+1)
+		excludedKinds := []string{androidSyncFeedRankSnapshotOwnerKind}
+		if cursor.Version >= androidSyncModelVersion {
+			excludedKinds = []string{"feed_rank"}
+		}
+		heads, err := snapshot.ListAndroidSyncHeadsThroughExcludingKinds(
+			cursor.Revision,
+			session.Through,
+			androidSyncChangePageSize+1,
+			excludedKinds,
+		)
 		if err != nil {
 			return err
 		}
@@ -279,6 +312,7 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 			time.Now().UnixMilli(),
 			session.Version,
 			heads,
+			session.Selection,
 		)
 		if err != nil {
 			return err
@@ -320,9 +354,19 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, http.StatusInternalServerError, "cursor_failed", "sync cursor failed")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"changes": changes, "next_cursor": next, "end_of_stream": finished && caughtUp,
-	})
+	endOfStream := finished && caughtUp
+	newerAvailable := false
+	if cursor.Version >= androidSyncModelVersion && finished {
+		endOfStream = true
+		newerAvailable = !caughtUp
+	}
+	response := map[string]any{
+		"changes": changes, "next_cursor": next, "end_of_stream": endOfStream,
+	}
+	if cursor.Version >= androidSyncModelVersion {
+		response["newer_available"] = newerAvailable
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) materializeAndroidSyncChangePage(
@@ -331,6 +375,7 @@ func (s *Server) materializeAndroidSyncChangePage(
 	nowMs int64,
 	version int,
 	heads []model.AndroidSyncHead,
+	frozenSelection *db.AndroidSyncDesiredSets,
 ) (int, []model.AndroidSyncChange, error) {
 	if len(heads) == 0 {
 		return 0, []model.AndroidSyncChange{}, nil
@@ -338,17 +383,26 @@ func (s *Server) materializeAndroidSyncChangePage(
 	count := len(heads)
 	for {
 		pageHeads := heads[:count]
-		selection, err := s.buildAndroidSyncChangeSelection(
-			database,
-			retention,
-			nowMs,
-			pageHeads,
-			androidSyncFullYoutubeMetadataForVersion(version),
-		)
-		if err != nil {
-			return 0, nil, err
+		selection := frozenSelection
+		if selection == nil {
+			pageSelection, err := s.buildAndroidSyncChangeSelection(
+				database,
+				retention,
+				nowMs,
+				pageHeads,
+				version,
+			)
+			if err != nil {
+				return 0, nil, err
+			}
+			selection = &pageSelection
 		}
-		changes, err := s.materializeAndroidSyncHeads(database, pageHeads, &selection)
+		changes, err := s.materializeAndroidSyncHeadsForVersion(
+			database,
+			pageHeads,
+			selection,
+			version,
+		)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -384,7 +438,8 @@ func (s *Server) handleAndroidSyncPriorityState(w http.ResponseWriter, r *http.R
 		return
 	}
 	if err != nil || (cursor.Mode != "changes" && cursor.Mode != "state") ||
-		!androidSyncModelVersionSupported(cursor.Version) || cursor.Revision < 0 {
+		!androidSyncModelVersionSupported(cursor.Version) ||
+		!androidSyncRequestedCursorVersionMatches(r, cursor.Version) || cursor.Revision < 0 {
 		writeAndroidSyncResetRequired(w)
 		return
 	}
@@ -480,7 +535,9 @@ func (s *Server) handleAndroidSyncPriorityState(w http.ResponseWriter, r *http.R
 }
 
 func androidSyncModelVersionSupported(version int) bool {
-	return version == androidSyncLegacyModelVersion || version == androidSyncModelVersion
+	return version == androidSyncLegacyModelVersion ||
+		version == androidSyncPreviousModelVersion ||
+		version == androidSyncModelVersion
 }
 
 func androidSyncFullYoutubeMetadataRequested(r *http.Request) bool {
@@ -488,7 +545,34 @@ func androidSyncFullYoutubeMetadataRequested(r *http.Request) bool {
 }
 
 func androidSyncFullYoutubeMetadataForVersion(version int) bool {
-	return version == androidSyncModelVersion
+	return version >= androidSyncPreviousModelVersion
+}
+
+func androidSyncRequestedModelVersion(r *http.Request, fullYoutubeMetadata bool) (int, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get("model_version"))
+	if raw == "" {
+		if fullYoutubeMetadata {
+			return androidSyncPreviousModelVersion, nil
+		}
+		return androidSyncLegacyModelVersion, nil
+	}
+	version, err := strconv.Atoi(raw)
+	if err != nil || !androidSyncModelVersionSupported(version) {
+		return 0, fmt.Errorf("unsupported Android sync model version")
+	}
+	if fullYoutubeMetadata && !androidSyncFullYoutubeMetadataForVersion(version) {
+		return 0, fmt.Errorf("model version does not support full YouTube metadata")
+	}
+	return version, nil
+}
+
+func androidSyncRequestedCursorVersionMatches(r *http.Request, cursorVersion int) bool {
+	raw := strings.TrimSpace(r.URL.Query().Get("model_version"))
+	if raw == "" {
+		return true
+	}
+	version, err := strconv.Atoi(raw)
+	return err == nil && androidSyncModelVersionSupported(version) && version == cursorVersion
 }
 
 func (s *Server) handleAndroidSyncAssetFile(w http.ResponseWriter, r *http.Request) {

@@ -520,6 +520,19 @@ class AndroidSyncMirror(
         selectedSnapshot: Boolean,
         deletedAssets: MutableList<AndroidSyncAssetEntity>,
     ) {
+        if (change.owner_kind == "feed_rank_snapshot") {
+            val rows =
+                if (change.operation == OP_DELETE) emptyList()
+                else AndroidSyncChangeDecoder.feedRankSnapshot(change).rows
+            db.feedRankDao().replaceSnapshot(rows)
+            dao.deleteHeadsByKind("feed_rank")
+            if (change.operation == OP_DELETE) {
+                dao.deleteHead(change.owner_kind, change.owner_id)
+            } else {
+                dao.upsertHead(change.toHead())
+            }
+            return
+        }
         if (change.operation == OP_DELETE) {
             deleteOwner(
                 change.owner_kind,
@@ -1024,6 +1037,7 @@ private fun AndroidSyncAssetDto.toEntity(existing: AndroidSyncAssetEntity?): And
         revision = revision,
         subtitleIsAuto = is_auto ?: true,
         state = state,
+        transferRequired = transfer_required,
         localPath = existing?.localPath.takeIf { keepVerified },
         verifiedAtMs = existing?.verifiedAtMs.takeIf { keepVerified },
         nextAttemptAtMs = existing?.nextAttemptAtMs?.takeIf { unchanged } ?: 0,
@@ -1059,6 +1073,7 @@ private val OWNER_KINDS =
         "channel",
         "retweet_sources",
         "feed_rank",
+        "feed_rank_snapshot",
         "asset",
         "feed_like",
         "bookmark",

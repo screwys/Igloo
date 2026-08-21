@@ -114,4 +114,13 @@ object IglooMigrations {
                 )
             }
         }
+
+    val MIGRATION_43_44 =
+        object : Migration(43, 44) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `android_sync_assets` ADD COLUMN `transfer_required` INTEGER NOT NULL DEFAULT 1",
+                )
+            }
+        }
 }

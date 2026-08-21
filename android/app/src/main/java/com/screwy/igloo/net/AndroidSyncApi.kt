@@ -26,6 +26,7 @@ class AndroidSyncApi(
     ): AndroidSyncPageResponse =
         client.get(baseUrlProvider() + "/api/android/sync/bootstrap") {
             syncMetadataTimeout()
+            parameter("model_version", SYNC_MODEL_VERSION_REQUEST)
             parameter("feed_days", retention.feedDays)
             parameter("youtube_days", retention.youtubeDays)
             parameter("moments_days", retention.momentsDays)
@@ -40,6 +41,7 @@ class AndroidSyncApi(
     ): AndroidSyncPageResponse =
         client.get(baseUrlProvider() + "/api/android/sync/changes") {
             syncMetadataTimeout()
+            parameter("model_version", SYNC_MODEL_VERSION_REQUEST)
             parameter("feed_days", retention.feedDays)
             parameter("youtube_days", retention.youtubeDays)
             parameter("moments_days", retention.momentsDays)
@@ -54,6 +56,7 @@ class AndroidSyncApi(
     ): AndroidSyncPageResponse =
         client.get(baseUrlProvider() + "/api/android/sync/state") {
             syncMetadataTimeout()
+            parameter("model_version", SYNC_MODEL_VERSION_REQUEST)
             parameter("feed_days", retention.feedDays)
             parameter("youtube_days", retention.youtubeDays)
             parameter("moments_days", retention.momentsDays)
@@ -84,6 +87,7 @@ class AndroidSyncApi(
     }
 
     private companion object {
+        const val SYNC_MODEL_VERSION_REQUEST = 3
         const val FULL_YOUTUBE_METADATA_REQUEST = 1
         const val SYNC_METADATA_REQUEST_TIMEOUT_MS = 60_000L
         const val SYNC_CONNECT_TIMEOUT_MS = 15_000L
@@ -157,6 +161,7 @@ data class AndroidSyncPageResponse(
     val changes: List<AndroidSyncChangeDto>,
     val next_cursor: String,
     val end_of_stream: Boolean,
+    val newer_available: Boolean = false,
 )
 
 @Serializable
@@ -191,6 +196,7 @@ data class AndroidSyncAssetDto(
     val size_bytes: Long,
     val revision: Long,
     val state: String,
+    val transfer_required: Boolean = true,
     val is_auto: Boolean?,
 )
 

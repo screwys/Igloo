@@ -191,6 +191,53 @@ class IglooDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration43To44KeepsAssetsAndMarksExistingDescriptorsRequired() {
+        helper.createDatabase(DATABASE_NAME, 43).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO android_sync_assets (
+                    asset_id, asset_kind, media_index, owner_id, owner_kind, bucket,
+                    content_type, size_bytes, revision, subtitle_is_auto, state,
+                    local_path, verified_at_ms, next_attempt_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """.trimIndent(),
+                arrayOf<Any?>(
+                    "sample_asset",
+                    "video_stream",
+                    0,
+                    "sample_video",
+                    "youtube_video",
+                    "youtube",
+                    "video/mp4",
+                    123L,
+                    7L,
+                    1,
+                    "ready",
+                    null,
+                    null,
+                    0L,
+                ),
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            DATABASE_NAME,
+            44,
+            true,
+            IglooMigrations.MIGRATION_43_44,
+        ).use { db ->
+            db.query(
+                "SELECT asset_id, revision, transfer_required FROM android_sync_assets",
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("sample_asset", cursor.getString(0))
+                assertEquals(7L, cursor.getLong(1))
+                assertEquals(1, cursor.getInt(2))
+            }
+        }
+    }
+
     private companion object {
         const val DATABASE_NAME = "igloo-migration-test"
     }

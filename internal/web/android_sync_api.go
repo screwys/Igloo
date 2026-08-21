@@ -596,8 +596,9 @@ func (s *Server) buildAndroidSyncAssets(database *db.DB, sets db.AndroidSyncDesi
 	}
 	out := make([]model.AndroidSyncAsset, 0, len(inventoryRows)+len(commentRows))
 	assetIndex := make(map[string]int, len(inventoryRows)+len(commentRows))
-	appendAsset := func(row db.Asset, effectiveRecencyMs int64) {
+	appendAsset := func(row db.Asset, effectiveRecencyMs int64, transferRequired bool) {
 		asset := s.androidSyncAssetFromInventory(row)
+		asset.TransferRequired = transferRequired
 		if effectiveRecencyMs <= 0 {
 			effectiveRecencyMs = row.UpdatedAtMs
 		}
@@ -616,10 +617,10 @@ func (s *Server) buildAndroidSyncAssets(database *db.DB, sets db.AndroidSyncDesi
 		if !androidSyncInventoryAssetDesired(row, sets) {
 			continue
 		}
-		appendAsset(row, 0)
+		appendAsset(row, 0, androidSyncInventoryAssetTransferRequired(row, sets))
 	}
 	for _, selected := range commentRows {
-		appendAsset(selected.Asset, selected.RecencyMs)
+		appendAsset(selected.Asset, selected.RecencyMs, true)
 	}
 	slog.Info(
 		"android_sync_asset_phase",
@@ -639,6 +640,17 @@ func (s *Server) buildAndroidSyncAssets(database *db.DB, sets db.AndroidSyncDesi
 		return out[i].AssetID < out[j].AssetID
 	})
 	return out, counts, nil
+}
+
+func androidSyncInventoryAssetTransferRequired(row db.Asset, sets db.AndroidSyncDesiredSets) bool {
+	switch row.AssetKind {
+	case "video_stream", "post_media", "post_audio":
+		if row.OwnerKind == "youtube_video" {
+			_, ok := sets.MediaVideos[row.OwnerID]
+			return ok
+		}
+	}
+	return true
 }
 
 func androidSyncInventoryAssetDesired(row db.Asset, sets db.AndroidSyncDesiredSets) bool {
@@ -696,6 +708,7 @@ func (s *Server) androidSyncAssetFromInventory(row db.Asset) model.AndroidSyncAs
 		SizeBytes:          sizeBytes,
 		Revision:           row.Revision,
 		State:              state,
+		TransferRequired:   true,
 		IsAuto:             row.IsAuto,
 		EffectiveRecencyMs: 0,
 	}

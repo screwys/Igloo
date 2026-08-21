@@ -37,6 +37,7 @@ type AndroidSyncAsset struct {
 	SizeBytes          int64  `json:"size_bytes"`
 	Revision           int64  `json:"revision"`
 	State              string `json:"state"`
+	TransferRequired   bool   `json:"transfer_required"`
 	IsAuto             *bool  `json:"is_auto"`
 	EffectiveRecencyMs int64  `json:"-"`
 }
