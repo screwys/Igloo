@@ -32,9 +32,9 @@ test('automatic mini-player preferences independently control Videos and Feed', 
   assert.equal(shouldAutomaticallyMini('feed', { miniPlayerFeedEnabled: true }), true)
 })
 
-test('automatic handoff skips a video that has finished', () => {
+test('automatic handoff only moves a currently playing video', () => {
   assert.equal(canAutomaticallyDockVideo({ ended: true, paused: true, currentTime: 600 }), false)
-  assert.equal(canAutomaticallyDockVideo({ ended: false, paused: true, currentTime: 90 }), true)
+  assert.equal(canAutomaticallyDockVideo({ ended: false, paused: true, currentTime: 90 }), false)
   assert.equal(canAutomaticallyDockVideo({ ended: false, paused: false, currentTime: 0 }), true)
 })
 

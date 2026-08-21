@@ -43,7 +43,7 @@ export function shouldDismissForYouTube(activeKind, activeVideo, nextVideo) {
 }
 
 export function canAutomaticallyDockVideo(video) {
-  return !!video && !video.ended && (!video.paused || Number(video.currentTime || 0) > 0)
+  return !!video && !video.paused && !video.ended
 }
 
 export function isPlayerURL(value, base) {
