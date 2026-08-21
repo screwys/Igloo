@@ -3,9 +3,11 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 import {
+  canAutomaticallyDockVideo,
   feedAccountName,
   feedThreadURL,
   findFeedThreadVideo,
+  isPlayerURL,
   preferredShellWidth,
   reconnectMediaController,
   resizedShellWidth,
@@ -28,6 +30,18 @@ test('automatic mini-player preferences independently control Videos and Feed', 
   assert.equal(shouldAutomaticallyMini('feed', preferences), false)
   assert.equal(shouldAutomaticallyMini('videos', { miniPlayerVideosEnabled: false }), false)
   assert.equal(shouldAutomaticallyMini('feed', { miniPlayerFeedEnabled: true }), true)
+})
+
+test('automatic handoff skips a video that has finished', () => {
+  assert.equal(canAutomaticallyDockVideo({ ended: true, paused: true, currentTime: 600 }), false)
+  assert.equal(canAutomaticallyDockVideo({ ended: false, paused: true, currentTime: 90 }), true)
+  assert.equal(canAutomaticallyDockVideo({ ended: false, paused: false, currentTime: 0 }), true)
+})
+
+test('a player route is opened as the new full player, not inside the mini player', () => {
+  assert.equal(isPlayerURL('/player/next-video?autoplay=1'), true)
+  assert.equal(isPlayerURL('/videos'), false)
+  assert.equal(isPlayerURL('/player/next/video'), false)
 })
 
 test('manual docking and closing do not navigate or reload the page', async () => {
@@ -204,4 +218,10 @@ test('a different YouTube player dismisses an existing YouTube mini player', () 
   assert.equal(shouldDismissForYouTube('videos', current, next), true)
   assert.equal(shouldDismissForYouTube('videos', current, current), false)
   assert.equal(shouldDismissForYouTube('feed', current, next), false)
+})
+
+test('a clicked player route closes the current mini player before navigation', async () => {
+  const source = await readFile(new URL('./src/mini-player.js', import.meta.url), 'utf8')
+  assert.match(source, /function leaveMiniPlayerForPlayer\(value\)[\s\S]*?restoreActiveSurface\(\{ pause: true \}\)[\s\S]*?window\.location\.assign\(value\)/)
+  assert.match(source, /activeSurface\.kind === 'videos' && isPlayerURL\(target\.href, frameWindow\.location\.href\)[\s\S]*?leaveMiniPlayerForPlayer\(target\.href\)/)
 })

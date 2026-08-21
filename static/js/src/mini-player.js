@@ -42,6 +42,18 @@ export function shouldDismissForYouTube(activeKind, activeVideo, nextVideo) {
   return activeKind === 'videos' && !!activeVideo && !!nextVideo && activeVideo !== nextVideo
 }
 
+export function canAutomaticallyDockVideo(video) {
+  return !!video && !video.ended && (!video.paused || Number(video.currentTime || 0) > 0)
+}
+
+export function isPlayerURL(value, base) {
+  try {
+    return /^\/player\/[^/]+$/.test(new URL(String(value || ''), base || 'https://igloo.invalid/').pathname)
+  } catch (_) {
+    return false
+  }
+}
+
 function normalizedMediaURL(value) {
   try {
     const parsed = new URL(String(value || ''), 'https://igloo.invalid/')
@@ -157,10 +169,6 @@ function initMiniPlayer() {
     return anchor
   }
 
-  function mediaHasStarted(video) {
-    return !!video && (!video.paused || Number(video.currentTime || 0) > 0)
-  }
-
   function preferences() {
     return window.IglooPreferences || {}
   }
@@ -222,13 +230,13 @@ function initMiniPlayer() {
 
   function playingSurface(ownerDocument) {
     const youtube = youtubeSurface(ownerDocument)
-    if (youtube && mediaHasStarted(youtube.video)) return youtube
+    if (youtube && canAutomaticallyDockVideo(youtube.video)) return youtube
 
     const videos = ownerDocument.querySelectorAll('[data-feed-media-kind="video"] video, .feed-overlay-video-wrap video')
     let started = null
     for (let index = 0; index < videos.length; index += 1) {
       const video = videos[index]
-      if (!mediaHasStarted(video)) continue
+      if (!canAutomaticallyDockVideo(video)) continue
       const wrap = video.closest('[data-feed-media], .feed-overlay-video-wrap')
       if (!wrap) continue
       const surface = feedSurface(wrap, video)
@@ -543,6 +551,11 @@ function initMiniPlayer() {
     restoreActiveSurface({ pause: true })
   }
 
+  function leaveMiniPlayerForPlayer(value) {
+    if (activeSurface) restoreActiveSurface({ pause: true })
+    window.location.assign(value)
+  }
+
   function handleYouTubePlayback(video) {
     if (!activeSurface || !shouldDismissForYouTube(activeSurface.kind, activeSurface.video, video)) return
     restoreActiveSurface({ pause: true })
@@ -596,6 +609,10 @@ function initMiniPlayer() {
 
       if (activeSurface && sameSurfaceHome(target.href)) {
         returnToSurface()
+        return
+      }
+      if (activeSurface && activeSurface.kind === 'videos' && isPlayerURL(target.href, frameWindow.location.href)) {
+        leaveMiniPlayerForPlayer(target.href)
         return
       }
       if (!activeSurface) {
@@ -766,6 +783,12 @@ function initMiniPlayer() {
     if (activeSurface && sameSurfaceHome(anchor.href)) {
       event.preventDefault()
       returnToSurface()
+      return
+    }
+
+    if (activeSurface && activeSurface.kind === 'videos' && isPlayerURL(anchor.href, window.location.href)) {
+      event.preventDefault()
+      leaveMiniPlayerForPlayer(anchor.href)
       return
     }
 
