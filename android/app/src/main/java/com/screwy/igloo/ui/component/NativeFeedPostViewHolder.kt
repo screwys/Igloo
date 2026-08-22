@@ -491,7 +491,7 @@ internal class NativeFeedViewHolder(
         views.quote.visibility = View.VISIBLE
         views.quote.background =
             roundedStroke(colors.surfaceElevated, colors.borderSubtle, dp(1), dp(8))
-        views.quote.setOnClickListener { callbacks.onQuoteOpen(quoteId) }
+        views.quote.setOnClickListener { callbacks.onQuoteOpen(row) }
         val quoteHandle =
             normalizeHandle(row.quoteAuthorHandle).ifBlank {
                 displayNameLooksLikeHandle(row.quoteAuthorDisplayName)
@@ -555,7 +555,7 @@ internal class NativeFeedViewHolder(
             views.quoteBody.text = quoteBody
             views.quoteBody.maxLines = NativeFeedQuoteCollapsedLines
             views.quoteBody.ellipsize = TextUtils.TruncateAt.END
-            views.quoteBody.setOnClickListener { callbacks.onQuoteOpen(quoteId) }
+            views.quoteBody.setOnClickListener { callbacks.onQuoteOpen(row) }
         }
         bindQuoteMedia(row, post, colors, callbacks)
     }

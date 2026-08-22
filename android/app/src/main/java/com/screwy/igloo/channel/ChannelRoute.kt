@@ -212,8 +212,8 @@ fun ChannelRoute(
                             source = IglooNavigationSource.Channel,
                         )
                     },
-                    onQuoteOpen = { tweetId ->
-                        navigator.openThread(tweetId, IglooNavigationSource.Channel)
+                    onQuoteOpen = { row ->
+                        navigator.openThread(row.item.tweetId, IglooNavigationSource.Channel)
                     },
                 )
             }
@@ -330,7 +330,7 @@ private fun ChannelTwitterBody(
     onChannelClick: (String) -> Unit,
     onProfileOpen: (SocialPostModel) -> Unit,
     onMediaOpen: (FeedRow, Int, FeedMediaGridModel) -> Unit,
-    onQuoteOpen: (String) -> Unit,
+    onQuoteOpen: (FeedRow) -> Unit,
 ) {
     NativeFeedSurface(
         rows = rows,

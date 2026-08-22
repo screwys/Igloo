@@ -74,8 +74,8 @@ fun LikedRoute(
         onDismissBookmarkSheet = vm::dismissBookmarkSheet,
         onCreateCategory = vm::createCategory,
         onMediaRowsChanged = vm::setMediaModelRows,
-        onQuoteOpen = { tweetId ->
-            navigator.openThread(tweetId, IglooNavigationSource.Liked)
+        onQuoteOpen = { row ->
+            navigator.openThread(row.item.tweetId, IglooNavigationSource.Liked)
         },
         emptyMessageRes = R.string.feed_empty_liked,
         modifier = modifier,

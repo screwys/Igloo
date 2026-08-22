@@ -115,8 +115,8 @@ fun ThreadRoute(
                 onDismissBookmarkSheet = vm::dismissBookmarkSheet,
                 onCreateCategory = vm::createCategory,
                 onMediaRowsChanged = vm::setMediaModelRows,
-                onQuoteOpen = { quoteTweetId ->
-                    navigator.openThread(quoteTweetId, IglooNavigationSource.Thread)
+                onQuoteOpen = { row ->
+                    navigator.openThread(row.item.tweetId, IglooNavigationSource.Thread)
                 },
             )
         }

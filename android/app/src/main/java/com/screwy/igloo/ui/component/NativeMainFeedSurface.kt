@@ -141,7 +141,7 @@ internal fun NativeFeedSurface(
     onHeaderOpenInPlatform: () -> Unit = {},
     onMediaRowsChanged: (List<FeedRow>) -> Unit = {},
     onRowClick: (FeedRow) -> Unit = {},
-    onQuoteOpen: (tweetId: String) -> Unit = {},
+    onQuoteOpen: (FeedRow) -> Unit = {},
     onProfileOpen: (SocialPostModel) -> Unit = { post -> onChannelClick(post.author.channelId) },
 ) {
     val context = LocalContext.current
@@ -576,7 +576,7 @@ internal data class NativeFeedCallbacks(
     val onSeenReached: (tweetIds: List<String>) -> Unit,
     val onMediaRowsChanged: (List<FeedRow>) -> Unit,
     val onRowClick: (FeedRow) -> Unit,
-    val onQuoteOpen: (tweetId: String) -> Unit,
+    val onQuoteOpen: (FeedRow) -> Unit,
     val onRequestUnfollowConfirmation: (channelId: String) -> Unit,
     val onRequestMuteConfirmation: (FeedMuteMenuAction) -> Unit,
     val onHeaderFollowToggle: (newValue: Boolean) -> Unit,

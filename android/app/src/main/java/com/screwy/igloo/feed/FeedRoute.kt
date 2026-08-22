@@ -80,8 +80,8 @@ fun FeedRoute(
                 navigator.openThread(row.item.tweetId, IglooNavigationSource.Feed)
             }
         },
-        onQuoteOpen = { tweetId ->
-            navigator.openThread(tweetId, IglooNavigationSource.Feed)
+        onQuoteOpen = { row ->
+            navigator.openThread(row.item.tweetId, IglooNavigationSource.Feed)
         },
         modifier = modifier,
     )
