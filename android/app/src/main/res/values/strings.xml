@@ -52,6 +52,8 @@
     <string name="action_manage_bookmark">Manage bookmark</string>
     <string name="action_merge">Merge</string>
     <string name="action_more">More</string>
+    <string name="action_move_down">Move down</string>
+    <string name="action_move_up">Move up</string>
     <string name="action_mute">Mute</string>
     <string name="action_mute_account_handle">Mute @%1$s</string>
     <string name="action_mute_account_label">Mute %1$s</string>
@@ -633,6 +635,8 @@
     <string name="settings_section_x_feed">X Feed</string>
     <string name="settings_segment_skipping">Segment skipping</string>
     <string name="settings_share_embed_friendly_links">Use embed-friendly sites for sharing links</string>
+    <string name="settings_sidebar_route_order">Sidebar Order</string>
+    <string name="settings_sidebar_route_order_help">Choose the order of routes in the sidebar.</string>
     <string name="settings_skip_language_placeholder">Type a language or code, e.g. Turkish or tr</string>
     <string name="settings_sponsorblock_ask">Ask</string>
     <string name="settings_sponsorblock_dearrow">SponsorBlock &amp; DeArrow</string>

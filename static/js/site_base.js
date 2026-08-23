@@ -308,6 +308,7 @@
           window.top.IglooPreferences = Object.assign({}, window.top.IglooPreferences || {}, window.IglooPreferences);
         }
       } catch (e) {}
+	  applySidebarRouteOrder(form);
     }
     var lang = form && form.querySelector('[name=ui_language]');
     var previousLang = form ? form.dataset.persistedUiLanguage : '';
@@ -378,6 +379,50 @@
   function qa(sel, root) {
     return Array.prototype.slice.call((root || doc).querySelectorAll(sel));
   }
+
+  function syncSidebarRouteOrder(container) {
+    if (!container) return;
+    var rows = qa('[data-sidebar-route]', container);
+    rows.forEach(function (row, index) {
+      var up = row.querySelector('[data-sidebar-route-move="up"]');
+      var down = row.querySelector('[data-sidebar-route-move="down"]');
+      if (up) up.disabled = index === 0;
+      if (down) down.disabled = index === rows.length - 1;
+    });
+    var input = container.parentElement && container.parentElement.querySelector('[data-sidebar-route-order-input]');
+    if (input) input.value = rows.map(function (row) { return row.getAttribute('data-sidebar-route'); }).join(',');
+  }
+
+  function applySidebarRouteOrder(form) {
+    var input = form && form.querySelector('[data-sidebar-route-order-input]');
+    var nav = doc.querySelector('.sidebar .nav');
+    if (!input || !nav) return;
+    input.value.split(',').forEach(function (route) {
+      var item = nav.querySelector('[data-sidebar-nav-route="' + route + '"]');
+      if (item) nav.appendChild(item);
+    });
+  }
+
+  doc.addEventListener('click', function (event) {
+    var button = event.target && event.target.closest && event.target.closest('[data-sidebar-route-move]');
+    if (!button) return;
+    var row = button.closest('[data-sidebar-route]');
+    var container = button.closest('[data-sidebar-route-order]');
+    if (!row || !container) return;
+    var direction = button.getAttribute('data-sidebar-route-move');
+    var sibling = direction === 'up' ? row.previousElementSibling : row.nextElementSibling;
+    if (!sibling) return;
+    if (direction === 'up') container.insertBefore(row, sibling);
+    else container.insertBefore(sibling, row);
+    syncSidebarRouteOrder(container);
+    var input = container.parentElement && container.parentElement.querySelector('[data-sidebar-route-order-input]');
+    if (input) input.dispatchEvent(new Event('input', { bubbles: true }));
+    button.focus();
+  });
+
+  doc.addEventListener('htmx:afterSettle', function (event) {
+    qa('[data-sidebar-route-order]', event.target || doc).forEach(syncSidebarRouteOrder);
+  });
 
   function setText(el, value) {
     if (!el) return;

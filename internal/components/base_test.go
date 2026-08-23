@@ -303,6 +303,40 @@ func TestPrefsBodyGeneralTabGroupsEmbedsAndMovesBackupsLeft(t *testing.T) {
 	}
 }
 
+func TestPrefsBodyRendersPersistedSidebarRouteOrder(t *testing.T) {
+	p := newTestPageProps()
+	prefs := PrefsData{Settings: map[string]any{
+		"sidebar_route_order": "feed,discover,videos,liked,channels,bookmarks,shorts",
+	}}
+	var buf bytes.Buffer
+	if err := PrefsBody(p, prefs).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	if !strings.Contains(html, `name="sidebar_route_order" value="feed,discover,videos,liked,channels,bookmarks,shorts"`) {
+		t.Fatalf("preferences should preserve the configured sidebar route order:\n%s", html)
+	}
+}
+
+func TestSidebarUsesConfiguredRouteOrder(t *testing.T) {
+	p := newTestPageProps()
+	p.UserPlatforms = []string{"youtube", "twitter"}
+	p.Prefs = PrefsData{Settings: map[string]any{
+		"sidebar_route_order": "feed,discover,videos,liked,channels,bookmarks,shorts",
+	}}
+	var buf bytes.Buffer
+	if err := Sidebar(p).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	feed := strings.Index(html, `href="/feed"`)
+	discover := strings.Index(html, `href="/discover"`)
+	videos := strings.Index(html, `href="/videos" class="nav-item`)
+	if feed < 0 || discover < 0 || videos < 0 || !(feed < discover && discover < videos) {
+		t.Fatalf("sidebar routes are not rendered in the configured order:\n%s", html)
+	}
+}
+
 func TestBookmarkCategoryPathsPanelUsesTallerScrollArea(t *testing.T) {
 	p := newTestPageProps()
 	var buf bytes.Buffer

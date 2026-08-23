@@ -188,7 +188,8 @@ var Defaults = map[string]any{
 	"backup_dir":                       "",
 	"backup_keep_count":                5,
 	"sponsorblock_categories":          SponsorBlockCategoriesDefault,
-	"starting_page":                    "feed",
+	"starting_page":                    "videos",
+	"sidebar_route_order":              "discover,videos,feed,shorts,channels,bookmarks,liked",
 	"dearrow_mode":                     "off",
 	"algorithmic_feed_enabled":         false,
 }

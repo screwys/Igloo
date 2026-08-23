@@ -3,6 +3,7 @@ package components
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/screwys/igloo/internal/model"
 	"github.com/screwys/igloo/internal/webtheme"
@@ -71,6 +72,19 @@ func startingPageChoices(p PageProps) []struct{ Key, Label string } {
 		{"liked", L(p, "nav_liked", "Liked")},
 		{"bookmarks", L(p, "nav_bookmarks", "Bookmarks")},
 		{"channels", L(p, "nav_channels", "Channels")},
+	}
+}
+
+func sidebarRouteLabel(p PageProps, key string) string {
+	switch key {
+	case "discover": return L(p, "nav_discover", "Discover")
+	case "videos": return L(p, "nav_videos", "Videos")
+	case "feed": return L(p, "nav_feed", "Feed")
+	case "shorts": return L(p, "nav_moments", "Moments")
+	case "channels": return L(p, "nav_channels", "Channels")
+	case "bookmarks": return L(p, "nav_bookmarks", "Bookmarks")
+	case "liked": return L(p, "nav_liked", "Liked")
+	default: return key
 	}
 }
 
@@ -369,10 +383,26 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 					<label for="global-setting-starting-page">{ L(p, "settings_starting_page", "Starting Page") }</label>
 					<select id="global-setting-starting-page" name="starting_page" class="input">
 						for _, page := range startingPageChoices(p) {
-							<option value={ page.Key } selected?={ prefs.Str("starting_page", "feed") == page.Key }>{ page.Label }</option>
+							<option value={ page.Key } selected?={ prefs.Str("starting_page", "videos") == page.Key }>{ page.Label }</option>
 						}
 					</select>
+				</div>
+				<div class="form-group">
+					<label>{ L(p, "settings_sidebar_route_order", "Sidebar Order") }</label>
+					<input type="hidden" name="sidebar_route_order" value={ strings.Join(sidebarRouteOrder(prefs.Str("sidebar_route_order", "")), ",") } data-sidebar-route-order-input/>
+					<div class="sidebar-route-order" data-sidebar-route-order>
+						for _, route := range sidebarRouteOrder(prefs.Str("sidebar_route_order", "")) {
+							<div class="sidebar-route-order-item" data-sidebar-route={ route }>
+								<span>{ sidebarRouteLabel(p, route) }</span>
+								<div class="sidebar-route-order-actions">
+									<button type="button" class="btn btn-secondary btn-sm" data-sidebar-route-move="up" aria-label={ L(p, "action_move_up", "Move up") } title={ L(p, "action_move_up", "Move up") }>&uarr;</button>
+									<button type="button" class="btn btn-secondary btn-sm" data-sidebar-route-move="down" aria-label={ L(p, "action_move_down", "Move down") } title={ L(p, "action_move_down", "Move down") }>&darr;</button>
+								</div>
+							</div>
+						}
 					</div>
+					<small>{ L(p, "settings_sidebar_route_order_help", "Choose the order of routes in the sidebar.") }</small>
+				</div>
 					<div class="form-group">
 						<label for="global-setting-quality">{ L(p, "settings_quality_default", "Default Quality") }</label>
 						<select id="global-setting-quality" name="quality" class="input">

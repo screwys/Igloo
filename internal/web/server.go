@@ -218,6 +218,7 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 		translateLookahead = settings.IntDefault("translate_auto_lookahead")
 	}
 	dearrowMode := s.setting("dearrow_mode", "off")
+	sidebarRouteOrder := s.setting("sidebar_route_order", "discover,videos,feed,shorts,channels,bookmarks,liked")
 	lang := s.requestLanguage(r)
 	if w != nil {
 		w.Header().Set("Content-Language", lang)
@@ -248,7 +249,8 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 		DownloadsStopped:        s.workers.IsStopRequested(),
 		StaticV:                 s.staticV,
 		Prefs: components.PrefsData{Settings: map[string]any{
-			"dearrow_mode": dearrowMode,
+			"dearrow_mode":       dearrowMode,
+			"sidebar_route_order": sidebarRouteOrder,
 		}},
 	}
 }

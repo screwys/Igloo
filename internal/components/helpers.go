@@ -1643,6 +1643,32 @@ type PrefsData struct {
 	Settings map[string]any
 }
 
+var defaultSidebarRouteOrder = []string{"discover", "videos", "feed", "shorts", "channels", "bookmarks", "liked"}
+
+// sidebarRouteOrder returns every known route exactly once, preserving valid
+// stored choices and appending routes introduced after the preference was saved.
+func sidebarRouteOrder(raw string) []string {
+	valid := make(map[string]bool, len(defaultSidebarRouteOrder))
+	for _, route := range defaultSidebarRouteOrder {
+		valid[route] = true
+	}
+	seen := make(map[string]bool, len(defaultSidebarRouteOrder))
+	order := make([]string, 0, len(defaultSidebarRouteOrder))
+	for _, route := range strings.Split(raw, ",") {
+		route = strings.TrimSpace(route)
+		if valid[route] && !seen[route] {
+			seen[route] = true
+			order = append(order, route)
+		}
+	}
+	for _, route := range defaultSidebarRouteOrder {
+		if !seen[route] {
+			order = append(order, route)
+		}
+	}
+	return order
+}
+
 // str returns a string setting value or the given fallback.
 func (p PrefsData) Str(key, fallback string) string {
 	if v, ok := p.Settings[key]; ok {

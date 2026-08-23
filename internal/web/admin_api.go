@@ -416,7 +416,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 		"media_download_limit_default", "x_profile_history_limit", "x_feed_fetch_delay",
 		"translate_target_lang", "translate_backend",
 		"translate_auto_mode", "translate_auto_lookahead",
-		"backup_dir", "backup_keep_count", "starting_page",
+		"backup_dir", "backup_keep_count", "starting_page", "sidebar_route_order",
 		"dearrow_mode", "ui_language",
 	}
 	for _, key := range simpleFields {

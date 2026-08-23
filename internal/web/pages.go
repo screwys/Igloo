@@ -32,9 +32,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	page, _ := s.db.GetSetting("starting_page", "feed")
+	page, _ := s.db.GetSetting("starting_page", "videos")
 	if !settings.WebStartingPages[page] {
-		page = "feed"
+		page = "videos"
 	}
 	http.Redirect(w, r, "/"+page, http.StatusSeeOther)
 }
