@@ -221,6 +221,10 @@ func (db *DB) ListYouTubeDiscoverVideos(limit int) ([]model.DiscoveryVideo, erro
 	if limit <= 0 {
 		limit = 80
 	}
+	followedChannels, err := db.followedChannelSet()
+	if err != nil {
+		return nil, err
+	}
 	rows, err := db.reader().Query(`
 		SELECT candidates_json
 		FROM youtube_recommendations
@@ -243,6 +247,7 @@ func (db *DB) ListYouTubeDiscoverVideos(limit int) ([]model.DiscoveryVideo, erro
 		}
 		batch = db.filterDiscoverDuration(batch)
 		batch = relatedDiscoverCandidates(batch)
+		batch = excludeFollowedDiscoverCandidates(batch, followedChannels)
 		if len(batch) > 0 {
 			batches = append(batches, batch)
 		}
@@ -252,6 +257,34 @@ func (db *DB) ListYouTubeDiscoverVideos(limit int) ([]model.DiscoveryVideo, erro
 	}
 	out := interleaveDiscoverBatches(batches, limit, 6, 2)
 	return out, db.markDiscoveryReady(out)
+}
+
+func (db *DB) followedChannelSet() (map[string]struct{}, error) {
+	rows, err := db.reader().Query(`SELECT channel_id FROM channel_follows`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	followed := make(map[string]struct{})
+	for rows.Next() {
+		var channelID string
+		if err := rows.Scan(&channelID); err != nil {
+			return nil, err
+		}
+		followed[channelID] = struct{}{}
+	}
+	return followed, rows.Err()
+}
+
+func excludeFollowedDiscoverCandidates(candidates []model.DiscoveryVideo, followed map[string]struct{}) []model.DiscoveryVideo {
+	out := candidates[:0]
+	for _, candidate := range candidates {
+		if _, exists := followed[candidate.ChannelID]; exists {
+			continue
+		}
+		out = append(out, candidate)
+	}
+	return out
 }
 
 func relatedDiscoverCandidates(candidates []model.DiscoveryVideo) []model.DiscoveryVideo {

@@ -41,12 +41,15 @@ func TestYouTubeRecommendationSnapshotAndDiscoverPrefetch(t *testing.T) {
 	if err != nil || !fresh || len(got) != 2 || got[0].VideoID != "sample_related_one" || got[1].VideoID != "sample_related_three" {
 		t.Fatalf("recommendations = %+v fresh=%v err=%v", got, fresh, err)
 	}
+	if err := d.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ('youtube_UCrelated_one', 1)`); err != nil {
+		t.Fatal(err)
+	}
 	pool, err := d.ListYouTubeDiscoverVideos(10)
-	if err != nil || len(pool) != 2 {
+	if err != nil || len(pool) != 1 || pool[0].VideoID != "sample_related_three" {
 		t.Fatalf("discover pool = %+v err=%v", pool, err)
 	}
 	added, err := d.EnqueueDiscoverTempDownloads(pool, 2)
-	if err != nil || added != 2 {
+	if err != nil || added != 1 {
 		t.Fatalf("prefetch added=%d err=%v", added, err)
 	}
 	interactiveURL := "https://www.youtube.com/watch?v=sample_related_two"
