@@ -309,6 +309,12 @@ func TestPrefsBodyGeneralTabGroupsEmbedsAndMovesBackupsLeft(t *testing.T) {
 	if got := strings.Count(html, `data-embed-host-save=`); got != 4 {
 		t.Fatalf("preferences should render one independent embed-host save button per platform, got %d:\n%s", got, html)
 	}
+	if strings.Contains(html, `class="embed-host-save" data-embed-host-save="youtube"`) && strings.Contains(html, `>Save</button>`) {
+		t.Fatalf("embed-host save actions should use compact checkmarks instead of text buttons:\n%s", html)
+	}
+	if !strings.Contains(html, `class="embed-host-save" data-embed-host-save="youtube" aria-label="Save"`) {
+		t.Fatalf("embed-host checkmark should retain an accessible Save label:\n%s", html)
+	}
 
 	backupIdx := strings.Index(html, `name="backup_enabled"`)
 	archiveIdx := strings.Index(html, `name="archive_bookmarks"`)

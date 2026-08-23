@@ -2934,27 +2934,67 @@ select.input:focus {
 }
 
 .embed-host-control {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.35rem;
+    position: relative;
 }
 
 .embed-host-row .input {
+    width: 100%;
     min-height: 2rem;
-    padding: 0.35rem 0.55rem;
+    margin-bottom: 0;
+    padding: 0.35rem 2.35rem 0.35rem 0.55rem;
     font-size: 0.8rem;
 }
 
 .embed-host-save {
-    min-width: 3.4rem;
-    padding-inline: 0.55rem;
+    position: absolute;
+    top: 50%;
+    right: 0.3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.7rem;
+    height: 1.7rem;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transform: translateY(-50%);
+    transition: color var(--transition-fast), background var(--transition-fast), opacity var(--transition-fast);
+}
+
+.embed-host-save:hover,
+.embed-host-save:focus-visible {
+    background: rgba(var(--accent-primary-rgb), 0.12);
+    color: var(--text-primary);
+}
+
+.embed-host-save:focus-visible {
+    outline: 1px solid var(--accent-primary);
+}
+
+.embed-host-save:disabled {
+    cursor: default;
+    opacity: 0.35;
+}
+
+.embed-host-save.saved {
+    background: rgba(var(--accent-primary-rgb), 0.16);
+    color: var(--accent-primary);
 }
 
 .embed-host-status {
-    min-height: 0.8rem;
-    color: var(--text-secondary);
+    height: 0;
+    overflow: hidden;
     font-size: 0.68rem;
     line-height: 1;
+}
+
+.embed-host-status.error {
+    height: auto;
+    overflow: visible;
+    color: var(--error);
 }
 
 .theme-settings-panel {

@@ -534,16 +534,25 @@
     var payload = {};
     payload[key] = input.value.trim();
     button.disabled = true;
-    if (status) status.textContent = '';
+    button.classList.remove('saved');
+    if (status) {
+      status.textContent = '';
+      status.classList.remove('error');
+    }
     apiJson('/api/settings', { method: 'POST', body: JSON.stringify(payload) }).then(function () {
       input.value = payload[key];
       window.IglooPreferences = Object.assign({}, window.IglooPreferences || {});
       window.IglooPreferences.shareEmbedHosts = Object.assign({}, window.IglooPreferences.shareEmbedHosts || {});
       window.IglooPreferences.shareEmbedHosts[platform] = payload[key];
       updatePrefsInitialField(form, input);
+      button.classList.add('saved');
       if (status) status.textContent = translate('status_saved', 'Saved');
+      setTimeout(function () { button.classList.remove('saved'); }, 1200);
     }).catch(function () {
-      if (status) status.textContent = translate('status_save_failed', 'Save failed');
+      if (status) {
+        status.textContent = translate('status_save_failed', 'Save failed');
+        status.classList.add('error');
+      }
     }).finally(function () {
       button.disabled = input.disabled;
     });

@@ -721,11 +721,15 @@ templ embedHostSetting(p PageProps, prefs PrefsData, platform, labelKey, fallbac
 			/>
 			<button
 				type="button"
-				class="btn btn-secondary btn-sm embed-host-save"
+				class="embed-host-save"
 				data-embed-host-save={ platform }
+				aria-label={ L(p, "action_save", "Save") }
+				title={ L(p, "action_save", "Save") }
 				disabled?={ !prefs.Bool("share_embed_friendly_links") }
 				data-embed-host-controlled
-			>{ L(p, "action_save", "Save") }</button>
+			>
+				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>
+			</button>
 		</div>
 		<span class="embed-host-status" data-embed-host-status aria-live="polite"></span>
 	</div>
