@@ -72,8 +72,16 @@ func (m *Manager) runTempDownloadLoop(ctx context.Context) {
 			continue
 		}
 
-		result := m.DownloadTemp(ctx, work.URL, false)
+		lane := tempDownloadLane(work.Origin)
+		result := m.downloadTemp(ctx, work.URL, false, lane, tempDownloadSeedsRecommendations(work.Origin))
 		if result.Success {
+			if origin, originErr := m.db.TempDownloadOrigin(work.URL); originErr != nil {
+				log.Printf("[temp-download] read origin %s: %v", work.URL, originErr)
+			} else if origin == "discover" && result.VideoID != "" {
+				if err := m.db.MarkDiscoverTempVideo(result.VideoID, time.Now().UnixMilli()); err != nil {
+					log.Printf("[temp-download] mark discover video %s: %v", result.VideoID, err)
+				}
+			}
 			if err := m.db.CompleteTempDownloadWork(work.URL, work.LeaseOwner); err != nil {
 				log.Printf("[temp-download] complete %s: %v", work.URL, err)
 			}
@@ -91,6 +99,17 @@ func (m *Manager) runTempDownloadLoop(ctx context.Context) {
 	}
 }
 
+func tempDownloadLane(origin string) download.MediaLane {
+	if origin == "discover" {
+		return download.MediaLaneBulkBackground
+	}
+	return download.MediaLaneBulkInteractive
+}
+
+func tempDownloadSeedsRecommendations(origin string) bool {
+	return origin != "discover"
+}
+
 func classifyTempDownloadFailure(result TempDownloadResult, attempt int) download.FailureClassification {
 	cause := result.Cause
 	if cause == nil {
@@ -101,6 +120,10 @@ func classifyTempDownloadFailure(result TempDownloadResult, attempt int) downloa
 
 // DownloadTemp handles an ad-hoc URL download.
 func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel bool) TempDownloadResult {
+	return m.downloadTemp(ctx, rawURL, saveChannel, download.MediaLaneBulkInteractive, true)
+}
+
+func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel bool, lane download.MediaLane, seedRecommendations bool) TempDownloadResult {
 	platform := subscribe.DetectPlatform(rawURL, "")
 	if err := subscribe.ValidateInput(rawURL, platform); err != nil {
 		return TempDownloadResult{Message: "Unsupported download URL"}
@@ -183,7 +206,7 @@ func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel b
 	if err != nil {
 		return TempDownloadResult{Message: fmt.Sprintf("Storage path: %v", err), Cause: err}
 	}
-	if err := m.downloader.RunMedia(ctx, download.MediaLaneBulkInteractive, func() error { return os.MkdirAll(tempDir, 0o755) }); err != nil {
+	if err := m.downloader.RunMedia(ctx, lane, func() error { return os.MkdirAll(tempDir, 0o755) }); err != nil {
 		return TempDownloadResult{Message: fmt.Sprintf("Create storage directory: %v", err), Cause: err}
 	}
 	outputID, err := downloadOutputID(videoID)
@@ -205,9 +228,9 @@ func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel b
 		SubtitleDir:        subtitleDir,
 	}
 
-	completed, dlErr := m.downloader.DownloadCompleted(ctx, download.MediaLaneBulkInteractive, rawURL, "video", opts)
+	completed, dlErr := m.downloader.DownloadCompleted(ctx, lane, rawURL, "video", opts)
 	if dlErr != nil || len(completed.MediaPaths) == 0 {
-		m.removeFailedAttempt(ctx, download.MediaLaneBulkInteractive, completedVideoFiles{}, completed)
+		m.removeFailedAttempt(ctx, lane, completedVideoFiles{}, completed)
 		msg := "Download failed"
 		if dlErr != nil {
 			msg = dlErr.Error()
@@ -215,9 +238,9 @@ func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel b
 		return TempDownloadResult{Message: msg, Cause: dlErr}
 	}
 
-	files, err := m.prepareCompletedVideoFiles(ctx, download.MediaLaneBulkInteractive, completed)
+	files, err := m.prepareCompletedVideoFiles(ctx, lane, completed)
 	if err != nil {
-		m.removeFailedAttempt(ctx, download.MediaLaneBulkInteractive, files, completed)
+		m.removeFailedAttempt(ctx, lane, files, completed)
 		return TempDownloadResult{Message: fmt.Sprintf("Prepare completed outputs: %v", err), Cause: err}
 	}
 
@@ -257,15 +280,23 @@ func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel b
 		mediaKind, slideCount = model.ComputeMediaKind(nil, files.primaryKey)
 	}
 
-	// Upsert channel.
-	_ = m.db.AddChannel(model.Channel{
-		ChannelID:    channelID,
-		SourceID:     strings.TrimPrefix(stringFromMap(info, "uploader_id"), "@"),
-		Name:         channelName,
-		URL:          channelURL,
-		Platform:     platform,
-		IsSubscribed: saveChannel,
-	})
+	// Commit the discovered identity even when search/recommendation observation
+	// created the channel first. Following remains an explicit user action.
+	sourceID := strings.TrimPrefix(stringFromMap(info, "uploader_id"), "@")
+	if platform == "youtube" {
+		sourceID = strings.TrimPrefix(channelID, "youtube_")
+	}
+	if err := m.db.ObserveChannels([]model.Channel{{
+		ChannelID: channelID, SourceID: sourceID, Name: channelName, DisplayName: channelName,
+		Handle: stringFromMap(info, "uploader_id"), URL: channelURL, Platform: platform,
+	}}); err != nil {
+		return TempDownloadResult{Message: fmt.Sprintf("Store channel identity: %v", err), Cause: err}
+	}
+	if saveChannel {
+		if err := m.db.FollowChannel(channelID); err != nil {
+			return TempDownloadResult{Message: fmt.Sprintf("Follow channel: %v", err), Cause: err}
+		}
+	}
 
 	if err := m.db.StoreCompletedVideo(db.CompletedVideo{
 		VideoID: videoID, ChannelID: channelID, OwnerKind: ownerKind, Title: title, Description: description,
@@ -273,16 +304,16 @@ func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel b
 		MediaKind: mediaKind, SlideCount: slideCount, IsTemp: true,
 		Assets: files.assets,
 	}); err != nil {
-		m.removeFailedAttempt(ctx, download.MediaLaneBulkInteractive, files, completed)
+		m.removeFailedAttempt(ctx, lane, files, completed)
 		return TempDownloadResult{Message: fmt.Sprintf("DB insert: %v", err), Cause: err}
 	}
-	if err := m.publishCompletedVideoThumbnail(ctx, download.MediaLaneBulkInteractive, videoID, platform, outputID, files); err != nil {
+	if err := m.publishCompletedVideoThumbnail(ctx, lane, videoID, platform, outputID, files); err != nil {
 		log.Printf("[temp] thumbnail publish failed for %s: %v", videoID, err)
 	}
 	if err := m.storeCompletedSubtitles(ctx, videoID, files, completed); err != nil {
 		log.Printf("[temp] subtitle publish failed for %s: %v", videoID, err)
 	}
-	m.removeTransientFiles(ctx, download.MediaLaneBulkInteractive, files)
+	m.removeTransientFiles(ctx, lane, files)
 
 	if platform == "youtube" {
 		m.RequestVideoPreview(videoID)
@@ -295,6 +326,11 @@ func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel b
 	if platform == "youtube" {
 		if err := m.QueueVideoMetadataRefresh(videoID); err != nil {
 			log.Printf("[video-metadata] queue temp video %s: %v", videoID, err)
+		}
+		if seedRecommendations {
+			if err := m.QueueYouTubeRecommendations(videoID); err != nil {
+				log.Printf("[youtube-recommendations] queue temp video %s: %v", videoID, err)
+			}
 		}
 	} else {
 		// TikTok does not use the YouTube metadata owner.

@@ -1,0 +1,111 @@
+package components
+
+import "github.com/screwys/igloo/internal/model"
+
+templ DiscoverPage(p PageProps, videos []model.DiscoveryVideo, pending bool) {
+	@Base(p) {
+		<div class="discover-page">
+			@DiscoverGrid(p, videos, pending)
+		</div>
+	}
+}
+
+templ DiscoverGrid(p PageProps, videos []model.DiscoveryVideo, pending bool) {
+	<div
+		id="discover-grid-state"
+		if pending {
+			hx-get="/api/discover/cards"
+			hx-trigger="load delay:2s"
+			hx-swap="outerHTML"
+		}
+	>
+		if len(videos) > 0 {
+			<div class="video-grid discover-grid">
+				for _, video := range videos {
+					@DiscoveryCard(p, video)
+				}
+			</div>
+		} else if pending {
+			<div class="empty-state discover-loading">
+				<h3>{ L(p, "discover_loading", "Finding recommendations...") }</h3>
+			</div>
+		} else {
+			<div class="empty-state">
+				<h3>{ L(p, "discover_empty", "No recommendations yet") }</h3>
+				<p>{ L(p, "discover_empty_help", "Open a YouTube video to seed Discover.") }</p>
+			</div>
+		}
+	</div>
+}
+
+templ PlayerDiscoveryRail(p PageProps, anchorVideoID string, localVideos []model.Video, videos []model.DiscoveryVideo, pending bool) {
+	<div
+		id="player-discovery-rail"
+		if pending {
+			hx-get={ "/api/videos/" + anchorVideoID + "/recommendations" }
+			hx-trigger="load delay:2s"
+			hx-swap="outerHTML"
+		}
+	>
+		if len(localVideos) > 0 || len(videos) > 0 {
+			<h3>{ L(p, "discover_rail_title", "More videos like this") }</h3>
+			<div class="more-videos-list">
+				for _, video := range localVideos {
+					@DiscoveryCard(p, localVideoDiscoveryCard(p, video))
+				}
+				for _, video := range videos {
+					@DiscoveryCard(p, video)
+				}
+			</div>
+		} else if pending {
+			<h3>{ L(p, "discover_rail_title", "More videos like this") }</h3>
+			<div class="discover-rail-loading">{ L(p, "discover_loading", "Finding recommendations...") }</div>
+		}
+	</div>
+}
+
+templ DiscoveryCard(p PageProps, video model.DiscoveryVideo) {
+	<a
+		class="video-card discovery-card"
+		href={ templ.SafeURL(discoveryVideoHref(video)) }
+		data-video-id={ video.VideoID }
+		data-channel-id={ video.ChannelID }
+		data-platform="youtube"
+	>
+		<div class="video-thumbnail">
+			<img src={ video.ThumbnailURL } loading="lazy" alt=""/>
+			if video.Duration > 0 {
+				<span class="video-duration">{ FormatDuration(video.Duration) }</span>
+			}
+			if video.Ready {
+				<span class="discover-ready-badge">&#10003; { L(p, "discover_ready", "Ready") }</span>
+			}
+		</div>
+		<div class="video-info">
+			<div class="video-title" title={ video.Title }>{ video.Title }</div>
+			<div class="video-meta">
+				<span class="video-channel-wrap">
+					if video.AvatarURL != "" {
+						<img class="video-channel-avatar" src={ video.AvatarURL } alt="" loading="lazy" data-profile-channel-id={ video.ChannelID } onerror="this.style.display='none'"/>
+					}
+					<span class="video-channel">{ video.ChannelName }</span>
+				</span>
+			</div>
+		</div>
+	</a>
+}
+
+func discoveryVideoHref(video model.DiscoveryVideo) string {
+	if video.Ready {
+		return "/player/" + video.VideoID
+	}
+	return "/temp/watch?v=" + video.VideoID
+}
+
+func localVideoDiscoveryCard(p PageProps, video model.Video) model.DiscoveryVideo {
+	return model.DiscoveryVideo{
+		VideoID: video.VideoID, Title: p.Prefs.VideoTitle(video), Duration: video.Duration,
+		ChannelID: video.ChannelID, ChannelName: videoChannelName(video), AvatarURL: videoAvatarURL(video),
+		ThumbnailURL: p.Prefs.VideoThumbURL(video), Ready: true,
+	}
+}

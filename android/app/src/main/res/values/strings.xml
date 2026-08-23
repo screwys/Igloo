@@ -216,6 +216,12 @@
     <string name="cookie_status_file_disabled">File (disabled)</string>
     <string name="cookie_status_files_active">%d files active</string>
     <string name="cookie_status_files_disabled">%d files (disabled)</string>
+    <string name="discover_empty">No recommendations yet</string>
+    <string name="discover_empty_help">Open a YouTube video to seed Discover.</string>
+    <string name="discover_loading">Finding recommendations...</string>
+    <string name="discover_rail_title">More videos like this</string>
+    <string name="discover_ready">Ready</string>
+    <string name="discover_title">Discover creators</string>
     <string name="download_url_placeholder">Paste URL to download...</string>
     <string name="drawer_accounts">Accounts</string>
     <string name="drawer_other">Other</string>
@@ -438,6 +444,7 @@
     <string name="moments_label_all">All</string>
     <string name="nav_bookmarks">Bookmarks</string>
     <string name="nav_channels">Channels</string>
+    <string name="nav_discover">Discover</string>
     <string name="nav_downloaded">Downloaded</string>
     <string name="nav_feed">Feed</string>
     <string name="nav_liked">Liked</string>
@@ -550,6 +557,10 @@
     <string name="settings_debug_mode">Debug mode</string>
     <string name="settings_default_speed">Default speed</string>
     <string name="settings_disabled">Disabled</string>
+    <string name="settings_discover_max_duration">Maximum Discover video length (minutes)</string>
+    <string name="settings_discover_max_duration_help">Longer videos are hidden from Discover and excluded from pre-download selection. Set to 0 for no limit.</string>
+    <string name="settings_discover_prefetch_count">Discover videos to pre-download</string>
+    <string name="settings_discover_prefetch_help">Keep this many recommendations ready as low-priority temporary downloads. Set to 0 to disable.</string>
     <string name="settings_dont_auto_translate">Don\'t auto-translate</string>
     <string name="settings_dont_auto_translate_help">Posts in these languages won\'t be auto-translated. Empty list translates everything except your target language.</string>
     <string name="settings_download_english_subtitles">Download English Subtitles</string>

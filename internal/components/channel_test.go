@@ -50,6 +50,7 @@ func TestVideoCardRender(t *testing.T) {
 		{"data-video-title", `data-video-title="Test Video Title"`},
 		{"data-channel-name", `data-channel-name="Test Channel"`},
 		{"data-channel-id", `data-channel-id="youtube_testchan"`},
+		{"profile hover channel id", `data-profile-channel-id="youtube_testchan"`},
 		{"data-channel-href", `data-channel-href="/channels/youtube_testchan"`},
 		{"data-stream-url", `data-stream-url="/api/media/stream/vid_abc123"`},
 		{"data-bookmarked", `data-bookmarked="1"`},
@@ -70,6 +71,66 @@ func TestVideoCardRender(t *testing.T) {
 				t.Errorf("expected %q in output", c.value)
 			}
 		})
+	}
+	avatarAt := strings.Index(html, `class="video-channel-avatar"`)
+	if avatarAt < 0 {
+		t.Fatalf("channel avatar missing: %s", html)
+	}
+	profileChannelAt := strings.Index(html[avatarAt:], `data-profile-channel-id="youtube_testchan"`)
+	if profileChannelAt < 0 {
+		t.Fatalf("profile hover identity must belong to channel avatar: %s", html)
+	}
+	if strings.Contains(html, `class="video-channel-wrap" data-profile-channel-id=`) {
+		t.Fatalf("channel name wrapper must not trigger profile hover: %s", html)
+	}
+}
+
+func TestGlobalVideoCardHoverHighlightsWithoutMoving(t *testing.T) {
+	css, err := os.ReadFile("../../static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := strings.Index(string(css), ".video-card:hover {")
+	if start < 0 {
+		t.Fatal("global video-card hover rule missing")
+	}
+	rest := string(css)[start:]
+	end := strings.Index(rest, "}")
+	if end < 0 {
+		t.Fatal("global video-card hover rule is unterminated")
+	}
+	block := rest[:end]
+	if strings.Contains(block, "transform:") {
+		t.Fatalf("global video-card hover moves cards: %s", block)
+	}
+	for _, highlight := range []string{"border-color:", "box-shadow:"} {
+		if !strings.Contains(block, highlight) {
+			t.Fatalf("global video-card hover lost %s highlight: %s", highlight, block)
+		}
+	}
+}
+
+func TestYouTubeSearchCardCarriesProfileHoverIdentity(t *testing.T) {
+	var buf bytes.Buffer
+	if err := YouTubeSearchCard(newTestPageProps(), map[string]any{
+		"VideoID":     "sample_video",
+		"Title":       "Sample Video",
+		"ChannelID":   "youtube_UCsample_search",
+		"ChannelName": "Sample Search Channel",
+		"AvatarURL":   "https://unavatar.io/youtube/sample_search",
+	}).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	for _, value := range []string{
+		`data-channel-id="youtube_UCsample_search"`,
+		`data-profile-channel-id="youtube_UCsample_search"`,
+		`data-platform="youtube"`,
+		`src="https://unavatar.io/youtube/sample_search"`,
+	} {
+		if !strings.Contains(html, value) {
+			t.Fatalf("expected %q in rendered search card", value)
+		}
 	}
 }
 

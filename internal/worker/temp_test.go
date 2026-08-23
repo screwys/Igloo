@@ -25,3 +25,18 @@ func TestTempDownloadCancellationRetriesEvenWhenOutputMentionsCookies(t *testing
 		t.Fatal("server shutdown cancellation must be retried")
 	}
 }
+
+func TestDiscoverTempDownloadsUseBackgroundMediaLane(t *testing.T) {
+	if got := tempDownloadLane("discover"); got != download.MediaLaneBulkBackground {
+		t.Fatalf("discover lane = %q", got)
+	}
+	if got := tempDownloadLane("interactive"); got != download.MediaLaneBulkInteractive {
+		t.Fatalf("interactive lane = %q", got)
+	}
+	if tempDownloadSeedsRecommendations("discover") {
+		t.Fatal("discover prefetch must not recursively seed recommendations")
+	}
+	if !tempDownloadSeedsRecommendations("interactive") {
+		t.Fatal("interactive temporary downloads should seed recommendations")
+	}
+}

@@ -46,24 +46,59 @@ func schemaQueueStatements() []string {
 			started_at_ms      INTEGER NOT NULL DEFAULT 0
 		)`,
 
-		`CREATE TABLE IF NOT EXISTS temp_download_queue (
-			url                TEXT PRIMARY KEY,
-			platform           TEXT NOT NULL,
-			status             TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')),
-			retry_count        INTEGER NOT NULL DEFAULT 0,
-			next_attempt_at_ms INTEGER NOT NULL DEFAULT 0,
-			last_error_kind    TEXT NOT NULL DEFAULT '',
-			last_error         TEXT NOT NULL DEFAULT '',
-			lease_owner        TEXT NOT NULL DEFAULT '',
-			lease_until_ms     INTEGER NOT NULL DEFAULT 0,
-			added_at_ms        INTEGER NOT NULL DEFAULT 0,
-			started_at_ms      INTEGER NOT NULL DEFAULT 0
-		)`,
+		tempDownloadQueueTableStatement(),
 
 		videoMetadataJobsTableStatement(),
 
+		youtubeRecommendationsTableStatement(),
+
+		discoverTempDownloadsTableStatement(),
+
 		feedOrderInvalidationQueueStatement(),
 	}
+}
+
+func discoverTempDownloadsTableStatement() string {
+	return `CREATE TABLE IF NOT EXISTS discover_temp_downloads (
+		video_id TEXT PRIMARY KEY,
+		downloaded_at_ms INTEGER NOT NULL DEFAULT 0,
+		FOREIGN KEY (video_id) REFERENCES videos(video_id) ON DELETE CASCADE
+	) WITHOUT ROWID`
+}
+
+func tempDownloadQueueTableStatement() string {
+	return `CREATE TABLE IF NOT EXISTS temp_download_queue (
+		url                TEXT PRIMARY KEY,
+		platform           TEXT NOT NULL,
+		origin             TEXT NOT NULL DEFAULT 'interactive' CHECK(origin IN ('interactive', 'discover')),
+		status             TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')),
+		retry_count        INTEGER NOT NULL DEFAULT 0,
+		next_attempt_at_ms INTEGER NOT NULL DEFAULT 0,
+		last_error_kind    TEXT NOT NULL DEFAULT '',
+		last_error         TEXT NOT NULL DEFAULT '',
+		lease_owner        TEXT NOT NULL DEFAULT '',
+		lease_until_ms     INTEGER NOT NULL DEFAULT 0,
+		added_at_ms        INTEGER NOT NULL DEFAULT 0,
+		started_at_ms      INTEGER NOT NULL DEFAULT 0
+	)`
+}
+
+func youtubeRecommendationsTableStatement() string {
+	return `CREATE TABLE IF NOT EXISTS youtube_recommendations (
+		anchor_video_id    TEXT PRIMARY KEY,
+		candidates_json    TEXT NOT NULL DEFAULT '[]',
+		status             TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'ready', 'blocked')),
+		fetched_at_ms      INTEGER NOT NULL DEFAULT 0,
+		expires_at_ms      INTEGER NOT NULL DEFAULT 0,
+		attempts           INTEGER NOT NULL DEFAULT 0,
+		next_attempt_at_ms INTEGER NOT NULL DEFAULT 0,
+		last_error         TEXT NOT NULL DEFAULT '',
+		lease_owner        TEXT NOT NULL DEFAULT '',
+		lease_until_ms     INTEGER NOT NULL DEFAULT 0,
+		requested_at_ms    INTEGER NOT NULL DEFAULT 0,
+		updated_at_ms      INTEGER NOT NULL DEFAULT 0,
+		FOREIGN KEY (anchor_video_id) REFERENCES videos(video_id) ON DELETE CASCADE
+	)`
 }
 
 func videoMetadataJobsTableStatement() string {

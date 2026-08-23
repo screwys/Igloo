@@ -58,6 +58,53 @@ func TestGetSubscribedChannelsIncludesFollowWithoutChannelRow(t *testing.T) {
 	t.Fatalf("twitter_follow_only missing from subscribed channels")
 }
 
+func TestObserveChannelsCreatesUnfollowedProfileWork(t *testing.T) {
+	d := openWritableTestDB(t)
+	const channelID = "youtube_UCsample_discovery"
+	if err := d.ObserveChannels([]model.Channel{
+		{
+			ChannelID:   channelID,
+			SourceID:    "UCsample_discovery",
+			Name:        "Sample Discovery",
+			DisplayName: "Sample Discovery",
+			Handle:      "@sample_discovery",
+			URL:         "https://www.youtube.com/channel/UCsample_discovery",
+			Platform:    "youtube",
+		},
+		{ChannelID: channelID, Platform: "youtube"},
+	}); err != nil {
+		t.Fatalf("ObserveChannels: %v", err)
+	}
+
+	channel, err := d.GetChannelByID(channelID)
+	if err != nil {
+		t.Fatalf("GetChannelByID: %v", err)
+	}
+	if channel.IsSubscribed {
+		t.Fatal("discovered channel was followed")
+	}
+	if channel.Name != "Sample Discovery" || channel.SourceID != "UCsample_discovery" {
+		t.Fatalf("unexpected discovered channel: %+v", channel)
+	}
+	profile, err := d.GetChannelProfile(channelID)
+	if err != nil {
+		t.Fatalf("GetChannelProfile: %v", err)
+	}
+	if profile == nil || profile.Handle != "@sample_discovery" || profile.DisplayName != "Sample Discovery" {
+		t.Fatalf("unexpected discovered profile: %+v", profile)
+	}
+	var requested, completed int64
+	if err := d.QueryRow(`
+		SELECT requested_revision, completed_revision
+		FROM profile_jobs WHERE channel_id = ?
+	`, channelID).Scan(&requested, &completed); err != nil {
+		t.Fatalf("profile job: %v", err)
+	}
+	if requested <= completed {
+		t.Fatalf("profile job requested=%d completed=%d", requested, completed)
+	}
+}
+
 func TestNextSubscribedChannelReturnsOldestAndPlatformCount(t *testing.T) {
 	d := openWritableTestDB(t)
 	if err := d.ExecRaw(`

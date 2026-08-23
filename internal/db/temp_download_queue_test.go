@@ -43,3 +43,32 @@ func TestTempDownloadQueueRecoversAndRetriesDurableWork(t *testing.T) {
 		t.Fatalf("completed queue rows = %d", got)
 	}
 }
+
+func TestCurrentlyAvailableExcludesDiscoverPrefetchButPinnedKeepsIt(t *testing.T) {
+	d := openWritableTestDB(t)
+	for _, videoID := range []string{"sample_manual_temp", "sample_discover_temp"} {
+		if err := d.InsertVideo(videoID, "youtube_UCsample", "youtube_video", videoID, "", 60, 1, "", "video", 0, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := d.MarkDiscoverTempVideo("sample_discover_temp", time.Now().UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+	available, err := d.GetCurrentlyAvailableVideos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(available) != 1 || available[0].VideoID != "sample_manual_temp" {
+		t.Fatalf("currently available = %+v", available)
+	}
+	if err := d.SetPinned("sample_discover_temp", true); err != nil {
+		t.Fatal(err)
+	}
+	pinned, err := d.GetPinnedVideos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pinned) != 1 || pinned[0].VideoID != "sample_discover_temp" {
+		t.Fatalf("pinned = %+v", pinned)
+	}
+}

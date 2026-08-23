@@ -238,6 +238,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	previousXMediaLimit := s.db.IntSetting("media_download_limit_default")
 	previousXProfileHistoryLimit := s.db.IntSetting("x_profile_history_limit")
 	previousYouTubeMemberOnly := s.db.BoolSetting("youtube_include_member_only")
+	previousDiscoverPrefetch := s.db.IntSetting("discover_prefetch_count")
 	previousTiktokReposts := s.db.MomentsIncludeRepostsEnabled()
 	previousInstagramTagged := s.db.InstagramIncludeTaggedEnabled()
 	if err := s.db.UpdateSettings(body); err != nil {
@@ -294,6 +295,9 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				slog.Error("EnforceXProfileHistoryRetention", "err", err)
 			}
 		}
+		if s.db.IntSetting("discover_prefetch_count") != previousDiscoverPrefetch {
+			s.workers.RefreshDiscoverPrefetch()
+		}
 	}
 
 	if isHTMX {
@@ -336,6 +340,20 @@ func normalizeSettingsUpdate(body map[string]string) {
 			n = settings.IntDefault("backup_keep_count")
 		}
 		body["backup_keep_count"] = strconv.Itoa(settings.ClampBackupKeepCount(n))
+	}
+	if v, ok := body["discover_prefetch_count"]; ok {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			n = settings.IntDefault("discover_prefetch_count")
+		}
+		body["discover_prefetch_count"] = strconv.Itoa(settings.ClampDiscoverPrefetchCount(n))
+	}
+	if v, ok := body["discover_max_duration_minutes"]; ok {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			n = settings.IntDefault("discover_max_duration_minutes")
+		}
+		body["discover_max_duration_minutes"] = strconv.Itoa(settings.ClampDiscoverMaxDurationMinutes(n))
 	}
 	if v, ok := body["moments_default_tab"]; ok {
 		body["moments_default_tab"] = db.NormalizeMomentsTab(v)
@@ -390,7 +408,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 	// Simple text/number fields.
 	simpleFields := []string{
 		"web_theme_id", "web_theme_accent",
-		"quality", "youtube_fetch_delay", "youtube_max_videos",
+		"quality", "youtube_fetch_delay", "youtube_max_videos", "discover_prefetch_count", "discover_max_duration_minutes",
 		"youtube_default_playback_speed",
 		"tiktok_fetch_delay", "shorts_max_videos", "tiktok_repost_max_videos",
 		"instagram_fetch_delay", "instagram_max_videos", "instagram_repost_max_videos",

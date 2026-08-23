@@ -41,7 +41,7 @@ func TestPlayerControlLabelsEscapeLocalizedAttributes(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := PlayerPage(p, video, nil, nil, nil, "").Render(context.Background(), &buf); err != nil {
+	if err := PlayerPage(p, video, nil, nil, nil, nil, false, "").Render(context.Background(), &buf); err != nil {
 		t.Fatal(err)
 	}
 	html := buf.String()
@@ -76,7 +76,7 @@ func TestYouTubePlayerRendersMiniPlayerHandoff(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := PlayerPage(p, video, nil, nil, nil, "").Render(context.Background(), &buf); err != nil {
+	if err := PlayerPage(p, video, nil, nil, nil, nil, false, "").Render(context.Background(), &buf); err != nil {
 		t.Fatal(err)
 	}
 	html := buf.String()
@@ -100,7 +100,7 @@ func TestNonYouTubePlayerDoesNotRenderMiniPlayerHandoff(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := PlayerPage(p, video, nil, nil, nil, "").Render(context.Background(), &buf); err != nil {
+	if err := PlayerPage(p, video, nil, nil, nil, nil, false, "").Render(context.Background(), &buf); err != nil {
 		t.Fatal(err)
 	}
 	if html := buf.String(); strings.Contains(html, `id="player-mini-btn"`) {

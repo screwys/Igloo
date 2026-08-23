@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -62,6 +63,25 @@ func TestHandlePageChannelRendersProfileOnlyTikTok(t *testing.T) {
 	}
 	assertActiveNav(t, html, "/channels")
 	assertInactiveNav(t, html, "/videos")
+}
+
+func TestHandlePageYouTubeChannelIncludesReadyTemporaryVideos(t *testing.T) {
+	srv := newTestServer(t)
+	srv.staticV = func(path string) string { return "/static/" + path }
+	const videoID = "sample_ready_discover"
+	storeReadyMediaAsset(t, srv, "youtube", "youtube_video", videoID, "video_stream", 0,
+		filepath.Join("media", "youtube", videoID+".mp4"), "video/mp4", []byte("fake-mp4"))
+	if err := srv.db.ExecRaw(`UPDATE videos SET title = 'Ready Discover Video', is_temp = 1 WHERE video_id = ?`, videoID); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/channels/youtube_asset_fixture", nil)
+	req.SetPathValue("channelID", "youtube_asset_fixture")
+	rec := httptest.NewRecorder()
+	srv.handlePageChannel(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Ready Discover Video") {
+		t.Fatalf("ready temporary video missing from channel page: status=%d body=%s", rec.Code, rec.Body.String())
+	}
 }
 
 func TestHandlePageChannelSeparatesAuthoredMomentsAndRepostsWithoutFullPageSwap(t *testing.T) {

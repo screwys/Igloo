@@ -22,6 +22,7 @@ templ Sidebar(p PageProps) {
 					<svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
 					<span data-i18n="nav_videos">{ L(p, "nav_videos", "Videos") }</span>
 				</a>
+				@SidebarDiscoverNavItem(p)
 			}
 			if p.PlatformsContain("twitter") {
 				<a href="/feed" class={ "nav-item", templ.KV("active", p.ActiveNav == "feed") } title={ L(p, "nav_feed", "Feed") } aria-label={ L(p, "nav_feed", "Feed") }>
@@ -140,6 +141,13 @@ templ Sidebar(p PageProps) {
 			@sidebarQuickDownloadForm(p, "compact-quick-dl-input", "compact-quick-dl-status")
 		</div>
 	</div>
+}
+
+templ SidebarDiscoverNavItem(p PageProps) {
+	<a href="/discover" class={ "nav-item", templ.KV("active", p.ActiveNav == "discover") } title={ L(p, "nav_discover", "Discover") } aria-label={ L(p, "nav_discover", "Discover") }>
+		<svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16 8 14 14 8 16 10 10 16 8"></polygon></svg>
+		<span>{ L(p, "nav_discover", "Discover") }</span>
+	</a>
 }
 
 templ sidebarQuickDownloadForm(p PageProps, inputID string, statusID string) {

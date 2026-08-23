@@ -34,6 +34,7 @@ go_changed=0
 drift_changed=0
 web_changed=0
 android_changed=0
+i18n_changed=0
 workflow_changed=0
 declare -A go_test_file_set=()
 declare -a shell_files=()
@@ -65,6 +66,14 @@ for path in "${changed[@]}"; do
   esac
 
   case "$path" in
+    locales/*|android/app/src/main/res/values/strings.xml)
+      i18n_changed=1
+      ;;
+  esac
+
+  case "$path" in
+    android/app/src/main/res/values/strings.xml)
+      ;;
     android/*|.github/workflows/ci.yml)
       android_changed=1
       ;;
@@ -86,6 +95,12 @@ for path in "${changed[@]}"; do
   esac
 done
 
+if [[ "${IGLOO_TEST_SELECTION_ONLY:-0}" == "1" ]]; then
+  printf 'go=%d drift=%d web=%d i18n=%d android=%d workflow=%d\n' \
+    "$go_changed" "$drift_changed" "$web_changed" "$i18n_changed" "$android_changed" "$workflow_changed"
+  exit 0
+fi
+
 if [[ "${#shell_files[@]}" -gt 0 ]]; then
   echo "[shell] checking changed scripts"
   bash -n "${shell_files[@]}"
@@ -100,6 +115,11 @@ fi
 if [[ "$drift_changed" -eq 1 ]]; then
   echo "[drift] regenerating tracked web outputs"
   scripts/dev/drift-check.sh --write
+fi
+
+if [[ "$i18n_changed" -eq 1 ]]; then
+  echo "[i18n] checking generated catalog outputs"
+  go test ./scripts/dev/i18n_sync_catalog -run TestGeneratedCatalogOutputsAreCurrent -count=1
 fi
 
 if [[ "$go_changed" -eq 1 ]]; then

@@ -24,6 +24,14 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260823_add_discover_temp_provenance",
+		apply: addDiscoverTempProvenance,
+	},
+	{
+		name:  "20260823_add_youtube_discover",
+		apply: addYouTubeDiscover,
+	},
+	{
 		name:  "20260814_index_android_sync_peer_triggers",
 		apply: installAndroidSyncPeerTriggers,
 	},
@@ -75,6 +83,56 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addDiscoverTempProvenance(tx *sql.Tx) error {
+	if _, err := tx.Exec(youtubeRecommendationsTableStatement()); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(discoverTempDownloadsTableStatement()); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`
+		INSERT OR IGNORE INTO discover_temp_downloads (video_id, downloaded_at_ms)
+		SELECT DISTINCT v.video_id, v.downloaded_at
+		FROM videos v
+		JOIN youtube_recommendations rec
+		JOIN json_each(rec.candidates_json) candidate
+		  ON json_extract(candidate.value, '$.video_id') = v.video_id
+		WHERE COALESCE(v.is_temp, 0) = 1
+	`)
+	return err
+}
+
+func addYouTubeDiscover(tx *sql.Tx) error {
+	if _, err := tx.Exec(youtubeRecommendationsTableStatement()); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(tempDownloadQueueTableStatement()); err != nil {
+		return err
+	}
+	hasOrigin, err := schemaColumnExists(tx, "temp_download_queue", "origin")
+	if err != nil {
+		return err
+	}
+	if !hasOrigin {
+		if _, err := tx.Exec(`ALTER TABLE temp_download_queue ADD COLUMN origin TEXT NOT NULL DEFAULT 'interactive' CHECK(origin IN ('interactive', 'discover'))`); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`DROP INDEX IF EXISTS idx_temp_download_queue_ready`); err != nil {
+		return err
+	}
+	for _, statement := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_temp_download_queue_ready ON temp_download_queue(origin, status, next_attempt_at_ms, lease_until_ms, added_at_ms)`,
+		`CREATE INDEX IF NOT EXISTS idx_youtube_recommendations_ready ON youtube_recommendations(status, next_attempt_at_ms, lease_until_ms, requested_at_ms)`,
+		`CREATE INDEX IF NOT EXISTS idx_youtube_recommendations_fetched ON youtube_recommendations(fetched_at_ms DESC, anchor_video_id)`,
+	} {
+		if _, err := tx.Exec(statement); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func addFeedRelatedAnchorIndexes(tx *sql.Tx) error {
@@ -199,23 +257,11 @@ func collapseFetchedIntroducedSources(tx *sql.Tx) error {
 }
 
 func addTempDownloadQueue(tx *sql.Tx) error {
-	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS temp_download_queue (
-		url TEXT PRIMARY KEY,
-		platform TEXT NOT NULL,
-		status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')),
-		retry_count INTEGER NOT NULL DEFAULT 0,
-		next_attempt_at_ms INTEGER NOT NULL DEFAULT 0,
-		last_error_kind TEXT NOT NULL DEFAULT '',
-		last_error TEXT NOT NULL DEFAULT '',
-		lease_owner TEXT NOT NULL DEFAULT '',
-		lease_until_ms INTEGER NOT NULL DEFAULT 0,
-		added_at_ms INTEGER NOT NULL DEFAULT 0,
-		started_at_ms INTEGER NOT NULL DEFAULT 0
-	)`)
+	_, err := tx.Exec(tempDownloadQueueTableStatement())
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_temp_download_queue_ready ON temp_download_queue(status, next_attempt_at_ms, lease_until_ms, added_at_ms)`)
+	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_temp_download_queue_ready ON temp_download_queue(origin, status, next_attempt_at_ms, lease_until_ms, added_at_ms)`)
 	return err
 }
 

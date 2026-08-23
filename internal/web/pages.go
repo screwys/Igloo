@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -20,6 +21,7 @@ import (
 	"github.com/screwys/igloo/internal/components"
 	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/feed"
 	"github.com/screwys/igloo/internal/model"
 	"github.com/screwys/igloo/internal/settings"
@@ -760,6 +762,7 @@ func (s *Server) handlePageChannel(w http.ResponseWriter, r *http.Request) {
 		Search:          q,
 		Limit:           perPage,
 		ExcludeMetadata: true,
+		IncludeTemp:     channel.Platform == "youtube",
 	}
 	usesShorts := channel.Platform == "tiktok" || channel.Platform == "instagram"
 	if usesShorts && section == "reposts" {
@@ -995,18 +998,7 @@ func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {
 	comments, _ := s.db.GetComments(videoID, 20)
 	s.projectCommentAuthorAvatars(comments)
 
-	moreFromChannel, _ := s.db.GetVideos(db.GetVideosOpts{
-		ChannelID:       video.ChannelID,
-		Limit:           14,
-		ExcludeMetadata: true,
-	})
-	var filtered []model.Video
-	for _, v := range moreFromChannel {
-		if v.VideoID != videoID {
-			filtered = append(filtered, v)
-		}
-	}
-	moreFromChannel = filtered
+	moreFromChannel := s.playerMoreFromChannel(*video, 4)
 
 	sbCategories, _ := s.db.GetSetting("sponsorblock_categories",
 		settings.SponsorBlockCategoriesDefault)
@@ -1020,6 +1012,22 @@ func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {
 			nextVideo.AvatarURL = "/api/media/avatar/" + nextVideo.ChannelID
 		}
 	}
+	var recommendations []model.DiscoveryVideo
+	recommendationsPending := false
+	if video.OwnerKind == "youtube_video" {
+		var freshRecommendations bool
+		recommendations, freshRecommendations, err = s.db.GetYouTubeRecommendations(videoID, 32)
+		if err != nil {
+			slog.Warn("GetYouTubeRecommendations", "video_id", videoID, "err", err)
+		}
+		recommendations = playerRelatedRecommendations(recommendations, video.VideoID, video.Title, video.ChannelID, 16)
+		recommendationsPending = len(recommendations) == 0 && !freshRecommendations
+		if !freshRecommendations && s.workers != nil {
+			if err := s.workers.QueueYouTubeRecommendations(videoID); err != nil {
+				slog.Warn("QueueYouTubeRecommendations", "video_id", videoID, "err", err)
+			}
+		}
+	}
 
 	p := s.pageProps(w, r)
 	p.PageTitle = ResolveDearrowTitle(dearrowMode, video.Title, video.DearrowTitle, video.DearrowTitleCasual)
@@ -1028,7 +1036,82 @@ func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {
 	p.ESBundle = "js/dist/player.js"
 	p.Sidebar = s.mustBuildSidebar(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = components.PlayerPage(p, *video, comments, moreFromChannel, nextVideo, sbCategories).Render(r.Context(), w)
+	_ = components.PlayerPage(p, *video, comments, moreFromChannel, nextVideo, recommendations, recommendationsPending, sbCategories).Render(r.Context(), w)
+}
+
+func (s *Server) playerMoreFromChannel(video model.Video, limit int) []model.Video {
+	if limit <= 0 || video.ChannelID == "" {
+		return nil
+	}
+	videos, err := s.db.GetVideos(db.GetVideosOpts{
+		ChannelID: video.ChannelID, Limit: limit + 1, ExcludeMetadata: true, IncludeTemp: true,
+	})
+	if err != nil {
+		return nil
+	}
+	out := make([]model.Video, 0, limit)
+	for _, candidate := range videos {
+		if candidate.VideoID == video.VideoID || sameVideoTitle(candidate.Title, video.Title) {
+			continue
+		}
+		out = append(out, candidate)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func playerRelatedRecommendations(videos []model.DiscoveryVideo, currentVideoID, currentTitle, channelID string, limit int) []model.DiscoveryVideo {
+	out := make([]model.DiscoveryVideo, 0, limit)
+	for _, video := range videos {
+		if video.Source != "related" || video.ChannelID == channelID || video.VideoID == currentVideoID || sameVideoTitle(video.Title, currentTitle) {
+			continue
+		}
+		out = append(out, video)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func sameVideoTitle(first, second string) bool {
+	first = strings.ToLower(strings.Join(strings.Fields(first), " "))
+	second = strings.ToLower(strings.Join(strings.Fields(second), " "))
+	return first != "" && first == second
+}
+
+func (s *Server) handlePageDiscover(w http.ResponseWriter, r *http.Request) {
+	videos, err := s.db.ListYouTubeDiscoverVideos(80)
+	if err != nil {
+		slog.Warn("ListYouTubeDiscoverVideos", "err", err)
+	}
+	videos = shuffledDiscoverVideos(videos, time.Now().UnixNano())
+	pending := len(videos) == 0
+	if s.workers != nil {
+		queued, err := s.workers.QueueFollowedYouTubeChannelRecommendations()
+		if err != nil {
+			slog.Warn("QueueFollowedYouTubeChannelRecommendations", "err", err)
+			pending = false
+		} else if queued == 0 && len(videos) == 0 {
+			pending = false
+		}
+	}
+	p := s.pageProps(w, r)
+	p.PageTitle = p.T("discover_title", "Discover creators")
+	p.ActiveNav = "discover"
+	p.Sidebar = s.mustBuildSidebar(r)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = components.DiscoverPage(p, videos, pending).Render(r.Context(), w)
+}
+
+func shuffledDiscoverVideos(videos []model.DiscoveryVideo, seed int64) []model.DiscoveryVideo {
+	shuffled := append([]model.DiscoveryVideo(nil), videos...)
+	rand.New(rand.NewSource(seed)).Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+	return shuffled
 }
 
 func (s *Server) handlePageFeed(w http.ResponseWriter, r *http.Request) {
@@ -1450,6 +1533,10 @@ func (s *Server) handlePageYouTubeSearch(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			searchErr = err.Error()
 			slog.Warn("YouTube search failed", "q", q, "err", err)
+		} else if err := s.db.ObserveChannels(youtubeSearchChannels(results)); err != nil {
+			slog.Warn("Observe YouTube search channels", "q", q, "err", err)
+		} else if s.workers != nil {
+			s.workers.KickProfileJobs()
 		}
 	}
 
@@ -1475,7 +1562,10 @@ func youtubeSearch(q string, limit int) ([]map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("yt-dlp search: %w", err)
 	}
+	return parseYouTubeSearchOutput(out), nil
+}
 
+func parseYouTubeSearchOutput(out []byte) []map[string]any {
 	var results []map[string]any
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if line == "" {
@@ -1489,22 +1579,57 @@ func youtubeSearch(q string, limit int) ([]map[string]any, error) {
 		title, _ := item["title"].(string)
 		channel, _ := item["channel"].(string)
 		channelID, _ := item["channel_id"].(string)
+		channelURL, _ := item["channel_url"].(string)
+		uploaderID, _ := item["uploader_id"].(string)
 		duration, _ := item["duration"].(float64)
 		viewCount, _ := item["view_count"].(float64)
+		channelID = download.CanonicalizeYouTubeChannelID(channelID, channelURL)
+		if channelURL == "" && strings.HasPrefix(channelID, "youtube_UC") {
+			channelURL = "https://www.youtube.com/channel/" + strings.TrimPrefix(channelID, "youtube_")
+		}
+		avatarURL := ""
+		if handle := strings.TrimLeft(strings.TrimSpace(uploaderID), "@"); handle != "" {
+			avatarURL = "https://unavatar.io/youtube/" + url.PathEscape(handle)
+		}
 
 		results = append(results, map[string]any{
-			"VideoID":      videoID,
-			"Title":        title,
-			"ThumbnailURL": fmt.Sprintf("https://i.ytimg.com/vi/%s/mqdefault.jpg", videoID),
-			"ChannelName":  channel,
-			"ChannelID":    channelID,
-			"Duration":     int(duration),
-			"ViewCount":    int(viewCount),
-			"Platform":     "youtube",
-			"AvatarURL":    "",
+			"VideoID":       videoID,
+			"Title":         title,
+			"ThumbnailURL":  fmt.Sprintf("https://i.ytimg.com/vi/%s/mqdefault.jpg", videoID),
+			"ChannelName":   channel,
+			"ChannelID":     channelID,
+			"ChannelURL":    channelURL,
+			"ChannelHandle": uploaderID,
+			"Duration":      int(duration),
+			"ViewCount":     int(viewCount),
+			"Platform":      "youtube",
+			"AvatarURL":     avatarURL,
 		})
 	}
-	return results, nil
+	return results
+}
+
+func youtubeSearchChannels(results []map[string]any) []model.Channel {
+	channels := make([]model.Channel, 0, len(results))
+	for _, result := range results {
+		channelID, _ := result["ChannelID"].(string)
+		if channelID == "" {
+			continue
+		}
+		name, _ := result["ChannelName"].(string)
+		channelURL, _ := result["ChannelURL"].(string)
+		handle, _ := result["ChannelHandle"].(string)
+		channels = append(channels, model.Channel{
+			ChannelID:   channelID,
+			SourceID:    strings.TrimPrefix(channelID, "youtube_"),
+			Name:        name,
+			URL:         channelURL,
+			Platform:    "youtube",
+			Handle:      handle,
+			DisplayName: name,
+		})
+	}
+	return channels
 }
 
 // enrichedChannels fetches subscribed channels with video counts and avatars, sorted.

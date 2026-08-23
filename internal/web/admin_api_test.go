@@ -98,6 +98,25 @@ func TestSettingsToAPIFormatDefaultsAutomaticMiniPlayerOnlyForVideos(t *testing.
 	}
 }
 
+func TestDiscoverPrefetchSettingDefaultsAndClamps(t *testing.T) {
+	if got := settingsToAPIFormat(nil)["discover_prefetch_count"]; got != 10 {
+		t.Fatalf("discover_prefetch_count default = %#v", got)
+	}
+	body := map[string]string{"discover_prefetch_count": "999"}
+	normalizeSettingsUpdate(body)
+	if body["discover_prefetch_count"] != "50" {
+		t.Fatalf("discover_prefetch_count = %q", body["discover_prefetch_count"])
+	}
+	if got := settingsToAPIFormat(nil)["discover_max_duration_minutes"]; got != 120 {
+		t.Fatalf("discover_max_duration_minutes default = %#v", got)
+	}
+	body = map[string]string{"discover_max_duration_minutes": "9999"}
+	normalizeSettingsUpdate(body)
+	if body["discover_max_duration_minutes"] != "1440" {
+		t.Fatalf("discover_max_duration_minutes = %q", body["discover_max_duration_minutes"])
+	}
+}
+
 func TestSettingsFromFormPersistsMiniPlayerDestinationToggles(t *testing.T) {
 	srv := newTestServer(t)
 	form := url.Values{}

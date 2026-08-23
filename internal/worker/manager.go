@@ -31,37 +31,38 @@ type WorkerStatus struct {
 
 // Manager owns all background goroutines.
 type Manager struct {
-	db                      *db.DB
-	cfg                     *config.Config
-	downloader              *download.Downloader
-	ctx                     context.Context
-	cancel                  context.CancelFunc
-	wg                      sync.WaitGroup
-	mediaCurrentKick        chan struct{} // buffered(1): coalescing kick for current media
-	mediaBackfillKick       chan struct{} // buffered(1): coalescing kick for historical media
-	tempDownloadKick        chan struct{} // buffered(1): durable user-download wake-up
-	discoveryKick           chan struct{} // buffered(1): coalescing kick for platform discovery
-	profileKick             chan struct{} // buffered(1): durable profile job wake-up
-	videoMetadataKick       chan struct{} // buffered(1): durable YouTube metadata wake-up
-	xStatusEnrich           chan xfeed.StatusEnrichmentRequest
-	ingestKick              chan struct{} // buffered(1): trigger immediate ingest
-	feedScoringKick         chan struct{} // buffered(1): rate-limited feed refresh
-	feedScoringPriorityKick chan struct{} // buffered(1): committed action-state refresh
-	feedOrderKick           chan struct{} // buffered(1): coalescing feed-order invalidation
-	feedOrderReady          chan struct{} // closed after persisted invalidations drain at startup
-	ingestPaused            int32         // atomic: 1 = paused
-	ingestRunning           int32         // atomic: 1 = cycle in progress
-	ingestCycleTotal        int32         // atomic: channels to fetch in current cycle
-	ingestCycleDone         int32         // atomic: channels fetched so far in current cycle
-	stopRequested           int32         // atomic: 1 = stop requested
-	statuses                map[string]*atomic.Value
-	statusMu                sync.RWMutex
-	activity                *ActivityRing // general server activity (200 items)
-	dlActivity              *ActivityRing // download-specific activity (100 items)
-	feedActivity            *ActivityRing // x_ingest/feed_media per-item activity (200 items)
-	externalNetwork         externalNetworkState
-	externalWakeMu          sync.Mutex
-	externalWake            *time.Timer
+	db                        *db.DB
+	cfg                       *config.Config
+	downloader                *download.Downloader
+	ctx                       context.Context
+	cancel                    context.CancelFunc
+	wg                        sync.WaitGroup
+	mediaCurrentKick          chan struct{} // buffered(1): coalescing kick for current media
+	mediaBackfillKick         chan struct{} // buffered(1): coalescing kick for historical media
+	tempDownloadKick          chan struct{} // buffered(1): durable user-download wake-up
+	discoveryKick             chan struct{} // buffered(1): coalescing kick for platform discovery
+	profileKick               chan struct{} // buffered(1): durable profile job wake-up
+	videoMetadataKick         chan struct{} // buffered(1): durable YouTube metadata wake-up
+	youtubeRecommendationKick chan struct{} // buffered(1): durable YouTube recommendation wake-up
+	xStatusEnrich             chan xfeed.StatusEnrichmentRequest
+	ingestKick                chan struct{} // buffered(1): trigger immediate ingest
+	feedScoringKick           chan struct{} // buffered(1): rate-limited feed refresh
+	feedScoringPriorityKick   chan struct{} // buffered(1): committed action-state refresh
+	feedOrderKick             chan struct{} // buffered(1): coalescing feed-order invalidation
+	feedOrderReady            chan struct{} // closed after persisted invalidations drain at startup
+	ingestPaused              int32         // atomic: 1 = paused
+	ingestRunning             int32         // atomic: 1 = cycle in progress
+	ingestCycleTotal          int32         // atomic: channels to fetch in current cycle
+	ingestCycleDone           int32         // atomic: channels fetched so far in current cycle
+	stopRequested             int32         // atomic: 1 = stop requested
+	statuses                  map[string]*atomic.Value
+	statusMu                  sync.RWMutex
+	activity                  *ActivityRing // general server activity (200 items)
+	dlActivity                *ActivityRing // download-specific activity (100 items)
+	feedActivity              *ActivityRing // x_ingest/feed_media per-item activity (200 items)
+	externalNetwork           externalNetworkState
+	externalWakeMu            sync.Mutex
+	externalWake              *time.Timer
 
 	dlSessionCompleted       int32        // atomic
 	dlSessionFailed          int32        // atomic
@@ -99,8 +100,9 @@ type Manager struct {
 	// is disabled (e.g. unit tests that don't want network calls). The
 	// The download-complete hook co-fetches both APIs because they share
 	// sponsor.ajay.app.
-	sponsorblockClient sponsorblockFetcher
-	youtubeMetadata    youtubeMetadataFetcher
+	sponsorblockClient     sponsorblockFetcher
+	youtubeMetadata        youtubeMetadataFetcher
+	youtubeRecommendations youtubeRecommendationFetcher
 
 	instagramProfileFetch instagramProfileFetchFn
 }
@@ -116,33 +118,40 @@ type youtubeMetadataFetcher interface {
 	FetchVideoMetadata(context.Context, string, int, download.Opts) (db.VideoMetadataRefreshResult, error)
 }
 
+type youtubeRecommendationFetcher interface {
+	FetchYouTubeMix(context.Context, string, int, download.Opts) ([]download.VideoRef, error)
+	SearchYouTube(context.Context, string, int, download.Opts) ([]download.VideoRef, error)
+	ChannelCheck(context.Context, string, int, bool) (download.SourceSnapshot, error)
+}
+
 // NewManager creates a Manager; call StartAll to launch goroutines.
 func NewManager(database *db.DB, cfg *config.Config) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &Manager{
-		db:                      database,
-		cfg:                     cfg,
-		downloader:              download.NewDownloader(cfg.CookiesDir),
-		ctx:                     ctx,
-		cancel:                  cancel,
-		mediaCurrentKick:        make(chan struct{}, 1),
-		mediaBackfillKick:       make(chan struct{}, 1),
-		tempDownloadKick:        make(chan struct{}, 1),
-		discoveryKick:           make(chan struct{}, 1),
-		profileKick:             make(chan struct{}, 1),
-		videoMetadataKick:       make(chan struct{}, 1),
-		xStatusEnrich:           make(chan xfeed.StatusEnrichmentRequest, 1024),
-		ingestKick:              make(chan struct{}, 1),
-		feedScoringKick:         make(chan struct{}, 1),
-		feedScoringPriorityKick: make(chan struct{}, 1),
-		feedOrderKick:           make(chan struct{}, 1),
-		feedOrderReady:          make(chan struct{}),
-		statuses:                make(map[string]*atomic.Value),
-		activity:                NewActivityRing(200),
-		dlActivity:              NewActivityRing(100),
-		feedActivity:            NewActivityRing(200),
-		xStatusQueued:           make(map[string]time.Time),
-		downloadBackoff:         make(map[string]downloadPlatformBackoff),
+		db:                        database,
+		cfg:                       cfg,
+		downloader:                download.NewDownloader(cfg.CookiesDir),
+		ctx:                       ctx,
+		cancel:                    cancel,
+		mediaCurrentKick:          make(chan struct{}, 1),
+		mediaBackfillKick:         make(chan struct{}, 1),
+		tempDownloadKick:          make(chan struct{}, 1),
+		discoveryKick:             make(chan struct{}, 1),
+		profileKick:               make(chan struct{}, 1),
+		videoMetadataKick:         make(chan struct{}, 1),
+		youtubeRecommendationKick: make(chan struct{}, 1),
+		xStatusEnrich:             make(chan xfeed.StatusEnrichmentRequest, 1024),
+		ingestKick:                make(chan struct{}, 1),
+		feedScoringKick:           make(chan struct{}, 1),
+		feedScoringPriorityKick:   make(chan struct{}, 1),
+		feedOrderKick:             make(chan struct{}, 1),
+		feedOrderReady:            make(chan struct{}),
+		statuses:                  make(map[string]*atomic.Value),
+		activity:                  NewActivityRing(200),
+		dlActivity:                NewActivityRing(100),
+		feedActivity:              NewActivityRing(200),
+		xStatusQueued:             make(map[string]time.Time),
+		downloadBackoff:           make(map[string]downloadPlatformBackoff),
 		downloadPlatformAt: map[db.DownloadLane]int{
 			db.DownloadLaneCurrent:  0,
 			db.DownloadLaneBackfill: 0,
@@ -161,6 +170,7 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 	}
 	m.sponsorblockClient = sponsorblock.NewClient(sponsorblock.DefaultBaseURL)
 	m.youtubeMetadata = m.downloader.YtDlp
+	m.youtubeRecommendations = m.downloader.YtDlp
 	m.downloader.SetMediaExecutor(cfg.Storage.MediaExecutor())
 	m.downloader.SetOperationSink(database)
 	return m
@@ -177,6 +187,9 @@ func (m *Manager) StartAll() {
 	if err := m.db.ResetTempDownloadWork(); err != nil {
 		log.Printf("[temp-download] recover interrupted work: %v", err)
 	}
+	if err := m.db.ResetYouTubeRecommendationWork(); err != nil {
+		log.Printf("[youtube-recommendations] recover interrupted work: %v", err)
+	}
 	log.Printf("[worker] startup recovery completed in %s", time.Since(startupStarted).Round(time.Millisecond))
 
 	// One-shot startup tasks — not tracked in status map.
@@ -188,6 +201,7 @@ func (m *Manager) StartAll() {
 	m.launch("temp_download", m.runTempDownloadLoop)
 	m.launch("profile_refresh", m.runProfileJobLoop)
 	m.launch("video_metadata", m.runVideoMetadataLoop)
+	m.launch("youtube_recommendations", m.runYouTubeRecommendationLoop)
 	m.launch("scheduler", m.runScheduler)
 	m.launch("feed_order_invalidation", m.runFeedOrderInvalidationLoop)
 	m.launch("feed_scoring", m.runFeedScoringWorker)

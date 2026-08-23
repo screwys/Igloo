@@ -8,11 +8,12 @@
 //   - a.shorts-channel              (shorts header — data-channel-id on element)
 //   - a.shorts-rail-avatar-link     (shorts side-rail avatar — data-channel-id on element)
 //   - a.shorts-repost-link          (shorts reposter — data-channel-id on element)
+//   - img.video-channel-avatar      (video-card channel avatar only)
 
 (() => {
-	const OPEN_DELAY = 0;
+	const OPEN_DELAY = 50;
 	const CLOSE_DELAY = 300;
-	const TRIGGER_SEL = 'a.feed-author-trigger, a.feed-overlay-headline, a.feed-quote-author-link, .feed-quote-avatar, a.feed-inline-link, a.feed-repost-link, a.shorts-channel, a.shorts-rail-avatar-link, a.shorts-repost-link';
+	const TRIGGER_SEL = 'a.feed-author-trigger, a.feed-overlay-headline, a.feed-quote-author-link, .feed-quote-avatar, a.feed-inline-link, a.feed-repost-link, a.shorts-channel, a.shorts-rail-avatar-link, a.shorts-repost-link, img.video-channel-avatar[data-profile-channel-id]';
 	const CHANNELS_HREF_RE = /^\/channels\/(twitter|x|youtube|tiktok|instagram)_([A-Za-z0-9_@.\-]+)$/;
 	const retweetMuteStorageKey = 'feedMutedRetweetChannels';
 	const legacyRetweetMuteStorageKey = 'mpa-feed-retweet-muted:v1';
@@ -45,6 +46,8 @@
 
 	function channelIDFor(el) {
 		if (!el) return null;
+		const explicitChannelID = el.getAttribute('data-profile-channel-id');
+		if (explicitChannelID) return explicitChannelID;
 		if (el.matches('a.shorts-channel, a.shorts-rail-avatar-link, a.shorts-repost-link')) {
 			return el.getAttribute('data-channel-id') || null;
 		}

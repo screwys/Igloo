@@ -31,6 +31,8 @@ func (s *Server) registerVideoAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/videos/{videoID}/comments/refresh", s.handleVideoCommentsRefresh)
 	mux.HandleFunc("GET /api/videos/{videoID}/segments", s.handleVideoSegments)
 	mux.HandleFunc("GET /api/videos/{videoID}/subtitles", s.handleVideoSubtitlesList)
+	mux.HandleFunc("GET /api/videos/{videoID}/recommendations", s.handleVideoRecommendations)
+	mux.HandleFunc("GET /api/discover/cards", s.handleDiscoverCards)
 	mux.HandleFunc("DELETE /api/videos/{videoID}", s.handleVideoDelete)
 	mux.HandleFunc("GET /api/media/stream/{videoID}", s.handleStream)
 	mux.HandleFunc("GET /api/media/audio/{videoID}", s.handleAudio)
@@ -54,6 +56,50 @@ func (s *Server) batchCheckSubtitles(videos []model.Video) map[string]bool {
 		result[asset.OwnerID] = true
 	}
 	return result
+}
+
+func (s *Server) handleVideoRecommendations(w http.ResponseWriter, r *http.Request) {
+	videoID := strings.TrimSpace(r.PathValue("videoID"))
+	video, err := s.db.GetVideo(videoID)
+	if err != nil || video == nil || video.OwnerKind != "youtube_video" {
+		http.NotFound(w, r)
+		return
+	}
+	localVideos := s.playerMoreFromChannel(*video, 4)
+	videos, fresh, err := s.db.GetYouTubeRecommendations(videoID, 32)
+	if err != nil {
+		slog.Warn("GetYouTubeRecommendations partial", "video_id", videoID, "err", err)
+	}
+	videos = playerRelatedRecommendations(videos, video.VideoID, video.Title, video.ChannelID, 16)
+	pending := len(videos) == 0 && !fresh
+	if !fresh && s.workers != nil {
+		if err := s.workers.QueueYouTubeRecommendations(videoID); err != nil {
+			slog.Warn("QueueYouTubeRecommendations partial", "video_id", videoID, "err", err)
+			pending = false
+		}
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = components.PlayerDiscoveryRail(s.pageProps(w, r), videoID, localVideos, videos, pending).Render(r.Context(), w)
+}
+
+func (s *Server) handleDiscoverCards(w http.ResponseWriter, r *http.Request) {
+	videos, err := s.db.ListYouTubeDiscoverVideos(80)
+	if err != nil {
+		slog.Warn("ListYouTubeDiscoverVideos partial", "err", err)
+	}
+	videos = shuffledDiscoverVideos(videos, time.Now().UnixNano())
+	pending := len(videos) == 0
+	if pending && s.workers != nil {
+		queued, err := s.workers.QueueFollowedYouTubeChannelRecommendations()
+		if err != nil {
+			slog.Warn("QueueFollowedYouTubeChannelRecommendations partial", "err", err)
+			pending = false
+		} else if queued == 0 {
+			pending = false
+		}
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = components.DiscoverGrid(s.pageProps(w, r), videos, pending).Render(r.Context(), w)
 }
 
 // videoToJSON converts a Video to a JSON map matching Android's VideoDto.

@@ -16,7 +16,7 @@ templ YouTubeSearchPage(p PageProps, query string, results []map[string]any, sea
 				} else if len(results) > 0 {
 					<div class="video-grid">
 						for _, r := range results {
-							@YouTubeSearchCard(r)
+							@YouTubeSearchCard(p, r)
 						}
 					</div>
 				} else {
@@ -51,8 +51,8 @@ templ youtubeSearchBar(p PageProps, query string) {
 
 // YouTubeSearchCard renders a single YouTube search result using the same
 // card structure as VideoCard (same CSS classes) for visual consistency.
-templ YouTubeSearchCard(r map[string]any) {
-	<a class="video-card" href={ templ.SafeURL("/temp/watch?v=" + mapStr(r, "VideoID")) } data-video-id={ mapStr(r, "VideoID") }>
+templ YouTubeSearchCard(p PageProps, r map[string]any) {
+	<a class="video-card" href={ templ.SafeURL("/temp/watch?v=" + mapStr(r, "VideoID")) } data-video-id={ mapStr(r, "VideoID") } data-channel-id={ mapStr(r, "ChannelID") } data-platform="youtube">
 		<div class="video-thumbnail">
 			<img src={ mapStr(r, "ThumbnailURL") } loading="lazy" alt=""/>
 			if mapInt(r, "Duration") > 0 {
@@ -64,7 +64,7 @@ templ YouTubeSearchCard(r map[string]any) {
 			<div class="video-meta">
 				<span class="video-channel-wrap">
 					if mapStr(r, "AvatarURL") != "" {
-						<img class="video-channel-avatar" src={ mapStr(r, "AvatarURL") } alt="" loading="lazy"/>
+						<img class="video-channel-avatar" src={ mapStr(r, "AvatarURL") } alt="" loading="lazy" data-profile-channel-id={ mapStr(r, "ChannelID") }/>
 					}
 					<span class="video-channel">{ mapStr(r, "ChannelName") }</span>
 				</span>

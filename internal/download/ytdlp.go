@@ -282,6 +282,117 @@ func (y *YtDlpWrapper) ChannelCheck(ctx context.Context, url string, limit int, 
 	return snapshot, nil
 }
 
+// FetchYouTubeMix returns lightweight entries from YouTube's dynamic mix for
+// one anchor video. It never downloads candidate media.
+func (y *YtDlpWrapper) FetchYouTubeMix(ctx context.Context, videoID string, limit int, opts Opts) ([]VideoRef, error) {
+	videoID = strings.TrimSpace(videoID)
+	if videoID == "" {
+		return nil, fmt.Errorf("youtube mix video id is empty")
+	}
+	if limit <= 0 {
+		limit = 24
+	}
+	start := time.Now()
+	mixURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s&list=RD%s", url.QueryEscape(videoID), url.QueryEscape(videoID))
+	cmd := applyCookieAuth(ytdlp.New().
+		FlatPlaylist().
+		SkipDownload().
+		NoWarnings().
+		PlaylistItems(fmt.Sprintf(":%d", limit)).
+		DumpJSON(), opts)
+	result, runErr := cmd.Run(ctx, mixURL)
+	if result == nil {
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.mix", mixURL, start, runErr, opts, 0, 0, 0)
+		return nil, fmt.Errorf("yt-dlp youtube mix: %w", runErr)
+	}
+	infos, parseErr := result.GetExtractedInfo()
+	if parseErr != nil {
+		err := parseErr
+		if runErr != nil {
+			err = runErr
+		}
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.mix", mixURL, start, err, opts, 0, 0, 0)
+		return nil, fmt.Errorf("parse youtube mix: %w", err)
+	}
+	refs := youtubeRefsFromExtractedInfo(infos, videoID)
+	y.recordYtDlpOperationWithCounts(ctx, "youtube.mix", mixURL, start, runErr, opts, len(refs), 0, 0)
+	if len(refs) == 0 && runErr != nil {
+		return nil, fmt.Errorf("yt-dlp youtube mix: %w", runErr)
+	}
+	return refs, nil
+}
+
+// SearchYouTube returns flat metadata candidates without downloading media.
+func (y *YtDlpWrapper) SearchYouTube(ctx context.Context, query string, limit int, opts Opts) ([]VideoRef, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, fmt.Errorf("youtube search query is empty")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	start := time.Now()
+	target := fmt.Sprintf("ytsearch%d:%s", limit, query)
+	result, runErr := applyCookieAuth(ytdlp.New().FlatPlaylist().SkipDownload().NoWarnings().DumpJSON(), opts).Run(ctx, target)
+	if result == nil {
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.recommendation_search", target, start, runErr, opts, 0, 0, 0)
+		return nil, fmt.Errorf("yt-dlp youtube search: %w", runErr)
+	}
+	infos, parseErr := result.GetExtractedInfo()
+	if parseErr != nil {
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.recommendation_search", target, start, parseErr, opts, 0, 0, 0)
+		return nil, fmt.Errorf("parse youtube search: %w", parseErr)
+	}
+	refs := youtubeRefsFromExtractedInfo(infos, "")
+	y.recordYtDlpOperationWithCounts(ctx, "youtube.recommendation_search", target, start, runErr, opts, len(refs), 0, 0)
+	if len(refs) == 0 && runErr != nil {
+		return nil, fmt.Errorf("yt-dlp youtube search: %w", runErr)
+	}
+	return refs, nil
+}
+
+func youtubeRefsFromExtractedInfo(infos []*ytdlp.ExtractedInfo, excludeVideoID string) []VideoRef {
+	refs := make([]VideoRef, 0, len(infos))
+	for _, info := range infos {
+		if info == nil || strings.TrimSpace(info.ID) == "" || info.ID == excludeVideoID {
+			continue
+		}
+		ref := VideoRef{VideoID: info.ID}
+		if info.Title != nil {
+			ref.Title = *info.Title
+		}
+		if info.Duration != nil {
+			ref.Duration = int(*info.Duration)
+		}
+		if info.WebpageURL != nil {
+			ref.URL = *info.WebpageURL
+		}
+		if ref.URL == "" {
+			ref.URL = "https://www.youtube.com/watch?v=" + ref.VideoID
+		}
+		if info.ChannelID != nil {
+			ref.ChannelID = CanonicalizeYouTubeChannelID(*info.ChannelID)
+		}
+		if info.Channel != nil {
+			ref.AuthorDisplayName = *info.Channel
+		} else if info.Uploader != nil {
+			ref.AuthorDisplayName = *info.Uploader
+		}
+		if info.UploaderID != nil {
+			ref.AuthorHandle = *info.UploaderID
+			handle := strings.TrimLeft(strings.TrimSpace(*info.UploaderID), "@")
+			if handle != "" {
+				ref.AuthorAvatarURL = "https://unavatar.io/youtube/" + url.PathEscape(handle)
+			}
+		}
+		if info.Timestamp != nil {
+			ref.PublishedAtMs = int64(*info.Timestamp * 1000)
+		}
+		refs = append(refs, ref)
+	}
+	return refs
+}
+
 func firstOpts(opts []Opts) Opts {
 	if len(opts) == 0 {
 		return Opts{}

@@ -92,6 +92,26 @@ func ClampBackupKeepCount(n int) int {
 	return n
 }
 
+func ClampDiscoverPrefetchCount(n int) int {
+	if n < 0 {
+		return 0
+	}
+	if n > 50 {
+		return 50
+	}
+	return n
+}
+
+func ClampDiscoverMaxDurationMinutes(n int) int {
+	if n < 0 {
+		return 0
+	}
+	if n > 1440 {
+		return 1440
+	}
+	return n
+}
+
 const MaxXProfileHistoryLimit = 10000
 
 // ClampXProfileHistoryLimit bounds X profile history to a practical database
@@ -134,6 +154,8 @@ var Defaults = map[string]any{
 	"youtube_fetch_delay":              120,
 	"youtube_max_videos":               12,
 	"youtube_include_member_only":      false,
+	"discover_prefetch_count":          10,
+	"discover_max_duration_minutes":    120,
 	"download_subtitles":               false,
 	"tiktok_fetch_delay":               60,
 	"shorts_max_videos":                20,

@@ -97,6 +97,7 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 	mux.HandleFunc("GET /shorts", s.handlePageShorts)
 	mux.HandleFunc("GET /channels/{channelID}", s.handlePageChannel)
 	mux.HandleFunc("GET /videos", s.handlePageVideos)
+	mux.HandleFunc("GET /discover", s.handlePageDiscover)
 	mux.HandleFunc("GET /creators", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/channels", http.StatusMovedPermanently)
 	})
@@ -185,6 +186,8 @@ func activeNavForPath(path string) string {
 		return "channels"
 	case path == "/videos" || strings.HasPrefix(path, "/videos/"):
 		return "videos"
+	case path == "/discover":
+		return "discover"
 	case path == "/player" || strings.HasPrefix(path, "/player/") || path == "/watch":
 		return "videos"
 	case path == "/youtube/search":

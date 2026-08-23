@@ -216,19 +216,23 @@ function mouseEvent(target, x, y, relatedTarget = null) {
 }
 
 async function flush() {
-	await new Promise((resolve) => setImmediate(resolve));
+	await new Promise((resolve) => setTimeout(resolve, 75));
 }
 
 async function loadProfileHover() {
 	const document = new FakeDocument();
 	const requests = [];
+	const windowListeners = new Map();
 	const window = {
 		document,
 		innerWidth: 1024,
 		innerHeight: 768,
 		scrollX: 0,
 		scrollY: 0,
-		addEventListener() {},
+		addEventListener(type, fn) {
+			if (!windowListeners.has(type)) windowListeners.set(type, []);
+			windowListeners.get(type).push(fn);
+		},
 		matchMedia: () => ({ matches: false }),
 	};
 	const context = vm.createContext({
@@ -254,7 +258,13 @@ async function loadProfileHover() {
 	});
 	const source = await readFile(new URL('./profile-hover.js', import.meta.url), 'utf8');
 	vm.runInContext(source, context, { filename: 'profile-hover.js' });
-	return { document, requests };
+	return {
+		document,
+		requests,
+		dispatchWindow(type, event = {}) {
+			for (const fn of windowListeners.get(type) || []) fn(event);
+		},
+	};
 }
 
 function addFeedTargets(document) {
@@ -317,6 +327,16 @@ function addShortsRepostTarget(document) {
 	});
 	document.body.appendChild(repost);
 	return repost;
+}
+
+function addVideoChannelTarget(document, channelID) {
+	const target = new FakeElement('img', {
+		classes: ['video-channel-avatar'],
+		attrs: { 'data-profile-channel-id': channelID },
+		rect: { left: 8, top: 8, right: 160, bottom: 36 },
+	});
+	document.body.appendChild(target);
+	return target;
 }
 
 test('profile hover ignores underlying triggers when the pointer is inside the open card', async () => {
@@ -396,4 +416,33 @@ test('profile hover ignores a Moments repost that moves under a stationary point
 	await flush();
 
 	assert.deepEqual(requests, ['/api/profile-card/tiktok_reposter']);
+});
+
+test('video-card profile hover opens only from channel avatars on every video platform', async () => {
+	for (const channelID of [
+		'youtube_UCsample',
+		'tiktok_sample_creator',
+		'instagram_sample_creator',
+	]) {
+		const { document, requests } = await loadProfileHover();
+		const target = addVideoChannelTarget(document, channelID);
+
+		document.dispatch('mousemove', mouseEvent(target, 20, 20));
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.deepEqual(requests, []);
+		await flush();
+
+		assert.deepEqual(requests, ['/api/profile-card/' + channelID]);
+	}
+});
+
+test('scrolling cancels a pending video-card profile hover', async () => {
+	const { document, requests, dispatchWindow } = await loadProfileHover();
+	const target = addVideoChannelTarget(document, 'youtube_UCsample');
+
+	document.dispatch('mousemove', mouseEvent(target, 20, 20));
+	dispatchWindow('scroll');
+	await flush();
+
+	assert.deepEqual(requests, []);
 });

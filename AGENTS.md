@@ -152,3 +152,7 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
   those changes with the localization drift check and the proportional test
   gate instead. The device proof above still applies when Android-owned copy or
   behavior changes.
+- The proportional gate must treat `android/app/src/main/res/values/strings.xml`
+  as generated localization output, not Android-owned behavior. When it changes
+  only alongside shared locale sources, run the localization drift proof and do
+  not launch Android JVM tests. Other Android resources remain Android-owned.

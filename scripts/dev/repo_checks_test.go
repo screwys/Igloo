@@ -147,6 +147,53 @@ func TestWebGateRunsJavaScriptBehaviorTests(t *testing.T) {
 	}
 }
 
+func TestChangedGateDoesNotTreatGeneratedLocalizationAsAndroidBehavior(t *testing.T) {
+	root := repoRoot(t)
+	runSelection := func(t *testing.T, files ...string) string {
+		t.Helper()
+		bin := t.TempDir()
+		fileList := filepath.Join(bin, "changed-files")
+		if err := os.WriteFile(fileList, []byte(strings.Join(files, "\n")+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		writeExecutable(t, filepath.Join(bin, "git"), `#!/usr/bin/env bash
+case "${1:-}" in
+  diff) cat "$TEST_CHANGED_FILES" ;;
+  ls-files) ;;
+  *) exit 42 ;;
+esac
+`)
+		cmd := exec.Command(filepath.Join(root, "scripts/dev/test-changed.sh"))
+		cmd.Dir = root
+		cmd.Env = append(os.Environ(),
+			"IGLOO_TEST_SELECTION_ONLY=1",
+			"TEST_CHANGED_FILES="+fileList,
+			"PATH="+bin+":"+os.Getenv("PATH"),
+		)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("selection failed: %v\n%s", err, output)
+		}
+		return string(output)
+	}
+
+	generatedOnly := runSelection(t,
+		"locales/app/en.toml",
+		"android/app/src/main/res/values/strings.xml",
+	)
+	if !strings.Contains(generatedOnly, "i18n=1 android=0") {
+		t.Fatalf("generated localization selected Android tests:\n%s", generatedOnly)
+	}
+
+	androidOwned := runSelection(t,
+		"android/app/src/main/res/values/strings.xml",
+		"android/app/src/main/java/com/screwy/igloo/player/PlayerRoute.kt",
+	)
+	if !strings.Contains(androidOwned, "i18n=1 android=1") {
+		t.Fatalf("Android behavior did not select Android tests:\n%s", androidOwned)
+	}
+}
+
 func TestGitHubActionsWorkflowDependenciesAreSHAPinned(t *testing.T) {
 	workflowsDir := filepath.Join(repoRoot(t), ".github", "workflows")
 	entries, err := os.ReadDir(workflowsDir)

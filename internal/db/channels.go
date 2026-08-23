@@ -601,6 +601,56 @@ func (db *DB) AddChannel(ch model.Channel) error {
 	})
 }
 
+// ObserveChannels commits lightweight channel identity discovered outside the
+// followed-source pipeline, such as YouTube search or recommendation results.
+// Observation never follows a channel; it makes the existing profile job the
+// owner of completing identity and media before hover-card presentation.
+func (db *DB) ObserveChannels(channels []model.Channel) error {
+	if len(channels) == 0 {
+		return nil
+	}
+	nowMs := time.Now().UnixMilli()
+	return db.WithWrite(func(tx *sql.Tx) error {
+		seen := make(map[string]struct{}, len(channels))
+		for _, channel := range channels {
+			applyChannelIDDefaults(&channel)
+			channel.ChannelID = strings.TrimSpace(channel.ChannelID)
+			channel.Platform = detectPlatform(channel.Platform, channel.URL)
+			_, _, _, derivedPlatform := channelDefaultsFromID(channel.ChannelID)
+			if channel.ChannelID == "" || derivedPlatform == "" || channel.Platform == "" {
+				continue
+			}
+			if _, duplicate := seen[channel.ChannelID]; duplicate {
+				continue
+			}
+			seen[channel.ChannelID] = struct{}{}
+
+			if _, err := tx.Exec(`
+				INSERT INTO channels
+					(channel_id, source_id, name, url, platform, quality)
+				VALUES (?, ?, ?, ?, ?, ?)
+				ON CONFLICT(channel_id) DO UPDATE SET
+					source_id = COALESCE(NULLIF(channels.source_id, ''), excluded.source_id),
+					name = CASE
+						WHEN COALESCE(channels.name, '') = '' OR channels.name = channels.channel_id
+						THEN excluded.name ELSE channels.name END,
+					url = COALESCE(NULLIF(channels.url, ''), excluded.url),
+					platform = COALESCE(NULLIF(channels.platform, ''), excluded.platform)
+			`, channel.ChannelID, nilIfEmpty(channel.SourceID), channel.Name,
+				nilIfEmpty(channel.URL), channel.Platform, nilIfEmpty(channel.Quality)); err != nil {
+				return err
+			}
+			if strings.TrimSpace(channel.DisplayName) == "" {
+				channel.DisplayName = channel.Name
+			}
+			if err := observeChannelProfileTx(tx, channel, nowMs); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // GetChannelByID returns a single channel by its channel_id.
 // Returns sql.ErrNoRows (wrapped) if not found.
 func (db *DB) GetChannelByID(channelID string) (model.Channel, error) {

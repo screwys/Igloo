@@ -3,7 +3,7 @@ package components
 import "github.com/screwys/igloo/internal/model"
 
 // PlayerPage renders the full video player page wrapped in the Base layout.
-templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFromChannel []model.Video, nextVideo *model.Video, sbCategories string) {
+templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFromChannel []model.Video, nextVideo *model.Video, recommendations []model.DiscoveryVideo, recommendationsPending bool, sbCategories string) {
 	@Base(p) {
 		{{ taggedAccounts := videoTaggedAccounts(video) }}
 		<div
@@ -203,14 +203,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 						@VideoCard(p, *nextVideo)
 					</div>
 				}
-				if len(moreFromChannel) > 0 {
-						<h3>{ L(p, "player_more_from_channel", "More videos from this channel") }</h3>
-					<div class="more-videos-list">
-						for _, v := range moreFromChannel {
-							@VideoCard(p, v)
-						}
-					</div>
-				}
+				@PlayerDiscoveryRail(p, video.VideoID, moreFromChannel, recommendations, recommendationsPending)
 			</aside>
 		</div>
 		<script type="module" src={ p.StaticV("js/media-chrome-loader.js") }></script>

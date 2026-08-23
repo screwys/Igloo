@@ -179,6 +179,24 @@ type Video struct {
 	DearrowCheckedAtMs *int64
 }
 
+// DiscoveryVideo is lightweight external video metadata. It deliberately does
+// not imply that canonical media exists; Ready selects the local player only
+// after the normal video/asset owners have committed a playable stream.
+type DiscoveryVideo struct {
+	VideoID       string `json:"video_id"`
+	Title         string `json:"title"`
+	ChannelID     string `json:"channel_id"`
+	ChannelName   string `json:"channel_name"`
+	ChannelHandle string `json:"channel_handle,omitempty"`
+	ChannelURL    string `json:"channel_url,omitempty"`
+	AvatarURL     string `json:"avatar_url,omitempty"`
+	ThumbnailURL  string `json:"thumbnail_url"`
+	Duration      int    `json:"duration,omitempty"`
+	Source        string `json:"source"`
+	Rank          int    `json:"rank"`
+	Ready         bool   `json:"-"`
+}
+
 // VideoRepostSource records a followed TikTok account that introduced a TikTok
 // post through reposts. It is separate from videos so repost metadata can
 // aggregate while the original post remains a single durable row.

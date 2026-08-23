@@ -137,7 +137,7 @@ CREATE INDEX idx_moment_views_date ON moment_views(viewed_at DESC);
 CREATE INDEX idx_profile_jobs_claim ON profile_jobs(requested_at_ms DESC, channel_id, next_attempt_at_ms, lease_until_ms, lease_owner) WHERE requested_revision > completed_revision;
 
 -- index: idx_temp_download_queue_ready on temp_download_queue
-CREATE INDEX idx_temp_download_queue_ready ON temp_download_queue(status, next_attempt_at_ms, lease_until_ms, added_at_ms);
+CREATE INDEX idx_temp_download_queue_ready ON temp_download_queue(origin, status, next_attempt_at_ms, lease_until_ms, added_at_ms);
 
 -- index: idx_translation_jobs_ready on translation_jobs
 CREATE INDEX idx_translation_jobs_ready ON translation_jobs(target_lang, status, priority DESC, updated_at, tweet_id, field, next_attempt_at);
@@ -168,6 +168,12 @@ CREATE INDEX idx_videos_media_shape ON videos(media_kind, slide_count);
 
 -- index: idx_videos_source_kind on videos
 CREATE INDEX idx_videos_source_kind ON videos(source_kind, published_at DESC);
+
+-- index: idx_youtube_recommendations_fetched on youtube_recommendations
+CREATE INDEX idx_youtube_recommendations_fetched ON youtube_recommendations(fetched_at_ms DESC, anchor_video_id);
+
+-- index: idx_youtube_recommendations_ready on youtube_recommendations
+CREATE INDEX idx_youtube_recommendations_ready ON youtube_recommendations(status, next_attempt_at_ms, lease_until_ms, requested_at_ms);
 
 -- table: analytics_events on analytics_events
 CREATE TABLE analytics_events ( event_id TEXT PRIMARY KEY, event_type TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, screen TEXT, content_type TEXT, elapsed_ms INTEGER DEFAULT 0, extra_json TEXT );
@@ -219,6 +225,9 @@ CREATE TABLE channel_stars ( channel_id TEXT PRIMARY KEY, starred_at INTEGER NOT
 
 -- table: channels on channels
 CREATE TABLE channels ( id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id TEXT UNIQUE NOT NULL, source_id TEXT, name TEXT NOT NULL, url TEXT, platform TEXT, quality TEXT, last_checked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL DEFAULT 0 );
+
+-- table: discover_temp_downloads on discover_temp_downloads
+CREATE TABLE discover_temp_downloads ( video_id TEXT PRIMARY KEY, downloaded_at_ms INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (video_id) REFERENCES videos(video_id) ON DELETE CASCADE ) WITHOUT ROWID;
 
 -- table: download_queue on download_queue
 CREATE TABLE download_queue ( video_id TEXT PRIMARY KEY, owner_channel_id TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', published_at_ms INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')), retry_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER NOT NULL DEFAULT 0, last_error_kind TEXT NOT NULL DEFAULT '', last_error TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL DEFAULT '', lease_until_ms INTEGER NOT NULL DEFAULT 0, added_at_ms INTEGER NOT NULL DEFAULT 0, started_at_ms INTEGER NOT NULL DEFAULT 0 );
@@ -329,7 +338,7 @@ CREATE TABLE sponsorblock_checked ( video_id TEXT PRIMARY KEY, checked_at INTEGE
 CREATE TABLE sponsorblock_segments ( video_id TEXT NOT NULL, start_time REAL NOT NULL, end_time REAL NOT NULL, category TEXT NOT NULL, PRIMARY KEY (video_id, start_time) );
 
 -- table: temp_download_queue on temp_download_queue
-CREATE TABLE temp_download_queue ( url TEXT PRIMARY KEY, platform TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')), retry_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER NOT NULL DEFAULT 0, last_error_kind TEXT NOT NULL DEFAULT '', last_error TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL DEFAULT '', lease_until_ms INTEGER NOT NULL DEFAULT 0, added_at_ms INTEGER NOT NULL DEFAULT 0, started_at_ms INTEGER NOT NULL DEFAULT 0 );
+CREATE TABLE temp_download_queue ( url TEXT PRIMARY KEY, platform TEXT NOT NULL, origin TEXT NOT NULL DEFAULT 'interactive' CHECK(origin IN ('interactive', 'discover')), status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')), retry_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER NOT NULL DEFAULT 0, last_error_kind TEXT NOT NULL DEFAULT '', last_error TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL DEFAULT '', lease_until_ms INTEGER NOT NULL DEFAULT 0, added_at_ms INTEGER NOT NULL DEFAULT 0, started_at_ms INTEGER NOT NULL DEFAULT 0 );
 
 -- table: translation_jobs on translation_jobs
 CREATE TABLE translation_jobs ( tweet_id TEXT NOT NULL, field TEXT NOT NULL, target_lang TEXT NOT NULL, source_hash TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'queued', priority INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at INTEGER NOT NULL DEFAULT 0, last_error_kind TEXT NOT NULL DEFAULT '', last_error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (tweet_id, field, target_lang) );
@@ -357,6 +366,9 @@ CREATE TABLE videos ( id INTEGER PRIMARY KEY AUTOINCREMENT, video_id TEXT UNIQUE
 
 -- table: watch_history on watch_history
 CREATE TABLE watch_history ( video_id TEXT PRIMARY KEY, playback_position REAL NOT NULL DEFAULT 0, duration REAL, updated_at_ms INTEGER NOT NULL DEFAULT 0 );
+
+-- table: youtube_recommendations on youtube_recommendations
+CREATE TABLE youtube_recommendations ( anchor_video_id TEXT PRIMARY KEY, candidates_json TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'ready', 'blocked')), fetched_at_ms INTEGER NOT NULL DEFAULT 0, expires_at_ms INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL DEFAULT '', lease_until_ms INTEGER NOT NULL DEFAULT 0, requested_at_ms INTEGER NOT NULL DEFAULT 0, updated_at_ms INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (anchor_video_id) REFERENCES videos(video_id) ON DELETE CASCADE );
 
 -- trigger: android_sync_head_assets_delete on assets
 CREATE TRIGGER android_sync_head_assets_delete AFTER DELETE ON assets WHEN TRIM(CAST(OLD.asset_id AS TEXT)) != '' BEGIN UPDATE android_sync_clock SET revision = revision + 1 WHERE id = 1; INSERT INTO android_sync_heads (owner_kind, owner_id, revision) VALUES ('asset', CAST(OLD.asset_id AS TEXT), (SELECT revision FROM android_sync_clock WHERE id = 1)) ON CONFLICT(owner_kind, owner_id) DO UPDATE SET revision = excluded.revision; END;

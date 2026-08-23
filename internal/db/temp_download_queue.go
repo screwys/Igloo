@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/screwys/igloo/internal/model"
 )
 
 // TempDownloadWork is an interactive download claimed by the durable worker.
 type TempDownloadWork struct {
 	URL        string
 	Platform   string
+	Origin     string
 	RetryCount int
 	LeaseOwner string
 }
@@ -37,6 +40,33 @@ func (db *DB) TempDownloadState(rawURL string) (TempDownloadState, bool, error) 
 	return state, true, nil
 }
 
+func (db *DB) TempDownloadOrigin(rawURL string) (string, error) {
+	var origin string
+	err := db.reader().QueryRow(`SELECT origin FROM temp_download_queue WHERE url = ?`, strings.TrimSpace(rawURL)).Scan(&origin)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return origin, err
+}
+
+func (db *DB) MarkDiscoverTempVideo(videoID string, nowMs int64) error {
+	videoID = strings.TrimSpace(videoID)
+	if videoID == "" {
+		return nil
+	}
+	if nowMs <= 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	return db.WithWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`
+			INSERT INTO discover_temp_downloads (video_id, downloaded_at_ms)
+			VALUES (?, ?)
+			ON CONFLICT(video_id) DO UPDATE SET downloaded_at_ms = excluded.downloaded_at_ms
+		`, videoID, nowMs)
+		return err
+	})
+}
+
 // EnqueueTempDownload records an interactive download before any network work
 // starts. A blocked URL is explicitly retried when submitted again.
 func (db *DB) EnqueueTempDownload(rawURL, platform string) (bool, error) {
@@ -49,9 +79,10 @@ func (db *DB) EnqueueTempDownload(rawURL, platform string) (bool, error) {
 	queued := false
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		res, err := tx.Exec(`
-			INSERT INTO temp_download_queue (url, platform, added_at_ms)
-			VALUES (?, ?, ?)
-			ON CONFLICT(url) DO UPDATE SET
+				INSERT INTO temp_download_queue (url, platform, origin, added_at_ms)
+				VALUES (?, ?, 'interactive', ?)
+				ON CONFLICT(url) DO UPDATE SET
+					origin = 'interactive',
 				status = CASE WHEN temp_download_queue.status = 'blocked' THEN 'pending' ELSE temp_download_queue.status END,
 				retry_count = CASE WHEN temp_download_queue.status = 'blocked' THEN 0 ELSE temp_download_queue.retry_count END,
 				next_attempt_at_ms = CASE WHEN temp_download_queue.status = 'blocked' THEN 0 ELSE temp_download_queue.next_attempt_at_ms END,
@@ -69,6 +100,88 @@ func (db *DB) EnqueueTempDownload(rawURL, platform string) (bool, error) {
 		return nil
 	})
 	return queued, err
+}
+
+// EnqueueDiscoverTempDownloads maintains a bounded global warm set. Existing
+// ready media and queued work both count toward the target; interactive work is
+// never demoted when the same URL is recommended again.
+func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, target int) (int, error) {
+	if target <= 0 || len(candidates) == 0 {
+		return 0, nil
+	}
+	if target > 50 {
+		target = 50
+	}
+	nowMs := time.Now().UnixMilli()
+	added := 0
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		seen := make(map[string]struct{})
+		warm := 0
+		for _, candidate := range candidates {
+			videoID := strings.TrimSpace(candidate.VideoID)
+			if videoID == "" {
+				continue
+			}
+			if _, duplicate := seen[videoID]; duplicate {
+				continue
+			}
+			seen[videoID] = struct{}{}
+			var ready bool
+			if err := tx.QueryRow(`
+				SELECT EXISTS(SELECT 1 FROM videos v WHERE v.video_id = ? AND `+readyVideoMediaExistsSQL("v")+`)
+			`, videoID).Scan(&ready); err != nil {
+				return err
+			}
+			url := "https://www.youtube.com/watch?v=" + videoID
+			var queued bool
+			if err := tx.QueryRow(`
+				SELECT EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ? AND status IN ('pending', 'processing'))
+			`, url).Scan(&queued); err != nil {
+				return err
+			}
+			if ready || queued {
+				warm++
+			}
+		}
+		if warm >= target {
+			return nil
+		}
+		seen = make(map[string]struct{})
+		for _, candidate := range candidates {
+			videoID := strings.TrimSpace(candidate.VideoID)
+			if videoID == "" {
+				continue
+			}
+			if _, duplicate := seen[videoID]; duplicate {
+				continue
+			}
+			seen[videoID] = struct{}{}
+			url := "https://www.youtube.com/watch?v=" + videoID
+			var occupied bool
+			if err := tx.QueryRow(`
+				SELECT EXISTS(SELECT 1 FROM videos v WHERE v.video_id = ? AND `+readyVideoMediaExistsSQL("v")+`)
+				    OR EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ?)
+			`, videoID, url).Scan(&occupied); err != nil {
+				return err
+			}
+			if occupied {
+				continue
+			}
+			if _, err := tx.Exec(`
+				INSERT INTO temp_download_queue (url, platform, origin, added_at_ms)
+				VALUES (?, 'youtube', 'discover', ?)
+			`, url, nowMs); err != nil {
+				return err
+			}
+			added++
+			warm++
+			if warm >= target {
+				break
+			}
+		}
+		return nil
+	})
+	return added, err
 }
 
 // ClaimTempDownloadWork leases the oldest due user-submitted download.
@@ -93,12 +206,12 @@ func (db *DB) ClaimTempDownloadWork(owner string, nowMs int64, lease time.Durati
 				SELECT url FROM temp_download_queue
 				WHERE (status = 'pending' AND next_attempt_at_ms <= ?)
 				   OR (status = 'processing' AND lease_until_ms <= ?)
-				ORDER BY added_at_ms, url
+					ORDER BY CASE WHEN origin = 'interactive' THEN 0 ELSE 1 END, added_at_ms, url
 				LIMIT 1
 			)
-			RETURNING url, platform, retry_count, lease_owner
-		`, owner, nowMs+lease.Milliseconds(), nowMs, nowMs, nowMs)
-		if err := row.Scan(&work.URL, &work.Platform, &work.RetryCount, &work.LeaseOwner); err != nil {
+				RETURNING url, platform, origin, retry_count, lease_owner
+			`, owner, nowMs+lease.Milliseconds(), nowMs, nowMs, nowMs)
+		if err := row.Scan(&work.URL, &work.Platform, &work.Origin, &work.RetryCount, &work.LeaseOwner); err != nil {
 			if err == sql.ErrNoRows {
 				return nil
 			}

@@ -83,8 +83,11 @@ func (db *DB) queryTempVideosByPin(pinned bool) ([]model.Video, error) {
 		FROM videos v
 		LEFT JOIN watch_history wh ON wh.video_id = v.video_id
 		WHERE v.is_temp = 1 AND COALESCE(v.is_pinned, 0) = ?
+		  AND (? = 1 OR NOT EXISTS (
+		    SELECT 1 FROM discover_temp_downloads discover WHERE discover.video_id = v.video_id
+		  ))
 		ORDER BY v.downloaded_at DESC
-	`, flag)
+	`, flag, flag)
 	if err != nil {
 		return nil, err
 	}

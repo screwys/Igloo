@@ -182,6 +182,41 @@ body.feed-media-overlay-open {
     }
 }
 
+/* ===== YouTube discovery ===== */
+.discover-page {
+    padding: 0 1.5rem 2rem;
+}
+
+.discover-rail-loading {
+    color: var(--text-secondary);
+}
+
+.discover-ready-badge {
+    position: absolute;
+    left: 0.45rem;
+    bottom: 0.45rem;
+    padding: 0.2rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(28, 145, 78, 0.92);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 650;
+    backdrop-filter: blur(6px);
+}
+
+.discover-rail-loading {
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 0.82rem;
+}
+
+@media (max-width: 768px) {
+    .discover-page {
+        padding: 0 0.75rem 1.5rem;
+    }
+}
+
 .nav-item-container {
     display: flex;
     align-items: center;
@@ -1514,7 +1549,6 @@ html.sidebar-resizing .sidebar-resize-handle::after {
 }
 
 .video-card:hover {
-    transform: translateY(-4px) scale(1.005);
     border-color: var(--accent-primary);
     box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
 }
