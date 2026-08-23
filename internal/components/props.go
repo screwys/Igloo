@@ -57,6 +57,7 @@ type PageProps struct {
 	SupportedLanguages      []LanguageChoice
 	Sidebar                 model.SidebarContext
 	ShareEmbedFriendlyLinks bool
+	ShareEmbedHosts         map[string]string
 	MiniPlayerVideosEnabled bool
 	MiniPlayerFeedEnabled   bool
 	DownloadsStopped        bool
@@ -125,6 +126,7 @@ func (p PageProps) ShortcutConfigJSON() string {
 func (p PageProps) PreferencesConfigJSON() string {
 	b, _ := json.Marshal(map[string]any{
 		"shareEmbedFriendlyLinks": p.ShareEmbedFriendlyLinks,
+		"shareEmbedHosts":         p.ShareEmbedHosts,
 		"miniPlayerVideosEnabled": p.MiniPlayerVideosEnabled,
 		"miniPlayerFeedEnabled":   p.MiniPlayerFeedEnabled,
 	})

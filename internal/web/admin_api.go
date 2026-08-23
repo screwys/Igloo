@@ -424,7 +424,10 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 			body[key] = v
 		}
 	}
-	clearableFields := []string{"translate_api_site", "translate_api_key", "translate_model", "web_custom_css"}
+	clearableFields := []string{
+		"translate_api_site", "translate_api_key", "translate_model", "web_custom_css",
+		"share_embed_host_youtube", "share_embed_host_twitter", "share_embed_host_tiktok", "share_embed_host_instagram",
+	}
 	for _, key := range clearableFields {
 		if _, ok := r.Form[key]; ok {
 			body[key] = r.FormValue(key)

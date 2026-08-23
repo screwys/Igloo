@@ -38,18 +38,33 @@ export function toFxTwitterUrl(rawUrl) {
   try {
     var parsed = new URL(value, window.location.origin)
     var host = String(parsed.hostname || '').toLowerCase()
-    if (host === 'x.com' || host === 'www.x.com' || host.endsWith('.x.com') ||
-        host === 'twitter.com' || host === 'www.twitter.com' || host.endsWith('.twitter.com')) {
-      parsed.hostname = 'fxtwitter.com'
-    }
-    if (host === 'tiktok.com' || host === 'www.tiktok.com' || host.endsWith('.tiktok.com')) {
-      parsed.hostname = 'tnktok.com'
-    }
-    if (host === 'instagram.com' || host === 'www.instagram.com' || host.endsWith('.instagram.com')) {
-      parsed.hostname = 'vxinstagram.com'
-    }
+    var platform = ''
+    if (matchesDomain(host, 'x.com') || matchesDomain(host, 'twitter.com')) platform = 'twitter'
+    else if (matchesDomain(host, 'tiktok.com')) platform = 'tiktok'
+    else if (matchesDomain(host, 'instagram.com')) platform = 'instagram'
+    else if (matchesDomain(host, 'youtube.com') || matchesDomain(host, 'youtu.be')) platform = 'youtube'
+    var replacement = configuredEmbedHost(platform)
+    if (replacement) parsed.host = replacement
     return parsed.toString()
   } catch (_) { return value }
+}
+
+function matchesDomain(host, domain) {
+  return host === domain || host === 'www.' + domain || host.endsWith('.' + domain)
+}
+
+function configuredEmbedHost(platform) {
+  if (!platform) return ''
+  var defaults = { twitter: 'fxtwitter.com', tiktok: 'tnktok.com', instagram: 'vxinstagram.com', youtube: '' }
+  var configured = (window.IglooPreferences || {}).shareEmbedHosts
+  var value = configured && Object.prototype.hasOwnProperty.call(configured, platform) ? configured[platform] : defaults[platform]
+  value = String(value || '').trim()
+  if (!value) return ''
+  try {
+    return new URL(value.indexOf('://') >= 0 ? value : 'https://' + value).host
+  } catch (_) {
+    return ''
+  }
 }
 
 export function useEmbedFriendlyShareLinks() {

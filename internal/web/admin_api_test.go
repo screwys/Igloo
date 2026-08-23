@@ -46,6 +46,8 @@ func TestSettingsFromForm_PersistsShareEmbedFriendlyLinks(t *testing.T) {
 	srv := newTestServer(t)
 	form := url.Values{}
 	form.Set("share_embed_friendly_links", "true")
+	form.Set("share_embed_host_twitter", "fixupx.example")
+	form.Set("share_embed_host_youtube", "")
 	req := httptest.NewRequest("POST", "/api/settings", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if err := req.ParseForm(); err != nil {
@@ -55,6 +57,12 @@ func TestSettingsFromForm_PersistsShareEmbedFriendlyLinks(t *testing.T) {
 	body := srv.settingsFromForm(req)
 	if got := body["share_embed_friendly_links"]; got != "true" {
 		t.Errorf("share_embed_friendly_links = %q, want true", got)
+	}
+	if got := body["share_embed_host_twitter"]; got != "fixupx.example" {
+		t.Errorf("share_embed_host_twitter = %q, want fixupx.example", got)
+	}
+	if got, ok := body["share_embed_host_youtube"]; !ok || got != "" {
+		t.Errorf("share_embed_host_youtube = %q, %v; want persisted empty value", got, ok)
 	}
 }
 

@@ -295,11 +295,18 @@
 
     var form = doc.getElementById('prefs-form');
     var shareEmbedFriendly = form && form.querySelector('[name=share_embed_friendly_links]');
+    var shareEmbedHosts = {};
+    if (form) {
+      qa('[name^=share_embed_host_]', form).forEach(function (input) {
+        shareEmbedHosts[input.name.slice('share_embed_host_'.length)] = input.value.trim();
+      });
+    }
     var miniPlayerVideos = form && form.querySelector('[name=mini_player_videos_enabled]');
     var miniPlayerFeed = form && form.querySelector('[name=mini_player_feed_enabled]');
     if (form) {
       window.IglooPreferences = Object.assign({}, window.IglooPreferences || {}, {
         shareEmbedFriendlyLinks: !!(shareEmbedFriendly && shareEmbedFriendly.checked),
+        shareEmbedHosts: shareEmbedHosts,
         miniPlayerVideosEnabled: !!(miniPlayerVideos && miniPlayerVideos.checked),
         miniPlayerFeedEnabled: !!(miniPlayerFeed && miniPlayerFeed.checked)
       });
@@ -383,14 +390,36 @@
   function syncSidebarRouteOrder(container) {
     if (!container) return;
     var rows = qa('[data-sidebar-route]', container);
-    rows.forEach(function (row, index) {
-      var up = row.querySelector('[data-sidebar-route-move="up"]');
-      var down = row.querySelector('[data-sidebar-route-move="down"]');
-      if (up) up.disabled = index === 0;
-      if (down) down.disabled = index === rows.length - 1;
-    });
     var input = container.parentElement && container.parentElement.querySelector('[data-sidebar-route-order-input]');
     if (input) input.value = rows.map(function (row) { return row.getAttribute('data-sidebar-route'); }).join(',');
+  }
+
+  function sidebarRouteOrderValue(container) {
+    return qa('[data-sidebar-route]', container).map(function (row) {
+      return row.getAttribute('data-sidebar-route');
+    }).join(',');
+  }
+
+  function notifySidebarRouteOrderChanged(container) {
+    syncSidebarRouteOrder(container);
+    var input = container.parentElement && container.parentElement.querySelector('[data-sidebar-route-order-input]');
+    if (input) input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function updatePrefsInitialField(form, input) {
+    if (!form || !input || !input.name) return;
+    var prefix = input.name + '=';
+    var replacement = prefix + encodeURIComponent(input.value || '');
+    var parts = String(form.dataset.initialState || '').split('&').filter(Boolean);
+    var found = false;
+    parts = parts.map(function (part) {
+      if (part.indexOf(prefix) !== 0) return part;
+      found = true;
+      return replacement;
+    });
+    if (!found) parts.push(replacement);
+    form.dataset.initialState = parts.join('&');
+    updatePrefsDirtyState(form);
   }
 
   function applySidebarRouteOrder(form) {
@@ -403,21 +432,121 @@
     });
   }
 
-  doc.addEventListener('click', function (event) {
-    var button = event.target && event.target.closest && event.target.closest('[data-sidebar-route-move]');
-    if (!button) return;
-    var row = button.closest('[data-sidebar-route]');
-    var container = button.closest('[data-sidebar-route-order]');
+  var draggedSidebarRoute = null;
+
+  function moveDraggedSidebarRoute(row, clientY) {
+    if (!draggedSidebarRoute || !row || row === draggedSidebarRoute) return;
+    var container = draggedSidebarRoute.closest('[data-sidebar-route-order]');
+    if (!container || row.closest('[data-sidebar-route-order]') !== container) return;
+    var rect = row.getBoundingClientRect();
+    container.insertBefore(draggedSidebarRoute, clientY > rect.top + rect.height / 2 ? row.nextElementSibling : row);
+  }
+
+  function finishSidebarRouteDrag() {
+    if (!draggedSidebarRoute) return;
+    var row = draggedSidebarRoute;
+    var container = row.closest('[data-sidebar-route-order]');
+    row.classList.remove('dragging');
+    draggedSidebarRoute = null;
+    if (container && container.dataset.dragStartOrder !== sidebarRouteOrderValue(container)) {
+      notifySidebarRouteOrderChanged(container);
+    }
+    if (container) delete container.dataset.dragStartOrder;
+  }
+
+  doc.addEventListener('pointerdown', function (event) {
+    if (event.button !== 0) return;
+	if (event.target && event.target.closest && event.target.closest('button, input, select, textarea, a')) return;
+	var row = event.target && event.target.closest && event.target.closest('[data-sidebar-route]');
+    var container = row && row.closest('[data-sidebar-route-order]');
     if (!row || !container) return;
-    var direction = button.getAttribute('data-sidebar-route-move');
-    var sibling = direction === 'up' ? row.previousElementSibling : row.nextElementSibling;
+    event.preventDefault();
+    draggedSidebarRoute = row;
+    container.dataset.dragStartOrder = sidebarRouteOrderValue(container);
+    row.classList.add('dragging');
+	if (row.setPointerCapture) row.setPointerCapture(event.pointerId);
+  });
+
+  doc.addEventListener('pointermove', function (event) {
+    if (!draggedSidebarRoute) return;
+    event.preventDefault();
+    var target = doc.elementFromPoint(event.clientX, event.clientY);
+    moveDraggedSidebarRoute(target && target.closest('[data-sidebar-route]'), event.clientY);
+  });
+
+  doc.addEventListener('pointerup', finishSidebarRouteDrag);
+  doc.addEventListener('pointercancel', finishSidebarRouteDrag);
+
+  doc.addEventListener('dragstart', function (event) {
+    var row = event.target && event.target.closest && event.target.closest('[data-sidebar-route]');
+    var container = row && row.closest('[data-sidebar-route-order]');
+    if (!row || !container) return;
+    draggedSidebarRoute = row;
+    container.dataset.dragStartOrder = sidebarRouteOrderValue(container);
+    row.classList.add('dragging');
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', row.getAttribute('data-sidebar-route') || '');
+    }
+  });
+
+  doc.addEventListener('dragover', function (event) {
+    if (!draggedSidebarRoute) return;
+    var row = event.target && event.target.closest && event.target.closest('[data-sidebar-route]');
+    var container = draggedSidebarRoute.closest('[data-sidebar-route-order]');
+    if (!row || !container || row === draggedSidebarRoute || row.closest('[data-sidebar-route-order]') !== container) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    moveDraggedSidebarRoute(row, event.clientY);
+  });
+
+  doc.addEventListener('drop', function (event) {
+    if (draggedSidebarRoute && event.target && event.target.closest('[data-sidebar-route-order]')) event.preventDefault();
+  });
+
+  doc.addEventListener('dragend', finishSidebarRouteDrag);
+
+  doc.addEventListener('keydown', function (event) {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    var row = event.target && event.target.closest && event.target.closest('[data-sidebar-route]');
+    var container = row && row.closest('[data-sidebar-route-order]');
+    if (!row || !container) return;
+    var sibling = event.key === 'ArrowUp' ? row.previousElementSibling : row.nextElementSibling;
     if (!sibling) return;
-    if (direction === 'up') container.insertBefore(row, sibling);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.key === 'ArrowUp') container.insertBefore(row, sibling);
     else container.insertBefore(sibling, row);
-    syncSidebarRouteOrder(container);
-    var input = container.parentElement && container.parentElement.querySelector('[data-sidebar-route-order-input]');
-    if (input) input.dispatchEvent(new Event('input', { bubbles: true }));
-    button.focus();
+    notifySidebarRouteOrderChanged(container);
+    row.focus();
+  });
+
+  doc.addEventListener('click', function (event) {
+    var button = event.target && event.target.closest && event.target.closest('[data-embed-host-save]');
+    if (!button) return;
+    var row = button.closest('.embed-host-row');
+    var input = row && row.querySelector('[name^=share_embed_host_]');
+    var status = row && row.querySelector('[data-embed-host-status]');
+    var form = button.closest('#prefs-form');
+    if (!input || !form) return;
+    var platform = button.getAttribute('data-embed-host-save');
+    var key = 'share_embed_host_' + platform;
+    var payload = {};
+    payload[key] = input.value.trim();
+    button.disabled = true;
+    if (status) status.textContent = '';
+    apiJson('/api/settings', { method: 'POST', body: JSON.stringify(payload) }).then(function () {
+      input.value = payload[key];
+      window.IglooPreferences = Object.assign({}, window.IglooPreferences || {});
+      window.IglooPreferences.shareEmbedHosts = Object.assign({}, window.IglooPreferences.shareEmbedHosts || {});
+      window.IglooPreferences.shareEmbedHosts[platform] = payload[key];
+      updatePrefsInitialField(form, input);
+      if (status) status.textContent = translate('status_saved', 'Saved');
+    }).catch(function () {
+      if (status) status.textContent = translate('status_save_failed', 'Save failed');
+    }).finally(function () {
+      button.disabled = input.disabled;
+    });
   });
 
   doc.addEventListener('htmx:afterSettle', function (event) {

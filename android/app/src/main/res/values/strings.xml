@@ -566,6 +566,7 @@
     <string name="settings_dont_auto_translate">Don\'t auto-translate</string>
     <string name="settings_dont_auto_translate_help">Posts in these languages won\'t be auto-translated. Empty list translates everything except your target language.</string>
     <string name="settings_download_english_subtitles">Download English Subtitles</string>
+    <string name="settings_embed_original_site">Original site</string>
     <string name="settings_enable_mini_player">Enable mini player</string>
     <string name="settings_endpoint_override">Endpoint Override</string>
     <string name="settings_endpoint_override_help">Leave blank for Google Basic or DeepL defaults. OpenAI-compatible defaults to local Ollama at http://127.0.0.1:11434.</string>
@@ -775,7 +776,9 @@
     <string name="status_nothing_here_yet">Nothing here yet</string>
     <string name="status_preferences_save_failed">Failed to save preferences</string>
     <string name="status_preferences_saved">Preferences saved</string>
+    <string name="status_save_failed">Save failed</string>
     <string name="status_save_preferences_to_apply">Save your preferences to apply</string>
+    <string name="status_saved">Saved</string>
     <string name="status_scanning_network">Scanning...</string>
     <string name="status_signed_in_as">Signed in as %1$s</string>
     <string name="status_up_to_date">You\'re up to date!</string>

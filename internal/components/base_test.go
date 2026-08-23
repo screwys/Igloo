@@ -133,9 +133,13 @@ func TestBaseEmbedsSharePreferenceConfig(t *testing.T) {
 	}
 
 	p.ShareEmbedFriendlyLinks = true
+	p.ShareEmbedHosts = map[string]string{"twitter": "fixupx.example"}
 	html = renderBase(t, p)
 	if !strings.Contains(html, `"shareEmbedFriendlyLinks":true`) {
 		t.Fatalf("base config should expose enabled shareEmbedFriendlyLinks:\n%s", html)
+	}
+	if !strings.Contains(html, `"shareEmbedHosts":{"twitter":"fixupx.example"}`) {
+		t.Fatalf("base config should expose per-platform embed hosts:\n%s", html)
 	}
 }
 
@@ -292,6 +296,19 @@ func TestPrefsBodyGeneralTabGroupsEmbedsAndMovesBackupsLeft(t *testing.T) {
 	if strings.Contains(html, `Use embed-friendly site for sharing links`) {
 		t.Fatalf("preferences body should not render the old singular embed copy")
 	}
+	for _, want := range []string{
+		`name="share_embed_host_youtube"`,
+		`name="share_embed_host_twitter" class="input" value="fxtwitter.com"`,
+		`name="share_embed_host_tiktok" class="input" value="tnktok.com"`,
+		`name="share_embed_host_instagram" class="input" value="vxinstagram.com"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("preferences body missing editable embed host %q:\n%s", want, html)
+		}
+	}
+	if got := strings.Count(html, `data-embed-host-save=`); got != 4 {
+		t.Fatalf("preferences should render one independent embed-host save button per platform, got %d:\n%s", got, html)
+	}
 
 	backupIdx := strings.Index(html, `name="backup_enabled"`)
 	archiveIdx := strings.Index(html, `name="archive_bookmarks"`)
@@ -315,6 +332,12 @@ func TestPrefsBodyRendersPersistedSidebarRouteOrder(t *testing.T) {
 	html := buf.String()
 	if !strings.Contains(html, `name="sidebar_route_order" value="feed,discover,videos,liked,channels,bookmarks,shorts"`) {
 		t.Fatalf("preferences should preserve the configured sidebar route order:\n%s", html)
+	}
+	if !strings.Contains(html, `data-sidebar-route="feed" draggable="true" tabindex="0"`) {
+		t.Fatalf("sidebar routes should render as draggable, keyboard-focusable rows:\n%s", html)
+	}
+	if strings.Contains(html, `Choose the order of routes in the sidebar.`) || strings.Contains(html, `data-sidebar-route-move`) {
+		t.Fatalf("sidebar order should use the compact drag UI without help copy or move buttons:\n%s", html)
 	}
 }
 
@@ -774,11 +797,19 @@ func TestPrefsPlatformSettingsTabOwnsPlatformDefaults(t *testing.T) {
 	platformPanel := strings.Index(html, `data-prefs-panel="feed"`)
 	sponsorPanel := strings.Index(html, `data-prefs-panel="sponsorblock"`)
 	youtubeSetting := strings.Index(html, `name="youtube_fetch_delay"`)
+	discoverSetting := strings.Index(html, `name="discover_prefetch_count"`)
+	xFeedHeading := strings.Index(html, `>X Feed</h4>`)
 	if platformPanel < 0 || sponsorPanel < 0 || youtubeSetting < 0 {
 		t.Fatalf("missing expected platform panel or YouTube setting:\n%s", html)
 	}
 	if youtubeSetting < platformPanel || youtubeSetting > sponsorPanel {
 		t.Fatalf("youtube settings should render inside Platform Settings panel:\n%s", html)
+	}
+	if discoverSetting < youtubeSetting || xFeedHeading < discoverSetting {
+		t.Fatalf("Discover settings should render inside YouTube before X Feed:\n%s", html)
+	}
+	if strings.Contains(html[platformPanel:sponsorPanel], `>Discover</h4>`) {
+		t.Fatalf("Platform Settings should not render a standalone Discover category:\n%s", html)
 	}
 	for _, want := range []string{
 		`name="youtube_include_member_only" value="true"`,
