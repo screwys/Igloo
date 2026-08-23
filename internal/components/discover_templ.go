@@ -391,7 +391,7 @@ func DiscoveryCard(p PageProps, video model.DiscoveryVideo) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		if video.Ready {
+		if video.DiscoverReady {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<span class=\"discover-ready-badge\">&#10003; ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

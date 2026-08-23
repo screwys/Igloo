@@ -36,6 +36,14 @@ func TestDiscoveryCardUsesTemporaryWatchUntilMediaIsReady(t *testing.T) {
 	if !strings.Contains(buf.String(), `href="/player/sample_discover"`) {
 		t.Fatalf("ready card did not use player: %s", buf.String())
 	}
+	if strings.Contains(buf.String(), `class="discover-ready-badge"`) {
+		t.Fatalf("ordinary local video rendered Discover Ready badge: %s", buf.String())
+	}
+	video.DiscoverReady = true
+	buf.Reset()
+	if err := DiscoveryCard(newTestPageProps(), video).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(buf.String(), `class="discover-ready-badge"`) || !strings.Contains(buf.String(), `Ready`) {
 		t.Fatalf("ready card did not render ready badge: %s", buf.String())
 	}

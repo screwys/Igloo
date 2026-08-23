@@ -362,22 +362,26 @@ func (db *DB) markDiscoveryReady(candidates []model.DiscoveryVideo) error {
 		ids = append(ids, candidate.VideoID)
 	}
 	rows, err := db.reader().Query(`
-		SELECT v.video_id FROM videos v
+		SELECT v.video_id, EXISTS (
+			SELECT 1 FROM discover_temp_downloads discover
+			WHERE discover.video_id = v.video_id
+		) FROM videos v
 		WHERE v.video_id IN (`+placeholders(len(ids))+`) AND `+readyVideoMediaExistsSQL("v"), stringsToAny(ids)...)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = rows.Close() }()
-	ready := make(map[string]struct{})
+	ready := make(map[string]bool)
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		var discoverReady bool
+		if err := rows.Scan(&id, &discoverReady); err != nil {
 			return err
 		}
-		ready[id] = struct{}{}
+		ready[id] = discoverReady
 	}
 	for i := range candidates {
-		_, candidates[i].Ready = ready[candidates[i].VideoID]
+		candidates[i].DiscoverReady, candidates[i].Ready = ready[candidates[i].VideoID]
 	}
 	return rows.Err()
 }
