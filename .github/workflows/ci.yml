@@ -113,8 +113,14 @@ jobs:
             fi
           fi
 
-          git diff --name-only "$base" "$head" | tee "$RUNNER_TEMP/android-changed-files.txt"
-          if grep -Eq '^(android/|\.github/workflows/ci\.yml$)' "$RUNNER_TEMP/android-changed-files.txt"; then
+          selection="$(
+            IGLOO_TEST_BASE="$base" \
+            IGLOO_TEST_HEAD="$head" \
+            IGLOO_TEST_SELECTION_ONLY=1 \
+              scripts/dev/test-changed.sh
+          )"
+          echo "$selection"
+          if grep -q 'android=1' <<< "$selection"; then
             echo "android=true" >> "$GITHUB_OUTPUT"
           else
             echo "android=false" >> "$GITHUB_OUTPUT"

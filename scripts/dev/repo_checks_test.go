@@ -192,6 +192,11 @@ esac
 	if !strings.Contains(androidOwned, "i18n=1 android=1") {
 		t.Fatalf("Android behavior did not select Android tests:\n%s", androidOwned)
 	}
+
+	workflowOnly := runSelection(t, ".github/workflows/ci.yml")
+	if !strings.Contains(workflowOnly, "android=0 workflow=1") {
+		t.Fatalf("workflow-only changes selected Android tests:\n%s", workflowOnly)
+	}
 }
 
 func TestGitHubActionsWorkflowDependenciesAreSHAPinned(t *testing.T) {

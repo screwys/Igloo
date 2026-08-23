@@ -272,8 +272,8 @@ func ApplySchemaMigrations(conn *sql.DB) error {
 	if _, err := conn.Exec(schemaMigrationLedgerStatement()); err != nil {
 		return fmt.Errorf("create schema migration ledger: %w", err)
 	}
-	for _, migration := range schemaMigrations {
-		if _, err := runSchemaMigrationOnce(conn, migration); err != nil {
+	for index := len(schemaMigrations) - 1; index >= 0; index-- {
+		if _, err := runSchemaMigrationOnce(conn, schemaMigrations[index]); err != nil {
 			return err
 		}
 	}

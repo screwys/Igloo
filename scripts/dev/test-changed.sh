@@ -74,7 +74,7 @@ for path in "${changed[@]}"; do
   case "$path" in
     android/app/src/main/res/values/strings.xml)
       ;;
-    android/*|.github/workflows/ci.yml)
+    android/*)
       android_changed=1
       ;;
   esac
