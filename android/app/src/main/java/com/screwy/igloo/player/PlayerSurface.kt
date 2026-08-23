@@ -15,7 +15,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,6 +35,7 @@ import com.screwy.igloo.data.entity.SponsorBlockSegmentEntity
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.ui.component.rememberRemoteImageModel
 import com.screwy.igloo.ui.theme.iglooColors
+import kotlinx.coroutines.delay
 
 internal enum class PlayerSurfaceMode {
     Inline,
@@ -74,6 +79,14 @@ internal fun PlayerSurface(
     val fullscreen = mode == PlayerSurfaceMode.Fullscreen
     val subtitleBottomPadding = playerSubtitleBottomPaddingDp(fullscreen, controlsVisible).dp
     val sponsorBlockBottomPadding = if (fullscreen) 72.dp else 56.dp
+    var seekFeedback by remember(player) { mutableStateOf<PlayerSeekDirection?>(null) }
+
+    LaunchedEffect(seekFeedback) {
+        if (seekFeedback != null) {
+            delay(600L)
+            seekFeedback = null
+        }
+    }
 
     Box(
         modifier = modifier.background(Color.Black),
@@ -93,6 +106,7 @@ internal fun PlayerSurface(
             onScrubStart = { onControlsVisibleChange(true) },
             onScrubUpdate = { onControlsVisibleChange(true) },
             onScrubEnd = { onControlsVisibleChange(true) },
+            onSeek = { seekFeedback = it },
             onBrightnessChange = onBrightnessChange,
             onVolumeChange = onVolumeChange,
         )
@@ -134,6 +148,37 @@ internal fun PlayerSurface(
         PlayerLevelFeedbackOverlay(
             feedback = levelFeedback,
             modifier = Modifier.align(Alignment.Center),
+        )
+        PlayerSeekFeedbackOverlay(
+            direction = seekFeedback,
+            modifier =
+                Modifier.align(
+                    if (seekFeedback == PlayerSeekDirection.Back) {
+                        Alignment.CenterStart
+                    } else {
+                        Alignment.CenterEnd
+                    }
+                ),
+        )
+    }
+}
+
+@Composable
+private fun PlayerSeekFeedbackOverlay(
+    direction: PlayerSeekDirection?,
+    modifier: Modifier = Modifier,
+) {
+    val shown = direction ?: return
+    Surface(
+        modifier = modifier.padding(horizontal = 32.dp),
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.55f),
+        contentColor = Color.White,
+    ) {
+        Text(
+            text = if (shown == PlayerSeekDirection.Back) "-10s" else "+10s",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.labelLarge,
         )
     }
 }

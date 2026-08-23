@@ -81,6 +81,11 @@ internal fun volumeIndexForFraction(fraction: Float, maxVolume: Int): Int {
     return (fraction.coerceIn(0f, 1f) * max).roundToInt().coerceIn(0, max)
 }
 
+internal enum class PlayerSeekDirection {
+    Back,
+    Forward,
+}
+
 private const val SKIP_STEP_MS: Long = 10_000L
 private const val BOOST_SPEED: Float = 2.0f
 private const val NORMAL_SPEED: Float = 1.0f
@@ -93,13 +98,14 @@ private const val VERTICAL_LEVEL_DRAG_FRACTION: Float = 0.62f
  * (commit-on-release), vertical drag adjusts brightness/volume.
  */
 @Composable
-fun PlayerGestures(
+internal fun PlayerGestures(
     player: ExoPlayer,
     modifier: Modifier = Modifier,
     onTap: () -> Unit = {},
     onScrubStart: () -> Unit = {},
     onScrubUpdate: (targetMs: Long) -> Unit = { _ -> },
     onScrubEnd: (targetMs: Long) -> Unit = { _ -> },
+    onSeek: (PlayerSeekDirection) -> Unit = {},
     onBrightnessChange: (level: Float) -> Unit = { _ -> },
     onVolumeChange: (level: Float) -> Unit = { _ -> },
 ) {
@@ -107,6 +113,7 @@ fun PlayerGestures(
     val currentOnScrubStart by rememberUpdatedState(onScrubStart)
     val currentOnScrubUpdate by rememberUpdatedState(onScrubUpdate)
     val currentOnScrubEnd by rememberUpdatedState(onScrubEnd)
+    val currentOnSeek by rememberUpdatedState(onSeek)
     val currentOnBrightnessChange by rememberUpdatedState(onBrightnessChange)
     val currentOnVolumeChange by rememberUpdatedState(onVolumeChange)
     val context = LocalContext.current
@@ -165,6 +172,9 @@ fun PlayerGestures(
                         val target = if (isLeft) skipBackwardMs(current)
                                      else skipForwardMs(current, duration)
                         player.seekTo(target)
+                        currentOnSeek(
+                            if (isLeft) PlayerSeekDirection.Back else PlayerSeekDirection.Forward
+                        )
                     }
                 }
             }

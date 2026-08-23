@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
@@ -64,6 +65,36 @@ class PlayerGesturesCallbackTest {
             composeRule.runOnIdle {
                 assertEquals(1, tapCount)
                 assertTrue(controlsVisible.value)
+            }
+        } finally {
+            player.release()
+        }
+    }
+
+    @Test
+    fun double_tap_reports_seek_direction() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val player = ExoPlayer.Builder(context).build()
+        var direction: PlayerSeekDirection? = null
+
+        try {
+            composeRule.setContent {
+                Box(Modifier.size(100.dp)) {
+                    PlayerGestures(
+                        player = player,
+                        onSeek = { direction = it },
+                        modifier = Modifier.fillMaxSize().testTag(GestureTag),
+                    )
+                }
+            }
+
+            composeRule.onNodeWithTag(GestureTag).performTouchInput {
+                doubleClick(position = androidx.compose.ui.geometry.Offset(75f, 50f))
+            }
+            composeRule.waitForIdle()
+
+            composeRule.runOnIdle {
+                assertEquals(PlayerSeekDirection.Forward, direction)
             }
         } finally {
             player.release()
