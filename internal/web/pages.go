@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -1087,7 +1086,6 @@ func (s *Server) handlePageDiscover(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Warn("ListYouTubeDiscoverVideos", "err", err)
 	}
-	videos = shuffledDiscoverVideos(videos, time.Now().UnixNano())
 	pending := len(videos) == 0
 	if s.workers != nil {
 		queued, err := s.workers.QueueFollowedYouTubeChannelRecommendations()
@@ -1104,14 +1102,6 @@ func (s *Server) handlePageDiscover(w http.ResponseWriter, r *http.Request) {
 	p.Sidebar = s.mustBuildSidebar(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = components.DiscoverPage(p, videos, pending).Render(r.Context(), w)
-}
-
-func shuffledDiscoverVideos(videos []model.DiscoveryVideo, seed int64) []model.DiscoveryVideo {
-	shuffled := append([]model.DiscoveryVideo(nil), videos...)
-	rand.New(rand.NewSource(seed)).Shuffle(len(shuffled), func(i, j int) {
-		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
-	})
-	return shuffled
 }
 
 func (s *Server) handlePageFeed(w http.ResponseWriter, r *http.Request) {

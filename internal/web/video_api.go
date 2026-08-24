@@ -87,7 +87,6 @@ func (s *Server) handleDiscoverCards(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Warn("ListYouTubeDiscoverVideos partial", "err", err)
 	}
-	videos = shuffledDiscoverVideos(videos, time.Now().UnixNano())
 	pending := len(videos) == 0
 	if pending && s.workers != nil {
 		queued, err := s.workers.QueueFollowedYouTubeChannelRecommendations()
