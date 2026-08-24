@@ -138,21 +138,26 @@ test("local release script publishes a GitHub release on push", () => {
   assert.match(script, /gh workflow run android-release\.yml --ref "\$tag"/);
 });
 
-test("container release publishes signed provenance attestation", () => {
+test("container release publishes daily latest and signed release images", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/container-release.yml", import.meta.url),
     "utf8",
   );
 
   assert.match(workflow, /\non:\n  workflow_dispatch:\n/);
+  assert.match(workflow, /\n  schedule:\n    - cron: "17 3 \* \* \*"\n/);
   assert.doesNotMatch(workflow, /\n  push:\n/);
   assert.match(workflow, /\n  id-token: write\n/);
   assert.match(workflow, /\n  attestations: write\n/);
   assert.match(workflow, /\n  contents: write\n/);
-  assert.match(workflow, /\n    if: startsWith\(github\.ref, 'refs\/tags\/v'\)\n/);
+  assert.doesNotMatch(workflow, /\n  image:\n    if:/);
   assert.doesNotMatch(workflow, /\n    environment: container-release\n/);
   assert.match(workflow, /fetch-depth: 0/);
   assert.match(workflow, /name: Verify release tag/);
+  assert.match(
+    workflow,
+    /name: Verify release tag\n        if: startsWith\(github\.ref, 'refs\/tags\/v'\)/,
+  );
   assert.match(workflow, /run: \.github\/scripts\/verify-signed-release-tag\.sh/);
   assert.doesNotMatch(workflow, /BEGIN PGP SIGNATURE/);
   assert.match(workflow, /\n        id: build\n/);

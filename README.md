@@ -101,7 +101,7 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
 ## Install
 
 ```bash
-IGLOO_VERSION=vX.Y.Z
+IGLOO_VERSION=latest
 docker pull "ghcr.io/screwys/igloo:${IGLOO_VERSION}"
 docker run -d --name igloo --restart unless-stopped \
   -p 5001:5001 \
@@ -112,11 +112,15 @@ docker run -d --name igloo --restart unless-stopped \
 Use `-p 127.0.0.1:5001:5001` instead if you only want same-machine browser access.
 If you serve Igloo only over HTTPS, set `IGLOO_SESSION_COOKIE_SECURE=true`.
 
-You can use `latest` or a release tag such as `vX.Y.Z`. The image runs as the
-unprivileged user `10001:10001`, and the container runtime prepares the
-`igloo-state` volume for that user on its first start. Replace `docker` with
-`podman` to use Podman. If your `docker` command is provided by Podman, use the
-commands as written.
+`latest` is rebuilt daily from `main`; each build includes the current yt-dlp
+nightly and latest stable gallery-dl versions tracked by the repository. Use a
+release tag such as `vX.Y.Z` instead when you want Igloo itself to remain pinned.
+Pulling a new image does not replace an already-running container, so run the
+same `docker pull` followed by a container recreation from your host scheduler
+when you want unattended deployment updates. The image runs as the unprivileged
+user `10001:10001`, and the container runtime prepares the `igloo-state` volume
+for that user on its first start. Replace `docker` with `podman` to use Podman.
+If your `docker` command is provided by Podman, use the commands as written.
 
 You can configure bookmarks through web; use `/igloo/bookmarks/<folder>` to
 keep them in the state volume or reuse one folder for multiple categories. To
