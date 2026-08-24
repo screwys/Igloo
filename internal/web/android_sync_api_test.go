@@ -32,6 +32,26 @@ const androidSyncTestRetentionQuery = "feed_days=7&youtube_days=7&moments_days=7
 const androidSyncTestFullYoutubeMetadataQuery = androidSyncTestRetentionQuery + "&full_youtube_metadata=1"
 const androidSyncTestV3Query = androidSyncTestFullYoutubeMetadataQuery + "&model_version=3"
 
+func TestAndroidSyncKeepsAndroidV320Contract(t *testing.T) {
+	srv := newAndroidSyncTestServer(t)
+	seedAndroidSyncContent(t, srv)
+
+	bootstrap := requestAndroidSyncPage(t, srv,
+		"/api/android/sync/bootstrap?"+androidSyncTestFullYoutubeMetadataQuery)
+	cursor, err := decodeAndroidSyncCursor(bootstrap.NextCursor)
+	if err != nil || cursor.Version != androidSyncPreviousModelVersion {
+		t.Fatalf("Android 3.2.0 bootstrap cursor = %+v / %v", cursor, err)
+	}
+	assertFlatAndroidSyncPayloads(t, bootstrap.Changes)
+
+	changes := requestAndroidSyncPage(t, srv,
+		"/api/android/sync/changes?"+androidSyncTestFullYoutubeMetadataQuery+"&after="+bootstrap.NextCursor)
+	next, err := decodeAndroidSyncCursor(changes.NextCursor)
+	if err != nil || next.Version != androidSyncPreviousModelVersion {
+		t.Fatalf("Android 3.2.0 changes cursor = %+v / %v", next, err)
+	}
+}
+
 func TestAndroidSyncFlatStreamConvergesChangedAndDeletedOwners(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	seedAndroidSyncContent(t, srv)
