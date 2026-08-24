@@ -17,22 +17,18 @@ const (
 
 const mediaStateConcurrency = 2
 
-// MediaExecutor is the single admission owner for file-producing work. One
-// interactive, foreground, and background bulk producers may run; work within
-// each lane remains serial. Small state assets converge independently.
+// MediaExecutor is the single admission owner for file-producing work. Bulk
+// lanes describe scheduling intent, but they share one physical writer because
+// they target the same media disk. Small state assets converge independently.
 type MediaExecutor struct {
-	state       chan struct{}
-	interactive chan struct{}
-	foreground  chan struct{}
-	background  chan struct{}
+	state chan struct{}
+	bulk  chan struct{}
 }
 
 func NewMediaExecutor() *MediaExecutor {
 	return &MediaExecutor{
-		state:       make(chan struct{}, mediaStateConcurrency),
-		interactive: make(chan struct{}, 1),
-		foreground:  make(chan struct{}, 1),
-		background:  make(chan struct{}, 1),
+		state: make(chan struct{}, mediaStateConcurrency),
+		bulk:  make(chan struct{}, 1),
 	}
 }
 
@@ -43,12 +39,8 @@ func (e *MediaExecutor) Run(ctx context.Context, lane MediaLane, work func() err
 	switch lane {
 	case MediaLaneState:
 		return e.run(ctx, e.state, work)
-	case MediaLaneBulkInteractive:
-		return e.run(ctx, e.interactive, work)
-	case MediaLaneBulkForeground:
-		return e.run(ctx, e.foreground, work)
-	case MediaLaneBulkRegular, MediaLaneBulkBackground:
-		return e.run(ctx, e.background, work)
+	case MediaLaneBulkInteractive, MediaLaneBulkForeground, MediaLaneBulkRegular, MediaLaneBulkBackground:
+		return e.run(ctx, e.bulk, work)
 	default:
 		return fmt.Errorf("unknown media lane %q", lane)
 	}

@@ -19,7 +19,11 @@ import (
 	"github.com/screwys/igloo/internal/subtitlemeta"
 )
 
-const mediaNoWorkPollFloor = 5 * time.Second
+const (
+	mediaNoWorkPollFloor = 5 * time.Second
+	mediaWorkPollDelay   = 10 * time.Millisecond
+	mediaBackfillDelay   = 5 * time.Second
+)
 
 type mediaWorkClass uint8
 
@@ -52,36 +56,15 @@ var qualityFormats = map[string]string{
 	"best":  "best",
 }
 
-type mediaWorkerKind uint8
-
-const (
-	mediaWorkerCurrent mediaWorkerKind = iota
-	mediaWorkerBackfill
-)
-
-func (m *Manager) runMediaCurrentLoop(ctx context.Context) {
-	m.runMediaWorkLoop(ctx, mediaWorkerCurrent)
-}
-
-func (m *Manager) runMediaBackfillLoop(ctx context.Context) {
-	m.runMediaWorkLoop(ctx, mediaWorkerBackfill)
-}
-
-func (m *Manager) runMediaWorkLoop(ctx context.Context, kind mediaWorkerKind) {
+func (m *Manager) runMediaWorkLoop(ctx context.Context) {
 	timer := time.NewTimer(0)
 	defer timer.Stop()
-	kick := m.mediaCurrentKick
-	label := "current"
-	if kind == mediaWorkerBackfill {
-		kick = m.mediaBackfillKick
-		label = "backfill"
-	}
-	log.Printf("[media] %s worker started", label)
+	log.Printf("[media] worker started")
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-kick:
+		case <-m.mediaKick:
 		case <-timer.C:
 		}
 		if m.IsStopRequested() {
@@ -93,22 +76,14 @@ func (m *Manager) runMediaWorkLoop(ctx context.Context, kind mediaWorkerKind) {
 			resetMediaTimer(timer, delay)
 			continue
 		}
-		worked, previewDelay := m.processNextMediaWork(ctx, now, kind)
+		worked, backfill, previewDelay := m.processNextMediaWork(ctx, now)
 		if worked {
-			resetMediaTimer(timer, 10*time.Millisecond)
+			resetMediaTimer(timer, mediaWorkedDelay(backfill))
 			continue
 		}
 		eligiblePlatforms, backoffDelay := m.downloadSchedulingState(now)
 		includeTweets := m.cfg == nil || m.cfg.PlatformEnabled("twitter")
-		lane := db.DownloadLaneCurrent
-		if kind == mediaWorkerBackfill {
-			lane = db.DownloadLaneBackfill
-		}
-		delay, err := m.db.NextMediaWorkDelay(now.UnixMilli(), eligiblePlatforms, includeTweets, lane)
-		if err != nil {
-			log.Printf("[media] next due: %v", err)
-			delay = time.Minute
-		}
+		delay := m.nextMediaWorkDelay(now, eligiblePlatforms, includeTweets)
 		if backoffDelay > 0 && backoffDelay < delay {
 			delay = backoffDelay
 		}
@@ -122,31 +97,26 @@ func (m *Manager) runMediaWorkLoop(ctx context.Context, kind mediaWorkerKind) {
 	}
 }
 
-func (m *Manager) processNextMediaWork(ctx context.Context, now time.Time, kind mediaWorkerKind) (bool, time.Duration) {
-	if kind == mediaWorkerCurrent {
-		order := mediaCurrentWorkOrder(m.mediaCurrentTurn)
-		for _, workClass := range order {
-			worked := false
-			switch workClass {
-			case mediaWorkAssetCurrent:
-				worked = m.processContentAssetBatch(ctx, db.DownloadLaneCurrent)
-			case mediaWorkVideoCurrent:
-				worked = m.processDownloadBatch(ctx, db.DownloadLaneCurrent)
-			}
-			if worked {
-				m.mediaCurrentTurn++
-				return true, 0
-			}
+func (m *Manager) processNextMediaWork(ctx context.Context, now time.Time) (worked, backfill bool, previewDelay time.Duration) {
+	for _, workClass := range mediaCurrentWorkOrder(m.mediaCurrentTurn) {
+		worked := false
+		switch workClass {
+		case mediaWorkAssetCurrent:
+			worked = m.processContentAssetBatch(ctx, db.DownloadLaneCurrent)
+		case mediaWorkVideoCurrent:
+			worked = m.processDownloadBatch(ctx, db.DownloadLaneCurrent)
 		}
-		return false, 0
+		if worked {
+			m.mediaCurrentTurn++
+			return true, false, 0
+		}
 	}
 
-	var previewDelay time.Duration
 	if m.hasPreviewHint() {
 		worked, delay := m.processRequestedPreview(ctx, now)
 		previewDelay = delay
 		if worked {
-			return true, previewDelay
+			return true, false, previewDelay
 		}
 	}
 	for _, workClass := range mediaBackfillPrimaryWorkOrder(m.mediaBackgroundTurn) {
@@ -161,13 +131,37 @@ func (m *Manager) processNextMediaWork(ctx context.Context, now time.Time, kind 
 			continue
 		}
 		m.mediaBackgroundTurn++
-		return true, previewDelay
+		return true, true, previewDelay
 	}
 	worked, delay := m.processPreviewBatch(ctx, now)
 	if previewDelay == 0 || delay > 0 && delay < previewDelay {
 		previewDelay = delay
 	}
-	return worked, previewDelay
+	return worked, worked, previewDelay
+}
+
+func mediaWorkedDelay(backfill bool) time.Duration {
+	if backfill {
+		return mediaBackfillDelay
+	}
+	return mediaWorkPollDelay
+}
+
+func (m *Manager) nextMediaWorkDelay(now time.Time, eligiblePlatforms []string, includeTweets bool) time.Duration {
+	delay := time.Minute
+	found := false
+	for _, lane := range []db.DownloadLane{db.DownloadLaneCurrent, db.DownloadLaneBackfill} {
+		laneDelay, err := m.db.NextMediaWorkDelay(now.UnixMilli(), eligiblePlatforms, includeTweets, lane)
+		if err != nil {
+			log.Printf("[media] next %s due: %v", lane, err)
+			continue
+		}
+		if !found || laneDelay < delay {
+			delay = laneDelay
+			found = true
+		}
+	}
+	return delay
 }
 
 func mediaCurrentWorkOrder(currentTurn uint64) [2]mediaWorkClass {

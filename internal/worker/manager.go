@@ -37,8 +37,7 @@ type Manager struct {
 	ctx                       context.Context
 	cancel                    context.CancelFunc
 	wg                        sync.WaitGroup
-	mediaCurrentKick          chan struct{} // buffered(1): coalescing kick for current media
-	mediaBackfillKick         chan struct{} // buffered(1): coalescing kick for historical media
+	mediaKick                 chan struct{} // buffered(1): coalescing durable media wake-up
 	tempDownloadKick          chan struct{} // buffered(1): durable user-download wake-up
 	discoveryKick             chan struct{} // buffered(1): coalescing kick for platform discovery
 	profileKick               chan struct{} // buffered(1): durable profile job wake-up
@@ -133,8 +132,7 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 		downloader:                download.NewDownloader(cfg.CookiesDir),
 		ctx:                       ctx,
 		cancel:                    cancel,
-		mediaCurrentKick:          make(chan struct{}, 1),
-		mediaBackfillKick:         make(chan struct{}, 1),
+		mediaKick:                 make(chan struct{}, 1),
 		tempDownloadKick:          make(chan struct{}, 1),
 		discoveryKick:             make(chan struct{}, 1),
 		profileKick:               make(chan struct{}, 1),
@@ -196,8 +194,7 @@ func (m *Manager) StartAll() {
 	m.startOnce("feed_bootstrap", m.runFeedBootstrap)
 	m.launch(xIngestWorkerName, m.runXIngestLoop)
 	m.launch("x_status_enrichment", m.runXStatusEnrichmentLoop)
-	m.launch("media_current", m.runMediaCurrentLoop)
-	m.launch("media_backfill", m.runMediaBackfillLoop)
+	m.launch("media", m.runMediaWorkLoop)
 	m.launch("temp_download", m.runTempDownloadLoop)
 	m.launch("profile_refresh", m.runProfileJobLoop)
 	m.launch("video_metadata", m.runVideoMetadataLoop)
@@ -256,11 +253,9 @@ func (m *Manager) ShutdownTimeout(timeout time.Duration) bool {
 
 // KickMediaWork sends a non-blocking signal to wake durable media work immediately.
 func (m *Manager) KickMediaWork() {
-	for _, kick := range []chan struct{}{m.mediaCurrentKick, m.mediaBackfillKick} {
-		select {
-		case kick <- struct{}{}:
-		default:
-		}
+	select {
+	case m.mediaKick <- struct{}{}:
+	default:
 	}
 }
 

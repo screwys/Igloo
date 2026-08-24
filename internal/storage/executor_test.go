@@ -40,7 +40,7 @@ func TestMediaExecutorKeepsStateLaneResponsiveDuringBulkMutation(t *testing.T) {
 	}
 }
 
-func TestMediaExecutorRunsForegroundAlongsideBackground(t *testing.T) {
+func TestMediaExecutorSerializesForegroundWithBackground(t *testing.T) {
 	executor := NewMediaExecutor()
 	backgroundEntered := make(chan struct{})
 	releaseBackground := make(chan struct{})
@@ -58,19 +58,24 @@ func TestMediaExecutorRunsForegroundAlongsideBackground(t *testing.T) {
 	})
 	select {
 	case <-foregroundEntered:
-	case <-time.After(time.Second):
-		t.Fatal("foreground work waited behind background work")
-	}
-	if err := <-foregroundDone; err != nil {
-		t.Fatal(err)
+		t.Fatal("foreground work overlapped background work on the bulk disk")
+	case <-time.After(20 * time.Millisecond):
 	}
 	close(releaseBackground)
 	if err := <-backgroundDone; err != nil {
 		t.Fatal(err)
 	}
+	select {
+	case <-foregroundEntered:
+	case <-time.After(time.Second):
+		t.Fatal("queued foreground work did not run")
+	}
+	if err := <-foregroundDone; err != nil {
+		t.Fatal(err)
+	}
 }
 
-func TestMediaExecutorRunsInteractiveWorkAheadOfOtherBulkLanes(t *testing.T) {
+func TestMediaExecutorSerializesInteractiveWithForeground(t *testing.T) {
 	executor := NewMediaExecutor()
 	foregroundEntered := make(chan struct{})
 	releaseForeground := make(chan struct{})
@@ -88,14 +93,19 @@ func TestMediaExecutorRunsInteractiveWorkAheadOfOtherBulkLanes(t *testing.T) {
 	})
 	select {
 	case <-interactiveEntered:
-	case <-time.After(time.Second):
-		t.Fatal("interactive work waited behind feed media")
-	}
-	if err := <-interactiveDone; err != nil {
-		t.Fatal(err)
+		t.Fatal("interactive work overlapped foreground work on the bulk disk")
+	case <-time.After(20 * time.Millisecond):
 	}
 	close(releaseForeground)
 	if err := <-foregroundDone; err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-interactiveEntered:
+	case <-time.After(time.Second):
+		t.Fatal("queued interactive work did not run")
+	}
+	if err := <-interactiveDone; err != nil {
 		t.Fatal(err)
 	}
 }

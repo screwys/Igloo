@@ -335,6 +335,33 @@ func TestDownloadPoolLeaseOwnerIsProcessScoped(t *testing.T) {
 	}
 }
 
+func TestMediaWorkOrderKeepsCurrentAheadOfBackfill(t *testing.T) {
+	for turn := range uint64(2) {
+		for _, workClass := range mediaCurrentWorkOrder(turn) {
+			if workClass != mediaWorkAssetCurrent && workClass != mediaWorkVideoCurrent {
+				t.Fatalf("current turn %d included backfill class %d", turn, workClass)
+			}
+		}
+		for _, workClass := range mediaBackfillPrimaryWorkOrder(turn) {
+			if workClass != mediaWorkAssetBackfill && workClass != mediaWorkVideoBackfill {
+				t.Fatalf("backfill turn %d included current class %d", turn, workClass)
+			}
+		}
+	}
+}
+
+func TestMediaWorkPacesBackfillWithoutDelayingCurrentWork(t *testing.T) {
+	if got := mediaWorkedDelay(false); got != mediaWorkPollDelay {
+		t.Fatalf("current media delay = %s, want %s", got, mediaWorkPollDelay)
+	}
+	if got := mediaWorkedDelay(true); got != mediaBackfillDelay {
+		t.Fatalf("backfill media delay = %s, want %s", got, mediaBackfillDelay)
+	}
+	if mediaWorkedDelay(true) <= mediaWorkedDelay(false) {
+		t.Fatal("backfill media was not paced behind current work")
+	}
+}
+
 func TestStartDownloadWorkLeaseRenewalExtendsOwnedJob(t *testing.T) {
 	d := newTestWorkerDB(t)
 	now := time.Now()

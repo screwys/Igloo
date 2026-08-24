@@ -27,8 +27,7 @@ func TestVideoMetadataWorkerPublishesAndSchedulesTheNextYoungRefresh(t *testing.
 		db:                newTestWorkerDBAt(t, dataDir),
 		cfg:               testCfg(dataDir),
 		videoMetadataKick: make(chan struct{}, 1),
-		mediaCurrentKick:  make(chan struct{}, 1),
-		mediaBackfillKick: make(chan struct{}, 1),
+		mediaKick:         make(chan struct{}, 1),
 	}
 	seedVideo(t, m, "sample_video")
 	if err := m.QueueVideoMetadataRefresh("sample_video"); err != nil {

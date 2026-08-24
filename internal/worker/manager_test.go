@@ -106,20 +106,15 @@ func TestManagerMediaKick(t *testing.T) {
 		m.KickMediaWork()
 	}
 
-	for name, kick := range map[string]chan struct{}{
-		"current":  m.mediaCurrentKick,
-		"backfill": m.mediaBackfillKick,
-	} {
-		select {
-		case <-kick:
-		default:
-			t.Fatalf("expected a signal in %s media channel after kicks", name)
-		}
-		select {
-		case <-kick:
-			t.Fatalf("expected %s media channel to coalesce kicks", name)
-		default:
-		}
+	select {
+	case <-m.mediaKick:
+	default:
+		t.Fatal("expected a signal in media channel after kicks")
+	}
+	select {
+	case <-m.mediaKick:
+		t.Fatal("expected media channel to coalesce kicks")
+	default:
 	}
 }
 

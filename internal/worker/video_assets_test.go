@@ -112,13 +112,16 @@ func TestPrepareCompletedVideoFilesKeepsMediaExternalAndDefersExactThumbnail(t *
 	}()
 	select {
 	case <-cleanupDone:
-	case <-time.After(time.Second):
-		close(releaseBackground)
-		<-backgroundDone
-		t.Fatal("foreground cleanup waited for historical media work")
+		t.Fatal("foreground cleanup overlapped historical work on the bulk disk")
+	case <-time.After(20 * time.Millisecond):
 	}
 	close(releaseBackground)
 	<-backgroundDone
+	select {
+	case <-cleanupDone:
+	case <-time.After(time.Second):
+		t.Fatal("queued foreground cleanup did not run")
+	}
 	if _, err := os.Stat(exactThumbnail); !os.IsNotExist(err) {
 		t.Fatalf("producer thumbnail sidecar was not retired: %v", err)
 	}
