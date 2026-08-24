@@ -3799,14 +3799,14 @@ body.mini-player-browsing {
     outline: none;
 }
 
-.mini-player-resize-edge-top {
+.mini-player-move-handle {
     position: absolute;
-    top: -8px;
-    right: 0;
-    left: 0;
-    z-index: 70;
-    height: 9px;
-    cursor: ns-resize;
+    top: -3px;
+    right: 16px;
+    left: 16px;
+    z-index: 69;
+    height: 8px;
+    cursor: grab;
     touch-action: none;
 }
 
@@ -3855,6 +3855,12 @@ html.mini-player-resizing .mini-player-shell {
 html.mini-player-resizing {
     cursor: ew-resize;
     user-select: none;
+}
+
+html.mini-player-moving,
+html.mini-player-moving * {
+    cursor: grabbing !important;
+    user-select: none !important;
 }
 
 .mini-player-header {

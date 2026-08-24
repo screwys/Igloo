@@ -26,6 +26,16 @@ export function resizedShellWidth(direction, startWidth, startHeight, deltaX, de
   return startWidth + (Math.abs(horizontal) >= Math.abs(vertical) ? horizontal : vertical)
 }
 
+export function movedShellPosition(startLeft, startTop, width, height, deltaX, deltaY, viewportWidth, viewportHeight) {
+  const inset = 8
+  const maxLeft = Math.max(inset, Number(viewportWidth || 0) - Number(width || 0) - inset)
+  const maxTop = Math.max(inset, Number(viewportHeight || 0) - Number(height || 0) - inset)
+  return {
+    left: Math.min(maxLeft, Math.max(inset, Number(startLeft || 0) + Number(deltaX || 0))),
+    top: Math.min(maxTop, Math.max(inset, Number(startTop || 0) + Number(deltaY || 0))),
+  }
+}
+
 export function reconnectMediaController(surface) {
   const controller = surface && surface.querySelector ? surface.querySelector('media-controller') : null
   if (!controller || typeof controller.associateElement !== 'function') return false
@@ -115,6 +125,7 @@ function initMiniPlayer() {
   const shellTitle = doc.getElementById('mini-player-title')
   const returnButton = doc.getElementById('mini-player-return')
   const closeButton = doc.getElementById('mini-player-close')
+  const moveHandle = doc.getElementById('mini-player-move-handle')
   const resizeHandle = doc.getElementById('mini-player-resize-handle')
   const resizeTargets = Array.from(doc.querySelectorAll('[data-mini-player-resize]'))
   let browseFrame = doc.getElementById('mini-player-browse-frame')
@@ -714,33 +725,28 @@ function initMiniPlayer() {
         target.setPointerCapture(event.pointerId)
         doc.documentElement.classList.add('mini-player-resizing')
       })
-      target.addEventListener('pointermove', function (event) {
-        if (event.pointerId !== pointerID || target !== pointerTarget || !startRect) return
-        const width = resizedShellWidth(
-          direction,
-          startWidth,
-          startHeight,
-          event.clientX - startX,
-          event.clientY - startY
-        )
-        setShellWidth(width, false)
-        const nextRect = shell.getBoundingClientRect()
-        const left = direction.includes('right') ? startRect.left : startRect.right - nextRect.width
-        const top = direction.includes('bottom') ? startRect.top : startRect.bottom - nextRect.height
-        shell.style.left = Math.round(left) + 'px'
-        shell.style.top = Math.round(top) + 'px'
-      })
-      target.addEventListener('pointerup', finishResize)
-      target.addEventListener('pointercancel', finishResize)
     })
+    doc.addEventListener('pointermove', function (event) {
+      if (event.pointerId !== pointerID || !pointerTarget || !startRect) return
+      const width = resizedShellWidth(
+        direction,
+        startWidth,
+        startHeight,
+        event.clientX - startX,
+        event.clientY - startY
+      )
+      setShellWidth(width, false)
+      const nextRect = shell.getBoundingClientRect()
+      const left = direction.includes('left') ? startRect.right - nextRect.width : startRect.left
+      const top = direction.includes('bottom') ? startRect.top : startRect.bottom - nextRect.height
+      shell.style.left = Math.round(left) + 'px'
+      shell.style.top = Math.round(top) + 'px'
+    })
+    doc.addEventListener('pointerup', finishResize)
+    doc.addEventListener('pointercancel', finishResize)
     function finishResize(event) {
       if (event.pointerId !== pointerID || !pointerTarget) return
       setShellWidth(shell.getBoundingClientRect().width, true)
-      const finalRect = shell.getBoundingClientRect()
-      shell.style.left = ''
-      shell.style.top = ''
-      shell.style.right = Math.round(window.innerWidth - finalRect.right) + 'px'
-      shell.style.bottom = Math.round(window.innerHeight - finalRect.bottom) + 'px'
       const target = pointerTarget
       pointerID = null
       pointerTarget = null
@@ -760,6 +766,54 @@ function initMiniPlayer() {
       event.preventDefault()
       setShellWidth(next, true)
     })
+  }
+
+  function bindMoveHandle() {
+    if (!moveHandle) return
+    let pointerID = null
+    let startX = 0
+    let startY = 0
+    let startRect = null
+
+    moveHandle.addEventListener('pointerdown', function (event) {
+      if (event.button !== 0) return
+      event.preventDefault()
+      pointerID = event.pointerId
+      startX = event.clientX
+      startY = event.clientY
+      startRect = shell.getBoundingClientRect()
+      shell.style.left = Math.round(startRect.left) + 'px'
+      shell.style.top = Math.round(startRect.top) + 'px'
+      shell.style.right = 'auto'
+      shell.style.bottom = 'auto'
+      moveHandle.setPointerCapture(event.pointerId)
+      doc.documentElement.classList.add('mini-player-moving')
+    })
+    doc.addEventListener('pointermove', function (event) {
+      if (event.pointerId !== pointerID || !startRect) return
+      const position = movedShellPosition(
+        startRect.left,
+        startRect.top,
+        startRect.width,
+        startRect.height,
+        event.clientX - startX,
+        event.clientY - startY,
+        window.innerWidth,
+        window.innerHeight
+      )
+      shell.style.left = Math.round(position.left) + 'px'
+      shell.style.top = Math.round(position.top) + 'px'
+    })
+    doc.addEventListener('pointerup', finishMove)
+    doc.addEventListener('pointercancel', finishMove)
+
+    function finishMove(event) {
+      if (event.pointerId !== pointerID) return
+      pointerID = null
+      startRect = null
+      doc.documentElement.classList.remove('mini-player-moving')
+      if (moveHandle.hasPointerCapture(event.pointerId)) moveHandle.releasePointerCapture(event.pointerId)
+    }
   }
 
   function bindYouTubeButton(ownerDocument) {
@@ -824,6 +878,7 @@ function initMiniPlayer() {
     iglooMiniSurfaceHome: window.location.pathname + window.location.search,
   }), '', window.location.href)
   bindResizeHandle()
+  bindMoveHandle()
   restoreShellWidth()
 
   window.IglooMiniPlayer = {

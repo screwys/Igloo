@@ -8,6 +8,7 @@ import {
   feedThreadURL,
   findFeedThreadVideo,
   isPlayerURL,
+  movedShellPosition,
   preferredShellWidth,
   reconnectMediaController,
   resizedShellWidth,
@@ -77,7 +78,8 @@ test('mini-player width remains horizontally resizable and persisted', async () 
   assert.doesNotMatch(css, /resize:\s*horizontal/)
   assert.match(template, /id="mini-player-resize-handle"[\s\S]*?role="separator"/)
   assert.match(template, /aria-valuemax="1040"/)
-  assert.match(template, /class="mini-player-resize-edge-top mini-player-resize-target"[\s\S]*?data-mini-player-resize="top"/)
+  assert.match(template, /id="mini-player-move-handle"[\s\S]*?class="mini-player-move-handle"/)
+  assert.doesNotMatch(template, /data-mini-player-resize="top"/)
   for (const corner of ['top-left', 'top-right', 'bottom-left', 'bottom-right']) {
     assert.match(template, new RegExp(`data-mini-player-resize="${corner}"`))
   }
@@ -90,13 +92,13 @@ test('mini-player width remains horizontally resizable and persisted', async () 
   assert.match(handleRule[1], /\bcursor:\s*(?:ew|col)-resize/)
   assert.doesNotMatch(handleRule[1], /\bheight:/)
   assert.doesNotMatch(handleRule[1], /\btransform:/)
-  const topEdgeRule = css.match(/\.mini-player-resize-edge-top\s*\{([^}]*)\}/)
-  assert.ok(topEdgeRule)
-  assert.match(topEdgeRule[1], /\btop:\s*-8px;/)
-  assert.match(topEdgeRule[1], /\bleft:\s*0;/)
-  assert.match(topEdgeRule[1], /\bright:\s*0;/)
-  assert.match(topEdgeRule[1], /\bheight:\s*9px;/)
-  assert.match(topEdgeRule[1], /\bcursor:\s*(?:ns|row)-resize/)
+  const moveHandleRule = css.match(/\.mini-player-move-handle\s*\{([^}]*)\}/)
+  assert.ok(moveHandleRule)
+  assert.match(moveHandleRule[1], /\btop:\s*-3px;/)
+  assert.match(moveHandleRule[1], /\bleft:\s*16px;/)
+  assert.match(moveHandleRule[1], /\bright:\s*16px;/)
+  assert.match(moveHandleRule[1], /\bheight:\s*8px;/)
+  assert.match(moveHandleRule[1], /\bcursor:\s*grab/)
   assert.doesNotMatch(css, /\.mini-player-resize-handle::after/)
   const shellRule = css.match(/\.mini-player-shell\s*\{([^}]*)\}/)
   assert.ok(shellRule)
@@ -118,9 +120,16 @@ test('each rounded corner resizes in its natural diagonal direction', () => {
   assert.equal(resizedShellWidth('bottom-right', 600, 300, -40, -20), 560)
 })
 
-test('the top edge resizes vertically and ignores horizontal pointer drift', () => {
-  assert.equal(resizedShellWidth('top', 600, 300, 100, -20), 640)
-  assert.equal(resizedShellWidth('top', 600, 300, -100, 20), 560)
+test('moving the mini-player follows the pointer without leaving the viewport', () => {
+  assert.deepEqual(movedShellPosition(700, 400, 500, 300, -180, -120, 1280, 720), { left: 520, top: 280 })
+  assert.deepEqual(movedShellPosition(700, 400, 500, 300, 300, 200, 1280, 720), { left: 772, top: 412 })
+  assert.deepEqual(movedShellPosition(20, 20, 500, 300, -100, -100, 1280, 720), { left: 8, top: 8 })
+})
+
+test('resizing from a right corner keeps the left edge fixed', async () => {
+  const source = await readFile(new URL('./src/mini-player.js', import.meta.url), 'utf8')
+  assert.match(source, /const left = direction\.includes\('left'\) \? startRect\.right - nextRect\.width : startRect\.left/)
+  assert.doesNotMatch(source, /shell\.style\.right = Math\.round\(window\.innerWidth - finalRect\.right\)/)
 })
 
 test('mini-player title and actions overlay the video on hover', async () => {

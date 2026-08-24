@@ -45,6 +45,7 @@ templ MiniPlayerShell(p PageProps) {
 				</button>
 			</div>
 		</header>
+		<div id="mini-player-move-handle" class="mini-player-move-handle" aria-hidden="true"></div>
 		<div
 			id="mini-player-resize-handle"
 			class="mini-player-resize-handle mini-player-resize-target"
@@ -58,7 +59,6 @@ templ MiniPlayerShell(p PageProps) {
 			title={ L(p, "mini_player_resize", "Resize mini player") }
 			aria-label={ L(p, "mini_player_resize", "Resize mini player") }
 		></div>
-		<div class="mini-player-resize-edge-top mini-player-resize-target" data-mini-player-resize="top" aria-hidden="true"></div>
 		<div class="mini-player-resize-corner mini-player-resize-corner-top-left mini-player-resize-target" data-mini-player-resize="top-left" aria-hidden="true"></div>
 		<div class="mini-player-resize-corner mini-player-resize-corner-top-right mini-player-resize-target" data-mini-player-resize="top-right" aria-hidden="true"></div>
 		<div class="mini-player-resize-corner mini-player-resize-corner-bottom-left mini-player-resize-target" data-mini-player-resize="bottom-left" aria-hidden="true"></div>
