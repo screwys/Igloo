@@ -32,7 +32,7 @@ const androidSyncTestRetentionQuery = "feed_days=7&youtube_days=7&moments_days=7
 const androidSyncTestFullYoutubeMetadataQuery = androidSyncTestRetentionQuery + "&full_youtube_metadata=1"
 const androidSyncTestV3Query = androidSyncTestFullYoutubeMetadataQuery + "&model_version=3"
 
-func TestAndroidSyncKeepsAndroidV320Contract(t *testing.T) {
+func TestLatestServerKeepsReleasedAndroidV320Contract(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	seedAndroidSyncContent(t, srv)
 

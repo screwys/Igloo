@@ -126,13 +126,13 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 ## Android
 
 - Android must render normal UI state without live Igloo server access.
-- Android 3.2.0 and later released clients constrain server and container
-  changes. Compatibility is tracked by shipped app version, not by the current
-  Room or server sync-model number. A newer server may add a sync model, but it
-  must preserve the exact request and wire contract used by every supported
-  released APK from 3.2.0 forward. Passing current Android CI is not evidence
-  that an installed older APK remains compatible; verify the released client
-  contract before publishing `latest` or changing an older materialization.
+- `latest` may run the next-release server ahead of the Android release. It must
+  remain compatible with the latest released APK; during the 3.3 development
+  cycle that means the server at HEAD must preserve the Android 3.2.0 request
+  and wire contract. Track compatibility by shipped app version, not by the
+  current Room or server sync-model number. Passing current Android CI is not
+  evidence that an installed older APK remains compatible; verify the released
+  client contract before publishing `latest` or changing its materialization.
 - Room mirrors the documented server schema; schema bumps need migrations in `IglooMigrations`.
 - User state belongs in thin side tables joined at read time.
 - Cursors are opaque. Server-owned identifiers stay server-owned.
