@@ -138,7 +138,7 @@ test("local release script publishes a GitHub release on push", () => {
   assert.match(script, /gh workflow run android-release\.yml --ref "\$tag"/);
 });
 
-test("container release publishes daily latest and signed release images", () => {
+test("container release keeps latest on main HEAD and signs release images", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/container-release.yml", import.meta.url),
     "utf8",
@@ -176,6 +176,11 @@ test("container release publishes daily latest and signed release images", () =>
   assert.match(workflow, /pushFilter: "\(-source\$\|\\\\\.tar\\\\\.gz\$\)"/);
   assert.match(workflow, /nix build \.#container --print-build-logs/);
   assert.match(workflow, /docker load < result/);
+  assert.match(workflow, /type=ref,event=tag/);
+  assert.match(
+    workflow,
+    /type=raw,value=latest,enable=\$\{\{ !startsWith\(github\.ref, 'refs\/tags\/v'\) \}\}/,
+  );
   assert.match(workflow, /SOURCE_IMAGE: ghcr\.io\/screwys\/igloo:latest/);
   assert.match(workflow, /docker tag "\$SOURCE_IMAGE" "\$tag"/);
   assert.match(workflow, /docker push "\$tag"/);
