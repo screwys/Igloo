@@ -694,6 +694,58 @@ if (root && video) {
     })
   }
 
+  function setupCommentTranslation() {
+    const list = doc.getElementById('player-comments-list')
+    if (!list) return
+    const targetLang = ((doc.querySelector('meta[name="translate-target"]') || {}).content || 'en').trim() || 'en'
+
+    list.addEventListener('click', function (event) {
+      const button = event.target && event.target.closest ? event.target.closest('[data-player-comment-translate]') : null
+      if (!button) return
+      event.preventDefault()
+      event.stopPropagation()
+
+      const card = button.closest('.player-comment-card')
+      const body = card && card.querySelector('[data-player-comment-body]')
+      const label = button.querySelector('[data-translate-label]')
+      if (!body) return
+
+      if (button.classList.contains('active')) {
+        const original = body.getAttribute('data-original-html')
+        if (original != null) body.innerHTML = original
+        button.classList.remove('active')
+        if (label) label.textContent = ''
+        return
+      }
+
+      const commentId = (button.getAttribute('data-comment-id') || '').trim()
+      const commentVideoId = (button.getAttribute('data-video-id') || videoId || '').trim()
+      if (!commentVideoId || !commentId || button.disabled) return
+
+      button.disabled = true
+      apiFetch('/api/translate', {
+        method: 'POST',
+        body: JSON.stringify({ video_id: commentVideoId, comment_id: commentId, target_lang: targetLang }),
+      }).then(function (resp) {
+        if (!resp || !resp.translated_text) {
+          if (resp && resp.error) showToast(resp.error)
+          return
+        }
+        if (!body.hasAttribute('data-original-html')) body.setAttribute('data-original-html', body.innerHTML)
+        body.innerHTML = renderRichText(resp.translated_text)
+        button.classList.add('active')
+        if (label) label.textContent = String(resp.source_lang || '').trim()
+      }).catch(function (err) {
+        const message = err && err.payload && err.payload.error
+          ? err.payload.error
+          : t('error_translation_failed', 'Translation failed')
+        showToast(message)
+      }).finally(function () {
+        button.disabled = false
+      })
+    })
+  }
+
   // --- Init ---
 
   function init() {
@@ -715,6 +767,7 @@ if (root && video) {
     setupPlayerControlsVisibility()
     setupChannelInlineActions()
     setupPlayerDateHover()
+    setupCommentTranslation()
 
     // Populate video stats from data attributes
     doc.querySelectorAll('.player-stat').forEach(function (el) {

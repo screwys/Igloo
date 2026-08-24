@@ -19,6 +19,8 @@ func (s *Server) handleTranslate(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		TweetID    string `json:"tweet_id"`
 		Field      string `json:"field"`
+		VideoID    string `json:"video_id"`
+		CommentID  string `json:"comment_id"`
 		TargetLang string `json:"target_lang"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
@@ -31,21 +33,38 @@ func (s *Server) handleTranslate(w http.ResponseWriter, r *http.Request) {
 	}
 	body.TweetID = strings.TrimSpace(body.TweetID)
 	body.Field = strings.TrimSpace(body.Field)
+	body.VideoID = strings.TrimSpace(body.VideoID)
+	body.CommentID = strings.TrimSpace(body.CommentID)
 	body.TargetLang = strings.ToLower(strings.TrimSpace(body.TargetLang))
-	if body.TweetID == "" || body.TargetLang == "" {
-		writeJSON(w, 400, map[string]any{"error": "tweet_id and target_lang required"})
-		return
-	}
-	if body.Field != "body" && body.Field != "quote" {
-		writeJSON(w, 400, map[string]any{"error": "field must be 'body' or 'quote'"})
-		return
-	}
 
 	translateCtx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
-	result, err := translate.FeedText(translateCtx, s.db, body.TweetID, body.Field, body.TargetLang)
+
+	var result *translate.Result
+	var err error
+	logID := body.TweetID
+	logField := body.Field
+	if body.VideoID != "" || body.CommentID != "" {
+		if body.VideoID == "" || body.CommentID == "" || body.TargetLang == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "video_id, comment_id, and target_lang required"})
+			return
+		}
+		logID = body.VideoID + ":" + body.CommentID
+		logField = "comment"
+		result, err = translate.CommentText(translateCtx, s.db, body.VideoID, body.CommentID, body.TargetLang)
+	} else {
+		if body.TweetID == "" || body.TargetLang == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "tweet_id and target_lang required"})
+			return
+		}
+		if body.Field != "body" && body.Field != "quote" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "field must be 'body' or 'quote'"})
+			return
+		}
+		result, err = translate.FeedText(translateCtx, s.db, body.TweetID, body.Field, body.TargetLang)
+	}
 	if err != nil {
-		s.writeTranslateError(w, body.TweetID, body.Field, err)
+		s.writeTranslateError(w, logID, logField, err)
 		return
 	}
 
@@ -71,6 +90,8 @@ func (s *Server) writeTranslateError(w http.ResponseWriter, tweetID, field strin
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "no text to translate"})
 	case errors.Is(err, translate.ErrFeedItemNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": "feed item not found"})
+	case errors.Is(err, translate.ErrCommentNotFound):
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "video comment not found"})
 	case errors.Is(err, translate.ErrNotConfigured):
 		slog.Error("translate", "tweet_id", tweetID, "field", field, "err", err)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "translation provider not configured"})

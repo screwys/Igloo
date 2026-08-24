@@ -339,6 +339,16 @@ function addVideoChannelTarget(document, channelID) {
 	return target;
 }
 
+function addPlayerChannelTarget(document, channelID) {
+	const target = new FakeElement('span', {
+		classes: ['player-channel-avatar-wrap'],
+		attrs: { 'data-profile-channel-id': channelID },
+		rect: { left: 8, top: 8, right: 36, bottom: 36 },
+	});
+	document.body.appendChild(target);
+	return target;
+}
+
 test('profile hover ignores underlying triggers when the pointer is inside the open card', async () => {
 	const { document, requests } = await loadProfileHover();
 	const { repost, author } = addFeedTargets(document);
@@ -434,6 +444,18 @@ test('video-card profile hover opens only from channel avatars on every video pl
 
 		assert.deepEqual(requests, ['/api/profile-card/' + channelID]);
 	}
+});
+
+test('player profile hover opens from the channel avatar after the shared delay', async () => {
+	const { document, requests } = await loadProfileHover();
+	const target = addPlayerChannelTarget(document, 'youtube_UCsample_player');
+
+	document.dispatch('mousemove', mouseEvent(target, 20, 20));
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.deepEqual(requests, []);
+	await flush();
+
+	assert.deepEqual(requests, ['/api/profile-card/youtube_UCsample_player']);
 });
 
 test('scrolling cancels a pending video-card profile hover', async () => {

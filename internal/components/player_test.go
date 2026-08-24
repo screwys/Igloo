@@ -83,6 +83,7 @@ func TestYouTubePlayerRendersMiniPlayerHandoff(t *testing.T) {
 	for _, want := range []string{
 		`id="player-mini-btn"`,
 		`aria-pressed="false"`,
+		`class="player-channel-avatar-wrap" data-profile-channel-id="youtube_sample_channel"`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("YouTube player missing %q:\n%s", want, html)

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/model"
 	"github.com/screwys/igloo/internal/settings"
 )
@@ -355,6 +356,46 @@ func TestFeedTextAllowsManualShortTranslation(t *testing.T) {
 	}
 	if requests != 1 {
 		t.Fatalf("provider requests = %d, want 1", requests)
+	}
+}
+
+func TestCommentTextTranslatesStoredCommentAndReusesCache(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"translations":[{"translatedText":"Hello","detectedSourceLanguage":"ko"}]}}`))
+	}))
+	defer srv.Close()
+
+	d := openTranslateTestDB(t)
+	if _, err := d.AddComments("sample_video", []db.CommentInput{{
+		CommentID: "sample_comment",
+		Text:      "안녕하세요",
+	}}); err != nil {
+		t.Fatalf("AddComments: %v", err)
+	}
+	if err := d.SetSetting("translate_backend", settings.TranslateBackendGoogle); err != nil {
+		t.Fatalf("SetSetting translate_backend: %v", err)
+	}
+	if err := d.SetSetting("translate_api_site", srv.URL); err != nil {
+		t.Fatalf("SetSetting translate_api_site: %v", err)
+	}
+	if err := d.SetSetting("translate_api_key", "test-key"); err != nil {
+		t.Fatalf("SetSetting translate_api_key: %v", err)
+	}
+
+	for i := 0; i < 2; i++ {
+		result, err := CommentText(context.Background(), d, "sample_video", "sample_comment", "en")
+		if err != nil {
+			t.Fatalf("CommentText pass %d: %v", i+1, err)
+		}
+		if result.TranslatedText != "Hello" {
+			t.Fatalf("TranslatedText = %q, want Hello", result.TranslatedText)
+		}
+	}
+	if requests != 1 {
+		t.Fatalf("provider requests = %d, want 1 with cached second translation", requests)
 	}
 }
 

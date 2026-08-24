@@ -51,6 +51,35 @@ func TestPlayerCommentsDoesNotRenderRawCommentAvatar(t *testing.T) {
 	}
 }
 
+func TestPlayerCommentsRendersTranslateControlBesideMetadata(t *testing.T) {
+	html := renderPlayerComments(t, []model.Comment{{
+		VideoID:    "sample_video",
+		CommentID:  "sample_comment",
+		AuthorName: "Commenter",
+		Text:       "안녕하세요",
+		LikeCount:  7,
+	}})
+
+	for _, want := range []string{
+		`class="player-comment-meta">7 likes</span>`,
+		`class="feed-translate-btn feed-translate-pill player-comment-translate-btn"`,
+		`data-player-comment-translate`,
+		`data-video-id="sample_video"`,
+		`data-comment-id="sample_comment"`,
+		`data-player-comment-body`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("comment translation control missing %q: %s", want, html)
+		}
+	}
+	if strings.Index(html, `class="player-comment-meta"`) > strings.Index(html, `data-player-comment-translate`) {
+		t.Fatalf("translate control must follow comment metadata: %s", html)
+	}
+	if strings.Contains(html, `data-profile-channel-id`) {
+		t.Fatalf("comment avatars must not trigger profile hover: %s", html)
+	}
+}
+
 func TestRenderCommentRichTextLinksURLsWithThemeClass(t *testing.T) {
 	got := RenderCommentRichText("watch https://example.com?a=1&b=2 and www.example.org/path.")
 

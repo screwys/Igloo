@@ -1082,6 +1082,17 @@ func (db *DB) GetComments(videoID string, limit int) ([]model.Comment, error) {
 	return comments, rows.Err()
 }
 
+// GetCommentText returns the stored body for one video comment.
+func (db *DB) GetCommentText(videoID, commentID string) (string, error) {
+	var text string
+	err := db.conn.QueryRow(`
+		SELECT COALESCE(text, '')
+		FROM video_comments
+		WHERE video_id = ? AND comment_id = ?
+	`, videoID, commentID).Scan(&text)
+	return text, err
+}
+
 // DeleteComments removes all comments for a video. Returns count deleted.
 func (db *DB) DeleteComments(videoID string) (int, error) {
 	var deleted int

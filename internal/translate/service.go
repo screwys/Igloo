@@ -3,6 +3,7 @@ package translate
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -40,6 +41,7 @@ var (
 
 	ErrNotConfigured         = errors.New("translation provider not configured")
 	ErrFeedItemNotFound      = errors.New("feed item not found")
+	ErrCommentNotFound       = errors.New("video comment not found")
 	ErrUnsupportedField      = errors.New("unsupported translation field")
 	ErrNoText                = errors.New("no text to translate")
 	ErrTranslationFailed     = errors.New("translation failed")
@@ -167,6 +169,63 @@ func FeedText(ctx context.Context, database *db.DB, tweetID, field, targetLang s
 	}
 
 	contextHint := stripForTranslateContext(buildContext(fi.BodyText, fi.QuoteBodyText, field))
+	return translatePreparedText(ctx, database, tweetID, field, cleanSource, placeholders, detectedLang, targetLang, contextHint)
+}
+
+// CommentText translates one stored video comment and caches the result by
+// comment identity and source text. Including the source hash prevents a
+// refreshed, edited comment from reusing stale translated text.
+func CommentText(ctx context.Context, database *db.DB, videoID, commentID, targetLang string) (*Result, error) {
+	videoID = strings.TrimSpace(videoID)
+	commentID = strings.TrimSpace(commentID)
+	targetLang = strings.ToLower(strings.TrimSpace(targetLang))
+	if targetLang == "" {
+		targetLang = "en"
+	}
+
+	sourceText, err := database.GetCommentText(videoID, commentID)
+	if err == sql.ErrNoRows {
+		return nil, ErrCommentNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(sourceText) == "" {
+		return nil, ErrNoText
+	}
+
+	sourceHash := sha256.Sum256([]byte(sourceText))
+	cacheID := fmt.Sprintf("youtube-comment:%s:%s:%x", videoID, commentID, sourceHash)
+	const field = "comment"
+	if cached, cachedLang, cacheErr := database.GetTranslation(cacheID, field, targetLang); cacheErr == nil {
+		return &Result{
+			TranslatedText: cached,
+			SourceLang:     language.DisplayName(cachedLang),
+			TargetLang:     targetLang,
+			Provider:       "cache",
+		}, nil
+	} else if cacheErr != sql.ErrNoRows {
+		slog.Error("GetTranslation comment cache check", "video_id", videoID, "comment_id", commentID, "err", cacheErr)
+	}
+
+	cleanSource, placeholders := protectForTranslate(sourceText)
+	if !hasTranslatableContent(cleanSource) {
+		return nil, ErrNoText
+	}
+	return translatePreparedText(ctx, database, cacheID, field, cleanSource, placeholders, "", targetLang, "YouTube comment")
+}
+
+func translatePreparedText(
+	ctx context.Context,
+	database *db.DB,
+	cacheID string,
+	field string,
+	cleanSource string,
+	placeholders []string,
+	detectedLang string,
+	targetLang string,
+	contextHint string,
+) (*Result, error) {
 	translated, provider, err := translateTextWithDB(ctx, database, cleanSource, targetLang, contextHint, detectedLang)
 	if err != nil {
 		return nil, err
@@ -194,8 +253,8 @@ func FeedText(ctx context.Context, database *db.DB, tweetID, field, targetLang s
 	if cacheLang == "" {
 		cacheLang = "und"
 	}
-	if err := database.SetTranslation(tweetID, field, cacheLang, targetLang, text); err != nil {
-		slog.Warn("SetTranslation cache write", "tweet_id", tweetID, "err", err)
+	if err := database.SetTranslation(cacheID, field, cacheLang, targetLang, text); err != nil {
+		slog.Warn("SetTranslation cache write", "cache_id", cacheID, "err", err)
 	}
 
 	return &Result{

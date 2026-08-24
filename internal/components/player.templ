@@ -101,7 +101,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 					<div class="player-meta-inline">
 						<h2 id="player-title" style="margin:0 0 0.2rem;">{ p.Prefs.VideoTitle(video) }</h2>
 						<div class="channel-name">
-							<span class="player-channel-avatar-wrap" aria-hidden="true">
+							<span class="player-channel-avatar-wrap" data-profile-channel-id={ video.ChannelID } aria-hidden="true">
 								<img class="player-channel-avatar" src={ videoAvatarURL(video) } alt="" onload="window.MpaSiteBase&&window.MpaSiteBase.avatarLoad(this)" onerror="if(window.MpaSiteBase&&window.MpaSiteBase.avatarError(this))return; this.style.display='none'; this.nextElementSibling.style.display='inline-flex';"/>
 								<span class="player-channel-avatar-fallback" style="display:none;">{ channelInitial(video) }</span>
 							</span>
