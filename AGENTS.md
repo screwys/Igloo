@@ -126,6 +126,12 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 ## Android
 
 - Android must render normal UI state without live Igloo server access.
+- Released Android clients constrain server and container changes. A newer
+  server may add a sync model, but it must continue accepting and materializing
+  every sync model used by supported released APKs. Passing current Android CI
+  is not evidence that an installed older APK remains compatible; inspect the
+  released client's requested model and preserve that wire shape before
+  publishing `latest` or removing an older server model.
 - Room mirrors the documented server schema; schema bumps need migrations in `IglooMigrations`.
 - User state belongs in thin side tables joined at read time.
 - Cursors are opaque. Server-owned identifiers stay server-owned.
