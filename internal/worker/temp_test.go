@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/screwys/igloo/internal/download"
+	"github.com/screwys/igloo/internal/model"
 )
 
 func TestTempDownloadCancellationRetriesEvenWhenOutputMentionsCookies(t *testing.T) {
@@ -23,6 +24,17 @@ func TestTempDownloadCancellationRetriesEvenWhenOutputMentionsCookies(t *testing
 	}
 	if classification.RetryDelay <= 0 {
 		t.Fatal("server shutdown cancellation must be retried")
+	}
+}
+
+func TestPreparedDiscoverMetadataAvoidsSeparateInfoRequest(t *testing.T) {
+	info := preparedDiscoverMetadata(model.DiscoveryVideo{
+		VideoID: "sample_prepared", Title: "Prepared Video", Duration: 75,
+		ChannelID: "youtube_UCprepared", ChannelName: "Prepared Creator",
+		ChannelHandle: "@prepared", ChannelURL: "https://www.youtube.com/channel/UCprepared",
+	})
+	if info["id"] != "sample_prepared" || info["channel_id"] != "UCprepared" || info["duration"] != float64(75) {
+		t.Fatalf("prepared metadata = %+v", info)
 	}
 }
 

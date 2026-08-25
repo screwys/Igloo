@@ -61,6 +61,7 @@ func (m *Manager) runYouTubeRecommendationLoop(ctx context.Context) {
 	} else if stored {
 		log.Printf("[youtube-recommendations] preserved existing Discover cache as prepared page")
 	}
+	m.reconcileDiscoverPrefetch()
 	for {
 		if m.maintainDiscoverGeneration() {
 			continue
@@ -107,6 +108,9 @@ func (m *Manager) maintainDiscoverGeneration() bool {
 	}
 	if !published {
 		return false
+	}
+	if err := m.db.ResetDiscoverTempDownloadQueue(); err != nil {
+		log.Printf("[youtube-recommendations] reset Discover download attempts: %v", err)
 	}
 	if err := m.db.RetireDiscoverDownloads(retired); err != nil {
 		log.Printf("[youtube-recommendations] retire previous Discover downloads: %v", err)
@@ -178,7 +182,6 @@ func (m *Manager) processYouTubeRecommendationJob(ctx context.Context, fetcher y
 		return true
 	}
 	m.KickProfileJobs()
-	m.reconcileDiscoverPrefetch()
 	log.Printf("[youtube-recommendations] refreshed %s: candidates=%d", job.AnchorVideoID, len(candidates))
 	return true
 }

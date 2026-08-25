@@ -24,6 +24,14 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260825_add_discover_generation_history",
+		apply: addDiscoverGenerationHistory,
+	},
+	{
+		name:  "20260825_reset_discover_prefetch_pipeline",
+		apply: resetDiscoverPrefetchPipeline,
+	},
+	{
 		name:  "20260825_add_prepared_discover_generation",
 		apply: addPreparedDiscoverGeneration,
 	},
@@ -87,6 +95,23 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addDiscoverGenerationHistory(tx *sql.Tx) error {
+	if _, err := tx.Exec(discoverGenerationTableStatement()); err != nil {
+		return err
+	}
+	hasHistory, err := schemaColumnExists(tx, "discover_generation", "history_video_ids_json")
+	if err != nil || hasHistory {
+		return err
+	}
+	_, err = tx.Exec(`ALTER TABLE discover_generation ADD COLUMN history_video_ids_json TEXT NOT NULL DEFAULT '[]'`)
+	return err
+}
+
+func resetDiscoverPrefetchPipeline(tx *sql.Tx) error {
+	_, err := tx.Exec(`DELETE FROM temp_download_queue WHERE origin = 'discover' AND status != 'processing'`)
+	return err
 }
 
 func addPreparedDiscoverGeneration(tx *sql.Tx) error {

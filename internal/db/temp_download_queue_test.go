@@ -75,7 +75,7 @@ func TestCurrentlyAvailableExcludesDiscoverPrefetchButPinnedKeepsIt(t *testing.T
 	}
 }
 
-func TestDiscoverPrefetchRetriesPreviouslyBlockedCandidate(t *testing.T) {
+func TestDiscoverPrefetchKeepsBlockedAttemptBoundedUntilGenerationReset(t *testing.T) {
 	d := openWritableTestDB(t)
 	const videoID = "sample_blocked_discover"
 	url := "https://www.youtube.com/watch?v=" + videoID
@@ -85,12 +85,19 @@ func TestDiscoverPrefetchRetriesPreviouslyBlockedCandidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	added, err := d.EnqueueDiscoverTempDownloads([]model.DiscoveryVideo{{VideoID: videoID, Source: "related"}}, 1)
-	if err != nil || added != 1 {
+	if err != nil || added != 0 {
 		t.Fatalf("enqueue blocked candidate = %d err=%v", added, err)
 	}
 	state, found, err := d.TempDownloadState(url)
-	if err != nil || !found || state.Status != "pending" || state.Error != "" {
-		t.Fatalf("retried state = %+v found=%v err=%v", state, found, err)
+	if err != nil || !found || state.Status != "blocked" {
+		t.Fatalf("bounded state = %+v found=%v err=%v", state, found, err)
+	}
+	if err := d.ResetDiscoverTempDownloadQueue(); err != nil {
+		t.Fatal(err)
+	}
+	added, err = d.EnqueueDiscoverTempDownloads([]model.DiscoveryVideo{{VideoID: videoID, Source: "related"}}, 1)
+	if err != nil || added != 1 {
+		t.Fatalf("new generation enqueue = %d err=%v", added, err)
 	}
 }
 

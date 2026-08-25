@@ -135,7 +135,7 @@ func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, ta
 			url := "https://www.youtube.com/watch?v=" + videoID
 			var queued bool
 			if err := tx.QueryRow(`
-				SELECT EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ? AND status IN ('pending', 'processing'))
+				SELECT EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ?)
 			`, url).Scan(&queued); err != nil {
 				return err
 			}
@@ -160,7 +160,7 @@ func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, ta
 			var occupied bool
 			if err := tx.QueryRow(`
 				SELECT EXISTS(SELECT 1 FROM videos v WHERE v.video_id = ? AND `+readyVideoMediaExistsSQL("v")+`)
-				    OR EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ? AND (status IN ('pending', 'processing') OR origin = 'interactive'))
+				    OR EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ?)
 			`, videoID, url).Scan(&occupied); err != nil {
 				return err
 			}
@@ -170,11 +170,6 @@ func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, ta
 			if _, err := tx.Exec(`
 				INSERT INTO temp_download_queue (url, platform, origin, added_at_ms)
 				VALUES (?, 'youtube', 'discover', ?)
-				ON CONFLICT(url) DO UPDATE SET
-					status = 'pending', retry_count = 0, next_attempt_at_ms = 0,
-					last_error_kind = '', last_error = '', lease_owner = '', lease_until_ms = 0,
-					added_at_ms = excluded.added_at_ms
-				WHERE temp_download_queue.origin = 'discover' AND temp_download_queue.status = 'blocked'
 			`, url, nowMs); err != nil {
 				return err
 			}
@@ -187,6 +182,15 @@ func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, ta
 		return nil
 	})
 	return added, err
+}
+
+// ResetDiscoverTempDownloadQueue clears the previous generation's bounded
+// attempts. A currently running download is allowed to finish.
+func (db *DB) ResetDiscoverTempDownloadQueue() error {
+	return db.WithWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`DELETE FROM temp_download_queue WHERE origin = 'discover' AND status != 'processing'`)
+		return err
+	})
 }
 
 // ClaimTempDownloadWork leases the oldest due user-submitted download.

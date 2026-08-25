@@ -60,6 +60,10 @@ func (m *Manager) runTempDownloadLoop(ctx context.Context) {
 		case <-m.tempDownloadKick:
 		case <-timer.C:
 		}
+		if delay := m.externalRetryDelay(time.Now()); delay > 0 {
+			resetMediaTimer(timer, delay)
+			continue
+		}
 
 		work, claimed, err := m.db.ClaimTempDownloadWork(downloadPoolLeaseOwner(), time.Now().UnixMilli(), tempDownloadLeaseDuration)
 		if err != nil {
@@ -73,7 +77,7 @@ func (m *Manager) runTempDownloadLoop(ctx context.Context) {
 		}
 
 		lane := tempDownloadLane(work.Origin)
-		result := m.downloadTemp(ctx, work.URL, false, lane, tempDownloadSeedsRecommendations(work.Origin))
+		result := m.downloadTemp(ctx, work.URL, false, lane, tempDownloadSeedsRecommendations(work.Origin), work.Origin)
 		if result.Success {
 			if origin, originErr := m.db.TempDownloadOrigin(work.URL); originErr != nil {
 				log.Printf("[temp-download] read origin %s: %v", work.URL, originErr)
@@ -120,10 +124,10 @@ func classifyTempDownloadFailure(result TempDownloadResult, attempt int) downloa
 
 // DownloadTemp handles an ad-hoc URL download.
 func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel bool) TempDownloadResult {
-	return m.downloadTemp(ctx, rawURL, saveChannel, download.MediaLaneBulkInteractive, true)
+	return m.downloadTemp(ctx, rawURL, saveChannel, download.MediaLaneBulkInteractive, true, "interactive")
 }
 
-func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel bool, lane download.MediaLane, seedRecommendations bool) TempDownloadResult {
+func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel bool, lane download.MediaLane, seedRecommendations bool, origin string) TempDownloadResult {
 	platform := subscribe.DetectPlatform(rawURL, "")
 	if err := subscribe.ValidateInput(rawURL, platform); err != nil {
 		return TempDownloadResult{Message: "Unsupported download URL"}
@@ -147,10 +151,25 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 		}
 	}
 
-	// Fetch metadata.
-	info, err := m.downloader.YtDlp.FetchInfo(ctx, rawURL, authOpts)
-	if err != nil {
-		return TempDownloadResult{Message: fmt.Sprintf("Could not fetch info: %v", err), Cause: err}
+	var info map[string]any
+	if origin == "discover" && platform == "youtube" {
+		parsed, err := url.Parse(rawURL)
+		if err == nil {
+			candidate, candidateErr := m.db.GetPreparedDiscoverVideo(parsed.Query().Get("v"))
+			if candidateErr != nil {
+				return TempDownloadResult{Message: fmt.Sprintf("Read prepared video: %v", candidateErr), Cause: candidateErr}
+			}
+			if candidate != nil {
+				info = preparedDiscoverMetadata(*candidate)
+			}
+		}
+	}
+	if info == nil {
+		var err error
+		info, err = m.downloader.YtDlp.FetchInfo(ctx, rawURL, authOpts)
+		if err != nil {
+			return TempDownloadResult{Message: fmt.Sprintf("Could not fetch info: %v", err), Cause: err}
+		}
 	}
 
 	videoID, _ := info["id"].(string)
@@ -230,12 +249,25 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 
 	completed, dlErr := m.downloader.DownloadCompleted(ctx, lane, rawURL, "video", opts)
 	if dlErr != nil || len(completed.MediaPaths) == 0 {
+		cause := dlErr
+		if cause == nil {
+			cause = errors.New("download returned no media files")
+		}
+		if origin == "discover" {
+			m.ReportExternalResult(cause)
+		}
 		m.removeFailedAttempt(ctx, lane, completedVideoFiles{}, completed)
 		msg := "Download failed"
 		if dlErr != nil {
 			msg = dlErr.Error()
 		}
-		return TempDownloadResult{Message: msg, Cause: dlErr}
+		return TempDownloadResult{Message: msg, Cause: cause}
+	}
+	if origin == "discover" {
+		m.ReportExternalResult(nil)
+	}
+	for key, value := range completed.Metadata {
+		info[key] = value
 	}
 
 	files, err := m.prepareCompletedVideoFiles(ctx, lane, completed)
@@ -354,6 +386,15 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 		Success: true,
 		Message: fmt.Sprintf("Downloaded: %s", title),
 		VideoID: videoID,
+	}
+}
+
+func preparedDiscoverMetadata(candidate model.DiscoveryVideo) map[string]any {
+	return map[string]any{
+		"id": candidate.VideoID, "title": candidate.Title, "duration": float64(candidate.Duration),
+		"channel_id": strings.TrimPrefix(candidate.ChannelID, "youtube_"),
+		"channel":    candidate.ChannelName, "uploader": candidate.ChannelName,
+		"uploader_id": candidate.ChannelHandle, "channel_url": candidate.ChannelURL,
 	}
 }
 

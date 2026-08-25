@@ -66,6 +66,7 @@ func discoverGenerationTableStatement() string {
 	return `CREATE TABLE IF NOT EXISTS discover_generation (
 		id INTEGER PRIMARY KEY CHECK(id = 1),
 		candidates_json TEXT NOT NULL DEFAULT '[]',
+		history_video_ids_json TEXT NOT NULL DEFAULT '[]',
 		prepared_at_ms INTEGER NOT NULL DEFAULT 0,
 		expires_at_ms INTEGER NOT NULL DEFAULT 0,
 		refresh_started_at_ms INTEGER NOT NULL DEFAULT 0

@@ -141,8 +141,8 @@ func (db *DB) PublishDiscoverGeneration(nowMs int64, limit int) (bool, []string,
 	var retired []string
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		var refreshStarted int64
-		var previousJSON string
-		if err := tx.QueryRow(`SELECT refresh_started_at_ms, candidates_json FROM discover_generation WHERE id = 1`).Scan(&refreshStarted, &previousJSON); err != nil {
+		var previousJSON, historyJSON string
+		if err := tx.QueryRow(`SELECT refresh_started_at_ms, candidates_json, history_video_ids_json FROM discover_generation WHERE id = 1`).Scan(&refreshStarted, &previousJSON, &historyJSON); err != nil {
 			return err
 		}
 		if refreshStarted == 0 {
@@ -190,35 +190,43 @@ func (db *DB) PublishDiscoverGeneration(nowMs int64, limit int) (bool, []string,
 		}
 		var previous []model.DiscoveryVideo
 		_ = json.Unmarshal([]byte(previousJSON), &previous)
-		oldIDs := make(map[string]struct{}, len(previous))
+		var history [][]string
+		_ = json.Unmarshal([]byte(historyJSON), &history)
+		oldIDs := make(map[string]struct{}, len(previous)+len(history)*limit)
+		previousIDsSet := make(map[string]struct{}, len(previous))
 		for _, video := range previous {
 			oldIDs[video.VideoID] = struct{}{}
+			previousIDsSet[video.VideoID] = struct{}{}
 		}
-		candidates := interleaveDiscoverBatches(batches, limit*2, 6, 2)
-		fresh := candidates[:0]
-		var repeated []model.DiscoveryVideo
-		for _, candidate := range candidates {
-			if _, exists := oldIDs[candidate.VideoID]; exists {
-				repeated = append(repeated, candidate)
-				continue
-			}
-			fresh = append(fresh, candidate)
-			if len(fresh) == limit {
-				break
+		for _, generation := range history {
+			for _, videoID := range generation {
+				oldIDs[videoID] = struct{}{}
 			}
 		}
-		for _, candidate := range repeated {
-			if len(fresh) == limit {
-				break
+		freshBatches := batches[:0]
+		for _, batch := range batches {
+			freshBatch := batch[:0]
+			for _, candidate := range batch {
+				if _, repeated := oldIDs[candidate.VideoID]; !repeated {
+					freshBatch = append(freshBatch, candidate)
+				}
 			}
-			fresh = append(fresh, candidate)
+			if len(freshBatch) > 0 {
+				freshBatches = append(freshBatches, freshBatch)
+			}
 		}
+		fresh := interleaveDiscoverBatches(freshBatches, limit, 3, 3)
 		payload, err := json.Marshal(fresh)
 		if err != nil {
 			return err
 		}
+		history = nextDiscoverGenerationHistory(previous, history)
+		historyPayload, err := json.Marshal(history)
+		if err != nil {
+			return err
+		}
 		expiresAt := nowMs + int64(resetHours)*time.Hour.Milliseconds()
-		if _, err := tx.Exec(`UPDATE discover_generation SET candidates_json = ?, prepared_at_ms = ?, expires_at_ms = ?, refresh_started_at_ms = 0 WHERE id = 1`, string(payload), nowMs, expiresAt); err != nil {
+		if _, err := tx.Exec(`UPDATE discover_generation SET candidates_json = ?, history_video_ids_json = ?, prepared_at_ms = ?, expires_at_ms = ?, refresh_started_at_ms = 0 WHERE id = 1`, string(payload), string(historyPayload), nowMs, expiresAt); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(`DELETE FROM discover_refresh_anchors`); err != nil {
@@ -228,7 +236,7 @@ func (db *DB) PublishDiscoverGeneration(nowMs int64, limit int) (bool, []string,
 		for _, video := range fresh {
 			newIDs[video.VideoID] = struct{}{}
 		}
-		for id := range oldIDs {
+		for id := range previousIDsSet {
 			if _, kept := newIDs[id]; !kept {
 				retired = append(retired, id)
 			}
@@ -237,6 +245,24 @@ func (db *DB) PublishDiscoverGeneration(nowMs int64, limit int) (bool, []string,
 		return nil
 	})
 	return published, retired, err
+}
+
+func nextDiscoverGenerationHistory(previous []model.DiscoveryVideo, history [][]string) [][]string {
+	previousIDs := make([]string, 0, len(previous))
+	for _, video := range previous {
+		if strings.TrimSpace(video.VideoID) != "" {
+			previousIDs = append(previousIDs, video.VideoID)
+		}
+	}
+	if len(previousIDs) > 0 {
+		history = append([][]string{previousIDs}, history...)
+	}
+	// The current page plus these two prior ID sets cover the last three
+	// prepared updates without allowing the exclusion cache to grow forever.
+	if len(history) > 2 {
+		history = history[:2]
+	}
+	return history
 }
 
 func (db *DB) ListPreparedDiscoverVideos(limit int) ([]model.DiscoveryVideo, error) {
@@ -256,6 +282,23 @@ func (db *DB) ListPreparedDiscoverVideos(limit int) ([]model.DiscoveryVideo, err
 		videos = videos[:limit]
 	}
 	return videos, db.markDiscoveryReady(videos)
+}
+
+func (db *DB) GetPreparedDiscoverVideo(videoID string) (*model.DiscoveryVideo, error) {
+	videoID = strings.TrimSpace(videoID)
+	if videoID == "" {
+		return nil, nil
+	}
+	videos, err := db.ListPreparedDiscoverVideos(0)
+	if err != nil {
+		return nil, err
+	}
+	for i := range videos {
+		if videos[i].VideoID == videoID {
+			return &videos[i], nil
+		}
+	}
+	return nil, nil
 }
 
 func (db *DB) RescheduleDiscoverRefresh(force bool) error {

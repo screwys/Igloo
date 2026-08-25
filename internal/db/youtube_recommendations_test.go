@@ -118,11 +118,11 @@ func TestPreparedDiscoverGenerationKeepsOldPageUntilAtomicHandoff(t *testing.T) 
 		t.Fatal(err)
 	}
 	published, retired, err := d.PublishDiscoverGeneration(103, 80)
-	if err != nil || !published || len(retired) != 0 {
+	if err != nil || !published || fmt.Sprint(retired) != "[sample_old_daily]" {
 		t.Fatalf("publish = %v retired=%v err=%v", published, retired, err)
 	}
 	after, err := d.ListPreparedDiscoverVideos(80)
-	if err != nil || len(after) != 2 || after[0].VideoID != "sample_new_daily" || after[1].VideoID != "sample_old_daily" {
+	if err != nil || len(after) != 1 || after[0].VideoID != "sample_new_daily" {
 		t.Fatalf("prepared page = %+v err=%v", after, err)
 	}
 	started, _, err = d.BeginDiscoverRefresh(104)
@@ -159,6 +159,16 @@ func TestInterleaveDiscoverBatchesCapsAnchorsAndCreators(t *testing.T) {
 	}
 	if got[0].VideoID != "topic_0" || got[1].VideoID != "first_0" || got[2].VideoID != "second_0" {
 		t.Fatalf("batches were not round-robin: %+v", got)
+	}
+}
+
+func TestDiscoverGenerationHistoryCoversThreeUpdatesIncludingCurrent(t *testing.T) {
+	history := nextDiscoverGenerationHistory(
+		[]model.DiscoveryVideo{{VideoID: "current"}},
+		[][]string{{"previous_one"}, {"previous_two"}, {"previous_three"}},
+	)
+	if fmt.Sprint(history) != "[[current] [previous_one]]" {
+		t.Fatalf("generation history = %v", history)
 	}
 }
 
