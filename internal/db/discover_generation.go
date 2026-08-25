@@ -266,6 +266,28 @@ func nextDiscoverGenerationHistory(previous []model.DiscoveryVideo, history [][]
 }
 
 func (db *DB) ListPreparedDiscoverVideos(limit int) ([]model.DiscoveryVideo, error) {
+	videos, err := db.listPreparedDiscoverCandidates()
+	if err != nil {
+		return nil, err
+	}
+	followed, err := db.followedChannelSet()
+	if err != nil {
+		return nil, err
+	}
+	visible := videos[:0]
+	for _, video := range videos {
+		if _, excluded := followed[video.ChannelID]; excluded {
+			continue
+		}
+		visible = append(visible, video)
+		if limit > 0 && len(visible) == limit {
+			break
+		}
+	}
+	return visible, db.markDiscoveryReady(visible)
+}
+
+func (db *DB) listPreparedDiscoverCandidates() ([]model.DiscoveryVideo, error) {
 	var payload string
 	err := db.reader().QueryRow(`SELECT candidates_json FROM discover_generation WHERE id = 1`).Scan(&payload)
 	if err == sql.ErrNoRows {
@@ -278,10 +300,7 @@ func (db *DB) ListPreparedDiscoverVideos(limit int) ([]model.DiscoveryVideo, err
 	if err := json.Unmarshal([]byte(payload), &videos); err != nil {
 		return nil, err
 	}
-	if limit > 0 && len(videos) > limit {
-		videos = videos[:limit]
-	}
-	return videos, db.markDiscoveryReady(videos)
+	return videos, nil
 }
 
 func (db *DB) GetPreparedDiscoverVideo(videoID string) (*model.DiscoveryVideo, error) {
@@ -289,7 +308,7 @@ func (db *DB) GetPreparedDiscoverVideo(videoID string) (*model.DiscoveryVideo, e
 	if videoID == "" {
 		return nil, nil
 	}
-	videos, err := db.ListPreparedDiscoverVideos(0)
+	videos, err := db.listPreparedDiscoverCandidates()
 	if err != nil {
 		return nil, err
 	}

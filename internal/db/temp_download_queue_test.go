@@ -101,6 +101,27 @@ func TestDiscoverPrefetchKeepsBlockedAttemptBoundedUntilGenerationReset(t *testi
 	}
 }
 
+func TestDiscoverPrefetchReplacesBlockedAttemptWithNextCandidate(t *testing.T) {
+	d := openWritableTestDB(t)
+	const blockedID = "sample_blocked_attempt"
+	if err := d.ExecRaw(`
+		INSERT INTO temp_download_queue (url, platform, origin, status)
+		VALUES ('https://www.youtube.com/watch?v=sample_blocked_attempt', 'youtube', 'discover', 'blocked')`); err != nil {
+		t.Fatal(err)
+	}
+	added, err := d.EnqueueDiscoverTempDownloads([]model.DiscoveryVideo{
+		{VideoID: blockedID, Source: "related"},
+		{VideoID: "sample_replacement_attempt", Source: "related"},
+	}, 1)
+	if err != nil || added != 1 {
+		t.Fatalf("replacement enqueue = %d err=%v", added, err)
+	}
+	state, found, err := d.TempDownloadState("https://www.youtube.com/watch?v=sample_replacement_attempt")
+	if err != nil || !found || state.Status != "pending" {
+		t.Fatalf("replacement state = %+v found=%v err=%v", state, found, err)
+	}
+}
+
 func TestDiscoverDownloadSurvivesGenericTempRetentionUntilHandoff(t *testing.T) {
 	d := openWritableTestDB(t)
 	const videoID = "sample_prepared_discover"

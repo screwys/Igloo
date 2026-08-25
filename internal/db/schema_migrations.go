@@ -24,6 +24,10 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260826_expand_discover_reserve",
+		apply: expandDiscoverReserve,
+	},
+	{
 		name:  "20260825_add_discover_generation_history",
 		apply: addDiscoverGenerationHistory,
 	},
@@ -95,6 +99,11 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func expandDiscoverReserve(tx *sql.Tx) error {
+	_, err := tx.Exec(`UPDATE discover_generation SET expires_at_ms = 0 WHERE id = 1 AND refresh_started_at_ms = 0`)
+	return err
 }
 
 func addDiscoverGenerationHistory(tx *sql.Tx) error {

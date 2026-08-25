@@ -183,10 +183,6 @@ body.feed-media-overlay-open {
 }
 
 /* ===== YouTube discovery ===== */
-.discover-page {
-    padding: 0 1.5rem 2rem;
-}
-
 .discover-rail-loading {
     color: var(--text-secondary);
 }
@@ -209,12 +205,6 @@ body.feed-media-overlay-open {
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
     font-size: 0.82rem;
-}
-
-@media (max-width: 768px) {
-    .discover-page {
-        padding: 0 0.75rem 1.5rem;
-    }
 }
 
 .nav-item-container {

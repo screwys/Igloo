@@ -459,6 +459,7 @@
 						method: 'POST',
 						body: JSON.stringify({ channel_id: channelID, action: 'set', updated_at_ms: Date.now() }),
 					});
+					document.body.dispatchEvent(new CustomEvent('followChanged', { detail: { channelId: channelID } }));
 					mpa.showToast(i18nFormat('toast_followed_channel', 'Followed %1$s', label));
 				}
 			} catch (err) {

@@ -36,14 +36,6 @@ func TestDiscoveryCardUsesTemporaryWatchUntilMediaIsReady(t *testing.T) {
 	if !strings.Contains(buf.String(), `href="/player/sample_discover"`) {
 		t.Fatalf("ready card did not use player: %s", buf.String())
 	}
-	if strings.Contains(buf.String(), `class="discover-ready-badge"`) {
-		t.Fatalf("ordinary local video rendered Discover Ready badge: %s", buf.String())
-	}
-	video.DiscoverReady = true
-	buf.Reset()
-	if err := DiscoveryCard(newTestPageProps(), video).Render(context.Background(), &buf); err != nil {
-		t.Fatal(err)
-	}
 	if !strings.Contains(buf.String(), `class="discover-ready-badge"`) || !strings.Contains(buf.String(), `Ready`) {
 		t.Fatalf("ready card did not render ready badge: %s", buf.String())
 	}
@@ -59,5 +51,17 @@ func TestPlayerDiscoveryRailPollsOnlyWhileEmpty(t *testing.T) {
 	}
 	if strings.Contains(buf.String(), "every") {
 		t.Fatalf("pending rail schedules overlapping polling: %s", buf.String())
+	}
+}
+
+func TestDiscoverGridRefreshesWhenAChannelIsFollowed(t *testing.T) {
+	var buf bytes.Buffer
+	videos := []model.DiscoveryVideo{{VideoID: "sample_visible", ChannelID: "youtube_UCvisible"}}
+	if err := DiscoverGrid(newTestPageProps(), videos, false).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	if !strings.Contains(html, `hx-get="/api/discover/cards"`) || !strings.Contains(html, `hx-trigger="followChanged from:body"`) {
+		t.Fatalf("populated Discover grid does not refresh after follow: %s", html)
 	}
 }

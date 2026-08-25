@@ -71,6 +71,28 @@ func TestYouTubeRecommendationSnapshotAndDiscoverPrefetch(t *testing.T) {
 	}
 }
 
+func TestDiscoverReadyUsesCanonicalPlayableMediaWithoutPrefetchProvenance(t *testing.T) {
+	d := openWritableTestDB(t)
+	const videoID = "sample_interactive_ready"
+	if err := d.InsertVideo(videoID, "youtube_UCinteractive", "youtube_video", "Interactive Ready", "", 60, 1, "", "video", 0, true); err != nil {
+		t.Fatal(err)
+	}
+	storeReadyAssetForTest(t, d, Asset{
+		AssetID: BuildAssetID("youtube", "youtube_video", videoID, "video_stream", 0), AssetKind: "video_stream",
+		OwnerKind: "youtube_video", OwnerID: videoID, FilePath: "media/youtube/" + videoID + ".mp4", ContentType: "video/mp4",
+	}, 1)
+	videos := []model.DiscoveryVideo{{VideoID: videoID}}
+	if err := d.markDiscoveryReady(videos); err != nil {
+		t.Fatal(err)
+	}
+	if !videos[0].Ready {
+		t.Fatal("canonical playable Discover video was not marked Ready")
+	}
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM discover_temp_downloads WHERE video_id = 'sample_interactive_ready'`); got != 0 {
+		t.Fatal("test unexpectedly created Discover prefetch provenance")
+	}
+}
+
 func TestPreparedDiscoverGenerationKeepsOldPageUntilAtomicHandoff(t *testing.T) {
 	d := openWritableTestDB(t)
 	const anchor = "sample_daily_anchor"
@@ -169,6 +191,28 @@ func TestDiscoverGenerationHistoryCoversThreeUpdatesIncludingCurrent(t *testing.
 	)
 	if fmt.Sprint(history) != "[[current] [previous_one]]" {
 		t.Fatalf("generation history = %v", history)
+	}
+}
+
+func TestPreparedDiscoverReplacesNewlyFollowedCreatorFromReserve(t *testing.T) {
+	d := openWritableTestDB(t)
+	videos := []model.DiscoveryVideo{
+		{VideoID: "sample_followed_candidate", ChannelID: "youtube_UCfollowed_candidate"},
+		{VideoID: "sample_reserve_candidate", ChannelID: "youtube_UCreserve_candidate"},
+	}
+	payload, err := json.Marshal(videos)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ExecRaw(`INSERT INTO discover_generation (id, candidates_json) VALUES (1, ?)`, string(payload)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ('youtube_UCfollowed_candidate', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	visible, err := d.ListPreparedDiscoverVideos(1)
+	if err != nil || len(visible) != 1 || visible[0].VideoID != "sample_reserve_candidate" {
+		t.Fatalf("visible Discover replacement = %+v err=%v", visible, err)
 	}
 }
 

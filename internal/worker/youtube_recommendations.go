@@ -101,7 +101,7 @@ func (m *Manager) maintainDiscoverGeneration() bool {
 		log.Printf("[youtube-recommendations] preparing Discover generation: anchors=%d", anchors)
 		return true
 	}
-	published, retired, err := m.db.PublishDiscoverGeneration(nowMs, 80)
+	published, retired, err := m.db.PublishDiscoverGeneration(nowMs, 120)
 	if err != nil {
 		log.Printf("[youtube-recommendations] publish Discover generation: %v", err)
 		return false

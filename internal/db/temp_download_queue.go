@@ -102,9 +102,8 @@ func (db *DB) EnqueueTempDownload(rawURL, platform string) (bool, error) {
 	return queued, err
 }
 
-// EnqueueDiscoverTempDownloads maintains a bounded global warm set. Existing
-// ready media and queued work both count toward the target; interactive work is
-// never demoted when the same URL is recommended again.
+// EnqueueDiscoverTempDownloads maintains a bounded global warm set. Ready media
+// and active work reserve slots; blocked attempts do not satisfy the target.
 func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, target int) (int, error) {
 	if target <= 0 || len(candidates) == 0 {
 		return 0, nil
@@ -135,7 +134,7 @@ func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, ta
 			url := "https://www.youtube.com/watch?v=" + videoID
 			var queued bool
 			if err := tx.QueryRow(`
-				SELECT EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ?)
+				SELECT EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ? AND status IN ('pending', 'processing'))
 			`, url).Scan(&queued); err != nil {
 				return err
 			}

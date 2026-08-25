@@ -99,6 +99,9 @@ func (m *Manager) runTempDownloadLoop(ctx context.Context) {
 				log.Printf("[temp-download] retry %s: %v", work.URL, err)
 			}
 		}
+		if work.Origin == "discover" {
+			m.reconcileDiscoverPrefetch()
+		}
 		resetMediaTimer(timer, 0)
 	}
 }

@@ -4,19 +4,19 @@ import "github.com/screwys/igloo/internal/model"
 
 templ DiscoverPage(p PageProps, videos []model.DiscoveryVideo, pending bool) {
 	@Base(p) {
-		<div class="discover-page">
-			@DiscoverGrid(p, videos, pending)
-		</div>
+		@DiscoverGrid(p, videos, pending)
 	}
 }
 
 templ DiscoverGrid(p PageProps, videos []model.DiscoveryVideo, pending bool) {
 	<div
 		id="discover-grid-state"
+		hx-get="/api/discover/cards"
+		hx-swap="outerHTML"
 		if pending {
-			hx-get="/api/discover/cards"
-			hx-trigger="load delay:2s"
-			hx-swap="outerHTML"
+			hx-trigger="load delay:2s, followChanged from:body"
+		} else {
+			hx-trigger="followChanged from:body"
 		}
 	>
 		if len(videos) > 0 {
@@ -77,7 +77,7 @@ templ DiscoveryCard(p PageProps, video model.DiscoveryVideo) {
 			if video.Duration > 0 {
 				<span class="video-duration">{ FormatDuration(video.Duration) }</span>
 			}
-			if video.DiscoverReady {
+			if video.Ready {
 				<span class="discover-ready-badge">&#10003; { L(p, "discover_ready", "Ready") }</span>
 			}
 		</div>

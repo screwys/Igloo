@@ -85,7 +85,7 @@ func (db *DB) QueueFollowedYouTubeChannelRecommendations(nowMs int64) (int, erro
 				JOIN channel_follows followed ON followed.channel_id = v.channel_id
 				WHERE v.owner_kind = 'youtube_video'
 				  AND COALESCE(v.is_temp, 0) = 0
-				  AND `+readyVideoMediaExistsSQL("v")+`
+				  AND ` + readyVideoMediaExistsSQL("v") + `
 			)
 			SELECT video_id FROM ranked
 			WHERE channel_position = 1
@@ -362,10 +362,7 @@ func (db *DB) markDiscoveryReady(candidates []model.DiscoveryVideo) error {
 		ids = append(ids, candidate.VideoID)
 	}
 	rows, err := db.reader().Query(`
-		SELECT v.video_id, EXISTS (
-			SELECT 1 FROM discover_temp_downloads discover
-			WHERE discover.video_id = v.video_id
-		) FROM videos v
+		SELECT v.video_id FROM videos v
 		WHERE v.video_id IN (`+placeholders(len(ids))+`) AND `+readyVideoMediaExistsSQL("v"), stringsToAny(ids)...)
 	if err != nil {
 		return err
@@ -374,14 +371,13 @@ func (db *DB) markDiscoveryReady(candidates []model.DiscoveryVideo) error {
 	ready := make(map[string]bool)
 	for rows.Next() {
 		var id string
-		var discoverReady bool
-		if err := rows.Scan(&id, &discoverReady); err != nil {
+		if err := rows.Scan(&id); err != nil {
 			return err
 		}
-		ready[id] = discoverReady
+		ready[id] = true
 	}
 	for i := range candidates {
-		candidates[i].DiscoverReady, candidates[i].Ready = ready[candidates[i].VideoID]
+		candidates[i].Ready = ready[candidates[i].VideoID]
 	}
 	return rows.Err()
 }
