@@ -258,10 +258,7 @@ func (db *DB) ListPreparedDiscoverVideos(limit int) ([]model.DiscoveryVideo, err
 	return videos, db.markDiscoveryReady(videos)
 }
 
-func (db *DB) RescheduleDiscoverRefresh(nowMs int64, force bool) error {
-	if nowMs <= 0 {
-		nowMs = time.Now().UnixMilli()
-	}
+func (db *DB) RescheduleDiscoverRefresh(force bool) error {
 	intervalMs := int64(settings.ClampDiscoverResetHours(db.IntSetting("discover_reset_hours"))) * time.Hour.Milliseconds()
 	return db.WithWrite(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO discover_generation (id) VALUES (1)`); err != nil {

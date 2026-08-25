@@ -276,7 +276,7 @@ func (m *Manager) RefreshDiscoverPrefetch() {
 }
 
 func (m *Manager) RescheduleDiscoverRefresh(force bool) {
-	if err := m.db.RescheduleDiscoverRefresh(time.Now().UnixMilli(), force); err != nil {
+	if err := m.db.RescheduleDiscoverRefresh(force); err != nil {
 		log.Printf("[youtube-recommendations] reschedule Discover refresh: %v", err)
 		return
 	}
