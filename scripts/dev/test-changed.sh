@@ -126,6 +126,16 @@ if [[ "$go_changed" -eq 1 ]]; then
   echo "[go] compiling all packages"
   go test -run '^$' ./...
 
+  . scripts/dev/go-tool-versions.sh
+  echo "[go] running repo-specific static checks"
+  go run ./scripts/dev/staticcheck
+  echo "[go] running errcheck"
+  go run "github.com/kisielk/errcheck@${ERRCHECK_VERSION}" ./...
+  echo "[go] running staticcheck"
+  go run "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}" ./...
+  echo "[go] running govulncheck"
+  go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
+
   declare -A go_tests_by_package=()
   for test_file in "${!go_test_file_set[@]}"; do
     dir="${test_file%/*}"

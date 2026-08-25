@@ -147,6 +147,25 @@ func TestWebGateRunsJavaScriptBehaviorTests(t *testing.T) {
 	}
 }
 
+func TestChangedGoGateRunsCIStaticChecks(t *testing.T) {
+	gate, err := os.ReadFile(filepath.Join(repoRoot(t), "scripts/dev/test-changed.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents := string(gate)
+	checks := []string{
+		`go run ./scripts/dev/staticcheck`,
+		`go run "github.com/kisielk/errcheck@${ERRCHECK_VERSION}" ./...`,
+		`go run "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}" ./...`,
+		`go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...`,
+	}
+	for _, check := range checks {
+		if !strings.Contains(contents, check) {
+			t.Errorf("changed Go gate does not run CI static check %q", check)
+		}
+	}
+}
+
 func TestChangedGateDoesNotTreatGeneratedLocalizationAsAndroidBehavior(t *testing.T) {
 	root := repoRoot(t)
 	runSelection := func(t *testing.T, files ...string) string {
