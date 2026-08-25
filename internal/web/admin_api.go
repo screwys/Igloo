@@ -239,6 +239,8 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	previousXProfileHistoryLimit := s.db.IntSetting("x_profile_history_limit")
 	previousYouTubeMemberOnly := s.db.BoolSetting("youtube_include_member_only")
 	previousDiscoverPrefetch := s.db.IntSetting("discover_prefetch_count")
+	previousDiscoverReset := s.db.IntSetting("discover_reset_hours")
+	previousDiscoverMaxDuration := s.db.IntSetting("discover_max_duration_minutes")
 	previousTiktokReposts := s.db.MomentsIncludeRepostsEnabled()
 	previousInstagramTagged := s.db.InstagramIncludeTaggedEnabled()
 	if err := s.db.UpdateSettings(body); err != nil {
@@ -297,6 +299,11 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if s.db.IntSetting("discover_prefetch_count") != previousDiscoverPrefetch {
 			s.workers.RefreshDiscoverPrefetch()
+		}
+		if s.db.IntSetting("discover_max_duration_minutes") != previousDiscoverMaxDuration {
+			s.workers.RescheduleDiscoverRefresh(true)
+		} else if s.db.IntSetting("discover_reset_hours") != previousDiscoverReset {
+			s.workers.RescheduleDiscoverRefresh(false)
 		}
 	}
 

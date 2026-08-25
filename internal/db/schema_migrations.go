@@ -24,6 +24,10 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260825_add_prepared_discover_generation",
+		apply: addPreparedDiscoverGeneration,
+	},
+	{
 		name:  "20260823_add_discover_temp_provenance",
 		apply: addDiscoverTempProvenance,
 	},
@@ -83,6 +87,14 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addPreparedDiscoverGeneration(tx *sql.Tx) error {
+	if _, err := tx.Exec(discoverGenerationTableStatement()); err != nil {
+		return err
+	}
+	_, err := tx.Exec(discoverRefreshAnchorsTableStatement())
+	return err
 }
 
 func addDiscoverTempProvenance(tx *sql.Tx) error {

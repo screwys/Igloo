@@ -52,10 +52,31 @@ func schemaQueueStatements() []string {
 
 		youtubeRecommendationsTableStatement(),
 
+		discoverGenerationTableStatement(),
+
+		discoverRefreshAnchorsTableStatement(),
+
 		discoverTempDownloadsTableStatement(),
 
 		feedOrderInvalidationQueueStatement(),
 	}
+}
+
+func discoverGenerationTableStatement() string {
+	return `CREATE TABLE IF NOT EXISTS discover_generation (
+		id INTEGER PRIMARY KEY CHECK(id = 1),
+		candidates_json TEXT NOT NULL DEFAULT '[]',
+		prepared_at_ms INTEGER NOT NULL DEFAULT 0,
+		expires_at_ms INTEGER NOT NULL DEFAULT 0,
+		refresh_started_at_ms INTEGER NOT NULL DEFAULT 0
+	)`
+}
+
+func discoverRefreshAnchorsTableStatement() string {
+	return `CREATE TABLE IF NOT EXISTS discover_refresh_anchors (
+		anchor_video_id TEXT PRIMARY KEY,
+		FOREIGN KEY (anchor_video_id) REFERENCES videos(video_id) ON DELETE CASCADE
+	) WITHOUT ROWID`
 }
 
 func discoverTempDownloadsTableStatement() string {

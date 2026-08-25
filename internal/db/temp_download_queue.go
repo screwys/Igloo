@@ -160,7 +160,7 @@ func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, ta
 			var occupied bool
 			if err := tx.QueryRow(`
 				SELECT EXISTS(SELECT 1 FROM videos v WHERE v.video_id = ? AND `+readyVideoMediaExistsSQL("v")+`)
-				    OR EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ?)
+				    OR EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ? AND (status IN ('pending', 'processing') OR origin = 'interactive'))
 			`, videoID, url).Scan(&occupied); err != nil {
 				return err
 			}
@@ -170,6 +170,11 @@ func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, ta
 			if _, err := tx.Exec(`
 				INSERT INTO temp_download_queue (url, platform, origin, added_at_ms)
 				VALUES (?, 'youtube', 'discover', ?)
+				ON CONFLICT(url) DO UPDATE SET
+					status = 'pending', retry_count = 0, next_attempt_at_ms = 0,
+					last_error_kind = '', last_error = '', lease_owner = '', lease_until_ms = 0,
+					added_at_ms = excluded.added_at_ms
+				WHERE temp_download_queue.origin = 'discover' AND temp_download_queue.status = 'blocked'
 			`, url, nowMs); err != nil {
 				return err
 			}

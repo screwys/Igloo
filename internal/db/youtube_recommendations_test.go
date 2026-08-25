@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -37,6 +38,14 @@ func TestYouTubeRecommendationSnapshotAndDiscoverPrefetch(t *testing.T) {
 	if err := d.CompleteYouTubeRecommendationJob(job, candidates, now+1); err != nil {
 		t.Fatal(err)
 	}
+	bootstrapped, err := d.BootstrapPreparedDiscoverGeneration(now+2, 80)
+	if err != nil || !bootstrapped {
+		t.Fatalf("bootstrap prepared generation = %v err=%v", bootstrapped, err)
+	}
+	prepared, err := d.ListPreparedDiscoverVideos(80)
+	if err != nil || len(prepared) != 2 {
+		t.Fatalf("bootstrapped prepared page = %+v err=%v", prepared, err)
+	}
 	got, fresh, err := d.GetYouTubeRecommendations(anchor, 2)
 	if err != nil || !fresh || len(got) != 2 || got[0].VideoID != "sample_related_one" || got[1].VideoID != "sample_related_three" {
 		t.Fatalf("recommendations = %+v fresh=%v err=%v", got, fresh, err)
@@ -59,6 +68,66 @@ func TestYouTubeRecommendationSnapshotAndDiscoverPrefetch(t *testing.T) {
 	work, ok, err := d.ClaimTempDownloadWork("sample-temp", now+2, time.Minute)
 	if err != nil || !ok || work.URL != interactiveURL || work.Origin != "interactive" {
 		t.Fatalf("temp work = %+v ok=%v err=%v", work, ok, err)
+	}
+}
+
+func TestPreparedDiscoverGenerationKeepsOldPageUntilAtomicHandoff(t *testing.T) {
+	d := openWritableTestDB(t)
+	const anchor = "sample_daily_anchor"
+	if err := d.AddChannel(model.Channel{
+		ChannelID: "youtube_UCdaily_anchor", Name: "Daily Anchor", Platform: "youtube", IsSubscribed: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.InsertVideo(anchor, "youtube_UCdaily_anchor", "youtube_video", "Anchor", "", 60, 10, "", "video", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	storeReadyAssetForTest(t, d, Asset{
+		AssetID: BuildAssetID("youtube", "youtube_video", anchor, "video_stream", 0), AssetKind: "video_stream",
+		OwnerKind: "youtube_video", OwnerID: anchor, FilePath: "media/youtube/" + anchor + ".mp4", ContentType: "video/mp4",
+	}, 10)
+	old := []model.DiscoveryVideo{{VideoID: "sample_old_daily", ChannelID: "youtube_UCold", Source: "related"}}
+	payload, err := json.Marshal(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ExecRaw(`INSERT INTO discover_generation (id, candidates_json, prepared_at_ms, expires_at_ms) VALUES (1, ?, 1, 1)`, string(payload)); err != nil {
+		t.Fatal(err)
+	}
+
+	started, anchors, err := d.BeginDiscoverRefresh(100)
+	if err != nil || !started || anchors != 1 {
+		t.Fatalf("begin = started=%v anchors=%d err=%v", started, anchors, err)
+	}
+	before, err := d.ListPreparedDiscoverVideos(80)
+	if err != nil || len(before) != 1 || before[0].VideoID != "sample_old_daily" {
+		t.Fatalf("page changed before refresh completed: %+v err=%v", before, err)
+	}
+	if published, _, err := d.PublishDiscoverGeneration(101, 80); err != nil || published {
+		t.Fatalf("published unfinished generation=%v err=%v", published, err)
+	}
+	job, ok, err := d.ClaimYouTubeRecommendationJob(LeaseOptions{Owner: "daily-worker", NowMs: 100, LeaseMs: 1000, Limit: 1})
+	if err != nil || !ok {
+		t.Fatalf("claim = %+v ok=%v err=%v", job, ok, err)
+	}
+	newCandidates := []model.DiscoveryVideo{
+		{VideoID: "sample_old_daily", ChannelID: "youtube_UCold", Source: "related"},
+		{VideoID: "sample_new_daily", ChannelID: "youtube_UCnew", Source: "related"},
+	}
+	if err := d.CompleteYouTubeRecommendationJob(job, newCandidates, 102); err != nil {
+		t.Fatal(err)
+	}
+	published, retired, err := d.PublishDiscoverGeneration(103, 80)
+	if err != nil || !published || len(retired) != 0 {
+		t.Fatalf("publish = %v retired=%v err=%v", published, retired, err)
+	}
+	after, err := d.ListPreparedDiscoverVideos(80)
+	if err != nil || len(after) != 2 || after[0].VideoID != "sample_new_daily" || after[1].VideoID != "sample_old_daily" {
+		t.Fatalf("prepared page = %+v err=%v", after, err)
+	}
+	started, _, err = d.BeginDiscoverRefresh(104)
+	if err != nil || started {
+		t.Fatalf("generation reset before configured interval: started=%v err=%v", started, err)
 	}
 }
 

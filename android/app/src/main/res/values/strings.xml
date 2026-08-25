@@ -563,6 +563,8 @@
     <string name="settings_discover_max_duration_help">Longer videos are hidden from Discover and excluded from pre-download selection. Set to 0 for no limit.</string>
     <string name="settings_discover_prefetch_count">Discover videos to pre-download</string>
     <string name="settings_discover_prefetch_help">Keep this many recommendations ready as low-priority temporary downloads. Set to 0 to disable.</string>
+    <string name="settings_discover_reset_help">Prepare a new Discover page after this interval. The current page remains available until its replacement is ready.</string>
+    <string name="settings_discover_reset_hours">Discover page reset interval (hours)</string>
     <string name="settings_dont_auto_translate">Don\'t auto-translate</string>
     <string name="settings_dont_auto_translate_help">Posts in these languages won\'t be auto-translated. Empty list translates everything except your target language.</string>
     <string name="settings_download_english_subtitles">Download English Subtitles</string>

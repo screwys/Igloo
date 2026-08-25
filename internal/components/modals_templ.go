@@ -11875,27 +11875,27 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 			templ_7745c5c3_Var685 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 992, "<div class=\"form-group\"><label for=\"global-setting-discover-prefetch-count\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 992, "<div class=\"form-group\"><label for=\"global-setting-discover-reset-hours\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var686 string
-		templ_7745c5c3_Var686, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_prefetch_count", "Discover videos to pre-download"))
+		templ_7745c5c3_Var686, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_reset_hours", "Discover page reset interval (hours)"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2332, Col: 131}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2332, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var686))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 993, "</label> <input type=\"number\" id=\"global-setting-discover-prefetch-count\" name=\"discover_prefetch_count\" class=\"input\" min=\"0\" max=\"50\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 993, "</label> <input type=\"number\" id=\"global-setting-discover-reset-hours\" name=\"discover_reset_hours\" class=\"input\" min=\"1\" max=\"168\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var687 string
-		templ_7745c5c3_Var687, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("discover_prefetch_count", "10"))
+		templ_7745c5c3_Var687, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("discover_reset_hours", "24"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2333, Col: 179}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2333, Col: 171}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var687)
 		if templ_7745c5c3_Err != nil {
@@ -11906,35 +11906,35 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var688 string
-		templ_7745c5c3_Var688, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_prefetch_help", "Keep this many recommendations ready as low-priority temporary downloads. Set to 0 to disable."))
+		templ_7745c5c3_Var688, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_reset_help", "Prepare a new Discover page after this interval. The current page remains available until its replacement is ready."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2334, Col: 166}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2334, Col: 184}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var688))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 995, "</small></div><div class=\"form-group\"><label for=\"global-setting-discover-max-duration\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 995, "</small></div><div class=\"form-group\"><label for=\"global-setting-discover-prefetch-count\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var689 string
-		templ_7745c5c3_Var689, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_max_duration", "Maximum Discover video length (minutes)"))
+		templ_7745c5c3_Var689, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_prefetch_count", "Discover videos to pre-download"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2337, Col: 135}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2337, Col: 131}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var689))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 996, "</label> <input type=\"number\" id=\"global-setting-discover-max-duration\" name=\"discover_max_duration_minutes\" class=\"input\" min=\"0\" max=\"1440\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 996, "</label> <input type=\"number\" id=\"global-setting-discover-prefetch-count\" name=\"discover_prefetch_count\" class=\"input\" min=\"0\" max=\"50\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var690 string
-		templ_7745c5c3_Var690, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("discover_max_duration_minutes", "120"))
+		templ_7745c5c3_Var690, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("discover_prefetch_count", "10"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2338, Col: 192}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2338, Col: 179}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var690)
 		if templ_7745c5c3_Err != nil {
@@ -11945,15 +11945,54 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var691 string
-		templ_7745c5c3_Var691, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_max_duration_help", "Longer videos are hidden from Discover and excluded from pre-download selection. Set to 0 for no limit."))
+		templ_7745c5c3_Var691, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_prefetch_help", "Keep this many recommendations ready as low-priority temporary downloads. Set to 0 to disable."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2339, Col: 179}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2339, Col: 166}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var691))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 998, "</small></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 998, "</small></div><div class=\"form-group\"><label for=\"global-setting-discover-max-duration\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var692 string
+		templ_7745c5c3_Var692, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_max_duration", "Maximum Discover video length (minutes)"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2342, Col: 135}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var692))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 999, "</label> <input type=\"number\" id=\"global-setting-discover-max-duration\" name=\"discover_max_duration_minutes\" class=\"input\" min=\"0\" max=\"1440\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var693 string
+		templ_7745c5c3_Var693, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("discover_max_duration_minutes", "120"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2343, Col: 192}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var693)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1000, "\"> <small class=\"form-hint\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var694 string
+		templ_7745c5c3_Var694, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_max_duration_help", "Longer videos are hidden from Discover and excluded from pre-download selection. Set to 0 for no limit."))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2344, Col: 179}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var694))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1001, "</small></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -11977,49 +12016,49 @@ func miniPlayerFeedSetting(p PageProps, prefs PrefsData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var692 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var692 == nil {
-			templ_7745c5c3_Var692 = templ.NopComponent
+		templ_7745c5c3_Var695 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var695 == nil {
+			templ_7745c5c3_Var695 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 999, "<div class=\"form-group checkbox-group\"><label>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1002, "<div class=\"form-group checkbox-group\"><label>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if prefs.Bool("mini_player_feed_enabled") {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1000, "<input type=\"checkbox\" name=\"mini_player_feed_enabled\" value=\"true\" checked> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1003, "<input type=\"checkbox\" name=\"mini_player_feed_enabled\" value=\"true\" checked> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1001, "<input type=\"checkbox\" name=\"mini_player_feed_enabled\" value=\"true\"> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1004, "<input type=\"checkbox\" name=\"mini_player_feed_enabled\" value=\"true\"> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		var templ_7745c5c3_Var693 string
-		templ_7745c5c3_Var693, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_enable_mini_player", "Enable mini player"))
+		var templ_7745c5c3_Var696 string
+		templ_7745c5c3_Var696, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_enable_mini_player", "Enable mini player"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2351, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2356, Col: 62}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var693))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1002, "</label> <small class=\"form-hint\">")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var696))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var694 string
-		templ_7745c5c3_Var694, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_mini_player_feed_help", "Automatically move a playing Feed video into the mini player when you browse away."))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2353, Col: 153}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var694))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1005, "</label> <small class=\"form-hint\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1003, "</small></div>")
+		var templ_7745c5c3_Var697 string
+		templ_7745c5c3_Var697, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_mini_player_feed_help", "Automatically move a playing Feed video into the mini player when you browse away."))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2358, Col: 153}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var697))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1006, "</small></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

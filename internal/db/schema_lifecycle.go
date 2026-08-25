@@ -36,6 +36,8 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 	"video_metadata_jobs":         schemaLifecycleQueue,
 	"youtube_recommendations":     schemaLifecycleDerivedCache,
 	"discover_temp_downloads":     schemaLifecycleDerivedCache,
+	"discover_generation":         schemaLifecycleDerivedCache,
+	"discover_refresh_anchors":    schemaLifecycleQueue,
 	"video_desires":               schemaLifecycleMaintainedState,
 	"downloader_operations":       schemaLifecycleDiagnostic,
 	"feed_item_sources":           schemaLifecycleArchive,

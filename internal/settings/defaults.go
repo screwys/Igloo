@@ -102,6 +102,16 @@ func ClampDiscoverPrefetchCount(n int) int {
 	return n
 }
 
+func ClampDiscoverResetHours(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > 168 {
+		return 168
+	}
+	return n
+}
+
 func ClampDiscoverMaxDurationMinutes(n int) int {
 	if n < 0 {
 		return 0
@@ -159,6 +169,7 @@ var Defaults = map[string]any{
 	"youtube_max_videos":               12,
 	"youtube_include_member_only":      false,
 	"discover_prefetch_count":          10,
+	"discover_reset_hours":             24,
 	"discover_max_duration_minutes":    120,
 	"download_subtitles":               false,
 	"tiktok_fetch_delay":               60,

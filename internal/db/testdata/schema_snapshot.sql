@@ -226,6 +226,12 @@ CREATE TABLE channel_stars ( channel_id TEXT PRIMARY KEY, starred_at INTEGER NOT
 -- table: channels on channels
 CREATE TABLE channels ( id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id TEXT UNIQUE NOT NULL, source_id TEXT, name TEXT NOT NULL, url TEXT, platform TEXT, quality TEXT, last_checked INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL DEFAULT 0 );
 
+-- table: discover_generation on discover_generation
+CREATE TABLE discover_generation ( id INTEGER PRIMARY KEY CHECK(id = 1), candidates_json TEXT NOT NULL DEFAULT '[]', prepared_at_ms INTEGER NOT NULL DEFAULT 0, expires_at_ms INTEGER NOT NULL DEFAULT 0, refresh_started_at_ms INTEGER NOT NULL DEFAULT 0 );
+
+-- table: discover_refresh_anchors on discover_refresh_anchors
+CREATE TABLE discover_refresh_anchors ( anchor_video_id TEXT PRIMARY KEY, FOREIGN KEY (anchor_video_id) REFERENCES videos(video_id) ON DELETE CASCADE ) WITHOUT ROWID;
+
 -- table: discover_temp_downloads on discover_temp_downloads
 CREATE TABLE discover_temp_downloads ( video_id TEXT PRIMARY KEY, downloaded_at_ms INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (video_id) REFERENCES videos(video_id) ON DELETE CASCADE ) WITHOUT ROWID;
 

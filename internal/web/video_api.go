@@ -83,20 +83,11 @@ func (s *Server) handleVideoRecommendations(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleDiscoverCards(w http.ResponseWriter, r *http.Request) {
-	videos, err := s.db.ListYouTubeDiscoverVideos(80)
+	videos, err := s.db.ListPreparedDiscoverVideos(80)
 	if err != nil {
-		slog.Warn("ListYouTubeDiscoverVideos partial", "err", err)
+		slog.Warn("ListPreparedDiscoverVideos partial", "err", err)
 	}
 	pending := len(videos) == 0
-	if pending && s.workers != nil {
-		queued, err := s.workers.QueueFollowedYouTubeChannelRecommendations()
-		if err != nil {
-			slog.Warn("QueueFollowedYouTubeChannelRecommendations partial", "err", err)
-			pending = false
-		} else if queued == 0 {
-			pending = false
-		}
-	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = components.DiscoverGrid(s.pageProps(w, r), videos, pending).Render(r.Context(), w)
 }

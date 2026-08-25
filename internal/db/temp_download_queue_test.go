@@ -3,6 +3,8 @@ package db
 import (
 	"testing"
 	"time"
+
+	"github.com/screwys/igloo/internal/model"
 )
 
 func TestTempDownloadQueueRecoversAndRetriesDurableWork(t *testing.T) {
@@ -70,5 +72,53 @@ func TestCurrentlyAvailableExcludesDiscoverPrefetchButPinnedKeepsIt(t *testing.T
 	}
 	if len(pinned) != 1 || pinned[0].VideoID != "sample_discover_temp" {
 		t.Fatalf("pinned = %+v", pinned)
+	}
+}
+
+func TestDiscoverPrefetchRetriesPreviouslyBlockedCandidate(t *testing.T) {
+	d := openWritableTestDB(t)
+	const videoID = "sample_blocked_discover"
+	url := "https://www.youtube.com/watch?v=" + videoID
+	if err := d.ExecRaw(`
+		INSERT INTO temp_download_queue (url, platform, origin, status, last_error_kind, last_error)
+		VALUES (?, 'youtube', 'discover', 'blocked', 'auth', 'sample failure')`, url); err != nil {
+		t.Fatal(err)
+	}
+	added, err := d.EnqueueDiscoverTempDownloads([]model.DiscoveryVideo{{VideoID: videoID, Source: "related"}}, 1)
+	if err != nil || added != 1 {
+		t.Fatalf("enqueue blocked candidate = %d err=%v", added, err)
+	}
+	state, found, err := d.TempDownloadState(url)
+	if err != nil || !found || state.Status != "pending" || state.Error != "" {
+		t.Fatalf("retried state = %+v found=%v err=%v", state, found, err)
+	}
+}
+
+func TestDiscoverDownloadSurvivesGenericTempRetentionUntilHandoff(t *testing.T) {
+	d := openWritableTestDB(t)
+	const videoID = "sample_prepared_discover"
+	if err := d.InsertVideo(videoID, "youtube_UCprepared", "youtube_video", "Prepared", "", 60, 1, "", "video", 0, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ExecRaw(`UPDATE videos SET downloaded_at = 1 WHERE video_id = ?`, videoID); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.MarkDiscoverTempVideo(videoID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.MaintainVideoRetention((48 * time.Hour).Milliseconds()); err != nil {
+		t.Fatal(err)
+	}
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = 'sample_prepared_discover' AND is_temp = 1`); got != 1 {
+		t.Fatalf("prepared Discover video expired before generation handoff")
+	}
+	if err := d.RetireDiscoverDownloads([]string{videoID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.MaintainVideoRetention((48 * time.Hour).Milliseconds()); err != nil {
+		t.Fatal(err)
+	}
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = 'sample_prepared_discover'`); got != 0 {
+		t.Fatalf("retired Discover video remained after generation handoff")
 	}
 }

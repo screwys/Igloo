@@ -2329,6 +2329,11 @@ templ miniPlayerVideosSetting(p PageProps, prefs PrefsData) {
 
 templ discoverPrefetchSetting(p PageProps, prefs PrefsData) {
 	<div class="form-group">
+		<label for="global-setting-discover-reset-hours">{ L(p, "settings_discover_reset_hours", "Discover page reset interval (hours)") }</label>
+		<input type="number" id="global-setting-discover-reset-hours" name="discover_reset_hours" class="input" min="1" max="168" value={ prefs.Str("discover_reset_hours", "24") }/>
+		<small class="form-hint">{ L(p, "settings_discover_reset_help", "Prepare a new Discover page after this interval. The current page remains available until its replacement is ready.") }</small>
+	</div>
+	<div class="form-group">
 		<label for="global-setting-discover-prefetch-count">{ L(p, "settings_discover_prefetch_count", "Discover videos to pre-download") }</label>
 		<input type="number" id="global-setting-discover-prefetch-count" name="discover_prefetch_count" class="input" min="0" max="50" value={ prefs.Str("discover_prefetch_count", "10") }/>
 		<small class="form-hint">{ L(p, "settings_discover_prefetch_help", "Keep this many recommendations ready as low-priority temporary downloads. Set to 0 to disable.") }</small>

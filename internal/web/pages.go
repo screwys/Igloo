@@ -1082,20 +1082,11 @@ func sameVideoTitle(first, second string) bool {
 }
 
 func (s *Server) handlePageDiscover(w http.ResponseWriter, r *http.Request) {
-	videos, err := s.db.ListYouTubeDiscoverVideos(80)
+	videos, err := s.db.ListPreparedDiscoverVideos(80)
 	if err != nil {
-		slog.Warn("ListYouTubeDiscoverVideos", "err", err)
+		slog.Warn("ListPreparedDiscoverVideos", "err", err)
 	}
 	pending := len(videos) == 0
-	if s.workers != nil {
-		queued, err := s.workers.QueueFollowedYouTubeChannelRecommendations()
-		if err != nil {
-			slog.Warn("QueueFollowedYouTubeChannelRecommendations", "err", err)
-			pending = false
-		} else if queued == 0 && len(videos) == 0 {
-			pending = false
-		}
-	}
 	p := s.pageProps(w, r)
 	p.PageTitle = p.T("discover_title", "Discover creators")
 	p.ActiveNav = "discover"

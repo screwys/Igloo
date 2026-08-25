@@ -958,6 +958,7 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 			WHERE COALESCE(is_pinned, 0) = 0
 			  AND COALESCE(is_temp, 0) = 1
 			  AND downloaded_at > 0 AND downloaded_at < ?
+			  AND NOT EXISTS (SELECT 1 FROM discover_temp_downloads discover WHERE discover.video_id = videos.video_id)
 		`, tempCutoffMs)
 		if err != nil {
 			return err
@@ -988,7 +989,8 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 			      ELSE source_kind END
 			WHERE COALESCE(is_pinned, 0) = 0
 			  AND (
-			    (COALESCE(is_temp, 0) = 1 AND downloaded_at > 0 AND downloaded_at < ?)
+			    (COALESCE(is_temp, 0) = 1 AND downloaded_at > 0 AND downloaded_at < ?
+			      AND NOT EXISTS (SELECT 1 FROM discover_temp_downloads discover WHERE discover.video_id = videos.video_id))
 			    OR (? > 0 AND COALESCE(source_kind, '') = 'story' AND published_at < ?)
 			  )
 		`, tempCutoffMs, storyCutoffMs, storyCutoffMs,

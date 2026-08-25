@@ -56,8 +56,15 @@ func (m *Manager) kickYouTubeRecommendations() {
 
 func (m *Manager) runYouTubeRecommendationLoop(ctx context.Context) {
 	log.Printf("[youtube-recommendations] durable worker started")
-	m.reconcileDiscoverPrefetch()
+	if stored, err := m.db.BootstrapPreparedDiscoverGeneration(time.Now().UnixMilli(), 80); err != nil {
+		log.Printf("[youtube-recommendations] bootstrap prepared Discover page: %v", err)
+	} else if stored {
+		log.Printf("[youtube-recommendations] preserved existing Discover cache as prepared page")
+	}
 	for {
+		if m.maintainDiscoverGeneration() {
+			continue
+		}
 		if delay := m.externalRetryDelay(time.Now()); delay > 0 {
 			if !waitForVideoMetadata(ctx, m.youtubeRecommendationKick, delay) {
 				return
@@ -80,6 +87,35 @@ func (m *Manager) runYouTubeRecommendationLoop(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (m *Manager) maintainDiscoverGeneration() bool {
+	nowMs := time.Now().UnixMilli()
+	started, anchors, err := m.db.BeginDiscoverRefresh(nowMs)
+	if err != nil {
+		log.Printf("[youtube-recommendations] begin Discover refresh: %v", err)
+		return false
+	}
+	if started && anchors > 0 {
+		log.Printf("[youtube-recommendations] preparing Discover generation: anchors=%d", anchors)
+		return true
+	}
+	published, retired, err := m.db.PublishDiscoverGeneration(nowMs, 80)
+	if err != nil {
+		log.Printf("[youtube-recommendations] publish Discover generation: %v", err)
+		return false
+	}
+	if !published {
+		return false
+	}
+	if err := m.db.RetireDiscoverDownloads(retired); err != nil {
+		log.Printf("[youtube-recommendations] retire previous Discover downloads: %v", err)
+	} else if _, err := m.db.MaintainVideoRetention(nowMs); err != nil {
+		log.Printf("[youtube-recommendations] collect previous Discover downloads: %v", err)
+	}
+	m.reconcileDiscoverPrefetch()
+	log.Printf("[youtube-recommendations] published prepared Discover generation: retired=%d", len(retired))
+	return true
 }
 
 func (m *Manager) processYouTubeRecommendationJob(ctx context.Context, fetcher youtubeRecommendationFetcher) bool {
@@ -207,7 +243,7 @@ func (m *Manager) reconcileDiscoverPrefetch() {
 	if target <= 0 {
 		return
 	}
-	candidates, err := m.db.ListYouTubeDiscoverVideos(100)
+	candidates, err := m.db.ListPreparedDiscoverVideos(100)
 	if err != nil {
 		log.Printf("[youtube-recommendations] list prefetch candidates: %v", err)
 		return
@@ -237,6 +273,14 @@ func discoverPrefetchCandidates(candidates []model.DiscoveryVideo) []model.Disco
 
 func (m *Manager) RefreshDiscoverPrefetch() {
 	m.reconcileDiscoverPrefetch()
+}
+
+func (m *Manager) RescheduleDiscoverRefresh(force bool) {
+	if err := m.db.RescheduleDiscoverRefresh(time.Now().UnixMilli(), force); err != nil {
+		log.Printf("[youtube-recommendations] reschedule Discover refresh: %v", err)
+		return
+	}
+	m.kickYouTubeRecommendations()
 }
 
 func (m *Manager) retryYouTubeRecommendationJob(job db.YouTubeRecommendationJob, cause error) {
