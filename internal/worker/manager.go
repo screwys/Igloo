@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/dearrow"
@@ -88,7 +89,7 @@ type Manager struct {
 	replyResolver *ReplyResolver
 	xFeedFetcher  xFeedFetcher
 	xStatusMu     sync.Mutex
-	xStatusQueued map[string]time.Time
+	xStatusQueued *lru.Cache[string, time.Time]
 	xRetentionMu  sync.Mutex
 
 	// dearrowFetcher is the configured DeArrow orchestrator. Nil means DeArrow
@@ -148,7 +149,7 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 		activity:                  NewActivityRing(200),
 		dlActivity:                NewActivityRing(100),
 		feedActivity:              NewActivityRing(200),
-		xStatusQueued:             make(map[string]time.Time),
+		xStatusQueued:             newXStatusEnrichmentCache(),
 		downloadBackoff:           make(map[string]downloadPlatformBackoff),
 		downloadPlatformAt: map[db.DownloadLane]int{
 			db.DownloadLaneCurrent:  0,

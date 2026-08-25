@@ -6,11 +6,23 @@ import (
 	"strings"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/screwys/igloo/internal/model"
 	"github.com/screwys/igloo/internal/xfeed"
 )
 
-const xStatusEnrichmentDedupWindow = 15 * time.Minute
+const (
+	xStatusEnrichmentDedupWindow   = 15 * time.Minute
+	xStatusEnrichmentDedupCapacity = 4096
+)
+
+func newXStatusEnrichmentCache() *lru.Cache[string, time.Time] {
+	cache, err := lru.New[string, time.Time](xStatusEnrichmentDedupCapacity)
+	if err != nil {
+		panic(err)
+	}
+	return cache
+}
 
 func (m *Manager) RequestXStatusEnrichment(req xfeed.StatusEnrichmentRequest) {
 	if m == nil || m.xStatusEnrich == nil {
@@ -30,27 +42,20 @@ func (m *Manager) RequestXStatusEnrichment(req xfeed.StatusEnrichmentRequest) {
 
 	m.xStatusMu.Lock()
 	if m.xStatusQueued == nil {
-		m.xStatusQueued = make(map[string]time.Time)
+		m.xStatusQueued = newXStatusEnrichmentCache()
 	}
-	if last, ok := m.xStatusQueued[key]; ok && now.Sub(last) < xStatusEnrichmentDedupWindow {
+	if last, ok := m.xStatusQueued.Get(key); ok && now.Sub(last) < xStatusEnrichmentDedupWindow {
 		m.xStatusMu.Unlock()
 		return
 	}
-	m.xStatusQueued[key] = now
-	if len(m.xStatusQueued) > 4096 {
-		for k, t := range m.xStatusQueued {
-			if now.Sub(t) >= xStatusEnrichmentDedupWindow {
-				delete(m.xStatusQueued, k)
-			}
-		}
-	}
+	m.xStatusQueued.Add(key, now)
 	m.xStatusMu.Unlock()
 
 	select {
 	case m.xStatusEnrich <- req:
 	default:
 		m.xStatusMu.Lock()
-		delete(m.xStatusQueued, key)
+		m.xStatusQueued.Remove(key)
 		m.xStatusMu.Unlock()
 		log.Printf("[x_status_enrichment] queue full; dropped %s", key)
 	}

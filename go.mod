@@ -6,6 +6,7 @@ require (
 	github.com/a-h/templ v0.3.1020
 	github.com/evanw/esbuild v0.28.0
 	github.com/gorilla/sessions v1.4.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/lrstanley/go-ytdlp v1.3.5
 	github.com/mark3labs/mcp-go v0.54.0
 	github.com/taruti/langdetect v0.0.0-20160316071627-327bfa898307
