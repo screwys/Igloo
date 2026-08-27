@@ -200,18 +200,23 @@ func (db *DB) GetYouTubeRecommendations(anchorVideoID string, limit int) ([]mode
 		return nil, false, err
 	}
 	candidates = db.filterDiscoverDuration(candidates)
-	if limit > 0 && len(candidates) > limit {
-		candidates = candidates[:limit]
-	}
-	if err := db.markDiscoveryReady(candidates); err != nil {
-		return nil, false, err
-	}
 	hasRelated := false
 	for _, candidate := range candidates {
 		if candidate.Source == "related" {
 			hasRelated = true
 			break
 		}
+	}
+	followedChannels, err := db.followedChannelSet()
+	if err != nil {
+		return nil, false, err
+	}
+	candidates = excludeFollowedDiscoverCandidates(candidates, followedChannels)
+	if limit > 0 && len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+	if err := db.markDiscoveryReady(candidates); err != nil {
+		return nil, false, err
 	}
 	fresh := status == "ready" && expiresAt > time.Now().UnixMilli() && hasRelated
 	return candidates, fresh, nil

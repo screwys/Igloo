@@ -20,3 +20,15 @@ func TestPlayerRelatedRecommendationsExcludesChannelShelfAndLimits(t *testing.T)
 		t.Fatalf("related recommendations = %+v", got)
 	}
 }
+
+func TestPlayerMoreFromChannelExcludesFollowedCreator(t *testing.T) {
+	srv := newTestServer(t)
+	const channelID = "youtube_UCfollowed_sidebar"
+	if err := srv.db.AddChannel(model.Channel{ChannelID: channelID, Name: "Followed Sidebar", Platform: "youtube", IsSubscribed: true}); err != nil {
+		t.Fatal(err)
+	}
+	got := srv.playerMoreFromChannel(model.Video{VideoID: "sample_current", ChannelID: channelID}, 4)
+	if len(got) != 0 {
+		t.Fatalf("followed creator local shelf = %+v", got)
+	}
+}

@@ -1039,7 +1039,7 @@ func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) playerMoreFromChannel(video model.Video, limit int) []model.Video {
-	if limit <= 0 || video.ChannelID == "" {
+	if limit <= 0 || video.ChannelID == "" || s.db.IsChannelFollowed(video.ChannelID) {
 		return nil
 	}
 	videos, err := s.db.GetVideos(db.GetVideosOpts{

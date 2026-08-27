@@ -53,6 +53,15 @@ func TestYouTubeRecommendationSnapshotAndDiscoverPrefetch(t *testing.T) {
 	if err := d.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ('youtube_UCrelated_one', 1)`); err != nil {
 		t.Fatal(err)
 	}
+	filtered, _, err := d.GetYouTubeRecommendations(anchor, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range filtered {
+		if candidate.ChannelID == "youtube_UCrelated_one" {
+			t.Fatalf("followed creator remained in player recommendations: %+v", filtered)
+		}
+	}
 	pool, err := d.ListYouTubeDiscoverVideos(10)
 	if err != nil || len(pool) != 1 || pool[0].VideoID != "sample_related_three" {
 		t.Fatalf("discover pool = %+v err=%v", pool, err)
