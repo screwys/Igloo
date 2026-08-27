@@ -11,11 +11,20 @@ Inspect the running UI before editing source when a UI symptom is visible or rep
 
 1. Identify whether the problem is absence, hidden content, wrong data, wrong layout, stale generated output, or client-side mutation.
 2. Inspect the live DOM when possible: element HTML, computed visibility, display, opacity, layout box, classes, inline styles, event handlers, and console errors.
+   For icon-and-label alignment, DOM boxes are only structural evidence. Compare the rendered icon height with the visible font ink or cap height in a screenshot before deciding the problem is positional. Equal box centers can still look wrong when a 20px icon is paired with roughly 11px-tall text; a shared top edge often exposes a scale mismatch, not an offset bug.
 3. If the element is absent, trace the render path through handler, enrichment, templ component, generated output, and JavaScript caller.
 4. If the element is present but wrong or hidden, inspect CSS cascade, responsive rules, container dimensions, runtime classes, and media query behavior before changing markup.
 5. For feed item surfaces, keep handler responses enriched with bookmark state, follow or subscription URLs, platform/media metadata, and every field the caller reads.
 6. For avatars, banners, names, bios, or hover cards, separate presentation bugs from readiness bugs. Patch the UI only when the DB row and cached file already existed before render.
 7. Regenerate templ/static assets through `just check-drift` instead of editing generated files directly.
+
+## Icon And Text Geometry
+
+- Diagnose size before position. Inspect isolated icon/label pairs and compare visible ink bounds, not only CSS width, line-height, or flex-item rectangles.
+- Identical SVG `width`, `height`, and `viewBox` values do not imply equal icon size: paths can occupy very different fractions of the canvas. Measure the rendered artwork bounds for every icon in the set and normalize undersized or oversized path geometry inside the shared slot before changing the slot itself.
+- Distinguish three separate failures: mismatched visual scale, unequal center alignment, and inconsistent row spacing. Do not use a spacing or offset change to compensate for a scale mismatch.
+- When icons visibly dominate the font, first adjust the icon-to-font size ratio while preserving ordinary flex centering. Use transforms, relative offsets, margins, or artificial line boxes only when evidence shows a remaining positional mismatch after sizing is correct.
+- Verify both normal and active rows because font weight changes the label's visible bounds. Reinspect the rendered result at the reported viewport; identical DOM centers alone do not establish visual consistency.
 
 ## Common Surfaces
 
