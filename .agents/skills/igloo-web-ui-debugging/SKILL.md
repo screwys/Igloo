@@ -21,7 +21,7 @@ Inspect the running UI before editing source when a UI symptom is visible or rep
 ## Icon And Text Geometry
 
 - Diagnose size before position. Inspect isolated icon/label pairs and compare visible ink bounds, not only CSS width, line-height, or flex-item rectangles.
-- Identical SVG `width`, `height`, and `viewBox` values do not imply equal icon size: paths can occupy very different fractions of the canvas. Measure the rendered artwork bounds for every icon in the set and normalize undersized or oversized path geometry inside the shared slot before changing the slot itself.
+- Identical SVG `width`, `height`, and `viewBox` values do not imply equal icon size: paths can occupy very different fractions of the canvas. Measure the rendered artwork bounds for every icon in the set. Preserve each icon's intended proportions; never stretch or redraw its path merely to match a target bound. Prefer a better-fitting icon designed in the same visual family, or adjust the shared icon slot and font relationship when the whole set needs scaling.
 - Distinguish three separate failures: mismatched visual scale, unequal center alignment, and inconsistent row spacing. Do not use a spacing or offset change to compensate for a scale mismatch.
 - When icons visibly dominate the font, first adjust the icon-to-font size ratio while preserving ordinary flex centering. Use transforms, relative offsets, margins, or artificial line boxes only when evidence shows a remaining positional mismatch after sizing is correct.
 - Verify both normal and active rows because font weight changes the label's visible bounds. Reinspect the rendered result at the reported viewport; identical DOM centers alone do not establish visual consistency.
