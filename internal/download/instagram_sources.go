@@ -70,10 +70,10 @@ func (g *GalleryDLWrapper) InstagramChannel(ctx context.Context, handle string, 
 				firstAttemptErr = cookieErr
 			}
 		}
-		window.Complete = authSucceeded
-		if !authSucceeded {
+		window.Complete = authSucceeded && len(window.Refs) > 0
+		if !window.Complete {
 			window.Refs = mergeSourceRefs(partialRefs, limit)
-			if firstErr == nil {
+			if !authSucceeded && firstErr == nil {
 				firstErr = firstAttemptErr
 			}
 		}

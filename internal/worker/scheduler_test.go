@@ -54,6 +54,56 @@ exit 1
 	}
 }
 
+func TestSuccessfulEmptyInstagramCheckPreservesExistingWindow(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "gallery-dl"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	database := newTestWorkerDB(t)
+	const sourceID = "instagram_sample_source"
+	if err := database.ExecRaw(`
+		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
+		VALUES (?, 'sample_source', 'Sample Source',
+		        'https://www.instagram.com/sample_source/', 'instagram', 1);
+		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
+	`, sourceID, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{
+		db:         database,
+		cfg:        testCfg(t.TempDir()),
+		downloader: &download.Downloader{GalleryDL: &download.GalleryDLWrapper{}},
+	}
+	channel := model.Channel{
+		ChannelID: sourceID,
+		SourceID:  "sample_source",
+		Name:      "Sample Source",
+		Platform:  "instagram",
+		URL:       "https://www.instagram.com/sample_source/",
+	}
+	if _, err := manager.reconcileSourceWindow(channel, download.SourceWindow{
+		Component: download.SourceComponentPosts,
+		Complete:  true,
+		Refs:      []download.VideoRef{{VideoID: "instagram_post_sample"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := manager.checkChannel(context.Background(), channel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.applyDiscoverySnapshot(channel, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	items := desireWindow(t, database, sourceID, download.SourceComponentPosts)
+	if got := fmt.Sprint(desireIDs(items)); got != "[instagram_post_sample]" {
+		t.Fatalf("posts after empty Instagram check = %s", got)
+	}
+}
+
 func TestYouTubeDiscoveryIncludesMemberOnlyVideosOnlyWhenEnabled(t *testing.T) {
 	bin := t.TempDir()
 	script := `#!/bin/sh

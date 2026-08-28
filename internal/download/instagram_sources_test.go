@@ -44,7 +44,7 @@ esac
 	}
 }
 
-func TestInstagramChannelTreatsTwoSuccessfulEmptySourcesAsComplete(t *testing.T) {
+func TestInstagramChannelTreatsSuccessfulEmptySourcesAsIncomplete(t *testing.T) {
 	bin := t.TempDir()
 	writeExecutable(t, filepath.Join(bin, "gallery-dl"), `#!/bin/sh
 exit 0
@@ -55,7 +55,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("InstagramChannel: %v", err)
 	}
-	if len(snapshot.Windows) != 2 || !snapshot.Windows[0].Complete || !snapshot.Windows[1].Complete ||
+	if len(snapshot.Windows) != 2 || snapshot.Windows[0].Complete || snapshot.Windows[1].Complete ||
 		len(snapshot.Windows[0].Refs) != 0 || len(snapshot.Windows[1].Refs) != 0 {
 		t.Fatalf("empty snapshot = %#v", snapshot)
 	}
