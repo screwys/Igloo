@@ -74,36 +74,8 @@ func (db *DB) QueueFollowedYouTubeChannelRecommendations(nowMs int64) (int, erro
 	}
 	queued := 0
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		rows, err := tx.Query(`
-			WITH ranked AS (
-				SELECT v.video_id,
-				       ROW_NUMBER() OVER (
-				         PARTITION BY v.channel_id
-				         ORDER BY v.published_at DESC, v.downloaded_at DESC, v.video_id DESC
-				       ) AS channel_position
-				FROM videos v
-				JOIN channel_follows followed ON followed.channel_id = v.channel_id
-				WHERE v.owner_kind = 'youtube_video'
-				  AND COALESCE(v.is_temp, 0) = 0
-				  AND ` + readyVideoMediaExistsSQL("v") + `
-			)
-			SELECT video_id FROM ranked
-			WHERE channel_position = 1
-			ORDER BY video_id
-		`)
+		ids, err := randomFollowedYouTubeAnchorIDsTx(tx)
 		if err != nil {
-			return err
-		}
-		var ids []string
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err != nil {
-				_ = rows.Close()
-				return err
-			}
-			ids = append(ids, id)
-		}
-		if err := rows.Close(); err != nil {
 			return err
 		}
 		for _, id := range ids {
@@ -115,6 +87,39 @@ func (db *DB) QueueFollowedYouTubeChannelRecommendations(nowMs int64) (int, erro
 		return nil
 	})
 	return queued, err
+}
+
+func randomFollowedYouTubeAnchorIDsTx(tx *sql.Tx) ([]string, error) {
+	rows, err := tx.Query(`
+		WITH ranked AS (
+			SELECT v.video_id,
+			       ROW_NUMBER() OVER (
+			         PARTITION BY v.channel_id
+			         ORDER BY RANDOM()
+			       ) AS channel_position
+			FROM videos v
+			JOIN channel_follows followed ON followed.channel_id = v.channel_id
+			WHERE v.owner_kind = 'youtube_video'
+			  AND COALESCE(v.is_temp, 0) = 0
+			  AND ` + readyVideoMediaExistsSQL("v") + `
+		)
+		SELECT video_id FROM ranked
+		WHERE channel_position = 1
+		ORDER BY video_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 func (db *DB) ClaimYouTubeRecommendationJob(opts LeaseOptions) (YouTubeRecommendationJob, bool, error) {
@@ -215,7 +220,7 @@ func (db *DB) GetYouTubeRecommendations(anchorVideoID string, limit int) ([]mode
 	if limit > 0 && len(candidates) > limit {
 		candidates = candidates[:limit]
 	}
-	if err := db.markDiscoveryReady(candidates); err != nil {
+	if err := db.projectDiscoveryMedia(candidates); err != nil {
 		return nil, false, err
 	}
 	fresh := status == "ready" && expiresAt > time.Now().UnixMilli() && hasRelated
@@ -261,7 +266,7 @@ func (db *DB) ListYouTubeDiscoverVideos(limit int) ([]model.DiscoveryVideo, erro
 		return nil, err
 	}
 	out := interleaveDiscoverBatches(batches, limit, 6, 2)
-	return out, db.markDiscoveryReady(out)
+	return out, db.projectDiscoveryMedia(out)
 }
 
 func (db *DB) followedChannelSet() (map[string]struct{}, error) {
@@ -358,13 +363,20 @@ func interleaveDiscoverBatches(batches [][]model.DiscoveryVideo, limit, perBatch
 	return out
 }
 
-func (db *DB) markDiscoveryReady(candidates []model.DiscoveryVideo) error {
+// projectDiscoveryMedia resolves prepared cards against canonical local media.
+// External image URLs remain available until their local assets are published.
+func (db *DB) projectDiscoveryMedia(candidates []model.DiscoveryVideo) error {
 	if len(candidates) == 0 {
 		return nil
 	}
 	ids := make([]string, 0, len(candidates))
+	owners := make([]AssetOwnerRef, 0, len(candidates)*2)
 	for _, candidate := range candidates {
 		ids = append(ids, candidate.VideoID)
+		owners = append(owners,
+			AssetOwnerRef{OwnerKind: "youtube_video", OwnerID: candidate.VideoID},
+			AssetOwnerRef{OwnerKind: "channel", OwnerID: candidate.ChannelID},
+		)
 	}
 	rows, err := db.reader().Query(`
 		SELECT v.video_id FROM videos v
@@ -381,10 +393,39 @@ func (db *DB) markDiscoveryReady(candidates []model.DiscoveryVideo) error {
 		}
 		ready[id] = true
 	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	assets, err := db.ListReadyAssetsForOwners(owners, []string{"avatar", "post_thumbnail"})
+	if err != nil {
+		return err
+	}
+	readyThumbnails := make(map[string]bool)
+	readyAvatars := make(map[string]bool)
+	for _, asset := range assets {
+		if !strings.HasPrefix(asset.ContentType, "image/") {
+			continue
+		}
+		switch asset.AssetKind {
+		case "post_thumbnail":
+			readyThumbnails[asset.OwnerID] = true
+		case "avatar":
+			readyAvatars[asset.OwnerID] = true
+		}
+	}
 	for i := range candidates {
 		candidates[i].Ready = ready[candidates[i].VideoID]
+		if readyThumbnails[candidates[i].VideoID] {
+			candidates[i].ThumbnailURL = "/api/media/thumbnail/" + candidates[i].VideoID
+		}
+		if readyAvatars[candidates[i].ChannelID] {
+			candidates[i].AvatarURL = "/api/media/avatar/" + candidates[i].ChannelID
+		}
 	}
-	return rows.Err()
+	return nil
 }
 
 func (db *DB) RetryYouTubeRecommendationJob(job YouTubeRecommendationJob, message string, delay time.Duration, nowMs int64) error {

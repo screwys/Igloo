@@ -80,22 +80,50 @@ func TestYouTubeRecommendationSnapshotAndDiscoverPrefetch(t *testing.T) {
 	}
 }
 
-func TestDiscoverReadyUsesCanonicalPlayableMediaWithoutPrefetchProvenance(t *testing.T) {
+func TestDiscoverReadyProjectsCanonicalLocalMediaWithoutPrefetchProvenance(t *testing.T) {
 	d := openWritableTestDB(t)
-	const videoID = "sample_interactive_ready"
-	if err := d.InsertVideo(videoID, "youtube_UCinteractive", "youtube_video", "Interactive Ready", "", 60, 1, "", "video", 0, true); err != nil {
+	const (
+		videoID   = "sample_interactive_ready"
+		channelID = "youtube_UCinteractive"
+	)
+	if err := d.InsertVideo(videoID, channelID, "youtube_video", "Interactive Ready", "", 60, 1, "", "video", 0, true); err != nil {
 		t.Fatal(err)
 	}
 	storeReadyAssetForTest(t, d, Asset{
 		AssetID: BuildAssetID("youtube", "youtube_video", videoID, "video_stream", 0), AssetKind: "video_stream",
 		OwnerKind: "youtube_video", OwnerID: videoID, FilePath: "media/youtube/" + videoID + ".mp4", ContentType: "video/mp4",
 	}, 1)
-	videos := []model.DiscoveryVideo{{VideoID: videoID}}
-	if err := d.markDiscoveryReady(videos); err != nil {
+	storeReadyAssetForTest(t, d, Asset{
+		AssetID: BuildAssetID("youtube", "youtube_video", videoID, "post_thumbnail", 0), AssetKind: "post_thumbnail",
+		OwnerKind: "youtube_video", OwnerID: videoID, FilePath: "thumbnails/videos/youtube/" + videoID + ".jpg", ContentType: "image/jpeg",
+	}, 1)
+	storeReadyAssetForTest(t, d, Asset{
+		AssetID: BuildAssetID("youtube", "channel", channelID, "avatar", 0), AssetKind: "avatar",
+		OwnerKind: "channel", OwnerID: channelID, FilePath: "thumbnails/avatars/" + channelID + ".jpg", ContentType: "image/jpeg",
+	}, 1)
+	videos := []model.DiscoveryVideo{
+		{
+			VideoID: videoID, ChannelID: channelID,
+			ThumbnailURL: "https://i.ytimg.com/vi/" + videoID + "/mqdefault.jpg",
+			AvatarURL:    "https://images.example.test/avatar.jpg",
+		},
+		{
+			VideoID: "sample_remote_only", ChannelID: "youtube_UCremote_only",
+			ThumbnailURL: "https://i.ytimg.com/vi/sample_remote_only/mqdefault.jpg",
+			AvatarURL:    "https://images.example.test/remote-avatar.jpg",
+		},
+	}
+	if err := d.projectDiscoveryMedia(videos); err != nil {
 		t.Fatal(err)
 	}
 	if !videos[0].Ready {
 		t.Fatal("canonical playable Discover video was not marked Ready")
+	}
+	if videos[0].ThumbnailURL != "/api/media/thumbnail/"+videoID || videos[0].AvatarURL != "/api/media/avatar/"+channelID {
+		t.Fatalf("ready Discover media URLs = thumbnail %q avatar %q", videos[0].ThumbnailURL, videos[0].AvatarURL)
+	}
+	if videos[1].Ready || videos[1].ThumbnailURL != "https://i.ytimg.com/vi/sample_remote_only/mqdefault.jpg" || videos[1].AvatarURL != "https://images.example.test/remote-avatar.jpg" {
+		t.Fatalf("unprepared Discover media changed: %+v", videos[1])
 	}
 	if got := testRowCount(t, d, `SELECT COUNT(*) FROM discover_temp_downloads WHERE video_id = 'sample_interactive_ready'`); got != 0 {
 		t.Fatal("test unexpectedly created Discover prefetch provenance")
@@ -225,7 +253,7 @@ func TestPreparedDiscoverReplacesNewlyFollowedCreatorFromReserve(t *testing.T) {
 	}
 }
 
-func TestQueueFollowedYouTubeChannelRecommendationsUsesOneRecentAnchorPerChannel(t *testing.T) {
+func TestQueueFollowedYouTubeChannelRecommendationsUsesOneEligibleAnchorPerChannel(t *testing.T) {
 	d := openWritableTestDB(t)
 	channels := []model.Channel{
 		{ChannelID: "youtube_UCfirst", Name: "First", Platform: "youtube", IsSubscribed: true},
@@ -273,8 +301,7 @@ func TestQueueFollowedYouTubeChannelRecommendationsUsesOneRecentAnchorPerChannel
 		}
 		got = append(got, videoID)
 	}
-	want := []string{"first_recent", "second_recent"}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("anchors=%v want=%v", got, want)
+	if len(got) != 2 || got[1] != "second_recent" || (got[0] != "first_old" && got[0] != "first_recent") {
+		t.Fatalf("anchors=%v", got)
 	}
 }

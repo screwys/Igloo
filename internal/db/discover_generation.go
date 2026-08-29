@@ -73,29 +73,8 @@ func (db *DB) BeginDiscoverRefresh(nowMs int64) (bool, int, error) {
 		if _, err := tx.Exec(`DELETE FROM discover_refresh_anchors`); err != nil {
 			return err
 		}
-		rows, err := tx.Query(`
-			WITH ranked AS (
-				SELECT v.video_id,
-				       ROW_NUMBER() OVER (PARTITION BY v.channel_id ORDER BY v.published_at DESC, v.downloaded_at DESC, v.video_id DESC) AS position
-				FROM videos v
-				JOIN channel_follows followed ON followed.channel_id = v.channel_id
-				WHERE v.owner_kind = 'youtube_video' AND COALESCE(v.is_temp, 0) = 0
-				  AND ` + readyVideoMediaExistsSQL("v") + `
-			)
-			SELECT video_id FROM ranked WHERE position = 1 ORDER BY video_id`)
+		ids, err := randomFollowedYouTubeAnchorIDsTx(tx)
 		if err != nil {
-			return err
-		}
-		var ids []string
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err != nil {
-				_ = rows.Close()
-				return err
-			}
-			ids = append(ids, id)
-		}
-		if err := rows.Close(); err != nil {
 			return err
 		}
 		for _, id := range ids {
@@ -284,7 +263,7 @@ func (db *DB) ListPreparedDiscoverVideos(limit int) ([]model.DiscoveryVideo, err
 			break
 		}
 	}
-	return visible, db.markDiscoveryReady(visible)
+	return visible, db.projectDiscoveryMedia(visible)
 }
 
 func (db *DB) listPreparedDiscoverCandidates() ([]model.DiscoveryVideo, error) {

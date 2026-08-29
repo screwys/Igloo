@@ -20,7 +20,7 @@ Any interaction you do on the client, stays in your machine which includes likes
 
 You can import your NewPipe subscriptions directly, or add any subscriptions one by one through the site by an account/post link, or you can use the provided [Tampermonkey script](https://github.com/screwys/Igloo/raw/refs/heads/main/scripts/tampermonkey/igloo-site-sync.user.js) which adds a button to each website that lets you import the account on screen to the server.
 
-Once you import a few subscriptions, you can expand your subscriptions list through Igloo alone. **Discovery** tab prepares you recommendation based on latest video of each Youtube account you follow, and you can also set it to download some of these beforehand. You can enable reposts to get content from accounts you are not directly following, and once they appear on your feed you can follow them, more about this at the next part.
+Once you import a few subscriptions, you can expand your subscriptions list through Igloo alone. **Discovery** tab prepares you recommendation based on a random video of each Youtube account you follow, and you can also set it to download some of these beforehand. You can enable reposts to get content from accounts you are not directly following, and once they appear on your feed you can follow them, more about this at the next part.
 
 ## Features
 
