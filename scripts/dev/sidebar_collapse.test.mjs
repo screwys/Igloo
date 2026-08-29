@@ -65,6 +65,17 @@ test("dragging owns compact snapping and persisted custom widths", () => {
   assert.doesNotMatch(sidebarTemplate, /sidebar-panel-(?:expand|collapse)-icon/);
 });
 
+test("dragging previews the resize without laying out the page on every pointer move", () => {
+  const pointerMove = siteBase.match(/sidebarResizeHandle\.addEventListener\('pointermove',[\s\S]*?\n\s*\}\);/);
+  assert.ok(pointerMove);
+  assert.match(pointerMove[0], /style\.transform\s*=\s*'translateX\('/);
+  assert.doesNotMatch(pointerMove[0], /setSidebarWidth\(/);
+  assert.match(siteBase, /setSidebarWidth\(event\.type === 'pointerup' \? event\.clientX : currentSidebarWidth, true\);/);
+  assert.match(siteBase, /style\.removeProperty\('transform'\)/);
+  assert.match(siteBase, /style\.removeProperty\('transform'\);[\s\S]*?sidebar\.getBoundingClientRect\(\);\s*resizingPointerId = null;/);
+  assert.match(css, /html\.sidebar-resizing \.sidebar-resize-handle\s*\{[^}]*will-change:\s*transform;/);
+});
+
 test("Z toggles compact mode without discarding the saved full width", () => {
   assert.match(siteBase, /'global\.sidebar':\s*'z'/);
   assert.match(siteBase, /cfShortcuts\.match\('global\.sidebar', event\.key\)/);

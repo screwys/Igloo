@@ -927,6 +927,10 @@ html.sidebar-resizing .sidebar-resize-handle::after {
     opacity: 1;
 }
 
+html.sidebar-resizing .sidebar-resize-handle {
+    will-change: transform;
+}
+
 .sidebar-compact-actions {
     padding: 0.6rem 0.5rem;
     border-top: 1px solid rgba(255, 255, 255, 0.08);

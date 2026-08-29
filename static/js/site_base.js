@@ -868,11 +868,16 @@
     });
     sidebarResizeHandle.addEventListener('pointermove', function (event) {
       if (event.pointerId !== resizingPointerId) return;
-      setSidebarWidth(event.clientX, false);
+      var previewWidth = normalizedSidebarWidth(event.clientX);
+      sidebarResizeHandle.style.transform = 'translateX(' + (previewWidth - currentSidebarWidth) + 'px)';
+      sidebarResizeHandle.setAttribute('aria-valuenow', String(previewWidth));
     });
     function finishSidebarResize(event) {
       if (event.pointerId !== resizingPointerId) return;
       setSidebarWidth(event.type === 'pointerup' ? event.clientX : currentSidebarWidth, true);
+      sidebarResizeHandle.style.removeProperty('transform');
+      // Apply the committed width before restoring transitions so it lands on the preview edge.
+      sidebar.getBoundingClientRect();
       resizingPointerId = null;
       doc.documentElement.classList.remove('sidebar-resizing');
       if (sidebarResizeHandle.hasPointerCapture(event.pointerId)) {
