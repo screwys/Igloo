@@ -610,7 +610,7 @@ if (root && video) {
           })
             .then(function (payload) {
               showToast((payload && payload.message) || t('player_channel_unsubscribed', 'Channel unsubscribed'))
-              window.location.assign('/channels')
+              window.location.assign(channelPlatform === 'youtube' ? '/videos' : '/channels')
             })
             .catch(function (err) {
               channelUnsubBtn.style.visibility = ''

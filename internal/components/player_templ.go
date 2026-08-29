@@ -542,7 +542,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				if video.IsTemp && !video.IsSubscribed {
+				if !video.IsSubscribed {
 					templ_7745c5c3_Err = playerSubButton(p).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err

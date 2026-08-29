@@ -108,3 +108,36 @@ func TestNonYouTubePlayerDoesNotRenderMiniPlayerHandoff(t *testing.T) {
 		t.Fatalf("non-YouTube player should not render the mini-player handoff:\n%s", html)
 	}
 }
+
+func TestPlayerRendersChannelActionFromFollowState(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		subscribed   bool
+		wantButtonID string
+		dropButtonID string
+	}{
+		{name: "unfollowed stored video", wantButtonID: `id="player-channel-sub-btn"`, dropButtonID: `id="player-channel-unsub-btn"`},
+		{name: "followed stored video", subscribed: true, wantButtonID: `id="player-channel-unsub-btn"`, dropButtonID: `id="player-channel-sub-btn"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			video := model.Video{
+				VideoID:      "sample_video",
+				ChannelID:    "youtube_sample_channel",
+				Title:        "Sample video",
+				Platform:     "youtube",
+				IsSubscribed: tc.subscribed,
+			}
+			var buf bytes.Buffer
+			if err := PlayerPage(newTestPageProps(), video, nil, nil, nil, nil, false, "").Render(context.Background(), &buf); err != nil {
+				t.Fatal(err)
+			}
+			html := buf.String()
+			if !strings.Contains(html, tc.wantButtonID) {
+				t.Fatalf("player missing %s", tc.wantButtonID)
+			}
+			if strings.Contains(html, tc.dropButtonID) {
+				t.Fatalf("player unexpectedly rendered %s", tc.dropButtonID)
+			}
+		})
+	}
+}

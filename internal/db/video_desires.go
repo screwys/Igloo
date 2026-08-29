@@ -917,7 +917,7 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 				SELECT c.channel_id
 				FROM channels c
 				LEFT JOIN channel_follows followed ON followed.channel_id = c.channel_id
-				WHERE c.platform IN ('tiktok', 'instagram')
+				WHERE c.platform IN ('youtube', 'tiktok', 'instagram')
 				  AND followed.channel_id IS NULL
 			)
 		`); err != nil {
@@ -929,7 +929,7 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 				SELECT c.channel_id
 				FROM channels c
 				LEFT JOIN channel_follows followed ON followed.channel_id = c.channel_id
-				WHERE c.platform IN ('tiktok', 'instagram')
+				WHERE c.platform IN ('youtube', 'tiktok', 'instagram')
 				  AND followed.channel_id IS NULL
 			)
 		`); err != nil {

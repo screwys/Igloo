@@ -33,13 +33,13 @@ func cleanupUnfollowedChannelContentTx(tx *sql.Tx, channelID string, nowMs int64
 		}
 		return nil, err
 	}
-	if platform != "tiktok" && platform != "instagram" {
+	if platform != "youtube" && platform != "tiktok" && platform != "instagram" {
 		return nil, nil
 	}
 	if err := stopUnfollowedProfileWorkTx(tx, channelID, nowMs); err != nil {
 		return nil, err
 	}
-	return collectUnreferencedShortsContentTx(tx, channelID, nowMs)
+	return collectUnreferencedVideoContentTx(tx, channelID, nowMs)
 }
 
 func stopUnfollowedProfileWorkTx(tx *sql.Tx, channelID string, nowMs int64) error {
@@ -206,7 +206,7 @@ func unreferencedXContentIDsQuery() string {
 	`, feedActiveOwnerPredicate("fi"))
 }
 
-func collectUnreferencedShortsContentTx(tx *sql.Tx, channelID string, nowMs int64) ([]string, error) {
+func collectUnreferencedVideoContentTx(tx *sql.Tx, channelID string, nowMs int64) ([]string, error) {
 	rows, err := tx.Query(`
 		SELECT DISTINCT video_id
 		FROM video_desires

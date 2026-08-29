@@ -109,7 +109,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							if video.ChannelID != "" {
 								<div class="player-channel-inline-actions" data-channel-inline-actions>
 									@PlayerStarButton(p, video.ChannelID, video.IsStarred)
-									if video.IsTemp && !video.IsSubscribed {
+									if !video.IsSubscribed {
 										@playerSubButton(p)
 									} else {
 										@playerUnsubButton(p)

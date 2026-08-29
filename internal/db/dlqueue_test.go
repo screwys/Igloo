@@ -644,7 +644,7 @@ func TestMaintainVideoRetentionExpiresStoryDesiresAndPendingWork(t *testing.T) {
 	}
 }
 
-func TestUnfollowStopsWorkAndKeepsHistoricalVideoOwnership(t *testing.T) {
+func TestUnfollowStopsWorkAndCollectsUnownedYouTubeVideo(t *testing.T) {
 	d := openWritableTestDB(t)
 	const (
 		first  = "youtube_sample_first"
@@ -672,14 +672,17 @@ func TestUnfollowStopsWorkAndKeepsHistoricalVideoOwnership(t *testing.T) {
 	if _, err := d.MaintainVideoRetention(time.Now().UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = ?`, video); got != 2 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = ?`, video); got != 1 {
 		t.Fatalf("shared desires after first unfollow = %d", got)
+	}
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = ? AND channel_id = ?`, video, owner); got != 1 {
+		t.Fatalf("shared video lost canonical owner: %d", got)
 	}
 	if err := d.UnfollowChannel(second); err != nil {
 		t.Fatal(err)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = ?`, video); got != 1 {
-		t.Fatal("unfollow performed mutation-local canonical cleanup")
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = ?`, video); got != 0 {
+		t.Fatal("unfollow retained unowned canonical video")
 	}
 	if delay, err := d.NextMediaWorkDelay(time.Now().UnixMilli(), []string{"youtube"}, false, DownloadLaneCurrent); err != nil || delay != 5*time.Minute {
 		t.Fatalf("unfollowed work delay=%v err=%v", delay, err)
@@ -693,18 +696,18 @@ func TestUnfollowStopsWorkAndKeepsHistoricalVideoOwnership(t *testing.T) {
 	if got := testRowCount(t, d, `SELECT COUNT(*) FROM download_queue WHERE video_id = ?`, video); got != 0 {
 		t.Fatalf("maintenance retained inactive work: %d", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = ?`, video); got != 2 {
-		t.Fatalf("maintenance removed historical desires: %d", got)
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = ?`, video); got != 0 {
+		t.Fatalf("maintenance restored unowned desires: %d", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = ?`, video); got != 1 {
-		t.Fatalf("maintenance removed historical video: %d", got)
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = ?`, video); got != 0 {
+		t.Fatalf("maintenance restored unowned video: %d", got)
 	}
 	added, err := d.ReconcileVideoDesires(VideoDesireSnapshot{
 		SourceChannelID: first,
 		Component:       "direct",
 		Items:           []VideoDesire{{VideoID: "sample_late", OwnerChannelID: owner, Lane: DownloadLaneCurrent}},
 	})
-	if err != nil || added != 0 || testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = ?`, first) != 1 {
+	if err != nil || added != 0 || testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = ?`, first) != 0 {
 		t.Fatalf("unfollowed reconcile added=%d err=%v", added, err)
 	}
 }

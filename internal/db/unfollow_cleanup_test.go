@@ -138,8 +138,8 @@ func TestUnfollowCollectsOnlyUnreferencedXContent(t *testing.T) {
 	}
 }
 
-func TestUnfollowCollectsOnlyUnreferencedShortsContent(t *testing.T) {
-	for _, platform := range []string{"tiktok", "instagram"} {
+func TestUnfollowCollectsOnlyUnreferencedVideoContent(t *testing.T) {
+	for _, platform := range []string{"youtube", "tiktok", "instagram"} {
 		t.Run(platform, func(t *testing.T) {
 			d := openWritableTestDB(t)
 			first := platform + "_sample_first"
@@ -225,37 +225,45 @@ func TestUnfollowCollectsOnlyUnreferencedShortsContent(t *testing.T) {
 	}
 }
 
-func TestVideoRetentionCollectsContentFromAlreadyUnfollowedShortsSources(t *testing.T) {
-	d := openWritableTestDB(t)
-	const source = "tiktok_sample_unfollowed"
-	seedVideoDesireChannels(t, d, source)
-	if err := d.ExecRaw(`
-		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
-		VALUES ('sample_stale_video', ?, 'tiktok_video', 'Stale', 1)
-	`, source); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.ReconcileVideoDesires(VideoDesireSnapshot{
-		SourceChannelID: source,
-		Component:       "direct",
-		Items: []VideoDesire{{
-			VideoID: "sample_stale_video", OwnerChannelID: source,
-			SourcePosition: 0, Lane: DownloadLaneCurrent,
-		}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.ExecRaw(`DELETE FROM channel_follows WHERE channel_id = ?`, source); err != nil {
-		t.Fatal(err)
-	}
+func TestVideoRetentionCollectsContentFromAlreadyUnfollowedVideoSources(t *testing.T) {
+	for _, platform := range []string{"youtube", "tiktok", "instagram"} {
+		t.Run(platform, func(t *testing.T) {
+			d := openWritableTestDB(t)
+			source := platform + "_sample_unfollowed"
+			ownerKind := platform + "_video"
+			if platform == "instagram" {
+				ownerKind = "instagram_reel"
+			}
+			seedVideoDesireChannels(t, d, source)
+			if err := d.ExecRaw(`
+				INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
+				VALUES ('sample_stale_video', ?, ?, 'Stale', 1)
+			`, source, ownerKind); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := d.ReconcileVideoDesires(VideoDesireSnapshot{
+				SourceChannelID: source,
+				Component:       "direct",
+				Items: []VideoDesire{{
+					VideoID: "sample_stale_video", OwnerChannelID: source,
+					SourcePosition: 0, Lane: DownloadLaneCurrent,
+				}},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := d.ExecRaw(`DELETE FROM channel_follows WHERE channel_id = ?`, source); err != nil {
+				t.Fatal(err)
+			}
 
-	if _, err := d.MaintainVideoRetention(100); err != nil {
-		t.Fatal(err)
-	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = ?`, source); got != 0 {
-		t.Fatalf("stale unfollowed desires remaining = %d", got)
-	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = 'sample_stale_video'`); got != 0 {
-		t.Fatalf("stale unreferenced video remained: %d", got)
+			if _, err := d.MaintainVideoRetention(100); err != nil {
+				t.Fatal(err)
+			}
+			if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = ?`, source); got != 0 {
+				t.Fatalf("stale unfollowed desires remaining = %d", got)
+			}
+			if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = 'sample_stale_video'`); got != 0 {
+				t.Fatalf("stale unreferenced video remained: %d", got)
+			}
+		})
 	}
 }
