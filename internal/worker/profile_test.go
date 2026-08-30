@@ -133,6 +133,67 @@ func TestInstagramUnavatarURLUsesProviderPath(t *testing.T) {
 	}
 }
 
+func TestInstagramProfileJobCachesNativeAvatarResolverWhenMetadataIsMissing(t *testing.T) {
+	stateRoot := t.TempDir()
+	database := newTestWorkerDBAt(t, stateRoot)
+	const channelID = "instagram_sample_creator"
+	if err := database.AddChannel(model.Channel{
+		ChannelID: channelID, SourceID: "sample_creator", Name: "Sample Creator",
+		DisplayName: "Sample Creator", URL: "https://www.instagram.com/sample_creator/", Platform: "instagram",
+		IsSubscribed: true,
+	}); err != nil {
+		t.Fatalf("AddChannel: %v", err)
+	}
+	bin := t.TempDir()
+	avatarPath := filepath.Join(bin, "avatar.png")
+	if err := os.WriteFile(avatarPath, testProfilePNGBytes(), 0o644); err != nil {
+		t.Fatalf("write avatar fixture: %v", err)
+	}
+	galleryDLPath := filepath.Join(bin, "gallery-dl")
+	if err := os.WriteFile(galleryDLPath, []byte(`#!/bin/sh
+dest=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-D" ]; then
+    dest="$2"
+    shift 2
+    continue
+  fi
+  shift
+done
+cp "$TEST_INSTAGRAM_AVATAR" "$dest/avatar.png"
+`), 0o755); err != nil {
+		t.Fatalf("write gallery-dl stub: %v", err)
+	}
+	t.Setenv("TEST_INSTAGRAM_AVATAR", avatarPath)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	manager := &Manager{
+		db: database, cfg: testCfg(stateRoot), downloader: testDownloader(),
+		instagramProfileFetch: func(context.Context, string, string) (*model.ChannelProfile, error) {
+			return &model.ChannelProfile{
+				ChannelID: channelID, Platform: "instagram", Handle: "sample_creator", DisplayName: "Sample Creator",
+			}, nil
+		},
+	}
+
+	if !manager.processProfileJobBatch(context.Background(), fetchprofile.Fetch) {
+		t.Fatal("profile job was not claimed")
+	}
+	asset, err := database.GetAssetByOwnerIdentity("avatar", "channel", channelID, 0)
+	if err != nil || asset == nil || asset.State != db.AssetStateReady || asset.SourceURL != instagramNativeAvatarURL("sample_creator") {
+		t.Fatalf("cached native avatar = %+v, err=%v", asset, err)
+	}
+	job, err := database.GetProfileJob(channelID)
+	if err != nil || job == nil || job.RequestedRevision != job.CompletedRevision || job.Attempts != 0 {
+		t.Fatalf("completed native avatar job = %+v, err=%v", job, err)
+	}
+}
+
+func TestInstagramNativeAvatarURLUsesGalleryDLResolverPath(t *testing.T) {
+	if got := instagramNativeAvatarURL("@sample.creator"); got != "https://www.instagram.com/sample.creator/avatar" {
+		t.Fatalf("instagramNativeAvatarURL = %q", got)
+	}
+}
+
 func TestSameInstagramAvatarSourceIgnoresExpiringQuery(t *testing.T) {
 	current := "https://scontent-a.cdninstagram.com/v/avatar.jpg?oe=AAAA&token=old"
 	fetched := "https://scontent-b.cdninstagram.com/v/avatar.jpg?oe=BBBB&token=new"

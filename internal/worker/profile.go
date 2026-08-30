@@ -299,12 +299,20 @@ func (m *Manager) ensureInstagramProfileAvatarSource(profile *model.ChannelProfi
 	if m.instagramAvatarFallback != nil {
 		profile.AvatarURL = strings.TrimSpace(m.instagramAvatarFallback(handle))
 	} else {
-		profile.AvatarURL = instagramUnavatarURL(handle)
+		profile.AvatarURL = instagramNativeAvatarURL(handle)
 	}
 	if profile.AvatarURL == "" {
 		return fmt.Errorf("%w: %s has no avatar fallback", fetchprofile.ErrIncompleteProfile, profile.ChannelID)
 	}
 	return nil
+}
+
+func instagramNativeAvatarURL(handle string) string {
+	handle = model.NormalizeInstagramHandle(handle)
+	if handle == "" {
+		return ""
+	}
+	return "https://www.instagram.com/" + url.PathEscape(handle) + "/avatar"
 }
 
 func instagramUnavatarURL(handle string) string {
@@ -439,7 +447,12 @@ func (m *Manager) downloadProfileJobAssetAdmitted(ctx context.Context, job model
 	if kind == "avatar" && profile.Platform == "twitter" {
 		downloadURL = upgradeTwimgURL(sourceURL)
 	}
-	tmpPath, err := m.downloader.HTTP.DownloadFile(ctx, downloadURL, dir, base+".download")
+	var tmpPath string
+	if kind == "avatar" && profile.Platform == "instagram" && sourceURL == instagramNativeAvatarURL(profile.Handle) {
+		tmpPath, err = m.downloadInstagramAvatarResolver(ctx, profile, dir, base, sourceURL)
+	} else {
+		tmpPath, err = m.downloader.HTTP.DownloadFile(ctx, downloadURL, dir, base+".download")
+	}
 	if err != nil && downloadURL != sourceURL {
 		tmpPath, err = m.downloader.HTTP.DownloadFile(ctx, sourceURL, dir, base+".download")
 	}
@@ -469,6 +482,34 @@ func (m *Manager) downloadProfileJobAssetAdmitted(ctx context.Context, job model
 		State:          db.AssetStateReady,
 		RequiredReason: "identity",
 	}, finalPath, nil
+}
+
+func (m *Manager) downloadInstagramAvatarResolver(ctx context.Context, profile model.ChannelProfile, dir, base, sourceURL string) (string, error) {
+	var nativeErr error
+	if m.downloader != nil && m.downloader.GalleryDL != nil {
+		cookiesFile, cookiesBrowser := m.cookieFileAndBrowserFor("instagram")
+		paths, err := m.downloader.GalleryDL.Download(ctx, sourceURL, dir, base+"-native", cookiesFile, cookiesBrowser)
+		if err == nil && len(paths) == 1 {
+			return paths[0], nil
+		}
+		for _, path := range paths {
+			_ = os.Remove(path)
+		}
+		if err != nil {
+			nativeErr = fmt.Errorf("gallery-dl instagram avatar: %w", err)
+		} else {
+			nativeErr = fmt.Errorf("gallery-dl instagram avatar returned %d files", len(paths))
+		}
+	} else {
+		nativeErr = errors.New("gallery-dl instagram avatar unavailable")
+	}
+
+	fallbackURL := instagramUnavatarURL(profile.Handle)
+	tmpPath, fallbackErr := m.downloader.HTTP.DownloadFile(ctx, fallbackURL, dir, base+".download")
+	if fallbackErr != nil {
+		return "", errors.Join(nativeErr, fmt.Errorf("unavatar fallback: %w", fallbackErr))
+	}
+	return tmpPath, nil
 }
 
 func profileMediaOwnerKey(channelID string) string {
