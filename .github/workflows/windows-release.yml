@@ -34,15 +34,17 @@ jobs:
       - name: Install build tools
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           go install github.com/a-h/templ/cmd/templ@v0.3.1020
           dotnet tool install --global wix --version 6.0.2
-          wix extension add -g WixToolset.Bal.wixext/6.0.2
+          wix extension add -g WixToolset.BootstrapperApplications.wixext/6.0.2
           wix extension add -g WixToolset.Util.wixext/6.0.2
           wix extension add -g WixToolset.Firewall.wixext/6.0.2
 
       - name: Generate application assets
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           templ generate
           go run ./cmd/igloo-assets
 
@@ -79,6 +81,7 @@ jobs:
         env:
           WINDOWS_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.WINDOWS_UPDATE_PUBLIC_KEY_BASE64 }}
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           New-Item -ItemType Directory -Force release-artifacts | Out-Null
           packaging/windows/build-app.ps1 `
             -Version "${{ steps.versions.outputs.version }}" `
@@ -92,6 +95,7 @@ jobs:
       - name: Verify Windows payloads
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           & "$env:RUNNER_TEMP/igloo-app/igloo.exe" --version
           & "$env:RUNNER_TEMP/igloo-runtime/yt-dlp.exe" --version
           & "$env:RUNNER_TEMP/igloo-runtime/gallery-dl.exe" --version
@@ -105,6 +109,7 @@ jobs:
           WINDOWS_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.WINDOWS_UPDATE_PUBLIC_KEY_BASE64 }}
           WINDOWS_UPDATE_SIGNING_KEY_BASE64: ${{ secrets.WINDOWS_UPDATE_SIGNING_KEY_BASE64 }}
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           packaging/windows/write-manifest.ps1 `
             -AppVersion "${{ steps.versions.outputs.version }}" `
             -RuntimeVersion "${{ steps.versions.outputs.runtime }}" `
@@ -120,6 +125,7 @@ jobs:
       - name: Build one-click installer
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $true
           $payload = "$env:RUNNER_TEMP/installer-payload"
           New-Item -ItemType Directory -Force "$payload/app/current" | Out-Null
           New-Item -ItemType Directory -Force "$payload/runtime/current" | Out-Null
@@ -138,14 +144,16 @@ jobs:
           wix msi validate "$env:RUNNER_TEMP/Igloo-x64.msi"
           wix build packaging/windows/Bundle.wxs `
             -arch x64 `
-            -ext WixToolset.Bal.wixext `
+            -ext WixToolset.BootstrapperApplications.wixext `
             -d "MsiPath=$env:RUNNER_TEMP/Igloo-x64.msi" `
             -d "ProductVersion=${{ steps.versions.outputs.product_version }}" `
             -o "release-artifacts/IglooSetup-x64.exe"
 
       - name: Run Windows-focused tests
         shell: pwsh
-        run: go test ./internal/buildinfo ./internal/config ./internal/toolenv ./internal/windowsupdate ./cmd/igloo ./cmd/igloo-update ./cmd/igloo-sign-update
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          go test ./internal/buildinfo ./internal/config ./internal/toolenv ./internal/windowsupdate ./cmd/igloo ./cmd/igloo-update ./cmd/igloo-sign-update
 
       - name: Generate artifact attestations
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4

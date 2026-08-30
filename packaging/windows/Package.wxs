@@ -24,7 +24,7 @@
       </Directory>
     </StandardDirectory>
 
-    <StandardDirectory Id="ProgramMenuFolder">
+    <StandardDirectory Id="CommonProgramsFolder">
       <Directory Id="IGLOOPROGRAMMENU" Name="Igloo" />
     </StandardDirectory>
 

@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 $root = Resolve-Path (Join-Path $PSScriptRoot "../..")
 $output = [System.IO.Path]::GetFullPath($OutputDirectory)
 Remove-Item -Recurse -Force $output -ErrorAction SilentlyContinue

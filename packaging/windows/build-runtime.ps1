@@ -3,6 +3,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 $root = Resolve-Path (Join-Path $PSScriptRoot "../..")
 $lockPath = Join-Path $PSScriptRoot "windows-runtime.lock.json"
 $lock = Get-Content -Raw $lockPath | ConvertFrom-Json

@@ -8,6 +8,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 function Payload([string] $Version, [string] $Path) {
     return [ordered]@{
         version = $Version
