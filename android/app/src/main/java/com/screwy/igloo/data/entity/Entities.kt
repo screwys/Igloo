@@ -111,6 +111,8 @@ data class VideoEntity(
     @ColumnInfo(name = "canonical_url") val canonicalUrl: String? = null,
     @ColumnInfo(name = "dearrow_title") val dearrowTitle: String? = null,
     @ColumnInfo(name = "dearrow_title_casual") val dearrowTitleCasual: String? = null,
+    @ColumnInfo(name = "moments_all_position", defaultValue = "0") val momentsAllPosition: Long = 0,
+    @ColumnInfo(name = "moments_following_position", defaultValue = "0") val momentsFollowingPosition: Long = 0,
 )
 
 @Serializable

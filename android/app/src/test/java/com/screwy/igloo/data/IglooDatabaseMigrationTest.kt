@@ -268,6 +268,31 @@ class IglooDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration45To46KeepsVideosAndAddsMomentsPositions() {
+        helper.createDatabase(DATABASE_NAME, 45).use { db ->
+            db.execSQL(
+                "INSERT INTO videos (video_id, channel_id, owner_kind, published_at, slide_count) VALUES ('sample_video', 'tiktok_sample', 'tiktok_video', 100, 0)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            DATABASE_NAME,
+            46,
+            true,
+            IglooMigrations.MIGRATION_45_46,
+        ).use { db ->
+            db.query(
+                "SELECT video_id, moments_all_position, moments_following_position FROM videos",
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("sample_video", cursor.getString(0))
+                assertEquals(0L, cursor.getLong(1))
+                assertEquals(0L, cursor.getLong(2))
+            }
+        }
+    }
+
     private companion object {
         const val DATABASE_NAME = "igloo-migration-test"
     }

@@ -2,6 +2,101 @@ package db
 
 import "testing"
 
+func TestMomentsOrderKeepsSeenRowsAndAppendsLateOlderVideos(t *testing.T) {
+	d := openWritableTestDB(t)
+	if err := d.ExecRaw(`
+		INSERT INTO channels (channel_id, source_id, name, platform)
+		VALUES ('tiktok_sample', 'sample', 'Sample', 'tiktok');
+		INSERT INTO channel_follows (channel_id, followed_at) VALUES ('tiktok_sample', 1);
+		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
+		VALUES
+			('sample_old', 'tiktok_sample', 'tiktok_video', 'Old', 100),
+			('sample_viewed', 'tiktok_sample', 'tiktok_video', 'Viewed', 200),
+			('sample_new', 'tiktok_sample', 'tiktok_video', 'New', 300);
+		INSERT INTO moment_views (video_id, viewed_at) VALUES ('sample_viewed', 400);
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	ids, err := d.ListShortsVideoIDs("following")
+	if err != nil {
+		t.Fatalf("ListShortsVideoIDs: %v", err)
+	}
+	if got, want := ids, []string{"sample_old", "sample_viewed", "sample_new"}; !sameStrings(got, want) {
+		t.Fatalf("Moments ids = %v, want %v", got, want)
+	}
+
+	if err := d.ExecRaw(`
+		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
+		VALUES ('sample_late_older', 'tiktok_sample', 'tiktok_video', 'Late older', 50)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	ids, err = d.ListShortsVideoIDs("following")
+	if err != nil {
+		t.Fatalf("ListShortsVideoIDs after arrival: %v", err)
+	}
+	if got, want := ids, []string{"sample_old", "sample_viewed", "sample_new", "sample_late_older"}; !sameStrings(got, want) {
+		t.Fatalf("Moments ids after arrival = %v, want %v", got, want)
+	}
+	rows, err := d.reader().Query(`
+		SELECT video_id, moments_following_position
+		FROM videos
+		WHERE video_id IN ('sample_old', 'sample_viewed', 'sample_new', 'sample_late_older')
+		ORDER BY moments_following_position`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var positions []int64
+	for rows.Next() {
+		var videoID string
+		var position int64
+		if err := rows.Scan(&videoID, &position); err != nil {
+			t.Fatal(err)
+		}
+		positions = append(positions, position)
+	}
+	if got, want := positions, []int64{1, 2, 3, 4}; !sameInt64s(got, want) {
+		t.Fatalf("following positions = %v, want %v", got, want)
+	}
+
+	videos, err := d.GetVideos(GetVideosOpts{
+		Platform:    "shorts",
+		MomentsMode: "following",
+	})
+	if err != nil {
+		t.Fatalf("GetVideos Moments: %v", err)
+	}
+	if got, want := videoIDs(videos), ids; !sameStrings(got, want) {
+		t.Fatalf("hydrated ids = %v, want %v", got, want)
+	}
+}
+
+func sameStrings(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func sameInt64s(got, want []int64) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestGetVideo(t *testing.T) {
 	d := openTestDB(t)
 	var videoID string

@@ -14,9 +14,9 @@ import kotlinx.coroutines.flow.Flow
  * Twitter-as-moment (video-kind tweets) is served by FeedReadDao with a media_kind
  * filter. This DAO stays shorts-only.
  *
- * Moments player and grid lists are intentionally oldest -> newest: scrolling
- * forward moves through time, and new rows append at the end instead of shifting
- * the start of the list. Keep web /moments and /api/shorts/cards aligned.
+ * Canonical Moments rows keep every retained video in the server-assigned append-only order. The
+ * player preserves that seed and appends later arrivals without disturbing the open session. Keep
+ * web /moments and /api/shorts/cards aligned.
  */
 @Dao
 interface MomentReadDao {
@@ -69,7 +69,8 @@ interface MomentReadDao {
           AND COALESCE(v.source_kind, '') != 'story'
           AND (cf.channel_id IS NOT NULL OR rh.video_id IS NOT NULL)
           AND NOT EXISTS (SELECT 1 FROM muted_channels mc WHERE mc.channel_id = v.channel_id)
-        ORDER BY effective_moment_at_ms ASC, v.video_id ASC
+        ORDER BY CASE WHEN v.moments_all_position > 0 THEN 0 ELSE 1 END,
+                 v.moments_all_position ASC, effective_moment_at_ms ASC, v.video_id ASC
         """
     )
     fun momentsAllFlow(): Flow<List<MomentItem>>
@@ -97,7 +98,8 @@ interface MomentReadDao {
         WHERE (v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
           AND COALESCE(v.source_kind, '') != 'story'
           AND NOT EXISTS (SELECT 1 FROM muted_channels mc WHERE mc.channel_id = v.channel_id)
-        ORDER BY v.published_at ASC, v.video_id ASC
+        ORDER BY CASE WHEN v.moments_following_position > 0 THEN 0 ELSE 1 END,
+                 v.moments_following_position ASC, v.published_at ASC, v.video_id ASC
         """
     )
     fun momentsFollowingFlow(): Flow<List<MomentItem>>
@@ -156,7 +158,8 @@ interface MomentReadDao {
           AND COALESCE(v.source_kind, '') != 'story'
           AND (cf.channel_id IS NOT NULL OR rh.video_id IS NOT NULL)
           AND NOT EXISTS (SELECT 1 FROM muted_channels mc WHERE mc.channel_id = v.channel_id)
-        ORDER BY effective_moment_at_ms ASC, v.video_id ASC
+        ORDER BY CASE WHEN v.moments_all_position > 0 THEN 0 ELSE 1 END,
+                 v.moments_all_position ASC, effective_moment_at_ms ASC, v.video_id ASC
         """
     )
     fun playerMomentsAllFlow(): Flow<List<MomentItem>>
@@ -183,7 +186,8 @@ interface MomentReadDao {
         WHERE (v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
           AND COALESCE(v.source_kind, '') != 'story'
           AND NOT EXISTS (SELECT 1 FROM muted_channels mc WHERE mc.channel_id = v.channel_id)
-        ORDER BY v.published_at ASC, v.video_id ASC
+        ORDER BY CASE WHEN v.moments_following_position > 0 THEN 0 ELSE 1 END,
+                 v.moments_following_position ASC, v.published_at ASC, v.video_id ASC
         """
     )
     fun playerMomentsFollowingFlow(): Flow<List<MomentItem>>

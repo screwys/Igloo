@@ -132,4 +132,12 @@ object IglooMigrations {
                 )
             }
         }
+
+    val MIGRATION_45_46 =
+        object : Migration(45, 46) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `videos` ADD COLUMN `moments_all_position` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `videos` ADD COLUMN `moments_following_position` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
 }

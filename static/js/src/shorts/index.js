@@ -59,6 +59,7 @@ if (layout) {
     var observedGridSkeletons = new WeakSet()
     var observedGridImages = new WeakSet()
     var tabGridCache = new Map()
+    var momentsTailRefresh = null
     var switchingTabs = false
     var STORY_TRAY_MIN_WIDTH = 76
     var STORY_TRAY_MAX_WIDTH = 520
@@ -928,6 +929,35 @@ if (layout) {
       })
     }
 
+    function refreshMomentsSession() {
+      if (currentTab === 'stories' || switchingTabs) return Promise.resolve(0)
+      if (momentsTailRefresh) return momentsTailRefresh
+      var requestTab = currentTab
+      tabGridCache.delete(requestTab)
+      momentsTailRefresh = loadTabSnapshot(requestTab).then(function (snapshot) {
+        if (currentTab !== requestTab) return 0
+        syncCardList()
+        var known = new Set(state.cards.map(function (card) {
+          return String(card.getAttribute('data-video-id') || '').trim()
+        }))
+        var template = doc.createElement('template')
+        template.innerHTML = snapshot.gridHTML
+        var added = 0
+        Array.prototype.slice.call(template.content.querySelectorAll(sourceCardSelector)).forEach(function (card) {
+          var videoId = String(card.getAttribute('data-video-id') || '').trim()
+          if (!videoId || known.has(videoId)) return
+          known.add(videoId)
+          sourceContainer.appendChild(card)
+          added += 1
+        })
+        if (added > 0) appendNewItemsFromGrid()
+        return added
+      }).finally(function () {
+        momentsTailRefresh = null
+      })
+      return momentsTailRefresh
+    }
+
     function advanceAfterMomentAction(entry) {
       var entryID = String(entry && entry.data && entry.data.id || '').trim()
       var keepOverlayOpen = state.overlayOpen
@@ -1725,6 +1755,7 @@ if (layout) {
       setLastViewedShortId: setLastViewedShortId,
       setLastViewedShortResume: setLastViewedShortResume,
       markShortViewed: markShortViewed,
+      refreshMomentsSession: refreshMomentsSession,
       beginOpenRequest: beginOpenRequest,
       getShortsInfiniteController: getShortsInfiniteController,
       makeShortItem: makeShortItem,

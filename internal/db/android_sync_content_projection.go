@@ -191,7 +191,8 @@ func (db *DB) ListAndroidSyncVideoProjections(videoIDs []string, commentLimit in
 			       COALESCE(v.title, ''), COALESCE(v.description, ''), COALESCE(v.duration, 0),
 			       v.published_at, COALESCE(v.metadata_json, ''), COALESCE(v.media_kind, ''),
 				       COALESCE(v.slide_count, 0), COALESCE(v.source_kind, ''), COALESCE(v.is_temp, 0),
-			       v.dearrow_title, v.dearrow_title_casual, v.dearrow_checked_at
+				       v.dearrow_title, v.dearrow_title_casual, v.dearrow_checked_at,
+				       v.moments_all_position, v.moments_following_position
 			FROM videos v
 			WHERE v.video_id IN (`+placeholders(len(chunk))+`)
 			ORDER BY v.video_id
@@ -321,6 +322,7 @@ func scanAndroidSyncVideoProjection(rows *sql.Rows) (AndroidSyncVideoProjection,
 		&projection.Video.MetadataJSON, &projection.Video.MediaKind, &projection.Video.MediaSlideCount,
 		&projection.Video.SourceKind, &projection.Video.IsTemp, &projection.Video.DearrowTitle,
 		&projection.Video.DearrowTitleCasual, &projection.Video.DearrowCheckedAtMs,
+		&projection.Video.MomentsAllPosition, &projection.Video.MomentsFollowingPosition,
 	); err != nil {
 		return AndroidSyncVideoProjection{}, err
 	}

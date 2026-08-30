@@ -162,17 +162,19 @@ type Video struct {
 	Metadata           *VideoMetadata
 	// Repost fields are joined for Moments. A repost-introduced video still
 	// appears once; RepostCount tells the UI how many followed sources surfaced it.
-	ReposterChannelID   string
-	ReposterHandle      string
-	ReposterDisplayName string
-	RepostCount         int
-	RepostIntroduced    bool
-	EffectiveMomentAtMs int64
-	StoryState          string
-	StoryCount          int
-	StoryUnseenCount    int
-	StoryFirstVideoID   string
-	StoryUnseen         bool
+	ReposterChannelID        string
+	ReposterHandle           string
+	ReposterDisplayName      string
+	RepostCount              int
+	RepostIntroduced         bool
+	EffectiveMomentAtMs      int64
+	MomentsAllPosition       int64
+	MomentsFollowingPosition int64
+	StoryState               string
+	StoryCount               int
+	StoryUnseenCount         int
+	StoryFirstVideoID        string
+	StoryUnseen              bool
 	// DeArrow fields — nullable pointers distinguish "unchecked" from "checked, no data".
 	DearrowTitle       *string
 	DearrowTitleCasual *string

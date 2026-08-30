@@ -85,21 +85,23 @@ type androidSyncComment struct {
 }
 
 type androidSyncVideoItem struct {
-	VideoID            string  `json:"video_id"`
-	ChannelID          string  `json:"channel_id"`
-	OwnerKind          string  `json:"owner_kind"`
-	Title              string  `json:"title"`
-	Description        string  `json:"description"`
-	Duration           int     `json:"duration"`
-	PublishedAt        int64   `json:"published_at"`
-	MediaKind          string  `json:"media_kind"`
-	SlideCount         int     `json:"slide_count"`
-	SourceKind         string  `json:"source_kind"`
-	IsTemp             bool    `json:"is_temp"`
-	MetadataJSON       string  `json:"metadata_json"`
-	CanonicalURL       string  `json:"canonical_url"`
-	DearrowTitle       *string `json:"dearrow_title"`
-	DearrowTitleCasual *string `json:"dearrow_title_casual"`
+	VideoID                  string  `json:"video_id"`
+	ChannelID                string  `json:"channel_id"`
+	OwnerKind                string  `json:"owner_kind"`
+	Title                    string  `json:"title"`
+	Description              string  `json:"description"`
+	Duration                 int     `json:"duration"`
+	PublishedAt              int64   `json:"published_at"`
+	MediaKind                string  `json:"media_kind"`
+	SlideCount               int     `json:"slide_count"`
+	SourceKind               string  `json:"source_kind"`
+	IsTemp                   bool    `json:"is_temp"`
+	MetadataJSON             string  `json:"metadata_json"`
+	CanonicalURL             string  `json:"canonical_url"`
+	DearrowTitle             *string `json:"dearrow_title"`
+	DearrowTitleCasual       *string `json:"dearrow_title_casual"`
+	MomentsAllPosition       int64   `json:"moments_all_position"`
+	MomentsFollowingPosition int64   `json:"moments_following_position"`
 }
 
 type androidSyncSponsorBlockCheck struct {
@@ -182,6 +184,10 @@ func (s *Server) registerAndroidSyncAPIRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) handleAndroidSyncReconcile(w http.ResponseWriter, r *http.Request) {
+	if err := s.db.ReconcileAllMomentsOrders(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "reconcile_failed", err.Error())
+		return
+	}
 	if userFromContext(r.Context()) == nil {
 		writeJSONError(w, http.StatusUnauthorized, "unauthenticated", "authentication required")
 		return
@@ -426,20 +432,22 @@ func androidSyncFeedItemFromModel(item model.FeedItem) androidSyncFeedItem {
 func androidSyncVideoItemFromProjection(projection db.AndroidSyncVideoProjection) androidSyncVideoItem {
 	video := projection.Video
 	out := androidSyncVideoItem{
-		VideoID:            video.VideoID,
-		ChannelID:          video.ChannelID,
-		OwnerKind:          video.OwnerKind,
-		Title:              video.Title,
-		Description:        video.Description,
-		Duration:           video.Duration,
-		MediaKind:          video.MediaKind,
-		SlideCount:         video.MediaSlideCount,
-		SourceKind:         video.SourceKind,
-		IsTemp:             video.IsTemp,
-		MetadataJSON:       video.MetadataJSON,
-		CanonicalURL:       androidSyncCanonicalVideoURL(video),
-		DearrowTitle:       video.DearrowTitle,
-		DearrowTitleCasual: video.DearrowTitleCasual,
+		VideoID:                  video.VideoID,
+		ChannelID:                video.ChannelID,
+		OwnerKind:                video.OwnerKind,
+		Title:                    video.Title,
+		Description:              video.Description,
+		Duration:                 video.Duration,
+		MediaKind:                video.MediaKind,
+		SlideCount:               video.MediaSlideCount,
+		SourceKind:               video.SourceKind,
+		IsTemp:                   video.IsTemp,
+		MetadataJSON:             video.MetadataJSON,
+		CanonicalURL:             androidSyncCanonicalVideoURL(video),
+		DearrowTitle:             video.DearrowTitle,
+		DearrowTitleCasual:       video.DearrowTitleCasual,
+		MomentsAllPosition:       video.MomentsAllPosition,
+		MomentsFollowingPosition: video.MomentsFollowingPosition,
 	}
 	if video.PublishedAt != nil {
 		out.PublishedAt = video.PublishedAt.UnixMilli()

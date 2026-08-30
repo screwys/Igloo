@@ -298,6 +298,9 @@ function initBasicOverlay(overlay, options = {}) {
     setLastViewedShortId(id) { persisted.push({ type: 'id', id }); },
     setLastViewedShortResume(id, index) { persisted.push({ type: 'resume', id, index }); },
     markShortViewed(id) { persisted.push({ type: 'viewed', id }); },
+    refreshMomentsSession() {
+      return options.refreshMomentsSession ? options.refreshMomentsSession() : Promise.resolve(0);
+    },
     beginOpenRequest() {
       state.openRequestSeq += 1;
       return state.openRequestSeq;
@@ -500,6 +503,29 @@ test('explicitly opening a moment still records cursor history', async () => {
     ['id', 'v1', undefined],
     ['resume', 'v1', 1],
   ]);
+});
+
+test('reaching the ordered tail appends a newly synced moment', async () => {
+  const overlay = await loadOverlay();
+  let setup;
+  setup = initBasicOverlay(overlay, {
+    count: 2,
+    refreshMomentsSession() {
+      const next = card('appended');
+      setup.sourceContainer.appendChild(next);
+      setup.state.cards.push(next);
+      setup.state.items.push(null);
+      setup.state.cardIndexById.set('appended', 2);
+      return Promise.resolve(1);
+    },
+  });
+
+  overlay.openOverlayAtIndex(1, true);
+  overlay.goNext({ explicit: true });
+  await flush();
+
+  assert.equal(setup.state.currentIndex, 2);
+  assert.equal(setup.state.items[2].data.id, 'appended');
 });
 
 test('vertical deck transition ignores additional navigation until landing', async () => {

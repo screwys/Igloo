@@ -24,6 +24,14 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260830_refresh_moments_position_trigger",
+		apply: refreshMomentsPositionTrigger,
+	},
+	{
+		name:  "20260830_add_moments_positions",
+		apply: addMomentsPositions,
+	},
+	{
 		name:  "20260826_expand_discover_reserve",
 		apply: expandDiscoverReserve,
 	},
@@ -99,6 +107,32 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func refreshMomentsPositionTrigger(tx *sql.Tx) error {
+	if _, err := tx.Exec(`DROP TRIGGER IF EXISTS android_sync_head_videos_update`); err != nil {
+		return err
+	}
+	return ensureAndroidSyncHeadTriggers(tx)
+}
+
+func addMomentsPositions(tx *sql.Tx) error {
+	for _, column := range []string{"moments_all_position", "moments_following_position"} {
+		exists, err := schemaColumnExists(tx, "videos", column)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			if _, err := tx.Exec(`ALTER TABLE videos ADD COLUMN ` + column + ` INTEGER NOT NULL DEFAULT 0`); err != nil {
+				return err
+			}
+		}
+	}
+	_, err := tx.Exec(`CREATE TABLE IF NOT EXISTS moments_order_counters (
+		scope TEXT PRIMARY KEY CHECK (scope IN ('all', 'following')),
+		next_position INTEGER NOT NULL DEFAULT 1
+	) WITHOUT ROWID`)
+	return err
 }
 
 func expandDiscoverReserve(tx *sql.Tx) error {

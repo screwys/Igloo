@@ -23,7 +23,7 @@ var androidSyncPayloadUpdateColumns = map[string]string{
 		quote_channel_id, reply_channel_id`,
 	"videos": `video_id, channel_id, owner_kind, title, description, duration, published_at,
 		metadata_json, media_kind, slide_count, source_kind, dearrow_title,
-		dearrow_title_casual`,
+		dearrow_title_casual, moments_all_position, moments_following_position`,
 }
 
 var androidSyncHeadTables = []androidSyncHeadTable{

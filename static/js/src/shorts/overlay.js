@@ -481,6 +481,13 @@ export function goNext(options) {
     return
   }
   requestMoreIfNeeded()
+  if (_fns && typeof _fns.refreshMomentsSession === 'function') {
+    _fns.refreshMomentsSession().then(function (added) {
+      if (added > 0 && scrollToIndex(_state.currentIndex + 1, 'smooth')) return
+      showUpToDateOverlay()
+    }).catch(showUpToDateOverlay)
+    return
+  }
   showUpToDateOverlay()
 }
 

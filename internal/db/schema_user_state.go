@@ -52,6 +52,11 @@ func schemaUserStateStatements() []string {
 			updated_at_ms INTEGER NOT NULL DEFAULT 0
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS moments_order_counters (
+			scope         TEXT PRIMARY KEY CHECK (scope IN ('all', 'following')),
+			next_position INTEGER NOT NULL DEFAULT 1
+		) WITHOUT ROWID`,
+
 		`CREATE TABLE IF NOT EXISTS watch_history (
 			video_id          TEXT PRIMARY KEY,
 			playback_position REAL NOT NULL DEFAULT 0,

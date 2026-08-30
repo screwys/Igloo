@@ -71,6 +71,10 @@ func main() {
 	defer func() {
 		_ = database.Close()
 	}()
+	if err := database.ReconcileAllMomentsOrders(); err != nil {
+		slog.Error("failed to reconcile Moments order", "err", err)
+		os.Exit(1)
+	}
 	slog.Info("database opened", "path", cfg.Storage.DatabasePath())
 	logStartupPhase("db_open", time.Since(phaseStart))
 

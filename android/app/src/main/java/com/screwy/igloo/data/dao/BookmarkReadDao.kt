@@ -120,6 +120,8 @@ interface BookmarkReadDao {
             v.canonical_url                AS vd_canonical_url,
             v.dearrow_title                AS vd_dearrow_title,
             v.dearrow_title_casual         AS vd_dearrow_title_casual,
+            COALESCE(v.moments_all_position, 0)       AS vd_moments_all_position,
+            COALESCE(v.moments_following_position, 0) AS vd_moments_following_position,
 
             COALESCE((
                 SELECT COUNT(DISTINCT asa.media_index)

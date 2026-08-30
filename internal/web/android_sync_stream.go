@@ -56,6 +56,10 @@ type androidSyncSession struct {
 }
 
 func (s *Server) handleAndroidSyncBootstrap(w http.ResponseWriter, r *http.Request) {
+	if err := s.db.ReconcileAllMomentsOrders(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "bootstrap_failed", err.Error())
+		return
+	}
 	if userFromContext(r.Context()) == nil {
 		writeJSONError(w, http.StatusUnauthorized, "unauthenticated", "authentication required")
 		return
@@ -207,6 +211,10 @@ func (s *Server) writeAndroidSyncBootstrapPage(w http.ResponseWriter, cursor and
 }
 
 func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request) {
+	if err := s.db.ReconcileAllMomentsOrders(); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "changes_failed", err.Error())
+		return
+	}
 	if userFromContext(r.Context()) == nil {
 		writeJSONError(w, http.StatusUnauthorized, "unauthenticated", "authentication required")
 		return

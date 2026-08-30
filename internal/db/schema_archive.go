@@ -32,7 +32,9 @@ func schemaArchiveStatements() []string {
 			source_kind TEXT DEFAULT '',
 			dearrow_title TEXT,
 			dearrow_title_casual TEXT,
-			dearrow_checked_at INTEGER
+			dearrow_checked_at INTEGER,
+			moments_all_position INTEGER NOT NULL DEFAULT 0,
+			moments_following_position INTEGER NOT NULL DEFAULT 0
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS feed_items (

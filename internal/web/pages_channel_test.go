@@ -404,7 +404,7 @@ func TestHandlePageTwitterChannelFeedDoesNotRepeatThreadAcrossPages(t *testing.T
 	}
 }
 
-func TestHandlePageShortsStartsAtOldestMoment(t *testing.T) {
+func TestHandlePageShortsUsesStableAppendOrdering(t *testing.T) {
 	srv := newTestServer(t)
 	srv.staticV = func(path string) string { return "/static/" + path }
 	if err := srv.db.ExecRaw(
@@ -429,6 +429,11 @@ func TestHandlePageShortsStartsAtOldestMoment(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if err := srv.db.ExecRaw(
+		`INSERT INTO moment_views (video_id, viewed_at) VALUES ('short_002', 10)`,
+	); err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/shorts?tab=following", nil)
 	rec := httptest.NewRecorder()
@@ -439,12 +444,38 @@ func TestHandlePageShortsStartsAtOldestMoment(t *testing.T) {
 	}
 	html := rec.Body.String()
 	oldest := strings.Index(html, `data-video-id="short_001"`)
+	viewed := strings.Index(html, `data-video-id="short_002"`)
 	newest := strings.Index(html, `data-video-id="short_003"`)
-	if newest < 0 || oldest < 0 {
+	if oldest < 0 || viewed < 0 || newest < 0 {
 		t.Fatalf("rendered page missing seeded shorts\n%s", html)
 	}
-	if oldest > newest {
-		t.Fatalf("shorts order starts newest first; oldest index %d newest index %d\n%s", oldest, newest, html)
+	if !(oldest < viewed && viewed < newest) {
+		t.Fatalf("Moments order = oldest:%d viewed:%d newest:%d\n%s", oldest, viewed, newest, html)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/shorts?tab=following&video=short_002", nil)
+	rec = httptest.NewRecorder()
+	srv.handlePageShorts(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("explicit status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), `data-video-id="short_002"`) {
+		t.Fatalf("explicit viewed selection was not included\n%s", rec.Body.String())
+	}
+
+	req = httptest.NewRequest(
+		http.MethodGet,
+		"/api/shorts/cards?tab=following&video_id=short_001&video_id=short_002",
+		nil,
+	)
+	rec = httptest.NewRecorder()
+	srv.handleShortsCards(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("session hydration status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), `data-video-id="short_001"`) ||
+		!strings.Contains(rec.Body.String(), `data-video-id="short_002"`) {
+		t.Fatalf("session hydration did not preserve exact requested IDs\n%s", rec.Body.String())
 	}
 }
 

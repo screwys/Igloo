@@ -315,11 +315,15 @@ func (db *DB) GetVideos(opts GetVideosOpts) ([]model.Video, error) {
 	var args []any
 	momentsMode := NormalizeMomentsTab(opts.MomentsMode)
 	isMomentsQuery := opts.Platform == "shorts" && opts.MomentsMode != ""
+	if isMomentsQuery {
+		if err := db.ReconcileMomentsOrder(momentsMode); err != nil {
+			return nil, err
+		}
+	}
 	includeMomentReposts := isMomentsQuery && momentsMode == "all" && db.MomentsIncludeRepostsEnabled()
 	includeInstagramTagged := isMomentsQuery && momentsMode == "all" && db.InstagramIncludeTaggedEnabled()
 	includeSourceWindows := includeMomentReposts || includeInstagramTagged
 	profileRepostQuery := strings.TrimSpace(opts.RepostedByChannelID) != ""
-
 	if opts.ChannelID != "" {
 		where = append(where, "v.channel_id = ?")
 		args = append(args, opts.ChannelID)
@@ -371,7 +375,6 @@ func (db *DB) GetVideos(opts GetVideosOpts) ([]model.Video, error) {
 	if opts.UnwatchedOnly {
 		where = append(where, "NOT "+videoFullyWatchedSQL("v"))
 	}
-
 	whereClause := ""
 	if len(where) > 0 {
 		whereClause = "WHERE " + strings.Join(where, " AND ")
@@ -446,6 +449,11 @@ func (db *DB) GetVideos(opts GetVideosOpts) ([]model.Video, error) {
 		        END AS effective_moment_at_ms`
 		orderExpr = "effective_moment_at_ms"
 	}
+	orderClause := fmt.Sprintf("%s %s, v.video_id %s", orderExpr, orderDir, orderDir)
+	if isMomentsQuery {
+		positionColumn, _ := momentsPositionColumn(momentsMode)
+		orderClause = "v." + positionColumn + " ASC, v.video_id ASC"
+	}
 
 	query := fmt.Sprintf(`
 		%s
@@ -470,9 +478,9 @@ func (db *DB) GetVideos(opts GetVideosOpts) ([]model.Video, error) {
 		LEFT JOIN bookmarks b ON b.video_id = v.video_id
 		%s
 		%s
-		ORDER BY %s %s, v.video_id %s
+		ORDER BY %s
 		LIMIT ? OFFSET ?
-	`, withClause, videoFullyWatchedSQL("v"), metadataCol, repostCols, repostJoin, whereClause, orderExpr, orderDir, orderDir)
+	`, withClause, videoFullyWatchedSQL("v"), metadataCol, repostCols, repostJoin, whereClause, orderClause)
 	args = append(args, limit, opts.Offset)
 
 	rows, err := db.conn.Query(query, args...)
@@ -683,7 +691,6 @@ func (db *DB) GetVideoCount(opts GetVideosOpts) (int, error) {
 	includeInstagramTagged := isMomentsQuery && momentsMode == "all" && db.InstagramIncludeTaggedEnabled()
 	includeSourceWindows := includeMomentReposts || includeInstagramTagged
 	profileRepostQuery := strings.TrimSpace(opts.RepostedByChannelID) != ""
-
 	if opts.ChannelID != "" {
 		where = append(where, "v.channel_id = ?")
 		args = append(args, opts.ChannelID)
@@ -738,7 +745,6 @@ func (db *DB) GetVideoCount(opts GetVideosOpts) (int, error) {
 	if !opts.IncludeTemp {
 		where = append(where, "COALESCE(v.is_temp,0) = 0")
 	}
-
 	whereClause := ""
 	if len(where) > 0 {
 		whereClause = "WHERE " + strings.Join(where, " AND ")
@@ -770,6 +776,28 @@ func (db *DB) GetVideoCount(opts GetVideosOpts) (int, error) {
 // this comparison must change with it or resume page hints will land wrong.
 func (db *DB) GetShortsOrdinal(videoID, momentsMode string) (int, bool, error) {
 	momentsMode = NormalizeMomentsTab(momentsMode)
+	if positionColumn, ok := momentsPositionColumn(momentsMode); ok {
+		if err := db.ReconcileMomentsOrder(momentsMode); err != nil {
+			return 0, false, err
+		}
+		query := db.shortsVisibleCTE(momentsMode) + `,
+			target AS (
+				SELECT stored.` + positionColumn + ` AS position
+				FROM visible v
+				JOIN videos stored ON stored.video_id = v.video_id
+				WHERE v.video_id = ? AND stored.` + positionColumn + ` > 0
+			)
+			SELECT COUNT(*)
+			FROM visible v
+			JOIN videos stored ON stored.video_id = v.video_id
+			CROSS JOIN target
+			WHERE stored.` + positionColumn + ` <= target.position`
+		var ordinal int
+		if err := db.reader().QueryRow(query, videoID).Scan(&ordinal); err != nil {
+			return 0, false, err
+		}
+		return ordinal, ordinal > 0, nil
+	}
 	includeMomentReposts := momentsMode == "all" && db.MomentsIncludeRepostsEnabled()
 	includeInstagramTagged := momentsMode == "all" && db.InstagramIncludeTaggedEnabled()
 	includeSourceWindows := includeMomentReposts || includeInstagramTagged
@@ -898,15 +926,21 @@ func (db *DB) GetShortsVisibleSortAt(videoID, momentsMode string) (int64, bool, 
 	return 0, false, nil
 }
 
-// ListShortsVideoIDs returns the complete visible Moments timeline in the same
-// oldest-to-newest order used by card hydration and cursor ordinals. The web
-// grid uses this lightweight index to avoid loading and enriching every card
-// body before it is visible.
+// ListShortsVideoIDs returns the complete visible Moments timeline with unseen
+// rows first and newest effective event time first within each viewed tier.
 func (db *DB) ListShortsVideoIDs(momentsMode string) ([]string, error) {
+	if err := db.ReconcileMomentsOrder(momentsMode); err != nil {
+		return nil, err
+	}
+	positionColumn, ok := momentsPositionColumn(momentsMode)
+	if !ok {
+		return nil, nil
+	}
 	query := db.shortsVisibleCTE(momentsMode) + `
-		SELECT video_id
-		FROM visible
-		ORDER BY effective_moment_at_ms ASC, video_id ASC`
+		SELECT v.video_id
+		FROM visible v
+		JOIN videos stored ON stored.video_id = v.video_id
+		ORDER BY stored.` + positionColumn + ` ASC, v.video_id ASC`
 	rows, err := db.conn.Query(query)
 	if err != nil {
 		return nil, err

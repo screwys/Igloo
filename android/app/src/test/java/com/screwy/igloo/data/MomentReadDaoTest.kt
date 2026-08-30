@@ -76,6 +76,43 @@ class MomentReadDaoTest {
     }
 
     @Test
+    fun momentsUseServerPositionsInsteadOfPublishedTime() = runBlocking {
+        val channelId = "tiktok_positioned"
+        seedChannel(channelId, "tiktok")
+        db.channelFollowDao().upsert(ChannelFollowEntity(channelId, 1L))
+        db.videoDao()
+            .upsert(
+                listOf(
+                    VideoEntity(
+                        videoId = "published_newer",
+                        channelId = channelId,
+                        ownerKind = "tiktok_video",
+                        publishedAt = 200L,
+                        momentsAllPosition = 2L,
+                        momentsFollowingPosition = 2L,
+                    ),
+                    VideoEntity(
+                        videoId = "appended_first",
+                        channelId = channelId,
+                        ownerKind = "tiktok_video",
+                        publishedAt = 100L,
+                        momentsAllPosition = 1L,
+                        momentsFollowingPosition = 1L,
+                    ),
+                )
+            )
+
+        assertEquals(
+            listOf("appended_first", "published_newer"),
+            db.momentReadDao().momentsFollowingFlow().first().map { it.video.videoId },
+        )
+        assertEquals(
+            listOf("appended_first", "published_newer"),
+            db.momentReadDao().playerMomentsAllFlow().first().map { it.video.videoId },
+        )
+    }
+
+    @Test
     fun mutedCanonicalOwnerIsHiddenButKeepsItsFollowingTimelineSort() = runBlocking {
         seedRepostedMoment(
             videoId = "tiktok_video",
