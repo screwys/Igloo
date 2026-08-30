@@ -10,3 +10,11 @@ test('YouTube unsubscribe returns to the Videos page', () => {
     /window\.location\.assign\(channelPlatform === 'youtube' \? '\/videos' : '\/channels'\)/,
   )
 })
+
+test('player bookmarks use the video title as the default label', () => {
+  assert.match(
+    playerIndex,
+    /titleFallback:\s*String\(\(playerTitle && playerTitle\.textContent\) \|\| ''\)\.trim\(\)/,
+  )
+  assert.match(playerIndex, /bodyText:\s*desc/)
+})

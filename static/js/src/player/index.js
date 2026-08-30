@@ -34,6 +34,7 @@ if (root && video) {
 
   const descCard = doc.getElementById('player-description-card')
   const descText = doc.getElementById('player-description-text')
+  const playerTitle = doc.getElementById('player-title')
   const descFade = doc.getElementById('player-description-fade')
   const descToggle = doc.getElementById('player-description-toggle')
   const playerDateEl = doc.getElementById('player-video-date')
@@ -507,7 +508,7 @@ if (root && video) {
         var desc = String((descText && descText.textContent) || '').trim()
         openBookmarkMenu(bookmarkBtn, root, Object.assign(idOpts, {
           bodyText: desc,
-          titleFallback: desc,
+          titleFallback: String((playerTitle && playerTitle.textContent) || '').trim(),
           onStateChange: function (_r, isBm) { updateBookmarkBtn(isBm) },
         }))
       })
