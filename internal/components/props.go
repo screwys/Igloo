@@ -61,6 +61,7 @@ type PageProps struct {
 	MiniPlayerVideosEnabled bool
 	MiniPlayerFeedEnabled   bool
 	DownloadsStopped        bool
+	RuntimeOS               string
 	StaticV                 func(string) string
 	PageScripts             []string // JS files to include after base scripts.
 	ESBundle                string   // esbuild bundle to load (e.g. "js/dist/feed.js")

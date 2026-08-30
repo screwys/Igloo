@@ -13,8 +13,36 @@ import (
 func ApplyCommonToolPaths() string {
 	home, _ := os.UserHomeDir()
 	path := AugmentPATH(os.Getenv("PATH"), home, os.Getenv("HOMEBREW_PREFIX"), dirExists)
+	if executable, err := os.Executable(); err == nil {
+		executableDir := filepath.Dir(executable)
+		runtimeDir := filepath.Join(executableDir, "runtime", "current")
+		if strings.EqualFold(filepath.Base(executableDir), "current") && strings.EqualFold(filepath.Base(filepath.Dir(executableDir)), "app") {
+			runtimeDir = filepath.Join(filepath.Dir(filepath.Dir(executableDir)), "runtime", "current")
+		}
+		if configured := strings.TrimSpace(os.Getenv("IGLOO_RUNTIME_DIR")); configured != "" {
+			runtimeDir = configured
+		}
+		path = prependExistingPath(path, runtimeDir, dirExists)
+		path = prependExistingPath(path, filepath.Join(filepath.Dir(executable), "tools"), dirExists)
+	}
 	_ = os.Setenv("PATH", path)
 	return path
+}
+
+func prependExistingPath(path, candidate string, exists func(string) bool) string {
+	if candidate == "" || exists == nil || !exists(candidate) {
+		return path
+	}
+	clean := filepath.Clean(candidate)
+	for _, part := range filepath.SplitList(path) {
+		if filepath.Clean(part) == clean {
+			return path
+		}
+	}
+	if path == "" {
+		return clean
+	}
+	return clean + string(os.PathListSeparator) + path
 }
 
 func AugmentPATH(path, home, brewPrefix string, exists func(string) bool) string {

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/screwys/igloo/internal/buildinfo"
 	"github.com/screwys/igloo/internal/components"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/settings"
@@ -23,6 +24,8 @@ func (s *Server) registerAdminAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/settings", s.handleUpdateSettings)
 	mux.HandleFunc("GET /api/theme.css", s.handleThemeCSS)
 	mux.HandleFunc("GET /api/theme.json", s.handleThemeJSON)
+	mux.HandleFunc("GET /api/windows-update/status", s.handleWindowsUpdateStatus)
+	mux.HandleFunc("POST /api/windows-update/check", s.handleWindowsUpdateCheck)
 
 	// Cookies
 	mux.HandleFunc("GET /api/cookies", s.handleGetCookies)
@@ -379,6 +382,13 @@ func normalizeSettingsUpdate(body map[string]string) {
 		}
 		body["x_profile_history_limit"] = strconv.Itoa(settings.ClampXProfileHistoryLimit(n))
 	}
+	if v, ok := body["windows_update_interval_hours"]; ok {
+		n, _ := strconv.Atoi(v)
+		body["windows_update_interval_hours"] = strconv.Itoa(settings.ClampWindowsUpdateIntervalHours(n))
+	}
+	if v, ok := body["windows_update_channel"]; ok {
+		body["windows_update_channel"] = settings.NormalizeWindowsUpdateChannel(v)
+	}
 }
 
 func validateSettingsUpdate(body map[string]string) error {
@@ -425,6 +435,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 		"translate_auto_mode", "translate_auto_lookahead",
 		"backup_dir", "backup_keep_count", "starting_page", "sidebar_route_order",
 		"dearrow_mode", "ui_language",
+		"windows_update_interval_hours", "windows_update_channel",
 	}
 	for _, key := range simpleFields {
 		if v := r.FormValue(key); v != "" {
@@ -448,6 +459,9 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 		"archive_bookmarks", "backup_enabled",
 		"algorithmic_feed_enabled", "moments_include_reposts_default",
 		"instagram_include_tagged_default", "share_embed_friendly_links",
+	}
+	if buildinfo.IsWindows() {
+		checkboxFields = append(checkboxFields, "windows_update_enabled")
 	}
 	for _, key := range checkboxFields {
 		if r.FormValue(key) != "" {
@@ -478,6 +492,45 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 	}
 
 	return body
+}
+
+func (s *Server) handleWindowsUpdateStatus(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
+	status := s.workers.WindowsUpdateStatus()
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = components.WindowsUpdatePanel(s.pageProps(w, r), status).Render(r.Context(), w)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"supported":         status.Supported,
+		"checking":          status.Checking,
+		"applying":          status.Applying,
+		"current_app":       status.CurrentApp,
+		"current_runtime":   status.CurrentRuntime,
+		"available_app":     status.AvailableApp,
+		"available_runtime": status.AvailableRuntime,
+		"last_checked_at":   status.LastCheckedAt,
+		"last_error":        status.LastError,
+	})
+}
+
+func (s *Server) handleWindowsUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
+	if !s.workers.CheckWindowsUpdateNow() {
+		writeJSONError(w, http.StatusServiceUnavailable, "windows_update_unavailable", "Windows updates are unavailable in this build")
+		return
+	}
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = components.WindowsUpdatePanel(s.pageProps(w, r), s.workers.WindowsUpdateStatus()).Render(r.Context(), w)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"queued": true})
 }
 
 func (s *Server) handleThemeCSS(w http.ResponseWriter, r *http.Request) {

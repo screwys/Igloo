@@ -327,3 +327,18 @@ func TestLoadRuntimeConfig(t *testing.T) {
 		t.Fatalf("EnabledPlatforms = %q", got)
 	}
 }
+
+func TestFindRepoDirFromUsesInstalledAssetsOutsideSourceTree(t *testing.T) {
+	root := t.TempDir()
+	installDir := filepath.Join(root, "Igloo", "app", "versions", "3.4.0")
+	for _, dir := range []string{"static", "locales"} {
+		if err := os.MkdirAll(filepath.Join(installDir, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := findRepoDirFrom(filepath.Join(root, "working"), filepath.Join(installDir, "igloo.exe"))
+	if got != installDir {
+		t.Fatalf("findRepoDirFrom = %q, want %q", got, installDir)
+	}
+}

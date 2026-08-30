@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "revision": "2026.08.30.1",
+  "artifacts": {
+    "yt-dlp": {
+      "version": "2026.08.29.232711",
+      "url": "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.08.29.232711/yt-dlp.exe",
+      "sha256": "1bf3b333bb542ff4ed08c96aeaabbaa7febfae5e9fb00a591d652b41cab0fcce",
+      "size": 17843102,
+      "output": "yt-dlp.exe"
+    },
+    "gallery-dl": {
+      "version": "2026.08.30",
+      "url": "https://github.com/gdl-org/builds/releases/download/2026.08.30/gallery-dl_windows.exe",
+      "sha256": "8fb35fa2db0a9f4f45e75bec85ef43302ac294d3249f32b9213fa224a6667e39",
+      "size": 23317321,
+      "output": "gallery-dl.exe"
+    },
+    "deno": {
+      "version": "2.9.6",
+      "url": "https://github.com/denoland/deno/releases/download/v2.9.6/deno-x86_64-pc-windows-msvc.zip",
+      "sha256": "15e5300b0ba3c3695a7621d90160a746ec9e710228cee639afa9d580f6e3cd11",
+      "size": 42601047,
+      "output": "deno.zip"
+    },
+    "ffmpeg": {
+      "version": "9.0.1-11-ge47273f4d9",
+      "release": "autobuild-2026-08-30-13-12",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-30-13-12/ffmpeg-n9.0.1-11-ge47273f4d9-win64-gpl-shared-9.0.zip",
+      "sha256": "c1f9d0c6fae2e906588202d39d2f25f808452f20baa8a6ce709c7b10bfd66454",
+      "size": 76434041,
+      "output": "ffmpeg.zip"
+    }
+  }
+}

@@ -92,6 +92,23 @@ func ClampBackupKeepCount(n int) int {
 	return n
 }
 
+func ClampWindowsUpdateIntervalHours(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > 168 {
+		return 168
+	}
+	return n
+}
+
+func NormalizeWindowsUpdateChannel(value string) string {
+	if value == "latest" {
+		return value
+	}
+	return "stable"
+}
+
 func ClampDiscoverPrefetchCount(n int) int {
 	if n < 0 {
 		return 0
@@ -195,6 +212,9 @@ var Defaults = map[string]any{
 	"translate_api_key":                "",
 	"translate_model":                  "",
 	"ui_language":                      "en",
+	"windows_update_enabled":           true,
+	"windows_update_interval_hours":    6,
+	"windows_update_channel":           "stable",
 	"youtube_default_playback_speed":   "1",
 	"mini_player_videos_enabled":       true,
 	"mini_player_feed_enabled":         false,

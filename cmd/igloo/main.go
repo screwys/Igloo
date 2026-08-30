@@ -12,42 +12,53 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/screwys/igloo/internal/auth"
+	"github.com/screwys/igloo/internal/buildinfo"
 	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/restore"
 	"github.com/screwys/igloo/internal/toolenv"
 	"github.com/screwys/igloo/internal/translate"
 	"github.com/screwys/igloo/internal/web"
+	"github.com/screwys/igloo/internal/windowsupdate"
 	"github.com/screwys/igloo/internal/worker"
 )
 
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "version") {
+		info := buildinfo.Current()
+		fmt.Printf("Igloo %s (runtime %s, %s/%s)\n", info.Version, info.BundleRevision, info.OS, info.Arch)
+		return
+	}
+	if err := runEntrypoint(); err != nil {
+		slog.Error("igloo stopped", "err", err)
+		os.Exit(1)
+	}
+}
+
+func runServer(externalStop <-chan struct{}, ready chan<- struct{}, serviceMode bool) error {
 	toolenv.ApplyCommonToolPaths()
 	cfg := config.Load()
 	stateRoot := strings.TrimSpace(cfg.Storage.StateRoot())
 	hadPendingRestore := stateRoot != "" && restore.HasPending(stateRoot)
 	phaseStart := time.Now()
 	if err := restore.ApplyPending(cfg); err != nil {
-		slog.Error("restore: apply failed", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("restore: apply failed: %w", err)
 	}
 	if err := initialConfigError(cfg, hadPendingRestore); err != nil {
-		slog.Error("invalid configuration", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 	logStartupPhase("restore", time.Since(phaseStart))
 	cfg = config.Load()
 	if cfg.ConfigError != nil {
-		slog.Error("invalid restored configuration", "err", cfg.ConfigError)
-		os.Exit(1)
+		return fmt.Errorf("invalid restored configuration: %w", cfg.ConfigError)
 	}
 	if err := cfg.EnsureRuntimeDirs(); err != nil {
-		slog.Error("failed to create runtime directories", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("create runtime directories: %w", err)
 	}
 	if logFile := setupServerLogging(cfg); logFile != nil {
 		defer func() {
@@ -65,15 +76,13 @@ func main() {
 		},
 	})
 	if err != nil {
-		slog.Error("failed to open database", "path", cfg.Storage.DatabasePath(), "err", err)
-		os.Exit(1)
+		return fmt.Errorf("open database %s: %w", cfg.Storage.DatabasePath(), err)
 	}
 	defer func() {
 		_ = database.Close()
 	}()
 	if err := database.ReconcileAllMomentsOrders(); err != nil {
-		slog.Error("failed to reconcile Moments order", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("reconcile Moments order: %w", err)
 	}
 	slog.Info("database opened", "path", cfg.Storage.DatabasePath())
 	logStartupPhase("db_open", time.Since(phaseStart))
@@ -94,30 +103,54 @@ func main() {
 
 	phaseStart = time.Now()
 	workers := worker.NewManager(database, cfg)
+	updateStop := make(chan struct{})
+	var requestUpdateStop sync.Once
+	windowsUpdater := windowsupdate.NewForCurrentProcess(database, serviceMode, localHealthURL(cfg), func() {
+		requestUpdateStop.Do(func() { close(updateStop) })
+	})
+	workers.SetWindowsUpdater(windowsUpdater)
 	go workers.StartAll()
+	if windowsUpdater != nil {
+		go windowsUpdater.Run(appCtx)
+	}
 	go translate.RunBackground(appCtx, database)
 	logStartupPhase("worker_launch", time.Since(phaseStart))
 
 	handler := web.NewServer(database, cfg, workers, staticV)
 	srv := newHTTPServer(cfg.ListenAddr, handler)
 
+	var shutdownOnce sync.Once
+	shutdown := func() {
+		shutdownOnce.Do(func() {
+			slog.Info("shutting down")
+			cancelApp()
+			if !workers.ShutdownTimeout(3 * time.Second) {
+				slog.Warn("worker shutdown timed out; continuing server shutdown")
+			}
+			_ = srv.Shutdown(context.Background())
+		})
+	}
+	defer shutdown()
+
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
-		<-sig
-		slog.Info("shutting down")
-		cancelApp()
-		if !workers.ShutdownTimeout(3 * time.Second) {
-			slog.Warn("worker shutdown timed out; continuing server shutdown")
+		defer signal.Stop(sig)
+		select {
+		case <-sig:
+		case <-externalStop:
+		case <-updateStop:
 		}
-		_ = srv.Shutdown(context.Background())
+		shutdown()
 	}()
 
 	phaseStart = time.Now()
 	listener, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
-		slog.Error("listener bind failed", "addr", cfg.ListenAddr, "err", err)
-		os.Exit(1)
+		return fmt.Errorf("listener bind failed on %s: %w", cfg.ListenAddr, err)
+	}
+	if ready != nil {
+		close(ready)
 	}
 	logStartupPhase("listener_bind", time.Since(phaseStart))
 
@@ -127,16 +160,27 @@ func main() {
 	if tlsEnabled {
 		slog.Info("listening (TLS)", "addr", cfg.ListenAddr)
 		if err := srv.ServeTLS(listener, cfg.TLSCert, cfg.TLSKey); err != http.ErrServerClosed {
-			slog.Error("server error", "err", err)
-			os.Exit(1)
+			return fmt.Errorf("serve TLS: %w", err)
 		}
 	} else {
 		slog.Info("listening", "addr", cfg.ListenAddr)
 		if err := srv.Serve(listener); err != http.ErrServerClosed {
-			slog.Error("server error", "err", err)
-			os.Exit(1)
+			return fmt.Errorf("serve: %w", err)
 		}
 	}
+	return nil
+}
+
+func localHealthURL(cfg *config.Config) string {
+	scheme := "http"
+	if tlsFilesExist(cfg) {
+		scheme = "https"
+	}
+	_, port, err := net.SplitHostPort(cfg.ListenAddr)
+	if err != nil || port == "" {
+		port = "5001"
+	}
+	return scheme + "://" + net.JoinHostPort("127.0.0.1", port) + "/api/health/live"
 }
 
 func initialConfigError(cfg *config.Config, hadPendingRestore bool) error {

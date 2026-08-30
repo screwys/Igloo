@@ -42,10 +42,10 @@ type Config struct {
 }
 
 func Load() *Config {
-	stateRoot := envOr("IGLOO_DATA_DIR", filepath.Join(homeDir(), ".local", "share", "igloo"))
+	stateRoot := envOr("IGLOO_DATA_DIR", defaultStateRoot())
 	mediaRoot := strings.TrimSpace(os.Getenv("IGLOO_MEDIA_DIR"))
 	layout, storageErr := storage.New(stateRoot, mediaRoot)
-	configDir := envOr("IGLOO_CONFIG_DIR", filepath.Join(homeDir(), ".config", "igloo"))
+	configDir := envOr("IGLOO_CONFIG_DIR", defaultConfigDir())
 	repoDir := envOr("IGLOO_REPO_DIR", findRepoDir())
 	runtimePath := filepath.Join(configDir, "config.json")
 	runtimeConfig, runtimeErr := loadRuntimeConfig(runtimePath)
@@ -389,17 +389,38 @@ func homeDir() string {
 }
 
 func findRepoDir() string {
-	dir, _ := os.Getwd()
+	cwd, _ := os.Getwd()
+	executable, _ := os.Executable()
+	return findRepoDirFrom(cwd, executable)
+}
+
+func findRepoDirFrom(cwd, executable string) string {
+	dir := cwd
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 			return dir
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "."
+			break
 		}
 		dir = parent
 	}
+	if executable != "" {
+		dir = filepath.Dir(executable)
+		if directoryExists(filepath.Join(dir, "static")) && directoryExists(filepath.Join(dir, "locales")) {
+			return dir
+		}
+	}
+	if cwd != "" {
+		return cwd
+	}
+	return "."
+}
+
+func directoryExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func loadSecretKey(configDir string) string {

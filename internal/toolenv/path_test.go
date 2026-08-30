@@ -54,3 +54,12 @@ func TestAugmentPATHDeduplicatesExistingDirs(t *testing.T) {
 		t.Fatalf("PATH = %q, want %q", got, localBin+":/usr/bin")
 	}
 }
+
+func TestPrependExistingPathAddsBundledRuntimeFirst(t *testing.T) {
+	runtimeDir := filepath.Join(t.TempDir(), "runtime", "current")
+	got := prependExistingPath("system-bin", runtimeDir, func(path string) bool { return path == runtimeDir })
+	want := runtimeDir + string(os.PathListSeparator) + "system-bin"
+	if got != want {
+		t.Fatalf("PATH = %q, want %q", got, want)
+	}
+}

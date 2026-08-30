@@ -17,6 +17,7 @@ import (
 	"github.com/screwys/igloo/internal/dearrow"
 	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/sponsorblock"
+	"github.com/screwys/igloo/internal/windowsupdate"
 	"github.com/screwys/igloo/internal/xfeed"
 )
 
@@ -106,6 +107,28 @@ type Manager struct {
 
 	instagramProfileFetch   instagramProfileFetchFn
 	instagramAvatarFallback func(string) string
+	windowsUpdater          *windowsupdate.Manager
+}
+
+func (m *Manager) SetWindowsUpdater(updater *windowsupdate.Manager) {
+	if m != nil {
+		m.windowsUpdater = updater
+	}
+}
+
+func (m *Manager) WindowsUpdateStatus() windowsupdate.Status {
+	if m == nil || m.windowsUpdater == nil {
+		return windowsupdate.Status{}
+	}
+	return m.windowsUpdater.Status()
+}
+
+func (m *Manager) CheckWindowsUpdateNow() bool {
+	if m == nil || m.windowsUpdater == nil {
+		return false
+	}
+	m.windowsUpdater.CheckNow()
+	return true
 }
 
 // sponsorblockFetcher is the narrow interface the worker needs from

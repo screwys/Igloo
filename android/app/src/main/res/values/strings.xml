@@ -11,6 +11,7 @@
     <string name="action_cancel">Cancel</string>
     <string name="action_channel_settings">Channel settings</string>
     <string name="action_channel_settings_short">Settings</string>
+    <string name="action_check_for_updates">Check now</string>
     <string name="action_clear">Clear</string>
     <string name="action_clear_all_cache">Clear all cache</string>
     <string name="action_clear_moments_cache">Clear Moments downloads</string>
@@ -635,6 +636,7 @@
     <string name="settings_section_system">System</string>
     <string name="settings_section_tiktok">TikTok</string>
     <string name="settings_section_translation">Translation</string>
+    <string name="settings_section_windows_updates">Windows Updates</string>
     <string name="settings_section_x_feed">X Feed</string>
     <string name="settings_segment_skipping">Segment skipping</string>
     <string name="settings_share_embed_friendly_links">Use embed-friendly sites for sharing links</string>
@@ -696,6 +698,14 @@
     <string name="settings_unmute_title">Unmute @%1$s?</string>
     <string name="settings_video_quality">Video Quality</string>
     <string name="settings_wifi_only">Wi-Fi only</string>
+    <string name="settings_windows_update_available">Update available</string>
+    <string name="settings_windows_update_channel">Update channel</string>
+    <string name="settings_windows_update_enabled">Automatically check for Windows updates</string>
+    <string name="settings_windows_update_installed">Installed</string>
+    <string name="settings_windows_update_interval">Check interval</string>
+    <string name="settings_windows_update_latest">Latest</string>
+    <string name="settings_windows_update_stable">Stable</string>
+    <string name="settings_windows_update_unavailable">Update status is available in packaged Windows builds.</string>
     <string name="settings_x_profile_history_limit">Number of posts to keep in the database</string>
     <string name="settings_x_profile_history_limit_hint">Doesn\'t affect the media purge limit, except video thumbnails.</string>
     <string name="settings_youtube_include_member_only">Include member-only content</string>
@@ -765,6 +775,8 @@
     <string name="state_off">OFF</string>
     <string name="state_on">ON</string>
     <string name="status_adding_ellipsis">Adding...</string>
+    <string name="status_applying_update">Applying update…</string>
+    <string name="status_checking_for_updates">Checking…</string>
     <string name="status_export_failed">Export failed</string>
     <string name="status_export_saved_to">Export saved to %1$s</string>
     <string name="status_export_saving">Saving export...</string>

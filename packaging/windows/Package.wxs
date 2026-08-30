@@ -1,0 +1,80 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util" xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall">
+  <Package
+    Name="Igloo"
+    Manufacturer="Igloo"
+    Version="$(var.ProductVersion)"
+    UpgradeCode="A8E3D470-7E57-49C3-9287-1CF0FC36D4CA"
+    Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Igloo is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Igloo">
+        <Directory Id="APPFOLDER" Name="app">
+          <Directory Id="APPCURRENT" Name="current" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="PROGRAMDATAIGLOO" Name="Igloo">
+        <Directory Id="DATADIR" Name="data" />
+        <Directory Id="CONFIGDIR" Name="config" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="IGLOOPROGRAMMENU" Name="Igloo" />
+    </StandardDirectory>
+
+    <Files Include="$(var.PayloadDir)\**" Directory="INSTALLFOLDER">
+      <Exclude Files="$(var.PayloadDir)\app\current\igloo.exe" />
+    </Files>
+
+    <Component Id="IglooServiceComponent" Directory="APPCURRENT">
+      <File Id="IglooServiceExecutable" Source="$(var.PayloadDir)\app\current\igloo.exe" KeyPath="yes">
+        <fire:FirewallException Id="IglooPrivateTCP" Name="Igloo private network TCP" Port="5001" Protocol="tcp" Profile="private" Scope="localSubnet" />
+        <fire:FirewallException Id="IglooPrivateUDP" Name="Igloo private network discovery" Port="5001" Protocol="udp" Profile="private" Scope="localSubnet" />
+      </File>
+      <ServiceInstall
+        Id="IglooServiceInstall"
+        Name="Igloo"
+        DisplayName="Igloo"
+        Description="Igloo personal social inbox"
+        Type="ownProcess"
+        Start="auto"
+        ErrorControl="normal"
+        Account="NT AUTHORITY\LocalService">
+        <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" ServiceStart="yes" ServiceStop="yes" ServiceQueryStatus="yes" />
+        <util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="restart" RestartServiceDelayInSeconds="10" />
+      </ServiceInstall>
+      <ServiceControl Id="IglooServiceControl" Name="Igloo" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+    </Component>
+
+    <Component Id="IglooProgramData" Directory="DATADIR" Permanent="yes" NeverOverwrite="yes">
+      <CreateFolder>
+        <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
+      </CreateFolder>
+      <File Id="StateRootMarker" Source="$(var.StateMarker)" Name=".igloo-state-root" KeyPath="yes" />
+    </Component>
+
+    <Component Id="IglooConfigData" Directory="CONFIGDIR" Guid="F22B0364-10A4-4D92-89BE-BDCA8538C038" Permanent="yes" NeverOverwrite="yes">
+      <CreateFolder>
+        <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
+      </CreateFolder>
+    </Component>
+
+    <Component Id="IglooUpdatePermissions" Directory="INSTALLFOLDER" Guid="D5C83105-34A0-466F-9B4B-EB40E43469D0">
+      <CreateFolder>
+        <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
+      </CreateFolder>
+    </Component>
+
+    <Component Id="IglooStartMenuShortcut" Directory="IGLOOPROGRAMMENU" Guid="24572A61-F65A-444F-A802-2B76BAFE0096">
+      <util:InternetShortcut Id="IglooOpenShortcut" Name="Igloo" Target="http://localhost:5001" Type="link" />
+      <RemoveFolder Id="RemoveIglooProgramMenu" On="uninstall" />
+      <RegistryValue Root="HKLM" Key="Software\Igloo" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+  </Package>
+</Wix>

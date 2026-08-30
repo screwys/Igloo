@@ -104,4 +104,5 @@ if [[ "$push_release" == "1" ]]; then
   fi
   gh workflow run container-release.yml --ref "$tag"
   gh workflow run android-release.yml --ref "$tag"
+  gh workflow run windows-release.yml --ref "$tag"
 fi

@@ -136,6 +136,7 @@ test("local release script publishes a GitHub release on push", () => {
   assert.match(script, /--notes-file "\$notes_file"/);
   assert.match(script, /gh workflow run container-release\.yml --ref "\$tag"/);
   assert.match(script, /gh workflow run android-release\.yml --ref "\$tag"/);
+  assert.match(script, /gh workflow run windows-release\.yml --ref "\$tag"/);
 });
 
 test("container release keeps latest on main HEAD and signs release images", () => {
@@ -368,6 +369,21 @@ test("Android release publishes only the APK asset with signed provenance attest
       workflow.indexOf("name: Build release APK"),
     "Android release tag verification should run before signing",
   );
+});
+
+test("Windows release publishes the installer and signed background-update bundles", () => {
+  const workflow = readFileSync(
+    new URL("../../.github/workflows/windows-release.yml", import.meta.url),
+    "utf8",
+  );
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /verify-signed-release-tag\.sh/);
+  assert.match(workflow, /IglooSetup-x64\.exe/);
+  assert.match(workflow, /igloo-app-windows-amd64\.zip/);
+  assert.match(workflow, /igloo-runtime-windows-amd64\.zip/);
+  assert.match(workflow, /igloo-windows-update\.json\.sig/);
+  assert.match(workflow, /WINDOWS_UPDATE_SIGNING_KEY_BASE64/);
+  assert.match(workflow, /actions\/attest@59d89421af93a897026c735860bf21b6eb4f7b26/);
 });
 
 test("Android Gradle wrapper pins the distribution checksum", () => {

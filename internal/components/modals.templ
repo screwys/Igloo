@@ -7,6 +7,7 @@ import (
 
 	"github.com/screwys/igloo/internal/model"
 	"github.com/screwys/igloo/internal/webtheme"
+	"github.com/screwys/igloo/internal/windowsupdate"
 )
 
 func prefsAfterRequestHandler(p PageProps) templ.ComponentScript {
@@ -412,6 +413,35 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 							<option value="480p" selected?={ prefs.Str("quality","best") == "480p" }>480p</option>
 						</select>
 					</div>
+					if p.UserRole == "admin" && p.RuntimeOS == "windows" {
+						<h4 style="margin:1.25rem 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_windows_updates", "Windows Updates") }</h4>
+						<div class="form-group checkbox-group">
+							<label>
+								if prefs.Bool("windows_update_enabled") {
+									<input type="checkbox" name="windows_update_enabled" value="true" checked/>
+								} else {
+									<input type="checkbox" name="windows_update_enabled" value="true"/>
+								}
+								{ L(p, "settings_windows_update_enabled", "Automatically check for Windows updates") }
+							</label>
+						</div>
+						<div class="form-group">
+							<label for="global-setting-windows-update-interval">{ L(p, "settings_windows_update_interval", "Check interval") }</label>
+							<select id="global-setting-windows-update-interval" name="windows_update_interval_hours" class="input">
+								for _, hours := range []string{"1", "6", "12", "24"} {
+									<option value={ hours } selected?={ prefs.Str("windows_update_interval_hours", "6") == hours }>{ hours + "h" }</option>
+								}
+							</select>
+						</div>
+						<div class="form-group">
+							<label for="global-setting-windows-update-channel">{ L(p, "settings_windows_update_channel", "Update channel") }</label>
+							<select id="global-setting-windows-update-channel" name="windows_update_channel" class="input">
+								<option value="stable" selected?={ prefs.Str("windows_update_channel", "stable") == "stable" }>{ L(p, "settings_windows_update_stable", "Stable") }</option>
+								<option value="latest" selected?={ prefs.Str("windows_update_channel", "stable") == "latest" }>{ L(p, "settings_windows_update_latest", "Latest") }</option>
+							</select>
+						</div>
+						@WindowsUpdatePanel(p, windowsupdate.Status{})
+					}
 					<h4 style="margin:1.25rem 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_embeds", "Embeds") }</h4>
 					<div class="form-group checkbox-group">
 						<label>
@@ -699,6 +729,42 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 					</div>
 				</div>
 		</div>
+	</div>
+}
+
+templ WindowsUpdatePanel(p PageProps, status windowsupdate.Status) {
+	<div id="windows-update-panel"
+		hx-get="/api/windows-update/status"
+		hx-trigger="load, every 5s"
+		hx-target="this"
+		hx-swap="outerHTML"
+		style="padding:0.75rem; border:1px solid var(--border-color); border-radius:8px; font-size:0.8rem;"
+	>
+		if !status.Supported {
+			<span style="color:var(--text-secondary);">{ L(p, "settings_windows_update_unavailable", "Update status is available in packaged Windows builds.") }</span>
+		} else {
+			<div>{ L(p, "settings_windows_update_installed", "Installed") + ": " + status.CurrentApp + " / runtime " + status.CurrentRuntime }</div>
+			if status.AvailableApp != "" || status.AvailableRuntime != "" {
+				<div style="color:var(--accent-primary); margin-top:0.35rem;">{ L(p, "settings_windows_update_available", "Update available") + ": " + status.AvailableApp + " / runtime " + status.AvailableRuntime }</div>
+			}
+			if status.LastError != "" {
+				<div style="color:var(--danger); margin-top:0.35rem;">{ status.LastError }</div>
+			}
+			<div style="margin-top:0.5rem;">
+				<button type="button" class="btn btn-secondary btn-sm"
+					hx-post="/api/windows-update/check"
+					hx-target="#windows-update-panel"
+					hx-swap="outerHTML"
+					disabled?={ status.Checking || status.Applying }
+				>{ L(p, "action_check_for_updates", "Check now") }</button>
+				if status.Checking {
+					<span style="margin-left:0.5rem; color:var(--text-secondary);">{ L(p, "status_checking_for_updates", "Checking…") }</span>
+				}
+				if status.Applying {
+					<span style="margin-left:0.5rem; color:var(--text-secondary);">{ L(p, "status_applying_update", "Applying update…") }</span>
+				}
+			</div>
+		}
 	</div>
 }
 

@@ -369,6 +369,19 @@ func TestHandleGetSettingsRequiresAdmin(t *testing.T) {
 	}
 }
 
+func TestWindowsUpdateCheckReportsUnavailableOutsidePackagedWindowsBuild(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/windows-update/check", nil)
+	req = req.WithContext(contextWithUser(req, "admin", "admin"))
+	rec := httptest.NewRecorder()
+
+	srv.handleWindowsUpdateCheck(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandleSettingsFormRequiresAdmin(t *testing.T) {
 	srv := newTestServer(t)
 	if err := srv.db.SetSetting("translate_api_key", "sample-secret-key"); err != nil {
@@ -1374,6 +1387,17 @@ func TestNormalizeSettingsUpdate_ClampsTranslateLookaheadAndBackend(t *testing.T
 	}
 	if got := body["translate_auto_lookahead"]; got != "100" {
 		t.Errorf("translate_auto_lookahead = %q, want 100", got)
+	}
+}
+
+func TestNormalizeSettingsUpdateNormalizesWindowsUpdateSettings(t *testing.T) {
+	body := map[string]string{
+		"windows_update_interval_hours": "999",
+		"windows_update_channel":        "unknown",
+	}
+	normalizeSettingsUpdate(body)
+	if body["windows_update_interval_hours"] != "168" || body["windows_update_channel"] != "stable" {
+		t.Fatalf("normalized Windows settings = %#v", body)
 	}
 }
 

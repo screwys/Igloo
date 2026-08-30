@@ -106,3 +106,4 @@ jobs:
         run: |
           gh workflow run container-release.yml --ref "${{ steps.release.outputs.tag }}"
           gh workflow run android-release.yml --ref "${{ steps.release.outputs.tag }}"
+          gh workflow run windows-release.yml --ref "${{ steps.release.outputs.tag }}"

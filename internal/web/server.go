@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/sessions"
+	"github.com/screwys/igloo/internal/buildinfo"
 	"github.com/screwys/igloo/internal/components"
 	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
@@ -253,9 +254,10 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 		MiniPlayerVideosEnabled: s.boolSetting("mini_player_videos_enabled"),
 		MiniPlayerFeedEnabled:   s.boolSetting("mini_player_feed_enabled"),
 		DownloadsStopped:        s.workers.IsStopRequested(),
+		RuntimeOS:               buildinfo.Current().OS,
 		StaticV:                 s.staticV,
 		Prefs: components.PrefsData{Settings: map[string]any{
-			"dearrow_mode":       dearrowMode,
+			"dearrow_mode":        dearrowMode,
 			"sidebar_route_order": sidebarRouteOrder,
 		}},
 	}
