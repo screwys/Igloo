@@ -57,6 +57,8 @@
           "is_temp": false,
           "media_kind": "video",
           "metadata_json": "",
+          "moments_all_position": 1,
+          "moments_following_position": 1,
           "owner_kind": "tiktok_video",
           "published_at": 1700000001000,
           "slide_count": 0,

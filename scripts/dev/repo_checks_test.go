@@ -216,6 +216,11 @@ esac
 	if !strings.Contains(workflowOnly, "android=0 workflow=1") {
 		t.Fatalf("workflow-only changes selected Android tests:\n%s", workflowOnly)
 	}
+
+	contractSource := runSelection(t, "internal/db/android_sync_content_projection.go")
+	if !strings.Contains(contractSource, "go=1") || !strings.Contains(contractSource, "contract=1") {
+		t.Fatalf("Android sync projection did not select API contract tests:\n%s", contractSource)
+	}
 }
 
 func TestGitHubActionsWorkflowDependenciesAreSHAPinned(t *testing.T) {

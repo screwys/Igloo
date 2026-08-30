@@ -36,6 +36,7 @@ web_changed=0
 android_changed=0
 i18n_changed=0
 workflow_changed=0
+contract_changed=0
 declare -A go_test_file_set=()
 declare -a shell_files=()
 declare -a node_tests=()
@@ -50,6 +51,13 @@ for path in "${changed[@]}"; do
       ;;
     go.mod|go.sum)
       go_changed=1
+      ;;
+  esac
+
+  case "$path" in
+    internal/db/*.go|internal/model/*.go|internal/web/*.go)
+      contract_changed=1
+      go_test_file_set["internal/web/contract_test.go"]=1
       ;;
   esac
 
@@ -96,8 +104,8 @@ for path in "${changed[@]}"; do
 done
 
 if [[ "${IGLOO_TEST_SELECTION_ONLY:-0}" == "1" ]]; then
-  printf 'go=%d drift=%d web=%d i18n=%d android=%d workflow=%d\n' \
-    "$go_changed" "$drift_changed" "$web_changed" "$i18n_changed" "$android_changed" "$workflow_changed"
+  printf 'go=%d drift=%d web=%d i18n=%d android=%d workflow=%d contract=%d\n' \
+    "$go_changed" "$drift_changed" "$web_changed" "$i18n_changed" "$android_changed" "$workflow_changed" "$contract_changed"
   exit 0
 fi
 
