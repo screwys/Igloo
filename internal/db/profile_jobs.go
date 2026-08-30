@@ -80,6 +80,36 @@ func observeChannelProfileTx(tx *sql.Tx, channel model.Channel, observedAt int64
 	})
 }
 
+// ObserveChannelProfile records identity returned by a normal source check.
+// The durable profile job remains the sole owner of downloading and publishing
+// changed identity media.
+func (db *DB) ObserveChannelProfile(profile model.ChannelProfile) error {
+	if db == nil {
+		return nil
+	}
+	return db.WithWrite(func(tx *sql.Tx) error {
+		if err := observeProfileTx(tx, profileObservation{
+			channelID:   profile.ChannelID,
+			platform:    profile.Platform,
+			handle:      profile.Handle,
+			displayName: profile.DisplayName,
+			avatarURL:   profile.AvatarURL,
+			observedAt:  time.Now().UnixMilli(),
+		}); err != nil {
+			return err
+		}
+		avatarURL := strings.TrimSpace(profile.AvatarURL)
+		if avatarURL == "" {
+			return nil
+		}
+		return upsertAssetTx(tx, normalizeAsset(Asset{
+			AssetID:   BuildAssetID(profile.Platform, "channel", profile.ChannelID, "avatar", 0),
+			AssetKind: "avatar", OwnerKind: "channel", OwnerID: profile.ChannelID,
+			SourceURL: avatarURL, State: AssetStateQueued, RequiredReason: "identity",
+		}, time.Now().UnixMilli()))
+	})
+}
+
 func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 	var ok bool
 	observation, ok = normalizeProfileObservation(observation)

@@ -83,6 +83,95 @@ func TestProfileJobPipelinePublishesCanonicalAvatar(t *testing.T) {
 	}
 }
 
+func TestInstagramProfileJobCachesUnavatarFallbackWhenNativeAvatarIsMissing(t *testing.T) {
+	stateRoot := t.TempDir()
+	database := newTestWorkerDBAt(t, stateRoot)
+	const channelID = "instagram_sample_creator"
+	if err := database.AddChannel(model.Channel{
+		ChannelID: channelID, SourceID: "sample_creator", Name: "Sample Creator",
+		DisplayName: "Sample Creator", URL: "https://www.instagram.com/sample_creator/", Platform: "instagram",
+		IsSubscribed: true,
+	}); err != nil {
+		t.Fatalf("AddChannel: %v", err)
+	}
+	var hits atomic.Int32
+	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(testProfilePNGBytes())
+	}))
+	t.Cleanup(imageServer.Close)
+	manager := &Manager{
+		db: database, cfg: testCfg(stateRoot), downloader: testDownloader(),
+		instagramProfileFetch: func(context.Context, string, string) (*model.ChannelProfile, error) {
+			return &model.ChannelProfile{
+				ChannelID: channelID, Platform: "instagram", Handle: "sample_creator", DisplayName: "Sample Creator",
+			}, nil
+		},
+		instagramAvatarFallback: func(string) string { return imageServer.URL + "/avatar.png" },
+	}
+
+	if !manager.processProfileJobBatch(context.Background(), fetchprofile.Fetch) {
+		t.Fatal("profile job was not claimed")
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("fallback downloads = %d, want 1", hits.Load())
+	}
+	asset, err := database.GetAssetByOwnerIdentity("avatar", "channel", channelID, 0)
+	if err != nil || asset == nil || asset.State != db.AssetStateReady || asset.SourceURL != imageServer.URL+"/avatar.png" {
+		t.Fatalf("cached fallback avatar = %+v, err=%v", asset, err)
+	}
+	job, err := database.GetProfileJob(channelID)
+	if err != nil || job == nil || job.RequestedRevision != job.CompletedRevision || job.Attempts != 0 {
+		t.Fatalf("completed fallback profile job = %+v, err=%v", job, err)
+	}
+}
+
+func TestInstagramUnavatarURLUsesProviderPath(t *testing.T) {
+	if got := instagramUnavatarURL("@sample.creator"); got != "https://unavatar.io/instagram/sample.creator?fallback=false" {
+		t.Fatalf("instagramUnavatarURL = %q", got)
+	}
+}
+
+func TestSameInstagramAvatarSourceIgnoresExpiringQuery(t *testing.T) {
+	current := "https://scontent-a.cdninstagram.com/v/avatar.jpg?oe=AAAA&token=old"
+	fetched := "https://scontent-b.cdninstagram.com/v/avatar.jpg?oe=BBBB&token=new"
+	if !sameInstagramAvatarSource(current, fetched) {
+		t.Fatal("same Instagram CDN object was treated as a changed avatar")
+	}
+	if sameInstagramAvatarSource(current, "https://scontent-b.cdninstagram.com/v/replacement.jpg?oe=BBBB") {
+		t.Fatal("different Instagram CDN object was treated as the same avatar")
+	}
+	if sameInstagramAvatarSource(current, "https://example.test/v/avatar.jpg?oe=BBBB") {
+		t.Fatal("unrelated host was treated as the same Instagram avatar")
+	}
+}
+
+func TestInstagramProfileJobUsesAvatarObservedByChannelCheck(t *testing.T) {
+	stateRoot := t.TempDir()
+	database := newTestWorkerDBAt(t, stateRoot)
+	const channelID = "instagram_sample_creator"
+	const oldSource = "https://cdn.example/old-avatar.jpg"
+	const newSource = "https://cdn.example/new-avatar.jpg"
+	storeReadyProfileAsset(t, database, stateRoot, channelID, "avatar", oldSource, "old")
+	if err := database.DeclareAsset(db.Asset{
+		AssetID:   db.BuildAssetID("instagram", "channel", channelID, "avatar", 0),
+		AssetKind: "avatar", OwnerKind: "channel", OwnerID: channelID,
+		SourceURL: newSource, RequiredReason: "identity",
+	}, time.Now().UnixMilli()); err != nil {
+		t.Fatalf("DeclareAsset: %v", err)
+	}
+	manager := &Manager{db: database}
+	profile := model.ChannelProfile{ChannelID: channelID, Platform: "instagram", Handle: "sample_creator"}
+
+	if err := manager.ensureInstagramProfileAvatarSource(&profile); err != nil {
+		t.Fatalf("ensureInstagramProfileAvatarSource: %v", err)
+	}
+	if profile.AvatarURL != newSource {
+		t.Fatalf("avatar source = %q, want observed %q", profile.AvatarURL, newSource)
+	}
+}
+
 func TestProfileJobWorkerDiscardsSupersededFetch(t *testing.T) {
 	stateRoot := t.TempDir()
 	database := newTestWorkerDBAt(t, stateRoot)

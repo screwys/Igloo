@@ -252,7 +252,111 @@ func (m *Manager) applyPartialDiscoveryAfterTransportFailure(channel model.Chann
 func (m *Manager) applyDiscoverySnapshot(channel model.Channel, snapshot download.SourceSnapshot) (int, error) {
 	added, reconcileErr := m.reconcileSourceSnapshot(channel, snapshot)
 	checkedErr := m.db.UpdateChannelChecked(channel.ChannelID)
-	return added, errors.Join(reconcileErr, checkedErr)
+	var profileErr error
+	if reconcileErr == nil && channel.Platform == "instagram" {
+		if observed := observedInstagramChannelProfile(channel, snapshot); observed != nil {
+			profileErr = m.reuseMatchingInstagramAvatarSource(observed)
+			if profileErr == nil {
+				profileErr = m.db.ObserveChannelProfile(*observed)
+			}
+			if profileErr == nil {
+				m.KickProfileJobs()
+			}
+		}
+		if profileErr == nil {
+			_, profileErr = m.requestMissingInstagramAvatar(channel.ChannelID)
+		}
+	}
+	return added, errors.Join(reconcileErr, checkedErr, profileErr)
+}
+
+func observedInstagramChannelProfile(channel model.Channel, snapshot download.SourceSnapshot) *model.ChannelProfile {
+	if channel.Platform != "instagram" || channel.ChannelID == "" {
+		return nil
+	}
+	var observed *model.ChannelProfile
+	for _, window := range snapshot.Windows {
+		for _, ref := range window.Refs {
+			if ref.ChannelID != channel.ChannelID {
+				continue
+			}
+			if observed == nil {
+				observed = &model.ChannelProfile{
+					ChannelID: channel.ChannelID, Platform: "instagram",
+					Handle: channel.Handle, DisplayName: channel.DisplayName,
+				}
+				if observed.Handle == "" {
+					observed.Handle = model.InstagramHandleFromChannelID(channel.ChannelID)
+				}
+				if observed.DisplayName == "" {
+					observed.DisplayName = channel.Name
+				}
+			}
+			if ref.AuthorHandle != "" {
+				observed.Handle = ref.AuthorHandle
+			}
+			if ref.AuthorDisplayName != "" {
+				observed.DisplayName = ref.AuthorDisplayName
+			}
+			if ref.AuthorAvatarURL != "" {
+				observed.AvatarURL = ref.AuthorAvatarURL
+				return observed
+			}
+		}
+	}
+	return observed
+}
+
+func (m *Manager) reuseMatchingInstagramAvatarSource(observed *model.ChannelProfile) error {
+	if m == nil || m.db == nil || observed == nil || strings.TrimSpace(observed.AvatarURL) == "" {
+		return nil
+	}
+	asset, err := m.db.GetAssetByOwnerIdentity("avatar", "channel", observed.ChannelID, 0)
+	if err != nil || asset == nil || asset.State != db.AssetStateReady {
+		return err
+	}
+	publishedSource := strings.TrimSpace(asset.PublishedSourceURL)
+	if publishedSource == "" {
+		publishedSource = strings.TrimSpace(asset.SourceURL)
+	}
+	if publishedSource != "" && sameInstagramAvatarSource(publishedSource, observed.AvatarURL) {
+		observed.AvatarURL = publishedSource
+	}
+	return nil
+}
+
+func (m *Manager) requestMissingInstagramAvatar(channelID string) (bool, error) {
+	if m == nil || m.db == nil || !strings.HasPrefix(channelID, "instagram_") {
+		return false, nil
+	}
+	asset, err := m.db.GetAssetByOwnerIdentity("avatar", "channel", channelID, 0)
+	if err != nil {
+		return false, err
+	}
+	if asset != nil && asset.State == db.AssetStateReady {
+		return false, nil
+	}
+	job, err := m.db.GetProfileJob(channelID)
+	if err != nil {
+		return false, err
+	}
+	if job == nil {
+		if err := m.db.ObserveChannelProfile(model.ChannelProfile{
+			ChannelID: channelID, Platform: "instagram", Handle: model.InstagramHandleFromChannelID(channelID),
+		}); err != nil {
+			return false, err
+		}
+		m.KickProfileJobs()
+		return true, nil
+	}
+	if job.RequestedRevision > job.CompletedRevision {
+		return false, nil
+	}
+	if err := m.db.RequestProfileJob(channelID, time.Now().UnixMilli()); err != nil {
+		return false, err
+	}
+	m.KickProfileJobs()
+	return true, nil
 }
 
 func (m *Manager) platformFetchDelay(platform string) time.Duration {

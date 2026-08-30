@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -146,6 +147,10 @@ func (m *Manager) processProfileJob(ctx context.Context, fetch fetchFn, job mode
 		}
 	}
 	m.ReportExternalResult(nil)
+	if err := m.ensureInstagramProfileAvatarSource(&profile); err != nil {
+		m.retryProfileJob(job, err, now)
+		return
+	}
 
 	replacements, previous, stagedPaths, stageErr := m.stageProfileJobAssets(ctx, job, profile)
 	stored, complete, err := m.db.CompleteProfileJob(job, profile, replacements, now.UnixMilli())
@@ -245,6 +250,82 @@ func (m *Manager) fetchInstagramProfile(ctx context.Context, channelID, handle s
 		Verified:    profile.Verified,
 		AvatarURL:   profile.AvatarURL,
 	}, nil
+}
+
+func (m *Manager) ensureInstagramProfileAvatarSource(profile *model.ChannelProfile) error {
+	if m == nil || m.db == nil || profile == nil || profile.Platform != "instagram" {
+		return nil
+	}
+	current, err := m.db.GetAssetByOwnerIdentity("avatar", "channel", profile.ChannelID, 0)
+	if err != nil {
+		return fmt.Errorf("read current avatar: %w", err)
+	}
+	fetchedSource := strings.TrimSpace(profile.AvatarURL)
+	if current != nil {
+		desiredSource := strings.TrimSpace(current.SourceURL)
+		publishedSource := strings.TrimSpace(current.PublishedSourceURL)
+		if fetchedSource != "" {
+			if current.State == db.AssetStateReady && publishedSource != "" && sameInstagramAvatarSource(publishedSource, fetchedSource) {
+				profile.AvatarURL = publishedSource
+				return nil
+			}
+			if desiredSource != "" && sameInstagramAvatarSource(desiredSource, fetchedSource) {
+				profile.AvatarURL = desiredSource
+				return nil
+			}
+			profile.AvatarURL = fetchedSource
+			return nil
+		}
+		if desiredSource != "" && desiredSource != publishedSource {
+			profile.AvatarURL = desiredSource
+			return nil
+		}
+		if current.State == db.AssetStateReady && publishedSource != "" {
+			profile.AvatarURL = publishedSource
+			return nil
+		}
+		if desiredSource != "" {
+			profile.AvatarURL = desiredSource
+			return nil
+		}
+	}
+	handle := model.NormalizeInstagramHandle(profile.Handle)
+	if handle == "" {
+		handle = model.InstagramHandleFromChannelID(profile.ChannelID)
+	}
+	if handle == "" {
+		return fmt.Errorf("%w: %s has no instagram handle", fetchprofile.ErrIncompleteProfile, profile.ChannelID)
+	}
+	if m.instagramAvatarFallback != nil {
+		profile.AvatarURL = strings.TrimSpace(m.instagramAvatarFallback(handle))
+	} else {
+		profile.AvatarURL = instagramUnavatarURL(handle)
+	}
+	if profile.AvatarURL == "" {
+		return fmt.Errorf("%w: %s has no avatar fallback", fetchprofile.ErrIncompleteProfile, profile.ChannelID)
+	}
+	return nil
+}
+
+func instagramUnavatarURL(handle string) string {
+	handle = model.NormalizeInstagramHandle(handle)
+	if handle == "" {
+		return ""
+	}
+	return "https://unavatar.io/instagram/" + url.PathEscape(handle) + "?fallback=false"
+}
+
+func sameInstagramAvatarSource(current, fetched string) bool {
+	currentURL, currentErr := url.Parse(strings.TrimSpace(current))
+	fetchedURL, fetchedErr := url.Parse(strings.TrimSpace(fetched))
+	if currentErr != nil || fetchedErr != nil || currentURL.Path == "" || fetchedURL.Path == "" {
+		return strings.TrimSpace(current) == strings.TrimSpace(fetched)
+	}
+	currentHost := strings.ToLower(currentURL.Hostname())
+	fetchedHost := strings.ToLower(fetchedURL.Hostname())
+	sameCDN := (strings.HasSuffix(currentHost, ".cdninstagram.com") && strings.HasSuffix(fetchedHost, ".cdninstagram.com")) ||
+		(strings.HasSuffix(currentHost, ".fbcdn.net") && strings.HasSuffix(fetchedHost, ".fbcdn.net"))
+	return currentURL.Path == fetchedURL.Path && (currentHost == fetchedHost || sameCDN)
 }
 
 func (m *Manager) retryProfileJob(job model.ProfileJob, cause error, now time.Time) {

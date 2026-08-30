@@ -944,6 +944,136 @@ func TestEnsureIntroducedInstagramOwnerQueuesProfileRefresh(t *testing.T) {
 	}
 }
 
+func TestInstagramChannelCheckRequestsOnlyOneMissingAvatarRepair(t *testing.T) {
+	database := newTestWorkerDB(t)
+	const channelID = "instagram_sample_creator"
+	if err := database.AddChannel(model.Channel{
+		ChannelID: channelID, SourceID: "sample_creator", Name: "Sample Creator",
+		DisplayName: "Sample Creator", URL: "https://www.instagram.com/sample_creator/", Platform: "instagram",
+		IsSubscribed: true,
+	}); err != nil {
+		t.Fatalf("AddChannel: %v", err)
+	}
+	if err := database.ExecRaw(`UPDATE profile_jobs SET completed_revision = requested_revision WHERE channel_id = ?`, channelID); err != nil {
+		t.Fatalf("complete initial profile job: %v", err)
+	}
+	manager := &Manager{db: database, profileKick: make(chan struct{}, 1)}
+
+	requested, err := manager.requestMissingInstagramAvatar(channelID)
+	if err != nil || !requested {
+		t.Fatalf("first missing-avatar request = %v, %v", requested, err)
+	}
+	job, err := database.GetProfileJob(channelID)
+	if err != nil || job == nil || job.RequestedRevision != 2 || job.CompletedRevision != 1 {
+		t.Fatalf("requested repair job = %+v, err=%v", job, err)
+	}
+	requested, err = manager.requestMissingInstagramAvatar(channelID)
+	if err != nil || requested {
+		t.Fatalf("pending repair requested again = %v, %v", requested, err)
+	}
+	job, err = database.GetProfileJob(channelID)
+	if err != nil || job == nil || job.RequestedRevision != 2 {
+		t.Fatalf("duplicate repair changed job = %+v, err=%v", job, err)
+	}
+}
+
+func TestInstagramChannelCheckObservesNativeAvatarAndRefreshesWhenStale(t *testing.T) {
+	stateRoot := t.TempDir()
+	database := newTestWorkerDBAt(t, stateRoot)
+	const channelID = "instagram_sample_creator"
+	const sourceURL = "https://cdn.example/sample-avatar.jpg"
+	if err := database.AddChannel(model.Channel{
+		ChannelID: channelID, SourceID: "sample_creator", Name: "Sample Creator",
+		DisplayName: "Sample Creator", URL: "https://www.instagram.com/sample_creator/", Platform: "instagram",
+		IsSubscribed: true,
+	}); err != nil {
+		t.Fatalf("AddChannel: %v", err)
+	}
+	if err := database.ExecRaw(`UPDATE profile_jobs SET completed_revision = requested_revision WHERE channel_id = ?`, channelID); err != nil {
+		t.Fatalf("complete fresh profile: %v", err)
+	}
+	storeReadyProfileAsset(t, database, stateRoot, channelID, "avatar", sourceURL, "ready")
+	if err := database.ExecRaw(`UPDATE channel_profiles SET fetched_at = ? WHERE channel_id = ?`, time.Now().UnixMilli(), channelID); err != nil {
+		t.Fatalf("mark profile fresh: %v", err)
+	}
+	manager := &Manager{db: database, profileKick: make(chan struct{}, 1)}
+	snapshot := download.SourceSnapshot{Windows: []download.SourceWindow{{
+		Component: download.SourceComponentPosts, Complete: true,
+		Refs: []download.VideoRef{{
+			VideoID: "instagram_post_sample", ChannelID: channelID,
+			AuthorHandle: "sample_creator", AuthorDisplayName: "Sample Creator", AuthorAvatarURL: sourceURL,
+		}},
+	}}}
+	asset, err := database.GetAssetByOwnerIdentity("avatar", "channel", channelID, 0)
+	if err != nil || asset == nil || asset.State != db.AssetStateReady || asset.SourceURL != sourceURL {
+		t.Fatalf("fresh avatar precondition = %+v, err=%v", asset, err)
+	}
+	profile, err := database.GetChannelProfile(channelID)
+	if err != nil || profile == nil || profile.FetchedAt == nil || time.Since(*profile.FetchedAt) > time.Minute {
+		t.Fatalf("fresh profile precondition = %+v, err=%v", profile, err)
+	}
+
+	if _, err := manager.applyDiscoverySnapshot(model.Channel{ChannelID: channelID, Platform: "instagram"}, snapshot); err != nil {
+		t.Fatalf("fresh channel check: %v", err)
+	}
+	job, err := database.GetProfileJob(channelID)
+	if err != nil || job == nil || job.RequestedRevision != 1 {
+		t.Fatalf("unchanged fresh avatar requested work = %+v, err=%v", job, err)
+	}
+	if err := database.ExecRaw(`UPDATE channel_profiles SET fetched_at = ? WHERE channel_id = ?`, time.Now().Add(-25*time.Hour).UnixMilli(), channelID); err != nil {
+		t.Fatalf("age profile: %v", err)
+	}
+	if _, err := manager.applyDiscoverySnapshot(model.Channel{ChannelID: channelID, Platform: "instagram"}, snapshot); err != nil {
+		t.Fatalf("stale channel check: %v", err)
+	}
+	job, err = database.GetProfileJob(channelID)
+	if err != nil || job == nil || job.RequestedRevision != 2 || job.CompletedRevision != 1 {
+		t.Fatalf("stale avatar did not request refresh = %+v, err=%v", job, err)
+	}
+}
+
+func TestInstagramChannelCheckDeclaresChangedNativeAvatar(t *testing.T) {
+	stateRoot := t.TempDir()
+	database := newTestWorkerDBAt(t, stateRoot)
+	const channelID = "instagram_sample_creator"
+	const oldSource = "https://cdn.example/old-avatar.jpg"
+	const newSource = "https://cdn.example/new-avatar.jpg"
+	if err := database.AddChannel(model.Channel{
+		ChannelID: channelID, SourceID: "sample_creator", Name: "Sample Creator",
+		DisplayName: "Sample Creator", URL: "https://www.instagram.com/sample_creator/", Platform: "instagram",
+		IsSubscribed: true,
+	}); err != nil {
+		t.Fatalf("AddChannel: %v", err)
+	}
+	if err := database.ExecRaw(`UPDATE profile_jobs SET completed_revision = requested_revision WHERE channel_id = ?`, channelID); err != nil {
+		t.Fatalf("complete profile job: %v", err)
+	}
+	storeReadyProfileAsset(t, database, stateRoot, channelID, "avatar", oldSource, "old")
+	if err := database.ExecRaw(`UPDATE channel_profiles SET fetched_at = ? WHERE channel_id = ?`, time.Now().UnixMilli(), channelID); err != nil {
+		t.Fatalf("mark profile fresh: %v", err)
+	}
+	manager := &Manager{db: database, profileKick: make(chan struct{}, 1)}
+	snapshot := download.SourceSnapshot{Windows: []download.SourceWindow{{
+		Component: download.SourceComponentPosts, Complete: true,
+		Refs: []download.VideoRef{{
+			VideoID: "instagram_post_sample", ChannelID: channelID,
+			AuthorHandle: "sample_creator", AuthorDisplayName: "Sample Creator", AuthorAvatarURL: newSource,
+		}},
+	}}}
+
+	if _, err := manager.applyDiscoverySnapshot(model.Channel{ChannelID: channelID, Platform: "instagram"}, snapshot); err != nil {
+		t.Fatalf("channel check: %v", err)
+	}
+	asset, err := database.GetAssetByOwnerIdentity("avatar", "channel", channelID, 0)
+	if err != nil || asset == nil || asset.SourceURL != newSource || asset.PublishedSourceURL != oldSource {
+		t.Fatalf("declared avatar replacement = %+v, err=%v", asset, err)
+	}
+	job, err := database.GetProfileJob(channelID)
+	if err != nil || job == nil || job.RequestedRevision != 2 || job.CompletedRevision != 1 {
+		t.Fatalf("changed avatar job = %+v, err=%v", job, err)
+	}
+}
+
 func TestInstagramUsesOwnGlobalSchedulerSettings(t *testing.T) {
 	database := newTestWorkerDB(t)
 	if err := database.SetSetting("tiktok_fetch_delay", "3"); err != nil {

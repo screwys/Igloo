@@ -104,7 +104,8 @@ type Manager struct {
 	youtubeMetadata        youtubeMetadataFetcher
 	youtubeRecommendations youtubeRecommendationFetcher
 
-	instagramProfileFetch instagramProfileFetchFn
+	instagramProfileFetch   instagramProfileFetchFn
+	instagramAvatarFallback func(string) string
 }
 
 // sponsorblockFetcher is the narrow interface the worker needs from
