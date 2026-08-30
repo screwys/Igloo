@@ -33,10 +33,12 @@ func schemaMaintainedStateStatements() []string {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_media_objects_claim
 		 ON media_objects(download_lane, next_attempt_at_ms, attempts, updated_at_ms DESC, id DESC, lease_until_ms)
-		 WHERE job_state IN ('queued', 'downloading') AND source_url != ''`,
+		 WHERE job_state IN ('queued', 'downloading')
+		   AND (source_url != '' OR object_key LIKE 'derived:video-thumbnail:%')`,
 		`CREATE INDEX IF NOT EXISTS idx_media_objects_lease
 		 ON media_objects(download_lane, lease_until_ms)
-		 WHERE job_state = 'downloading' AND source_url != ''`,
+		 WHERE job_state = 'downloading'
+		   AND (source_url != '' OR object_key LIKE 'derived:video-thumbnail:%')`,
 		`CREATE INDEX IF NOT EXISTS idx_media_objects_ready_file_path
 		 ON media_objects(file_path) WHERE published_revision > 0`,
 		`CREATE TABLE IF NOT EXISTS assets (

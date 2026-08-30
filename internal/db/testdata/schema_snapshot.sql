@@ -122,10 +122,10 @@ CREATE INDEX idx_feed_seen_at ON feed_seen(seen_at, tweet_id);
 CREATE INDEX idx_feed_sources_platform ON feed_sources(platform, enabled);
 
 -- index: idx_media_objects_claim on media_objects
-CREATE INDEX idx_media_objects_claim ON media_objects(download_lane, next_attempt_at_ms, attempts, updated_at_ms DESC, id DESC, lease_until_ms) WHERE job_state IN ('queued', 'downloading') AND source_url != '';
+CREATE INDEX idx_media_objects_claim ON media_objects(download_lane, next_attempt_at_ms, attempts, updated_at_ms DESC, id DESC, lease_until_ms) WHERE job_state IN ('queued', 'downloading') AND (source_url != '' OR object_key LIKE 'derived:video-thumbnail:%');
 
 -- index: idx_media_objects_lease on media_objects
-CREATE INDEX idx_media_objects_lease ON media_objects(download_lane, lease_until_ms) WHERE job_state = 'downloading' AND source_url != '';
+CREATE INDEX idx_media_objects_lease ON media_objects(download_lane, lease_until_ms) WHERE job_state = 'downloading' AND (source_url != '' OR object_key LIKE 'derived:video-thumbnail:%');
 
 -- index: idx_media_objects_ready_file_path on media_objects
 CREATE INDEX idx_media_objects_ready_file_path ON media_objects(file_path) WHERE published_revision > 0;

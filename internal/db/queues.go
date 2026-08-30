@@ -25,7 +25,7 @@ func (db *DB) NextMediaWorkDelay(nowMs int64, downloadPlatforms []string, includ
 			WHERE mo.job_state IN ('queued', 'downloading')
 			  AND mo.job_state = 'queued'
 			  AND mo.download_lane = ?
-			  AND mo.source_url != ''
+			  AND (mo.source_url != '' OR mo.object_key LIKE 'derived:video-thumbnail:%')
 			  AND EXISTS (
 			    SELECT 1 FROM assets a INDEXED BY idx_assets_desired_object
 			    WHERE a.desired_object_id = mo.object_id AND a.lifecycle_state = 'active'
@@ -38,7 +38,7 @@ func (db *DB) NextMediaWorkDelay(nowMs int64, downloadPlatforms []string, includ
 			FROM media_objects mo INDEXED BY idx_media_objects_lease
 			WHERE mo.job_state = 'downloading'
 			  AND mo.download_lane = ?
-			  AND mo.source_url != ''
+			  AND (mo.source_url != '' OR mo.object_key LIKE 'derived:video-thumbnail:%')
 			  AND EXISTS (
 			    SELECT 1 FROM assets a INDEXED BY idx_assets_desired_object
 			    WHERE a.desired_object_id = mo.object_id AND a.lifecycle_state = 'active'
@@ -238,7 +238,7 @@ func (db *DB) HasPendingXContentDownloads() (bool, error) {
 			  AND a.owner_kind = 'tweet'
 			  AND a.asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 			  AND mo.job_state IN ('queued', 'downloading')
-			  AND mo.source_url != ''
+			  AND (mo.source_url != '' OR mo.object_key LIKE 'derived:video-thumbnail:%')
 			LIMIT 1
 		)
 	`).Scan(&pending)

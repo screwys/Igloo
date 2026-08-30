@@ -705,6 +705,63 @@ func TestBookmarkProjectionKeepsActionIdentityAndResolvesCapturedContent(t *test
 	}
 }
 
+func TestBookmarkProjectionKeepsReadyCanonicalMediaWhenPresentationComesFromRepost(t *testing.T) {
+	d := openFreshTestDB(t)
+	const (
+		actionID  = "sample_saved_status"
+		repostID  = "sample_repost_status"
+		channelID = "twitter_sample_author"
+	)
+	statements := []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO channels (channel_id, name, platform) VALUES (?, 'Sample Author', 'twitter')`, []any{channelID}},
+		{`INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at, media_kind)
+		  VALUES (?, ?, 'tweet', 'X post sample_saved_status', 0, 'video')`, []any{actionID, channelID}},
+		{`INSERT INTO feed_items (tweet_id, published_at, fetched_at) VALUES (?, 1, 1)`, []any{actionID}},
+		{`INSERT INTO feed_items (
+			tweet_id, source_channel_id, channel_id, body_text, media_json,
+			canonical_tweet_id, is_retweet, published_at, fetched_at
+		  ) VALUES (?, 'twitter_sample_reposter', ?, 'captured body', '[{"type":"video"}]', ?, 1, 2, 2)`,
+			[]any{repostID, channelID, actionID}},
+		{`INSERT INTO bookmarks (video_id, category_id, bookmarked_at) VALUES (?, 0, 3)`, []any{actionID}},
+	}
+	for _, statement := range statements {
+		if err := d.ExecRaw(statement.query, statement.args...); err != nil {
+			t.Fatalf("insert canonical bookmark: %v", err)
+		}
+	}
+	storeBookmarkReadyAsset(t, d, "twitter", "tweet", actionID, "post_media", 0,
+		"media/twitter/sample_author/canonical.mp4", "video/mp4")
+
+	bookmarks, err := d.GetBookmarks(GetBookmarksOpts{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bookmarks) != 1 {
+		t.Fatalf("bookmarks = %d, want 1", len(bookmarks))
+	}
+	bookmark := bookmarks[0]
+	if bookmark.VideoID != actionID || bookmark.MediaOwnerID != actionID {
+		t.Fatalf("bookmark identity = action:%q media:%q", bookmark.VideoID, bookmark.MediaOwnerID)
+	}
+	if bookmark.Title != "captured body" || bookmark.MediaKind != "video" {
+		t.Fatalf("bookmark presentation = title:%q kind:%q", bookmark.Title, bookmark.MediaKind)
+	}
+	if bookmark.ThumbnailURL != "/api/media/thumbnail/"+actionID+"?owner_kind=tweet" {
+		t.Fatalf("bookmark thumbnail = %q", bookmark.ThumbnailURL)
+	}
+
+	video, err := d.GetVideo(actionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if video == nil || video.MediaOwnerID != actionID || video.Title != "captured body" || video.MediaKind != "video" {
+		t.Fatalf("player projection = %+v", video)
+	}
+}
+
 func storeBookmarkReadyAsset(t *testing.T, d *DB, platform, ownerKind, ownerID, assetKind string, index int, key, contentType string) {
 	t.Helper()
 	path, err := d.storage.Path(key)

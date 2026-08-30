@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -118,6 +119,61 @@ func TestContentAssetQueueIncludesVideoSubtitles(t *testing.T) {
 	}, false, DownloadLaneCurrent)
 	if err != nil || len(claimed) != 1 || claimed[0].AssetID != asset.AssetID || claimed[0].IsAuto == nil {
 		t.Fatalf("subtitle claim = %+v, %v", claimed, err)
+	}
+}
+
+func TestRepairBookmarkVideoThumbnailsQueuesSourceLessDerivedWork(t *testing.T) {
+	d := openFreshTestDB(t)
+	const ownerID = "sample_imported_bookmark"
+	if err := d.ExecRaw(`
+		INSERT INTO bookmarks (video_id, category_id, bookmarked_at)
+		VALUES (?, 0, 1)
+	`, ownerID); err != nil {
+		t.Fatal(err)
+	}
+	media := normalizeAsset(Asset{
+		AssetID:   BuildAssetID("twitter", "tweet", ownerID, "post_media", 0),
+		AssetKind: "post_media", OwnerKind: "tweet", OwnerID: ownerID,
+		ObjectKey:   "owner:tweet:" + ownerID + ":post_media:0",
+		FilePath:    "media/imported/bookmarks/" + ownerID + "/000.mp4",
+		ContentType: "video/mp4", SizeBytes: 100, FileMtimeNs: 100,
+		State: AssetStateReady, RequiredReason: "bookmark",
+	}, 1000)
+	media = prepareAssetIdentity(media)
+	if err := d.WithWrite(func(tx *sql.Tx) error { return upsertAssetTx(tx, media) }); err != nil {
+		t.Fatal(err)
+	}
+	upsertAssetForTest(t, d, Asset{
+		AssetID:   BuildAssetID("twitter", "tweet", ownerID, "post_thumbnail", 0),
+		AssetKind: "post_thumbnail", OwnerKind: "tweet", OwnerID: ownerID,
+		ObjectKey:   "owner:tweet:" + ownerID + ":post_thumbnail:0",
+		FilePath:    "thumbnails/generated/" + ownerID + ".jpg",
+		ContentType: "image/jpeg", State: AssetStateServerMissing, RequiredReason: "bookmark",
+	}, 1000)
+
+	if err := d.WithWrite(repairBookmarkVideoThumbnails); err != nil {
+		t.Fatal(err)
+	}
+	thumbnail, err := d.GetAsset(BuildAssetID("twitter", "tweet", ownerID, "post_thumbnail", 0), "post_thumbnail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if thumbnail == nil || thumbnail.State != AssetStateQueued ||
+		thumbnail.ObjectKey != VideoThumbnailObjectKey(media.ObjectID) || thumbnail.SourceURL != "" {
+		t.Fatalf("repaired thumbnail = %+v", thumbnail)
+	}
+	delay, err := d.NextMediaWorkDelay(time.Now().UnixMilli(), nil, true, DownloadLaneCurrent)
+	if err != nil || delay != 0 {
+		t.Fatalf("derived thumbnail work delay = %v, %v", delay, err)
+	}
+	claimed, err := d.ClaimContentAssetDownloadBatch(LeaseOptions{
+		Owner: "thumbnail-worker", NowMs: time.Now().UnixMilli() + 1, LeaseMs: 1000, Limit: 1,
+	}, true, DownloadLaneCurrent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(claimed) != 1 || claimed[0].AssetID != thumbnail.AssetID || !IsVideoThumbnailObjectKey(claimed[0].ObjectKey) {
+		t.Fatalf("claimed derived thumbnail = %+v", claimed)
 	}
 }
 

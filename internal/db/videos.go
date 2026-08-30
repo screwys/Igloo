@@ -195,12 +195,21 @@ func (db *DB) resolveTweetVideoPresentation(v *model.Video) error {
 		t := time.UnixMilli(publishedAt)
 		v.PublishedAt = &t
 	}
-	directTypes, err := db.readyTweetMediaTypes(contentID)
+	actionTypes, err := db.readyTweetMediaTypes(v.VideoID)
 	if err != nil {
 		return err
 	}
-	v.MediaOwnerID, v.MediaOwnerKind = contentID, "tweet"
-	mediaTypes := directTypes
+	v.MediaOwnerID, v.MediaOwnerKind = v.VideoID, "tweet"
+	mediaTypes := actionTypes
+	if len(mediaTypes) == 0 && contentID != v.VideoID {
+		mediaTypes, err = db.readyTweetMediaTypes(contentID)
+		if err != nil {
+			return err
+		}
+		if len(mediaTypes) > 0 {
+			v.MediaOwnerID = contentID
+		}
+	}
 	if len(mediaTypes) == 0 && quoteID != "" {
 		mediaTypes, err = db.readyTweetMediaTypes(quoteID)
 		if err != nil {

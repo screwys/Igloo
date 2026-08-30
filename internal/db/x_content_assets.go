@@ -167,7 +167,7 @@ func contentAssetClaimQuery(opts LeaseOptions, includeTweets bool, lane Download
 		FROM media_objects desired INDEXED BY idx_media_objects_claim
 		WHERE desired.download_lane = ?
 		  AND desired.job_state IN ('queued', 'downloading')
-		  AND desired.source_url != ''
+		  AND (desired.source_url != '' OR desired.object_key LIKE 'derived:video-thumbnail:%')
 		  AND (
 		    desired.object_key NOT LIKE ?
 		    OR EXISTS (

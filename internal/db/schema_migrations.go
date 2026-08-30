@@ -24,6 +24,14 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260830_refresh_derived_thumbnail_queue_indexes",
+		apply: refreshDerivedThumbnailQueueIndexes,
+	},
+	{
+		name:  "20260830_repair_bookmark_video_thumbnails",
+		apply: repairBookmarkVideoThumbnails,
+	},
+	{
 		name:  "20260830_refresh_moments_position_trigger",
 		apply: refreshMomentsPositionTrigger,
 	},
@@ -107,6 +115,107 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func refreshDerivedThumbnailQueueIndexes(tx *sql.Tx) error {
+	if _, err := tx.Exec(`DROP INDEX IF EXISTS idx_media_objects_claim`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		CREATE INDEX idx_media_objects_claim
+		ON media_objects(download_lane, next_attempt_at_ms, attempts, updated_at_ms DESC, id DESC, lease_until_ms)
+		WHERE job_state IN ('queued', 'downloading')
+		  AND (source_url != '' OR object_key LIKE 'derived:video-thumbnail:%')
+	`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DROP INDEX IF EXISTS idx_media_objects_lease`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		CREATE INDEX idx_media_objects_lease
+		ON media_objects(download_lane, lease_until_ms)
+		WHERE job_state = 'downloading'
+		  AND (source_url != '' OR object_key LIKE 'derived:video-thumbnail:%')
+	`); err != nil {
+		return err
+	}
+	return nil
+}
+
+func repairBookmarkVideoThumbnails(tx *sql.Tx) error {
+	rows, err := tx.Query(`
+		WITH ready_video AS (
+			SELECT a.owner_id, a.object_id,
+			       ROW_NUMBER() OVER (
+			           PARTITION BY a.owner_id
+			           ORDER BY a.media_index, a.id
+			       ) AS media_row
+			FROM assets a
+			JOIN media_objects mo ON mo.object_id = a.object_id
+			WHERE a.owner_kind = 'tweet'
+			  AND a.asset_kind = 'post_media'
+			  AND a.lifecycle_state = 'active'
+			  AND mo.published_revision > 0 AND mo.file_path != ''
+			  AND mo.content_type LIKE 'video/%'
+		)
+		SELECT b.video_id, ready_video.object_id
+		FROM bookmarks b
+		JOIN ready_video ON ready_video.owner_id = b.video_id AND ready_video.media_row = 1
+		WHERE NOT EXISTS (
+			SELECT 1
+			FROM assets thumbnail
+			JOIN media_objects thumbnail_object ON thumbnail_object.object_id = thumbnail.object_id
+			WHERE thumbnail.owner_kind = 'tweet'
+			  AND thumbnail.owner_id = b.video_id
+			  AND thumbnail.asset_kind = 'post_thumbnail'
+			  AND thumbnail.lifecycle_state = 'active'
+			  AND thumbnail_object.published_revision > 0
+			  AND thumbnail_object.file_path != ''
+		)
+		ORDER BY b.video_id
+	`)
+	if err != nil {
+		return err
+	}
+	type candidate struct {
+		ownerID        string
+		sourceObjectID string
+	}
+	var candidates []candidate
+	for rows.Next() {
+		var item candidate
+		if err := rows.Scan(&item.ownerID, &item.sourceObjectID); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		candidates = append(candidates, item)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	nowMs := time.Now().UnixMilli()
+	for _, item := range candidates {
+		asset := normalizeAsset(Asset{
+			AssetID:        BuildAssetID("twitter", "tweet", item.ownerID, "post_thumbnail", 0),
+			AssetKind:      "post_thumbnail",
+			OwnerKind:      "tweet",
+			OwnerID:        item.ownerID,
+			ObjectKey:      VideoThumbnailObjectKey(item.sourceObjectID),
+			ContentType:    "image/jpeg",
+			State:          AssetStateQueued,
+			DownloadLane:   DownloadLaneCurrent,
+			RequiredReason: "bookmark",
+		}, nowMs)
+		if err := upsertAssetTx(tx, asset); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func refreshMomentsPositionTrigger(tx *sql.Tx) error {
