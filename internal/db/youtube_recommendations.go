@@ -379,19 +379,20 @@ func (db *DB) projectDiscoveryMedia(candidates []model.DiscoveryVideo) error {
 		)
 	}
 	rows, err := db.reader().Query(`
-		SELECT v.video_id FROM videos v
+		SELECT v.video_id, v.published_at FROM videos v
 		WHERE v.video_id IN (`+placeholders(len(ids))+`) AND `+readyVideoMediaExistsSQL("v"), stringsToAny(ids)...)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = rows.Close() }()
-	ready := make(map[string]bool)
+	ready := make(map[string]*time.Time)
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		var publishedAt sql.NullInt64
+		if err := rows.Scan(&id, &publishedAt); err != nil {
 			return err
 		}
-		ready[id] = true
+		ready[id] = millisToTimePtr(publishedAt)
 	}
 	if err := rows.Err(); err != nil {
 		return err
@@ -417,7 +418,11 @@ func (db *DB) projectDiscoveryMedia(candidates []model.DiscoveryVideo) error {
 		}
 	}
 	for i := range candidates {
-		candidates[i].Ready = ready[candidates[i].VideoID]
+		publishedAt, isReady := ready[candidates[i].VideoID]
+		candidates[i].Ready = isReady
+		if publishedAt != nil {
+			candidates[i].PublishedAt = publishedAt
+		}
 		if readyThumbnails[candidates[i].VideoID] {
 			candidates[i].ThumbnailURL = "/api/media/thumbnail/" + candidates[i].VideoID
 		}

@@ -90,6 +90,11 @@ templ DiscoveryCard(p PageProps, video model.DiscoveryVideo) {
 					}
 					<span class="video-channel">{ video.ChannelName }</span>
 				</span>
+				if video.PublishedAt != nil {
+					<span class="video-date" data-video-date={ publishedAtStr(video.PublishedAt) } title={ publishedAtStr(video.PublishedAt) }>
+						{ RelativeTimeText(p, video.PublishedAt) }
+					</span>
+				}
 			</div>
 		</div>
 	</a>
@@ -105,6 +110,7 @@ func discoveryVideoHref(video model.DiscoveryVideo) string {
 func localVideoDiscoveryCard(p PageProps, video model.Video) model.DiscoveryVideo {
 	return model.DiscoveryVideo{
 		VideoID: video.VideoID, Title: p.Prefs.VideoTitle(video), Duration: video.Duration,
+		PublishedAt: video.PublishedAt,
 		ChannelID: video.ChannelID, ChannelName: videoChannelName(video), AvatarURL: videoAvatarURL(video),
 		ThumbnailURL: p.Prefs.VideoThumbURL(video), Ready: true,
 	}

@@ -119,6 +119,9 @@ func TestDiscoverReadyProjectsCanonicalLocalMediaWithoutPrefetchProvenance(t *te
 	if !videos[0].Ready {
 		t.Fatal("canonical playable Discover video was not marked Ready")
 	}
+	if videos[0].PublishedAt == nil || videos[0].PublishedAt.UnixMilli() != 1 {
+		t.Fatalf("ready Discover published time = %v", videos[0].PublishedAt)
+	}
 	if videos[0].ThumbnailURL != "/api/media/thumbnail/"+videoID || videos[0].AvatarURL != "/api/media/avatar/"+channelID {
 		t.Fatalf("ready Discover media URLs = thumbnail %q avatar %q", videos[0].ThumbnailURL, videos[0].AvatarURL)
 	}

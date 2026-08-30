@@ -5,15 +5,17 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/screwys/igloo/internal/model"
 )
 
 func TestDiscoveryCardUsesTemporaryWatchUntilMediaIsReady(t *testing.T) {
+	publishedAt := time.Now().Add(-48 * time.Hour).Truncate(time.Millisecond)
 	video := model.DiscoveryVideo{
 		VideoID: "sample_discover", Title: "Sample Discover", ChannelID: "youtube_UCsample_discover",
 		ChannelName: "Sample Creator", AvatarURL: "https://unavatar.io/youtube/sample_creator",
-		ThumbnailURL: "https://i.ytimg.com/vi/sample_discover/mqdefault.jpg", Source: "related",
+		ThumbnailURL: "https://i.ytimg.com/vi/sample_discover/mqdefault.jpg", Source: "related", PublishedAt: &publishedAt,
 	}
 	var buf bytes.Buffer
 	if err := DiscoveryCard(newTestPageProps(), video).Render(context.Background(), &buf); err != nil {
@@ -23,6 +25,8 @@ func TestDiscoveryCardUsesTemporaryWatchUntilMediaIsReady(t *testing.T) {
 	for _, expected := range []string{
 		`href="/temp/watch?v=sample_discover"`,
 		`data-profile-channel-id="youtube_UCsample_discover"`,
+		`class="video-date"`,
+		`data-video-date="` + publishedAtStr(&publishedAt) + `"`,
 	} {
 		if !strings.Contains(html, expected) {
 			t.Fatalf("missing %q in %s", expected, html)

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"testing"
+	"time"
 
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/download"
@@ -22,7 +23,7 @@ func TestMergeYouTubeRecommendationsKeepsChannelShelfThenRelatedCreators(t *test
 	}
 	mix := []download.VideoRef{
 		{VideoID: "same_one", ChannelID: "youtube_UCanchor"},
-		{VideoID: "related_one", Title: "Related", ChannelID: "youtube_UCrelated", AuthorDisplayName: "Related Channel", AuthorHandle: "@related"},
+		{VideoID: "related_one", Title: "Related", ChannelID: "youtube_UCrelated", AuthorDisplayName: "Related Channel", AuthorHandle: "@related", PublishedAtMs: 1710000000000},
 		{VideoID: "missing_owner", Title: "Missing owner"},
 	}
 	got := mergeYouTubeRecommendations(job, channelRefs, mix, 10)
@@ -36,6 +37,9 @@ func TestMergeYouTubeRecommendationsKeepsChannelShelfThenRelatedCreators(t *test
 	}
 	if got[4].VideoID != "related_one" || got[4].Source != "related" || got[4].ChannelID != "youtube_UCrelated" {
 		t.Fatalf("related recommendation = %+v", got[4])
+	}
+	if got[4].PublishedAt == nil || !got[4].PublishedAt.Equal(time.UnixMilli(1710000000000)) {
+		t.Fatalf("related published time = %v", got[4].PublishedAt)
 	}
 }
 

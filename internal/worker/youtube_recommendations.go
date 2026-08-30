@@ -219,9 +219,15 @@ func mergeYouTubeRecommendations(job db.YouTubeRecommendationJob, channelRefs, m
 			avatarURL = "/api/media/avatar/" + channelID
 		}
 		seen[ref.VideoID] = struct{}{}
+		var publishedAt *time.Time
+		if ref.PublishedAtMs > 0 {
+			value := time.UnixMilli(ref.PublishedAtMs)
+			publishedAt = &value
+		}
 		out = append(out, model.DiscoveryVideo{
 			VideoID: ref.VideoID, Title: ref.Title, Duration: ref.Duration,
-			ChannelID: channelID, ChannelName: channelName, ChannelHandle: channelHandle, ChannelURL: channelURL,
+			PublishedAt: publishedAt,
+			ChannelID:   channelID, ChannelName: channelName, ChannelHandle: channelHandle, ChannelURL: channelURL,
 			AvatarURL: avatarURL, ThumbnailURL: "https://i.ytimg.com/vi/" + ref.VideoID + "/mqdefault.jpg",
 			Source: source, Rank: len(out),
 		})

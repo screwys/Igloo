@@ -185,18 +185,19 @@ type Video struct {
 // not imply that canonical media exists; Ready selects the local player only
 // after the normal video/asset owners have committed a playable stream.
 type DiscoveryVideo struct {
-	VideoID       string `json:"video_id"`
-	Title         string `json:"title"`
-	ChannelID     string `json:"channel_id"`
-	ChannelName   string `json:"channel_name"`
-	ChannelHandle string `json:"channel_handle,omitempty"`
-	ChannelURL    string `json:"channel_url,omitempty"`
-	AvatarURL     string `json:"avatar_url,omitempty"`
-	ThumbnailURL  string `json:"thumbnail_url"`
-	Duration      int    `json:"duration,omitempty"`
-	Source        string `json:"source"`
-	Rank          int    `json:"rank"`
-	Ready         bool   `json:"-"`
+	VideoID       string     `json:"video_id"`
+	Title         string     `json:"title"`
+	ChannelID     string     `json:"channel_id"`
+	ChannelName   string     `json:"channel_name"`
+	ChannelHandle string     `json:"channel_handle,omitempty"`
+	ChannelURL    string     `json:"channel_url,omitempty"`
+	AvatarURL     string     `json:"avatar_url,omitempty"`
+	ThumbnailURL  string     `json:"thumbnail_url"`
+	Duration      int        `json:"duration,omitempty"`
+	PublishedAt   *time.Time `json:"published_at,omitempty"`
+	Source        string     `json:"source"`
+	Rank          int        `json:"rank"`
+	Ready         bool       `json:"-"`
 }
 
 // VideoRepostSource records a followed TikTok account that introduced a TikTok
