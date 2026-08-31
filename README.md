@@ -103,19 +103,10 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
 
 ### Windows 11
 
-Download and run `IglooSetup-x64.exe` from the latest release. The single-file
+Download and run `IglooSetup-x64.exe` from the [GitHub Releases](https://github.com/screwys/Igloo/releases). The single-file
 installer vendors Igloo, yt-dlp, gallery-dl, FFmpeg/FFprobe, and Deno, installs
 Igloo as an automatically starting Windows service, and adds a Start menu
-shortcut that opens `http://localhost:5001`. Upload cookie files through the
-Igloo settings UI, as with the container installation.
-
-Windows builds check signed GitHub Release manifests in the background every
-six hours by default. Application and downloader-runtime bundles download in
-the background, the service restarts after activation, and a failed health
-check restores the previous files. Enablement, interval, channel, current
-versions, update status, and a manual check are available under General in the
-web preferences. The setup executable remains available for manual upgrades or
-repair.
+shortcut that opens `http://localhost:5001`. Windows builds check signed GitHub Release manifests in the background every six hours by default.
 
 ### Container
 
