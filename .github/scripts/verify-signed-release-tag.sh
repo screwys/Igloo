@@ -15,7 +15,11 @@ if [[ ! -f "$public_key_path" ]]; then
   exit 1
 fi
 
-gpg_home="$(mktemp -d "${RUNNER_TEMP:-/tmp}/igloo-release-gpg.XXXXXX")"
+temp_root="${RUNNER_TEMP:-/tmp}"
+if command -v cygpath >/dev/null 2>&1; then
+  temp_root="$(cygpath -u "$temp_root")"
+fi
+gpg_home="$(mktemp -d "$temp_root/igloo-release-gpg.XXXXXX")"
 export GNUPGHOME="$gpg_home"
 cleanup_gpg_home() {
   gpgconf --kill all >/dev/null 2>&1 || true
