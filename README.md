@@ -101,12 +101,9 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
 
 ## Install
 
-### Windows 11
+### Windows 
 
-Download and run `IglooSetup-x64.exe` from the [GitHub Releases](https://github.com/screwys/Igloo/releases). The single-file
-installer vendors Igloo, yt-dlp, gallery-dl, FFmpeg/FFprobe, and Deno, installs
-Igloo as an automatically starting Windows service, and adds a Start menu
-shortcut that opens `http://localhost:5001`. Windows builds check signed GitHub Release manifests in the background every six hours by default.
+Download and run `IglooSetup-x64.exe` from the [GitHub Releases](https://github.com/screwys/Igloo/releases). This package comes with automatic updates with `main` (always up-to-date) and `stable` channels. 
 
 ### Container
 
