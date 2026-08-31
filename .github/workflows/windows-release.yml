@@ -122,7 +122,7 @@ jobs:
             --output "release-artifacts/igloo-windows-update.json.sig" `
             --public-key $env:WINDOWS_UPDATE_PUBLIC_KEY_BASE64
 
-      - name: Build one-click installer
+      - name: Build Windows installer
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $true

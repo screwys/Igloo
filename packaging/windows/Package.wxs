@@ -78,18 +78,18 @@
     </Component>
 
     <Component Id="IglooStartMenuShortcut" Directory="IGLOOPROGRAMMENU" Guid="5521FD0B-E977-42BE-BBA1-EAE38AFEE1E6">
-      <Shortcut Id="IglooOpenShortcut" Name="Igloo" Description="Open Igloo" Target="[#IglooLauncherExecutable]" WorkingDirectory="INSTALLFOLDER" Icon="IglooProductIcon" />
+      <Shortcut Id="IglooOpenShortcut" Name="Igloo" Description="Open Igloo" Target="[INSTALLFOLDER]app\current\igloo-launch.exe" WorkingDirectory="INSTALLFOLDER" Icon="IglooProductIcon" />
       <RemoveFolder Id="RemoveIglooProgramMenu" On="uninstall" />
       <RegistryValue Root="HKCU" Key="Software\Igloo" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
     <Component Id="IglooDesktopShortcut" Directory="DesktopFolder" Guid="E73176A9-8722-486D-BE8C-15F6CFD53D37" Condition="DESKTOPSHORTCUT = 1" Transitive="yes">
-      <Shortcut Id="IglooDesktopShortcutLink" Name="Igloo" Description="Open Igloo" Target="[#IglooLauncherExecutable]" WorkingDirectory="INSTALLFOLDER" Icon="IglooProductIcon" />
+      <Shortcut Id="IglooDesktopShortcutLink" Name="Igloo" Description="Open Igloo" Target="[INSTALLFOLDER]app\current\igloo-launch.exe" WorkingDirectory="INSTALLFOLDER" Icon="IglooProductIcon" />
       <RegistryValue Root="HKCU" Key="Software\Igloo" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
     <Component Id="IglooUserStartup" Directory="APPCURRENT" Guid="ED15B2B6-7115-46D6-AD85-F68F264F976B" Condition="RUNMODE = 1" Transitive="yes">
-      <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="Igloo" Type="string" Value="&quot;[#IglooUserExecutable]&quot;" KeyPath="yes" />
+      <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="Igloo" Type="string" Value="&quot;[INSTALLFOLDER]app\current\igloo-user.exe&quot;" KeyPath="yes" />
     </Component>
 
     <Component Id="IglooProgramData" Directory="DATADIR" Permanent="yes" NeverOverwrite="yes">

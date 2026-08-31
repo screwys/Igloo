@@ -16,6 +16,7 @@
     <util:CloseApplication Id="CloseIglooConsole" Target="igloo.exe" CloseMessage="yes" ElevatedCloseMessage="yes" Timeout="10" TerminateProcess="1" RebootPrompt="no" />
     <BootstrapperApplication>
       <bal:WixStandardBootstrapperApplication
+        Theme="hyperlinkLicense"
         ThemeFile="$(var.InstallerTheme)"
         LogoFile="$(var.InstallerLogo)"
         LicenseUrl=""
