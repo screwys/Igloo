@@ -159,6 +159,7 @@ jobs:
             -d "InstallerLogo=$env:GITHUB_WORKSPACE/packaging/windows/InstallerLogo.png" `
             -d "InstallerTheme=$env:GITHUB_WORKSPACE/packaging/windows/InstallerTheme.xml" `
             -o "release-artifacts/IglooSetup-x64.exe"
+          Remove-Item "release-artifacts/IglooSetup-x64.wixpdb" -ErrorAction SilentlyContinue
 
       - name: Run Windows-focused tests
         shell: pwsh
