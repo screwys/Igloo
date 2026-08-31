@@ -1,9 +1,11 @@
 package com.screwy.igloo.player
 
 import android.content.Context
+import android.view.TextureView
 import androidx.media3.ui.PlayerView
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.screwy.igloo.ui.component.createComposePlayerView
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,6 +13,15 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PlayerSurfaceTest {
+    @Test
+    fun compose_player_view_uses_texture_surface_for_shared_transitions() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+
+        val view = createComposePlayerView(context)
+
+        assertTrue(view.videoSurfaceView is TextureView)
+    }
+
     @Test
     fun player_view_tap_handler_invokes_latest_callback() {
         val context = ApplicationProvider.getApplicationContext<Context>()

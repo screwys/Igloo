@@ -1,6 +1,5 @@
 package com.screwy.igloo.ui.component
 
-import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -435,7 +434,7 @@ private fun collapseMomentCaptionWhitespace(text: String): String =
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 internal fun createMomentPlayerView(context: android.content.Context): PlayerView =
-    (LayoutInflater.from(context).inflate(R.layout.moment_player_view, null) as PlayerView).apply {
+    createComposePlayerView(context).apply {
         setBackgroundColor(android.graphics.Color.BLACK)
         setShutterBackgroundColor(android.graphics.Color.BLACK)
         setKeepContentOnPlayerReset(false)

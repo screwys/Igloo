@@ -1,5 +1,7 @@
 package com.screwy.igloo.ui.component
 
+import android.content.Context
+import android.view.LayoutInflater
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -15,6 +17,14 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.screwy.igloo.R
+
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
+internal fun createComposePlayerView(context: Context): PlayerView =
+    (LayoutInflater.from(context).inflate(R.layout.compose_player_view, null) as PlayerView).apply {
+        useController = false
+        setEnableComposeSurfaceSyncWorkaround(true)
+    }
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 internal fun videoResizeModeFor(
@@ -58,13 +68,7 @@ internal fun IglooVideoSurface(
         onDispose { player.removeListener(listener) }
     }
 
-    val playerView = remember {
-        PlayerView(context).apply {
-            useController = false
-            setEnableComposeSurfaceSyncWorkaround(true)
-            setShutterBackgroundColor(android.graphics.Color.BLACK)
-        }
-    }
+    val playerView = remember { createComposePlayerView(context) }
 
     AndroidView(
         factory = { playerView },

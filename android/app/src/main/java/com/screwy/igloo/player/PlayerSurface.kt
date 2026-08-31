@@ -33,6 +33,7 @@ import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import com.screwy.igloo.data.entity.SponsorBlockSegmentEntity
 import com.screwy.igloo.media.MediaUri
+import com.screwy.igloo.ui.component.createComposePlayerView
 import com.screwy.igloo.ui.component.rememberRemoteImageModel
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.delay
@@ -198,8 +199,7 @@ private fun VideoSurface(
 ) {
     val context = LocalContext.current
     val playerView = remember {
-        PlayerView(context).apply {
-            useController = false
+        createComposePlayerView(context).apply {
             setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
         }
     }
