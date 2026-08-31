@@ -105,7 +105,7 @@ func runServer(externalStop <-chan struct{}, ready chan<- struct{}, serviceMode 
 	workers := worker.NewManager(database, cfg)
 	updateStop := make(chan struct{})
 	var requestUpdateStop sync.Once
-	windowsUpdater := windowsupdate.NewForCurrentProcess(database, serviceMode, localHealthURL(cfg), func() {
+	windowsUpdater := windowsupdate.NewForCurrentProcess(database, serviceMode, localHealthURL(cfg), cfg.WindowsAutoUpdateDefault, func() {
 		requestUpdateStop.Do(func() { close(updateStop) })
 	})
 	workers.SetWindowsUpdater(windowsUpdater)

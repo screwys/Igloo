@@ -4,12 +4,18 @@
 installed server updates from the application and runtime ZIP assets attached
 to GitHub Releases; it does not rerun setup for automatic updates.
 
-The installer creates an automatically starting `Igloo` Windows service under
-`NT AUTHORITY\LocalService`, stores application files below
-`C:\Program Files\Igloo`, and preserves user state below
-`C:\ProgramData\Igloo`. The service has write access only to those roots and
-explicit start/stop/query access to itself so the staged update helper can
-activate and roll back versions.
+The guided installer offers three run modes: a `LocalService` Windows service
+that starts before sign-in, current-user startup after sign-in, or manual
+startup from the Igloo shortcut. Application, data, and media directories are
+configured independently; their defaults are `C:\Program Files\Igloo`,
+`C:\ProgramData\Igloo\data`, and `C:\ProgramData\Igloo\media`. Automatic
+updates and the desktop shortcut are enabled by default.
+
+Running setup again offers repair and uninstall. The default uninstall removes
+only application files. The user may explicitly remove application data while
+keeping media and configuration, or remove everything including uploaded
+cookies. Destructive cleanup validates Igloo ownership markers before touching
+any configured storage directory.
 
 ## Release signing
 

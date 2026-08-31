@@ -132,7 +132,11 @@ jobs:
           Copy-Item -Recurse "$env:RUNNER_TEMP/igloo-app/*" "$payload/app/current/"
           Copy-Item -Recurse "$env:RUNNER_TEMP/igloo-runtime/*" "$payload/runtime/current/"
           $marker = "$env:RUNNER_TEMP/.igloo-state-root"
+          $mediaMarker = "$env:RUNNER_TEMP/.igloo-media-root"
+          $configMarker = "$env:RUNNER_TEMP/.igloo-config-root"
           New-Item -ItemType File -Force $marker | Out-Null
+          New-Item -ItemType File -Force $mediaMarker | Out-Null
+          New-Item -ItemType File -Force $configMarker | Out-Null
           wix build packaging/windows/Package.wxs `
             -arch x64 `
             -ext WixToolset.Util.wixext `
@@ -140,20 +144,27 @@ jobs:
             -d "PayloadDir=$payload" `
             -d "ProductVersion=${{ steps.versions.outputs.product_version }}" `
             -d "StateMarker=$marker" `
+            -d "MediaMarker=$mediaMarker" `
+            -d "ConfigMarker=$configMarker" `
+            -d "InstallerIcon=$env:GITHUB_WORKSPACE/packaging/windows/InstallerIcon.ico" `
             -o "$env:RUNNER_TEMP/Igloo-x64.msi"
           wix msi validate "$env:RUNNER_TEMP/Igloo-x64.msi"
           wix build packaging/windows/Bundle.wxs `
             -arch x64 `
             -ext WixToolset.BootstrapperApplications.wixext `
+            -ext WixToolset.Util.wixext `
             -d "MsiPath=$env:RUNNER_TEMP/Igloo-x64.msi" `
             -d "ProductVersion=${{ steps.versions.outputs.product_version }}" `
+            -d "InstallerIcon=$env:GITHUB_WORKSPACE/packaging/windows/InstallerIcon.ico" `
+            -d "InstallerLogo=$env:GITHUB_WORKSPACE/packaging/windows/InstallerLogo.png" `
+            -d "InstallerTheme=$env:GITHUB_WORKSPACE/packaging/windows/InstallerTheme.xml" `
             -o "release-artifacts/IglooSetup-x64.exe"
 
       - name: Run Windows-focused tests
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          go test ./internal/buildinfo ./internal/config ./internal/toolenv ./internal/windowsupdate ./cmd/igloo ./cmd/igloo-update ./cmd/igloo-sign-update
+          go test ./internal/buildinfo ./internal/config ./internal/toolenv ./internal/windowsupdate ./internal/windowsuninstall ./cmd/igloo ./cmd/igloo-update ./cmd/igloo-sign-update ./cmd/igloo-uninstall
 
       - name: Generate artifact attestations
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4

@@ -25,7 +25,10 @@ try {
     $env:GOOS = "windows"
     $env:GOARCH = "amd64"
     go build -trimpath -ldflags $ldflags -o (Join-Path $output "igloo.exe") ./cmd/igloo
+    go build -trimpath -ldflags "$ldflags -H windowsgui" -o (Join-Path $output "igloo-user.exe") ./cmd/igloo
+    go build -trimpath -ldflags "-s -w -H windowsgui" -o (Join-Path $output "igloo-launch.exe") ./cmd/igloo-launch
     go build -trimpath -ldflags "-s -w" -o (Join-Path $output "igloo-update.exe") ./cmd/igloo-update
+    go build -trimpath -ldflags "-s -w" -o (Join-Path $output "igloo-uninstall.exe") ./cmd/igloo-uninstall
 
     Copy-Item -Recurse static (Join-Path $output "static")
     Remove-Item -Recurse -Force (Join-Path $output "static/screenshots") -ErrorAction SilentlyContinue

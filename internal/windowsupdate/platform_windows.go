@@ -21,7 +21,7 @@ var (
 	releaseRepository = defaultRepository
 )
 
-func NewForCurrentProcess(settings Settings, serviceMode bool, healthURL string, requestStop func()) *Manager {
+func NewForCurrentProcess(settings Settings, serviceMode bool, healthURL string, defaultEnabled bool, requestStop func()) *Manager {
 	info := buildinfo.Current()
 	if strings.TrimSpace(publicKeyBase64) == "" || info.Version == "dev" {
 		return nil
@@ -38,7 +38,9 @@ func NewForCurrentProcess(settings Settings, serviceMode bool, healthURL string,
 		RequestStop: requestStop,
 	}
 	source := GitHubSource{Repository: releaseRepository, PublicKeyBase64: publicKeyBase64}
-	return NewManager(settings, source, installer, info.Version, installedRuntimeVersion(installRoot, info.BundleRevision))
+	manager := NewManager(settings, source, installer, info.Version, installedRuntimeVersion(installRoot, info.BundleRevision))
+	manager.defaultEnabled = defaultEnabled
+	return manager
 }
 
 func installedRuntimeVersion(installRoot, fallback string) string {

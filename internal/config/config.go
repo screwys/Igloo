@@ -21,20 +21,21 @@ var SupportedPlatforms = []string{"youtube", "twitter", "tiktok", "instagram"}
 var secretKeyRandomReader io.Reader = rand.Reader
 
 type Config struct {
-	Storage             storage.Layout
-	ConfDir             string
-	RepoDir             string
-	StaticDir           string
-	LocaleDir           string
-	ListenAddr          string
-	SecretKey           string
-	CookiesDir          string
-	TLSCert             string
-	TLSKey              string
-	PublishedServerURL  string
-	AuthUsersPath       string
-	RuntimeConfigPath   string
-	SessionCookieSecure bool
+	Storage                  storage.Layout
+	ConfDir                  string
+	RepoDir                  string
+	StaticDir                string
+	LocaleDir                string
+	ListenAddr               string
+	SecretKey                string
+	CookiesDir               string
+	TLSCert                  string
+	TLSKey                   string
+	PublishedServerURL       string
+	AuthUsersPath            string
+	RuntimeConfigPath        string
+	SessionCookieSecure      bool
+	WindowsAutoUpdateDefault bool
 
 	EnabledPlatforms   []string
 	EnabledPlatformSet map[string]bool
@@ -44,6 +45,9 @@ type Config struct {
 func Load() *Config {
 	stateRoot := envOr("IGLOO_DATA_DIR", defaultStateRoot())
 	mediaRoot := strings.TrimSpace(os.Getenv("IGLOO_MEDIA_DIR"))
+	if mediaRoot == "" {
+		mediaRoot = defaultMediaRoot()
+	}
 	layout, storageErr := storage.New(stateRoot, mediaRoot)
 	configDir := envOr("IGLOO_CONFIG_DIR", defaultConfigDir())
 	repoDir := envOr("IGLOO_REPO_DIR", findRepoDir())
@@ -52,20 +56,21 @@ func Load() *Config {
 	enabledPlatforms, platformErr := resolveEnabledPlatforms(configDir, runtimeConfig)
 
 	return &Config{
-		Storage:             layout,
-		ConfDir:             configDir,
-		RepoDir:             repoDir,
-		StaticDir:           filepath.Join(repoDir, "static"),
-		LocaleDir:           envOr("IGLOO_LOCALE_DIR", filepath.Join(repoDir, "locales", "app")),
-		ListenAddr:          ":" + envOr("IGLOO_PORT", "5001"),
-		SecretKey:           loadSecretKey(configDir),
-		CookiesDir:          filepath.Join(configDir, "cookies"),
-		TLSCert:             filepath.Join(configDir, "server.crt"),
-		TLSKey:              filepath.Join(configDir, "server.key"),
-		PublishedServerURL:  normalizePublishedServerURL(os.Getenv("IGLOO_PUBLISHED_SERVER_URL")),
-		AuthUsersPath:       filepath.Join(configDir, "auth_users.json"),
-		RuntimeConfigPath:   runtimePath,
-		SessionCookieSecure: envBool("IGLOO_SESSION_COOKIE_SECURE", false),
+		Storage:                  layout,
+		ConfDir:                  configDir,
+		RepoDir:                  repoDir,
+		StaticDir:                filepath.Join(repoDir, "static"),
+		LocaleDir:                envOr("IGLOO_LOCALE_DIR", filepath.Join(repoDir, "locales", "app")),
+		ListenAddr:               ":" + envOr("IGLOO_PORT", "5001"),
+		SecretKey:                loadSecretKey(configDir),
+		CookiesDir:               filepath.Join(configDir, "cookies"),
+		TLSCert:                  filepath.Join(configDir, "server.crt"),
+		TLSKey:                   filepath.Join(configDir, "server.key"),
+		PublishedServerURL:       normalizePublishedServerURL(os.Getenv("IGLOO_PUBLISHED_SERVER_URL")),
+		AuthUsersPath:            filepath.Join(configDir, "auth_users.json"),
+		RuntimeConfigPath:        runtimePath,
+		SessionCookieSecure:      envBool("IGLOO_SESSION_COOKIE_SECURE", false),
+		WindowsAutoUpdateDefault: defaultWindowsAutoUpdate(),
 
 		EnabledPlatforms:   enabledPlatforms,
 		EnabledPlatformSet: platformSet(enabledPlatforms),

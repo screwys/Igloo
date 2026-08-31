@@ -2,6 +2,6 @@
 
 package windowsupdate
 
-func NewForCurrentProcess(Settings, bool, string, func()) *Manager {
+func NewForCurrentProcess(Settings, bool, string, bool, func()) *Manager {
 	return nil
 }

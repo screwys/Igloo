@@ -1,14 +1,37 @@
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Bundle
     Name="Igloo"
     Manufacturer="Igloo"
     Version="$(var.ProductVersion)"
-    UpgradeCode="1CC6AA3F-B763-48AE-BF8F-C67B70EB823D">
+    UpgradeCode="1CC6AA3F-B763-48AE-BF8F-C67B70EB823D"
+    IconSourceFile="$(var.InstallerIcon)">
+    <Variable Name="InstallFolder" Type="string" Value="[ProgramFiles64Folder]Igloo" Persisted="yes" bal:Overridable="yes" />
+    <Variable Name="DataDirectory" Type="string" Value="[CommonAppDataFolder]Igloo\data" Persisted="yes" bal:Overridable="yes" />
+    <Variable Name="MediaDirectory" Type="string" Value="[CommonAppDataFolder]Igloo\media" Persisted="yes" bal:Overridable="yes" />
+    <Variable Name="RunMode" Type="numeric" Value="0" Persisted="yes" bal:Overridable="yes" />
+    <Variable Name="AutomaticUpdates" Type="numeric" Value="1" Persisted="yes" bal:Overridable="yes" />
+    <Variable Name="DesktopShortcut" Type="numeric" Value="1" Persisted="yes" bal:Overridable="yes" />
+    <Variable Name="UninstallMode" Type="numeric" Value="0" bal:Overridable="yes" />
+    <util:CloseApplication Id="CloseIglooUser" Target="igloo-user.exe" CloseMessage="yes" ElevatedCloseMessage="yes" Timeout="10" TerminateProcess="1" RebootPrompt="no" />
+    <util:CloseApplication Id="CloseIglooConsole" Target="igloo.exe" CloseMessage="yes" ElevatedCloseMessage="yes" Timeout="10" TerminateProcess="1" RebootPrompt="no" />
     <BootstrapperApplication>
-      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl="" LaunchTarget="http://localhost:5001" />
+      <bal:WixStandardBootstrapperApplication
+        ThemeFile="$(var.InstallerTheme)"
+        LogoFile="$(var.InstallerLogo)"
+        LicenseUrl=""
+        ShowVersion="yes"
+        LaunchTarget="[InstallFolder]app\current\igloo-launch.exe" />
     </BootstrapperApplication>
     <Chain>
-      <MsiPackage SourceFile="$(var.MsiPath)" />
+      <MsiPackage SourceFile="$(var.MsiPath)">
+        <MsiProperty Name="INSTALLFOLDER" Value="[InstallFolder]" />
+        <MsiProperty Name="DATADIR" Value="[DataDirectory]" />
+        <MsiProperty Name="MEDIADIR" Value="[MediaDirectory]" />
+        <MsiProperty Name="RUNMODE" Value="[RunMode]" />
+        <MsiProperty Name="AUTOMATICUPDATES" Value="[AutomaticUpdates]" />
+        <MsiProperty Name="DESKTOPSHORTCUT" Value="[DesktopShortcut]" />
+        <MsiProperty Name="UNINSTALLMODE" Value="[UninstallMode]" />
+      </MsiPackage>
     </Chain>
   </Bundle>
 </Wix>

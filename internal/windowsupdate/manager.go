@@ -37,6 +37,7 @@ type Manager struct {
 	installer      Installer
 	currentApp     string
 	currentRuntime string
+	defaultEnabled bool
 	checkNow       chan struct{}
 
 	mu     sync.RWMutex
@@ -51,6 +52,7 @@ func NewManager(settings Settings, source Source, installer Installer, currentAp
 		installer:      installer,
 		currentApp:     currentApp,
 		currentRuntime: currentRuntime,
+		defaultEnabled: true,
 		checkNow:       make(chan struct{}, 1),
 		status:         Status{Supported: true, CurrentApp: currentApp, CurrentRuntime: currentRuntime},
 	}
@@ -165,7 +167,7 @@ func (m *Manager) check(ctx context.Context, apply bool) {
 }
 
 func (m *Manager) enabled() bool {
-	value, _ := m.settings.GetSetting("windows_update_enabled", "true")
+	value, _ := m.settings.GetSetting("windows_update_enabled", fmt.Sprint(m.defaultEnabled))
 	return value != "false" && value != "0"
 }
 

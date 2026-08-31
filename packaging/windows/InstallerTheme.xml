@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Theme xmlns="http://wixtoolset.org/schemas/v4/thmutil">
+    <Font Id="Body" Height="-12" Weight="500" Foreground="windowtext" Background="window">Segoe UI</Font>
+    <Font Id="Title" Height="-28" Weight="600" Foreground="windowtext">Segoe UI</Font>
+    <Font Id="Header" Height="-21" Weight="600" Foreground="windowtext">Segoe UI</Font>
+    <Font Id="Muted" Height="-11" Weight="400" Foreground="graytext" Background="window">Segoe UI</Font>
+    <Font Id="Label" Height="-12" Weight="600" Foreground="windowtext" Background="window">Segoe UI</Font>
+    <Font Id="Active" Height="-12" Weight="700" Foreground="2e2e8b" Background="window">Segoe UI</Font>
+
+    <Window Width="720" Height="540" HexStyle="100a0000" FontId="Body" Caption="Igloo Setup">
+        <ImageControl X="24" Y="20" Width="64" Height="64" ImageFile="logo.png" Visible="yes" />
+        <Label X="104" Y="22" Width="-24" Height="36" FontId="Title" DisablePrefix="yes">Igloo</Label>
+        <Static X="176" Y="96" Width="1" Height="-64" />
+
+        <Page Name="Loading">
+            <Label X="200" Y="112" Width="-28" Height="30" FontId="Header" DisablePrefix="yes" Visible="no" Name="CheckingForUpdatesLabel" />
+        </Page>
+
+        <Page Name="Help">
+            <Label X="200" Y="112" Width="-28" Height="30" FontId="Header" DisablePrefix="yes">#(loc.HelpHeader)</Label>
+            <Label X="200" Y="148" Width="-28" Height="-52" FontId="Body" DisablePrefix="yes">#(loc.HelpText)</Label>
+            <Button Name="HelpCloseButton" X="-24" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body">
+                <Text>#(loc.HelpCloseButton)</Text>
+                <CloseWindowAction />
+            </Button>
+        </Page>
+
+        <Page Name="Install">
+            <Label X="24" Y="118" Width="146" Height="24" FontId="Active" DisablePrefix="yes">1  Run mode</Label>
+            <Label X="24" Y="150" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">2  Storage</Label>
+            <Label X="24" Y="182" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">3  Updates</Label>
+            <Label X="24" Y="214" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">4  Install</Label>
+
+            <Label X="200" Y="106" Width="-28" Height="30" FontId="Header" DisablePrefix="yes">Run mode</Label>
+            <RadioButtons Name="RunMode">
+                <RadioButton X="200" Y="156" Width="-28" Height="22" Value="0" FontId="Label">System service</RadioButton>
+                <RadioButton X="200" Y="202" Width="-28" Height="22" Value="1" FontId="Label">User service</RadioButton>
+                <RadioButton X="200" Y="248" Width="-28" Height="22" Value="2" FontId="Label">Manual</RadioButton>
+            </RadioButtons>
+            <Label X="222" Y="179" Width="-28" Height="20" FontId="Muted" DisablePrefix="yes">(Recommended for servers)</Label>
+            <Label X="222" Y="225" Width="-28" Height="20" FontId="Muted" DisablePrefix="yes">(Starts at user login)</Label>
+            <Label X="222" Y="271" Width="-28" Height="20" FontId="Muted" DisablePrefix="yes">(Starts only when you run the program)</Label>
+            <Label Name="InstallVersion" X="24" Y="-57" Width="260" Height="17" FontId="Muted" DisablePrefix="yes" VisibleCondition="WixStdBAShowVersion">#(loc.InstallVersion)</Label>
+            <Button X="-126" Y="-20" Width="102" Height="28" TabStop="yes" FontId="Body">
+                <Text>Next</Text>
+                <ChangePageAction Page="Storage" />
+            </Button>
+            <Button Name="InstallCancelButton" X="-24" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body">
+                <Text>Cancel</Text>
+                <CloseWindowAction />
+            </Button>
+        </Page>
+
+        <Page Name="Storage">
+            <Label X="24" Y="118" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">✓  Run mode</Label>
+            <Label X="24" Y="150" Width="146" Height="24" FontId="Active" DisablePrefix="yes">2  Storage</Label>
+            <Label X="24" Y="182" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">3  Updates</Label>
+            <Label X="24" Y="214" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">4  Install</Label>
+
+            <Label X="200" Y="106" Width="-28" Height="30" FontId="Header" DisablePrefix="yes">Storage</Label>
+            <Label X="200" Y="138" Width="-28" Height="34" FontId="Muted" DisablePrefix="yes">For the best experience, you can put the data folder in your fastest disk. Media directory can work on a slower disk.</Label>
+            <Label X="200" Y="185" Width="-28" Height="17" FontId="Label" DisablePrefix="yes">Application directory</Label>
+            <Editbox Name="InstallFolder" X="200" Y="205" Width="-120" Height="23" TabStop="yes" FontId="Body" FileSystemAutoComplete="yes" />
+            <Button Name="BrowseButton" X="-28" Y="204" Width="82" Height="26" TabStop="yes" FontId="Body"><Text>Browse…</Text><BrowseDirectoryAction VariableName="InstallFolder" /></Button>
+            <Label X="200" Y="245" Width="-28" Height="17" FontId="Label" DisablePrefix="yes">Data directory</Label>
+            <Editbox Name="DataDirectory" X="200" Y="265" Width="-120" Height="23" TabStop="yes" FontId="Body" FileSystemAutoComplete="yes" />
+            <Button X="-28" Y="264" Width="82" Height="26" TabStop="yes" FontId="Body"><Text>Browse…</Text><BrowseDirectoryAction VariableName="DataDirectory" /></Button>
+            <Label X="200" Y="305" Width="-28" Height="17" FontId="Label" DisablePrefix="yes">Media directory</Label>
+            <Editbox Name="MediaDirectory" X="200" Y="325" Width="-120" Height="23" TabStop="yes" FontId="Body" FileSystemAutoComplete="yes" />
+            <Button X="-28" Y="324" Width="82" Height="26" TabStop="yes" FontId="Body"><Text>Browse…</Text><BrowseDirectoryAction VariableName="MediaDirectory" /></Button>
+            <Button X="-230" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body"><Text>Back</Text><ChangePageAction Page="Install" /></Button>
+            <Button X="-126" Y="-20" Width="102" Height="28" TabStop="yes" FontId="Body"><Text>Next</Text><ChangePageAction Page="Updates" /></Button>
+            <Button X="-24" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body"><Text>Cancel</Text><CloseWindowAction /></Button>
+        </Page>
+
+        <Page Name="Updates">
+            <Label X="24" Y="118" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">✓  Run mode</Label>
+            <Label X="24" Y="150" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">✓  Storage</Label>
+            <Label X="24" Y="182" Width="146" Height="24" FontId="Active" DisablePrefix="yes">3  Updates</Label>
+            <Label X="24" Y="214" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">4  Install</Label>
+
+            <Label X="200" Y="106" Width="-28" Height="30" FontId="Header" DisablePrefix="yes">Updates and shortcuts</Label>
+            <Checkbox Name="AutomaticUpdates" X="200" Y="156" Width="-28" Height="22" TabStop="yes" FontId="Body">Install updates automatically</Checkbox>
+            <Checkbox Name="DesktopShortcut" X="200" Y="202" Width="-28" Height="22" TabStop="yes" FontId="Body">Create a desktop shortcut</Checkbox>
+            <Button X="-230" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body"><Text>Back</Text><ChangePageAction Page="Storage" /></Button>
+            <Button Name="InstallButton" X="-126" Y="-20" Width="102" Height="28" TabStop="yes" FontId="Body" ElevationShieldCondition="NOT WixBundleElevated">Install</Button>
+            <Button X="-24" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body"><Text>Cancel</Text><CloseWindowAction /></Button>
+        </Page>
+
+        <Page Name="Progress">
+            <Label X="24" Y="118" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">✓  Run mode</Label>
+            <Label X="24" Y="150" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">✓  Storage</Label>
+            <Label X="24" Y="182" Width="146" Height="24" FontId="Muted" DisablePrefix="yes">✓  Updates</Label>
+            <Label X="24" Y="214" Width="146" Height="24" FontId="Active" DisablePrefix="yes">4  Install</Label>
+            <Label X="200" Y="112" Width="-28" Height="30" FontId="Header" DisablePrefix="yes">Installing Igloo</Label>
+            <Label Name="OverallProgressPackageText" X="200" Y="158" Width="-28" Height="17" FontId="Body" DisablePrefix="yes">#(loc.OverallProgressPackageText)</Label>
+            <Label Name="ExecuteProgressActionDataText" X="200" Y="184" Width="-28" Height="20" FontId="Muted" DisablePrefix="yes" />
+            <Progressbar Name="OverallCalculatedProgressbar" X="200" Y="216" Width="-28" Height="18" />
+            <Button Name="ProgressCancelButton" X="-24" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body">#(loc.ProgressCancelButton)</Button>
+        </Page>
+
+        <Page Name="Modify">
+            <Label X="200" Y="112" Width="-28" Height="30" FontId="Header" DisablePrefix="yes">Igloo is installed</Label>
+            <Button Name="ModifyUpdateButton" X="200" Y="170" Width="180" Height="28" TabStop="yes" FontId="Body" EnableCondition="WixStdBAUpdateAvailable" HideWhenDisabled="yes">#(loc.UpdateButton)</Button>
+            <Button Name="RepairButton" X="200" Y="214" Width="180" Height="32" TabStop="yes" FontId="Body" HideWhenDisabled="yes">Repair</Button>
+            <Button X="200" Y="258" Width="180" Height="32" TabStop="yes" FontId="Body"><Text>Uninstall…</Text><ChangePageAction Page="UninstallOptions" /></Button>
+            <Button Name="ModifyCancelButton" X="-24" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body"><Text>Close</Text><CloseWindowAction /></Button>
+        </Page>
+
+        <Page Name="UninstallOptions">
+            <Label X="200" Y="106" Width="-28" Height="30" FontId="Header" DisablePrefix="yes">Uninstall Igloo</Label>
+            <RadioButtons Name="UninstallMode">
+                <RadioButton X="200" Y="160" Width="-28" Height="22" Value="0" FontId="Label">Keep data and settings</RadioButton>
+                <RadioButton X="200" Y="214" Width="-28" Height="22" Value="1" FontId="Label">Remove application data</RadioButton>
+                <RadioButton X="200" Y="276" Width="-28" Height="22" Value="2" FontId="Label">Remove everything</RadioButton>
+            </RadioButtons>
+            <Label X="222" Y="237" Width="-28" Height="30" FontId="Muted" DisablePrefix="yes">Keeps media, settings, and uploaded cookies.</Label>
+            <Label X="222" Y="299" Width="-28" Height="42" FontId="Muted" DisablePrefix="yes">Deletes data, media, settings, and uploaded cookies.</Label>
+            <Button X="-230" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body"><Text>Back</Text><ChangePageAction Page="Modify" /></Button>
+            <Button Name="UninstallButton" X="-126" Y="-20" Width="102" Height="28" TabStop="yes" FontId="Body" ElevationShieldCondition="NOT WixBundleElevated">Uninstall</Button>
+            <Button X="-24" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body"><Text>Cancel</Text><CloseWindowAction /></Button>
+        </Page>
+
+        <Page Name="Success">
+            <Label X="200" Y="128" Width="-28" Height="34" FontId="Header" DisablePrefix="yes">
+                <Text>#(loc.SuccessHeader)</Text>
+                <Text Condition="WixBundleAction = 3">Uninstall complete</Text>
+                <Text Condition="WixBundleAction = 5">Installation complete</Text>
+                <Text Condition="WixBundleAction = 7">Repair complete</Text>
+            </Label>
+            <Label X="-24" Y="-62" Width="430" Height="34" FontId="Muted" DisablePrefix="yes" VisibleCondition="WixStdBARestartRequired">#(loc.SuccessRestartText)</Label>
+            <Button Name="LaunchButton" X="-168" Y="-20" Width="144" Height="28" TabStop="yes" FontId="Body" HideWhenDisabled="yes" VisibleCondition="WixBundleAction &lt;&gt; 3">Finish and launch</Button>
+            <Button Name="SuccessRestartButton" X="-126" Y="-20" Width="102" Height="28" TabStop="yes" FontId="Body" HideWhenDisabled="yes">#(loc.SuccessRestartButton)</Button>
+            <Button Name="SuccessCloseButton" X="-24" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body"><Text>Finish</Text><CloseWindowAction /></Button>
+        </Page>
+
+        <Page Name="Failure">
+            <Label X="200" Y="112" Width="-28" Height="30" FontId="Header" DisablePrefix="yes">Installation failed</Label>
+            <Hypertext Name="FailureLogFileLink" X="200" Y="154" Width="-28" Height="42" FontId="Body" TabStop="yes" HideWhenDisabled="yes">#(loc.FailureHyperlinkLogText)</Hypertext>
+            <Hypertext Name="FailureMessageText" X="212" Y="198" Width="-28" Height="62" FontId="Body" TabStop="yes" HideWhenDisabled="yes" />
+            <Label X="-24" Y="-62" Width="430" Height="34" FontId="Muted" DisablePrefix="yes" VisibleCondition="WixStdBARestartRequired">#(loc.FailureRestartText)</Label>
+            <Button Name="FailureRestartButton" X="-126" Y="-20" Width="102" Height="28" TabStop="yes" FontId="Body" HideWhenDisabled="yes">#(loc.FailureRestartButton)</Button>
+            <Button Name="FailureCloseButton" X="-24" Y="-20" Width="92" Height="28" TabStop="yes" FontId="Body"><Text>Close</Text><CloseWindowAction /></Button>
+        </Page>
+    </Window>
+</Theme>

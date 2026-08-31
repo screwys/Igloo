@@ -8,6 +8,12 @@
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of Igloo is already installed." />
     <MediaTemplate EmbedCab="yes" />
+    <Property Id="RUNMODE" Value="0" />
+    <Property Id="AUTOMATICUPDATES" Value="1" />
+    <Property Id="DESKTOPSHORTCUT" Value="1" />
+    <Property Id="UNINSTALLMODE" Value="0" />
+    <Icon Id="IglooProductIcon" SourceFile="$(var.InstallerIcon)" />
+    <Property Id="ARPPRODUCTICON" Value="IglooProductIcon" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="Igloo">
@@ -20,6 +26,7 @@
     <StandardDirectory Id="CommonAppDataFolder">
       <Directory Id="PROGRAMDATAIGLOO" Name="Igloo">
         <Directory Id="DATADIR" Name="data" />
+        <Directory Id="MEDIADIR" Name="media" />
         <Directory Id="CONFIGDIR" Name="config" />
       </Directory>
     </StandardDirectory>
@@ -28,11 +35,16 @@
       <Directory Id="IGLOOPROGRAMMENU" Name="Igloo" />
     </StandardDirectory>
 
+    <StandardDirectory Id="DesktopFolder" />
+
     <Files Include="$(var.PayloadDir)\**" Directory="INSTALLFOLDER">
       <Exclude Files="$(var.PayloadDir)\app\current\igloo.exe" />
+      <Exclude Files="$(var.PayloadDir)\app\current\igloo-user.exe" />
+      <Exclude Files="$(var.PayloadDir)\app\current\igloo-launch.exe" />
+      <Exclude Files="$(var.PayloadDir)\app\current\igloo-uninstall.exe" />
     </Files>
 
-    <Component Id="IglooServiceComponent" Directory="APPCURRENT">
+    <Component Id="IglooServiceComponent" Directory="APPCURRENT" Condition="RUNMODE = 0" Transitive="yes">
       <File Id="IglooServiceExecutable" Source="$(var.PayloadDir)\app\current\igloo.exe" KeyPath="yes">
         <fire:FirewallException Id="IglooPrivateTCP" Name="Igloo private network TCP" Port="5001" Protocol="tcp" Profile="private" Scope="localSubnet" />
         <fire:FirewallException Id="IglooPrivateUDP" Name="Igloo private network discovery" Port="5001" Protocol="udp" Profile="private" Scope="localSubnet" />
@@ -47,14 +59,43 @@
         ErrorControl="normal"
         Account="NT AUTHORITY\LocalService">
         <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" ServiceStart="yes" ServiceStop="yes" ServiceQueryStatus="yes" />
+        <util:PermissionEx User="BUILTIN\Users" ServiceStart="yes" ServiceQueryStatus="yes" />
         <util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="restart" RestartServiceDelayInSeconds="10" />
       </ServiceInstall>
       <ServiceControl Id="IglooServiceControl" Name="Igloo" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
     </Component>
 
+    <Component Id="IglooUserExecutableComponent" Directory="APPCURRENT">
+      <File Id="IglooUserExecutable" Source="$(var.PayloadDir)\app\current\igloo-user.exe" KeyPath="yes" />
+    </Component>
+
+    <Component Id="IglooLauncherComponent" Directory="APPCURRENT">
+      <File Id="IglooLauncherExecutable" Source="$(var.PayloadDir)\app\current\igloo-launch.exe" KeyPath="yes" />
+    </Component>
+
+    <Component Id="IglooUninstallExecutableComponent" Directory="APPCURRENT">
+      <File Id="IglooUninstallExecutable" Source="$(var.PayloadDir)\app\current\igloo-uninstall.exe" KeyPath="yes" />
+    </Component>
+
+    <Component Id="IglooStartMenuShortcut" Directory="IGLOOPROGRAMMENU" Guid="5521FD0B-E977-42BE-BBA1-EAE38AFEE1E6">
+      <Shortcut Id="IglooOpenShortcut" Name="Igloo" Description="Open Igloo" Target="[#IglooLauncherExecutable]" WorkingDirectory="INSTALLFOLDER" Icon="IglooProductIcon" />
+      <RemoveFolder Id="RemoveIglooProgramMenu" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\Igloo" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Component Id="IglooDesktopShortcut" Directory="DesktopFolder" Guid="E73176A9-8722-486D-BE8C-15F6CFD53D37" Condition="DESKTOPSHORTCUT = 1" Transitive="yes">
+      <Shortcut Id="IglooDesktopShortcutLink" Name="Igloo" Description="Open Igloo" Target="[#IglooLauncherExecutable]" WorkingDirectory="INSTALLFOLDER" Icon="IglooProductIcon" />
+      <RegistryValue Root="HKCU" Key="Software\Igloo" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Component Id="IglooUserStartup" Directory="APPCURRENT" Guid="ED15B2B6-7115-46D6-AD85-F68F264F976B" Condition="RUNMODE = 1" Transitive="yes">
+      <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="Igloo" Type="string" Value="&quot;[#IglooUserExecutable]&quot;" KeyPath="yes" />
+    </Component>
+
     <Component Id="IglooProgramData" Directory="DATADIR" Permanent="yes" NeverOverwrite="yes">
       <CreateFolder>
         <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
+        <util:PermissionEx User="[LogonUser]" GenericAll="yes" />
       </CreateFolder>
       <File Id="StateRootMarker" Source="$(var.StateMarker)" Name=".igloo-state-root" KeyPath="yes" />
     </Component>
@@ -62,19 +103,41 @@
     <Component Id="IglooConfigData" Directory="CONFIGDIR" Guid="F22B0364-10A4-4D92-89BE-BDCA8538C038" Permanent="yes" NeverOverwrite="yes">
       <CreateFolder>
         <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
+        <util:PermissionEx User="[LogonUser]" GenericAll="yes" />
       </CreateFolder>
+    </Component>
+
+    <Component Id="IglooConfigMarker" Directory="CONFIGDIR" Guid="53049D5C-882C-494C-B868-5B10AF134106" Permanent="yes" NeverOverwrite="yes">
+      <File Id="ConfigRootMarker" Source="$(var.ConfigMarker)" Name=".igloo-config-root" KeyPath="yes" />
+    </Component>
+
+    <Component Id="IglooMediaData" Directory="MEDIADIR" Permanent="yes" NeverOverwrite="yes">
+      <CreateFolder>
+        <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
+        <util:PermissionEx User="[LogonUser]" GenericAll="yes" />
+      </CreateFolder>
+      <File Id="MediaRootMarker" Source="$(var.MediaMarker)" Name=".igloo-media-root" KeyPath="yes" />
     </Component>
 
     <Component Id="IglooUpdatePermissions" Directory="INSTALLFOLDER" Guid="D5C83105-34A0-466F-9B4B-EB40E43469D0">
       <CreateFolder>
         <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
+        <util:PermissionEx User="[LogonUser]" GenericAll="yes" />
       </CreateFolder>
     </Component>
 
-    <Component Id="IglooStartMenuShortcut" Directory="IGLOOPROGRAMMENU" Guid="24572A61-F65A-444F-A802-2B76BAFE0096">
-      <util:InternetShortcut Id="IglooOpenShortcut" Name="Igloo" Target="http://localhost:5001" Type="link" />
-      <RemoveFolder Id="RemoveIglooProgramMenu" On="uninstall" />
-      <RegistryValue Root="HKCU" Key="Software\Igloo" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+    <Component Id="IglooInstallSettings" Directory="INSTALLFOLDER" Guid="BF4B14E4-EF20-43C6-BD9E-B0D0F7BF8F72">
+      <RegistryValue Root="HKLM" Key="Software\Igloo" Name="InstallDirectory" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+      <RegistryValue Root="HKLM" Key="Software\Igloo" Name="DataDirectory" Type="string" Value="[DATADIR]" />
+      <RegistryValue Root="HKLM" Key="Software\Igloo" Name="MediaDirectory" Type="string" Value="[MEDIADIR]" />
+      <RegistryValue Root="HKLM" Key="Software\Igloo" Name="ConfigDirectory" Type="string" Value="[CONFIGDIR]" />
+      <RegistryValue Root="HKLM" Key="Software\Igloo" Name="AutomaticUpdates" Type="integer" Value="[AUTOMATICUPDATES]" />
+      <RegistryValue Root="HKLM" Key="Software\Igloo" Name="RunMode" Type="integer" Value="[RUNMODE]" />
     </Component>
+
+    <CustomAction Id="RemoveSelectedIglooData" FileRef="IglooUninstallExecutable" ExeCommand="[UNINSTALLMODE]" Execute="deferred" Impersonate="no" Return="check" />
+    <InstallExecuteSequence>
+      <Custom Action="RemoveSelectedIglooData" After="StopServices" Condition="REMOVE~=&quot;ALL&quot; AND UNINSTALLMODE &lt;&gt; 0" />
+    </InstallExecuteSequence>
   </Package>
 </Wix>

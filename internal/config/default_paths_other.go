@@ -11,3 +11,7 @@ func defaultStateRoot() string {
 func defaultConfigDir() string {
 	return filepath.Join(homeDir(), ".config", "igloo")
 }
+
+func defaultMediaRoot() string { return "" }
+
+func defaultWindowsAutoUpdate() bool { return true }

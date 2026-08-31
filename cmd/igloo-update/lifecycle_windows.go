@@ -68,7 +68,7 @@ func (platformLifecycle) Start(ctx context.Context, plan windowsupdate.ApplyPlan
 			}
 		}
 	}
-	executable := filepath.Join(plan.InstallRoot, "app", "current", "igloo.exe")
+	executable := filepath.Join(plan.InstallRoot, "app", "current", "igloo-user.exe")
 	command := exec.CommandContext(ctx, executable)
 	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.DETACHED_PROCESS, HideWindow: true}
 	return command.Start()
