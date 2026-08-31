@@ -42,16 +42,19 @@ func TestAugmentPATHPrefersUserPackageManagerDirs(t *testing.T) {
 func TestAugmentPATHDeduplicatesExistingDirs(t *testing.T) {
 	home := filepath.Join(string(os.PathSeparator), "home", "me")
 	localBin := filepath.Join(home, ".local", "bin")
+	systemBin := filepath.Join(string(os.PathSeparator), "usr", "bin")
 	exists := func(path string) bool {
-		return path == localBin || path == "/usr/bin"
+		return path == localBin || path == systemBin
 	}
 
-	got := AugmentPATH(localBin+":/usr/bin:"+localBin, home, "", exists)
+	separator := string(os.PathListSeparator)
+	got := AugmentPATH(strings.Join([]string{localBin, systemBin, localBin}, separator), home, "", exists)
 	if count := strings.Count(got, localBin); count != 1 {
 		t.Fatalf("local bin count = %d, want 1 in %q", count, got)
 	}
-	if got != localBin+":/usr/bin" {
-		t.Fatalf("PATH = %q, want %q", got, localBin+":/usr/bin")
+	want := strings.Join([]string{localBin, systemBin}, separator)
+	if got != want {
+		t.Fatalf("PATH = %q, want %q", got, want)
 	}
 }
 

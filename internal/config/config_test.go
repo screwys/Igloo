@@ -216,7 +216,11 @@ func TestLoadFreshInstallDefaultsToNoPlatforms(t *testing.T) {
 	if cfg.PlatformEnabled("youtube") {
 		t.Fatal("youtube should be opt-in on fresh installs")
 	}
-	if cfg.Storage.DatabasePath() != filepath.Join(dataDir, DatabaseFilename) {
+	canonicalDataDir, err := filepath.EvalSymlinks(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Storage.DatabasePath() != filepath.Join(canonicalDataDir, DatabaseFilename) {
 		t.Fatalf("DatabasePath = %q, want igloo.db default", cfg.Storage.DatabasePath())
 	}
 }
@@ -284,11 +288,19 @@ func TestLoadUsesExplicitMediaRoot(t *testing.T) {
 	if cfg.ConfigError != nil {
 		t.Fatal(cfg.ConfigError)
 	}
-	if cfg.Storage.DatabasePath() != filepath.Join(stateRoot, DatabaseFilename) {
+	canonicalStateRoot, err := filepath.EvalSymlinks(stateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalMediaRoot, err := filepath.EvalSymlinks(mediaRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Storage.DatabasePath() != filepath.Join(canonicalStateRoot, DatabaseFilename) {
 		t.Fatalf("DatabasePath = %q", cfg.Storage.DatabasePath())
 	}
-	if cfg.Storage.MediaRoot() != mediaRoot {
-		t.Fatalf("MediaRoot = %q, want %q", cfg.Storage.MediaRoot(), mediaRoot)
+	if cfg.Storage.MediaRoot() != canonicalMediaRoot {
+		t.Fatalf("MediaRoot = %q, want %q", cfg.Storage.MediaRoot(), canonicalMediaRoot)
 	}
 }
 
