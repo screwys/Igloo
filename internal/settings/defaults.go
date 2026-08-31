@@ -175,7 +175,7 @@ func SponsorBlockDefaultAction(category string) string {
 var Defaults = map[string]any{
 	"quality":                          "best",
 	"web_theme_id":                     "occult-umbral",
-	"web_theme_accent":                 "#e6c27a",
+	"web_theme_accent":                 "#8b2e2e",
 	"web_custom_css":                   "",
 	"share_embed_friendly_links":       false,
 	"share_embed_host_youtube":         "",

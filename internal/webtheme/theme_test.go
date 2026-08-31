@@ -38,7 +38,7 @@ func TestBuiltInThemeCatalogAndAccentNormalization(t *testing.T) {
 	}
 }
 
-func TestDefaultThemeUsesOccultAmber(t *testing.T) {
+func TestDefaultThemeUsesOccultUmbralCatalogAccent(t *testing.T) {
 	got := NormalizeSettings(Settings{})
 	if got.ThemeID != DefaultThemeID {
 		t.Fatalf("ThemeID = %q, want %q", got.ThemeID, DefaultThemeID)
@@ -52,8 +52,8 @@ func TestDefaultThemeUsesOccultAmber(t *testing.T) {
 		`color-scheme: dark;`,
 		`--web-theme-id: "occult-umbral";`,
 		`--bg-primary: #0a0a12;`,
-		`--accent-primary: #e6c27a;`,
-		`--accent-secondary: #8b2e2e;`,
+		`--accent-primary: #8b2e2e;`,
+		`--accent-secondary: #a83a3a;`,
 	} {
 		if !strings.Contains(css, want) {
 			t.Fatalf("default CSS missing %q:\n%s", want, css)
@@ -99,8 +99,8 @@ func TestNormalizeSettingsFallsBackToDefaultThemeAccent(t *testing.T) {
 	if got.ThemeID != DefaultThemeID {
 		t.Fatalf("ThemeID = %q, want %q", got.ThemeID, DefaultThemeID)
 	}
-	if got.AccentHex != "#e6c27a" {
-		t.Fatalf("AccentHex = %q, want Occult Amber", got.AccentHex)
+	if got.AccentHex != "#8b2e2e" {
+		t.Fatalf("AccentHex = %q, want Occult Umbral default", got.AccentHex)
 	}
 	if len(got.CustomCSS) != MaxCustomCSSBytes {
 		t.Fatalf("CustomCSS length = %d, want cap %d", len(got.CustomCSS), MaxCustomCSSBytes)

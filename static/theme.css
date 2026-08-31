@@ -1,4 +1,4 @@
-/* Occult Amber fallback for login and first paint.
+/* Occult Umbral fallback for login and first paint.
    Authenticated pages replace this with /api/theme.css after settings load. */
 
 :root {
@@ -71,11 +71,11 @@
     --text-handle: var(--ctp-subtext0);
     --text-handle-rgb: var(--ctp-subtext0-rgb);
 
-    --accent-primary: var(--ctp-peach);
-    --accent-secondary: #8b2e2e;
-    --accent-primary-rgb: var(--ctp-peach-rgb);
-    --accent-secondary-rgb: 139, 46, 46;
-    --accent-gradient: linear-gradient(135deg, var(--ctp-peach) 0%, #8b2e2e 100%);
+    --accent-primary: #8b2e2e;
+    --accent-secondary: #a83a3a;
+    --accent-primary-rgb: 139, 46, 46;
+    --accent-secondary-rgb: 168, 58, 58;
+    --accent-gradient: linear-gradient(135deg, #8b2e2e 0%, #a83a3a 100%);
     --accent-yellow: var(--ctp-yellow);
     --accent-green: var(--ctp-green);
 
@@ -107,5 +107,5 @@
     --media-range-bar-color: rgba(var(--accent-primary-rgb), 0.5);
     --media-icon-color: var(--ctp-text);
 
-    --on-accent: #11111b;
+    --on-accent: #ffffff;
 }

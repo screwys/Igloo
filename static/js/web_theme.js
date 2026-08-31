@@ -1,7 +1,7 @@
 (function () {
   const doc = document;
   const DEFAULT_THEME = 'occult-umbral';
-  const DEFAULT_ACCENT = '#e6c27a';
+  const DEFAULT_ACCENT = '#8b2e2e';
   const MAX_CUSTOM_CSS_BYTES = 64 * 1024;
   const accentNames = [
     ['rosewater', 'Rosewater'], ['flamingo', 'Flamingo'], ['pink', 'Pink'], ['mauve', 'Mauve'],
@@ -137,7 +137,7 @@
   }
   function onAccent(accent) { return luminance(rgb(accent)) > 0.35 ? '#11111b' : '#ffffff'; }
   function derivedSecondary(id, themeData, accent) {
-    if (id === DEFAULT_THEME && normalizeHex(accent) === normalizeHex(DEFAULT_ACCENT)) return '#8b2e2e';
+    if (id === DEFAULT_THEME && normalizeHex(accent) === normalizeHex(DEFAULT_ACCENT)) return '#a83a3a';
     if (normalizeHex(accent) === normalizeHex(themeData.defaultAccent)) return themeData.secondary.toLowerCase();
     const base = rgb(accent);
     const target = luminance(base) > 0.45 ? rgb(themeData.crust) : rgb(themeData.text);

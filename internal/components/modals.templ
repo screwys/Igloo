@@ -433,14 +433,16 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 								}
 							</select>
 						</div>
-						<div class="form-group">
-							<label for="global-setting-windows-update-channel">{ L(p, "settings_windows_update_channel", "Update channel") }</label>
-							<select id="global-setting-windows-update-channel" name="windows_update_channel" class="input">
-								<option value="stable" selected?={ prefs.Str("windows_update_channel", "stable") == "stable" }>{ L(p, "settings_windows_update_stable", "Stable") }</option>
-								<option value="latest" selected?={ prefs.Str("windows_update_channel", "stable") == "latest" }>{ L(p, "settings_windows_update_latest", "Latest") }</option>
-							</select>
+						<div class="windows-update-row">
+							<div class="form-group windows-update-channel">
+								<label for="global-setting-windows-update-channel">{ L(p, "settings_windows_update_channel", "Update channel") }</label>
+								<select id="global-setting-windows-update-channel" name="windows_update_channel" class="input">
+									<option value="stable" selected?={ prefs.Str("windows_update_channel", "stable") == "stable" }>{ L(p, "settings_windows_update_stable", "Stable") }</option>
+									<option value="latest" selected?={ prefs.Str("windows_update_channel", "stable") == "latest" }>{ L(p, "settings_windows_update_latest", "Latest") }</option>
+								</select>
+							</div>
+							@WindowsUpdatePanel(p, windowsupdate.Status{})
 						</div>
-						@WindowsUpdatePanel(p, windowsupdate.Status{})
 					}
 					<h4 style="margin:1.25rem 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_embeds", "Embeds") }</h4>
 					<div class="form-group checkbox-group">
@@ -734,23 +736,23 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 
 templ WindowsUpdatePanel(p PageProps, status windowsupdate.Status) {
 	<div id="windows-update-panel"
+		class="windows-update-panel"
 		hx-get="/api/windows-update/status"
 		hx-trigger="load, every 5s"
 		hx-target="this"
 		hx-swap="outerHTML"
-		style="padding:0.75rem; border:1px solid var(--border-color); border-radius:8px; font-size:0.8rem;"
 	>
 		if !status.Supported {
-			<span style="color:var(--text-secondary);">{ L(p, "settings_windows_update_unavailable", "Update status is available in packaged Windows builds.") }</span>
+			<span class="windows-update-meta">{ L(p, "settings_windows_update_unavailable", "Update status is available in packaged Windows builds.") }</span>
 		} else {
-			<div>{ L(p, "settings_windows_update_installed", "Installed") + ": " + status.CurrentApp + " / runtime " + status.CurrentRuntime }</div>
+			<span class="windows-update-meta">{ L(p, "settings_windows_update_installed", "Installed") + ": " + status.CurrentApp + " / runtime " + status.CurrentRuntime }</span>
 			if status.AvailableApp != "" || status.AvailableRuntime != "" {
-				<div style="color:var(--accent-primary); margin-top:0.35rem;">{ L(p, "settings_windows_update_available", "Update available") + ": " + status.AvailableApp + " / runtime " + status.AvailableRuntime }</div>
+				<span class="windows-update-detail available">{ L(p, "settings_windows_update_available", "Update available") + ": " + status.AvailableApp + " / runtime " + status.AvailableRuntime }</span>
 			}
 			if status.LastError != "" {
-				<div style="color:var(--danger); margin-top:0.35rem;">{ status.LastError }</div>
+				<span class="windows-update-detail error">{ status.LastError }</span>
 			}
-			<div style="margin-top:0.5rem;">
+			<div class="windows-update-actions">
 				<button type="button" class="btn btn-secondary btn-sm"
 					hx-post="/api/windows-update/check"
 					hx-target="#windows-update-panel"
@@ -758,10 +760,10 @@ templ WindowsUpdatePanel(p PageProps, status windowsupdate.Status) {
 					disabled?={ status.Checking || status.Applying }
 				>{ L(p, "action_check_for_updates", "Check now") }</button>
 				if status.Checking {
-					<span style="margin-left:0.5rem; color:var(--text-secondary);">{ L(p, "status_checking_for_updates", "Checking…") }</span>
+					<span class="windows-update-state">{ L(p, "status_checking_for_updates", "Checking…") }</span>
 				}
 				if status.Applying {
-					<span style="margin-left:0.5rem; color:var(--text-secondary);">{ L(p, "status_applying_update", "Applying update…") }</span>
+					<span class="windows-update-state">{ L(p, "status_applying_update", "Applying update…") }</span>
 				}
 			</div>
 		}

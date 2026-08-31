@@ -12,9 +12,9 @@ import (
 const (
 	SystemThemeID     = "system"
 	DefaultThemeID    = "occult-umbral"
-	DefaultAccentHex  = "#e6c27a"
+	DefaultAccentHex  = "#8b2e2e"
 	MaxCustomCSSBytes = 64 * 1024
-	defaultSecondary  = "#8b2e2e"
+	defaultSecondary  = "#a83a3a"
 )
 
 // Settings are the persisted web-only theme preferences.
