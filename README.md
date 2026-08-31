@@ -105,6 +105,11 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
 
 Download and run `IglooSetup-x64.exe` from the [GitHub Releases](https://github.com/screwys/Igloo/releases). This package comes with automatic updates with `main` (always up-to-date) and `stable` channels. 
 
+### Android 
+
+Android app is not a standalone package, it is a client for the Igloo server. Set up [Obtanium](https://github.com/ImranR98/Obtainium) to follow the [GitHub Releases](https://github.com/screwys/Igloo/releases) for automatic updates or download the APK manually.
+
+
 ### Container
 
 ```bash
