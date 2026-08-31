@@ -20,6 +20,10 @@ if command -v cygpath >/dev/null 2>&1; then
   temp_root="$(cygpath -u "$temp_root")"
 fi
 gpg_home="$(mktemp -d "$temp_root/igloo-release-gpg.XXXXXX")"
+git_gpg_home="$gpg_home"
+if command -v cygpath >/dev/null 2>&1; then
+  git_gpg_home="$(cygpath -w "$gpg_home")"
+fi
 export GNUPGHOME="$gpg_home"
 cleanup_gpg_home() {
   gpgconf --kill all >/dev/null 2>&1 || true
@@ -48,7 +52,7 @@ if [[ "$tag_type" != "tag" ]]; then
   exit 1
 fi
 
-git tag -v "$release_ref_name"
+GNUPGHOME="$git_gpg_home" git tag -v "$release_ref_name"
 
 tag_target="$(git rev-list -n1 "refs/tags/${release_ref_name}")"
 head_commit="$(git rev-parse HEAD)"
