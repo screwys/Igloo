@@ -24,7 +24,7 @@
       </Directory>
     </StandardDirectory>
 
-    <StandardDirectory Id="CommonProgramsFolder">
+    <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="IGLOOPROGRAMMENU" Name="Igloo" />
     </StandardDirectory>
 
@@ -74,7 +74,7 @@
     <Component Id="IglooStartMenuShortcut" Directory="IGLOOPROGRAMMENU" Guid="24572A61-F65A-444F-A802-2B76BAFE0096">
       <util:InternetShortcut Id="IglooOpenShortcut" Name="Igloo" Target="http://localhost:5001" Type="link" />
       <RemoveFolder Id="RemoveIglooProgramMenu" On="uninstall" />
-      <RegistryValue Root="HKLM" Key="Software\Igloo" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      <RegistryValue Root="HKCU" Key="Software\Igloo" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
     </Component>
   </Package>
 </Wix>
