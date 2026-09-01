@@ -95,12 +95,16 @@ func TestGitHubSourceReadsNightlyAndRuntimeFeedsByTag(t *testing.T) {
 	server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/repos/sample/Igloo/releases/tags/windows-nightly", "/repos/sample/Igloo/releases/tags/windows-runtime":
+			requestedManifest := manifestAssetName
+			if strings.HasSuffix(r.URL.Path, "/windows-runtime") {
+				requestedManifest = runtimeManifestAssetName
+			}
 			_, _ = fmt.Fprintf(w, `{"prerelease":true,"assets":[
                   {"name":"%s","browser_download_url":"%s/manifest","size":%d},
                   {"name":"%s.sig","browser_download_url":"%s/signature","size":%d},
                   {"name":"%s","browser_download_url":"%s/app","size":10},
                   {"name":"%s","browser_download_url":"%s/runtime","size":20}
-                ]}`, manifestAssetName, server.URL, len(rawManifest), manifestAssetName, server.URL, len(signature), manifest.App.Asset, server.URL, manifest.Runtime.Asset, server.URL)
+                ]}`, requestedManifest, server.URL, len(rawManifest), requestedManifest, server.URL, len(signature), manifest.App.Asset, server.URL, manifest.Runtime.Asset, server.URL)
 		case "/manifest":
 			_, _ = w.Write(rawManifest)
 		case "/signature":

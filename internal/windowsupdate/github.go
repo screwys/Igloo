@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	defaultRepository = "screwys/Igloo"
-	manifestAssetName = "igloo-windows-update.json"
-	nightlyReleaseTag = "windows-nightly"
-	runtimeReleaseTag = "windows-runtime"
-	maxMetadataBytes  = 1 << 20
+	defaultRepository        = "screwys/Igloo"
+	manifestAssetName        = "igloo-windows-update.json"
+	runtimeManifestAssetName = "igloo-windows-runtime-update.json"
+	nightlyReleaseTag        = "windows-nightly"
+	runtimeReleaseTag        = "windows-runtime"
+	maxMetadataBytes         = 1 << 20
 )
 
 type githubRelease struct {
@@ -114,11 +115,15 @@ func (s GitHubSource) Latest(ctx context.Context, channel, etag string) (Availab
 		for _, asset := range release.Assets {
 			assets[asset.Name] = asset
 		}
-		manifestAsset, ok := assets[manifestAssetName]
+		requestedManifest := manifestAssetName
+		if channel == "runtime" {
+			requestedManifest = runtimeManifestAssetName
+		}
+		manifestAsset, ok := assets[requestedManifest]
 		if !ok {
 			continue
 		}
-		signatureAsset, ok := assets[manifestAssetName+".sig"]
+		signatureAsset, ok := assets[requestedManifest+".sig"]
 		if !ok {
 			continue
 		}

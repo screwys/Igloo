@@ -135,10 +135,10 @@ jobs:
             -RuntimeVersion "${{ steps.runtime.outputs.version }}" `
             -MinimumAppVersion $minimumAppVersion `
             -RuntimeArchive "release-artifacts/igloo-runtime-windows-amd64.zip" `
-            -OutputPath "release-artifacts/igloo-windows-update.json"
+            -OutputPath "release-artifacts/igloo-windows-runtime-update.json"
           go run ./cmd/igloo-sign-update `
-            --input "release-artifacts/igloo-windows-update.json" `
-            --output "release-artifacts/igloo-windows-update.json.sig" `
+            --input "release-artifacts/igloo-windows-runtime-update.json" `
+            --output "release-artifacts/igloo-windows-runtime-update.json.sig" `
             --public-key $env:WINDOWS_UPDATE_PUBLIC_KEY_BASE64
 
       - name: Publish runtime update
@@ -152,7 +152,7 @@ jobs:
           gh release edit windows-runtime --title "Windows Runtime ${{ steps.runtime.outputs.version }}"
           gh release upload windows-runtime `
             release-artifacts/igloo-runtime-windows-amd64.zip `
-            release-artifacts/igloo-windows-update.json.sig `
+            release-artifacts/igloo-windows-runtime-update.json.sig `
             release-artifacts/windows-runtime-sources.json `
             --clobber
-          gh release upload windows-runtime release-artifacts/igloo-windows-update.json --clobber
+          gh release upload windows-runtime release-artifacts/igloo-windows-runtime-update.json --clobber
