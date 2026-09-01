@@ -2,6 +2,7 @@ package fetchprofile
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -51,6 +52,24 @@ func TestParseYouTubeDumpPrefersSquareAvatarOverWideNumericThumb(t *testing.T) {
 	}
 	if p.BannerURL != "https://img.example/banner.jpg" {
 		t.Fatalf("banner_url = %q; want wide banner", p.BannerURL)
+	}
+}
+
+func TestParseYouTubeDumpMapsVerification(t *testing.T) {
+	data := []byte(`{"channel":"Example","channel_id":"UCexample","channel_is_verified":true,"uploader_id":"@example"}`)
+	p, err := parseYouTubeDump("UCexample", data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !p.Verified {
+		t.Fatal("verified channel metadata was dropped")
+	}
+}
+
+func TestParseYouTubeDumpRejectsMismatchedChannel(t *testing.T) {
+	data := []byte(`{"channel":"Different Channel","channel_id":"UCdifferent"}`)
+	if _, err := parseYouTubeDump("UCrequested", data); !errors.Is(err, ErrIdentityMismatch) {
+		t.Fatalf("expected ErrIdentityMismatch, got %v", err)
 	}
 }
 

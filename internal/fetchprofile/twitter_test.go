@@ -34,8 +34,13 @@ func TestFetchTwitterSuccess(t *testing.T) {
 	if p.Platform != "twitter" {
 		t.Fatalf("platform: %q", p.Platform)
 	}
-	if p.DisplayName == "" || p.Handle == "" {
-		t.Fatalf("display name or handle empty: %+v", p)
+	if p.Handle != "user_alpha" || p.DisplayName != "User Alpha" ||
+		p.Bio != "Synthetic profile fixture for tests." || p.Website != "https://example.invalid" ||
+		p.Followers != 123 || p.Following != 45 || !p.Verified ||
+		p.VerifiedType != "blue" || p.Protected ||
+		p.AvatarURL != "https://pbs.twimg.com/profile_images/1000000000000000001/avatar_normal.jpg" ||
+		p.BannerURL != "https://pbs.twimg.com/profile_banners/1000000000000000001/1/1500x500" {
+		t.Fatalf("profile metadata = %+v", p)
 	}
 }
 

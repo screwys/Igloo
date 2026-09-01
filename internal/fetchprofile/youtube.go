@@ -65,6 +65,8 @@ func parseYouTubeDump(rawID string, out []byte) (*Profile, error) {
 	}
 	var meta struct {
 		Channel              string         `json:"channel"`
+		ChannelID            string         `json:"channel_id"`
+		ChannelIsVerified    bool           `json:"channel_is_verified"`
 		ChannelURL           string         `json:"channel_url"`
 		Uploader             string         `json:"uploader"`
 		UploaderID           string         `json:"uploader_id"`
@@ -84,6 +86,13 @@ func parseYouTubeDump(rawID string, out []byte) (*Profile, error) {
 		if json.Unmarshal([]byte(line), &meta) == nil {
 			break
 		}
+	}
+	returnedID := strings.TrimSpace(meta.ChannelID)
+	if returnedID != "" && returnedID != rawID {
+		return nil, fmt.Errorf("%w: requested %s returned %s", ErrIdentityMismatch, rawID, returnedID)
+	}
+	if returnedID == "" {
+		returnedID = rawID
 	}
 
 	displayName := meta.Channel
@@ -107,12 +116,13 @@ func parseYouTubeDump(rawID string, out []byte) (*Profile, error) {
 	}
 
 	return &Profile{
-		ChannelID:   "youtube_" + rawID,
+		ChannelID:   "youtube_" + returnedID,
 		Platform:    "youtube",
 		Handle:      handle,
 		DisplayName: displayName,
 		Bio:         meta.Description,
 		Followers:   meta.ChannelFollowerCount,
+		Verified:    meta.ChannelIsVerified,
 		AvatarURL:   avatarURL,
 		BannerURL:   bannerURL,
 	}, nil
