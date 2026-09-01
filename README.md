@@ -103,7 +103,7 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
 
 ### Windows 
 
-Download and run `IglooSetup-x64.exe` from the [GitHub Releases](https://github.com/screwys/Igloo/releases). This package comes with automatic updates with `main` (always up-to-date) and `stable` channels. 
+Download and run `IglooSetup-x64.exe` from the [GitHub Releases](https://github.com/screwys/Igloo/releases). This package comes with automatic updates with `nightly` and `stable` channels. Dependency updates can be set to follow the package, or update periodically automatically. The latter ensures stability in the case there is no active development, or a package gets a quick fix.  
 
 ### Android 
 
