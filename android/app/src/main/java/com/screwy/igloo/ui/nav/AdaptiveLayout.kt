@@ -74,8 +74,7 @@ internal fun wideContentKindForRoute(route: String?): WideContentKind =
         RouteRegistry.Videos.route,
         RouteRegistry.Bookmarks.route,
         RouteRegistry.Downloaded.route,
-        RouteRegistry.Channel.route,
-        RouteRegistry.AllMoments.route -> WideContentKind.Grid
+        RouteRegistry.Channel.route -> WideContentKind.Grid
 
         else -> WideContentKind.Timeline
     }

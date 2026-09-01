@@ -384,7 +384,6 @@ internal fun drawerDestinationSelected(currentRoute: String?, destination: Igloo
         IglooDestination.Feed -> route == RouteRegistry.Feed.route
         IglooDestination.Videos -> route == RouteRegistry.Videos.route
         IglooDestination.Moments -> route == RouteRegistry.Moments.route ||
-            route == RouteRegistry.AllMoments.route ||
             route == RouteRegistry.Shorts.route
         IglooDestination.Bookmarks -> route == RouteRegistry.Bookmarks.route
         IglooDestination.Liked -> route == RouteRegistry.Liked.route

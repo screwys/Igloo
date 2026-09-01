@@ -25,7 +25,6 @@ import com.screwy.igloo.liked.LikedRoute
 import com.screwy.igloo.logs.LogFilter
 import com.screwy.igloo.logs.LogsRoute
 import com.screwy.igloo.media.MediaRoute
-import com.screwy.igloo.moments.AllMomentsHost
 import com.screwy.igloo.moments.MomentsRoute
 import com.screwy.igloo.moments.ShortsRoute
 import com.screwy.igloo.player.PlayerRoute
@@ -44,9 +43,7 @@ import com.screwy.igloo.videos.VideosRoute
 import org.koin.compose.koinInject
 
 /**
- * Root NavHost. Moments sits in a nested `moments-graph` so the Moments VM is
- * scoped to `{moments, all-moments}` and resume cursor state is shared across
- * the two destinations.
+ * Root NavHost. Moments sits in a nested `moments-graph` so its player and grid share one VM.
  *
  * Deep links: `igloo://channel/{id}`, `igloo://youtube/{id}`, `igloo://tt/{id}`,
  * `igloo://ig/{id}`, `igloo://tw/{id}`.
@@ -102,7 +99,6 @@ fun AppNavHost() {
 
         navigation(route = RouteRegistry.MomentsGraphRoute, startDestination = RouteRegistry.Moments.route) {
             scaffoldDestination(navController, RouteRegistry.Moments) { MomentsRoute(navController) }
-            scaffoldDestination(navController, RouteRegistry.AllMoments) { AllMomentsHost(navController) }
         }
 
         scaffoldDestination(navController, RouteRegistry.Bookmarks) {

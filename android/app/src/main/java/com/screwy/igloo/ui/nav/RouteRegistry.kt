@@ -37,11 +37,6 @@ object RouteRegistry {
         chrome = momentsPolicy(),
     )
 
-    val AllMoments = IglooRouteSpec(
-        route = "all-moments",
-        chrome = momentsPolicy(),
-    )
-
     val Bookmarks = IglooRouteSpec(
         route = "bookmarks",
         chrome = feedStylePolicy(topBarTitle = TopBarTitle.Resource(R.string.nav_bookmarks)),
@@ -123,7 +118,6 @@ object RouteRegistry {
         Feed,
         Videos,
         Moments,
-        AllMoments,
         Bookmarks,
         Liked,
         Downloaded,

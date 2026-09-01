@@ -9,7 +9,7 @@ class MomentsGraphBackStackTest {
     @Test
     fun momentsGraphContentRoutesAreRecognized() {
         assertTrue(isMomentsGraphContentRoute(RouteRegistry.Moments.route))
-        assertTrue(isMomentsGraphContentRoute(RouteRegistry.AllMoments.route))
+        assertFalse(isMomentsGraphContentRoute("all-moments"))
         assertFalse(isMomentsGraphContentRoute(RouteRegistry.Feed.route))
         assertFalse(isMomentsGraphContentRoute(RouteRegistry.Bookmarks.route))
         assertFalse(isMomentsGraphContentRoute(null))

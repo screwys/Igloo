@@ -39,8 +39,7 @@ private val TABS = listOf(
 
 /**
  * Four-tab Material3 `NavigationBar`. Tab selection tracks the back stack
- * (including the nested `moments-graph`), so the Moments tab stays lit while
- * `all-moments` is on top. Taps use saveState/restoreState round-tripping.
+ * (including the nested `moments-graph`). Taps use saveState/restoreState round-tripping.
  */
 @Composable
 fun BottomNavBar(

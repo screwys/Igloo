@@ -13,7 +13,6 @@ enum class IglooNavigationSource {
     Channel,
     Videos,
     Moments,
-    AllMoments,
     MediaViewer,
     Player,
     Thread,
@@ -31,7 +30,6 @@ enum class IglooDestination {
     Downloaded,
     Settings,
     Logs,
-    AllMoments,
     ThemeSettings,
     PlaybackSettings,
     FeedSettings,
@@ -226,7 +224,6 @@ object IglooNavigation {
             IglooDestination.Downloaded -> RouteRegistry.Downloaded.route
             IglooDestination.Settings -> RouteRegistry.Settings.route
             IglooDestination.Logs -> RouteRegistry.Logs.route
-            IglooDestination.AllMoments -> RouteRegistry.AllMoments.route
             IglooDestination.ThemeSettings -> RouteRegistry.ThemeSettings.route
             IglooDestination.PlaybackSettings -> RouteRegistry.PlaybackSettings.route
             IglooDestination.FeedSettings -> RouteRegistry.FeedSettings.route

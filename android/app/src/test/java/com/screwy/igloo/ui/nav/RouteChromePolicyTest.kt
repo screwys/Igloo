@@ -33,7 +33,7 @@ class RouteChromePolicyTest {
 
     @Test
     fun momentsRoutesKeepChromelessContentOwnedInsetsWithBottomNav() {
-        listOf("moments", "all-moments", "shorts/{playlist_type}/{playlist_id}/{video_id}").forEach { route ->
+        listOf("moments", "shorts/{playlist_type}/{playlist_id}/{video_id}").forEach { route ->
             val policy = routeChromePolicyFor(route)
 
             assertSame(TopChrome.ContentOwnsTopInset, policy.topChrome)

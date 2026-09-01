@@ -18,7 +18,6 @@ class RouteRegistryTest {
             "feed",
             "videos",
             "moments",
-            "all-moments",
             "bookmarks",
             "liked",
             "liked/downloaded",

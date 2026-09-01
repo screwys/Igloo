@@ -21,5 +21,4 @@ internal fun rememberMomentsGraphBackStackEntry(navController: NavController): N
 }
 
 internal fun isMomentsGraphContentRoute(route: String?): Boolean =
-    route == RouteRegistry.Moments.route ||
-        route == RouteRegistry.AllMoments.route
+    route == RouteRegistry.Moments.route

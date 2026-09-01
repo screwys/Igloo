@@ -128,31 +128,22 @@ internal fun <T> scopedShortsSnapshotFlow(
     cursorForScope: (String) -> Flow<MomentsCursorEntity?>,
     startItem: (T, String) -> ShortsStartItem,
     scopeForTab: (String) -> String = ::momentsPlayerScope,
-    selectionOverride: Flow<String?> = flowOf(null),
 ): Flow<ScopedShortsSnapshot<T>> =
     activeTab
         .map(scopeForTab)
         .distinctUntilChanged()
         .flatMapLatest { scope ->
-            combine(
-                rowsForScope(scope),
-                cursorForScope(scope),
-                selectionOverride,
-            ) { rows, cursor, overrideVideoId ->
+            combine(rowsForScope(scope), cursorForScope(scope)) { rows, cursor ->
                 val startItems = rows.map { startItem(it, scope) }
-                val exactOverride =
-                    overrideVideoId?.takeIf { id -> startItems.any { item -> item.videoId == id } }
                 ScopedShortsSnapshot(
                     scope = scope,
                     rows = rows,
                     selection =
                         visibleShortsSelection(
                             items = startItems,
-                            requestedVideoId = exactOverride ?: cursor?.videoId,
-                            fallbackSortAtMs =
-                                cursor?.sortAtMs?.takeIf { exactOverride == null && it > 0L },
-                            fallbackOrderPosition =
-                                cursor?.orderPosition?.takeIf { exactOverride == null && it > 0L },
+                            requestedVideoId = cursor?.videoId,
+                            fallbackSortAtMs = cursor?.sortAtMs?.takeIf { it > 0L },
+                            fallbackOrderPosition = cursor?.orderPosition?.takeIf { it > 0L },
                         ),
                 )
             }
@@ -172,9 +163,9 @@ internal fun momentsPlayerScope(tab: String): String =
 
 /**
  * Nav-graph-scoped ViewModel shared by `MomentsRoute` (the TikTok-style player) and
- * `AllMomentsRoute` (the 3-column grid). Both routes live in the `moments-graph` nested nav graph and
- * resolve this VM against that graph's `NavBackStackEntry` ViewModelStore. The grid thumbnails are
- * still resolved eagerly here because the all-moments grid is a thumbnail surface. The player list
+ * `AllMomentsRoute` (the 3-column grid). Both presentations resolve this VM against the
+ * `moments-graph` ViewModelStore. Grid thumbnails are resolved eagerly because the grid is a
+ * thumbnail surface. The player list
  * is intentionally cheap: it emits metadata only, and the player resolves
  * stream/thumbnail/bookmark state lazily for the current and neighboring pages.
  */
@@ -314,11 +305,10 @@ class MomentsViewModel(
                     orderPosition = momentOrderPosition(row, scope),
                 )
             },
-            selectionOverride = sessionVideoId,
         )
             .stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.Eagerly,
+                started = SharingStarted.WhileSubscribed(5_000L),
                 initialValue =
                     ScopedShortsSnapshot(
                         scope = momentsPlayerScope(PreferencesRepo.Defaults.MOMENTS_DEFAULT_TAB),
@@ -359,7 +349,7 @@ class MomentsViewModel(
         }
             .stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.Eagerly,
+                started = SharingStarted.WhileSubscribed(5_000L),
                 initialValue =
                     MomentsPlayerRouteState(
                         scope = momentsPlayerScope(PreferencesRepo.Defaults.MOMENTS_DEFAULT_TAB),

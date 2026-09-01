@@ -125,12 +125,6 @@ class IglooNavigatorTest {
             )?.route,
         )
         assertEquals(
-            RouteRegistry.AllMoments.route,
-            IglooNavigation.targetFor(
-                IglooNavigationIntent.OpenDestination(IglooDestination.AllMoments, IglooNavigationSource.Moments),
-            )?.route,
-        )
-        assertEquals(
             RouteRegistry.Downloaded.route,
             IglooNavigation.targetFor(
                 IglooNavigationIntent.OpenDestination(
@@ -233,30 +227,6 @@ class IglooNavigatorTest {
                 currentRoute = RouteRegistry.Feed.route,
                 intent = channelIntent,
             ),
-        )
-    }
-
-    @Test
-    fun explicitShortsSelectionDoesNotRestoreAnOlderPlayerEntry() {
-        val intent =
-            IglooNavigationIntent.OpenShorts(
-                playlistType = "all_moments",
-                playlistId = "_",
-                videoId = "selected_video",
-                source = IglooNavigationSource.AllMoments,
-            )
-
-        assertTrue(
-            IglooNavigation.shouldLaunchSingleTop(
-                currentRoute = RouteRegistry.AllMoments.route,
-                intent = intent,
-            )
-        )
-        assertFalse(
-            IglooNavigation.shouldRestoreState(
-                currentRoute = RouteRegistry.AllMoments.route,
-                intent = intent,
-            )
         )
     }
 

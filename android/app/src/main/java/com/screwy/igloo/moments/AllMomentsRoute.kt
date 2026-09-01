@@ -35,9 +35,8 @@ import com.screwy.igloo.ui.component.storyRingBorder
 import com.screwy.igloo.ui.theme.iglooColors
 
 /**
- * Secondary `all-moments` route.
- * `all-moments`. Renders a compact "← All" header above the 3-column grid so a
- * back-nav affordance is always visible in addition to the predictive back gesture.
+ * Grid presentation inside the Moments session. Renders a compact "← All" header above the
+ * 3-column grid.
  */
 @Composable
 fun AllMomentsRoute(
