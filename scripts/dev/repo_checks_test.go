@@ -166,6 +166,39 @@ func TestChangedGoGateRunsCIStaticChecks(t *testing.T) {
 	}
 }
 
+func TestPrePushRunsAndroidFromAColdBuild(t *testing.T) {
+	root := repoRoot(t)
+	hook, err := os.ReadFile(filepath.Join(root, ".githooks/pre-push"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents := string(hook)
+	for _, setting := range []string{
+		"IGLOO_ANDROID_CLEAN=1",
+		"IGLOO_ANDROID_NO_DAEMON=1",
+		"IGLOO_ANDROID_RERUN_TASKS=1",
+	} {
+		if !strings.Contains(contents, setting) {
+			t.Errorf("pre-push hook does not set %s", setting)
+		}
+	}
+
+	androidTest, err := os.ReadFile(filepath.Join(root, "android/test.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	androidContents := string(androidTest)
+	for _, behavior := range []string{
+		`test_args+=("clean")`,
+		`test_args+=("--rerun-tasks")`,
+		`test_args+=("--no-daemon")`,
+	} {
+		if !strings.Contains(androidContents, behavior) {
+			t.Errorf("Android test wrapper does not apply %s", behavior)
+		}
+	}
+}
+
 func TestChangedGateDoesNotTreatGeneratedLocalizationAsAndroidBehavior(t *testing.T) {
 	root := repoRoot(t)
 	runSelection := func(t *testing.T, files ...string) string {

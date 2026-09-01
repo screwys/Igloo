@@ -24,6 +24,9 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
   fi
   echo "pre-push: testing changes from ${remote_sha:0:12} to ${local_sha:0:12}"
   GOCACHE="${GOCACHE:-$repo_root/.local/go-cache}" \
+    IGLOO_ANDROID_CLEAN=1 \
+    IGLOO_ANDROID_NO_DAEMON=1 \
+    IGLOO_ANDROID_RERUN_TASKS=1 \
     IGLOO_TEST_BASE="$remote_sha" \
     IGLOO_TEST_HEAD="$local_sha" \
     scripts/dev/test-changed.sh

@@ -24,9 +24,16 @@ if [ "${IGLOO_ANDROID_SCRIPT_LOCK_HELD:-}" != "1" ]; then
     exec flock --close "$SCRIPT_DIR/.gradle-home/igloo-android.lock" "$SCRIPT_DIR/$(basename "$0")" "$@"
 fi
 
-test_args=(":app:testDevtestUnitTest")
+test_args=()
+if [ "${IGLOO_ANDROID_CLEAN:-0}" = "1" ]; then
+    test_args+=("clean")
+fi
+test_args+=(":app:testDevtestUnitTest")
 if [ "${IGLOO_ANDROID_RERUN_TASKS:-0}" = "1" ]; then
     test_args+=("--rerun-tasks")
+fi
+if [ "${IGLOO_ANDROID_NO_DAEMON:-0}" = "1" ]; then
+    test_args+=("--no-daemon")
 fi
 if [ $# -gt 0 ]; then
     test_args+=("--tests" "$@")
