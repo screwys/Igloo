@@ -179,4 +179,5 @@ data class MomentsCursorRequest(
     val updated_at_ms: Long,
     val scope: String = "all",
     val sort_at_ms: Long? = null,
+    val order_position: Long? = null,
 )

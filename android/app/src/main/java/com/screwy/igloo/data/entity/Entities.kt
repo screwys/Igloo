@@ -300,6 +300,7 @@ data class MomentsCursorEntity(
     @ColumnInfo(name = "position_ms") val positionMs: Long = 0,
     @ColumnInfo(name = "sort_at_ms") val sortAtMs: Long = 0,
     @ColumnInfo(name = "updated_at_ms") val updatedAtMs: Long = 0,
+    @ColumnInfo(name = "order_position", defaultValue = "0") val orderPosition: Long = 0,
 )
 
 @Serializable

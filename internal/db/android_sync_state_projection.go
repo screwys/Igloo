@@ -133,7 +133,8 @@ func (db *DB) ListAndroidSyncStateProjections(keys []AndroidSyncStateKey) ([]And
 			UNION ALL
 			SELECT 'moments_cursor', s.scope, '',
 			       json_object('scope', s.scope, 'video_id', s.video_id, 'position_ms', s.position_ms,
-			         'sort_at_ms', s.sort_at_ms, 'updated_at_ms', s.updated_at_ms)
+			         'sort_at_ms', s.sort_at_ms, 'order_position', s.order_position,
+			         'updated_at_ms', s.updated_at_ms)
 			FROM moments_cursors s
 			JOIN wanted w ON w.owner_kind = 'moments_cursor' AND w.owner_id = s.scope
 			WHERE s.scope IN ('all', 'following')

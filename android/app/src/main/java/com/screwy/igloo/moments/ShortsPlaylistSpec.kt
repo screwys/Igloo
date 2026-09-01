@@ -79,6 +79,7 @@ internal fun shortsStartIndex(videoIds: List<String>, requestedVideoId: String?)
 internal data class ShortsStartItem(
     val videoId: String,
     val sortAtMs: Long,
+    val orderPosition: Long = 0,
 )
 
 internal data class VisibleShortsSelection(
@@ -90,9 +91,10 @@ internal fun visibleShortsSelection(
     items: List<ShortsStartItem>,
     requestedVideoId: String?,
     fallbackSortAtMs: Long? = null,
+    fallbackOrderPosition: Long? = null,
 ): VisibleShortsSelection {
     if (items.isEmpty()) return VisibleShortsSelection(videoId = null, index = 0)
-    val index = shortsStartIndex(items, requestedVideoId, fallbackSortAtMs)
+    val index = shortsStartIndex(items, requestedVideoId, fallbackSortAtMs, fallbackOrderPosition)
     return VisibleShortsSelection(videoId = items[index].videoId, index = index)
 }
 
@@ -100,12 +102,19 @@ internal fun shortsStartIndex(
     items: List<ShortsStartItem>,
     requestedVideoId: String?,
     fallbackSortAtMs: Long? = null,
+    fallbackOrderPosition: Long? = null,
 ): Int {
     val target = requestedVideoId?.trim()?.takeIf { it.isNotEmpty() } ?: return 0
     val exact = items.indexOfFirst { it.videoId == target }
-    if (exact >= 0 && fallbackSortAtMs == null) return exact
+    if (exact >= 0) return exact
+    val orderPosition = fallbackOrderPosition?.takeIf { it > 0 }
+    if (orderPosition != null) {
+        return items.indexOfFirst { it.orderPosition >= orderPosition && it.orderPosition > 0 }
+            .takeIf { it >= 0 }
+            ?: items.indexOfLast { it.orderPosition > 0 }.takeIf { it >= 0 }
+            ?: 0
+    }
     val sortAt = fallbackSortAtMs ?: return 0
-    if (exact >= 0 && items[exact].sortAtMs == sortAt) return exact
     if (items.isEmpty()) return 0
     return items.withIndex()
         .firstOrNull {

@@ -282,11 +282,11 @@ func TestHandleShortsHistoryDerivesLegacyZeroSortAndUsesVideoIDTie(t *testing.T)
 		t.Fatalf("status: got %d - %s", rr.Code, rr.Body.String())
 	}
 	var resp struct {
-		VideoID           string `json:"video_id"`
+		VideoID          string `json:"video_id"`
 		FallbackForVideo string `json:"fallback_for_video_id"`
-		Page              int    `json:"page"`
-		Index             int    `json:"index"`
-		UpdatedAtMs       int64  `json:"updated_at_ms"`
+		Page             int    `json:"page"`
+		Index            int    `json:"index"`
+		UpdatedAtMs      int64  `json:"updated_at_ms"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -299,7 +299,7 @@ func TestHandleShortsHistoryDerivesLegacyZeroSortAndUsesVideoIDTie(t *testing.T)
 	}
 }
 
-func TestHandleShortsHistoryFallsForwardWhenFollowedOwnerUsesCanonicalTime(t *testing.T) {
+func TestHandleShortsHistoryKeepsExactCursorWhenPresentationTimeChanges(t *testing.T) {
 	srv := newTestServer(t)
 	if err := srv.db.SetSetting("instagram_include_tagged_default", "true"); err != nil {
 		t.Fatalf("SetSetting instagram_include_tagged_default: %v", err)
@@ -382,14 +382,14 @@ func TestHandleShortsHistoryFallsForwardWhenFollowedOwnerUsesCanonicalTime(t *te
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if resp.VideoID != "direct_after" {
-		t.Fatalf("video_id=%q, want direct_after", resp.VideoID)
+	if resp.VideoID != "old_tagged_cursor" {
+		t.Fatalf("video_id=%q, want old_tagged_cursor", resp.VideoID)
 	}
-	if resp.FallbackForVideoID != "old_tagged_cursor" {
-		t.Fatalf("fallback_for_video_id=%q, want old_tagged_cursor", resp.FallbackForVideoID)
+	if resp.FallbackForVideoID != "" {
+		t.Fatalf("fallback_for_video_id=%q, want none", resp.FallbackForVideoID)
 	}
-	if resp.Index != 2 {
-		t.Fatalf("index=%d, want 2", resp.Index)
+	if resp.Index != 0 {
+		t.Fatalf("index=%d, want 0", resp.Index)
 	}
 	if resp.SortAtMs != 1000 {
 		t.Fatalf("sort_at_ms=%d, want 1000", resp.SortAtMs)

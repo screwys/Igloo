@@ -96,7 +96,7 @@ import com.screwy.igloo.data.entity.WatchHistoryEntity
             AndroidSyncAssetEntity::class,
             OfflineVideoDownloadEntity::class,
         ],
-	version = 46,
+	version = 47,
     exportSchema = true,
 )
 abstract class IglooDatabase : RoomDatabase() {
@@ -176,6 +176,7 @@ abstract class IglooDatabase : RoomDatabase() {
                     IglooMigrations.MIGRATION_43_44,
 					IglooMigrations.MIGRATION_44_45,
 					IglooMigrations.MIGRATION_45_46,
+					IglooMigrations.MIGRATION_46_47,
                 )
                 .build()
         }

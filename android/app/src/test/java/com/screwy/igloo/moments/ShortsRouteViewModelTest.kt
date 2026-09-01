@@ -19,7 +19,6 @@ import com.screwy.igloo.testutil.ViewModelTestTracker
 import com.screwy.igloo.testutil.clearViewModel
 import com.screwy.igloo.ui.UiEffects
 import com.screwy.igloo.ui.UiState
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -670,7 +669,7 @@ class ShortsRouteViewModelTest {
         assertEquals(200L, db.momentsCursorDao().get("following")?.sortAtMs)
     }
 
-    @Test fun newerCursorSupersedesPendingRouteBeforeItsRoomRowArrives() = runBlocking {
+    @Test fun explicitRouteSelectionWinsOverThePreviousCursor() = runBlocking {
         db.channelDao().upsert(
             ChannelEntity(
                 channelId = "tiktok_sample",
@@ -681,14 +680,32 @@ class ShortsRouteViewModelTest {
         )
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_sample"))
         db.videoDao().upsert(
-            VideoEntity(
-                videoId = "newer",
-                channelId = "tiktok_sample",
-                ownerKind = "tiktok_video",
-                title = "Newer",
-                publishedAt = 300L,
+            listOf(
+                VideoEntity(
+                    videoId = "selected",
+                    channelId = "tiktok_sample",
+                    ownerKind = "tiktok_video",
+                    title = "Selected",
+                    publishedAt = 200L,
+                ),
+                VideoEntity(
+                    videoId = "newer",
+                    channelId = "tiktok_sample",
+                    ownerKind = "tiktok_video",
+                    title = "Newer",
+                    publishedAt = 300L,
+                ),
             )
         )
+        db.momentsCursorDao()
+            .upsert(
+                MomentsCursorEntity(
+                    scope = "following",
+                    videoId = "newer",
+                    sortAtMs = 300L,
+                    updatedAtMs = 500L,
+                )
+            )
         val writeClock = AtomicInteger()
         val routeWriter =
             OutboxWriter(
@@ -710,55 +727,29 @@ class ShortsRouteViewModelTest {
                     baseUrlProvider = ServerBaseUrlProvider { "https://example.test" },
                     savedStateHandle = SavedStateHandle(),
                 )
-            )
-        val subscription = subscribe(vm)
-        val baselineCaptured = CompletableDeferred<Unit>()
-        val pendingInitialSelection =
-            scope.launch {
-                vm.consumePendingInitialMomentsSelection {
-                    baselineCaptured.complete(Unit)
-                }
-            }
-        val ready = withTimeoutOrNull(2_000L) { baselineCaptured.await() }
-        assertEquals(Unit, ready)
-
-        db.momentsCursorDao()
-            .upsert(
-                MomentsCursorEntity(
-                    scope = "following",
-                    videoId = "newer",
-                    sortAtMs = 300L,
-                    updatedAtMs = 500L,
-                )
-            )
-        val superseded =
-            withTimeoutOrNull(2_000L) {
-                pendingInitialSelection.join()
-                true
-            }
-        db.videoDao().upsert(
-            VideoEntity(
-                videoId = "selected",
-                channelId = "tiktok_sample",
-                ownerKind = "tiktok_video",
-                title = "Selected",
-                publishedAt = 200L,
-            )
         )
-        val delayedRowLoaded =
+        val subscription = subscribe(vm)
+        val pendingInitialSelection =
+            scope.launch { vm.consumePendingInitialMomentsSelection() }
+        val selected =
             withTimeoutOrNull(2_000L) {
-                while (vm.items.value.none { it.videoId == "selected" }) delay(10)
+                while (
+                    vm.currentVideoId.value != "selected" ||
+                        db.momentsCursorDao().get("following")?.videoId != "selected"
+                ) {
+                    delay(10)
+                }
                 true
             }
+        pendingInitialSelection.join()
         yield()
         subscription.cancel()
 
-        assertEquals(true, superseded)
-        assertEquals(true, delayedRowLoaded)
-        assertEquals("newer", db.momentsCursorDao().get("following")?.videoId)
-        assertEquals("newer", vm.currentVideoId.value)
-        assertEquals(0, writeClock.get())
-        assertEquals(0, db.outboxDao().pendingRows().size)
+        assertEquals(true, selected)
+        assertEquals("selected", db.momentsCursorDao().get("following")?.videoId)
+        assertEquals("selected", vm.currentVideoId.value)
+        assertEquals(1, writeClock.get())
+        assertEquals(1, db.outboxDao().pendingRows().size)
     }
 
     @Test fun restoredPendingRouteIdentityStaysPassiveWhenTheRowArrives() = runBlocking {

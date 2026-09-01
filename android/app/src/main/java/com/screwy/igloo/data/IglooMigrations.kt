@@ -140,4 +140,25 @@ object IglooMigrations {
                 db.execSQL("ALTER TABLE `videos` ADD COLUMN `moments_following_position` INTEGER NOT NULL DEFAULT 0")
             }
         }
+
+    val MIGRATION_46_47 =
+        object : Migration(46, 47) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `moments_cursors` ADD COLUMN `order_position` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    """
+                    UPDATE `moments_cursors`
+                    SET `order_position` = COALESCE((
+                        SELECT CASE `moments_cursors`.`scope`
+                            WHEN 'following' THEN `videos`.`moments_following_position`
+                            ELSE `videos`.`moments_all_position`
+                        END
+                        FROM `videos`
+                        WHERE `videos`.`video_id` = `moments_cursors`.`video_id`
+                    ), 0)
+                    WHERE `scope` IN ('all', 'following')
+                    """.trimIndent(),
+                )
+            }
+        }
 }

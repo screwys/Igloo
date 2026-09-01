@@ -62,10 +62,6 @@ class ShortsRouteViewModel(
         val videoId: String,
         val index: Int,
     )
-    private data class PendingInitialSelectionResolution(
-        val item: PlayerMomentItem? = null,
-        val cursorSuperseded: Boolean = false,
-    )
     private enum class InitialSelectionKind {
         Explicit,
         Passive,
@@ -165,12 +161,10 @@ class ShortsRouteViewModel(
 
     /**
      * A passive handoff resolves against the first Room playlist and never writes a cursor. An
-     * explicit selection may publish only while this route is visible. Its initial cursor is the
-     * causal baseline: any later cursor wins, even if the requested Room row appears afterward.
+     * explicit selection may publish only while this route is visible. The route argument remains
+     * authoritative until its Room row arrives or the user navigates away.
      */
-    internal suspend fun consumePendingInitialMomentsSelection(
-        onBaselineCaptured: () -> Unit = {},
-    ) {
+    internal suspend fun consumePendingInitialMomentsSelection() {
         if (!initialMomentsSelectionPending) return
         try {
             if (initialSelectionKind == InitialSelectionKind.Passive) {
@@ -180,27 +174,20 @@ class ShortsRouteViewModel(
                 return
             }
 
-            val baselineCursor = db.momentsCursorDao().get(momentsCursorScope)
-            onBaselineCaptured()
-            val resolution =
-                combine(rawItems.filterNotNull(), rawScopedResumeCursor) { currentItems, cursor ->
-                    PendingInitialSelectionResolution(
-                        item = currentItems.firstOrNull { it.videoId == initialVideoId },
-                        cursorSuperseded = cursor != baselineCursor,
-                    )
-                }
-                    .first { it.item != null || it.cursorSuperseded }
-            val requestedItem = resolution.item ?: return
+            val requestedItem =
+                rawItems.filterNotNull()
+                    .map { currentItems -> currentItems.firstOrNull { it.videoId == initialVideoId } }
+                    .filterNotNull()
+                    .first()
             if (!initialMomentsSelectionPending) return
-            val recorded =
-                outboxWriter.recordMomentsCursorIfUnchanged(
-                    expectedCursor = baselineCursor,
-                    videoId = requestedItem.videoId,
-                    positionMs = 0L,
-                    scope = momentsCursorScope,
-                    sortAtMs = requestedItem.sortAtMs.takeIf { it > 0L } ?: requestedItem.publishedAt,
-                )
-            if (recorded) initialMomentsSelectionPending = false
+            outboxWriter.recordMomentsCursor(
+                videoId = requestedItem.videoId,
+                positionMs = 0L,
+                scope = momentsCursorScope,
+                sortAtMs = requestedItem.sortAtMs.takeIf { it > 0L } ?: requestedItem.publishedAt,
+                orderPosition = requestedItem.orderPosition,
+            )
+            initialMomentsSelectionPending = false
         } finally {
             cancelPendingInitialMomentsSelection()
         }
@@ -305,6 +292,7 @@ class ShortsRouteViewModel(
             0L,
             momentsCursorScope,
             item.sortAtMs.takeIf { it > 0L } ?: item.publishedAt,
+            item.orderPosition,
         )
     }
 
@@ -330,9 +318,10 @@ class ShortsRouteViewModel(
         if (cursorVideoId.isNotEmpty()) {
             val cursorIndex =
                 shortsStartIndex(
-                    items.map { ShortsStartItem(it.videoId, it.sortAtMs) },
+                    items.map { ShortsStartItem(it.videoId, it.sortAtMs, it.orderPosition) },
                     cursorVideoId,
                     fallbackSortAtMs = cursorRow?.sortAtMs?.takeIf { it > 0L },
+                    fallbackOrderPosition = cursorRow?.orderPosition?.takeIf { it > 0L },
                 )
             return StartSelection(items[cursorIndex].videoId, cursorIndex)
         }
@@ -543,6 +532,12 @@ class ShortsRouteViewModel(
             repostAuthorLabel = repost?.authorLabel,
             repostOtherCount = repost?.otherCount ?: 0,
             sortAtMs = row.effectiveMomentAtMs.takeIf { it > 0L } ?: video.publishedAt,
+            orderPosition =
+                if (playlistSpec.type == ShortsPlaylistType.Moments) {
+                    video.momentsFollowingPosition
+                } else {
+                    video.momentsAllPosition
+                },
         )
     }
 

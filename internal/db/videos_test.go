@@ -47,7 +47,6 @@ func TestMomentsOrderKeepsSeenRowsAndAppendsLateOlderVideos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = rows.Close() }()
 	var positions []int64
 	for rows.Next() {
 		var videoID string
@@ -60,6 +59,26 @@ func TestMomentsOrderKeepsSeenRowsAndAppendsLateOlderVideos(t *testing.T) {
 	if got, want := positions, []int64{1, 2, 3, 4}; !sameInt64s(got, want) {
 		t.Fatalf("following positions = %v, want %v", got, want)
 	}
+	if err := rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := d.ExecRaw(`DELETE FROM channel_follows WHERE channel_id = 'tiktok_sample'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ReconcileMomentsOrder("following"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ('tiktok_sample', 2)`); err != nil {
+		t.Fatal(err)
+	}
+	ids, err = d.ListShortsVideoIDs("following")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := ids, []string{"sample_old", "sample_viewed", "sample_new", "sample_late_older"}; !sameStrings(got, want) {
+		t.Fatalf("re-followed Moments ids = %v, want fixed order %v", got, want)
+	}
 
 	videos, err := d.GetVideos(GetVideosOpts{
 		Platform:    "shorts",
@@ -70,6 +89,44 @@ func TestMomentsOrderKeepsSeenRowsAndAppendsLateOlderVideos(t *testing.T) {
 	}
 	if got, want := videoIDs(videos), ids; !sameStrings(got, want) {
 		t.Fatalf("hydrated ids = %v, want %v", got, want)
+	}
+}
+
+func TestNearestMomentsPositionTargetSkipsRemovedAccount(t *testing.T) {
+	d := openWritableTestDB(t)
+	if err := d.ExecRaw(`
+		INSERT INTO channels (channel_id, source_id, name, platform) VALUES
+			('tiktok_removed', 'removed', 'Removed', 'tiktok'),
+			('tiktok_kept', 'kept', 'Kept', 'tiktok');
+		INSERT INTO channel_follows (channel_id, followed_at) VALUES
+			('tiktok_removed', 1), ('tiktok_kept', 1);
+		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at) VALUES
+			('removed_old', 'tiktok_removed', 'tiktok_video', 'Removed old', 100),
+			('removed_cursor', 'tiktok_removed', 'tiktok_video', 'Removed cursor', 200),
+			('kept_next', 'tiktok_kept', 'tiktok_video', 'Kept next', 300);
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.ListShortsVideoIDs("following"); err != nil {
+		t.Fatal(err)
+	}
+	position, ok, err := d.GetMomentsPosition("removed_cursor", "following")
+	if err != nil || !ok {
+		t.Fatalf("cursor position = %d, %v, %v", position, ok, err)
+	}
+	if _, err := d.MutateMomentsCursor("removed_cursor", 0, 1_000, "following", 200); err != nil {
+		t.Fatal(err)
+	}
+	cursor, found, err := d.GetMomentsCursor("following")
+	if err != nil || !found || cursor.OrderPosition != position {
+		t.Fatalf("stored cursor order position = %+v, %v, %v; want %d", cursor, found, err, position)
+	}
+	if err := d.ExecRaw(`DELETE FROM channel_follows WHERE channel_id = 'tiktok_removed'`); err != nil {
+		t.Fatal(err)
+	}
+	target, ordinal, found, err := d.GetNearestShortsPositionTarget(position, "following")
+	if err != nil || !found || target != "kept_next" || ordinal != 1 {
+		t.Fatalf("nearest retained target = %q, %d, %v, %v; want kept_next, 1, true, nil", target, ordinal, found, err)
 	}
 }
 

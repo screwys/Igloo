@@ -14,11 +14,12 @@ func (s *Server) handleMomentsCursor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		VideoID     string `json:"video_id"`
-		PositionMs  int64  `json:"position_ms"`
-		UpdatedAtMs int64  `json:"updated_at_ms"`
-		Scope       string `json:"scope"`
-		SortAtMs    int64  `json:"sort_at_ms"`
+		VideoID       string `json:"video_id"`
+		PositionMs    int64  `json:"position_ms"`
+		UpdatedAtMs   int64  `json:"updated_at_ms"`
+		Scope         string `json:"scope"`
+		SortAtMs      int64  `json:"sort_at_ms"`
+		OrderPosition int64  `json:"order_position"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		if requestBodyTooLarge(err) {

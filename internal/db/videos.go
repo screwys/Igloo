@@ -935,8 +935,8 @@ func (db *DB) GetShortsVisibleSortAt(videoID, momentsMode string) (int64, bool, 
 	return 0, false, nil
 }
 
-// ListShortsVideoIDs returns the complete visible Moments timeline with unseen
-// rows first and newest effective event time first within each viewed tier.
+// ListShortsVideoIDs returns the complete visible Moments timeline in its fixed
+// server-assigned append order.
 func (db *DB) ListShortsVideoIDs(momentsMode string) ([]string, error) {
 	if err := db.ReconcileMomentsOrder(momentsMode); err != nil {
 		return nil, err

@@ -49,6 +49,7 @@ func schemaUserStateStatements() []string {
 			video_id      TEXT NOT NULL,
 			position_ms   INTEGER NOT NULL DEFAULT 0,
 			sort_at_ms    INTEGER NOT NULL DEFAULT 0,
+			order_position INTEGER NOT NULL DEFAULT 0,
 			updated_at_ms INTEGER NOT NULL DEFAULT 0
 		)`,
 

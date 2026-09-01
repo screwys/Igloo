@@ -75,13 +75,33 @@ class ShortsPlaylistSpecTest {
     }
 
     @Test
-    fun startIndexUsesStoredTimelineWhenRequestedVideoMoved() {
+    fun exactCursorVideoWinsWhenItsPresentationTimeChanges() {
         val items = listOf(
             ShortsStartItem(videoId = "moved", sortAtMs = 100),
             ShortsStartItem(videoId = "near", sortAtMs = 300),
         )
 
-        assertEquals(1, shortsStartIndex(items, "moved", fallbackSortAtMs = 250))
+        assertEquals(0, shortsStartIndex(items, "moved", fallbackSortAtMs = 250))
+    }
+
+    @Test
+    fun missingCursorUsesNearestRetainedOrderPosition() {
+        val items =
+            listOf(
+                ShortsStartItem(videoId = "bookmark", sortAtMs = 10, orderPosition = 20),
+                ShortsStartItem(videoId = "retained_old", sortAtMs = 900, orderPosition = 100),
+                ShortsStartItem(videoId = "retained_new", sortAtMs = 1000, orderPosition = 110),
+            )
+
+        assertEquals(
+            1,
+            shortsStartIndex(
+                items,
+                requestedVideoId = "pruned_cursor",
+                fallbackSortAtMs = 15,
+                fallbackOrderPosition = 95,
+            ),
+        )
     }
 
     @Test

@@ -63,6 +63,7 @@ class MomentsCursorWriteTest {
                 videoId = "all_only_video",
                 sortAtMs = 100L,
                 activeTab = activeTab,
+                orderPosition = 42L,
             )
         activeTab = "following"
         runCurrent()
@@ -70,12 +71,14 @@ class MomentsCursorWriteTest {
 
         assertEquals("following", activeTab)
         assertEquals("all_only_video", db.momentsCursorDao().get("all")?.videoId)
+        assertEquals(42L, db.momentsCursorDao().get("all")?.orderPosition)
         assertNull(db.momentsCursorDao().get("following"))
     }
 
     @Test
     fun delayedTabFlowsEmitOneCoherentPlayerRouteState() = runTest {
         val activeTab = MutableStateFlow("all")
+        val selectionOverride = MutableStateFlow<String?>(null)
         val rows =
             mapOf(
                 "all" to Channel<List<ShortsStartItem>>(Channel.UNLIMITED),
@@ -93,7 +96,8 @@ class MomentsCursorWriteTest {
                         activeTab = activeTab,
                         rowsForScope = { scope -> rows.getValue(scope).receiveAsFlow() },
                         cursorForScope = { scope -> cursors.getValue(scope).receiveAsFlow() },
-                        startItem = { item -> item },
+                        startItem = { item, _ -> item },
+                        selectionOverride = selectionOverride,
                     )
                     .map { snapshot ->
                         momentsPlayerRouteState(snapshot) { scopedRows ->
@@ -116,6 +120,11 @@ class MomentsCursorWriteTest {
         runCurrent()
         assertEquals("all", routeStates.last().scope)
         assertEquals("all_only", routeStates.last().selection.videoId)
+
+        selectionOverride.value = "shared"
+        runCurrent()
+        assertEquals("shared", routeStates.last().selection.videoId)
+        selectionOverride.value = null
 
         activeTab.value = "following"
         runCurrent()
@@ -169,8 +178,14 @@ class MomentsCursorWriteTest {
         collection.cancel()
 
         val ready = routeStates.filter { routeState -> routeState.uiState is UiState.Data }
-        assertEquals(listOf("all", "following", "all"), ready.map { routeState -> routeState.scope })
-        assertEquals(listOf("all_only", "following_only", "all_return"), ready.map { it.selection.videoId })
+        assertEquals(
+            listOf("all", "all", "following", "all"),
+            ready.map { routeState -> routeState.scope },
+        )
+        assertEquals(
+            listOf("all_only", "shared", "following_only", "all_return"),
+            ready.map { it.selection.videoId },
+        )
         assertTrue(
             ready.all { routeState ->
                 routeState.items.any { item -> item.videoId == routeState.selection.videoId }
@@ -198,7 +213,7 @@ class MomentsCursorWriteTest {
                         activeTab = activeTab,
                         rowsForScope = { scope -> rows.getValue(scope).receiveAsFlow() },
                         cursorForScope = { scope -> cursors.getValue(scope).receiveAsFlow() },
-                        startItem = { item -> item },
+                        startItem = { item, _ -> item },
                         scopeForTab = PreferencesRepo.Defaults::normalizeMomentsTab,
                     )
                     .map { snapshot ->

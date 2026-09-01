@@ -298,27 +298,6 @@ class OutboxWriterTest {
     }
 
     @Test
-    fun conditionalMomentsCursorWriteCannotReplaceAChangedRoomCursor() = runBlocking {
-        val expected = MomentsCursorEntity("all", "baseline", updatedAtMs = 10_000L)
-        val newer = MomentsCursorEntity("all", "newer", updatedAtMs = 10_001L)
-        db.momentsCursorDao().upsert(expected)
-        db.momentsCursorDao().upsert(newer)
-
-        val recorded =
-            writer.recordMomentsCursorIfUnchanged(
-                expectedCursor = expected,
-                videoId = "stale_route",
-                positionMs = 0L,
-                scope = "all",
-                sortAtMs = 200L,
-            )
-
-        assertFalse(recorded)
-        assertEquals(newer, db.momentsCursorDao().get("all"))
-        assertTrue(db.outboxDao().pendingRows().isEmpty())
-    }
-
-    @Test
     fun storiesCursorIsMonotonicWithoutEnteringTheOutbox() = runBlocking {
         db.momentsCursorDao()
             .upsert(MomentsCursorEntity("stories", "first", updatedAtMs = 10_000L))

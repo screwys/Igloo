@@ -109,6 +109,7 @@ sealed class OutboxKind {
         val positionMs: Long,
         val scope: String = "all",
         val sortAtMs: Long? = null,
+        val orderPosition: Long? = null,
     ) : OutboxKind() {
         override val code = CODE_MOMENTS_CURSOR
         override val itemId: String = scope

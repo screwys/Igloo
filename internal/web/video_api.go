@@ -257,6 +257,7 @@ func (s *Server) handleShortsHistory(w http.ResponseWriter, r *http.Request) {
 	videoID := cursor.VideoID
 	updatedAtMs := cursor.UpdatedAtMs
 	sortAtMs := cursor.SortAtMs
+	orderPosition := cursor.OrderPosition
 
 	body := map[string]any{
 		"video_id":      videoID,
@@ -266,6 +267,9 @@ func (s *Server) handleShortsHistory(w http.ResponseWriter, r *http.Request) {
 	if sortAtMs > 0 {
 		body["sort_at_ms"] = sortAtMs
 	}
+	if orderPosition > 0 {
+		body["order_position"] = orderPosition
+	}
 	if videoID != "" {
 		setPageHint := func(ordinal int) {
 			body["page"] = ((ordinal - 1) / momentsCursorPageSize) + 1
@@ -273,26 +277,24 @@ func (s *Server) handleShortsHistory(w http.ResponseWriter, r *http.Request) {
 			body["page_size"] = momentsCursorPageSize
 		}
 		resolved := false
-		if sortAtMs > 0 {
-			if currentSortAt, visible, err := s.db.GetShortsVisibleSortAt(videoID, scope); err != nil {
-				slog.Error("GetShortsVisibleSortAt", "video", videoID, "scope", scope, "err", err)
-			} else if !visible || currentSortAt != sortAtMs {
-				if fallbackVideoID, fallbackOrdinal, fallbackOK, err := s.db.GetNearestShortsCursorTarget(videoID, scope, sortAtMs); err != nil {
-					slog.Error("GetNearestShortsCursorTarget", "video", videoID, "scope", scope, "err", err)
-				} else if fallbackOK {
-					body["video_id"] = fallbackVideoID
-					body["fallback_for_video_id"] = videoID
-					setPageHint(fallbackOrdinal)
-					resolved = true
-				}
+		if ordinal, ok, err := s.db.GetShortsOrdinal(videoID, scope); err != nil {
+			slog.Error("GetShortsOrdinal", "video", videoID, "err", err)
+		} else if ok {
+			setPageHint(ordinal)
+			resolved = true
+		}
+		if !resolved && orderPosition > 0 {
+			if fallbackVideoID, fallbackOrdinal, fallbackOK, err := s.db.GetNearestShortsPositionTarget(orderPosition, scope); err != nil {
+				slog.Error("GetNearestShortsPositionTarget", "video", videoID, "scope", scope, "err", err)
+			} else if fallbackOK {
+				body["video_id"] = fallbackVideoID
+				body["fallback_for_video_id"] = videoID
+				setPageHint(fallbackOrdinal)
+				resolved = true
 			}
 		}
 		if !resolved {
-			if ordinal, ok, err := s.db.GetShortsOrdinal(videoID, scope); err != nil {
-				slog.Error("GetShortsOrdinal", "video", videoID, "err", err)
-			} else if ok {
-				setPageHint(ordinal)
-			} else if fallbackVideoID, fallbackOrdinal, fallbackOK, err := s.db.GetNearestShortsCursorTarget(videoID, scope, sortAtMs); err != nil {
+			if fallbackVideoID, fallbackOrdinal, fallbackOK, err := s.db.GetNearestShortsCursorTarget(videoID, scope, sortAtMs); err != nil {
 				slog.Error("GetNearestShortsCursorTarget", "video", videoID, "scope", scope, "err", err)
 			} else if fallbackOK {
 				body["video_id"] = fallbackVideoID

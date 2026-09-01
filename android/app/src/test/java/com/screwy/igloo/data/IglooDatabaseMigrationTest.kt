@@ -293,6 +293,32 @@ class IglooDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration46To47KeepsCursorAndAddsOrderPosition() {
+        helper.createDatabase(DATABASE_NAME, 46).use { db ->
+            db.execSQL(
+                "INSERT INTO videos (video_id, channel_id, owner_kind, published_at, slide_count, moments_all_position, moments_following_position) VALUES ('sample_video', 'tiktok_sample', 'tiktok_video', 100, 0, 42, 43)",
+            )
+            db.execSQL(
+                "INSERT INTO moments_cursors (scope, video_id, position_ms, sort_at_ms, updated_at_ms) VALUES ('all', 'sample_video', 0, 100, 200)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            DATABASE_NAME,
+            47,
+            true,
+            IglooMigrations.MIGRATION_46_47,
+        ).use { db ->
+            db.query("SELECT video_id, order_position, updated_at_ms FROM moments_cursors WHERE scope = 'all'").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("sample_video", cursor.getString(0))
+                assertEquals(42L, cursor.getLong(1))
+                assertEquals(200L, cursor.getLong(2))
+            }
+        }
+    }
+
     private companion object {
         const val DATABASE_NAME = "igloo-migration-test"
     }

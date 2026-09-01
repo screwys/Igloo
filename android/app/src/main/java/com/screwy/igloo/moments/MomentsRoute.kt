@@ -44,6 +44,7 @@ fun MomentsRoute(
     val vm: MomentsViewModel = koinViewModel(viewModelStoreOwner = backStackEntry)
 
     val playerRouteState by vm.playerRouteState.collectAsStateWithLifecycle()
+    val sessionVideoId by vm.sessionVideoId.collectAsStateWithLifecycle()
     val autoplayEnabled by vm.autoplayEnabled.collectAsStateWithLifecycle()
     val muted by vm.muted.collectAsStateWithLifecycle()
     val pendingBookmark by vm.pendingBookmark.collectAsStateWithLifecycle()
@@ -67,7 +68,7 @@ fun MomentsRoute(
             MomentsPlayer(
                 items = playerRouteState.items,
                 startIndex = playerRouteState.selection.index,
-                startVideoId = playerRouteState.selection.videoId,
+                startVideoId = sessionVideoId ?: playerRouteState.selection.videoId,
                 autoSwipeDefault = autoplayEnabled,
                 muteDefault = muted,
                 onAutoSwipeChanged = vm::setAutoplayEnabled,

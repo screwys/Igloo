@@ -868,19 +868,23 @@ func (db *DB) MutateMomentsCursor(videoID string, positionMs, updatedAtMs int64,
 			return result, err
 		}
 	}
-	err := db.WithWrite(func(tx *sql.Tx) error {
+	orderPosition, _, err := db.GetMomentsPosition(result.CanonicalID, scope)
+	if err != nil {
+		return result, err
+	}
+	err = db.WithWrite(func(tx *sql.Tx) error {
 		var existingVideoID string
-		var existingPositionMs, existingSortAtMs, existingUpdatedAtMs int64
+		var existingPositionMs, existingSortAtMs, existingOrderPosition, existingUpdatedAtMs int64
 		err := tx.QueryRow(`
-			SELECT video_id, position_ms, sort_at_ms, updated_at_ms
+			SELECT video_id, position_ms, sort_at_ms, order_position, updated_at_ms
 			FROM moments_cursors WHERE scope = ?
-		`, scope).Scan(&existingVideoID, &existingPositionMs, &existingSortAtMs, &existingUpdatedAtMs)
+		`, scope).Scan(&existingVideoID, &existingPositionMs, &existingSortAtMs, &existingOrderPosition, &existingUpdatedAtMs)
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
 		if err == nil && updatedAtMs <= existingUpdatedAtMs {
 			same := updatedAtMs == existingUpdatedAtMs && result.CanonicalID == existingVideoID &&
-				positionMs == existingPositionMs && sortAtMs == existingSortAtMs
+				positionMs == existingPositionMs && sortAtMs == existingSortAtMs && orderPosition == existingOrderPosition
 			if same {
 				return nil
 			}
@@ -890,14 +894,15 @@ func (db *DB) MutateMomentsCursor(videoID string, positionMs, updatedAtMs int64,
 			}
 		}
 		if _, err := tx.Exec(`
-			INSERT INTO moments_cursors (scope, video_id, position_ms, sort_at_ms, updated_at_ms)
-			VALUES (?, ?, ?, ?, ?)
+			INSERT INTO moments_cursors (scope, video_id, position_ms, sort_at_ms, order_position, updated_at_ms)
+			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(scope) DO UPDATE SET
 			  video_id = excluded.video_id,
 			  position_ms = excluded.position_ms,
 			  sort_at_ms = excluded.sort_at_ms,
+			  order_position = excluded.order_position,
 			  updated_at_ms = excluded.updated_at_ms
-		`, scope, result.CanonicalID, positionMs, sortAtMs, updatedAtMs); err != nil {
+		`, scope, result.CanonicalID, positionMs, sortAtMs, orderPosition, updatedAtMs); err != nil {
 			return err
 		}
 		result.Applied = true
@@ -908,11 +913,12 @@ func (db *DB) MutateMomentsCursor(videoID string, positionMs, updatedAtMs int64,
 }
 
 type MutationMomentsCursor struct {
-	Scope       string `json:"scope"`
-	VideoID     string `json:"video_id"`
-	PositionMs  int64  `json:"position_ms"`
-	SortAtMs    int64  `json:"sort_at_ms"`
-	UpdatedAtMs int64  `json:"updated_at_ms"`
+	Scope         string `json:"scope"`
+	VideoID       string `json:"video_id"`
+	PositionMs    int64  `json:"position_ms"`
+	SortAtMs      int64  `json:"sort_at_ms"`
+	OrderPosition int64  `json:"order_position"`
+	UpdatedAtMs   int64  `json:"updated_at_ms"`
 }
 
 func (db *DB) GetMomentsCursor(scope string) (MutationMomentsCursor, bool, error) {
@@ -922,12 +928,12 @@ func (db *DB) GetMomentsCursor(scope string) (MutationMomentsCursor, bool, error
 		return cursor, false, invalidMutation("invalid moments cursor scope")
 	}
 	err := db.conn.QueryRow(`
-		SELECT scope, video_id, position_ms, sort_at_ms, updated_at_ms
+		SELECT scope, video_id, position_ms, sort_at_ms, order_position, updated_at_ms
 		FROM moments_cursors
 		WHERE scope = ?
 	`, normalizedScope).Scan(
 		&cursor.Scope, &cursor.VideoID, &cursor.PositionMs,
-		&cursor.SortAtMs, &cursor.UpdatedAtMs,
+		&cursor.SortAtMs, &cursor.OrderPosition, &cursor.UpdatedAtMs,
 	)
 	if err == sql.ErrNoRows {
 		return cursor, false, nil

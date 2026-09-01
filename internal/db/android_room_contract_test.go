@@ -32,10 +32,10 @@ type roomIndex struct {
 	Orders      []string `json:"orders"`
 }
 
-func TestAndroidRoomSchemaV46Owners(t *testing.T) {
+func TestAndroidRoomSchemaV47Owners(t *testing.T) {
 	schema := readAndroidRoomSchema(t)
-	if schema.Database.Version != 46 {
-		t.Fatalf("Room schema version = %d, want 46", schema.Database.Version)
+	if schema.Database.Version != 47 {
+		t.Fatalf("Room schema version = %d, want 47", schema.Database.Version)
 	}
 
 	tables := make(map[string][]string, len(schema.Database.Entities))
@@ -61,7 +61,7 @@ func TestAndroidRoomSchemaV46Owners(t *testing.T) {
 		"local_path", "verified_at_ms", "next_attempt_at_ms")
 	assertRoomColumns(t, tables, "muted_channels", "channel_id", "muted_at")
 	assertRoomColumns(t, tables, "moments_cursors",
-		"scope", "video_id", "position_ms", "sort_at_ms", "updated_at_ms")
+		"scope", "video_id", "position_ms", "sort_at_ms", "updated_at_ms", "order_position")
 	assertRoomColumns(t, tables, "offline_video_downloads",
 		"video_id", "state", "updated_at_ms")
 	assertRoomContains(t, tables, "channel_settings", "include_member_only")
@@ -167,10 +167,10 @@ func readAndroidRoomSchema(t *testing.T) roomSchemaFile {
 		}
 	}
 	sort.Strings(names)
-	if !reflect.DeepEqual(names, []string{"40.json", "41.json", "42.json", "43.json", "44.json", "45.json", "46.json"}) {
-		t.Fatalf("Room schema files = %v, want 40.json through 46.json", names)
+	if !reflect.DeepEqual(names, []string{"40.json", "41.json", "42.json", "43.json", "44.json", "45.json", "46.json", "47.json"}) {
+		t.Fatalf("Room schema files = %v, want 40.json through 47.json", names)
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, "46.json"))
+	raw, err := os.ReadFile(filepath.Join(dir, "47.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

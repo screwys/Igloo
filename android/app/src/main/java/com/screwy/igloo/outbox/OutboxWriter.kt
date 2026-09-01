@@ -57,6 +57,7 @@ class OutboxWriter(
                 positionMs = kind.positionMs,
                 scope = kind.scope,
                 sortAtMs = kind.sortAtMs,
+                orderPosition = null,
             )
             return
         }
@@ -87,61 +88,39 @@ class OutboxWriter(
         positionMs: Long,
         scope: String,
         sortAtMs: Long? = null,
+        orderPosition: Long? = null,
     ) {
-        writeMomentsCursor(videoId, positionMs, scope, sortAtMs) { true }
-    }
-
-    internal suspend fun recordMomentsCursorIfUnchanged(
-        expectedCursor: MomentsCursorEntity?,
-        videoId: String,
-        positionMs: Long,
-        scope: String,
-        sortAtMs: Long? = null,
-    ): Boolean =
-        writeMomentsCursor(videoId, positionMs, scope, sortAtMs) { current ->
-            current == expectedCursor
-        }
-
-    private suspend fun writeMomentsCursor(
-        videoId: String,
-        positionMs: Long,
-        scope: String,
-        sortAtMs: Long?,
-        acceptsCurrent: (MomentsCursorEntity?) -> Boolean,
-    ): Boolean {
         val normalized = PreferencesRepo.Defaults.normalizeMomentsTab(scope)
-        val queued =
-            db.withTransaction {
-                val cursorDao = db.momentsCursorDao()
-                val current = cursorDao.get(normalized)
-                if (!acceptsCurrent(current)) return@withTransaction false
+        db.withTransaction {
+            val cursorDao = db.momentsCursorDao()
+            val current = cursorDao.get(normalized)
 
-                val updatedAtMs = nextMomentsCursorTimestamp(current?.updatedAtMs)
-                val next =
-                    MomentsCursorEntity(
-                        scope = normalized,
+            val updatedAtMs = nextMomentsCursorTimestamp(current?.updatedAtMs)
+            val next =
+                MomentsCursorEntity(
+                    scope = normalized,
+                    videoId = videoId,
+                    positionMs = positionMs,
+                    sortAtMs = sortAtMs ?: 0L,
+                    orderPosition = orderPosition ?: 0L,
+                    updatedAtMs = updatedAtMs,
+                )
+            if (normalized == "stories") {
+                cursorDao.upsert(next)
+            } else {
+                val kind =
+                    OutboxKind.MomentsCursor(
                         videoId = videoId,
                         positionMs = positionMs,
-                        sortAtMs = sortAtMs ?: 0L,
-                        updatedAtMs = updatedAtMs,
+                        scope = normalized,
+                        sortAtMs = sortAtMs,
+                        orderPosition = orderPosition,
                     )
-                if (normalized == "stories") {
-                    cursorDao.upsert(next)
-                } else {
-                    val kind =
-                        OutboxKind.MomentsCursor(
-                            videoId = videoId,
-                            positionMs = positionMs,
-                            scope = normalized,
-                            sortAtMs = sortAtMs,
-                        )
-                    db.outboxDao().coalesceAndInsert(buildOutboxRow(kind, updatedAtMs))
-                    cursorDao.upsert(next)
-                }
-                true
+                db.outboxDao().coalesceAndInsert(buildOutboxRow(kind, updatedAtMs))
+                cursorDao.upsert(next)
             }
-        if (queued && normalized != "stories") _debounceSignal.tryEmit(Unit)
-        return queued
+        }
+        if (normalized != "stories") _debounceSignal.tryEmit(Unit)
     }
 
     // ─── Row construction ──────────────────────────────────────────────────────
@@ -219,6 +198,7 @@ class OutboxWriter(
                     put("position_ms", kind.positionMs)
                     put("scope", kind.scope)
                     kind.sortAtMs?.takeIf { it > 0L }?.let { put("sort_at_ms", it) }
+                    kind.orderPosition?.takeIf { it > 0L }?.let { put("order_position", it) }
                 }
                 is OutboxKind.CreateCategory -> {
                     put("name", kind.name)

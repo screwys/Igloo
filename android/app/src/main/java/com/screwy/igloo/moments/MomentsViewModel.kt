@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 
 internal data class ScopedShortsSnapshot<T>(
     val scope: String,
@@ -125,22 +126,33 @@ internal fun <T> scopedShortsSnapshotFlow(
     activeTab: Flow<String>,
     rowsForScope: (String) -> Flow<List<T>>,
     cursorForScope: (String) -> Flow<MomentsCursorEntity?>,
-    startItem: (T) -> ShortsStartItem,
+    startItem: (T, String) -> ShortsStartItem,
     scopeForTab: (String) -> String = ::momentsPlayerScope,
+    selectionOverride: Flow<String?> = flowOf(null),
 ): Flow<ScopedShortsSnapshot<T>> =
     activeTab
         .map(scopeForTab)
         .distinctUntilChanged()
         .flatMapLatest { scope ->
-            combine(rowsForScope(scope), cursorForScope(scope)) { rows, cursor ->
+            combine(
+                rowsForScope(scope),
+                cursorForScope(scope),
+                selectionOverride,
+            ) { rows, cursor, overrideVideoId ->
+                val startItems = rows.map { startItem(it, scope) }
+                val exactOverride =
+                    overrideVideoId?.takeIf { id -> startItems.any { item -> item.videoId == id } }
                 ScopedShortsSnapshot(
                     scope = scope,
                     rows = rows,
                     selection =
                         visibleShortsSelection(
-                            items = rows.map(startItem),
-                            requestedVideoId = cursor?.videoId,
-                            fallbackSortAtMs = cursor?.sortAtMs?.takeIf { it > 0L },
+                            items = startItems,
+                            requestedVideoId = exactOverride ?: cursor?.videoId,
+                            fallbackSortAtMs =
+                                cursor?.sortAtMs?.takeIf { exactOverride == null && it > 0L },
+                            fallbackOrderPosition =
+                                cursor?.orderPosition?.takeIf { exactOverride == null && it > 0L },
                         ),
                 )
             }
@@ -193,6 +205,8 @@ class MomentsViewModel(
     }
 
     private val sessionTabOverride = MutableStateFlow<String?>(null)
+    private val _sessionVideoId = MutableStateFlow<String?>(null)
+    internal val sessionVideoId: StateFlow<String?> = _sessionVideoId.asStateFlow()
 
     val activeTab: StateFlow<String> =
         combine(prefs.momentsDefaultTab(), sessionTabOverride) { defaultTab, override ->
@@ -257,10 +271,11 @@ class MomentsViewModel(
             cursorForScope = { scope ->
                 if (scope == "stories") flowOf(null) else resolvedMomentsCursorFlow(scope)
             },
-            startItem = { row ->
+            startItem = { row, scope ->
                 ShortsStartItem(
                     videoId = row.video.videoId,
                     sortAtMs = momentSortAtMs(row),
+                    orderPosition = momentOrderPosition(row, scope),
                 )
             },
             scopeForTab = { tab -> PreferencesRepo.Defaults.normalizeMomentsTab(tab) },
@@ -292,16 +307,18 @@ class MomentsViewModel(
                 }
             },
             cursorForScope = ::resolvedMomentsCursorFlow,
-            startItem = { row ->
+            startItem = { row, scope ->
                 ShortsStartItem(
                     videoId = row.video.videoId,
                     sortAtMs = momentSortAtMs(row),
+                    orderPosition = momentOrderPosition(row, scope),
                 )
             },
+            selectionOverride = sessionVideoId,
         )
             .stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000L),
+                started = SharingStarted.Eagerly,
                 initialValue =
                     ScopedShortsSnapshot(
                         scope = momentsPlayerScope(PreferencesRepo.Defaults.MOMENTS_DEFAULT_TAB),
@@ -337,12 +354,12 @@ class MomentsViewModel(
     internal val playerRouteState: StateFlow<MomentsPlayerRouteState> =
         combine(playerScopeSnapshot, storyStatusByChannel) { snapshot, storyStatuses ->
             momentsPlayerRouteState(snapshot) { rows ->
-                rows.map { row -> toPlayerMomentItem(row, storyStatuses) }
+                rows.map { row -> toPlayerMomentItem(row, storyStatuses, snapshot.scope) }
             }
         }
             .stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000L),
+                started = SharingStarted.Eagerly,
                 initialValue =
                     MomentsPlayerRouteState(
                         scope = momentsPlayerScope(PreferencesRepo.Defaults.MOMENTS_DEFAULT_TAB),
@@ -413,12 +430,36 @@ class MomentsViewModel(
         val requestedScope = momentsPlayerScope(sessionTabOverride.value ?: activeTab.value)
         if (routeState.scope != requestedScope) return
         if (routeState.items.none { current -> current.videoId == item.videoId }) return
+        _sessionVideoId.value = item.videoId
         viewModelScope.launchMomentsCursorWrite(
             outboxWriter = outboxWriter,
             videoId = item.videoId,
             sortAtMs = item.sortAtMs.takeIf { it > 0L } ?: item.publishedAt,
+            orderPosition = item.orderPosition,
             activeTab = routeState.scope,
         )
+    }
+
+    fun selectGridMoment(videoId: String): Boolean {
+        val snapshot = gridScopeSnapshot.value
+        val row = snapshot.rows?.firstOrNull { item -> item.video.videoId == videoId } ?: return false
+        if (snapshot.scope == "stories") return false
+
+        _sessionVideoId.value = videoId
+        val cursorScope = snapshot.scope
+        val sortAtMs = momentSortAtMs(row)
+        val orderPosition = momentOrderPosition(row, cursorScope)
+        viewModelScope.launch {
+            yield()
+            outboxWriter.recordMomentsCursor(
+                videoId = videoId,
+                positionMs = 0L,
+                scope = cursorScope,
+                sortAtMs = sortAtMs,
+                orderPosition = orderPosition,
+            )
+        }
+        return true
     }
 
     /** One-per-video FIFO log of "this was shown on screen". */
@@ -435,6 +476,7 @@ class MomentsViewModel(
     }
 
     fun setActiveTab(tab: String) {
+        _sessionVideoId.value = null
         sessionTabOverride.value = PreferencesRepo.Defaults.normalizeMomentsTab(tab)
     }
 
@@ -642,6 +684,7 @@ class MomentsViewModel(
     private fun toPlayerMomentItem(
         row: DbMomentItem,
         storyStatuses: Map<String, StoryChannelItem>,
+        scope: String,
     ): PlayerMomentItem {
         val video = row.video
         val handle = momentHandle(row.channelSourceId, video.channelId)
@@ -667,6 +710,7 @@ class MomentsViewModel(
             repostAuthorLabel = repost?.authorLabel,
             repostOtherCount = repost?.otherCount ?: 0,
             sortAtMs = momentSortAtMs(row),
+            orderPosition = momentOrderPosition(row, scope),
             storyRingState = storyStatus.storyRingState(),
             storyFirstVideoId = storyStatus?.startVideoId().orEmpty(),
         )
@@ -674,6 +718,9 @@ class MomentsViewModel(
 
     private fun momentSortAtMs(row: DbMomentItem): Long =
         row.effectiveMomentAtMs.takeIf { it > 0L } ?: row.video.publishedAt
+
+    private fun momentOrderPosition(row: DbMomentItem, scope: String): Long =
+        if (scope == "following") row.video.momentsFollowingPosition else row.video.momentsAllPosition
 
     private fun repostMeta(row: DbMomentItem): RepostMeta? {
         if (row.repostIntroduced != 1) return null
@@ -690,9 +737,10 @@ internal fun CoroutineScope.launchMomentsCursorWrite(
     videoId: String,
     sortAtMs: Long,
     activeTab: String,
+    orderPosition: Long = 0,
 ): Job {
     val cursorScope = PreferencesRepo.Defaults.normalizeMomentsTab(activeTab)
     return launch {
-        outboxWriter.recordMomentsCursor(videoId, 0L, cursorScope, sortAtMs)
+        outboxWriter.recordMomentsCursor(videoId, 0L, cursorScope, sortAtMs, orderPosition)
     }
 }

@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-required_java_major=26
+minimum_java_major=26
 required_android_compile_sdk=36
 required_android_build_tools=36.0.0
 
@@ -16,7 +16,7 @@ java_major_version() {
     if [[ "$version" == 1.* ]]; then
         printf '%s\n' "${version#1.}" | cut -d. -f1
     else
-        printf '%s\n' "$version" | cut -d. -f1
+        printf '%s\n' "$version" | cut -d. -f1 | sed 's/[^0-9].*$//'
     fi
 }
 
@@ -39,20 +39,17 @@ candidate_java_homes() {
 
     printf '%s\n' \
         "$HOME/.sdkman/candidates/java/current" \
-        "$HOME/.sdkman/candidates/java/${required_java_major}"* \
-        "$HOME/.local/share/jdks/java-${required_java_major}-openjdk" \
-        "$HOME/.local/share/jdks/jdk-${required_java_major}" \
-        "/usr/lib/jvm/java-${required_java_major}-openjdk" \
-        "/usr/lib/jvm/java-latest-openjdk" \
-        "/usr/lib/jvm/jdk-${required_java_major}" \
-        "/usr/lib/jvm/jdk-${required_java_major}-openjdk" \
-        "/opt/homebrew/opt/openjdk@${required_java_major}" \
-        "/opt/homebrew/opt/openjdk@${required_java_major}/libexec/openjdk.jdk/Contents/Home" \
-        "/usr/local/opt/openjdk@${required_java_major}" \
-        "/usr/local/opt/openjdk@${required_java_major}/libexec/openjdk.jdk/Contents/Home"
+        "$HOME/.sdkman/candidates/java/"* \
+        "$HOME/.local/share/jdks/"* \
+        "/usr/lib/jvm/"* \
+        "/opt/homebrew/opt/openjdk"* \
+        "/opt/homebrew/opt/openjdk"*/libexec/openjdk.jdk/Contents/Home \
+        "/usr/local/opt/openjdk"* \
+        "/usr/local/opt/openjdk"*/libexec/openjdk.jdk/Contents/Home \
+        "/Library/Java/JavaVirtualMachines/"*/Contents/Home
 }
 
-is_required_java_home() {
+is_supported_java_home() {
     local candidate="$1"
     local java_bin="$candidate/bin/java"
     local javac_bin="$candidate/bin/javac"
@@ -61,33 +58,43 @@ is_required_java_home() {
     [ -x "$java_bin" ] || return 1
     [ -x "$javac_bin" ] || return 1
     major="$(java_major_version "$java_bin")"
-    [ "$major" = "$required_java_major" ]
+    [ "$major" -ge "$minimum_java_major" ]
 }
 
 require_java_home() {
-    local candidate
+    local candidate major
+    local latest_java_home=""
+    local latest_java_major=0
     local original_java_home="${JAVA_HOME:-}"
 
     while IFS= read -r candidate; do
         [ -n "$candidate" ] || continue
-        if is_required_java_home "$candidate"; then
-            export JAVA_HOME="$candidate"
-            export PATH="$JAVA_HOME/bin:$PATH"
-            return 0
+        if is_supported_java_home "$candidate"; then
+            major="$(java_major_version "$candidate/bin/java")"
+            if [ "$major" -gt "$latest_java_major" ]; then
+                latest_java_home="$candidate"
+                latest_java_major="$major"
+            fi
         fi
     done < <(candidate_java_homes | awk 'NF && !seen[$0]++')
 
-    if [ -n "$original_java_home" ]; then
-        echo "❌ JAVA_HOME is set, but it is not a Java ${required_java_major} JDK: $original_java_home"
-    else
-        echo "❌ Java ${required_java_major} JDK not found."
+    if [ -n "$latest_java_home" ]; then
+        export JAVA_HOME="$latest_java_home"
+        export PATH="$JAVA_HOME/bin:$PATH"
+        return 0
     fi
-    echo "   Set JAVA_HOME to a Java ${required_java_major} JDK, put Java ${required_java_major} on PATH,"
+
+    if [ -n "$original_java_home" ]; then
+        echo "❌ JAVA_HOME is set, but no Java ${minimum_java_major} or newer JDK was found: $original_java_home"
+    else
+        echo "❌ Java ${minimum_java_major} or newer JDK not found."
+    fi
+    echo "   Set JAVA_HOME to a Java ${minimum_java_major} or newer JDK, put it on PATH,"
     echo "   or install it with your platform package manager."
     echo "   Examples:"
     echo "     Arch/CachyOS: sudo pacman -S jdk-openjdk"
     echo "     Fedora:       rpm-ostree install java-latest-openjdk-devel"
-    echo "     Homebrew:     brew install openjdk@${required_java_major}"
+    echo "     Homebrew:     brew install openjdk"
     return 1
 }
 

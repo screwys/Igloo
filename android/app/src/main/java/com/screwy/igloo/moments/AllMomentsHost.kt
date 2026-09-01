@@ -15,8 +15,8 @@ import org.koin.androidx.compose.koinViewModel
  * separate from `AllMomentsRoute` so the composable stays pure (testable with a
  * canned items list) while this host owns the wiring concerns.
  *
- * A grid tap opens the standalone player with the selected video in its route.
- * That route owns recording the explicit selection after its Room playlist loads.
+ * A grid tap opens the standalone player with the selected video in its route. The route shows that
+ * explicit selection immediately and records its cursor in the background.
  */
 @Composable
 fun AllMomentsHost(
@@ -34,17 +34,7 @@ fun AllMomentsHost(
             items = routeState.items,
             initialIndex = routeState.startIndex,
             onMomentClick = { videoId ->
-                navigator.openShorts(
-                    playlistType =
-                        if (routeState.scope == "following") {
-                            ShortsPlaylistType.Moments.routeValue
-                        } else {
-                            ShortsPlaylistType.AllMoments.routeValue
-                        },
-                    playlistId = ShortsPlaylistSpec.RootPlaylistId,
-                    videoId = videoId,
-                    source = IglooNavigationSource.AllMoments,
-                )
+                if (vm.selectGridMoment(videoId)) navController.popBackStack()
             },
             onChannelClick = { cid ->
                 navigator.openChannel(cid, IglooNavigationSource.AllMoments)

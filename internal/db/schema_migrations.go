@@ -24,6 +24,10 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260901_add_moments_cursor_position",
+		apply: addMomentsCursorPosition,
+	},
+	{
 		name:  "20260830_refresh_derived_thumbnail_queue_indexes",
 		apply: refreshDerivedThumbnailQueueIndexes,
 	},
@@ -115,6 +119,35 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addMomentsCursorPosition(tx *sql.Tx) error {
+	exists, err := schemaColumnExists(tx, "moments_cursors", "order_position")
+	if err != nil {
+		return err
+	}
+	if !exists {
+		if _, err := tx.Exec(`ALTER TABLE moments_cursors ADD COLUMN order_position INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`
+		UPDATE moments_cursors
+		SET order_position = COALESCE((
+			SELECT CASE moments_cursors.scope
+				WHEN 'following' THEN videos.moments_following_position
+				ELSE videos.moments_all_position
+			END
+			FROM videos WHERE videos.video_id = moments_cursors.video_id
+		), 0)
+		WHERE scope IN ('all', 'following') AND order_position = 0
+	`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DROP TRIGGER IF EXISTS android_sync_head_moments_cursors_update`); err != nil {
+		return err
+	}
+	return ensureAndroidSyncHeadTriggers(tx)
 }
 
 func refreshDerivedThumbnailQueueIndexes(tx *sql.Tx) error {

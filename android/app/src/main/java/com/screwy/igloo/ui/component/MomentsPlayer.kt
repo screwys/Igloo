@@ -79,6 +79,7 @@ data class MomentItem(
     val repostAuthorLabel: String? = null,
     val repostOtherCount: Int = 0,
     val sortAtMs: Long = 0L,
+    val orderPosition: Long = 0L,
     val storyRingState: StoryRingState = StoryRingState.None,
     val storyFirstVideoId: String = "",
     /**
@@ -319,7 +320,7 @@ fun MomentsPlayer(
         settlementTracker = settlementTracker,
         onSettled = { item, origin ->
             settledVideoId = item.videoId
-            if (origin == MomentPagerSettlementOrigin.Navigation) {
+            if (origin != MomentPagerSettlementOrigin.Restore) {
                 onIndexChange(item)
             }
             onViewEvent(item.videoId)

@@ -156,7 +156,7 @@ class MomentPagerSettlementTest {
     }
 
     @Test
-    fun clamping_after_tail_removal_is_passive_reconciliation() {
+    fun clamping_after_tail_removal_advances_the_cursor() {
         var items by
             mutableStateOf(
                 listOf(
@@ -178,7 +178,7 @@ class MomentPagerSettlementTest {
                 settlementTracker = settlementTracker,
                 onSettled = { item, origin ->
                     origins += item.videoId to origin
-                    if (origin == MomentPagerSettlementOrigin.Navigation) {
+                    if (origin != MomentPagerSettlementOrigin.Restore) {
                         cursorVideoIds += item.videoId
                     }
                 },
@@ -203,7 +203,7 @@ class MomentPagerSettlementTest {
                 ),
                 origins,
             )
-            assertEquals(emptyList<String>(), cursorVideoIds)
+            assertEquals(listOf("newer"), cursorVideoIds)
         }
     }
 

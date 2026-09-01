@@ -117,6 +117,7 @@ internal suspend fun applyOptimisticMutation(db: IglooDatabase, row: OutboxEntit
                         positionMs = payload.long("position_ms") ?: 0,
                         sortAtMs = payload.long("sort_at_ms") ?: 0,
                         updatedAtMs = updatedAt,
+                        orderPosition = payload.long("order_position") ?: 0,
                     )
                 )
         OutboxKind.CODE_CREATE_CATEGORY -> {
