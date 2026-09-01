@@ -149,6 +149,7 @@ jobs:
           if (-not (gh release view windows-runtime 2>$null)) {
             gh release create windows-runtime --target main --prerelease --title "Windows Runtime" --notes "Automated Windows dependency updates."
           }
+          gh release edit windows-runtime --title "Windows Runtime ${{ steps.runtime.outputs.version }}"
           gh release upload windows-runtime `
             release-artifacts/igloo-runtime-windows-amd64.zip `
             release-artifacts/igloo-windows-update.json.sig `

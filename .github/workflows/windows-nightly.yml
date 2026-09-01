@@ -6,7 +6,6 @@ on:
     branches:
       - main
     paths:
-      - .github/workflows/windows-nightly.yml
       - android/app/build.gradle.kts
       - cmd/**
       - go.mod
@@ -92,6 +91,7 @@ jobs:
           if (-not (gh release view windows-nightly 2>$null)) {
             gh release create windows-nightly --target main --prerelease --title "Windows Nightly" --notes "Automated builds from main."
           }
+          gh release edit windows-nightly --title "Windows Nightly ${{ steps.versions.outputs.version }}"
           gh release upload windows-nightly `
             release-artifacts/igloo-app-windows-amd64.zip `
             release-artifacts/igloo-windows-update.json.sig `
