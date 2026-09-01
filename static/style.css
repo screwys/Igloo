@@ -2855,10 +2855,19 @@ select.input:focus {
 
 .windows-update-row {
     display: grid;
-    grid-template-columns: minmax(11rem, 1fr) auto;
+    grid-template-columns: minmax(11rem, 1fr) auto auto;
     gap: 1rem;
     align-items: end;
     margin-bottom: 1rem;
+}
+
+.windows-runtime-update-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.6rem;
+    padding-bottom: 0.05rem;
+    white-space: nowrap;
 }
 
 .windows-update-channel {

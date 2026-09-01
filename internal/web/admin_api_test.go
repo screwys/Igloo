@@ -1401,6 +1401,24 @@ func TestNormalizeSettingsUpdateNormalizesWindowsUpdateSettings(t *testing.T) {
 	}
 }
 
+func TestSettingsToAPIFormatDefaultsRuntimeUpdatesFromChannel(t *testing.T) {
+	stable := settingsToAPIFormat(map[string]string{"windows_update_channel": "stable"})
+	if stable["windows_runtime_update_enabled"] != false {
+		t.Fatalf("stable runtime update default = %#v", stable["windows_runtime_update_enabled"])
+	}
+	nightly := settingsToAPIFormat(map[string]string{"windows_update_channel": "latest"})
+	if nightly["windows_update_channel"] != "nightly" || nightly["windows_runtime_update_enabled"] != true {
+		t.Fatalf("migrated nightly settings = %#v", nightly)
+	}
+	explicit := settingsToAPIFormat(map[string]string{
+		"windows_update_channel":         "nightly",
+		"windows_runtime_update_enabled": "false",
+	})
+	if explicit["windows_runtime_update_enabled"] != "false" {
+		t.Fatalf("explicit runtime update setting = %#v", explicit["windows_runtime_update_enabled"])
+	}
+}
+
 func mapKeys[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {

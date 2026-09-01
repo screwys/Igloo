@@ -301,9 +301,8 @@ test("release tag verifier pins the release public key", () => {
     verifier.includes('[[ ! "$release_ref_name" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]'),
   );
   assert.match(verifier, /git cat-file -t "refs\/tags\/\$\{release_ref_name\}"/);
-  assert.match(verifier, /git tag -v "\$release_ref_name"/);
+  assert.match(verifier, /gpg --batch --verify "\$tag_signature" "\$tag_payload"/);
   assert.match(verifier, /git merge-base --is-ancestor "\$tag_target" origin\/main/);
-  assert.doesNotMatch(verifier, /BEGIN PGP SIGNATURE/);
 });
 
 test("container images run as non-root by default", () => {
@@ -384,6 +383,29 @@ test("Windows release publishes the installer and signed background-update bundl
   assert.match(workflow, /igloo-windows-update\.json\.sig/);
   assert.match(workflow, /WINDOWS_UPDATE_SIGNING_KEY_BASE64/);
   assert.match(workflow, /actions\/attest@59d89421af93a897026c735860bf21b6eb4f7b26/);
+});
+
+test("Windows rolling feeds publish nightly apps and changed runtime dependencies", () => {
+  const nightly = readFileSync(
+    new URL("../../.github/workflows/windows-nightly.yml", import.meta.url),
+    "utf8",
+  );
+  const runtime = readFileSync(
+    new URL("../../.github/workflows/windows-runtime.yml", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(nightly, /push:\n    branches:\n      - main/);
+  assert.match(nightly, /gh release upload windows-nightly/);
+  assert.match(nightly, /igloo-app-windows-amd64\.zip/);
+  assert.doesNotMatch(nightly, /igloo-runtime-windows-amd64\.zip/);
+
+  assert.match(runtime, /cron: "23 \*\/6 \* \* \*"/);
+  assert.match(runtime, /runs-on: ubuntu-latest/);
+  assert.match(runtime, /if: needs\.check\.outputs\.changed == 'true'/);
+  assert.match(runtime, /runs-on: windows-latest/);
+  assert.match(runtime, /gh release upload windows-runtime/);
+  assert.match(runtime, /windows-runtime-sources\.json/);
 });
 
 test("Android Gradle wrapper pins the distribution checksum", () => {

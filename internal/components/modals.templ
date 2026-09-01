@@ -414,7 +414,7 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 						</select>
 					</div>
 					if p.UserRole == "admin" && p.RuntimeOS == "windows" {
-						<h4 style="margin:1.25rem 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_windows_updates", "Windows Updates") }</h4>
+						<h4 style="margin:1.25rem 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_updates", "Updates") }</h4>
 						<div class="form-group checkbox-group">
 							<label>
 								if prefs.Bool("windows_update_enabled") {
@@ -422,7 +422,7 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 								} else {
 									<input type="checkbox" name="windows_update_enabled" value="true"/>
 								}
-								{ L(p, "settings_windows_update_enabled", "Automatically check for Windows updates") }
+								{ L(p, "settings_update_enabled", "Automatically update Igloo") }
 							</label>
 						</div>
 						<div class="form-group">
@@ -436,11 +436,19 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 						<div class="windows-update-row">
 							<div class="form-group windows-update-channel">
 								<label for="global-setting-windows-update-channel">{ L(p, "settings_windows_update_channel", "Update channel") }</label>
-								<select id="global-setting-windows-update-channel" name="windows_update_channel" class="input">
+								<select id="global-setting-windows-update-channel" name="windows_update_channel" class="input" onchange="this.closest('.windows-update-row').querySelector('[name=windows_runtime_update_enabled]').checked=this.value==='nightly'">
 									<option value="stable" selected?={ prefs.Str("windows_update_channel", "stable") == "stable" }>{ L(p, "settings_windows_update_stable", "Stable") }</option>
-									<option value="latest" selected?={ prefs.Str("windows_update_channel", "stable") == "latest" }>{ L(p, "settings_windows_update_latest", "Latest") }</option>
+									<option value="nightly" selected?={ prefs.Str("windows_update_channel", "stable") == "nightly" }>{ L(p, "settings_windows_update_nightly", "Nightly") }</option>
 								</select>
 							</div>
+							<label class="windows-runtime-update-toggle">
+								if prefs.Bool("windows_runtime_update_enabled") {
+									<input type="checkbox" name="windows_runtime_update_enabled" value="true" checked/>
+								} else {
+									<input type="checkbox" name="windows_runtime_update_enabled" value="true"/>
+								}
+								{ L(p, "settings_windows_runtime_update_enabled", "Automatic dependency updates") }
+							</label>
 							@WindowsUpdatePanel(p, windowsupdate.Status{})
 						</div>
 					}

@@ -15,6 +15,8 @@ import (
 const (
 	defaultRepository = "screwys/Igloo"
 	manifestAssetName = "igloo-windows-update.json"
+	nightlyReleaseTag = "windows-nightly"
+	runtimeReleaseTag = "windows-runtime"
 	maxMetadataBytes  = 1 << 20
 )
 
@@ -62,6 +64,11 @@ func (s GitHubSource) Latest(ctx context.Context, channel, etag string) (Availab
 		return Available{}, etag, false, errors.New("GitHub API URL is not HTTPS")
 	}
 	releasesURL := apiBaseURL + "/repos/" + repository + "/releases?per_page=20"
+	if channel == "nightly" {
+		releasesURL = apiBaseURL + "/repos/" + repository + "/releases/tags/" + nightlyReleaseTag
+	} else if channel == "runtime" {
+		releasesURL = apiBaseURL + "/repos/" + repository + "/releases/tags/" + runtimeReleaseTag
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releasesURL, nil)
 	if err != nil {
 		return Available{}, etag, false, err
@@ -80,16 +87,27 @@ func (s GitHubSource) Latest(ctx context.Context, channel, etag string) (Availab
 	if resp.StatusCode == http.StatusNotModified {
 		return Available{}, etag, true, nil
 	}
+	if resp.StatusCode == http.StatusNotFound && channel != "stable" {
+		return Available{}, resp.Header.Get("ETag"), false, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return Available{}, etag, false, fmt.Errorf("GitHub releases: %s", resp.Status)
 	}
 	var releases []githubRelease
-	if err := decodeLimitedJSON(resp.Body, maxMetadataBytes, &releases); err != nil {
-		return Available{}, etag, false, err
+	if channel == "stable" {
+		if err := decodeLimitedJSON(resp.Body, maxMetadataBytes, &releases); err != nil {
+			return Available{}, etag, false, err
+		}
+	} else {
+		var release githubRelease
+		if err := decodeLimitedJSON(resp.Body, maxMetadataBytes, &release); err != nil {
+			return Available{}, etag, false, err
+		}
+		releases = []githubRelease{release}
 	}
 	newETag := resp.Header.Get("ETag")
 	for _, release := range releases {
-		if release.Draft || (release.Prerelease && channel != "latest") {
+		if release.Draft || (channel == "stable" && release.Prerelease) {
 			continue
 		}
 		assets := make(map[string]githubAsset, len(release.Assets))
@@ -127,19 +145,24 @@ func (s GitHubSource) Latest(ctx context.Context, channel, etag string) (Availab
 			continue
 		}
 		available := Available{Manifest: manifest}
-		if manifest.App != nil {
+		if manifest.App != nil && channel != "runtime" {
 			asset, ok := assets[manifest.App.Asset]
 			if !ok || asset.Size != manifest.App.Size {
 				return Available{}, newETag, false, errors.New("Windows app update asset is missing or has the wrong size")
 			}
 			available.AppURL = asset.BrowserDownloadURL
 		}
-		if manifest.Runtime != nil {
+		if manifest.Runtime != nil && channel == "runtime" {
 			asset, ok := assets[manifest.Runtime.Asset]
 			if !ok || asset.Size != manifest.Runtime.Size {
 				return Available{}, newETag, false, errors.New("Windows runtime update asset is missing or has the wrong size")
 			}
 			available.RuntimeURL = asset.BrowserDownloadURL
+		}
+		if channel == "runtime" {
+			available.Manifest.App = nil
+		} else {
+			available.Manifest.Runtime = nil
 		}
 		return available, newETag, false, nil
 	}

@@ -1,0 +1,99 @@
+name: Windows Nightly
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/windows-nightly.yml
+      - android/app/build.gradle.kts
+      - cmd/**
+      - go.mod
+      - go.sum
+      - internal/**
+      - locales/**
+      - packaging/windows/build-app.ps1
+      - packaging/windows/write-manifest.ps1
+      - static/**
+
+concurrency:
+  group: windows-nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Generate application assets
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          templ generate
+          go run ./cmd/igloo-assets
+
+      - name: Build application package
+        id: versions
+        shell: pwsh
+        env:
+          WINDOWS_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.WINDOWS_UPDATE_PUBLIC_KEY_BASE64 }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (-not $env:WINDOWS_UPDATE_PUBLIC_KEY_BASE64) { throw "WINDOWS_UPDATE_PUBLIC_KEY_BASE64 is not configured" }
+          $gradle = Get-Content -Raw android/app/build.gradle.kts
+          $baseVersion = [regex]::Match($gradle, 'versionName\s*=\s*"([^"]+)"').Groups[1].Value
+          $version = "$baseVersion.${env:GITHUB_RUN_NUMBER}"
+          $runtime = (Get-Content -Raw packaging/windows/windows-runtime.lock.json | ConvertFrom-Json).revision
+          New-Item -ItemType Directory -Force release-artifacts | Out-Null
+          packaging/windows/build-app.ps1 `
+            -Version $version `
+            -RuntimeRevision $runtime `
+            -UpdatePublicKey $env:WINDOWS_UPDATE_PUBLIC_KEY_BASE64 `
+            -OutputDirectory "$env:RUNNER_TEMP/igloo-app"
+          Compress-Archive -Path "$env:RUNNER_TEMP/igloo-app/*" -DestinationPath "release-artifacts/igloo-app-windows-amd64.zip"
+          & "$env:RUNNER_TEMP/igloo-app/igloo.exe" --version
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "base_version=$baseVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Sign application update
+        shell: pwsh
+        env:
+          WINDOWS_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.WINDOWS_UPDATE_PUBLIC_KEY_BASE64 }}
+          WINDOWS_UPDATE_SIGNING_KEY_BASE64: ${{ secrets.WINDOWS_UPDATE_SIGNING_KEY_BASE64 }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (-not $env:WINDOWS_UPDATE_SIGNING_KEY_BASE64) { throw "WINDOWS_UPDATE_SIGNING_KEY_BASE64 is not configured" }
+          packaging/windows/write-manifest.ps1 `
+            -AppVersion "${{ steps.versions.outputs.version }}" `
+            -MinimumAppVersion "${{ steps.versions.outputs.base_version }}" `
+            -AppArchive "release-artifacts/igloo-app-windows-amd64.zip" `
+            -OutputPath "release-artifacts/igloo-windows-update.json"
+          go run ./cmd/igloo-sign-update `
+            --input "release-artifacts/igloo-windows-update.json" `
+            --output "release-artifacts/igloo-windows-update.json.sig" `
+            --public-key $env:WINDOWS_UPDATE_PUBLIC_KEY_BASE64
+
+      - name: Publish nightly update
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (-not (gh release view windows-nightly 2>$null)) {
+            gh release create windows-nightly --target main --prerelease --title "Windows Nightly" --notes "Automated builds from main."
+          }
+          gh release upload windows-nightly `
+            release-artifacts/igloo-app-windows-amd64.zip `
+            release-artifacts/igloo-windows-update.json.sig `
+            --clobber
+          gh release upload windows-nightly release-artifacts/igloo-windows-update.json --clobber

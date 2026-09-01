@@ -182,9 +182,10 @@ func TestPrefsBodyRendersWindowsUpdateControlsInOneRow(t *testing.T) {
 	p.UserRole = "admin"
 	p.RuntimeOS = "windows"
 	prefs := PrefsData{Settings: map[string]any{
-		"windows_update_enabled":        true,
-		"windows_update_interval_hours": 6,
-		"windows_update_channel":        "stable",
+		"windows_update_enabled":         true,
+		"windows_runtime_update_enabled": true,
+		"windows_update_interval_hours":  6,
+		"windows_update_channel":         "nightly",
 	}}
 	var buf bytes.Buffer
 	if err := PrefsBody(p, prefs).Render(context.Background(), &buf); err != nil {
@@ -193,16 +194,20 @@ func TestPrefsBodyRendersWindowsUpdateControlsInOneRow(t *testing.T) {
 	html := buf.String()
 	rowStart := strings.Index(html, `class="windows-update-row"`)
 	channelStart := strings.Index(html, `id="global-setting-windows-update-channel"`)
+	runtimeToggleStart := strings.Index(html, `name="windows_runtime_update_enabled"`)
 	panelStart := strings.Index(html, `id="windows-update-panel" class="windows-update-panel"`)
-	if rowStart < 0 || channelStart < rowStart || panelStart < channelStart {
-		t.Fatalf("Windows update channel and status should share one row:\n%s", html)
+	if rowStart < 0 || channelStart < rowStart || runtimeToggleStart < channelStart || panelStart < runtimeToggleStart {
+		t.Fatalf("update channel, dependency toggle, and status should share one row:\n%s", html)
+	}
+	if !strings.Contains(html, `<option value="nightly" selected>Nightly</option>`) {
+		t.Fatalf("nightly update channel is missing:\n%s", html)
 	}
 
 	css, err := os.ReadFile("../../static/style.css")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(css), "grid-template-columns: minmax(11rem, 1fr) auto;") {
+	if !strings.Contains(string(css), "grid-template-columns: minmax(11rem, 1fr) auto auto;") {
 		t.Fatal("Windows update row is missing its desktop side-by-side grid")
 	}
 }

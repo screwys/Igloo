@@ -636,6 +636,7 @@
     <string name="settings_section_system">System</string>
     <string name="settings_section_tiktok">TikTok</string>
     <string name="settings_section_translation">Translation</string>
+    <string name="settings_section_updates">Updates</string>
     <string name="settings_section_windows_updates">Windows Updates</string>
     <string name="settings_section_x_feed">X Feed</string>
     <string name="settings_segment_skipping">Segment skipping</string>
@@ -696,14 +697,17 @@
     <string name="settings_ui_language_help">Translations are loaded from the local Weblate catalog.</string>
     <string name="settings_unmute_help">Their posts can appear in your feed again after sync catches up.</string>
     <string name="settings_unmute_title">Unmute @%1$s?</string>
+    <string name="settings_update_enabled">Automatically update Igloo</string>
     <string name="settings_video_quality">Video Quality</string>
     <string name="settings_wifi_only">Wi-Fi only</string>
+    <string name="settings_windows_runtime_update_enabled">Automatic dependency updates</string>
     <string name="settings_windows_update_available">Update available</string>
     <string name="settings_windows_update_channel">Update channel</string>
     <string name="settings_windows_update_enabled">Automatically check for Windows updates</string>
     <string name="settings_windows_update_installed">Installed</string>
     <string name="settings_windows_update_interval">Check interval</string>
     <string name="settings_windows_update_latest">Latest</string>
+    <string name="settings_windows_update_nightly">Nightly</string>
     <string name="settings_windows_update_stable">Stable</string>
     <string name="settings_windows_update_unavailable">Update status is available in packaged Windows builds.</string>
     <string name="settings_x_profile_history_limit">Number of posts to keep in the database</string>

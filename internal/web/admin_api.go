@@ -152,6 +152,11 @@ func settingsToAPIFormat(dbSettings map[string]string) map[string]any {
 		}
 		result[k] = v
 	}
+	channel := settings.NormalizeWindowsUpdateChannel(fmt.Sprintf("%v", result["windows_update_channel"]))
+	result["windows_update_channel"] = channel
+	if _, explicitlyConfigured := dbSettings["windows_runtime_update_enabled"]; !explicitlyConfigured {
+		result["windows_runtime_update_enabled"] = channel == "nightly"
+	}
 	themeSettings := webtheme.NormalizeSettings(webtheme.Settings{
 		ThemeID:   fmt.Sprintf("%v", result["web_theme_id"]),
 		AccentHex: fmt.Sprintf("%v", result["web_theme_accent"]),
@@ -461,7 +466,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 		"instagram_include_tagged_default", "share_embed_friendly_links",
 	}
 	if buildinfo.IsWindows() {
-		checkboxFields = append(checkboxFields, "windows_update_enabled")
+		checkboxFields = append(checkboxFields, "windows_update_enabled", "windows_runtime_update_enabled")
 	}
 	for _, key := range checkboxFields {
 		if r.FormValue(key) != "" {

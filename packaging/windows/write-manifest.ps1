@@ -1,9 +1,9 @@
 param(
     [string] $AppVersion,
-    [Parameter(Mandatory = $true)] [string] $RuntimeVersion,
+    [string] $RuntimeVersion,
     [Parameter(Mandatory = $true)] [string] $MinimumAppVersion,
     [string] $AppArchive,
-    [Parameter(Mandatory = $true)] [string] $RuntimeArchive,
+    [string] $RuntimeArchive,
     [Parameter(Mandatory = $true)] [string] $OutputPath
 )
 
@@ -23,10 +23,16 @@ $manifest = [ordered]@{
     os = "windows"
     arch = "amd64"
     minimum_app_version = $MinimumAppVersion
-    runtime = Payload $RuntimeVersion $RuntimeArchive
 }
 if ($AppArchive) {
     if (-not $AppVersion) { throw "AppVersion is required when AppArchive is provided" }
     $manifest["app"] = Payload $AppVersion $AppArchive
+}
+if ($RuntimeArchive) {
+    if (-not $RuntimeVersion) { throw "RuntimeVersion is required when RuntimeArchive is provided" }
+    $manifest["runtime"] = Payload $RuntimeVersion $RuntimeArchive
+}
+if (-not $AppArchive -and -not $RuntimeArchive) {
+    throw "At least one update archive is required"
 }
 $manifest | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8NoBOM $OutputPath

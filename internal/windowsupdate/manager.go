@@ -40,9 +40,10 @@ type Manager struct {
 	defaultEnabled bool
 	checkNow       chan struct{}
 
-	mu     sync.RWMutex
-	status Status
-	etag   string
+	mu          sync.RWMutex
+	status      Status
+	appETag     string
+	runtimeETag string
 }
 
 func NewManager(settings Settings, source Source, installer Installer, currentApp, currentRuntime string) *Manager {
@@ -73,9 +74,8 @@ func (m *Manager) Run(ctx context.Context) {
 			forced = true
 		case <-timer.C:
 		}
-		enabled := m.enabled()
-		if forced || enabled {
-			m.check(ctx, enabled)
+		if forced || m.enabled() || m.runtimeEnabled() {
+			m.check(ctx, forced)
 		}
 		timer.Reset(m.interval())
 	}
@@ -100,30 +100,54 @@ func (m *Manager) Status() Status {
 	return m.status
 }
 
-func (m *Manager) check(ctx context.Context, apply bool) {
+func (m *Manager) check(ctx context.Context, forced bool) {
 	m.updateStatus(func(status *Status) {
 		status.Checking = true
 		status.LastError = ""
 	})
 	defer m.updateStatus(func(status *Status) { status.Checking = false })
 
-	available, etag, unchanged, err := m.source.Latest(ctx, m.channel(), m.etag)
-	if err != nil {
-		m.fail(err)
-		return
+	applyApp := m.enabled()
+	applyRuntime := m.runtimeEnabled()
+	checkApp := forced || applyApp
+	checkRuntime := forced || applyRuntime
+	available := Available{Manifest: Manifest{Schema: ManifestSchema, OS: "windows", Arch: "amd64"}}
+	if checkApp {
+		app, etag, unchanged, err := m.source.Latest(ctx, m.channel(), m.appETag)
+		if err != nil {
+			m.fail(err)
+			return
+		}
+		if !unchanged {
+			m.appETag = etag
+			available.Manifest.App = app.Manifest.App
+			available.AppURL = app.AppURL
+			available.Manifest.MinimumAppVersion = app.Manifest.MinimumAppVersion
+		}
+	}
+	if checkRuntime {
+		runtimeAvailable, etag, unchanged, err := m.source.Latest(ctx, "runtime", m.runtimeETag)
+		if err != nil {
+			m.fail(err)
+			return
+		}
+		if !unchanged {
+			m.runtimeETag = etag
+			available.Manifest.Runtime = runtimeAvailable.Manifest.Runtime
+			available.RuntimeURL = runtimeAvailable.RuntimeURL
+			if runtimeAvailable.Manifest.MinimumAppVersion != "" {
+				available.Manifest.MinimumAppVersion = runtimeAvailable.Manifest.MinimumAppVersion
+			}
+		}
 	}
 	m.updateStatus(func(status *Status) { status.LastCheckedAt = time.Now().UTC() })
-	if unchanged {
-		return
-	}
 	if available.Manifest.App == nil && available.Manifest.Runtime == nil {
-		m.etag = etag
 		return
 	}
 	needsApp := available.Manifest.App != nil && NewerVersion(available.Manifest.App.Version, m.currentApp)
 	needsRuntime := available.Manifest.Runtime != nil && NewerVersion(available.Manifest.Runtime.Version, m.currentRuntime)
 	effectiveApp := m.currentApp
-	if needsApp {
+	if needsApp && applyApp {
 		effectiveApp = available.Manifest.App.Version
 	}
 	if needsRuntime && NewerVersion(available.Manifest.MinimumAppVersion, effectiveApp) {
@@ -147,10 +171,17 @@ func (m *Manager) check(ctx context.Context, apply bool) {
 		}
 	})
 	if !needsApp && !needsRuntime {
-		m.etag = etag
 		return
 	}
-	if !apply {
+	if !applyApp {
+		available.Manifest.App = nil
+		available.AppURL = ""
+	}
+	if !applyRuntime {
+		available.Manifest.Runtime = nil
+		available.RuntimeURL = ""
+	}
+	if available.Manifest.App == nil && available.Manifest.Runtime == nil {
 		return
 	}
 	if m.installer == nil {
@@ -163,11 +194,16 @@ func (m *Manager) check(ctx context.Context, apply bool) {
 		m.fail(fmt.Errorf("apply Windows update: %w", err))
 		return
 	}
-	m.etag = etag
 }
 
 func (m *Manager) enabled() bool {
 	value, _ := m.settings.GetSetting("windows_update_enabled", fmt.Sprint(m.defaultEnabled))
+	return value != "false" && value != "0"
+}
+
+func (m *Manager) runtimeEnabled() bool {
+	fallback := m.channel() == "nightly"
+	value, _ := m.settings.GetSetting("windows_runtime_update_enabled", fmt.Sprint(fallback))
 	return value != "false" && value != "0"
 }
 
@@ -186,8 +222,8 @@ func (m *Manager) interval() time.Duration {
 
 func (m *Manager) channel() string {
 	value, _ := m.settings.GetSetting("windows_update_channel", "stable")
-	if value == "latest" {
-		return value
+	if value == "nightly" || value == "latest" {
+		return "nightly"
 	}
 	return "stable"
 }

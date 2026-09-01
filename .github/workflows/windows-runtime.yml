@@ -1,0 +1,157 @@
+name: Windows Runtime
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 */6 * * *"
+
+concurrency:
+  group: windows-runtime
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.versions.outputs.changed }}
+      yt_version: ${{ steps.versions.outputs.yt_version }}
+      yt_url: ${{ steps.versions.outputs.yt_url }}
+      gallery_version: ${{ steps.versions.outputs.gallery_version }}
+      gallery_url: ${{ steps.versions.outputs.gallery_url }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Check downloader versions
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          yt_release="$(gh api repos/yt-dlp/yt-dlp-nightly-builds/releases/latest)"
+          gallery_release="$(gh api repos/gdl-org/builds/releases/latest)"
+          yt_version="$(jq -r '.tag_name' <<<"$yt_release")"
+          yt_url="$(jq -r '.assets[] | select(.name == "yt-dlp.exe") | .browser_download_url' <<<"$yt_release")"
+          gallery_version="$(jq -r '.tag_name' <<<"$gallery_release")"
+          gallery_url="$(jq -r '.assets[] | select(.name == "gallery-dl_windows.exe") | .browser_download_url' <<<"$gallery_release")"
+          deno_version="$(jq -r '.artifacts.deno.version' packaging/windows/windows-runtime.lock.json)"
+          ffmpeg_version="$(jq -r '.artifacts.ffmpeg.version' packaging/windows/windows-runtime.lock.json)"
+          test -n "$yt_version" && test -n "$yt_url" && test -n "$gallery_version" && test -n "$gallery_url"
+
+          current_dir="$(mktemp -d)"
+          changed=true
+          if gh release download windows-runtime --pattern windows-runtime-sources.json --dir "$current_dir" 2>/dev/null; then
+            if jq -e --arg yt "$yt_version" --arg gallery "$gallery_version" --arg deno "$deno_version" --arg ffmpeg "$ffmpeg_version" \
+              '.yt_dlp == $yt and .gallery_dl == $gallery and .deno == $deno and .ffmpeg == $ffmpeg' \
+              "$current_dir/windows-runtime-sources.json" >/dev/null; then
+              changed=false
+            fi
+          fi
+
+          {
+            echo "changed=$changed"
+            echo "yt_version=$yt_version"
+            echo "yt_url=$yt_url"
+            echo "gallery_version=$gallery_version"
+            echo "gallery_url=$gallery_url"
+          } >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build runtime package
+        id: runtime
+        shell: pwsh
+        env:
+          YT_VERSION: ${{ needs.check.outputs.yt_version }}
+          YT_URL: ${{ needs.check.outputs.yt_url }}
+          GALLERY_VERSION: ${{ needs.check.outputs.gallery_version }}
+          GALLERY_URL: ${{ needs.check.outputs.gallery_url }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $lockPath = "packaging/windows/windows-runtime.lock.json"
+          $lock = Get-Content -Raw $lockPath | ConvertFrom-Json
+          $downloads = "$env:RUNNER_TEMP/runtime-sources"
+          New-Item -ItemType Directory -Force $downloads | Out-Null
+
+          function Update-Artifact([string] $Name, [string] $Version, [string] $Url) {
+            $path = Join-Path $downloads $lock.artifacts.$Name.output
+            Invoke-WebRequest -Uri $Url -OutFile $path
+            $lock.artifacts.$Name.version = $Version
+            $lock.artifacts.$Name.url = $Url
+            $lock.artifacts.$Name.size = (Get-Item $path).Length
+            $lock.artifacts.$Name.sha256 = (Get-FileHash -Algorithm SHA256 $path).Hash.ToLowerInvariant()
+          }
+
+          Update-Artifact "yt-dlp" $env:YT_VERSION $env:YT_URL
+          Update-Artifact "gallery-dl" $env:GALLERY_VERSION $env:GALLERY_URL
+          $lock.revision = (Get-Date).ToUniversalTime().ToString("yyyy.MM.dd.HHmmss")
+          $lock | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8NoBOM $lockPath
+
+          New-Item -ItemType Directory -Force release-artifacts | Out-Null
+          packaging/windows/build-runtime.ps1 -OutputDirectory "$env:RUNNER_TEMP/igloo-runtime"
+          Compress-Archive -Path "$env:RUNNER_TEMP/igloo-runtime/*" -DestinationPath "release-artifacts/igloo-runtime-windows-amd64.zip"
+          @{
+            yt_dlp = $env:YT_VERSION
+            gallery_dl = $env:GALLERY_VERSION
+            deno = $lock.artifacts.deno.version
+            ffmpeg = $lock.artifacts.ffmpeg.version
+          } | ConvertTo-Json | Set-Content -Encoding utf8NoBOM "release-artifacts/windows-runtime-sources.json"
+          "version=$($lock.revision)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Verify runtime package
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          & "$env:RUNNER_TEMP/igloo-runtime/yt-dlp.exe" --version
+          & "$env:RUNNER_TEMP/igloo-runtime/gallery-dl.exe" --version
+          & "$env:RUNNER_TEMP/igloo-runtime/deno.exe" --version
+          & "$env:RUNNER_TEMP/igloo-runtime/ffmpeg.exe" -version
+
+      - name: Sign runtime update
+        shell: pwsh
+        env:
+          WINDOWS_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.WINDOWS_UPDATE_PUBLIC_KEY_BASE64 }}
+          WINDOWS_UPDATE_SIGNING_KEY_BASE64: ${{ secrets.WINDOWS_UPDATE_SIGNING_KEY_BASE64 }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (-not $env:WINDOWS_UPDATE_PUBLIC_KEY_BASE64) { throw "WINDOWS_UPDATE_PUBLIC_KEY_BASE64 is not configured" }
+          if (-not $env:WINDOWS_UPDATE_SIGNING_KEY_BASE64) { throw "WINDOWS_UPDATE_SIGNING_KEY_BASE64 is not configured" }
+          $gradle = Get-Content -Raw android/app/build.gradle.kts
+          $minimumAppVersion = [regex]::Match($gradle, 'versionName\s*=\s*"([^"]+)"').Groups[1].Value
+          packaging/windows/write-manifest.ps1 `
+            -RuntimeVersion "${{ steps.runtime.outputs.version }}" `
+            -MinimumAppVersion $minimumAppVersion `
+            -RuntimeArchive "release-artifacts/igloo-runtime-windows-amd64.zip" `
+            -OutputPath "release-artifacts/igloo-windows-update.json"
+          go run ./cmd/igloo-sign-update `
+            --input "release-artifacts/igloo-windows-update.json" `
+            --output "release-artifacts/igloo-windows-update.json.sig" `
+            --public-key $env:WINDOWS_UPDATE_PUBLIC_KEY_BASE64
+
+      - name: Publish runtime update
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (-not (gh release view windows-runtime 2>$null)) {
+            gh release create windows-runtime --target main --prerelease --title "Windows Runtime" --notes "Automated Windows dependency updates."
+          }
+          gh release upload windows-runtime `
+            release-artifacts/igloo-runtime-windows-amd64.zip `
+            release-artifacts/igloo-windows-update.json.sig `
+            release-artifacts/windows-runtime-sources.json `
+            --clobber
+          gh release upload windows-runtime release-artifacts/igloo-windows-update.json --clobber

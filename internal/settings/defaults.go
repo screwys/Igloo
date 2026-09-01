@@ -103,8 +103,8 @@ func ClampWindowsUpdateIntervalHours(n int) int {
 }
 
 func NormalizeWindowsUpdateChannel(value string) string {
-	if value == "latest" {
-		return value
+	if value == "nightly" || value == "latest" {
+		return "nightly"
 	}
 	return "stable"
 }
@@ -213,6 +213,7 @@ var Defaults = map[string]any{
 	"translate_model":                  "",
 	"ui_language":                      "en",
 	"windows_update_enabled":           true,
+	"windows_runtime_update_enabled":   false,
 	"windows_update_interval_hours":    6,
 	"windows_update_channel":           "stable",
 	"youtube_default_playback_speed":   "1",
