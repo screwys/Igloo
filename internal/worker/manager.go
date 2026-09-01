@@ -105,9 +105,7 @@ type Manager struct {
 	youtubeMetadata        youtubeMetadataFetcher
 	youtubeRecommendations youtubeRecommendationFetcher
 
-	instagramProfileFetch   instagramProfileFetchFn
-	instagramAvatarFallback func(string) string
-	windowsUpdater          *windowsupdate.Manager
+	windowsUpdater *windowsupdate.Manager
 }
 
 func (m *Manager) SetWindowsUpdater(updater *windowsupdate.Manager) {

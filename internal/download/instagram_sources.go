@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/screwys/igloo/internal/model"
 )
 
 const instagramGalleryDLTimeout = 90 * time.Second
@@ -25,7 +27,7 @@ func normalizeInstagramHandle(raw string) string {
 	return handle
 }
 
-type InstagramProfile struct {
+type instagramProfile struct {
 	Handle      string
 	DisplayName string
 	Bio         string
@@ -56,7 +58,12 @@ func (g *GalleryDLWrapper) InstagramChannel(ctx context.Context, handle string, 
 		var firstAttemptErr error
 		authSucceeded := false
 		for _, auth := range authAttempts {
-			cookieRefs, cookieErr := g.instagramDump(ctx, rawURL, limit, auth, handle)
+			output, cookieErr := g.instagramDumpOutput(ctx, rawURL, limit, auth.File, auth.Browser)
+			cookieRefs := ParseInstagramChannelDumpForHandle(output, handle)
+			window.Profile = preferInstagramObservedProfile(
+				window.Profile,
+				ParseInstagramObservedProfileDump(output, handle),
+			)
 			if cookieErr == nil {
 				authSucceeded = true
 				window.Refs = cookieRefs
@@ -125,38 +132,7 @@ func (g *GalleryDLWrapper) InstagramTagged(ctx context.Context, handle string, l
 	return mergeSourceRefs(refs, limit), nil
 }
 
-func (g *GalleryDLWrapper) InstagramProfile(ctx context.Context, handle string, cookiesFile string, cookiesBrowser ...string) (*InstagramProfile, error) {
-	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
-	if handle == "" {
-		return nil, nil
-	}
-	var firstErr error
-	anySuccess := false
-	cookieAttempts := instagramProfileCookieAttempts(cookiesFile, optionalCookieBrowser(cookiesBrowser))
-	rawURL := "https://www.instagram.com/" + handle + "/info/"
-	for _, cookies := range cookieAttempts {
-		output, err := g.instagramProfileDumpOutput(ctx, rawURL, cookies.File, cookies.Browser)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		anySuccess = true
-		if profile := ParseInstagramProfileDump(output, handle); profile != nil {
-			return profile, nil
-		}
-	}
-	if anySuccess {
-		return nil, fmt.Errorf("gallery-dl Instagram profile returned no matching metadata for %s", handle)
-	}
-	if firstErr != nil {
-		return nil, firstErr
-	}
-	return nil, nil
-}
-
-func instagramProfileScore(profile InstagramProfile, fallbackHandle string) int {
+func instagramProfileScore(profile instagramProfile, fallbackHandle string) int {
 	score := 0
 	if profile.Handle != "" {
 		score++
@@ -174,20 +150,6 @@ func instagramProfileScore(profile InstagramProfile, fallbackHandle string) int 
 		score += 2
 	}
 	return score
-}
-
-func instagramProfileCookieAttempts(cookiesFile, cookiesBrowser string) []CookieSet {
-	if strings.TrimSpace(cookiesFile) == "" {
-		if strings.TrimSpace(cookiesBrowser) == "" {
-			return []CookieSet{{}}
-		}
-		return []CookieSet{{Browser: strings.TrimSpace(cookiesBrowser)}}
-	}
-	out := []CookieSet{{File: strings.TrimSpace(cookiesFile)}}
-	if strings.TrimSpace(cookiesBrowser) != "" {
-		out = append(out, CookieSet{Browser: strings.TrimSpace(cookiesBrowser)})
-	}
-	return out
 }
 
 func instagramCookieAuthAttempts(cookiesFile, cookiesBrowser string) []CookieSet {
@@ -211,11 +173,6 @@ func optionalCookieBrowser(cookiesBrowser []string) string {
 	return strings.TrimSpace(cookiesBrowser[0])
 }
 
-func (g *GalleryDLWrapper) instagramDump(ctx context.Context, rawURL string, limit int, cookies CookieSet, sourceHandle string) ([]VideoRef, error) {
-	output, err := g.instagramDumpOutput(ctx, rawURL, limit, cookies.File, cookies.Browser)
-	return ParseInstagramChannelDumpForHandle(output, sourceHandle), err
-}
-
 func (g *GalleryDLWrapper) instagramDumpOutput(ctx context.Context, rawURL string, limit int, cookiesFile string, cookiesBrowser ...string) ([]byte, error) {
 	browser := optionalCookieBrowser(cookiesBrowser)
 	args := instagramDumpArgs(limit, cookiesFile, rawURL, browser)
@@ -227,20 +184,6 @@ func (g *GalleryDLWrapper) instagramDumpOutput(ctx context.Context, rawURL strin
 			return output, fmt.Errorf("gallery-dl Instagram timed out after %s for %s", instagramGalleryDLTimeout, rawURL)
 		}
 		return output, fmt.Errorf("gallery-dl Instagram: %w: %s", err, RedactText(string(output)))
-	}
-	return output, nil
-}
-
-func (g *GalleryDLWrapper) instagramProfileDumpOutput(ctx context.Context, rawURL, cookiesFile string, cookiesBrowser ...string) ([]byte, error) {
-	browser := optionalCookieBrowser(cookiesBrowser)
-	args := instagramProfileDumpArgs(cookiesFile, rawURL, browser)
-	result := g.Run(ctx, "instagram.profile", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: instagramGalleryDLTimeout}, browser)
-	output := result.CombinedOutput()
-	if result.Err != nil {
-		if errors.Is(result.Err, context.DeadlineExceeded) {
-			return output, fmt.Errorf("gallery-dl Instagram profile timed out after %s for %s", instagramGalleryDLTimeout, rawURL)
-		}
-		return output, fmt.Errorf("gallery-dl Instagram profile: %w: %s", result.Err, RedactText(string(output)))
 	}
 	return output, nil
 }
@@ -276,16 +219,6 @@ func instagramDumpArgs(limit int, cookiesFile, rawURL string, cookiesBrowser ...
 
 func instagramTaggedArgs(limit int, cookiesFile, rawURL string, cookiesBrowser ...string) []string {
 	return instagramDumpArgs(limit, cookiesFile, rawURL, cookiesBrowser...)
-}
-
-func instagramProfileDumpArgs(cookiesFile, rawURL string, cookiesBrowser ...string) []string {
-	args := []string{
-		"--dump-json",
-		"--simulate",
-		"--option", "extractor.instagram.user-strategy=info",
-	}
-	args = appendCookieAuthArgs(args, cookiesFile, optionalCookieBrowser(cookiesBrowser))
-	return append(args, rawURL)
 }
 
 func ParseInstagramChannelDump(output []byte) []VideoRef {
@@ -346,17 +279,116 @@ func ParseInstagramTaggedDumpForHandle(output []byte, taggedHandle string) []Vid
 	return refs
 }
 
-func ParseInstagramProfileDump(output []byte, fallbackHandle string) *InstagramProfile {
-	fallbackHandle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(fallbackHandle), "@"))
+func ParseInstagramObservedProfileDump(output []byte, sourceHandle string) *model.ChannelProfile {
+	sourceHandle = normalizeInstagramHandle(sourceHandle)
+	if sourceHandle == "" {
+		return nil
+	}
+	var observed instagramProfile
 	for _, payload := range galleryDLJSONPayloads(output) {
 		for _, obj := range instagramSourceObjects(payload) {
-			profile := instagramProfileFromGalleryDLObject(obj, fallbackHandle)
-			if profile.Handle != "" {
-				return &profile
-			}
+			observed = mergeInstagramProfile(
+				observed,
+				instagramObservedProfileFromObject(obj, sourceHandle),
+				sourceHandle,
+			)
 		}
 	}
-	return nil
+	if !instagramProfileHasData(observed) {
+		return nil
+	}
+	return &model.ChannelProfile{
+		ChannelID:   "instagram_" + sourceHandle,
+		Platform:    "instagram",
+		Handle:      sourceHandle,
+		DisplayName: observed.DisplayName,
+		Bio:         observed.Bio,
+		Website:     observed.Website,
+		Followers:   observed.Followers,
+		Following:   observed.Following,
+		Verified:    observed.Verified,
+		AvatarURL:   observed.AvatarURL,
+	}
+}
+
+func instagramObservedProfileFromObject(obj map[string]any, sourceHandle string) instagramProfile {
+	observed := instagramNestedProfileForHandle(obj, sourceHandle)
+	topHandle := normalizeInstagramHandle(firstDirectString(obj, "username", "owner_username", "uploader_id"))
+	if topHandle == sourceHandle {
+		observed = mergeInstagramProfile(observed, instagramProfile{
+			Handle:      topHandle,
+			DisplayName: firstDirectString(obj, "fullname", "full_name", "name"),
+			Bio:         firstDirectString(obj, "biography", "bio"),
+			Website:     firstDirectString(obj, "external_url", "website"),
+			Followers:   firstDirectInt(obj, "edge_followed_by", "followers", "follower_count", "count_followed"),
+			Following:   firstDirectInt(obj, "edge_follow", "following", "following_count", "count_follow"),
+			Verified:    firstDirectBool(obj, "is_verified", "verified"),
+			AvatarURL:   firstDirectString(obj, "profile_pic_url_hd", "profile_pic_url", "avatar_url", "profile_image_url"),
+		}, sourceHandle)
+	}
+	if displayName, ok := instagramCoauthorDisplayName(obj, sourceHandle); ok {
+		observed = mergeInstagramProfile(observed, instagramProfile{
+			Handle: sourceHandle, DisplayName: displayName,
+		}, sourceHandle)
+	}
+	return observed
+}
+
+func mergeInstagramProfile(current, candidate instagramProfile, handle string) instagramProfile {
+	if candidate.Handle != "" && normalizeInstagramHandle(candidate.Handle) != handle {
+		return current
+	}
+	current.Handle = handle
+	if candidate.DisplayName != "" && (current.DisplayName == "" || current.DisplayName == handle) {
+		current.DisplayName = candidate.DisplayName
+	}
+	if candidate.Bio != "" {
+		current.Bio = candidate.Bio
+	}
+	if candidate.Website != "" {
+		current.Website = candidate.Website
+	}
+	if candidate.Followers > 0 {
+		current.Followers = candidate.Followers
+	}
+	if candidate.Following > 0 {
+		current.Following = candidate.Following
+	}
+	current.Verified = current.Verified || candidate.Verified
+	if preferInstagramAvatarURL(candidate.AvatarURL, current.AvatarURL) {
+		current.AvatarURL = candidate.AvatarURL
+	}
+	return current
+}
+
+func preferInstagramObservedProfile(current, candidate *model.ChannelProfile) *model.ChannelProfile {
+	if candidate == nil {
+		return current
+	}
+	if current == nil {
+		copy := *candidate
+		return &copy
+	}
+	if current.ChannelID != candidate.ChannelID {
+		return current
+	}
+	merged := mergeInstagramProfile(instagramProfile{
+		Handle: current.Handle, DisplayName: current.DisplayName, Bio: current.Bio,
+		Website: current.Website, Followers: current.Followers, Following: current.Following,
+		Verified: current.Verified, AvatarURL: current.AvatarURL,
+	}, instagramProfile{
+		Handle: candidate.Handle, DisplayName: candidate.DisplayName, Bio: candidate.Bio,
+		Website: candidate.Website, Followers: candidate.Followers, Following: candidate.Following,
+		Verified: candidate.Verified, AvatarURL: candidate.AvatarURL,
+	}, model.NormalizeInstagramHandle(current.Handle))
+	current.DisplayName = merged.DisplayName
+	current.Bio = merged.Bio
+	current.Website = merged.Website
+	current.Followers = merged.Followers
+	current.Following = merged.Following
+	current.Verified = merged.Verified
+	current.AvatarURL = merged.AvatarURL
+	return current
 }
 
 func instagramSourceObjects(value any) []map[string]any {
@@ -384,29 +416,7 @@ func instagramSourceObjects(value any) []map[string]any {
 	}
 }
 
-func instagramProfileFromGalleryDLObject(obj map[string]any, fallbackHandle string) InstagramProfile {
-	fallbackHandle = normalizeInstagramHandle(fallbackHandle)
-	handle := normalizeInstagramHandle(firstDirectExactString(obj, "username", "owner_username", "uploader_id"))
-	if handle == "" || (fallbackHandle != "" && handle != fallbackHandle) {
-		return InstagramProfile{}
-	}
-	displayName := firstDirectExactString(obj, "fullname", "full_name", "name")
-	if displayName == "" {
-		displayName = handle
-	}
-	return InstagramProfile{
-		Handle:      handle,
-		DisplayName: displayName,
-		Bio:         firstDirectExactString(obj, "biography", "bio"),
-		Website:     firstDirectExactString(obj, "external_url", "website"),
-		Followers:   firstDirectInt(obj, "edge_followed_by", "followers", "follower_count"),
-		Following:   firstDirectInt(obj, "edge_follow", "following", "following_count"),
-		Verified:    firstDirectBool(obj, "is_verified", "verified"),
-		AvatarURL:   firstDirectExactString(obj, "profile_pic_url_hd", "profile_pic_url", "avatar_url", "profile_image_url"),
-	}
-}
-
-func instagramProfileHasData(profile InstagramProfile) bool {
+func instagramProfileHasData(profile instagramProfile) bool {
 	return profile.DisplayName != "" ||
 		profile.Bio != "" ||
 		profile.Website != "" ||
@@ -490,13 +500,13 @@ func instagramVideoRefFromGalleryDLObject(obj map[string]any, sourceHandle strin
 	return ref
 }
 
-func instagramNestedProfileForHandle(obj map[string]any, handle string) InstagramProfile {
+func instagramNestedProfileForHandle(obj map[string]any, handle string) instagramProfile {
 	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
 	if handle == "" {
-		return InstagramProfile{}
+		return instagramProfile{}
 	}
 	bestScore := -1
-	var best InstagramProfile
+	var best instagramProfile
 	for _, nestedKey := range []string{"user", "owner", "author", "audio_user"} {
 		nested, ok := obj[nestedKey].(map[string]any)
 		if !ok {
@@ -506,7 +516,7 @@ func instagramNestedProfileForHandle(obj map[string]any, handle string) Instagra
 		if username != handle {
 			continue
 		}
-		profile := InstagramProfile{
+		profile := instagramProfile{
 			Handle:      username,
 			DisplayName: firstExactString(nested, "full_name", "fullname", "name"),
 			Bio:         firstExactString(nested, "biography", "bio"),
@@ -597,14 +607,14 @@ func instagramTaggedHandleFromObject(obj map[string]any, fallbackHandle string) 
 	return ""
 }
 
-func instagramTaggedProfileFromObject(obj map[string]any, handle string) InstagramProfile {
+func instagramTaggedProfileFromObject(obj map[string]any, handle string) instagramProfile {
 	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
 	if handle == "" {
-		return InstagramProfile{}
+		return instagramProfile{}
 	}
 	raw, ok := obj["tagged_users"].([]any)
 	if !ok {
-		return InstagramProfile{}
+		return instagramProfile{}
 	}
 	for _, item := range raw {
 		tagged, ok := item.(map[string]any)
@@ -615,13 +625,13 @@ func instagramTaggedProfileFromObject(obj map[string]any, handle string) Instagr
 		if username != handle {
 			continue
 		}
-		return InstagramProfile{
+		return instagramProfile{
 			Handle:      username,
 			DisplayName: firstExactString(tagged, "full_name", "fullname", "name"),
 			AvatarURL:   firstExactString(tagged, "profile_pic_url_hd", "profile_pic_url", "avatar_url", "profile_image_url"),
 		}
 	}
-	return InstagramProfile{}
+	return instagramProfile{}
 }
 
 func firstExactString(item map[string]any, keys ...string) string {
@@ -646,11 +656,11 @@ func firstExactString(item map[string]any, keys ...string) string {
 	return ""
 }
 
-func firstDirectExactString(item map[string]any, keys ...string) string {
+func firstDirectString(item map[string]any, keys ...string) string {
 	for _, key := range keys {
-		if v, ok := item[key]; ok {
-			if s := stringFromAny(v); s != "" {
-				return s
+		if value, ok := item[key]; ok {
+			if text := stringFromAny(value); text != "" {
+				return text
 			}
 		}
 	}
@@ -659,16 +669,25 @@ func firstDirectExactString(item map[string]any, keys ...string) string {
 
 func firstDirectInt(item map[string]any, keys ...string) int {
 	for _, key := range keys {
-		if n := intFromAny(item[key]); n > 0 {
-			return n
+		if value := intFromAny(item[key]); value > 0 {
+			return value
 		}
 		if nested, ok := item[key].(map[string]any); ok {
-			if n := intFromAny(nested["count"]); n > 0 {
-				return n
+			if value := intFromAny(nested["count"]); value > 0 {
+				return value
 			}
 		}
 	}
 	return 0
+}
+
+func firstDirectBool(item map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		if value, ok := item[key].(bool); ok && value {
+			return true
+		}
+	}
+	return false
 }
 
 func firstInt(item map[string]any, keys ...string) int {
@@ -728,15 +747,6 @@ func firstBool(item map[string]any, keys ...string) bool {
 					return true
 				}
 			}
-		}
-	}
-	return false
-}
-
-func firstDirectBool(item map[string]any, keys ...string) bool {
-	for _, key := range keys {
-		if b, ok := item[key].(bool); ok && b {
-			return true
 		}
 	}
 	return false

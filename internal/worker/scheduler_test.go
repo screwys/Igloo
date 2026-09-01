@@ -999,6 +999,11 @@ func TestInstagramChannelCheckObservesNativeAvatarAndRefreshesWhenStale(t *testi
 	manager := &Manager{db: database, profileKick: make(chan struct{}, 1)}
 	snapshot := download.SourceSnapshot{Windows: []download.SourceWindow{{
 		Component: download.SourceComponentPosts, Complete: true,
+		Profile: &model.ChannelProfile{
+			ChannelID: channelID, Platform: "instagram", Handle: "sample_creator",
+			DisplayName: "Sample Creator", Bio: "Observed biography", Website: "https://example.com",
+			Followers: 42, Following: 7, Verified: true, AvatarURL: sourceURL,
+		},
 		Refs: []download.VideoRef{{
 			VideoID: "instagram_post_sample", ChannelID: channelID,
 			AuthorHandle: "sample_creator", AuthorDisplayName: "Sample Creator", AuthorAvatarURL: sourceURL,
@@ -1015,6 +1020,12 @@ func TestInstagramChannelCheckObservesNativeAvatarAndRefreshesWhenStale(t *testi
 
 	if _, err := manager.applyDiscoverySnapshot(model.Channel{ChannelID: channelID, Platform: "instagram"}, snapshot); err != nil {
 		t.Fatalf("fresh channel check: %v", err)
+	}
+	profile, err = database.GetChannelProfile(channelID)
+	if err != nil || profile == nil || profile.DisplayName != "Sample Creator" ||
+		profile.Bio != "Observed biography" || profile.Website != "https://example.com" ||
+		profile.Followers != 42 || profile.Following != 7 || !profile.Verified {
+		t.Fatalf("observed metadata = %+v, err=%v", profile, err)
 	}
 	job, err := database.GetProfileJob(channelID)
 	if err != nil || job == nil || job.RequestedRevision != 1 {

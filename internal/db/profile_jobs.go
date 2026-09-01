@@ -32,12 +32,18 @@ const profileJobNextDelaySQL = `
 	WHERE requested_revision > completed_revision`
 
 type profileObservation struct {
-	channelID   string
-	platform    string
-	handle      string
-	displayName string
-	avatarURL   string
-	observedAt  int64
+	channelID       string
+	platform        string
+	handle          string
+	displayName     string
+	bio             string
+	website         string
+	followers       int
+	following       int
+	verified        bool
+	profileMetadata bool
+	avatarURL       string
+	observedAt      int64
 }
 
 type profileObservationState struct {
@@ -89,12 +95,18 @@ func (db *DB) ObserveChannelProfile(profile model.ChannelProfile) error {
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
 		if err := observeProfileTx(tx, profileObservation{
-			channelID:   profile.ChannelID,
-			platform:    profile.Platform,
-			handle:      profile.Handle,
-			displayName: profile.DisplayName,
-			avatarURL:   profile.AvatarURL,
-			observedAt:  time.Now().UnixMilli(),
+			channelID:       profile.ChannelID,
+			platform:        profile.Platform,
+			handle:          profile.Handle,
+			displayName:     profile.DisplayName,
+			bio:             profile.Bio,
+			website:         profile.Website,
+			followers:       profile.Followers,
+			following:       profile.Following,
+			verified:        profile.Verified,
+			profileMetadata: true,
+			avatarURL:       profile.AvatarURL,
+			observedAt:      time.Now().UnixMilli(),
 		}); err != nil {
 			return err
 		}
@@ -121,12 +133,13 @@ func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 	if err != nil {
 		return err
 	}
-	_, shouldRequest := profileObservationDecision(state, observation)
+	currentObservation, shouldRequest := profileObservationDecision(state, observation)
 
 	if _, err := tx.Exec(`
 		INSERT INTO channel_profiles (
-			channel_id, platform, handle, display_name, observed_at_ms, tombstone
-		) VALUES (?, ?, ?, ?, ?, 0)
+			channel_id, platform, handle, display_name, bio, website,
+			followers, following, verified, observed_at_ms, tombstone
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 		ON CONFLICT(channel_id) DO UPDATE SET
 			platform = excluded.platform,
 			handle = CASE
@@ -162,8 +175,15 @@ func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 			  WHEN excluded.observed_at_ms >= channel_profiles.fetched_at THEN 0
 			  ELSE channel_profiles.tombstone
 		   END
-	`, observation.channelID, observation.platform, nilIfEmpty(observation.handle), nilIfEmpty(observation.displayName), observation.observedAt); err != nil {
+	`, observation.channelID, observation.platform, nilIfEmpty(observation.handle), nilIfEmpty(observation.displayName),
+		observation.bio, nilIfEmpty(observation.website), observation.followers, observation.following,
+		boolToInt(observation.verified), observation.observedAt); err != nil {
 		return err
+	}
+	if observation.platform == "instagram" && observation.profileMetadata && currentObservation {
+		if err := mergeInstagramObservedMetadataTx(tx, observation); err != nil {
+			return err
+		}
 	}
 
 	if !state.hasJob {
@@ -191,6 +211,39 @@ func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 	return err
 }
 
+func mergeInstagramObservedMetadataTx(tx *sql.Tx, observation profileObservation) error {
+	_, err := tx.Exec(`
+		UPDATE channel_profiles
+		SET display_name = CASE WHEN ? != '' THEN ? ELSE display_name END,
+		    bio = CASE WHEN ? != '' THEN ? ELSE bio END,
+		    website = CASE WHEN ? != '' THEN ? ELSE website END,
+		    followers = CASE WHEN ? > 0 THEN ? ELSE followers END,
+		    following = CASE WHEN ? > 0 THEN ? ELSE following END,
+		    verified = CASE WHEN ? != 0 THEN 1 ELSE verified END
+		WHERE channel_id = ?
+		  AND ((? != '' AND COALESCE(display_name, '') != ?)
+		    OR (? != '' AND COALESCE(bio, '') != ?)
+		    OR (? != '' AND COALESCE(website, '') != ?)
+		    OR (? > 0 AND followers != ?)
+		    OR (? > 0 AND following != ?)
+		    OR (? != 0 AND verified = 0))
+	`,
+		observation.displayName, observation.displayName,
+		observation.bio, observation.bio,
+		observation.website, observation.website,
+		observation.followers, observation.followers,
+		observation.following, observation.following,
+		boolToInt(observation.verified), observation.channelID,
+		observation.displayName, observation.displayName,
+		observation.bio, observation.bio,
+		observation.website, observation.website,
+		observation.followers, observation.followers,
+		observation.following, observation.following,
+		boolToInt(observation.verified),
+	)
+	return err
+}
+
 func normalizeProfileObservation(observation profileObservation) (profileObservation, bool) {
 	observation.channelID = strings.TrimSpace(observation.channelID)
 	observation.platform = strings.ToLower(strings.TrimSpace(observation.platform))
@@ -208,6 +261,8 @@ func normalizeProfileObservation(observation profileObservation) (profileObserva
 		return observation, false
 	}
 	observation.displayName = strings.TrimSpace(observation.displayName)
+	observation.bio = strings.TrimSpace(observation.bio)
+	observation.website = strings.TrimSpace(observation.website)
 	observation.avatarURL = strings.TrimSpace(model.CleanFeedAvatarURL(observation.avatarURL))
 	if observation.platform == "twitter" && !model.IsRawTwitterProfileAvatar(observation.avatarURL) {
 		observation.avatarURL = ""

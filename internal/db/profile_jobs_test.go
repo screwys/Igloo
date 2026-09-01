@@ -434,6 +434,43 @@ func TestProfileJobIngestObservationsCoalesceWhileRevisionIsInFlight(t *testing.
 	}
 }
 
+func TestInstagramObservationUpdatesFetchedDisplayName(t *testing.T) {
+	d := openWritableTestDB(t)
+	fetchedAt := time.Now().Add(-time.Hour)
+	const channelID = "instagram_sample_creator"
+	if err := d.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID: channelID, Platform: "instagram", Handle: "sample_creator",
+		DisplayName: "Earlier Name", Bio: "Earlier biography", Website: "https://earlier.example",
+		Followers: 10, Following: 2, FetchedAt: &fetchedAt,
+	}); err != nil {
+		t.Fatalf("UpsertChannelProfile: %v", err)
+	}
+	if err := d.ObserveChannelProfile(model.ChannelProfile{
+		ChannelID: channelID, Platform: "instagram", Handle: "sample_creator",
+		DisplayName: "Observed Name", Bio: "Observed biography", Website: "https://observed.example",
+		Followers: 42, Following: 7, Verified: true,
+	}); err != nil {
+		t.Fatalf("ObserveChannelProfile: %v", err)
+	}
+	profile, err := d.GetChannelProfile(channelID)
+	if err != nil || profile == nil || profile.DisplayName != "Observed Name" ||
+		profile.Bio != "Observed biography" || profile.Website != "https://observed.example" ||
+		profile.Followers != 42 || profile.Following != 7 || !profile.Verified {
+		t.Fatalf("observed profile = %+v, err=%v", profile, err)
+	}
+	if err := d.ObserveChannelProfile(model.ChannelProfile{
+		ChannelID: channelID, Platform: "instagram", Handle: "sample_creator", DisplayName: "Observed Name",
+	}); err != nil {
+		t.Fatalf("sparse ObserveChannelProfile: %v", err)
+	}
+	profile, err = d.GetChannelProfile(channelID)
+	if err != nil || profile == nil || profile.Bio != "Observed biography" ||
+		profile.Website != "https://observed.example" || profile.Followers != 42 ||
+		profile.Following != 7 || !profile.Verified {
+		t.Fatalf("sparse observation cleared metadata: %+v, err=%v", profile, err)
+	}
+}
+
 func TestProfileJobLeaseTokenRejectsExpiredSameOwnerClaim(t *testing.T) {
 	d := openWritableTestDB(t)
 	now := time.Now().UTC()

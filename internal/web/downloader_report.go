@@ -412,17 +412,29 @@ func (s *Server) addInstagramReportRows(ctx context.Context, dl *download.Downlo
 	report.Rows = append(report.Rows, s.runReportCheck(ctx, "instagram post/reel dump", "instagram", "instagram.dump", func(ctx context.Context) (map[string]any, error) {
 		snapshot, err := dl.GalleryDL.InstagramChannel(ctx, handle, 10, opts.Cookies, opts.CookiesFromBrowser)
 		refs := snapshot.FlattenRefs(10)
-		for _, ref := range refs {
-			if ref.URL != "" {
-				rawURL = ref.URL
-				break
-			}
-			if ref.VideoID != "" {
-				rawURL = instagramReportURL(ref.VideoID)
-				break
+		hasDisplayName := false
+		hasAvatar := false
+		for _, window := range snapshot.Windows {
+			if window.Profile != nil {
+				hasDisplayName = hasDisplayName || window.Profile.DisplayName != ""
+				hasAvatar = hasAvatar || window.Profile.AvatarURL != ""
 			}
 		}
-		return map[string]any{"item_count": len(refs), "complete": sourceSnapshotComplete(snapshot)}, err
+		for _, ref := range refs {
+			hasDisplayName = hasDisplayName || ref.AuthorDisplayName != ""
+			hasAvatar = hasAvatar || ref.AuthorAvatarURL != ""
+			if rawURL == "" {
+				if ref.URL != "" {
+					rawURL = ref.URL
+				} else if ref.VideoID != "" {
+					rawURL = instagramReportURL(ref.VideoID)
+				}
+			}
+		}
+		return map[string]any{
+			"item_count": len(refs), "complete": sourceSnapshotComplete(snapshot),
+			"display_name": hasDisplayName, "avatar_url": hasAvatar,
+		}, err
 	}))
 	if rawURL == "" && sample.VideoID != "" {
 		rawURL = instagramReportURL(sample.VideoID)
@@ -441,16 +453,6 @@ func (s *Server) addInstagramReportRows(ctx context.Context, dl *download.Downlo
 	report.Rows = append(report.Rows, s.runReportCheck(ctx, "instagram story dump", "instagram", "instagram.stories", func(ctx context.Context) (map[string]any, error) {
 		refs, err := dl.GalleryDL.InstagramStories(ctx, handle, 10, opts.Cookies, opts.CookiesFromBrowser)
 		return map[string]any{"item_count": len(refs)}, err
-	}))
-	report.Rows = append(report.Rows, s.runReportCheck(ctx, "instagram profile", "instagram", "instagram.profile", func(ctx context.Context) (map[string]any, error) {
-		p, err := dl.GalleryDL.InstagramProfile(ctx, handle, opts.Cookies, opts.CookiesFromBrowser)
-		if err != nil {
-			return nil, err
-		}
-		if p == nil {
-			return nil, fmt.Errorf("instagram profile returned no profile")
-		}
-		return map[string]any{"display_name": p.DisplayName != "", "avatar_url": p.AvatarURL != "", "bio": p.Bio != ""}, nil
 	}))
 }
 

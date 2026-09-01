@@ -200,6 +200,7 @@ const (
 type SourceWindow struct {
 	Component string
 	Refs      []VideoRef
+	Profile   *model.ChannelProfile
 	Complete  bool
 }
 

@@ -275,33 +275,57 @@ func observedInstagramChannelProfile(channel model.Channel, snapshot download.So
 		return nil
 	}
 	var observed *model.ChannelProfile
+	merge := func(candidate model.ChannelProfile, profileMetadata bool) {
+		if candidate.ChannelID != "" && candidate.ChannelID != channel.ChannelID {
+			return
+		}
+		if observed == nil {
+			observed = &model.ChannelProfile{
+				ChannelID: channel.ChannelID, Platform: "instagram",
+				Handle: channel.Handle, DisplayName: channel.DisplayName,
+			}
+			if observed.Handle == "" {
+				observed.Handle = model.InstagramHandleFromChannelID(channel.ChannelID)
+			}
+			if observed.DisplayName == "" {
+				observed.DisplayName = channel.Name
+			}
+		}
+		if candidate.Handle != "" {
+			observed.Handle = candidate.Handle
+		}
+		if candidate.DisplayName != "" && (profileMetadata || observed.DisplayName == "" || observed.DisplayName == observed.Handle) {
+			observed.DisplayName = candidate.DisplayName
+		}
+		if candidate.Bio != "" {
+			observed.Bio = candidate.Bio
+		}
+		if candidate.Website != "" {
+			observed.Website = candidate.Website
+		}
+		if candidate.Followers > 0 {
+			observed.Followers = candidate.Followers
+		}
+		if candidate.Following > 0 {
+			observed.Following = candidate.Following
+		}
+		observed.Verified = observed.Verified || candidate.Verified
+		if candidate.AvatarURL != "" {
+			observed.AvatarURL = candidate.AvatarURL
+		}
+	}
 	for _, window := range snapshot.Windows {
+		if window.Profile != nil {
+			merge(*window.Profile, true)
+		}
 		for _, ref := range window.Refs {
 			if ref.ChannelID != channel.ChannelID {
 				continue
 			}
-			if observed == nil {
-				observed = &model.ChannelProfile{
-					ChannelID: channel.ChannelID, Platform: "instagram",
-					Handle: channel.Handle, DisplayName: channel.DisplayName,
-				}
-				if observed.Handle == "" {
-					observed.Handle = model.InstagramHandleFromChannelID(channel.ChannelID)
-				}
-				if observed.DisplayName == "" {
-					observed.DisplayName = channel.Name
-				}
-			}
-			if ref.AuthorHandle != "" {
-				observed.Handle = ref.AuthorHandle
-			}
-			if ref.AuthorDisplayName != "" {
-				observed.DisplayName = ref.AuthorDisplayName
-			}
-			if ref.AuthorAvatarURL != "" {
-				observed.AvatarURL = ref.AuthorAvatarURL
-				return observed
-			}
+			merge(model.ChannelProfile{
+				ChannelID: channel.ChannelID, Platform: "instagram",
+				Handle: ref.AuthorHandle, DisplayName: ref.AuthorDisplayName, AvatarURL: ref.AuthorAvatarURL,
+			}, false)
 		}
 	}
 	return observed

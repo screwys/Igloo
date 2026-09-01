@@ -83,7 +83,37 @@ func TestProfileJobPipelinePublishesCanonicalAvatar(t *testing.T) {
 	}
 }
 
-func TestInstagramProfileJobCachesUnavatarFallbackWhenNativeAvatarIsMissing(t *testing.T) {
+func TestInstagramProfileJobUsesObservedIdentityWithoutNetwork(t *testing.T) {
+	database := newTestWorkerDB(t)
+	const channelID = "instagram_sample_creator"
+	const avatarURL = "https://cdn.example/sample-avatar.jpg"
+	if err := database.AddChannel(model.Channel{
+		ChannelID: channelID, SourceID: "sample_creator", Name: "Initial Name",
+		DisplayName: "Initial Name", URL: "https://www.instagram.com/sample_creator/", Platform: "instagram",
+		IsSubscribed: true,
+	}); err != nil {
+		t.Fatalf("AddChannel: %v", err)
+	}
+	if err := database.ObserveChannelProfile(model.ChannelProfile{
+		ChannelID: channelID, Platform: "instagram", Handle: "sample_creator",
+		DisplayName: "Observed Name", AvatarURL: avatarURL,
+	}); err != nil {
+		t.Fatalf("ObserveChannelProfile: %v", err)
+	}
+	manager := &Manager{db: database}
+	profile, err := manager.fetchInstagramProfile(context.Background(), channelID, "sample_creator")
+	if err != nil {
+		t.Fatalf("fetchInstagramProfile: %v", err)
+	}
+	if profile.DisplayName != "Observed Name" || profile.AvatarURL != avatarURL {
+		t.Fatalf("observed profile = %+v", profile)
+	}
+	if profile.FetchedAt != nil {
+		t.Fatalf("observed profile retained stale completion time: %+v", profile.FetchedAt)
+	}
+}
+
+func TestInstagramProfileJobCompletesWithoutUnobservedAvatar(t *testing.T) {
 	stateRoot := t.TempDir()
 	database := newTestWorkerDBAt(t, stateRoot)
 	const channelID = "instagram_sample_creator"
@@ -94,103 +124,24 @@ func TestInstagramProfileJobCachesUnavatarFallbackWhenNativeAvatarIsMissing(t *t
 	}); err != nil {
 		t.Fatalf("AddChannel: %v", err)
 	}
-	var hits atomic.Int32
-	imageServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		hits.Add(1)
-		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(testProfilePNGBytes())
-	}))
-	t.Cleanup(imageServer.Close)
 	manager := &Manager{
 		db: database, cfg: testCfg(stateRoot), downloader: testDownloader(),
-		instagramProfileFetch: func(context.Context, string, string) (*model.ChannelProfile, error) {
-			return &model.ChannelProfile{
-				ChannelID: channelID, Platform: "instagram", Handle: "sample_creator", DisplayName: "Sample Creator",
-			}, nil
-		},
-		instagramAvatarFallback: func(string) string { return imageServer.URL + "/avatar.png" },
-	}
-
-	if !manager.processProfileJobBatch(context.Background(), fetchprofile.Fetch) {
-		t.Fatal("profile job was not claimed")
-	}
-	if hits.Load() != 1 {
-		t.Fatalf("fallback downloads = %d, want 1", hits.Load())
-	}
-	asset, err := database.GetAssetByOwnerIdentity("avatar", "channel", channelID, 0)
-	if err != nil || asset == nil || asset.State != db.AssetStateReady || asset.SourceURL != imageServer.URL+"/avatar.png" {
-		t.Fatalf("cached fallback avatar = %+v, err=%v", asset, err)
-	}
-	job, err := database.GetProfileJob(channelID)
-	if err != nil || job == nil || job.RequestedRevision != job.CompletedRevision || job.Attempts != 0 {
-		t.Fatalf("completed fallback profile job = %+v, err=%v", job, err)
-	}
-}
-
-func TestInstagramUnavatarURLUsesProviderPath(t *testing.T) {
-	if got := instagramUnavatarURL("@sample.creator"); got != "https://unavatar.io/instagram/sample.creator?fallback=false" {
-		t.Fatalf("instagramUnavatarURL = %q", got)
-	}
-}
-
-func TestInstagramProfileJobCachesNativeAvatarResolverWhenMetadataIsMissing(t *testing.T) {
-	stateRoot := t.TempDir()
-	database := newTestWorkerDBAt(t, stateRoot)
-	const channelID = "instagram_sample_creator"
-	if err := database.AddChannel(model.Channel{
-		ChannelID: channelID, SourceID: "sample_creator", Name: "Sample Creator",
-		DisplayName: "Sample Creator", URL: "https://www.instagram.com/sample_creator/", Platform: "instagram",
-		IsSubscribed: true,
-	}); err != nil {
-		t.Fatalf("AddChannel: %v", err)
-	}
-	bin := t.TempDir()
-	avatarPath := filepath.Join(bin, "avatar.png")
-	if err := os.WriteFile(avatarPath, testProfilePNGBytes(), 0o644); err != nil {
-		t.Fatalf("write avatar fixture: %v", err)
-	}
-	galleryDLPath := filepath.Join(bin, "gallery-dl")
-	if err := os.WriteFile(galleryDLPath, []byte(`#!/bin/sh
-dest=""
-while [ "$#" -gt 0 ]; do
-  if [ "$1" = "-D" ]; then
-    dest="$2"
-    shift 2
-    continue
-  fi
-  shift
-done
-cp "$TEST_INSTAGRAM_AVATAR" "$dest/avatar.png"
-`), 0o755); err != nil {
-		t.Fatalf("write gallery-dl stub: %v", err)
-	}
-	t.Setenv("TEST_INSTAGRAM_AVATAR", avatarPath)
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	manager := &Manager{
-		db: database, cfg: testCfg(stateRoot), downloader: testDownloader(),
-		instagramProfileFetch: func(context.Context, string, string) (*model.ChannelProfile, error) {
-			return &model.ChannelProfile{
-				ChannelID: channelID, Platform: "instagram", Handle: "sample_creator", DisplayName: "Sample Creator",
-			}, nil
-		},
 	}
 
 	if !manager.processProfileJobBatch(context.Background(), fetchprofile.Fetch) {
 		t.Fatal("profile job was not claimed")
 	}
 	asset, err := database.GetAssetByOwnerIdentity("avatar", "channel", channelID, 0)
-	if err != nil || asset == nil || asset.State != db.AssetStateReady || asset.SourceURL != instagramNativeAvatarURL("sample_creator") {
-		t.Fatalf("cached native avatar = %+v, err=%v", asset, err)
+	if err != nil || asset != nil {
+		t.Fatalf("unobserved avatar asset = %+v, err=%v", asset, err)
 	}
 	job, err := database.GetProfileJob(channelID)
 	if err != nil || job == nil || job.RequestedRevision != job.CompletedRevision || job.Attempts != 0 {
-		t.Fatalf("completed native avatar job = %+v, err=%v", job, err)
+		t.Fatalf("completed profile job = %+v, err=%v", job, err)
 	}
-}
-
-func TestInstagramNativeAvatarURLUsesGalleryDLResolverPath(t *testing.T) {
-	if got := instagramNativeAvatarURL("@sample.creator"); got != "https://www.instagram.com/sample.creator/avatar" {
-		t.Fatalf("instagramNativeAvatarURL = %q", got)
+	profile, err := database.GetChannelProfile(channelID)
+	if err != nil || profile == nil || profile.FetchedAt == nil || profile.AvatarURL != "" {
+		t.Fatalf("completed profile = %+v, err=%v", profile, err)
 	}
 }
 
@@ -205,6 +156,29 @@ func TestSameInstagramAvatarSourceIgnoresExpiringQuery(t *testing.T) {
 	}
 	if sameInstagramAvatarSource(current, "https://example.test/v/avatar.jpg?oe=BBBB") {
 		t.Fatal("unrelated host was treated as the same Instagram avatar")
+	}
+}
+
+func TestInstagramProfileJobDropsUnreadyLegacyResolverSource(t *testing.T) {
+	database := newTestWorkerDB(t)
+	const channelID = "instagram_sample_creator"
+	legacySource := legacyInstagramAvatarURL("sample_creator")
+	if err := database.DeclareAsset(db.Asset{
+		AssetID:   db.BuildAssetID("instagram", "channel", channelID, "avatar", 0),
+		AssetKind: "avatar", OwnerKind: "channel", OwnerID: channelID,
+		SourceURL: legacySource, RequiredReason: "identity",
+	}, time.Now().UnixMilli()); err != nil {
+		t.Fatalf("DeclareAsset: %v", err)
+	}
+	manager := &Manager{db: database}
+	profile := model.ChannelProfile{
+		ChannelID: channelID, Platform: "instagram", Handle: "sample_creator", AvatarURL: legacySource,
+	}
+	if err := manager.ensureInstagramProfileAvatarSource(&profile); err != nil {
+		t.Fatalf("ensureInstagramProfileAvatarSource: %v", err)
+	}
+	if profile.AvatarURL != "" {
+		t.Fatalf("legacy resolver source retained: %q", profile.AvatarURL)
 	}
 }
 

@@ -29,8 +29,6 @@ const (
 // fetchFn is fetchprofile.Fetch, overridable by focused worker tests.
 type fetchFn func(ctx context.Context, channelID string) (*fetchprofile.Profile, error)
 
-type instagramProfileFetchFn func(ctx context.Context, channelID, handle string) (*model.ChannelProfile, error)
-
 // runProfileJobLoop is the sole normal profile-recovery path. The request and
 // retry state lives in profile_jobs; the channel is only a coalescing wake-up
 // signal. Each claimed revision fetches metadata and replacement identity
@@ -223,33 +221,35 @@ func (m *Manager) fetchProfileJob(ctx context.Context, fetch fetchFn, channelID 
 	}, nil
 }
 
-func (m *Manager) fetchInstagramProfile(ctx context.Context, channelID, handle string) (*model.ChannelProfile, error) {
-	if m != nil && m.instagramProfileFetch != nil {
-		return m.instagramProfileFetch(ctx, channelID, handle)
+func (m *Manager) fetchInstagramProfile(_ context.Context, channelID, handle string) (*model.ChannelProfile, error) {
+	if m == nil || m.db == nil {
+		return nil, errors.New("instagram profile storage unavailable")
 	}
-	if m == nil || m.downloader == nil || m.downloader.GalleryDL == nil {
-		return nil, errors.New("instagram profile downloader unavailable")
-	}
-	cookiesFile, cookiesBrowser := m.cookieFileAndBrowserFor("instagram")
-	profile, err := m.downloader.GalleryDL.InstagramProfile(ctx, handle, cookiesFile, cookiesBrowser)
+	profile, err := m.db.GetChannelProfile(channelID)
 	if err != nil {
 		return nil, err
 	}
 	if profile == nil {
 		return nil, fetchprofile.ErrNotFound
 	}
-	return &model.ChannelProfile{
-		ChannelID:   channelID,
-		Platform:    "instagram",
-		Handle:      profile.Handle,
-		DisplayName: profile.DisplayName,
-		Bio:         profile.Bio,
-		Website:     profile.Website,
-		Followers:   profile.Followers,
-		Following:   profile.Following,
-		Verified:    profile.Verified,
-		AvatarURL:   profile.AvatarURL,
-	}, nil
+	requestedHandle := model.NormalizeInstagramHandle(handle)
+	storedHandle := model.NormalizeInstagramHandle(profile.Handle)
+	if storedHandle != "" && requestedHandle != "" && storedHandle != requestedHandle {
+		return nil, fmt.Errorf("%w: requested @%s found @%s", fetchprofile.ErrIdentityMismatch, requestedHandle, storedHandle)
+	}
+	if storedHandle == "" {
+		storedHandle = requestedHandle
+	}
+	profile.ChannelID = channelID
+	profile.Platform = "instagram"
+	profile.Handle = storedHandle
+	if strings.TrimSpace(profile.DisplayName) == "" {
+		profile.DisplayName = storedHandle
+	}
+	// Completion records when the observed identity and its media became ready,
+	// not the timestamp of an older profile revision read from storage.
+	profile.FetchedAt = nil
+	return profile, nil
 }
 
 func (m *Manager) ensureInstagramProfileAvatarSource(profile *model.ChannelProfile) error {
@@ -264,6 +264,14 @@ func (m *Manager) ensureInstagramProfileAvatarSource(profile *model.ChannelProfi
 	if current != nil {
 		desiredSource := strings.TrimSpace(current.SourceURL)
 		publishedSource := strings.TrimSpace(current.PublishedSourceURL)
+		if fetchedSource == legacyInstagramAvatarURL(profile.Handle) {
+			if current.State == db.AssetStateReady {
+				profile.AvatarURL = publishedSource
+			} else {
+				profile.AvatarURL = ""
+			}
+			return nil
+		}
 		if fetchedSource != "" {
 			if current.State == db.AssetStateReady && publishedSource != "" && sameInstagramAvatarSource(publishedSource, fetchedSource) {
 				profile.AvatarURL = publishedSource
@@ -289,38 +297,16 @@ func (m *Manager) ensureInstagramProfileAvatarSource(profile *model.ChannelProfi
 			return nil
 		}
 	}
-	handle := model.NormalizeInstagramHandle(profile.Handle)
-	if handle == "" {
-		handle = model.InstagramHandleFromChannelID(profile.ChannelID)
-	}
-	if handle == "" {
-		return fmt.Errorf("%w: %s has no instagram handle", fetchprofile.ErrIncompleteProfile, profile.ChannelID)
-	}
-	if m.instagramAvatarFallback != nil {
-		profile.AvatarURL = strings.TrimSpace(m.instagramAvatarFallback(handle))
-	} else {
-		profile.AvatarURL = instagramNativeAvatarURL(handle)
-	}
-	if profile.AvatarURL == "" {
-		return fmt.Errorf("%w: %s has no avatar fallback", fetchprofile.ErrIncompleteProfile, profile.ChannelID)
-	}
+	profile.AvatarURL = ""
 	return nil
 }
 
-func instagramNativeAvatarURL(handle string) string {
+func legacyInstagramAvatarURL(handle string) string {
 	handle = model.NormalizeInstagramHandle(handle)
 	if handle == "" {
 		return ""
 	}
 	return "https://www.instagram.com/" + url.PathEscape(handle) + "/avatar"
-}
-
-func instagramUnavatarURL(handle string) string {
-	handle = model.NormalizeInstagramHandle(handle)
-	if handle == "" {
-		return ""
-	}
-	return "https://unavatar.io/instagram/" + url.PathEscape(handle) + "?fallback=false"
 }
 
 func sameInstagramAvatarSource(current, fetched string) bool {
@@ -447,12 +433,7 @@ func (m *Manager) downloadProfileJobAssetAdmitted(ctx context.Context, job model
 	if kind == "avatar" && profile.Platform == "twitter" {
 		downloadURL = upgradeTwimgURL(sourceURL)
 	}
-	var tmpPath string
-	if kind == "avatar" && profile.Platform == "instagram" && sourceURL == instagramNativeAvatarURL(profile.Handle) {
-		tmpPath, err = m.downloadInstagramAvatarResolver(ctx, profile, dir, base, sourceURL)
-	} else {
-		tmpPath, err = m.downloader.HTTP.DownloadFile(ctx, downloadURL, dir, base+".download")
-	}
+	tmpPath, err := m.downloader.HTTP.DownloadFile(ctx, downloadURL, dir, base+".download")
 	if err != nil && downloadURL != sourceURL {
 		tmpPath, err = m.downloader.HTTP.DownloadFile(ctx, sourceURL, dir, base+".download")
 	}
@@ -482,34 +463,6 @@ func (m *Manager) downloadProfileJobAssetAdmitted(ctx context.Context, job model
 		State:          db.AssetStateReady,
 		RequiredReason: "identity",
 	}, finalPath, nil
-}
-
-func (m *Manager) downloadInstagramAvatarResolver(ctx context.Context, profile model.ChannelProfile, dir, base, sourceURL string) (string, error) {
-	var nativeErr error
-	if m.downloader != nil && m.downloader.GalleryDL != nil {
-		cookiesFile, cookiesBrowser := m.cookieFileAndBrowserFor("instagram")
-		paths, err := m.downloader.GalleryDL.Download(ctx, sourceURL, dir, base+"-native", cookiesFile, cookiesBrowser)
-		if err == nil && len(paths) == 1 {
-			return paths[0], nil
-		}
-		for _, path := range paths {
-			_ = os.Remove(path)
-		}
-		if err != nil {
-			nativeErr = fmt.Errorf("gallery-dl instagram avatar: %w", err)
-		} else {
-			nativeErr = fmt.Errorf("gallery-dl instagram avatar returned %d files", len(paths))
-		}
-	} else {
-		nativeErr = errors.New("gallery-dl instagram avatar unavailable")
-	}
-
-	fallbackURL := instagramUnavatarURL(profile.Handle)
-	tmpPath, fallbackErr := m.downloader.HTTP.DownloadFile(ctx, fallbackURL, dir, base+".download")
-	if fallbackErr != nil {
-		return "", errors.Join(nativeErr, fmt.Errorf("unavatar fallback: %w", fallbackErr))
-	}
-	return tmpPath, nil
 }
 
 func profileMediaOwnerKey(channelID string) string {

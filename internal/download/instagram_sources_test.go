@@ -18,7 +18,7 @@ for arg in "$@"; do
 done
 case "$last" in
   */reels/)
-    printf '[2, {"subcategory":"reels","type":"reel","username":"sample.creator","post_shortcode":"sample_reel"}]\n'
+    printf '[2, {"subcategory":"reels","type":"reel","username":"sample.creator","fullname":"Sample Creator","post_shortcode":"sample_reel","user":{"username":"sample.creator","biography":"Profile biography","edge_followed_by":{"count":42}}}]\n'
     ;;
   */posts/)
     printf 'posts source failed\n' >&2
@@ -38,6 +38,9 @@ esac
 	reels, posts := snapshot.Windows[0], snapshot.Windows[1]
 	if reels.Component != SourceComponentReels || !reels.Complete || len(reels.Refs) != 1 || reels.Refs[0].VideoID != "instagram_reel_sample_reel" {
 		t.Fatalf("reels window = %#v", reels)
+	}
+	if reels.Profile == nil || reels.Profile.Bio != "Profile biography" || reels.Profile.Followers != 42 {
+		t.Fatalf("reels profile = %+v", reels.Profile)
 	}
 	if posts.Component != SourceComponentPosts || posts.Complete || len(posts.Refs) != 0 {
 		t.Fatalf("posts window = %#v", posts)
@@ -142,6 +145,34 @@ func TestParseInstagramChannelDump(t *testing.T) {
 	}
 	if refs[1].PublishedAtMs == 0 {
 		t.Fatalf("reel PublishedAtMs should be parsed")
+	}
+}
+
+func TestParseInstagramObservedProfileDumpMapsAvailableMetadata(t *testing.T) {
+	dump := []byte(`
+[2, {"subcategory":"posts","type":"post","username":"sample.creator","fullname":"Sample Creator","profile_pic_url":"https://cdn.example/avatar.jpg","post_shortcode":"POST123","description":"This is a post caption, not a profile bio.","user":{"username":"sample.creator","full_name":"Sample Creator","biography":"Profile biography","external_url":"https://example.com","edge_followed_by":{"count":42},"edge_follow":{"count":7},"is_verified":true}}]
+`)
+	profile := ParseInstagramObservedProfileDump(dump, "sample.creator")
+	if profile == nil {
+		t.Fatal("profile missing")
+	}
+	if profile.ChannelID != "instagram_sample.creator" || profile.Handle != "sample.creator" ||
+		profile.DisplayName != "Sample Creator" || profile.AvatarURL != "https://cdn.example/avatar.jpg" {
+		t.Fatalf("profile identity = %+v", profile)
+	}
+	if profile.Bio != "Profile biography" || profile.Website != "https://example.com" ||
+		profile.Followers != 42 || profile.Following != 7 || !profile.Verified {
+		t.Fatalf("profile metadata = %+v", profile)
+	}
+}
+
+func TestParseInstagramObservedProfileDumpDoesNotUsePostCaptionAsBio(t *testing.T) {
+	dump := []byte(`
+[2, {"subcategory":"posts","type":"post","username":"sample.creator","profile_pic_url":"https://cdn.example/avatar.jpg","post_shortcode":"POST123","description":"Post caption"}]
+`)
+	profile := ParseInstagramObservedProfileDump(dump, "sample.creator")
+	if profile == nil || profile.DisplayName != "" || profile.Bio != "" || profile.Website != "" {
+		t.Fatalf("post fields leaked into profile metadata: %+v", profile)
 	}
 }
 
@@ -267,32 +298,6 @@ func TestInstagramTaggedArgsUseBrowserCookies(t *testing.T) {
 	}
 }
 
-func TestInstagramProfileCookieAttemptsPreferConfiguredCookies(t *testing.T) {
-	got := instagramProfileCookieAttempts("/tmp/instagram-cookies.txt", "firefox")
-	want := []CookieSet{{File: "/tmp/instagram-cookies.txt"}, {Browser: "firefox"}}
-	if len(got) != len(want) {
-		t.Fatalf("cookie attempts = %#v, want %#v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("cookie attempts = %#v, want %#v", got, want)
-		}
-	}
-}
-
-func TestInstagramProfileCookieAttemptsUseBrowserWhenFileDisabled(t *testing.T) {
-	got := instagramProfileCookieAttempts("", "firefox")
-	want := []CookieSet{{Browser: "firefox"}}
-	if len(got) != len(want) {
-		t.Fatalf("cookie attempts = %#v, want %#v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("cookie attempts = %#v, want %#v", got, want)
-		}
-	}
-}
-
 func TestInstagramCookieAuthAttemptsUseOnlyBrowserWhenFileDisabled(t *testing.T) {
 	got := instagramCookieAuthAttempts("", "firefox")
 	want := []CookieSet{{Browser: "firefox"}}
@@ -316,117 +321,6 @@ func TestInstagramCookieAuthAttemptsAllowAnonymousOnlyWithoutConfiguredCookies(t
 		if got[i] != want[i] {
 			t.Fatalf("cookie attempts = %#v, want %#v", got, want)
 		}
-	}
-}
-
-func TestParseInstagramProfileDump(t *testing.T) {
-	dump := []byte(`
-[2, {"username":"sample.creator","full_name":"Sample Creator","biography":"Profile biography","external_url":"https://example.com","profile_pic_url_hd":"https://cdn.example/avatar-hd.jpg","edge_followed_by":{"count":42},"edge_follow":{"count":7},"is_verified":true}]
-`)
-	profile := ParseInstagramProfileDump(dump, "sample.creator")
-	if profile == nil {
-		t.Fatal("profile missing")
-	}
-	if profile.Handle != "sample.creator" || profile.DisplayName != "Sample Creator" {
-		t.Fatalf("profile identity = %#v", profile)
-	}
-	if profile.Bio != "Profile biography" || profile.Website != "https://example.com" {
-		t.Fatalf("profile text = %#v", profile)
-	}
-	if profile.Followers != 42 || profile.Following != 7 || !profile.Verified {
-		t.Fatalf("counts/verified = %#v", profile)
-	}
-	if profile.AvatarURL != "https://cdn.example/avatar-hd.jpg" {
-		t.Fatalf("avatar = %q", profile.AvatarURL)
-	}
-}
-
-func TestInstagramProfileUsesProfileInfoEndpoint(t *testing.T) {
-	bin := t.TempDir()
-	writeExecutable(t, filepath.Join(bin, "gallery-dl"), `#!/bin/sh
-last=""
-strategy=""
-for arg in "$@"; do
-  last="$arg"
-  if [ "$arg" = "extractor.instagram.user-strategy=info" ]; then
-    strategy="info"
-  fi
-done
-if [ "$last" != "https://www.instagram.com/sample.creator/info/" ] || [ "$strategy" != "info" ]; then
-  exit 1
-fi
-printf '[2, {"username":"sample.creator","full_name":"Sample Creator","biography":"Profile biography","external_url":"https://example.com","profile_pic_url_hd":"https://cdn.example/avatar.jpg","edge_followed_by":{"count":42},"edge_follow":{"count":7},"is_verified":true}]\n'
-`)
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	profile, err := (&GalleryDLWrapper{Runner: CommandRunner{}}).InstagramProfile(context.Background(), "sample.creator", "")
-	if err != nil {
-		t.Fatalf("InstagramProfile: %v", err)
-	}
-	if profile == nil {
-		t.Fatal("profile missing")
-	}
-	if profile.Bio != "Profile biography" || profile.Website != "https://example.com" ||
-		profile.Followers != 42 || profile.Following != 7 || !profile.Verified ||
-		profile.AvatarURL != "https://cdn.example/avatar.jpg" {
-		t.Fatalf("profile metadata = %#v", profile)
-	}
-}
-
-func TestParseInstagramProfileDumpDoesNotUsePostCaptionAsBio(t *testing.T) {
-	dump := []byte(`
-[2, {"subcategory":"posts","type":"post","username":"sample_cinema","fullname":"Sample Cinema Page","profile_pic_url":"https://cdn.example/avatar.jpg","post_shortcode":"sample_post","post_url":"https://www.instagram.com/p/sample_post/","description":"This is a post caption, not a profile bio.","url":"https://www.instagram.com/p/sample_post/"}]
-`)
-	profile := ParseInstagramProfileDump(dump, "sample_cinema")
-	if profile == nil {
-		t.Fatal("profile missing")
-	}
-	if profile.Handle != "sample_cinema" || profile.DisplayName != "Sample Cinema Page" {
-		t.Fatalf("profile identity = %#v", profile)
-	}
-	if profile.Bio != "" {
-		t.Fatalf("Bio = %q, want empty because media descriptions are captions", profile.Bio)
-	}
-	if profile.Website != "" {
-		t.Fatalf("Website = %q, want empty because media URLs are not profile websites", profile.Website)
-	}
-	if profile.AvatarURL != "https://cdn.example/avatar.jpg" {
-		t.Fatalf("AvatarURL = %q, want matching owner avatar", profile.AvatarURL)
-	}
-}
-
-func TestParseInstagramProfileDumpRejectsMismatchedIdentity(t *testing.T) {
-	dump := []byte(`
-[2, {"username":"different.creator","full_name":"Different Creator","biography":"Wrong profile"}]
-`)
-	if profile := ParseInstagramProfileDump(dump, "sample.creator"); profile != nil {
-		t.Fatalf("mismatched profile was accepted: %#v", profile)
-	}
-}
-
-func TestParseInstagramProfileDumpSkipsMismatchedNestedOwner(t *testing.T) {
-	dump := []byte(`
-[2, {"subcategory":"posts","type":"post","user":{"username":"reposter","full_name":"Reposter","profile_pic_url":"https://cdn.example/reposter.jpg"},"post_shortcode":"POST123","description":"A repost caption"}]
-`)
-	profile := ParseInstagramProfileDump(dump, "cinema")
-	if profile != nil {
-		t.Fatalf("mismatched nested profile was accepted: %#v", profile)
-	}
-}
-
-func TestParseInstagramProfileDumpForCoauthorUsesMatchingNestedAvatar(t *testing.T) {
-	dump := []byte(`
-[2, {"subcategory":"posts","type":"post","username":"primary","fullname":"Primary","profile_pic_url":"https://cdn.example/primary.jpg","coauthors":[{"username":"coauthor","full_name":"Co Author"}],"user":{"username":"coauthor","full_name":"Co Author","profile_pic_url":"https://cdn.example/coauthor.jpg"},"post_shortcode":"POST123"}]
-`)
-	profile := ParseInstagramProfileDump(dump, "coauthor")
-	if profile != nil {
-		t.Fatalf("coauthor media object was accepted as profile metadata: %#v", profile)
-	}
-}
-
-func TestParseInstagramProfileDumpEmptyOutputDoesNotFallback(t *testing.T) {
-	if profile := ParseInstagramProfileDump(nil, "fallback"); profile != nil {
-		t.Fatalf("profile = %#v, want nil", profile)
 	}
 }
 
