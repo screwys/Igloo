@@ -49,14 +49,13 @@ fun ShortsRoute(
         vm.consumePendingInitialMomentsSelection()
     }
     val items by vm.items.collectAsStateWithLifecycle()
-    val startIndex by vm.startIndex.collectAsStateWithLifecycle()
+    val startSelection by vm.startSelection.collectAsStateWithLifecycle()
     val uiState by vm.uiState.collectAsStateWithLifecycle()
     val autoplayEnabled by vm.autoplayEnabled.collectAsStateWithLifecycle()
     val muted by vm.muted.collectAsStateWithLifecycle()
     val pendingBookmark by vm.pendingBookmark.collectAsStateWithLifecycle()
     val pendingMomentActions by vm.pendingMomentActions.collectAsStateWithLifecycle()
     val categories by vm.bookmarkCategories.collectAsStateWithLifecycle()
-    val currentVideoId by vm.currentVideoId.collectAsStateWithLifecycle()
     val storyChannels by vm.storyChannels.collectAsStateWithLifecycle()
     val prefs: PreferencesRepo = koinInject()
     val useEmbedFriendlyShareLinks by prefs.shareEmbedFriendlyLinks()
@@ -79,8 +78,8 @@ fun ShortsRoute(
         UiStateSwitch(state = uiState, modifier = Modifier.fillMaxSize()) {
             MomentsPlayer(
                 items = items,
-                startIndex = startIndex,
-                startVideoId = currentVideoId,
+                startIndex = startSelection.index,
+                startVideoId = startSelection.videoId,
                 autoSwipeDefault = autoplayEnabled,
                 muteDefault = muted,
                 onAutoSwipeChanged = vm::setAutoplayEnabled,
@@ -135,7 +134,7 @@ fun ShortsRoute(
                             navigator.openShorts(
                                 playlistType = nextType,
                                 playlistId = ShortsPlaylistSpec.RootPlaylistId,
-                                videoId = currentVideoId.ifBlank { videoId },
+                                videoId = startSelection.videoId.ifBlank { videoId },
                                 source = IglooNavigationSource.Moments,
                                 explicitInitialSelection = false,
                             )

@@ -58,7 +58,7 @@ class ShortsRouteViewModel(
         val authorLabel: String,
         val otherCount: Int,
     )
-    private data class StartSelection(
+    internal data class StartSelection(
         val videoId: String,
         val index: Int,
     )
@@ -207,7 +207,7 @@ class ShortsRouteViewModel(
             initialValue = emptyList(),
         )
 
-    private val startSelection: StateFlow<StartSelection> =
+    internal val startSelection: StateFlow<StartSelection> =
         combine(items, activeVideoId, scopedResumeCursor) { currentItems, targetId, cursor ->
             resolveStartSelection(currentItems, targetId, cursor)
         }
@@ -216,22 +216,6 @@ class ShortsRouteViewModel(
                 started = SharingStarted.WhileSubscribed(5_000L),
                 initialValue = StartSelection(initialVideoId, 0),
             )
-
-    val currentVideoId: StateFlow<String> = startSelection
-        .map { it.videoId }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = initialVideoId,
-        )
-
-    val startIndex: StateFlow<Int> = startSelection
-        .map { it.index }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = 0,
-        )
 
     val uiState: StateFlow<UiState<Unit>> = rawItems
         .map { list ->

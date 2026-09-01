@@ -77,8 +77,7 @@ class ShortsRouteViewModelTest {
 
     private fun subscribe(vm: ShortsRouteViewModel): Job = scope.launch {
         launch { vm.items.collect {} }
-        launch { vm.startIndex.collect {} }
-        launch { vm.currentVideoId.collect {} }
+        launch { vm.startSelection.collect {} }
         launch { vm.uiState.collect {} }
     }
 
@@ -154,7 +153,7 @@ class ShortsRouteViewModelTest {
 
         assertEquals(true, ok)
         assertEquals(listOf("v_older", "v_newer_first", "v_newer_last"), vm.items.value.map { it.videoId })
-        assertEquals(0, vm.startIndex.value)
+        assertEquals(0, vm.startSelection.value.index)
     }
 
     @Test fun storyTrayPlaylistOrderDoesNotChangeAfterViewingStories() = runBlocking {
@@ -227,7 +226,7 @@ class ShortsRouteViewModelTest {
 
         assertEquals(true, loaded)
         assertEquals(listOf("art_new", "art_old"), vm.items.value.map { it.videoId })
-        assertEquals(0, vm.startIndex.value)
+        assertEquals(0, vm.startSelection.value.index)
     }
 
     @Test fun passiveCarriedVideoUsesTheDestinationCursorAndIgnoresLateArrival() = runBlocking {
@@ -286,7 +285,7 @@ class ShortsRouteViewModelTest {
         val passiveSelection = scope.launch { vm.consumePendingInitialMomentsSelection() }
         val loaded =
             withTimeoutOrNull(2_000L) {
-                while (vm.items.value.size < 2 || vm.currentVideoId.value != "resume") delay(10)
+                while (vm.items.value.size < 2 || vm.startSelection.value.videoId != "resume") delay(10)
                 true
             }
         val resolved =
@@ -315,8 +314,8 @@ class ShortsRouteViewModelTest {
         assertEquals(true, loaded)
         assertEquals(true, resolved)
         assertEquals(true, lateRowLoaded)
-        assertEquals("resume", vm.currentVideoId.value)
-        assertEquals(1, vm.startIndex.value)
+        assertEquals("resume", vm.startSelection.value.videoId)
+        assertEquals(1, vm.startSelection.value.index)
         assertEquals(0, db.outboxDao().pendingRows().size)
         assertEquals("resume", db.momentsCursorDao().get("following")?.videoId)
     }
@@ -393,7 +392,7 @@ class ShortsRouteViewModelTest {
         val passiveSelection = scope.launch { vm.consumePendingInitialMomentsSelection() }
         val loaded =
             withTimeoutOrNull(2_000L) {
-                while (vm.items.value.size < 2 || vm.currentVideoId.value != "older") delay(10)
+                while (vm.items.value.size < 2 || vm.startSelection.value.videoId != "older") delay(10)
                 true
             }
         val resolved =
@@ -406,8 +405,8 @@ class ShortsRouteViewModelTest {
         assertEquals(true, loaded)
         assertEquals(true, resolved)
         assertEquals(listOf("older", "next"), vm.items.value.map { it.videoId })
-        assertEquals("older", vm.currentVideoId.value)
-        assertEquals(0, vm.startIndex.value)
+        assertEquals("older", vm.startSelection.value.videoId)
+        assertEquals(0, vm.startSelection.value.index)
         assertEquals(0, db.outboxDao().pendingRows().size)
     }
 
@@ -464,7 +463,7 @@ class ShortsRouteViewModelTest {
         val passiveSelection = scope.launch { vm.consumePendingInitialMomentsSelection() }
         val loaded =
             withTimeoutOrNull(2_000L) {
-                while (vm.items.value.size < 2 || vm.currentVideoId.value != "c") delay(10)
+                while (vm.items.value.size < 2 || vm.startSelection.value.videoId != "c") delay(10)
                 true
             }
         val resolved =
@@ -477,8 +476,8 @@ class ShortsRouteViewModelTest {
         assertEquals(true, loaded)
         assertEquals(true, resolved)
         assertEquals(listOf("a", "c"), vm.items.value.map { it.videoId })
-        assertEquals("c", vm.currentVideoId.value)
-        assertEquals(1, vm.startIndex.value)
+        assertEquals("c", vm.startSelection.value.videoId)
+        assertEquals(1, vm.startSelection.value.index)
         assertEquals(0, db.outboxDao().pendingRows().size)
     }
 
@@ -544,7 +543,9 @@ class ShortsRouteViewModelTest {
             withTimeoutOrNull(2_000L) {
                 while (
                     initialVm.items.value.size < 3 ||
-                        db.momentsCursorDao().get("following")?.videoId != "selected"
+                        db.momentsCursorDao().get("following")?.videoId != "selected" ||
+                        initialVm.startSelection.value !=
+                            ShortsRouteViewModel.StartSelection("selected", 1)
                 ) {
                     delay(10)
                 }
@@ -552,8 +553,8 @@ class ShortsRouteViewModelTest {
             }
 
         assertEquals(true, loaded)
-        assertEquals("selected", initialVm.currentVideoId.value)
-        assertEquals(1, initialVm.startIndex.value)
+        assertEquals("selected", initialVm.startSelection.value.videoId)
+        assertEquals(1, initialVm.startSelection.value.index)
         assertEquals(1, writeClock.get())
         assertEquals(200L, db.momentsCursorDao().get("following")?.sortAtMs)
         initialSelection.cancelAndJoin()
@@ -588,7 +589,8 @@ class ShortsRouteViewModelTest {
         val restoredLoaded =
             withTimeoutOrNull(2_000L) {
                 while (
-                    restoredVm.items.value.size < 3 || restoredVm.currentVideoId.value != "newer"
+                    restoredVm.items.value.size < 3 ||
+                        restoredVm.startSelection.value.videoId != "newer"
                 ) {
                     delay(10)
                 }
@@ -598,8 +600,8 @@ class ShortsRouteViewModelTest {
         restoredSubscription.cancel()
 
         assertEquals(true, restoredLoaded)
-        assertEquals("newer", restoredVm.currentVideoId.value)
-        assertEquals(2, restoredVm.startIndex.value)
+        assertEquals("newer", restoredVm.startSelection.value.videoId)
+        assertEquals(2, restoredVm.startSelection.value.index)
         assertEquals(2, writeClock.get())
         assertEquals(latestOutboxRow.id, db.outboxDao().pendingRows().single().id)
     }
@@ -734,7 +736,7 @@ class ShortsRouteViewModelTest {
         val selected =
             withTimeoutOrNull(2_000L) {
                 while (
-                    vm.currentVideoId.value != "selected" ||
+                    vm.startSelection.value.videoId != "selected" ||
                         db.momentsCursorDao().get("following")?.videoId != "selected"
                 ) {
                     delay(10)
@@ -747,7 +749,7 @@ class ShortsRouteViewModelTest {
 
         assertEquals(true, selected)
         assertEquals("selected", db.momentsCursorDao().get("following")?.videoId)
-        assertEquals("selected", vm.currentVideoId.value)
+        assertEquals("selected", vm.startSelection.value.videoId)
         assertEquals(1, writeClock.get())
         assertEquals(1, db.outboxDao().pendingRows().size)
     }
