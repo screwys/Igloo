@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.screwy.igloo.feed.FeedMediaCellModel
 import com.screwy.igloo.media.MediaUri
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 internal data class NativeVideoSlot(
     val key: String,
@@ -256,24 +257,32 @@ internal fun nativeSingleMediaDimensions(
 }
 
 internal fun nativeMultiMediaCellDimensions(
-    visibleCellCount: Int,
+    cellAspectRatios: List<Float>,
     cellIndex: Int,
     gridWidthPx: Int,
     gapPx: Int,
 ): NativeMediaDimensions {
-    val cellWidth = (gridWidthPx - gapPx).coerceAtLeast(1) / 2
+    val visibleCellCount = cellAspectRatios.size
     return when (visibleCellCount) {
-        2 -> NativeMediaDimensions(widthPx = cellWidth, heightPx = cellWidth)
         3 -> {
-            val gridHeight = (gridWidthPx / 1.6f).toInt().coerceAtLeast(1)
-            val rightCellHeight = (gridHeight - gapPx).coerceAtLeast(1) / 2
-            if (cellIndex == 0) {
-                NativeMediaDimensions(widthPx = cellWidth, heightPx = gridHeight)
-            } else {
-                NativeMediaDimensions(widthPx = cellWidth, heightPx = rightCellHeight)
-            }
+            val ratios =
+                cellAspectRatios.map { ratio ->
+                    ratio.takeIf { it.isFinite() && it > 0f } ?: 1f
+                }
+            val availableWidth = (gridWidthPx - gapPx * 2).coerceAtLeast(1)
+            val totalRatio = ratios.sum().coerceAtLeast(1f)
+            val rowHeight = (availableWidth / totalRatio).roundToInt().coerceAtLeast(1)
+            val cellRatio = ratios.getOrElse(cellIndex) { 1f }
+            NativeMediaDimensions(
+                widthPx =
+                    (availableWidth * cellRatio / totalRatio).roundToInt().coerceAtLeast(1),
+                heightPx = rowHeight,
+            )
         }
-        else -> NativeMediaDimensions(widthPx = cellWidth, heightPx = cellWidth)
+        else -> {
+            val cellWidth = (gridWidthPx - gapPx).coerceAtLeast(1) / 2
+            NativeMediaDimensions(widthPx = cellWidth, heightPx = cellWidth)
+        }
     }
 }
 
@@ -289,11 +298,12 @@ internal fun nativeQuoteMediaGridWidthPx(
 internal fun nativeMediaScaleTypeFor(
     cell: com.screwy.igloo.feed.FeedMediaCellDescriptor,
     isSingle: Boolean = false,
+    preserveFullImage: Boolean = false,
 ): ImageView.ScaleType =
-    if (isSingle && cell.aspectRatioKnown && !cell.isVideo) {
-        ImageView.ScaleType.FIT_START
-    } else {
-        ImageView.ScaleType.CENTER_CROP
+    when {
+        preserveFullImage && cell.aspectRatioKnown && !cell.isVideo -> ImageView.ScaleType.FIT_CENTER
+        isSingle && cell.aspectRatioKnown && !cell.isVideo -> ImageView.ScaleType.FIT_START
+        else -> ImageView.ScaleType.CENTER_CROP
     }
 
 internal fun FeedMediaCellModel.artworkUri(): MediaUri {

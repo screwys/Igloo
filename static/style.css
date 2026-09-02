@@ -8457,7 +8457,6 @@ body.shorts-mode .sidebar {
 
 .feed-card {
     --feed-card-media-max-width: 840px;
-    --feed-card-grid-row-3: 262.5px;
     --feed-card-grid-row-4: 420px;
     --feed-card-grid-square-max-height: 630px;
     background: rgba(var(--surface-soft-rgb), 0.82);
@@ -9378,18 +9377,15 @@ body.shorts-mode .sidebar {
     min-height: 0;
 }
 
-/* 2-4 items: Twitter-style grid with explicit row heights so tiles fill their slot. */
+/* Multi-item grids use explicit heights so every tile fills its slot. */
 
 .feed-media-grid.count-3 {
-    grid-auto-rows: var(--feed-card-grid-row-3);
+    display: flex;
+    align-items: stretch;
 }
 
 .feed-media-grid.count-4 {
     grid-auto-rows: var(--feed-card-grid-row-4);
-}
-
-.feed-media-grid.count-3 .feed-media-tile:first-child {
-    grid-row: span 2;
 }
 
 .feed-media-grid.count-2 .feed-media-tile {
@@ -9397,7 +9393,13 @@ body.shorts-mode .sidebar {
     max-height: var(--feed-card-grid-square-max-height);
 }
 
-.feed-media-grid.count-3 .feed-media-tile,
+.feed-media-grid.count-3 .feed-media-tile {
+    width: 0;
+    height: auto;
+    min-width: 0;
+    flex: 1 1 0;
+}
+
 .feed-media-grid.count-4 .feed-media-tile {
     height: 100%;
 }
@@ -9412,6 +9414,12 @@ body.shorts-mode .sidebar {
     height: 100%;
     max-height: none;
     object-fit: cover;
+}
+
+.feed-media-grid.count-3 .feed-media-tile .feed-media-image {
+    height: auto;
+    min-height: 0;
+    object-fit: contain;
 }
 
 .feed-media-tile {

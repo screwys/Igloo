@@ -942,10 +942,11 @@ internal class NativeFeedViewHolder(
             val gridWidth = gridWidthPx
             val gap = dp(2)
             val displayCells = grid.cells.take(4)
+            val cellAspectRatios = displayCells.map(::nativeStableSingleMediaAspectRatio)
             fun frameFor(index: Int, cell: FeedMediaCellModel): FrameLayout {
                 val imageDimensions =
                     nativeMultiMediaCellDimensions(
-                        visibleCellCount = displayCells.size,
+                        cellAspectRatios = cellAspectRatios,
                         cellIndex = index,
                         gridWidthPx = gridWidth,
                         gapPx = gap,
@@ -1003,38 +1004,26 @@ internal class NativeFeedViewHolder(
                     container.addView(rowLayout)
                 }
                 3 -> {
-                    val gridHeight = (gridWidth / 1.6f).toInt()
-                    val columnWidth = (gridWidth - gap) / 2
-                    val rightCellHeight = (gridHeight - gap) / 2
+                    val gridHeight =
+                        nativeMultiMediaCellDimensions(
+                            cellAspectRatios = cellAspectRatios,
+                            cellIndex = 0,
+                            gridWidthPx = gridWidth,
+                            gapPx = gap,
+                        ).heightPx
                     val rowLayout =
                         LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
                     rowLayout.layoutParams = LinearLayout.LayoutParams(gridWidth, gridHeight)
-                    rowLayout.addView(
-                        frameFor(0, displayCells[0]),
-                        LinearLayout.LayoutParams(columnWidth, ViewGroup.LayoutParams.MATCH_PARENT),
-                    )
-                    val rightColumn =
-                        LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-                    rowLayout.addView(
-                        rightColumn,
-                        LinearLayout.LayoutParams(columnWidth, ViewGroup.LayoutParams.MATCH_PARENT)
-                            .apply { marginStart = gap },
-                    )
-                    rightColumn.addView(
-                        frameFor(1, displayCells[1]),
-                        LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            rightCellHeight,
-                        ),
-                    )
-                    rightColumn.addView(
-                        frameFor(2, displayCells[2]),
-                        LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            rightCellHeight,
-                            )
-                            .apply { topMargin = gap },
-                    )
+                    displayCells.forEachIndexed { index, cell ->
+                        rowLayout.addView(
+                            frameFor(index, cell),
+                            LinearLayout.LayoutParams(
+                                0,
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                cellAspectRatios[index],
+                            ).apply { if (index > 0) marginStart = gap },
+                        )
+                    }
                     container.addView(rowLayout)
                 }
                 else -> {
@@ -1083,7 +1072,12 @@ internal class NativeFeedViewHolder(
     ) {
         val image =
             ImageView(parent.context).apply {
-                scaleType = nativeMediaScaleTypeFor(cell.descriptor, isSingle)
+                scaleType =
+                    nativeMediaScaleTypeFor(
+                        cell.descriptor,
+                        isSingle = isSingle,
+                        preserveFullImage = grid.mediaCount == 3,
+                    )
                 setBackgroundColor(if (isSingle) Color.TRANSPARENT else colors.surface)
             }
         parent.addView(

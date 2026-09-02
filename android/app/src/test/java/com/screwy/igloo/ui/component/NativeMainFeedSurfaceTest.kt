@@ -160,6 +160,10 @@ class NativeMainFeedSurfaceTest {
         )
         assertEquals(ImageView.ScaleType.CENTER_CROP, nativeMediaScaleTypeFor(cell(1.25f)))
         assertEquals(
+            ImageView.ScaleType.FIT_CENTER,
+            nativeMediaScaleTypeFor(cell(1.25f), preserveFullImage = true),
+        )
+        assertEquals(
             ImageView.ScaleType.CENTER_CROP,
             nativeMediaScaleTypeFor(cell(1.25f, isVideo = true)),
         )
@@ -306,26 +310,17 @@ class NativeMainFeedSurfaceTest {
         assertEquals(
             NativeMediaDimensions(widthPx = 498, heightPx = 498),
             nativeMultiMediaCellDimensions(
-                visibleCellCount = 2,
+                cellAspectRatios = listOf(1f, 1f),
                 cellIndex = 0,
                 gridWidthPx = 1_000,
                 gapPx = 4,
             ),
         )
         assertEquals(
-            NativeMediaDimensions(widthPx = 498, heightPx = 625),
+            NativeMediaDimensions(widthPx = 331, heightPx = 573),
             nativeMultiMediaCellDimensions(
-                visibleCellCount = 3,
+                cellAspectRatios = listOf(624f / 1080f, 623f / 1080f, 624f / 1080f),
                 cellIndex = 0,
-                gridWidthPx = 1_000,
-                gapPx = 4,
-            ),
-        )
-        assertEquals(
-            NativeMediaDimensions(widthPx = 498, heightPx = 310),
-            nativeMultiMediaCellDimensions(
-                visibleCellCount = 3,
-                cellIndex = 2,
                 gridWidthPx = 1_000,
                 gapPx = 4,
             ),
@@ -333,7 +328,7 @@ class NativeMainFeedSurfaceTest {
         assertEquals(
             NativeMediaDimensions(widthPx = 498, heightPx = 498),
             nativeMultiMediaCellDimensions(
-                visibleCellCount = 4,
+                cellAspectRatios = listOf(1f, 1f, 1f, 1f),
                 cellIndex = 3,
                 gridWidthPx = 1_000,
                 gapPx = 4,
