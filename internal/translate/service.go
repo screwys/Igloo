@@ -27,8 +27,9 @@ import (
 )
 
 const (
-	kagiProviderCooldownDuration = 5 * time.Minute
-	kagiContextMaxRunes          = 500
+	kagiProviderCooldownDuration  = 5 * time.Minute
+	kagiContextMaxRunes           = 500
+	socialMediaTranslationContext = "Social-media post. Preserve names, abbreviations, usernames, fandom terms, and text already readable in the target language. If a term is ambiguous, leave it unchanged."
 )
 
 var (
@@ -368,12 +369,12 @@ func sourceLanguageMatchesTarget(sourceLang, targetLang string) bool {
 // buildContext builds context for quote tweet translations.
 func buildContext(bodyText, quoteBodyText, field string) string {
 	if field == "body" && quoteBodyText != "" {
-		return "You are translating a post that quotes another post.\nQuoted post: \"" + quoteBodyText + "\""
+		return socialMediaTranslationContext + "\nThe post quotes another post:\n\"" + quoteBodyText + "\""
 	}
 	if field == "quote" && bodyText != "" {
-		return "You are translating a quoted post. The post quoting it says:\n\"" + bodyText + "\""
+		return socialMediaTranslationContext + "\nThe post quoting this one says:\n\"" + bodyText + "\""
 	}
-	return "social media post"
+	return socialMediaTranslationContext
 }
 
 func translateTextWithDB(ctx context.Context, database *db.DB, text, targetLang, contextHint, sourceLangHint string) (*Result, string, error) {
@@ -501,7 +502,7 @@ func kagiTranslate(ctx context.Context, text, targetLang, contextHint, sourceLan
 	kagiCallMu.Lock()
 	defer kagiCallMu.Unlock()
 
-	args := kagiTranslateArgs(text, targetLang, contextHint, sourceLangHint)
+	args := kagiTranslateArgs(text, targetLang, contextHint)
 	cmd := exec.CommandContext(ctx, "kagi", args...)
 
 	var stdout, stderr bytes.Buffer
@@ -647,7 +648,7 @@ func parseKagiBatchTranslation(text string, count int) ([]string, error) {
 	return out, nil
 }
 
-func kagiTranslateArgs(text, targetLang, contextHint, sourceLangHint string) []string {
+func kagiTranslateArgs(text, targetLang, contextHint string) []string {
 	args := []string{
 		"translate",
 		"--to", targetLang,
@@ -656,9 +657,6 @@ func kagiTranslateArgs(text, targetLang, contextHint, sourceLangHint string) []s
 		"--no-suggestions",
 		"--no-alignments",
 		"--preserve-formatting", "true",
-	}
-	if sourceLang := kagiSourceLanguage(sourceLangHint); sourceLang != "" {
-		args = append(args, "--from", sourceLang, "--predicted-language", sourceLang)
 	}
 	contextHint = clampKagiContext(contextHint)
 	if contextHint != "" {
@@ -677,29 +675,6 @@ func clampKagiContext(contextHint string) string {
 		return contextHint
 	}
 	return strings.TrimSpace(string(runes[:kagiContextMaxRunes]))
-}
-
-func kagiSourceLanguage(sourceLangHint string) string {
-	sourceLang := strings.ToLower(strings.TrimSpace(sourceLangHint))
-	if sourceLang == "" {
-		return ""
-	}
-	sourceLang = strings.ReplaceAll(sourceLang, "_", "-")
-	if language.IsUnknown(sourceLang) {
-		return ""
-	}
-	switch sourceLang {
-	case "in":
-		return "id"
-	case "iw":
-		return "he"
-	case "jw":
-		return "jv"
-	}
-	if strings.ContainsAny(sourceLang, " \t\r\n") {
-		return ""
-	}
-	return sourceLang
 }
 
 func kagiMessageNeedsCooldown(msg string) bool {
@@ -895,7 +870,7 @@ func openAICompatTranslate(ctx context.Context, endpoint, apiKey, model, text, t
 		return nil, err
 	}
 
-	prompt := "Translate the provided social-media text. Preserve every placeholder like {{0}} exactly. Return only JSON with keys translated_text and source_language. source_language must be the full English name of the source language, for example Korean, not an ISO code."
+	prompt := "Translate the provided social-media text. Preserve every placeholder like {{0}} exactly. Preserve names, abbreviations, usernames, fandom terms, and text already readable in the target language. If the text or a term is ambiguous, leave it unchanged rather than guessing. Return only JSON with keys translated_text and source_language. source_language must be the full English name of the source language, for example Korean, not an ISO code."
 	user := "Target language: " + strings.ToLower(strings.TrimSpace(targetLang)) + "\n"
 	if strings.TrimSpace(contextHint) != "" {
 		user += "Context: " + strings.TrimSpace(contextHint) + "\n"

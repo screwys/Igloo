@@ -420,6 +420,11 @@ func translateAndCacheBackgroundCandidates(ctx context.Context, database *db.DB,
 			_ = database.SkipTranslationJob(candidate.TweetID, candidate.Field, cfg.target, "not eligible")
 			continue
 		}
+		if equivalentTranslationText(candidate.SourceText, restoredText) {
+			skipped[key] = translateBackgroundSkip{sourceText: candidate.SourceText}
+			_ = database.SkipTranslationJob(candidate.TweetID, candidate.Field, cfg.target, "unchanged")
+			continue
+		}
 
 		cacheLang := srcLang
 		if cacheLang == "" {

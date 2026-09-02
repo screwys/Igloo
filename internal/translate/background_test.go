@@ -192,6 +192,55 @@ func TestTranslateBackgroundSkipsProviderDetectedSkipLanguage(t *testing.T) {
 	}
 }
 
+func TestTranslateBackgroundSkipsAmbiguousUnchangedText(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"translations":[{"translatedText":"cos\nZOMBIESTAGE MIZI SUA\n{{0}} {{1}}","detectedSourceLanguage":"it"}]}}`))
+	}))
+	defer srv.Close()
+
+	d := openTranslateTestDB(t)
+	if _, err := d.UpsertFeedItems([]model.FeedItem{{
+		TweetID:      "ambiguous_social_caption",
+		AuthorHandle: "sample_author",
+		BodyText:     "cos\nZOMBIESTAGE MIZI SUA\n#sample #cosplay",
+		Lang:         "it",
+	}}); err != nil {
+		t.Fatalf("UpsertFeedItems: %v", err)
+	}
+	if err := d.SetSetting("translate_backend", settings.TranslateBackendGoogle); err != nil {
+		t.Fatalf("SetSetting translate_backend: %v", err)
+	}
+	if err := d.SetSetting("translate_api_site", srv.URL); err != nil {
+		t.Fatalf("SetSetting translate_api_site: %v", err)
+	}
+	if err := d.SetSetting("translate_api_key", "test-key"); err != nil {
+		t.Fatalf("SetSetting translate_api_key: %v", err)
+	}
+
+	cfg := translateBackgroundConfig{
+		mode:    settings.TranslateAutoBackground,
+		backend: settings.TranslateBackendGoogle,
+		target:  "en",
+		skipSet: map[string]bool{},
+	}
+	translated, err := runTranslateBackgroundBatch(context.Background(), d, cfg, map[string]translateBackgroundSkip{})
+	if err != nil {
+		t.Fatalf("runTranslateBackgroundBatch: %v", err)
+	}
+	if translated != 0 {
+		t.Fatalf("translated = %d, want 0", translated)
+	}
+	if requests != 1 {
+		t.Fatalf("provider requests = %d, want 1", requests)
+	}
+	if _, _, err := d.GetTranslation("ambiguous_social_caption", "body", "en"); err != sql.ErrNoRows {
+		t.Fatalf("GetTranslation err = %v, want sql.ErrNoRows", err)
+	}
+}
+
 func TestTranslateBackgroundBatchesSameLanguageThreadBodies(t *testing.T) {
 	requests := 0
 	var gotTexts []string

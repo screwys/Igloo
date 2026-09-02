@@ -180,13 +180,22 @@ func TestSourceLanguageMatchesTargetNormalizesLanguageTags(t *testing.T) {
 	}
 }
 
-func TestKagiTranslateArgsUseKnownSourceLanguage(t *testing.T) {
-	got := strings.Join(kagiTranslateArgs("안녕하세요", "en", "social media post", "ko"), "\x00")
-	if !strings.Contains(got, "\x00--from\x00ko\x00") {
-		t.Fatalf("kagi args missing source language: %q", got)
+func TestBuildContextGuidesAmbiguousSocialText(t *testing.T) {
+	for _, contextHint := range []string{
+		buildContext("", "", "body"),
+		buildContext("wrapper text", "", "quote"),
+		buildContext("", "quoted text", "body"),
+	} {
+		if !strings.Contains(contextHint, "If a term is ambiguous, leave it unchanged") {
+			t.Fatalf("translation context missing ambiguity guidance: %q", contextHint)
+		}
 	}
-	if !strings.Contains(got, "\x00--predicted-language\x00ko\x00") {
-		t.Fatalf("kagi args missing predicted source language: %q", got)
+}
+
+func TestKagiTranslateArgsUseAutomaticSourceLanguage(t *testing.T) {
+	got := strings.Join(kagiTranslateArgs("안녕하세요", "en", socialMediaTranslationContext), "\x00")
+	if strings.Contains(got, "\x00--from\x00") || strings.Contains(got, "\x00--predicted-language\x00") {
+		t.Fatalf("kagi args forced a source language: %q", got)
 	}
 	for _, want := range []string{
 		"\x00--no-alternatives\x00",
@@ -200,18 +209,8 @@ func TestKagiTranslateArgsUseKnownSourceLanguage(t *testing.T) {
 		}
 	}
 
-	got = strings.Join(kagiTranslateArgs("Mimpi basah WNI", "en", "", "in"), "\x00")
-	if !strings.Contains(got, "\x00--from\x00id\x00") {
-		t.Fatalf("kagi args did not normalize Indonesian source language: %q", got)
-	}
-
-	got = strings.Join(kagiTranslateArgs("hello", "en", "", "qam"), "\x00")
-	if strings.Contains(got, "\x00--from\x00") {
-		t.Fatalf("kagi args should not pass private-use source language: %q", got)
-	}
-
 	longContext := strings.Repeat("x", kagiContextMaxRunes+20)
-	gotArgs := kagiTranslateArgs("bonjour", "en", longContext, "fr")
+	gotArgs := kagiTranslateArgs("bonjour", "en", longContext)
 	for i, arg := range gotArgs {
 		if arg != "--context" || i+1 >= len(gotArgs) {
 			continue
@@ -517,6 +516,11 @@ func TestOpenAICompatTranslateUsesBareEndpointAndModelWithoutKey(t *testing.T) {
 	messages, ok := gotBody["messages"].([]any)
 	if !ok || len(messages) == 0 {
 		t.Fatalf("messages missing from request: %#v", gotBody)
+	}
+	systemMessage, ok := messages[0].(map[string]any)
+	systemContent, contentOK := systemMessage["content"].(string)
+	if !ok || !contentOK || !strings.Contains(systemContent, "leave it unchanged rather than guessing") {
+		t.Fatalf("system prompt missing ambiguity guidance: %#v", messages[0])
 	}
 	if result.TranslatedText != "Hello {{0}}" || result.SourceLang != "Korean" {
 		t.Fatalf("result = %#v", result)
