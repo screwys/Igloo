@@ -8,6 +8,7 @@ import {
   syncFeedActionIcons,
   formatRelative,
   formatAbsolute,
+  materialIconMarkup,
   t,
 } from '../utils.js'
 import { bindFeedVideoControls, createFeedVideoControls, handleFeedVideoShortcut } from './video-controls.js'
@@ -348,12 +349,12 @@ export function openMediaOverlay(root, triggerEl) {
   // Static overlay shell template — no user input
   overlay.innerHTML = '' + // eslint-disable-line no-unsanitized/property
     '<div class="feed-media-overlay-shell">' +
-    '<button class="feed-media-overlay-close" type="button" aria-label="' + t('action_close', 'Close') + '">\u00d7</button>' +
+    '<button class="feed-media-overlay-close" type="button" aria-label="' + t('action_close', 'Close') + '">' + materialIconMarkup('Close') + '</button>' +
     '<div class="feed-media-overlay-main">' +
     '<div class="feed-media-overlay-left">' +
-    '<button class="feed-media-overlay-nav prev" type="button" aria-label="' + t('action_previous', 'Previous') + '">\u2039</button>' +
+    '<button class="feed-media-overlay-nav prev" type="button" aria-label="' + t('action_previous', 'Previous') + '">' + materialIconMarkup('KeyboardArrowLeft') + '</button>' +
     '<div class="feed-media-overlay-media"></div>' +
-    '<button class="feed-media-overlay-nav next" type="button" aria-label="' + t('action_next', 'Next') + '">\u203a</button>' +
+    '<button class="feed-media-overlay-nav next" type="button" aria-label="' + t('action_next', 'Next') + '">' + materialIconMarkup('KeyboardArrowRight') + '</button>' +
     '<div class="feed-media-overlay-counter"></div>' +
     '</div>' +
     '<div class="feed-media-overlay-right">' +

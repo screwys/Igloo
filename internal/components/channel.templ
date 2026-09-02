@@ -40,7 +40,7 @@ templ ChannelPage(p PageProps, channel model.Channel, profile *model.ChannelProf
 		@ChannelVideoSection(p, videos, channel, pager, search, usesShorts, section)
 		if usesShorts {
 			<div id="shorts-layout" class="shorts-layout hidden" data-auto-open="0" data-persist-history="0" data-source-container-selector="#video-grid" data-source-card-selector="a.video-card" data-infinite-container-selector="#video-grid" tabindex="-1">
-				<button id="close-shorts-btn" class="shorts-close-btn" title={ L(p, "action_close_shorts_mode", "Close Shorts mode") }>&#x2715;</button>
+				<button id="close-shorts-btn" class="shorts-close-btn" title={ L(p, "action_close_shorts_mode", "Close Shorts mode") }>@MaterialIcon("Close", "")</button>
 				<div id="shorts-container" class="shorts-container"></div>
 				<div id="shorts-uptodate-overlay" class="shorts-uptodate-overlay hidden">
 					<div class="uptodate-content"><span>{ L(p, "status_up_to_date", "You're up to date!") }</span></div>

@@ -2,7 +2,7 @@
 // Usable from feed, videos, shorts, or any page. Dispatches callbacks for
 // page-specific state sync (e.g. icon updates, sibling propagation).
 
-import { apiFetch, showToast, stateBool, setStateBool, t, tf } from './utils.js'
+import { apiFetch, materialIconMarkup, showToast, stateBool, setStateBool, t, tf } from './utils.js'
 
 var bookmarkMenu = null
 var bookmarkCategories = []
@@ -446,7 +446,7 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
       var accountAddBtn = document.createElement('button')
       accountAddBtn.className = 'bookmark-sheet-account-add-btn'
       accountAddBtn.type = 'button'
-      accountAddBtn.textContent = '+'
+      accountAddBtn.innerHTML = materialIconMarkup('Add') // eslint-disable-line no-unsanitized/property
       accountAddBtn.setAttribute('aria-label', t('bookmark_add_account', 'Add account'))
       pillRow.appendChild(accountAddBtn)
       popover._accountPickerToggle = accountAddBtn
@@ -667,7 +667,7 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
     addBtnEl.className = 'bookmark-sheet-add-btn'
     addBtnEl.type = 'button'
     addBtnEl.setAttribute('data-bookmark-add', '')
-    addBtnEl.textContent = '+'
+    addBtnEl.innerHTML = materialIconMarkup('Add') // eslint-disable-line no-unsanitized/property
     addDiv.appendChild(addBtnEl)
     body.appendChild(addDiv)
 

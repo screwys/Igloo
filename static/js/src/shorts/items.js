@@ -410,7 +410,7 @@ function menuIconSvg(kind) {
 export function iconSvg(kind, active, volume) {
   var names = {
     menu: 'Menu', more: 'MoreVert', fullscreen: active ? 'FullscreenExit' : 'Fullscreen',
-    grid: 'GridView', 'tray-right': 'ViewSidebar', prev: 'KeyboardArrowLeft',
+    grid: 'GridView', 'tray-right': 'WebStories', prev: 'KeyboardArrowLeft',
     next: 'KeyboardArrowRight', open: 'OpenInNew', check: 'Check', add: 'Add',
     share: 'Share', comment: 'ChatBubble', pause: 'Pause'
   }

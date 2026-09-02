@@ -41,10 +41,10 @@ templ youtubeSearchBar(p PageProps, query string) {
 	<form method="get" action="/search/youtube" class="youtube-search-bar" role="search">
 		<div class="youtube-search-input-wrap">
 			<input class="input youtube-search-input" type="search" name="q" value={ query } placeholder={ L(p, "youtube_search_placeholder", "Search YouTube") } autocomplete="off" spellcheck="false" autofocus onfocus="var l=this.value.length;this.setSelectionRange(l,l);"/>
-			<button type="button" class="input-clear-btn" aria-label={ L(p, "action_clear", "Clear") } onclick="var i=this.previousElementSibling;i.value='';i.focus();">&times;</button>
+			<button type="button" class="input-clear-btn" aria-label={ L(p, "action_clear", "Clear") } onclick="var i=this.previousElementSibling;i.value='';i.focus();">@MaterialIcon("Close", "")</button>
 		</div>
 		<button class="btn btn-secondary youtube-search-submit" type="submit" aria-label={ L(p, "search_title", "Search") }>
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+			@MaterialIcon("Search", "")
 		</button>
 	</form>
 }

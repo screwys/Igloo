@@ -1784,7 +1784,7 @@
         b.className = 'skip-lang-remove';
         b.setAttribute('aria-label', t('action_remove', 'Remove'));
         b.style.cssText = 'background:none; border:0; color:var(--text-secondary); cursor:pointer; padding:0; line-height:1;';
-        b.textContent = '×';
+        b.innerHTML = materialIconMarkup('Close');
         pill.appendChild(b);
       }
     }
@@ -1809,7 +1809,7 @@
       btn.className = 'skip-lang-remove';
       btn.setAttribute('aria-label', t('action_remove', 'Remove'));
       btn.style.cssText = 'background:none; border:0; color:var(--text-secondary); cursor:pointer; padding:0; line-height:1;';
-      btn.textContent = '×';
+      btn.innerHTML = materialIconMarkup('Close');
       pill.appendChild(btn);
       pills.appendChild(pill);
       syncHidden(widget);

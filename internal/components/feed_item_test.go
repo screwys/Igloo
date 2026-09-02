@@ -805,7 +805,7 @@ func TestFeedVideoRendersUnifiedPlaybackControls(t *testing.T) {
 	if strings.Contains(html, `aria-pressed="false" data-feed-video-control data-feed-video-cinema`) {
 		t.Fatalf("cinema should remain a momentary button rather than selected state; html=%s", html)
 	}
-	if got := strings.Count(html, `<path d="M15 4v16"></path>`); got != 2 {
+	if got := strings.Count(html, `data-material-icon="VerticalSplit"`); got != 2 {
 		t.Fatalf("split-view icon count = %d, want 2; html=%s", got, html)
 	}
 	if got := strings.Count(html, `data-feed-video-kind="video"`); got != 2 {

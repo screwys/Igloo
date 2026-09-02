@@ -41,9 +41,9 @@ templ FeedStarButton(p PageProps, channelID string, isStarred bool) {
 		}
 	>
 		if isStarred {
-			&#x2605;
+			@MaterialIcon("Star", "")
 		} else {
-			&#x2606;
+			@MaterialIcon("StarBorder", "")
 		}
 	</button>
 }
@@ -65,8 +65,10 @@ templ LikeButton(p PageProps, tweetID string, isLiked bool) {
 		}
 		hx-swap="outerHTML"
 	>
-		<svg width="20" height="20" viewBox="0 0 24 24" fill={ heartFill(isLiked) } stroke="currentColor" stroke-width="2">
-			<path d="M12 21s-6.7-4.35-9.2-8.14C.69 9.63 1.22 5.5 4.56 4.02 6.8 3.03 9.2 3.69 10.72 5.55L12 7.12l1.28-1.57c1.52-1.86 3.92-2.52 6.16-1.53 3.34 1.48 3.87 5.61 1.76 8.84C18.7 16.65 12 21 12 21z"></path>
-		</svg>
+		if isLiked {
+			@MaterialIcon("Favorite", "")
+		} else {
+			@MaterialIcon("FavoriteBorder", "")
+		}
 	</button>
 }

@@ -276,8 +276,7 @@ if (root && video) {
     if (!bookmarkBtn) return
     bookmarkBtn.classList.toggle('active', !!bookmarked)
     root.setAttribute('data-bookmarked', bookmarked ? '1' : '0')
-    const svg = q('svg', bookmarkBtn)
-    if (svg) svg.setAttribute('fill', bookmarked ? 'currentColor' : 'none')
+    setSvgContent(bookmarkBtn, materialIconMarkup(bookmarked ? 'Bookmark' : 'BookmarkBorder'))
     bookmarkBtn.title = bookmarked ? t('action_remove_bookmark', 'Remove bookmark') : t('action_bookmark', 'Bookmark')
     bookmarkBtn.setAttribute('aria-label', bookmarkBtn.title)
   }
@@ -292,6 +291,7 @@ if (root && video) {
     }
     if (autoplayNextBtn) {
       autoplayNextBtn.classList.toggle('active', autoplayNext)
+      setSvgContent(autoplayNextBtn, materialIconMarkup(autoplayNext ? 'PlayCircle' : 'PlayCircleOutline'))
       autoplayNextBtn.title = tf('player_autoplay_next_state', 'Auto-play next: %1$s', autoplayNext ? t('state_on', 'ON') : t('state_off', 'OFF'))
       autoplayNextBtn.setAttribute('aria-label', autoplayNextBtn.title)
     }
@@ -488,7 +488,9 @@ if (root && video) {
     }
 
     function onFullscreenChange() {
-      if (isPlayerLayoutFullscreen()) {
+      var fullscreen = isPlayerLayoutFullscreen()
+      setSvgContent(fullscreenBtn, materialIconMarkup(fullscreen ? 'FullscreenExit' : 'Fullscreen'))
+      if (fullscreen) {
         var target = playerFullscreenTarget()
         if (target === playerLayout) {
           setFullscreenMode('immersive')

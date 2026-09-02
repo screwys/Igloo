@@ -149,13 +149,9 @@ templ ProfileCardStarButton(props PageProps, channelID string, isStarred bool) {
 		}
 	>
 		if isStarred {
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true">
-				<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-			</svg>
+			@MaterialIcon("Star", "")
 		} else {
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true">
-				<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-			</svg>
+			@MaterialIcon("StarBorder", "")
 		}
 	</button>
 }
@@ -169,11 +165,7 @@ templ ProfileCardMenu(props PageProps, p *model.ChannelProfile, isFollowing bool
 			aria-label={ L(props, "action_more", "More") }
 			data-profile-card-menu-toggle
 		>
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-				<circle cx="5" cy="12" r="1.1" fill="currentColor" stroke="none"></circle>
-				<circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"></circle>
-				<circle cx="19" cy="12" r="1.1" fill="currentColor" stroke="none"></circle>
-			</svg>
+			@MaterialIcon("MoreHoriz", "")
 		</button>
 		<div class="feed-card-menu-list profile-card-menu-list">
 			if profileSupportsRepostToggle(p.Platform) {

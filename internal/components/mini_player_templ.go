@@ -84,59 +84,75 @@ func MiniPlayerShell(p PageProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 3H3v5\"></path> <path d=\"M3 3l7 7\"></path> <rect x=\"7\" y=\"7\" width=\"14\" height=\"14\" rx=\"2\"></rect></svg></button> <button id=\"mini-player-close\" class=\"mini-player-header-btn\" type=\"button\" title=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = MaterialIcon("OpenInFull", "").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</button> <button id=\"mini-player-close\" class=\"mini-player-header-btn\" type=\"button\" title=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "mini_player_close", "Close mini player"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/mini_player.templ`, Line: 39, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/mini_player.templ`, Line: 35, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" aria-label=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" aria-label=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "mini_player_close", "Close mini player"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/mini_player.templ`, Line: 40, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/mini_player.templ`, Line: 36, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M6 6l12 12M18 6L6 18\"></path></svg></button></div></header><div id=\"mini-player-move-handle\" class=\"mini-player-move-handle\" aria-hidden=\"true\"></div><div id=\"mini-player-resize-handle\" class=\"mini-player-resize-handle mini-player-resize-target\" data-mini-player-resize=\"left\" role=\"separator\" tabindex=\"0\" aria-orientation=\"vertical\" aria-valuemin=\"300\" aria-valuemax=\"1040\" aria-valuenow=\"630\" title=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = MaterialIcon("Close", "").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</button></div></header><div id=\"mini-player-move-handle\" class=\"mini-player-move-handle\" aria-hidden=\"true\"></div><div id=\"mini-player-resize-handle\" class=\"mini-player-resize-handle mini-player-resize-target\" data-mini-player-resize=\"left\" role=\"separator\" tabindex=\"0\" aria-orientation=\"vertical\" aria-valuemin=\"300\" aria-valuemax=\"1040\" aria-valuenow=\"630\" title=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "mini_player_resize", "Resize mini player"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/mini_player.templ`, Line: 59, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/mini_player.templ`, Line: 53, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" aria-label=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" aria-label=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "mini_player_resize", "Resize mini player"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/mini_player.templ`, Line: 60, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/mini_player.templ`, Line: 54, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-top-left mini-player-resize-target\" data-mini-player-resize=\"top-left\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-top-right mini-player-resize-target\" data-mini-player-resize=\"top-right\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-bottom-left mini-player-resize-target\" data-mini-player-resize=\"bottom-left\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-bottom-right mini-player-resize-target\" data-mini-player-resize=\"bottom-right\" aria-hidden=\"true\"></div><div id=\"mini-player-media-host\" class=\"mini-player-media-host\"></div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-top-left mini-player-resize-target\" data-mini-player-resize=\"top-left\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-top-right mini-player-resize-target\" data-mini-player-resize=\"top-right\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-bottom-left mini-player-resize-target\" data-mini-player-resize=\"bottom-left\" aria-hidden=\"true\"></div><div class=\"mini-player-resize-corner mini-player-resize-corner-bottom-right mini-player-resize-target\" data-mini-player-resize=\"bottom-right\" aria-hidden=\"true\"></div><div id=\"mini-player-media-host\" class=\"mini-player-media-host\"></div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

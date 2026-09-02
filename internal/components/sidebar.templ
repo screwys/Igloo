@@ -23,37 +23,37 @@ templ Sidebar(p PageProps) {
 				}
 				if route == "videos" && p.PlatformsContain("youtube") {
 				<a href="/videos" class={ "nav-item", templ.KV("active", p.ActiveNav == "videos") } data-sidebar-nav-route="videos" title={ L(p, "nav_videos", "Videos") } aria-label={ L(p, "nav_videos", "Videos") }>
-					<svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+					@MaterialIcon("VideoLibrary", "nav-icon")
 					<span data-i18n="nav_videos">{ L(p, "nav_videos", "Videos") }</span>
 				</a>
 				}
 				if route == "feed" && p.PlatformsContain("twitter") {
 				<a href="/feed" class={ "nav-item", templ.KV("active", p.ActiveNav == "feed") } data-sidebar-nav-route="feed" title={ L(p, "nav_feed", "Feed") } aria-label={ L(p, "nav_feed", "Feed") }>
-					<svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg>
+					@MaterialIcon("DynamicFeed", "nav-icon")
 					<span data-i18n="nav_feed">{ L(p, "nav_feed", "Feed") }</span>
 				</a>
 			}
 				if route == "shorts" && (p.PlatformsContain("tiktok") || p.PlatformsContain("instagram")) {
 				<a href="/shorts" class={ "nav-item", templ.KV("active", p.ActiveNav == "shorts") } data-sidebar-nav-route="shorts" title={ L(p, "nav_moments", "Moments") } aria-label={ L(p, "nav_moments", "Moments") }>
-					<svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+					@MaterialIcon("PlayCircle", "nav-icon")
 					<span data-i18n="nav_moments">{ L(p, "nav_moments", "Moments") }</span>
 				</a>
 			}
 				if route == "channels" {
 				<a href="/channels" class={ "nav-item", templ.KV("active", p.ActiveNav == "channels") } data-sidebar-nav-route="channels" title={ L(p, "nav_channels", "Channels") } aria-label={ L(p, "nav_channels", "Channels") }>
-				<svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+				@MaterialIcon("GridView", "nav-icon")
 				<span data-i18n="nav_channels">{ L(p, "nav_channels", "Channels") }</span>
 			</a>
 				}
 				if route == "bookmarks" {
 				<a href="/bookmarks" class={ "nav-item", templ.KV("active", p.ActiveNav == "bookmarks") } data-sidebar-nav-route="bookmarks" title={ L(p, "nav_bookmarks", "Bookmarks") } aria-label={ L(p, "nav_bookmarks", "Bookmarks") }>
-				<svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+				@MaterialIcon("Bookmark", "nav-icon")
 				<span data-i18n="nav_bookmarks">{ L(p, "nav_bookmarks", "Bookmarks") }</span>
 			</a>
 				}
 				if route == "liked" && p.PlatformsContain("twitter") {
 				<a href="/liked" class={ "nav-item", templ.KV("active", p.ActiveNav == "liked") } data-sidebar-nav-route="liked" title={ L(p, "nav_liked", "Liked") } aria-label={ L(p, "nav_liked", "Liked") }>
-					<svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+					@MaterialIcon("Favorite", "nav-icon")
 					<span data-i18n="nav_liked">{ L(p, "nav_liked", "Liked") }</span>
 				</a>
 				}
@@ -61,13 +61,13 @@ templ Sidebar(p PageProps) {
 		</nav>
 		<div class="sidebar-compact-actions">
 			<button class="sidebar-compact-btn" type="button" data-sidebar-compact-add title={ L(p, "action_add_channel", "Add Channel") } aria-label={ L(p, "action_add_channel", "Add Channel") } data-i18n-title="action_add_channel" data-i18n-aria-label="action_add_channel">
-				<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+				@MaterialIcon("Add", "")
 			</button>
 			<button class="sidebar-compact-btn" type="button" data-sidebar-compact-download title={ L(p, "action_download", "Download") } aria-label={ L(p, "action_download", "Download") } data-i18n-title="action_download" data-i18n-aria-label="action_download">
-				<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>
+				@MaterialIcon("Download", "")
 			</button>
 			<button class="sidebar-compact-btn" type="button" data-sidebar-compact-logs title={ L(p, "action_view_logs", "View logs") } aria-label={ L(p, "action_view_logs", "View logs") } data-i18n-title="action_view_logs" data-i18n-aria-label="action_view_logs">
-				<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+				@MaterialIcon("Subject", "")
 			</button>
 		</div>
 		if len(p.Sidebar.CurrentlyWatching) > 0 {
@@ -82,7 +82,7 @@ templ Sidebar(p PageProps) {
 		<div class="filter-row">
 			<div class="clearable-input">
 				<input id="platform-search" class="platform-search-input" type="text" placeholder={ L(p, "sidebar_channel_filter_placeholder", "Filter channels...") } data-i18n-placeholder="sidebar_channel_filter_placeholder" autocomplete="off" spellcheck="false"/>
-				<button type="button" class="input-clear-btn hidden" data-clear-for="platform-search" aria-label={ L(p, "action_clear", "Clear") } data-i18n-aria-label="action_clear">&times;</button>
+				<button type="button" class="input-clear-btn hidden" data-clear-for="platform-search" aria-label={ L(p, "action_clear", "Clear") } data-i18n-aria-label="action_clear">@MaterialIcon("Close", "")</button>
 			</div>
 			<button
 				class="sidebar-add-btn"
@@ -92,7 +92,7 @@ templ Sidebar(p PageProps) {
 				data-i18n-title="action_add_channel"
 				data-i18n-aria-label="action_add_channel"
 				onclick="var m=document.getElementById('add-sub-modal');if(m){m.classList.remove('hidden');m.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';var s=document.getElementById('add-sub-status');if(s)s.innerHTML='';var i=document.getElementById('sub-input');if(i){requestAnimationFrame(function(){i.focus();i.select()})}}"
-			>&#x2b;</button>
+			>@MaterialIcon("Add", "")</button>
 		</div>
 		<div class="sidebar-scroll">
 			<div class="sidebar-section">
@@ -117,9 +117,7 @@ templ Sidebar(p PageProps) {
 						<span class="status-secondary-text" data-i18n="status_loading">{ L(p, "status_loading", "Loading...") }</span>
 					</div>
 					<button id="status-log-btn" class="status-log-btn" type="button" aria-label={ L(p, "action_view_logs", "View logs") } data-i18n-aria-label="action_view_logs">
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-						</svg>
+						@MaterialIcon("Subject", "")
 					</button>
 				</div>
 			</div>
@@ -144,7 +142,7 @@ templ Sidebar(p PageProps) {
 		<div class="modal-content quick-download-modal-content">
 			<div class="modal-header">
 				<h2>{ L(p, "action_download", "Download") }</h2>
-				<button class="modal-close" type="button" aria-label={ L(p, "action_close", "Close") } data-i18n-aria-label="action_close">&times;</button>
+				<button class="modal-close" type="button" aria-label={ L(p, "action_close", "Close") } data-i18n-aria-label="action_close">@MaterialIcon("Close", "")</button>
 			</div>
 			@sidebarQuickDownloadForm(p, "compact-quick-dl-input", "compact-quick-dl-status")
 		</div>
@@ -153,7 +151,7 @@ templ Sidebar(p PageProps) {
 
 templ SidebarDiscoverNavItem(p PageProps) {
 	<a href="/discover" class={ "nav-item", templ.KV("active", p.ActiveNav == "discover") } data-sidebar-nav-route="discover" title={ L(p, "nav_discover", "Discover") } aria-label={ L(p, "nav_discover", "Discover") }>
-		<svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16 8 14 14 8 16 10 10 16 8"></polygon></svg>
+		@MaterialIcon("Explore", "nav-icon")
 		<span>{ L(p, "nav_discover", "Discover") }</span>
 	</a>
 }
@@ -163,12 +161,12 @@ templ sidebarQuickDownloadForm(p PageProps, inputID string, statusID string) {
 		hx-post="/api/quick-download"
 		hx-target={ "#" + statusID }
 		hx-swap="innerHTML"
-		hx-on::before-request="this.querySelector('.quick-dl-icon').className='quick-dl-icon downloading';this.querySelector('.quick-dl-icon').textContent='⟳';this.querySelector('.quick-dl-status').className='quick-dl-status hidden'"
-		hx-on::after-request="var b=this.querySelector('.quick-dl-icon'),s=this.querySelector('.quick-dl-status'),result=s.querySelector('[data-download-success]'),ok=result?result.dataset.downloadSuccess==='true':event.detail.successful;b.className='quick-dl-icon '+(ok?'success':'error');b.textContent=ok?'✓':'✕';s.className='quick-dl-status';if(ok)this.querySelector('.quick-download-bar .input').value='';setTimeout(function(){b.className='quick-dl-icon';b.textContent='↓'},3000)"
+		hx-on::before-request="var b=this.querySelector('.quick-dl-icon');if(!b.dataset.idleIcon)b.dataset.idleIcon=b.innerHTML;b.className='quick-dl-icon downloading';b.textContent='⟳';this.querySelector('.quick-dl-status').className='quick-dl-status hidden'"
+		hx-on::after-request="var b=this.querySelector('.quick-dl-icon'),s=this.querySelector('.quick-dl-status'),result=s.querySelector('[data-download-success]'),ok=result?result.dataset.downloadSuccess==='true':event.detail.successful;b.className='quick-dl-icon '+(ok?'success':'error');b.textContent=ok?'✓':'✕';s.className='quick-dl-status';if(ok)this.querySelector('.quick-download-bar .input').value='';setTimeout(function(){b.className='quick-dl-icon';b.innerHTML=b.dataset.idleIcon},3000)"
 	>
 		<div class="quick-download-bar">
 			<input type="text" name="url" id={ inputID } class="input" autocomplete="off" placeholder={ L(p, "download_url_placeholder", "Paste URL to download...") } data-i18n-placeholder="download_url_placeholder"/>
-			<button class="quick-dl-icon" type="submit" title={ L(p, "action_download", "Download") } data-i18n-title="action_download">&#x2193;</button>
+			<button class="quick-dl-icon" type="submit" title={ L(p, "action_download", "Download") } data-i18n-title="action_download">@MaterialIcon("Download", "")</button>
 		</div>
 		<div id={ statusID } class="quick-dl-status hidden"></div>
 	</form>
@@ -233,9 +231,9 @@ templ ChannelGroupRender(p PageProps, g model.ChannelGroup, renderItems bool) {
 						hx-swap="none"
 						hx-on::before-request="this.classList.add('spinning')"
 						hx-on::after-request="var b=this;setTimeout(function(){b.classList.remove('spinning')},800)"
-					>&#x21bb;</button>
+					>@MaterialIcon("Refresh", "")</button>
 				}
-				<span class="chevron">&#x203A;</span>
+				<span class="chevron">@MaterialIcon("KeyboardArrowRight", "")</span>
 			</div>
 		</div>
 		<div class="channel-list" data-sidebar-group-items>
@@ -273,16 +271,16 @@ templ SidebarChannelItem(p PageProps, ch model.Channel) {
 			<button class="channel-btn refresh" type="button" title={ L(p, "action_refresh_channel", "Update/Refresh") } data-i18n-title="action_refresh_channel"
 				hx-post={ "/api/channels/" + ch.ChannelID + "/refresh" }
 				hx-swap="none"
-				hx-on::before-request="this.textContent='⏳';this.disabled=true"
-				hx-on::after-request="var b=this;b.textContent=event.detail.successful?'✓':'!';setTimeout(function(){b.textContent='↻';b.disabled=false},1200)"
-			>&#x21bb;</button>
-			<button class="channel-btn settings" type="button" title={ L(p, "action_channel_settings_short", "Settings") } data-i18n-title="action_channel_settings_short" data-action="settings" data-id={ ch.ChannelID }>&#x2699;</button>
+				hx-on::before-request="this.dataset.idleIcon=this.innerHTML;this.textContent='…';this.disabled=true"
+				hx-on::after-request="var b=this;b.textContent=event.detail.successful?'✓':'!';setTimeout(function(){b.innerHTML=b.dataset.idleIcon;b.disabled=false},1200)"
+			>@MaterialIcon("Refresh", "")</button>
+			<button class="channel-btn settings" type="button" title={ L(p, "action_channel_settings_short", "Settings") } data-i18n-title="action_channel_settings_short" data-action="settings" data-id={ ch.ChannelID }>@MaterialIcon("Settings", "")</button>
 			<button class="channel-btn remove" type="button" title={ L(p, "action_unfollow", "Unfollow") } data-i18n-title="action_unfollow" data-optimistic-unfollow
 				hx-delete={ "/api/unsubscribe/" + ch.ChannelID }
 				hx-target="closest .channel-item"
 				hx-swap="outerHTML"
 				hx-confirm={ LF(p, "confirm_unfollow_channel_body", "Unfollow %1$s?", ch.Name) }
-				>&times;</button>
+				>@MaterialIcon("PersonRemove", "")</button>
 		</div>
 	</div>
 }
@@ -293,12 +291,12 @@ templ SidebarStarButton(p PageProps, channelID string, isStarred bool) {
 		<button class="channel-btn star active" type="button" title={ L(p, "action_unstar_channel", "Unstar channel") } data-i18n-title="action_unstar_channel"
 			hx-post={ "/api/channels/" + channelID + "/star?ctx=sidebar" }
 			hx-swap="outerHTML"
-		>&#x2605;</button>
+		>@MaterialIcon("Star", "")</button>
 	} else {
 		<button class="channel-btn star" type="button" title={ L(p, "action_star_channel", "Star channel") } data-i18n-title="action_star_channel"
 			hx-post={ "/api/channels/" + channelID + "/star?ctx=sidebar" }
 			hx-swap="outerHTML"
-		>&#x2606;</button>
+		>@MaterialIcon("StarBorder", "")</button>
 	}
 }
 
@@ -311,7 +309,7 @@ templ SidebarVideoList(title string, videos []model.Video, p PrefsData) {
 				<div class="sidebar-video-item">
 					<a href={ templ.SafeURL(fmt.Sprintf("/player/%s", v.VideoID)) } class="sidebar-video-link" title={ p.VideoTitle(v) }>
 						<div class="sidebar-video-row">
-							<svg class="sidebar-video-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+							@MaterialIcon("PlayArrow", "sidebar-video-play")
 							<div class="sidebar-video-title">{ p.VideoTitle(v) }</div>
 						</div>
 						<div class="sidebar-video-progress">

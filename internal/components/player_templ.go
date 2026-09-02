@@ -550,7 +550,7 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = MaterialIcon("ViewSidebar", "player-cinema-rectangle-icon").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = MaterialIcon("FitScreen", "player-cinema-rectangle-icon").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

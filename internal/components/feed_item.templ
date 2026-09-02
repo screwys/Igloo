@@ -384,7 +384,7 @@ templ feedTranslateControl(p PageProps, item model.FeedItem) {
 
 templ feedCardMenu(p PageProps, item model.FeedItem, authorLabel string) {
 	<div class="feed-card-menu" data-feed-menu>
-		<button class="feed-card-menu-btn" type="button" data-feed-menu-toggle title={ L(p, "feed_post_actions", "Post actions") } aria-label={ L(p, "feed_post_actions", "Post actions") }>@MaterialIcon("MoreVert", "")</button>
+		<button class="feed-card-menu-btn" type="button" data-feed-menu-toggle title={ L(p, "feed_post_actions", "Post actions") } aria-label={ L(p, "feed_post_actions", "Post actions") }>@MaterialIcon("MoreHoriz", "")</button>
 		<div class="feed-card-menu-list">
 			<button
 				class="feed-card-menu-item"
@@ -968,7 +968,7 @@ templ feedVideoControls(p PageProps) {
 			@MaterialIcon("PictureInPictureAlt", "")
 		</button>
 		<button class="feed-video-control-btn" type="button" aria-label={ L(p, "player_cinema_view", "Cinema view") } data-feed-video-control data-feed-video-cinema>
-			@MaterialIcon("ViewSidebar", "")
+			@MaterialIcon("VerticalSplit", "")
 		</button>
 		<button class="feed-video-control-btn" type="button" aria-label={ L(p, "action_enter_fullscreen", "Enter fullscreen") } data-feed-video-control data-feed-video-fullscreen>
 			@MaterialIcon("Fullscreen", "")

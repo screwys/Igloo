@@ -5,15 +5,15 @@ templ Header(p PageProps) {
 	<div class="floating-header">
 		<div class="header-search" id="header-search">
 			<input type="text" id="global-search-input" class="input" placeholder={ L(p, "search_global_placeholder", "Search") } data-i18n-placeholder="search_global_placeholder" autocomplete="off" value=""/>
-			<button type="button" id="global-search-clear" class="input-clear-btn hidden" aria-label={ L(p, "action_clear", "Clear") } data-i18n-aria-label="action_clear">&times;</button>
+			<button type="button" id="global-search-clear" class="input-clear-btn hidden" aria-label={ L(p, "action_clear", "Clear") } data-i18n-aria-label="action_clear">@MaterialIcon("Close", "")</button>
 			<div id="search-dropdown" class="search-dropdown hidden"></div>
 		</div>
 		<button type="button" id="compact-search-btn" class="compact-header-search-btn" title={ L(p, "search_title", "Search") } aria-label={ L(p, "search_title", "Search") } data-i18n-title="search_title" data-i18n-aria-label="search_title">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+			@MaterialIcon("Search", "")
 		</button>
 		<div id="stop-play-container">
 			@StopPlayButton(p, p.DownloadsStopped)
 		</div>
-		<button id="prefs-btn" class="btn-prefs" title={ L(p, "action_preferences", "Preferences") } data-i18n-title="action_preferences" type="button">&#x2699;</button>
+		<button id="prefs-btn" class="btn-prefs" title={ L(p, "action_preferences", "Preferences") } data-i18n-title="action_preferences" type="button">@MaterialIcon("Settings", "")</button>
 	</div>
 }

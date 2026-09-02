@@ -11,7 +11,7 @@ const videoControlIcons = {
   low: materialIconMarkup('VolumeDown'),
   high: materialIconMarkup('VolumeUp'),
   mini: materialIconMarkup('PictureInPictureAlt'),
-  cinema: materialIconMarkup('ViewSidebar'),
+  cinema: materialIconMarkup('VerticalSplit'),
   fullscreen: materialIconMarkup('Fullscreen')
 }
 

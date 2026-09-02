@@ -43,7 +43,7 @@ templ ChannelsPage(p PageProps, sections []ChannelWithVideos, query string, hasM
 			data-source-card-selector="a.video-card"
 			tabindex="-1"
 		>
-			<button id="close-shorts-btn" class="shorts-close-btn" title={ L(p, "action_back_to_grid", "Back to Grid") }>&#x2715;</button>
+			<button id="close-shorts-btn" class="shorts-close-btn" title={ L(p, "action_back_to_grid", "Back to Grid") }>@MaterialIcon("Close", "")</button>
 			<div id="shorts-container" class="shorts-container"></div>
 			<div id="shorts-uptodate-overlay" class="shorts-uptodate-overlay hidden">
 				<div class="uptodate-content"><span>{ L(p, "status_up_to_date", "You're up to date!") }</span></div>
@@ -87,16 +87,16 @@ templ ChannelSection(p PageProps, sec ChannelWithVideos) {
 				<button class="channel-action-btn" type="button" title={ L(p, "action_refresh_channel", "Update/Refresh") }
 					hx-post={ "/api/channels/" + sec.Channel.ChannelID + "/refresh" }
 					hx-swap="none"
-					hx-on::before-request="this.textContent='⏳';this.disabled=true"
-					hx-on::after-request="var b=this;b.textContent=event.detail.successful?'✓':'!';setTimeout(function(){b.textContent='↻';b.disabled=false},1200)"
-				>&#x21BB;</button>
-				<button class="channel-action-btn" type="button" data-action="settings" data-id={ sec.Channel.ChannelID } title={ L(p, "action_channel_settings_short", "Settings") }>&#x2699;</button>
+				hx-on::before-request="this.dataset.idleIcon=this.innerHTML;this.textContent='…';this.disabled=true"
+				hx-on::after-request="var b=this;b.textContent=event.detail.successful?'✓':'!';setTimeout(function(){b.innerHTML=b.dataset.idleIcon;b.disabled=false},1200)"
+				>@MaterialIcon("Refresh", "")</button>
+				<button class="channel-action-btn" type="button" data-action="settings" data-id={ sec.Channel.ChannelID } title={ L(p, "action_channel_settings_short", "Settings") }>@MaterialIcon("Settings", "")</button>
 				<button class="channel-action-btn" type="button" title={ L(p, "action_unfollow", "Unfollow") } data-optimistic-unfollow
 					hx-delete={ "/api/unsubscribe/" + sec.Channel.ChannelID }
 					hx-target="closest .channel-section"
 					hx-swap="outerHTML"
 					hx-confirm={ LF(p, "confirm_unfollow_channel_body", "Unfollow %1$s?", sec.Channel.Name) }
-				>&#x2715;</button>
+				>@MaterialIcon("PersonRemove", "")</button>
 			</div>
 		</div>
 		if len(sec.Videos) > 0 {
@@ -126,7 +126,7 @@ templ ChannelStarButton(p PageProps, channelID string, isStarred bool) {
 			title={ L(p, "action_unstar_channel", "Unstar channel") }
 			hx-post={ fmt.Sprintf("/api/channels/%s/star", channelID) }
 			hx-swap="outerHTML"
-		>&#x2605;</button>
+		>@MaterialIcon("Star", "")</button>
 	} else {
 		<button
 			class="channel-action-btn"
@@ -134,7 +134,7 @@ templ ChannelStarButton(p PageProps, channelID string, isStarred bool) {
 			title={ L(p, "action_star_channel", "Star channel") }
 			hx-post={ fmt.Sprintf("/api/channels/%s/star", channelID) }
 			hx-swap="outerHTML"
-		>&#x2606;</button>
+		>@MaterialIcon("StarBorder", "")</button>
 	}
 }
 
@@ -163,16 +163,16 @@ templ ChannelListItem(p PageProps, ch model.Channel) {
 				<button class="channel-action-btn" type="button" title={ L(p, "action_refresh_channel", "Update/Refresh") }
 					hx-post={ "/api/channels/" + ch.ChannelID + "/refresh" }
 					hx-swap="none"
-					hx-on::before-request="this.textContent='⏳';this.disabled=true"
-					hx-on::after-request="var b=this;b.textContent=event.detail.successful?'✓':'!';setTimeout(function(){b.textContent='↻';b.disabled=false},1200)"
-				>&#x21BB;</button>
-				<button class="channel-action-btn" type="button" data-action="settings" data-id={ ch.ChannelID } title={ L(p, "action_channel_settings_short", "Settings") }>&#x2699;</button>
+				hx-on::before-request="this.dataset.idleIcon=this.innerHTML;this.textContent='…';this.disabled=true"
+				hx-on::after-request="var b=this;b.textContent=event.detail.successful?'✓':'!';setTimeout(function(){b.innerHTML=b.dataset.idleIcon;b.disabled=false},1200)"
+				>@MaterialIcon("Refresh", "")</button>
+				<button class="channel-action-btn" type="button" data-action="settings" data-id={ ch.ChannelID } title={ L(p, "action_channel_settings_short", "Settings") }>@MaterialIcon("Settings", "")</button>
 				<button class="channel-action-btn" type="button" title={ L(p, "action_unfollow", "Unfollow") } data-optimistic-unfollow
 					hx-delete={ "/api/unsubscribe/" + ch.ChannelID }
 					hx-target="closest .channel-row"
 					hx-swap="outerHTML"
 					hx-confirm={ LF(p, "confirm_unfollow_channel_body", "Unfollow %1$s?", ch.Name) }
-				>&#x2715;</button>
+				>@MaterialIcon("PersonRemove", "")</button>
 			</div>
 		</div>
 	</div>

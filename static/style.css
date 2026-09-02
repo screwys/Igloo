@@ -154,6 +154,8 @@ body.feed-media-overlay-open {
     height: 1em;
     flex-shrink: 0;
     fill: currentColor;
+    stroke: none;
+    pointer-events: none;
 }
 
 .material-icon-palette {
@@ -406,6 +408,11 @@ body.feed-media-overlay-open {
     padding: 0 4px;
     opacity: 0.6;
     transition: opacity 0.12s;
+}
+
+.input-clear-btn .material-icon {
+    width: 14px;
+    height: 14px;
 }
 
 .input-clear-btn:hover { opacity: 1; color: var(--text-primary); }
@@ -1288,6 +1295,11 @@ html.sidebar-resizing .sidebar-resize-handle {
     box-shadow: none;
 }
 
+.btn-prefs .material-icon {
+    width: 20px;
+    height: 20px;
+}
+
 .btn-danger-lite {
     color: var(--status-error);
     border-color: rgba(var(--accent-primary-rgb), 0.25);
@@ -2066,6 +2078,7 @@ select.input:focus {
     border-bottom-left-radius: 0;
 }
 .youtube-search-submit svg { display: block; }
+.youtube-search-submit .material-icon { width: 18px; height: 18px; }
 
 .search-platform-filters {
     position: sticky;
@@ -2196,6 +2209,7 @@ select.input:focus {
     gap: 0.35rem;
 }
 .bookmark-label-filter-toggle svg { flex-shrink: 0; }
+.bookmark-label-filter-toggle .material-icon { width: 16px; height: 16px; }
 .bookmark-label-panel {
     position: absolute;
     top: calc(100% + 8px);
@@ -2353,7 +2367,8 @@ select.input:focus {
 .bookmark-sheet-account-pill.active { background: rgba(var(--accent-primary-rgb), 0.75); border-color: rgba(var(--accent-primary-rgb), 0.75); color: var(--text-primary); }
 .bookmark-sheet-account-input { background: rgba(255,255,255,0.06); border: 1px solid rgba(var(--accent-primary-rgb), 0.5); color: inherit; border-radius: 16px; padding: 4px 10px; font-size: 0.82rem; outline: none; }
 .bookmark-sheet-account-wrap { position: relative; margin-bottom: 10px; }
-.bookmark-sheet-account-add-btn { width: 26px; height: 26px; border-radius: 9999px; border: 1px solid rgba(var(--accent-primary-rgb), 0.35); background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.9rem; line-height: 1; }
+.bookmark-sheet-account-add-btn { width: 26px; height: 26px; border-radius: 9999px; border: 1px solid rgba(var(--accent-primary-rgb), 0.35); background: transparent; color: var(--text-secondary); cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 26px; }
+.bookmark-sheet-account-add-btn .material-icon { width: 16px; height: 16px; }
 .bookmark-sheet-account-add-btn:hover { background: rgba(var(--accent-primary-rgb), 0.12); border-color: var(--accent-secondary); color: var(--text-primary); }
 .bookmark-sheet-account-picker { position: fixed; width: 280px; max-width: calc(100vw - 16px); display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--bg-primary); border: 1px solid rgba(var(--accent-primary-rgb), 0.3); border-radius: 10px; box-shadow: 0 12px 28px rgba(0,0,0,0.42); z-index: 43000; }
 .bookmark-sheet-account-picker.hidden { display: none; }
@@ -2495,16 +2510,24 @@ select.input:focus {
     text-align: left;
 }
 .moment-actions-item-icon {
-    width: 1.35rem;
-    height: 1.35rem;
-    flex: 0 0 1.35rem;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 .moment-actions-item-icon svg {
-    width: 100%;
-    height: 100%;
+    display: block;
+    width: 22px;
+    height: 22px;
+}
+.moment-actions-sheet-item > span:last-child,
+.moment-actions-speed-label > span:last-child {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    line-height: 1.25;
 }
 .moment-actions-sheet-item:last-child { border-bottom: 0; }
 .moment-actions-sheet-item:hover { background: rgba(var(--accent-primary-rgb), 0.12); }
@@ -2740,14 +2763,16 @@ select.input:focus {
     min-width: 0;
 }
 
-/* Preferences Button - SVG Color */
+/* Preferences Button - icon color */
 .btn-prefs svg {
-    stroke: var(--accent-primary);
+    color: var(--accent-primary);
+    fill: currentColor;
+    stroke: none;
     transition: all var(--transition-fast);
 }
 
 .btn-prefs:hover svg {
-    stroke: var(--accent-secondary);
+    color: var(--accent-secondary);
 }
 
 /* Modal */
@@ -3543,6 +3568,15 @@ select.input:focus {
     font-size: 1.25rem;
     cursor: pointer;
     transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.modal-close .material-icon {
+    width: 20px;
+    height: 20px;
 }
 
 .modal-close:hover {
@@ -5291,6 +5325,11 @@ html.mini-player-moving * {
     outline-offset: 2px;
 }
 
+.player-channel-inline-btn .material-icon {
+    width: 16px;
+    height: 16px;
+}
+
 .player-btn-danger {
     color: var(--status-error);
     border-color: rgba(var(--accent-primary-rgb), 0.4);
@@ -5350,6 +5389,11 @@ html.mini-player-moving * {
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
 }
 
+.player-btn .material-icon {
+    width: 20px;
+    height: 20px;
+}
+
 #player-cc-btn.active {
     background: rgba(var(--accent-primary-rgb), 0.22);
     color: var(--accent-secondary);
@@ -5394,6 +5438,7 @@ html.mini-player-moving * {
 .player-comments-refresh-btn:active { transform: translateY(1px); }
 .player-comments-refresh-btn:disabled { opacity: 0.6; cursor: wait; }
 .player-comments-refresh-btn svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.player-comments-refresh-btn svg.material-icon { fill: currentColor; stroke: none; }
 .player-comment-card { position: relative; border-color: rgba(255,255,255,0.12) !important; background: var(--bg-primary) !important; box-shadow: none; }
 .player-comment-card:hover { transform: none; }
 .player-comment-card .player-channel-avatar-wrap { width: 24px !important; height: 24px !important; border-radius: 50%; overflow: hidden; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 24px; }
@@ -5479,6 +5524,11 @@ html.mini-player-moving * {
 }
 .player-stat svg {
     flex-shrink: 0;
+}
+
+.player-stat .material-icon {
+    width: 16px;
+    height: 16px;
 }
 
 .player-sidebar {
@@ -6431,6 +6481,11 @@ body.shorts-mode .floating-header {
     color: var(--accent-primary);
 }
 
+.channel-action-btn .material-icon {
+    width: 18px;
+    height: 18px;
+}
+
 /* ===== Medium screens — tighter sidebar + modal layout ===== */
 @media screen and (max-width: 1200px) {
     :root {
@@ -7376,6 +7431,11 @@ body.landscape-mode .shorts-video-wrapper.is-wide video {
     box-shadow: 0 0 15px rgba(var(--accent-primary-rgb), 0.5);
 }
 
+.shorts-close-btn .material-icon {
+    width: 22px;
+    height: 22px;
+}
+
 /* Hide Channel Search Bar in Shorts Mode */
 body.shorts-mode .channel-search-bar {
     display: none !important;
@@ -8137,6 +8197,11 @@ body.shorts-mode .sidebar {
     stroke: currentColor;
 }
 
+.shorts-rail-follow-badge svg.material-icon {
+    fill: currentColor;
+    stroke: none;
+}
+
 .shorts-rail-follow-badge.is-following {
     background: white;
     color: var(--accent-primary);
@@ -8560,6 +8625,11 @@ body.shorts-mode .sidebar {
     transition: stroke 0.15s ease, fill 0.15s ease;
 }
 
+.action-btn svg.material-icon {
+    fill: currentColor;
+    stroke: none;
+}
+
 .action-btn.active {
     color: var(--accent-primary);
 }
@@ -8612,6 +8682,11 @@ body.shorts-mode .sidebar {
     display: block;
     stroke: currentColor;
     fill: none;
+}
+
+.shorts-nav-btn-icon svg.material-icon {
+    fill: currentColor;
+    stroke: none;
 }
 
 .shorts-nav-btn-label {
@@ -8811,8 +8886,8 @@ body.shorts-mode .sidebar {
 }
 
 .btn-stop-play svg {
-    fill: none;
-    stroke: var(--text-secondary);
+    fill: currentColor;
+    stroke: none;
     transition: all var(--transition-fast);
 }
 
@@ -8821,7 +8896,7 @@ body.shorts-mode .sidebar {
 }
 
 .btn-stop-play.is-stopped svg {
-    stroke: var(--accent-primary);
+    color: var(--accent-primary);
 }
 
 /* Star button specific styling */
@@ -9225,6 +9300,8 @@ body.shorts-mode .sidebar {
 
 .feed-card-menu {
     position: relative;
+    display: flex;
+    align-items: center;
 }
 
 .feed-follow-btn {
@@ -9354,6 +9431,11 @@ body.shorts-mode .sidebar {
     background: rgba(var(--accent-primary-rgb), 0.12);
 }
 
+.feed-star-btn .material-icon {
+    width: 18px;
+    height: 18px;
+}
+
 .feed-card-menu-btn {
     border: none;
     background: transparent;
@@ -9375,8 +9457,10 @@ body.shorts-mode .sidebar {
 }
 
 .feed-card-menu-btn .material-icon {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
+    transform: rotate(90deg);
+    transform-origin: center;
 }
 
 .feed-card-menu-list {
@@ -9724,6 +9808,11 @@ body.shorts-mode .sidebar {
 .feed-video-control-btn svg {
     display: block;
     pointer-events: none;
+}
+
+.feed-video-control-btn .material-icon {
+    width: 18px;
+    height: 18px;
 }
 
 .feed-video-speed-menu-wrap {
@@ -10393,6 +10482,15 @@ body.shorts-mode .sidebar {
     font-size: 1.4rem;
     cursor: pointer;
     pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.feed-media-overlay-close .material-icon {
+    width: 22px;
+    height: 22px;
 }
 
 .feed-media-overlay-nav {
@@ -10407,6 +10505,15 @@ body.shorts-mode .sidebar {
     color: var(--text-primary);
     font-size: 1.3rem;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.feed-media-overlay-nav .material-icon {
+    width: 26px;
+    height: 26px;
 }
 
 .feed-media-overlay-nav.prev {
