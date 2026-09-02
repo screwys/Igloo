@@ -84,11 +84,11 @@ templ DiscoveryCard(p PageProps, video model.DiscoveryVideo) {
 		<div class="video-info">
 			<div class="video-title" title={ video.Title }>{ video.Title }</div>
 			<div class="video-meta">
-				<span class="video-channel-wrap" data-profile-channel-id={ video.ChannelID }>
+				<span class="video-channel-wrap">
 					if video.AvatarURL != "" {
-						<img class="video-channel-avatar" src={ video.AvatarURL } alt="" loading="lazy" onerror="this.style.display='none'"/>
+						<img class="video-channel-avatar" src={ video.AvatarURL } alt="" loading="lazy" data-profile-channel-id={ video.ChannelID } onerror="this.style.display='none'"/>
 					}
-					<span class="video-channel">{ video.ChannelName }</span>
+					<span class="video-channel" data-profile-channel-id={ video.ChannelID }>{ video.ChannelName }</span>
 				</span>
 				if video.PublishedAt != nil {
 					<span class="video-date" data-video-date={ publishedAtStr(video.PublishedAt) } title={ publishedAtStr(video.PublishedAt) }>

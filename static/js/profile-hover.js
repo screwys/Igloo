@@ -8,13 +8,13 @@
 //   - a.shorts-channel              (shorts header — data-channel-id on element)
 //   - a.shorts-rail-avatar-link     (shorts side-rail avatar — data-channel-id on element)
 //   - a.shorts-repost-link          (shorts reposter — data-channel-id on element)
-//   - .video-channel-wrap           (video-card channel avatar and name)
+//   - .video-channel-avatar, .video-channel  (video-card channel identity)
 //   - .player-channel-avatar-wrap   (player channel avatar only)
 
 (() => {
 	const OPEN_DELAY = 50;
 	const CLOSE_DELAY = 300;
-	const TRIGGER_SEL = 'a.feed-author-trigger, a.feed-overlay-headline, a.feed-quote-author-link, .feed-quote-avatar, a.feed-inline-link, a.feed-repost-link, a.shorts-channel, a.shorts-rail-avatar-link, a.shorts-repost-link, .video-channel-wrap[data-profile-channel-id], .player-channel-avatar-wrap[data-profile-channel-id]';
+	const TRIGGER_SEL = 'a.feed-author-trigger, a.feed-overlay-headline, a.feed-quote-author-link, .feed-quote-avatar, a.feed-inline-link, a.feed-repost-link, a.shorts-channel, a.shorts-rail-avatar-link, a.shorts-repost-link, .video-channel-avatar[data-profile-channel-id], .video-channel[data-profile-channel-id], .player-channel-avatar-wrap[data-profile-channel-id]';
 	const CHANNELS_HREF_RE = /^\/channels\/(twitter|x|youtube|tiktok|instagram)_([A-Za-z0-9_@.\-]+)$/;
 	const retweetMuteStorageKey = 'feedMutedRetweetChannels';
 	const legacyRetweetMuteStorageKey = 'mpa-feed-retweet-muted:v1';
@@ -493,12 +493,16 @@
 	}
 
 	function scheduleOpen(anchor, channelID) {
+		const scheduleGen = ++openGen;
 		clearTimers();
 		if (OPEN_DELAY <= 0) {
 			openFor(anchor, channelID);
 			return;
 		}
-		openTimer = setTimeout(() => { openFor(anchor, channelID); }, OPEN_DELAY);
+		openTimer = setTimeout(() => {
+			if (scheduleGen !== openGen) return;
+			openFor(anchor, channelID);
+		}, OPEN_DELAY);
 	}
 
 	function scheduleClose() {
@@ -513,7 +517,12 @@
 		const cid = channelIDFor(anchor);
 		if (!cid) return;
 		if (cid === currentChannelID && currentCard) { clearTimers(); return; }
-		if (anchor === pointerAnchor) return;
+		if (anchor === pointerAnchor) {
+			// A hover card should express pointer intent, not merely a slow pass
+			// through the trigger. Restart the delay until movement settles.
+			scheduleOpen(anchor, cid);
+			return;
+		}
 		pointerAnchor = anchor;
 		scheduleOpen(anchor, cid);
 	});

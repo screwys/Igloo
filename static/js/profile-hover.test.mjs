@@ -219,6 +219,10 @@ async function flush() {
 	await new Promise((resolve) => setTimeout(resolve, 75));
 }
 
+async function pause(ms) {
+	await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function loadProfileHover() {
 	const document = new FakeDocument();
 	const requests = [];
@@ -332,15 +336,16 @@ function addShortsRepostTarget(document) {
 function addVideoChannelTarget(document, channelID) {
 	const target = new FakeElement('span', {
 		classes: ['video-channel-wrap'],
-		attrs: { 'data-profile-channel-id': channelID },
 		rect: { left: 8, top: 8, right: 160, bottom: 36 },
 	});
 	const avatar = new FakeElement('img', {
 		classes: ['video-channel-avatar'],
+		attrs: { 'data-profile-channel-id': channelID },
 		rect: { left: 8, top: 8, right: 28, bottom: 28 },
 	});
 	const title = new FakeElement('span', {
 		classes: ['video-channel'],
+		attrs: { 'data-profile-channel-id': channelID },
 		rect: { left: 34, top: 8, right: 160, bottom: 28 },
 	});
 	target.appendChild(avatar);
@@ -456,6 +461,30 @@ test('video-card profile hover opens from channel avatars and names after the sh
 			assert.deepEqual(requests, ['/api/profile-card/' + channelID]);
 		}
 	}
+});
+
+test('video-card profile hover ignores empty space in the channel row', async () => {
+	const { document, requests } = await loadProfileHover();
+	const { target } = addVideoChannelTarget(document, 'youtube_UCsample');
+
+	document.dispatch('mousemove', mouseEvent(target, 150, 32));
+	await flush();
+
+	assert.deepEqual(requests, []);
+});
+
+test('profile hover waits for pointer movement inside a trigger to settle', async () => {
+	const { document, requests } = await loadProfileHover();
+	const { title } = addVideoChannelTarget(document, 'youtube_UCsample');
+
+	document.dispatch('mousemove', mouseEvent(title, 40, 20));
+	await pause(30);
+	document.dispatch('mousemove', mouseEvent(title, 70, 20));
+	await pause(30);
+
+	assert.deepEqual(requests, []);
+	await pause(30);
+	assert.deepEqual(requests, ['/api/profile-card/youtube_UCsample']);
 });
 
 test('player profile hover opens from the channel avatar after the shared delay', async () => {
