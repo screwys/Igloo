@@ -308,7 +308,7 @@ func TestYouTubeChannelSettingsRenderMemberOnlyOverride(t *testing.T) {
 	}
 }
 
-func TestPrefsBodyGeneralTabGroupsEmbedsAndMovesBackupsLeft(t *testing.T) {
+func TestPrefsBodyGeneralTabRendersEmbedsAndBackups(t *testing.T) {
 	p := newTestPageProps()
 	prefs := PrefsData{Settings: map[string]any{
 		"share_embed_friendly_links": true,
@@ -350,14 +350,14 @@ func TestPrefsBodyGeneralTabGroupsEmbedsAndMovesBackupsLeft(t *testing.T) {
 	if !strings.Contains(html, `class="embed-host-save" data-embed-host-save="youtube" aria-label="Save"`) {
 		t.Fatalf("embed-host checkmark should retain an accessible Save label:\n%s", html)
 	}
-
-	backupIdx := strings.Index(html, `name="backup_enabled"`)
-	archiveIdx := strings.Index(html, `name="archive_bookmarks"`)
-	if backupIdx < 0 || archiveIdx < 0 {
-		t.Fatalf("preferences body missing backup or bookmark controls")
-	}
-	if archiveIdx < backupIdx {
-		t.Fatalf("backup controls should render in the left column before bookmark controls")
+	for _, want := range []string{
+		`name="backup_enabled"`,
+		`name="backup_dir"`,
+		`name="backup_keep_count"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("preferences body missing backup control %q:\n%s", want, html)
+		}
 	}
 }
 

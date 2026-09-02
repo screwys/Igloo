@@ -452,6 +452,31 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 							@WindowsUpdatePanel(p, windowsupdate.Status{})
 						</div>
 					}
+				</div>
+				<div>
+					<h4 style="margin:0 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_bookmarks", "Bookmarks") }</h4>
+					if p.UserRole == "admin" {
+						<div class="form-group checkbox-group">
+							<label>
+								if prefs.Bool("archive_bookmarks") {
+									<input type="checkbox" name="archive_bookmarks" value="true" checked onchange="this.closest('.account-tab-grid').querySelector('#global-setting-archive-path').disabled=!this.checked"/>
+								} else {
+									<input type="checkbox" name="archive_bookmarks" value="true" onchange="this.closest('.account-tab-grid').querySelector('#global-setting-archive-path').disabled=!this.checked"/>
+								}
+								{ L(p, "settings_archive_bookmarks", "Save bookmarks to folder") }
+							</label>
+						</div>
+					}
+					<div class="form-group" style="margin-top:0.75rem;">
+						<label>{ L(p, "settings_bookmark_per_category", "Per-Category Settings") }</label>
+						<div id="bookmark-category-paths-container"
+							hx-get="/api/bookmark-categories"
+							hx-trigger="intersect once"
+							hx-swap="innerHTML"
+						>
+							<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.75rem;">{ L(p, "status_loading_categories", "Loading categories...") }</div>
+						</div>
+					</div>
 					<h4 style="margin:1.25rem 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_embeds", "Embeds") }</h4>
 					<div class="form-group checkbox-group">
 						<label>
@@ -488,31 +513,6 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 						<label for="global-setting-backup-keep-count">{ L(p, "settings_backup_keep_count", "Backups to keep") }</label>
 						<input type="number" id="global-setting-backup-keep-count" name="backup_keep_count" class="input" min="1" max="5" value={ prefs.Str("backup_keep_count", "5") } disabled?={ !prefs.Bool("backup_enabled") } data-backup-controlled/>
 						<small style="display:block; margin-top:0.35rem; color:var(--text-secondary); font-size:0.75rem;">{ L(p, "settings_backup_help", "Please use a dedicated folder. Daily backups include the database and non-secret config. Keep count is limited to 1-5.") }</small>
-					</div>
-				</div>
-				<div>
-					<h4 style="margin:0 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_bookmarks", "Bookmarks") }</h4>
-					if p.UserRole == "admin" {
-						<div class="form-group checkbox-group">
-							<label>
-								if prefs.Bool("archive_bookmarks") {
-									<input type="checkbox" name="archive_bookmarks" value="true" checked onchange="this.closest('.account-tab-grid').querySelector('#global-setting-archive-path').disabled=!this.checked"/>
-								} else {
-									<input type="checkbox" name="archive_bookmarks" value="true" onchange="this.closest('.account-tab-grid').querySelector('#global-setting-archive-path').disabled=!this.checked"/>
-								}
-								{ L(p, "settings_archive_bookmarks", "Save bookmarks to folder") }
-							</label>
-						</div>
-					}
-					<div class="form-group" style="margin-top:0.75rem;">
-						<label>{ L(p, "settings_bookmark_per_category", "Per-Category Settings") }</label>
-						<div id="bookmark-category-paths-container"
-							hx-get="/api/bookmark-categories"
-							hx-trigger="intersect once"
-							hx-swap="innerHTML"
-						>
-							<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.75rem;">{ L(p, "status_loading_categories", "Loading categories...") }</div>
-						</div>
 					</div>
 				</div>
 			</div>
