@@ -62,9 +62,9 @@ templ YouTubeSearchCard(p PageProps, r map[string]any) {
 		<div class="video-info">
 			<div class="video-title" title={ mapStr(r, "Title") }>{ mapStr(r, "Title") }</div>
 			<div class="video-meta">
-				<span class="video-channel-wrap">
+				<span class="video-channel-wrap" data-profile-channel-id={ mapStr(r, "ChannelID") }>
 					if mapStr(r, "AvatarURL") != "" {
-						<img class="video-channel-avatar" src={ mapStr(r, "AvatarURL") } alt="" loading="lazy" data-profile-channel-id={ mapStr(r, "ChannelID") }/>
+						<img class="video-channel-avatar" src={ mapStr(r, "AvatarURL") } alt="" loading="lazy"/>
 					}
 					<span class="video-channel">{ mapStr(r, "ChannelName") }</span>
 				</span>

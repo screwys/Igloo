@@ -194,8 +194,8 @@ templ VideoCard(p PageProps, v model.Video) {
 		<div class="video-info">
 			<div class="video-title" title={ p.Prefs.VideoTitle(v) }>{ p.Prefs.VideoTitle(v) }</div>
 			<div class="video-meta">
-				<span class="video-channel-wrap">
-					<img class="video-channel-avatar" src={ videoAvatarURL(v) } alt="" loading="lazy" data-profile-channel-id={ v.ChannelID } onerror="this.style.display='none'"/>
+				<span class="video-channel-wrap" data-profile-channel-id={ v.ChannelID }>
+					<img class="video-channel-avatar" src={ videoAvatarURL(v) } alt="" loading="lazy" onerror="this.style.display='none'"/>
 					<span class="video-channel">{ videoChannelName(v) }</span>
 				</span>
 				<span class="video-date" data-video-date={ publishedAtStr(v.PublishedAt) } title={ publishedAtStr(v.PublishedAt) }>

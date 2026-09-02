@@ -72,17 +72,6 @@ func TestVideoCardRender(t *testing.T) {
 			}
 		})
 	}
-	avatarAt := strings.Index(html, `class="video-channel-avatar"`)
-	if avatarAt < 0 {
-		t.Fatalf("channel avatar missing: %s", html)
-	}
-	profileChannelAt := strings.Index(html[avatarAt:], `data-profile-channel-id="youtube_testchan"`)
-	if profileChannelAt < 0 {
-		t.Fatalf("profile hover identity must belong to channel avatar: %s", html)
-	}
-	if strings.Contains(html, `class="video-channel-wrap" data-profile-channel-id=`) {
-		t.Fatalf("channel name wrapper must not trigger profile hover: %s", html)
-	}
 }
 
 func TestGlobalVideoCardHoverHighlightsWithoutMoving(t *testing.T) {

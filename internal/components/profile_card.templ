@@ -12,7 +12,6 @@ import (
 templ ProfileCard(props PageProps, p *model.ChannelProfile, size string, isFollowing bool, isStarred bool) {
 	{{ noBanner := p.BannerURL == "" }}
 	{{ hasStats := p.Followers > 0 || p.Following > 0 }}
-	{{ showProfileActions := size == "hero" }}
 	<div class={ profileCardClasses(p, size, noBanner) } data-channel-id={ p.ChannelID } data-platform={ p.Platform }>
 		if !noBanner {
 			<div class="profile-card-banner">
@@ -21,7 +20,7 @@ templ ProfileCard(props PageProps, p *model.ChannelProfile, size string, isFollo
 		}
 		<div class="profile-card-body">
 			<div class={ profileCardBodyInnerClasses(p, size) }>
-				@ProfileCardTop(props, p, size, isFollowing, isStarred, showProfileActions)
+				@ProfileCardTop(props, p, size, isFollowing, isStarred)
 				if size != "hero" {
 					<div class="profile-card-name-row">
 						<a class="profile-card-name profile-card-name-link" href={ templ.SafeURL(profileCardHref(p)) }>{ profileLabel(p) }</a>
@@ -52,7 +51,7 @@ templ ProfileCard(props PageProps, p *model.ChannelProfile, size string, isFollo
 	</div>
 }
 
-templ ProfileCardTop(props PageProps, p *model.ChannelProfile, size string, isFollowing bool, isStarred bool, showHeroActions bool) {
+templ ProfileCardTop(props PageProps, p *model.ChannelProfile, size string, isFollowing bool, isStarred bool) {
 	<div class="profile-card-top">
 		<div
 			class={ storyRingClass("profile-card-avatar-wrap", p.StoryState) }
@@ -82,10 +81,8 @@ templ ProfileCardTop(props PageProps, p *model.ChannelProfile, size string, isFo
 		}
 		<div class="profile-card-top-actions">
 			@FollowButton(props, p.ChannelID, p.Handle, profileLabel(p), isFollowing)
-			if showHeroActions {
-				@ProfileCardStarButton(props, p.ChannelID, isStarred)
-				@ProfileCardMenu(props, p, isFollowing)
-			}
+			@ProfileCardStarButton(props, p.ChannelID, isStarred)
+			@ProfileCardMenu(props, p, isFollowing)
 		</div>
 	</div>
 }

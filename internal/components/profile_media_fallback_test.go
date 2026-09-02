@@ -43,3 +43,25 @@ func TestProfileMediaFailureOnlyShowsPresentationFallback(t *testing.T) {
 		}
 	}
 }
+
+func TestProfileHoverCardIncludesChannelActions(t *testing.T) {
+	var buf bytes.Buffer
+	profile := &model.ChannelProfile{
+		ChannelID:   "youtube_sample_profile",
+		Platform:    "youtube",
+		Handle:      "sample_profile",
+		DisplayName: "Sample Profile",
+	}
+	if err := ProfileCard(newTestPageProps(), profile, "hover", true, false).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	for _, want := range []string{
+		`/api/channels/youtube_sample_profile/star?ctx=profile`,
+		`data-profile-card-menu`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("hover profile card missing %q: %s", want, html)
+		}
+	}
+}

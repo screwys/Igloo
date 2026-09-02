@@ -330,13 +330,23 @@ function addShortsRepostTarget(document) {
 }
 
 function addVideoChannelTarget(document, channelID) {
-	const target = new FakeElement('img', {
-		classes: ['video-channel-avatar'],
+	const target = new FakeElement('span', {
+		classes: ['video-channel-wrap'],
 		attrs: { 'data-profile-channel-id': channelID },
 		rect: { left: 8, top: 8, right: 160, bottom: 36 },
 	});
+	const avatar = new FakeElement('img', {
+		classes: ['video-channel-avatar'],
+		rect: { left: 8, top: 8, right: 28, bottom: 28 },
+	});
+	const title = new FakeElement('span', {
+		classes: ['video-channel'],
+		rect: { left: 34, top: 8, right: 160, bottom: 28 },
+	});
+	target.appendChild(avatar);
+	target.appendChild(title);
 	document.body.appendChild(target);
-	return target;
+	return { target, avatar, title };
 }
 
 function addPlayerChannelTarget(document, channelID) {
@@ -428,21 +438,23 @@ test('profile hover ignores a Moments repost that moves under a stationary point
 	assert.deepEqual(requests, ['/api/profile-card/tiktok_reposter']);
 });
 
-test('video-card profile hover opens only from channel avatars on every video platform', async () => {
+test('video-card profile hover opens from channel avatars and names after the shared delay', async () => {
 	for (const channelID of [
 		'youtube_UCsample',
 		'tiktok_sample_creator',
 		'instagram_sample_creator',
 	]) {
-		const { document, requests } = await loadProfileHover();
-		const target = addVideoChannelTarget(document, channelID);
+		for (const part of ['avatar', 'title']) {
+			const { document, requests } = await loadProfileHover();
+			const target = addVideoChannelTarget(document, channelID)[part];
 
-		document.dispatch('mousemove', mouseEvent(target, 20, 20));
-		await new Promise((resolve) => setImmediate(resolve));
-		assert.deepEqual(requests, []);
-		await flush();
+			document.dispatch('mousemove', mouseEvent(target, 20, 20));
+			await new Promise((resolve) => setImmediate(resolve));
+			assert.deepEqual(requests, []);
+			await flush();
 
-		assert.deepEqual(requests, ['/api/profile-card/' + channelID]);
+			assert.deepEqual(requests, ['/api/profile-card/' + channelID]);
+		}
 	}
 });
 
@@ -460,7 +472,7 @@ test('player profile hover opens from the channel avatar after the shared delay'
 
 test('scrolling cancels a pending video-card profile hover', async () => {
 	const { document, requests, dispatchWindow } = await loadProfileHover();
-	const target = addVideoChannelTarget(document, 'youtube_UCsample');
+	const { avatar: target } = addVideoChannelTarget(document, 'youtube_UCsample');
 
 	document.dispatch('mousemove', mouseEvent(target, 20, 20));
 	dispatchWindow('scroll');
