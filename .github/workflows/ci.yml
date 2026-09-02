@@ -88,8 +88,8 @@ jobs:
         with:
           use-flakehub: false
 
-      - name: Build downloader runtime tools
-        run: nix build .#yt-dlp .#gallery-dl --no-link --print-build-logs
+      - name: Build Nix server and runtime tools
+        run: nix build .#igloo .#yt-dlp .#gallery-dl --no-link --print-build-logs
 
   android:
     runs-on: ubuntu-latest

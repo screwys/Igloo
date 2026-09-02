@@ -457,7 +457,10 @@ test("CI covers pull requests and pushes to main with static, Go, runtime, and A
   assert.match(workflow, /run: scripts\/dev\/web-test\.sh/);
   assert.match(workflow, /DeterminateSystems\/determinate-nix-action@[0-9a-f]{40}/);
   assert.match(workflow, /DeterminateSystems\/magic-nix-cache-action@[0-9a-f]{40}/);
-  assert.match(workflow, /run: nix build \.#yt-dlp \.#gallery-dl --no-link --print-build-logs/);
+  assert.match(
+    workflow,
+    /run: nix build \.#igloo \.#yt-dlp \.#gallery-dl --no-link --print-build-logs/,
+  );
   assert.match(workflow, /run: \.\/test\.sh/);
   assert.doesNotMatch(workflow, /workflow-pin-check\.sh/);
   assert.match(workflow, /No Android-relevant changes/);
