@@ -3,7 +3,14 @@ package com.screwy.igloo.player
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.graphics.Rect
+import android.os.Build
+import android.util.Rational
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,12 +28,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect as ComposeRect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -34,6 +46,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.app.PictureInPictureModeChangedInfo
+import androidx.core.app.PictureInPictureParamsCompat
+import androidx.core.app.PictureInPictureUiStateCompat
+import androidx.core.util.Consumer
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -48,6 +65,7 @@ import com.screwy.igloo.data.dao.ChannelFollowDao
 import com.screwy.igloo.data.dao.ChannelStarDao
 import com.screwy.igloo.data.dao.OfflineVideoDownloadDao
 import com.screwy.igloo.data.dao.VideoDao
+import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
 import com.screwy.igloo.outbox.OutboxKind
@@ -60,12 +78,16 @@ import com.screwy.igloo.ui.component.sharePlainText
 import com.screwy.igloo.ui.component.videoBinaryAction
 import com.screwy.igloo.ui.nav.IglooNavigationSource
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
+import com.screwy.igloo.ui.theme.iglooColors
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
+import kotlin.math.roundToInt
 
 /**
  * YouTube long-form player route.
@@ -124,11 +146,28 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
         remember(authTokens.bearerTokenSync()) {
             buildIglooPlayer(ctx, authTokens, iglooHostProvider).also {}
         }
+    val mediaSession =
+        remember(player) { buildIglooMediaSession(ctx.applicationContext, player) }
     val playbackCoordinator = remember { PlaybackCoordinator() }
     val playbackPlayer = remember(player) { ExoPlayerPlaybackPlayer(player) }
     val activity = ctx.findActivity()
+    val componentActivity = activity as? ComponentActivity
+    val pictureInPictureSupported =
+        remember(componentActivity) {
+            componentActivity?.packageManager?.hasSystemFeature(
+                PackageManager.FEATURE_PICTURE_IN_PICTURE
+            ) == true
+        }
     var isFullscreen by remember { mutableStateOf(false) }
     var playerControlsVisible by remember { mutableStateOf(true) }
+    var playerPlayWhenReady by remember(player) { mutableStateOf(player.playWhenReady) }
+    var playerPlaybackState by remember(player) { mutableIntStateOf(player.playbackState) }
+    var pictureInPictureSourceRect by remember { mutableStateOf<Rect?>(null) }
+    var isInPictureInPicture by
+        remember(componentActivity) {
+            mutableStateOf(componentActivity?.isInPictureInPictureMode == true)
+        }
+    var isTransitioningToPictureInPicture by remember { mutableStateOf(false) }
     var showUnfollowDialog by remember(videoId) { mutableStateOf(false) }
     var showDeleteLocalDialog by remember(videoId) { mutableStateOf(false) }
     var levelFeedback by remember(videoId) { mutableStateOf<PlayerLevelFeedback?>(null) }
@@ -178,6 +217,12 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
             .collectAsStateWithLifecycle(
                 initialValue = PreferencesRepo.Defaults.SHARE_EMBED_FRIENDLY_LINKS
             )
+    val miniPlayerAutoEnter by
+        prefs
+            .miniPlayerAutoEnter()
+            .collectAsStateWithLifecycle(
+                initialValue = PreferencesRepo.Defaults.MINI_PLAYER_AUTO_ENTER
+            )
 
     val bookmarkRow by
         bookmarkDao.getByIdFlow(videoId).collectAsStateWithLifecycle(initialValue = null)
@@ -193,13 +238,36 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
         produceState<String?>(initialValue = null, key1 = videoId) {
             value = videoDao.getNextVideoId(videoId)
         }
-    DisposableEffect(Unit) { onDispose { player.release() } }
+    DisposableEffect(player, mediaSession) {
+        onDispose {
+            mediaSession.release()
+            player.release()
+        }
+    }
+    DisposableEffect(activity) {
+        val initialBrightness = activity?.window?.attributes?.screenBrightness
+        onDispose {
+            if (activity != null && initialBrightness != null) {
+                val attributes = activity.window.attributes
+                attributes.screenBrightness = initialBrightness
+                activity.window.attributes = attributes
+            }
+        }
+    }
 
-    DisposableEffect(lifecycleOwner, player) {
+    DisposableEffect(lifecycleOwner, player, activity, isFullscreen) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
-                player.playWhenReady = false
-                player.pause()
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    if (isFullscreen) hidePlayerSystemBars(activity)
+                }
+                Lifecycle.Event.ON_STOP -> {
+                    if (componentActivity?.isInPictureInPictureMode != true) {
+                        player.playWhenReady = false
+                        player.pause()
+                    }
+                }
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -214,26 +282,41 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
         isFullscreen = false
     }
 
-    DisposableEffect(activity, isFullscreen, largeScreen) {
-        if (activity != null) {
-            val controller =
-                WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+    LaunchedEffect(
+        activity,
+        isFullscreen,
+        largeScreen,
+        configuration.orientation,
+        isInPictureInPicture,
+        isTransitioningToPictureInPicture,
+    ) {
+        if (activity != null &&
+            !isInPictureInPicture &&
+            !isTransitioningToPictureInPicture
+        ) {
             activity.requestedOrientation = playerRequestedOrientation(isFullscreen, largeScreen)
             if (isFullscreen) {
-                controller.hide(WindowInsetsCompat.Type.systemBars())
+                hidePlayerSystemBars(activity)
             } else {
-                controller.show(WindowInsetsCompat.Type.systemBars())
-            }
-        }
-        onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            activity?.let {
-                WindowCompat.getInsetsController(it.window, it.window.decorView)
-                    .show(WindowInsetsCompat.Type.systemBars())
+                showPlayerSystemBars(activity)
             }
         }
     }
+    DisposableEffect(activity) {
+        onDispose {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            showPlayerSystemBars(activity)
+        }
+    }
     BackHandler(enabled = isFullscreen) { exitFullscreen() }
+    PredictiveBackHandler(enabled = !isFullscreen) { progress ->
+        try {
+            progress.collect {}
+            navController.popBackStack()
+        } catch (_: CancellationException) {
+            // A cancelled edge swipe keeps the player exactly where it was.
+        }
+    }
     // Bind media item when the stream URI resolves. Re-run if Sync verifies a local
     // file after playback started. Stop first so a mid-session swap doesn't leak
     // a black frame or audio tail from the old item.
@@ -262,6 +345,14 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
                     }
                 }
 
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    playerPlayWhenReady = playWhenReady
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    playerPlaybackState = playbackState
+                }
+
                 override fun onPositionDiscontinuity(
                     oldPosition: Player.PositionInfo,
                     newPosition: Player.PositionInfo,
@@ -273,6 +364,8 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
                 }
             }
         player.addListener(listener)
+        playerPlayWhenReady = player.playWhenReady
+        playerPlaybackState = player.playbackState
         try {
             while (isActive) {
                 delay(5_000L)
@@ -369,6 +462,94 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
         }
     val onNextVideo =
         nextVideoId?.let { nextId -> { navigator.openVideo(nextId, IglooNavigationSource.Player) } }
+    val autoMiniPlayerEligible =
+        shouldAutoEnterMiniPlayer(
+            preferenceEnabled = miniPlayerAutoEnter,
+            playWhenReady = playerPlayWhenReady,
+            playbackState = playerPlaybackState,
+            streamAvailable = streamUri !is MediaUri.Missing,
+        )
+    val pictureInPictureParams =
+        remember(autoMiniPlayerEligible, pictureInPictureSourceRect, playerTitle) {
+            buildPictureInPictureParams(
+                enabled = autoMiniPlayerEligible,
+                title = playerTitle,
+                sourceRect = pictureInPictureSourceRect,
+            )
+        }
+    val currentAutoMiniPlayerEligible by rememberUpdatedState(autoMiniPlayerEligible)
+    val currentPictureInPictureParams by rememberUpdatedState(pictureInPictureParams)
+
+    LaunchedEffect(componentActivity, pictureInPictureSupported, pictureInPictureParams) {
+        if (pictureInPictureSupported) {
+            componentActivity?.setPictureInPictureParams(pictureInPictureParams)
+        }
+    }
+    DisposableEffect(componentActivity, pictureInPictureSupported) {
+        if (componentActivity == null || !pictureInPictureSupported) {
+            return@DisposableEffect onDispose {}
+        }
+
+        val leaveListener =
+            Runnable {
+                if (currentAutoMiniPlayerEligible) {
+                    playerControlsVisible = false
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                        componentActivity.enterPictureInPictureMode(
+                            currentPictureInPictureParams
+                        )
+                    }
+                }
+            }
+        val modeListener =
+            Consumer<PictureInPictureModeChangedInfo> { info ->
+                isInPictureInPicture = info.isInPictureInPictureMode
+                isTransitioningToPictureInPicture = false
+                playerControlsVisible = !info.isInPictureInPictureMode
+            }
+        val uiStateListener =
+            Consumer<PictureInPictureUiStateCompat> { state ->
+                isTransitioningToPictureInPicture = state.isTransitioningToPip
+                if (state.isTransitioningToPip) playerControlsVisible = false
+            }
+        componentActivity.addOnUserLeaveHintListener(leaveListener)
+        componentActivity.addOnPictureInPictureModeChangedListener(modeListener)
+        componentActivity.addOnPictureInPictureUiStateChangedListener(uiStateListener)
+        onDispose {
+            componentActivity.removeOnUserLeaveHintListener(leaveListener)
+            componentActivity.removeOnPictureInPictureModeChangedListener(modeListener)
+            componentActivity.removeOnPictureInPictureUiStateChangedListener(uiStateListener)
+            componentActivity.setPictureInPictureParams(
+                PictureInPictureParamsCompat.Builder().setEnabled(false).build()
+            )
+        }
+    }
+
+    fun enterMiniPlayer() {
+        if (!pictureInPictureSupported || componentActivity == null) return
+        playerControlsVisible = false
+        componentActivity.enterPictureInPictureMode(
+            buildPictureInPictureParams(
+                enabled = true,
+                title = playerTitle,
+                sourceRect = pictureInPictureSourceRect,
+            )
+        )
+    }
+
+    fun updatePictureInPictureSourceRect(bounds: ComposeRect) {
+        val next =
+            Rect(
+                bounds.left.roundToInt(),
+                bounds.top.roundToInt(),
+                bounds.right.roundToInt(),
+                bounds.bottom.roundToInt(),
+            )
+        if (next.width() > 0 && next.height() > 0 && next != pictureInPictureSourceRect) {
+            pictureInPictureSourceRect = next
+        }
+    }
+
     fun onVideoBinaryAction() {
         when (binaryAction) {
             VideoBinaryAction.Download -> {
@@ -380,7 +561,18 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
             VideoBinaryAction.Delete -> showDeleteLocalDialog = true
         }
     }
-    if (isFullscreen) {
+    val pictureInPicturePresentation =
+        isInPictureInPicture || isTransitioningToPictureInPicture
+    val miniPlayerAction: (() -> Unit)? =
+        if (pictureInPictureSupported &&
+            streamUri !is MediaUri.Missing &&
+            !pictureInPicturePresentation
+        ) {
+            { enterMiniPlayer() }
+        } else {
+            null
+        }
+    if (isFullscreen || pictureInPicturePresentation) {
         PlayerSurface(
             mode = PlayerSurfaceMode.Fullscreen,
             player = player,
@@ -394,8 +586,11 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
             showSubtitles = showSubtitles,
             onToggleSubtitles = { showSubtitles = !showSubtitles },
             onToggleFullscreen = { exitFullscreen() },
-            controlsVisible = playerControlsVisible,
-            onControlsVisibleChange = { playerControlsVisible = it },
+            onEnterPictureInPicture = miniPlayerAction,
+            controlsVisible = playerControlsVisible && !pictureInPicturePresentation,
+            onControlsVisibleChange = {
+                if (!pictureInPicturePresentation) playerControlsVisible = it
+            },
             previewSpritePath = previewSpritePath,
             previewTrackJsonPath = previewTrackJsonPath,
             subtitlePath = subtitlePath,
@@ -406,10 +601,16 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
             levelFeedback = levelFeedback,
             onBrightnessChange = { level -> showLevelFeedback(brightnessLabel, level) },
             onVolumeChange = { level -> showLevelFeedback(volumeLabel, level) },
-            modifier = modifier.fillMaxSize(),
+            modifier =
+                modifier.fillMaxSize().onGloballyPositioned {
+                    updatePictureInPictureSourceRect(it.boundsInWindow())
+                },
         )
     } else {
-        LazyColumn(state = listState, modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = modifier.fillMaxSize().background(MaterialTheme.iglooColors.background),
+        ) {
             item(key = "player_status_spacer") {
                 Spacer(modifier = Modifier.fillMaxWidth().statusBarsPadding().height(8.dp))
             }
@@ -428,6 +629,7 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
                     showSubtitles = showSubtitles,
                     onToggleSubtitles = { showSubtitles = !showSubtitles },
                     onToggleFullscreen = { enterFullscreen() },
+                    onEnterPictureInPicture = miniPlayerAction,
                     controlsVisible = playerControlsVisible,
                     onControlsVisibleChange = { playerControlsVisible = it },
                     previewSpritePath = previewSpritePath,
@@ -440,7 +642,10 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
                     levelFeedback = levelFeedback,
                     onBrightnessChange = { level -> showLevelFeedback(brightnessLabel, level) },
                     onVolumeChange = { level -> showLevelFeedback(volumeLabel, level) },
-                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+                    modifier =
+                        Modifier.fillMaxWidth().aspectRatio(16f / 9f).onGloballyPositioned {
+                            updatePictureInPictureSourceRect(it.boundsInWindow())
+                        },
                 )
             }
 
@@ -597,6 +802,47 @@ internal fun shouldApplySubtitleDefault(
 ): Boolean = !defaultApplied && subtitlePath != null && subtitleIsAuto != null
 
 internal fun subtitleVisibleByDefault(subtitleIsAuto: Boolean): Boolean = !subtitleIsAuto
+
+internal fun shouldAutoEnterMiniPlayer(
+    preferenceEnabled: Boolean,
+    playWhenReady: Boolean,
+    playbackState: Int,
+    streamAvailable: Boolean,
+): Boolean =
+    preferenceEnabled &&
+        playWhenReady &&
+        streamAvailable &&
+        playbackState != Player.STATE_IDLE &&
+        playbackState != Player.STATE_ENDED
+
+private fun buildPictureInPictureParams(
+    enabled: Boolean,
+    title: String,
+    sourceRect: Rect?,
+): PictureInPictureParamsCompat =
+    PictureInPictureParamsCompat.Builder()
+        .setEnabled(enabled)
+        .setAspectRatio(Rational(16, 9))
+        .apply {
+            if (title.isNotBlank()) setTitle(title)
+            if (sourceRect != null) setSourceRectHint(sourceRect)
+        }
+        .build()
+
+private fun hidePlayerSystemBars(activity: Activity?) {
+    val window = activity?.window ?: return
+    WindowCompat.getInsetsController(window, window.decorView).apply {
+        systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        hide(WindowInsetsCompat.Type.systemBars())
+    }
+}
+
+private fun showPlayerSystemBars(activity: Activity?) {
+    val window = activity?.window ?: return
+    WindowCompat.getInsetsController(window, window.decorView)
+        .show(WindowInsetsCompat.Type.systemBars())
+}
 
 private tailrec fun Context.findActivity(): Activity? =
     when (this) {

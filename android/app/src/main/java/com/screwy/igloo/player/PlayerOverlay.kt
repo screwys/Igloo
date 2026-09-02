@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.ClosedCaptionDisabled
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -75,6 +76,7 @@ fun PlayerOverlay(
     onToggleSubtitles: () -> Unit,
     isFullscreen: Boolean,
     onToggleFullscreen: () -> Unit,
+    onEnterPictureInPicture: (() -> Unit)?,
     controlsVisible: Boolean,
     onControlsVisibleChange: (Boolean) -> Unit,
     previewSpritePath: String? = null,
@@ -92,6 +94,7 @@ fun PlayerOverlay(
     val playbackSpeedLabel = stringResource(R.string.player_playback_speed)
     val enterFullscreenLabel = stringResource(R.string.action_enter_fullscreen)
     val exitFullscreenLabel = stringResource(R.string.action_exit_fullscreen)
+    val miniPlayerLabel = stringResource(R.string.mini_player_title)
 
     val context = LocalContext.current
     val audioManager = remember(context) {
@@ -342,6 +345,15 @@ fun PlayerOverlay(
                                     },
                                 )
                             }
+                        }
+                    }
+                    if (onEnterPictureInPicture != null) {
+                        IconButton(onClick = onEnterPictureInPicture) {
+                            Icon(
+                                imageVector = Icons.Default.PictureInPictureAlt,
+                                contentDescription = miniPlayerLabel,
+                                tint = Color.White,
+                            )
                         }
                     }
                     IconButton(

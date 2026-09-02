@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.screwy.igloo.R
 import com.screwy.igloo.settings.components.SectionHeader
+import com.screwy.igloo.settings.components.SectionDescription
 import com.screwy.igloo.settings.components.SettingsSubScreen
 import com.screwy.igloo.settings.components.SettingsSwitchRow
 import com.screwy.igloo.ui.theme.iglooColors
@@ -37,6 +38,7 @@ fun PlaybackRoute(
     val autoplay by vm.autoplay.collectAsStateWithLifecycle()
     val muteDefault by vm.muteDefault.collectAsStateWithLifecycle()
     val speed by vm.playbackSpeedDefault.collectAsStateWithLifecycle()
+    val miniPlayerAutoEnter by vm.miniPlayerAutoEnter.collectAsStateWithLifecycle()
 
     SettingsSubScreen(
         title = stringResource(R.string.settings_playback),
@@ -53,6 +55,13 @@ fun PlaybackRoute(
             checked = muteDefault,
             onToggle = vm::setMuteDefault,
         )
+        SectionHeader(stringResource(R.string.mini_player_title))
+        SettingsSwitchRow(
+            label = stringResource(R.string.settings_mini_player_auto_enter),
+            checked = miniPlayerAutoEnter,
+            onToggle = vm::setMiniPlayerAutoEnter,
+        )
+        SectionDescription(stringResource(R.string.settings_mini_player_android_help))
         SectionHeader(stringResource(R.string.settings_default_speed))
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

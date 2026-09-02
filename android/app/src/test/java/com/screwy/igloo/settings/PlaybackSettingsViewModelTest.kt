@@ -68,4 +68,18 @@ class PlaybackSettingsViewModelTest {
         }
         assertEquals(true, ok)
     }
+
+    @Test fun miniPlayerAutoEnter_defaultsOn_andWritesOptOut() = runBlocking {
+        val vm = newViewModel()
+        assertEquals(true, vm.miniPlayerAutoEnter.value)
+
+        vm.setMiniPlayerAutoEnter(false)
+        val ok = withTimeoutOrNull(1_000L) {
+            while (db.preferenceDao().getValue(PreferencesRepo.Keys.MINI_PLAYER_AUTO_ENTER) != "false") {
+                delay(10)
+            }
+            true
+        }
+        assertEquals(true, ok)
+    }
 }

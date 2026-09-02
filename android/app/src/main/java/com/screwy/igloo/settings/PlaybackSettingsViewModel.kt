@@ -33,6 +33,13 @@ class PlaybackSettingsViewModel(
             PreferencesRepo.Defaults.PLAYBACK_SPEED_DEFAULT,
         )
 
+    val miniPlayerAutoEnter: StateFlow<Boolean> =
+        prefs.miniPlayerAutoEnter().stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000L),
+            PreferencesRepo.Defaults.MINI_PLAYER_AUTO_ENTER,
+        )
+
     fun setAutoplay(value: Boolean) {
         viewModelScope.launch { prefs.setAutoplay(value) }
     }
@@ -43,5 +50,9 @@ class PlaybackSettingsViewModel(
 
     fun setPlaybackSpeedDefault(value: String) {
         viewModelScope.launch { prefs.setPlaybackSpeedDefault(value) }
+    }
+
+    fun setMiniPlayerAutoEnter(value: Boolean) {
+        viewModelScope.launch { prefs.setMiniPlayerAutoEnter(value) }
     }
 }

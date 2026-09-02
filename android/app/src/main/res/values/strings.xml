@@ -584,6 +584,8 @@
     <string name="settings_media_only_default">Media-only by default</string>
     <string name="settings_media_only_feed">Media-only feed</string>
     <string name="settings_media_only_x">Media only (X)</string>
+    <string name="settings_mini_player_android_help">Keep a playing YouTube video visible over other apps when you leave Igloo. The player button remains available when automatic entry is off.</string>
+    <string name="settings_mini_player_auto_enter">Enter mini player automatically</string>
     <string name="settings_mini_player_feed_help">Automatically move a playing Feed video into the mini player when you browse away.</string>
     <string name="settings_mini_player_videos_help">Automatically move a playing YouTube video into the mini player when you browse away.</string>
     <string name="settings_mode_casual">Casual</string>

@@ -39,7 +39,10 @@ Use the GitHub CI skill for GitHub Actions mechanics, but keep these Igloo-speci
 - Do not reset app data or preferences as a shortcut.
 - For sync/media bugs, treat media completeness and sync convergence as data-pipeline issues before UI polish.
 - For Room/schema changes, verify migrations and generated schema expectations instead of using destructive fallback.
-- For UI behavior, use code, logs, UI tree, or user-provided screenshots first. Do not run repeated screenshot-based device checks unless the user asks.
+- For UI behavior, use code, logs, and user-provided descriptions or screenshots first.
+  Do not navigate an installed app, simulate input, inspect its UI tree, or capture
+  screenshots unless the user explicitly asks for device interaction. A required
+  build/install does not authorize additional control of the device.
 
 ## Web And Server Debugging
 

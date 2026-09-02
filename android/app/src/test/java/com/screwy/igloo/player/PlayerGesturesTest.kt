@@ -1,5 +1,6 @@
 package com.screwy.igloo.player
 
+import androidx.compose.ui.geometry.Offset
 import com.screwy.igloo.data.entity.SponsorBlockSegmentEntity
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -48,36 +49,25 @@ class PlayerGesturesTest {
     }
 
     @Test
-    fun seek_from_drag_full_width_sweeps_full_duration() {
-        val target = seekFromHorizontalDrag(
-            currentMs = 0L,
-            dragPx = 1000f,
-            widthPx = 1000f,
-            durationMs = 60_000L,
-        )
-        assertEquals(60_000L, target)
-    }
-
-    @Test
-    fun seek_from_drag_half_width_sweeps_half_duration() {
+    fun seek_from_drag_uses_fixed_distance_sensitivity() {
         val target = seekFromHorizontalDrag(
             currentMs = 10_000L,
-            dragPx = 500f,
-            widthPx = 1000f,
+            dragPx = 100f,
+            pixelsPerSecond = 20f,
             durationMs = 60_000L,
         )
-        assertEquals(40_000L, target)
+        assertEquals(15_000L, target)
     }
 
     @Test
     fun seek_from_drag_negative_drag_rewinds() {
         val target = seekFromHorizontalDrag(
             currentMs = 30_000L,
-            dragPx = -500f,
-            widthPx = 1000f,
+            dragPx = -100f,
+            pixelsPerSecond = 20f,
             durationMs = 60_000L,
         )
-        assertEquals(0L, target)
+        assertEquals(25_000L, target)
     }
 
     @Test
@@ -85,18 +75,18 @@ class PlayerGesturesTest {
         val target = seekFromHorizontalDrag(
             currentMs = 50_000L,
             dragPx = 1000f,
-            widthPx = 1000f,
+            pixelsPerSecond = 20f,
             durationMs = 60_000L,
         )
         assertEquals(60_000L, target)
     }
 
     @Test
-    fun seek_from_drag_zero_width_returns_current_unchanged() {
+    fun seek_from_drag_zero_sensitivity_returns_current_unchanged() {
         val target = seekFromHorizontalDrag(
             currentMs = 10_000L,
             dragPx = 500f,
-            widthPx = 0f,
+            pixelsPerSecond = 0f,
             durationMs = 60_000L,
         )
         assertEquals(10_000L, target)
@@ -107,10 +97,88 @@ class PlayerGesturesTest {
         val target = seekFromHorizontalDrag(
             currentMs = 10_000L,
             dragPx = 500f,
-            widthPx = 1000f,
+            pixelsPerSecond = 20f,
             durationMs = 0L,
         )
         assertEquals(10_000L, target)
+    }
+
+    @Test
+    fun gesture_waits_for_clear_direction_before_claiming_drag() {
+        assertEquals(
+            null,
+            playerDragMode(
+                start = Offset(500f, 500f),
+                totalDrag = Offset(40f, 30f),
+                surfaceWidthPx = 1000f,
+                surfaceHeightPx = 1000f,
+                horizontalExclusionPx = 48f,
+                verticalExclusionPx = 64f,
+            ),
+        )
+    }
+
+    @Test
+    fun clear_horizontal_drag_scrubs_outside_system_edges() {
+        assertEquals(
+            PlayerDragMode.Scrub,
+            playerDragMode(
+                start = Offset(500f, 500f),
+                totalDrag = Offset(61f, 30f),
+                surfaceWidthPx = 1000f,
+                surfaceHeightPx = 1000f,
+                horizontalExclusionPx = 48f,
+                verticalExclusionPx = 64f,
+            ),
+        )
+        assertEquals(
+            null,
+            playerDragMode(
+                start = Offset(20f, 500f),
+                totalDrag = Offset(61f, 30f),
+                surfaceWidthPx = 1000f,
+                surfaceHeightPx = 1000f,
+                horizontalExclusionPx = 48f,
+                verticalExclusionPx = 64f,
+            ),
+        )
+    }
+
+    @Test
+    fun vertical_drag_uses_starting_half_and_excludes_top_and_bottom() {
+        assertEquals(
+            PlayerDragMode.Brightness,
+            playerDragMode(
+                start = Offset(400f, 500f),
+                totalDrag = Offset(20f, 50f),
+                surfaceWidthPx = 1000f,
+                surfaceHeightPx = 1000f,
+                horizontalExclusionPx = 48f,
+                verticalExclusionPx = 64f,
+            ),
+        )
+        assertEquals(
+            PlayerDragMode.Volume,
+            playerDragMode(
+                start = Offset(600f, 500f),
+                totalDrag = Offset(20f, 50f),
+                surfaceWidthPx = 1000f,
+                surfaceHeightPx = 1000f,
+                horizontalExclusionPx = 48f,
+                verticalExclusionPx = 64f,
+            ),
+        )
+        assertEquals(
+            null,
+            playerDragMode(
+                start = Offset(600f, 40f),
+                totalDrag = Offset(20f, 50f),
+                surfaceWidthPx = 1000f,
+                surfaceHeightPx = 1000f,
+                horizontalExclusionPx = 48f,
+                verticalExclusionPx = 64f,
+            ),
+        )
     }
 
     @Test

@@ -63,6 +63,7 @@ internal fun PlayerSurface(
     showSubtitles: Boolean,
     onToggleSubtitles: () -> Unit,
     onToggleFullscreen: () -> Unit,
+    onEnterPictureInPicture: (() -> Unit)?,
     controlsVisible: Boolean,
     onControlsVisibleChange: (Boolean) -> Unit,
     previewSpritePath: String?,
@@ -81,11 +82,21 @@ internal fun PlayerSurface(
     val subtitleBottomPadding = playerSubtitleBottomPaddingDp(fullscreen, controlsVisible).dp
     val sponsorBlockBottomPadding = if (fullscreen) 72.dp else 56.dp
     var seekFeedback by remember(player) { mutableStateOf<PlayerSeekDirection?>(null) }
+    var gestureScrubTargetMs by remember(player) { mutableStateOf<Long?>(null) }
+    var gestureScrubCompleteNonce by remember(player) { mutableStateOf(0L) }
+    var gestureScrubbing by remember(player) { mutableStateOf(false) }
 
     LaunchedEffect(seekFeedback) {
         if (seekFeedback != null) {
             delay(600L)
             seekFeedback = null
+        }
+    }
+
+    LaunchedEffect(gestureScrubCompleteNonce) {
+        if (gestureScrubCompleteNonce > 0L) {
+            delay(600L)
+            if (!gestureScrubbing) gestureScrubTargetMs = null
         }
     }
 
@@ -104,12 +115,29 @@ internal fun PlayerSurface(
             player = player,
             modifier = Modifier.fillMaxSize(),
             onTap = { onControlsVisibleChange(!controlsVisible) },
-            onScrubStart = { onControlsVisibleChange(true) },
-            onScrubUpdate = { onControlsVisibleChange(true) },
-            onScrubEnd = { onControlsVisibleChange(true) },
+            onScrubStart = {
+                gestureScrubbing = true
+                gestureScrubTargetMs = player.currentPosition.coerceAtLeast(0L)
+                onControlsVisibleChange(true)
+            },
+            onScrubUpdate = { targetMs ->
+                gestureScrubTargetMs = targetMs
+                onControlsVisibleChange(true)
+            },
+            onScrubEnd = { targetMs ->
+                gestureScrubbing = false
+                gestureScrubTargetMs = targetMs
+                gestureScrubCompleteNonce += 1L
+                onControlsVisibleChange(true)
+            },
+            onScrubCancel = {
+                gestureScrubbing = false
+                gestureScrubTargetMs = null
+            },
             onSeek = { seekFeedback = it },
             onBrightnessChange = onBrightnessChange,
             onVolumeChange = onVolumeChange,
+            swipeGesturesEnabled = fullscreen,
         )
         PlayerOverlay(
             player = player,
@@ -122,6 +150,7 @@ internal fun PlayerSurface(
             onToggleSubtitles = onToggleSubtitles,
             isFullscreen = fullscreen,
             onToggleFullscreen = onToggleFullscreen,
+            onEnterPictureInPicture = onEnterPictureInPicture,
             controlsVisible = controlsVisible,
             onControlsVisibleChange = onControlsVisibleChange,
             previewSpritePath = previewSpritePath,
@@ -146,6 +175,15 @@ internal fun PlayerSurface(
             bottomPadding = sponsorBlockBottomPadding,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
+        gestureScrubTargetMs?.let { targetMs ->
+            SeekPreview(
+                targetMs = targetMs,
+                visible = true,
+                previewSpritePath = previewSpritePath,
+                previewTrackJsonPath = previewTrackJsonPath,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
         PlayerLevelFeedbackOverlay(
             feedback = levelFeedback,
             modifier = Modifier.align(Alignment.Center),

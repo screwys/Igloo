@@ -15,7 +15,8 @@
 
 ## Evidence
 
-- Start from local evidence: files, DB rows, logs, running DOM, device/app state, then code.
+- Start from local evidence: files, DB rows, logs, running DOM, then code. For Android UI,
+  prefer source and log evidence; live device interaction belongs to the user unless they ask for it.
 - The canonical local browser target is `https://localhost:8443`. Use it directly for live web and DOM checks; do not rediscover Igloo from listening ports or substitute another local URL.
 - When the Igloo MCP is available, prefer its read-only tools for first-pass
   orientation and runtime evidence: `doctor_status`, `server_query`,
@@ -154,6 +155,11 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
   say that explicitly in the final response. Host-only Android scripts such as
   `android/test.sh` and `android/build.sh` require shell validation and the
   relevant script behavior proof, not an APK build/install.
+- The install and relaunch performed by `just build-android` are the full default
+  device interaction for automated proof. Do not navigate the installed app,
+  simulate taps, gestures, Back, or Home, inspect its UI tree, or capture screenshots
+  unless the user explicitly requests device interaction. Ask the user to confirm
+  live visual, gesture, timing, and playback behavior.
 - Generated Android localization catalog changes caused solely by synchronizing
   web-only strings do not require an APK build, install, or relaunch. Verify
   those changes with the localization drift check and the proportional test

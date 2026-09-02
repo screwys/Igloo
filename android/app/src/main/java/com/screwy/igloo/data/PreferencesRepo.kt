@@ -50,6 +50,7 @@ class PreferencesRepo(
         const val AUTOPLAY                   = "autoplay"
         const val MUTE_DEFAULT               = "mute_default"
         const val PLAYBACK_SPEED_DEFAULT     = "playback_speed_default"
+        const val MINI_PLAYER_AUTO_ENTER     = "mini_player_auto_enter"
 
         // Feed
         const val INCLUDE_REPOSTS_DEFAULT    = "include_reposts_default"
@@ -112,6 +113,7 @@ class PreferencesRepo(
         // across Moments / Channel / Bookmarks.
         const val MUTE_DEFAULT               = false
         const val PLAYBACK_SPEED_DEFAULT     = "1.0"
+        const val MINI_PLAYER_AUTO_ENTER     = true
         const val DEBUG_MODE                 = false
         const val SERVER_TIME_OFFSET_MS      = 0L
         const val RETENTION_DAYS_MOMENTS     = 7
@@ -208,6 +210,8 @@ class PreferencesRepo(
     fun muteDefault(): Flow<Boolean> = flowBool(Keys.MUTE_DEFAULT, default = Defaults.MUTE_DEFAULT)
     fun playbackSpeedDefault(): Flow<String> =
         flowString(Keys.PLAYBACK_SPEED_DEFAULT, default = Defaults.PLAYBACK_SPEED_DEFAULT)
+    fun miniPlayerAutoEnter(): Flow<Boolean> =
+        flowBool(Keys.MINI_PLAYER_AUTO_ENTER, default = Defaults.MINI_PLAYER_AUTO_ENTER)
 
     fun debugMode(): Flow<Boolean> = flowBool(Keys.DEBUG_MODE, default = Defaults.DEBUG_MODE)
     fun serverTimeOffsetMs(): Flow<Long> =
@@ -287,6 +291,8 @@ class PreferencesRepo(
     suspend fun setAutoplay(value: Boolean) = putBool(Keys.AUTOPLAY, value)
     suspend fun setMuteDefault(value: Boolean) = putBool(Keys.MUTE_DEFAULT, value)
     suspend fun setPlaybackSpeedDefault(value: String) = putString(Keys.PLAYBACK_SPEED_DEFAULT, value)
+    suspend fun setMiniPlayerAutoEnter(value: Boolean) =
+        putBool(Keys.MINI_PLAYER_AUTO_ENTER, value)
 
     suspend fun setDebugMode(value: Boolean) = putBool(Keys.DEBUG_MODE, value)
     suspend fun setServerTimeOffsetMs(offsetMs: Long) = putLong(Keys.SERVER_TIME_OFFSET_MS, offsetMs)

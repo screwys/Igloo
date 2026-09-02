@@ -1,5 +1,7 @@
 package com.screwy.igloo.player
 
+import androidx.media3.common.Player
+import androidx.media3.session.CommandButton
 import com.screwy.igloo.net.NetDefaults
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -7,6 +9,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class IglooPlayerFactoryTest {
+
+    @Test
+    fun mediaSessionPrefersTenSecondBackAndForwardControls() {
+        val buttons =
+            playerMediaButtonPreferences(
+                backLabel = "Back 10 seconds",
+                forwardLabel = "Forward 10 seconds",
+            )
+
+        assertEquals(
+            listOf(Player.COMMAND_SEEK_BACK, Player.COMMAND_SEEK_FORWARD),
+            buttons.map { it.playerCommand },
+        )
+        assertEquals(
+            listOf(CommandButton.ICON_SKIP_BACK_10, CommandButton.ICON_SKIP_FORWARD_10),
+            buttons.map { it.icon },
+        )
+        assertTrue(buttons.all { it.displayName.isNotBlank() })
+    }
 
     @Test
     fun iglooMediaRequest_getsBearerHeader() {
