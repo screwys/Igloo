@@ -11,8 +11,9 @@ require (
 	github.com/mark3labs/mcp-go v0.54.0
 	github.com/taruti/langdetect v0.0.0-20160316071627-327bfa898307
 	golang.org/x/crypto v0.52.0
-	golang.org/x/sys v0.45.0
-	golang.org/x/text v0.37.0
+	golang.org/x/image v0.45.0
+	golang.org/x/sys v0.47.0
+	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.50.1
 )
 

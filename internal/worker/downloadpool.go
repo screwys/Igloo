@@ -98,6 +98,13 @@ func (m *Manager) runMediaWorkLoop(ctx context.Context) {
 }
 
 func (m *Manager) processNextMediaWork(ctx context.Context, now time.Time) (worked, backfill bool, previewDelay time.Duration) {
+	if m.hasPreviewHint() {
+		worked, delay := m.processRequestedPreview(ctx, now)
+		previewDelay = delay
+		if worked {
+			return true, false, previewDelay
+		}
+	}
 	for _, workClass := range mediaCurrentWorkOrder(m.mediaCurrentTurn) {
 		worked := false
 		switch workClass {
@@ -112,12 +119,12 @@ func (m *Manager) processNextMediaWork(ctx context.Context, now time.Time) (work
 		}
 	}
 
-	if m.hasPreviewHint() {
-		worked, delay := m.processRequestedPreview(ctx, now)
+	worked, delay := m.processPreviewBatch(ctx, now)
+	if previewDelay == 0 || delay > 0 && delay < previewDelay {
 		previewDelay = delay
-		if worked {
-			return true, false, previewDelay
-		}
+	}
+	if worked {
+		return true, true, previewDelay
 	}
 	for _, workClass := range mediaBackfillPrimaryWorkOrder(m.mediaBackgroundTurn) {
 		worked := false
@@ -133,11 +140,7 @@ func (m *Manager) processNextMediaWork(ctx context.Context, now time.Time) (work
 		m.mediaBackgroundTurn++
 		return true, true, previewDelay
 	}
-	worked, delay := m.processPreviewBatch(ctx, now)
-	if previewDelay == 0 || delay > 0 && delay < previewDelay {
-		previewDelay = delay
-	}
-	return worked, worked, previewDelay
+	return false, false, previewDelay
 }
 
 func mediaWorkedDelay(backfill bool) time.Duration {

@@ -1,13 +1,10 @@
 package worker
 
 import (
-	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/color"
-	"image/draw"
 	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
@@ -22,16 +19,23 @@ import (
 
 func installTestYouTubeStoryboard(t *testing.T, m *Manager, callsPath string) {
 	t.Helper()
-	sheet := image.NewRGBA(image.Rect(0, 0, 320, 90))
-	draw.Draw(sheet, image.Rect(0, 0, 160, 90), image.NewUniform(color.RGBA{R: 180, A: 255}), image.Point{}, draw.Src)
-	draw.Draw(sheet, image.Rect(160, 0, 320, 90), image.NewUniform(color.RGBA{G: 180, A: 255}), image.Point{}, draw.Src)
-	var sheetJPEG bytes.Buffer
-	if err := jpeg.Encode(&sheetJPEG, sheet, &jpeg.Options{Quality: 90}); err != nil {
+	// YouTube currently serves storyboard fragments as WebP even when yt-dlp's
+	// fragment URL ends in .jpg. Keep that response shape in the worker proof.
+	fullSheetWebP, err := base64.StdEncoding.DecodeString("UklGRogAAABXRUJQVlA4IHwAAABwCQCdASpAAVoAPpFIoUylpCMiIEgAsBIJaW7hdfAAJ7Xoq4QZBDVUmu20XCDIIaqk122i4QZBDVUmu20XCDIIaqk122i4QZBDVUmu20XCDIIaqbAA/v6hH/6qp6/G7//4hz/Ar/FPdOsEwOcCWWxyEaKtmgpKIBAAAAAA")
+	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "image/jpeg")
-		_, _ = w.Write(sheetJPEG.Bytes())
+	partialSheetWebP, err := base64.StdEncoding.DecodeString("UklGRlwAAABXRUJQVlA4IFAAAABQBgCdASqgAFoAPpFIoUylpCMiIIgAsBIJaW7hdJAAZZvL89sReIKjntiLxBUc9sReIKjntiLxBUcoAAD+8q/97lopFf/rV7r/Vo2gAAAAAA==")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/webp")
+		if r.URL.Path == "/sheet-2.jpg" {
+			_, _ = w.Write(partialSheetWebP)
+			return
+		}
+		_, _ = w.Write(fullSheetWebP)
 	}))
 	t.Cleanup(server.Close)
 
@@ -39,7 +43,7 @@ func installTestYouTubeStoryboard(t *testing.T, m *Manager, callsPath string) {
 		"_type": "video", "id": "sample_video", "title": "Sample video", "duration": 10,
 		"formats": []any{map[string]any{
 			"format_id": "sb0", "format_note": "storyboard", "protocol": "mhtml", "ext": "mhtml",
-			"width": 160, "height": 90, "columns": 2, "rows": 1, "fps": 0.4,
+			"width": 160, "height": 90, "columns": 2, "rows": 1, "fps": 0.3,
 			"fragments": []any{
 				map[string]any{"url": server.URL + "/sheet-1.jpg", "duration": 5},
 				map[string]any{"url": server.URL + "/sheet-2.jpg", "duration": 5},
@@ -205,7 +209,7 @@ func TestPreviewReconciliationDoesNotDependOnCompletionHint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if track.Columns != 2 || len(track.Cues) != 4 || spriteConfig.Width != 320 || spriteConfig.Height != 180 {
+	if track.Columns != 2 || len(track.Cues) != 3 || spriteConfig.Width != 320 || spriteConfig.Height != 180 {
 		t.Fatalf("native preview geometry = track %+v sprite %dx%d", track, spriteConfig.Width, spriteConfig.Height)
 	}
 }
@@ -247,11 +251,11 @@ func TestEmptyPreviewBackfillAdvancesOnlyBackgroundGate(t *testing.T) {
 	m.previewBackfillNotBefore = time.Time{}
 
 	worked, delay := m.processPreviewBatch(context.Background(), now)
-	if worked || delay != previewBackfillInterval {
+	if worked || delay != previewIdlePollInterval {
 		t.Fatalf("empty backfill = worked %v delay %s", worked, delay)
 	}
 	worked, delay = m.processPreviewBatch(context.Background(), now.Add(previewMinimumInterval))
-	if worked || delay != previewBackfillInterval-previewMinimumInterval {
+	if worked || delay != previewIdlePollInterval-previewMinimumInterval {
 		t.Fatalf("paced empty backfill = worked %v delay %s", worked, delay)
 	}
 
@@ -294,11 +298,8 @@ func TestPreviewHistoricalFillIsPaced(t *testing.T) {
 		t.Fatal("first historical preview was not processed")
 	}
 	worked, delay := m.processPreviewBatch(context.Background(), now.Add(previewMinimumInterval))
-	if worked || delay != previewBackfillInterval-previewMinimumInterval {
+	if !worked || delay != previewMinimumInterval {
 		t.Fatalf("second historical preview = worked %v delay %s", worked, delay)
-	}
-	if worked, _ := m.processPreviewBatch(context.Background(), now.Add(previewBackfillInterval)); !worked {
-		t.Fatal("paced historical preview did not become eligible")
 	}
 	calls, err := os.ReadFile(callsPath)
 	if err != nil {

@@ -19,6 +19,7 @@ import (
 
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/download"
+	_ "golang.org/x/image/webp"
 )
 
 const (
@@ -29,7 +30,7 @@ const (
 
 const (
 	previewMinimumInterval  = 10 * time.Second
-	previewBackfillInterval = time.Minute
+	previewIdlePollInterval = time.Minute
 )
 
 // PreviewRequest is a request to generate a sprite sheet preview for a video.
@@ -135,9 +136,9 @@ func (m *Manager) processPreviewBatchMode(ctx context.Context, now time.Time, al
 	}
 	if len(candidates) == 0 {
 		m.previewMu.Lock()
-		m.previewBackfillNotBefore = now.Add(previewBackfillInterval)
+		m.previewBackfillNotBefore = now.Add(previewIdlePollInterval)
 		m.previewMu.Unlock()
-		return false, previewBackfillInterval
+		return false, previewIdlePollInterval
 	}
 	var retryDelay time.Duration
 	for _, candidate := range candidates {
@@ -148,8 +149,8 @@ func (m *Manager) processPreviewBatchMode(ctx context.Context, now time.Time, al
 			}
 			continue
 		}
-		m.setPreviewAdmission(now.Add(previewMinimumInterval), now.Add(previewBackfillInterval))
-		return m.processPreviewCandidate(ctx, candidate, now), previewBackfillInterval
+		m.setPreviewAdmission(now.Add(previewMinimumInterval), now.Add(previewMinimumInterval))
+		return m.processPreviewCandidate(ctx, candidate, now), previewMinimumInterval
 	}
 	return false, retryDelay
 }
@@ -441,7 +442,7 @@ func selectYouTubeStoryboard(info map[string]any, duration float64) (youtubeStor
 		}
 	}
 	if best.FrameCount == 0 {
-		return youtubeStoryboard{}, fmt.Errorf("youtube did not provide a usable JPEG storyboard")
+		return youtubeStoryboard{}, fmt.Errorf("youtube did not provide a usable storyboard")
 	}
 	return best, nil
 }
@@ -450,9 +451,10 @@ func (m *Manager) renderYouTubeStoryboard(ctx context.Context, storyboard youtub
 	sheetWidth := storyboard.Columns * storyboard.Width
 	sheetHeight := storyboard.Rows * storyboard.Height
 	sprite := image.NewRGBA(image.Rect(0, 0, sheetWidth, sheetHeight*len(storyboard.Fragments)))
+	frameCapacity := 0
 	for i, fragmentURL := range storyboard.Fragments {
 		path, err := m.downloader.HTTP.DownloadFileWithOptions(
-			ctx, fragmentURL, tmpDir, fmt.Sprintf("sheet-%03d.jpg", i),
+			ctx, fragmentURL, tmpDir, fmt.Sprintf("sheet-%03d.img", i),
 			download.HTTPDownloadOptions{MaxBytes: 4 << 20, Timeout: 30 * time.Second},
 		)
 		if err != nil {
@@ -462,16 +464,24 @@ func (m *Manager) renderYouTubeStoryboard(ctx context.Context, storyboard youtub
 		if err != nil {
 			return err
 		}
-		sheet, err := jpeg.Decode(file)
+		sheet, _, err := image.Decode(file)
 		_ = file.Close()
 		if err != nil {
 			return fmt.Errorf("decode youtube storyboard sheet %d: %w", i, err)
 		}
 		bounds := sheet.Bounds()
-		if bounds.Dx() < sheetWidth || bounds.Dy() < sheetHeight {
-			return fmt.Errorf("youtube storyboard sheet %d is %dx%d, expected at least %dx%d", i, bounds.Dx(), bounds.Dy(), sheetWidth, sheetHeight)
+		width, height := bounds.Dx(), bounds.Dy()
+		if width <= 0 || height <= 0 || width > sheetWidth || height > sheetHeight || width%storyboard.Width != 0 || height%storyboard.Height != 0 {
+			return fmt.Errorf("youtube storyboard sheet %d is %dx%d, expected tile-aligned dimensions within %dx%d", i, width, height, sheetWidth, sheetHeight)
 		}
-		draw.Draw(sprite, image.Rect(0, i*sheetHeight, sheetWidth, (i+1)*sheetHeight), sheet, bounds.Min, draw.Src)
+		if i < len(storyboard.Fragments)-1 && (width != sheetWidth || height != sheetHeight) {
+			return fmt.Errorf("youtube storyboard sheet %d is partial before the final sheet", i)
+		}
+		frameCapacity += (width / storyboard.Width) * (height / storyboard.Height)
+		draw.Draw(sprite, image.Rect(0, i*sheetHeight, width, i*sheetHeight+height), sheet, bounds.Min, draw.Src)
+	}
+	if frameCapacity < storyboard.FrameCount {
+		return fmt.Errorf("youtube storyboard contains %d tiles for %d frames", frameCapacity, storyboard.FrameCount)
 	}
 	file, err := os.Create(spritePath)
 	if err != nil {

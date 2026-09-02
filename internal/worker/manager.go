@@ -177,9 +177,8 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 			db.DownloadLaneCurrent:  0,
 			db.DownloadLaneBackfill: 0,
 		},
-		previewHints:             make(map[string]struct{}),
-		previewRetry:             make(map[string]previewRetryState),
-		previewBackfillNotBefore: time.Now().Add(previewBackfillInterval),
+		previewHints: make(map[string]struct{}),
+		previewRetry: make(map[string]previewRetryState),
 	}
 	m.dearrowFetcher = &dearrow.Fetcher{
 		Client:  dearrow.NewClient(dearrow.DefaultBaseURL),
