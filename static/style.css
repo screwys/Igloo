@@ -2510,17 +2510,17 @@ select.input:focus {
     text-align: left;
 }
 .moment-actions-item-icon {
-    width: 24px;
-    height: 24px;
-    flex: 0 0 24px;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 26px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 .moment-actions-item-icon svg {
     display: block;
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
 }
 .moment-actions-sheet-item > span:last-child,
 .moment-actions-speed-label > span:last-child {
@@ -7629,6 +7629,11 @@ body.shorts-mode .sidebar {
     color: white;
 }
 
+.shorts-top-control-btn .material-icon {
+    width: 24px;
+    height: 24px;
+}
+
 .shorts-volume-control {
     width: 2.8rem;
     height: 2.8rem;
@@ -8653,6 +8658,11 @@ body.shorts-mode .sidebar {
     height: 52px;
     background: rgba(36, 36, 39, 0.94) !important;
     filter: none;
+}
+
+.shorts-actions .action-btn .material-icon {
+    width: 28px;
+    height: 28px;
 }
 
 .shorts-actions .action-btn:hover,
