@@ -145,6 +145,9 @@ func TestSettingsFromFormPersistsMiniPlayerDestinationToggles(t *testing.T) {
 }
 
 func TestShortcutDefaultsIncludeCinemaSidebarAndSettings(t *testing.T) {
+	if got := defaultShortcutConfig()["feed.mute"]; got != "m" {
+		t.Fatalf("default feed mute shortcut = %q, want m", got)
+	}
 	if got := defaultShortcutConfig()["player.cinema"]; got != "c" {
 		t.Fatalf("default cinema shortcut = %q, want c", got)
 	}
@@ -161,6 +164,9 @@ func TestShortcutDefaultsIncludeCinemaSidebarAndSettings(t *testing.T) {
 	}
 	if got := shortcuts["player.cinema"]; got != "c" {
 		t.Fatalf("settings cinema shortcut = %q, want c", got)
+	}
+	if got := shortcuts["feed.mute"]; got != "m" {
+		t.Fatalf("settings feed mute shortcut = %q, want m", got)
 	}
 	if got := shortcuts["global.sidebar"]; got != "z" {
 		t.Fatalf("settings sidebar shortcut = %q, want z", got)

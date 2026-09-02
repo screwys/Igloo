@@ -505,6 +505,7 @@ templ feedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 				class="feed-media-wrap"
 				data-feed-media
 				data-feed-media-kind="video"
+				data-feed-video-kind={ feedMediaPlaybackKind(item.Media[0]) }
 				data-feed-media-stream={ streamURL }
 				if mediaURL != "" {
 					data-feed-media-url={ mediaURL }
@@ -573,6 +574,7 @@ templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, st
 			class="feed-media-tile"
 			data-feed-media
 			data-feed-media-kind="video"
+			data-feed-video-kind={ feedMediaPlaybackKind(m) }
 			data-feed-media-url={ slideURL }
 			if tileStreamURL != "" {
 				data-feed-media-stream={ tileStreamURL }
@@ -740,6 +742,7 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMed
 			class="feed-media-wrap"
 			data-feed-media
 			data-feed-media-kind="video"
+			data-feed-video-kind={ feedMediaPlaybackKind(item.QuoteMedia[0]) }
 			data-feed-media-stream={ item.QuoteMediaStreamURL }
 			role="button"
 			tabindex="0"
@@ -800,6 +803,7 @@ templ feedQuoteMediaTile(p PageProps, index int, qm model.MediaRef, qMediaCount 
 			class="feed-media-tile"
 			data-feed-media
 			data-feed-media-kind="video"
+			data-feed-video-kind={ feedMediaPlaybackKind(qm) }
 			data-feed-media-url={ slideURL }
 			if tileStreamURL != "" {
 				data-feed-media-stream={ tileStreamURL }
@@ -974,7 +978,10 @@ templ feedVideoControls(p PageProps) {
 		<button class="feed-video-control-btn" type="button" aria-label={ L(p, "mini_player_title", "Mini player") } aria-pressed="false" data-feed-video-control data-feed-video-mini>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><rect x="11" y="11" width="8" height="6" rx="1" fill="currentColor" stroke="none"></rect></svg>
 		</button>
-		<button class="feed-video-control-btn" type="button" aria-label={ L(p, "action_enter_fullscreen", "Enter fullscreen") } data-feed-video-control data-feed-video-expand>
+		<button class="feed-video-control-btn" type="button" aria-label={ L(p, "player_cinema_view", "Cinema view") } data-feed-video-control data-feed-video-cinema>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M15 4v16"></path></svg>
+		</button>
+		<button class="feed-video-control-btn" type="button" aria-label={ L(p, "action_enter_fullscreen", "Enter fullscreen") } data-feed-video-control data-feed-video-fullscreen>
 			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"></path></svg>
 		</button>
 	</div>

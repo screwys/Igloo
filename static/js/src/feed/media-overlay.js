@@ -10,7 +10,7 @@ import {
   formatAbsolute,
   t,
 } from '../utils.js'
-import { bindFeedVideoControls, createFeedVideoControls } from './video-controls.js'
+import { bindFeedVideoControls, createFeedVideoControls, handleFeedVideoShortcut } from './video-controls.js'
 
 // ── Helpers ──
 
@@ -110,6 +110,7 @@ function restoreInlineVideoPlayback(overlay, keepPlaying) {
   overlay._sourceClassName = ''
   overlay._sourceMuted = false
   overlay._overlayVideo = null
+  overlay._overlayPlaybackKind = ''
   overlay._videoClickHandler = null
   overlay._videoControlsCleanup = null
 }
@@ -149,7 +150,8 @@ function extractSlidesFromRoot(rootEl) {
         var img = tile.querySelector('.feed-media-image')
         if (img) tUrl = String(img.getAttribute('src') || '').trim()
       }
-      slides.push({ kind: tKind, url: tUrl, streamUrl: tStream, posterUrl: tPoster })
+      var tPlaybackKind = String(tile.getAttribute('data-feed-video-kind') || 'video').trim().toLowerCase()
+      slides.push({ kind: tKind, playbackKind: tPlaybackKind, url: tUrl, streamUrl: tStream, posterUrl: tPoster })
     })
     return { slides: slides, singleVideo: null }
   }
@@ -168,13 +170,14 @@ function extractSlidesFromRoot(rootEl) {
   if (wKind === 'video') {
     var streamUrl = String(wrap.getAttribute('data-feed-media-stream') || '').trim()
     var posterUrl = String(wrap.getAttribute('data-feed-media-preview') || '').trim()
+    var playbackKind = String(wrap.getAttribute('data-feed-video-kind') || 'video').trim().toLowerCase()
     if (!posterUrl) {
       var vidEl = wrap.querySelector('video')
       if (vidEl) posterUrl = String(vidEl.getAttribute('poster') || '').trim()
     }
     return {
-      slides: [{ kind: 'video', url: '', streamUrl: streamUrl, posterUrl: posterUrl }],
-      singleVideo: { streamUrl: streamUrl, posterUrl: posterUrl },
+      slides: [{ kind: 'video', playbackKind: playbackKind, url: '', streamUrl: streamUrl, posterUrl: posterUrl }],
+      singleVideo: { streamUrl: streamUrl, posterUrl: posterUrl, playbackKind: playbackKind },
     }
   }
 
@@ -199,15 +202,16 @@ function extractProfileMediaSlides(rootEl) {
     var url = String(node.getAttribute('data-feed-media-url') || '').trim()
     var streamUrl = String(node.getAttribute('data-feed-media-stream') || '').trim()
     var posterUrl = String(node.getAttribute('data-feed-media-preview') || '').trim()
+    var playbackKind = String(node.getAttribute('data-feed-video-kind') || 'video').trim().toLowerCase()
     if (!url && !streamUrl) return
-    slides.push({ kind: kind, url: url, streamUrl: streamUrl, posterUrl: posterUrl })
+    slides.push({ kind: kind, playbackKind: playbackKind, url: url, streamUrl: streamUrl, posterUrl: posterUrl })
   })
   if (!slides.length) return null
   var only = slides[0]
   return {
     slides: slides,
     singleVideo: slides.length === 1 && only.kind === 'video' && only.streamUrl
-      ? { streamUrl: only.streamUrl, posterUrl: only.posterUrl }
+      ? { streamUrl: only.streamUrl, posterUrl: only.posterUrl, playbackKind: only.playbackKind }
       : null,
   }
 }
@@ -224,6 +228,7 @@ function getMediaSources(card, clickedEl) {
         kind: 'video',
         streamUrl: profileExtract.singleVideo.streamUrl,
         posterUrl: profileExtract.singleVideo.posterUrl,
+        playbackKind: profileExtract.singleVideo.playbackKind,
         urls: [],
         slides: profileSlides,
         startIndex: 0,
@@ -263,6 +268,7 @@ function getMediaSources(card, clickedEl) {
         kind: 'video',
         streamUrl: onlySingleVideo.streamUrl,
         posterUrl: onlySingleVideo.posterUrl,
+        playbackKind: onlySingleVideo.playbackKind,
         urls: [],
         slides: slides,
         startIndex: 0,
@@ -294,6 +300,7 @@ function getMediaSources(card, clickedEl) {
     urls: urls,
     streamUrl: '',
     posterUrl: '',
+    playbackKind: '',
     startIndex: startIndex,
   }
 }
@@ -593,7 +600,7 @@ export function openMediaOverlay(root, triggerEl) {
     }
   }
 
-  function renderVideo(activeStreamUrl, activePosterUrl) {
+  function renderVideo(activeStreamUrl, activePosterUrl, activePlaybackKind) {
     var videoWrap = document.createElement('div')
     videoWrap.className = 'feed-overlay-video-wrap'
 
@@ -618,11 +625,14 @@ export function openMediaOverlay(root, triggerEl) {
     }
     v.addEventListener('click', togglePlayback)
     overlay._overlayVideo = v
+    overlay._overlayPlaybackKind = activePlaybackKind || 'video'
     overlay._videoClickHandler = togglePlayback
 
     videoWrap.appendChild(v)
     videoWrap.appendChild(createFeedVideoControls())
-    overlay._videoControlsCleanup = bindFeedVideoControls(videoWrap, v)
+    overlay._videoControlsCleanup = bindFeedVideoControls(videoWrap, v, {
+      onCinema: closeMediaOverlay,
+    })
     return videoWrap
   }
 
@@ -640,9 +650,10 @@ export function openMediaOverlay(root, triggerEl) {
     var isVideo = isMixedVideo || isStandaloneVideo
     var activeStreamUrl = slideInfo ? slideInfo.streamUrl : media.streamUrl
     var activePosterUrl = slideInfo ? (slideInfo.posterUrl || slideInfo.url) : media.posterUrl
+    var activePlaybackKind = slideInfo ? slideInfo.playbackKind : media.playbackKind
 
     if (isVideo) {
-      host.appendChild(renderVideo(activeStreamUrl, activePosterUrl))
+      host.appendChild(renderVideo(activeStreamUrl, activePosterUrl, activePlaybackKind))
     } else {
       const urls = Array.isArray(media.urls) ? media.urls : []
       const img = document.createElement('img')
@@ -682,8 +693,22 @@ export function openMediaOverlay(root, triggerEl) {
   if (next) next.addEventListener('click', function (event) { event.preventDefault(); event.stopPropagation(); step(1) })
 
   keyHandler = function (event) {
-    if (event.key === 'Escape') closeMediaOverlay()
-    else if (event.key === 'ArrowLeft') step(-1)
+    var target = event.target || {}
+    var tag = String(target.tagName || '').toLowerCase()
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return
+    if (event.ctrlKey || event.altKey || event.metaKey) return
+    if (event.key === 'Escape') {
+      if (!(document.fullscreenElement || document.webkitFullscreenElement)) closeMediaOverlay()
+      return
+    }
+    var activeVideo = overlay._overlayVideo
+    var playbackKind = String(overlay._overlayPlaybackKind || 'video').toLowerCase()
+    if (activeVideo && handleFeedVideoShortcut(event, activeVideo, { seek: playbackKind !== 'gif' })) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      return
+    }
+    if (event.key === 'ArrowLeft') step(-1)
     else if (event.key === 'ArrowRight') step(1)
   }
   document.addEventListener('keydown', keyHandler)
@@ -699,6 +724,7 @@ export function getOverlayElement() {
 
 window.FeedMediaOverlay = {
   get element() { return overlayEl },
+  get video() { return overlayEl && overlayEl._overlayVideo },
   open: openMediaOverlay,
   close: closeMediaOverlay,
 }

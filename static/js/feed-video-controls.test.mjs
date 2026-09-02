@@ -45,6 +45,7 @@ class FakeElement {
     this.style = {
       values: new Map(),
       setProperty: (name, value) => this.style.values.set(name, value),
+      removeProperty: (name) => this.style.values.delete(name),
     }
   }
 
@@ -74,18 +75,24 @@ class FakeElement {
     this.listeners.get(name).push(listener)
   }
 
+  removeEventListener(name, listener) {
+    const listeners = this.listeners.get(name) || []
+    this.listeners.set(name, listeners.filter((candidate) => candidate !== listener))
+  }
+
   blur() {
     this.blurred = true
   }
 
   dispatch(name, details = {}) {
-    const event = { preventDefault() {}, stopPropagation() {}, ...details }
+    const event = { preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...details }
     for (const listener of this.listeners.get(name) || []) listener(event)
   }
 
   querySelector(selector) {
     const match = /^\[([^=\]]+)(?:="([^"]*)")?\]$/.exec(selector)
     if (match && this.attributes.has(match[1]) && (match[2] === undefined || this.attributes.get(match[1]) === match[2])) return this
+    if (String(selector).toLowerCase() === String(this.tagName).toLowerCase()) return this
     if (selector.startsWith('.') && String(this.className || '').split(/\s+/).includes(selector.slice(1))) return this
     for (const child of this.children) {
       const found = child.querySelector(selector)
@@ -98,6 +105,7 @@ class FakeElement {
     const matches = []
     const match = /^\[([^=\]]+)(?:="([^"]*)")?\]$/.exec(selector)
     if (match && this.attributes.has(match[1]) && (match[2] === undefined || this.attributes.get(match[1]) === match[2])) matches.push(this)
+    if (String(selector).toLowerCase() === String(this.tagName).toLowerCase()) matches.push(this)
     if (selector.startsWith('.') && String(this.className || '').split(/\s+/).includes(selector.slice(1))) matches.push(this)
     for (const child of this.children) matches.push(...child.querySelectorAll(selector))
     return matches
@@ -117,6 +125,8 @@ class FakeVideo extends FakeElement {
     this.volume = 0.8
     this.playbackRate = 1
     this.defaultPlaybackRate = 1
+    this.currentTime = 0
+    this.duration = 60
   }
 
   play() {
@@ -137,7 +147,7 @@ async function loadVideoControls() {
   const runnable = "const attachSeekTooltip = () => {}; const makeDraggableSeekbar = () => {}; const setSvgContent = () => {}; const t = (_key, fallback) => fallback;\n" +
     visibilitySource.replace(/\bexport\s+/g, '') + '\n' +
     source.replace(/^import .*$/gm, '').replace(/\bexport\s+/g, '') +
-    '\nObject.assign(globalThis, { createFeedVideoControls, bindFeedVideoControls });'
+    '\nObject.assign(globalThis, { createFeedVideoControls, bindFeedVideoControls, exitFeedVideoFullscreen, handleFeedVideoShortcut, toggleFeedVideoFullscreen, toggleFeedVideoMute });'
 
   let pendingTimer = null
   const window = {
@@ -285,4 +295,88 @@ test('feed controls always offer manual mini-player docking', async () => {
   assert.equal(surface.kind, 'feed')
   assert.equal(surface.title, undefined)
   assert.equal(video.paused, true)
+})
+
+test('feed cinema and fullscreen controls own different presentation modes', async () => {
+  const media = await loadVideoControls()
+  const wrap = new FakeElement('div')
+  const controls = media.createFeedVideoControls()
+  const video = new FakeVideo()
+  wrap.appendChild(video)
+  wrap.appendChild(controls)
+
+  let opened = null
+  media.window.FeedMediaOverlay = {
+    open(root, trigger) { opened = { root, trigger } },
+  }
+  video.requestFullscreen = function () {
+    media.document.fullscreenElement = video
+    media.document.dispatch('fullscreenchange')
+    return Promise.resolve()
+  }
+  media.document.exitFullscreen = function () {
+    media.document.fullscreenElement = null
+    media.document.dispatch('fullscreenchange')
+    return Promise.resolve()
+  }
+
+  media.bindFeedVideoControls(wrap, video)
+  const cinema = controls.querySelector('[data-feed-video-cinema]')
+  const fullscreen = controls.querySelector('[data-feed-video-fullscreen]')
+  assert.ok(cinema)
+  assert.ok(fullscreen)
+  assert.equal(cinema.getAttribute('aria-pressed'), null)
+
+  cinema.dispatch('click')
+  assert.deepEqual(opened, { root: wrap, trigger: wrap })
+  assert.equal(media.document.fullscreenElement, undefined)
+
+  fullscreen.dispatch('click')
+  assert.equal(media.document.fullscreenElement, video)
+  assert.equal(fullscreen.getAttribute('aria-label'), 'Exit fullscreen')
+  assert.equal(fullscreen.classList.contains('active'), false)
+
+  video.dispatch('dblclick')
+  assert.equal(media.document.fullscreenElement, null)
+  assert.equal(fullscreen.getAttribute('aria-label'), 'Enter fullscreen')
+})
+
+test('video shortcuts seek, change volume, play, and mute', async () => {
+  const media = await loadVideoControls()
+  const video = new FakeVideo()
+  media.window.cfShortcuts = {
+    match(id, key) { return id === 'feed.mute' && key.toLowerCase() === 'm' },
+  }
+
+  video.currentTime = 10
+  assert.equal(media.handleFeedVideoShortcut({ key: 'ArrowRight' }, video), true)
+  assert.equal(video.currentTime, 15)
+  assert.equal(media.handleFeedVideoShortcut({ key: 'ArrowLeft' }, video), true)
+  assert.equal(video.currentTime, 10)
+
+  video.volume = 0.5
+  assert.equal(media.handleFeedVideoShortcut({ key: 'ArrowUp' }, video), true)
+  assert.equal(video.volume, 0.55)
+  assert.equal(video.muted, false)
+  assert.equal(media.handleFeedVideoShortcut({ key: 'ArrowDown' }, video), true)
+  assert.equal(video.volume, 0.5)
+
+  assert.equal(media.handleFeedVideoShortcut({ key: ' ' }, video), true)
+  assert.equal(video.paused, false)
+  assert.equal(media.handleFeedVideoShortcut({ key: 'M' }, video), true)
+  assert.equal(video.muted, true)
+})
+
+test('GIF overlays retain arrow navigation while still accepting mute', async () => {
+  const media = await loadVideoControls()
+  const video = new FakeVideo()
+  media.window.cfShortcuts = {
+    match(id, key) { return id === 'feed.mute' && key.toLowerCase() === 'm' },
+  }
+  video.currentTime = 10
+
+  assert.equal(media.handleFeedVideoShortcut({ key: 'ArrowRight' }, video, { seek: false }), false)
+  assert.equal(video.currentTime, 10)
+  assert.equal(media.handleFeedVideoShortcut({ key: 'm' }, video, { seek: false }), true)
+  assert.equal(video.muted, false)
 })

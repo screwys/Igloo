@@ -175,6 +175,15 @@ func feedMediaRefIsVideo(ref model.MediaRef) bool {
 	}
 }
 
+func feedMediaPlaybackKind(ref model.MediaRef) string {
+	switch strings.ToLower(strings.TrimSpace(ref.Type)) {
+	case "gif", "animated_gif":
+		return "gif"
+	default:
+		return "video"
+	}
+}
+
 func storyStateAttr(state string) string {
 	switch state {
 	case model.StoryStateNew, model.StoryStateSeen:

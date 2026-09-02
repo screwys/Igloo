@@ -92,6 +92,7 @@ test('double-clicking a playing feed video opens its overlay still playing', asy
       assert.equal(trigger, mediaTrigger)
       opened = true
     },
+    exitFeedVideoFullscreen() { return false },
   })
   vm.runInContext(
     extractFunction(source, 'clearPendingInlineVideoClick') + '\n' +
@@ -109,6 +110,65 @@ test('double-clicking a playing feed video opens its overlay still playing', asy
   assert.equal(video.paused, false)
   assert.equal(video.playCount, 0)
   assert.equal(pendingClick, null)
+})
+
+test('double-clicking a fullscreen feed video exits without opening the overlay', async () => {
+  var source = await readFile(new URL('./src/feed/index.js', import.meta.url), 'utf8')
+  var exitedVideo = null
+  var opened = false
+  var pendingClick = true
+  var video = { muted: false, paused: false }
+  var mediaTrigger = {
+    querySelector(selector) {
+      assert.equal(selector, 'video')
+      return video
+    },
+  }
+  var context = vm.createContext({
+    window: { clearTimeout() { pendingClick = null } },
+    exitFeedVideoFullscreen(candidate) {
+      exitedVideo = candidate
+      return true
+    },
+    openMediaOverlay() { opened = true },
+  })
+  vm.runInContext(
+    extractFunction(source, 'clearPendingInlineVideoClick') + '\n' +
+      extractFunction(source, 'handleInlineVideoClick') +
+      '\nthis.handleInlineVideoClick = handleInlineVideoClick',
+    context,
+  )
+  mediaTrigger._feedVideoClickTimer = 1
+
+  context.handleInlineVideoClick(mediaTrigger, { detail: 2 })
+
+  assert.equal(exitedVideo, video)
+  assert.equal(opened, false)
+  assert.equal(pendingClick, null)
+})
+
+test('fullscreen keyboard ownership recognizes the video element itself', async () => {
+  var source = await readFile(new URL('./src/feed/index.js', import.meta.url), 'utf8')
+  var card = {}
+  var video = {
+    tagName: 'VIDEO',
+    closest(selector) {
+      assert.equal(selector, '[data-feed-item]')
+      return card
+    },
+  }
+  var context = vm.createContext({
+    document: { fullscreenElement: video },
+  })
+  vm.runInContext(
+    extractFunction(source, 'fullscreenFeedSurface') +
+      '\nthis.fullscreenFeedSurface = fullscreenFeedSurface',
+    context,
+  )
+
+  var surface = context.fullscreenFeedSurface()
+  assert.equal(surface.video, video)
+  assert.equal(surface.card, card)
 })
 
 test('single-clicking a playing feed video pauses after the double-click window', async () => {

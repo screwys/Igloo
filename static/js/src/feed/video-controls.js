@@ -7,7 +7,8 @@ const videoControlIcons = {
   muted: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6M16 9l6 6"/></svg>',
   unmuted: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>',
   mini: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="11" y="11" width="8" height="6" rx="1" fill="currentColor" stroke="none"/></svg>',
-  expand: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>'
+  cinema: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>',
+  fullscreen: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>'
 }
 
 const playbackRates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
@@ -110,10 +111,77 @@ export function createFeedVideoControls(options) {
   const miniButton = makeControlButton('data-feed-video-mini', t('mini_player_title', 'Mini player'), 'mini')
   miniButton.setAttribute('aria-pressed', 'false')
   controls.appendChild(miniButton)
-  if (options && typeof options.onExpand === 'function') {
-    controls.appendChild(makeControlButton('data-feed-video-expand', t('action_enter_fullscreen', 'Enter fullscreen'), 'expand'))
-  }
+  controls.appendChild(makeControlButton('data-feed-video-cinema', t('player_cinema_view', 'Cinema view'), 'cinema'))
+  controls.appendChild(makeControlButton('data-feed-video-fullscreen', t('action_enter_fullscreen', 'Enter fullscreen'), 'fullscreen'))
   return controls
+}
+
+function fullscreenElement(ownerDocument) {
+  return ownerDocument.fullscreenElement || ownerDocument.webkitFullscreenElement || null
+}
+
+export function exitFeedVideoFullscreen(video) {
+  if (!(video instanceof HTMLVideoElement)) return false
+  const ownerDocument = video.ownerDocument || document
+  const active = fullscreenElement(ownerDocument)
+  if (!active || !(active === video || (active.contains && active.contains(video)))) return false
+  const exit = ownerDocument.exitFullscreen || ownerDocument.webkitExitFullscreen
+  if (!exit) return false
+  try {
+    const result = exit.call(ownerDocument)
+    if (result && typeof result.catch === 'function') result.catch(function () {})
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
+export function toggleFeedVideoFullscreen(video) {
+  if (!(video instanceof HTMLVideoElement)) return false
+  const ownerDocument = video.ownerDocument || document
+  if (fullscreenElement(ownerDocument)) return exitFeedVideoFullscreen(video)
+  const request = video.requestFullscreen || video.webkitRequestFullscreen
+  if (!request) return false
+  try {
+    const result = request.call(video)
+    if (result && typeof result.catch === 'function') result.catch(function () {})
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
+export function toggleFeedVideoMute(video) {
+  if (!(video instanceof HTMLVideoElement)) return false
+  video.muted = !video.muted
+  return true
+}
+
+export function handleFeedVideoShortcut(event, video, options) {
+  if (!event || !(video instanceof HTMLVideoElement)) return false
+  const key = String(event.key || '')
+  const seekEnabled = !options || options.seek !== false
+  if (seekEnabled && (key === 'ArrowLeft' || key === 'ArrowRight')) {
+    const delta = key === 'ArrowRight' ? 5 : -5
+    const duration = Number(video.duration)
+    const upper = Number.isFinite(duration) && duration > 0 ? duration : Infinity
+    video.currentTime = Math.max(0, Math.min(upper, Number(video.currentTime || 0) + delta))
+    return true
+  }
+  if (key === 'ArrowUp' || key === 'ArrowDown') {
+    const delta = key === 'ArrowUp' ? 0.05 : -0.05
+    video.volume = Math.max(0, Math.min(1, Number(video.volume || 0) + delta))
+    if (key === 'ArrowUp') video.muted = false
+    return true
+  }
+  if (key === ' ') {
+    if (video.paused) video.play().catch(function () {})
+    else video.pause()
+    return true
+  }
+  const shortcuts = window.cfShortcuts
+  if (shortcuts && shortcuts.match('feed.mute', key)) return toggleFeedVideoMute(video)
+  return false
 }
 
 export function bindFeedVideoControls(wrap, video, options) {
@@ -128,7 +196,8 @@ export function bindFeedVideoControls(wrap, video, options) {
   const volumeControl = controls.querySelector('[data-feed-video-volume-control]')
   const volumePopover = controls.querySelector('.feed-video-volume-popover')
   const mini = controls.querySelector('[data-feed-video-mini]')
-  const expand = controls.querySelector('[data-feed-video-expand]')
+  const cinema = controls.querySelector('[data-feed-video-cinema]')
+  const fullscreen = controls.querySelector('[data-feed-video-fullscreen]')
   const speed = controls.querySelector('[data-feed-video-speed]')
   const speedButton = controls.querySelector('[data-feed-video-speed-button]')
   const speedMenu = controls.querySelector('[data-feed-video-speed-menu]')
@@ -258,6 +327,21 @@ export function bindFeedVideoControls(wrap, video, options) {
       })
     })
   }
+  if (cinema) {
+    cinema.addEventListener('click', function (event) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (options && typeof options.onCinema === 'function') {
+        options.onCinema()
+        return
+      }
+      const overlay = wrap.closest && wrap.closest('.feed-media-overlay')
+      const manager = window.FeedMediaOverlay
+      if (!manager) return
+      if (overlay && typeof manager.close === 'function') manager.close()
+      else if (typeof manager.open === 'function') manager.open(wrap, wrap)
+    })
+  }
   if (speed && speedButton && speedMenu) {
     speedButton.addEventListener('click', function (event) {
       event.preventDefault()
@@ -285,13 +369,29 @@ export function bindFeedVideoControls(wrap, video, options) {
     speed.addEventListener('mousedown', function (event) { event.stopPropagation() })
     speed.addEventListener('touchstart', function (event) { event.stopPropagation() })
   }
-  if (expand && options && typeof options.onExpand === 'function') {
-    expand.addEventListener('click', function (event) {
+  function syncFullscreen() {
+    if (!fullscreen) return
+    const ownerDocument = wrap.ownerDocument || document
+    const active = fullscreenElement(ownerDocument) === video
+    fullscreen.setAttribute('aria-label', active ? t('action_exit_fullscreen', 'Exit fullscreen') : t('action_enter_fullscreen', 'Enter fullscreen'))
+  }
+  if (fullscreen) {
+    fullscreen.addEventListener('click', function (event) {
       event.preventDefault()
       event.stopPropagation()
-      options.onExpand()
+      toggleFeedVideoFullscreen(video)
     })
+    const ownerDocument = wrap.ownerDocument || document
+    ownerDocument.addEventListener('fullscreenchange', syncFullscreen)
+    ownerDocument.addEventListener('webkitfullscreenchange', syncFullscreen)
   }
+
+  function exitFullscreenOnDoubleClick(event) {
+    if (!exitFeedVideoFullscreen(video)) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+  }
+  video.addEventListener('dblclick', exitFullscreenOnDoubleClick)
 
   video.addEventListener('play', syncPlay)
   video.addEventListener('pause', syncPlay)
@@ -304,11 +404,16 @@ export function bindFeedVideoControls(wrap, video, options) {
   syncPlay()
   syncMute()
   syncSpeed()
+  syncFullscreen()
   return function () {
     video.removeEventListener('play', syncPlay)
     video.removeEventListener('pause', syncPlay)
     video.removeEventListener('volumechange', syncMute)
     video.removeEventListener('ratechange', syncSpeed)
     video.removeEventListener('timeupdate', syncProgress)
+    video.removeEventListener('dblclick', exitFullscreenOnDoubleClick)
+    const ownerDocument = wrap.ownerDocument || document
+    ownerDocument.removeEventListener('fullscreenchange', syncFullscreen)
+    ownerDocument.removeEventListener('webkitfullscreenchange', syncFullscreen)
   }
 }

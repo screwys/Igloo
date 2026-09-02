@@ -789,7 +789,8 @@ func TestFeedVideoRendersUnifiedPlaybackControls(t *testing.T) {
 		`data-feed-video-speed-button>`,
 		`data-feed-video-speed-menu>`,
 		`data-feed-video-mini`,
-		`data-feed-video-expand`,
+		`data-feed-video-cinema`,
+		`data-feed-video-fullscreen`,
 	} {
 		if got := strings.Count(html, control); got != 2 {
 			t.Fatalf("%s count = %d, want 2; html=%s", control, got, html)
@@ -798,7 +799,37 @@ func TestFeedVideoRendersUnifiedPlaybackControls(t *testing.T) {
 	if strings.Contains(html, `feed-video-expand-btn`) {
 		t.Fatalf("separate fullscreen button should not remain; html=%s", html)
 	}
+	if strings.Contains(html, `data-feed-video-expand`) {
+		t.Fatalf("fullscreen control should not retain the old overlay expansion action; html=%s", html)
+	}
+	if strings.Contains(html, `aria-pressed="false" data-feed-video-control data-feed-video-cinema`) {
+		t.Fatalf("cinema should remain a momentary button rather than selected state; html=%s", html)
+	}
+	if got := strings.Count(html, `<path d="M15 4v16"></path>`); got != 2 {
+		t.Fatalf("split-view icon count = %d, want 2; html=%s", got, html)
+	}
+	if got := strings.Count(html, `data-feed-video-kind="video"`); got != 2 {
+		t.Fatalf("video playback kind count = %d, want 2; html=%s", got, html)
+	}
 	if strings.Contains(html, `feed-video-speed-select`) {
 		t.Fatalf("feed speed control should use the custom player menu, not a native select; html=%s", html)
+	}
+}
+
+func TestFeedGIFPreservesOverlayNavigationKind(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:           "sample_gif_post",
+		AuthorHandle:      "sample_author",
+		AuthorDisplayName: "Sample Author",
+		Media:             []model.MediaRef{{Type: "animated_gif"}},
+		MediaStreamURL:    "/api/media/stream/sample_gif_post",
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	if html := buf.String(); !strings.Contains(html, `data-feed-video-kind="gif"`) {
+		t.Fatalf("GIF playback kind missing; html=%s", html)
 	}
 }

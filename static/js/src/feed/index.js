@@ -3,6 +3,7 @@
 
 import { openMediaOverlay } from './media-overlay.js'
 import { initInlineMedia } from './inline-media.js'
+import { exitFeedVideoFullscreen, handleFeedVideoShortcut, toggleFeedVideoMute } from './video-controls.js'
 import { initTextClamps } from './text-clamp.js'
 import { initDates } from './dates.js'
 import { handleTranslateAction, getTranslateObserver, queueBackgroundTranslations } from './translate.js'
@@ -1122,6 +1123,7 @@ function handleInlineVideoClick(mediaTrigger, event) {
   var inlineVideo = mediaTrigger.querySelector('video')
   if (event.detail >= 2) {
     clearPendingInlineVideoClick(mediaTrigger)
+    if (exitFeedVideoFullscreen(inlineVideo)) return
     openMediaOverlay(mediaTrigger, mediaTrigger)
     return
   }
@@ -1142,16 +1144,7 @@ function handleInlineVideoClick(mediaTrigger, event) {
 }
 
 document.addEventListener('click', function (event) {
-  var expandBtn = event.target && event.target.closest ? event.target.closest('[data-feed-video-expand]') : null
-  if (expandBtn) {
-    event.preventDefault(); event.stopPropagation()
-    var wrap = expandBtn.closest('[data-feed-media]')
-    if (wrap) {
-      clearPendingInlineVideoClick(wrap)
-      openMediaOverlay(wrap, wrap)
-    }
-    return
-  }
+  if (event.target.closest && event.target.closest('[data-feed-video-control], [data-feed-progress]')) return
 
   var mediaTrigger = event.target && event.target.closest ? event.target.closest('[data-feed-media]') : null
   if (!mediaTrigger) return
@@ -1250,6 +1243,19 @@ function getFocusedFeedCard() {
   return _focusedFeedCard
 }
 
+function fullscreenFeedSurface() {
+  var fullscreen = document.fullscreenElement || document.webkitFullscreenElement
+  if (!fullscreen) return null
+  var video = String(fullscreen.tagName || '').toLowerCase() === 'video'
+    ? fullscreen
+    : (fullscreen.querySelector ? fullscreen.querySelector('video') : null)
+  if (!video) return null
+  return {
+    card: fullscreen.closest ? fullscreen.closest('[data-feed-item]') : null,
+    video: video,
+  }
+}
+
 function scrollFeedCardBy(delta) {
   var entries = visibleFeedEntries()
   if (!entries.length) return false
@@ -1312,6 +1318,12 @@ document.addEventListener('keydown', function (event) {
   }
   if (isBookmarkMenuOpen()) return
 
+  var fullscreenSurface = fullscreenFeedSurface()
+  if (fullscreenSurface && handleFeedVideoShortcut(event, fullscreenSurface.video)) {
+    event.preventDefault(); event.stopImmediatePropagation()
+    return
+  }
+
   if (event.key === 'j' || event.key === 'J') {
     if (scrollFeedCardBy(1)) { event.preventDefault(); event.stopPropagation() }
     return
@@ -1320,10 +1332,15 @@ document.addEventListener('keydown', function (event) {
     return
   }
 
-  var card = getFocusedFeedCard()
+  var card = (fullscreenSurface && fullscreenSurface.card) || getFocusedFeedCard()
   if (!card) return
 
-  if (sc.match('feed.like', event.key)) {
+  if (sc.match('feed.mute', event.key)) {
+    var video = (fullscreenSurface && fullscreenSurface.video) || card.querySelector('video[data-feed-inline-video]')
+    if (toggleFeedVideoMute(video)) {
+      event.preventDefault(); event.stopPropagation()
+    }
+  } else if (sc.match('feed.like', event.key)) {
     event.preventDefault(); event.stopPropagation()
     triggerFeedActionUi(card, 'like', getFeedActionUiButton(card, 'heart'))
   } else if (sc.match('feed.bookmark', event.key)) {

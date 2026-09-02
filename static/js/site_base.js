@@ -1,7 +1,7 @@
 // Global configurable keyboard shortcuts — backed by server preferences.json
 (function () {
   var defaults = {
-    'feed.like': 'l', 'feed.bookmark': 'b', 'feed.share': 's', 'feed.translate': 't', 'feed.media': 'f',
+    'feed.like': 'l', 'feed.bookmark': 'b', 'feed.share': 's', 'feed.translate': 't', 'feed.media': 'f', 'feed.mute': 'm',
     'shorts.mute': 'm', 'shorts.autoplay': 'a', 'shorts.bookmark': 'b', 'shorts.share': 's', 'shorts.grid': 'c',
     'player.fullscreen': 'f', 'player.cinema': 'c', 'player.bookmark': 'b', 'player.share': 's', 'player.autoplay': 'a',
     'global.sidebar': 'z',
