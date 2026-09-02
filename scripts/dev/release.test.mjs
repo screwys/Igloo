@@ -196,11 +196,8 @@ test("container release keeps latest on main HEAD and signs release images", () 
   assert.match(workflow, shaPinnedAction("anchore/sbom-action", "v0.24.0"));
   assert.match(workflow, /image: ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/igloo@\$\{\{ steps\.build\.outputs\.digest \}\}/);
   assert.match(workflow, /output-file: release-artifacts\/igloo-container-\$\{\{ github\.ref_name \}\}\.spdx\.json/);
-  assert.match(workflow, shaPinnedAction("anchore/scan-action", "v7.4.0"));
-  assert.match(workflow, /sbom: release-artifacts\/igloo-container-\$\{\{ github\.ref_name \}\}\.spdx\.json/);
-  assert.match(workflow, /severity-cutoff: critical/);
-  assert.match(workflow, /only-fixed: true/);
-  assert.match(workflow, /output-file: release-artifacts\/igloo-container-\$\{\{ github\.ref_name \}\}-vulnerabilities\.json/);
+  assert.doesNotMatch(workflow, /anchore\/scan-action/);
+  assert.doesNotMatch(workflow, /\.grype\.yaml/);
   assert.match(workflow, shaPinnedAction("actions/attest", "v4"));
   assert.match(workflow, /subject-name: ghcr\.io\/\$\{\{ github\.repository_owner \}\}\/igloo/);
   assert.match(workflow, /subject-digest: \$\{\{ steps\.build\.outputs\.digest \}\}/);
