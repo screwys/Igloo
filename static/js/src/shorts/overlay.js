@@ -509,7 +509,7 @@ export function updateCurrentActionButtons() {
     var isCurrent = idx === _state.currentIndex
     if (refs.muteBtn) {
       refs.muteBtn.classList.toggle('active', _state.muted)
-      setSvgContent(refs.muteBtn, _fns.iconSvg('mute', _state.muted))
+      setSvgContent(refs.muteBtn, _fns.iconSvg('mute', _state.muted, _state.volume))
       refs.muteBtn.title = _state.muted ? t('action_unmute', 'Unmute') : t('action_mute', 'Mute')
       refs.muteBtn.setAttribute('aria-label', refs.muteBtn.title)
     }

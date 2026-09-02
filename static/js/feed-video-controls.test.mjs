@@ -144,7 +144,9 @@ class FakeVideo extends FakeElement {
 async function loadVideoControls() {
   const source = await readFile(new URL('./src/feed/video-controls.js', import.meta.url), 'utf8')
   const visibilitySource = await readFile(new URL('./src/video-controls-visibility.js', import.meta.url), 'utf8')
-  const runnable = "const attachSeekTooltip = () => {}; const makeDraggableSeekbar = () => {}; const setSvgContent = () => {}; const t = (_key, fallback) => fallback;\n" +
+  const volumeSource = await readFile(new URL('./src/volume.js', import.meta.url), 'utf8')
+  const runnable = "const attachSeekTooltip = () => {}; const makeDraggableSeekbar = () => {}; const materialIconMarkup = (name) => '<svg>' + name + '</svg>'; const setSvgContent = (element, html) => { element.innerHTML = html }; const t = (_key, fallback) => fallback;\n" +
+    volumeSource.replace(/\bexport\s+/g, '') + '\n' +
     visibilitySource.replace(/\bexport\s+/g, '') + '\n' +
     source.replace(/^import .*$/gm, '').replace(/\bexport\s+/g, '') +
     '\nObject.assign(globalThis, { createFeedVideoControls, bindFeedVideoControls, exitFeedVideoFullscreen, handleFeedVideoShortcut, toggleFeedVideoFullscreen, toggleFeedVideoMute });'
@@ -159,6 +161,11 @@ async function loadVideoControls() {
       pendingTimer = null
     },
   }
+  const storedValues = new Map()
+  window.localStorage = {
+    getItem(key) { return storedValues.has(key) ? storedValues.get(key) : null },
+    setItem(key, value) { storedValues.set(key, value) },
+  }
   window.top = window
   const document = new FakeElement('document')
   document.createElement = (tagName) => new FakeElement(tagName)
@@ -169,10 +176,11 @@ async function loadVideoControls() {
     pendingTimer = null
     if (callback) callback()
   }
+  context.storedValues = storedValues
   return context
 }
 
-test('vertical volume control changes volume without toggling feed playback', async () => {
+test('integrated volume control changes and persists feed volume without toggling playback', async () => {
   const media = await loadVideoControls()
   const wrap = new FakeElement('div')
   const controls = media.createFeedVideoControls()
@@ -191,7 +199,15 @@ test('vertical volume control changes volume without toggling feed playback', as
   assert.equal(video.volume, 0.35)
   assert.equal(video.muted, false)
   assert.equal(video.paused, true)
-  assert.equal(popover.style.values.get('--feed-volume-height'), '27px')
+  assert.equal(popover.style.values.get('--feed-volume-height'), '22px')
+  assert.equal(media.storedValues.get('feedVolume'), '0.35')
+
+  const nextWrap = new FakeElement('div')
+  const nextControls = media.createFeedVideoControls()
+  const nextVideo = new FakeVideo()
+  nextWrap.appendChild(nextControls)
+  media.bindFeedVideoControls(nextWrap, nextVideo)
+  assert.equal(nextVideo.volume, 0.35)
 
   let corridorClickStopped = false
   volumeControl.dispatch('click', { stopPropagation() { corridorClickStopped = true } })

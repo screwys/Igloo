@@ -1,4 +1,5 @@
 import { showToast, t, tf } from '../utils.js'
+import { sponsorSegmentLayout } from './sponsorblock-segments.js'
 
 const CATEGORY_KEYS = {
   sponsor: 'sponsorblock_category_sponsor',
@@ -55,6 +56,7 @@ export function initSponsorBlock(video, root) {
   let didSeek = false
   let playbackStarted = false
   let internalSeek = false
+  let overlayRenderPending = false
 
   // Track user-initiated seeks only. Ignore:
   //   - seeks before first 'playing' (resume position applied during load)
@@ -121,38 +123,43 @@ export function initSponsorBlock(video, root) {
 
     const timeRange = document.getElementById('main-player-time-range')
     if (!timeRange) return
+    timeRange.sponsorBlockPreviewSegments = segments.map(function (segment) {
+      return {
+        start: segment.start,
+        end: segment.end,
+        label: categoryLabel(segment.category),
+      }
+    })
+    const track = timeRange.shadowRoot && timeRange.shadowRoot.querySelector('#track')
+    if (!track) {
+      if (!overlayRenderPending && window.customElements && typeof window.customElements.whenDefined === 'function') {
+        overlayRenderPending = true
+        window.customElements.whenDefined('media-time-range').then(function () {
+          overlayRenderPending = false
+          window.requestAnimationFrame(renderOverlay)
+        })
+      }
+      return
+    }
+    let layer = track.querySelector('#igloo-sponsorblock-segments')
 
     if (!segments.length) {
-      timeRange.style.removeProperty('--media-range-track-background')
+      if (layer) layer.remove()
       return
     }
 
-    const base = 'rgba(255, 255, 255, 0.14)'
-    const sorted = segments.slice().sort(function (a, b) { return a.start - b.start })
-
-    function buildGradient(fillColor) {
-      const stops = []
-      let cursor = 0
-      sorted.forEach(function (seg) {
-        const startPct = (seg.start / dur) * 100
-        const endPct = Math.min((seg.end / dur) * 100, 100)
-        const color = CATEGORY_COLORS[seg.category] || '#888'
-        if (startPct > cursor) {
-          stops.push(fillColor + ' ' + cursor + '%')
-          stops.push(fillColor + ' ' + startPct + '%')
-        }
-        stops.push(color + ' ' + startPct + '%')
-        stops.push(color + ' ' + endPct + '%')
-        cursor = endPct
-      })
-      if (cursor < 100) {
-        stops.push(fillColor + ' ' + cursor + '%')
-        stops.push(fillColor + ' 100%')
-      }
-      return 'linear-gradient(to right, ' + stops.join(', ') + ')'
+    if (!layer) {
+      layer = document.createElement('div')
+      layer.id = 'igloo-sponsorblock-segments'
+      layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:2;'
+      track.appendChild(layer)
     }
-
-    timeRange.style.setProperty('--media-range-track-background', buildGradient(base))
+    layer.replaceChildren()
+    sponsorSegmentLayout(segments, dur, CATEGORY_COLORS).forEach(function (segment) {
+      const marker = document.createElement('span')
+      marker.style.cssText = 'position:absolute;top:0;bottom:0;left:' + segment.left + '%;width:' + segment.width + '%;background:' + segment.color + ';'
+      layer.appendChild(marker)
+    })
   }
 
   video.addEventListener('timeupdate', function () {

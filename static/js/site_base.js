@@ -91,6 +91,14 @@
     return translate(message, message);
   }
 
+  function materialIconMarkup(name, className) {
+    var icon = doc.querySelector('#material-icon-palette [data-material-icon="' + String(name).replace(/[^A-Za-z0-9]/g, '') + '"]');
+    if (!icon) return '';
+    var clone = icon.cloneNode(true);
+    if (className) clone.classList.add(className);
+    return clone.outerHTML;
+  }
+
   function i18nArgs(el, prefix) {
     var raw = el.getAttribute(prefix + '-args') || '';
     if (!raw) return [];
@@ -801,7 +809,10 @@
   function syncSidebarControls() {
     var expanded = desktopSidebar.matches && !doc.documentElement.classList.contains('sidebar-hidden');
     expanded = expanded || body.classList.contains('sidebar-open');
-    if (sidebarToggle) sidebarToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    if (sidebarToggle) {
+      sidebarToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      sidebarToggle.innerHTML = materialIconMarkup(expanded ? 'Close' : 'Menu');
+    }
   }
 
   function setSidebarHidden(hidden) {
@@ -3141,6 +3152,7 @@
     closeModal: closeModal,
     showToast: showToast,
     t: t,
+    materialIconMarkup: materialIconMarkup,
     apiJson: apiJson,
     askConfirm: askConfirm,
     syncChannelFollowState: syncChannelFollowState,

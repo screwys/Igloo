@@ -1,14 +1,18 @@
-import { attachSeekTooltip, makeDraggableSeekbar, setSvgContent, t } from '../utils.js'
+import { attachSeekTooltip, makeDraggableSeekbar, materialIconMarkup, setSvgContent, t } from '../utils.js'
 import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
+import { readStoredVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
+
+const FEED_VOLUME_KEY = 'feedVolume'
 
 const videoControlIcons = {
-  play: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>',
-  pause: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>',
-  muted: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6M16 9l6 6"/></svg>',
-  unmuted: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>',
-  mini: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="11" y="11" width="8" height="6" rx="1" fill="currentColor" stroke="none"/></svg>',
-  cinema: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>',
-  fullscreen: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>'
+  play: materialIconMarkup('PlayArrow'),
+  pause: materialIconMarkup('Pause'),
+  muted: materialIconMarkup('VolumeOff'),
+  low: materialIconMarkup('VolumeDown'),
+  high: materialIconMarkup('VolumeUp'),
+  mini: materialIconMarkup('PictureInPictureAlt'),
+  cinema: materialIconMarkup('ViewSidebar'),
+  fullscreen: materialIconMarkup('Fullscreen')
 }
 
 const playbackRates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
@@ -47,8 +51,12 @@ function makeVolumeControl() {
   slider.setAttribute('data-feed-video-control', '')
   slider.setAttribute('data-feed-video-volume', '')
   popover.appendChild(slider)
+  const thumb = document.createElement('span')
+  thumb.className = 'feed-video-volume-thumb'
+  thumb.setAttribute('aria-hidden', 'true')
+  popover.appendChild(thumb)
   control.appendChild(popover)
-  control.appendChild(makeControlButton('data-feed-video-mute', t('action_mute', 'Mute'), 'unmuted'))
+  control.appendChild(makeControlButton('data-feed-video-mute', t('action_mute', 'Mute'), 'high'))
   return control
 }
 
@@ -172,6 +180,7 @@ export function handleFeedVideoShortcut(event, video, options) {
     const delta = key === 'ArrowUp' ? 0.05 : -0.05
     video.volume = Math.max(0, Math.min(1, Number(video.volume || 0) + delta))
     if (key === 'ArrowUp') video.muted = false
+    writeStoredVolume(window.localStorage, FEED_VOLUME_KEY, video.volume)
     return true
   }
   if (key === ' ') {
@@ -189,6 +198,7 @@ export function bindFeedVideoControls(wrap, video, options) {
   const controls = wrap.querySelector('[data-feed-video-controls]')
   if (!controls || controls.dataset.feedVideoControlsBound === '1') return
   controls.dataset.feedVideoControlsBound = '1'
+  video.volume = readStoredVolume(window.localStorage, FEED_VOLUME_KEY, video.volume)
 
   const play = controls.querySelector('[data-feed-video-play]')
   const mute = controls.querySelector('[data-feed-video-mute]')
@@ -232,12 +242,12 @@ export function bindFeedVideoControls(wrap, video, options) {
   function syncMute() {
     if (mute) {
       mute.setAttribute('aria-label', video.muted ? t('action_unmute', 'Unmute') : t('action_mute', 'Mute'))
-      setSvgContent(mute, videoControlIcons[video.muted ? 'muted' : 'unmuted'])
+      setSvgContent(mute, videoControlIcons[volumeIconLevel(video.muted, video.volume)])
     }
     if (volume) {
       const effectiveVolume = video.muted ? 0 : video.volume
       volume.value = String(effectiveVolume)
-      if (volumePopover) volumePopover.style.setProperty('--feed-volume-height', Math.round(effectiveVolume * 76) + 'px')
+      if (volumePopover) volumePopover.style.setProperty('--feed-volume-height', Math.round(effectiveVolume * 62) + 'px')
     }
   }
 
@@ -286,6 +296,7 @@ export function bindFeedVideoControls(wrap, video, options) {
       const nextVolume = Math.max(0, Math.min(1, Number(volume.value || 0)))
       video.volume = nextVolume
       video.muted = nextVolume === 0
+      writeStoredVolume(window.localStorage, FEED_VOLUME_KEY, nextVolume)
       syncMute()
     })
     volume.addEventListener('click', function (event) { event.stopPropagation() })

@@ -35,14 +35,13 @@ templ Base(p PageProps) {
 		<script>try{var w=Number(localStorage.getItem('igloo.sidebar.width.v1'));if(w===72){document.documentElement.classList.add('sidebar-collapsed');document.documentElement.style.setProperty('--sidebar-panel-width','72px')}else if(w>=200&&w<=420){document.documentElement.style.setProperty('--sidebar-panel-width',w+'px')}}catch(_){}</script>
 	</head>
 	<body hx-headers={ `{"X-CSRF-Token":"` + p.CSRFToken + `"}` }>
+		@MaterialIconPalette()
 		<div class="app">
 			<div id="sidebar-overlay" class="sidebar-overlay"></div>
 			@Sidebar(p)
 			<main class="main" id="main-content">
 				<button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-controls="app-sidebar" aria-expanded="true" aria-label={ L(p, "action_toggle_sidebar", "Toggle sidebar") }>
-					<span></span>
-					<span></span>
-					<span></span>
+					@MaterialIcon("Menu", "")
 				</button>
 				@Header(p)
 				{ children... }

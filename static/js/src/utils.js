@@ -181,29 +181,31 @@ export function askConfirm(opts) {
   return Promise.resolve(window.confirm(body))
 }
 
-// Static SVG icon markup — getFeedActionIconSvg returns hardcoded SVG strings
-// with no user input. Used by syncFeedActionIcons and state sync functions.
+export function materialIconMarkup(name, className) {
+  if (typeof window !== 'undefined' && window.MpaSiteBase && typeof window.MpaSiteBase.materialIconMarkup === 'function') {
+    return window.MpaSiteBase.materialIconMarkup(name, className)
+  }
+  var cls = 'material-icon' + (className ? ' ' + className : '')
+  return '<svg class="' + cls + '" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" data-material-icon="' + name + '"></svg>'
+}
+
+// Used by syncFeedActionIcons and state sync functions. X keeps its platform
+// logo; all product actions use the shared Material icon palette.
 export function getFeedActionIconSvg(kind, active) {
-  if (kind === 'share') return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>'
-  if (kind === 'heart') {
-    var fill = active ? 'currentColor' : 'none'
-    return '<svg width="20" height="20" viewBox="0 0 24 24" fill="' + fill + '" stroke="currentColor" stroke-width="2"><path d="M12 21s-6.7-4.35-9.2-8.14C.69 9.63 1.22 5.5 4.56 4.02 6.8 3.03 9.2 3.69 10.72 5.55L12 7.12l1.28-1.57c1.52-1.86 3.92-2.52 6.16-1.53 3.34 1.48 3.87 5.61 1.76 8.84C18.7 16.65 12 21 12 21z"/></svg>'
-  }
-  if (kind === 'bookmark') {
-    var bfill = active ? 'currentColor' : 'none'
-    return '<svg width="20" height="20" viewBox="0 0 24 24" fill="' + bfill + '" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>'
-  }
+  if (kind === 'share') return materialIconMarkup('Share')
+  if (kind === 'heart') return materialIconMarkup(active ? 'Favorite' : 'FavoriteBorder')
+  if (kind === 'bookmark') return materialIconMarkup(active ? 'Bookmark' : 'BookmarkBorder')
   if (kind === 'link' || kind === 'xlogo') return '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>'
-  if (kind === 'open') return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>'
-  return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l2.12-2.12a5 5 0 0 0-7.07-7.07L11.38 5.5"/><path d="M14 11a5 5 0 0 0-7.54-.54L4.34 12.58a5 5 0 0 0 7.07 7.07l1.41-1.41"/></svg>'
+  if (kind === 'open') return materialIconMarkup('OpenInNew')
+  return materialIconMarkup('Link')
 }
 
 // setSvgContent safely sets static SVG content on an element using a template.
-// All SVG comes from getFeedActionIconSvg — no user input.
+// All markup comes from the static icon palette — no user input.
 export function setSvgContent(el, svgString) {
   el.replaceChildren()
   var tmp = document.createElement('template')
-  tmp.innerHTML = svgString // nosec: static SVG from getFeedActionIconSvg
+  tmp.innerHTML = svgString // nosec: static markup from the Material icon palette
   el.appendChild(tmp.content)
 }
 

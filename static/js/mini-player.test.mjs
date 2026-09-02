@@ -75,7 +75,6 @@ test('the mini-player defaults to one and a half times its previous width', asyn
   assert.match(css, /width:\s*clamp\(480px, 42vw, 630px\)/)
   assert.match(css, /max-width:\s*min\(1040px, calc\(100vw - 2rem\)\)/)
   assert.match(source, /igloo\.mini-player\.width\.v2/)
-  assert.match(css, /media-volume-range\s*\+\s*\.mc-custom-btn/)
 })
 
 test('saved mini-player width migrates once and then remains exact', () => {

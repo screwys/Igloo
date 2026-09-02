@@ -33,6 +33,7 @@ import {
   momentsResumeVideoId
 } from './cursor.js'
 import { initShortsDebug } from './debug.js'
+import { readStoredVolume } from '../volume.js'
 
 var doc = document
 var layout = doc.getElementById('shorts-layout')
@@ -65,9 +66,7 @@ if (layout) {
     var STORY_TRAY_MAX_WIDTH = 520
     var storyTrayStorageKey = 'igloo.story-tray.width.v1'
     var storyTrayResizePointerId = null
-    var storedShortsVolume = parseFloat(localStorage.getItem('shortsVolume'))
-    if (!Number.isFinite(storedShortsVolume)) storedShortsVolume = 1
-    storedShortsVolume = Math.max(0, Math.min(1, storedShortsVolume))
+    var storedShortsVolume = readStoredVolume(localStorage, 'shortsVolume', 1)
     var storedShortsPlaybackRate = parseFloat(localStorage.getItem('shortsPlaybackRate'))
     if ([0.75, 1, 1.25, 1.5, 2].indexOf(storedShortsPlaybackRate) < 0) storedShortsPlaybackRate = 1
 

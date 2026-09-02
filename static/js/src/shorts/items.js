@@ -1,9 +1,10 @@
 // Shorts items — DOM builder, action button handlers, card parsing.
 
-import { apiFetch, askConfirm, cssEscape, escapeHtml, showToast, copyText, makeDraggableSeekbar, attachSeekTooltip, formatRelative, t, tf, toFxTwitterUrl } from '../utils.js'
+import { apiFetch, askConfirm, cssEscape, escapeHtml, showToast, copyText, makeDraggableSeekbar, attachSeekTooltip, formatRelative, materialIconMarkup, t, tf, toFxTwitterUrl } from '../utils.js'
 import { openBookmarkMenu } from '../bookmark-menu.js'
 import { maybeMarkAspect, handleVideoTimeUpdate, toggleShortPlayback, setSlideshowIndex, stepSlideshow, syncRenderedShortVideoLoop } from './playback.js'
 import { attachShortVideoDebug } from './debug.js'
+import { normalizeVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
 
 var _state = null
 var _fns = null
@@ -54,6 +55,7 @@ function syncMomentFullscreenButtons() {
     var label = isActive ? t('action_exit_fullscreen', 'Exit fullscreen') : t('action_enter_fullscreen', 'Enter fullscreen')
     button.title = label
     button.setAttribute('aria-label', label)
+    safeSetMarkup(button, iconSvg('fullscreen', isActive))
   })
 }
 
@@ -81,7 +83,7 @@ function toggleMomentFullscreen(entry) {
 }
 
 function applyShortMediaPreferences() {
-  var volume = Math.max(0, Math.min(1, Number(_state.volume)))
+  var volume = normalizeVolume(_state.volume, 1)
   var rate = Number(_state.playbackRate) > 0 ? Number(_state.playbackRate) : 1
   document.querySelectorAll('#shorts-container video, #shorts-container audio').forEach(function (media) {
     media.volume = volume
@@ -91,10 +93,10 @@ function applyShortMediaPreferences() {
 }
 
 function setShortVolume(value) {
-  var volume = Math.max(0, Math.min(1, Number(value)))
-  _state.volume = Number.isFinite(volume) ? volume : 1
+  var volume = normalizeVolume(value, 1)
+  _state.volume = volume
   _state.muted = _state.volume === 0
-  localStorage.setItem('shortsVolume', String(_state.volume))
+  writeStoredVolume(localStorage, 'shortsVolume', _state.volume)
   localStorage.setItem('shortsMuted', String(_state.muted))
   applyShortMediaPreferences()
   _fns.updateCurrentActionButtons()
@@ -103,7 +105,7 @@ function setShortVolume(value) {
 function toggleShortMute() {
   _state.muted = !_state.muted
   if (!_state.muted && !(_state.volume > 0)) _state.volume = 1
-  localStorage.setItem('shortsVolume', String(_state.volume))
+  writeStoredVolume(localStorage, 'shortsVolume', _state.volume)
   localStorage.setItem('shortsMuted', String(_state.muted))
   applyShortMediaPreferences()
   _fns.updateCurrentActionButtons()
@@ -397,98 +399,28 @@ function openMomentActions(entry, trigger) {
   return true
 }
 
-function lucideMenuIcon(paths) {
-  return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>'
-}
-
-// Menu glyphs use Lucide's published 24px icon data (ISC license).
 function menuIconSvg(kind) {
-  if (kind === 'speed') {
-    return lucideMenuIcon('<path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path>')
+  var names = {
+    speed: 'Speed', mini: 'PictureInPictureAlt', share: 'Share', profile: 'Person',
+    repost: 'Repeat', 'mute-account': 'VolumeOff', follow: 'Person', unfollow: 'PersonRemove'
   }
-  if (kind === 'mini') {
-    return lucideMenuIcon('<path d="M2 10h6V4"></path><path d="m2 4 6 6"></path><path d="M21 10V7a2 2 0 0 0-2-2h-7"></path><path d="M3 14v2a2 2 0 0 0 2 2h3"></path><rect x="12" y="14" width="10" height="7" rx="1"></rect>')
-  }
-  if (kind === 'share') {
-    return lucideMenuIcon('<circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line>')
-  }
-  if (kind === 'profile') {
-    return lucideMenuIcon('<circle cx="12" cy="8" r="5"></circle><path d="M20 21a8 8 0 0 0-16 0"></path>')
-  }
-  if (kind === 'repost') {
-    return lucideMenuIcon('<path d="m2 9 3-3 3 3"></path><path d="M13 18H7a2 2 0 0 1-2-2V6"></path><path d="m22 15-3 3-3-3"></path><path d="M11 6h6a2 2 0 0 1 2 2v10"></path>')
-  }
-  if (kind === 'mute-account') {
-    return lucideMenuIcon('<path d="M11 4.702a.7.7 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.7.7 0 0 0 11 19.298z"></path><path d="m16.5 14.5 5-5"></path><path d="m16.5 9.5 5 5"></path>')
-  }
-  if (kind === 'follow') {
-    return lucideMenuIcon('<path d="M2 21a8 8 0 0 1 13.292-6"></path><circle cx="10" cy="8" r="5"></circle><path d="M19 16v6"></path><path d="M22 19h-6"></path>')
-  }
-  if (kind === 'unfollow') {
-    return lucideMenuIcon('<path d="M2 21a8 8 0 0 1 13.292-6"></path><circle cx="10" cy="8" r="5"></circle><path d="M22 19h-6"></path>')
-  }
-  return ''
+  return names[kind] ? materialIconMarkup(names[kind]) : ''
 }
 
-export function iconSvg(kind, active) {
-  if (kind === 'menu') {
-    return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>'
+export function iconSvg(kind, active, volume) {
+  var names = {
+    menu: 'Menu', more: 'MoreVert', fullscreen: active ? 'FullscreenExit' : 'Fullscreen',
+    grid: 'GridView', 'tray-right': 'ViewSidebar', prev: 'KeyboardArrowLeft',
+    next: 'KeyboardArrowRight', open: 'OpenInNew', check: 'Check', add: 'Add',
+    share: 'Share', comment: 'ChatBubble', pause: 'Pause'
   }
-  if (kind === 'more') {
-    return '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>'
-  }
-  if (kind === 'fullscreen') {
-    return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"></path></svg>'
-  }
-  if (kind === 'grid') {
-    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1.2"></rect><rect x="14" y="4" width="6" height="6" rx="1.2"></rect><rect x="4" y="14" width="6" height="6" rx="1.2"></rect><rect x="14" y="14" width="6" height="6" rx="1.2"></rect></svg>'
-  }
-  if (kind === 'tray-right') {
-    return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M15 4v16"></path><path d="M9 9l3 3-3 3"></path></svg>'
-  }
-  if (kind === 'prev') {
-    return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>'
-  }
-  if (kind === 'next') {
-    return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>'
-  }
-  if (kind === 'open') {
-    return '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7"></path><path d="M10 14L21 3"></path><path d="M21 14v6a1 1 0 0 1-1 1h-6"></path><path d="M10 3H4a1 1 0 0 0-1 1v6"></path><path d="M3 10v10a1 1 0 0 0 1 1h10"></path></svg>'
-  }
-  if (kind === 'check') {
-    return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>'
-  }
-  if (kind === 'add') {
-    return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>'
-  }
-  if (kind === 'share') {
-    return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>'
-  }
-  if (kind === 'bookmark') {
-    if (active) {
-      return '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>'
-    }
-    return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>'
-  }
-  if (kind === 'comment') {
-    return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
-  }
-  if (kind === 'autoplay') {
-    if (active) {
-      return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" fill="none"></circle><polygon points="10 8 16 12 10 16" fill="currentColor" stroke="none"></polygon></svg>'
-    }
-    return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16" fill="currentColor" stroke="none"></polygon></svg>'
-  }
+  if (kind === 'bookmark') return materialIconMarkup(active ? 'Bookmark' : 'BookmarkBorder')
+  if (kind === 'autoplay') return materialIconMarkup(active ? 'PlayCircle' : 'PlayCircleOutline')
   if (kind === 'mute') {
-    if (active) {
-      return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>'
-    }
-    return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>'
+    var level = volumeIconLevel(active, volume)
+    return materialIconMarkup(level === 'muted' ? 'VolumeOff' : (level === 'low' ? 'VolumeDown' : 'VolumeUp'))
   }
-  if (kind === 'pause') {
-    return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="5" width="4" height="14" fill="currentColor" stroke="none"></rect><rect x="14" y="5" width="4" height="14" fill="currentColor" stroke="none"></rect></svg>'
-  }
-  return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>'
+  return materialIconMarkup(names[kind] || 'PlayCircleOutline')
 }
 
 
@@ -707,7 +639,7 @@ function makeRepostLabel(entryData) {
     var chevron = document.createElement('span')
     chevron.className = 'shorts-repost-chevron'
     chevron.setAttribute('aria-hidden', 'true')
-    chevron.textContent = '›'
+    safeSetMarkup(chevron, iconSvg('next'))
     el.appendChild(chevron)
   }
   return el
@@ -828,7 +760,7 @@ export function makeShortItem(entryData, existingEl) {
   var volumeValue = _state.muted ? 0 : _state.volume
   safeSetMarkup(topControls, '' +
     '<div class="shorts-volume-control">' +
-    '<button class="shorts-top-control-btn shorts-mute-btn" type="button" data-short-top-action="mute" title="' + escapeHtml(_state.muted ? t('action_unmute', 'Unmute') : t('action_mute', 'Mute')) + '" aria-label="' + escapeHtml(_state.muted ? t('action_unmute', 'Unmute') : t('action_mute', 'Mute')) + '">' + iconSvg('mute', _state.muted) + '</button>' +
+    '<button class="shorts-top-control-btn shorts-mute-btn" type="button" data-short-top-action="mute" title="' + escapeHtml(_state.muted ? t('action_unmute', 'Unmute') : t('action_mute', 'Mute')) + '" aria-label="' + escapeHtml(_state.muted ? t('action_unmute', 'Unmute') : t('action_mute', 'Mute')) + '">' + iconSvg('mute', _state.muted, _state.volume) + '</button>' +
     '<input class="shorts-volume-slider" type="range" min="0" max="1" step="0.05" value="' + escapeHtml(String(volumeValue)) + '" aria-label="' + escapeHtml(t('player_volume', 'Volume')) + '">' +
     '</div>' +
     '<div class="shorts-top-right-actions">' +
@@ -919,7 +851,7 @@ export function makeShortItem(entryData, existingEl) {
     prevSlideBtn.className = 'slide-arrow prev'
     prevSlideBtn.type = 'button'
     prevSlideBtn.setAttribute('aria-label', t('action_previous_slide', 'Previous slide'))
-    safeSetMarkup(prevSlideBtn, '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>')
+    safeSetMarkup(prevSlideBtn, iconSvg('prev'))
     prevSlideBtn.addEventListener('click', function (e) {
       e.preventDefault()
       e.stopPropagation()
@@ -939,7 +871,7 @@ export function makeShortItem(entryData, existingEl) {
     nextSlideBtn.className = 'slide-arrow next'
     nextSlideBtn.type = 'button'
     nextSlideBtn.setAttribute('aria-label', t('action_next_slide', 'Next slide'))
-    safeSetMarkup(nextSlideBtn, '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>')
+    safeSetMarkup(nextSlideBtn, iconSvg('next'))
     nextSlideBtn.addEventListener('click', function (e) {
       e.preventDefault()
       e.stopPropagation()

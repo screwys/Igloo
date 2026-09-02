@@ -33,12 +33,23 @@ function findPreviewCueAtTime(cues, timeSeconds) {
   return list[list.length - 1] || null
 }
 
+export function findPreviewSegmentAtTime(segments, timeSeconds) {
+  const time = Number(timeSeconds)
+  if (!Number.isFinite(time) || !Array.isArray(segments)) return null
+  return segments.filter(function (segment) {
+    return time >= Number(segment.start) && time < Number(segment.end)
+  }).sort(function (a, b) {
+    return (Number(a.end) - Number(a.start)) - (Number(b.end) - Number(b.start))
+  })[0] || null
+}
+
 export function initPreviewHover(video, videoId, playerWrapper) {
   if (!playerWrapper || !videoId) return
 
   let previewOverlay = null
   let previewFrame = null
   let previewImg = null
+  let previewSegmentEl = null
   let previewTimeEl = null
   let previewCues = []
   let trackLoading = false
@@ -53,6 +64,10 @@ export function initPreviewHover(video, videoId, playerWrapper) {
     previewFrame = document.createElement('div')
     previewFrame.className = 'dashboard-preview-overlay-frame'
     previewOverlay.appendChild(previewFrame)
+
+    previewSegmentEl = document.createElement('div')
+    previewSegmentEl.className = 'dashboard-preview-overlay-segment hidden'
+    previewOverlay.appendChild(previewSegmentEl)
 
     previewTimeEl = document.createElement('div')
     previewTimeEl.className = 'dashboard-preview-overlay-time'
@@ -73,14 +88,19 @@ export function initPreviewHover(video, videoId, playerWrapper) {
 
   function setOverlay(cue, previewTime, clientX) {
     ensureOverlay()
-    if (!previewOverlay || !previewFrame || !previewTimeEl) return
+    if (!previewOverlay || !previewFrame || !previewSegmentEl || !previewTimeEl) return
     previewOverlay.classList.remove('hidden')
     previewTimeEl.textContent = formatClock(previewTime)
+    const previewSegment = findPreviewSegmentAtTime(timeRange.sponsorBlockPreviewSegments, previewTime)
+    previewSegmentEl.textContent = previewSegment ? String(previewSegment.label || '') : ''
+    previewSegmentEl.classList.toggle('hidden', !previewSegmentEl.textContent)
 
     const wrapperRect = playerWrapper.getBoundingClientRect()
+    const rangeRect = timeRange.getBoundingClientRect()
     const x = Math.max(0, Math.min(wrapperRect.width, Number(clientX) - wrapperRect.left))
     previewOverlay.style.left = x + 'px'
-    previewOverlay.style.bottom = '58px'
+    const overlayBottom = Math.max(0, wrapperRect.bottom - rangeRect.top + 12)
+    previewOverlay.style.bottom = overlayBottom + 'px'
 
     if (!cue || !Array.isArray(cue.coords) || cue.coords.length !== 4) {
       previewFrame.style.display = 'none'
@@ -90,15 +110,15 @@ export function initPreviewHover(video, videoId, playerWrapper) {
     const sy = Number(cue.coords[1]) || 0
     const sw = Math.max(1, Number(cue.coords[2]) || 1)
     const sh = Math.max(1, Number(cue.coords[3]) || 1)
+    const scale = 0.72
     previewFrame.style.display = ''
-    previewFrame.style.width = sw + 'px'
-    previewFrame.style.height = sh + 'px'
-    previewFrame.style.transform = 'scale(0.72)'
-    previewFrame.style.transformOrigin = 'top left'
-    previewFrame.style.marginBottom = '-' + Math.round(sh * 0.28) + 'px'
+    previewFrame.style.width = Math.round(sw * scale) + 'px'
+    previewFrame.style.height = Math.round(sh * scale) + 'px'
     previewImg.src = cue.imageUrl
-    previewImg.style.left = (-sx) + 'px'
-    previewImg.style.top = (-sy) + 'px'
+    previewImg.style.left = (-sx * scale) + 'px'
+    previewImg.style.top = (-sy * scale) + 'px'
+    previewImg.style.transform = 'scale(' + scale + ')'
+    previewImg.style.transformOrigin = 'top left'
   }
 
   function scheduleRetry() {

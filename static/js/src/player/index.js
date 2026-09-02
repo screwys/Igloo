@@ -1,10 +1,11 @@
-import { apiFetch, showToast, copyText, escapeHtml, askConfirm, formatRelative, formatAbsolute, t, tf, toFxTwitterUrl } from '../utils.js'
+import { apiFetch, showToast, copyText, escapeHtml, askConfirm, formatRelative, formatAbsolute, materialIconMarkup, setSvgContent, t, tf, toFxTwitterUrl } from '../utils.js'
 import { openBookmarkMenu, closeBookmarkMenu, isBookmarkMenuOpen } from '../bookmark-menu.js'
 import { initSponsorBlock } from './sponsorblock.js'
 import { initPreviewHover } from './preview.js'
 import { initProgress } from './progress.js'
 import { initCinemaView } from './cinema.js'
 import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
+import { readStoredVolume, writeStoredVolume } from '../volume.js'
 
 const doc = document
 const root = doc.getElementById('player-root')
@@ -26,6 +27,9 @@ if (root && video) {
   const speedMenu = doc.getElementById('player-speed-menu')
   const fullscreenBtn = doc.getElementById('player-fullscreen-btn')
   const cinemaBtn = doc.getElementById('player-cinema-btn')
+  const moreControlsBtn = doc.getElementById('player-more-controls-btn')
+  const volumeRange = doc.getElementById('player-volume-range')
+  const volumeControl = root.querySelector('.dashboard-volume-control')
   // Note: no custom subtitle menu in the template — media-chrome's
   // built-in <media-captions-button> handles CC when tracks exist.
   const deleteBtn = doc.getElementById('player-delete-btn')
@@ -42,6 +46,9 @@ if (root && video) {
   const AUTOPLAY_NEXT_KEY = 'playerAutoplayNextV1'
   const YOUTUBE_DEFAULT_RATE_KEY = 'youtube_default_playback_rate'
   const YOUTUBE_LEGACY_RATE_KEY = 'youtube_playback_rate'
+  const YOUTUBE_VOLUME_KEY = 'youtubeVolume'
+  const YOUTUBE_MUTED_KEY = 'youtubeMuted'
+  const PLAYER_SETTINGS_ICON = materialIconMarkup('Speed')
   let autoplayNext = false
 
   // --- Helpers ---
@@ -182,12 +189,77 @@ if (root && video) {
       visibleAttribute: 'data-player-controls-visible',
       inactiveAttribute: 'userinactive',
       onVisibilityChange: function (visible) {
+        if (!visible && moreControlsBtn) {
+          controller.removeAttribute('data-player-more-controls-open')
+          moreControlsBtn.setAttribute('aria-expanded', 'false')
+        }
         controller.dispatchEvent(new CustomEvent('playercontrolsvisibilitychange', {
           bubbles: true,
           detail: { visible: visible },
         }))
       },
     })
+  }
+
+  function setupResponsiveMoreControls() {
+    if (!moreControlsBtn) return
+    const controller = doc.getElementById('main-media-controller')
+    if (!controller) return
+    moreControlsBtn.addEventListener('click', function (event) {
+      event.preventDefault()
+      event.stopPropagation()
+      const opening = !controller.hasAttribute('data-player-more-controls-open')
+      controller.toggleAttribute('data-player-more-controls-open', opening)
+      moreControlsBtn.setAttribute('aria-expanded', opening ? 'true' : 'false')
+    })
+  }
+
+  function setupYouTubeVolumePreference() {
+    if (channelPlatform !== 'youtube') return
+    video.volume = readStoredVolume(localStorage, YOUTUBE_VOLUME_KEY, 1)
+    try {
+      const storedMuted = localStorage.getItem(YOUTUBE_MUTED_KEY)
+      if (storedMuted === 'true' || storedMuted === 'false') video.muted = storedMuted === 'true'
+    } catch (_) {}
+
+    function syncVolumeRange() {
+      if (!volumeRange) return
+      const effectiveVolume = video.muted ? 0 : video.volume
+      volumeRange.value = String(effectiveVolume)
+      volumeRange.style.setProperty('--player-volume-percent', Math.round(effectiveVolume * 100) + '%')
+    }
+
+    if (volumeRange) {
+      volumeRange.addEventListener('input', function () {
+        const nextVolume = Math.max(0, Math.min(1, Number(volumeRange.value || 0)))
+        video.volume = nextVolume
+        video.muted = nextVolume === 0
+        syncVolumeRange()
+      })
+      volumeRange.addEventListener('pointerdown', function () {
+        if (volumeControl) volumeControl.removeAttribute('data-player-volume-adjusted')
+      })
+      volumeRange.addEventListener('pointerup', function () {
+        if (volumeControl) volumeControl.setAttribute('data-player-volume-adjusted', '')
+        volumeRange.blur()
+      })
+      volumeRange.addEventListener('pointercancel', function () {
+        if (volumeControl) volumeControl.setAttribute('data-player-volume-adjusted', '')
+        volumeRange.blur()
+      })
+      if (volumeControl) {
+        volumeControl.addEventListener('pointerleave', function () {
+          volumeControl.removeAttribute('data-player-volume-adjusted')
+        })
+      }
+    }
+
+    video.addEventListener('volumechange', function () {
+      writeStoredVolume(localStorage, YOUTUBE_VOLUME_KEY, video.volume)
+      try { localStorage.setItem(YOUTUBE_MUTED_KEY, String(video.muted)) } catch (_) {}
+      syncVolumeRange()
+    })
+    syncVolumeRange()
   }
 
   function controllerControlsVisible(controller) {
@@ -281,7 +353,7 @@ if (root && video) {
       speedMenu.appendChild(btn)
     })
     if (speedMenuBtn) {
-      speedMenuBtn.textContent = formatRateLabel(current)
+      setSvgContent(speedMenuBtn, PLAYER_SETTINGS_ICON)
       speedMenuBtn.title = tf('player_playback_speed_value', 'Playback speed (%1$s)', formatRateLabel(current))
       speedMenuBtn.setAttribute('aria-label', speedMenuBtn.title)
     }
@@ -764,7 +836,9 @@ if (root && video) {
         return true
       },
     })
+    setupYouTubeVolumePreference()
     setupSpeedMenu()
+    setupResponsiveMoreControls()
     setupPlayerControlsVisibility()
     setupChannelInlineActions()
     setupPlayerDateHover()
@@ -818,7 +892,13 @@ if (root && video) {
             var barRect = bar.getBoundingClientRect()
             if (!(wrapperRect && wrapperRect.height > 0 && barRect && barRect.height > 0)) return fallback
             var gap = readSubtitleOffsetPx(isFs ? '--player-subtitles-controls-gap-fullscreen' : '--player-subtitles-controls-gap', isFs ? 12 : 6)
-            var measured = wrapperRect.bottom - barRect.top + gap
+            var controlsTop = barRect.top
+            var timeRange = controller.querySelector('#main-player-time-range')
+            if (timeRange && typeof timeRange.getBoundingClientRect === 'function') {
+              var rangeRect = timeRange.getBoundingClientRect()
+              if (rangeRect && rangeRect.height > 0) controlsTop = rangeRect.top
+            }
+            var measured = wrapperRect.bottom - controlsTop + gap
             if (!Number.isFinite(measured) || measured <= 0) return fallback
             return Math.max(0, Math.min(wrapperRect.height, measured))
           }

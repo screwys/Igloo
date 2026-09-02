@@ -30,7 +30,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 		>
 			<section class="player-main">
 				<div class="player-wrapper" style="background:#000; border-radius:12px; overflow:hidden;">
-					<media-controller id="main-media-controller" class="dashboard-media-controller">
+					<media-controller id="main-media-controller" class={ "dashboard-media-controller", templ.KV("youtube-media-controller", video.Platform == "youtube") }>
 						<video
 							id="mpa-player"
 							slot="media"
@@ -46,30 +46,51 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							<source src={ videoMediaURL("stream", video) } type="video/mp4"/>
 						</video>
 						<media-loading-indicator noautohide></media-loading-indicator>
+						if video.Platform == "youtube" {
+							<media-time-range id="main-player-time-range"></media-time-range>
+						}
 						<media-control-bar class="vjs-control-bar dashboard-media-control-bar">
 							<media-play-button></media-play-button>
 							@playerSeekBackButton(p)
 							@playerSeekForwardButton(p)
-							<span class="mc-separator" aria-hidden="true"></span>
-							<media-time-range id="main-player-time-range"></media-time-range>
-							<media-time-display show-duration></media-time-display>
-							<span class="mc-separator" aria-hidden="true"></span>
+							<span class="mc-separator mc-separator-seek" aria-hidden="true"></span>
+							if video.Platform != "youtube" {
+								<media-time-range id="main-player-time-range"></media-time-range>
+							}
+							<media-time-display showduration></media-time-display>
+							<span class="mc-separator mc-separator-time" aria-hidden="true"></span>
+							<span class="mc-controls-spacer" aria-hidden="true"></span>
+							<div class="dashboard-volume-control">
+								<media-mute-button></media-mute-button>
+								if video.Platform == "youtube" {
+									<input id="player-volume-range" class="dashboard-volume-range" type="range" min="0" max="1" step="0.05" value="1" aria-label={ L(p, "player_volume", "Volume") }/>
+								} else {
+									<media-volume-range></media-volume-range>
+								}
+							</div>
+							<div class="dashboard-right-controls">
+							if video.Platform == "youtube" {
+								<button id="player-more-controls-btn" class="mc-custom-btn player-more-controls-btn" type="button" title={ L(p, "action_more", "More") } aria-label={ L(p, "action_more", "More") } aria-expanded="false">
+									@MaterialIcon("MoreHoriz", "")
+								</button>
+								@playerAutoplayButton(p)
+							}
 							<button
 								id="player-cc-btn"
 								class="mc-custom-btn mc-label-btn hidden"
 								type="button"
 								title={ L(p, "player_subtitles", "Subtitles") }
 								aria-label={ L(p, "player_subtitles", "Subtitles") }
-								>{ L(p, "player_subtitles_abbrev", "CC") }</button>
+								>@MaterialIcon("ClosedCaption", "")</button>
 							<div id="player-speed-menu-wrap" class="mc-speed-menu-wrap">
-								<button id="player-speed-menu-btn" class="mc-custom-btn mc-label-btn mc-speed-btn" type="button" title={ L(p, "player_playback_speed", "Playback speed") } aria-label={ L(p, "player_playback_speed", "Playback speed") } aria-haspopup="menu" aria-expanded="false">1x</button>
+								<button id="player-speed-menu-btn" class="mc-custom-btn mc-label-btn mc-speed-btn" type="button" title={ L(p, "player_playback_speed", "Playback speed") } aria-label={ L(p, "player_playback_speed", "Playback speed") } aria-haspopup="menu" aria-expanded="false">
+									@MaterialIcon("Speed", "")
+								</button>
 								<div id="player-speed-menu" class="mc-speed-menu hidden" role="menu" aria-label={ L(p, "player_playback_speed_menu", "Playback speed menu") }></div>
 							</div>
-						<media-mute-button></media-mute-button>
-						<media-volume-range></media-volume-range>
-						if video.Platform == "youtube" {
-							@playerMiniButton(p)
-						}
+							if video.Platform == "youtube" {
+								@playerMiniButton(p)
+							}
 						<button
 							id="player-cinema-btn"
 							class="mc-custom-btn"
@@ -78,9 +99,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							aria-label={ L(p, "player_cinema_view", "Cinema view") }
 							aria-pressed="false"
 						>
-							<svg class="player-cinema-rectangle-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
-								<rect x="3" y="7" width="18" height="10" rx="1"></rect>
-							</svg>
+			@MaterialIcon("ViewSidebar", "player-cinema-rectangle-icon")
 						</button>
 						<button
 							id="player-fullscreen-btn"
@@ -89,10 +108,9 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							title={ L(p, "action_toggle_fullscreen", "Toggle fullscreen") }
 							aria-label={ L(p, "action_toggle_fullscreen", "Toggle fullscreen") }
 						>
-							<svg class="player-fullscreen-corners-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-								<path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"></path>
-							</svg>
+			@MaterialIcon("Fullscreen", "player-fullscreen-corners-icon")
 						</button>
+							</div>
 						</media-control-bar>
 					</media-controller>
 				</div>
@@ -124,23 +142,25 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 
 					<div class="player-side-controls">
 						<div class="player-actions">
-								@playerPinButton(p, video)
+							@playerPinButton(p, video)
 							@playerShareButton(p)
 							@playerBookmarkButton(p, video.BookmarkCategoryID != nil)
-							@playerAutoplayButton(p)
+							if video.Platform != "youtube" {
+								@playerAutoplayButton(p)
+							}
 							@playerDeleteButton(p)
 						</div>
 						if video.Metadata != nil {
 							<div class="player-stats">
 								if video.Metadata.LikeCount > 0 {
 									<span class="player-stat" id="player-stat-likes" data-count={ int64Str(video.Metadata.LikeCount) }>
-										@templ.Raw(`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>`)
+										@MaterialIcon("ThumbUp", "")
 										<span class="player-stat-value"></span>
 									</span>
 								}
 								if video.Metadata.ViewCount > 0 {
 									<span class="player-stat" id="player-stat-views" data-count={ int64Str(video.Metadata.ViewCount) }>
-										@templ.Raw(`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`)
+										@MaterialIcon("Visibility", "")
 										<span class="player-stat-value"></span>
 									</span>
 								}
@@ -241,17 +261,17 @@ func commentAuthorName(p PageProps, c model.Comment) string {
 	return L(p, "player_comment_author_unknown", "User")
 }
 
-// playerSeekBackButton renders the seek-back-10-seconds button with SVG.
+// playerSeekBackButton renders the seek-back-10-seconds button.
 templ playerSeekBackButton(p PageProps) {
 	<button id="player-seek-back-10-btn" class="mc-custom-btn mc-seek-btn" type="button" title={ L(p, "player_back_10_seconds", "Back 10 seconds") } aria-label={ L(p, "player_seek_backward_10_seconds", "Seek backward 10 seconds") }>
-		@templ.Raw(`<svg class="mc-seek-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="translate(1.8 1.8) scale(.85)" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15A9 9 0 1 0 5.64 5.64L1 10"/></g></svg>`)
+		@MaterialIcon("Replay10", "mc-seek-icon")
 	</button>
 }
 
-// playerSeekForwardButton renders the seek-forward-10-seconds button with SVG.
+// playerSeekForwardButton renders the seek-forward-10-seconds button.
 templ playerSeekForwardButton(p PageProps) {
 	<button id="player-seek-forward-10-btn" class="mc-custom-btn mc-seek-btn" type="button" title={ L(p, "player_forward_10_seconds", "Forward 10 seconds") } aria-label={ L(p, "player_seek_forward_10_seconds", "Seek forward 10 seconds") }>
-		@templ.Raw(`<svg class="mc-seek-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="translate(24 0) scale(-1 1)"><g transform="translate(1.8 1.8) scale(.85)" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15A9 9 0 1 0 5.64 5.64L1 10"/></g></g></svg>`)
+		@MaterialIcon("Forward10", "mc-seek-icon")
 	</button>
 }
 
@@ -270,9 +290,9 @@ templ PlayerStarButton(p PageProps, channelID string, isStarred bool) {
 		hx-disabled-elt="this"
 	>
 		if isStarred {
-			@templ.Raw(`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`)
+			@MaterialIcon("Star", "")
 		} else {
-			@templ.Raw(`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`)
+			@MaterialIcon("StarBorder", "")
 		}
 	</button>
 }
@@ -300,7 +320,7 @@ templ playerSubButton(p PageProps) {
 		title={ L(p, "action_subscribe_channel", "Subscribe to channel") }
 		aria-label={ L(p, "action_subscribe_channel", "Subscribe to channel") }
 	>
-		@templ.Raw(`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`)
+		@MaterialIcon("Add", "")
 	</button>
 }
 
@@ -313,7 +333,7 @@ templ playerUnsubButton(p PageProps) {
 		title={ L(p, "action_unsubscribe_channel", "Unsubscribe channel") }
 		aria-label={ L(p, "action_unsubscribe_channel", "Unsubscribe channel") }
 	>
-		@templ.Raw(`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`)
+		@MaterialIcon("PersonRemove", "")
 	</button>
 }
 
@@ -336,11 +356,7 @@ templ PlayerPinButton(p PageProps, videoID string, isPinned, isTemp bool) {
 		hx-swap="outerHTML"
 		hx-disabled-elt="this"
 	>
-		if isPinned {
-			@templ.Raw(`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"></path><path d="M8 3h8l-1 6 3 3v2H6v-2l3-3-1-6z"></path></svg>`)
-		} else {
-			@templ.Raw(`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"></path><path d="M8 3h8l-1 6 3 3v2H6v-2l3-3-1-6z"></path></svg>`)
-		}
+		@MaterialIcon("PushPin", "")
 	</button>
 }
 
@@ -371,7 +387,7 @@ templ playerShareButton(p PageProps) {
 		title={ L(p, "action_copy_link", "Copy link") }
 		aria-label={ L(p, "action_copy_link", "Copy link") }
 	>
-		@templ.Raw(`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>`)
+		@MaterialIcon("Share", "")
 	</button>
 }
 
@@ -385,9 +401,9 @@ templ playerBookmarkButton(p PageProps, bookmarked bool) {
 		aria-label={ L(p, "action_bookmark", "Bookmark") }
 	>
 		if bookmarked {
-			@templ.Raw(`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`)
+			@MaterialIcon("Bookmark", "")
 		} else {
-			@templ.Raw(`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`)
+			@MaterialIcon("BookmarkBorder", "")
 		}
 	</button>
 }
@@ -403,12 +419,12 @@ func playerBookmarkBtnClass(bookmarked bool) string {
 templ playerAutoplayButton(p PageProps) {
 	<button
 		id="player-autoplay-next-btn"
-		class="player-btn toggle-btn"
+		class="player-btn toggle-btn mc-custom-btn"
 		type="button"
 		title={ L(p, "player_autoplay_next", "Auto-play next") }
 		aria-label={ L(p, "player_autoplay_next", "Auto-play next") }
 	>
-		@templ.Raw(`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16" fill="currentColor" stroke="none"></polygon></svg>`)
+		@MaterialIcon("PlayCircleOutline", "")
 	</button>
 }
 
@@ -421,22 +437,19 @@ templ playerDeleteButton(p PageProps) {
 		title={ L(p, "player_delete_video_title", "Delete video") }
 		aria-label={ L(p, "player_delete_video_title", "Delete video") }
 	>
-		@templ.Raw(`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>`)
+		@MaterialIcon("Delete", "")
 	</button>
 }
 
 templ playerMiniButton(p PageProps) {
 	<button
 		id="player-mini-btn"
-		class="mc-custom-btn"
+		class="mc-custom-btn player-btn toggle-btn"
 		type="button"
 		title={ L(p, "mini_player_title", "Mini player") }
 		aria-label={ L(p, "mini_player_title", "Mini player") }
 		aria-pressed="false"
 	>
-		<svg class="player-mini-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
-			<rect x="3" y="4" width="18" height="16" rx="2"></rect>
-			<rect x="11" y="11" width="8" height="6" rx="1" fill="currentColor" stroke="none"></rect>
-		</svg>
+		@MaterialIcon("PictureInPictureAlt", "player-mini-icon")
 	</button>
 }
