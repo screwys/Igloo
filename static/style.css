@@ -8178,7 +8178,6 @@ body.shorts-mode .sidebar {
 }
 
 .action-btn:hover {
-    transform: scale(1.14);
     filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
 }
 
@@ -8189,10 +8188,6 @@ body.shorts-mode .sidebar {
 }
 
 .action-btn.active {
-    color: var(--accent-primary);
-}
-
-.action-btn:hover {
     color: var(--accent-primary);
 }
 

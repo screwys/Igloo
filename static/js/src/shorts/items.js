@@ -876,8 +876,8 @@ export function makeShortItem(entryData, existingEl) {
     '</div>' +
     '<button class="action-btn shorts-autoplay-btn" type="button" data-short-action="autoplay" title="' + escapeHtml(t('shorts_autoplay_next', 'Auto-play next short')) + '">' + iconSvg('autoplay', false) + '</button>' +
     '<button class="action-btn bookmark-btn shorts-bookmark-btn" type="button" data-short-action="bookmark" title="' + escapeHtml(t('action_bookmark', 'Bookmark')) + '">' + iconSvg('bookmark', !!entryData.bookmarked) + '</button>' +
-    (video ? '<button class="action-btn shorts-mini-player-btn" type="button" data-short-action="mini-player" title="' + escapeHtml(t('mini_player_title', 'Mini player')) + '" aria-label="' + escapeHtml(t('mini_player_title', 'Mini player')) + '">' + menuIconSvg('mini') + '</button>' : '') +
     '<button class="action-btn shorts-share-btn" type="button" data-short-action="share" title="' + escapeHtml(t('action_share', 'Share')) + '">' + iconSvg('share', false) + '</button>' +
+    (video ? '<button class="action-btn shorts-mini-player-btn" type="button" data-short-action="mini-player" title="' + escapeHtml(t('mini_player_title', 'Mini player')) + '" aria-label="' + escapeHtml(t('mini_player_title', 'Mini player')) + '">' + menuIconSvg('mini') + '</button>' : '') +
     externalAction
   safeSetMarkup(actions, actionsHtml)
 

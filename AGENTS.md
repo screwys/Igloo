@@ -75,6 +75,7 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 
 ## Test Gates
 
+- Do not add tests that merely restate an implementation detail or assert that code was added or removed. Test observable behavior when deterministic coverage is valuable; otherwise omit the test.
 - Use focused tests while developing or proving a narrow change, then run
   `just test` for the proportional changed-file gate.
 - For full-suite verification, do not treat raw `go test ./...` or Android
