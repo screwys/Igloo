@@ -84,20 +84,37 @@ func TestShortsPlayerHeaderRendersStoriesTabTrigger(t *testing.T) {
 	}
 }
 
-func TestShortsPlayerLongPressUsesMomentMutationOwners(t *testing.T) {
+func TestShortsPlayerMoreMenuUsesMomentMutationOwners(t *testing.T) {
 	srcBytes, err := os.ReadFile("../../static/js/src/shorts/items.js")
 	if err != nil {
 		t.Fatal(err)
 	}
 	src := string(srcBytes)
 	for _, check := range []string{
-		"function bindMomentLongPress(entry)",
-		"if (!wrapper || !entry.data) return",
+		"function openMomentActions(entry, trigger)",
+		`data-short-top-action="more"`,
+		`data-short-top-action="fullscreen"`,
+		`className = 'shorts-media-stage'`,
+		"var target = entry.refs.mediaStage",
+		"target.classList.add('is-fullscreen')",
+		"target.classList.remove('is-fullscreen')",
+		`class="shorts-volume-slider"`,
+		"shortPlaybackRates = [0.75, 1, 1.25, 1.5, 2]",
+		"setShortPlaybackRate(rate)",
+		"function toggleMomentMiniPlayer(entry)",
+		"kind: 'moments'",
+		`data-short-action="mini-player"`,
+		`class="action-btn shorts-external-btn"`,
+		`target="_blank" rel="noopener noreferrer"`,
+		"entryData.originalUrl",
+		"menuIconSvg(action.icon)",
+		"Lucide's published 24px icon data",
+		"if (kind === 'follow')",
+		"if (kind === 'unfollow')",
 		"/api/mutations/channel_setting",
 		"field: 'include_reposts'",
 		"/api/mutations/mute",
 		"/api/mutations/follow",
-		"function openMomentActions(entry)",
 		"function momentAccountHandleLabel(channelID, rawHandle)",
 		"momentAccountHandleLabel(reposterID, data.repostHandle)",
 		"momentAccountHandleLabel(authorID)",
@@ -105,8 +122,8 @@ func TestShortsPlayerLongPressUsesMomentMutationOwners(t *testing.T) {
 		"if (!data.channelFollowed && authorID)",
 		"wrapper.appendChild(overlay)",
 		"wrapper.classList.add('moment-actions-open')",
-		"if (event.target !== overlay) return\n    event.preventDefault()\n    event.stopPropagation()\n    closeMomentActions()",
-		"event.target.closest('.moment-actions-overlay')) return",
+		"document.addEventListener('pointerdown', momentActionsOutsideHandler, true)",
+		"if (sheet.contains(event.target)) return",
 		"shareShort(data)",
 		"else if (data.channelFollowed && authorID)",
 		"advanceMomentsAfterAction(entry)",
@@ -117,7 +134,12 @@ func TestShortsPlayerLongPressUsesMomentMutationOwners(t *testing.T) {
 		"function followShortAuthor(entry, btn)",
 	} {
 		if !strings.Contains(src, check) {
-			t.Errorf("Moment long-press action wiring missing %q", check)
+			t.Errorf("Moment menu action wiring missing %q", check)
+		}
+	}
+	for _, removed := range []string{"function bindMomentLongPress", "wrapper.addEventListener('contextmenu'"} {
+		if strings.Contains(src, removed) {
+			t.Errorf("Moment menu should replace the old long-press trigger %q", removed)
 		}
 	}
 	if strings.Contains(src, "window.location.reload") {
@@ -130,14 +152,30 @@ func TestShortsPlayerLongPressUsesMomentMutationOwners(t *testing.T) {
 	}
 	css := string(cssBytes)
 	overlayBody := cssRuleBody(t, css, ".moment-actions-overlay")
-	for _, check := range []string{"position: absolute", "inset: 0"} {
+	for _, check := range []string{"position: absolute", "inset: 0", "align-items: flex-start", "justify-content: flex-end"} {
 		if !strings.Contains(overlayBody, check) {
-			t.Errorf("Moment actions should stay centered inside the media frame; missing %q in %s", check, overlayBody)
+			t.Errorf("Moment actions should open from the top-right menu; missing %q in %s", check, overlayBody)
 		}
 	}
-	chromeSelector := ".shorts-video-wrapper.moment-actions-open > :not(.native-short-video):not(.shorts-video-poster-frame):not(.slideshow-container):not(.slideshow-audio):not(.moment-actions-overlay)"
-	if chromeBody := cssRuleBody(t, css, chromeSelector); !strings.Contains(chromeBody, "visibility: hidden") {
-		t.Errorf("Moment actions should hide the player chrome: %s", chromeBody)
+	if !strings.Contains(cssRuleBody(t, css, ".moment-actions-overlay.visible"), "pointer-events: none") ||
+		!strings.Contains(cssRuleBody(t, css, ".moment-actions-sheet"), "pointer-events: auto") {
+		t.Error("Only the open Moment menu card should capture pointer input")
+	}
+	if strings.Contains(css, ".shorts-video-wrapper.moment-actions-open > :not(") {
+		t.Error("Moment menu should not hide the surrounding player chrome")
+	}
+	if strings.Contains(css, ".shorts-media-stage:-webkit-full-screen") {
+		t.Error("Firefox must not discard Moment fullscreen rules because of a WebKit-only selector")
+	}
+	controlsBody := cssRuleBody(t, css, ".shorts-player-controls")
+	if !strings.Contains(controlsBody, "top: max(0.75rem") {
+		t.Errorf("Moment controls should share the top chrome row: %s", controlsBody)
+	}
+	actionBody := cssRuleBody(t, css, ".shorts-actions .action-btn")
+	for _, check := range []string{"width: 52px", "height: 52px", "background: rgba(36, 36, 39, 0.94)"} {
+		if !strings.Contains(actionBody, check) {
+			t.Errorf("Moment side buttons should use the larger circular surface; missing %q in %s", check, actionBody)
+		}
 	}
 
 	indexBytes, err := os.ReadFile("../../static/js/src/shorts/index.js")
@@ -181,19 +219,19 @@ func TestShortsStoryTrayOpensByDefaultForNormalMoments(t *testing.T) {
 	overlaySrc := string(overlayBytes)
 
 	for _, check := range []string{
-		"function openDefaultStoryTray()",
-		"if (currentTab === 'stories' || state.storyMode || !state.overlayOpen) return",
+		"function prepareDefaultStoryTray()",
+		"if (currentTab === 'stories' || state.storyMode) return",
 		"function storyTrayCompactMode()",
 		"ensureStoryTray()",
 		"if (storyTrayCompactMode()) return",
-		"afterOverlayOpen: openDefaultStoryTray",
+		"beforeOverlayOpen: prepareDefaultStoryTray",
 	} {
 		if !strings.Contains(indexSrc, check) {
 			t.Errorf("default story tray wiring missing %q", check)
 		}
 	}
-	if !strings.Contains(overlaySrc, "typeof _fns.afterOverlayOpen === 'function'") {
-		t.Fatal("overlay should call the post-open hook after Moments opens")
+	if !strings.Contains(overlaySrc, "typeof _fns.beforeOverlayOpen === 'function'") {
+		t.Fatal("overlay should prepare the story tray before Moments becomes visible")
 	}
 }
 
@@ -513,6 +551,7 @@ func TestShortsVerticalMomentsUseControlledDeckLayout(t *testing.T) {
 		"overflow: hidden",
 		"touch-action: none",
 		"overscroll-behavior-y: contain",
+		"max-width: var(--shorts-player-footprint",
 	} {
 		if !strings.Contains(containerBody, check) {
 			t.Errorf(".shorts-container controlled deck layout missing %q in %s", check, containerBody)
@@ -521,6 +560,8 @@ func TestShortsVerticalMomentsUseControlledDeckLayout(t *testing.T) {
 	for _, check := range []string{
 		"position: absolute",
 		"inset: 0",
+		"grid-template-columns: minmax(0, var(--shorts-player-max-width",
+		"var(--shorts-action-rail-width",
 		"will-change: transform",
 	} {
 		if !strings.Contains(itemBody, check) {
@@ -627,7 +668,8 @@ func TestShortsStoryTrayUsesRemainingWidthBeforeCompactingItsContents(t *testing
 		}
 	}
 	for _, check := range []string{
-		"--shorts-story-tray-width: clamp(76px, calc(100vw - var(--sidebar-width) - 750px - 2rem), 390px)",
+		"--shorts-player-footprint: calc(var(--shorts-player-max-width) + var(--shorts-action-rail-width) + var(--shorts-action-rail-gap))",
+		"--shorts-story-tray-width: clamp(76px, calc(100vw - var(--sidebar-width) - var(--shorts-player-footprint) - 2rem), 390px)",
 		"width: min(var(--shorts-story-tray-width), 92vw)",
 		"body.shorts-open:has(.shorts-story-tray.open) .shorts-layout",
 		"right: var(--shorts-story-tray-width)",
@@ -654,6 +696,7 @@ func TestShortsStoryTrayUsesRemainingWidthBeforeCompactingItsContents(t *testing
 	for _, check := range []string{
 		"igloo.story-tray.width.v1",
 		"function setStoryTrayWidth(width, persist)",
+		"window.innerWidth - sidebarWidth - playerWidth - actionWidth - actionGap - 32",
 		"setPointerCapture(event.pointerId)",
 		"window.innerWidth - event.clientX",
 		"function updateStoryTrayTitleCollision()",

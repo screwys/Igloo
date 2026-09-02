@@ -260,7 +260,7 @@ function initMiniPlayer() {
   function normalizeSurface(value) {
     if (!value || !value.element || !value.video) return null
     const sourceDocument = value.sourceDocument || value.element.ownerDocument
-    const kind = value.kind === 'feed' ? 'feed' : 'videos'
+    const kind = value.kind === 'feed' ? 'feed' : value.kind === 'moments' ? 'moments' : 'videos'
     const feedReturn = kind === 'feed' ? feedReturnDetails(value.element, value.video) : {}
     const feedTitle = kind === 'feed' ? feedAccountName(value.element) : ''
     return {
@@ -330,7 +330,11 @@ function initMiniPlayer() {
 
   function makePlaceholder(surface) {
     const placeholder = surface.sourceDocument.createElement('div')
-    placeholder.className = surface.kind === 'feed' ? 'feed-mini-placeholder' : 'player-mini-placeholder'
+    placeholder.className = surface.kind === 'feed'
+      ? 'feed-mini-placeholder'
+      : surface.kind === 'moments'
+        ? 'shorts-mini-placeholder'
+        : 'player-mini-placeholder'
     if (surface.kind === 'feed' && surface.element.getBoundingClientRect) {
       const rect = surface.element.getBoundingClientRect()
       if (rect.height > 0) placeholder.style.height = Math.round(rect.height) + 'px'
@@ -344,6 +348,7 @@ function initMiniPlayer() {
     pendingFeedThreadReturn = null
     shell.classList.add('hidden')
     shell.setAttribute('aria-hidden', 'true')
+    shell.removeAttribute('data-mini-player-kind')
     if (shellTitle) shellTitle.textContent = ''
   }
 
@@ -422,6 +427,7 @@ function initMiniPlayer() {
     mediaHost.appendChild(next.element)
     reconnectMediaController(next.element)
     activeSurface = next
+    shell.setAttribute('data-mini-player-kind', next.kind)
     shell.classList.remove('hidden')
     shell.setAttribute('aria-hidden', 'false')
     syncResizeHandle(shell.getBoundingClientRect().width)

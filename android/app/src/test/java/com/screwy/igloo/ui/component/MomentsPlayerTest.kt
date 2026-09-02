@@ -277,6 +277,18 @@ class MomentsPlayerTest {
     }
 
     @Test
+    fun moment_mini_player_is_available_only_for_video_on_pip_devices() {
+        val image = storyItem("image_moment", "tiktok_author")
+        val video = image.copy(mediaKind = "video")
+        val slideshow = image.copy(mediaKind = "slideshow", slideCount = 3)
+
+        assertTrue(momentMiniPlayerAvailable(video, pictureInPictureSupported = true))
+        assertFalse(momentMiniPlayerAvailable(video, pictureInPictureSupported = false))
+        assertFalse(momentMiniPlayerAvailable(image, pictureInPictureSupported = true))
+        assertFalse(momentMiniPlayerAvailable(slideshow, pictureInPictureSupported = true))
+    }
+
+    @Test
     fun moment_action_labels_name_the_reposter_and_original_author() {
         val item =
             storyItem("sample_moment", "tiktok_sample_author").copy(

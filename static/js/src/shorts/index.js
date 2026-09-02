@@ -65,6 +65,11 @@ if (layout) {
     var STORY_TRAY_MAX_WIDTH = 520
     var storyTrayStorageKey = 'igloo.story-tray.width.v1'
     var storyTrayResizePointerId = null
+    var storedShortsVolume = parseFloat(localStorage.getItem('shortsVolume'))
+    if (!Number.isFinite(storedShortsVolume)) storedShortsVolume = 1
+    storedShortsVolume = Math.max(0, Math.min(1, storedShortsVolume))
+    var storedShortsPlaybackRate = parseFloat(localStorage.getItem('shortsPlaybackRate'))
+    if ([0.75, 1, 1.25, 1.5, 2].indexOf(storedShortsPlaybackRate) < 0) storedShortsPlaybackRate = 1
 
     if (!sourceContainer || !shortsContainer) return
 
@@ -81,6 +86,8 @@ if (layout) {
       overlayOpen: false,
       autoPlayNext: localStorage.getItem('shortsAutoPlayNext') !== 'false',
       muted: localStorage.getItem('shortsMuted') === 'true',
+      volume: storedShortsVolume,
+      playbackRate: storedShortsPlaybackRate,
       observer: null,
       wheelLocked: false,
       wheelLockTimer: 0,
@@ -480,7 +487,11 @@ if (layout) {
 
     function defaultStoryTrayWidth() {
       var sidebarWidth = parseFloat(getComputedStyle(doc.documentElement).getPropertyValue('--sidebar-width')) || 0
-      return Math.min(390, Math.max(STORY_TRAY_MIN_WIDTH, window.innerWidth - sidebarWidth - 750 - 32))
+      var bodyStyle = getComputedStyle(doc.body)
+      var playerWidth = parseFloat(bodyStyle.getPropertyValue('--shorts-player-max-width')) || 750
+      var actionWidth = parseFloat(bodyStyle.getPropertyValue('--shorts-action-rail-width')) || 56
+      var actionGap = parseFloat(bodyStyle.getPropertyValue('--shorts-action-rail-gap')) || 14.4
+      return Math.min(390, Math.max(STORY_TRAY_MIN_WIDTH, window.innerWidth - sidebarWidth - playerWidth - actionWidth - actionGap - 32))
     }
 
     function normalizedStoryTrayWidth(width) {
@@ -773,8 +784,8 @@ if (layout) {
       startStoryTrayRefreshTimer()
     }
 
-    function openDefaultStoryTray() {
-      if (currentTab === 'stories' || state.storyMode || !state.overlayOpen) return
+    function prepareDefaultStoryTray() {
+      if (currentTab === 'stories' || state.storyMode) return
       ensureStoryTray()
       if (storyTrayCompactMode()) return
       if (state.storyTray && state.storyTray.classList.contains('open')) return
@@ -1763,7 +1774,7 @@ if (layout) {
       iconSvg: iconSvg,
       exitStoryMode: exitStoryMode,
       handleStoryEnd: openNextQueuedStory,
-      afterOverlayOpen: openDefaultStoryTray
+      beforeOverlayOpen: prepareDefaultStoryTray
     })
 
     initItems(state, {

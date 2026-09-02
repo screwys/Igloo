@@ -55,6 +55,20 @@ test('manual docking and closing do not navigate or reload the page', async () =
   assert.match(source, /closeButton\.addEventListener\('click', closeMiniPlayer\)/)
 })
 
+test('moments can use the shared manual mini-player surface', async () => {
+  const css = await readFile(new URL('../style.css', import.meta.url), 'utf8')
+  const source = await readFile(new URL('./src/mini-player.js', import.meta.url), 'utf8')
+  const moments = await readFile(new URL('./src/shorts/items.js', import.meta.url), 'utf8')
+  assert.match(source, /value\.kind === 'moments' \? 'moments'/)
+  assert.match(source, /surface\.kind === 'moments'[\s\S]*?'shorts-mini-placeholder'/)
+  assert.match(source, /data-mini-player-kind/)
+  assert.match(css, /\.mini-player-shell\[data-mini-player-kind="moments"\]/)
+  assert.match(css, /max-width:\s*min\(360px, calc\(100vw - 2rem\)\)/)
+  assert.match(css, /\.shorts-mini-placeholder\s*\{[\s\S]*?height:\s*100%/)
+  assert.match(moments, /kind:\s*'moments'/)
+  assert.match(moments, /manager\.toggleSurface/)
+})
+
 test('the mini-player defaults to one and a half times its previous width', async () => {
   const css = await readFile(new URL('../style.css', import.meta.url), 'utf8')
   const source = await readFile(new URL('./src/mini-player.js', import.meta.url), 'utf8')

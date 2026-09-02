@@ -10,12 +10,21 @@ var _fns = null
 var momentActionsSheet = null
 var momentActionsWrapper = null
 var momentActionsKeyHandler = null
+var momentActionsOutsideHandler = null
+var momentActionsTrigger = null
+var fullscreenEventsBound = false
+var shortPlaybackRates = [0.75, 1, 1.25, 1.5, 2]
 
 // initItems sets up module-level refs.
 //   fns: { goNext, updateCurrentActionButtons, currentData }
 export function initItems(stateRef, fns) {
   _state = stateRef
   _fns = fns
+  if (!fullscreenEventsBound) {
+    document.addEventListener('fullscreenchange', syncMomentFullscreenButtons)
+    document.addEventListener('webkitfullscreenchange', syncMomentFullscreenButtons)
+    fullscreenEventsBound = true
+  }
 }
 
 function closeMomentActions() {
@@ -23,8 +32,111 @@ function closeMomentActions() {
   momentActionsSheet = null
   if (momentActionsWrapper) momentActionsWrapper.classList.remove('moment-actions-open')
   momentActionsWrapper = null
+  if (momentActionsTrigger) momentActionsTrigger.setAttribute('aria-expanded', 'false')
+  momentActionsTrigger = null
   if (momentActionsKeyHandler) document.removeEventListener('keydown', momentActionsKeyHandler)
   momentActionsKeyHandler = null
+  if (momentActionsOutsideHandler) document.removeEventListener('pointerdown', momentActionsOutsideHandler, true)
+  momentActionsOutsideHandler = null
+}
+
+function syncMomentFullscreenButtons() {
+  var active = document.fullscreenElement || document.webkitFullscreenElement || null
+  document.querySelectorAll('.shorts-media-stage.is-fullscreen').forEach(function (stage) {
+    if (stage !== active) stage.classList.remove('is-fullscreen')
+  })
+  if (active && active.classList && active.classList.contains('shorts-media-stage')) {
+    active.classList.add('is-fullscreen')
+  }
+  document.querySelectorAll('[data-short-top-action="fullscreen"]').forEach(function (button) {
+    var wrapper = button.closest('.shorts-video-wrapper')
+    var isActive = !!active && !!wrapper && (active === wrapper || wrapper.contains(active))
+    var label = isActive ? t('action_exit_fullscreen', 'Exit fullscreen') : t('action_enter_fullscreen', 'Enter fullscreen')
+    button.title = label
+    button.setAttribute('aria-label', label)
+  })
+}
+
+function toggleMomentFullscreen(entry) {
+  if (!entry || !entry.refs) return
+  var active = document.fullscreenElement || document.webkitFullscreenElement || null
+  var target = entry.refs.mediaStage
+  if (!target) return
+  var request = null
+  try {
+    if (active) {
+      request = document.exitFullscreen ? document.exitFullscreen() : (document.webkitExitFullscreen ? document.webkitExitFullscreen() : null)
+    } else {
+      var enter = target.requestFullscreen || target.webkitRequestFullscreen
+      if (!enter) return
+      target.classList.add('is-fullscreen')
+      request = enter.call(target)
+    }
+  } catch (_) {
+    target.classList.remove('is-fullscreen')
+  }
+  if (request && typeof request.catch === 'function') {
+    request.catch(function () { target.classList.remove('is-fullscreen') })
+  }
+}
+
+function applyShortMediaPreferences() {
+  var volume = Math.max(0, Math.min(1, Number(_state.volume)))
+  var rate = Number(_state.playbackRate) > 0 ? Number(_state.playbackRate) : 1
+  document.querySelectorAll('#shorts-container video, #shorts-container audio').forEach(function (media) {
+    media.volume = volume
+    media.muted = !!_state.muted
+    media.playbackRate = rate
+  })
+}
+
+function setShortVolume(value) {
+  var volume = Math.max(0, Math.min(1, Number(value)))
+  _state.volume = Number.isFinite(volume) ? volume : 1
+  _state.muted = _state.volume === 0
+  localStorage.setItem('shortsVolume', String(_state.volume))
+  localStorage.setItem('shortsMuted', String(_state.muted))
+  applyShortMediaPreferences()
+  _fns.updateCurrentActionButtons()
+}
+
+function toggleShortMute() {
+  _state.muted = !_state.muted
+  if (!_state.muted && !(_state.volume > 0)) _state.volume = 1
+  localStorage.setItem('shortsVolume', String(_state.volume))
+  localStorage.setItem('shortsMuted', String(_state.muted))
+  applyShortMediaPreferences()
+  _fns.updateCurrentActionButtons()
+  showToast(_state.muted ? t('toast_muted', 'Muted') : t('toast_unmuted', 'Unmuted'))
+}
+
+function setShortPlaybackRate(rate) {
+  var next = Number(rate)
+  if (shortPlaybackRates.indexOf(next) < 0) return
+  _state.playbackRate = next
+  localStorage.setItem('shortsPlaybackRate', String(next))
+  applyShortMediaPreferences()
+  document.querySelectorAll('.moment-actions-rate').forEach(function (button) {
+    var active = Number(button.getAttribute('data-playback-rate')) === next
+    button.classList.toggle('active', active)
+    button.setAttribute('aria-checked', active ? 'true' : 'false')
+  })
+}
+
+function toggleMomentMiniPlayer(entry) {
+  var refs = entry && entry.refs
+  if (!refs || !refs.wrapper || !refs.video) return false
+  var manager = null
+  try { manager = window.top && window.top.IglooMiniPlayer } catch (_) {}
+  if (!manager || typeof manager.toggleSurface !== 'function') return false
+  return manager.toggleSurface({
+    element: refs.wrapper,
+    video: refs.video,
+    button: refs.miniPlayerBtn,
+    title: String(entry.data && (entry.data.channelName || entry.data.title) || '').trim() || t('mini_player_title', 'Mini player'),
+    kind: 'moments',
+    homeURL: window.location.pathname + window.location.search,
+  }) !== false
 }
 
 function shortShareUrl(entryData) {
@@ -126,6 +238,11 @@ function applyMomentAction(entry, action) {
     return
   }
 
+  if (action === 'mini_player') {
+    toggleMomentMiniPlayer(entry)
+    return
+  }
+
   if (action === 'visit_author' && authorID) {
     window.location.assign('/channels/' + encodeURIComponent(authorID))
     return
@@ -178,7 +295,7 @@ function applyMomentAction(entry, action) {
   }
 }
 
-function openMomentActions(entry) {
+function openMomentActions(entry, trigger) {
   var data = entry && entry.data
   var wrapper = entry && entry.refs && entry.refs.wrapper
   if (!data || !wrapper) return false
@@ -189,10 +306,37 @@ function openMomentActions(entry) {
   overlay.setAttribute('role', 'presentation')
   var sheet = document.createElement('div')
   sheet.className = 'moment-actions-sheet'
-  sheet.setAttribute('role', 'dialog')
-  sheet.setAttribute('aria-modal', 'true')
+  sheet.setAttribute('role', 'menu')
   sheet.setAttribute('aria-label', t('action_more', 'More'))
   overlay.appendChild(sheet)
+
+  var speedRow = document.createElement('div')
+  speedRow.className = 'moment-actions-speed'
+  var speedLabel = document.createElement('span')
+  speedLabel.className = 'moment-actions-speed-label'
+  safeSetMarkup(speedLabel, '<span class="moment-actions-item-icon">' + menuIconSvg('speed') + '</span><span>' + escapeHtml(t('player_playback_speed', 'Playback speed')) + '</span>')
+  speedRow.appendChild(speedLabel)
+  var speedOptions = document.createElement('div')
+  speedOptions.className = 'moment-actions-speed-options'
+  speedOptions.setAttribute('role', 'group')
+  speedOptions.setAttribute('aria-label', t('player_playback_speed_menu', 'Playback speed menu'))
+  shortPlaybackRates.forEach(function (rate) {
+    var rateButton = document.createElement('button')
+    rateButton.type = 'button'
+    rateButton.className = 'moment-actions-rate' + (Number(_state.playbackRate) === rate ? ' active' : '')
+    rateButton.setAttribute('role', 'menuitemradio')
+    rateButton.setAttribute('aria-checked', Number(_state.playbackRate) === rate ? 'true' : 'false')
+    rateButton.setAttribute('data-playback-rate', String(rate))
+    rateButton.textContent = String(rate) + 'x'
+    rateButton.addEventListener('click', function (event) {
+      event.preventDefault()
+      event.stopPropagation()
+      setShortPlaybackRate(rate)
+    })
+    speedOptions.appendChild(rateButton)
+  })
+  speedRow.appendChild(speedOptions)
+  sheet.appendChild(speedRow)
 
   var reposterID = String(data.repostChannelId || '').trim()
   var authorID = String(data.channelId || '').trim()
@@ -201,106 +345,100 @@ function openMomentActions(entry) {
   var isRepost = !!data.repostIntroduced && !!reposterID
   var actions = []
   if (isRepost) {
-    actions.push({ key: 'disable_reposts', label: tf('action_turn_off_reposts_for_account', 'Turn off reposts for %1$s', reposterLabel) })
+    actions.push({ key: 'disable_reposts', icon: 'repost', label: tf('action_turn_off_reposts_for_account', 'Turn off reposts for %1$s', reposterLabel) })
   }
-  actions.push({ key: 'share', label: t('action_share', 'Share') })
+  if (entry.refs && entry.refs.video) {
+    actions.push({ key: 'mini_player', icon: 'mini', label: t('mini_player_title', 'Mini player') })
+  }
+  actions.push({ key: 'share', icon: 'share', label: t('action_share', 'Share') })
   if (isRepost) {
-    actions.push({ key: 'visit_reposter', label: tf('action_visit_profile_of_account', 'Visit profile of %1$s', reposterLabel) })
+    actions.push({ key: 'visit_reposter', icon: 'profile', label: tf('action_visit_profile_of_account', 'Visit profile of %1$s', reposterLabel) })
   }
   if (authorID && authorID !== reposterID) {
-    actions.push({ key: 'visit_author', label: tf('action_visit_profile_of_account', 'Visit profile of %1$s', authorLabel) })
+    actions.push({ key: 'visit_author', icon: 'profile', label: tf('action_visit_profile_of_account', 'Visit profile of %1$s', authorLabel) })
   }
   if (!data.channelFollowed && authorID) {
-    actions.push({ key: 'mute_author', label: tf('action_mute_account_label', 'Mute %1$s', authorLabel) })
+    actions.push({ key: 'mute_author', icon: 'mute-account', label: tf('action_mute_account_label', 'Mute %1$s', authorLabel) })
   }
   if (isRepost) {
-    actions.push({ key: 'unfollow_reposter', label: tf('action_unfollow_account_label', 'Unfollow %1$s', reposterLabel), danger: true })
+    actions.push({ key: 'unfollow_reposter', icon: 'unfollow', label: tf('action_unfollow_account_label', 'Unfollow %1$s', reposterLabel), danger: true })
   } else if (data.channelFollowed && authorID) {
-    actions.push({ key: 'unfollow_author', label: tf('action_unfollow_account_label', 'Unfollow %1$s', authorLabel), danger: true })
+    actions.push({ key: 'unfollow_author', icon: 'unfollow', label: tf('action_unfollow_account_label', 'Unfollow %1$s', authorLabel), danger: true })
   }
   actions.forEach(function (action) {
     var button = document.createElement('button')
     button.type = 'button'
     button.className = 'moment-actions-sheet-item' + (action.danger ? ' danger' : '')
-    button.textContent = action.label
+    button.setAttribute('role', 'menuitem')
+    safeSetMarkup(button, '<span class="moment-actions-item-icon">' + menuIconSvg(action.icon) + '</span><span>' + escapeHtml(action.label) + '</span>')
     button.addEventListener('click', function () {
       closeMomentActions()
       applyMomentAction(entry, action.key)
     })
     sheet.appendChild(button)
   })
-  var cancel = document.createElement('button')
-  cancel.type = 'button'
-  cancel.className = 'moment-actions-sheet-item'
-  cancel.textContent = t('action_cancel', 'Cancel')
-  cancel.addEventListener('click', closeMomentActions)
-  sheet.appendChild(cancel)
-  overlay.addEventListener('click', function (event) {
-    if (event.target !== overlay) return
-    event.preventDefault()
-    event.stopPropagation()
-    closeMomentActions()
-  })
   momentActionsKeyHandler = function (event) {
     if (event.key === 'Escape') closeMomentActions()
   }
+  momentActionsOutsideHandler = function (event) {
+    if (sheet.contains(event.target)) return
+    if (trigger && trigger.contains(event.target)) return
+    closeMomentActions()
+  }
   document.addEventListener('keydown', momentActionsKeyHandler)
+  document.addEventListener('pointerdown', momentActionsOutsideHandler, true)
   wrapper.classList.add('moment-actions-open')
   wrapper.appendChild(overlay)
   momentActionsSheet = overlay
   momentActionsWrapper = wrapper
+  momentActionsTrigger = trigger || null
+  if (momentActionsTrigger) momentActionsTrigger.setAttribute('aria-expanded', 'true')
   requestAnimationFrame(function () { overlay.classList.add('visible') })
   return true
 }
 
-function bindMomentLongPress(entry) {
-  var wrapper = entry && entry.refs && entry.refs.wrapper
-  if (!wrapper || !entry.data) return
-  var timer = 0
-  var startX = 0
-  var startY = 0
-  var suppressClick = false
-  function clear() {
-    if (timer) window.clearTimeout(timer)
-    timer = 0
+function lucideMenuIcon(paths) {
+  return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>'
+}
+
+// Menu glyphs use Lucide's published 24px icon data (ISC license).
+function menuIconSvg(kind) {
+  if (kind === 'speed') {
+    return lucideMenuIcon('<path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path>')
   }
-  function isControl(target) {
-    return !!(target && target.closest && target.closest('a, button, input, textarea, select, .val-progress-container, .shorts-slide-controls'))
+  if (kind === 'mini') {
+    return lucideMenuIcon('<path d="M2 10h6V4"></path><path d="m2 4 6 6"></path><path d="M21 10V7a2 2 0 0 0-2-2h-7"></path><path d="M3 14v2a2 2 0 0 0 2 2h3"></path><rect x="12" y="14" width="10" height="7" rx="1"></rect>')
   }
-  wrapper.addEventListener('pointerdown', function (event) {
-    if (isControl(event.target)) return
-    clear()
-    startX = event.clientX
-    startY = event.clientY
-    timer = window.setTimeout(function () {
-      timer = 0
-      suppressClick = openMomentActions(entry)
-    }, 500)
-  })
-  wrapper.addEventListener('pointermove', function (event) {
-    if (Math.abs(event.clientX - startX) > 12 || Math.abs(event.clientY - startY) > 12) clear()
-  })
-  wrapper.addEventListener('pointerup', clear)
-  wrapper.addEventListener('pointercancel', clear)
-  wrapper.addEventListener('contextmenu', function (event) {
-    if (isControl(event.target)) return
-    if (openMomentActions(entry)) {
-      suppressClick = true
-      event.preventDefault()
-    }
-  })
-  wrapper.addEventListener('click', function (event) {
-    if (!suppressClick) return
-    suppressClick = false
-    if (event.target && event.target.closest && event.target.closest('.moment-actions-overlay')) return
-    event.preventDefault()
-    event.stopPropagation()
-  }, true)
+  if (kind === 'share') {
+    return lucideMenuIcon('<circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line>')
+  }
+  if (kind === 'profile') {
+    return lucideMenuIcon('<circle cx="12" cy="8" r="5"></circle><path d="M20 21a8 8 0 0 0-16 0"></path>')
+  }
+  if (kind === 'repost') {
+    return lucideMenuIcon('<path d="m2 9 3-3 3 3"></path><path d="M13 18H7a2 2 0 0 1-2-2V6"></path><path d="m22 15-3 3-3-3"></path><path d="M11 6h6a2 2 0 0 1 2 2v10"></path>')
+  }
+  if (kind === 'mute-account') {
+    return lucideMenuIcon('<path d="M11 4.702a.7.7 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.7.7 0 0 0 11 19.298z"></path><path d="m16.5 14.5 5-5"></path><path d="m16.5 9.5 5 5"></path>')
+  }
+  if (kind === 'follow') {
+    return lucideMenuIcon('<path d="M2 21a8 8 0 0 1 13.292-6"></path><circle cx="10" cy="8" r="5"></circle><path d="M19 16v6"></path><path d="M22 19h-6"></path>')
+  }
+  if (kind === 'unfollow') {
+    return lucideMenuIcon('<path d="M2 21a8 8 0 0 1 13.292-6"></path><circle cx="10" cy="8" r="5"></circle><path d="M22 19h-6"></path>')
+  }
+  return ''
 }
 
 export function iconSvg(kind, active) {
   if (kind === 'menu') {
     return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>'
+  }
+  if (kind === 'more') {
+    return '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>'
+  }
+  if (kind === 'fullscreen') {
+    return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"></path></svg>'
   }
   if (kind === 'grid') {
     return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1.2"></rect><rect x="14" y="4" width="6" height="6" rx="1.2"></rect><rect x="4" y="14" width="6" height="6" rx="1.2"></rect><rect x="14" y="14" width="6" height="6" rx="1.2"></rect></svg>'
@@ -584,6 +722,9 @@ export function makeShortItem(entryData, existingEl) {
   var wrapper = doc.createElement('div')
   wrapper.className = 'shorts-video-wrapper'
   wrapper.id = 'shorts-wrapper-' + entryData.id
+  var mediaStage = doc.createElement('div')
+  mediaStage.className = 'shorts-media-stage'
+  wrapper.appendChild(mediaStage)
   var mediaKind = String(entryData.mediaKind || '').trim().toLowerCase()
   var hasSlides = mediaKind === 'slideshow' || mediaKind === 'image' || (Number(entryData.mediaSlideCount || 0) > 0)
   var slideCount = Math.max(0, parseInt(entryData.mediaSlideCount || 0, 10) || 0) || (mediaKind === 'image' ? 1 : 0)
@@ -606,6 +747,8 @@ export function makeShortItem(entryData, existingEl) {
         slide.playsInline = true
         slide.controls = false
         slide.muted = _state.muted
+        slide.volume = _state.volume
+        slide.playbackRate = _state.playbackRate
         slide.loop = false
         slide.setAttribute('playsinline', '')
       } else {
@@ -618,7 +761,7 @@ export function makeShortItem(entryData, existingEl) {
       slides.push(slide)
     }
     slideshow = { container: slideWrap, slides: slides, images: slides, dots: dots, count: slideCount, index: 0, timer: 0, counter: null, audio: null, playing: false }
-    wrapper.appendChild(slideWrap)
+    mediaStage.appendChild(slideWrap)
     var slideshowAudioSrc = entryData.audioUrl
     if (!slideshowAudioSrc && entryData.platform === 'tiktok' && mediaKind === 'slideshow') {
       slideshowAudioSrc = '/api/media/audio/' + encId
@@ -630,10 +773,12 @@ export function makeShortItem(entryData, existingEl) {
       slideshowAudio.src = slideshowAudioSrc
       slideshowAudio.loop = !autoAdvanceEnabled()
       slideshowAudio.muted = _state.muted
+      slideshowAudio.volume = _state.volume
+      slideshowAudio.playbackRate = _state.playbackRate
       slideshowAudio.addEventListener('error', function () {
         if (slideshowAudio) slideshowAudio.removeAttribute('src')
       })
-      wrapper.appendChild(slideshowAudio)
+      mediaStage.appendChild(slideshowAudio)
       slideshow.audio = slideshowAudio
     }
   } else {
@@ -645,7 +790,7 @@ export function makeShortItem(entryData, existingEl) {
       poster.loading = 'eager'
       poster.src = entryData.thumbUrl
       wrapper.classList.add('is-awaiting-first-frame')
-      wrapper.appendChild(poster)
+      mediaStage.appendChild(poster)
     }
     video = doc.createElement('video')
     video.className = 'native-short-video'
@@ -656,7 +801,7 @@ export function makeShortItem(entryData, existingEl) {
     video.dataset.videoId = entryData.id
     if (entryData.thumbUrl) video.poster = entryData.thumbUrl
     if (entryData.streamUrl) video.src = entryData.streamUrl
-    wrapper.appendChild(video)
+    mediaStage.appendChild(video)
   }
 
   var header = doc.createElement('div')
@@ -677,6 +822,20 @@ export function makeShortItem(entryData, existingEl) {
     '</div>'
   safeSetMarkup(header, headerHtml)
   wrapper.appendChild(header)
+
+  var topControls = doc.createElement('div')
+  topControls.className = 'shorts-player-controls'
+  var volumeValue = _state.muted ? 0 : _state.volume
+  safeSetMarkup(topControls, '' +
+    '<div class="shorts-volume-control">' +
+    '<button class="shorts-top-control-btn shorts-mute-btn" type="button" data-short-top-action="mute" title="' + escapeHtml(_state.muted ? t('action_unmute', 'Unmute') : t('action_mute', 'Mute')) + '" aria-label="' + escapeHtml(_state.muted ? t('action_unmute', 'Unmute') : t('action_mute', 'Mute')) + '">' + iconSvg('mute', _state.muted) + '</button>' +
+    '<input class="shorts-volume-slider" type="range" min="0" max="1" step="0.05" value="' + escapeHtml(String(volumeValue)) + '" aria-label="' + escapeHtml(t('player_volume', 'Volume')) + '">' +
+    '</div>' +
+    '<div class="shorts-top-right-actions">' +
+    '<button class="shorts-top-control-btn shorts-more-btn" type="button" data-short-top-action="more" title="' + escapeHtml(t('action_more', 'More')) + '" aria-label="' + escapeHtml(t('action_more', 'More')) + '" aria-haspopup="menu" aria-expanded="false">' + iconSvg('more') + '</button>' +
+    '<button class="shorts-top-control-btn shorts-fullscreen-btn" type="button" data-short-top-action="fullscreen" title="' + escapeHtml(t('action_enter_fullscreen', 'Enter fullscreen')) + '" aria-label="' + escapeHtml(t('action_enter_fullscreen', 'Enter fullscreen')) + '">' + iconSvg('fullscreen') + '</button>' +
+    '</div>')
+  wrapper.appendChild(topControls)
 
   var storyChrome = null
   if (_state.storyMode) {
@@ -703,6 +862,10 @@ export function makeShortItem(entryData, existingEl) {
     ? (' data-story-channel-id="' + escapeHtml(entryData.channelId) + '" data-story-first-video-id="' + escapeHtml(entryData.storyFirstVideoId || '') + '" data-story-state="' + escapeHtml(storyState) + '"')
     : ''
   var avatarLinkClass = 'shorts-rail-avatar-link story-ring-' + storyState
+  var externalLabel = t('action_open_externally', 'Open externally')
+  var externalAction = entryData.originalUrl
+    ? '<a class="action-btn shorts-external-btn" href="' + escapeHtml(entryData.originalUrl) + '" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(externalLabel) + '" aria-label="' + escapeHtml(externalLabel) + '">' + iconSvg('open') + '</a>'
+    : ''
   var actionsHtml = '' +
     '<div class="shorts-rail-avatar-wrap">' +
     '<a class="' + avatarLinkClass + '" href="' + escapeHtml(channelHref) + '"' +
@@ -711,12 +874,12 @@ export function makeShortItem(entryData, existingEl) {
     '</a>' +
     followBadge +
     '</div>' +
-    '<button class="action-btn shorts-mute-btn" type="button" data-short-action="mute" title="' + escapeHtml(_state.muted ? t('action_unmute', 'Unmute') : t('action_mute', 'Mute')) + '">' + iconSvg('mute', _state.muted) + '</button>' +
     '<button class="action-btn shorts-autoplay-btn" type="button" data-short-action="autoplay" title="' + escapeHtml(t('shorts_autoplay_next', 'Auto-play next short')) + '">' + iconSvg('autoplay', false) + '</button>' +
     '<button class="action-btn bookmark-btn shorts-bookmark-btn" type="button" data-short-action="bookmark" title="' + escapeHtml(t('action_bookmark', 'Bookmark')) + '">' + iconSvg('bookmark', !!entryData.bookmarked) + '</button>' +
-    '<button class="action-btn shorts-share-btn" type="button" data-short-action="share" title="' + escapeHtml(t('action_share', 'Share')) + '">' + iconSvg('share', false) + '</button>'
+    (video ? '<button class="action-btn shorts-mini-player-btn" type="button" data-short-action="mini-player" title="' + escapeHtml(t('mini_player_title', 'Mini player')) + '" aria-label="' + escapeHtml(t('mini_player_title', 'Mini player')) + '">' + menuIconSvg('mini') + '</button>' : '') +
+    '<button class="action-btn shorts-share-btn" type="button" data-short-action="share" title="' + escapeHtml(t('action_share', 'Share')) + '">' + iconSvg('share', false) + '</button>' +
+    externalAction
   safeSetMarkup(actions, actionsHtml)
-  wrapper.appendChild(actions)
 
   var info = doc.createElement('div')
   info.className = 'shorts-info-overlay'
@@ -818,15 +981,21 @@ export function makeShortItem(entryData, existingEl) {
   wrapper.appendChild(progressContainer)
 
   item.appendChild(wrapper)
+  item.appendChild(actions)
 
   var refs = {
     video: video,
     poster: poster,
     wrapper: wrapper,
+    mediaStage: mediaStage,
     actions: actions,
     info: info,
     author: author,
-    muteBtn: q('.shorts-mute-btn', actions),
+    muteBtn: q('.shorts-mute-btn', topControls),
+    volumeSlider: q('.shorts-volume-slider', topControls),
+    moreBtn: q('.shorts-more-btn', topControls),
+    fullscreenBtn: q('.shorts-fullscreen-btn', topControls),
+    miniPlayerBtn: q('.shorts-mini-player-btn', actions),
     autoplayBtn: q('.shorts-autoplay-btn', actions),
     bookmarkBtn: q('.shorts-bookmark-btn', actions),
     shareBtn: q('.shorts-share-btn', actions),
@@ -839,8 +1008,6 @@ export function makeShortItem(entryData, existingEl) {
     descToggle: descToggle
   }
   var entryObj = { el: item, data: entryData, refs: refs }
-
-  bindMomentLongPress(entryObj)
 
   if (video) {
     function revealVideoFrame() {
@@ -859,6 +1026,8 @@ export function makeShortItem(entryData, existingEl) {
     attachSeekTooltip(progressContainer, video)
     video.loop = !autoAdvanceEnabled()
     video.muted = _state.muted
+    video.volume = _state.volume
+    video.playbackRate = _state.playbackRate
     video.addEventListener('ended', function () {
       if (autoAdvanceEnabled()) _fns.goNext()
       else {
@@ -897,7 +1066,7 @@ export function makeShortItem(entryData, existingEl) {
       }, { once: true })
     }
   }
-  var avatarImg = q('.channel-avatar-img', wrapper)
+  var avatarImg = q('.channel-avatar-img', item)
   if (avatarImg) {
     avatarImg.addEventListener('error', function () {
       var fb = escapeHtml(String(avatarImg.getAttribute('data-avatar-fallback') || 'U'))
@@ -956,18 +1125,6 @@ export function makeShortItem(entryData, existingEl) {
     e.preventDefault()
     e.stopPropagation()
     var action = btn.getAttribute('data-short-action')
-    if (action === 'mute') {
-      _state.muted = !_state.muted
-      localStorage.setItem('shortsMuted', _state.muted)
-      document.querySelectorAll('#shorts-container video').forEach(function (v) { v.muted = _state.muted })
-      _state.items.forEach(function (e) {
-        var a = e && e.refs && e.refs.slideshow && e.refs.slideshow.audio
-        if (a) a.muted = _state.muted
-      })
-      _fns.updateCurrentActionButtons()
-      showToast(_state.muted ? t('toast_muted', 'Muted') : t('toast_unmuted', 'Unmuted'))
-      return
-    }
     if (action === 'autoplay') {
       if (_state.storyMode) return
       _state.autoPlayNext = !_state.autoPlayNext
@@ -982,6 +1139,10 @@ export function makeShortItem(entryData, existingEl) {
         .replace('%1$s', _state.autoPlayNext ? t('state_on', 'ON') : t('state_off', 'OFF')))
       return
     }
+    if (action === 'mini-player') {
+      toggleMomentMiniPlayer(entryObj)
+      return
+    }
     if (action === 'share') {
       shareShort(entryData, btn)
       return
@@ -992,8 +1153,30 @@ export function makeShortItem(entryData, existingEl) {
     }
   })
 
+  topControls.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-short-top-action]') : null
+    if (!btn) return
+    e.preventDefault()
+    e.stopPropagation()
+    var action = btn.getAttribute('data-short-top-action')
+    if (action === 'mute') toggleShortMute()
+    else if (action === 'more') {
+      if (momentActionsWrapper === wrapper) closeMomentActions()
+      else openMomentActions(entryObj, btn)
+    }
+    else if (action === 'fullscreen') toggleMomentFullscreen(entryObj)
+  })
+  refs.volumeSlider.addEventListener('input', function (e) {
+    e.stopPropagation()
+    setShortVolume(refs.volumeSlider.value)
+  })
+  refs.volumeSlider.addEventListener('click', function (e) { e.stopPropagation() })
+  refs.volumeSlider.addEventListener('pointerdown', function (e) { e.stopPropagation() })
+  refs.volumeSlider.addEventListener('pointerup', function () { refs.volumeSlider.blur() })
+  refs.volumeSlider.addEventListener('pointercancel', function () { refs.volumeSlider.blur() })
+
   wrapper.addEventListener('click', function (e) {
-    var clickOnControl = e.target && e.target.closest && e.target.closest('.shorts-actions, .shorts-header-overlay, .shorts-story-chrome, .val-progress-container, .shorts-slide-controls')
+    var clickOnControl = e.target && e.target.closest && e.target.closest('.shorts-actions, .shorts-player-controls, .shorts-header-overlay, .shorts-story-chrome, .val-progress-container, .shorts-slide-controls, .moment-actions-overlay')
     if (clickOnControl) return
     if (navigateStoryFromClick(entryObj, e)) return
     toggleShortPlayback(entryObj)

@@ -5,6 +5,10 @@ description: Use when changing or debugging Igloo web UI, static assets, templ c
 
 # Igloo Web UI Debugging
 
+## Cross-Browser Invariant
+
+Never assume Chromium. Igloo web behavior must work in Firefox and Chromium. Start with standard APIs and CSS, then isolate any vendor-specific fallback. Do not combine a vendor-only selector with standard selectors in one comma-separated rule: browsers use unforgiving selector-list parsing and may discard the entire rule when one selector is unsupported. A pass in one engine is evidence only for that engine; when the reported browser is known, reason from and verify that engine's behavior.
+
 Inspect the running UI before editing source when a UI symptom is visible or reproducible.
 
 ## Flow

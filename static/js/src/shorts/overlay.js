@@ -511,7 +511,9 @@ export function updateCurrentActionButtons() {
       refs.muteBtn.classList.toggle('active', _state.muted)
       setSvgContent(refs.muteBtn, _fns.iconSvg('mute', _state.muted))
       refs.muteBtn.title = _state.muted ? t('action_unmute', 'Unmute') : t('action_mute', 'Mute')
+      refs.muteBtn.setAttribute('aria-label', refs.muteBtn.title)
     }
+    if (refs.volumeSlider) refs.volumeSlider.value = String(_state.muted ? 0 : _state.volume)
     if (refs.autoplayBtn) {
       var autoAdvance = _state.storyMode || _state.autoPlayNext
       refs.autoplayBtn.classList.toggle('active', autoAdvance && isCurrent)
@@ -812,6 +814,7 @@ export function openOverlayAtIndex(index, immediate, options) {
   })) return
   var wasOpen = _state.overlayOpen
   renderShortsWindow(index)
+  if (!wasOpen && _fns && typeof _fns.beforeOverlayOpen === 'function') _fns.beforeOverlayOpen()
   setOverlayVisible(true)
   activateIndex(index, {
     force: true,
@@ -820,7 +823,6 @@ export function openOverlayAtIndex(index, immediate, options) {
     recordView: true
   })
   if (_state.storyMode) ensureCurrentVisible(index, true)
-  if (!wasOpen && _fns && typeof _fns.afterOverlayOpen === 'function') _fns.afterOverlayOpen()
 }
 
 export function openOverlayByVideoId(videoId, immediate, options) {

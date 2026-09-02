@@ -1,5 +1,9 @@
 package com.screwy.igloo.ui.component
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -35,6 +39,8 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.core.app.PictureInPictureModeChangedInfo
+import androidx.core.util.Consumer
 import androidx.media3.common.MediaItem
 import com.screwy.igloo.data.dao.AndroidSyncDao
 import com.screwy.igloo.log.Logger
@@ -234,6 +240,21 @@ fun MomentsPlayer(
     val reachability: Reachability = koinInject()
     val logger: Logger = koinInject()
     val drawerController = LocalDrawerController.current
+    val componentActivity = remember(context) { context.findMomentsComponentActivity() }
+    var isInPictureInPicture by
+        remember(componentActivity) {
+            mutableStateOf(componentActivity?.isInPictureInPictureMode == true)
+        }
+    DisposableEffect(componentActivity) {
+        if (componentActivity == null) return@DisposableEffect onDispose {}
+        val listener =
+            Consumer<PictureInPictureModeChangedInfo> { info ->
+                isInPictureInPicture = info.isInPictureInPictureMode
+            }
+        componentActivity.addOnPictureInPictureModeChangedListener(listener)
+        onDispose { componentActivity.removeOnPictureInPictureModeChangedListener(listener) }
+    }
+    val effectiveChromeVisible = chromeVisible && !isInPictureInPicture
     // IglooPlayerFactory resolves the bearer token for each media request. Rotating a
     // token must not throw away a slideshow's current audio position.
     val slideshowAudioPlayer =
@@ -467,7 +488,7 @@ fun MomentsPlayer(
                 onRequestMomentActions = onRequestMomentActions,
                 onSwipeLeftToChannel = onSwipeLeftToChannel,
                 onSwipeRightFromEdge = drawerController::open,
-                chromeVisible = chromeVisible,
+                chromeVisible = effectiveChromeVisible,
                 logger = logger,
             )
         }
@@ -502,7 +523,7 @@ fun MomentsPlayer(
                         .zIndex(3f)
                         .padding(top = overlayIdentityTopPadding()),
             )
-        } else if (chromeVisible && activeTab != null && onTabSelected != null) {
+        } else if (effectiveChromeVisible && activeTab != null && onTabSelected != null) {
             MomentsTabControl(
                 activeTab = activeTab,
                 onTabSelected = onTabSelected,
@@ -524,6 +545,14 @@ fun MomentsPlayer(
         }
     }
 }
+
+private tailrec fun Context.findMomentsComponentActivity(): ComponentActivity? =
+    when (this) {
+        is ComponentActivity -> this
+        is ContextWrapper -> baseContext.findMomentsComponentActivity()
+        is Activity -> null
+        else -> null
+    }
 
 /**
  * Keeps the order already shown by this player session while applying metadata updates, removals,
