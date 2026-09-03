@@ -4468,6 +4468,7 @@ html.mini-player-moving * {
 .youtube-media-controller:not(.dashboard-media-controller-mini) {
     --player-control-size: 36px;
     --player-control-icon-size: 18px;
+    --media-control-hover-background: transparent;
 }
 
 .youtube-media-controller:not(.dashboard-media-controller-mini) media-control-bar.dashboard-media-control-bar {
@@ -4605,6 +4606,21 @@ html.mini-player-moving * {
 .youtube-media-controller:not(.dashboard-media-controller-mini) #player-speed-menu-btn {
     min-width: var(--player-control-size);
     padding-inline: 0;
+}
+
+.youtube-media-controller:not(.dashboard-media-controller-mini) .mc-custom-btn:hover,
+.youtube-media-controller:not(.dashboard-media-controller-mini) .mc-custom-btn:focus-visible {
+    color: var(--text-primary);
+    background: transparent;
+    transform: none;
+}
+
+.youtube-media-controller:not(.dashboard-media-controller-mini) .mc-custom-btn.active,
+.youtube-media-controller:not(.dashboard-media-controller-mini) #player-cc-btn.active,
+.youtube-media-controller:not(.dashboard-media-controller-mini) .mc-speed-btn[aria-expanded="true"] {
+    color: var(--accent-secondary);
+    background: transparent;
+    box-shadow: none;
 }
 
 #player-more-controls-btn {
@@ -5090,14 +5106,16 @@ html.mini-player-moving * {
 #main-media-controller.youtube-media-controller:not(.dashboard-media-controller-mini) #player-autoplay-next-btn:focus-visible,
 #main-media-controller.youtube-media-controller:not(.dashboard-media-controller-mini) #player-mini-btn:hover,
 #main-media-controller.youtube-media-controller:not(.dashboard-media-controller-mini) #player-mini-btn:focus-visible {
-    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    background: transparent;
     box-shadow: none;
+    transform: none;
 }
 
 #main-media-controller.youtube-media-controller:not(.dashboard-media-controller-mini) #player-autoplay-next-btn.active,
 #main-media-controller.youtube-media-controller:not(.dashboard-media-controller-mini) #player-mini-btn.active {
     color: var(--accent-secondary);
-    background: rgba(var(--accent-primary-rgb), 0.2);
+    background: transparent;
     box-shadow: none;
 }
 

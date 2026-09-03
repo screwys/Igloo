@@ -30,6 +30,12 @@ Inspect the running UI before editing source when a UI symptom is visible or rep
 - When icons visibly dominate the font, first adjust the icon-to-font size ratio while preserving ordinary flex centering. Use transforms, relative offsets, margins, or artificial line boxes only when evidence shows a remaining positional mismatch after sizing is correct.
 - Verify both normal and active rows because font weight changes the label's visible bounds. Reinspect the rendered result at the reported viewport; identical DOM centers alone do not establish visual consistency.
 
+## Interaction Styling
+
+- Hover must not transform an element or change its foreground or accent color. Keep geometry and color stable so hovering communicates availability without making the control jump or look selected.
+- A clicked or selected state may introduce the accent color. Use that single signal; do not combine an accent foreground with an additional active outline, filled container, glow, or selection ring.
+- Focus indicators remain an accessibility requirement and are separate from selected-state decoration.
+
 ## Common Surfaces
 
 - Feed cards, conversation threads, loaded thread fragments, hover cards, source badges, story tray, moments, fullscreen player, subtitle overlays, and media readiness indicators.
