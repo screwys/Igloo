@@ -116,7 +116,6 @@
 }
 .profile-card-action-btn:hover {
 	border-color: var(--accent-secondary);
-	color: var(--accent-secondary);
 	background: rgba(var(--accent-primary-rgb), 0.08);
 }
 .profile-card-action-btn.active {
