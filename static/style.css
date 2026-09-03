@@ -253,7 +253,6 @@ body.feed-media-overlay-open {
 }
 
 .nav-refresh-btn:hover {
-    color: var(--accent-primary);
     background: var(--bg-hover);
     opacity: 1;
 }
@@ -415,7 +414,7 @@ body.feed-media-overlay-open {
     height: 14px;
 }
 
-.input-clear-btn:hover { opacity: 1; color: var(--text-primary); }
+.input-clear-btn:hover { opacity: 1; }
 .input-clear-btn.hidden { display: none; }
 
 .clearable-input .platform-search-input { width: 100%; padding-right: 1.2rem; }
@@ -678,13 +677,11 @@ body.feed-media-overlay-open {
 }
 
 .channel-btn:hover {
-    color: var(--accent-primary);
     background: rgba(var(--accent-primary-rgb), 0.12);
     border-color: rgba(var(--accent-primary-rgb), 0.2);
 }
 
 .channel-btn.remove:hover {
-    color: var(--error);
     background: rgba(var(--accent-primary-rgb), 0.1);
     border-color: rgba(var(--accent-primary-rgb), 0.2);
 }
@@ -800,7 +797,6 @@ body.feed-media-overlay-open {
 }
 
 .status-log-btn:hover {
-    color: var(--accent-secondary);
     opacity: 0.9;
 }
 
@@ -997,7 +993,6 @@ html.sidebar-resizing .sidebar-resize-handle {
 
 .sidebar-compact-btn:hover,
 .sidebar-compact-btn:focus-visible {
-    color: var(--text-primary);
     background: rgba(var(--accent-primary-rgb), 0.12);
     border-color: rgba(255, 255, 255, 0.1);
 }
@@ -1291,13 +1286,13 @@ html.sidebar-resizing .sidebar-resize-handle {
 .btn-prefs:hover {
     background: rgba(var(--accent-primary-rgb), 0.12);
     border-color: rgba(var(--accent-primary-rgb), 0.3);
-    color: var(--accent-primary);
     box-shadow: none;
 }
 
 .btn-prefs .material-icon {
     width: 20px;
     height: 20px;
+    color: var(--text-secondary);
 }
 
 .btn-danger-lite {
@@ -1687,7 +1682,6 @@ html.sidebar-resizing .sidebar-resize-handle {
 
 .video-card.is-previewing .video-preview-mute-btn:hover {
     opacity: 1;
-    color: var(--text-primary);
 }
 
 .video-preview-seekbar {
@@ -2369,7 +2363,7 @@ select.input:focus {
 .bookmark-sheet-account-wrap { position: relative; margin-bottom: 10px; }
 .bookmark-sheet-account-add-btn { width: 26px; height: 26px; border-radius: 9999px; border: 1px solid rgba(var(--accent-primary-rgb), 0.35); background: transparent; color: var(--text-secondary); cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 26px; }
 .bookmark-sheet-account-add-btn .material-icon { width: 16px; height: 16px; }
-.bookmark-sheet-account-add-btn:hover { background: rgba(var(--accent-primary-rgb), 0.12); border-color: var(--accent-secondary); color: var(--text-primary); }
+.bookmark-sheet-account-add-btn:hover { background: rgba(var(--accent-primary-rgb), 0.12); border-color: var(--accent-secondary); }
 .bookmark-sheet-account-picker { position: fixed; width: 280px; max-width: calc(100vw - 16px); display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--bg-primary); border: 1px solid rgba(var(--accent-primary-rgb), 0.3); border-radius: 10px; box-shadow: 0 12px 28px rgba(0,0,0,0.42); z-index: 43000; }
 .bookmark-sheet-account-picker.hidden { display: none; }
 .bookmark-sheet-account-search { width: 100%; box-sizing: border-box; }
@@ -2765,14 +2759,10 @@ select.input:focus {
 
 /* Preferences Button - icon color */
 .btn-prefs svg {
-    color: var(--accent-primary);
+    color: var(--text-secondary);
     fill: currentColor;
     stroke: none;
     transition: all var(--transition-fast);
-}
-
-.btn-prefs:hover svg {
-    color: var(--accent-secondary);
 }
 
 /* Modal */
@@ -3581,7 +3571,6 @@ select.input:focus {
 
 .modal-close:hover {
     background: var(--accent-primary);
-    color: var(--on-accent);
 }
 
 .modal-description {
@@ -4112,7 +4101,6 @@ html.mini-player-moving * {
 }
 
 .mini-player-header-btn:hover {
-    color: var(--accent-secondary);
     background: rgba(var(--accent-primary-rgb), 0.16);
 }
 
@@ -4847,7 +4835,6 @@ html.mini-player-moving * {
 }
 
 .dashboard-media-controller:not(.dashboard-media-controller-mini) .mc-custom-btn:hover {
-    color: var(--accent-secondary);
     background: rgba(var(--accent-primary-rgb), 0.14);
 }
 
@@ -5306,7 +5293,6 @@ html.mini-player-moving * {
 }
 
 .player-channel-inline-btn:hover {
-    color: var(--accent-secondary);
     background: rgba(var(--accent-primary-rgb), 0.08);
 }
 
@@ -5316,7 +5302,6 @@ html.mini-player-moving * {
 }
 
 .player-channel-inline-btn.player-btn-danger:hover {
-    color: var(--status-error);
     background: rgba(var(--accent-primary-rgb), 0.08);
 }
 
@@ -5475,7 +5460,6 @@ html.mini-player-moving * {
 }
 
 .player-btn:hover {
-    color: var(--accent-secondary);
     border-color: rgba(var(--accent-primary-rgb), 0.42);
     background: rgba(var(--accent-primary-rgb), 0.09);
     box-shadow: 0 7px 16px rgba(var(--accent-primary-rgb), 0.12);
@@ -5496,7 +5480,6 @@ html.mini-player-moving * {
 }
 
 .player-btn.pin-btn:hover {
-    color: var(--warning);
     border-color: rgba(var(--accent-secondary-rgb), 0.46);
     background: rgba(var(--accent-secondary-rgb), 0.11);
 }
@@ -6165,7 +6148,6 @@ html.mini-player-moving * {
 
 .quick-dl-icon:hover {
     background: var(--bg-hover);
-    color: var(--text-primary);
 }
 
 .quick-dl-icon .material-icon {
@@ -6478,7 +6460,6 @@ body.shorts-mode .floating-header {
 }
 
 .channel-action-btn:hover {
-    color: var(--accent-primary);
 }
 
 .channel-action-btn .material-icon {
@@ -7141,7 +7122,6 @@ body.shorts-open:has(.shorts-story-tray.open) .shorts-story-tray-controls {
 
 .shorts-story-tray-toggle:hover,
 .shorts-story-tray-toggle:focus-visible {
-    color: var(--text-primary);
     border-color: rgba(var(--accent-primary-rgb), 0.55);
     background: rgba(var(--accent-primary-rgb), 0.18);
     outline: none;
@@ -7215,7 +7195,6 @@ body.shorts-open:has(.shorts-story-tray.open) .shorts-story-tray-controls {
 .shorts-story-tray-close:hover,
 .shorts-story-tray-close:focus-visible {
     background: rgba(255, 255, 255, 0.08);
-    color: var(--text-primary);
     outline: none;
 }
 
@@ -7425,7 +7404,6 @@ body.landscape-mode .shorts-video-wrapper.is-wide video {
 
 .shorts-close-btn:hover {
     background: rgba(0, 0, 0, 0.8);
-    color: var(--accent-primary);
     border-color: var(--accent-primary);
     box-shadow: 0 0 15px rgba(var(--accent-primary-rgb), 0.5);
 }
@@ -7618,7 +7596,6 @@ body.shorts-mode .sidebar {
 
 .shorts-top-control-btn:hover,
 .shorts-top-control-btn:focus-visible {
-    color: white;
     background: rgba(255, 255, 255, 0.15);
     filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.5));
     outline: none;
@@ -7732,7 +7709,6 @@ body.shorts-mode .sidebar {
 }
 
 .shorts-sidebar-toggle:hover {
-    color: var(--accent-primary);
     border-color: rgba(var(--accent-primary-rgb), 0.55);
     background: rgba(0, 0, 0, 0.55);
 }
@@ -8236,7 +8212,6 @@ body.shorts-mode .sidebar {
 }
 
 .status-log-btn:hover {
-    color: var(--accent-primary);
     background: transparent;
 }
 
@@ -8724,7 +8699,6 @@ body.shorts-mode .sidebar {
 }
 
 .shorts-top-right-actions .btn:hover {
-    color: var(--accent-primary);
     border-color: rgba(var(--accent-primary-rgb), 0.55);
     background: rgba(0, 0, 0, 0.65);
 }
@@ -8912,10 +8886,6 @@ body.shorts-mode .sidebar {
     font-size: 1.1rem;
     color: var(--text-muted);
     transition: color 0.2s ease, transform 0.2s ease;
-}
-
-.channel-btn.star:hover {
-    color: var(--text-primary);
 }
 
 .channel-btn.star.active {
@@ -9296,10 +9266,6 @@ body.shorts-mode .sidebar {
     line-height: 1.2;
 }
 
-.feed-author-trigger:hover .feed-author {
-    color: var(--accent-secondary);
-}
-
 .feed-date {
     font-size: 0.8rem;
     color: var(--text-muted);
@@ -9429,7 +9395,6 @@ body.shorts-mode .sidebar {
 
 .feed-star-btn:hover {
     border-color: var(--accent-secondary);
-    color: var(--accent-secondary);
 }
 
 .feed-star-btn.active {
@@ -9459,7 +9424,6 @@ body.shorts-mode .sidebar {
 }
 
 .feed-card-menu-btn:hover {
-    color: var(--accent-secondary);
     background: rgba(255, 255, 255, 0.06);
 }
 
@@ -9803,7 +9767,6 @@ body.shorts-mode .sidebar {
 
 .feed-video-control-btn:hover,
 .feed-video-control-btn:focus-visible {
-    color: #fff;
     background: rgba(255, 255, 255, 0.12);
 }
 
@@ -10221,8 +10184,8 @@ body.shorts-mode .sidebar {
     border-radius: 999px;
     background: transparent;
     color: var(--text-secondary);
-    width: 30px;
-    height: 30px;
+    width: 36px;
+    height: 36px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -10233,14 +10196,13 @@ body.shorts-mode .sidebar {
 }
 
 .feed-action-btn:hover {
-    color: var(--accent-primary);
     background: rgba(var(--accent-primary-rgb), 0.12);
     border-color: rgba(var(--accent-primary-rgb), 0.3);
 }
 
 .feed-action-btn svg {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     display: block;
     pointer-events: none;
     stroke-linecap: round;
