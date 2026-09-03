@@ -7427,7 +7427,6 @@ body.landscape-mode .shorts-video-wrapper.is-wide video {
     background: rgba(0, 0, 0, 0.8);
     color: var(--accent-primary);
     border-color: var(--accent-primary);
-    transform: scale(1.1);
     box-shadow: 0 0 15px rgba(var(--accent-primary-rgb), 0.5);
 }
 
@@ -8765,7 +8764,6 @@ body.shorts-mode .sidebar {
 
 .close-shorts-btn:hover {
     background: transparent;
-    transform: scale(1.2);
 }
 
 /* removed shorts-top-btn mobile */
@@ -8918,7 +8916,6 @@ body.shorts-mode .sidebar {
 
 .channel-btn.star:hover {
     color: var(--text-primary);
-    transform: scale(1.1);
 }
 
 .channel-btn.star.active {
@@ -10239,7 +10236,6 @@ body.shorts-mode .sidebar {
     color: var(--accent-primary);
     background: rgba(var(--accent-primary-rgb), 0.12);
     border-color: rgba(var(--accent-primary-rgb), 0.3);
-    transform: scale(1.07);
 }
 
 .feed-action-btn svg {
