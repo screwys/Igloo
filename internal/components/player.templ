@@ -46,28 +46,26 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							<source src={ videoMediaURL("stream", video) } type="video/mp4"/>
 						</video>
 						<media-loading-indicator noautohide></media-loading-indicator>
-						if video.Platform == "youtube" {
-							<media-time-range id="main-player-time-range"></media-time-range>
-						}
 						<media-control-bar class="vjs-control-bar dashboard-media-control-bar">
 							<media-play-button></media-play-button>
 							@playerSeekBackButton(p)
 							@playerSeekForwardButton(p)
 							<span class="mc-separator mc-separator-seek" aria-hidden="true"></span>
-							if video.Platform != "youtube" {
-								<media-time-range id="main-player-time-range"></media-time-range>
+							if video.Platform == "youtube" {
+								<media-time-display class={ templ.KV("mc-time-long", video.Duration >= 3600) } showduration></media-time-display>
 							}
-							<media-time-display showduration></media-time-display>
+							<media-time-range id="main-player-time-range"></media-time-range>
+							if video.Platform != "youtube" {
+								<media-time-display showduration></media-time-display>
+							}
 							<span class="mc-separator mc-separator-time" aria-hidden="true"></span>
 							<span class="mc-controls-spacer" aria-hidden="true"></span>
-							<div class="dashboard-volume-control">
-								<media-mute-button></media-mute-button>
-								if video.Platform == "youtube" {
-									<input id="player-volume-range" class="dashboard-volume-range" type="range" min="0" max="1" step="0.05" value="1" aria-label={ L(p, "player_volume", "Volume") }/>
-								} else {
+							if video.Platform != "youtube" {
+								<div class="dashboard-volume-control">
+									<media-mute-button></media-mute-button>
 									<media-volume-range></media-volume-range>
-								}
-							</div>
+								</div>
+							}
 							<div class="dashboard-right-controls">
 							if video.Platform == "youtube" {
 								<button id="player-more-controls-btn" class="mc-custom-btn player-more-controls-btn" type="button" title={ L(p, "action_more", "More") } aria-label={ L(p, "action_more", "More") } aria-expanded="false">
@@ -89,6 +87,13 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 								<div id="player-speed-menu" class="mc-speed-menu hidden" role="menu" aria-label={ L(p, "player_playback_speed_menu", "Playback speed menu") }></div>
 							</div>
 							if video.Platform == "youtube" {
+								<div class="dashboard-volume-control">
+									<div class="dashboard-volume-popover">
+										<input id="player-volume-range" class="dashboard-volume-range" type="range" min="0" max="1" step="0.05" value="1" orient="vertical" aria-label={ L(p, "player_volume", "Volume") }/>
+										<span class="dashboard-volume-thumb" aria-hidden="true"></span>
+									</div>
+									<media-mute-button></media-mute-button>
+								</div>
 								@playerMiniButton(p)
 							}
 						<button

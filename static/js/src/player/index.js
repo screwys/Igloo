@@ -227,6 +227,7 @@ if (root && video) {
       const effectiveVolume = video.muted ? 0 : video.volume
       volumeRange.value = String(effectiveVolume)
       volumeRange.style.setProperty('--player-volume-percent', Math.round(effectiveVolume * 100) + '%')
+      if (volumeControl) volumeControl.style.setProperty('--player-volume-height', Math.round(effectiveVolume * 74) + 'px')
     }
 
     if (volumeRange) {
@@ -894,13 +895,7 @@ if (root && video) {
             var barRect = bar.getBoundingClientRect()
             if (!(wrapperRect && wrapperRect.height > 0 && barRect && barRect.height > 0)) return fallback
             var gap = readSubtitleOffsetPx(isFs ? '--player-subtitles-controls-gap-fullscreen' : '--player-subtitles-controls-gap', isFs ? 12 : 6)
-            var controlsTop = barRect.top
-            var timeRange = controller.querySelector('#main-player-time-range')
-            if (timeRange && typeof timeRange.getBoundingClientRect === 'function') {
-              var rangeRect = timeRange.getBoundingClientRect()
-              if (rangeRect && rangeRect.height > 0) controlsTop = rangeRect.top
-            }
-            var measured = wrapperRect.bottom - controlsTop + gap
+            var measured = wrapperRect.bottom - barRect.top + gap
             if (!Number.isFinite(measured) || measured <= 0) return fallback
             return Math.max(0, Math.min(wrapperRect.height, measured))
           }
