@@ -4444,7 +4444,7 @@ html.mini-player-moving * {
     --media-range-track-background: rgba(255, 255, 255, 0.14);
     --media-range-track-border-radius: 999px;
     --media-range-track-box-shadow: none;
-    --media-range-track-height: 4px;
+    --media-range-track-height: 3px;
     --media-range-thumb-width: 11px;
     --media-range-thumb-height: 11px;
 }
@@ -4456,9 +4456,9 @@ html.mini-player-moving * {
     --media-range-track-outline-offset: 0;
     --media-range-track-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
     --media-range-bar-color: var(--accent-secondary);
-    --media-range-track-height: 5px;
-    --media-range-thumb-width: 14px;
-    --media-range-thumb-height: 14px;
+    --media-range-track-height: 3px;
+    --media-range-thumb-width: 11px;
+    --media-range-thumb-height: 11px;
     --media-range-thumb-background: var(--accent-secondary);
     --media-range-thumb-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
     --media-time-range-buffered-color: rgba(255, 255, 255, 0.42);

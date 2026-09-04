@@ -98,21 +98,25 @@ export function initPreviewHover(video, videoId, playerWrapper) {
     const wrapperRect = playerWrapper.getBoundingClientRect()
     const rangeRect = timeRange.getBoundingClientRect()
     const x = Math.max(0, Math.min(wrapperRect.width, Number(clientX) - wrapperRect.left))
-    previewOverlay.style.left = x + 'px'
     const overlayBottom = Math.max(0, wrapperRect.bottom - rangeRect.top + 12)
     previewOverlay.style.bottom = overlayBottom + 'px'
 
     if (!cue || !Array.isArray(cue.coords) || cue.coords.length !== 4) {
       previewFrame.style.display = 'none'
+      previewOverlay.style.left = x + 'px'
       return
     }
     const sx = Number(cue.coords[0]) || 0
     const sy = Number(cue.coords[1]) || 0
     const sw = Math.max(1, Number(cue.coords[2]) || 1)
     const sh = Math.max(1, Number(cue.coords[3]) || 1)
-    const scale = 0.72
+    const scale = 1.0
+    const frameWidth = Math.round(sw * scale)
+    const halfWidth = Math.round(frameWidth / 2) + 8
+    const clampedX = wrapperRect.width > halfWidth * 2 ? Math.max(halfWidth, Math.min(wrapperRect.width - halfWidth, x)) : x
+    previewOverlay.style.left = clampedX + 'px'
     previewFrame.style.display = ''
-    previewFrame.style.width = Math.round(sw * scale) + 'px'
+    previewFrame.style.width = frameWidth + 'px'
     previewFrame.style.height = Math.round(sh * scale) + 'px'
     previewImg.src = cue.imageUrl
     previewImg.style.left = (-sx * scale) + 'px'
