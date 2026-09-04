@@ -537,16 +537,26 @@ templ feedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 			/>
 		</div>
 	} else if readyMediaCount > 0 {
-		<div class="feed-media-wrap feed-media-wrap-grid">
-			<div class={ fmt.Sprintf("feed-media-grid count-%d", readyMediaCount) }>
+		@feedMediaGrid(p, readyMediaCount, feedMediaRowStyle(item.Media, item.MediaSlideURLs)) {
 				for i, m := range item.Media {
-					if i < 4 && feedMediaURLAt(item.MediaSlideURLs, i) != "" {
+					if feedMediaURLAt(item.MediaSlideURLs, i) != "" {
 						@feedMediaTile(p, i, m, mediaCount, item.MediaStreamURL, item.MediaPreviewURL, feedMediaURLAt(item.MediaSlideURLs, i), deferMedia)
 					}
 				}
+		}
+	}
+}
+
+templ feedMediaGrid(p PageProps, count int, rowStyle string) {
+	<div class="feed-media-row-container">
+		<div class="feed-media-wrap feed-media-wrap-grid" data-feed-media-scroll>
+			<div class={ fmt.Sprintf("feed-media-grid count-%d", count), templ.KV("feed-media-row", rowStyle != "") } style={ rowStyle }>
+				{ children... }
 			</div>
 		</div>
-	}
+		<button type="button" class="feed-media-nav feed-media-nav-prev" data-feed-media-step="-1" aria-label={ L(p, "action_previous", "Previous") } hidden>‹</button>
+		<button type="button" class="feed-media-nav feed-media-nav-next" data-feed-media-step="1" aria-label={ L(p, "action_next", "Next") } hidden>›</button>
+	</div>
 }
 
 templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, streamURL string, previewURL string, slideURL string, deferMedia bool) {
@@ -596,9 +606,6 @@ templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, st
 					alt={ fmt.Sprintf(L(p, "feed_post_media_index", "Post media %d"), index+1) }
 				/>
 			}
-			if index == 3 && mediaCount > 4 {
-				<span class="feed-media-more">+{ fmt.Sprintf("%d", mediaCount-4) }</span>
-			}
 		</div>
 	} else {
 		<button
@@ -617,9 +624,6 @@ templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, st
 				}
 				alt={ fmt.Sprintf(L(p, "feed_post_media_index", "Post media %d"), index+1) }
 			/>
-			if index == 3 && mediaCount > 4 {
-				<span class="feed-media-more">+{ fmt.Sprintf("%d", mediaCount-4) }</span>
-			}
 		</button>
 	}
 }
@@ -764,15 +768,13 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMed
 			/>
 		</div>
 	} else if qMediaCount > 1 && readyMediaCount > 0 {
-		<div class="feed-media-wrap feed-media-wrap-grid">
-			<div class={ fmt.Sprintf("feed-media-grid count-%d", readyMediaCount) }>
+		@feedMediaGrid(p, readyMediaCount, feedMediaRowStyle(item.QuoteMedia, item.QuoteMediaSlideURLs)) {
 				for i, qm := range item.QuoteMedia {
-					if i < 4 && feedMediaURLAt(item.QuoteMediaSlideURLs, i) != "" {
+					if feedMediaURLAt(item.QuoteMediaSlideURLs, i) != "" {
 						@feedQuoteMediaTile(p, i, qm, qMediaCount, item.QuoteMediaStreamURL, item.QuoteMediaPreviewURL, feedMediaURLAt(item.QuoteMediaSlideURLs, i), deferMedia)
 					}
 				}
-			</div>
-		</div>
+		}
 	} else if item.QuoteBodyText == "" {
 		<div class="feed-quote-unavailable">{ L(p, "feed_quoted_post", "Quoted post") }</div>
 	}
@@ -825,9 +827,6 @@ templ feedQuoteMediaTile(p PageProps, index int, qm model.MediaRef, qMediaCount 
 					alt={ fmt.Sprintf(L(p, "feed_quoted_post_media_index", "Quoted post media %d"), index+1) }
 				/>
 			}
-			if index == 3 && qMediaCount > 4 {
-				<span class="feed-media-more">+{ fmt.Sprintf("%d", qMediaCount-4) }</span>
-			}
 		</div>
 	} else {
 		<button
@@ -846,9 +845,6 @@ templ feedQuoteMediaTile(p PageProps, index int, qm model.MediaRef, qMediaCount 
 				}
 				alt={ fmt.Sprintf(L(p, "feed_quoted_post_media_index", "Quoted post media %d"), index+1) }
 			/>
-			if index == 3 && qMediaCount > 4 {
-				<span class="feed-media-more">+{ fmt.Sprintf("%d", qMediaCount-4) }</span>
-			}
 		</button>
 	}
 }

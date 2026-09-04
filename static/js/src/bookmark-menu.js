@@ -355,6 +355,7 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
   }, 80)
 
   var body = bodyDiv
+  var combineImages = false
 
   function renderSheet() {
     var categories = Array.isArray(bookmarkCategories) ? bookmarkCategories : []
@@ -654,22 +655,22 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
       body.appendChild(dangerBtn)
     }
 
-    // Add category
-    var addDiv = document.createElement('div')
-    addDiv.className = 'bookmark-sheet-add'
+    // Category creation lives beside the category choices.
     var addInputEl = document.createElement('input')
     addInputEl.className = 'bookmark-sheet-input'
     addInputEl.type = 'text'
     addInputEl.placeholder = t('bookmark_add_category', 'Add category')
     addInputEl.maxLength = 64
-    addDiv.appendChild(addInputEl)
+    addInputEl.hidden = true
     var addBtnEl = document.createElement('button')
-    addBtnEl.className = 'bookmark-sheet-add-btn'
+    addBtnEl.className = 'bookmark-sheet-account-add-btn'
     addBtnEl.type = 'button'
     addBtnEl.setAttribute('data-bookmark-add', '')
+    addBtnEl.setAttribute('aria-label', t('bookmark_add_category', 'Add category'))
+    addBtnEl.setAttribute('aria-expanded', 'false')
     addBtnEl.innerHTML = materialIconMarkup('Add') // eslint-disable-line no-unsanitized/property
-    addDiv.appendChild(addBtnEl)
-    body.appendChild(addDiv)
+    catList.appendChild(addBtnEl)
+    catList.appendChild(addInputEl)
 
     // Media index selector
     var mainMediaCount = parseInt(root.getAttribute('data-media-count') || '0', 10) || 0
@@ -705,6 +706,25 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
           mediaRow.appendChild(mBtn)
         })(di, displayOrder[di])
       }
+      var combineBtn = document.createElement('button')
+      combineBtn.type = 'button'
+      combineBtn.className = 'bookmark-media-combine'
+      combineBtn.innerHTML = materialIconMarkup(combineImages ? 'Panorama' : 'PhotoLibrary') // eslint-disable-line no-unsanitized/property
+      combineBtn.title = combineImages
+        ? t('bookmark_combine_images', 'Combining selected images into one')
+        : t('bookmark_separate_images', 'Saving selected images separately')
+      combineBtn.setAttribute('aria-label', combineBtn.title)
+      combineBtn.setAttribute('aria-pressed', String(combineImages))
+      combineBtn.addEventListener('click', function () {
+        combineImages = !combineImages
+        combineBtn.setAttribute('aria-pressed', String(combineImages))
+        combineBtn.innerHTML = materialIconMarkup(combineImages ? 'Panorama' : 'PhotoLibrary') // eslint-disable-line no-unsanitized/property
+        combineBtn.title = combineImages
+          ? t('bookmark_combine_images', 'Combining selected images into one')
+          : t('bookmark_separate_images', 'Saving selected images separately')
+        combineBtn.setAttribute('aria-label', combineBtn.title)
+      })
+      mediaRow.appendChild(combineBtn)
       body.appendChild(mediaRow)
     }
 
@@ -724,6 +744,7 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
         .map(function (p) { return p.dataset.originalHandle }).filter(Boolean)
       var categoryIdNum = Number(currentCategoryId) || null
       var bookmarkBody = { category_id: categoryIdNum }
+      if (combineImages) bookmarkBody.combine_images = true
       var custom = String((titleInput && titleInput.value) || '').trim()
       if (custom) bookmarkBody.custom_title = custom
       if (accountHandles.length) bookmarkBody.account_handles = accountHandles
@@ -896,7 +917,13 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
       })
     }
 
-    addBtnEl.addEventListener('click', submitCreate)
+    addBtnEl.addEventListener('click', function () {
+      if (addInputEl.hidden) {
+        addInputEl.hidden = false
+        addBtnEl.setAttribute('aria-expanded', 'true')
+        addInputEl.focus()
+      } else submitCreate()
+    })
     addInputEl.addEventListener('keydown', function (e) {
       sheetKeydown(e)
       if (e.key === 'Enter') { e.preventDefault(); submitCreate() }

@@ -306,32 +306,48 @@ class NativeMainFeedSurfaceTest {
     }
 
     @Test
+    fun nativeMediaRowsPreserveProportionsAndOverflowInsteadOfShrinking() {
+        assertEquals(
+            NativeMediaDimensions(540, 360),
+            nativeMultiMediaCellDimensions(List(4) { 1.5f }, 0, 360, maxHeightPx = 520),
+        )
+        assertEquals(
+            NativeMediaDimensions(468, 520),
+            nativeMultiMediaCellDimensions(listOf(0.3f, 0.9f, 0.3f), 1, 1000, maxHeightPx = 520),
+        )
+    }
+
+    @Test
     fun nativeMultiMediaCellsUseTheirRenderedGridDimensions() {
+        val pair = nativeMultiMediaCellDimensions(List(2) { 0.75f }, 0, 840, maxHeightPx = 520)
+        val four = nativeMultiMediaCellDimensions(List(4) { 0.75f }, 0, 840, maxHeightPx = 520)
+        assertEquals(pair, four)
         assertEquals(
             NativeMediaDimensions(widthPx = 498, heightPx = 498),
             nativeMultiMediaCellDimensions(
                 cellAspectRatios = listOf(1f, 1f),
                 cellIndex = 0,
                 gridWidthPx = 1_000,
+                maxHeightPx = 520,
                 gapPx = 4,
             ),
         )
         assertEquals(
-            NativeMediaDimensions(widthPx = 331, heightPx = 573),
+            NativeMediaDimensions(widthPx = 300, heightPx = 520),
             nativeMultiMediaCellDimensions(
                 cellAspectRatios = listOf(624f / 1080f, 623f / 1080f, 624f / 1080f),
                 cellIndex = 0,
                 gridWidthPx = 1_000,
-                gapPx = 4,
+                maxHeightPx = 520,
             ),
         )
         assertEquals(
-            NativeMediaDimensions(widthPx = 498, heightPx = 498),
+            NativeMediaDimensions(widthPx = 520, heightPx = 520),
             nativeMultiMediaCellDimensions(
                 cellAspectRatios = listOf(1f, 1f, 1f, 1f),
                 cellIndex = 3,
                 gridWidthPx = 1_000,
-                gapPx = 4,
+                maxHeightPx = 520,
             ),
         )
     }

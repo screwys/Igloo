@@ -131,6 +131,7 @@ class OutboxDispatcher(
                     custom_title = p.string("custom_title"),
                     account_handles = p.string("account_handles"),
                     media_indices = p.string("media_indices"),
+                    combine_images = p.string("combine_images") == "true",
                     updated_at_ms = p.long("updated_at_ms") ?: row.createdAtMs,
                 )
             )

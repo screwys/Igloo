@@ -9,6 +9,7 @@ import { initDates } from './dates.js'
 import { handleTranslateAction, getTranslateObserver, queueBackgroundTranslations } from './translate.js'
 import { initRetweetersDialog, applyRepostMuteFilter } from './retweeters.js'
 import { initFeedSeenTracking } from './seen.js'
+import { initMediaRows } from './media-row.js'
 
 function observeTranslateCards(scope, translateObserver) {
   queueBackgroundTranslations(scope)
@@ -909,6 +910,7 @@ function initFeedCards(scope) {
   initTextClamps(container)
   initDates(container)
   initInlineMedia(container)
+  initMediaRows(container)
   container.querySelectorAll('[data-feed-item]').forEach(function (item) {
     syncFeedButtons(item)
     item.setAttribute('data-fi', '1')
@@ -1429,6 +1431,7 @@ function initNewFeedCards() {
   initTextClamps(feedList)
   initDates(feedList)
   initInlineMedia(feedList)
+  initMediaRows(feedList)
   newItems.forEach(function (item) {
     syncFeedButtons(item)
     item.setAttribute('data-fi', '1')

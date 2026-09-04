@@ -179,6 +179,36 @@ func feedMediaRefIsVideo(ref model.MediaRef) bool {
 	}
 }
 
+// Adding media extends the row; it must not shrink the other items to fit.
+func feedMediaRowStyle(media []model.MediaRef, urls []string) string {
+	if len(media) < 2 {
+		return ""
+	}
+	var style strings.Builder
+	style.WriteString("grid-template-columns:")
+	totalRatio, count := 0.0, 0
+	for i, m := range media {
+		if feedMediaURLAt(urls, i) == "" {
+			continue
+		}
+		ratio := 1.0
+		if feedMediaRefIsVideo(m) {
+			ratio = 16.0 / 9.0
+		}
+		if m.Width > 0 && m.Height > 0 {
+			ratio = float64(m.Width) / float64(m.Height)
+		}
+		fmt.Fprintf(&style, " minmax(0, %.6ffr)", ratio)
+		totalRatio += ratio
+		count++
+	}
+	if count == 0 {
+		return ""
+	}
+	fmt.Fprintf(&style, "; --feed-row-ratio: %.6f; --feed-row-gaps: %dpx;", totalRatio, (count-1)*2)
+	return style.String()
+}
+
 func feedMediaPlaybackKind(ref model.MediaRef) string {
 	switch strings.ToLower(strings.TrimSpace(ref.Type)) {
 	case "gif", "animated_gif":
@@ -360,10 +390,7 @@ func feedMediaURLAt(urls []string, index int) string {
 
 func feedReadyMediaCount(urls []string) int {
 	count := 0
-	for index, url := range urls {
-		if index >= 4 {
-			break
-		}
+	for _, url := range urls {
 		if url != "" {
 			count++
 		}

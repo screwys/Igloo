@@ -51,6 +51,7 @@ sealed class OutboxKind {
         val customTitle: String? = null,
         val accountHandles: String? = null,
         val mediaIndices: String? = null,
+        val combineImages: Boolean = false,
     ) : OutboxKind() {
         override val code = CODE_BOOKMARK
         override val itemId: String = videoId

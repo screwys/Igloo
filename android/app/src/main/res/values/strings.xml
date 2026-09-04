@@ -143,6 +143,7 @@
     <string name="bookmark_category">Category</string>
     <string name="bookmark_category_creating">%1$s (creating...)</string>
     <string name="bookmark_category_default">Category %1$s</string>
+    <string name="bookmark_combine_images">Combining selected images into one</string>
     <string name="bookmark_confirm_delete_category_move_default">Delete category %1$s? Bookmarks in it will be moved to the default category.</string>
     <string name="bookmark_create_category_failed">Failed to create category.</string>
     <string name="bookmark_creating">Creating...</string>
@@ -174,6 +175,7 @@
     <string name="bookmark_save_to">Save bookmark to…</string>
     <string name="bookmark_saved">Bookmarked</string>
     <string name="bookmark_saved_to">Bookmarked to %1$s</string>
+    <string name="bookmark_separate_images">Saving selected images separately</string>
     <string name="bookmark_waiting_for_category_sync_before_saving">Waiting for category sync before saving.</string>
     <string name="bookmarks_all_with_count">All (%1$d)</string>
     <string name="bookmarks_empty">No bookmarks</string>

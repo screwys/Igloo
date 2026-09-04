@@ -21,6 +21,10 @@ templ MaterialIcon(name string, className string) {
 				<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"></path>
 			case "Check":
 				<path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path>
+			case "PhotoLibrary":
+				<path d="M22 16V4c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2v12c0 1.1 .9 2 2 2h12c1.1 0 2-.9 2-2zM11 12l2.03 2.71L16 11l4 5H8l3-4zM2 6v14c0 1.1 .9 2 2 2h14v-2H4V6H2z"></path>
+			case "Panorama":
+				<path d="M21 4H3c-1.1 0-2 .9-2 2v12c0 1.1 .9 2 2 2h18c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM3 17l4.5-6 3.5 4.51L15.5 10l5.5 7H3z"></path>
 			case "Close":
 				<path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path>
 			case "ClosedCaption":
@@ -135,6 +139,7 @@ templ MaterialIcon(name string, className string) {
 templ MaterialIconPalette() {
 	<div id="material-icon-palette" class="material-icon-palette" aria-hidden="true">
 		for _, name := range []string{
+			"PhotoLibrary", "Panorama",
 			"Add", "ArrowBack", "ArrowDropDown", "ArrowUpward", "Bookmark", "BookmarkBorder", "ChatBubble", "Check", "Close", "ClosedCaption", "Delete", "Download", "DynamicFeed", "Explore", "Favorite", "FavoriteBorder", "FitScreen", "Forward10", "Fullscreen", "FullscreenExit", "GridView", "KeyboardArrowDown", "KeyboardArrowLeft", "KeyboardArrowRight", "KeyboardArrowUp", "Language", "Link", "Menu", "MoreHoriz", "MoreVert", "OpenInFull", "OpenInNew", "Pause", "Person", "PersonRemove", "PictureInPictureAlt", "PlayArrow", "PlayCircle", "PlayCircleOutline", "PushPin", "Refresh", "Repeat", "Replay10", "Search", "Settings", "Share", "Speed", "Star", "StarBorder", "Subject", "ThumbUp", "Translate", "VerticalSplit", "VideoLibrary", "Visibility", "VolumeDown", "VolumeOff", "VolumeUp", "WebStories",
 		} {
 			@MaterialIcon(name, "")

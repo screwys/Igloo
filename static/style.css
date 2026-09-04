@@ -2363,6 +2363,7 @@ select.input:focus {
 .bookmark-sheet-account-wrap { position: relative; margin-bottom: 10px; }
 .bookmark-sheet-account-add-btn { width: 26px; height: 26px; border-radius: 9999px; border: 1px solid rgba(var(--accent-primary-rgb), 0.35); background: transparent; color: var(--text-secondary); cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 26px; }
 .bookmark-sheet-account-add-btn .material-icon { width: 16px; height: 16px; }
+.bookmark-sheet-list input[hidden] { display: none; }
 .bookmark-sheet-account-add-btn:hover { background: rgba(var(--accent-primary-rgb), 0.12); border-color: var(--accent-secondary); }
 .bookmark-sheet-account-picker { position: fixed; width: 280px; max-width: calc(100vw - 16px); display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--bg-primary); border: 1px solid rgba(var(--accent-primary-rgb), 0.3); border-radius: 10px; box-shadow: 0 12px 28px rgba(0,0,0,0.42); z-index: 43000; }
 .bookmark-sheet-account-picker.hidden { display: none; }
@@ -2374,9 +2375,11 @@ select.input:focus {
 .bookmark-sheet-account-result-label { font-size: 0.75rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bookmark-sheet-account-empty { padding: 8px 9px; color: var(--text-muted); font-size: 0.78rem; }
 .bookmark-media-idx-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 8px; }
-.bookmark-media-idx-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(var(--accent-primary-rgb), 0.35); background: transparent; color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 0; line-height: 28px; text-align: center; transition: background 0.12s, border-color 0.12s; }
-.bookmark-media-idx-btn:hover { background: rgba(var(--accent-primary-rgb), 0.18); border-color: var(--accent-secondary); }
-.bookmark-media-idx-btn.active { background: rgba(var(--accent-primary-rgb), 0.75); border-color: rgba(var(--accent-primary-rgb), 0.75); color: var(--text-primary); }
+.bookmark-media-idx-btn, .bookmark-media-combine { width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(var(--accent-primary-rgb), 0.35); background: transparent; color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; cursor: pointer; padding: 0; line-height: 28px; text-align: center; transition: background 0.12s, border-color 0.12s; }
+.bookmark-media-idx-btn:hover, .bookmark-media-combine:hover { background: rgba(var(--accent-primary-rgb), 0.18); border-color: var(--accent-secondary); }
+.bookmark-media-idx-btn.active, .bookmark-media-combine, .bookmark-media-combine:hover { background: rgba(var(--accent-primary-rgb), 0.75); border-color: rgba(var(--accent-primary-rgb), 0.75); color: var(--text-primary); }
+.bookmark-media-combine { display: inline-flex; align-items: center; justify-content: center; margin-left: 6px; }
+.bookmark-media-combine svg { width: 16px; height: 16px; }
 
 /* Bookmark sheet overlay (shorts/TikTok feed) */
 .bookmark-sheet-overlay {
@@ -10040,7 +10043,46 @@ body.shorts-mode .sidebar {
     width: 100%;
     max-width: var(--feed-card-media-max-width);
     margin-inline: auto;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    direction: ltr;
+    scrollbar-width: none;
 }
+
+.feed-media-wrap-grid::-webkit-scrollbar { display: none; }
+
+.feed-media-row-container {
+    position: relative;
+    min-width: 0;
+    container-type: inline-size;
+}
+
+.feed-media-nav {
+    position: absolute;
+    top: calc(50% - 18px);
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(20, 20, 20, 0.65);
+    color: white;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.feed-media-nav[hidden] {
+    display: none;
+}
+
+.feed-media-nav:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.feed-media-nav-prev { left: 6px; }
+.feed-media-nav-next { right: 6px; }
 
 .feed-media-grid {
     width: 100%;
@@ -10090,47 +10132,34 @@ body.shorts-mode .sidebar {
     min-height: 0;
 }
 
-/* Multi-item grids use explicit heights so every tile fills its slot. */
-
-.feed-media-grid.count-3 {
-    display: flex;
-    align-items: stretch;
+.feed-media-grid.feed-media-row {
+    --feed-row-height: min(520px, 100cqw);
+    height: var(--feed-row-height);
+    width: calc(var(--feed-row-height) * var(--feed-row-ratio) + var(--feed-row-gaps));
+    grid-template-rows: minmax(0, 1fr);
+    border-radius: 0;
+    border: none;
+    background: transparent;
 }
 
-.feed-media-grid.count-4 {
-    grid-auto-rows: var(--feed-card-grid-row-4);
-}
-
-.feed-media-grid.count-2 .feed-media-tile {
-    aspect-ratio: 1 / 1;
-    max-height: var(--feed-card-grid-square-max-height);
-}
-
-.feed-media-grid.count-3 .feed-media-tile {
-    width: 0;
-    height: auto;
-    min-width: 0;
-    flex: 1 1 0;
-}
-
-.feed-media-grid.count-4 .feed-media-tile {
+.feed-media-grid.feed-media-row .feed-media-tile {
+    grid-row: auto;
     height: 100%;
+    min-width: 0;
+    border-radius: 8px;
 }
 
-.feed-media-grid.count-2 .feed-media-tile .feed-media-image,
-.feed-media-grid.count-2 .feed-media-tile .feed-media-video,
-.feed-media-grid.count-3 .feed-media-tile .feed-media-image,
-.feed-media-grid.count-3 .feed-media-tile .feed-media-video,
-.feed-media-grid.count-4 .feed-media-tile .feed-media-image,
-.feed-media-grid.count-4 .feed-media-tile .feed-media-video {
+.feed-media-grid.feed-media-row.count-1,
+.feed-media-grid.feed-media-row.count-2 {
+    --feed-row-height: min(520px, calc((100cqw - var(--feed-row-gaps)) / var(--feed-row-ratio)));
+}
+
+.feed-media-grid.feed-media-row .feed-media-tile .feed-media-image,
+.feed-media-grid.feed-media-row .feed-media-tile .feed-media-video {
+    display: block;
     width: 100%;
     height: 100%;
     max-height: none;
-    object-fit: cover;
-}
-
-.feed-media-grid.count-3 .feed-media-tile .feed-media-image {
-    height: auto;
     min-height: 0;
     object-fit: contain;
 }

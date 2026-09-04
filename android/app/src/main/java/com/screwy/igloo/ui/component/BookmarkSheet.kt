@@ -39,6 +39,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material.icons.filled.Panorama
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -141,7 +147,11 @@ data class BookmarkPayload(
     val customTitle: String?,
     val mediaIndices: List<Int>?,
     val accountHandles: List<String>? = null,
-)
+    val combineImages: Boolean = false,
+) {
+    val serializedMediaIndices: String?
+        get() = mediaIndices?.joinToString(",", prefix = "[", postfix = "]")
+}
 
 /**
  * Top-attached bookmark surface that lets the user pick a category, set a custom title,
@@ -235,6 +245,7 @@ fun BookmarkSheet(
         )
     }
     var showCreateInput by remember(target) { mutableStateOf(false) }
+    var combineImages by remember(target) { mutableStateOf(false) }
     var newCategoryName by remember(target) { mutableStateOf("") }
     var pendingCreatedCategoryName by remember(target) { mutableStateOf<String?>(null) }
     val selectedCategory = categories.firstOrNull { it.categoryId == selectedCategoryId }
@@ -278,6 +289,7 @@ fun BookmarkSheet(
             mediaCount = target.mediaCount,
             selectedAccountHandles = selectedAccountHandles,
             availableAccountHandles = visibleAccountHandles,
+            combineImages = combineImages,
         )
         scope.launch {
             prefs.setLastBookmarkCategoryId(catId)
@@ -630,6 +642,34 @@ fun BookmarkSheet(
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
                     verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = colors.primary,
+                        modifier = Modifier
+                            .padding(end = 6.dp)
+                            .size(32.dp)
+                            .border(
+                                width = 1.dp,
+                                color = colors.primary,
+                                shape = RoundedCornerShape(6.dp),
+                            )
+                            .toggleable(
+                                value = combineImages,
+                                role = Role.Checkbox,
+                                onValueChange = { combineImages = it },
+                            ),
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                if (combineImages) Icons.Default.Panorama else Icons.Default.PhotoLibrary,
+                                contentDescription = stringResource(
+                                    if (combineImages) R.string.bookmark_combine_images else R.string.bookmark_separate_images,
+                                ),
+                                modifier = Modifier.size(16.dp),
+                                tint = colors.onPrimary,
+                            )
+                        }
+                    }
                     for (idx in 0 until target.mediaCount) {
                         val selected = idx in selectedIndices
                         Surface(
@@ -779,6 +819,7 @@ internal fun parseStoredHandles(raw: String?): List<String>? {
 internal fun parseStoredMediaIndices(raw: String?): List<Int>? {
     val trimmed = raw?.trim().orEmpty()
     if (trimmed.isEmpty()) return null
+    if (trimmed == "[]") return emptyList()
     val parsed = if (trimmed.startsWith("[")) {
         runCatching { Json.decodeFromString<List<Int>>(trimmed) }.getOrElse { emptyList() }
     } else {
@@ -947,6 +988,7 @@ internal fun buildPayload(
     mediaCount: Int,
     selectedAccountHandles: Set<String>,
     availableAccountHandles: List<String>,
+    combineImages: Boolean = false,
 ): BookmarkPayload {
     val trimmedTitle: String? = customTitle.trim().ifEmpty { null }
     val fullRange: List<Int> = (0 until mediaCount).toList()
@@ -969,6 +1011,7 @@ internal fun buildPayload(
         customTitle = trimmedTitle,
         accountHandles = normalizedAccountHandles,
         mediaIndices = normalizedIndices,
+        combineImages = combineImages,
     )
 }
 

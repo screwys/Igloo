@@ -91,6 +91,7 @@ func (s *Server) handleMutationBookmark(w http.ResponseWriter, r *http.Request) 
 		CustomTitle    *string `json:"custom_title,omitempty"`
 		AccountHandles *string `json:"account_handles,omitempty"`
 		MediaIndices   *string `json:"media_indices,omitempty"`
+		CombineImages  bool    `json:"combine_images,omitempty"`
 		UpdatedAtMs    int64   `json:"updated_at_ms"`
 	}
 	if err := decodeMutation(r, &body); err != nil {
@@ -126,8 +127,8 @@ func (s *Server) handleMutationBookmark(w http.ResponseWriter, r *http.Request) 
 	if result.Applied {
 		if body.Action == "set" {
 			s.requestXStatusRecovery(result.CanonicalID, true)
-			if result.Affected > 0 {
-				go s.startMutationBookmarkArchive(user, result.CanonicalID)
+			if result.Affected > 0 || body.CombineImages {
+				go s.startMutationBookmarkArchive(user, result.CanonicalID, body.CombineImages)
 			}
 		}
 		s.wakeFeedOrderInvalidation()
@@ -135,7 +136,7 @@ func (s *Server) handleMutationBookmark(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, 200, map[string]any{})
 }
 
-func (s *Server) startMutationBookmarkArchive(user *userInfo, videoID string) {
+func (s *Server) startMutationBookmarkArchive(user *userInfo, videoID string, combineImages bool) {
 	var categoryID int64
 	var customTitle, accountHandles, mediaIndices string
 	err := s.db.QueryRow(`
@@ -155,7 +156,7 @@ func (s *Server) startMutationBookmarkArchive(user *userInfo, videoID string) {
 	if bookmarkArchivePathsAllowed(user) {
 		archivePath = category.ArchivePath
 	}
-	s.archiveBookmark(videoID, archivePath, customTitle, accountHandles, parseBookmarkMediaIndices(mediaIndices))
+	s.archiveBookmark(videoID, archivePath, customTitle, accountHandles, parseBookmarkMediaIndices(mediaIndices), combineImages)
 }
 
 func (s *Server) handleMutationFollow(w http.ResponseWriter, r *http.Request) {

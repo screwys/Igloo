@@ -168,6 +168,7 @@ class OutboxWriter(
                     kind.customTitle?.let { put("custom_title", it) }
                     kind.accountHandles?.let { put("account_handles", it) }
                     kind.mediaIndices?.let { put("media_indices", it) }
+                    if (kind.combineImages) put("combine_images", true)
                 }
                 is OutboxKind.Follow -> {
                     put("channel_id", kind.channelId)

@@ -129,6 +129,7 @@ data class BookmarkRequest(
     val custom_title: String? = null,
     val account_handles: String? = null,
     val media_indices: String? = null,
+    val combine_images: Boolean = false,
     val updated_at_ms: Long,
 )
 

@@ -88,6 +88,7 @@ func (s *Server) handleBookmarkAdd(w http.ResponseWriter, r *http.Request) {
 		CustomTitle    string   `json:"custom_title"`
 		AccountHandles []string `json:"account_handles"`
 		MediaIndices   []int    `json:"media_indices"`
+		CombineImages  bool     `json:"combine_images"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil && !errors.Is(err, io.EOF) {
 		if requestBodyTooLarge(err) {
@@ -104,7 +105,7 @@ func (s *Server) handleBookmarkAdd(w http.ResponseWriter, r *http.Request) {
 		accountHandlesJSON = string(b)
 	}
 	mediaIndicesJSON := ""
-	if len(body.MediaIndices) > 0 {
+	if body.MediaIndices != nil {
 		b, _ := json.Marshal(body.MediaIndices)
 		mediaIndicesJSON = string(b)
 	}
@@ -160,11 +161,11 @@ func (s *Server) handleBookmarkAdd(w http.ResponseWriter, r *http.Request) {
 	if result.Applied {
 		go func() {
 			_, _ = s.db.MutateSeen([]string{result.CanonicalID}, 0)
-			if result.Affected > 0 {
+			if result.Affected > 0 || body.CombineImages {
 				if s.workers != nil {
 					s.workers.KickMediaWork()
 				}
-				s.archiveBookmark(result.CanonicalID, archivePath, body.CustomTitle, accountHandlesJSON, body.MediaIndices)
+				s.archiveBookmark(result.CanonicalID, archivePath, body.CustomTitle, accountHandlesJSON, body.MediaIndices, body.CombineImages)
 			}
 		}()
 	}
@@ -177,13 +178,13 @@ func nullableString(value sql.NullString) string {
 	return value.String
 }
 
-func (s *Server) archiveBookmark(videoID, archivePath, customTitle, accountHandles string, mediaIndices []int) {
+func (s *Server) archiveBookmark(videoID, archivePath, customTitle, accountHandles string, mediaIndices []int, combineImages bool) {
 	if archivePath == "" {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	if err := s.archiveBookmarkCombined(ctx, videoID, archivePath, customTitle, accountHandles, mediaIndices); err != nil {
+	if err := s.archiveBookmarkCombined(ctx, videoID, archivePath, customTitle, accountHandles, mediaIndices, combineImages); err != nil {
 		slog.Warn("[Bookmark] archive failed", "tweet", videoID, "err", err)
 	}
 }
@@ -557,7 +558,7 @@ func (s *Server) handleBookmarkCategoryDelete(w http.ResponseWriter, r *http.Req
 // and quote media into a single list that matches the JS modal's index order:
 // parent slides (indices 0..M-1) + quote slides (indices M..M+Q-1).
 // If mediaIndices is non-empty, only the selected indices are archived.
-func (s *Server) archiveBookmarkCombined(ctx context.Context, tweetID, archivePath, customTitle, accountHandlesJSON string, mediaIndices []int) error {
+func (s *Server) archiveBookmarkCombined(ctx context.Context, tweetID, archivePath, customTitle, accountHandlesJSON string, mediaIndices []int, combineImages bool) error {
 	if archivePath == "" {
 		return nil
 	}
@@ -592,7 +593,7 @@ func (s *Server) archiveBookmarkCombined(ctx context.Context, tweetID, archivePa
 	slog.Info("[Bookmark] combined slides", "tweet", tweetID, "total", len(allSlides), "slides", allSlides, "mediaIndices", mediaIndices)
 
 	// Filter by media_indices if specified
-	if len(mediaIndices) > 0 {
+	if mediaIndices != nil {
 		allowed := make(map[int]bool, len(mediaIndices))
 		for _, idx := range mediaIndices {
 			allowed[idx] = true
@@ -645,6 +646,17 @@ func (s *Server) archiveBookmarkCombined(ctx context.Context, tweetID, archivePa
 		}
 
 		copied := 0
+		if combineImages {
+			remaining, combined, err := combineBookmarkImages(ctx, allSlides, filepath.Join(archivePath, fmt.Sprintf("%s %03d.png", safeName, startNum+1)))
+			if err != nil {
+				return err
+			}
+			allSlides = remaining
+			if combined {
+				startNum++
+				copied++
+			}
+		}
 		var copyErr error
 		for i, slidePath := range allSlides {
 			ext := filepath.Ext(slidePath)

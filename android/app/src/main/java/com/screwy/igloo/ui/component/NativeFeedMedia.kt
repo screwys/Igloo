@@ -19,7 +19,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.screwy.igloo.feed.FeedMediaCellModel
 import com.screwy.igloo.media.MediaUri
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 internal data class NativeVideoSlot(
     val key: String,
@@ -204,7 +203,8 @@ internal class NativeInlineVideoManager(
                 val rvRect = Rect()
                 recyclerView.getGlobalVisibleRect(rvRect)
                 rect.offset(-rvRect.left, -rvRect.top)
-                val visibleFraction = nativeVisibleHeightFraction(rect, viewport.height())
+                val visibleFraction = nativeVisibleHeightFraction(rect, viewport.height()) *
+                    (rect.width().toFloat() / slot.container.width.coerceAtLeast(1)).coerceIn(0f, 1f)
                 result += slot to NativeInlineVideoCandidate(
                     key = slot.key,
                     streamUri = slot.streamUri,
@@ -260,30 +260,19 @@ internal fun nativeMultiMediaCellDimensions(
     cellAspectRatios: List<Float>,
     cellIndex: Int,
     gridWidthPx: Int,
-    gapPx: Int,
+    maxHeightPx: Int = dp(NativeSingleMediaMaxHeightDp),
+    gapPx: Int = dp(2),
 ): NativeMediaDimensions {
-    val visibleCellCount = cellAspectRatios.size
-    return when (visibleCellCount) {
-        3 -> {
-            val ratios =
-                cellAspectRatios.map { ratio ->
-                    ratio.takeIf { it.isFinite() && it > 0f } ?: 1f
-                }
-            val availableWidth = (gridWidthPx - gapPx * 2).coerceAtLeast(1)
-            val totalRatio = ratios.sum().coerceAtLeast(1f)
-            val rowHeight = (availableWidth / totalRatio).roundToInt().coerceAtLeast(1)
-            val cellRatio = ratios.getOrElse(cellIndex) { 1f }
-            NativeMediaDimensions(
-                widthPx =
-                    (availableWidth * cellRatio / totalRatio).roundToInt().coerceAtLeast(1),
-                heightPx = rowHeight,
-            )
-        }
-        else -> {
-            val cellWidth = (gridWidthPx - gapPx).coerceAtLeast(1) / 2
-            NativeMediaDimensions(widthPx = cellWidth, heightPx = cellWidth)
-        }
-    }
+    val ratio = cellAspectRatios.getOrNull(cellIndex)?.takeIf { it.isFinite() && it > 0f } ?: 1f
+    val preferredHeight = if (cellAspectRatios.size <= 2) {
+        val totalRatio = cellAspectRatios.sumOf { (it.takeIf { r -> r.isFinite() && r > 0f } ?: 1f).toDouble() }
+        ((gridWidthPx - gapPx * (cellAspectRatios.size - 1)) / totalRatio.coerceAtLeast(0.01)).toInt()
+    } else gridWidthPx
+    val rowHeight = preferredHeight.coerceAtMost(maxHeightPx).coerceAtLeast(1)
+    return NativeMediaDimensions(
+        widthPx = (rowHeight * ratio).toInt().coerceAtLeast(1),
+        heightPx = rowHeight,
+    )
 }
 
 internal fun nativeMediaGridWidthPx(context: Context): Int =

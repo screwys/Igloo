@@ -178,7 +178,7 @@ class FeedViewModel(
                 bookmarkCustomTitle = payload.customTitle,
                 bookmarkedAt = System.currentTimeMillis(),
                 bookmarkAccountHandles = payload.accountHandles?.joinToString(","),
-                bookmarkMediaIndices = payload.mediaIndices?.joinToString(","),
+                bookmarkMediaIndices = payload.serializedMediaIndices,
             )
         }
         viewModelScope.launch {
@@ -189,7 +189,8 @@ class FeedViewModel(
                     categoryId = payload.categoryId,
                     customTitle = payload.customTitle,
                     accountHandles = payload.accountHandles?.joinToString(","),
-                    mediaIndices = payload.mediaIndices?.joinToString(","),
+                    mediaIndices = payload.serializedMediaIndices,
+                    combineImages = payload.combineImages,
                 )
             )
         }

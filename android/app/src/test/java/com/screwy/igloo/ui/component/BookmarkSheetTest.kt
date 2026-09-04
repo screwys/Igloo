@@ -4,12 +4,19 @@ import com.screwy.igloo.data.entity.ChannelDisplay
 import com.screwy.igloo.data.entity.ChannelEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Pure-function tests for [defaultMediaIndices] and [buildPayload].
  */
 class BookmarkSheetTest {
+    @Test
+    fun emptySelectionRemainsEmptyForOfflineExport() {
+        val payload = BookmarkPayload(7L, null, emptyList(), combineImages = true)
+        assertEquals("[]", payload.serializedMediaIndices)
+        assertEquals(emptyList<Int>(), parseStoredMediaIndices(payload.serializedMediaIndices))
+    }
 
     private val target = BookmarkTarget(
         itemId = "item_1",
@@ -122,8 +129,10 @@ class BookmarkSheetTest {
             mediaCount = 3,
             selectedAccountHandles = setOf("author_handle"),
             availableAccountHandles = listOf("author_handle"),
+            combineImages = true,
         )
         assertEquals(5L, payload.categoryId)
+        assertTrue(payload.combineImages)
         assertNull(payload.customTitle)
         assertNull(payload.mediaIndices)
         assertEquals(listOf("author_handle"), payload.accountHandles)

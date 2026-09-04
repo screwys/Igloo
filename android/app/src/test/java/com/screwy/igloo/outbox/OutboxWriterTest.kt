@@ -68,6 +68,13 @@ class OutboxWriterTest {
     }
 
     @Test
+    fun combinedBookmarkExportSurvivesOfflineQueueing() = runBlocking {
+        writer.enqueue(OutboxKind.Bookmark("sample-post", OutboxKind.Action.Set, combineImages = true))
+        val payload = Json.parseToJsonElement(db.outboxDao().pendingRows().single().payloadJson).jsonObject
+        assertEquals("true", payload.getValue("combine_images").jsonPrimitive.content)
+    }
+
+    @Test
     fun setIsOptimisticAndCoalescesToLatestAction() = runBlocking {
         writer.enqueue(OutboxKind.Like("item-1", OutboxKind.Action.Set))
         writer.enqueue(OutboxKind.Like("item-1", OutboxKind.Action.Clear))

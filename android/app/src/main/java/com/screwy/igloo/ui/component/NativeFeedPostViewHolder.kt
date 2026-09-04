@@ -4,15 +4,19 @@
 package com.screwy.igloo.ui.component
 
 import android.content.Context
+import android.animation.ObjectAnimator
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
 import android.text.method.LinkMovementMethod
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -941,7 +945,7 @@ internal class NativeFeedViewHolder(
             val context = container.context
             val gridWidth = gridWidthPx
             val gap = dp(2)
-            val displayCells = grid.cells.take(4)
+            val displayCells = grid.cells
             val cellAspectRatios = displayCells.map(::nativeStableSingleMediaAspectRatio)
             fun frameFor(index: Int, cell: FeedMediaCellModel): FrameLayout {
                 val imageDimensions =
@@ -949,7 +953,6 @@ internal class NativeFeedViewHolder(
                         cellAspectRatios = cellAspectRatios,
                         cellIndex = index,
                         gridWidthPx = gridWidth,
-                        gapPx = gap,
                     )
                 val frame =
                     FrameLayout(container.context).apply {
@@ -965,95 +968,83 @@ internal class NativeFeedViewHolder(
                     cell = cell,
                     mediaIndex = feedMediaViewerIndex(grid, index, mediaIndexOffset),
                     imageDimensions = imageDimensions,
+                    preserveFullImage = true,
                     colors = colors,
                     callbacks = callbacks,
                 )
-                if (index == 3 && grid.mediaCount > 4) {
-                    frame.addView(
-                        TextView(context).apply {
-                            text = "+${grid.mediaCount - 4}"
-                            textSize = 24f
-                            setTypeface(typeface, Typeface.BOLD)
-                            setTextColor(Color.WHITE)
-                            gravity = Gravity.CENTER
-                            background =
-                                GradientDrawable().apply { setColor(Color.argb(145, 0, 0, 0)) }
-                        },
-                        FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                        ),
-                    )
-                }
                 return frame
             }
 
-            when (displayCells.size) {
-                2 -> {
-                    val cellSize = (gridWidth - gap) / 2
-                    val rowLayout =
-                        LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
-                    rowLayout.layoutParams = LinearLayout.LayoutParams(gridWidth, cellSize)
-                    displayCells.forEachIndexed { index, cell ->
-                        rowLayout.addView(
-                            frameFor(index, cell),
-                            LinearLayout.LayoutParams(cellSize, ViewGroup.LayoutParams.MATCH_PARENT)
-                                .apply { if (index > 0) marginStart = gap },
-                        )
+            val dimensions = displayCells.indices.map { index ->
+                nativeMultiMediaCellDimensions(cellAspectRatios, index, gridWidth)
+            }
+            val rowWidth = dimensions.sumOf { it.widthPx } + gap * (displayCells.size - 1)
+            val rowHeight = dimensions.first().heightPx
+            val rowLayout = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+            displayCells.forEachIndexed { index, cell ->
+                rowLayout.addView(
+                    frameFor(index, cell),
+                    LinearLayout.LayoutParams(dimensions[index].widthPx, rowHeight)
+                        .apply { if (index > 0) marginStart = gap },
+                )
+            }
+            val scroller = HorizontalScrollView(context).apply {
+                isHorizontalScrollBarEnabled = false
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                addView(rowLayout, ViewGroup.LayoutParams(rowWidth, rowHeight))
+            }
+            val frame = FrameLayout(context)
+            frame.addView(scroller, FrameLayout.LayoutParams(gridWidth, rowHeight))
+            if (rowWidth > gridWidth) {
+                var scrollAnimation: ObjectAnimator? = null
+                var scrollTarget: Int? = null
+                scroller.setOnTouchListener { _, event ->
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                        scrollAnimation?.cancel()
+                        scrollTarget = null
                     }
-                    container.addView(rowLayout)
+                    false
                 }
-                3 -> {
-                    val gridHeight =
-                        nativeMultiMediaCellDimensions(
-                            cellAspectRatios = cellAspectRatios,
-                            cellIndex = 0,
-                            gridWidthPx = gridWidth,
-                            gapPx = gap,
-                        ).heightPx
-                    val rowLayout =
-                        LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
-                    rowLayout.layoutParams = LinearLayout.LayoutParams(gridWidth, gridHeight)
-                    displayCells.forEachIndexed { index, cell ->
-                        rowLayout.addView(
-                            frameFor(index, cell),
-                            LinearLayout.LayoutParams(
-                                0,
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                cellAspectRatios[index],
-                            ).apply { if (index > 0) marginStart = gap },
-                        )
-                    }
-                    container.addView(rowLayout)
-                }
-                else -> {
-                    val cellSize = (gridWidth - gap) / 2
-                    val gridLayout =
-                        LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-                    gridLayout.layoutParams = LinearLayout.LayoutParams(gridWidth, gridWidth)
-                    repeat(2) { rowIndex ->
-                        val rowLayout =
-                            LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
-                        gridLayout.addView(
-                            rowLayout,
-                            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cellSize)
-                                .apply { if (rowIndex > 0) topMargin = gap },
-                        )
-                        repeat(2) { columnIndex ->
-                            val index = rowIndex * 2 + columnIndex
-                            rowLayout.addView(
-                                frameFor(index, displayCells[index]),
-                                LinearLayout.LayoutParams(
-                                    cellSize,
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    )
-                                    .apply { if (columnIndex > 0) marginStart = gap },
-                            )
+                fun navigationButton(direction: Int): TextView = TextView(context).apply {
+                    text = if (direction < 0) "‹" else "›"
+                    textSize = 26f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    background = roundedFill(Color.argb(165, 20, 20, 20), dp(18))
+                    contentDescription = context.getString(
+                        if (direction < 0) R.string.action_previous else R.string.action_next,
+                    )
+                    isFocusable = true
+                    setOnClickListener {
+                        val distance = rowWidth - gridWidth
+                        val steps = maxOf(1, (distance + gridWidth - 1) / gridWidth)
+                        val position = (scrollTarget ?: scroller.scrollX) + direction * ((distance + steps - 1) / steps)
+                        scrollTarget = position.coerceIn(0, distance)
+                        scrollAnimation?.cancel()
+                        scrollAnimation = ObjectAnimator.ofInt(scroller, "scrollX", position.coerceIn(0, rowWidth - gridWidth)).apply {
+                            duration = 320
+                            interpolator = DecelerateInterpolator()
+                            start()
                         }
                     }
-                    container.addView(gridLayout)
                 }
+                val previous = navigationButton(-1)
+                val next = navigationButton(1)
+                frame.addView(previous, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.START or Gravity.CENTER_VERTICAL))
+                frame.addView(next, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.END or Gravity.CENTER_VERTICAL))
+                fun updateNavigation() {
+                    previous.isEnabled = scroller.scrollX > 0
+                    next.isEnabled = scroller.scrollX < rowWidth - gridWidth
+                    previous.alpha = if (previous.isEnabled) 1f else 0.4f
+                    next.alpha = if (next.isEnabled) 1f else 0.4f
+                }
+                scroller.setOnScrollChangeListener { _, _, _, _, _ ->
+                    updateNavigation()
+                    (itemView.parent as? RecyclerView)?.let(inlineVideoManager::selectFrom)
+                }
+                updateNavigation()
             }
+            container.addView(frame, LinearLayout.LayoutParams(gridWidth, rowHeight))
         }
     }
 
@@ -1066,6 +1057,7 @@ internal class NativeFeedViewHolder(
         cell: FeedMediaCellModel,
         mediaIndex: Int?,
         isSingle: Boolean = false,
+        preserveFullImage: Boolean = false,
         imageDimensions: NativeMediaDimensions,
         colors: NativeFeedColors,
         callbacks: NativeFeedCallbacks,
@@ -1076,7 +1068,7 @@ internal class NativeFeedViewHolder(
                     nativeMediaScaleTypeFor(
                         cell.descriptor,
                         isSingle = isSingle,
-                        preserveFullImage = grid.mediaCount == 3,
+                        preserveFullImage = preserveFullImage,
                     )
                 setBackgroundColor(if (isSingle) Color.TRANSPARENT else colors.surface)
             }

@@ -121,7 +121,8 @@ class ThreadViewModel(
                     categoryId = payload.categoryId,
                     customTitle = payload.customTitle,
                     accountHandles = payload.accountHandles?.joinToString(","),
-                    mediaIndices = payload.mediaIndices?.joinToString(","),
+                    mediaIndices = payload.serializedMediaIndices,
+                    combineImages = payload.combineImages,
                 )
             )
         }
