@@ -10325,25 +10325,20 @@ body.shorts-mode .sidebar {
     color: var(--accent-primary);
 }
 
-/* Pop/burst animation matching Twitter/X interaction */
-.feed-action-btn.animating svg,
+/* Pop/burst animation matching Twitter/X interaction - like and bookmark only */
+.feed-action-btn[data-feed-action="heart"].animating svg,
+.feed-action-btn[data-feed-overlay-action="heart"].animating svg,
+.feed-action-btn[data-feed-action="bookmark"].animating svg,
+.feed-action-btn[data-feed-overlay-action="bookmark"].animating svg,
 .player-channel-inline-btn.animating svg,
 .feed-star-btn.animating svg,
 .feed-follow-btn.animating {
     animation: feed-action-pop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
-.feed-action-btn.animating[data-feed-action="open"] svg,
-.feed-action-btn.animating[data-feed-overlay-action="open"] svg,
-.feed-action-btn.animating[data-feed-action="openx"] svg,
-.feed-action-btn.animating[data-feed-overlay-action="openx"] svg,
-.feed-action-btn.animating[data-feed-action="share"] svg,
-.feed-action-btn.animating[data-feed-overlay-action="share"] svg {
-    color: var(--accent-primary);
-}
-
-/* Expanding halo ring */
-.feed-action-btn.animating::before,
+/* Expanding halo ring - signature flashy effect reserved for like (heart) */
+.feed-action-btn[data-feed-action="heart"].animating::before,
+.feed-action-btn[data-feed-overlay-action="heart"].animating::before,
 .player-channel-inline-btn.animating::before,
 .feed-star-btn.animating::before,
 .feed-follow-btn.animating::before {
@@ -10360,8 +10355,9 @@ body.shorts-mode .sidebar {
     animation: feed-action-ring 0.42s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
 }
 
-/* Sparkle particles burst */
-.feed-action-btn.animating::after,
+/* Sparkle particles burst - signature flashy effect reserved for like (heart) */
+.feed-action-btn[data-feed-action="heart"].animating::after,
+.feed-action-btn[data-feed-overlay-action="heart"].animating::after,
 .player-channel-inline-btn.animating::after,
 .feed-star-btn.animating::after,
 .feed-follow-btn.animating::after {
@@ -10378,8 +10374,17 @@ body.shorts-mode .sidebar {
     animation: feed-action-burst 0.5s cubic-bezier(0.12, 0.74, 0.58, 1) forwards;
 }
 
+/* Subtle feedback animation for normal actions like Share */
+.feed-action-btn[data-feed-action="share"].animating svg,
+.feed-action-btn[data-feed-overlay-action="share"].animating svg {
+    animation: feed-action-share-tap 0.35s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
 /* Deflate animation on deactivate/unlike */
-.feed-action-btn.animating-unlike svg,
+.feed-action-btn[data-feed-action="heart"].animating-unlike svg,
+.feed-action-btn[data-feed-overlay-action="heart"].animating-unlike svg,
+.feed-action-btn[data-feed-action="bookmark"].animating-unlike svg,
+.feed-action-btn[data-feed-overlay-action="bookmark"].animating-unlike svg,
 .player-channel-inline-btn.animating-unlike svg,
 .feed-star-btn.animating-unlike svg,
 .feed-follow-btn.animating-unlike {
@@ -10410,6 +10415,18 @@ body.shorts-mode .sidebar {
     }
     40% {
         transform: scale(0.82);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes feed-action-share-tap {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.18);
     }
     100% {
         transform: scale(1);

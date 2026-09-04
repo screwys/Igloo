@@ -993,7 +993,6 @@ document.addEventListener('click', function (event) {
   if (actionBtn) {
     var action = String(actionBtn.getAttribute('data-feed-action') || '').trim()
     if (action === 'open' || action === 'openx') {
-      animateFeedActionButton(actionBtn)
       return
     }
     if (action) {
@@ -1038,7 +1037,6 @@ document.addEventListener('click', function (event) {
   if (overlayActionBtn) {
     var overlayAction = String(overlayActionBtn.getAttribute('data-feed-overlay-action') || '').trim()
     if (overlayAction === 'open' || overlayAction === 'openx') {
-      animateFeedActionButton(overlayActionBtn)
       return
     }
     if (overlayAction) {
@@ -1521,7 +1519,7 @@ document.body.addEventListener('htmx:beforeSend', function (e) {
   if (!tid) return
   var nextLiked = elt.hasAttribute('hx-post') ? true : elt.hasAttribute('hx-delete') ? false : null
   if (nextLiked === null) return
-  elt.setAttribute('data-feed-like-before', stateBool(card, 'liked') ? '1' : '0')
+  card.setAttribute('data-feed-like-before', stateBool(card, 'liked') ? '1' : '0')
   animateFeedActionButton(elt, !nextLiked)
   applyLikeState(card, tid, nextLiked)
 })
@@ -1529,21 +1527,21 @@ document.body.addEventListener('htmx:beforeSend', function (e) {
 function rollbackHTMXLikeState(e) {
   var elt = e.detail && e.detail.elt
   if (!elt || elt.getAttribute('data-feed-action') !== 'heart') return
-  var previous = elt.getAttribute('data-feed-like-before')
-  if (previous !== '0' && previous !== '1') return
-  elt.removeAttribute('data-feed-like-before')
   var card = elt.closest('[data-feed-item]')
   var tid = card && card.getAttribute('data-tweet-id')
   if (!card || !tid) return
+  var previous = card.getAttribute('data-feed-like-before')
+  if (previous !== '0' && previous !== '1') return
+  card.removeAttribute('data-feed-like-before')
   applyLikeState(card, tid, previous === '1')
 }
 
 document.body.addEventListener('htmx:responseError', rollbackHTMXLikeState)
 document.body.addEventListener('htmx:sendError', rollbackHTMXLikeState)
 
-// After like button HTMX swap, propagate state
+// After like button HTMX swap, propagate state and trigger full flashy animation
 document.body.addEventListener('htmx:afterSwap', function (e) {
-  var elt = e.detail.elt
+  var elt = e.detail && e.detail.elt
   if (!elt) return
   if (elt.getAttribute('data-feed-action') === 'heart') {
     var card = elt.closest('[data-feed-item]')
@@ -1551,9 +1549,12 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
     var tid = card.getAttribute('data-tweet-id')
     var liked = elt.classList.contains('active')
     propagateLikeState(tid, liked)
-    var before = elt.getAttribute('data-feed-like-before')
+    var before = card.getAttribute('data-feed-like-before')
+    card.removeAttribute('data-feed-like-before')
     if (liked && before === '0') {
       animateFeedActionButton(elt, false)
+    } else if (!liked && before === '1') {
+      animateFeedActionButton(elt, true)
     }
   }
 })
