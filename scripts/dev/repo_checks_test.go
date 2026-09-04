@@ -199,6 +199,71 @@ func TestPrePushRunsAndroidFromAColdBuild(t *testing.T) {
 	}
 }
 
+func TestPrePushRejectsNixDependencyFailureForGoChanges(t *testing.T) {
+	hook := filepath.Join(repoRoot(t), ".githooks/pre-push")
+	for _, tc := range []struct {
+		name, file, contents string
+		checksNix            bool
+	}{
+		{"import", "main.go", "package main\nimport \"example.invalid/dependency\"\n", true},
+		{"import block", "main.go", "package main\nimport (\n \"example.invalid/dependency\"\n)\n", true},
+		{"build constraint", "main.go", "//go:build ignore\n\npackage main\n", true},
+		{"implementation", "main.go", "package main\nfunc main() {}\n", false},
+		{"modules", "go.mod", "changed\n", true},
+		{"nix", "flake.nix", "changed\n", true},
+		{"docs", "README.md", "changed\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			runGit := func(args ...string) string {
+				t.Helper()
+				cmd := exec.Command("git", args...)
+				cmd.Dir = dir
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("git %v: %v\n%s", args, err, out)
+				}
+				return strings.TrimSpace(string(out))
+			}
+			write := func(path, contents string) {
+				t.Helper()
+				path = filepath.Join(dir, path)
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(contents), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			runGit("init", "-q")
+			runGit("config", "user.name", "Test")
+			runGit("config", "user.email", "test@example.invalid")
+			runGit("config", "commit.gpgsign", "false")
+			runGit("commit", "--allow-empty", "-qm", "initial")
+			base := runGit("rev-parse", "HEAD")
+			write(tc.file, tc.contents)
+			runGit("add", tc.file)
+			runGit("commit", "-qm", "change")
+			head := runGit("rev-parse", "HEAD")
+			write("bin/just", "#!/bin/sh\nprintf '%s\\n' \"$@\" > nix-arguments\nexit 1\n")
+			write("scripts/dev/test-changed.sh", "#!/bin/sh\nexit 0\n")
+			cmd := exec.Command("bash", hook)
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(), "PATH="+filepath.Join(dir, "bin")+":"+os.Getenv("PATH"), "IGLOO_PRE_PUSH_FULL=0")
+			cmd.Stdin = strings.NewReader("refs/heads/main " + head + " refs/heads/main " + base + "\n")
+			out, err := cmd.CombinedOutput()
+			args, readErr := os.ReadFile(filepath.Join(dir, "nix-arguments"))
+			if !tc.checksNix {
+				if err != nil || !os.IsNotExist(readErr) {
+					t.Fatalf("unrelated change should pass without Nix: %v\n%s", err, out)
+				}
+			} else if err == nil || readErr != nil || string(args) != "check-nix-deps\n"+head+"\n" {
+				t.Fatalf("push must fail on the outgoing commit's Nix check: err=%v args=%q\n%s", err, args, out)
+			}
+		})
+	}
+}
+
 func TestChangedGateDoesNotTreatGeneratedLocalizationAsAndroidBehavior(t *testing.T) {
 	root := repoRoot(t)
 	runSelection := func(t *testing.T, files ...string) string {

@@ -200,7 +200,7 @@
             version = "0.0.0-${revision}";
 
             src = source;
-            vendorHash = "sha256-BdJ+tb5pakm0Lt81D91gtx6e/hsiVrQ/E/zaGn7kW1M=";
+            vendorHash = "sha256-yXPF19lonuXWbDBR6I1HimmetC5Tdk5nxarLY9si5MA=";
 
             subPackages = [
               "cmd/igloo"

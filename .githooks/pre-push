@@ -8,12 +8,6 @@ while IFS= read -r git_env_var; do
   unset "$git_env_var"
 done < <(git rev-parse --local-env-vars)
 
-if [[ "${IGLOO_PRE_PUSH_FULL:-0}" == "1" ]]; then
-  echo "pre-push: running scripts/dev/test-full.sh"
-  scripts/dev/test-full.sh
-  exit 0
-fi
-
 tested_range=0
 while read -r _local_ref local_sha _remote_ref remote_sha; do
   if [[ "$local_sha" =~ ^0+$ ]]; then
@@ -23,6 +17,20 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     remote_sha="$(git merge-base "$local_sha" origin/main)"
   fi
   echo "pre-push: testing changes from ${remote_sha:0:12} to ${local_sha:0:12}"
+  if [[ "${IGLOO_PRE_PUSH_FULL:-0}" == "1" ]] || ! git diff --quiet "$remote_sha" "$local_sha" -- \
+    go.mod go.sum flake.nix flake.lock \
+    .githooks/pre-push scripts/dev/check-nix-deps.sh || \
+    ! git diff --quiet -G '(^import[[:space:](]|^[[:space:]]*([[:alnum:]_.]+[[:space:]]+)?["`]|^//go:build|^//[[:space:]]*\+build)' \
+      "$remote_sha" "$local_sha" -- '*.go'; then
+    echo "pre-push: verifying Nix Go dependency hash"
+    just check-nix-deps "$local_sha"
+  fi
+  if [[ "${IGLOO_PRE_PUSH_FULL:-0}" == "1" ]]; then
+    echo "pre-push: running scripts/dev/test-full.sh"
+    scripts/dev/test-full.sh
+    tested_range=1
+    continue
+  fi
   GOCACHE="${GOCACHE:-$repo_root/.local/go-cache}" \
     IGLOO_ANDROID_CLEAN=1 \
     IGLOO_ANDROID_NO_DAEMON=1 \

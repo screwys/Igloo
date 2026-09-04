@@ -72,6 +72,10 @@ test-web:
 check-drift:
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/drift-check.sh --write
 
+# Verify the Nix dependency hash for a commit (defaults to HEAD).
+check-nix-deps revision="":
+    bash scripts/dev/check-nix-deps.sh {{ quote(revision) }}
+
 # Validate the SQLite schema and Android Room mirror contract.
 check-schema:
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/schema-check.sh
