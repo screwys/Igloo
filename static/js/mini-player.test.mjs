@@ -247,3 +247,13 @@ test('a clicked player route closes the current mini player before navigation', 
   assert.match(source, /function leaveMiniPlayerForPlayer\(value\)[\s\S]*?restoreActiveSurface\(\{ pause: true \}\)[\s\S]*?window\.location\.assign\(value\)/)
   assert.match(source, /activeSurface\.kind === 'videos' && isPlayerURL\(target\.href, frameWindow\.location\.href\)[\s\S]*?leaveMiniPlayerForPlayer\(target\.href\)/)
 })
+
+test('moments mini-player supports wheel navigation and preserves surface coordinates', async () => {
+  const source = await readFile(new URL('./src/mini-player.js', import.meta.url), 'utf8')
+  assert.match(source, /activeSurface\.kind === 'moments'/)
+  assert.match(source, /shell\.addEventListener\('wheel'/)
+  assert.match(source, /activeSurface\.onNext\(\)/)
+  assert.match(source, /activeSurface\.onPrev\(\)/)
+  assert.match(source, /const wasMoments = activeSurface && activeSurface\.kind === 'moments' && next\.kind === 'moments'/)
+  assert.match(source, /currentKind:\s*function\s*\(\)\s*\{\s*return activeSurface \? activeSurface\.kind : null\s*\}/)
+})

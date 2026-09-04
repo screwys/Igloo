@@ -31,7 +31,7 @@ function observeTranslateCards(scope, translateObserver) {
 import { openBookmarkMenu, isBookmarkMenuOpen } from '../bookmark-menu.js'
 import {
   cssEscape, apiFetch, showToast, copyText, toFxTwitterUrl, askConfirm,
-  getFeedActionIconSvg, syncFeedActionIcons, setSvgContent,
+  getFeedActionIconSvg, syncFeedActionIcons, setSvgContent, animateFeedActionButton,
   stateBool, setStateBool, itemRootFromNode, t, tf
 } from '../utils.js'
 
@@ -490,6 +490,8 @@ function runFeedAction(root, actionType, form) {
   if (actionType === 'like') {
     var currentlyLiked = stateBool(root, 'liked')
     var method = currentlyLiked ? 'DELETE' : 'POST'
+    var heartBtn = getFeedActionUiButton(root, 'heart')
+    if (heartBtn) animateFeedActionButton(heartBtn, currentlyLiked)
     applyLikeState(root, tweetId, !currentlyLiked)
     return apiFetch('/api/feed/like/' + encodeURIComponent(tweetId), {
       method: method,
@@ -566,6 +568,7 @@ function handleFeedActionSubmit(form) {
 function runQuoteOverlayLike(quoteTweetId, btn) {
   if (!quoteTweetId || btn.disabled) return
   var isLiked = btn.classList.contains('active')
+  animateFeedActionButton(btn, isLiked)
   var method = isLiked ? 'DELETE' : 'POST'
   btn.disabled = true
   propagateLikeState(quoteTweetId, !isLiked)
@@ -584,7 +587,12 @@ function runQuoteOverlayLike(quoteTweetId, btn) {
 
 // ── Bookmark menu integration ──
 
-function onBookmarkStateChange(root) {
+function onBookmarkStateChange(root, isBookmarked) {
+  var bmBtn = getFeedActionUiButton(root, 'bookmark')
+  if (bmBtn) {
+    var nextBm = typeof isBookmarked === 'boolean' ? isBookmarked : stateBool(root, 'bookmarked')
+    animateFeedActionButton(bmBtn, !nextBm)
+  }
   syncFeedButtons(root)
   syncSiblingCards(root)
   if (typeof root._onBookmarkChange === 'function') root._onBookmarkChange()
@@ -979,15 +987,20 @@ document.addEventListener('click', function (event) {
     return
   }
 
-  // Feed action buttons (heart, bookmark, share)
+  // Feed action buttons (heart, bookmark, share, open)
   var actionBtn = event.target && event.target.closest ? event.target.closest('.feed-action-btn[data-feed-action]') : null
   if (actionBtn) {
     var action = String(actionBtn.getAttribute('data-feed-action') || '').trim()
-    if (action && action !== 'openx') {
+    if (action === 'open' || action === 'openx') {
+      animateFeedActionButton(actionBtn)
+      return
+    }
+    if (action) {
       event.preventDefault(); event.stopPropagation()
       var root = resolveFeedRootForActionNode(actionBtn)
       if (!root) return
       if (action === 'share') {
+        animateFeedActionButton(actionBtn)
         var link = String(root.getAttribute('data-feed-link') || '').trim()
         var shareLink = toFxTwitterUrl(link) || link
         copyText(shareLink).then(function () { showToast(t('toast_link_copied', 'Link copied')) }).catch(function () { showToast(t('error_copy_link_failed', 'Failed to copy link')) })
@@ -1023,13 +1036,18 @@ document.addEventListener('click', function (event) {
   var overlayActionBtn = event.target && event.target.closest ? event.target.closest('[data-feed-overlay-action]') : null
   if (overlayActionBtn) {
     var overlayAction = String(overlayActionBtn.getAttribute('data-feed-overlay-action') || '').trim()
-    if (overlayAction && overlayAction !== 'openx') {
+    if (overlayAction === 'open' || overlayAction === 'openx') {
+      animateFeedActionButton(overlayActionBtn)
+      return
+    }
+    if (overlayAction) {
       event.preventDefault(); event.stopPropagation()
       var overlayEl = overlayActionBtn.closest('.feed-media-overlay')
       var overlayQuoteTweetId = overlayEl ? String(overlayEl.getAttribute('data-feed-overlay-quote-tweet-id') || '').trim() : ''
 
       if (overlayQuoteTweetId) {
         if (overlayAction === 'share') {
+          animateFeedActionButton(overlayActionBtn)
           var qCard = feedList && feedList.querySelector('.feed-quote-card[data-quote-tweet-id="' + cssEscape(overlayQuoteTweetId) + '"]')
           var qLink = qCard ? String(qCard.getAttribute('data-quote-link') || '').trim() : ''
           var qShareLink = toFxTwitterUrl(qLink) || qLink
@@ -1070,6 +1088,7 @@ document.addEventListener('click', function (event) {
             setSvgContent(_overlayBtnRef, getFeedActionIconSvg('bookmark', nextBm))
             _overlayBtnRef.title = nextBm ? t('action_unbookmark', 'Unbookmark') : t('action_bookmark', 'Bookmark')
             _overlayBtnRef.setAttribute('aria-label', _overlayBtnRef.title)
+            animateFeedActionButton(_overlayBtnRef, !nextBm)
           }
           openFeedBookmarkMenu(_overlayBtnRef, syntheticRoot)
           return
@@ -1080,6 +1099,7 @@ document.addEventListener('click', function (event) {
       var oRoot = resolveFeedRootForActionNode(overlayActionBtn)
       if (!oRoot) return
       if (overlayAction === 'share') {
+        animateFeedActionButton(overlayActionBtn)
         var oLink = String(oRoot.getAttribute('data-feed-link') || '').trim()
         var oShareLink = toFxTwitterUrl(oLink) || oLink
         copyText(oShareLink).then(function () { showToast(t('toast_link_copied', 'Link copied')) }).catch(function () { showToast(t('error_copy_link_failed', 'Failed to copy link')) })
@@ -1496,6 +1516,7 @@ document.body.addEventListener('htmx:beforeSend', function (e) {
   var nextLiked = elt.hasAttribute('hx-post') ? true : elt.hasAttribute('hx-delete') ? false : null
   if (nextLiked === null) return
   elt.setAttribute('data-feed-like-before', stateBool(card, 'liked') ? '1' : '0')
+  animateFeedActionButton(elt, !nextLiked)
   applyLikeState(card, tid, nextLiked)
 })
 
@@ -1524,6 +1545,10 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
     var tid = card.getAttribute('data-tweet-id')
     var liked = elt.classList.contains('active')
     propagateLikeState(tid, liked)
+    var before = elt.getAttribute('data-feed-like-before')
+    if (liked && before === '0') {
+      animateFeedActionButton(elt, false)
+    }
   }
 })
 

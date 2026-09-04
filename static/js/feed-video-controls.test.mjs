@@ -145,7 +145,7 @@ async function loadVideoControls() {
   const source = await readFile(new URL('./src/feed/video-controls.js', import.meta.url), 'utf8')
   const visibilitySource = await readFile(new URL('./src/video-controls-visibility.js', import.meta.url), 'utf8')
   const volumeSource = await readFile(new URL('./src/volume.js', import.meta.url), 'utf8')
-  const runnable = "const attachSeekTooltip = () => {}; const makeDraggableSeekbar = () => {}; const materialIconMarkup = (name) => '<svg>' + name + '</svg>'; const setSvgContent = (element, html) => { element.innerHTML = html }; const t = (_key, fallback) => fallback;\n" +
+  const runnable = "const attachSeekTooltip = () => {}; const makeDraggableSeekbar = () => {}; const materialIconMarkup = (name) => '<svg>' + name + '</svg>'; const setSvgContent = (element, html) => { element.innerHTML = html }; const t = (_key, fallback) => fallback; const tf = (_key, fallback) => fallback;\n" +
     volumeSource.replace(/\bexport\s+/g, '') + '\n' +
     visibilitySource.replace(/\bexport\s+/g, '') + '\n' +
     source.replace(/^import .*$/gm, '').replace(/\bexport\s+/g, '') +
@@ -395,4 +395,42 @@ test('GIF overlays retain arrow navigation while still accepting mute', async ()
   assert.equal(video.currentTime, 10)
   assert.equal(media.handleFeedVideoShortcut({ key: 'm' }, video, { seek: false }), true)
   assert.equal(video.muted, false)
+})
+
+test('moments toolbox options support omitting mini/cinema and binding autoplay', async () => {
+  const media = await loadVideoControls()
+  const wrap = new FakeElement('div')
+  const controls = media.createFeedVideoControls({ mini: false, cinema: false, autoplay: true })
+  const video = new FakeVideo()
+  wrap.appendChild(video)
+  wrap.appendChild(controls)
+
+  assert.equal(controls.querySelector('[data-feed-video-mini]'), null)
+  assert.equal(controls.querySelector('[data-feed-video-cinema]'), null)
+  const autoplay = controls.querySelector('[data-feed-video-autoplay]')
+  assert.ok(autoplay)
+  assert.ok(controls.querySelector('[data-feed-video-play]'))
+  assert.ok(controls.querySelector('[data-feed-progress]'))
+  assert.ok(controls.querySelector('[data-feed-video-speed]'))
+  assert.ok(controls.querySelector('[data-feed-video-volume-control]'))
+  assert.ok(controls.querySelector('[data-feed-video-fullscreen]'))
+
+  let autoplayState = false
+  let toggled = false
+  media.bindFeedVideoControls(wrap, video, {
+    mini: false,
+    cinema: false,
+    autoplay: true,
+    getAutoplay() { return autoplayState },
+    onAutoplayToggle() {
+      toggled = true
+      autoplayState = !autoplayState
+    },
+  })
+
+  assert.equal(autoplay.getAttribute('aria-pressed'), 'false')
+  autoplay.dispatch('click')
+  assert.equal(toggled, true)
+  assert.equal(autoplayState, true)
+  assert.equal(autoplay.getAttribute('aria-pressed'), 'true')
 })

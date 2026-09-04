@@ -573,17 +573,17 @@ export function openMediaOverlay(root, triggerEl) {
 
       var overlayLink = isQuote ? (quoteLink || link) : link
       if (overlayLink) {
-        var openX = document.createElement('a')
-        openX.className = 'feed-action-btn'
-        openX.href = overlayLink
-        openX.target = '_blank'
-        openX.rel = 'noopener noreferrer'
-        openX.title = t('action_open_on_x', 'Open on X')
-        openX.setAttribute('aria-label', openX.title)
-        openX.setAttribute('data-feed-overlay-action', 'openx')
+        var openExternal = document.createElement('a')
+        openExternal.className = 'feed-action-btn'
+        openExternal.href = overlayLink
+        openExternal.target = '_blank'
+        openExternal.rel = 'noopener noreferrer'
+        openExternal.title = t('action_open_externally', 'Open externally')
+        openExternal.setAttribute('aria-label', openExternal.title)
+        openExternal.setAttribute('data-feed-overlay-action', 'open')
         // Static SVG — no user input
-        openX.innerHTML = getFeedActionIconSvg('link') // eslint-disable-line no-unsanitized/property
-        actionsWrap.appendChild(openX)
+        openExternal.innerHTML = getFeedActionIconSvg('open') // eslint-disable-line no-unsanitized/property
+        actionsWrap.appendChild(openExternal)
       }
       var threadHref = String(article.getAttribute('data-feed-thread-href') || '').trim()
       if (threadHref.startsWith('/') && !threadHref.startsWith('//')) {

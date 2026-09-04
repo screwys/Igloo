@@ -7286,6 +7286,16 @@ body.shorts-open:has(.shorts-story-tray.open) .shorts-story-tray-controls {
     display: none;
 }
 
+.shorts-mini-controls {
+    display: none;
+}
+
+.mini-player-media-host .shorts-video-wrapper .shorts-mini-controls {
+    display: flex;
+    z-index: 10;
+    border-radius: 0;
+}
+
 .mini-player-media-host .shorts-video-wrapper video {
     object-fit: cover;
 }
@@ -9682,7 +9692,8 @@ body.shorts-mode .sidebar {
 }
 
 .feed-media-wrap .feed-video-controls[data-feed-video-controls-visible="0"],
-.feed-overlay-video-wrap .feed-video-controls[data-feed-video-controls-visible="0"] {
+.feed-overlay-video-wrap .feed-video-controls[data-feed-video-controls-visible="0"],
+.shorts-video-wrapper .feed-video-controls[data-feed-video-controls-visible="0"] {
     opacity: 0;
     pointer-events: none;
 }
@@ -10118,39 +10129,273 @@ body.shorts-mode .sidebar {
 }
 
 .feed-action-btn {
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    position: relative;
+    border: 1px solid transparent;
     border-radius: 999px;
     background: transparent;
-    color: var(--text-secondary);
-    width: 30px;
-    height: 30px;
+    color: var(--text-muted, rgba(var(--text-primary-rgb), 0.5));
+    width: 36px;
+    height: 36px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    font-size: 1.1rem;
     text-decoration: none;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    overflow: visible;
+    transition: color var(--transition-fast), background var(--transition-fast), opacity var(--transition-fast);
+    --btn-anim-color: var(--accent-primary);
+    --btn-anim-secondary: var(--accent-secondary, var(--accent-primary));
+    --btn-hover-bg: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+    --btn-hover-border: transparent;
+    --btn-hover-color: var(--accent-primary);
 }
 
+/* Hovering over colors the outer area and restores full opacity with that action accent */
 .feed-action-btn:hover {
-    background: rgba(var(--accent-primary-rgb), 0.12);
-    border-color: rgba(var(--accent-primary-rgb), 0.3);
+    background: var(--btn-hover-bg);
+    border-color: var(--btn-hover-border);
+    color: var(--btn-hover-color);
+    opacity: 1;
 }
 
 .feed-action-btn svg {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     display: block;
     pointer-events: none;
     stroke-linecap: round;
     stroke-linejoin: round;
+    transform-origin: center center;
 }
 
+/* Action button color themes: Option 1 balanced palette */
+.feed-action-btn[data-feed-action="heart"],
+.feed-action-btn[data-feed-overlay-action="heart"] {
+    --feed-like-color: #d94f68;
+    --feed-like-sparkle: #eb7a90;
+    --btn-anim-color: var(--feed-like-color);
+    --btn-anim-secondary: var(--feed-like-sparkle);
+    --btn-hover-bg: color-mix(in srgb, var(--feed-like-color) 14%, transparent);
+    --btn-hover-border: transparent;
+    --btn-hover-color: var(--feed-like-color);
+}
+
+.feed-action-btn[data-feed-action="bookmark"],
+.feed-action-btn[data-feed-overlay-action="bookmark"] {
+    --feed-bookmark-color: #6b80bf;
+    --feed-bookmark-sparkle: #8ca0db;
+    --btn-anim-color: var(--feed-bookmark-color);
+    --btn-anim-secondary: var(--feed-bookmark-sparkle);
+    --btn-hover-bg: color-mix(in srgb, var(--feed-bookmark-color) 14%, transparent);
+    --btn-hover-border: transparent;
+    --btn-hover-color: var(--feed-bookmark-color);
+}
+
+.feed-action-btn[data-feed-action="share"],
+.feed-action-btn[data-feed-overlay-action="share"],
+.feed-action-btn[data-feed-action="open"],
+.feed-action-btn[data-feed-overlay-action="open"],
+.feed-action-btn[data-feed-action="openx"],
+.feed-action-btn[data-feed-overlay-action="openx"] {
+    --btn-anim-color: var(--accent-primary);
+    --btn-anim-secondary: var(--accent-secondary, var(--accent-primary));
+    --btn-hover-bg: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+    --btn-hover-border: transparent;
+    --btn-hover-color: var(--accent-primary);
+}
+
+/* Active states: icon is filled with respective color at full opacity, no outer selection when idle */
 .feed-action-btn.active {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    opacity: 1 !important;
+}
+
+/* Hovering over an active button also colors the outer area with its matching theme wash */
+.feed-action-btn.active:hover {
+    background: var(--btn-hover-bg);
+    border-color: var(--btn-hover-border);
+    box-shadow: none;
+    opacity: 1 !important;
+}
+
+.feed-action-btn[data-feed-action="heart"].active,
+.feed-action-btn[data-feed-overlay-action="heart"].active {
+    color: var(--feed-like-color, #d94f68) !important;
+}
+
+.feed-action-btn[data-feed-action="bookmark"].active,
+.feed-action-btn[data-feed-overlay-action="bookmark"].active {
+    color: var(--feed-bookmark-color, #6b80bf) !important;
+}
+
+.feed-action-btn[data-feed-action="share"].active,
+.feed-action-btn[data-feed-overlay-action="share"].active,
+.feed-action-btn[data-feed-action="open"].active,
+.feed-action-btn[data-feed-overlay-action="open"].active,
+.feed-action-btn[data-feed-action="openx"].active,
+.feed-action-btn[data-feed-overlay-action="openx"].active {
     color: var(--accent-primary);
-    background: rgba(var(--accent-primary-rgb), 0.15);
-    border-color: rgba(var(--accent-primary-rgb), 0.25);
+}
+
+/* Pop/burst animation matching Twitter/X interaction */
+.feed-action-btn.animating svg {
+    animation: feed-action-pop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.feed-action-btn.animating[data-feed-action="open"] svg,
+.feed-action-btn.animating[data-feed-overlay-action="open"] svg,
+.feed-action-btn.animating[data-feed-action="openx"] svg,
+.feed-action-btn.animating[data-feed-overlay-action="openx"] svg,
+.feed-action-btn.animating[data-feed-action="share"] svg,
+.feed-action-btn.animating[data-feed-overlay-action="share"] svg {
+    color: var(--accent-primary);
+}
+
+/* Expanding halo ring */
+.feed-action-btn.animating::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 1;
+    animation: feed-action-ring 0.42s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+/* Sparkle particles burst */
+.feed-action-btn.animating::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 2;
+    transform: translate(-50%, -50%);
+    animation: feed-action-burst 0.5s cubic-bezier(0.12, 0.74, 0.58, 1) forwards;
+}
+
+/* Deflate animation on deactivate/unlike */
+.feed-action-btn.animating-unlike svg {
+    animation: feed-action-deflate 0.25s ease-out forwards;
+}
+
+@keyframes feed-action-pop {
+    0% {
+        transform: scale(1);
+    }
+    20% {
+        transform: scale(0.65);
+    }
+    50% {
+        transform: scale(1.35);
+    }
+    75% {
+        transform: scale(0.92);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes feed-action-deflate {
+    0% {
+        transform: scale(1);
+    }
+    40% {
+        transform: scale(0.82);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes feed-action-ring {
+    0% {
+        width: 0;
+        height: 0;
+        opacity: 0.9;
+        border: 16px solid var(--btn-anim-color);
+    }
+    40% {
+        opacity: 0.6;
+        border: 7px solid var(--btn-anim-color);
+    }
+    80% {
+        width: 42px;
+        height: 42px;
+        opacity: 0.2;
+        border: 2px solid var(--btn-anim-color);
+    }
+    100% {
+        width: 48px;
+        height: 48px;
+        opacity: 0;
+        border: 0 solid var(--btn-anim-color);
+    }
+}
+
+@keyframes feed-action-burst {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.2) rotate(0deg);
+        box-shadow: 0 0 0 0 transparent;
+    }
+    25% {
+        opacity: 1;
+        box-shadow:
+            0 -12px 0 1.5px var(--btn-anim-color),
+            8px -8px 0 1px var(--btn-anim-secondary),
+            12px 0 0 1.5px var(--btn-anim-color),
+            8px 8px 0 1px var(--btn-anim-secondary),
+            0 12px 0 1.5px var(--btn-anim-color),
+            -8px 8px 0 1px var(--btn-anim-secondary),
+            -12px 0 0 1.5px var(--btn-anim-color),
+            -8px -8px 0 1px var(--btn-anim-secondary);
+    }
+    60% {
+        opacity: 0.9;
+        box-shadow:
+            0 -19px 0 1.2px var(--btn-anim-color),
+            13px -13px 0 0.8px var(--btn-anim-secondary),
+            19px 0 0 1.2px var(--btn-anim-color),
+            13px 13px 0 0.8px var(--btn-anim-secondary),
+            0 19px 0 1.2px var(--btn-anim-color),
+            -13px 13px 0 0.8px var(--btn-anim-secondary),
+            -19px 0 0 1.2px var(--btn-anim-color),
+            -13px -13px 0 0.8px var(--btn-anim-secondary);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.25) rotate(20deg);
+        box-shadow:
+            0 -24px 0 0 transparent,
+            17px -17px 0 0 transparent,
+            24px 0 0 0 transparent,
+            17px 17px 0 0 transparent,
+            0 24px 0 0 transparent,
+            -17px 17px 0 0 transparent,
+            -24px 0 0 0 transparent,
+            -17px -17px 0 0 transparent;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .feed-action-btn.animating svg,
+    .feed-action-btn.animating-unlike svg,
+    .feed-action-btn.animating::before,
+    .feed-action-btn.animating::after {
+        animation: none !important;
+    }
 }
 
 .feed-media-overlay {

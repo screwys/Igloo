@@ -19,7 +19,7 @@ function autoAdvanceEnabled() {
 
 export function syncRenderedShortVideoLoop() {
   var loop = !autoAdvanceEnabled()
-  document.querySelectorAll('#shorts-container video').forEach(function (video) {
+  document.querySelectorAll('#shorts-container video, #mini-player-media-host video').forEach(function (video) {
     video.loop = loop
   })
 }

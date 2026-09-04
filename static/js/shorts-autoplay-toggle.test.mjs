@@ -14,7 +14,7 @@ async function loadPlayback(videos) {
     document: {
       querySelectorAll(selector) {
         selectors.push(selector)
-        return selector === '#shorts-container video' ? videos : []
+        return (selector === '#shorts-container video' || selector === '#shorts-container video, #mini-player-media-host video') ? videos : []
       },
     },
   })
@@ -41,8 +41,8 @@ test('autoplay toggle synchronizes loop state on rendered shorts videos', async 
   playback.syncRenderedShortVideoLoop()
   assert.deepEqual(videos.map((video) => video.loop), [false, false])
   assert.deepEqual(playback.__selectors, [
-    '#shorts-container video',
-    '#shorts-container video',
-    '#shorts-container video',
+    '#shorts-container video, #mini-player-media-host video',
+    '#shorts-container video, #mini-player-media-host video',
+    '#shorts-container video, #mini-player-media-host video',
   ])
 })

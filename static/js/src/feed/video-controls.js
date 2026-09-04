@@ -1,4 +1,4 @@
-import { attachSeekTooltip, makeDraggableSeekbar, materialIconMarkup, setSvgContent, t } from '../utils.js'
+import { attachSeekTooltip, makeDraggableSeekbar, materialIconMarkup, setSvgContent, t, tf } from '../utils.js'
 import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
 import { readStoredVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
 
@@ -12,7 +12,9 @@ const videoControlIcons = {
   high: materialIconMarkup('VolumeUp'),
   mini: materialIconMarkup('PictureInPictureAlt'),
   cinema: materialIconMarkup('VerticalSplit'),
-  fullscreen: materialIconMarkup('Fullscreen')
+  fullscreen: materialIconMarkup('Fullscreen'),
+  autoplay: materialIconMarkup('PlayCircleOutline'),
+  autoplayActive: materialIconMarkup('PlayCircle')
 }
 
 const playbackRates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
@@ -68,34 +70,39 @@ function makeSpeedControl() {
   const button = document.createElement('button')
   button.className = 'feed-video-control-btn feed-video-speed-btn'
   button.type = 'button'
-  button.textContent = '1x'
   button.setAttribute('aria-label', t('player_playback_speed', 'Playback speed'))
   button.setAttribute('aria-haspopup', 'menu')
   button.setAttribute('aria-expanded', 'false')
   button.setAttribute('data-feed-video-control', '')
   button.setAttribute('data-feed-video-speed-button', '')
+  button.textContent = '1x'
   control.appendChild(button)
 
   const menu = document.createElement('div')
   menu.className = 'feed-video-speed-menu hidden'
   menu.setAttribute('role', 'menu')
-  menu.setAttribute('aria-label', t('player_playback_speed_menu', 'Playback speed menu'))
+  menu.setAttribute('aria-label', t('player_playback_speed', 'Playback speed'))
   menu.setAttribute('data-feed-video-speed-menu', '')
+
   playbackRates.forEach(function (rate) {
-    const option = document.createElement('button')
-    option.className = 'feed-video-speed-option' + (rate === 1 ? ' is-active' : '')
-    option.type = 'button'
-    option.textContent = formatPlaybackRate(rate)
-    option.setAttribute('role', 'menuitemradio')
-    option.setAttribute('aria-checked', rate === 1 ? 'true' : 'false')
-    option.setAttribute('data-rate', String(rate))
-    menu.appendChild(option)
+    const item = document.createElement('button')
+    item.className = 'feed-video-speed-option'
+    if (rate === 1) item.classList.add('is-active')
+    item.type = 'button'
+    item.setAttribute('role', 'menuitemradio')
+    item.setAttribute('aria-checked', rate === 1 ? 'true' : 'false')
+    item.setAttribute('data-rate', String(rate))
+    item.setAttribute('data-feed-video-control', '')
+    item.textContent = formatPlaybackRate(rate)
+    menu.appendChild(item)
   })
+
   control.appendChild(menu)
   return control
 }
 
 export function createFeedVideoControls(options) {
+  const opts = options || {}
   const controls = document.createElement('div')
   controls.className = 'feed-video-controls'
   controls.setAttribute('data-feed-video-controls', '')
@@ -114,13 +121,29 @@ export function createFeedVideoControls(options) {
   progress.appendChild(fill)
   controls.appendChild(progress)
 
+  if (opts.autoplay) {
+    const autoplayBtn = makeControlButton('data-feed-video-autoplay', t('shorts_autoplay_next', 'Auto-play next short'), 'autoplay')
+    autoplayBtn.setAttribute('aria-pressed', 'false')
+    controls.appendChild(autoplayBtn)
+  }
+
   controls.appendChild(makeSpeedControl())
   controls.appendChild(makeVolumeControl())
-  const miniButton = makeControlButton('data-feed-video-mini', t('mini_player_title', 'Mini player'), 'mini')
-  miniButton.setAttribute('aria-pressed', 'false')
-  controls.appendChild(miniButton)
-  controls.appendChild(makeControlButton('data-feed-video-cinema', t('player_cinema_view', 'Cinema view'), 'cinema'))
-  controls.appendChild(makeControlButton('data-feed-video-fullscreen', t('action_enter_fullscreen', 'Enter fullscreen'), 'fullscreen'))
+
+  if (opts.mini !== false) {
+    const miniButton = makeControlButton('data-feed-video-mini', t('mini_player_title', 'Mini player'), 'mini')
+    miniButton.setAttribute('aria-pressed', 'false')
+    controls.appendChild(miniButton)
+  }
+
+  if (opts.cinema !== false) {
+    controls.appendChild(makeControlButton('data-feed-video-cinema', t('player_cinema_view', 'Cinema view'), 'cinema'))
+  }
+
+  if (opts.fullscreen !== false) {
+    controls.appendChild(makeControlButton('data-feed-video-fullscreen', t('action_enter_fullscreen', 'Enter fullscreen'), 'fullscreen'))
+  }
+
   return controls
 }
 
@@ -194,17 +217,20 @@ export function handleFeedVideoShortcut(event, video, options) {
 }
 
 export function bindFeedVideoControls(wrap, video, options) {
+  const opts = options || {}
   if (!wrap || !(video instanceof HTMLVideoElement)) return
   const controls = wrap.querySelector('[data-feed-video-controls]')
   if (!controls || controls.dataset.feedVideoControlsBound === '1') return
   controls.dataset.feedVideoControlsBound = '1'
-  video.volume = readStoredVolume(window.localStorage, FEED_VOLUME_KEY, video.volume)
+  const volumeKey = opts.volumeKey || FEED_VOLUME_KEY
+  video.volume = readStoredVolume(window.localStorage, volumeKey, video.volume)
 
   const play = controls.querySelector('[data-feed-video-play]')
   const mute = controls.querySelector('[data-feed-video-mute]')
   const volume = controls.querySelector('[data-feed-video-volume]')
   const volumeControl = controls.querySelector('[data-feed-video-volume-control]')
   const volumePopover = controls.querySelector('.feed-video-volume-popover')
+  const autoplay = controls.querySelector('[data-feed-video-autoplay]')
   const mini = controls.querySelector('[data-feed-video-mini]')
   const cinema = controls.querySelector('[data-feed-video-cinema]')
   const fullscreen = controls.querySelector('[data-feed-video-fullscreen]')
@@ -261,6 +287,17 @@ export function bindFeedVideoControls(wrap, video, options) {
     })
   }
 
+  function syncAutoplay() {
+    if (!autoplay) return
+    const active = typeof opts.getAutoplay === 'function' ? !!opts.getAutoplay() : false
+    autoplay.classList.toggle('active', active)
+    autoplay.setAttribute('aria-pressed', active ? 'true' : 'false')
+    const label = tf('shorts_autoplay_next_state', 'Auto-play next short: %1$s', active ? t('state_on', 'ON') : t('state_off', 'OFF'))
+    autoplay.setAttribute('title', label)
+    autoplay.setAttribute('aria-label', label)
+    setSvgContent(autoplay, videoControlIcons[active ? 'autoplayActive' : 'autoplay'])
+  }
+
   function syncProgress() {
     if (!fill) return
     const duration = Number(video.duration || 0)
@@ -279,6 +316,10 @@ export function bindFeedVideoControls(wrap, video, options) {
     play.addEventListener('click', function (event) {
       event.preventDefault()
       event.stopPropagation()
+      if (typeof opts.onPlayToggle === 'function') {
+        opts.onPlayToggle()
+        return
+      }
       if (video.paused) video.play().catch(function () {})
       else video.pause()
     })
@@ -288,6 +329,10 @@ export function bindFeedVideoControls(wrap, video, options) {
       event.preventDefault()
       event.stopPropagation()
       video.muted = !video.muted
+      if (typeof opts.onVolumeChange === 'function') {
+        opts.onVolumeChange(video.volume, video.muted)
+      }
+      syncMute()
     })
   }
   if (volume) {
@@ -296,7 +341,10 @@ export function bindFeedVideoControls(wrap, video, options) {
       const nextVolume = Math.max(0, Math.min(1, Number(volume.value || 0)))
       video.volume = nextVolume
       video.muted = nextVolume === 0
-      writeStoredVolume(window.localStorage, FEED_VOLUME_KEY, nextVolume)
+      writeStoredVolume(window.localStorage, volumeKey, nextVolume)
+      if (typeof opts.onVolumeChange === 'function') {
+        opts.onVolumeChange(nextVolume, video.muted)
+      }
       syncMute()
     })
     volume.addEventListener('click', function (event) { event.stopPropagation() })
@@ -322,6 +370,16 @@ export function bindFeedVideoControls(wrap, video, options) {
     volumeControl.addEventListener('click', function (event) { event.stopPropagation() })
     volumeControl.addEventListener('mousedown', function (event) { event.stopPropagation() })
     volumeControl.addEventListener('touchstart', function (event) { event.stopPropagation() })
+  }
+  if (autoplay) {
+    autoplay.addEventListener('click', function (event) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (typeof opts.onAutoplayToggle === 'function') {
+        opts.onAutoplayToggle()
+      }
+      syncAutoplay()
+    })
   }
   if (mini) {
     mini.addEventListener('click', function (event) {
@@ -369,6 +427,9 @@ export function bindFeedVideoControls(wrap, video, options) {
         if (!playbackRates.includes(rate)) return
         video.playbackRate = rate
         video.defaultPlaybackRate = rate
+        if (typeof opts.onRateChange === 'function') {
+          opts.onRateChange(rate)
+        }
         syncSpeed()
         closeSpeedMenu()
       })
@@ -390,6 +451,10 @@ export function bindFeedVideoControls(wrap, video, options) {
     fullscreen.addEventListener('click', function (event) {
       event.preventDefault()
       event.stopPropagation()
+      if (typeof opts.onFullscreen === 'function') {
+        opts.onFullscreen()
+        return
+      }
       toggleFeedVideoFullscreen(video)
     })
     const ownerDocument = wrap.ownerDocument || document
@@ -416,6 +481,7 @@ export function bindFeedVideoControls(wrap, video, options) {
   syncMute()
   syncSpeed()
   syncFullscreen()
+  syncAutoplay()
   return function () {
     video.removeEventListener('play', syncPlay)
     video.removeEventListener('pause', syncPlay)

@@ -274,6 +274,8 @@ function initMiniPlayer() {
       feedTweetID: value.feedTweetID || feedReturn.feedTweetID || '',
       feedStreamURL: value.feedStreamURL || feedReturn.feedStreamURL || '',
       threadURL: value.threadURL || feedReturn.threadURL || '',
+      onNext: typeof value.onNext === 'function' ? value.onNext : null,
+      onPrev: typeof value.onPrev === 'function' ? value.onPrev : null,
       placeholder: null,
       sourceFrame: null,
     }
@@ -418,12 +420,15 @@ function initMiniPlayer() {
     if (activeSurface) restoreActiveSurface({ pause: true })
     pendingFeedThreadReturn = null
 
+    const wasMoments = activeSurface && activeSurface.kind === 'moments' && next.kind === 'moments'
     next.placeholder = makePlaceholder(next)
     next.element.before(next.placeholder)
-    shell.style.left = ''
-    shell.style.top = ''
-    shell.style.right = ''
-    shell.style.bottom = ''
+    if (!wasMoments) {
+      shell.style.left = ''
+      shell.style.top = ''
+      shell.style.right = ''
+      shell.style.bottom = ''
+    }
     mediaHost.appendChild(next.element)
     reconnectMediaController(next.element)
     activeSurface = next
@@ -866,6 +871,32 @@ function initMiniPlayer() {
 
   if (returnButton) returnButton.addEventListener('click', returnToSurface)
   if (closeButton) closeButton.addEventListener('click', closeMiniPlayer)
+
+  let wheelLocked = false
+  let wheelLockTimer = null
+  function keepWheelLocked() {
+    wheelLocked = true
+    if (wheelLockTimer) clearTimeout(wheelLockTimer)
+    wheelLockTimer = setTimeout(function () {
+      wheelLocked = false
+      wheelLockTimer = null
+    }, 280)
+  }
+
+  shell.addEventListener('wheel', function (event) {
+    if (!activeSurface || activeSurface.kind !== 'moments') return
+    if (event.target && event.target.closest && event.target.closest('.feed-video-volume-control, .dashboard-volume-control, .feed-video-speed-menu')) return
+    event.preventDefault()
+    if (wheelLocked) return
+    const delta = Number(event.deltaY || 0)
+    if (Math.abs(delta) < 10) return
+    keepWheelLocked()
+    if (delta > 0) {
+      if (typeof activeSurface.onNext === 'function') activeSurface.onNext()
+    } else {
+      if (typeof activeSurface.onPrev === 'function') activeSurface.onPrev()
+    }
+  }, { passive: false })
   function bindBrowseFrame(frame) {
     frame.addEventListener('load', function () {
       if (frame === browseFrame) installFrameNavigation()
@@ -889,6 +920,7 @@ function initMiniPlayer() {
 
   window.IglooMiniPlayer = {
     isMini: function () { return !!activeSurface },
+    currentKind: function () { return activeSurface ? activeSurface.kind : null },
     ownsSurface: function (element) { return !!activeSurface && activeSurface.element === element },
     fullscreenTarget: function (fallback) { return activeSurface ? activeSurface.element : fallback },
     fullscreenTargetFor: function (element, fallback) {
@@ -949,6 +981,10 @@ function initFramePlayerBridge() {
     isMini: function () {
       const owner = manager()
       return !!(owner && owner.ownsSurface && owner.ownsSurface(wrapper))
+    },
+    currentKind: function () {
+      const owner = manager()
+      return owner && typeof owner.currentKind === 'function' ? owner.currentKind() : null
     },
     fullscreenTarget: function (fallback) {
       const owner = manager()

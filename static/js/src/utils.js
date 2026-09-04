@@ -272,13 +272,30 @@ export function makeDraggableSeekbar(bar, fill, video) {
   bar.addEventListener('click', function (e) { e.stopPropagation() })
 }
 
+export function animateFeedActionButton(btn, isUnlike) {
+  if (!btn) return
+  btn.classList.remove("animating", "animating-unlike")
+  void btn.offsetWidth
+  if (isUnlike) {
+    btn.classList.add("animating-unlike")
+    setTimeout(function () {
+      btn.classList.remove("animating-unlike")
+    }, 300)
+  } else {
+    btn.classList.add("animating")
+    setTimeout(function () {
+      btn.classList.remove("animating")
+    }, 650)
+  }
+}
+
 export function syncFeedActionIcons(scope) {
   var root = scope || document
   root.querySelectorAll('.feed-action-btn[data-feed-action="share"], .feed-action-btn[data-feed-overlay-action="share"]').forEach(function (btn) {
     setSvgContent(btn, getFeedActionIconSvg('share'))
   })
-  root.querySelectorAll('.feed-action-btn[data-feed-action="openx"], .feed-action-btn[data-feed-overlay-action="openx"]').forEach(function (btn) {
-    setSvgContent(btn, getFeedActionIconSvg('link'))
+  root.querySelectorAll('.feed-action-btn[data-feed-action="open"], .feed-action-btn[data-feed-overlay-action="open"], .feed-action-btn[data-feed-action="openx"], .feed-action-btn[data-feed-overlay-action="openx"]').forEach(function (btn) {
+    setSvgContent(btn, getFeedActionIconSvg('open'))
   })
 }
 
