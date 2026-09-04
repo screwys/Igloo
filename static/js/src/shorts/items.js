@@ -5,6 +5,7 @@ import { openBookmarkMenu } from '../bookmark-menu.js'
 import { maybeMarkAspect, handleVideoTimeUpdate, toggleShortPlayback, setSlideshowIndex, stepSlideshow, syncRenderedShortVideoLoop } from './playback.js'
 import { attachShortVideoDebug } from './debug.js'
 import { normalizeVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
+import { createFeedVideoControls, bindFeedVideoControls } from '../feed/video-controls.js'
 
 var _state = null
 var _fns = null
@@ -85,7 +86,7 @@ function toggleMomentFullscreen(entry) {
 function applyShortMediaPreferences() {
   var volume = normalizeVolume(_state.volume, 1)
   var rate = Number(_state.playbackRate) > 0 ? Number(_state.playbackRate) : 1
-  document.querySelectorAll('#shorts-container video, #shorts-container audio').forEach(function (media) {
+  document.querySelectorAll('#shorts-container video, #shorts-container audio, #mini-player-media-host video').forEach(function (media) {
     media.volume = volume
     media.muted = !!_state.muted
     media.playbackRate = rate
@@ -125,20 +126,49 @@ function setShortPlaybackRate(rate) {
   })
 }
 
-function toggleMomentMiniPlayer(entry) {
+function momentSurface(entry) {
   var refs = entry && entry.refs
-  if (!refs || !refs.wrapper || !refs.video) return false
-  var manager = null
-  try { manager = window.top && window.top.IglooMiniPlayer } catch (_) {}
-  if (!manager || typeof manager.toggleSurface !== 'function') return false
-  return manager.toggleSurface({
+  if (!refs || !refs.wrapper || !refs.video) return null
+  return {
     element: refs.wrapper,
     video: refs.video,
     button: refs.miniPlayerBtn,
     title: String(entry.data && (entry.data.channelName || entry.data.title) || '').trim() || t('mini_player_title', 'Mini player'),
     kind: 'moments',
     homeURL: window.location.pathname + window.location.search,
-  }) !== false
+    onNext: function () {
+      if (_state && _state.storyMode) {
+        if (_fns && typeof _fns.goStoryNext === 'function') _fns.goStoryNext()
+      } else {
+        if (_fns && typeof _fns.goNext === 'function') _fns.goNext({ explicit: true })
+      }
+    },
+    onPrev: function () {
+      if (_state && _state.storyMode) {
+        if (_fns && typeof _fns.goStoryPrev === 'function') _fns.goStoryPrev()
+      } else {
+        if (_fns && typeof _fns.goPrev === 'function') _fns.goPrev({ explicit: true })
+      }
+    },
+  }
+}
+
+export function dockMomentMiniPlayer(entry) {
+  var surface = momentSurface(entry)
+  if (!surface) return false
+  var manager = null
+  try { manager = window.top && window.top.IglooMiniPlayer } catch (_) {}
+  if (!manager || typeof manager.enterSurface !== 'function') return false
+  return manager.enterSurface(surface) !== false
+}
+
+function toggleMomentMiniPlayer(entry) {
+  var surface = momentSurface(entry)
+  if (!surface) return false
+  var manager = null
+  try { manager = window.top && window.top.IglooMiniPlayer } catch (_) {}
+  if (!manager || typeof manager.toggleSurface !== 'function') return false
+  return manager.toggleSurface(surface) !== false
 }
 
 function shortShareUrl(entryData) {
@@ -960,6 +990,53 @@ export function makeShortItem(entryData, existingEl) {
     video.muted = _state.muted
     video.volume = _state.volume
     video.playbackRate = _state.playbackRate
+
+    var miniControls = createFeedVideoControls({ mini: false, cinema: false, autoplay: true })
+    miniControls.classList.add('shorts-mini-controls')
+    wrapper.appendChild(miniControls)
+    refs.miniControls = miniControls
+    bindFeedVideoControls(wrapper, video, {
+      mini: false,
+      cinema: false,
+      autoplay: true,
+      volumeKey: 'shortsVolume',
+      getAutoplay: function () {
+        return autoAdvanceEnabled()
+      },
+      onAutoplayToggle: function () {
+        _state.autoPlayNext = !_state.autoPlayNext
+        try { localStorage.setItem('shortsAutoPlayNext', _state.autoPlayNext) } catch (_) {}
+        _state.items.forEach(function (e) {
+          var a = e && e.refs && e.refs.slideshow && e.refs.slideshow.audio
+          if (a) a.loop = !_state.autoPlayNext
+        })
+        syncRenderedShortVideoLoop()
+        if (_fns && typeof _fns.updateCurrentActionButtons === 'function') {
+          _fns.updateCurrentActionButtons()
+        }
+        showToast(tf('shorts_autoplay_next_state', 'Auto-play next short: %1', _state.autoPlayNext ? t('state_on', 'ON') : t('state_off', 'OFF')))
+      },
+      onVolumeChange: function (vol, muted) {
+        _state.volume = vol
+        _state.muted = muted
+        try {
+          localStorage.setItem('shortsVolume', vol)
+          localStorage.setItem('shortsMuted', muted)
+        } catch (_) {}
+        applyShortMediaPreferences()
+        if (_fns && typeof _fns.updateTopControls === 'function') {
+          _fns.updateTopControls()
+        }
+      },
+      onRateChange: function (rate) {
+        _state.playbackRate = rate
+        try { localStorage.setItem('shortsPlaybackRate', rate) } catch (_) {}
+        applyShortMediaPreferences()
+      },
+      onFullscreen: function () {
+        toggleMomentFullscreen(entryObj)
+      },
+    })
     video.addEventListener('ended', function () {
       if (autoAdvanceEnabled()) _fns.goNext()
       else {

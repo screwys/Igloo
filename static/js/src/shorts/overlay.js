@@ -2,7 +2,7 @@
 
 import { pauseAllShorts } from './playback.js'
 import { setSlideshowIndex, startSlideshowPlayback } from './playback.js'
-import { t, tf } from '../utils.js'
+import { materialIconMarkup, t, tf } from '../utils.js'
 import { recordShortsDebugEvent } from './debug.js'
 
 var _state = null
@@ -247,7 +247,11 @@ function revealShortVideoIfReady(entry, video) {
 
 function playShortVideo(entry, video) {
   if (!entry || !video) return
-  if (!_state.overlayOpen) return
+  var manager = null
+  try { manager = window.top && window.top.IglooMiniPlayer } catch (_) {}
+  var isMini = manager && typeof manager.isMini === 'function' && manager.isMini() &&
+    typeof manager.currentKind === 'function' && manager.currentKind() === 'moments'
+  if (!_state.overlayOpen && !isMini) return
   var current = currentData()
   if (!current || current.id !== entry.data.id) return
   recordShortsDebugEvent(entry, 'play:attempt')
@@ -520,6 +524,18 @@ export function updateCurrentActionButtons() {
       setSvgContent(refs.autoplayBtn, _fns.iconSvg('autoplay', autoAdvance && isCurrent))
       refs.autoplayBtn.title = tf('shorts_autoplay_next_state', 'Auto-play next short: %1$s', autoAdvance ? t('state_on', 'ON') : t('state_off', 'OFF'))
     }
+    if (refs.miniControls) {
+      var miniAutoplay = refs.miniControls.querySelector('[data-feed-video-autoplay]')
+      if (miniAutoplay) {
+        var autoAdvanceMini = _state.storyMode || _state.autoPlayNext
+        miniAutoplay.classList.toggle('active', autoAdvanceMini)
+        miniAutoplay.setAttribute('aria-pressed', autoAdvanceMini ? 'true' : 'false')
+        var miniLabel = tf('shorts_autoplay_next_state', 'Auto-play next short: %1', autoAdvanceMini ? t('state_on', 'ON') : t('state_off', 'OFF'))
+        miniAutoplay.setAttribute('title', miniLabel)
+        miniAutoplay.setAttribute('aria-label', miniLabel)
+        setSvgContent(miniAutoplay, materialIconMarkup(autoAdvanceMini ? 'PlayCircle' : 'PlayCircleOutline'))
+      }
+    }
     if (refs.bookmarkBtn) {
       refs.bookmarkBtn.classList.toggle('active', !!entry.data.bookmarked)
       setSvgContent(refs.bookmarkBtn, _fns.iconSvg('bookmark', !!entry.data.bookmarked))
@@ -583,6 +599,15 @@ export function activateIndex(index, options) {
   updateUrlForCurrent()
   requestMoreIfNeeded()
   updateCurrentActionButtons()
+
+  var manager = null
+  try { manager = window.top && window.top.IglooMiniPlayer } catch (_) {}
+  if (manager && typeof manager.isMini === 'function' && manager.isMini() &&
+      typeof manager.currentKind === 'function' && manager.currentKind() === 'moments') {
+    if (_fns && typeof _fns.dockMomentMiniPlayer === 'function') {
+      _fns.dockMomentMiniPlayer(entry)
+    }
+  }
 
   warmNearbyShortVideos(index)
   if (opts.play !== false) playEntryFromStart(entry)

@@ -187,6 +187,8 @@ async function loadOverlay() {
     },
     t(_key, fallback) { return fallback; },
     tf(_key, fallback) { return fallback; },
+    materialIconMarkup(name) { return '<svg>' + name + '</svg>'; },
+    setSvgContent(el, markup) { if (el) el.innerHTML = markup; },
     recordShortsDebugEvent() {},
   });
   context.__calls = calls;

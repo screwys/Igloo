@@ -22,7 +22,8 @@ import {
   initItems,
   iconSvg,
   parseCardData,
-  makeShortItem
+  makeShortItem,
+  dockMomentMiniPlayer
 } from './items.js'
 import {
   readMomentsCursor,
@@ -1769,6 +1770,7 @@ if (layout) {
       beginOpenRequest: beginOpenRequest,
       getShortsInfiniteController: getShortsInfiniteController,
       makeShortItem: makeShortItem,
+      dockMomentMiniPlayer: dockMomentMiniPlayer,
       parseCardData: parseCardData,
       iconSvg: iconSvg,
       exitStoryMode: exitStoryMode,
@@ -1783,7 +1785,8 @@ if (layout) {
       advanceAfterMomentAction: advanceAfterMomentAction,
       openStoryChannel: openStoryChannel,
       goStoryNext: goStoryNextManual,
-      goStoryPrev: goStoryPrevManual
+      goStoryPrev: goStoryPrevManual,
+      updateTopControls: updateTopControls
     })
 
     // ── Buttons + events ──
