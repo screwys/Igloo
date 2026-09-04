@@ -2866,6 +2866,23 @@
     });
   }
 
+  function animateActionButton(btn, isUnlike) {
+    if (!btn) return;
+    if (isUnlike) {
+      btn.classList.remove("animating");
+      btn.classList.remove("animating-unlike");
+      void btn.offsetWidth;
+      btn.classList.add("animating-unlike");
+      setTimeout(function () { btn.classList.remove("animating-unlike"); }, 280);
+    } else {
+      btn.classList.remove("animating-unlike");
+      btn.classList.remove("animating");
+      void btn.offsetWidth;
+      btn.classList.add("animating");
+      setTimeout(function () { btn.classList.remove("animating"); }, 550);
+    }
+  }
+
   function syncChannelFollowState(channelID, following) {
     var cid = String(channelID || '').trim();
     if (!cid) return;
@@ -2875,6 +2892,7 @@
       btn.setAttribute('data-following', isFollowing ? '1' : '0');
       btn.classList.toggle('following', isFollowing);
       btn.textContent = isFollowing ? t('action_following', 'Following') : t('action_follow', 'Follow');
+      animateActionButton(btn, !isFollowing);
     });
     doc.querySelectorAll('[data-feed-menu-action="unfollow"][data-feed-channel-id]').forEach(function (btn) {
       if (String(btn.getAttribute('data-feed-channel-id') || '').trim() !== cid) return;
@@ -2885,6 +2903,7 @@
       btn.setAttribute('data-following', isFollowing ? '1' : '0');
       btn.classList.toggle('following', isFollowing);
       btn.textContent = isFollowing ? t('action_following', 'Following') : t('action_follow', 'Follow');
+      animateActionButton(btn, !isFollowing);
     });
     doc.querySelectorAll('[data-profile-card-menu-action="unfollow"][data-profile-card-channel-id]').forEach(function (btn) {
       if (String(btn.getAttribute('data-profile-card-channel-id') || '').trim() !== cid) return;

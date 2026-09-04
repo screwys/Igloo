@@ -1,4 +1,4 @@
-import { apiFetch, showToast, copyText, escapeHtml, askConfirm, formatRelative, formatAbsolute, materialIconMarkup, setSvgContent, t, tf, toFxTwitterUrl } from '../utils.js'
+import { apiFetch, showToast, copyText, escapeHtml, askConfirm, formatRelative, formatAbsolute, materialIconMarkup, setSvgContent, animateFeedActionButton, t, tf, toFxTwitterUrl } from '../utils.js'
 import { openBookmarkMenu, closeBookmarkMenu, isBookmarkMenuOpen } from '../bookmark-menu.js'
 import { initSponsorBlock } from './sponsorblock.js'
 import { initPreviewHover } from './preview.js'
@@ -639,11 +639,39 @@ if (root && video) {
   // --- Channel inline actions ---
 
   function setupChannelInlineActions() {
+    root.addEventListener('click', function (e) {
+      const starBtn = e.target && e.target.closest ? e.target.closest('#player-channel-star-btn') : null
+      if (starBtn) {
+        animateFeedActionButton(starBtn, starBtn.classList.contains('active'))
+      }
+    })
+
+    doc.body.addEventListener('htmx:afterSwap', function (e) {
+      const elt = e.detail && e.detail.elt
+      if (elt && elt.id === 'player-channel-star-btn') {
+        const isStarred = elt.classList.contains('active')
+        animateFeedActionButton(elt, !isStarred)
+      }
+    })
+
+    doc.body.addEventListener('starChanged', function (e) {
+      const cid = e.detail && e.detail.channelId
+      const starred = !!(e.detail && e.detail.starred)
+      if (cid && cid === channelId) {
+        const starBtn = doc.getElementById('player-channel-star-btn')
+        if (starBtn) {
+          starBtn.classList.toggle('active', starred)
+          animateFeedActionButton(starBtn, !starred)
+        }
+      }
+    })
+
     // Star button is HTMX-driven via PlayerStarButton templ component.
     if (channelSubBtn && channelId) {
       channelSubBtn.addEventListener('click', function () {
         if (channelSubBtn.disabled) return
         channelSubBtn.disabled = true
+        animateFeedActionButton(channelSubBtn, false)
         apiFetch('/api/channels/' + encodeURIComponent(channelId) + '/subscribe', { method: 'POST' })
           .then(function () {
             showToast(t('player_subscribed_to_channel', 'Subscribed to channel'))
@@ -679,6 +707,7 @@ if (root && video) {
         var displayName = (channelLink && channelLink.textContent || '').trim() || channelId
         var doUnsub = function () {
           channelUnsubBtn.disabled = true
+          animateFeedActionButton(channelUnsubBtn, true)
           channelUnsubBtn.style.visibility = 'hidden'
           apiFetch('/api/mutations/follow', {
             method: 'POST',

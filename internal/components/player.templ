@@ -150,10 +150,13 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							@playerPinButton(p, video)
 							@playerShareButton(p)
 							@playerBookmarkButton(p, video.BookmarkCategoryID != nil)
+							if playerPlatform(video.Platform) == "youtube" {
+								@playerOpenButton(p, videoWebpageURL(video))
+							}
+							@playerDeleteButton(p)
 							if video.Platform != "youtube" {
 								@playerAutoplayButton(p)
 							}
-							@playerDeleteButton(p)
 						</div>
 						if video.Metadata != nil {
 							<div class="player-stats">
@@ -418,6 +421,21 @@ func playerBookmarkBtnClass(bookmarked bool) string {
 		return "player-btn toggle-btn active"
 	}
 	return "player-btn toggle-btn"
+}
+
+// playerOpenButton renders the open in external platform (e.g. YouTube) button.
+templ playerOpenButton(p PageProps, url string) {
+	<a
+		id="player-open-btn"
+		class="player-btn"
+		href={ templ.SafeURL(url) }
+		target="_blank"
+		rel="noopener noreferrer"
+		title={ L(p, "action_open_externally", "Open externally") }
+		aria-label={ L(p, "action_open_externally", "Open externally") }
+	>
+		@MaterialIcon("OpenInNew", "")
+	</a>
 }
 
 // playerAutoplayButton renders the autoplay-next toggle button.

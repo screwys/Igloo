@@ -714,6 +714,7 @@ function syncFollowButtons(channelId, following) {
     btn.setAttribute('data-following', following ? '1' : '0')
     btn.classList.toggle('following', !!following)
     btn.textContent = following ? t('action_following', 'Following') : t('action_follow', 'Follow')
+    animateFeedActionButton(btn, !following)
   })
   document.querySelectorAll('[data-feed-menu-action="unfollow"][data-feed-channel-id]').forEach(function (btn) {
     if (String(btn.getAttribute('data-feed-channel-id') || '').trim() !== cid) return
@@ -1495,6 +1496,7 @@ document.body.addEventListener('starChanged', function (e) {
     btn.classList.toggle('active', starred)
     btn.textContent = starred ? '\u2605' : '\u2606'
     btn.title = starred ? t('action_unfavourite_account', 'Unfavourite account') : t('action_favourite_account', 'Favourite account')
+    animateFeedActionButton(btn, !starred)
   })
 })
 
@@ -1508,6 +1510,10 @@ document.body.addEventListener('followChanged', function (e) {
 
 document.body.addEventListener('htmx:beforeSend', function (e) {
   var elt = e.detail && e.detail.elt
+  if (elt && elt.classList && elt.classList.contains('feed-star-btn')) {
+    animateFeedActionButton(elt, elt.classList.contains('active'))
+    return
+  }
   if (!elt || elt.getAttribute('data-feed-action') !== 'heart') return
   var card = elt.closest('[data-feed-item]')
   if (!card) return

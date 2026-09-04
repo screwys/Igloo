@@ -105,6 +105,10 @@ func videoWebpageURL(v model.Video) string {
 	}
 	// Construct URL from platform + video ID when metadata is missing (e.g. bookmark stubs).
 	switch v.Platform {
+	case "youtube", "":
+		if v.VideoID != "" {
+			return "https://www.youtube.com/watch?v=" + v.VideoID
+		}
 	case "twitter":
 		handle, _ := strings.CutPrefix(v.ChannelID, "twitter_")
 		if handle == "" {
