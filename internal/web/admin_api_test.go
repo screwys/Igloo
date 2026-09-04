@@ -388,6 +388,19 @@ func TestWindowsUpdateCheckReportsUnavailableOutsidePackagedWindowsBuild(t *test
 	}
 }
 
+func TestWindowsUpdateApplyReportsUnavailableOutsidePackagedWindowsBuild(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/windows-update/apply", nil)
+	req = req.WithContext(contextWithUser(req, "admin", "admin"))
+	rec := httptest.NewRecorder()
+
+	srv.handleWindowsUpdateApply(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandleSettingsFormRequiresAdmin(t *testing.T) {
 	srv := newTestServer(t)
 	if err := srv.db.SetSetting("translate_api_key", "sample-secret-key"); err != nil {

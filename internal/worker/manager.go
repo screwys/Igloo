@@ -129,6 +129,14 @@ func (m *Manager) CheckWindowsUpdateNow() bool {
 	return true
 }
 
+func (m *Manager) ApplyWindowsUpdateNow() bool {
+	if m == nil || m.windowsUpdater == nil {
+		return false
+	}
+	m.windowsUpdater.ApplyNow()
+	return true
+}
+
 // sponsorblockFetcher is the narrow interface the worker needs from
 // sponsorblock.Client. Kept local so tests can stub it without touching the
 // real package.

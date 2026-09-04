@@ -126,6 +126,7 @@
     <string name="action_unstar_channel">Unstar channel</string>
     <string name="action_unsubscribe">Unsubscribe</string>
     <string name="action_unsubscribe_channel">Unsubscribe channel</string>
+    <string name="action_update_and_restart">Update &amp; restart</string>
     <string name="action_update_credentials">Update Credentials</string>
     <string name="action_upload_file">Upload File</string>
     <string name="action_view_logs">View logs</string>

@@ -65,6 +65,44 @@ func TestManagerAppliesOnlyNewPayloads(t *testing.T) {
 	}
 }
 
+func TestManagerCheckNowDoesNotAutoApply(t *testing.T) {
+	installer := &fakeInstaller{}
+	app := Available{
+		Manifest: Manifest{
+			MinimumAppVersion: "3.4.0",
+			App:               &Payload{Version: "3.5.0"},
+		},
+		AppURL: "https://example.test/app.zip",
+	}
+	manager := NewManager(
+		fakeSettings{"windows_update_enabled": "true"},
+		fakeSource{available: map[string]Available{"stable": app}},
+		installer,
+		"3.4.0",
+		"18",
+	)
+
+	// forced = true (simulates manual "Check now")
+	manager.check(t.Context(), true)
+
+	if len(installer.applied) != 0 {
+		t.Fatalf("manual check should not auto-apply updates, applied = %d", len(installer.applied))
+	}
+	status := manager.Status()
+	if status.AvailableApp != "3.5.0" {
+		t.Fatalf("expected available app 3.5.0, got %q", status.AvailableApp)
+	}
+
+	// Now explicitly apply
+	manager.apply(t.Context())
+	if len(installer.applied) != 1 {
+		t.Fatalf("explicit apply should install update, applied = %d", len(installer.applied))
+	}
+	if installer.applied[0].Manifest.App == nil || installer.applied[0].Manifest.App.Version != "3.5.0" {
+		t.Fatalf("applied version mismatch: %+v", installer.applied[0])
+	}
+}
+
 func TestManagerClampsConfiguredInterval(t *testing.T) {
 	manager := NewManager(fakeSettings{"windows_update_interval_hours": "999"}, fakeSource{}, &fakeInstaller{}, "3.4.0", "18")
 	if got := manager.interval().Hours(); got != 168 {

@@ -44,11 +44,15 @@
       <Exclude Files="$(var.PayloadDir)\app\current\igloo-uninstall.exe" />
     </Files>
 
-    <Component Id="IglooServiceComponent" Directory="APPCURRENT" Condition="RUNMODE = 0" Transitive="yes">
-      <File Id="IglooServiceExecutable" Source="$(var.PayloadDir)\app\current\igloo.exe" KeyPath="yes">
+    <Component Id="IglooServerExecutableComponent" Directory="APPCURRENT">
+      <File Id="IglooServerExecutable" Source="$(var.PayloadDir)\app\current\igloo.exe" KeyPath="yes">
         <fire:FirewallException Id="IglooPrivateTCP" Name="Igloo private network TCP" Port="5001" Protocol="tcp" Profile="private" Scope="localSubnet" />
         <fire:FirewallException Id="IglooPrivateUDP" Name="Igloo private network discovery" Port="5001" Protocol="udp" Profile="private" Scope="localSubnet" />
       </File>
+    </Component>
+
+    <Component Id="IglooServiceComponent" Directory="APPCURRENT" Condition="RUNMODE = 0" Transitive="yes">
+      <RegistryValue Root="HKLM" Key="Software\Igloo" Name="ServiceMode" Type="integer" Value="1" KeyPath="yes" />
       <ServiceInstall
         Id="IglooServiceInstall"
         Name="Igloo"
@@ -63,6 +67,11 @@
         <util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="restart" RestartServiceDelayInSeconds="10" />
       </ServiceInstall>
       <ServiceControl Id="IglooServiceControl" Name="Igloo" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+    </Component>
+
+    <Component Id="IglooServiceStopComponent" Directory="APPCURRENT">
+      <RegistryValue Root="HKLM" Key="Software\Igloo" Name="ServiceStopHelper" Type="integer" Value="1" KeyPath="yes" />
+      <ServiceControl Id="IglooStopExistingService" Name="Igloo" Stop="both" Wait="yes" />
     </Component>
 
     <Component Id="IglooUserExecutableComponent" Directory="APPCURRENT">
@@ -95,7 +104,7 @@
     <Component Id="IglooProgramData" Directory="DATADIR" Permanent="yes" NeverOverwrite="yes">
       <CreateFolder>
         <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
-        <util:PermissionEx User="[LogonUser]" GenericAll="yes" />
+        <util:PermissionEx User="BUILTIN\Users" GenericAll="yes" />
       </CreateFolder>
       <File Id="StateRootMarker" Source="$(var.StateMarker)" Name=".igloo-state-root" KeyPath="yes" />
     </Component>
@@ -103,7 +112,7 @@
     <Component Id="IglooConfigData" Directory="CONFIGDIR" Guid="F22B0364-10A4-4D92-89BE-BDCA8538C038" Permanent="yes" NeverOverwrite="yes">
       <CreateFolder>
         <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
-        <util:PermissionEx User="[LogonUser]" GenericAll="yes" />
+        <util:PermissionEx User="BUILTIN\Users" GenericAll="yes" />
       </CreateFolder>
     </Component>
 
@@ -114,7 +123,7 @@
     <Component Id="IglooMediaData" Directory="MEDIADIR" Permanent="yes" NeverOverwrite="yes">
       <CreateFolder>
         <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
-        <util:PermissionEx User="[LogonUser]" GenericAll="yes" />
+        <util:PermissionEx User="BUILTIN\Users" GenericAll="yes" />
       </CreateFolder>
       <File Id="MediaRootMarker" Source="$(var.MediaMarker)" Name=".igloo-media-root" KeyPath="yes" />
     </Component>
@@ -122,7 +131,7 @@
     <Component Id="IglooUpdatePermissions" Directory="INSTALLFOLDER" Guid="D5C83105-34A0-466F-9B4B-EB40E43469D0">
       <CreateFolder>
         <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
-        <util:PermissionEx User="[LogonUser]" GenericAll="yes" />
+        <util:PermissionEx User="BUILTIN\Users" GenericAll="yes" />
       </CreateFolder>
     </Component>
 

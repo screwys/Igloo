@@ -26,6 +26,7 @@ func (s *Server) registerAdminAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/theme.json", s.handleThemeJSON)
 	mux.HandleFunc("GET /api/windows-update/status", s.handleWindowsUpdateStatus)
 	mux.HandleFunc("POST /api/windows-update/check", s.handleWindowsUpdateCheck)
+	mux.HandleFunc("POST /api/windows-update/apply", s.handleWindowsUpdateApply)
 
 	// Cookies
 	mux.HandleFunc("GET /api/cookies", s.handleGetCookies)
@@ -527,6 +528,22 @@ func (s *Server) handleWindowsUpdateCheck(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if !s.workers.CheckWindowsUpdateNow() {
+		writeJSONError(w, http.StatusServiceUnavailable, "windows_update_unavailable", "Windows updates are unavailable in this build")
+		return
+	}
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = components.WindowsUpdatePanel(s.pageProps(w, r), s.workers.WindowsUpdateStatus()).Render(r.Context(), w)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"queued": true})
+}
+
+func (s *Server) handleWindowsUpdateApply(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
+	if !s.workers.ApplyWindowsUpdateNow() {
 		writeJSONError(w, http.StatusServiceUnavailable, "windows_update_unavailable", "Windows updates are unavailable in this build")
 		return
 	}

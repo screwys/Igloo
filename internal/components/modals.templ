@@ -767,6 +767,14 @@ templ WindowsUpdatePanel(p PageProps, status windowsupdate.Status) {
 					hx-swap="outerHTML"
 					disabled?={ status.Checking || status.Applying }
 				>{ L(p, "action_check_for_updates", "Check now") }</button>
+				if (status.AvailableApp != "" || status.AvailableRuntime != "") && !status.Applying {
+					<button type="button" class="btn btn-primary btn-sm"
+						hx-post="/api/windows-update/apply"
+						hx-target="#windows-update-panel"
+						hx-swap="outerHTML"
+						disabled?={ status.Checking || status.Applying }
+					>{ L(p, "action_update_and_restart", "Update & restart") }</button>
+				}
 				if status.Checking {
 					<span class="windows-update-state">{ L(p, "status_checking_for_updates", "Checking…") }</span>
 				}

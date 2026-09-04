@@ -39,11 +39,13 @@ type Manager struct {
 	currentRuntime string
 	defaultEnabled bool
 	checkNow       chan struct{}
+	applyNow       chan struct{}
 
-	mu          sync.RWMutex
-	status      Status
-	appETag     string
-	runtimeETag string
+	mu            sync.RWMutex
+	status        Status
+	appETag       string
+	runtimeETag   string
+	lastAvailable Available
 }
 
 func NewManager(settings Settings, source Source, installer Installer, currentApp, currentRuntime string) *Manager {
@@ -55,6 +57,7 @@ func NewManager(settings Settings, source Source, installer Installer, currentAp
 		currentRuntime: currentRuntime,
 		defaultEnabled: true,
 		checkNow:       make(chan struct{}, 1),
+		applyNow:       make(chan struct{}, 1),
 		status:         Status{Supported: true, CurrentApp: currentApp, CurrentRuntime: currentRuntime},
 	}
 }
@@ -67,14 +70,19 @@ func (m *Manager) Run(ctx context.Context) {
 	defer timer.Stop()
 	for {
 		forced := false
+		apply := false
 		select {
 		case <-ctx.Done():
 			return
 		case <-m.checkNow:
 			forced = true
+		case <-m.applyNow:
+			apply = true
 		case <-timer.C:
 		}
-		if forced || m.enabled() || m.runtimeEnabled() {
+		if apply {
+			m.apply(ctx)
+		} else if forced || m.enabled() || m.runtimeEnabled() {
 			m.check(ctx, forced)
 		}
 		timer.Reset(m.interval())
@@ -91,6 +99,16 @@ func (m *Manager) CheckNow() {
 	}
 }
 
+func (m *Manager) ApplyNow() {
+	if m == nil {
+		return
+	}
+	select {
+	case m.applyNow <- struct{}{}:
+	default:
+	}
+}
+
 func (m *Manager) Status() Status {
 	if m == nil {
 		return Status{}
@@ -100,59 +118,57 @@ func (m *Manager) Status() Status {
 	return m.status
 }
 
-func (m *Manager) check(ctx context.Context, forced bool) {
-	m.updateStatus(func(status *Status) {
-		status.Checking = true
-		status.LastError = ""
-	})
-	defer m.updateStatus(func(status *Status) { status.Checking = false })
+func (m *Manager) queryAvailable(ctx context.Context) (Available, error) {
+	available := Available{
+		Manifest: Manifest{
+			Schema:            ManifestSchema,
+			OS:                "windows",
+			Arch:              "amd64",
+			App:               m.lastAvailable.Manifest.App,
+			Runtime:           m.lastAvailable.Manifest.Runtime,
+			MinimumAppVersion: m.lastAvailable.Manifest.MinimumAppVersion,
+		},
+		AppURL:     m.lastAvailable.AppURL,
+		RuntimeURL: m.lastAvailable.RuntimeURL,
+	}
 
-	applyApp := m.enabled()
-	applyRuntime := m.runtimeEnabled()
-	checkApp := forced || applyApp
-	checkRuntime := forced || applyRuntime
-	available := Available{Manifest: Manifest{Schema: ManifestSchema, OS: "windows", Arch: "amd64"}}
-	if checkApp {
-		app, etag, unchanged, err := m.source.Latest(ctx, m.channel(), m.appETag)
-		if err != nil {
-			m.fail(err)
-			return
-		}
-		if !unchanged {
-			m.appETag = etag
-			available.Manifest.App = app.Manifest.App
-			available.AppURL = app.AppURL
+	app, etag, unchanged, err := m.source.Latest(ctx, m.channel(), m.appETag)
+	if err != nil {
+		return available, err
+	}
+	if !unchanged {
+		m.appETag = etag
+		available.Manifest.App = app.Manifest.App
+		available.AppURL = app.AppURL
+		if app.Manifest.MinimumAppVersion != "" {
 			available.Manifest.MinimumAppVersion = app.Manifest.MinimumAppVersion
 		}
 	}
-	if checkRuntime {
-		runtimeAvailable, etag, unchanged, err := m.source.Latest(ctx, "runtime", m.runtimeETag)
-		if err != nil {
-			m.fail(err)
-			return
-		}
-		if !unchanged {
-			m.runtimeETag = etag
-			available.Manifest.Runtime = runtimeAvailable.Manifest.Runtime
-			available.RuntimeURL = runtimeAvailable.RuntimeURL
-			if runtimeAvailable.Manifest.MinimumAppVersion != "" {
-				available.Manifest.MinimumAppVersion = runtimeAvailable.Manifest.MinimumAppVersion
-			}
+
+	runtimeAvailable, etag, unchanged, err := m.source.Latest(ctx, "runtime", m.runtimeETag)
+	if err != nil {
+		return available, err
+	}
+	if !unchanged {
+		m.runtimeETag = etag
+		available.Manifest.Runtime = runtimeAvailable.Manifest.Runtime
+		available.RuntimeURL = runtimeAvailable.RuntimeURL
+		if runtimeAvailable.Manifest.MinimumAppVersion != "" {
+			available.Manifest.MinimumAppVersion = runtimeAvailable.Manifest.MinimumAppVersion
 		}
 	}
-	m.updateStatus(func(status *Status) { status.LastCheckedAt = time.Now().UTC() })
-	if available.Manifest.App == nil && available.Manifest.Runtime == nil {
-		return
-	}
+
+	m.lastAvailable = available
+
 	needsApp := available.Manifest.App != nil && NewerVersion(available.Manifest.App.Version, m.currentApp)
 	needsRuntime := available.Manifest.Runtime != nil && NewerVersion(available.Manifest.Runtime.Version, m.currentRuntime)
 	effectiveApp := m.currentApp
-	if needsApp && applyApp {
+	if needsApp {
 		effectiveApp = available.Manifest.App.Version
 	}
 	if needsRuntime && NewerVersion(available.Manifest.MinimumAppVersion, effectiveApp) {
 		needsRuntime = false
-		m.fail(fmt.Errorf("Windows runtime %s requires Igloo %s", available.Manifest.Runtime.Version, available.Manifest.MinimumAppVersion))
+		return available, fmt.Errorf("Windows runtime %s requires Igloo %s", available.Manifest.Runtime.Version, available.Manifest.MinimumAppVersion)
 	}
 	if !needsApp {
 		available.Manifest.App = nil
@@ -162,17 +178,41 @@ func (m *Manager) check(ctx context.Context, forced bool) {
 		available.Manifest.Runtime = nil
 		available.RuntimeURL = ""
 	}
+	return available, nil
+}
+
+func (m *Manager) check(ctx context.Context, forced bool) {
 	m.updateStatus(func(status *Status) {
+		status.Checking = true
+		status.LastError = ""
+	})
+	defer m.updateStatus(func(status *Status) { status.Checking = false })
+
+	available, err := m.queryAvailable(ctx)
+	if err != nil {
+		m.fail(err)
+		return
+	}
+	m.updateStatus(func(status *Status) {
+		status.LastCheckedAt = time.Now().UTC()
 		if available.Manifest.App != nil {
 			status.AvailableApp = available.Manifest.App.Version
+		} else {
+			status.AvailableApp = ""
 		}
 		if available.Manifest.Runtime != nil {
 			status.AvailableRuntime = available.Manifest.Runtime.Version
+		} else {
+			status.AvailableRuntime = ""
 		}
 	})
-	if !needsApp && !needsRuntime {
+
+	if forced {
 		return
 	}
+
+	applyApp := m.enabled()
+	applyRuntime := m.runtimeEnabled()
 	if !applyApp {
 		available.Manifest.App = nil
 		available.AppURL = ""
@@ -190,6 +230,31 @@ func (m *Manager) check(ctx context.Context, forced bool) {
 	}
 	m.updateStatus(func(status *Status) { status.Applying = true })
 	defer m.updateStatus(func(status *Status) { status.Applying = false })
+	if err := m.installer.Apply(ctx, available); err != nil {
+		m.fail(fmt.Errorf("apply Windows update: %w", err))
+		return
+	}
+}
+
+func (m *Manager) apply(ctx context.Context) {
+	if m.installer == nil {
+		m.fail(fmt.Errorf("Windows update installer is unavailable"))
+		return
+	}
+	m.updateStatus(func(status *Status) {
+		status.Applying = true
+		status.LastError = ""
+	})
+	defer m.updateStatus(func(status *Status) { status.Applying = false })
+
+	available, err := m.queryAvailable(ctx)
+	if err != nil {
+		m.fail(err)
+		return
+	}
+	if available.Manifest.App == nil && available.Manifest.Runtime == nil {
+		return
+	}
 	if err := m.installer.Apply(ctx, available); err != nil {
 		m.fail(fmt.Errorf("apply Windows update: %w", err))
 		return

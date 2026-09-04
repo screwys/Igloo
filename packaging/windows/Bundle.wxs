@@ -12,6 +12,7 @@
     <Variable Name="AutomaticUpdates" Type="numeric" Value="1" Persisted="yes" bal:Overridable="yes" />
     <Variable Name="DesktopShortcut" Type="numeric" Value="1" Persisted="yes" bal:Overridable="yes" />
     <Variable Name="UninstallMode" Type="numeric" Value="0" bal:Overridable="yes" />
+    <Variable Name="EulaAcceptCheckbox" Type="numeric" Value="0" />
     <util:CloseApplication Id="CloseIglooUser" Target="igloo-user.exe" CloseMessage="yes" ElevatedCloseMessage="yes" Timeout="10" TerminateProcess="1" RebootPrompt="no" />
     <util:CloseApplication Id="CloseIglooConsole" Target="igloo.exe" CloseMessage="yes" ElevatedCloseMessage="yes" Timeout="10" TerminateProcess="1" RebootPrompt="no" />
     <BootstrapperApplication>
@@ -19,7 +20,7 @@
         Theme="hyperlinkLicense"
         ThemeFile="$(var.InstallerTheme)"
         LogoFile="$(var.InstallerLogo)"
-        LicenseUrl=""
+        LicenseUrl="https://github.com/screwys/igloo/blob/main/LICENSE"
         ShowVersion="yes"
         LaunchTarget="[InstallFolder]app\current\igloo-launch.exe" />
     </BootstrapperApplication>
