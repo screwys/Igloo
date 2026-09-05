@@ -16,6 +16,21 @@ function updateNavigation(root) {
   })
 }
 
+function layoutMediaRow(root) {
+  const row = root.querySelector('.feed-media-row')
+  const viewport = root.querySelector('[data-feed-media-scroll]')
+  if (row) {
+    row.style.removeProperty('--feed-row-height')
+    const width = row.getBoundingClientRect().width
+    const overflow = width - viewport.clientWidth
+    // Fit small remainders without cropping or changing image proportions.
+    if (overflow > 0 && overflow <= width * 0.15) {
+      row.style.setProperty('--feed-row-height', `calc((${viewport.clientWidth}px - var(--feed-row-gaps)) / var(--feed-row-ratio))`)
+    }
+  }
+  updateNavigation(root)
+}
+
 export function initMediaRows(scope) {
   scope.querySelectorAll('.feed-media-row-container').forEach(root => {
     if (root.dataset.mediaRowReady) return
@@ -48,7 +63,7 @@ export function initMediaRows(scope) {
       move(event.key === 'ArrowRight' ? 1 : -1)
     })
     viewport.addEventListener('scroll', () => updateNavigation(root), { passive: true })
-    updateNavigation(root)
+    layoutMediaRow(root)
   })
 }
 
@@ -57,6 +72,6 @@ export function initMediaRows(scope) {
 const content = document.getElementById('main-content')
 if (content) {
   new ResizeObserver(() => {
-    content.querySelectorAll('.feed-media-row-container').forEach(updateNavigation)
+    content.querySelectorAll('.feed-media-row-container').forEach(layoutMediaRow)
   }).observe(content)
 }

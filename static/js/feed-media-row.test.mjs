@@ -40,7 +40,8 @@ test('two clicks reach the end even before the first animation finishes', () => 
   let click
   const next = { dataset: { feedMediaStep: '1' }, addEventListener: (_, fn) => { click = fn } }
   const root = {
-    dataset: {}, querySelector: () => viewport, querySelectorAll: () => [next], addEventListener: () => {},
+    dataset: {}, querySelector: selector => selector === '[data-feed-media-scroll]' ? viewport : null,
+    querySelectorAll: () => [next], addEventListener: () => {},
   }
   context.initMediaRows({ querySelectorAll: () => [root] })
   click({ stopPropagation() {} })
@@ -51,4 +52,30 @@ test('two clicks reach the end even before the first animation finishes', () => 
   viewport.scrollLeft = 100
   click({ stopPropagation() {} })
   assert.equal(moves.at(-1), 404)
+})
+
+test('small remainders fit through 15 percent and return to scrolling after resize', () => {
+  let fitted = false
+  const row = {
+    style: {
+      removeProperty: () => { fitted = false },
+      setProperty: () => { fitted = true },
+    },
+    getBoundingClientRect: () => ({ width: fitted ? viewport.clientWidth : 1000 }),
+  }
+  const viewport = {
+    clientWidth: 900, scrollLeft: 0,
+    get scrollWidth() { return fitted ? this.clientWidth : 1000 },
+  }
+  const next = { dataset: { feedMediaStep: '1' } }
+  const root = {
+    querySelector: selector => selector === '.feed-media-row' ? row : viewport,
+    querySelectorAll: () => [next],
+  }
+  for (const width of [900, 850, 849, 1100, 900]) {
+    viewport.clientWidth = width
+    context.layoutMediaRow(root)
+    assert.equal(viewport.scrollWidth, width >= 850 && width < 1000 ? width : 1000)
+    assert.equal(next.hidden, width >= 850)
+  }
 })

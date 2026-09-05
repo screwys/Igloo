@@ -318,6 +318,25 @@ class NativeMainFeedSurfaceTest {
     }
 
     @Test
+    fun nativeMediaRowsFitUpToFifteenPercentOverflow() {
+        val ratios = List(3) { 0.5f }
+        // The preferred row is 1000px wide, including its two gaps.
+        assertEquals(
+            NativeMediaDimensions(282, 564),
+            nativeMultiMediaCellDimensions(ratios, 0, 850, maxHeightPx = 664, gapPx = 2),
+        )
+        assertEquals(
+            NativeMediaDimensions(332, 664),
+            nativeMultiMediaCellDimensions(ratios, 0, 849, maxHeightPx = 664, gapPx = 2),
+        )
+        val cells = ratios.indices.map { index ->
+            nativeMultiMediaCellDimensions(ratios, index, 900, maxHeightPx = 664, gapPx = 2)
+        }
+        assertTrue(cells.sumOf { it.widthPx } + 4 <= 900)
+        cells.forEach { assertEquals(it.heightPx / 2, it.widthPx) }
+    }
+
+    @Test
     fun nativeMultiMediaCellsUseTheirRenderedGridDimensions() {
         val pair = nativeMultiMediaCellDimensions(List(2) { 0.75f }, 0, 840, maxHeightPx = 520)
         val four = nativeMultiMediaCellDimensions(List(4) { 0.75f }, 0, 840, maxHeightPx = 520)

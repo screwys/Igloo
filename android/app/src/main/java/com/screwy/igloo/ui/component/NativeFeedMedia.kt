@@ -264,11 +264,16 @@ internal fun nativeMultiMediaCellDimensions(
     gapPx: Int = dp(2),
 ): NativeMediaDimensions {
     val ratio = cellAspectRatios.getOrNull(cellIndex)?.takeIf { it.isFinite() && it > 0f } ?: 1f
-    val preferredHeight = if (cellAspectRatios.size <= 2) {
-        val totalRatio = cellAspectRatios.sumOf { (it.takeIf { r -> r.isFinite() && r > 0f } ?: 1f).toDouble() }
-        ((gridWidthPx - gapPx * (cellAspectRatios.size - 1)) / totalRatio.coerceAtLeast(0.01)).toInt()
-    } else gridWidthPx
-    val rowHeight = preferredHeight.coerceAtMost(maxHeightPx).coerceAtLeast(1)
+    val totalRatio = cellAspectRatios.sumOf { (it.takeIf { r -> r.isFinite() && r > 0f } ?: 1f).toDouble() }
+    val gaps = gapPx * (cellAspectRatios.size - 1).coerceAtLeast(0)
+    val fitHeight = ((gridWidthPx - gaps) / totalRatio.coerceAtLeast(0.01)).toInt()
+    val preferredHeight = if (cellAspectRatios.size <= 2) fitHeight else gridWidthPx
+    val cappedHeight = preferredHeight.coerceAtMost(maxHeightPx).coerceAtLeast(1)
+    val rowWidth = cappedHeight * totalRatio + gaps
+    val overflow = rowWidth - gridWidthPx
+    val rowHeight = if (overflow > 0 && overflow <= rowWidth * 0.15) {
+        fitHeight.coerceAtLeast(1)
+    } else cappedHeight
     return NativeMediaDimensions(
         widthPx = (rowHeight * ratio).toInt().coerceAtLeast(1),
         heightPx = rowHeight,
