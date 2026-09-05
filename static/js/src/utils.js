@@ -209,6 +209,22 @@ export function setSvgContent(el, svgString) {
   el.appendChild(tmp.content)
 }
 
+var feedShareResetTimers = new WeakMap()
+
+export function showFeedShareSuccess(btn) {
+  if (!btn) return
+  var previousTimer = feedShareResetTimers.get(btn)
+  if (previousTimer) clearTimeout(previousTimer)
+  btn.classList.add('active')
+  setSvgContent(btn, materialIconMarkup('Check'))
+  var resetTimer = setTimeout(function () {
+    setSvgContent(btn, getFeedActionIconSvg('share'))
+    btn.classList.remove('active')
+    feedShareResetTimers.delete(btn)
+  }, 1200)
+  feedShareResetTimers.set(btn, resetTimer)
+}
+
 // makeDraggableSeekbar — click + hold-and-drag seeking for a progress bar.
 // bar: the progress container element, fill: the fill element, video: the HTMLVideoElement.
 export function makeDraggableSeekbar(bar, fill, video) {

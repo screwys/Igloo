@@ -33,7 +33,7 @@ import { openBookmarkMenu, isBookmarkMenuOpen } from '../bookmark-menu.js'
 import {
   cssEscape, apiFetch, showToast, copyText, toFxTwitterUrl, askConfirm,
   getFeedActionIconSvg, syncFeedActionIcons, setSvgContent, animateFeedActionButton,
-  stateBool, setStateBool, itemRootFromNode, t, tf
+  showFeedShareSuccess, stateBool, setStateBool, itemRootFromNode, t, tf
 } from '../utils.js'
 
 var feedList = document.getElementById('feed-list')
@@ -1005,7 +1005,10 @@ document.addEventListener('click', function (event) {
         animateFeedActionButton(actionBtn)
         var link = String(root.getAttribute('data-feed-link') || '').trim()
         var shareLink = toFxTwitterUrl(link) || link
-        copyText(shareLink).then(function () { showToast(t('toast_link_copied', 'Link copied')) }).catch(function () { showToast(t('error_copy_link_failed', 'Failed to copy link')) })
+        copyText(shareLink).then(function () {
+          showToast(t('toast_link_copied', 'Link copied'))
+          showFeedShareSuccess(actionBtn)
+        }).catch(function () { showToast(t('error_copy_link_failed', 'Failed to copy link')) })
         var shareTweetId = String(root.getAttribute('data-tweet-id') || '').trim()
         if (shareTweetId) {
 	          apiFetch('/api/feed/interaction', {
@@ -1052,7 +1055,10 @@ document.addEventListener('click', function (event) {
           var qCard = feedList && feedList.querySelector('.feed-quote-card[data-quote-tweet-id="' + cssEscape(overlayQuoteTweetId) + '"]')
           var qLink = qCard ? String(qCard.getAttribute('data-quote-link') || '').trim() : ''
           var qShareLink = toFxTwitterUrl(qLink) || qLink
-          if (qShareLink) copyText(qShareLink).then(function () { showToast(t('toast_link_copied', 'Link copied')) }).catch(function () { showToast(t('error_copy_link_failed', 'Failed to copy link')) })
+          if (qShareLink) copyText(qShareLink).then(function () {
+            showToast(t('toast_link_copied', 'Link copied'))
+            showFeedShareSuccess(overlayActionBtn)
+          }).catch(function () { showToast(t('error_copy_link_failed', 'Failed to copy link')) })
           return
         }
         if (overlayAction === 'heart') {
@@ -1103,7 +1109,10 @@ document.addEventListener('click', function (event) {
         animateFeedActionButton(overlayActionBtn)
         var oLink = String(oRoot.getAttribute('data-feed-link') || '').trim()
         var oShareLink = toFxTwitterUrl(oLink) || oLink
-        copyText(oShareLink).then(function () { showToast(t('toast_link_copied', 'Link copied')) }).catch(function () { showToast(t('error_copy_link_failed', 'Failed to copy link')) })
+        copyText(oShareLink).then(function () {
+          showToast(t('toast_link_copied', 'Link copied'))
+          showFeedShareSuccess(overlayActionBtn)
+        }).catch(function () { showToast(t('error_copy_link_failed', 'Failed to copy link')) })
         return
       }
       if (overlayAction === 'heart') {
@@ -1371,7 +1380,11 @@ document.addEventListener('keydown', function (event) {
     event.preventDefault(); event.stopPropagation()
     var sLink = String(card.getAttribute('data-feed-link') || '').trim()
     var sShareLink = toFxTwitterUrl(sLink) || sLink
-    copyText(sShareLink).then(function () { showToast(t('toast_link_copied', 'Link copied')) }).catch(function () { showToast(t('error_copy_link_failed', 'Failed to copy link')) })
+    var sShareBtn = card.querySelector('.feed-action-btn[data-feed-action="share"]')
+    copyText(sShareLink).then(function () {
+      showToast(t('toast_link_copied', 'Link copied'))
+      showFeedShareSuccess(sShareBtn)
+    }).catch(function () { showToast(t('error_copy_link_failed', 'Failed to copy link')) })
   } else if (sc.match('feed.translate', event.key)) {
     event.preventDefault(); event.stopPropagation()
     var tBtn = card.querySelector('.feed-translate-btn[data-feed-action="translate"]')
