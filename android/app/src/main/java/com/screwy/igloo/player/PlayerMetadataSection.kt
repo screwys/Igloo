@@ -15,7 +15,6 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PersonRemove
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.ThumbUp
@@ -39,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import com.screwy.igloo.R
 import com.screwy.igloo.data.Dearrow
 import com.screwy.igloo.data.stripPlatformPrefix
@@ -223,7 +223,7 @@ private fun StatsRow(
             }
             IconButton(onClick = onShare, enabled = shareEnabled) {
                 Icon(
-                    imageVector = Icons.Default.Share,
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_feed_share_24),
                     contentDescription = stringResource(R.string.action_share),
                     tint = colors.onSurfaceMuted,
                 )

@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -40,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import androidx.core.app.PictureInPictureParamsCompat
 import com.screwy.igloo.R
@@ -214,7 +214,7 @@ internal fun MomentActionSheet(
                 )
             }
             MomentActionRow(
-                icon = Icons.Default.Share,
+                icon = ImageVector.vectorResource(R.drawable.ic_feed_share_24),
                 label = stringResource(R.string.action_share),
                 onClick = {
                     onDismissRequest()
