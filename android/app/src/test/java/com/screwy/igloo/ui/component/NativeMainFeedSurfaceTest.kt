@@ -1,5 +1,8 @@
 package com.screwy.igloo.ui.component
 
+import android.content.Context
+import android.view.View
+import androidx.test.core.app.ApplicationProvider
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.text.style.ClickableSpan
@@ -27,15 +30,40 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], manifest = Config.NONE)
 class NativeMainFeedSurfaceTest {
     @Test
-    fun nativeFeedPrimaryActionsKeepStarOutOfTheLeftRow() {
+    fun nativeFeedPrimaryActionsPutThreadBeforeSavedActions() {
         assertEquals(
             listOf(
-                NativeFeedPrimaryAction.Share,
+                NativeFeedPrimaryAction.Reply,
                 NativeFeedPrimaryAction.Like,
                 NativeFeedPrimaryAction.Bookmark,
+                NativeFeedPrimaryAction.Share,
+                NativeFeedPrimaryAction.External,
             ),
             NativeFeedPrimaryActions,
         )
+    }
+
+    @Test
+    fun accountBadgeStaysBesideHandleAndLeavesRoomForFollow() {
+        val header = NativeIdentityHeaderViews(ApplicationProvider.getApplicationContext<Context>())
+        header.accountBadge.text = "🇺🇸 📱 ⓘ"
+        header.accountBadge.visibility = View.VISIBLE
+        header.follow.text = "Follow"
+        header.date.text = "· 2h"
+        fun layout(name: String) {
+            header.name.text = name
+            header.meta.text = name
+            header.root.measure(View.MeasureSpec.makeMeasureSpec(500, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+            header.root.layout(0, 0, 500, header.root.measuredHeight)
+        }
+        layout("Sample")
+        assertEquals(header.meta.right + dp(6), header.accountBadge.left)
+        assertTrue(header.follow.right <= (header.follow.parent as View).width)
+        layout("A very long display name ".repeat(20))
+        assertEquals(header.meta.right + dp(6), header.accountBadge.left)
+        assertTrue(header.date.right <= (header.date.parent as View).width)
+        assertTrue(header.follow.right <= (header.follow.parent as View).width)
     }
 
     @Test

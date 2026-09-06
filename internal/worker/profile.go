@@ -205,19 +205,21 @@ func (m *Manager) fetchProfileJob(ctx context.Context, fetch fetchFn, channelID 
 		return model.ChannelProfile{}, err
 	}
 	return model.ChannelProfile{
-		ChannelID:    channelID,
-		Platform:     profile.Platform,
-		Handle:       profile.Handle,
-		DisplayName:  profile.DisplayName,
-		Bio:          profile.Bio,
-		Website:      profile.Website,
-		Followers:    profile.Followers,
-		Following:    profile.Following,
-		Verified:     profile.Verified,
-		VerifiedType: profile.VerifiedType,
-		Protected:    profile.Protected,
-		AvatarURL:    profile.AvatarURL,
-		BannerURL:    profile.BannerURL,
+		ChannelID:          channelID,
+		Platform:           profile.Platform,
+		Handle:             profile.Handle,
+		DisplayName:        profile.DisplayName,
+		Bio:                profile.Bio,
+		Website:            profile.Website,
+		Followers:          profile.Followers,
+		Following:          profile.Following,
+		Verified:           profile.Verified,
+		VerifiedType:       profile.VerifiedType,
+		Protected:          profile.Protected,
+		AccountRegion:      profile.AccountRegion,
+		AccountDetailsJSON: profile.AccountDetailsJSON,
+		AvatarURL:          profile.AvatarURL,
+		BannerURL:          profile.BannerURL,
 	}, nil
 }
 

@@ -11,6 +11,21 @@ import kotlinx.coroutines.launch
 class FeedSettingsViewModel(
     private val prefs: PreferencesRepo,
 ) : ViewModel() {
+    val showCommunityNotes: StateFlow<Boolean> =
+        prefs.flowBool(PreferencesRepo.Keys.SHOW_X_COMMUNITY_NOTES, default = true)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
+
+    fun setShowCommunityNotes(value: Boolean) {
+        viewModelScope.launch { prefs.putBool(PreferencesRepo.Keys.SHOW_X_COMMUNITY_NOTES, value) }
+    }
+
+    val showAccountRegion: StateFlow<Boolean> =
+        prefs.flowBool(PreferencesRepo.Keys.SHOW_X_ACCOUNT_REGION, default = true)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
+
+    fun setShowAccountRegion(value: Boolean) {
+        viewModelScope.launch { prefs.putBool(PreferencesRepo.Keys.SHOW_X_ACCOUNT_REGION, value) }
+    }
 
     val includeReposts: StateFlow<Boolean> =
         prefs.flowBool(PreferencesRepo.Keys.INCLUDE_REPOSTS_DEFAULT, default = true)

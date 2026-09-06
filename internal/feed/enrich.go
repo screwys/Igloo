@@ -107,15 +107,30 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool) 
 		}
 	}
 	profilesByHandle, _ := database.GetTwitterChannelProfilesByHandles(profileLookupHandles)
+	showAccountRegion := database.BoolSetting("x_account_region_enabled")
 	for i := range items {
-		if profile, ok := profilesByHandle[model.NormalizeTwitterHandle(items[i].AuthorHandle)]; ok && profile.DisplayName != "" {
-			items[i].AuthorDisplayName = profile.DisplayName
+		items[i].AuthorAccountRegion, items[i].AuthorAccountDetailsJSON = "", ""
+		items[i].QuoteAccountRegion, items[i].QuoteAccountDetailsJSON = "", ""
+		if profile, ok := profilesByHandle[model.NormalizeTwitterHandle(items[i].AuthorHandle)]; ok {
+			if profile.DisplayName != "" {
+				items[i].AuthorDisplayName = profile.DisplayName
+			}
+			if showAccountRegion {
+				items[i].AuthorAccountRegion = profile.AccountRegion
+				items[i].AuthorAccountDetailsJSON = profile.AccountDetailsJSON
+			}
 		}
 		if profile, ok := profilesByHandle[model.NormalizeTwitterHandle(items[i].RetweetedByHandle)]; ok && profile.DisplayName != "" {
 			items[i].RetweetedByDisplayName = profile.DisplayName
 		}
-		if profile, ok := profilesByHandle[model.NormalizeTwitterHandle(items[i].QuoteAuthorHandle)]; ok && profile.DisplayName != "" {
-			items[i].QuoteAuthorDisplayName = profile.DisplayName
+		if profile, ok := profilesByHandle[model.NormalizeTwitterHandle(items[i].QuoteAuthorHandle)]; ok {
+			if profile.DisplayName != "" {
+				items[i].QuoteAuthorDisplayName = profile.DisplayName
+			}
+			if showAccountRegion {
+				items[i].QuoteAccountRegion = profile.AccountRegion
+				items[i].QuoteAccountDetailsJSON = profile.AccountDetailsJSON
+			}
 		}
 	}
 

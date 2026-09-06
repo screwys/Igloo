@@ -61,6 +61,9 @@ internal class NativeFeedChannelHeaderViewHolder(
         views.verified.visibility = if (header.isVerified) View.VISIBLE else View.GONE
         views.handle.text = header.handle.takeIf { it.isNotBlank() }?.let { "@$it" }.orEmpty()
         views.handle.visibility = if (views.handle.text.isNullOrBlank()) View.GONE else View.VISIBLE
+        val isX = header.channelId.startsWith("twitter_")
+        bindNativeAccountBadge(views.accountBadge, header.displayName,
+            header.accountRegion.takeIf { isX }, header.accountDetailsJson.takeIf { isX }, colors)
         bindHeaderBio(header, colors, callbacks)
         val linkColor = colors.channelProfileHeaderLinkColor(header.linkColorRole)
         views.website.text = header.website

@@ -53,9 +53,9 @@ func (db *DB) ListAndroidSyncFeedProjection(tweetIDs []string) (AndroidSyncFeedP
 	for _, chunk := range stringChunks(tweetIDs, androidSyncProjectionChunkSize) {
 		rows, err := db.reader().Query(`
 			SELECT fi.tweet_id,
-			       COALESCE(fi.body_text, ''), COALESCE(fi.lang, ''),
+			       COALESCE(fi.body_text, ''), COALESCE(fi.article_title, ''), COALESCE(fi.poll_json, ''), COALESCE(fi.community_note, ''), COALESCE(fi.lang, ''),
 			       COALESCE(fi.is_retweet, 0), COALESCE(fi.quote_tweet_id, ''),
-			       COALESCE(fi.quote_body_text, ''), COALESCE(fi.quote_lang, ''),
+			       COALESCE(fi.quote_body_text, ''), COALESCE(fi.quote_article_title, ''), COALESCE(fi.quote_poll_json, ''), COALESCE(fi.quote_community_note, ''), COALESCE(fi.quote_lang, ''),
 			       COALESCE(fi.quote_media_json, ''), COALESCE(fi.media_json, ''),
 			       COALESCE(fi.canonical_url, ''), COALESCE(fi.reply_to_status, ''),
 			       COALESCE(fi.is_reply, 0),
@@ -124,9 +124,9 @@ func scanAndroidSyncFeedRow(row *sql.Rows) (AndroidSyncFeedRow, error) {
 	var quotePublishedAt, publishedAt int64
 	err := row.Scan(
 		&out.Item.TweetID,
-		&out.Item.BodyText, &out.Item.Lang,
+		&out.Item.BodyText, &out.Item.ArticleTitle, &out.Item.PollJSON, &out.Item.CommunityNote, &out.Item.Lang,
 		&out.Item.IsRetweet, &out.Item.QuoteTweetID,
-		&out.Item.QuoteBodyText, &out.Item.QuoteLang, &out.Item.QuoteMediaJSON, &out.Item.MediaJSON,
+		&out.Item.QuoteBodyText, &out.Item.QuoteArticleTitle, &out.Item.QuotePollJSON, &out.Item.QuoteCommunityNote, &out.Item.QuoteLang, &out.Item.QuoteMediaJSON, &out.Item.MediaJSON,
 		&out.Item.CanonicalURL, &out.Item.ReplyToStatus,
 		&out.Item.IsReply, &out.Item.IsGhost, &quotePublishedAt,
 		&out.Item.Views, &out.Item.Likes, &out.Item.Retweets, &publishedAt,

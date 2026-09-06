@@ -183,6 +183,12 @@ func (c *Client) enrichStatuses(ctx context.Context, parsed *ParseResult) error 
 			TargetTweetID: item.TweetID,
 		}
 		if fallback, ok := c.fallbackFeedItem(ctx, item.AuthorHandle, item.CanonicalTweetID); ok {
+			if fallback.PollJSON != "" {
+				item.PollJSON = fallback.PollJSON
+			}
+			if fallback.CommunityNote != "" {
+				item.CommunityNote = fallback.CommunityNote
+			}
 			if fallback.QuoteTweetID != "" {
 				copyQuoteFields(item, fallback)
 			}
@@ -231,6 +237,27 @@ func applyFallbackDetails(item *FeedItem, fallback FeedItem) {
 	if item == nil {
 		return
 	}
+	if fallback.PollJSON != "" {
+		item.PollJSON = fallback.PollJSON
+	}
+	if fallback.CommunityNote != "" {
+		item.CommunityNote = fallback.CommunityNote
+	}
+	if item.QuoteTweetID == fallback.QuoteTweetID {
+		if fallback.QuotePollJSON != "" {
+			item.QuotePollJSON = fallback.QuotePollJSON
+		}
+		if fallback.QuoteCommunityNote != "" {
+			item.QuoteCommunityNote = fallback.QuoteCommunityNote
+		}
+	}
+	if item.ArticleTitle == "" && fallback.ArticleTitle != "" {
+		item.ArticleTitle = fallback.ArticleTitle
+		item.BodyText = fallback.BodyText
+		item.MediaJSON = fallback.MediaJSON
+		item.Media = fallback.Media
+		item.ContentHash = fallback.ContentHash
+	}
 	if item.ReplyToStatus == "" {
 		item.ReplyToStatus = fallback.ReplyToStatus
 	}
@@ -246,7 +273,7 @@ func applyFallbackDetails(item *FeedItem, fallback FeedItem) {
 		item.MediaJSON = fallback.MediaJSON
 		item.Media = fallback.Media
 	}
-	if item.QuoteTweetID == "" {
+	if item.QuoteTweetID == "" || (item.QuoteTweetID == fallback.QuoteTweetID && item.QuoteArticleTitle == "" && fallback.QuoteArticleTitle != "") {
 		copyQuoteFields(item, fallback)
 	}
 }
@@ -257,6 +284,9 @@ func copyQuoteFields(dst *FeedItem, src FeedItem) {
 	dst.QuoteAuthorDisplayName = src.QuoteAuthorDisplayName
 	dst.QuoteAuthorAvatarURL = src.QuoteAuthorAvatarURL
 	dst.QuoteBodyText = src.QuoteBodyText
+	dst.QuoteArticleTitle = src.QuoteArticleTitle
+	dst.QuotePollJSON = src.QuotePollJSON
+	dst.QuoteCommunityNote = src.QuoteCommunityNote
 	dst.QuoteLang = src.QuoteLang
 	dst.QuotePublishedAt = src.QuotePublishedAt
 	dst.QuoteMediaJSON = src.QuoteMediaJSON
@@ -277,6 +307,10 @@ func feedItemFromFallbackTweet(tweet *fxtwitter.Tweet, sourceHandle string) Feed
 		source = author
 	}
 	media := trustedMediaFromJSON(tweet.MediaJSON)
+	body := tweet.Text
+	if tweet.ArticleTitle == "" {
+		body = stripTrailingTcoURL(body)
+	}
 	publishedAt := timePtr(tweet.CreatedAt)
 	now := time.Now().UTC()
 	item := FeedItem{
@@ -285,7 +319,10 @@ func feedItemFromFallbackTweet(tweet *fxtwitter.Tweet, sourceHandle string) Feed
 		AuthorHandle:      author,
 		AuthorDisplayName: tweet.AuthorDisplayName,
 		AuthorAvatarURL:   model.CleanFeedAvatarURL(tweet.AuthorAvatarURL),
-		BodyText:          stripTrailingTcoURL(tweet.Text),
+		BodyText:          body,
+		ArticleTitle:      tweet.ArticleTitle,
+		PollJSON:          tweet.PollJSON,
+		CommunityNote:     tweet.CommunityNote,
 		Lang:              tweet.Lang,
 		MediaJSON:         mediaJSON(media),
 		CanonicalURL:      "https://x.com/" + author + "/status/" + tweet.ID,
@@ -321,7 +358,13 @@ func applyFallbackQuote(item *FeedItem, quote *fxtwitter.Tweet) {
 	item.QuoteAuthorHandle = author
 	item.QuoteAuthorDisplayName = quote.AuthorDisplayName
 	item.QuoteAuthorAvatarURL = model.CleanFeedAvatarURL(quote.AuthorAvatarURL)
-	item.QuoteBodyText = stripTrailingTcoURL(quote.Text)
+	item.QuoteBodyText = quote.Text
+	if quote.ArticleTitle == "" {
+		item.QuoteBodyText = stripTrailingTcoURL(quote.Text)
+	}
+	item.QuoteArticleTitle = quote.ArticleTitle
+	item.QuotePollJSON = quote.PollJSON
+	item.QuoteCommunityNote = quote.CommunityNote
 	item.QuoteLang = quote.Lang
 	if language.IsUnknown(item.QuoteLang) {
 		item.QuoteLang = DetectLang(item.QuoteBodyText)
@@ -485,6 +528,7 @@ func galleryDLArgs(rawURL string, limit int) []string {
 		"-o", "extractor.twitter.text-tweets=true",
 		"-o", "extractor.twitter.retweets=true",
 		"-o", "extractor.twitter.quoted=true",
+		"-o", "extractor.twitter.articles=meta,html,cover,media",
 		"--range", "1-" + strconv.Itoa(limit),
 		rawURL,
 	}

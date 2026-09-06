@@ -31,6 +31,41 @@ func TestEnrichMediaStatus(t *testing.T) {
 	}
 }
 
+func TestEnrichAccountRegionRespectsDisplaySetting(t *testing.T) {
+	d := openWritableFeedTestDB(t)
+	for _, handle := range []string{"sample_author", "sample_quote"} {
+		if err := d.UpsertChannelProfile(model.ChannelProfile{
+			ChannelID: "twitter_" + handle, Platform: "twitter", Handle: handle,
+			DisplayName: "Sample", AccountRegion: "Japan",
+			AccountDetailsJSON: `{"source":"Japan App Store"}`,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	item := model.FeedItem{TweetID: "1001", AuthorHandle: "sample_author", QuoteAuthorHandle: "sample_quote"}
+	for _, enabled := range []bool{true, false, true} {
+		value, want := "false", ""
+		if enabled {
+			value, want = "true", "Japan"
+		}
+		if err := d.SetSetting("x_account_region_enabled", value); err != nil {
+			t.Fatal(err)
+		}
+		got := EnrichFeedItems(d, []model.FeedItem{item})
+		if len(got) != 1 || got[0].AuthorAccountRegion != want || got[0].QuoteAccountRegion != want {
+			t.Fatalf("region enabled=%v: %+v", enabled, got)
+		}
+		wantDetails := ""
+		if enabled {
+			wantDetails = `{"source":"Japan App Store"}`
+		}
+		if got[0].AuthorAccountDetailsJSON != wantDetails || got[0].QuoteAccountDetailsJSON != wantDetails {
+			t.Fatalf("details enabled=%v: %+v", enabled, got)
+		}
+		item = got[0]
+	}
+}
+
 func TestEnrichMediaStatusCDN(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:   "456",

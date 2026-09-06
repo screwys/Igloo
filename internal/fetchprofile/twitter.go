@@ -2,6 +2,7 @@ package fetchprofile
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -33,20 +34,26 @@ func fetchTwitterWithClient(ctx context.Context, handle string, fx *fxtwitter.Cl
 
 	// Twitter banner URLs need the size suffix for the card-sized crop.
 	bannerURL := fxtwitter.UpgradeBannerURL(u.BannerURL)
+	accountDetails, err := json.Marshal(u.AccountDetails)
+	if err != nil {
+		return nil, fmt.Errorf("encode account details: %w", err)
+	}
 
 	return &Profile{
-		ChannelID:    "twitter_" + returnedHandle,
-		Platform:     "twitter",
-		Handle:       returnedHandle,
-		DisplayName:  u.Name,
-		Bio:          u.Description,
-		Website:      normalizeURL(u.Website),
-		Followers:    u.Followers,
-		Following:    u.Following,
-		Verified:     u.Verified,
-		VerifiedType: u.VerifiedType,
-		Protected:    u.Protected,
-		AvatarURL:    u.AvatarURL,
-		BannerURL:    bannerURL,
+		ChannelID:          "twitter_" + returnedHandle,
+		Platform:           "twitter",
+		Handle:             returnedHandle,
+		DisplayName:        u.Name,
+		Bio:                u.Description,
+		Website:            normalizeURL(u.Website),
+		Followers:          u.Followers,
+		Following:          u.Following,
+		Verified:           u.Verified,
+		VerifiedType:       u.VerifiedType,
+		Protected:          u.Protected,
+		AccountRegion:      u.AccountRegion,
+		AccountDetailsJSON: string(accountDetails),
+		AvatarURL:          u.AvatarURL,
+		BannerURL:          bannerURL,
 	}, nil
 }

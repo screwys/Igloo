@@ -40,7 +40,7 @@ type instagramProfile struct {
 
 // InstagramChannel fetches recent Instagram posts and reels through gallery-dl
 // without downloading media.
-func (g *GalleryDLWrapper) InstagramChannel(ctx context.Context, handle string, limit int, cookiesFile string, cookiesBrowser ...string) (SourceSnapshot, error) {
+func (g *GalleryDLWrapper) InstagramChannel(ctx context.Context, handle string, limit int, cookiesFile string, detailedProfile bool, cookiesBrowser ...string) (SourceSnapshot, error) {
 	handle = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(handle), "@"))
 	if handle == "" {
 		return SourceSnapshot{}, nil
@@ -58,7 +58,7 @@ func (g *GalleryDLWrapper) InstagramChannel(ctx context.Context, handle string, 
 		var firstAttemptErr error
 		authSucceeded := false
 		for _, auth := range authAttempts {
-			output, cookieErr := g.instagramDumpOutput(ctx, rawURL, limit, auth.File, auth.Browser)
+			output, cookieErr := g.instagramDumpOutput(ctx, rawURL, limit, auth.File, detailedProfile, auth.Browser)
 			cookieRefs := ParseInstagramChannelDumpForHandle(output, handle)
 			window.Profile = preferInstagramObservedProfile(
 				window.Profile,
@@ -173,9 +173,9 @@ func optionalCookieBrowser(cookiesBrowser []string) string {
 	return strings.TrimSpace(cookiesBrowser[0])
 }
 
-func (g *GalleryDLWrapper) instagramDumpOutput(ctx context.Context, rawURL string, limit int, cookiesFile string, cookiesBrowser ...string) ([]byte, error) {
+func (g *GalleryDLWrapper) instagramDumpOutput(ctx context.Context, rawURL string, limit int, cookiesFile string, detailedProfile bool, cookiesBrowser ...string) ([]byte, error) {
 	browser := optionalCookieBrowser(cookiesBrowser)
-	args := instagramDumpArgs(limit, cookiesFile, rawURL, browser)
+	args := instagramDumpArgs(limit, cookiesFile, rawURL, detailedProfile, browser)
 	result := g.Run(ctx, "instagram.dump", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: instagramGalleryDLTimeout}, browser)
 	output := result.CombinedOutput()
 	err := result.Err
@@ -203,7 +203,7 @@ func (g *GalleryDLWrapper) instagramTaggedDumpOutput(ctx context.Context, rawURL
 	return output, nil
 }
 
-func instagramDumpArgs(limit int, cookiesFile, rawURL string, cookiesBrowser ...string) []string {
+func instagramDumpArgs(limit int, cookiesFile, rawURL string, detailedProfile bool, cookiesBrowser ...string) []string {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -212,13 +212,18 @@ func instagramDumpArgs(limit int, cookiesFile, rawURL string, cookiesBrowser ...
 		"--simulate",
 		"--range", "1-" + strconv.Itoa(limit),
 	}
+	strategy := "search,web"
+	if detailedProfile {
+		strategy = "info,search,web"
+	}
+	args = append(args, "-o", "extractor.instagram.user-strategy="+strategy)
 	args = appendCookieAuthArgs(args, cookiesFile, optionalCookieBrowser(cookiesBrowser))
 	args = append(args, rawURL)
 	return args
 }
 
 func instagramTaggedArgs(limit int, cookiesFile, rawURL string, cookiesBrowser ...string) []string {
-	return instagramDumpArgs(limit, cookiesFile, rawURL, cookiesBrowser...)
+	return instagramDumpArgs(limit, cookiesFile, rawURL, false, cookiesBrowser...)
 }
 
 func ParseInstagramChannelDump(output []byte) []VideoRef {

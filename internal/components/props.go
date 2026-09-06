@@ -44,6 +44,9 @@ type PageProps struct {
 	Username                string
 	UserPlatforms           []string
 	PageTitle               string
+	ArticleReader           bool
+	CommunityNotesEnabled   bool
+	ThreadTweetID           string
 	ActiveNav               string
 	PageBadge               string
 	ShortcutConfig          map[string]string

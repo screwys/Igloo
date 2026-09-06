@@ -6,12 +6,14 @@
       "owner_kind": "feed",
       "payload": {
         "item": {
+          "article_title": "Contract sync article",
           "body_source_lang": "",
           "body_text": "android sync contract body",
           "body_translation": "",
           "canonical_tweet_id": "",
           "canonical_url": "https://x.com/sample_channel/status/sample_tweet_sync",
           "channel_id": "twitter_sample_channel",
+          "community_note": "",
           "content_hash": "",
           "is_ghost": false,
           "is_reply": false,
@@ -19,12 +21,16 @@
           "lang": "",
           "likes": 0,
           "media_json": "",
+          "poll_json": "",
           "published_at": 1700000001000,
+          "quote_article_title": "",
           "quote_body_text": "",
           "quote_canonical_url": "",
           "quote_channel_id": "",
+          "quote_community_note": "",
           "quote_lang": "",
           "quote_media_json": "",
+          "quote_poll_json": "",
           "quote_published_at": 0,
           "quote_source_lang": "",
           "quote_translation": "",
@@ -150,6 +156,8 @@
           "url": "https://www.tiktok.com/@sample_channel"
         },
         "profile": {
+          "account_details_json": "",
+          "account_region": "",
           "bio": "",
           "channel_id": "tiktok_sample_channel",
           "display_name": "Contract TikTok Profile",
@@ -179,6 +187,8 @@
           "url": "https://x.com/sample_channel"
         },
         "profile": {
+          "account_details_json": "",
+          "account_region": "Japan",
           "bio": "",
           "channel_id": "twitter_sample_channel",
           "display_name": "Contract Channel Profile",
@@ -202,6 +212,8 @@
       "payload": {
         "channel": null,
         "profile": {
+          "account_details_json": "",
+          "account_region": "",
           "bio": "",
           "channel_id": "twitter_sample_source",
           "display_name": "",

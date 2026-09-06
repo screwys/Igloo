@@ -38,6 +38,9 @@ data class FeedItemEntity(
     @PrimaryKey @ColumnInfo(name = "tweet_id") val tweetId: String,
     @ColumnInfo(name = "source_channel_id") val sourceChannelId: String? = null,
     @ColumnInfo(name = "body_text") val bodyText: String? = null,
+    @ColumnInfo(name = "article_title") val articleTitle: String? = null,
+    @ColumnInfo(name = "poll_json") val pollJson: String? = null,
+    @ColumnInfo(name = "community_note") val communityNote: String? = null,
     @ColumnInfo(name = "lang") val lang: String? = null,
     @ColumnInfo(name = "is_retweet") val isRetweet: Boolean = false,
     @ColumnInfo(name = "reposter_channel_id") val reposterChannelId: String? = null,
@@ -45,6 +48,9 @@ data class FeedItemEntity(
     @ColumnInfo(name = "quote_tweet_id") val quoteTweetId: String? = null,
     @ColumnInfo(name = "quote_channel_id") val quoteChannelId: String? = null,
     @ColumnInfo(name = "quote_body_text") val quoteBodyText: String? = null,
+    @ColumnInfo(name = "quote_article_title") val quoteArticleTitle: String? = null,
+    @ColumnInfo(name = "quote_poll_json") val quotePollJson: String? = null,
+    @ColumnInfo(name = "quote_community_note") val quoteCommunityNote: String? = null,
     @ColumnInfo(name = "quote_lang") val quoteLang: String? = null,
     @ColumnInfo(name = "quote_media_json") val quoteMediaJson: String? = null,
     @ColumnInfo(name = "quote_published_at") val quotePublishedAt: Long = 0,
@@ -143,6 +149,8 @@ data class ChannelProfileEntity(
     @ColumnInfo(name = "following") val following: Int = 0,
     @ColumnInfo(name = "verified") val verified: Boolean = false,
     @ColumnInfo(name = "verified_type") val verifiedType: String? = null,
+    @ColumnInfo(name = "account_region") val accountRegion: String? = null,
+    @ColumnInfo(name = "account_details_json") val accountDetailsJson: String? = null,
     @SerialName("protected")
     @ColumnInfo(name = "protected") val isProtected: Boolean = false,
 )

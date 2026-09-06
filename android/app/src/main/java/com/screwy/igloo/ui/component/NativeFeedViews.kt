@@ -120,6 +120,11 @@ internal class NativeFeedChannelHeaderViews(context: Context) {
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
     }
+    val accountBadge: TextView = accountBadgeText(context)
+    private val handleRow = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+    }
     val bio: TextView = TextView(context).apply {
         textSize = NativeChannelHeaderBioTextSp
         setIncludeFontPadding(false)
@@ -182,8 +187,12 @@ internal class NativeFeedChannelHeaderViews(context: Context) {
             marginStart = dp(8)
         })
         infoCard.addView(nameRow)
+        handleRow.addView(handle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        handleRow.addView(accountBadge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)).apply {
+            marginStart = dp(6)
+        })
         infoCard.addView(
-            handle,
+            handleRow,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(ChannelProfileHeaderDefaults.NameHandleSpacingDp)
             },
@@ -246,8 +255,10 @@ internal class NativeFeedCardViews(context: Context) {
     val header: NativeIdentityHeaderViews = NativeIdentityHeaderViews(context)
     val reply: TextView = smallText(context)
     val body: TextView = bodyText(context)
+    val articleTitle: TextView = bodyText(context).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) }
     val showMore: TextView = smallText(context)
     val media: LinearLayout = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+    val details: LinearLayout = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     val quote: LinearLayout = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(
@@ -260,6 +271,7 @@ internal class NativeFeedCardViews(context: Context) {
     val quoteHeader: NativeIdentityHeaderViews = NativeIdentityHeaderViews(context)
     val quoteBody: TextView = quoteText(context)
     val quoteMedia: LinearLayout = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+    val quoteDetails: LinearLayout = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     val actionContainer: LinearLayout = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
@@ -294,12 +306,15 @@ internal class NativeFeedCardViews(context: Context) {
         root.addView(retweeter)
         root.addView(header.root)
         root.addView(reply)
+        root.addView(articleTitle)
         root.addView(body)
         root.addView(showMore)
         root.addView(media, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        root.addView(details)
         quote.addView(quoteHeader.root)
         quote.addView(quoteBody)
         quote.addView(quoteMedia, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        quote.addView(quoteDetails)
         root.addView(quote, verticalSpacingLayoutParams())
         root.addView(
             actionContainer,
@@ -341,11 +356,31 @@ internal class NativeIdentityHeaderViews(context: Context) {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_VERTICAL
     }
-    private val nameRow: LinearLayout = LinearLayout(context).apply {
+    private val nameRow: LinearLayout = object : LinearLayout(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            val reserved = listOf(follow).filter { it.visibility != View.GONE }.sumOf {
+                it.measure(unspecified, heightMeasureSpec)
+                it.measuredWidth
+            }
+            name.maxWidth = (View.MeasureSpec.getSize(widthMeasureSpec) - reserved - dp(6)).coerceAtLeast(0)
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        }
+    }.apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
     }
-    private val metaRow: LinearLayout = LinearLayout(context).apply {
+    private val metaRow: LinearLayout = object : LinearLayout(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            val reserved = listOf(accountBadge, date, translate).filter { it.visibility != View.GONE }.sumOf {
+                it.measure(unspecified, heightMeasureSpec)
+                it.measuredWidth
+            }
+            meta.maxWidth = (View.MeasureSpec.getSize(widthMeasureSpec) - reserved - dp(12)).coerceAtLeast(0)
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        }
+    }.apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
     }
@@ -355,6 +390,7 @@ internal class NativeIdentityHeaderViews(context: Context) {
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
     }
+    val accountBadge: TextView = accountBadgeText(context)
     val follow: TextView = TextView(context).apply {
         gravity = Gravity.CENTER
         textSize = 13f
@@ -366,6 +402,7 @@ internal class NativeIdentityHeaderViews(context: Context) {
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
     }
+    val date: TextView = smallText(context).apply { maxLines = 1 }
     val translate: LinearLayout = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
@@ -385,10 +422,17 @@ internal class NativeIdentityHeaderViews(context: Context) {
 
     init {
         root.addView(avatar, LinearLayout.LayoutParams(dp(42), dp(42)))
-        nameRow.addView(name, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        nameRow.addView(name, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        nameRow.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
         nameRow.addView(follow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)))
         textColumn.addView(nameRow)
         metaRow.addView(meta, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        metaRow.addView(accountBadge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(24)).apply {
+            marginStart = dp(6)
+        })
+        metaRow.addView(date, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            marginStart = dp(6)
+        })
         translate.addView(translateIcon, LinearLayout.LayoutParams(dp(15), dp(15)))
         translate.addView(translateLabel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         metaRow.addView(translate, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))

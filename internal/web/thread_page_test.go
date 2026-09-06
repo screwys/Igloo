@@ -19,6 +19,7 @@ func TestHandlePageThreadRendersAllReplyBranches(t *testing.T) {
 		{TweetID: "sample_root", AuthorHandle: "sample_root_author", BodyText: "root body", PublishedAt: &rootAt, FetchedAt: rootAt, ContentHash: "sample_thread_root"},
 		{TweetID: "sample_leaf", AuthorHandle: "sample_author", BodyText: "leaf body", IsReply: true, ReplyToHandle: "sample_root_author", ReplyToStatus: "sample_root", PublishedAt: &leafAt, FetchedAt: leafAt, ContentHash: "sample_thread_leaf"},
 		{TweetID: "sample_sibling", AuthorHandle: "sample_author_b", BodyText: "sibling body", IsReply: true, ReplyToHandle: "sample_root_author", ReplyToStatus: "sample_root", PublishedAt: &siblingAt, FetchedAt: siblingAt, ContentHash: "sample_thread_sibling"},
+		{TweetID: "sample_quote", AuthorHandle: "sample_quoting_author", BodyText: "quoting body", QuoteTweetID: "sample_leaf", IsGhost: true, PublishedAt: &siblingAt, FetchedAt: siblingAt, ContentHash: "sample_thread_quote"},
 	}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -32,7 +33,7 @@ func TestHandlePageThreadRendersAllReplyBranches(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{`root body`, `leaf body`, `data-thread-back-link`, `href="/feed"`, `data-thread-reply`, `data-thread-depth="1"`} {
+	for _, want := range []string{`root body`, `leaf body`, `data-thread-back-link`, `href="/feed"`, `data-thread-reply`, `data-thread-depth="1"`, `data-thread-id="sample_leaf"`, `data-thread-fetch-status`, `data-thread-quotes`, `quoting body`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing %q in body: %s", want, body)
 		}

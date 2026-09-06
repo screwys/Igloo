@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf16"
+
+	"github.com/screwys/igloo/internal/model"
 )
 
 const DefaultBaseURL = "https://api.fxtwitter.com"
@@ -24,23 +26,25 @@ var ErrNotFound = errors.New("fxtwitter: user not found")
 
 // User mirrors the subset of fxtwitter's JSON we use.
 type User struct {
-	ID           string
-	ScreenName   string
-	Name         string
-	Description  string
-	Location     string
-	Website      string
-	AvatarURL    string
-	BannerURL    string
-	Followers    int
-	Following    int
-	Tweets       int
-	MediaCount   int
-	Likes        int
-	Verified     bool
-	VerifiedType string
-	Protected    bool
-	Joined       time.Time
+	ID             string
+	ScreenName     string
+	Name           string
+	Description    string
+	Location       string
+	AccountRegion  string
+	AccountDetails model.AccountDetails
+	Website        string
+	AvatarURL      string
+	BannerURL      string
+	Followers      int
+	Following      int
+	Tweets         int
+	MediaCount     int
+	Likes          int
+	Verified       bool
+	VerifiedType   string
+	Protected      bool
+	Joined         time.Time
 }
 
 // Tweet mirrors the subset of fxtwitter's /status/<id> JSON we use.
@@ -50,6 +54,9 @@ type Tweet struct {
 	AuthorDisplayName string
 	AuthorAvatarURL   string
 	Text              string
+	ArticleTitle      string
+	PollJSON          string
+	CommunityNote     string
 	Lang              string
 	ReplyToHandle     string // "" if not a reply
 	ReplyToStatus     string // "" if not a reply
@@ -80,7 +87,7 @@ func (c *Client) FetchUser(ctx context.Context, handle string) (*User, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
 
-	url := c.BaseURL + "/" + strings.TrimPrefix(handle, "@")
+	url := c.BaseURL + "/2/profile/" + strings.TrimPrefix(handle, "@") + "?about_account=1"
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
@@ -116,19 +123,28 @@ func (c *Client) FetchUser(ctx context.Context, handle string) (*User, error) {
 			Name         string `json:"name"`
 			Description  string `json:"description"`
 			Location     string `json:"location"`
+			AboutAccount struct {
+				BasedIn          string `json:"based_in"`
+				Source           string `json:"source"`
+				LocationAccurate *bool  `json:"location_accurate"`
+				UsernameChanges  *struct {
+					Count *int `json:"count"`
+				} `json:"username_changes"`
+			} `json:"about_account"`
 			Website      any    `json:"website"`
 			AvatarURL    string `json:"avatar_url"`
 			BannerURL    string `json:"banner_url"`
 			Followers    int    `json:"followers"`
 			Following    int    `json:"following"`
-			Tweets       int    `json:"tweets"`
+			Tweets       int    `json:"statuses"`
 			MediaCount   int    `json:"media_count"`
 			Likes        int    `json:"likes"`
 			Joined       string `json:"joined"`
 			Protected    bool   `json:"protected"`
 			Verification struct {
-				Verified bool   `json:"verified"`
-				Type     string `json:"type"`
+				Verified   bool   `json:"verified"`
+				Type       string `json:"type"`
+				VerifiedAt string `json:"verified_at"`
 			} `json:"verification"`
 		} `json:"user"`
 	}
@@ -140,27 +156,48 @@ func (c *Client) FetchUser(ctx context.Context, handle string) (*User, error) {
 	}
 
 	u := &User{
-		ID:           raw.User.ID,
-		ScreenName:   raw.User.ScreenName,
-		Name:         raw.User.Name,
-		Description:  raw.User.Description,
-		Location:     raw.User.Location,
-		AvatarURL:    raw.User.AvatarURL,
-		BannerURL:    raw.User.BannerURL,
-		Followers:    raw.User.Followers,
-		Following:    raw.User.Following,
-		Tweets:       raw.User.Tweets,
-		MediaCount:   raw.User.MediaCount,
-		Likes:        raw.User.Likes,
-		Verified:     raw.User.Verification.Verified,
-		VerifiedType: raw.User.Verification.Type,
-		Protected:    raw.User.Protected,
+		ID:            raw.User.ID,
+		ScreenName:    raw.User.ScreenName,
+		Name:          raw.User.Name,
+		Description:   raw.User.Description,
+		Location:      raw.User.Location,
+		AccountRegion: strings.TrimSpace(raw.User.AboutAccount.BasedIn),
+		AvatarURL:     raw.User.AvatarURL,
+		BannerURL:     raw.User.BannerURL,
+		Followers:     raw.User.Followers,
+		Following:     raw.User.Following,
+		Tweets:        raw.User.Tweets,
+		MediaCount:    raw.User.MediaCount,
+		Likes:         raw.User.Likes,
+		Verified:      raw.User.Verification.Verified,
+		VerifiedType:  raw.User.Verification.Type,
+		Protected:     raw.User.Protected,
 	}
 	u.Website = websiteFromAny(raw.User.Website)
-	if t, err := time.Parse("Mon Jan 02 15:04:05 -0700 2006", raw.User.Joined); err == nil {
-		u.Joined = t.UTC()
+	u.AccountDetails = model.AccountDetails{
+		Source:           strings.TrimSpace(raw.User.AboutAccount.Source),
+		LocationAccurate: raw.User.AboutAccount.LocationAccurate,
+		CreatedAt:        accountDate(raw.User.Joined),
+		UserID:           raw.User.ID,
+		VerifiedAt:       accountDate(raw.User.Verification.VerifiedAt),
+		Verification:     raw.User.Verification.Type,
+	}
+	if raw.User.AboutAccount.UsernameChanges != nil {
+		u.AccountDetails.UsernameChanges = raw.User.AboutAccount.UsernameChanges.Count
+	}
+	if u.AccountDetails.CreatedAt != "" {
+		u.Joined, _ = time.Parse(time.RFC3339, u.AccountDetails.CreatedAt)
 	}
 	return u, nil
+}
+
+func accountDate(raw string) string {
+	for _, layout := range []string{time.RFC3339, "Mon Jan 02 15:04:05 -0700 2006"} {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t.UTC().Format(time.RFC3339)
+		}
+	}
+	return ""
 }
 
 func websiteFromAny(value any) string {
@@ -229,6 +266,7 @@ func (c *Client) FetchTweet(ctx context.Context, handle, tweetID string) (*Tweet
 }
 
 type rawTweet struct {
+	Type   string `json:"type"`
 	ID     string `json:"id"`
 	Text   string `json:"text"`
 	Lang   string `json:"lang"`
@@ -237,8 +275,8 @@ type rawTweet struct {
 		Name       string `json:"name"`
 		AvatarURL  string `json:"avatar_url"`
 	} `json:"author"`
-	ReplyingTo       string `json:"replying_to"`
-	ReplyingToStatus string `json:"replying_to_status"`
+	ReplyingTo       rawReplyTarget `json:"replying_to"`
+	ReplyingToStatus string         `json:"replying_to_status"`
 	RawText          struct {
 		Text             string `json:"text"`
 		DisplayTextRange []int  `json:"display_text_range"`
@@ -247,9 +285,13 @@ type rawTweet struct {
 			Original string `json:"original"`
 		} `json:"facets"`
 	} `json:"raw_text"`
-	CreatedAt string    `json:"created_at"`
-	Media     *rawMedia `json:"media"`
-	Quote     *rawTweet `json:"quote"`
+	CreatedAt        string            `json:"created_at"`
+	CreatedTimestamp int64             `json:"created_timestamp"`
+	Media            *rawMedia         `json:"media"`
+	Quote            *rawTweet         `json:"quote"`
+	Article          *rawArticle       `json:"article"`
+	Poll             *model.Poll       `json:"poll"`
+	CommunityNote    *rawCommunityNote `json:"community_note"`
 }
 
 type rawMedia struct {
@@ -262,7 +304,7 @@ type rawMedia struct {
 }
 
 func tweetFromRaw(raw *rawTweet) *Tweet {
-	if raw == nil {
+	if raw == nil || raw.Type == "tombstone" {
 		return nil
 	}
 	visibleText := visibleTweetText(raw.Text, raw.RawText.Text, raw.RawText.DisplayTextRange)
@@ -279,12 +321,19 @@ func tweetFromRaw(raw *rawTweet) *Tweet {
 		AuthorAvatarURL:   raw.Author.AvatarURL,
 		Text:              visibleText,
 		Lang:              raw.Lang,
-		ReplyToHandle:     raw.ReplyingTo,
+		ReplyToHandle:     raw.ReplyingTo.ScreenName,
 		ReplyToStatus:     raw.ReplyingToStatus,
 		MentionHandles:    mentionHandles,
 	}
+	if out.ReplyToStatus == "" {
+		out.ReplyToStatus = raw.ReplyingTo.Status
+	}
 	if t, err := time.Parse("Mon Jan 02 15:04:05 -0700 2006", raw.CreatedAt); err == nil {
 		out.CreatedAt = t.UTC()
+	} else if t, err := time.Parse(time.RFC3339, raw.CreatedAt); err == nil {
+		out.CreatedAt = t.UTC()
+	} else if raw.CreatedTimestamp > 0 {
+		out.CreatedAt = time.Unix(raw.CreatedTimestamp, 0).UTC()
 	}
 
 	// Map media.all[] into the same JSON shape feed_items.media_json uses.
@@ -311,6 +360,9 @@ func tweetFromRaw(raw *rawTweet) *Tweet {
 			out.MediaJSON = string(b)
 		}
 	}
+	applyArticle(out, raw.Article)
+	out.PollJSON = capturePoll(raw.Poll, time.Now().UTC())
+	out.CommunityNote = communityNoteText(raw.CommunityNote)
 	out.Quote = tweetFromRaw(raw.Quote)
 
 	return out

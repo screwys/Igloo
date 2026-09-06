@@ -285,6 +285,10 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 		filtered := applyChannelFiltersFromSettings(items, settings)
 
 		if len(filtered) > 0 {
+			threadRoots, threadErr := m.newAutomaticThreadRoots(ch.ChannelID, filtered)
+			if threadErr != nil {
+				log.Printf("[x_ingest] select thread context: %v", threadErr)
+			}
 			result, upsertErr := m.upsertFeedItemsBatch(filtered)
 			if upsertErr != nil {
 				log.Printf("[x_ingest] UpsertFeedItems: %v", upsertErr)
@@ -299,6 +303,7 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 					log.Printf("[x_ingest] %v", err)
 				}
 				m.KickFeedScoring()
+				m.fetchAutomaticThreads(ctx, threadRoots)
 			}
 		}
 	}

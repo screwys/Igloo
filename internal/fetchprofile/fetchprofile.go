@@ -27,19 +27,21 @@ var ErrIncompleteProfile = errors.New("fetchprofile: incomplete profile")
 
 // Profile is the platform-generic profile record.
 type Profile struct {
-	ChannelID    string
-	Platform     string
-	Handle       string
-	DisplayName  string
-	Bio          string
-	Website      string
-	Followers    int // 0 if unavailable for platform
-	Following    int // 0 if unavailable
-	Verified     bool
-	VerifiedType string // twitter only
-	Protected    bool   // twitter only
-	AvatarURL    string
-	BannerURL    string // "" if platform has no banner concept
+	ChannelID          string
+	Platform           string
+	Handle             string
+	DisplayName        string
+	Bio                string
+	Website            string
+	Followers          int // 0 if unavailable for platform
+	Following          int // 0 if unavailable
+	Verified           bool
+	VerifiedType       string // twitter only
+	Protected          bool   // twitter only
+	AccountRegion      string // X-reported account region, not the profile location
+	AccountDetailsJSON string
+	AvatarURL          string
+	BannerURL          string // "" if platform has no banner concept
 }
 
 func ValidateChannelIdentity(channelID string, p *Profile) error {

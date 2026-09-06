@@ -141,6 +141,32 @@ object IglooMigrations {
             }
         }
 
+    val MIGRATION_47_48 =
+        object : Migration(47, 48) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `feed_items` ADD COLUMN `article_title` TEXT")
+                db.execSQL("ALTER TABLE `feed_items` ADD COLUMN `quote_article_title` TEXT")
+                db.execSQL("ALTER TABLE `channel_profiles` ADD COLUMN `account_region` TEXT")
+            }
+        }
+
+    val MIGRATION_48_49 =
+        object : Migration(48, 49) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `feed_items` ADD COLUMN `poll_json` TEXT")
+                db.execSQL("ALTER TABLE `feed_items` ADD COLUMN `quote_poll_json` TEXT")
+                db.execSQL("ALTER TABLE `feed_items` ADD COLUMN `community_note` TEXT")
+                db.execSQL("ALTER TABLE `feed_items` ADD COLUMN `quote_community_note` TEXT")
+            }
+        }
+
+    val MIGRATION_49_50 =
+        object : Migration(49, 50) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `channel_profiles` ADD COLUMN `account_details_json` TEXT")
+            }
+        }
+
     val MIGRATION_46_47 =
         object : Migration(46, 47) {
             override fun migrate(db: SupportSQLiteDatabase) {

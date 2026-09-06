@@ -1498,6 +1498,10 @@
       if (!select || select.dataset.themedSelectReady === '1') return;
       if (select.multiple || select.size > 1 || select.closest('.themed-select')) return;
       if (select.getAttribute('data-native-select') === 'true') return;
+      if (select.hasAttribute('data-setting-choices')) {
+        enhanceSettingChoices(select);
+        return;
+      }
 
       var selectID = ensureID(select, 'themed-native-select');
       var menuID = selectID + '-menu';
@@ -1595,6 +1599,65 @@
         var observer = new MutationObserver(function () { renderOptions(wrap); });
         observer.observe(select, { childList: true, subtree: true, characterData: true, attributes: true });
       }
+    }
+
+    function enhanceSettingChoices(select) {
+      var group = doc.createElement('div');
+      group.className = 'settings-choices';
+      group.setAttribute('role', 'radiogroup');
+      group.setAttribute('aria-label', Array.from(select.labels || []).map(function (label) {
+        return label.textContent.trim();
+      }).join(' ') || select.getAttribute('aria-label') || select.name);
+      select.parentNode.insertBefore(group, select);
+      group.appendChild(select);
+      select.hidden = true;
+      select.dataset.themedSelectReady = '1';
+      var choices = Array.from(select.options).map(function (option) {
+        var button = doc.createElement('button');
+        button.type = 'button';
+        button.setAttribute('role', 'radio');
+        button.textContent = optionLabel(option);
+        if (option.title) {
+          button.title = option.title;
+          button.setAttribute('aria-description', option.title);
+        }
+        button.addEventListener('click', function () {
+          if (select.value === option.value) return;
+          select.value = option.value;
+          select.dispatchEvent(new Event('input', { bubbles: true }));
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        group.appendChild(button);
+        return { button: button, option: option };
+      });
+      function sync() {
+        choices.forEach(function (choice) {
+          var checked = choice.option.selected;
+          choice.button.setAttribute('aria-checked', String(checked));
+          choice.button.tabIndex = checked ? 0 : -1;
+          choice.button.disabled = select.disabled || choice.option.disabled;
+        });
+      }
+      group.addEventListener('keydown', function (event) {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+        var buttons = choices.map(function (choice) { return choice.button; }).filter(function (button) { return !button.disabled; });
+        if (!buttons.length) return;
+        event.preventDefault();
+        var index = buttons.indexOf(doc.activeElement);
+        var next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 :
+          (index + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length;
+        buttons[next].click();
+        buttons[next].focus();
+      });
+      select.addEventListener('change', sync);
+      Array.from(select.labels || []).forEach(function (label) {
+        label.addEventListener('click', function (event) {
+          event.preventDefault();
+          var selected = group.querySelector('[aria-checked="true"]');
+          if (selected) selected.focus();
+        });
+      });
+      sync();
     }
 
     function enhanceThemedSelects(root) {

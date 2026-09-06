@@ -136,7 +136,7 @@ func videoToJSON(v model.Video) map[string]any {
 	m["media_slide_count"] = v.MediaSlideCount
 	m["slide_count"] = v.MediaSlideCount
 	m["source_kind"] = v.SourceKind
-	if v.MediaKind == "slideshow" && v.Platform == "tiktok" {
+	if (v.MediaKind == "slideshow" || v.MediaKind == "image") && (v.Platform == "tiktok" || v.Platform == "instagram") {
 		m["audio_url"] = "/api/media/audio/" + v.VideoID
 	}
 	displayTitle, displayTitleCasual := ResolveDearrowDisplayTitles(v.Title, v.DearrowTitle, v.DearrowTitleCasual)

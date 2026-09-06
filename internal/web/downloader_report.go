@@ -410,7 +410,7 @@ func (s *Server) addInstagramReportRows(ctx context.Context, dl *download.Downlo
 	opts := s.reportDownloadOpts("instagram", filepath.Join(tempDir, "instagram"), "instagram-demo")
 	var rawURL string
 	report.Rows = append(report.Rows, s.runReportCheck(ctx, "instagram post/reel dump", "instagram", "instagram.dump", func(ctx context.Context) (map[string]any, error) {
-		snapshot, err := dl.GalleryDL.InstagramChannel(ctx, handle, 10, opts.Cookies, opts.CookiesFromBrowser)
+		snapshot, err := dl.GalleryDL.InstagramChannel(ctx, handle, 10, opts.Cookies, s.db.BoolSetting("instagram_profile_details"), opts.CookiesFromBrowser)
 		refs := snapshot.FlattenRefs(10)
 		hasDisplayName := false
 		hasAvatar := false

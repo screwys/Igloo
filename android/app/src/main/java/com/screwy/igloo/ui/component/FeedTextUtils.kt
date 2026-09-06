@@ -8,8 +8,13 @@ import com.screwy.igloo.R
 import com.screwy.igloo.data.entity.FeedItemEntity
 import com.screwy.igloo.data.entity.FeedRow
 import com.screwy.igloo.feed.canonicalTweetUrl
+import com.screwy.igloo.net.iglooJson
 import java.net.URI
+import java.time.Instant
+import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 internal data class FeedMuteMenuAction(
     val channelId: String,
@@ -243,3 +248,66 @@ internal fun stripReplyPrefix(row: FeedRow, text: String): String {
 }
 
 private val leadingReplyMentionRegex = Regex("^@([A-Za-z0-9_]{1,30})(?=$|[\\s,:\n\t])")
+
+// Account metadata contains country names or broad regions, never profile location text.
+private val accountRegionCountries: Map<String, String> by lazy {
+    Locale.getISOCountries().associateBy { country ->
+        Locale.Builder().setRegion(country).build().getDisplayCountry(Locale.ENGLISH).lowercase(Locale.ROOT)
+    } + mapOf("turkey" to "TR", "türkiye" to "TR", "south korea" to "KR", "korea" to "KR", "north korea" to "KP")
+}
+
+internal fun accountRegionFlag(region: String?): String {
+    val country = accountRegionCountries[region?.trim()?.lowercase(Locale.ROOT)] ?: return ""
+    return country.map { String(Character.toChars(0x1F1E6 + it.code - 'A'.code)) }.joinToString("")
+}
+
+@Serializable
+internal data class FeedAccountDetails(
+    val source: String = "",
+    @SerialName("location_accurate") val locationAccurate: Boolean? = null,
+    @SerialName("created_at") val createdAt: String = "",
+    @SerialName("user_id") val userId: String = "",
+    @SerialName("verified_at") val verifiedAt: String = "",
+    @SerialName("username_changes") val usernameChanges: Int? = null,
+    val verification: String = "",
+)
+
+internal fun parseFeedAccountDetails(raw: String?): FeedAccountDetails? =
+    raw?.takeIf(String::isNotBlank)?.let {
+        runCatching { iglooJson.decodeFromString<FeedAccountDetails>(it) }.getOrNull()?.takeIf { details ->
+            details.source.isNotBlank() || details.locationAccurate != null || details.createdAt.isNotBlank() ||
+                details.userId.isNotBlank() || details.verifiedAt.isNotBlank() ||
+                details.usernameChanges != null || details.verification.isNotBlank()
+        }
+    }
+
+internal fun accountSourceSymbol(source: String): String = when {
+    source.contains("android", ignoreCase = true) -> "🤖"
+    source.contains("ios", ignoreCase = true) || source.contains("iphone", ignoreCase = true) ||
+        source.contains("app store", ignoreCase = true) -> "📱"
+    source.contains("web", ignoreCase = true) -> "🌐"
+    else -> ""
+}
+
+@Serializable
+internal data class FeedPollChoice(val label: String, val count: Long, val percentage: Double)
+
+@Serializable
+internal data class FeedPoll(
+    val choices: List<FeedPollChoice>,
+    @SerialName("total_votes") val totalVotes: Long,
+    @SerialName("ends_at") val endsAt: String = "",
+    @SerialName("captured_at") val capturedAt: Long,
+) {
+    val endsAtMs: Long? get() = runCatching { Instant.parse(endsAt).toEpochMilli() }.getOrNull()
+    val closedAtCapture: Boolean? get() = endsAtMs?.let { capturedAt >= it }
+}
+
+internal fun parseFeedPoll(raw: String?): FeedPoll? = raw?.takeIf(String::isNotBlank)?.let {
+    runCatching { iglooJson.decodeFromString<FeedPoll>(it) }.getOrNull()?.takeIf { poll ->
+        poll.capturedAt > 0 && poll.totalVotes >= 0 && poll.choices.isNotEmpty() &&
+            poll.choices.all { choice ->
+                choice.label.isNotBlank() && choice.count >= 0 && choice.percentage in 0.0..100.0
+            }
+    }
+}

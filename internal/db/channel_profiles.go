@@ -32,9 +32,9 @@ func upsertChannelProfileTx(tx *sql.Tx, profile model.ChannelProfile) error {
 	_, err := tx.Exec(`
 		INSERT INTO channel_profiles (
 			channel_id, platform, handle, display_name, bio, website,
-			followers, following, verified, verified_type, protected,
+			followers, following, verified, verified_type, protected, account_region, account_details_json,
 			observed_at_ms, fetched_at, tombstone
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(channel_id) DO UPDATE SET
 			platform = excluded.platform,
 			handle = COALESCE(excluded.handle, channel_profiles.handle),
@@ -46,13 +46,15 @@ func upsertChannelProfileTx(tx *sql.Tx, profile model.ChannelProfile) error {
 			verified = excluded.verified,
 			verified_type = excluded.verified_type,
 			protected = excluded.protected,
+			account_region = excluded.account_region,
+			account_details_json = excluded.account_details_json,
 			observed_at_ms = MAX(channel_profiles.observed_at_ms, excluded.observed_at_ms),
 			fetched_at = MAX(channel_profiles.fetched_at, excluded.fetched_at),
 			tombstone = excluded.tombstone
 	`,
 		channelID, platform, nilIfEmpty(profile.Handle), nilIfEmpty(profile.DisplayName),
 		profile.Bio, nilIfEmpty(profile.Website), profile.Followers, profile.Following,
-		boolToInt(profile.Verified), nilIfEmpty(profile.VerifiedType), boolToInt(profile.Protected),
+		boolToInt(profile.Verified), nilIfEmpty(profile.VerifiedType), boolToInt(profile.Protected), nilIfEmpty(profile.AccountRegion), nilIfEmpty(profile.AccountDetailsJSON),
 		nilIfTimeZero(profile.ObservedAt), nilIfTimeZero(profile.FetchedAt), boolToInt(profile.Tombstone),
 	)
 	return err
@@ -66,7 +68,7 @@ func (db *DB) GetChannelProfile(channelID string) (*model.ChannelProfile, error)
 	return scanChannelProfile(db.conn.QueryRow(`
 		SELECT cp.channel_id, cp.platform, COALESCE(cp.handle, ''),
 		       COALESCE(cp.display_name, ''), COALESCE(cp.bio, ''), COALESCE(cp.website, ''),
-		       cp.followers, cp.following, cp.verified, COALESCE(cp.verified_type, ''), cp.protected,
+		       cp.followers, cp.following, cp.verified, COALESCE(cp.verified_type, ''), cp.protected, COALESCE(cp.account_region, ''), COALESCE(cp.account_details_json, ''),
 		       COALESCE(avatar_object.source_url, ''), COALESCE(banner_object.source_url, ''),
 		       cp.observed_at_ms, cp.fetched_at, cp.tombstone
 		FROM channel_profiles cp
@@ -90,7 +92,7 @@ func (db *DB) GetYouTubeChannelProfileByHandle(handle string) (*model.ChannelPro
 	return scanChannelProfile(db.conn.QueryRow(`
 		SELECT cp.channel_id, cp.platform, COALESCE(cp.handle, ''),
 		       COALESCE(cp.display_name, ''), COALESCE(cp.bio, ''), COALESCE(cp.website, ''),
-		       cp.followers, cp.following, cp.verified, COALESCE(cp.verified_type, ''), cp.protected,
+		       cp.followers, cp.following, cp.verified, COALESCE(cp.verified_type, ''), cp.protected, COALESCE(cp.account_region, ''), COALESCE(cp.account_details_json, ''),
 		       COALESCE(avatar_object.source_url, ''), COALESCE(banner_object.source_url, ''),
 		       cp.observed_at_ms, cp.fetched_at, cp.tombstone
 		FROM channel_profiles cp
@@ -122,7 +124,7 @@ func scanChannelProfile(row channelProfileScanner) (*model.ChannelProfile, error
 	err := row.Scan(
 		&profile.ChannelID, &profile.Platform, &profile.Handle,
 		&profile.DisplayName, &profile.Bio, &profile.Website,
-		&profile.Followers, &profile.Following, &verified, &profile.VerifiedType, &protected,
+		&profile.Followers, &profile.Following, &verified, &profile.VerifiedType, &protected, &profile.AccountRegion, &profile.AccountDetailsJSON,
 		&profile.AvatarURL, &profile.BannerURL,
 		&observedAt, &fetchedAt, &tombstone,
 	)
@@ -159,7 +161,7 @@ func (db *DB) GetTwitterChannelProfilesByHandles(handles []string) (map[string]m
 	}
 	args := stringsToAny(keys)
 	rows, err := db.conn.Query(`
-		SELECT channel_id, COALESCE(handle, ''), COALESCE(display_name, '')
+		SELECT channel_id, COALESCE(handle, ''), COALESCE(display_name, ''), COALESCE(account_region, ''), COALESCE(account_details_json, '')
 		FROM channel_profiles
 		WHERE platform = 'twitter' AND tombstone = 0
 		  AND LOWER(COALESCE(handle, '')) IN (`+placeholders(len(keys))+`)
@@ -171,7 +173,7 @@ func (db *DB) GetTwitterChannelProfilesByHandles(handles []string) (map[string]m
 	out := make(map[string]model.ChannelProfile, len(keys))
 	for rows.Next() {
 		var profile model.ChannelProfile
-		if err := rows.Scan(&profile.ChannelID, &profile.Handle, &profile.DisplayName); err != nil {
+		if err := rows.Scan(&profile.ChannelID, &profile.Handle, &profile.DisplayName, &profile.AccountRegion, &profile.AccountDetailsJSON); err != nil {
 			return nil, err
 		}
 		profile.Platform = "twitter"

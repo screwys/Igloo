@@ -34,6 +34,41 @@ class FeedReadDaoTest {
     }
 
     @Test
+    fun retweetThreadUsesSavedWrapperUntilCanonicalConversationArrives() = runBlocking {
+        db.feedItemDao().upsert(FeedItemEntity(
+            tweetId = "sample_wrapper", canonicalTweetId = "sample_original", isRetweet = true,
+            bodyText = "Saved post", publishedAt = 10,
+        ))
+        assertEquals(
+            listOf("sample_wrapper"),
+            db.feedReadDao().getThreadTree("sample_wrapper").map { it.item.tweetId },
+        )
+
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_original", bodyText = "Original post", publishedAt = 1))
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_reply", replyToStatus = "sample_original", isReply = true, publishedAt = 2))
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_quote", quoteTweetId = "sample_original", publishedAt = 3))
+
+        assertEquals(
+            listOf("sample_original", "sample_reply", "sample_quote"),
+            db.feedReadDao().getThreadTree("sample_wrapper").map { it.item.tweetId },
+        )
+    }
+
+    @Test
+    fun threadIncludesDirectQuotesAndRepliesOnceWithoutUnrelatedPosts() = runBlocking {
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_root", bodyText = "Root", publishedAt = 1))
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_reply", bodyText = "Reply", replyToStatus = "sample_root", isReply = true, publishedAt = 2))
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_quote", bodyText = "Quote", quoteTweetId = "sample_root", publishedAt = 3))
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_reply_quote", replyToStatus = "sample_root", quoteTweetId = "sample_root", isReply = true, publishedAt = 4))
+        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_other_quote", quoteTweetId = "other_root", publishedAt = 5))
+
+        assertEquals(
+            listOf("sample_root", "sample_reply", "sample_reply_quote", "sample_quote"),
+            db.feedReadDao().getThreadTree("sample_root").map { it.item.tweetId },
+        )
+    }
+
+    @Test
     fun displayIdentityComesOnlyFromChannelProfiles() = runBlocking {
         seedIdentity("sample_author", "sample_author_handle", "Sample Author")
         seedIdentity("sample_source", "sample_source_handle", "Sample Source")

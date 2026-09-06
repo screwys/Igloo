@@ -397,6 +397,9 @@ func feedItemToJSON(item model.FeedItem, bookmarkInfo map[string]db.BookmarkInfo
 		"author_avatar_url":         authorAvatarURL,
 		"avatar_url":                authorAvatarURL,
 		"body_text":                 item.BodyText,
+		"article_title":             item.ArticleTitle,
+		"poll_json":                 item.PollJSON,
+		"community_note":            item.CommunityNote,
 		"lang":                      item.Lang,
 		"is_retweet":                item.IsRetweet,
 		"retweeted_by_handle":       item.RetweetedByHandle,
@@ -466,6 +469,9 @@ func feedItemToJSON(item model.FeedItem, bookmarkInfo map[string]db.BookmarkInfo
 		m["quote_author_display_name"] = item.QuoteAuthorDisplayName
 		m["quote_author_avatar_url"] = item.QuoteAuthorAvatarURL
 		m["quote_body_text"] = item.QuoteBodyText
+		m["quote_article_title"] = item.QuoteArticleTitle
+		m["quote_poll_json"] = item.QuotePollJSON
+		m["quote_community_note"] = item.QuoteCommunityNote
 		m["quote_channel_id"] = item.QuoteChannelID
 		m["quote_channel_is_followed"] = item.QuoteChannelFollowed
 		m["quote_media_stream_url"] = item.QuoteMediaStreamURL
@@ -822,7 +828,7 @@ func (s *Server) handleFeedShorts(w http.ResponseWriter, r *http.Request) {
 		if v.PublishedAt != nil {
 			item["published_at"] = v.PublishedAt.UnixMilli()
 		}
-		if v.MediaKind == "slideshow" {
+		if v.MediaKind == "slideshow" || v.MediaKind == "image" {
 			item["media_audio_url"] = "/api/media/audio/" + v.VideoID
 		}
 		jsonItems = append(jsonItems, item)

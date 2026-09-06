@@ -1,0 +1,41 @@
+package components
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/screwys/igloo/internal/model"
+)
+
+templ feedContext(p PageProps, pollJSON string, note string) {
+	if poll := model.ParsePoll(pollJSON); poll != nil {
+		<section class="feed-poll" aria-label={ L(p, "feed_poll_results", "Poll results") }>
+			for _, choice := range poll.Choices {
+				<div class="feed-poll-choice" style={ templ.SafeCSS(fmt.Sprintf("--poll-percentage: %.1f%%;", min(100.0, max(0.0, choice.Percentage)))) }>
+					<span>{ choice.Label }</span>
+					<span class="feed-poll-count">{ fmt.Sprintf("%.1f%% · %d", choice.Percentage, choice.Count) }</span>
+				</div>
+			}
+			<div class="feed-poll-meta">
+				<span>{ LF(p, "feed_poll_votes", "%1$s votes", poll.TotalVotes) }</span>
+				if poll.CapturedAt > 0 {
+					{{ captured := time.UnixMilli(poll.CapturedAt).UTC() }}
+					<time datetime={ captured.Format(time.RFC3339) } title={ captured.Format(time.RFC3339) }>{ LF(p, "feed_poll_captured", "Captured %1$s", RelativeTimeText(p, &captured)) }</time>
+					if _, err := time.Parse(time.RFC3339, poll.EndsAt); err == nil {
+						if poll.ClosedAtCapture() {
+							<span>{ L(p, "feed_poll_closed_at_capture", "Closed when captured") }</span>
+						} else {
+							<span>{ L(p, "feed_poll_open_at_capture", "Voting was open when captured") }</span>
+						}
+					}
+				}
+			</div>
+		</section>
+	}
+	if p.CommunityNotesEnabled && note != "" {
+		<aside class="feed-community-note">
+			<strong>{ L(p, "feed_community_note", "Community Note") }</strong>
+			<p class="feed-community-note-text">@templ.Raw(Linkify(note))</p>
+		</aside>
+	}
+}

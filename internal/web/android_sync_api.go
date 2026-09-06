@@ -27,36 +27,42 @@ type androidSyncFeedPayload struct {
 }
 
 type androidSyncFeedItem struct {
-	TweetID           string `json:"tweet_id"`
-	SourceChannelID   string `json:"source_channel_id"`
-	ChannelID         string `json:"channel_id"`
-	BodyText          string `json:"body_text"`
-	Lang              string `json:"lang"`
-	IsRetweet         bool   `json:"is_retweet"`
-	ReposterChannelID string `json:"reposter_channel_id"`
-	QuoteTweetID      string `json:"quote_tweet_id"`
-	QuoteChannelID    string `json:"quote_channel_id"`
-	QuoteBodyText     string `json:"quote_body_text"`
-	QuoteLang         string `json:"quote_lang"`
-	QuoteMediaJSON    string `json:"quote_media_json"`
-	QuotePublishedAt  int64  `json:"quote_published_at"`
-	QuoteCanonicalURL string `json:"quote_canonical_url"`
-	MediaJSON         string `json:"media_json"`
-	Views             int64  `json:"views"`
-	Likes             int64  `json:"likes"`
-	Retweets          int64  `json:"retweets"`
-	CanonicalURL      string `json:"canonical_url"`
-	CanonicalTweetID  string `json:"canonical_tweet_id"`
-	ReplyChannelID    string `json:"reply_channel_id"`
-	ReplyToStatus     string `json:"reply_to_status"`
-	IsReply           bool   `json:"is_reply"`
-	IsGhost           bool   `json:"is_ghost"`
-	ContentHash       string `json:"content_hash"`
-	BodyTranslation   string `json:"body_translation"`
-	BodySourceLang    string `json:"body_source_lang"`
-	QuoteTranslation  string `json:"quote_translation"`
-	QuoteSourceLang   string `json:"quote_source_lang"`
-	PublishedAt       int64  `json:"published_at"`
+	TweetID            string `json:"tweet_id"`
+	SourceChannelID    string `json:"source_channel_id"`
+	ChannelID          string `json:"channel_id"`
+	BodyText           string `json:"body_text"`
+	ArticleTitle       string `json:"article_title"`
+	PollJSON           string `json:"poll_json"`
+	CommunityNote      string `json:"community_note"`
+	Lang               string `json:"lang"`
+	IsRetweet          bool   `json:"is_retweet"`
+	ReposterChannelID  string `json:"reposter_channel_id"`
+	QuoteTweetID       string `json:"quote_tweet_id"`
+	QuoteChannelID     string `json:"quote_channel_id"`
+	QuoteBodyText      string `json:"quote_body_text"`
+	QuoteArticleTitle  string `json:"quote_article_title"`
+	QuotePollJSON      string `json:"quote_poll_json"`
+	QuoteCommunityNote string `json:"quote_community_note"`
+	QuoteLang          string `json:"quote_lang"`
+	QuoteMediaJSON     string `json:"quote_media_json"`
+	QuotePublishedAt   int64  `json:"quote_published_at"`
+	QuoteCanonicalURL  string `json:"quote_canonical_url"`
+	MediaJSON          string `json:"media_json"`
+	Views              int64  `json:"views"`
+	Likes              int64  `json:"likes"`
+	Retweets           int64  `json:"retweets"`
+	CanonicalURL       string `json:"canonical_url"`
+	CanonicalTweetID   string `json:"canonical_tweet_id"`
+	ReplyChannelID     string `json:"reply_channel_id"`
+	ReplyToStatus      string `json:"reply_to_status"`
+	IsReply            bool   `json:"is_reply"`
+	IsGhost            bool   `json:"is_ghost"`
+	ContentHash        string `json:"content_hash"`
+	BodyTranslation    string `json:"body_translation"`
+	BodySourceLang     string `json:"body_source_lang"`
+	QuoteTranslation   string `json:"quote_translation"`
+	QuoteSourceLang    string `json:"quote_source_lang"`
+	PublishedAt        int64  `json:"published_at"`
 }
 
 type androidSyncVideoPayload struct {
@@ -123,17 +129,19 @@ type androidSyncChannel struct {
 }
 
 type androidSyncChannelProfile struct {
-	ChannelID    string `json:"channel_id"`
-	Platform     string `json:"platform"`
-	Handle       string `json:"handle"`
-	DisplayName  string `json:"display_name"`
-	Bio          string `json:"bio"`
-	Website      string `json:"website"`
-	Followers    int    `json:"followers"`
-	Following    int    `json:"following"`
-	Verified     bool   `json:"verified"`
-	VerifiedType string `json:"verified_type"`
-	Protected    bool   `json:"protected"`
+	ChannelID          string `json:"channel_id"`
+	Platform           string `json:"platform"`
+	Handle             string `json:"handle"`
+	DisplayName        string `json:"display_name"`
+	Bio                string `json:"bio"`
+	Website            string `json:"website"`
+	Followers          int    `json:"followers"`
+	Following          int    `json:"following"`
+	Verified           bool   `json:"verified"`
+	VerifiedType       string `json:"verified_type"`
+	AccountRegion      string `json:"account_region"`
+	AccountDetailsJSON string `json:"account_details_json"`
+	Protected          bool   `json:"protected"`
 }
 
 type androidSyncRetweetSource struct {
@@ -391,34 +399,40 @@ func optionalNonNegativeQueryInt(raw string, fallback int, name string) (int, er
 
 func androidSyncFeedItemFromModel(item model.FeedItem) androidSyncFeedItem {
 	out := androidSyncFeedItem{
-		TweetID:           item.TweetID,
-		SourceChannelID:   item.SourceChannelID,
-		ChannelID:         item.ChannelID,
-		BodyText:          item.BodyText,
-		Lang:              item.Lang,
-		IsRetweet:         item.IsRetweet,
-		ReposterChannelID: item.ReposterChannelID,
-		QuoteTweetID:      item.QuoteTweetID,
-		QuoteChannelID:    item.QuoteChannelID,
-		QuoteBodyText:     item.QuoteBodyText,
-		QuoteLang:         item.QuoteLang,
-		QuoteMediaJSON:    item.QuoteMediaJSON,
-		QuoteCanonicalURL: androidSyncQuoteCanonicalURL(item),
-		MediaJSON:         item.MediaJSON,
-		Views:             item.Views,
-		Likes:             item.Likes,
-		Retweets:          item.Retweets,
-		CanonicalURL:      androidSyncFeedCanonicalURL(item),
-		CanonicalTweetID:  item.CanonicalTweetID,
-		ReplyChannelID:    item.ReplyChannelID,
-		ReplyToStatus:     item.ReplyToStatus,
-		IsReply:           item.IsReply,
-		IsGhost:           item.IsGhost,
-		ContentHash:       item.ContentHash,
-		BodyTranslation:   item.BodyTranslation,
-		BodySourceLang:    item.BodySourceLang,
-		QuoteTranslation:  item.QuoteTranslation,
-		QuoteSourceLang:   item.QuoteSourceLang,
+		TweetID:            item.TweetID,
+		SourceChannelID:    item.SourceChannelID,
+		ChannelID:          item.ChannelID,
+		BodyText:           item.BodyText,
+		ArticleTitle:       item.ArticleTitle,
+		PollJSON:           item.PollJSON,
+		CommunityNote:      item.CommunityNote,
+		Lang:               item.Lang,
+		IsRetweet:          item.IsRetweet,
+		ReposterChannelID:  item.ReposterChannelID,
+		QuoteTweetID:       item.QuoteTweetID,
+		QuoteChannelID:     item.QuoteChannelID,
+		QuoteBodyText:      item.QuoteBodyText,
+		QuoteArticleTitle:  item.QuoteArticleTitle,
+		QuotePollJSON:      item.QuotePollJSON,
+		QuoteCommunityNote: item.QuoteCommunityNote,
+		QuoteLang:          item.QuoteLang,
+		QuoteMediaJSON:     item.QuoteMediaJSON,
+		QuoteCanonicalURL:  androidSyncQuoteCanonicalURL(item),
+		MediaJSON:          item.MediaJSON,
+		Views:              item.Views,
+		Likes:              item.Likes,
+		Retweets:           item.Retweets,
+		CanonicalURL:       androidSyncFeedCanonicalURL(item),
+		CanonicalTweetID:   item.CanonicalTweetID,
+		ReplyChannelID:     item.ReplyChannelID,
+		ReplyToStatus:      item.ReplyToStatus,
+		IsReply:            item.IsReply,
+		IsGhost:            item.IsGhost,
+		ContentHash:        item.ContentHash,
+		BodyTranslation:    item.BodyTranslation,
+		BodySourceLang:     item.BodySourceLang,
+		QuoteTranslation:   item.QuoteTranslation,
+		QuoteSourceLang:    item.QuoteSourceLang,
 	}
 	if item.QuotePublishedAt != nil {
 		out.QuotePublishedAt = item.QuotePublishedAt.UnixMilli()
@@ -481,17 +495,19 @@ func androidSyncChannelPayloadFromProjection(projection db.AndroidSyncChannelPro
 	}
 	if profile := projection.Profile; profile != nil {
 		payload.Profile = &androidSyncChannelProfile{
-			ChannelID:    profile.ChannelID,
-			Platform:     profile.Platform,
-			Handle:       profile.Handle,
-			DisplayName:  profile.DisplayName,
-			Bio:          profile.Bio,
-			Website:      profile.Website,
-			Followers:    profile.Followers,
-			Following:    profile.Following,
-			Verified:     profile.Verified,
-			VerifiedType: profile.VerifiedType,
-			Protected:    profile.Protected,
+			ChannelID:          profile.ChannelID,
+			Platform:           profile.Platform,
+			Handle:             profile.Handle,
+			DisplayName:        profile.DisplayName,
+			Bio:                profile.Bio,
+			Website:            profile.Website,
+			Followers:          profile.Followers,
+			Following:          profile.Following,
+			Verified:           profile.Verified,
+			VerifiedType:       profile.VerifiedType,
+			AccountRegion:      profile.AccountRegion,
+			AccountDetailsJSON: profile.AccountDetailsJSON,
+			Protected:          profile.Protected,
 		}
 	}
 	return payload

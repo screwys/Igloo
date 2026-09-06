@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/screwys/igloo/internal/fxtwitter"
+	"github.com/screwys/igloo/internal/model"
 )
 
 func TestFetchTwitterSuccess(t *testing.T) {
@@ -41,6 +42,10 @@ func TestFetchTwitterSuccess(t *testing.T) {
 		p.AvatarURL != "https://pbs.twimg.com/profile_images/1000000000000000001/avatar_normal.jpg" ||
 		p.BannerURL != "https://pbs.twimg.com/profile_banners/1000000000000000001/1/1500x500" {
 		t.Fatalf("profile metadata = %+v", p)
+	}
+	details := model.ParseAccountDetails(p.AccountDetailsJSON)
+	if details.UserID != "1000000000000000001" || details.CreatedAt != "2024-01-02T03:04:05Z" || details.Verification != "blue" || details.LocationAccurate != nil {
+		t.Fatalf("account details = %+v", details)
 	}
 }
 

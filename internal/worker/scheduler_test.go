@@ -104,6 +104,74 @@ func TestSuccessfulEmptyInstagramCheckPreservesExistingWindow(t *testing.T) {
 	}
 }
 
+func TestInstagramDiscoveryUsesDetailedProfileSetting(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(enabled), func(t *testing.T) {
+			bin := t.TempDir()
+			calls := filepath.Join(bin, "calls")
+			script := `#!/bin/sh
+printf 'call\n' >> "$IGLOO_INSTAGRAM_CALLS"
+for arg in "$@"; do
+  case "$arg" in
+    extractor.instagram.user-strategy=*) strategy="$arg" ;;
+  esac
+done
+case "$strategy" in
+  extractor.instagram.user-strategy=info,search,web)
+    printf '[2, "", {"username":"sample_source","post_shortcode":"sample_post","user":{"username":"sample_source","biography":"Profile biography","external_url":"https://example.com","count_followed":42,"count_follow":7,"profile_pic_url_hd":"https://cdn.example/avatar.jpg"}}]\n'
+    ;;
+  extractor.instagram.user-strategy=search,web)
+    printf '[2, "", {"username":"sample_source","post_shortcode":"sample_post","user":{"username":"sample_source","full_name":"Sample Source"}}]\n'
+    ;;
+  *) exit 2 ;;
+esac
+`
+			if err := os.WriteFile(filepath.Join(bin, "gallery-dl"), []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("IGLOO_INSTAGRAM_CALLS", calls)
+			database := newTestWorkerDB(t)
+			if err := database.SetSetting("instagram_profile_details", fmt.Sprint(enabled)); err != nil {
+				t.Fatal(err)
+			}
+			if err := database.SetSetting("instagram_include_tagged_default", "false"); err != nil {
+				t.Fatal(err)
+			}
+			manager := &Manager{
+				db: database, cfg: testCfg(t.TempDir()),
+				downloader: &download.Downloader{GalleryDL: &download.GalleryDLWrapper{}},
+			}
+			snapshot, err := manager.checkChannel(context.Background(), model.Channel{
+				ChannelID: "instagram_sample_source", SourceID: "sample_source", Platform: "instagram",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, window := range snapshot.Windows[:2] {
+				profile := window.Profile
+				if !window.Complete || profile == nil || profile.ChannelID != "instagram_sample_source" {
+					t.Fatalf("source profile missing: %+v", window)
+				}
+				if enabled {
+					if profile.Bio != "Profile biography" || profile.Website != "https://example.com" || profile.Followers != 42 || profile.Following != 7 || profile.AvatarURL != "https://cdn.example/avatar.jpg" {
+						t.Fatalf("detailed profile metadata lost: %+v", profile)
+					}
+				} else if profile.Bio != "" || profile.DisplayName != "Sample Source" {
+					t.Fatalf("basic profile metadata changed: %+v", profile)
+				}
+			}
+			rawCalls, err := os.ReadFile(calls)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(rawCalls) != "call\ncall\n" {
+				t.Fatalf("gallery-dl calls = %q, want existing reels and posts discovery only", rawCalls)
+			}
+		})
+	}
+}
+
 func TestYouTubeDiscoveryIncludesMemberOnlyVideosOnlyWhenEnabled(t *testing.T) {
 	bin := t.TempDir()
 	script := `#!/bin/sh

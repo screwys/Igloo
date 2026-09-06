@@ -525,7 +525,13 @@ class AndroidSyncMirror(
             "moments_cursor" ->
                 db.momentsCursorDao()
                     .upsertIfNotOlder(AndroidSyncChangeDecoder.momentsCursor(change))
-            "setting" -> AndroidSyncChangeDecoder.setting(change)
+            "setting" -> {
+                val value = AndroidSyncChangeDecoder.setting(change)
+                if (change.owner_id == PreferencesRepo.Keys.X_ACCOUNT_REGION_ENABLED ||
+                    change.owner_id == PreferencesRepo.Keys.X_COMMUNITY_NOTES_ENABLED) {
+                    db.preferenceDao().put(change.owner_id, value, serverNowMsProvider())
+                }
+            }
             else -> error("unknown thin Android sync owner: ${change.owner_kind}")
         }
         dao.upsertHead(change.toHead())
@@ -724,7 +730,10 @@ class AndroidSyncMirror(
             "channel_star" -> db.channelStarDao().delete(ownerId)
             "channel_setting" -> db.channelSettingDao().delete(ownerId)
             "moments_cursor" -> db.momentsCursorDao().delete(ownerId)
-            "setting" -> Unit
+            "setting" -> if (ownerId == PreferencesRepo.Keys.X_ACCOUNT_REGION_ENABLED ||
+                ownerId == PreferencesRepo.Keys.X_COMMUNITY_NOTES_ENABLED) {
+                db.preferenceDao().delete(ownerId)
+            }
             "feed" -> if (ownerId !in protectedContent) db.feedItemDao().deleteByIds(listOf(ownerId))
             "video" -> {
                 val video = db.videoDao().getById(ownerId)

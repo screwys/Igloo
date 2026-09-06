@@ -7,6 +7,102 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
+func TestFeedArticlePersistsThroughSyncAndSparseRefresh(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UTC()
+	item := model.FeedItem{TweetID: "sample_article", AuthorHandle: "sample_author", ArticleTitle: "Article title", BodyText: "Full article body", QuoteTweetID: "sample_quote", QuoteAuthorHandle: "quote_author", QuoteArticleTitle: "Quote article", QuoteBodyText: "Full quote article", PublishedAt: &now, FetchedAt: now, ContentHash: "article_hash"}
+	item.MediaJSON = `[{"type":"photo","url":"https://pbs.twimg.com/media/article.jpg"}]`
+	if _, err := d.UpsertFeedItems([]model.FeedItem{item}); err != nil {
+		t.Fatal(err)
+	}
+	item.ArticleTitle, item.QuoteArticleTitle = "", ""
+	item.BodyText, item.QuoteBodyText = "Preview", "Quote preview"
+	item.MediaJSON, item.ContentHash = `[]`, "preview_hash"
+	if _, err := d.UpsertFeedItems([]model.FeedItem{item}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := d.GetFeedItemByTweetID(item.TweetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.ArticleTitle != "Article title" || stored.BodyText != "Full article body" || stored.QuoteArticleTitle != "Quote article" || stored.QuoteBodyText != "Full quote article" {
+		t.Fatalf("article content lost: %+v", stored)
+	}
+	if len(stored.Media) != 1 || stored.ContentHash != "article_hash" {
+		t.Fatalf("article media or content identity lost: %+v", stored)
+	}
+	projection, err := d.ListAndroidSyncFeedProjection([]string{item.TweetID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	synced := projection.Rows[item.TweetID].Item
+	if synced.ArticleTitle != stored.ArticleTitle || synced.BodyText != stored.BodyText || synced.QuoteArticleTitle != stored.QuoteArticleTitle {
+		t.Fatalf("sync lost article: %+v", synced)
+	}
+}
+
+func TestFeedPollAndNotesSurviveSparseRefreshAndSync(t *testing.T) {
+	d := openWritableTestDB(t)
+	now := time.Now().UTC()
+	const poll = `{"choices":[{"label":"First","count":3,"percentage":75},{"label":"Second","count":1,"percentage":25}],"total_votes":4,"ends_at":"2026-09-07T12:00:00Z","captured_at":1788696000000}`
+	item := model.FeedItem{TweetID: "sample_poll", AuthorHandle: "sample_author", BodyText: "Choose one", PollJSON: poll, CommunityNote: "Source https://example.test/evidence", QuoteTweetID: "sample_quote", QuoteAuthorHandle: "quote_author", QuotePollJSON: poll, QuoteCommunityNote: "Quote context", PublishedAt: &now, FetchedAt: now, ContentHash: "sample_poll_hash"}
+	if _, err := d.UpsertFeedItems([]model.FeedItem{item}); err != nil {
+		t.Fatal(err)
+	}
+	item.PollJSON, item.CommunityNote, item.QuotePollJSON, item.QuoteCommunityNote = "", "", "", ""
+	if _, err := d.UpsertFeedItems([]model.FeedItem{item}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := d.GetFeedItemByTweetID(item.TweetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.PollJSON != poll || stored.CommunityNote != "Source https://example.test/evidence" || stored.QuotePollJSON != poll || stored.QuoteCommunityNote != "Quote context" {
+		t.Fatalf("sparse refresh erased context: %+v", stored)
+	}
+	projection, err := d.ListAndroidSyncFeedProjection([]string{item.TweetID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	synced := projection.Rows[item.TweetID].Item
+	if synced.PollJSON != poll || synced.CommunityNote != stored.CommunityNote || synced.QuotePollJSON != poll || synced.QuoteCommunityNote != stored.QuoteCommunityNote {
+		t.Fatalf("sync lost context: %+v", synced)
+	}
+	item.PollJSON = `{"choices":[{"label":"First","count":6,"percentage":75},{"label":"Second","count":2,"percentage":25}],"total_votes":8,"ends_at":"2026-09-07T12:00:00Z","captured_at":1788699600000}`
+	item.CommunityNote = "Updated context https://example.test/evidence"
+	if _, err := d.UpsertFeedItems([]model.FeedItem{item}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err = d.GetFeedItemByTweetID(item.TweetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.PollJSON != item.PollJSON || stored.CommunityNote != item.CommunityNote {
+		t.Fatalf("fresh context was ignored: %+v", stored)
+	}
+}
+
+func TestGhostRefreshFillsMissingRealContent(t *testing.T) {
+	d := openWritableTestDB(t)
+	item := model.FeedItem{TweetID: "sample_empty", AuthorHandle: "sample_author", ContentHash: "captured_hash", FetchedAt: time.Now().UTC()}
+	if _, err := d.UpsertFeedItems([]model.FeedItem{item}); err != nil {
+		t.Fatal(err)
+	}
+	item.BodyText, item.ArticleTitle = "Recovered body", "Recovered article"
+	item.MediaJSON = `[{"type":"photo","url":"https://pbs.twimg.com/media/recovered.jpg"}]`
+	item.ContentHash = "ghost-sample_empty"
+	if err := d.UpsertGhostFeedItem(item); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := d.GetFeedItemByTweetID(item.TweetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.IsGhost || stored.BodyText != item.BodyText || stored.ArticleTitle != item.ArticleTitle || stored.MediaJSON != item.MediaJSON || stored.ContentHash != "captured_hash" {
+		t.Fatalf("missing real content not filled: %+v", stored)
+	}
+}
+
 func TestListFeedItemsPage(t *testing.T) {
 	d := openTestDB(t)
 	items, err := d.ListFeedItemsPage(40, nil, false)

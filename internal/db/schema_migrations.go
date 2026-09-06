@@ -24,6 +24,18 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260906_add_x_account_details",
+		apply: addXAccountDetails,
+	},
+	{
+		name:  "20260906_add_x_poll_and_community_notes",
+		apply: addXPollAndCommunityNotes,
+	},
+	{
+		name:  "20260906_add_x_articles_and_account_region",
+		apply: addXArticlesAndAccountRegion,
+	},
+	{
 		name:  "20260901_add_moments_cursor_position",
 		apply: addMomentsCursorPosition,
 	},
@@ -119,6 +131,74 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addXAccountDetails(tx *sql.Tx) error {
+	exists, err := schemaColumnExists(tx, "channel_profiles", "account_details_json")
+	if err != nil {
+		return err
+	}
+	if !exists {
+		if _, err := tx.Exec("ALTER TABLE channel_profiles ADD COLUMN account_details_json TEXT"); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec("DROP TRIGGER IF EXISTS android_sync_head_channel_profiles_update"); err != nil {
+		return err
+	}
+	return ensureAndroidSyncHeadTriggers(tx)
+}
+
+func addXPollAndCommunityNotes(tx *sql.Tx) error {
+	for _, column := range []string{"poll_json", "community_note", "quote_poll_json", "quote_community_note"} {
+		exists, err := schemaColumnExists(tx, "feed_items", column)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			if _, err := tx.Exec("ALTER TABLE feed_items ADD COLUMN " + column + " TEXT"); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := tx.Exec("DROP TRIGGER IF EXISTS android_sync_head_feed_items_update"); err != nil {
+		return err
+	}
+	for _, event := range []string{"insert", "update", "delete"} {
+		if _, err := tx.Exec("DROP TRIGGER IF EXISTS android_sync_head_settings_" + event); err != nil {
+			return err
+		}
+	}
+	return ensureAndroidSyncHeadTriggers(tx)
+}
+
+func addXArticlesAndAccountRegion(tx *sql.Tx) error {
+	for _, column := range []struct{ table, name string }{
+		{"feed_items", "article_title"},
+		{"feed_items", "quote_article_title"},
+		{"channel_profiles", "account_region"},
+	} {
+		exists, err := schemaColumnExists(tx, column.table, column.name)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			if _, err := tx.Exec("ALTER TABLE " + column.table + " ADD COLUMN " + column.name + " TEXT"); err != nil {
+				return err
+			}
+		}
+	}
+	for _, table := range []string{"feed_items", "channel_profiles"} {
+		if _, err := tx.Exec("DROP TRIGGER IF EXISTS android_sync_head_" + table + "_update"); err != nil {
+			return err
+		}
+	}
+	for _, event := range []string{"insert", "update", "delete"} {
+		if _, err := tx.Exec("DROP TRIGGER IF EXISTS android_sync_head_settings_" + event); err != nil {
+			return err
+		}
+	}
+	return ensureAndroidSyncHeadTriggers(tx)
 }
 
 func addMomentsCursorPosition(tx *sql.Tx) error {

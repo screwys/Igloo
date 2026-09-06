@@ -83,7 +83,7 @@ func (db *DB) ListAndroidSyncChannelProjections(channelIDs []string) ([]AndroidS
 			       COALESCE(cp.display_name, ''), COALESCE(cp.bio, ''), COALESCE(cp.website, ''),
 			       COALESCE(cp.followers, 0), COALESCE(cp.following, 0),
 			       COALESCE(cp.verified, 0), COALESCE(cp.verified_type, ''),
-			       COALESCE(cp.protected, 0)
+			       COALESCE(cp.protected, 0), COALESCE(cp.account_region, ''), COALESCE(cp.account_details_json, '')
 			FROM desired d
 			LEFT JOIN channels c ON c.channel_id = d.channel_id
 			LEFT JOIN channel_profiles cp ON cp.channel_id = d.channel_id AND cp.tombstone = 0
@@ -129,13 +129,13 @@ func scanAndroidSyncChannelProjection(rows *sql.Rows) (AndroidSyncChannelProject
 	var profileID sql.NullString
 	var profilePlatform, handle, displayName, bio, website string
 	var followers, following, verified, protected int
-	var verifiedType string
+	var verifiedType, accountRegion, accountDetailsJSON string
 	if err := rows.Scan(
 		&projection.ChannelID,
 		&channelRowID, &channelID, &sourceID, &name, &rawURL, &platform, &quality,
 		&lastChecked, &createdAt,
 		&profileID, &profilePlatform, &handle, &displayName, &bio, &website,
-		&followers, &following, &verified, &verifiedType, &protected,
+		&followers, &following, &verified, &verifiedType, &protected, &accountRegion, &accountDetailsJSON,
 	); err != nil {
 		return AndroidSyncChannelProjection{}, err
 	}
@@ -159,17 +159,19 @@ func scanAndroidSyncChannelProjection(rows *sql.Rows) (AndroidSyncChannelProject
 
 	if profileID.Valid {
 		profile := &model.ChannelProfile{
-			ChannelID:    profileID.String,
-			Platform:     profilePlatform,
-			Handle:       handle,
-			DisplayName:  displayName,
-			Bio:          bio,
-			Website:      website,
-			Followers:    followers,
-			Following:    following,
-			Verified:     verified != 0,
-			VerifiedType: verifiedType,
-			Protected:    protected != 0,
+			ChannelID:          profileID.String,
+			Platform:           profilePlatform,
+			Handle:             handle,
+			DisplayName:        displayName,
+			Bio:                bio,
+			Website:            website,
+			Followers:          followers,
+			Following:          following,
+			Verified:           verified != 0,
+			VerifiedType:       verifiedType,
+			Protected:          protected != 0,
+			AccountRegion:      accountRegion,
+			AccountDetailsJSON: accountDetailsJSON,
 		}
 		projection.Profile = profile
 	}

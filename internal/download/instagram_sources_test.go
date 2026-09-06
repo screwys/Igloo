@@ -28,7 +28,7 @@ esac
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	snapshot, err := (&GalleryDLWrapper{Runner: CommandRunner{}}).InstagramChannel(context.Background(), "sample.creator", 20, "")
+	snapshot, err := (&GalleryDLWrapper{Runner: CommandRunner{}}).InstagramChannel(context.Background(), "sample.creator", 20, "", false)
 	if err == nil {
 		t.Fatal("InstagramChannel returned nil error after one source failed")
 	}
@@ -54,7 +54,7 @@ exit 0
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	snapshot, err := (&GalleryDLWrapper{Runner: CommandRunner{}}).InstagramChannel(context.Background(), "sample.creator", 20, "")
+	snapshot, err := (&GalleryDLWrapper{Runner: CommandRunner{}}).InstagramChannel(context.Background(), "sample.creator", 20, "", false)
 	if err != nil {
 		t.Fatalf("InstagramChannel: %v", err)
 	}
@@ -79,7 +79,7 @@ esac
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	snapshot, err := (&GalleryDLWrapper{Runner: CommandRunner{}}).InstagramChannel(context.Background(), "sample.creator", 20, "")
+	snapshot, err := (&GalleryDLWrapper{Runner: CommandRunner{}}).InstagramChannel(context.Background(), "sample.creator", 20, "", false)
 	if err == nil {
 		t.Fatal("InstagramChannel returned nil error after one source failed")
 	}
@@ -107,7 +107,7 @@ esac
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	snapshot, err := (&GalleryDLWrapper{Runner: CommandRunner{}}).InstagramChannel(context.Background(), "sample.creator", 2, "")
+	snapshot, err := (&GalleryDLWrapper{Runner: CommandRunner{}}).InstagramChannel(context.Background(), "sample.creator", 2, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

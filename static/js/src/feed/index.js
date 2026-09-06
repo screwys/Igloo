@@ -47,6 +47,7 @@ var activeThreadRoute = null
 var activeThreadAbort = null
 var lastFeedThreadRouteState = null
 var feedSeenTracking = null
+var fetchedThreadRoutes = new WeakSet()
 
 // ── State helpers ──
 
@@ -162,6 +163,7 @@ function insertThreadRoute(route, returnState) {
   _focusedFeedCard = null
   initFeedCards(route)
   initThreadBackLink(route)
+  initThreadAutoFetch(route)
   window.scrollTo(0, 0)
   return true
 }
@@ -189,6 +191,54 @@ function parseThreadRouteHTML(html) {
   var route = template.content.firstElementChild
   if (!route || !route.matches || !route.matches('[data-thread-route]')) return null
   return route
+}
+
+function initThreadAutoFetch(route) {
+  if (!route || fetchedThreadRoutes.has(route)) return
+  var tweetID = route.getAttribute('data-thread-id')
+  if (!tweetID) return
+  fetchedThreadRoutes.add(route)
+  var href = window.location.pathname + window.location.search
+  var status = route.querySelector('[data-thread-fetch-status]')
+  function isCurrent() {
+    return document.contains(route) && href === window.location.pathname + window.location.search
+  }
+  if (status) {
+    status.hidden = false
+    status.setAttribute('data-thread-fetch-state', 'loading')
+    status.textContent = t('feed_thread_fetching', 'Fetching replies and quote-posts…')
+  }
+  return apiFetch('/api/thread/' + encodeURIComponent(tweetID) + '/refresh', { method: 'POST' })
+    .then(function () {
+      if (!isCurrent()) return null
+      var back = route.querySelector('[data-thread-back-link]')
+      return fetch(partialThreadURL(href, back && back.getAttribute('href')), {
+        credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' }
+      }).then(function (response) {
+        if (!response.ok) throw new Error('thread partial failed')
+        return response.text()
+      })
+    })
+    .then(function (html) {
+      if (html === null || !isCurrent()) return
+      var refreshed = parseThreadRouteHTML(html)
+      var nextList = refreshed && refreshed.querySelector('[data-thread-page]')
+      var list = route.querySelector('[data-thread-page]')
+      if (!nextList || !list) throw new Error('thread partial invalid')
+      // Keep the route and its once-per-opening request identity in place.
+      list.replaceChildren.apply(list, Array.from(nextList.childNodes))
+      _feedFocusDirty = true
+      _focusedFeedEntry = null
+      _focusedFeedCard = null
+      initFeedCards(list)
+      if (window.htmx) window.htmx.process(list)
+      if (status) status.hidden = true
+    })
+    .catch(function () {
+      if (!isCurrent() || !status) return
+      status.setAttribute('data-thread-fetch-state', 'error')
+      status.textContent = t('feed_thread_fetch_failed', 'Could not update this thread. Saved posts remain available.')
+    })
 }
 
 function closeThreadRoute(returnState) {
@@ -603,7 +653,8 @@ function openFeedBookmarkMenu(anchorEl, root) {
   var tweetId = String(root.getAttribute('data-tweet-id') || '').trim()
   var bodyText = ((root.querySelector('.feed-body-text') || {}).textContent || '')
     + ' ' + ((root.querySelector('.feed-quote-text') || {}).textContent || '')
-  var title = String((root.querySelector('.feed-body-text') || {}).textContent || '').trim()
+  var title = String((root.querySelector('.feed-article-title') || {}).textContent || '').trim()
+    || String((root.querySelector('.feed-body-text') || {}).textContent || '').trim()
     || String((root.querySelector('.feed-text') || {}).textContent || '').trim()
     || String((root.querySelector('.feed-summary') || {}).textContent || '').trim()
     || String(root.getAttribute('data-feed-author') || '').trim()
@@ -939,6 +990,9 @@ document.addEventListener('submit', function (event) {
 document.addEventListener('click', function (event) {
   var threadOpen = event.target && event.target.closest ? event.target.closest('[data-feed-thread-open]') : null
   if (threadOpen) {
+    threadOpen.classList.add('reply-opening')
+    window.setTimeout(function () { threadOpen.classList.remove('reply-opening') }, 360)
+    closeAllFeedMenus()
     var tweetId = String(threadOpen.getAttribute('data-thread-tweet-id') || '').trim()
     var threadHref = threadOpen.getAttribute('href')
     if (tweetId) writeFeedThreadReturn(tweetId)
@@ -1596,3 +1650,4 @@ observeSentinelEarly()
 initRetweetersDialog()
 restoreFeedThreadReturn()
 initThreadBackLink()
+initThreadAutoFetch(document.querySelector('[data-thread-route]'))

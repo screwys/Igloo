@@ -8,15 +8,19 @@ import (
 	"testing"
 )
 
-func TestGalleryDLDownloadStagesUnderDestinationAndMovesOutputs(t *testing.T) {
+func TestGalleryDLInstagramPostStagesUnderDestinationAndMovesMusic(t *testing.T) {
 	bin := t.TempDir()
 	writeExecutable(t, filepath.Join(bin, "gallery-dl"), `#!/bin/sh
 out=""
+audio=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -D)
       shift
       out="$1"
+      ;;
+    extractor.instagram.post.audio=true)
+      audio="true"
       ;;
   esac
   shift
@@ -27,7 +31,8 @@ case "$out" in
 esac
 mkdir -p "$out"
 printf 'image data' > "$out/slide.jpg"
-printf 'audio data' > "$out/sound.mp3"
+printf 'second image data' > "$out/slide2.jpg"
+if [ "$audio" = "true" ]; then printf 'audio data' > "$out/sound.m4a"; fi
 printf '{"id":"source"}' > "$out/slide.json"
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -36,7 +41,7 @@ printf '{"id":"source"}' > "$out/slide.json"
 	t.Setenv("EXPECTED_DEST", destDir)
 	completed, err := (&GalleryDLWrapper{Runner: CommandRunner{}}).DownloadCompleted(
 		context.Background(),
-		"https://www.tiktok.com/@sample_handle/video/sample_video",
+		"https://www.instagram.com/p/sample_post/",
 		destDir,
 		"post",
 		"",
@@ -48,7 +53,8 @@ printf '{"id":"source"}' > "$out/slide.json"
 
 	wantPaths := []string{
 		filepath.Join(destDir, "post_1.jpg"),
-		filepath.Join(destDir, "post.mp3"),
+		filepath.Join(destDir, "post_2.jpg"),
+		filepath.Join(destDir, "post.m4a"),
 	}
 	if len(paths) != len(wantPaths) {
 		t.Fatalf("paths = %#v, want %#v", paths, wantPaths)
@@ -59,7 +65,8 @@ printf '{"id":"source"}' > "$out/slide.json"
 		}
 	}
 	assertFileContent(t, filepath.Join(destDir, "post_1.jpg"), "image data")
-	assertFileContent(t, filepath.Join(destDir, "post.mp3"), "audio data")
+	assertFileContent(t, filepath.Join(destDir, "post_2.jpg"), "second image data")
+	assertFileContent(t, filepath.Join(destDir, "post.m4a"), "audio data")
 	if completed.InfoJSONPath != filepath.Join(destDir, "post.info.json") {
 		t.Fatalf("info path = %q", completed.InfoJSONPath)
 	}

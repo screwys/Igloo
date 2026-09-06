@@ -534,10 +534,12 @@ interface AndroidSyncDao {
              AND asa.local_path IS NOT NULL
             WHERE saved.state = 'downloaded' AND COALESCE(v.is_temp, 0) = 0
             UNION
-            SELECT fi.reply_to_status
-            FROM feed_items fi
-            JOIN protected p ON p.owner_id = fi.tweet_id
-            WHERE COALESCE(fi.reply_to_status, '') != ''
+            SELECT CASE WHEN fi.tweet_id = p.owner_id THEN fi.reply_to_status ELSE fi.tweet_id END
+            FROM protected p
+            JOIN feed_items fi
+              ON (fi.tweet_id = p.owner_id AND COALESCE(fi.reply_to_status, '') != '')
+              OR (fi.is_ghost = 1 AND fi.tweet_id != p.owner_id
+                  AND (fi.reply_to_status = p.owner_id OR fi.quote_tweet_id = p.owner_id))
         )
         SELECT owner_id FROM protected
         """,

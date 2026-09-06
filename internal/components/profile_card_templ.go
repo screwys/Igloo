@@ -223,6 +223,10 @@ func ProfileCard(props PageProps, p *model.ChannelProfile, size string, isFollow
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
+				templ_7745c5c3_Err = accountDetailsBadge(props, p.AccountRegion, p.AccountDetailsJSON, profileLabel(p), p.Handle).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -523,6 +527,10 @@ func ProfileCardTop(props PageProps, p *model.ChannelProfile, size string, isFol
 					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/profile_card.templ`, Line: 78, Col: 79}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = accountDetailsBadge(props, p.AccountRegion, p.AccountDetailsJSON, profileLabel(p), p.Handle).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1172,7 +1180,7 @@ func profileRepostOnLabel(props PageProps, platform string) string {
 func verifiedClass(platform, t string) string {
 	if platform == "twitter" {
 		switch t {
-		case "business":
+		case "business", "organization":
 			return "gold"
 		case "government":
 			return "grey"

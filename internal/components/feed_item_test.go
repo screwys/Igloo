@@ -10,6 +10,26 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
+func TestArticleOpensThreadAndOnlyRendersFullTextInReader(t *testing.T) {
+	item := model.FeedItem{TweetID: "sample_article", AuthorHandle: "sample_author", ArticleTitle: "Article title", BodyText: "Full article paragraph", QuoteTweetID: "sample_quote", QuoteArticleTitle: "Quoted article title", QuoteBodyText: "Full quoted article paragraph"}
+	var preview bytes.Buffer
+	if err := feedLeafCard(PageProps{}, item, false).Render(context.Background(), &preview); err != nil {
+		t.Fatal(err)
+	}
+	html := preview.String()
+	if !strings.Contains(html, `href="/thread/sample_article"`) || !strings.Contains(html, "Article title") || strings.Contains(html, ">Full article paragraph<") || strings.Contains(html, ">Full quoted article paragraph<") {
+		t.Fatalf("article preview should open thread: %s", html)
+	}
+	var reader bytes.Buffer
+	if err := ThreadRoutePartial(PageProps{}, []model.FeedItem{item}, nil, "/feed").Render(context.Background(), &reader); err != nil {
+		t.Fatal(err)
+	}
+	html = reader.String()
+	if !strings.Contains(html, ">Full article paragraph<") || !strings.Contains(html, ">Full quoted article paragraph<") || strings.Contains(html, "data-feed-text-clamp") || strings.Contains(html, "data-feed-text-toggle") {
+		t.Fatalf("thread should render full article without expansion: %s", html)
+	}
+}
+
 func TestFeedMediaOverlayTextCannotCreateHorizontalScroller(t *testing.T) {
 	cssBytes, err := os.ReadFile("../../static/style.css")
 	if err != nil {
@@ -163,7 +183,6 @@ func TestFeedItemTwoPostThreadOmitsCapsule(t *testing.T) {
 	}
 	for _, notWant := range []string{
 		`data-feed-thread-capsule`,
-		`data-feed-thread-open`,
 		`feed-thread-capsule-text`,
 	} {
 		if strings.Contains(html, notWant) {
@@ -302,7 +321,7 @@ func TestFeedItemThreadPreviewUsesRootAndLeaf(t *testing.T) {
 	}
 }
 
-func TestFeedItemActionsDoNotShowStandaloneThreadButton(t *testing.T) {
+func TestFeedItemActionsOpenStandaloneThread(t *testing.T) {
 	item := model.FeedItem{
 		TweetID:      "leaf_1",
 		AuthorHandle: "sample_author_a",
@@ -314,8 +333,8 @@ func TestFeedItemActionsDoNotShowStandaloneThreadButton(t *testing.T) {
 		t.Fatalf("render feed item: %v", err)
 	}
 	html := buf.String()
-	if strings.Contains(html, `data-feed-action="thread"`) || strings.Contains(html, `data-feed-thread-open`) {
-		t.Fatalf("standalone action row should not render local thread button: %s", html)
+	if !strings.Contains(html, `data-feed-thread-open`) || !strings.Contains(html, `href="/thread/leaf_1"`) {
+		t.Fatalf("standalone action row should open the local thread: %s", html)
 	}
 }
 

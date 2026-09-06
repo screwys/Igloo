@@ -20,6 +20,7 @@ import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
@@ -49,6 +50,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import java.text.DateFormat
+import java.text.NumberFormat
+import java.util.Date
 
 internal class NativeFeedViewHolder(
     context: Context,
@@ -119,6 +123,8 @@ internal class NativeFeedViewHolder(
             channelId = item.channelId.orEmpty(),
             displayName = post.author.displayName,
             handle = post.author.handle,
+            accountRegion = row.authorAccountRegion,
+            accountDetailsJson = row.authorAccountDetailsJson,
             timestamp = localizedRelativeTime(views.root.context, item.publishedAt),
             showFollow = item.channelId?.isNotBlank() == true,
             isFollowed = row.channelIsFollowed == 1,
@@ -148,12 +154,18 @@ internal class NativeFeedViewHolder(
         )
 
         bindReply(row, callbacks, colors, visible = adapterRow.threaded.chain.isEmpty())
+        views.articleTitle.text = item.articleTitle.orEmpty()
+        views.articleTitle.setTextColor(colors.onSurface)
+        views.articleTitle.visibility = if (item.articleTitle.isNullOrBlank()) View.GONE else View.VISIBLE
         bindBody(
             textView = views.body,
             moreView = views.showMore,
             text = bodyText,
             colors = colors,
             callbacks = callbacks,
+            articleTitle = item.articleTitle,
+            showFullArticle = adapterRow.showFullArticles,
+            onArticleOpen = { callbacks.onRowClick(row) },
         )
         bindMediaGrid(
             container = views.media,
@@ -164,6 +176,7 @@ internal class NativeFeedViewHolder(
             colors = colors,
             callbacks = callbacks,
         )
+        bindDetails(views.details, item.pollJson, item.communityNote, colors, callbacks)
         bindQuote(row, post, quoteTranslation, colors, callbacks)
         bindActions(row, post, shareUrl, colors, callbacks)
         bindThreadCapsule(adapterRow.threaded, colors, callbacks)
@@ -337,6 +350,8 @@ internal class NativeFeedViewHolder(
             channelId = item.channelId.orEmpty(),
             displayName = authorDisplay,
             handle = authorHandle,
+            accountRegion = row.authorAccountRegion,
+            accountDetailsJson = row.authorAccountDetailsJson,
             timestamp = localizedRelativeTime(views.root.context, item.publishedAt),
             showFollow = false,
             isFollowed = false,
@@ -351,7 +366,9 @@ internal class NativeFeedViewHolder(
         )
         container.addView(header.root)
 
-        val body = stripReplyPrefix(row, item.bodyText.orEmpty())
+        val body = if (!item.articleTitle.isNullOrBlank()) {
+            item.articleTitle + "\n" + item.bodyText.orEmpty().take(600)
+        } else stripReplyPrefix(row, item.bodyText.orEmpty())
         if (body.isNotBlank()) {
             container.addView(
                 bodyText(views.root.context).apply {
@@ -379,6 +396,11 @@ internal class NativeFeedViewHolder(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             )
+        }
+        if (!item.pollJson.isNullOrBlank() || !item.communityNote.isNullOrBlank()) {
+            val details = LinearLayout(views.root.context).apply { orientation = LinearLayout.VERTICAL }
+            bindDetails(details, item.pollJson, item.communityNote, colors, callbacks)
+            container.addView(details)
         }
         container.addView(
             threadAncestorActions(post, colors, callbacks),
@@ -447,7 +469,21 @@ internal class NativeFeedViewHolder(
         text: String,
         colors: NativeFeedColors,
         callbacks: NativeFeedCallbacks,
+        articleTitle: String? = null,
+        showFullArticle: Boolean = false,
+        onArticleOpen: () -> Unit = {},
     ) {
+        if (!articleTitle.isNullOrBlank()) {
+            textView.visibility = if (text.isBlank()) View.GONE else View.VISIBLE
+            bindMentionText(textView, if (showFullArticle) text else text.take(600), colors, callbacks)
+            textView.maxLines = if (showFullArticle) Int.MAX_VALUE else NativeFeedQuoteCollapsedLines
+            textView.ellipsize = if (showFullArticle) null else TextUtils.TruncateAt.END
+            moreView.visibility = if (showFullArticle) View.GONE else View.VISIBLE
+            moreView.text = textView.context.getString(R.string.feed_article_open)
+            moreView.setTextColor(colors.primary)
+            moreView.setOnClickListener { onArticleOpen() }
+            return
+        }
         if (text.isBlank()) {
             textView.visibility = View.GONE
             moreView.visibility = View.GONE
@@ -528,6 +564,8 @@ internal class NativeFeedViewHolder(
             channelId = quoteChannelId,
             displayName = quoteDisplay,
             handle = quoteHandle,
+            accountRegion = row.quoteAuthorAccountRegion,
+            accountDetailsJson = row.quoteAuthorAccountDetailsJson,
             timestamp = quoteTimestamp,
             showFollow = followTarget != null,
             isFollowed = false,
@@ -549,19 +587,81 @@ internal class NativeFeedViewHolder(
             } else {
                 item.quoteBodyText.orEmpty()
             }
-        if (quoteBody.isBlank()) {
+        if (quoteBody.isBlank() && item.quoteArticleTitle.isNullOrBlank()) {
             views.quoteBody.visibility = View.GONE
             views.quoteBody.setOnClickListener(null)
         } else {
             views.quoteBody.visibility = View.VISIBLE
             views.quoteBody.setTextColor(colors.onSurface)
             views.quoteBody.movementMethod = null
-            views.quoteBody.text = quoteBody
-            views.quoteBody.maxLines = NativeFeedQuoteCollapsedLines
-            views.quoteBody.ellipsize = TextUtils.TruncateAt.END
+            val fullArticle = !item.quoteArticleTitle.isNullOrBlank() && callbacks.showFullArticles
+            views.quoteBody.text = when {
+                item.quoteArticleTitle.isNullOrBlank() -> quoteBody
+                fullArticle -> item.quoteArticleTitle + "\n\n" + quoteBody
+                else -> item.quoteArticleTitle + "\n" + views.root.context.getString(R.string.feed_article_open)
+            }
+            views.quoteBody.maxLines = if (fullArticle) Int.MAX_VALUE else NativeFeedQuoteCollapsedLines
+            views.quoteBody.ellipsize = if (fullArticle) null else TextUtils.TruncateAt.END
             views.quoteBody.setOnClickListener { callbacks.onQuoteOpen(row) }
         }
+        bindDetails(views.quoteDetails, item.quotePollJson, item.quoteCommunityNote, colors, callbacks)
         bindQuoteMedia(row, post, colors, callbacks)
+    }
+
+    private fun bindDetails(
+        container: LinearLayout,
+        pollJson: String?,
+        communityNote: String?,
+        colors: NativeFeedColors,
+        callbacks: NativeFeedCallbacks,
+    ) {
+        container.removeAllViews()
+        val context = container.context
+        parseFeedPoll(pollJson)?.let { poll ->
+            val numbers = NumberFormat.getIntegerInstance()
+            val percentages = NumberFormat.getPercentInstance().apply { maximumFractionDigits = 1 }
+            container.addView(smallText(context).apply {
+                text = context.getString(R.string.feed_poll_results)
+                setTextColor(colors.onSurfaceMuted)
+            })
+            poll.choices.forEach { choice ->
+                container.addView(bodyText(context).apply {
+                    text = "${choice.label} · ${percentages.format(choice.percentage / 100)} (${numbers.format(choice.count)})"
+                    setTextColor(colors.onSurface)
+                })
+                container.addView(ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
+                    isIndeterminate = false
+                    max = 1000
+                    progress = (choice.percentage * 10).toInt()
+                    progressTintList = android.content.res.ColorStateList.valueOf(colors.primary)
+                    progressBackgroundTintList = android.content.res.ColorStateList.valueOf(colors.surfaceHighest)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(6)))
+            }
+            val dates = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+            val summary = mutableListOf(
+                context.getString(R.string.feed_poll_votes, numbers.format(poll.totalVotes)),
+                context.getString(R.string.feed_poll_captured, dates.format(Date(poll.capturedAt))),
+            )
+            poll.endsAtMs?.let { endsAt ->
+                summary += context.getString(R.string.feed_poll_closes, dates.format(Date(endsAt)))
+                summary += context.getString(if (poll.closedAtCapture == true)
+                    R.string.feed_poll_closed_at_capture else R.string.feed_poll_open_at_capture)
+            }
+            container.addView(smallText(context).apply {
+                text = summary.joinToString(" · ")
+                setTextColor(colors.onSurfaceMuted)
+            })
+        }
+        communityNote?.takeIf(String::isNotBlank)?.let { note ->
+            container.addView(smallText(context).apply {
+                text = context.getString(R.string.feed_community_note)
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(colors.onSurfaceMuted)
+            })
+            container.addView(bodyText(context).apply { bindMentionText(this, note, colors, callbacks) })
+        }
+        container.visibility = if (container.childCount == 0) View.GONE else View.VISIBLE
     }
 
     private fun bindQuoteMedia(
@@ -666,13 +766,6 @@ internal class NativeFeedViewHolder(
                     },
                 )
         }
-        if (items.isEmpty()) {
-            items +=
-                NativeFeedMenuItem(
-                    label = context.getString(R.string.feed_open_thread),
-                    action = { callbacks.onRowClick(post.row) },
-                )
-        }
         showNativeFeedPopup(anchor, getColors(), items)
     }
 
@@ -714,13 +807,13 @@ internal class NativeFeedViewHolder(
         container.removeAllViews()
         configureMenuButton(menu, colors)
         menu.setOnClickListener { showMenu(menu, row, post, shareUrl) }
-        container.addView(menu, equalActionLayoutParams())
         NativeFeedPrimaryActions.forEach { action ->
             val button = actionIconButton(views.root.context, colors)
             button.contentDescription = action.contentDescription(views.root.context, post)
             button.isEnabled =
                 when (action) {
-                    NativeFeedPrimaryAction.Share -> canOpenExternal
+                    NativeFeedPrimaryAction.Share, NativeFeedPrimaryAction.External -> canOpenExternal
+                    NativeFeedPrimaryAction.Reply -> true
                     NativeFeedPrimaryAction.Like,
                     NativeFeedPrimaryAction.Bookmark -> true
                 }
@@ -740,6 +833,16 @@ internal class NativeFeedViewHolder(
             )
             button.setOnClickListener {
                 when (action) {
+                    NativeFeedPrimaryAction.Reply -> {
+                        if (android.animation.ValueAnimator.areAnimatorsEnabled()) {
+                            button.animate().cancel()
+                            button.scaleX = 0.9f
+                            button.scaleY = 0.9f
+                            button.animate().scaleX(1f).scaleY(1f).setDuration(160).start()
+                        }
+                        callbacks.onQuoteOpen(row)
+                    }
+                    NativeFeedPrimaryAction.External -> openExternalUrl(views.root.context, shareUrl)
                     NativeFeedPrimaryAction.Share ->
                         sharePlainText(
                             views.root.context,
@@ -753,6 +856,7 @@ internal class NativeFeedViewHolder(
             }
             container.addView(button, equalActionLayoutParams())
         }
+        container.addView(menu, equalActionLayoutParams())
     }
 
     private fun equalActionLayoutParams(): LinearLayout.LayoutParams =
@@ -814,6 +918,8 @@ internal class NativeFeedViewHolder(
         channelId: String,
         displayName: String,
         handle: String,
+        accountRegion: String? = null,
+        accountDetailsJson: String? = null,
         timestamp: String,
         showFollow: Boolean,
         isFollowed: Boolean,
@@ -826,17 +932,20 @@ internal class NativeFeedViewHolder(
         header.root.setOnClickListener { onClick() }
         header.avatar.setOnClickListener { onClick() }
         loadAvatar(header.avatar, channelId)
+        val isX = channelId.startsWith("twitter_")
+        bindNativeAccountBadge(header.accountBadge, displayName.ifBlank { handle },
+            accountRegion.takeIf { isX }, accountDetailsJson.takeIf { isX }, colors)
         header.name.text = displayName.ifBlank { handle }
         header.name.setTextColor(colors.onSurface)
         val normalizedHandle = normalizeHandle(handle)
-        header.meta.text =
-            when {
-                normalizedHandle.isNotBlank() && timestamp.isNotBlank() ->
-                    "@$normalizedHandle · $timestamp"
-                normalizedHandle.isNotBlank() -> "@$normalizedHandle"
-                else -> timestamp
-            }
+        val handleLabel = if (normalizedHandle.isBlank()) "" else
+            "@$normalizedHandle"
+        header.meta.text = handleLabel
+        header.meta.contentDescription = handleLabel
         header.meta.setTextColor(colors.onSurfaceHandle)
+        header.date.text = if (timestamp.isBlank()) "" else "· $timestamp"
+        header.date.visibility = if (timestamp.isBlank()) View.GONE else View.VISIBLE
+        header.date.setTextColor(colors.onSurfaceMuted)
         bindTranslationPill(header, translation, colors, onTranslationClick)
         header.follow.visibility = if (showFollow) View.VISIBLE else View.GONE
         header.follow.text =

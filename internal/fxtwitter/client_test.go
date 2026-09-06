@@ -2,6 +2,7 @@ package fxtwitter
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -12,17 +13,20 @@ import (
 
 func TestFetchUserSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/test_user" {
+		if r.URL.Path != "/2/profile/test_user" {
 			t.Errorf("path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("about_account") != "1" {
+			t.Error("profile request must include account region metadata")
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"code":200,"user":{
 			"screen_name":"test_user","id":"1001","name":"Test User",
-			"description":"bio","followers":1,"following":2,"tweets":3,
+			"description":"bio","followers":1,"following":2,"statuses":3,
 			"media_count":4,"likes":5,
 			"avatar_url":"https://pbs.twimg.com/profile_images/x_normal.jpg",
 			"banner_url":"https://pbs.twimg.com/profile_banners/1001/1",
-			"location":"","website":{"url":"https://example.test","display_url":"example.test"},
+			"location":"Somewhere else","about_account":{"based_in":"Japan"},"website":{"url":"https://example.test","display_url":"example.test"},
 			"joined":"Tue Jun 02 20:12:29 +0000 2009",
 			"protected":false,
 			"verification":{"verified":true,"type":"individual"}
@@ -35,14 +39,59 @@ func TestFetchUserSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
-	if u.ScreenName != "test_user" || u.Followers != 1 || !u.Verified {
+	if u.ScreenName != "test_user" || u.Followers != 1 || u.Tweets != 3 || !u.Verified {
 		t.Fatalf("bad decode: %+v", u)
 	}
 	if u.Joined.Year() != 2009 {
 		t.Fatalf("joined parse failed: %v", u.Joined)
 	}
+	if u.AccountRegion != "Japan" {
+		t.Fatalf("account region = %q, want reported country", u.AccountRegion)
+	}
 	if u.Website != "https://example.test" {
 		t.Fatalf("website = %q, want object url", u.Website)
+	}
+}
+
+func TestFetchUserAccountDetails(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		about    string
+		accurate *bool
+		count    *int
+	}{
+		{name: "unknown", about: `{}`},
+		{name: "explicit false and zero", about: `{"source":"Japan App Store","location_accurate":false,"username_changes":{"count":0}}`, accurate: new(bool), count: new(int)},
+		{name: "known", about: `{"source":"Japan App Store","location_accurate":true,"username_changes":{"count":7}}`, accurate: func() *bool { v := true; return &v }(), count: func() *int { v := 7; return &v }()},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(`{"code":200,"user":{"id":"1001","screen_name":"sample_user","joined":"2009-06-02T20:12:29Z","verification":{"verified":true,"type":"individual","verified_at":"2024-03-01T00:00:00Z"},"about_account":` + tt.about + `}}`))
+			}))
+			defer srv.Close()
+			c := &Client{BaseURL: srv.URL, HTTP: srv.Client(), Timeout: time.Second}
+			u, err := c.FetchUser(context.Background(), "sample_user")
+			if err != nil {
+				t.Fatal(err)
+			}
+			d := u.AccountDetails
+			if d.UserID != "1001" || d.CreatedAt != "2009-06-02T20:12:29Z" || d.VerifiedAt != "2024-03-01T00:00:00Z" || d.Verification != "individual" {
+				t.Fatalf("details = %+v", d)
+			}
+			if (d.LocationAccurate == nil) != (tt.accurate == nil) || (d.UsernameChanges == nil) != (tt.count == nil) {
+				t.Fatalf("unknown values changed: %+v", d)
+			}
+			if tt.accurate != nil && (*d.LocationAccurate != *tt.accurate || *d.UsernameChanges != *tt.count || d.Source != "Japan App Store") {
+				t.Fatalf("reported values changed: %+v", d)
+			}
+			encoded, err := json.Marshal(d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.accurate == nil && (strings.Contains(string(encoded), "location_accurate") || strings.Contains(string(encoded), "username_changes")) {
+				t.Fatalf("unknown values were serialized: %s", encoded)
+			}
+		})
 	}
 }
 

@@ -76,7 +76,7 @@ fun FeedRoute(
         onCreateCategory = vm::createCategory,
         onMediaRowsChanged = vm::setMediaModelRows,
         onRowClick = { row ->
-            if (row.item.isReply) {
+            if (row.item.isReply || !row.item.articleTitle.isNullOrBlank()) {
                 navigator.openThread(row.item.tweetId, IglooNavigationSource.Feed)
             }
         },

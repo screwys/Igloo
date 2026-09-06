@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,40 @@ import (
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/model"
 )
+
+func TestAccountDetailsPresentationAndSync(t *testing.T) {
+	srv := newTestServer(t)
+	profile := &model.ChannelProfile{ChannelID: "twitter_sample", Platform: "twitter", AccountRegion: "Japan", AccountDetailsJSON: `{"source":"Japan App Store","location_accurate":false,"username_changes":0}`}
+	for _, enabled := range []bool{true, false} {
+		setting := "false"
+		if enabled {
+			setting = "true"
+		}
+		if err := srv.db.SetSetting("x_account_region_enabled", setting); err != nil {
+			t.Fatal(err)
+		}
+		presented := srv.profileForPresentation(profile)
+		if (presented.AccountDetailsJSON != "") != enabled || (presented.AccountRegion != "") != enabled {
+			t.Fatalf("enabled=%v presented=%+v", enabled, presented)
+		}
+		payload := androidSyncChannelPayloadFromProjection(db.AndroidSyncChannelProjection{ChannelID: profile.ChannelID, Profile: profile})
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded struct {
+			Profile struct {
+				AccountDetailsJSON string `json:"account_details_json"`
+			} `json:"profile"`
+		}
+		if err := json.Unmarshal(encoded, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		if decoded.Profile.AccountDetailsJSON != profile.AccountDetailsJSON {
+			t.Fatalf("offline sync metadata = %s", encoded)
+		}
+	}
+}
 
 func TestProfileCardRendersCommittedProfileWithoutRequestingWork(t *testing.T) {
 	srv := newTestServer(t)

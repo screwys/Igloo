@@ -66,6 +66,7 @@ templ Base(p PageProps) {
 		<script defer src={ p.StaticV("js/dist/mini-player.js") }></script>
 		<script type="module" src={ p.StaticV("js/profile-hover.js") }></script>
 		<script type="module" src={ p.StaticV("js/profile-image-overlay.js") }></script>
+		<script type="module" src={ p.StaticV("js/account-details.js") }></script>
 		for _, script := range p.PageScripts {
 			<script src={ p.StaticV(script) }></script>
 		}

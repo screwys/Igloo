@@ -398,6 +398,15 @@ func normalizeSettingsUpdate(body map[string]string) {
 }
 
 func validateSettingsUpdate(body map[string]string) error {
+	if v, ok := body["x_thread_fetch_mode"]; ok && v != "never" && v != "starred" && v != "always" {
+		return fmt.Errorf("x_thread_fetch_mode must be never, starred, or always")
+	}
+	if v, ok := body["x_thread_auto_post_limit"]; ok {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 20 {
+			return fmt.Errorf("x_thread_auto_post_limit must be between 1 and 20")
+		}
+	}
 	if v, ok := body["backup_dir"]; ok {
 		dir := strings.TrimSpace(v)
 		body["backup_dir"] = dir
@@ -437,6 +446,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 		"instagram_fetch_delay", "instagram_max_videos", "instagram_repost_max_videos",
 		"moments_default_tab", "stories_window_hours",
 		"media_download_limit_default", "x_profile_history_limit", "x_feed_fetch_delay",
+		"x_thread_fetch_mode", "x_thread_auto_post_limit",
 		"translate_target_lang", "translate_backend",
 		"translate_auto_mode", "translate_auto_lookahead",
 		"backup_dir", "backup_keep_count", "starting_page", "sidebar_route_order",
@@ -460,6 +470,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 
 	// Checkboxes: present=true, absent=false.
 	checkboxFields := []string{
+		"x_account_region_enabled", "x_community_notes_enabled", "instagram_profile_details",
 		"youtube_include_member_only", "download_subtitles", "media_only_default",
 		"mini_player_videos_enabled", "mini_player_feed_enabled",
 		"archive_bookmarks", "backup_enabled",

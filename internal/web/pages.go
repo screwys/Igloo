@@ -1204,9 +1204,17 @@ func (s *Server) handlePageThread(w http.ResponseWriter, r *http.Request) {
 
 	p := s.pageProps(w, r)
 	p.PageTitle = "Thread"
+	p.ThreadTweetID = tweetID
 	p.ActiveNav = "feed"
 	p.ESBundle = "js/dist/feed.js"
 	p.Sidebar = s.mustBuildSidebar(r)
+	quotes, err := s.db.ListThreadQuotes(tweetID, 20)
+	if err != nil {
+		slog.Error("ListThreadQuotes", "tweet_id", tweetID, "err", err)
+		http.Error(w, "thread query failed", http.StatusInternalServerError)
+		return
+	}
+	quotes = feed.EnrichFeedItemsPreserveRows(s.db, quotes)
 
 	returnHref := r.URL.Query().Get("return")
 	if returnHref == "" || !strings.HasPrefix(returnHref, "/") || strings.HasPrefix(returnHref, "//") {
@@ -1215,10 +1223,10 @@ func (s *Server) handlePageThread(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if r.URL.Query().Get("fmt") == "partial" {
-		_ = components.ThreadRoutePartial(p, items, returnHref).Render(r.Context(), w)
+		_ = components.ThreadRoutePartial(p, items, quotes, returnHref).Render(r.Context(), w)
 		return
 	}
-	_ = components.ThreadPage(p, items, returnHref).Render(r.Context(), w)
+	_ = components.ThreadPage(p, items, quotes, returnHref).Render(r.Context(), w)
 }
 
 func (s *Server) handlePageLiked(w http.ResponseWriter, r *http.Request) {

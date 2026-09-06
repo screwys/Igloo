@@ -136,7 +136,7 @@ func (db *DB) listAndroidSyncDesiredFeedIDsAmong(feedDays int, nowMs int64, cand
 	}
 
 	visible := make(map[string]struct{}, len(candidates))
-	for _, chunk := range stringChunks(candidates, androidSyncProjectionChunkSize) {
+	for _, chunk := range stringChunks(nodeIDs, androidSyncProjectionChunkSize) {
 		if err := db.collectStrings(`
 			SELECT fi.tweet_id
 			FROM feed_items fi
@@ -146,7 +146,7 @@ func (db *DB) listAndroidSyncDesiredFeedIDsAmong(feedDays int, nowMs int64, cand
 			return nil, err
 		}
 	}
-	for _, id := range candidates {
+	for _, id := range nodeIDs {
 		node := nodes[id]
 		if !node.exists {
 			continue
@@ -166,7 +166,29 @@ func (db *DB) listAndroidSyncDesiredFeedIDsAmong(feedDays int, nowMs int64, cand
 			selected[id] = struct{}{}
 		}
 	}
-	return selected, nil
+	children := androidSyncFeedContextChildren(nodes)
+	queue := sortedKeys(selected)
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		for _, childID := range children[id] {
+			for childID != "" && nodes[childID].exists {
+				if _, exists := selected[childID]; exists {
+					break
+				}
+				selected[childID] = struct{}{}
+				queue = append(queue, childID)
+				childID = nodes[childID].parentID
+			}
+		}
+	}
+	result := make(map[string]struct{}, len(candidates))
+	for _, id := range candidates {
+		if _, exists := selected[id]; exists {
+			result[id] = struct{}{}
+		}
+	}
+	return result, nil
 }
 
 func (db *DB) ListAndroidSyncDesiredFeedAssetOwnersAmong(feedDays int, nowMs int64, candidates []string) ([]string, error) {

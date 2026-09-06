@@ -106,6 +106,10 @@ interface FeedReadDao {
             COALESCE(sp.display_name, '') AS source_display_name,
             COALESCE(qp.handle, '') AS quote_author_handle,
             COALESCE(qp.display_name, '') AS quote_author_display_name,
+            cp.account_region AS author_account_region,
+            cp.account_details_json AS author_account_details_json,
+            qp.account_region AS quote_author_account_region,
+            qp.account_details_json AS quote_author_account_details_json,
             COALESCE(replyp.handle, '') AS reply_handle,
             COALESCE(rp.handle, '') AS reposter_handle,
             COALESCE(rp.display_name, '') AS reposter_display_name,
@@ -235,6 +239,10 @@ interface FeedReadDao {
             COALESCE(sp.display_name, '') AS source_display_name,
             COALESCE(qp.handle, '') AS quote_author_handle,
             COALESCE(qp.display_name, '') AS quote_author_display_name,
+            cp.account_region AS author_account_region,
+            cp.account_details_json AS author_account_details_json,
+            qp.account_region AS quote_author_account_region,
+            qp.account_details_json AS quote_author_account_details_json,
             COALESCE(replyp.handle, '') AS reply_handle,
             COALESCE(rp.handle, '') AS reposter_handle,
             COALESCE(rp.display_name, '') AS reposter_display_name,
@@ -350,6 +358,10 @@ interface FeedReadDao {
             COALESCE(sp.display_name, '') AS source_display_name,
             COALESCE(qp.handle, '') AS quote_author_handle,
             COALESCE(qp.display_name, '') AS quote_author_display_name,
+            cp.account_region AS author_account_region,
+            cp.account_details_json AS author_account_details_json,
+            qp.account_region AS quote_author_account_region,
+            qp.account_details_json AS quote_author_account_details_json,
             COALESCE(replyp.handle, '') AS reply_handle,
             COALESCE(rp.handle, '') AS reposter_handle,
             COALESCE(rp.display_name, '') AS reposter_display_name,
@@ -421,6 +433,10 @@ interface FeedReadDao {
             COALESCE(sp.display_name, '') AS source_display_name,
             COALESCE(qp.handle, '') AS quote_author_handle,
             COALESCE(qp.display_name, '') AS quote_author_display_name,
+            cp.account_region AS author_account_region,
+            cp.account_details_json AS author_account_details_json,
+            qp.account_region AS quote_author_account_region,
+            qp.account_details_json AS quote_author_account_details_json,
             COALESCE(replyp.handle, '') AS reply_handle,
             COALESCE(rp.handle, '') AS reposter_handle,
             COALESCE(rp.display_name, '') AS reposter_display_name,
@@ -504,6 +520,10 @@ interface FeedReadDao {
             COALESCE(sp.display_name, '') AS source_display_name,
             COALESCE(qp.handle, '') AS quote_author_handle,
             COALESCE(qp.display_name, '') AS quote_author_display_name,
+            cp.account_region AS author_account_region,
+            cp.account_details_json AS author_account_details_json,
+            qp.account_region AS quote_author_account_region,
+            qp.account_details_json AS quote_author_account_details_json,
             COALESCE(replyp.handle, '') AS reply_handle,
             COALESCE(rp.handle, '') AS reposter_handle,
             COALESCE(rp.display_name, '') AS reposter_display_name,
@@ -548,10 +568,18 @@ interface FeedReadDao {
     @Query(
         """
         WITH RECURSIVE
+        target(tweet_id) AS (
+            SELECT COALESCE((
+                SELECT canonical.tweet_id
+                FROM feed_items wrapper
+                JOIN feed_items canonical ON canonical.tweet_id = wrapper.canonical_tweet_id
+                WHERE wrapper.tweet_id = :tweetId AND wrapper.is_retweet = 1
+            ), :tweetId)
+        ),
         chain(tweet_id, depth) AS (
             SELECT tweet_id, 0
             FROM feed_items
-            WHERE tweet_id = :tweetId
+            WHERE tweet_id = (SELECT tweet_id FROM target)
             UNION ALL
             SELECT fi.reply_to_status, c.depth + 1
             FROM chain c
@@ -603,6 +631,13 @@ interface FeedReadDao {
               AND (SELECT root_tweet_id FROM root) != (SELECT branch_tweet_id FROM branch)
             UNION ALL
             SELECT tweet_id, depth, sort_path FROM subtree
+            UNION ALL
+            SELECT quoted.tweet_id, 1,
+                   printf('%020d:%s', COALESCE(quoted.published_at, 0), quoted.tweet_id)
+            FROM feed_items quoted
+            WHERE quoted.quote_tweet_id = (SELECT tweet_id FROM target)
+              AND quoted.tweet_id != (SELECT root_tweet_id FROM root)
+              AND NOT EXISTS (SELECT 1 FROM subtree WHERE subtree.tweet_id = quoted.tweet_id)
         )
         SELECT
             fi.*,
@@ -614,6 +649,10 @@ interface FeedReadDao {
             COALESCE(sp.display_name, '') AS source_display_name,
             COALESCE(qp.handle, '') AS quote_author_handle,
             COALESCE(qp.display_name, '') AS quote_author_display_name,
+            cp.account_region AS author_account_region,
+            cp.account_details_json AS author_account_details_json,
+            qp.account_region AS quote_author_account_region,
+            qp.account_details_json AS quote_author_account_details_json,
             COALESCE(replyp.handle, '') AS reply_handle,
             COALESCE(rp.handle, '') AS reposter_handle,
             COALESCE(rp.display_name, '') AS reposter_display_name,
@@ -667,6 +706,10 @@ interface FeedReadDao {
             COALESCE(sp.display_name, '') AS source_display_name,
             COALESCE(qp.handle, '') AS quote_author_handle,
             COALESCE(qp.display_name, '') AS quote_author_display_name,
+            cp.account_region AS author_account_region,
+            cp.account_details_json AS author_account_details_json,
+            qp.account_region AS quote_author_account_region,
+            qp.account_details_json AS quote_author_account_details_json,
             COALESCE(replyp.handle, '') AS reply_handle,
             COALESCE(rp.handle, '') AS reposter_handle,
             COALESCE(rp.display_name, '') AS reposter_display_name,

@@ -59,6 +59,10 @@ func (s *Server) profileForPresentation(p *model.ChannelProfile) *model.ChannelP
 		return nil
 	}
 	cp := *p
+	if !s.db.BoolSetting("x_account_region_enabled") {
+		cp.AccountRegion = ""
+		cp.AccountDetailsJSON = ""
+	}
 	if s.resolveBannerPath(cp.ChannelID) == "" {
 		cp.BannerURL = ""
 	}

@@ -93,12 +93,14 @@ func seedContractFeedFixture(t *testing.T, srv *testServer) {
 		AuthorHandle:           "sample_author",
 		AuthorDisplayName:      "Contract Author",
 		BodyText:               "contract body",
+		ArticleTitle:           "Contract article",
 		CanonicalURL:           "https://x.com/sample_author/status/sample_tweet_main",
 		PublishedAt:            &published,
 		QuoteTweetID:           "sample_tweet_quote",
 		QuoteAuthorHandle:      "sample_quote",
 		QuoteAuthorDisplayName: "Contract Quote",
 		QuoteBodyText:          "quoted contract body",
+		QuoteArticleTitle:      "Quoted contract article",
 	}}); err != nil {
 		t.Fatalf("UpsertFeedItems: %v", err)
 	}
@@ -183,7 +185,7 @@ func seedAndroidContractRows(t *testing.T, srv *testServer) {
 		t.Fatalf("insert channels: %v", err)
 	}
 	for _, profile := range []model.ChannelProfile{
-		{ChannelID: "twitter_sample_channel", Platform: "twitter", Handle: "sample_channel", DisplayName: "Contract Channel Profile", Followers: 1200, FetchedAt: &fetchedAt},
+		{ChannelID: "twitter_sample_channel", Platform: "twitter", Handle: "sample_channel", DisplayName: "Contract Channel Profile", Followers: 1200, AccountRegion: "Japan", FetchedAt: &fetchedAt},
 		{ChannelID: "youtube_sample_profile", Platform: "youtube", Handle: "sample_profile", DisplayName: "Contract Profile Only", Followers: 42, FetchedAt: &fetchedAt},
 		{ChannelID: "tiktok_sample_channel", Platform: "tiktok", Handle: "sample_channel", DisplayName: "Contract TikTok Profile", FetchedAt: &fetchedAt},
 	} {
@@ -197,6 +199,7 @@ func seedAndroidContractRows(t *testing.T, srv *testServer) {
 	if _, err := srv.db.UpsertFeedItems([]model.FeedItem{{
 		TweetID: "sample_tweet_sync", SourceHandle: "sample_source", AuthorHandle: "sample_channel",
 		AuthorDisplayName: "Inline Stale Name", BodyText: "android sync contract body",
+		ArticleTitle: "Contract sync article",
 		CanonicalURL: "https://x.com/sample_channel/status/sample_tweet_sync", PublishedAt: &published,
 	}}); err != nil {
 		t.Fatalf("upsert feed item: %v", err)

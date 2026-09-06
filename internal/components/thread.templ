@@ -2,20 +2,22 @@ package components
 
 import "github.com/screwys/igloo/internal/model"
 
-templ ThreadPage(p PageProps, items []model.FeedItem, returnHref string) {
+templ ThreadPage(p PageProps, items []model.FeedItem, quotes []model.FeedItem, returnHref string) {
 	@Base(p) {
-		@threadRoute(p, items, returnHref, "feed-list")
+		@threadRoute(p, items, quotes, returnHref, "feed-list")
 		@RetweetersDialog(p)
 	}
 }
 
-templ ThreadRoutePartial(p PageProps, items []model.FeedItem, returnHref string) {
-	@threadRoute(p, items, returnHref, "thread-feed-list")
+templ ThreadRoutePartial(p PageProps, items []model.FeedItem, quotes []model.FeedItem, returnHref string) {
+	@threadRoute(p, items, quotes, returnHref, "thread-feed-list")
 }
 
-templ threadRoute(p PageProps, items []model.FeedItem, returnHref string, listID string) {
-	<div class="thread-page-shell" data-thread-route>
+templ threadRoute(p PageProps, items []model.FeedItem, quotes []model.FeedItem, returnHref string, listID string) {
+	{{ p.ArticleReader = true }}
+	<div class="thread-page-shell" data-thread-route data-thread-id={ p.ThreadTweetID }>
 		<a class="thread-back-link" href={ templ.SafeURL(returnHref) } data-thread-back-link>{ L(p, "thread_back_to_feed", "<- Feed") }</a>
+		<div class="thread-fetch-status" data-thread-fetch-status role="status" aria-live="polite" hidden></div>
 		<div id={ listID } class="feed-list thread-page-feed-list" data-thread-page>
 			if len(items) > 0 {
 				<div class="thread-tree" data-thread-tree data-thread-root-id={ items[0].TweetID }>
@@ -32,6 +34,14 @@ templ threadRoute(p PageProps, items []model.FeedItem, returnHref string, listID
 				</div>
 			} else {
 				<div class="empty-state"><h3>{ L(p, "thread_unavailable", "Thread unavailable") }</h3></div>
+			}
+			if len(quotes) > 0 {
+				<section data-thread-quotes>
+					<h2>{ L(p, "feed_thread_quote_posts", "Quote-posts") }</h2>
+					for _, item := range quotes {
+						@feedLeafCard(p, stripThreadNoise(item), false)
+					}
+				</section>
 			}
 		</div>
 	</div>

@@ -957,6 +957,8 @@ func androidSyncRelevantSettingKeys() []string {
 	return []string{
 		"moments_include_reposts_default", "instagram_include_tagged_default",
 		"include_reposts_default", "translate_target_lang", "translate_skip_langs",
+		"x_account_region_enabled",
+		"x_community_notes_enabled",
 	}
 }
 

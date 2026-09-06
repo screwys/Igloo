@@ -17,7 +17,7 @@ func TestThreadPageRendersFullChainAndFeedLink(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := ThreadPage(newTestPageProps(), items, "/feed?offset=40").Render(context.Background(), &buf); err != nil {
+	if err := ThreadPage(newTestPageProps(), items, nil, "/feed?offset=40").Render(context.Background(), &buf); err != nil {
 		t.Fatalf("render thread page: %v", err)
 	}
 	html := buf.String()
@@ -46,7 +46,7 @@ func TestThreadRoutePartialUsesNonFeedListID(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := ThreadRoutePartial(newTestPageProps(), items, "/feed").Render(context.Background(), &buf); err != nil {
+	if err := ThreadRoutePartial(newTestPageProps(), items, nil, "/feed").Render(context.Background(), &buf); err != nil {
 		t.Fatalf("render thread route partial: %v", err)
 	}
 	html := buf.String()

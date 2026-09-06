@@ -44,6 +44,29 @@ func (db *DB) UpsertGhostFeedItem(item model.FeedItem) error {
 	return err
 }
 
+// ListThreadQuotes returns posts quoting the selected tweet without treating
+// them as replies or making context-only rows visible in the main feed.
+func (db *DB) ListThreadQuotes(tweetID string, limit int) ([]model.FeedItem, error) {
+	tweetID, err := db.ResolveFeedStateID(tweetID)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 20 {
+		limit = 20
+	}
+	rows, err := db.reader().Query(`
+		SELECT `+feedItemSelectSQL("feed_items")+`
+		FROM feed_items_resolved AS feed_items
+		WHERE quote_tweet_id = ? AND quote_tweet_id != '' AND tweet_id != ?
+		ORDER BY published_at DESC, tweet_id DESC
+		LIMIT ?`, tweetID, tweetID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	return scanFeedItems(rows)
+}
+
 // UpdateReplyToStatus sets reply_to_status on an existing feed_items row.
 // Idempotent — calling multiple times with the same value is a no-op.
 func (db *DB) UpdateReplyToStatus(tweetID, parentTweetID string) error {
@@ -62,13 +85,20 @@ func (db *DB) UpdateReplyToStatus(tweetID, parentTweetID string) error {
 // known ancestor and ending at tweetID, ordered root → leaf. If a parent in
 // the chain is missing from the DB, the chain stops at the first orphan
 // (the leaf row is always returned, even with no ancestors).
+// Reposts use their original once it is stored; until then the captured repost
+// remains available as the thread's content.
 //
 // Implementation uses a recursive CTE walking up via reply_to_status, then
 // reverses to root → leaf order.
 func (db *DB) GetThreadChain(tweetID string) ([]model.FeedItem, error) {
+	canonicalID, err := db.ResolveFeedStateID(tweetID)
+	if err != nil {
+		return nil, err
+	}
 	const q = `
 		WITH RECURSIVE chain(tweet_id, depth) AS (
-			SELECT tweet_id, 0 FROM feed_items WHERE tweet_id = ?
+			SELECT tweet_id, 0 FROM feed_items
+			WHERE tweet_id = COALESCE((SELECT tweet_id FROM feed_items WHERE tweet_id = ?), ?)
 			UNION ALL
 			SELECT fi.reply_to_status, c.depth + 1
 			FROM chain c
@@ -81,7 +111,7 @@ func (db *DB) GetThreadChain(tweetID string) ([]model.FeedItem, error) {
 		WHERE tweet_id IS NOT NULL AND tweet_id != ''
 		ORDER BY depth DESC`
 
-	rows, err := db.conn.Query(q, tweetID)
+	rows, err := db.conn.Query(q, canonicalID, tweetID)
 	if err != nil {
 		return nil, fmt.Errorf("GetThreadChain query: %w", err)
 	}

@@ -11,7 +11,7 @@
 
 - Run routine build, test, generated-output, Android, and release workflows through `just` from the repository root. Bare `just` lists the recipes and their side effects.
 - Recipes delegate to the existing scripts; do not reconstruct script combinations by hand. Use a raw command only for installer bootstrap, read-only evidence, an exact CI reproduction, a partial-release recovery, or a narrowly scoped proof that has no recipe.
-- `just test` is the proportional local gate for files changed from `HEAD`. Use `just test-full` only for broad or cross-client changes, releases, publication, an explicit full-suite request, or when focused evidence leaves a concrete integration risk. `just restart` verifies the local server path but does not replace tests. `just build-android` builds, installs, and relaunches the app, so never use it as a generic Android test command.
+- `just test` runs the proportional local gate when verification is needed without a push. The pre-push hook owns publication checks; do not run the same gate manually before pushing. `just restart` verifies the local server path. `just build-android` builds, installs, and relaunches the app, so never use it as a generic Android test command.
 - Release recipes remain explicit: only run `just release <patch|minor|major> "<user summary>"` or `just release-local ...` after the user has supplied both the requested bump and exact summary. Never invent public release text.
 
 ## Evidence
@@ -76,8 +76,15 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 ## Test Gates
 
 - Do not add tests that merely restate an implementation detail or assert that code was added or removed. Test observable behavior when deterministic coverage is valuable; otherwise omit the test.
-- Use focused tests while developing or proving a narrow change, then run
-  `just test` for the proportional changed-file gate.
+- Use focused tests when developing or investigating a change. Do not repeat
+  equivalent passing coverage as a separate pre-commit or pre-push step.
+- `.githooks/pre-push` owns checks for the outgoing commit range: proportional
+  tests, static/security checks, generated output, and applicable web/Android
+  checks. It also verifies the Nix dependency hash when relevant. Let the hook
+  run during `git push`; fix any failures without duplicating its gates manually.
+- A push alone does not require `just test-full`. Use it for an explicit
+  full-suite request, release validation, or a concrete integration risk that
+  the proportional gate does not cover.
 - For full-suite verification, do not treat raw `go test ./...` or Android
   `BUILD SUCCESSFUL` output as enough. Check for skipped tests and ignored
   errors explicitly.
@@ -96,10 +103,13 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 
 ## Git Workflow
 
-- Igloo normally publishes directly from the current branch. For "push",
-  "lets push", "ship it", or similar requests, commit the intended changes on
-  the current branch and push that branch. If the current branch is `main`,
-  push directly to `origin/main`.
+- "Push", "lets push", "ship it", or similar requests mean commit and push
+  all current repository changes, including pre-existing edits and untracked
+  project files, unless the user explicitly narrows the scope. Do not select
+  only the current task's changes, leave other work out, or ask for confirmation
+  of this default. Let the pre-push hook check the complete outgoing change set.
+- Commit on the current branch and push that branch. If the current branch
+  is `main`, push directly to `origin/main`.
 - Do not create a feature branch, PR, or review branch for Igloo unless the
   user explicitly asks for one, the current branch is not the intended target,
   or repository state makes a direct push unsafe.
@@ -124,7 +134,6 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 - For web UI bugs, inspect the live DOM before source: element HTML, computed visibility, layout box, inline style, and classes.
 - For missing avatars, banners, names, bios, or hover profile cards, separate presentation bugs from readiness bugs. A presentation fix is valid only when the DB row and cached file already existed before render; otherwise fix the source path: parser, ingest batch, identity seed, profile refresh candidate query, worker queue/backfill, or failed download retry.
 - After server, web, static, or component changes that affect the running app, run `just restart`.
-- For narrow Go changes, run focused package tests and `just test`. Use `just test-go` when all Go packages need test execution, and `just test-full` only for the exhaustive cross-client gate.
 
 ## Android
 
@@ -142,13 +151,9 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 - Sync must converge for the retention window, associated assets, bookmarks, likes, and their assets. Partial sync is not success.
 - Retention widening triggers replay/backfill; narrowing prunes; bookmarks and likes survive prune.
 - Use the named Android recipes: `just test-android`, `just build-android`, `just build-android-with-server`, and `just restart-and-build-android`.
-- Before committing Android changes, run the focused `just test-android <ClassFilter>` proof for the touched area.
 - Treat Android JVM final-field mutation warnings as test failures. Replace
   concrete-class mocks with fakes/interfaces rather than adding JVM flags to
   silence the warning.
-- Do not run a separate full `just test-android` after `just test-full`
-  just to duplicate full-suite proof; run it separately when debugging Android
-  failures or when Android-only output is needed.
 - If Android app source, resources, manifest, Gradle build configuration, or Room schema changes, `just build-android` is the required final
   Android proof before final response or commit. It builds, installs, and
   relaunches the app on the device. Do not treat `just test-android`, a focused

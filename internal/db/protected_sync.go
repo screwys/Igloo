@@ -90,7 +90,7 @@ func (db *DB) ensureFeedItemStubFromBookmarkTx(tx *sql.Tx, videoID string) error
 		return nil
 	}
 
-	var channelID, authorHandle, authorName, avatarURL, bodyText, mediaJSON string
+	var channelID, authorHandle, authorName, avatarURL, bodyText, articleTitle, pollJSON, communityNote, mediaJSON string
 	var publishedAt, observedAt int64
 	err := tx.QueryRow(`
 		SELECT
@@ -99,6 +99,9 @@ func (db *DB) ensureFeedItemStubFromBookmarkTx(tx *sql.Tx, videoID string) error
 			COALESCE(NULLIF(fi.quote_author_display_name, ''), ''),
 			COALESCE(NULLIF(fi.quote_author_avatar_url, ''), ''),
 			COALESCE(NULLIF(fi.quote_body_text, ''), ''),
+			COALESCE(fi.quote_article_title, ''),
+			COALESCE(fi.quote_poll_json, ''),
+			COALESCE(fi.quote_community_note, ''),
 			COALESCE(NULLIF(fi.quote_media_json, ''), ''),
 			COALESCE(fi.quote_published_at, fi.published_at, 0),
 			MAX(COALESCE(fi.fetched_at, 0), COALESCE(fi.quote_published_at, 0), COALESCE(fi.published_at, 0))
@@ -106,7 +109,7 @@ func (db *DB) ensureFeedItemStubFromBookmarkTx(tx *sql.Tx, videoID string) error
 		WHERE fi.quote_tweet_id = ?
 		ORDER BY COALESCE(fi.fetched_at, 0) DESC, fi.tweet_id DESC
 		LIMIT 1
-	`, videoID).Scan(&channelID, &authorHandle, &authorName, &avatarURL, &bodyText, &mediaJSON, &publishedAt, &observedAt)
+	`, videoID).Scan(&channelID, &authorHandle, &authorName, &avatarURL, &bodyText, &articleTitle, &pollJSON, &communityNote, &mediaJSON, &publishedAt, &observedAt)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -123,12 +126,15 @@ func (db *DB) ensureFeedItemStubFromBookmarkTx(tx *sql.Tx, videoID string) error
 	res, err := tx.Exec(`
 		INSERT OR IGNORE INTO feed_items (
 			tweet_id, channel_id,
-			body_text, media_json, published_at, fetched_at
-		) VALUES (?, ?, ?, ?, ?, ?)
+			body_text, article_title, poll_json, community_note, media_json, published_at, fetched_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		videoID,
 		nilIfEmpty(channelID),
 		nilIfEmpty(bodyText),
+		nilIfEmpty(articleTitle),
+		nilIfEmpty(pollJSON),
+		nilIfEmpty(communityNote),
 		nilIfEmpty(mediaJSON),
 		publishedAt,
 		nowMs,

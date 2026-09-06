@@ -18,14 +18,12 @@ import androidx.navigation.NavController
 import com.screwy.igloo.R
 import com.screwy.igloo.data.entity.ThreadedFeedRow
 import com.screwy.igloo.feed.buildProfileOpenSnapshot
-import com.screwy.igloo.net.ServerBaseUrlProvider
 import com.screwy.igloo.ui.UiState
 import com.screwy.igloo.ui.component.NativeFeedSurface
 import com.screwy.igloo.ui.nav.IglooNavigationSource
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
 import com.screwy.igloo.ui.theme.iglooColors
 import org.koin.androidx.compose.koinViewModel
-import org.koin.compose.koinInject
 
 @Composable
 fun ThreadRoute(
@@ -35,12 +33,11 @@ fun ThreadRoute(
 ) {
     val vm: ThreadViewModel = koinViewModel()
     val chain by vm.chain.collectAsStateWithLifecycle()
+    val isFetching by vm.isFetching.collectAsStateWithLifecycle()
     val pendingBookmark by vm.pendingBookmark.collectAsStateWithLifecycle()
     val categories by vm.bookmarkCategories.collectAsStateWithLifecycle()
     val mutedChannelIds by vm.mutedChannelIds.collectAsStateWithLifecycle()
     val mediaModels by vm.mediaModels.collectAsStateWithLifecycle()
-    val baseUrlProvider: ServerBaseUrlProvider = koinInject()
-    val baseUrl = baseUrlProvider.baseUrl()
     val navigator = rememberIglooNavigator(navController)
     val threadRows = remember(chain) {
         chain.map { row ->
@@ -51,8 +48,8 @@ fun ThreadRoute(
         }
     }
 
-    LaunchedEffect(tweetId) {
-        vm.load(tweetId)
+    LaunchedEffect(vm, tweetId) {
+        vm.open(tweetId)
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -72,18 +69,19 @@ fun ThreadRoute(
         } else {
             NativeFeedSurface(
                 rows = threadRows,
+                showFullArticles = true,
                 uiState = UiState.Data(Unit),
-                isRefreshing = false,
+                isRefreshing = isFetching,
                 pendingBookmark = pendingBookmark,
                 bookmarkCategories = categories,
                 mutedChannelIds = mutedChannelIds,
                 mediaModels = mediaModels,
-                onRefresh = { vm.load(tweetId) },
+                onRefresh = { vm.refresh(tweetId) },
                 onChannelClick = { channelId ->
                     navigator.openChannel(channelId, IglooNavigationSource.Thread)
                 },
                 onRowClick = { row ->
-                    if (row.item.isReply && row.item.tweetId != tweetId) {
+                    if ((row.item.isReply || !row.item.articleTitle.isNullOrBlank()) && row.item.tweetId != tweetId) {
                         navigator.openThread(row.item.tweetId, IglooNavigationSource.Thread)
                     }
                 },

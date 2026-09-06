@@ -21,6 +21,7 @@ func TestGetThreadHandler(t *testing.T) {
 		{TweetID: "t_2", AuthorHandle: "user_beta", BodyText: "mid", IsReply: true, ReplyToHandle: "user_alpha", ReplyToStatus: "t_1", PublishedAt: &midAt, FetchedAt: midAt, ContentHash: "th_2"},
 		{TweetID: "t_3", AuthorHandle: "user_alpha", BodyText: "leaf", IsReply: true, ReplyToHandle: "user_beta", ReplyToStatus: "t_2", PublishedAt: &leafAt, FetchedAt: leafAt, ContentHash: "th_3"},
 		{TweetID: "t_4", AuthorHandle: "sample_author_c", BodyText: "sibling branch", IsReply: true, ReplyToHandle: "user_alpha", ReplyToStatus: "t_1", PublishedAt: &siblingAt, FetchedAt: siblingAt, ContentHash: "th_4"},
+		{TweetID: "t_5", AuthorHandle: "quote_author", BodyText: "Quoting post", QuoteTweetID: "t_3", IsGhost: true, PublishedAt: &siblingAt, FetchedAt: siblingAt, ContentHash: "th_5"},
 	})
 	if err != nil {
 		t.Fatalf("seed: %v", err)
@@ -38,6 +39,7 @@ func TestGetThreadHandler(t *testing.T) {
 	var resp struct {
 		Success bool             `json:"success"`
 		Thread  []map[string]any `json:"thread"`
+		Quotes  []map[string]any `json:"quotes"`
 		RootID  string           `json:"root_id"`
 		LeafID  string           `json:"leaf_id"`
 	}
@@ -49,6 +51,9 @@ func TestGetThreadHandler(t *testing.T) {
 	}
 	if len(resp.Thread) != 4 {
 		t.Fatalf("thread length: got %d, want 4, body=%s", len(resp.Thread), rr.Body.String())
+	}
+	if len(resp.Quotes) != 1 || resp.Quotes[0]["tweet_id"] != "t_5" || resp.Quotes[0]["quote_tweet_id"] != "t_3" {
+		t.Fatalf("quoting posts missing or represented as replies: %+v", resp.Quotes)
 	}
 	want := []string{"t_1", "t_2", "t_3", "t_4"}
 	wantDepths := []float64{0, 1, 2, 1}

@@ -382,7 +382,7 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 				</div>
 				<div class="form-group">
 					<label for="global-setting-starting-page">{ L(p, "settings_starting_page", "Starting Page") }</label>
-					<select id="global-setting-starting-page" name="starting_page" class="input">
+					<select data-setting-choices id="global-setting-starting-page" name="starting_page" class="input">
 						for _, page := range startingPageChoices(p) {
 							<option value={ page.Key } selected?={ prefs.Str("starting_page", "videos") == page.Key }>{ page.Label }</option>
 						}
@@ -406,7 +406,7 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 				</div>
 					<div class="form-group">
 						<label for="global-setting-quality">{ L(p, "settings_quality_default", "Default Quality") }</label>
-						<select id="global-setting-quality" name="quality" class="input">
+						<select data-setting-choices id="global-setting-quality" name="quality" class="input">
 							<option value="best" selected?={ prefs.Str("quality","best") == "best" }>{ L(p, "settings_quality_best_available", "Best Available") }</option>
 							<option value="1080p" selected?={ prefs.Str("quality","best") == "1080p" }>1080p</option>
 							<option value="720p" selected?={ prefs.Str("quality","best") == "720p" }>720p</option>
@@ -427,7 +427,7 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 						</div>
 						<div class="form-group">
 							<label for="global-setting-windows-update-interval">{ L(p, "settings_windows_update_interval", "Check interval") }</label>
-							<select id="global-setting-windows-update-interval" name="windows_update_interval_hours" class="input">
+							<select data-setting-choices id="global-setting-windows-update-interval" name="windows_update_interval_hours" class="input">
 								for _, hours := range []string{"1", "6", "12", "24"} {
 									<option value={ hours } selected?={ prefs.Str("windows_update_interval_hours", "6") == hours }>{ hours + "h" }</option>
 								}
@@ -436,7 +436,7 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 						<div class="windows-update-row">
 							<div class="form-group windows-update-channel">
 								<label for="global-setting-windows-update-channel">{ L(p, "settings_windows_update_channel", "Update channel") }</label>
-								<select id="global-setting-windows-update-channel" name="windows_update_channel" class="input" onchange="this.closest('.windows-update-row').querySelector('[name=windows_runtime_update_enabled]').checked=this.value==='nightly'">
+								<select data-setting-choices id="global-setting-windows-update-channel" name="windows_update_channel" class="input" onchange="this.closest('.windows-update-row').querySelector('[name=windows_runtime_update_enabled]').checked=this.value==='nightly'">
 									<option value="stable" selected?={ prefs.Str("windows_update_channel", "stable") == "stable" }>{ L(p, "settings_windows_update_stable", "Stable") }</option>
 									<option value="nightly" selected?={ prefs.Str("windows_update_channel", "stable") == "nightly" }>{ L(p, "settings_windows_update_nightly", "Nightly") }</option>
 								</select>
@@ -588,6 +588,34 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 					<label for="global-setting-x-feed-fetch-delay">{ L(p, "settings_fetch_delay_seconds", "Fetch Delay (seconds)") }</label>
 					<input type="number" id="global-setting-x-feed-fetch-delay" name="x_feed_fetch_delay" class="input" min="3" max="300" value={ prefs.Str("x_feed_fetch_delay", "10") }/>
 				</div>
+				<div class="form-group checkbox-group">
+					<label>
+						<input type="checkbox" name="x_account_region_enabled" value="true" checked?={ prefs.Bool("x_account_region_enabled") }/>
+						{ L(p, "settings_x_account_region", "Show X account details") }
+					</label>
+					<small class="form-hint">{ L(p, "settings_x_account_region_hint", "Show a compact country and account-source badge with a local details panel.") }</small>
+				</div>
+				<div class="form-group checkbox-group">
+					<label>
+						<input type="checkbox" name="x_community_notes_enabled" value="true" checked?={ prefs.Bool("x_community_notes_enabled") }/>
+						{ L(p, "settings_x_community_notes", "Show Community Notes") }
+					</label>
+					<small class="form-hint">{ L(p, "settings_x_community_notes_hint", "Show captured Community Notes and their source links beside posts.") }</small>
+				</div>
+				<div class="form-group">
+					<label for="global-setting-x-thread-fetch-mode">{ L(p, "settings_x_thread_fetch_mode", "Fetch thread context during account checks") }</label>
+					<select data-setting-choices id="global-setting-x-thread-fetch-mode" name="x_thread_fetch_mode" class="input">
+						<option value="never" selected?={ prefs.Str("x_thread_fetch_mode", "starred") == "never" }>{ L(p, "settings_x_thread_fetch_never", "Never") }</option>
+						<option value="starred" selected?={ prefs.Str("x_thread_fetch_mode", "starred") == "starred" }>{ L(p, "settings_x_thread_fetch_starred", "Starred only") }</option>
+						<option value="always" selected?={ prefs.Str("x_thread_fetch_mode", "starred") == "always" }>{ L(p, "settings_x_thread_fetch_always", "Always") }</option>
+					</select>
+					<small class="form-hint">{ L(p, "settings_x_thread_fetch_mode_hint", "Fetch one page of replies and quote-posts for new posts during account checks. Opening a thread always fetches its context.") }</small>
+				</div>
+				<div class="form-group">
+					<label for="global-setting-x-thread-auto-post-limit">{ L(p, "settings_x_thread_auto_post_limit", "Posts to expand per account check") }</label>
+					<input type="number" id="global-setting-x-thread-auto-post-limit" name="x_thread_auto_post_limit" class="input" min="1" max="20" value={ prefs.Str("x_thread_auto_post_limit", "3") }/>
+					<small class="form-hint">{ L(p, "settings_x_thread_auto_post_limit_hint", "Limit automatic fetching to this many new posts per account, with a 30-second time budget.") }</small>
+				</div>
 				<h4 style="margin:1.25rem 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_ranking", "Ranking") }</h4>
 				<div class="form-group checkbox-group">
 					<label>
@@ -612,10 +640,10 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 				<h4 style="margin:0 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_translation", "Translation") }</h4>
 				<div class="form-group">
 					<label for="global-setting-translate-auto-mode">{ L(p, "settings_auto_translate", "Auto Translate") }</label>
-					<select id="global-setting-translate-auto-mode" name="translate_auto_mode" class="input">
-						<option value="off" selected?={ prefs.Str("translate_auto_mode", "lazy") == "off" }>{ L(p, "settings_translate_manual_only", "Manual only") }</option>
-						<option value="lazy" selected?={ prefs.Str("translate_auto_mode", "lazy") == "lazy" }>{ L(p, "settings_translate_lazy", "Lazy, before posts enter view") }</option>
-						<option value="background" selected?={ prefs.Str("translate_auto_mode", "lazy") == "background" }>{ L(p, "settings_translate_background", "Translate feed continuously in background") }</option>
+					<select data-setting-choices id="global-setting-translate-auto-mode" name="translate_auto_mode" class="input">
+						<option value="off" title={ L(p, "settings_translate_manual_hint", "Translate a post only when you request it.") } selected?={ prefs.Str("translate_auto_mode", "lazy") == "off" }>{ L(p, "settings_translate_manual_label", "Manual") }</option>
+						<option value="lazy" title={ L(p, "settings_translate_lazy_hint", "Translate posts shortly before they enter view, using the lookahead setting.") } selected?={ prefs.Str("translate_auto_mode", "lazy") == "lazy" }>{ L(p, "settings_translate_lazy_label", "Lazy") }</option>
+						<option value="background" title={ L(p, "settings_translate_auto_hint", "Translate the feed continuously in the background, even when you are not viewing it.") } selected?={ prefs.Str("translate_auto_mode", "lazy") == "background" }>{ L(p, "settings_translate_auto_label", "Auto") }</option>
 					</select>
 				</div>
 				<div class="form-group" id="translate-lookahead-config" style={ translateLookaheadStyle(prefs.Str("translate_auto_mode", "lazy")) }>
@@ -653,7 +681,7 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 				</div>
 				<div class="form-group">
 						<label>{ L(p, "settings_translation_backend", "Translation Backend") }</label>
-						<select id="global-setting-translate-backend" name="translate_backend" class="input">
+						<select data-setting-choices id="global-setting-translate-backend" name="translate_backend" class="input">
 							<option value="none" selected?={ prefs.Str("translate_backend", "none") == "none" }>{ L(p, "settings_disabled", "Disabled") }</option>
 							<option value="google" selected?={ prefs.Str("translate_backend", "none") == "google" }>{ L(p, "settings_translation_backend_google_cloud", "Google Cloud Translation") }</option>
 							<option value="deepl" selected?={ prefs.Str("translate_backend", "none") == "deepl" }>{ L(p, "settings_translation_backend_deepl_api", "DeepL API") }</option>
@@ -702,6 +730,13 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 						{ L(p, "settings_moments_include_instagram_tagged", "Include Instagram reposts in Moments") }
 					</label>
 				</div>
+				<div class="form-group checkbox-group">
+					<label>
+						<input type="checkbox" name="instagram_profile_details" value="true" checked?={ prefs.Bool("instagram_profile_details") }/>
+						{ L(p, "settings_instagram_profile_details", "Fetch detailed profiles") }
+					</label>
+					<small class="form-hint">{ L(p, "settings_instagram_profile_details_hint", "Retrieve bios, websites, and follower counts while checking accounts. Instagram may rate limit this lookup.") }</small>
+				</div>
 				<h4 style="margin:1.25rem 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_tiktok", "TikTok") }</h4>
 				<div class="form-group">
 					<label for="global-setting-tiktok-fetch-delay">{ L(p, "settings_fetch_delay_seconds", "Fetch Delay (seconds)") }</label>
@@ -717,7 +752,7 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 				</div>
 				<div class="form-group">
 					<label for="global-setting-moments-default-tab">{ L(p, "settings_moments_default_tab", "Moments default tab") }</label>
-					<select id="global-setting-moments-default-tab" name="moments_default_tab" class="input">
+					<select data-setting-choices id="global-setting-moments-default-tab" name="moments_default_tab" class="input">
 						<option value="all" selected?={ prefs.Str("moments_default_tab", "all") == "all" }>{ L(p, "settings_moments_default_tab_all", "All") }</option>
 						<option value="following" selected?={ prefs.Str("moments_default_tab", "all") == "following" }>{ L(p, "settings_moments_default_tab_following", "Following") }</option>
 						<option value="stories" selected?={ prefs.Str("moments_default_tab", "all") == "stories" }>{ L(p, "shorts_tab_stories", "Stories") }</option>
@@ -865,7 +900,7 @@ templ prefsSponsorBlockTab(p PageProps, prefs PrefsData) {
 
 // sbSelect renders a SponsorBlock category select with the correct value pre-selected.
 templ sbSelect(p PageProps, category string, current string) {
-	<select id={ "global-setting-sb-" + category } name={ "sb_" + category } class="input">
+	<select data-setting-choices id={ "global-setting-sb-" + category } name={ "sb_" + category } class="input">
 		<option value="off" selected?={ current == "off" }>{ L(p, "settings_sb_do_not_skip", "Do not skip") }</option>
 		<option value="silent" selected?={ current == "silent" }>{ L(p, "settings_sb_silent_skip", "Silent skip") }</option>
 		<option value="ask" selected?={ current == "ask" }>{ L(p, "settings_sb_ask_to_skip", "Ask to skip") }</option>
@@ -964,29 +999,11 @@ templ CookieRowsPanel(p PageProps, rows []CookieRowData) {
 					<input type="file" name="file" accept=".txt" multiple style="display:none;"
 						onchange="if(this.files.length)this.closest('form').requestSubmit()"
 					/>
-					<button class="btn btn-secondary" type="button" style="padding:0.3rem 0.6rem; font-size:0.75rem;"
+					<button class="btn btn-secondary" type="button"
 						onclick="this.previousElementSibling.click()"
 					>{ L(p, "action_upload_file", "Upload File") }</button>
 				</form>
-				<form style="display:contents;"
-					hx-post={ "/api/cookies/" + row.Platform + "/browser" }
-					hx-target="#cookie-rows-container"
-					hx-swap="innerHTML"
-				>
-					<select name="browser" class="input cookie-browser-select"
-						hx-post={ "/api/cookies/" + row.Platform + "/browser" }
-						hx-target="#cookie-rows-container"
-						hx-swap="innerHTML"
-						hx-trigger="change"
-						>
-							<option value="">{ L(p, "cookie_browser_source", "Browser Cookies") }</option>
-							<option value="firefox" selected?={ row.Browser == "firefox" }>{ L(p, "cookie_browser_firefox", "Firefox") }</option>
-							<option value="chrome" selected?={ row.Browser == "chrome" }>{ L(p, "cookie_browser_chrome", "Chrome") }</option>
-							<option value="chromium" selected?={ row.Browser == "chromium" }>{ L(p, "cookie_browser_chromium", "Chromium") }</option>
-							<option value="brave" selected?={ row.Browser == "brave" }>{ L(p, "cookie_browser_brave", "Brave") }</option>
-							<option value="edge" selected?={ row.Browser == "edge" }>{ L(p, "cookie_browser_edge", "Edge") }</option>
-						</select>
-					</form>
+
 					if row.Exists {
 						<button class="btn btn-secondary" type="button"
 							hx-post={ "/api/cookies/" + row.Platform + "/toggle" }
@@ -1000,6 +1017,26 @@ templ CookieRowsPanel(p PageProps, rows []CookieRowData) {
 							}
 						</button>
 					}
+				<form class="cookie-browser-form"
+					hx-post={ "/api/cookies/" + row.Platform + "/browser" }
+					hx-target="#cookie-rows-container"
+					hx-swap="innerHTML"
+				>
+					<select data-setting-choices name="browser" class="input cookie-browser-select"
+						aria-label={ L(p, "cookie_browser_source", "Browser Cookies") }
+						hx-post={ "/api/cookies/" + row.Platform + "/browser" }
+						hx-target="#cookie-rows-container"
+						hx-swap="innerHTML"
+						hx-trigger="change"
+						>
+							<option value="">{ L(p, "settings_mode_off", "Off") }</option>
+							<option value="firefox" selected?={ row.Browser == "firefox" }>{ L(p, "cookie_browser_firefox", "Firefox") }</option>
+							<option value="chrome" selected?={ row.Browser == "chrome" }>{ L(p, "cookie_browser_chrome", "Chrome") }</option>
+							<option value="chromium" selected?={ row.Browser == "chromium" }>{ L(p, "cookie_browser_chromium", "Chromium") }</option>
+							<option value="brave" selected?={ row.Browser == "brave" }>{ L(p, "cookie_browser_brave", "Brave") }</option>
+							<option value="edge" selected?={ row.Browser == "edge" }>{ L(p, "cookie_browser_edge", "Edge") }</option>
+						</select>
+					</form>
 				</div>
 			</div>
 	}

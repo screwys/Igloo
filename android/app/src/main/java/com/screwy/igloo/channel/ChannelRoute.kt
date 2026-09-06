@@ -351,6 +351,7 @@ private fun ChannelTwitterBody(
         onMuteToggle = vm::toggleRowMute,
         onMediaOpen = { row, mediaIndex, visibleMediaModel -> onMediaOpen(row, mediaIndex, visibleMediaModel) },
         onQuoteOpen = onQuoteOpen,
+        onRowClick = { row -> if (!row.item.articleTitle.isNullOrBlank()) onQuoteOpen(row) },
         onSeenReached = { /* server sees feed_seen via main feed route */ },
         onConfirmBookmark = vm::confirmBookmark,
         onRemoveBookmark = vm::removePendingBookmark,

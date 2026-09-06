@@ -102,6 +102,8 @@ internal data class ChannelProfileHeaderUiModel(
     val isProtected: Boolean = false,
     val isVerified: Boolean = false,
     val verifiedType: String? = null,
+    val accountRegion: String? = null,
+    val accountDetailsJson: String? = null,
     val isFollowed: Boolean = false,
     val isStarred: Boolean = false,
     val storyRingState: StoryRingState = StoryRingState.None,
@@ -678,6 +680,8 @@ internal fun channelProfileHeaderUiModel(
         isProtected = profile?.isProtected == true,
         isVerified = profile?.verified == true,
         verifiedType = profile?.verifiedType,
+        accountRegion = profile?.accountRegion,
+        accountDetailsJson = profile?.accountDetailsJson,
         isFollowed = channel.isFollowed == 1,
         isStarred = channel.isStarred == 1,
     )

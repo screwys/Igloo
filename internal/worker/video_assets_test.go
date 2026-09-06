@@ -16,6 +16,45 @@ import (
 	"github.com/screwys/igloo/internal/storage"
 )
 
+func TestPrepareInstagramCarouselKeepsMusicSeparateFromSlides(t *testing.T) {
+	cfg := testCfg(t.TempDir())
+	mediaDir, err := cfg.Storage.WritePath("media/instagram/sample_author")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(mediaDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{
+		filepath.Join(mediaDir, "sample_1.jpg"),
+		filepath.Join(mediaDir, "sample_2.jpg"),
+		filepath.Join(mediaDir, "sample.m4a"),
+	}
+	for _, path := range paths {
+		if err := os.WriteFile(path, []byte("media data"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files, err := (&Manager{cfg: cfg}).prepareCompletedVideoFiles(
+		context.Background(), download.MediaLaneBulkRegular,
+		download.CompletedDownload{MediaPaths: paths},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files.imageKeys) != 2 || files.primaryPath != paths[0] || files.thumbnailImageSource != paths[0] {
+		t.Fatalf("carousel images changed by music: %+v", files)
+	}
+	if len(files.assets) != 3 || files.assets[2].AssetKind != "post_audio" || files.assets[2].MediaIndex != 0 || files.assets[2].ContentType != "audio/mp4" {
+		t.Fatalf("carousel music asset = %+v", files.assets)
+	}
+	for index, asset := range files.assets[:2] {
+		if asset.AssetKind != "post_media" || asset.MediaIndex != index {
+			t.Fatalf("carousel slide asset = %+v", asset)
+		}
+	}
+}
+
 func TestPrepareCompletedVideoFilesKeepsMediaExternalAndDefersExactThumbnail(t *testing.T) {
 	stateRoot := filepath.Join(t.TempDir(), "state")
 	mediaRoot := filepath.Join(t.TempDir(), "bulk")

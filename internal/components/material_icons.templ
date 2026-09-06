@@ -7,6 +7,12 @@ templ MaterialIcon(name string, className string) {
 		switch name {
 			case "Reply":
 				<path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"></path>
+			case "Smartphone":
+				<path d="M17 1H7C5.9 1 5 1.9 5 3v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm0 18H7V5h10v14zm-4 3h-2v-2h2v2z"></path>
+			case "Info":
+				<path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"></path>
+			case "Warning":
+				<path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"></path>
 			case "Add":
 				<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path>
 			case "ArrowBack":
@@ -141,7 +147,7 @@ templ MaterialIcon(name string, className string) {
 templ MaterialIconPalette() {
 	<div id="material-icon-palette" class="material-icon-palette" aria-hidden="true">
 		for _, name := range []string{
-			"PhotoLibrary", "Panorama", "Reply",
+			"PhotoLibrary", "Panorama", "Reply", "Smartphone", "Info", "Warning",
 			"Add", "ArrowBack", "ArrowDropDown", "ArrowUpward", "Bookmark", "BookmarkBorder", "ChatBubble", "Check", "Close", "ClosedCaption", "Delete", "Download", "DynamicFeed", "Explore", "Favorite", "FavoriteBorder", "FitScreen", "Forward10", "Fullscreen", "FullscreenExit", "GridView", "KeyboardArrowDown", "KeyboardArrowLeft", "KeyboardArrowRight", "KeyboardArrowUp", "Language", "Link", "Menu", "MoreHoriz", "MoreVert", "OpenInFull", "OpenInNew", "Pause", "Person", "PersonRemove", "PictureInPictureAlt", "PlayArrow", "PlayCircle", "PlayCircleOutline", "PushPin", "Refresh", "Repeat", "Replay10", "Search", "Settings", "Share", "Speed", "Star", "StarBorder", "Subject", "ThumbUp", "Translate", "VerticalSplit", "VideoLibrary", "Visibility", "VolumeDown", "VolumeOff", "VolumeUp", "WebStories",
 		} {
 			@MaterialIcon(name, "")

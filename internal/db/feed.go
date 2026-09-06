@@ -12,12 +12,12 @@ import (
 func feedItemSelectSQL(alias string) string {
 	return fmt.Sprintf(`%[1]s.tweet_id, COALESCE(%[1]s.source_handle,''), COALESCE(%[1]s.author_handle,''),
 		COALESCE(%[1]s.author_display_name,''), COALESCE(%[1]s.author_avatar_url,''),
-		COALESCE(%[1]s.body_text,''), COALESCE(%[1]s.lang,''),
+		COALESCE(%[1]s.body_text,''), COALESCE(%[1]s.article_title,''), COALESCE(%[1]s.poll_json,''), COALESCE(%[1]s.community_note,''), COALESCE(%[1]s.lang,''),
 		COALESCE(%[1]s.is_retweet,0), COALESCE(%[1]s.retweeted_by_handle,''),
 		COALESCE(%[1]s.retweeted_by_display_name,''),
 		COALESCE(%[1]s.quote_tweet_id,''), COALESCE(%[1]s.quote_author_handle,''),
 		COALESCE(%[1]s.quote_author_display_name,''), COALESCE(%[1]s.quote_author_avatar_url,''),
-		COALESCE(%[1]s.quote_body_text,''), COALESCE(%[1]s.quote_lang,''),
+		COALESCE(%[1]s.quote_body_text,''), COALESCE(%[1]s.quote_article_title,''), COALESCE(%[1]s.quote_poll_json,''), COALESCE(%[1]s.quote_community_note,''), COALESCE(%[1]s.quote_lang,''),
 		COALESCE(%[1]s.quote_media_json,''), COALESCE(%[1]s.media_json,''),
 		COALESCE(%[1]s.canonical_url,''), COALESCE(%[1]s.reply_to_handle,''),
 		COALESCE(%[1]s.reply_to_status,''), COALESCE(%[1]s.is_reply,0), COALESCE(%[1]s.is_ghost,0),
@@ -212,7 +212,7 @@ func (db *DB) materializeResolvedFeedStateTx(tx *sql.Tx, sourceID, stateID strin
 	if _, err := tx.Exec(`
 		INSERT INTO feed_items (
 			tweet_id, source_channel_id, channel_id,
-			body_text, media_json, canonical_url,
+			body_text, article_title, poll_json, community_note, media_json, canonical_url,
 			published_at, fetched_at,
 			content_hash, canonical_tweet_id
 		)
@@ -221,6 +221,9 @@ func (db *DB) materializeResolvedFeedStateTx(tx *sql.Tx, sourceID, stateID strin
 			source_channel_id,
 			channel_id,
 			body_text,
+			article_title,
+			poll_json,
+			community_note,
 			media_json,
 			canonical_url,
 			published_at,
@@ -231,8 +234,11 @@ func (db *DB) materializeResolvedFeedStateTx(tx *sql.Tx, sourceID, stateID strin
 		ON CONFLICT(tweet_id) DO UPDATE SET
 			source_channel_id = CASE WHEN COALESCE(feed_items.source_channel_id, '') = '' THEN excluded.source_channel_id ELSE feed_items.source_channel_id END,
 			channel_id = CASE WHEN COALESCE(feed_items.channel_id, '') = '' THEN excluded.channel_id ELSE feed_items.channel_id END,
-			body_text = CASE WHEN COALESCE(feed_items.body_text, '') = '' THEN excluded.body_text ELSE feed_items.body_text END,
-			media_json = CASE WHEN COALESCE(feed_items.media_json, '') IN ('', '[]') THEN excluded.media_json ELSE feed_items.media_json END,
+			body_text = CASE WHEN COALESCE(feed_items.body_text, '') = '' OR COALESCE(excluded.article_title, '') != '' THEN excluded.body_text ELSE feed_items.body_text END,
+			article_title = COALESCE(excluded.article_title, feed_items.article_title),
+			poll_json = COALESCE(excluded.poll_json, feed_items.poll_json),
+			community_note = COALESCE(excluded.community_note, feed_items.community_note),
+			media_json = CASE WHEN COALESCE(feed_items.media_json, '') IN ('', '[]') OR COALESCE(excluded.article_title, '') != '' THEN excluded.media_json ELSE feed_items.media_json END,
 			canonical_url = CASE WHEN COALESCE(feed_items.canonical_url, '') = '' THEN excluded.canonical_url ELSE feed_items.canonical_url END,
 			published_at = CASE WHEN COALESCE(feed_items.published_at, 0) = 0 THEN excluded.published_at ELSE feed_items.published_at END,
 			fetched_at = CASE WHEN COALESCE(feed_items.fetched_at, 0) = 0 THEN excluded.fetched_at ELSE feed_items.fetched_at END,
@@ -875,11 +881,11 @@ func scanFeedItem(row feedItemScanner) (model.FeedItem, error) {
 	err := row.Scan(
 		&f.TweetID, &f.SourceHandle, &f.AuthorHandle,
 		&f.AuthorDisplayName, &f.AuthorAvatarURL,
-		&f.BodyText, &f.Lang,
+		&f.BodyText, &f.ArticleTitle, &f.PollJSON, &f.CommunityNote, &f.Lang,
 		&f.IsRetweet, &f.RetweetedByHandle, &f.RetweetedByDisplayName,
 		&f.QuoteTweetID, &f.QuoteAuthorHandle,
 		&f.QuoteAuthorDisplayName, &f.QuoteAuthorAvatarURL,
-		&f.QuoteBodyText, &f.QuoteLang,
+		&f.QuoteBodyText, &f.QuoteArticleTitle, &f.QuotePollJSON, &f.QuoteCommunityNote, &f.QuoteLang,
 		&f.QuoteMediaJSON, &f.MediaJSON,
 		&f.CanonicalURL, &f.ReplyToHandle, &f.ReplyToStatus,
 		&f.IsReply, &f.IsGhost, &quotePubAt,
@@ -1167,9 +1173,9 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 		stmt, err := tx.Prepare(`
 			INSERT INTO feed_items (
 				tweet_id, source_channel_id, channel_id,
-				body_text, lang, is_retweet,
+				body_text, article_title, poll_json, community_note, lang, is_retweet,
 				quote_tweet_id, quote_channel_id,
-				quote_body_text, quote_lang, quote_media_json,
+				quote_body_text, quote_article_title, quote_poll_json, quote_community_note, quote_lang, quote_media_json,
 				media_json, canonical_url, reply_channel_id, reply_to_status,
 				is_reply, is_ghost, reposter_channel_id,
 				quote_published_at, views, likes, retweets,
@@ -1177,9 +1183,9 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 				content_hash, canonical_tweet_id
 			) VALUES (
 				?, ?, ?,
-				?, ?, ?,
+				?, ?, ?, ?, ?, ?,
 				?, ?,
-				?, ?, ?,
+				?, ?, ?, ?, ?, ?,
 				?, ?, ?, ?,
 				?, ?, ?,
 				?, ?, ?, ?,
@@ -1190,9 +1196,19 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 				source_channel_id = COALESCE(excluded.source_channel_id, feed_items.source_channel_id),
 				channel_id = CASE WHEN COALESCE(feed_items.channel_id, '') = '' THEN excluded.channel_id ELSE feed_items.channel_id END,
 				body_text = CASE
+					WHEN COALESCE(feed_items.is_ghost, 0) = 0 AND excluded.is_ghost = 1 AND COALESCE(feed_items.body_text, '') != '' THEN feed_items.body_text
+					WHEN COALESCE(feed_items.article_title, '') != '' AND COALESCE(excluded.article_title, '') = '' THEN feed_items.body_text
 					WHEN excluded.body_text IS NULL OR excluded.body_text = '' THEN feed_items.body_text
 					ELSE excluded.body_text
 				END,
+				article_title = CASE
+					WHEN COALESCE(feed_items.is_ghost, 0) = 0 AND excluded.is_ghost = 1 AND COALESCE(feed_items.body_text, '') != '' THEN feed_items.article_title
+					ELSE COALESCE(excluded.article_title, feed_items.article_title)
+				END,
+				poll_json = COALESCE(excluded.poll_json, feed_items.poll_json),
+				community_note = COALESCE(excluded.community_note, feed_items.community_note),
+				quote_poll_json = COALESCE(excluded.quote_poll_json, feed_items.quote_poll_json),
+				quote_community_note = COALESCE(excluded.quote_community_note, feed_items.quote_community_note),
 				lang = CASE
 					WHEN excluded.lang IS NOT NULL
 						AND excluded.lang != ''
@@ -1204,7 +1220,11 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 						) THEN excluded.lang
 					ELSE feed_items.lang
 				END,
-				media_json = COALESCE(excluded.media_json, feed_items.media_json),
+				media_json = CASE
+					WHEN COALESCE(feed_items.is_ghost, 0) = 0 AND excluded.is_ghost = 1 AND COALESCE(feed_items.media_json, '') NOT IN ('', '[]') THEN feed_items.media_json
+					WHEN COALESCE(feed_items.article_title, '') != '' AND COALESCE(excluded.article_title, '') = '' THEN feed_items.media_json
+					ELSE COALESCE(excluded.media_json, feed_items.media_json)
+				END,
 				canonical_url = CASE
 					WHEN excluded.canonical_url IS NOT NULL
 					 AND excluded.canonical_url != ''
@@ -1222,8 +1242,14 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 				END,
 				quote_channel_id = CASE WHEN COALESCE(feed_items.quote_channel_id, '') = '' THEN excluded.quote_channel_id ELSE feed_items.quote_channel_id END,
 				quote_body_text = CASE
+					WHEN COALESCE(feed_items.is_ghost, 0) = 0 AND excluded.is_ghost = 1 AND COALESCE(feed_items.quote_body_text, '') != '' THEN feed_items.quote_body_text
+					WHEN COALESCE(excluded.quote_article_title, '') != '' AND COALESCE(excluded.quote_body_text, '') != '' THEN excluded.quote_body_text
 					WHEN COALESCE(feed_items.quote_body_text, '') = '' THEN COALESCE(excluded.quote_body_text, feed_items.quote_body_text)
 					ELSE feed_items.quote_body_text
+				END,
+				quote_article_title = CASE
+					WHEN COALESCE(feed_items.is_ghost, 0) = 0 AND excluded.is_ghost = 1 AND COALESCE(feed_items.quote_body_text, '') != '' THEN feed_items.quote_article_title
+					ELSE COALESCE(excluded.quote_article_title, feed_items.quote_article_title)
 				END,
 				quote_lang = CASE
 					WHEN COALESCE(feed_items.quote_lang, '') = '' THEN COALESCE(excluded.quote_lang, feed_items.quote_lang)
@@ -1238,6 +1264,8 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 					ELSE feed_items.quote_lang
 				END,
 				quote_media_json = CASE
+					WHEN COALESCE(feed_items.is_ghost, 0) = 0 AND excluded.is_ghost = 1 AND COALESCE(feed_items.quote_media_json, '') NOT IN ('', '[]') THEN feed_items.quote_media_json
+					WHEN COALESCE(excluded.quote_article_title, '') != '' THEN COALESCE(excluded.quote_media_json, feed_items.quote_media_json)
 					WHEN COALESCE(feed_items.quote_media_json, '') IN ('', '[]') THEN COALESCE(excluded.quote_media_json, feed_items.quote_media_json)
 					ELSE feed_items.quote_media_json
 				END,
@@ -1248,7 +1276,11 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 					WHEN COALESCE(feed_items.fetched_at, 0) > 0 THEN feed_items.fetched_at
 					ELSE excluded.fetched_at
 				END,
-				content_hash = COALESCE(excluded.content_hash, feed_items.content_hash),
+				content_hash = CASE
+					WHEN COALESCE(feed_items.is_ghost, 0) = 0 AND excluded.is_ghost = 1 AND COALESCE(feed_items.content_hash, '') != '' THEN feed_items.content_hash
+					WHEN COALESCE(feed_items.article_title, '') != '' AND COALESCE(excluded.article_title, '') = '' THEN feed_items.content_hash
+					ELSE COALESCE(excluded.content_hash, feed_items.content_hash)
+				END,
 				canonical_tweet_id = CASE
 					WHEN COALESCE(excluded.is_retweet, 0) = 1
 						AND COALESCE(excluded.quote_tweet_id, '') = ''
@@ -1283,6 +1315,12 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 			       AND feed_items.channel_id IS NOT excluded.channel_id)
 			   OR (excluded.body_text IS NOT NULL AND excluded.body_text != ''
 			       AND feed_items.body_text IS NOT excluded.body_text)
+			   OR (excluded.article_title IS NOT NULL AND feed_items.article_title IS NOT excluded.article_title)
+			   OR (excluded.poll_json IS NOT NULL AND feed_items.poll_json IS NOT excluded.poll_json)
+			   OR (excluded.community_note IS NOT NULL AND feed_items.community_note IS NOT excluded.community_note)
+			   OR (excluded.quote_poll_json IS NOT NULL AND feed_items.quote_poll_json IS NOT excluded.quote_poll_json)
+			   OR (excluded.quote_community_note IS NOT NULL AND feed_items.quote_community_note IS NOT excluded.quote_community_note)
+			   OR (excluded.quote_article_title IS NOT NULL AND (feed_items.quote_article_title IS NOT excluded.quote_article_title OR feed_items.quote_body_text IS NOT excluded.quote_body_text OR feed_items.quote_media_json IS NOT excluded.quote_media_json))
 			   OR (excluded.lang IS NOT NULL AND excluded.lang != ''
 			       AND (feed_items.lang IS NULL OR feed_items.lang = ''
 			            OR LOWER(feed_items.lang) IN ('und','unknown','qam','qct','qht','qme','qst','zxx')
@@ -1331,7 +1369,8 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 			       AND feed_items.reply_to_status IS NOT excluded.reply_to_status)
 			   OR (COALESCE(feed_items.reposter_channel_id, '') = ''
 			       AND feed_items.reposter_channel_id IS NOT excluded.reposter_channel_id)
-			RETURNING tweet_id, COALESCE(body_text, ''), COALESCE(quote_body_text, '')
+			RETURNING tweet_id, COALESCE(body_text, ''), COALESCE(quote_body_text, ''),
+			          COALESCE(media_json, ''), COALESCE(quote_media_json, ''), COALESCE(quote_tweet_id, '')
 		`)
 		if err != nil {
 			return err
@@ -1356,7 +1395,9 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 			)
 			return err
 		}
-		for _, item := range normalizedItems {
+		for index := range normalizedItems {
+			item := &normalizedItems[index]
+			incomingMediaJSON, incomingQuoteMediaJSON := item.MediaJSON, item.QuoteMediaJSON
 			pubMs := timePtrToMillis(item.PublishedAt)
 			quotePubMs := timePtrToMillis(item.QuotePublishedAt)
 			row := stmt.QueryRow(
@@ -1364,11 +1405,17 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 				nilIfEmpty(item.SourceChannelID),
 				nilIfEmpty(item.ChannelID),
 				nilIfEmpty(item.BodyText),
+				nilIfEmpty(item.ArticleTitle),
+				nilIfEmpty(item.PollJSON),
+				nilIfEmpty(item.CommunityNote),
 				nilIfEmpty(item.Lang),
 				boolToInt(item.IsRetweet),
 				nilIfEmpty(item.QuoteTweetID),
 				nilIfEmpty(item.QuoteChannelID),
 				nilIfEmpty(item.QuoteBodyText),
+				nilIfEmpty(item.QuoteArticleTitle),
+				nilIfEmpty(item.QuotePollJSON),
+				nilIfEmpty(item.QuoteCommunityNote),
 				nilIfEmpty(item.QuoteLang),
 				nilIfEmpty(item.QuoteMediaJSON),
 				nilIfEmpty(item.MediaJSON),
@@ -1388,11 +1435,24 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 				nilIfEmpty(item.CanonicalTweetID),
 			)
 			var storedTweetID, finalBodyText, finalQuoteBodyText string
-			err := row.Scan(&storedTweetID, &finalBodyText, &finalQuoteBodyText)
+			err := row.Scan(&storedTweetID, &finalBodyText, &finalQuoteBodyText, &item.MediaJSON, &item.QuoteMediaJSON, &item.QuoteTweetID)
 			if err != nil && err != sql.ErrNoRows {
 				return err
 			}
 			result.Processed++
+			if err == sql.ErrNoRows {
+				if item.IsGhost {
+					if err := tx.QueryRow(`SELECT COALESCE(media_json, ''), COALESCE(quote_media_json, ''), COALESCE(quote_tweet_id, '') FROM feed_items WHERE tweet_id = ?`, item.TweetID).Scan(&item.MediaJSON, &item.QuoteMediaJSON, &item.QuoteTweetID); err != nil {
+						return err
+					}
+				}
+			}
+			if item.MediaJSON != incomingMediaJSON {
+				item.Media = nil
+			}
+			if item.QuoteMediaJSON != incomingQuoteMediaJSON {
+				item.QuoteMedia = nil
+			}
 			if err == sql.ErrNoRows {
 				continue
 			}

@@ -14,6 +14,8 @@ type AndroidSyncFeedRankProjection struct {
 
 type androidSyncFeedRecencyNode struct {
 	parentID    string
+	quoteID     string
+	isGhost     bool
 	contentHash string
 	publishedAt int64
 	exists      bool
@@ -104,10 +106,54 @@ func (db *DB) ListAndroidSyncFeedEffectiveRecency(tweetIDs []string) (map[string
 			current = parentID
 		}
 	}
+	children := androidSyncFeedContextChildren(nodes)
+	queue := nodeIDs
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		value := effectiveRecency[id]
+		for _, childID := range children[id] {
+			if effectiveRecency[childID] >= value {
+				continue
+			}
+			effectiveRecency[childID] = value
+			queue = append(queue, childID)
+			current := childID
+			for steps := 0; steps < 50; steps++ {
+				parentID := nodes[current].parentID
+				if parentID == "" || !nodes[parentID].exists {
+					break
+				}
+				if effectiveRecency[parentID] < value {
+					effectiveRecency[parentID] = value
+					queue = append(queue, parentID)
+				}
+				current = parentID
+			}
+		}
+	}
 	for _, id := range roots {
 		out[id] = effectiveRecency[id]
 	}
 	return out, nil
+}
+
+// Only fetched context inherits retention from its parent; ordinary incoming
+// quotes and replies retain their own timeline eligibility.
+func androidSyncFeedContextChildren(nodes map[string]androidSyncFeedRecencyNode) map[string][]string {
+	children := make(map[string][]string)
+	for id, node := range nodes {
+		if !node.isGhost {
+			continue
+		}
+		if node.parentID != "" {
+			children[node.parentID] = append(children[node.parentID], id)
+		}
+		if node.quoteID != "" && node.quoteID != node.parentID {
+			children[node.quoteID] = append(children[node.quoteID], id)
+		}
+	}
+	return children
 }
 
 func (db *DB) listAndroidSyncFeedRecencyNodes(roots []string) (map[string]androidSyncFeedRecencyNode, error) {
@@ -122,7 +168,7 @@ func (db *DB) listAndroidSyncFeedRecencyNodes(roots []string) (map[string]androi
 		var childIDs []string
 		for _, chunk := range stringChunks(frontier, androidSyncProjectionChunkSize) {
 			rows, err := db.reader().Query(`
-				SELECT tweet_id, COALESCE(reply_to_status, ''),
+				SELECT tweet_id, COALESCE(reply_to_status, ''), COALESCE(quote_tweet_id, ''), COALESCE(is_ghost, 0),
 				       COALESCE(content_hash, ''), COALESCE(published_at, 0)
 				FROM feed_items
 				WHERE tweet_id IN (`+placeholders(len(chunk))+`)
@@ -133,12 +179,15 @@ func (db *DB) listAndroidSyncFeedRecencyNodes(roots []string) (map[string]androi
 			for rows.Next() {
 				var id string
 				var row androidSyncFeedRecencyNode
-				if err := rows.Scan(&id, &row.parentID, &row.contentHash, &row.publishedAt); err != nil {
+				if err := rows.Scan(&id, &row.parentID, &row.quoteID, &row.isGhost, &row.contentHash, &row.publishedAt); err != nil {
 					_ = rows.Close()
 					return nil, err
 				}
 				row.exists = true
 				nodes[id] = row
+				if row.isGhost {
+					childIDs = append(childIDs, row.parentID, row.quoteID)
+				}
 			}
 			if err := rows.Err(); err != nil {
 				_ = rows.Close()
@@ -153,7 +202,10 @@ func (db *DB) listAndroidSyncFeedRecencyNodes(roots []string) (map[string]androi
 				WHERE reply_to_status IS NOT NULL
 				  AND reply_to_status != ''
 				  AND reply_to_status IN (`+placeholders(len(chunk))+`)
-			`, stringsToAny(chunk)...)
+				UNION
+				SELECT tweet_id FROM feed_items
+				WHERE is_ghost = 1 AND quote_tweet_id IN (`+placeholders(len(chunk))+`)
+			`, append(stringsToAny(chunk), stringsToAny(chunk)...)...)
 			if err != nil {
 				return nil, err
 			}
@@ -255,9 +307,10 @@ func (db *DB) ListAndroidSyncFeedClosureIDs(leafIDs []string) ([]string, error) 
 	return out, nil
 }
 
-// ListAndroidSyncFeedHydrationIDs returns the canonical owner plus its quoted
-// targets and reply ancestors. Same-hash peers receive their own revision heads
-// when the shared retention inputs change, so they remain page-bounded here.
+// ListAndroidSyncFeedHydrationIDs returns the canonical owner, quoted targets,
+// reply ancestors, and fetched ghost context. Root protection changes hydrate
+// that same context so incremental selection can retain or delete it together.
+// Same-hash peers receive their own revision heads and remain page-bounded here.
 func (db *DB) ListAndroidSyncFeedHydrationIDs(tweetIDs []string) ([]string, error) {
 	tweetIDs = uniqueStrings(tweetIDs)
 	if len(tweetIDs) == 0 {
@@ -272,12 +325,17 @@ func (db *DB) ListAndroidSyncFeedHydrationIDs(tweetIDs []string) ([]string, erro
 	for len(frontier) > 0 {
 		var linkedIDs []string
 		for _, chunk := range stringChunks(frontier, androidSyncProjectionChunkSize) {
+			args := stringsToAny(chunk)
+			args = append(args, stringsToAny(chunk)...)
+			args = append(args, stringsToAny(chunk)...)
 			rows, err := db.reader().Query(`
 				SELECT tweet_id, COALESCE(quote_tweet_id, ''),
 				       COALESCE(reply_to_status, '')
 				FROM feed_items
 				WHERE tweet_id IN (`+placeholders(len(chunk))+`)
-			`, stringsToAny(chunk)...)
+				   OR (is_ghost = 1 AND (reply_to_status IN (`+placeholders(len(chunk))+`)
+				       OR quote_tweet_id IN (`+placeholders(len(chunk))+`)))
+			`, args...)
 			if err != nil {
 				return nil, err
 			}
@@ -288,7 +346,7 @@ func (db *DB) ListAndroidSyncFeedHydrationIDs(tweetIDs []string) ([]string, erro
 					return nil, err
 				}
 				seen[id] = struct{}{}
-				linkedIDs = append(linkedIDs, quoteID, parentID)
+				linkedIDs = append(linkedIDs, id, quoteID, parentID)
 			}
 			if err := rows.Err(); err != nil {
 				_ = rows.Close()

@@ -162,6 +162,20 @@ func (db *DB) listAndroidSyncDesiredFeed(feedDays int, nowMs int64) (map[string]
 			FROM reply_chain rc
 			JOIN feed_items fi ON fi.tweet_id = rc.tweet_id
 			WHERE COALESCE(fi.reply_to_status, '') != ''
+
+			UNION
+
+			SELECT child.tweet_id, 1
+			FROM reply_chain rc
+			JOIN feed_items context_root ON context_root.tweet_id = rc.tweet_id
+			-- Match the partial-index predicates so each recursive step uses indexed lookups.
+			JOIN feed_items child ON (child.reply_to_status = rc.tweet_id AND child.reply_to_status != '')
+				OR (child.quote_tweet_id = rc.tweet_id AND child.quote_tweet_id != '')
+			WHERE child.is_ghost = 1
+			  AND (rc.is_ancestor = 1
+			    OR EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = context_root.tweet_id)
+			    OR EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = context_root.tweet_id)
+			    OR (`+retweetFilterClause("context_root")+`))
 		)
 		SELECT DISTINCT fi.tweet_id
 		FROM reply_chain rc

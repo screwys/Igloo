@@ -91,15 +91,19 @@ internal const val NativeChannelHeaderBioTextSp = 16f
 internal const val NativeChannelHeaderMetaTextSp = 17f
 
 internal enum class NativeFeedPrimaryAction {
+    Reply,
     Share,
     Like,
     Bookmark,
+    External,
 }
 
 internal val NativeFeedPrimaryActions = listOf(
-    NativeFeedPrimaryAction.Share,
+    NativeFeedPrimaryAction.Reply,
     NativeFeedPrimaryAction.Like,
     NativeFeedPrimaryAction.Bookmark,
+    NativeFeedPrimaryAction.Share,
+    NativeFeedPrimaryAction.External,
 )
 
 internal const val NativeFeedBodyCollapsedLines = 15
@@ -117,6 +121,7 @@ internal fun NativeFeedSurface(
     bookmarkCategories: List<BookmarkCategoryDisplay>,
     mutedChannelIds: Set<String>,
     mediaModels: Map<String, FeedMediaGridModel> = emptyMap(),
+    showFullArticles: Boolean = false,
     onRefresh: () -> Unit,
     onNewPostsClick: () -> Unit = onRefresh,
     onChannelClick: (channelId: String) -> Unit,
@@ -153,13 +158,43 @@ internal fun NativeFeedSurface(
     val db: IglooDatabase = koinInject()
     val useEmbedFriendlyShareLinks by prefs.shareEmbedFriendlyLinks()
         .collectAsStateWithLifecycle(initialValue = PreferencesRepo.Defaults.SHARE_EMBED_FRIENDLY_LINKS)
+    val showAccountRegion by prefs.flowBool(PreferencesRepo.Keys.SHOW_X_ACCOUNT_REGION, true)
+        .collectAsStateWithLifecycle(initialValue = true)
+    val accountRegionEnabled by prefs.flowBool(PreferencesRepo.Keys.X_ACCOUNT_REGION_ENABLED, true)
+        .collectAsStateWithLifecycle(initialValue = true)
+    val showCommunityNotes by prefs.flowBool(PreferencesRepo.Keys.SHOW_X_COMMUNITY_NOTES, true)
+        .collectAsStateWithLifecycle(initialValue = true)
+    val communityNotesEnabled by prefs.flowBool(PreferencesRepo.Keys.X_COMMUNITY_NOTES_ENABLED, true)
+        .collectAsStateWithLifecycle(initialValue = true)
     val pendingFeedActionRows by db.outboxDao().pendingFeedActionRowsFlow()
         .collectAsStateWithLifecycle(initialValue = emptyList())
-    val displayRows = remember(rows, pendingFeedActionRows) {
+    val displayRows = remember(rows, pendingFeedActionRows, showAccountRegion, accountRegionEnabled,
+        showCommunityNotes, communityNotesEnabled) {
         nativeFeedRowsWithPendingActionOverrides(
             rows = rows,
             overrides = pendingFeedActionOverrides(pendingFeedActionRows),
-        )
+        ).let { actionRows ->
+            val regionsVisible = showAccountRegion && accountRegionEnabled
+            val notesVisible = showCommunityNotes && communityNotesEnabled
+            fun FeedRow.withDisplayPreferences() = copy(
+                authorAccountRegion = authorAccountRegion.takeIf { regionsVisible },
+                quoteAuthorAccountRegion = quoteAuthorAccountRegion.takeIf { regionsVisible },
+                authorAccountDetailsJson = authorAccountDetailsJson.takeIf { regionsVisible },
+                quoteAuthorAccountDetailsJson = quoteAuthorAccountDetailsJson.takeIf { regionsVisible },
+                item = if (notesVisible) item else item.copy(communityNote = null, quoteCommunityNote = null),
+            )
+            if (regionsVisible && notesVisible) actionRows
+            else actionRows.map { threaded ->
+                threaded.copy(
+                    row = threaded.row.withDisplayPreferences(),
+                    chain = threaded.chain.map { it.withDisplayPreferences() },
+                )
+            }
+        }
+    }
+    val displayChannelHeader = channelHeader?.let {
+        if (showAccountRegion && accountRegionEnabled) it
+        else it.copy(accountRegion = null, accountDetailsJson = null)
     }
     val lifecycleOwner = LocalLifecycleOwner.current
     val colors = nativeFeedColors()
@@ -188,6 +223,7 @@ internal fun NativeFeedSurface(
             onHeaderRefresh = onHeaderRefresh,
             onHeaderOpenInPlatform = onHeaderOpenInPlatform,
             useEmbedFriendlyShareLinks = useEmbedFriendlyShareLinks,
+            showFullArticles = showFullArticles,
         )
     )
     val seenBatcher = remember(onSeenReached) { SeenBatcher(onSeenReached) }
@@ -270,7 +306,7 @@ internal fun NativeFeedSurface(
                     update = {
                         controller.update(
                             rows = displayRows,
-                            channelHeader = channelHeader,
+                            channelHeader = displayChannelHeader,
                             mediaModels = mediaModels,
                             colors = colors,
                             callbacks = currentCallbacks,
@@ -584,6 +620,7 @@ internal data class NativeFeedCallbacks(
     val onHeaderRefresh: () -> Unit,
     val onHeaderOpenInPlatform: () -> Unit,
     val useEmbedFriendlyShareLinks: Boolean,
+    val showFullArticles: Boolean = false,
 )
 
 internal data class NativeTranslationPill(
@@ -637,6 +674,7 @@ internal sealed class NativeFeedAdapterItem {
         val threaded: ThreadedFeedRow,
         val post: SocialPostModel,
         val chainPosts: List<SocialPostModel> = emptyList(),
+        val showFullArticles: Boolean = false,
     ) : NativeFeedAdapterItem() {
         override val id: String = post.stableKey
     }

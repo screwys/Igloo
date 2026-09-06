@@ -33,6 +33,10 @@ class PreferencesRepo(
 
     @Suppress("MemberVisibilityCanBePrivate")
     object Keys {
+        const val X_ACCOUNT_REGION_ENABLED = "x_account_region_enabled"
+        const val SHOW_X_ACCOUNT_REGION = "show_x_account_region"
+        const val X_COMMUNITY_NOTES_ENABLED = "x_community_notes_enabled"
+        const val SHOW_X_COMMUNITY_NOTES = "show_x_community_notes"
         // Server
         const val SERVER_URL                 = "server_url"
 

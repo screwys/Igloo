@@ -447,6 +447,11 @@ func (g *GalleryDLWrapper) DownloadCompleted(ctx context.Context, rawURL, destDi
 		"--write-info-json",
 		"-D", tmpDir,
 	}
+	if IsInstagramURL(rawURL) {
+		// Single posts carry carousel music. Keep reel audio in the video and
+		// leave account discovery ranges counting the existing media records.
+		args = append(args, "-o", "extractor.instagram.post.audio=true")
+	}
 	args = appendCookieAuthArgs(args, cookiesFile, browser)
 	args = append(args, rawURL)
 	result := g.Runner.Run(ctx, "gallery-dl", args, CommandOptions{Timeout: galleryDLDefaultTimeout})

@@ -15,7 +15,8 @@ type androidSyncHeadTable struct {
 
 var androidSyncPayloadUpdateColumns = map[string]string{
 	"channels": `channel_id, source_id, name, url, platform`,
-	"feed_items": `tweet_id, body_text, lang,
+	"feed_items": `tweet_id, body_text, article_title, quote_article_title, lang,
+		poll_json, quote_poll_json, community_note, quote_community_note,
 		is_retweet, quote_tweet_id, quote_body_text, quote_lang,
 		quote_media_json, media_json, canonical_url, reply_to_status,
 		is_reply, is_ghost, quote_published_at, views, likes, retweets, published_at,
@@ -29,7 +30,7 @@ var androidSyncPayloadUpdateColumns = map[string]string{
 var androidSyncHeadTables = []androidSyncHeadTable{
 	{table: "channels", ownerKind: "channel", idColumn: "channel_id", updateColumns: androidSyncPayloadUpdateColumns["channels"]},
 	{table: "channel_profiles", ownerKind: "channel", idColumn: "channel_id", updateColumns: `channel_id, platform, handle, display_name, bio, website,
-		followers, following, verified, verified_type, protected, tombstone`},
+		followers, following, verified, verified_type, account_region, account_details_json, protected, tombstone`},
 	{table: "feed_items", ownerKind: "feed", idColumn: "tweet_id", updateColumns: androidSyncPayloadUpdateColumns["feed_items"]},
 	{table: "translations", ownerKind: "feed", idColumn: "tweet_id", updateColumns: "tweet_id, field, source_lang, target_lang, translated_text, translated_at"},
 	{table: "videos", ownerKind: "video", idColumn: "video_id", updateColumns: androidSyncPayloadUpdateColumns["videos"]},
@@ -176,7 +177,7 @@ func ensureAndroidSyncHeadTriggers(conn schemaExecer) error {
 
 func androidSyncAuxiliaryHeadTriggers() []string {
 	relevantSettings := `'moments_include_reposts_default', 'instagram_include_tagged_default',
-		'include_reposts_default', 'translate_target_lang', 'translate_skip_langs'`
+		'include_reposts_default', 'translate_target_lang', 'translate_skip_langs', 'x_account_region_enabled', 'x_community_notes_enabled'`
 	triggers := []string{
 		`CREATE TRIGGER IF NOT EXISTS android_sync_head_settings_insert
 		 AFTER INSERT ON settings

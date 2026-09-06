@@ -263,6 +263,16 @@ func TestAndroidSyncHeadsFilterSettingsAndHydrateProtectedContent(t *testing.T) 
 		t.Fatal(err)
 	}
 	_ = requireAndroidSyncHead(t, d, "setting", "translate_target_lang")
+	if err := d.SetSetting("x_account_region_enabled", "true"); err != nil {
+		t.Fatal(err)
+	}
+	regionHead := requireAndroidSyncHead(t, d, "setting", "x_account_region_enabled")
+	if err := d.SetSetting("x_account_region_enabled", "false"); err != nil {
+		t.Fatal(err)
+	}
+	if next := requireAndroidSyncHead(t, d, "setting", "x_account_region_enabled"); next.Revision <= regionHead.Revision {
+		t.Fatal("region opt-out did not advance Android sync")
+	}
 
 	if err := d.ExecRaw(`INSERT INTO feed_likes (tweet_id, liked_at) VALUES ('sample_protected', 1)`); err != nil {
 		t.Fatal(err)

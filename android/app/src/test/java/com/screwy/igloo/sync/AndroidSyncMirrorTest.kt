@@ -99,6 +99,81 @@ class AndroidSyncMirrorTest {
     }
 
     @Test
+    fun enrichedPostSyncRemainsAvailableOfflineWithoutChangingLocalOptOuts() = runBlocking {
+        db.preferenceDao().put(PreferencesRepo.Keys.SHOW_X_ACCOUNT_REGION, "false", nowMs)
+        db.preferenceDao().put(PreferencesRepo.Keys.SHOW_X_COMMUNITY_NOTES, "false", nowMs)
+        val pollJson = """{"choices":[{"label":"Sample","count":1,"percentage":100}],"total_votes":1,"captured_at":100}"""
+        val detailsJson = """{"source":"App Store","location_accurate":false,"username_changes":0,"user_id":"12345"}"""
+        val article = feedChange("sample_article", channelId = "twitter_sample")
+        val item = article.payload!!.jsonObject.getValue("item").jsonObject
+        val profile = profileOnlyChannelChange("twitter_sample")
+        val profilePayload = profile.payload!!.jsonObject.getValue("profile").jsonObject
+        val changes = listOf(
+            article.copy(payload = buildJsonObject {
+                put("item", JsonObject(item + buildJsonObject {
+                    put("article_title", "Sample article")
+                    put("body_text", "First paragraph.\n\nSecond paragraph.")
+                    put("quote_article_title", "Quoted article")
+                    put("quote_body_text", "Quoted full text.")
+                    put("poll_json", pollJson)
+                    put("quote_poll_json", pollJson)
+                    put("community_note", "Context https://example.com/source")
+                    put("quote_community_note", "Quoted context https://example.com/quote")
+                }))
+            }),
+            profile.copy(payload = buildJsonObject {
+                put("channel", JsonNull)
+                put("profile", JsonObject(profilePayload + buildJsonObject {
+                    put("account_region", "United States")
+                    put("account_details_json", detailsJson)
+                }))
+            }),
+            upsertChange(
+                ownerKind = "setting",
+                ownerId = PreferencesRepo.Keys.X_COMMUNITY_NOTES_ENABLED,
+                payload = buildJsonObject {
+                    put("key", PreferencesRepo.Keys.X_COMMUNITY_NOTES_ENABLED)
+                    put("value", "false")
+                },
+            ),
+            upsertChange(
+                ownerKind = "setting",
+                ownerId = PreferencesRepo.Keys.X_ACCOUNT_REGION_ENABLED,
+                payload = buildJsonObject {
+                    put("key", PreferencesRepo.Keys.X_ACCOUNT_REGION_ENABLED)
+                    put("value", "true")
+                },
+            ),
+        )
+        buildMirror(MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/android/sync/bootstrap" -> respondJson(page(changes, "article-cursor"))
+                "/api/android/sync/changes" -> respondJson(page(emptyList(), "article-cursor"))
+                "/api/android/sync/health" -> respondOk()
+                else -> error("Unexpected request ${request.url}")
+            }
+        }).syncMetadataOnce()
+
+        val saved = db.feedItemDao().getById("sample_article")!!
+        assertEquals("Sample article", saved.articleTitle)
+        assertEquals("First paragraph.\n\nSecond paragraph.", saved.bodyText)
+        assertEquals("Quoted article", saved.quoteArticleTitle)
+        assertEquals("Quoted full text.", saved.quoteBodyText)
+        assertEquals(pollJson, saved.pollJson)
+        assertEquals(pollJson, saved.quotePollJson)
+        assertEquals("Context https://example.com/source", saved.communityNote)
+        assertEquals("Quoted context https://example.com/quote", saved.quoteCommunityNote)
+        assertEquals(detailsJson, db.channelProfileDao().getById("twitter_sample")?.accountDetailsJson)
+        assertEquals(detailsJson, db.feedReadDao().getThreadTree("sample_article").single().authorAccountDetailsJson)
+        assertEquals("United States", db.channelProfileDao().getById("twitter_sample")?.accountRegion)
+        assertEquals("United States", db.feedReadDao().getThreadTree("sample_article").single().authorAccountRegion)
+        assertEquals("true", db.preferenceDao().getValue(PreferencesRepo.Keys.X_ACCOUNT_REGION_ENABLED))
+        assertEquals("false", db.preferenceDao().getValue(PreferencesRepo.Keys.SHOW_X_ACCOUNT_REGION))
+        assertEquals("false", db.preferenceDao().getValue(PreferencesRepo.Keys.X_COMMUNITY_NOTES_ENABLED))
+        assertEquals("false", db.preferenceDao().getValue(PreferencesRepo.Keys.SHOW_X_COMMUNITY_NOTES))
+    }
+
+    @Test
     fun flatBootstrapPageAppliesDependenciesBeforeOpaqueCursorCommit() = runBlocking {
         val requests = mutableListOf<String>()
         val changes =
@@ -958,6 +1033,48 @@ class AndroidSyncMirrorTest {
 
         assertEquals("sample_story", db.momentsCursorDao().get("stories")?.videoId)
         assertFalse(db.androidSyncDao().headIds("moments_cursor").contains("stories"))
+    }
+
+    @Test
+    fun savedRootKeepsOldGhostThreadContextUntilUnsaved() = runBlocking {
+        val oldTime = nowMs - 100L * DAY_MS
+        db.androidSyncDao().upsertSyncState(changesState("context-cursor"))
+        val rows = listOf(
+            FeedItemEntity(tweetId = "context_root", publishedAt = oldTime),
+            FeedItemEntity(tweetId = "context_reply", replyToStatus = "context_root", isGhost = true, publishedAt = oldTime),
+            FeedItemEntity(tweetId = "context_nested", replyToStatus = "context_reply", isGhost = true, publishedAt = oldTime),
+            FeedItemEntity(tweetId = "context_quote", quoteTweetId = "context_root", isGhost = true, publishedAt = oldTime),
+            FeedItemEntity(tweetId = "ordinary_reply", replyToStatus = "context_root", publishedAt = oldTime),
+            FeedItemEntity(tweetId = "ordinary_quote", quoteTweetId = "context_root", publishedAt = oldTime),
+        )
+        rows.forEach { row ->
+            db.feedItemDao().upsert(row)
+            db.androidSyncDao().upsertHead(AndroidSyncHeadEntity("feed", row.tweetId, "feed", oldTime))
+        }
+        db.feedLikeDao().upsert(FeedLikeEntity("context_root", nowMs))
+        val image = File(temporaryFolder.newFolder("sync"), "context-image.jpg").apply { writeText("cached image") }
+        db.androidSyncDao().upsertAsset(readyAsset("context_asset").copy(
+            ownerId = "context_quote", localPath = image.absolutePath, verifiedAtMs = nowMs,
+        ))
+        db.androidSyncDao().upsertHead(AndroidSyncHeadEntity("asset", "context_asset", "feed", oldTime))
+        val mirror = buildMirror(MockEngine { error("Pruning must stay offline") })
+
+        mirror.prune()
+
+        listOf("context_root", "context_reply", "context_nested", "context_quote").forEach {
+            assertNotNull(db.feedItemDao().getById(it))
+        }
+        assertNull(db.feedItemDao().getById("ordinary_reply"))
+        assertNull(db.feedItemDao().getById("ordinary_quote"))
+        assertTrue(image.exists())
+        assertNotNull(db.androidSyncDao().asset("context_asset"))
+        db.feedLikeDao().delete("context_root")
+
+        mirror.prune()
+
+        rows.forEach { assertNull(db.feedItemDao().getById(it.tweetId)) }
+        assertFalse(image.exists())
+        assertNull(db.androidSyncDao().asset("context_asset"))
     }
 
     @Test

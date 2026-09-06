@@ -224,6 +224,95 @@ func TestListAndroidSyncDesiredFeedAssetOwnersAmongMatchesCanonicalSelection(t *
 	}
 }
 
+func TestAndroidSyncGhostThreadContextFollowsRootRetentionAndProtection(t *testing.T) {
+	d := openWritableTestDB(t)
+	nowMs := int64(30 * 24 * time.Hour / time.Millisecond)
+	recent := nowMs - time.Hour.Milliseconds()
+	old := nowMs - 10*24*time.Hour.Milliseconds()
+	if err := d.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, reply_to_status, quote_tweet_id, is_ghost, published_at, fetched_at) VALUES
+		('context_root', '', '', 0, ?, ?),
+		('context_reply', 'context_root', '', 1, ?, ?),
+		('context_nested', 'context_reply', '', 1, ?, ?),
+		('context_quote', '', 'context_root', 1, ?, ?),
+		('ordinary_quote', '', 'context_root', 0, ?, ?),
+		('ordinary_reply', 'context_root', '', 0, ?, ?),
+		('unrelated_ghost', 'absent_root', '', 1, ?, ?)
+	`, recent, recent, old, old, old, old, old, old, old, old, old, old, old, old); err != nil {
+		t.Fatal(err)
+	}
+	candidates := []string{"context_root", "context_reply", "context_nested", "context_quote", "ordinary_quote", "ordinary_reply", "unrelated_ghost"}
+	want := "context_nested,context_quote,context_reply,context_root"
+	checkSelection := func(feedDays int, expected string) {
+		t.Helper()
+		full, err := d.ListAndroidSyncDesiredContent(AndroidRetentionSettings{FeedDays: feedDays}, nowMs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		among, err := d.ListAndroidSyncDesiredContentAmong(AndroidRetentionSettings{FeedDays: feedDays}, nowMs, candidates, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for name, sets := range map[string]AndroidSyncDesiredSets{"bootstrap": full, "incremental": among} {
+			if got := strings.Join(sets.SortedTweets(), ","); got != expected {
+				t.Fatalf("%s retained %q, want %q", name, got, expected)
+			}
+			if got := strings.Join(sets.SortedTweetAssetOwners(), ","); got != expected {
+				t.Fatalf("%s retained asset owners %q, want %q", name, got, expected)
+			}
+		}
+	}
+	checkSelection(1, want)
+	if err := d.ExecRaw(`
+		INSERT INTO channel_settings (channel_id, include_reposts, updated_at) VALUES ('twitter_hidden', 0, 1);
+		UPDATE feed_items SET is_retweet = 1, source_channel_id = 'twitter_hidden' WHERE tweet_id = 'context_root'
+	`); err != nil {
+		t.Fatal(err)
+	}
+	checkSelection(1, "")
+	if err := d.ExecRaw(`UPDATE feed_items SET is_retweet = 0 WHERE tweet_id = 'context_root'`); err != nil {
+		t.Fatal(err)
+	}
+	recency, err := d.ListAndroidSyncFeedEffectiveRecency([]string{"context_reply", "context_nested", "context_quote"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, retainAt := range recency {
+		if retainAt != recent {
+			t.Fatalf("%s retain_at=%d, want root time %d", id, retainAt, recent)
+		}
+	}
+	if err := d.ExecRaw(`UPDATE feed_items SET published_at = ? WHERE tweet_id = 'context_root'`, old); err != nil {
+		t.Fatal(err)
+	}
+	checkSelection(1, "")
+	for _, table := range []string{"feed_likes", "bookmarks"} {
+		column, timeColumn := "tweet_id", "liked_at"
+		if table == "bookmarks" {
+			column, timeColumn = "video_id", "bookmarked_at"
+		}
+		if err := d.ExecRaw(`INSERT INTO `+table+` (`+column+`, `+timeColumn+`) VALUES ('context_root', ?)`, nowMs); err != nil {
+			t.Fatal(err)
+		}
+		checkSelection(0, want)
+		head := requireAndroidSyncHead(t, d, "feed", "context_root")
+		if err := d.ExecRaw(`DELETE FROM ` + table + ` WHERE ` + column + ` = 'context_root'`); err != nil {
+			t.Fatal(err)
+		}
+		if next := requireAndroidSyncHead(t, d, "feed", "context_root"); next.Revision <= head.Revision {
+			t.Fatal("removing root protection did not invalidate its context")
+		}
+		hydrated, err := d.ListAndroidSyncFeedHydrationIDs([]string{"context_root"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Join(hydrated, ","); got != want {
+			t.Fatalf("root invalidation hydrates %q, want bounded context %q", got, want)
+		}
+		checkSelection(1, "")
+	}
+}
+
 func TestListAndroidSyncDesiredContentAmongMatchesCanonicalVideoSelection(t *testing.T) {
 	d := openWritableTestDB(t)
 	nowMs := int64(30 * 24 * time.Hour / time.Millisecond)

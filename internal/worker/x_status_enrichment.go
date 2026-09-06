@@ -144,6 +144,21 @@ func copyQuoteFieldsForStatusEnrichment(dst *model.FeedItem, src model.FeedItem)
 		return false
 	}
 	changed := false
+	if src.QuotePollJSON != "" && dst.QuotePollJSON != src.QuotePollJSON {
+		dst.QuotePollJSON = src.QuotePollJSON
+		changed = true
+	}
+	if src.QuoteCommunityNote != "" && dst.QuoteCommunityNote != src.QuoteCommunityNote {
+		dst.QuoteCommunityNote = src.QuoteCommunityNote
+		changed = true
+	}
+	if dst.QuoteArticleTitle == "" && src.QuoteArticleTitle != "" {
+		dst.QuoteArticleTitle = src.QuoteArticleTitle
+		dst.QuoteBodyText = src.QuoteBodyText
+		dst.QuoteMediaJSON = src.QuoteMediaJSON
+		dst.QuoteMedia = src.QuoteMedia
+		changed = true
+	}
 	if dst.QuoteTweetID == "" {
 		dst.QuoteTweetID = src.QuoteTweetID
 		changed = true

@@ -430,7 +430,7 @@ func (m *Manager) checkChannel(ctx context.Context, channel model.Channel) (down
 			}}, errors.New("instagram channel handle is empty")
 		}
 		cookiesFile, cookiesBrowser := m.cookieFileAndBrowserFor("instagram")
-		snapshot, channelErr := m.downloader.GalleryDL.InstagramChannel(ctx, handle, authoredLimit, cookiesFile, cookiesBrowser)
+		snapshot, channelErr := m.downloader.GalleryDL.InstagramChannel(ctx, handle, authoredLimit, cookiesFile, m.db.BoolSetting("instagram_profile_details"), cookiesBrowser)
 		snapshot = ensureSourceWindows(snapshot, download.SourceComponentReels, download.SourceComponentPosts)
 
 		taggedWindow := download.SourceWindow{Component: sourceComponentTagged, Complete: true}

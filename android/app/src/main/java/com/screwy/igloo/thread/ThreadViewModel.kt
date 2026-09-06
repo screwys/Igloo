@@ -2,6 +2,7 @@ package com.screwy.igloo.thread
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.screwy.igloo.R
 import com.screwy.igloo.channel.ChannelRouteResolver
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.entity.FeedItemEntity
@@ -14,6 +15,7 @@ import com.screwy.igloo.net.ServerBaseUrlProvider
 import com.screwy.igloo.net.Reachability
 import com.screwy.igloo.outbox.OutboxKind
 import com.screwy.igloo.outbox.OutboxWriter
+import com.screwy.igloo.sync.SyncCoordinator
 import com.screwy.igloo.ui.UiEffect
 import com.screwy.igloo.ui.UiEffects
 import com.screwy.igloo.ui.component.BookmarkCategoryDisplay
@@ -31,14 +33,25 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import io.ktor.client.HttpClient
+import io.ktor.client.request.post
+import io.ktor.client.plugins.timeout
+import io.ktor.http.encodeURLPathPart
+import io.ktor.http.isSuccess
 
 class ThreadViewModel(
     private val db: IglooDatabase,
     private val outboxWriter: OutboxWriter,
     private val uiEffects: UiEffects,
-    baseUrlProvider: ServerBaseUrlProvider,
+    private val baseUrlProvider: ServerBaseUrlProvider,
     reachability: Reachability,
+    private val client: HttpClient,
+    private val scheduler: SyncCoordinator,
 ) : ViewModel() {
+    private var openedTweetId: String? = null
+    private val _isFetching = MutableStateFlow(false)
+    val isFetching = _isFetching.asStateFlow()
     private val _chain = MutableStateFlow<List<FeedRow>>(emptyList())
     val chain: StateFlow<List<FeedRow>> = _chain.asStateFlow()
 
@@ -74,9 +87,35 @@ class ThreadViewModel(
         }
     }
 
-    fun load(tweetId: String) {
+    fun open(tweetId: String) {
+        if (openedTweetId == tweetId) return
+        openedTweetId = tweetId
+        refresh(tweetId)
+    }
+
+    fun refresh(tweetId: String) {
         viewModelScope.launch {
             loadBlocking(tweetId)
+            fetchConversation(tweetId)
+        }
+    }
+
+    private suspend fun fetchConversation(tweetId: String) {
+        if (_isFetching.value) return
+        _isFetching.value = true
+        try {
+            val response = client.post(baseUrlProvider.baseUrl() +
+                "/api/thread/${tweetId.encodeURLPathPart()}/refresh") {
+                timeout { requestTimeoutMillis = 35_000; socketTimeoutMillis = 35_000 }
+            }
+            check(scheduler.pass())
+            loadBlocking(tweetId)
+            check(response.status.isSuccess())
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            uiEffects.emit(UiEffect.ToastRes(R.string.feed_thread_fetch_failed))
+        } finally {
+            _isFetching.value = false
         }
     }
 
@@ -277,6 +316,9 @@ class ThreadViewModel(
                 tweetId = quoteId,
                 sourceChannelId = quoteChannelId,
                 bodyText = quoteBody,
+                articleTitle = source.quoteArticleTitle,
+                pollJson = source.quotePollJson,
+                communityNote = source.quoteCommunityNote,
                 lang = source.quoteLang.trimOrNull(),
                 mediaJson = quoteMediaJson,
                 canonicalUrl = source.quoteCanonicalUrl.trimOrNull(),
@@ -293,6 +335,8 @@ class ThreadViewModel(
                 ?: "twitter",
             authorHandle = quoteHandle,
             authorDisplayName = quoteDisplayName,
+            authorAccountRegion = quoteProfile?.accountRegion ?: sourceRow.quoteAuthorAccountRegion,
+            authorAccountDetailsJson = quoteProfile?.accountDetailsJson ?: sourceRow.quoteAuthorAccountDetailsJson,
             sourceHandle = quoteHandle,
             isLiked = quoteIsLiked,
             likedAt = null,

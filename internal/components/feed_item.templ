@@ -110,12 +110,13 @@ templ feedThreadCard(p PageProps, item model.FeedItem, collapsed bool, deferMedi
 		data-quote-media-count={ fmt.Sprintf("%d", len(item.QuoteMedia)) }
 	>
 		@feedHeader(p, item, authorLabel, pure)
-		if item.BodyText != "" {
+		if item.BodyText != "" || item.ArticleTitle != "" {
 			@feedBodyText(p, item)
 		}
 		if len(item.Media) > 0 {
 			@feedMedia(p, item, deferMedia)
 		}
+		@feedContext(p, item.PollJSON, item.CommunityNote)
 		if item.QuoteTweetID != "" {
 			@feedQuoteCard(p, item, deferMedia)
 		}
@@ -172,12 +173,13 @@ templ feedLeafCard(p PageProps, item model.FeedItem, deferMedia bool) {
 			@feedRepostLine(p, item, repostList)
 		}
 		@feedHeader(p, item, authorLabel, pure)
-		if item.BodyText != "" {
+		if item.BodyText != "" || item.ArticleTitle != "" {
 			@feedBodyText(p, item)
 		}
 		if len(item.Media) > 0 {
 			@feedMedia(p, item, deferMedia)
 		}
+		@feedContext(p, item.PollJSON, item.CommunityNote)
 		if item.QuoteTweetID != "" {
 			@feedQuoteCard(p, item, deferMedia)
 		}
@@ -278,7 +280,7 @@ templ feedHeader(p PageProps, item model.FeedItem, authorLabel string, pure bool
 					<span class="feed-author">{ authorLabel }</span>
 				</a>
 			}
-			@feedAuthorAside(p, item)
+			@feedAuthorAside(p, item, authorLabel)
 		</div>
 		@feedHeaderActions(p, item, authorLabel, pure)
 	</div>
@@ -306,10 +308,11 @@ templ feedAvatar(p PageProps, avatarURL string, authorLabel string) {
 // feedAuthorAside renders @handle, date, and translate pill alongside the
 // trigger anchor — kept OUTSIDE the link so the hover card doesn't open from
 // these elements and the handle text stays selectable.
-templ feedAuthorAside(p PageProps, item model.FeedItem) {
+templ feedAuthorAside(p PageProps, item model.FeedItem, authorLabel string) {
 	if item.AuthorHandle != "" {
 		<span class="feed-author-handle">{ "@" + item.AuthorHandle }</span>
 	}
+	@accountDetailsBadge(p, item.AuthorAccountRegion, item.AuthorAccountDetailsJSON, authorLabel, item.AuthorHandle)
 	if item.PublishedAt != nil {
 		<span
 			class="feed-date-inline"
@@ -317,7 +320,7 @@ templ feedAuthorAside(p PageProps, item model.FeedItem) {
 			title={ feedPublishedAtStr(item.PublishedAt) }
 			>&middot; { RelativeTimeText(p, item.PublishedAt) }</span>
 	}
-	if hasBodyTranslatePill(item) {
+	if hasBodyTranslatePill(item) && (item.ArticleTitle == "" || p.ArticleReader) {
 		<span class="feed-date-inline">&middot;</span>
 		@feedTranslatePill(p, "body", item.BodySourceLang, item.BodyTranslation != "")
 	}
@@ -448,6 +451,9 @@ templ feedCardMenu(p PageProps, item model.FeedItem, authorLabel string) {
 }
 
 templ feedBodyText(p PageProps, item model.FeedItem) {
+	if item.ArticleTitle != "" {
+		@feedArticleText(p, item.ArticleTitle, item.BodyText, item.BodyTranslation, item.TweetID, "body", item.Lang)
+	} else {
 	<div
 		class="feed-text-block"
 		data-feed-text-container
@@ -478,6 +484,35 @@ templ feedBodyText(p PageProps, item model.FeedItem) {
 		}
 		<button class="feed-text-toggle hidden" type="button" data-feed-text-toggle aria-expanded="false">{ L(p, "action_read_more", "Read more") }</button>
 	</div>
+	}
+}
+
+templ feedArticleText(p PageProps, title string, body string, translation string, tweetID string, field string, lang string) {
+	<section class="feed-article" data-feed-article>
+		if p.ArticleReader {
+			<h2 class="feed-article-title">{ title }</h2>
+			<div class="feed-text-block" data-feed-text-container data-translate-field={ field } data-lang={ lang } data-target-lang={ translateTargetOrDefault(p.TranslateTargetLang) }
+				if translation != "" {
+					data-translated="1"
+				}
+			>
+				<p class="feed-body-text"
+					if translation != "" {
+						data-original-text={ body }
+					}
+				>
+					if translation != "" {
+						@templ.Raw(Linkify(translation))
+					} else {
+						@templ.Raw(Linkify(body))
+					}
+				</p>
+			</div>
+		} else {
+			<a class="feed-article-title" href={ templ.SafeURL("/thread/" + tweetID) } data-feed-thread-open data-thread-tweet-id={ tweetID }>{ title }</a>
+			<a class="feed-text-toggle" href={ templ.SafeURL("/thread/" + tweetID) } data-feed-thread-open data-thread-tweet-id={ tweetID }>{ L(p, "feed_article_open", "Open article") }</a>
+		}
+	</section>
 }
 
 templ feedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
@@ -674,10 +709,11 @@ templ feedQuoteCard(p PageProps, item model.FeedItem, deferMedia bool) {
 				if item.QuoteAuthorHandle != "" {
 					<span class="feed-author-handle">{ "@" + item.QuoteAuthorHandle }</span>
 				}
+				@accountDetailsBadge(p, item.QuoteAccountRegion, item.QuoteAccountDetailsJSON, qLabel, item.QuoteAuthorHandle)
 				if item.QuotePublishedAt != nil {
 							<span class="feed-quote-date" data-feed-date-raw={ feedPublishedAtStr(item.QuotePublishedAt) } title={ feedPublishedAtStr(item.QuotePublishedAt) }>&middot; { RelativeTimeText(p, item.QuotePublishedAt) }</span>
 				}
-				if hasQuoteTranslatePill(item) {
+					if hasQuoteTranslatePill(item) && (item.QuoteArticleTitle == "" || p.ArticleReader) {
 					<span class="feed-quote-date">&middot;</span>
 					@feedTranslatePill(p, "quote", item.QuoteSourceLang, item.QuoteTranslation != "")
 				}
@@ -694,7 +730,9 @@ templ feedQuoteCard(p PageProps, item model.FeedItem, deferMedia bool) {
 					>{ L(p, "action_follow", "Follow") }</button>
 			}
 		</div>
-		if item.QuoteBodyText != "" {
+		if item.QuoteArticleTitle != "" {
+			@feedArticleText(p, item.QuoteArticleTitle, item.QuoteBodyText, item.QuoteTranslation, item.TweetID, "quote", item.QuoteLang)
+		} else if item.QuoteBodyText != "" {
 				<div
 					data-feed-text-container
 					data-translate-field="quote"
@@ -726,6 +764,7 @@ templ feedQuoteCard(p PageProps, item model.FeedItem, deferMedia bool) {
 			</div>
 		}
 		@feedQuoteMedia(p, item, qMediaCount, deferMedia)
+		@feedContext(p, item.QuotePollJSON, item.QuoteCommunityNote)
 	</div>
 }
 
@@ -869,9 +908,9 @@ templ feedTaggedAccounts(p PageProps, item model.FeedItem) {
 templ feedActions(p PageProps, item model.FeedItem) {
 	{{ externalURL := feedExternalURL(item) }}
 	<div class="feed-actions" data-feed-index="0">
-		<button class="feed-action-btn" type="button" data-feed-action="share" title={ L(p, "action_copy_link", "Copy link") } aria-label={ L(p, "action_copy_link", "Copy link") }>
-			@MaterialIcon("Share", "")
-		</button>
+		<a class="feed-action-btn feed-reply-btn" href={ templ.SafeURL("/thread/" + item.TweetID) } data-feed-thread-open data-thread-tweet-id={ item.TweetID } title={ L(p, "feed_open_thread", "Open thread") } aria-label={ L(p, "feed_open_thread", "Open thread") }>
+			@MaterialIcon("Reply", "")
+		</a>
 		@LikeButton(p, item.TweetID, item.IsLiked)
 		<button
 			class={ "feed-action-btn", templ.KV("active", item.IsBookmarked) }
@@ -891,6 +930,9 @@ templ feedActions(p PageProps, item model.FeedItem) {
 				@MaterialIcon("BookmarkBorder", "")
 			}
 		</button>
+		<button class="feed-action-btn" type="button" data-feed-action="share" title={ L(p, "action_share", "Share") } aria-label={ L(p, "action_share", "Share") }>
+			@MaterialIcon("Share", "")
+		</button>
 		if externalURL != "" {
 			<a
 				class="feed-action-btn"
@@ -898,8 +940,8 @@ templ feedActions(p PageProps, item model.FeedItem) {
 				href={ templ.SafeURL(externalURL) }
 				target="_blank"
 				rel="noopener noreferrer"
-				title={ L(p, "action_open_externally", "Open externally") }
-				aria-label={ L(p, "action_open_externally", "Open externally") }
+				title={ L(p, "action_open_on_x", "Open on X") }
+				aria-label={ L(p, "action_open_on_x", "Open on X") }
 			>
 				@MaterialIcon("OpenInNew", "")
 			</a>

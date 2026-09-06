@@ -319,6 +319,61 @@ class IglooDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration47To48KeepsSavedArticleBodiesAndProfiles() {
+        helper.createDatabase(DATABASE_NAME, 47).use { db ->
+            db.execSQL("INSERT INTO feed_items (tweet_id, body_text, is_retweet, quote_published_at, is_reply, is_ghost, published_at) VALUES ('sample_post', 'Saved body', 0, 0, 0, 0, 100)")
+            db.execSQL("INSERT INTO channel_profiles (channel_id, platform, followers, following, verified, protected) VALUES ('twitter_sample', 'twitter', 5, 2, 0, 0)")
+        }
+        helper.runMigrationsAndValidate(DATABASE_NAME, 48, true, IglooMigrations.MIGRATION_47_48).use { db ->
+            db.query("SELECT body_text, article_title, quote_article_title FROM feed_items WHERE tweet_id = 'sample_post'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Saved body", cursor.getString(0))
+                assertTrue(cursor.isNull(1))
+                assertTrue(cursor.isNull(2))
+            }
+            db.query("SELECT followers, account_region FROM channel_profiles WHERE channel_id = 'twitter_sample'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(5, cursor.getInt(0))
+                assertTrue(cursor.isNull(1))
+            }
+        }
+    }
+
+    @Test
+    fun migration48To49KeepsArticleAndSavedStateWhileAddingPollsAndNotes() {
+        helper.createDatabase(DATABASE_NAME, 48).use { db ->
+            db.execSQL("INSERT INTO feed_items (tweet_id, body_text, article_title, is_retweet, quote_published_at, is_reply, is_ghost, published_at) VALUES ('sample_post', 'Saved body', 'Saved article', 0, 0, 0, 0, 100)")
+            db.execSQL("INSERT INTO feed_likes (tweet_id, liked_at) VALUES ('sample_post', 200)")
+        }
+        helper.runMigrationsAndValidate(DATABASE_NAME, 49, true, IglooMigrations.MIGRATION_48_49).use { db ->
+            db.query("SELECT article_title, poll_json, quote_poll_json, community_note, quote_community_note FROM feed_items WHERE tweet_id = 'sample_post'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Saved article", cursor.getString(0))
+                (1..4).forEach { assertTrue(cursor.isNull(it)) }
+            }
+            db.query("SELECT liked_at FROM feed_likes WHERE tweet_id = 'sample_post'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(200L, cursor.getLong(0))
+            }
+        }
+    }
+
+    @Test
+    fun migration49To50KeepsProfileRegionAndIdentity() {
+        helper.createDatabase(DATABASE_NAME, 49).use { db ->
+            db.execSQL("INSERT INTO channel_profiles (channel_id, platform, display_name, account_region, followers, following, verified, protected) VALUES ('twitter_sample', 'twitter', 'Sample Name', 'United States', 5, 2, 0, 0)")
+        }
+        helper.runMigrationsAndValidate(DATABASE_NAME, 50, true, IglooMigrations.MIGRATION_49_50).use { db ->
+            db.query("SELECT display_name, account_region, account_details_json FROM channel_profiles WHERE channel_id = 'twitter_sample'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Sample Name", cursor.getString(0))
+                assertEquals("United States", cursor.getString(1))
+                assertTrue(cursor.isNull(2))
+            }
+        }
+    }
+
     private companion object {
         const val DATABASE_NAME = "igloo-migration-test"
     }

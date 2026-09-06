@@ -137,6 +137,8 @@ val iglooFeatureModule = module {
             uiEffects = get(),
             baseUrlProvider = get(),
             reachability = get(),
+            client = get(),
+            scheduler = get(),
         )
     }
     viewModel {

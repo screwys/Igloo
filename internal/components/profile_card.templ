@@ -29,7 +29,7 @@ templ ProfileCard(props PageProps, p *model.ChannelProfile, size string, isFollo
 						}
 					</div>
 					if p.Handle != "" {
-						<div class="profile-card-handle">{ "@" + strings.TrimPrefix(p.Handle, "@") }</div>
+						<div class="profile-card-handle">{ "@" + strings.TrimPrefix(p.Handle, "@") } @accountDetailsBadge(props, p.AccountRegion, p.AccountDetailsJSON, profileLabel(p), p.Handle)</div>
 					}
 				}
 				if p.Protected {
@@ -75,7 +75,7 @@ templ ProfileCardTop(props PageProps, p *model.ChannelProfile, size string, isFo
 					}
 				</div>
 				if p.Handle != "" {
-					<div class="profile-card-handle">{ "@" + strings.TrimPrefix(p.Handle, "@") }</div>
+					<div class="profile-card-handle">{ "@" + strings.TrimPrefix(p.Handle, "@") } @accountDetailsBadge(props, p.AccountRegion, p.AccountDetailsJSON, profileLabel(p), p.Handle)</div>
 				}
 			</div>
 		}
@@ -243,7 +243,7 @@ func profileRepostOnLabel(props PageProps, platform string) string {
 func verifiedClass(platform, t string) string {
 	if platform == "twitter" {
 		switch t {
-		case "business":
+		case "business", "organization":
 			return "gold"
 		case "government":
 			return "grey"

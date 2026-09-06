@@ -1,0 +1,86 @@
+package components
+
+import (
+	"strconv"
+	"strings"
+	"time"
+	"github.com/screwys/igloo/internal/model"
+)
+
+templ accountDetailsBadge(p PageProps, region string, detailsJSON string, name string, handle string) {
+	if region != "" || detailsJSON != "" {
+		{{ details := model.ParseAccountDetails(detailsJSON) }}
+		<span class="account-details-wrap">
+			<button type="button" class="account-region" data-account-details aria-haspopup="dialog" aria-expanded="false" title={ L(p, "feed_account_details", "About this account") } aria-label={ L(p, "feed_account_details", "About this account") }>
+				if flag := model.AccountRegionFlag(region); flag != "" {
+					<span aria-hidden="true">{ flag }</span>
+				} else if region != "" || accountSourceIcon(details.Source) == "" {
+					@MaterialIcon("Language", "")
+				}
+				if icon := accountSourceIcon(details.Source); icon != "" {
+					@MaterialIcon(icon, "")
+				}
+				if details.LocationAccurate != nil && !*details.LocationAccurate {
+					@MaterialIcon("Warning", "account-location-warning")
+				}
+			</button>
+			<template data-account-details-content>
+				<div class="account-details-heading">
+					<div><strong>{ name }</strong><span>{ "@" + strings.TrimPrefix(handle, "@") }</span></div>
+					<button type="button" class="feed-action-btn" data-account-details-close aria-label={ L(p, "action_close", "Close") }>@MaterialIcon("Close", "")</button>
+				</div>
+				<dl class="account-details-fields">
+					if region != "" {
+						@accountDetailsRow(L(p, "feed_account_region", "Account based in"), strings.TrimSpace(model.AccountRegionFlag(region) + " " + region))
+					}
+					if details.Source != "" {
+						@accountDetailsRow(L(p, "feed_account_source", "Account source"), details.Source)
+					}
+					if details.Verification != "" {
+						@accountDetailsRow(L(p, "feed_account_verification", "Verification"), accountVerificationLabel(p, details.Verification))
+					}
+					if details.CreatedAt != "" {
+						@accountDetailsRow(L(p, "feed_account_created_at", "Joined"), accountDate(details.CreatedAt))
+					}
+					if details.VerifiedAt != "" {
+						@accountDetailsRow(L(p, "feed_account_verified_at", "Verified since"), accountDate(details.VerifiedAt))
+					}
+					if details.UsernameChanges != nil {
+						@accountDetailsRow(L(p, "feed_account_username_changes", "Username changes"), strconv.Itoa(*details.UsernameChanges))
+					}
+					if details.UserID != "" {
+						@accountDetailsRow(L(p, "feed_account_user_id", "User ID"), details.UserID)
+					}
+				</dl>
+				if details.LocationAccurate != nil && !*details.LocationAccurate {
+					<p class="account-location-warning">{ L(p, "feed_account_location_uncertain", "X reports that this location may be inaccurate, for example when a VPN or proxy is used.") }</p>
+				}
+			</template>
+		</span>
+	}
+}
+
+templ accountDetailsRow(label string, value string) {
+	<div><dt>{ label }</dt><dd>{ value }</dd></div>
+}
+
+func accountSourceIcon(source string) string {
+	source = strings.ToLower(source)
+	if strings.Contains(source, "android") || strings.Contains(source, "iphone") || strings.Contains(source, "ipad") || strings.Contains(source, "ios") || strings.Contains(source, "app store") { return "Smartphone" }
+	if strings.Contains(source, "web") { return "Language" }
+	return ""
+}
+
+func accountDate(value string) string {
+	if date, err := time.Parse(time.RFC3339, value); err == nil { return date.Format("Jan 2, 2006") }
+	return value
+}
+
+func accountVerificationLabel(p PageProps, value string) string {
+	switch value {
+	case "individual": return L(p, "feed_account_verification_blue", "Blue")
+	case "business", "organization": return L(p, "feed_account_verification_business", "Business")
+	case "government": return L(p, "feed_account_verification_government", "Government")
+	default: return value
+	}
+}

@@ -44,6 +44,8 @@ fun FeedRoute(
 
     val includeReposts by settingsVm.includeReposts.collectAsStateWithLifecycle()
     val mediaOnly by settingsVm.mediaOnly.collectAsStateWithLifecycle()
+    val showAccountRegion by settingsVm.showAccountRegion.collectAsStateWithLifecycle()
+    val showCommunityNotes by settingsVm.showCommunityNotes.collectAsStateWithLifecycle()
     val mutedChannels by mutedVm.channels.collectAsStateWithLifecycle()
     var pendingUnmute by remember { mutableStateOf<MutedChannelDisplay?>(null) }
     var confirmClearMuted by remember { mutableStateOf(false) }
@@ -62,6 +64,18 @@ fun FeedRoute(
             label = stringResource(R.string.settings_media_only_x),
             checked = mediaOnly,
             onToggle = settingsVm::setMediaOnly,
+        )
+
+        SettingsSwitchRow(
+            label = stringResource(R.string.settings_x_account_region),
+            checked = showAccountRegion,
+            onToggle = settingsVm::setShowAccountRegion,
+        )
+
+        SettingsSwitchRow(
+            label = stringResource(R.string.settings_x_community_notes),
+            checked = showCommunityNotes,
+            onToggle = settingsVm::setShowCommunityNotes,
         )
 
         SectionHeader(stringResource(R.string.settings_section_muted_accounts))

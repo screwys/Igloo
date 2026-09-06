@@ -131,9 +131,10 @@ internal object AndroidSyncChangeDecoder {
             ) { "empty channel setting upsert" }
         }
     fun momentsCursor(change: AndroidSyncChangeDto): MomentsCursorEntity = change.row { it.scope }
-    fun setting(change: AndroidSyncChangeDto) {
-        require(change.decode<SettingPayload>().key == change.owner_id) { "setting owner id mismatch" }
-    }
+    fun setting(change: AndroidSyncChangeDto): String? =
+        change.decode<SettingPayload>().also {
+            require(it.key == change.owner_id) { "setting owner id mismatch" }
+        }.value
 
     private inline fun <reified T> AndroidSyncChangeDto.row(id: (T) -> String): T =
         decode<T>().also { require(id(it) == owner_id) { "$owner_kind owner id mismatch" } }
@@ -230,6 +231,9 @@ internal fun feedRankSnapshotDigest(rows: List<FeedRankEntity>): String {
 private fun FeedItemEntity.cleaned() =
     copy(
         sourceChannelId = sourceChannelId.clean(), bodyText = bodyText.clean(), lang = lang.clean(),
+        articleTitle = articleTitle.clean(), quoteArticleTitle = quoteArticleTitle.clean(),
+        pollJson = pollJson.clean(), quotePollJson = quotePollJson.clean(),
+        communityNote = communityNote.clean(), quoteCommunityNote = quoteCommunityNote.clean(),
         reposterChannelId = reposterChannelId.clean(), quoteTweetId = quoteTweetId.clean(),
         quoteChannelId = quoteChannelId.clean(), quoteBodyText = quoteBodyText.clean(),
         quoteLang = quoteLang.clean(), quoteMediaJson = quoteMediaJson.clean(),
@@ -253,7 +257,8 @@ private fun ChannelEntity.cleaned() = copy(sourceId = sourceId.clean(), url = ur
 private fun ChannelProfileEntity.cleaned() =
     copy(
         handle = handle.clean(), displayName = displayName.clean(), bio = bio.clean(),
-        website = website.clean(), verifiedType = verifiedType.clean(),
+        website = website.clean(), verifiedType = verifiedType.clean(), accountRegion = accountRegion.clean(),
+        accountDetailsJson = accountDetailsJson.clean(),
     )
 
 private fun String?.clean(): String? = this?.trim()?.takeIf(String::isNotEmpty)

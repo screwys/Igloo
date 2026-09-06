@@ -59,7 +59,7 @@ func (g *GalleryDLWrapper) InstagramStories(ctx context.Context, handle string, 
 		limit = 20
 	}
 	rawURL := "https://www.instagram.com/stories/" + handle + "/"
-	output, err := g.instagramDumpOutput(ctx, rawURL, limit, cookiesFile, optionalCookieBrowser(cookiesBrowser))
+	output, err := g.instagramDumpOutput(ctx, rawURL, limit, cookiesFile, false, optionalCookieBrowser(cookiesBrowser))
 	if err != nil {
 		return nil, err
 	}

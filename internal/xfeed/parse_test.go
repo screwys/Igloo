@@ -15,6 +15,72 @@ type fakeTweetFallback struct {
 	fetch func(context.Context, string, string) (*fxtwitter.Tweet, error)
 }
 
+func TestParseDumpForwardQuoteSharedByReposts(t *testing.T) {
+	parsed := ParseDump([]byte(`[
+		[2,{"tweet_id":"100","retweet_id":"101","quoted_id":"300","author":{"name":"sample_author"},"content":"First"}],
+		[2,{"tweet_id":"200","retweet_id":"201","quoted_id":"300","author":{"name":"sample_author"},"content":"Second"}],
+		[2,{"tweet_id":"300","quote_id":"100","author":{"name":"quote_author"},"content":"Shared quote"}]
+	]`), "sample_source")
+	if len(parsed.Items) != 2 {
+		t.Fatalf("items = %d", len(parsed.Items))
+	}
+	for _, item := range parsed.Items {
+		if item.QuoteTweetID != "300" || item.QuoteBodyText != "Shared quote" {
+			t.Fatalf("lost shared quote on %s: %+v", item.TweetID, item)
+		}
+	}
+	c := &Client{TweetFallback: fakeTweetFallback{fetch: func(context.Context, string, string) (*fxtwitter.Tweet, error) {
+		t.Fatal("complete gallery quote should not request FxTwitter enrichment")
+		return nil, nil
+	}}}
+	if err := c.enrichStatuses(context.Background(), &parsed); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestParseDumpArticleTextAndMedia(t *testing.T) {
+	parsed := ParseDump([]byte(`[
+		[2,{"tweet_id":"100","author":{"name":"sample_author"},"content":"Preview", "article":{"title":"Long article","html":"<h2>Heading</h2><p>First &amp; second<br>line.</p><p><a href=\"https://example.test/read\">Reference</a></p><script>ignored</script>"}}],
+		[3,"https://pbs.twimg.com/media/cover.jpg",{"tweet_id":"100","type":"article:cover"}],
+		[3,"https://video.twimg.com/ext_tw_video/article.mp4",{"tweet_id":"100","type":"article:video"}]
+	]`), "sample_author")
+	if len(parsed.Items) != 1 {
+		t.Fatalf("items = %d", len(parsed.Items))
+	}
+	item := parsed.Items[0]
+	if item.ArticleTitle != "Long article" || item.BodyText != "Heading\n\nFirst & second\nline.\n\nReference (https://example.test/read)" {
+		t.Fatalf("article = %q %q", item.ArticleTitle, item.BodyText)
+	}
+	if len(item.Media) != 2 || item.Media[0].Type != "photo" || item.Media[1].Type != "video" {
+		t.Fatalf("media = %+v", item.Media)
+	}
+}
+
+func TestArticleMetadataWithoutBodyIsNotFullContent(t *testing.T) {
+	parsed := ParseDump([]byte(`[[2,{"tweet_id":"100","author":{"name":"sample_author"},"content":"Preview","article":{"title":"Long article"}}]]`), "sample_author")
+	if len(parsed.Items) != 1 || parsed.Items[0].ArticleTitle != "" || parsed.Items[0].BodyText != "Preview" {
+		t.Fatalf("metadata-only article must remain a preview: %+v", parsed.Items)
+	}
+}
+
+func TestGalleryAndFallbackRetainPollAndNoteContext(t *testing.T) {
+	parsed := ParseDump([]byte(`[[2,{"tweet_id":"100","author":{"name":"sample_author"},"content":"Post","birdwatch":"Source &amp; context"}]]`), "sample_author")
+	if len(parsed.Items) != 1 || parsed.Items[0].CommunityNote != "Source & context" {
+		t.Fatalf("gallery note = %+v", parsed.Items)
+	}
+	const poll = `{"choices":[{"label":"First","count":1,"percentage":100}],"total_votes":1,"ends_at":"2026-09-07T12:00:00Z","captured_at":1788696000000}`
+	fallback := feedItemFromFallbackTweet(&fxtwitter.Tweet{ID: "100", AuthorHandle: "sample_author", PollJSON: poll, CommunityNote: "Updated source", Quote: &fxtwitter.Tweet{ID: "200", AuthorHandle: "quote_author", PollJSON: poll, CommunityNote: "Quote source"}}, "sample_author")
+	item := parsed.Items[0]
+	applyFallbackDetails(&item, fallback)
+	if item.PollJSON != poll || item.CommunityNote != "Updated source" || item.QuotePollJSON != poll || item.QuoteCommunityNote != "Quote source" {
+		t.Fatalf("fallback lost context: %+v", item)
+	}
+	merged := mergeItem(item, model.FeedItem{TweetID: "100", QuoteTweetID: "200"})
+	if merged.PollJSON != poll || merged.QuotePollJSON != poll || merged.CommunityNote != item.CommunityNote || merged.QuoteCommunityNote != item.QuoteCommunityNote {
+		t.Fatalf("sparse merge erased context: %+v", merged)
+	}
+}
+
 func (f fakeTweetFallback) FetchTweet(ctx context.Context, handle, tweetID string) (*fxtwitter.Tweet, error) {
 	return f.fetch(ctx, handle, tweetID)
 }

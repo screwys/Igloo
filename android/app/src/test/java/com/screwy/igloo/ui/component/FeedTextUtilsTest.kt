@@ -6,6 +6,7 @@ import com.screwy.igloo.data.entity.FeedItemEntity
 import com.screwy.igloo.data.entity.FeedRow
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,6 +29,52 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], manifest = Config.NONE)
 class FeedTextUtilsTest {
+    @Test
+    fun accountDetailsPreserveKnownFalseAndZeroWithoutInventingUnknowns() {
+        val details = parseFeedAccountDetails("""{"source":"App Store","location_accurate":false,"username_changes":0,"future_key":true}""")!!
+        assertEquals(false, details.locationAccurate)
+        assertEquals(0, details.usernameChanges)
+        assertEquals("📱", accountSourceSymbol(details.source))
+        val partial = parseFeedAccountDetails("""{"source":"Web"}""")!!
+        assertNull(partial.locationAccurate)
+        assertNull(partial.usernameChanges)
+        assertEquals("🌐", accountSourceSymbol(partial.source))
+        assertEquals("", accountSourceSymbol("Unknown provider"))
+        assertNull(parseFeedAccountDetails("{}"))
+        assertNull(parseFeedAccountDetails("invalid"))
+    }
+
+    @Test
+    fun accountFlagsOnlyRepresentReportedCountries() {
+        assertEquals("🇺🇸", accountRegionFlag("United States"))
+        assertEquals("🇹🇷", accountRegionFlag("Türkiye"))
+        assertEquals("🇰🇷", accountRegionFlag("South Korea"))
+        assertEquals("🇰🇷", accountRegionFlag("Korea"))
+        assertEquals("", accountRegionFlag("Europe"))
+        assertEquals("", accountRegionFlag("North America"))
+        assertEquals("", accountRegionFlag("London, United Kingdom"))
+        assertEquals("", accountRegionFlag(null))
+    }
+
+    @Test
+    fun pollResultsRetainCaptureTimeAndDoNotBecomeFinalWhenThePollEndsLater() {
+        val poll = parseFeedPoll("""{
+            "choices":[{"label":"First option","count":3,"percentage":75},{"label":"Second option","count":1,"percentage":25}],
+            "total_votes":4,"ends_at":"2025-01-02T00:00:00Z","captured_at":1735689600000
+        }""")!!
+        assertEquals(4L, poll.totalVotes)
+        assertEquals(75.0, poll.choices.first().percentage, 0.0)
+        assertEquals(false, poll.closedAtCapture)
+        assertEquals(true, poll.copy(capturedAt = 1735776000000).closedAtCapture)
+        assertNull(poll.copy(endsAt = "").closedAtCapture)
+    }
+
+    @Test
+    fun invalidPollResultsCannotDisplayMisleadingVoteBars() {
+        assertNull(parseFeedPoll("not JSON"))
+        assertNull(parseFeedPoll("""{"choices":[{"label":"Sample","count":1,"percentage":101}],"total_votes":1,"captured_at":1}"""))
+        assertNull(parseFeedPoll("""{"choices":[{"label":"Sample","count":1,"percentage":100}],"total_votes":1,"captured_at":0}"""))
+    }
 
     private val now: Long = 1_700_000_000_000L
     private lateinit var context: Context
@@ -303,18 +350,6 @@ class FeedTextUtilsTest {
             )
 
         assertEquals(null, target)
-    }
-
-    @Test
-    fun main_feed_primary_actions_are_the_compact_igloo_row_without_star() {
-        assertEquals(
-            listOf(
-                NativeFeedPrimaryAction.Share,
-                NativeFeedPrimaryAction.Like,
-                NativeFeedPrimaryAction.Bookmark,
-            ),
-            NativeFeedPrimaryActions,
-        )
     }
 
     @Test

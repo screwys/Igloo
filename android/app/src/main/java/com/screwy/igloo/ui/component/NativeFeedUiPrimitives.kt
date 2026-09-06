@@ -19,7 +19,12 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupWindow
+import android.widget.ScrollView
 import android.widget.TextView
+import java.text.DateFormat
+import java.text.NumberFormat
+import java.time.Instant
+import java.util.Date
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.dp
@@ -132,12 +137,16 @@ internal fun <T> nativeThreadCapsuleVisible(chain: List<T>): Boolean =
     chain.size > nativeThreadPreviewAncestors(chain).size
 
 internal fun NativeFeedPrimaryAction.iconRes(selected: Boolean): Int = when (this) {
+    NativeFeedPrimaryAction.Reply -> R.drawable.ic_feed_reply_24
+    NativeFeedPrimaryAction.External -> R.drawable.ic_feed_open_24
     NativeFeedPrimaryAction.Share -> R.drawable.ic_feed_share_24
     NativeFeedPrimaryAction.Like -> if (selected) R.drawable.ic_feed_favorite_24 else R.drawable.ic_feed_favorite_border_24
     NativeFeedPrimaryAction.Bookmark -> if (selected) R.drawable.ic_feed_bookmark_24 else R.drawable.ic_feed_bookmark_border_24
 }
 
 internal fun NativeFeedPrimaryAction.contentDescription(context: Context, post: SocialPostModel): String = when (this) {
+    NativeFeedPrimaryAction.Reply -> context.getString(R.string.feed_open_thread)
+    NativeFeedPrimaryAction.External -> context.getString(R.string.action_open_on_x)
     NativeFeedPrimaryAction.Share -> context.getString(R.string.action_share)
     NativeFeedPrimaryAction.Like -> context.getString(if (post.actions.isLiked) R.string.action_unlike else R.string.action_like)
     NativeFeedPrimaryAction.Bookmark -> context.getString(
@@ -184,6 +193,114 @@ internal fun showNativeFeedPopup(
         )
     }
     popup.showAsDropDown(anchor, anchor.width - menuWidth, dp(4))
+}
+
+internal fun accountBadgeText(context: Context): TextView = smallText(context).apply {
+    gravity = Gravity.CENTER
+    setPadding(dp(6), dp(2), dp(6), dp(2))
+    maxLines = 1
+    visibility = View.GONE
+}
+
+internal fun bindNativeAccountBadge(
+    badge: TextView,
+    displayName: String,
+    region: String?,
+    detailsJson: String?,
+    colors: NativeFeedColors,
+) {
+    val details = parseFeedAccountDetails(detailsJson)
+    badge.visibility = if (region.isNullOrBlank() && details == null) View.GONE else View.VISIBLE
+    if (badge.visibility == View.GONE) {
+        badge.setOnClickListener(null)
+        return
+    }
+    badge.text = listOf(accountRegionFlag(region), accountSourceSymbol(details?.source.orEmpty()),
+        if (details?.locationAccurate == false) "⚠" else "")
+        .filter(String::isNotBlank).joinToString(" ").ifBlank { "🌐" }
+    badge.setTextColor(colors.onSurfaceMuted)
+    badge.background = roundedStroke(colors.surfaceVariant, colors.borderSubtle, dp(1), dp(10))
+    badge.contentDescription = badge.context.getString(R.string.feed_account_details) + ", " + displayName
+    badge.setOnClickListener { showNativeAccountDetails(badge, displayName, region, details, colors) }
+}
+
+private fun showNativeAccountDetails(
+    anchor: View,
+    displayName: String,
+    region: String?,
+    details: FeedAccountDetails?,
+    colors: NativeFeedColors,
+) {
+    val context = anchor.context
+    val content = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(16), dp(12), dp(16), dp(12))
+        background = roundedStroke(colors.surfaceElevated, colors.borderSubtle, dp(1), dp(10))
+    }
+    content.addView(bodyText(context).apply {
+        text = context.getString(R.string.feed_account_details)
+        setTypeface(typeface, android.graphics.Typeface.BOLD)
+        setTextColor(colors.onSurface)
+    })
+    content.addView(smallText(context).apply { text = displayName; setTextColor(colors.onSurfaceMuted) })
+    fun field(label: Int, value: String?) {
+        if (value.isNullOrBlank()) return
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = roundedFill(colors.surfaceVariant, dp(6))
+        }
+        row.addView(smallText(context).apply {
+            text = context.getString(label)
+            setTextColor(colors.onSurfaceMuted)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(smallText(context).apply {
+            text = value
+            gravity = Gravity.END
+            setTextColor(colors.onSurface)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextIsSelectable(true)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.5f).apply {
+            marginStart = dp(8)
+        })
+        content.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+    }
+    fun date(raw: String?): String? = raw?.let {
+        runCatching { DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date.from(Instant.parse(it))) }.getOrNull()
+    }
+    field(R.string.feed_account_region, region)
+    field(R.string.feed_account_source, details?.source)
+    if (details?.locationAccurate == false) {
+        content.addView(bodyText(context).apply {
+            text = context.getString(R.string.feed_account_location_uncertain)
+            setTextColor(colors.onSurfaceMuted)
+            setPadding(0, dp(12), 0, 0)
+        })
+    }
+    field(R.string.feed_account_created_at, date(details?.createdAt))
+    field(R.string.feed_account_verified_at, date(details?.verifiedAt))
+    field(R.string.feed_account_username_changes, details?.usernameChanges?.takeIf { it >= 0 }?.let { NumberFormat.getIntegerInstance().format(it) })
+    field(R.string.feed_account_verification, details?.verification?.takeIf(String::isNotBlank)?.let { value ->
+        when (value.lowercase()) {
+            "blue", "individual" -> context.getString(R.string.feed_account_verification_blue)
+            "business", "organization" -> context.getString(R.string.feed_account_verification_business)
+            "government" -> context.getString(R.string.feed_account_verification_government)
+            else -> value
+        }
+    })
+    field(R.string.feed_account_user_id, details?.userId)
+    val width = minOf(dp(300), context.resources.displayMetrics.widthPixels - dp(24))
+    val scroll = ScrollView(context).apply { addView(content) }
+    scroll.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+    PopupWindow(scroll, width, minOf(scroll.measuredHeight, context.resources.displayMetrics.heightPixels * 2 / 3), true).apply {
+        isOutsideTouchable = true
+        elevation = dp(10).toFloat()
+        setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        showAsDropDown(anchor, 0, dp(4))
+    }
 }
 
 internal fun actionIconButton(context: Context, colors: NativeFeedColors): ImageButton =

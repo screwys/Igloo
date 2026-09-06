@@ -126,6 +126,7 @@ internal class NativeMainFeedController(
                         post = buildSocialPostModel(threaded.row, mediaModels),
                         chainPosts =
                             threaded.chain.map { row -> buildSocialPostModel(row, mediaModels) },
+                        showFullArticles = callbacks.showFullArticles,
                     )
                 )
             }

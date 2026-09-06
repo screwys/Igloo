@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -138,6 +139,14 @@ func ParseDump(output []byte, fallbackSourceHandle string) ParseResult {
 			}
 		}
 	}
+	// Forward references survive gallery-dl's deduplication when several posts
+	// quote the same status. Keep the reverse mapping for older extractor output.
+	for tid, d := range metaByID {
+		if quoted := metaByID[nonZeroID(firstString(d, "quoted_id"))]; quoted != nil && ValidHandle(authorHandle(quoted)) &&
+			(firstString(quoted, "content", "text", "description", "full_text") != "" || len(mediaByID[tweetID(quoted)]) > 0) {
+			quoteForParent[tid] = quoted
+		}
+	}
 
 	var items []FeedItem
 	for _, tid := range order {
@@ -235,6 +244,10 @@ func feedItemFromMeta(d map[string]any, fallbackSourceHandle string, media []mod
 	if replyToStatus != "" || replyToHandle != "" {
 		body = stripStructuredReplyMentionPrefix(body, mentionHandles)
 	}
+	articleTitle, articleBody := articleFromMeta(d)
+	if articleBody != "" {
+		body = articleBody
+	}
 
 	media = dedupeMediaRefs(media)
 	mediaJSON := mediaJSON(media)
@@ -251,6 +264,8 @@ func feedItemFromMeta(d map[string]any, fallbackSourceHandle string, media []mod
 		AuthorDisplayName:      authorDisplay(d),
 		AuthorAvatarURL:        authorAvatar(d),
 		BodyText:               body,
+		ArticleTitle:           articleTitle,
+		CommunityNote:          html.UnescapeString(strings.TrimSpace(firstString(d, "birdwatch"))),
 		Lang:                   firstString(d, "lang"),
 		IsRetweet:              isRetweet,
 		RetweetedByHandle:      "",
@@ -303,9 +318,15 @@ func applyQuote(item *FeedItem, quote map[string]any, media []model.MediaRef) {
 	item.QuoteAuthorDisplayName = authorDisplay(quote)
 	item.QuoteAuthorAvatarURL = authorAvatar(quote)
 	item.QuoteBodyText = qbody
+	articleTitle, articleBody := articleFromMeta(quote)
+	item.QuoteArticleTitle = articleTitle
+	item.QuoteCommunityNote = html.UnescapeString(strings.TrimSpace(firstString(quote, "birdwatch")))
+	if articleBody != "" {
+		item.QuoteBodyText = articleBody
+	}
 	item.QuoteLang = firstString(quote, "lang")
 	if language.IsUnknown(item.QuoteLang) {
-		item.QuoteLang = DetectLang(qbody)
+		item.QuoteLang = DetectLang(item.QuoteBodyText)
 	}
 	item.QuotePublishedAt = firstTime(quote, "date", "created_at", "timestamp")
 	if item.QuotePublishedAt == nil {
@@ -316,6 +337,26 @@ func applyQuote(item *FeedItem, quote map[string]any, media []model.MediaRef) {
 }
 
 func mergeItem(base, next FeedItem) FeedItem {
+	if next.PollJSON != "" {
+		base.PollJSON = next.PollJSON
+	}
+	if next.CommunityNote != "" {
+		base.CommunityNote = next.CommunityNote
+	}
+	if next.QuoteTweetID == base.QuoteTweetID {
+		if next.QuotePollJSON != "" {
+			base.QuotePollJSON = next.QuotePollJSON
+		}
+		if next.QuoteCommunityNote != "" {
+			base.QuoteCommunityNote = next.QuoteCommunityNote
+		}
+	}
+	if next.ArticleTitle != "" && base.ArticleTitle == "" {
+		base.ArticleTitle = next.ArticleTitle
+		base.BodyText = next.BodyText
+		base.MediaJSON = next.MediaJSON
+		base.ContentHash = next.ContentHash
+	}
 	if base.BodyText == "" {
 		base.BodyText = next.BodyText
 	}
@@ -328,7 +369,7 @@ func mergeItem(base, next FeedItem) FeedItem {
 	if base.MediaJSON == "" {
 		base.MediaJSON = next.MediaJSON
 	}
-	if base.QuoteTweetID == "" {
+	if base.QuoteTweetID == "" || (base.QuoteTweetID == next.QuoteTweetID && base.QuoteArticleTitle == "" && next.QuoteArticleTitle != "") {
 		copyQuoteFields(&base, next)
 	}
 	if base.PublishedAt == nil {
@@ -529,6 +570,12 @@ func mediaRef(rawURL string, d map[string]any) (model.MediaRef, bool) {
 	}
 	if ref.Type == "animated_gif" || ref.Type == "gif" {
 		ref.Type = "video"
+	}
+	switch ref.Type {
+	case "article:video":
+		ref.Type = "video"
+	case "article:image", "article:cover":
+		ref.Type = "photo"
 	}
 	if ref.Type == "" {
 		switch strings.ToLower(firstString(d, "extension", "ext")) {

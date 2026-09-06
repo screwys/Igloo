@@ -37,12 +37,13 @@ func TestProfileJobPipelinePublishesCanonicalAvatar(t *testing.T) {
 	}
 	fetch := func(_ context.Context, channelID string) (*fetchprofile.Profile, error) {
 		return &fetchprofile.Profile{
-			ChannelID:   channelID,
-			Platform:    "twitter",
-			Handle:      "sample_author",
-			DisplayName: "Fetched Name",
-			Bio:         "Fetched metadata",
-			AvatarURL:   imageServer.URL + "/avatar.png",
+			ChannelID:          channelID,
+			Platform:           "twitter",
+			Handle:             "sample_author",
+			DisplayName:        "Fetched Name",
+			Bio:                "Fetched metadata",
+			AccountDetailsJSON: `{"source":"Japan App Store","location_accurate":false}`,
+			AvatarURL:          imageServer.URL + "/avatar.png",
 		}, nil
 	}
 
@@ -55,6 +56,9 @@ func TestProfileJobPipelinePublishesCanonicalAvatar(t *testing.T) {
 	}
 	if profile == nil || profile.DisplayName != "Fetched Name" || profile.Bio != "Fetched metadata" || profile.FetchedAt == nil {
 		t.Fatalf("completed profile = %+v", profile)
+	}
+	if profile.AccountDetailsJSON != `{"source":"Japan App Store","location_accurate":false}` {
+		t.Fatalf("persisted account details = %q", profile.AccountDetailsJSON)
 	}
 	job, err := database.GetProfileJob("twitter_sample_author")
 	if err != nil || job == nil || job.CompletedRevision != job.RequestedRevision {

@@ -367,8 +367,8 @@ fun MomentsPlayer(
                 val currentItem = pagerItems.getOrNull(page)
                 if (
                     currentItem == null ||
-                        momentMediaMode(currentItem.mediaKind, currentItem.slideCount) !=
-                            MomentMediaMode.Slideshow
+                        momentMediaMode(currentItem.mediaKind, currentItem.slideCount) ==
+                            MomentMediaMode.Video
                 ) {
                     loadedSlideshowAudioKey = clearMomentAudio(slideshowAudioPlayer)
                     return@collectLatest

@@ -97,10 +97,36 @@ func (r *ReplyResolver) ResolveCycle(ctx context.Context, items []model.FeedItem
 
 // resolveOne resolves a single leaf reply and walks up the chain.
 func (r *ReplyResolver) resolveOne(ctx context.Context, leaf model.FeedItem, cache *resolveCache) error {
+	var conversation fxtwitter.Conversation
+	conversationFetched := false
+	fetchMissing := func(handle, tweetID string) (*fxtwitter.Tweet, error) {
+		if !conversationFetched {
+			conversationFetched = true
+			var err error
+			conversation, err = r.fx.FetchConversation(ctx, tweetID)
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if err != nil || conversation.Status.ID != tweetID {
+				conversation = fxtwitter.Conversation{}
+			}
+		}
+		if conversation.Status != nil && conversation.Status.ID == tweetID {
+			return conversation.Status, nil
+		}
+		for _, tweet := range conversation.Thread {
+			if tweet.ID == tweetID && xfeed.ValidHandle(tweet.AuthorHandle) {
+				return tweet, nil
+			}
+		}
+		// A conversation page may omit unavailable ancestors. Keep the existing
+		// single-status lookup for those gaps without refetching supplied parents.
+		return r.fx.FetchTweet(ctx, handle, tweetID)
+	}
 	currentID := strings.TrimSpace(leaf.ReplyToStatus)
 	currentHandle := firstNonEmptyHandle(leaf.ReplyToHandle, leaf.AuthorHandle)
 	if currentID == "" {
-		leafTweet, err := r.fx.FetchTweet(ctx, leaf.AuthorHandle, leaf.TweetID)
+		leafTweet, err := fetchMissing(leaf.AuthorHandle, leaf.TweetID)
 		if err != nil {
 			return err
 		}
@@ -134,7 +160,7 @@ func (r *ReplyResolver) resolveOne(ctx context.Context, leaf model.FeedItem, cac
 			return nil
 		}
 
-		parent, err := r.fx.FetchTweet(ctx, currentHandle, currentID)
+		parent, err := fetchMissing(currentHandle, currentID)
 		if err != nil {
 			if errors.Is(err, fxtwitter.ErrNotFound) {
 				return nil
@@ -177,14 +203,18 @@ func tweetToGhostFeedItem(tw *fxtwitter.Tweet) model.FeedItem {
 		AuthorDisplayName: tw.AuthorDisplayName,
 		AuthorAvatarURL:   tw.AuthorAvatarURL,
 		BodyText:          tw.Text,
+		ArticleTitle:      tw.ArticleTitle,
+		PollJSON:          tw.PollJSON,
+		CommunityNote:     tw.CommunityNote,
 		Lang:              tw.Lang,
 		ReplyToHandle:     tw.ReplyToHandle,
 		ReplyToStatus:     tw.ReplyToStatus,
 		IsReply:           tw.ReplyToStatus != "",
 		IsGhost:           true,
 		MediaJSON:         tw.MediaJSON,
+		MentionHandles:    tw.MentionHandles,
 		PublishedAt:       pubAt,
-		FetchedAt:         tw.CreatedAt,
+		FetchedAt:         time.Now().UTC(),
 		ContentHash:       "ghost-" + tw.ID,
 	}
 	if quote := tw.Quote; quote != nil && xfeed.ValidTweetID(quote.ID) && xfeed.ValidHandle(quote.AuthorHandle) {
@@ -193,6 +223,9 @@ func tweetToGhostFeedItem(tw *fxtwitter.Tweet) model.FeedItem {
 		item.QuoteAuthorDisplayName = quote.AuthorDisplayName
 		item.QuoteAuthorAvatarURL = model.CleanFeedAvatarURL(quote.AuthorAvatarURL)
 		item.QuoteBodyText = quote.Text
+		item.QuoteArticleTitle = quote.ArticleTitle
+		item.QuotePollJSON = quote.PollJSON
+		item.QuoteCommunityNote = quote.CommunityNote
 		item.QuoteLang = quote.Lang
 		item.QuoteMediaJSON = trustedTwitterQuoteMediaJSON(quote.MediaJSON)
 		if !quote.CreatedAt.IsZero() {
