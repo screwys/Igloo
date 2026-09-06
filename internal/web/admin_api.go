@@ -107,9 +107,11 @@ var shortcutDefaults = map[string]string{
 	"feed.like": "l", "feed.bookmark": "b", "feed.share": "s", "feed.translate": "t", "feed.media": "f", "feed.mute": "m",
 	"shorts.autoplay": "a", "shorts.bookmark": "b", "shorts.share": "s", "shorts.grid": "c",
 	"player.fullscreen": "f", "player.cinema": "c", "player.bookmark": "b", "player.share": "s", "player.autoplay": "a",
-	"global.sidebar":  "z",
-	"global.settings": "g",
-	"global.logs":     "l",
+	"global.sidebar":    "z",
+	"global.addChannel": "n",
+	"global.download":   "d",
+	"global.settings":   "g",
+	"global.logs":       "l",
 }
 
 var settingsInternalKeys = map[string]bool{

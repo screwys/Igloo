@@ -5,6 +5,8 @@
     'shorts.mute': 'm', 'shorts.autoplay': 'a', 'shorts.bookmark': 'b', 'shorts.share': 's', 'shorts.grid': 'c',
     'player.fullscreen': 'f', 'player.cinema': 'c', 'player.bookmark': 'b', 'player.share': 's', 'player.autoplay': 'a',
     'global.sidebar': 'z',
+    'global.addChannel': 'n',
+    'global.download': 'd',
     'global.settings': 'g',
     'global.logs': 'o',
     'global.search': 'h'
@@ -2214,6 +2216,32 @@
     event.preventDefault();
     var href = target.getAttribute('href');
     if (href) window.location.href = href;
+  });
+
+  doc.addEventListener('keydown', function (event) {
+    if (event.defaultPrevented || event.repeat || event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
+    var tag = (event.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || event.target.isContentEditable) return;
+    if (q('.modal:not(.hidden)')) return;
+    if (window.cfShortcuts.match('global.addChannel', event.key)) {
+      var addButton = q('.sidebar-add-btn');
+      if (!addButton) return;
+      event.preventDefault();
+      addButton.click();
+    } else if (window.cfShortcuts.match('global.download', event.key)) {
+      var input = q('#quick-dl-input');
+      if (!input) return;
+      event.preventDefault();
+      if (desktopSidebar.matches && currentSidebarWidth === SIDEBAR_COMPACT_WIDTH) {
+        sidebarCompactDownload.click();
+      } else {
+        if (!desktopSidebar.matches) {
+          body.classList.add('sidebar-open');
+          syncSidebarControls();
+        }
+        input.focus();
+      }
+    }
   });
 
   // Global shortcut to toggle logs modal (default "O")

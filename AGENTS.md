@@ -3,7 +3,7 @@
 ## Project
 
 - Igloo is a Go/SQLite server with web and Android clients. In Igloo requests, unqualified "mobile" means the Android app; use the web client only when the user says web, browser, mobile web, or names a browser viewport.
-- Web behavior must work in Firefox and Chromium. Never assume Chromium semantics or treat a Chromium-only pass as cross-browser proof. Prefer standards-based APIs and CSS; isolate vendor-specific selectors and fallbacks so an unsupported selector cannot invalidate the standard rule.
+- Implement web behavior for both Firefox and Chromium using standards-based APIs and CSS; isolate vendor-specific selectors and fallbacks so an unsupported selector cannot invalidate the standard rule. Report browser-specific verification limits only when they materially affect confidence in the change, rather than routinely listing untested browsers.
 - `android/` is the current Android app.
 - Runtime/config defaults: native `~/.local/share/igloo/` and `~/.config/igloo/`; container `/igloo/data` and `/igloo/config`; bundled container assets `/app/static`.
 
