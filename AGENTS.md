@@ -11,7 +11,6 @@
 
 - Run routine build, test, generated-output, Android, and release workflows through `just` from the repository root. Bare `just` lists the recipes and their side effects.
 - Recipes delegate to the existing scripts; do not reconstruct script combinations by hand. Use a raw command only for installer bootstrap, read-only evidence, an exact CI reproduction, a partial-release recovery, or a narrowly scoped proof that has no recipe.
-- `just test` runs the proportional local gate when verification is needed without a push. The pre-push hook owns publication checks; do not run the same gate manually before pushing. `just restart` verifies the local server path. `just build-android` builds, installs, and relaunches the app, so never use it as a generic Android test command.
 - Release recipes remain explicit: only run `just release <patch|minor|major> "<user summary>"` or `just release-local ...` after the user has supplied both the requested bump and exact summary. Never invent public release text.
 
 ## Evidence
@@ -76,23 +75,8 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 ## Test Gates
 
 - Do not add tests that merely restate an implementation detail or assert that code was added or removed. Test observable behavior when deterministic coverage is valuable; otherwise omit the test.
-- Use focused tests when developing or investigating a change. Do not repeat
-  equivalent passing coverage as a separate pre-commit or pre-push step.
-- `.githooks/pre-push` owns checks for the outgoing commit range: proportional
-  tests, static/security checks, generated output, and applicable web/Android
-  checks. It also verifies the Nix dependency hash when relevant. Let the hook
-  run during `git push`; fix any failures without duplicating its gates manually.
-- A push alone does not require `just test-full`. Use it for an explicit
-  full-suite request, release validation, or a concrete integration risk that
-  the proportional gate does not cover.
-- For full-suite verification, do not treat raw `go test ./...` or Android
-  `BUILD SUCCESSFUL` output as enough. Check for skipped tests and ignored
-  errors explicitly.
-- Run `just test-full` for full-suite verification. It runs Go tests
-  with JSON output, fails/reports real skipped Go tests, runs the pinned
-  static and security checks, runs the Android warning-aware test wrapper,
-  inspects Android XML for failures/errors/skips, and reports Kotlin/JVM
-  warnings from the Android test output.
+- Use focused tests while developing; rely on `.githooks/pre-push` for push checks without repeating them manually.
+- When full-suite verification is needed, use `just test-full` and inspect skips, ignored errors, and Android warnings.
 - Treat new or high-signal production `errcheck` findings as blockers. If
   existing findings remain, report them plainly with the reason they were not
   fixed.
@@ -103,13 +87,10 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 
 ## Git Workflow
 
-- "Push", "lets push", "ship it", or similar requests mean commit and push
-  all current repository changes, including pre-existing edits and untracked
-  project files, unless the user explicitly narrows the scope. Do not select
-  only the current task's changes, leave other work out, or ask for confirmation
-  of this default. Let the pre-push hook check the complete outgoing change set.
-- Commit on the current branch and push that branch. If the current branch
-  is `main`, push directly to `origin/main`.
+- "Push", "lets push", "ship it", or similar requests mean commit and push all
+  current repository changes, including pre-existing edits and untracked project
+  files, unless the user explicitly narrows the scope. Use the current branch;
+  on `main`, push directly to `origin/main`.
 - Do not create a feature branch, PR, or review branch for Igloo unless the
   user explicitly asks for one, the current branch is not the intended target,
   or repository state makes a direct push unsafe.
