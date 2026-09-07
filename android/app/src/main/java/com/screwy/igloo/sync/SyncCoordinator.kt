@@ -136,10 +136,7 @@ class SyncCoordinator(
 
     /** WorkManager and explicit passes preserve drain-before-mirror ordering. */
     suspend fun pass(): Boolean {
-        val actionPass =
-            actionMutex.withLock { executeActionPass(probeIfOffline = true) }
-        if (!actionPass.canReachServer) return false
-        metadataPassMutex.withLock { executeMetadataPass() }
+        if (!refreshMetadata()) return false
         try {
             val assets = assetMutex.withLock { mirror.syncAssetsOnce() }
             assetRetryWake.schedule(assets.nextAttemptAtMs)
@@ -149,6 +146,15 @@ class SyncCoordinator(
             val assets = assetMutex.withLock { mirror.syncAssetsOnce() }
             assetRetryWake.schedule(assets.nextAttemptAtMs)
         }
+        return true
+    }
+
+    /** Make freshly fetched posts readable without waiting for media downloads. */
+    suspend fun refreshMetadata(): Boolean {
+        val actionPass =
+            actionMutex.withLock { executeActionPass(probeIfOffline = true) }
+        if (!actionPass.canReachServer) return false
+        metadataPassMutex.withLock { executeMetadataPass() }
         return true
     }
 
@@ -178,7 +184,7 @@ class SyncCoordinator(
         metadataTriggers.trySend(Unit)
     }
 
-    private fun triggerAssets() {
+    fun triggerAssets() {
         assetTriggers.trySend(Unit)
     }
 

@@ -108,8 +108,9 @@ class ThreadViewModel(
                 "/api/thread/${tweetId.encodeURLPathPart()}/refresh") {
                 timeout { requestTimeoutMillis = 35_000; socketTimeoutMillis = 35_000 }
             }
-            check(scheduler.pass())
+            check(scheduler.refreshMetadata())
             loadBlocking(tweetId)
+            scheduler.triggerAssets()
             check(response.status.isSuccess())
         } catch (e: Exception) {
             if (e is CancellationException) throw e

@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -67,10 +68,16 @@ import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
 import com.screwy.igloo.outbox.PendingFeedActionOverrides
+import com.screwy.igloo.outbox.OutboxWriter
+import com.screwy.igloo.outbox.OutboxKind
+import com.screwy.igloo.ui.UiEffects
+import com.screwy.igloo.ui.UiEffect
+import com.screwy.igloo.ui.nav.RouteRegistry
 import com.screwy.igloo.outbox.pendingFeedActionOverrides
 import com.screwy.igloo.ui.UiState
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 data class NewPostPoster(
@@ -99,10 +106,10 @@ internal enum class NativeFeedPrimaryAction {
 }
 
 internal val NativeFeedPrimaryActions = listOf(
-    NativeFeedPrimaryAction.Reply,
+    NativeFeedPrimaryAction.Share,
     NativeFeedPrimaryAction.Like,
     NativeFeedPrimaryAction.Bookmark,
-    NativeFeedPrimaryAction.Share,
+    NativeFeedPrimaryAction.Reply,
     NativeFeedPrimaryAction.External,
 )
 
@@ -156,6 +163,9 @@ internal fun NativeFeedSurface(
     val mediaResolvers: MediaResolvers = koinInject()
     val prefs: PreferencesRepo = koinInject()
     val db: IglooDatabase = koinInject()
+    val outbox: OutboxWriter = koinInject()
+    val effects: UiEffects = koinInject()
+    val scope = rememberCoroutineScope()
     val useEmbedFriendlyShareLinks by prefs.shareEmbedFriendlyLinks()
         .collectAsStateWithLifecycle(initialValue = PreferencesRepo.Defaults.SHARE_EMBED_FRIENDLY_LINKS)
     val showAccountRegion by prefs.flowBool(PreferencesRepo.Keys.SHOW_X_ACCOUNT_REGION, true)
@@ -218,6 +228,15 @@ internal fun NativeFeedSurface(
             onQuoteOpen = onQuoteOpen,
             onRequestUnfollowConfirmation = { pendingUnfollowChannelId = it },
             onRequestMuteConfirmation = { pendingMuteAction = it },
+            repostsEnabled = { channelId -> db.channelSettingDao().getById(channelId)?.includeReposts != 0 },
+            onRepostsToggle = { channelId, enabled ->
+                scope.launch {
+                    outbox.enqueue(OutboxKind.ChannelSetting(channelId, "include_reposts", if (enabled) 1L else 0L))
+                }
+            },
+            onFeedSettings = {
+                scope.launch { effects.emit(UiEffect.NavigateTo(RouteRegistry.FeedSettings.route)) }
+            },
             onHeaderFollowToggle = onHeaderFollowToggle,
             onHeaderStarToggle = onHeaderStarToggle,
             onHeaderRefresh = onHeaderRefresh,
@@ -621,6 +640,9 @@ internal data class NativeFeedCallbacks(
     val onHeaderOpenInPlatform: () -> Unit,
     val useEmbedFriendlyShareLinks: Boolean,
     val showFullArticles: Boolean = false,
+    val repostsEnabled: suspend (String) -> Boolean = { true },
+    val onRepostsToggle: (String, Boolean) -> Unit = { _, _ -> },
+    val onFeedSettings: () -> Unit = {},
 )
 
 internal data class NativeTranslationPill(

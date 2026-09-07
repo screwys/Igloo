@@ -192,6 +192,7 @@ export function materialIconMarkup(name, className) {
 // Used by syncFeedActionIcons and state sync functions. X keeps its platform
 // logo; all product actions use the shared Material icon palette.
 export function getFeedActionIconSvg(kind, active) {
+  if (kind === 'thread') return materialIconMarkup('Reply')
   if (kind === 'share') return materialIconMarkup('Share')
   if (kind === 'heart') return materialIconMarkup(active ? 'Favorite' : 'FavoriteBorder')
   if (kind === 'bookmark') return materialIconMarkup(active ? 'Bookmark' : 'BookmarkBorder')

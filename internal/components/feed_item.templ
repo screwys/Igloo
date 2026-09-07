@@ -908,9 +908,9 @@ templ feedTaggedAccounts(p PageProps, item model.FeedItem) {
 templ feedActions(p PageProps, item model.FeedItem) {
 	{{ externalURL := feedExternalURL(item) }}
 	<div class="feed-actions" data-feed-index="0">
-		<a class="feed-action-btn feed-reply-btn" href={ templ.SafeURL("/thread/" + item.TweetID) } data-feed-thread-open data-thread-tweet-id={ item.TweetID } title={ L(p, "feed_open_thread", "Open thread") } aria-label={ L(p, "feed_open_thread", "Open thread") }>
-			@MaterialIcon("Reply", "")
-		</a>
+		<button class="feed-action-btn" type="button" data-feed-action="share" title={ L(p, "action_share", "Share") } aria-label={ L(p, "action_share", "Share") }>
+			@MaterialIcon("Share", "")
+		</button>
 		@LikeButton(p, item.TweetID, item.IsLiked)
 		<button
 			class={ "feed-action-btn", templ.KV("active", item.IsBookmarked) }
@@ -930,9 +930,9 @@ templ feedActions(p PageProps, item model.FeedItem) {
 				@MaterialIcon("BookmarkBorder", "")
 			}
 		</button>
-		<button class="feed-action-btn" type="button" data-feed-action="share" title={ L(p, "action_share", "Share") } aria-label={ L(p, "action_share", "Share") }>
-			@MaterialIcon("Share", "")
-		</button>
+		<a class="feed-action-btn feed-reply-btn" href={ templ.SafeURL("/thread/" + item.TweetID) } data-feed-thread-open data-thread-tweet-id={ item.TweetID } title={ L(p, "feed_open_thread", "Open thread") } aria-label={ L(p, "feed_open_thread", "Open thread") }>
+			@MaterialIcon("Reply", "")
+		</a>
 		if externalURL != "" {
 			<a
 				class="feed-action-btn"

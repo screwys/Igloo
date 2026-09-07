@@ -112,7 +112,7 @@ internal class NativeFeedViewHolder(
         views.applyColors(colors)
         views.root.setOnClickListener { callbacks.onRowClick(row) }
         views.root.setOnLongClickListener {
-            showMenu(row, post)
+            showMenu(views.menu, row)
             true
         }
 
@@ -319,7 +319,7 @@ internal class NativeFeedViewHolder(
         views.threadCapsuleText.setTextColor(colors.onSurfaceMuted)
         views.threadCapsule.background =
             roundedStroke(Color.TRANSPARENT, colors.borderSubtle, dp(1), dp(14))
-        views.threadCapsule.setOnClickListener { callbacks.onRowClick(threaded.row) }
+        views.threadCapsule.setOnClickListener { callbacks.onQuoteOpen(threaded.row) }
         bindThreadCapsuleAvatars(threaded, colors)
     }
 
@@ -713,39 +713,23 @@ internal class NativeFeedViewHolder(
     }
 
     private fun showMenu(
-        row: FeedRow,
-        post: SocialPostModel,
-        shareUrl: String = feedShareUrl(row).trim(),
-    ) {
-        showMenu(views.menu, row, post, shareUrl)
-    }
-
-    private fun showMenu(
         anchor: View,
         row: FeedRow,
-        post: SocialPostModel,
-        shareUrl: String = feedShareUrl(row).trim(),
     ) {
         val callbacks = getCallbacks()
         val context = views.root.context
         val items = mutableListOf<NativeFeedMenuItem>()
         val channelId = row.item.channelId?.trim().orEmpty()
-        if (shareUrl.isNotBlank()) {
+        items += NativeFeedMenuItem(
+            label = context.getString(R.string.feed_open_x_feed_settings),
+            action = callbacks.onFeedSettings,
+        )
+        if (channelId.isNotBlank() && row.channelIsFollowed == 1) {
             items +=
                 NativeFeedMenuItem(
-                    label = context.getString(R.string.action_open_on_x),
-                    action = { openExternalUrl(context, shareUrl) },
-                )
-        }
-        if (channelId.isNotBlank()) {
-            items +=
-                NativeFeedMenuItem(
-                    label =
-                        context.getString(
-                            if (row.channelIsStarred == 1) R.string.action_unstar_channel
-                            else R.string.action_star_channel
-                        ),
-                    action = { callbacks.onStarToggle(channelId, row.channelIsStarred == 0) },
+                    label = context.getString(R.string.action_unfollow_account),
+                    danger = true,
+                    action = { callbacks.onRequestUnfollowConfirmation(channelId) },
                 )
         }
         feedMuteMenuActions(row, callbacks.mutedChannelIds).forEach { action ->
@@ -766,7 +750,19 @@ internal class NativeFeedViewHolder(
                     },
                 )
         }
-        showNativeFeedPopup(anchor, getColors(), items)
+        val sourceChannelId = row.item.reposterChannelId?.takeIf { it.isNotBlank() } ?: channelId
+        scope.launch {
+            if (sourceChannelId.isNotBlank()) {
+                val enabled = callbacks.repostsEnabled(sourceChannelId)
+                items.add(0, NativeFeedMenuItem(
+                    label = context.getString(
+                        if (enabled) R.string.feed_turn_off_retweets else R.string.feed_turn_on_retweets,
+                    ),
+                    action = { callbacks.onRepostsToggle(sourceChannelId, !enabled) },
+                ))
+            }
+            if (anchor.isAttachedToWindow) showNativeFeedPopup(anchor, getColors(), items)
+        }
     }
 
     private fun threadAncestorActions(
@@ -806,7 +802,7 @@ internal class NativeFeedViewHolder(
         val canOpenExternal = shareUrl.isNotBlank()
         container.removeAllViews()
         configureMenuButton(menu, colors)
-        menu.setOnClickListener { showMenu(menu, row, post, shareUrl) }
+        menu.setOnClickListener { showMenu(menu, row) }
         NativeFeedPrimaryActions.forEach { action ->
             val button = actionIconButton(views.root.context, colors)
             button.contentDescription = action.contentDescription(views.root.context, post)

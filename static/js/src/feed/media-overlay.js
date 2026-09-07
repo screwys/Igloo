@@ -539,7 +539,7 @@ export function openMediaOverlay(root, triggerEl) {
       shareBtn.className = 'feed-action-btn'
       shareBtn.type = 'button'
       shareBtn.setAttribute('data-feed-overlay-action', 'share')
-      shareBtn.title = t('action_copy_link', 'Copy link')
+      shareBtn.title = t('action_share', 'Share')
       shareBtn.setAttribute('aria-label', shareBtn.title)
       // Static SVG — no user input
       shareBtn.innerHTML = getFeedActionIconSvg('share') // eslint-disable-line no-unsanitized/property
@@ -572,29 +572,28 @@ export function openMediaOverlay(root, triggerEl) {
       actionsWrap.appendChild(bmBtn)
 
       var overlayLink = isQuote ? (quoteLink || link) : link
+      var threadTweetId = isQuote ? quoteTweetId : tweetId
+      if (threadTweetId) {
+        var openThread = document.createElement('a')
+        openThread.className = 'feed-action-btn'
+        openThread.href = '/thread/' + encodeURIComponent(threadTweetId)
+        openThread.title = t('feed_open_thread', 'Open thread')
+        openThread.setAttribute('aria-label', openThread.title)
+        openThread.innerHTML = getFeedActionIconSvg('thread') // eslint-disable-line no-unsanitized/property
+        actionsWrap.appendChild(openThread)
+      }
       if (overlayLink) {
         var openExternal = document.createElement('a')
         openExternal.className = 'feed-action-btn'
         openExternal.href = overlayLink
         openExternal.target = '_blank'
         openExternal.rel = 'noopener noreferrer'
-        openExternal.title = t('action_open_externally', 'Open externally')
+        openExternal.title = t('action_open_on_x', 'Open on X')
         openExternal.setAttribute('aria-label', openExternal.title)
         openExternal.setAttribute('data-feed-overlay-action', 'open')
         // Static SVG — no user input
         openExternal.innerHTML = getFeedActionIconSvg('open') // eslint-disable-line no-unsanitized/property
         actionsWrap.appendChild(openExternal)
-      }
-      var threadHref = String(article.getAttribute('data-feed-thread-href') || '').trim()
-      if (threadHref.startsWith('/') && !threadHref.startsWith('//')) {
-        var openPost = document.createElement('a')
-        openPost.className = 'feed-action-btn'
-        openPost.href = threadHref
-        openPost.title = t('profile_open_post', 'Open post')
-        openPost.setAttribute('aria-label', openPost.title)
-        // Static SVG — no user input
-        openPost.innerHTML = getFeedActionIconSvg('open') // eslint-disable-line no-unsanitized/property
-        actionsWrap.appendChild(openPost)
       }
       bottom.appendChild(actionsWrap)
       syncFeedActionIcons(bottom)

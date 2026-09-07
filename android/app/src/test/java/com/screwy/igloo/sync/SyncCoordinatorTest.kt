@@ -34,6 +34,30 @@ import org.robolectric.annotation.Config
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncCoordinatorTest {
     @Test
+    fun explicitMetadataRefreshCompletesWhileAssetsAreBusy() = runTest {
+        val logs = LoggerFixture()
+        val mirror = FakeMirror(blockAssets = true)
+        val coordinator = coordinator(
+            backgroundScope, FakeOutbox(), mirror, reachability(backgroundScope),
+            MutableStateFlow(false), logs.logger,
+        )
+        try {
+            coordinator.start()
+            runCurrent()
+            assertTrue(mirror.assetStarted.isCompleted)
+            val before = mirror.metadataCalls.get()
+
+            assertTrue(coordinator.refreshMetadata())
+
+            assertTrue(mirror.metadataCalls.get() > before)
+            assertFalse(mirror.releaseAssets.isCompleted)
+        } finally {
+            coordinator.stopAll()
+            logs.close()
+        }
+    }
+
+    @Test
     fun actionLaneKeepsDrainingWhileAssetsAreBusy() = runTest {
         val logs = LoggerFixture()
         val outbox = FakeOutbox()

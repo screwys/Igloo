@@ -30,13 +30,13 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34], manifest = Config.NONE)
 class NativeMainFeedSurfaceTest {
     @Test
-    fun nativeFeedPrimaryActionsPutThreadBeforeSavedActions() {
+    fun nativeFeedPrimaryActionsFollowRequestedOrder() {
         assertEquals(
             listOf(
-                NativeFeedPrimaryAction.Reply,
+                NativeFeedPrimaryAction.Share,
                 NativeFeedPrimaryAction.Like,
                 NativeFeedPrimaryAction.Bookmark,
-                NativeFeedPrimaryAction.Share,
+                NativeFeedPrimaryAction.Reply,
                 NativeFeedPrimaryAction.External,
             ),
             NativeFeedPrimaryActions,

@@ -61,7 +61,7 @@ fun ThreadRoute(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = stringResource(R.string.thread_unavailable),
+                    text = stringResource(if (isFetching) R.string.feed_thread_fetching else R.string.thread_unavailable),
                     color = MaterialTheme.iglooColors.onSurfaceMuted,
                     style = MaterialTheme.typography.bodyMedium,
                 )
