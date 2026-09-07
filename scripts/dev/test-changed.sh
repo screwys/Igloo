@@ -37,19 +37,12 @@ android_changed=0
 i18n_changed=0
 workflow_changed=0
 contract_changed=0
-declare -A go_test_file_set=()
 declare -a shell_files=()
 declare -a node_tests=()
 
 for path in "${changed[@]}"; do
   case "$path" in
-    *.go)
-      go_changed=1
-      if [[ "$path" == *_test.go ]]; then
-        go_test_file_set["$path"]=1
-      fi
-      ;;
-    go.mod|go.sum)
+    *.go|*.templ|go.mod|go.sum|scripts/dev/test-changed.sh)
       go_changed=1
       ;;
   esac
@@ -57,7 +50,6 @@ for path in "${changed[@]}"; do
   case "$path" in
     internal/db/*.go|internal/model/*.go|internal/web/*.go)
       contract_changed=1
-      go_test_file_set["internal/web/contract_test.go"]=1
       ;;
   esac
 
@@ -131,8 +123,8 @@ if [[ "$i18n_changed" -eq 1 ]]; then
 fi
 
 if [[ "$go_changed" -eq 1 ]]; then
-  echo "[go] compiling all packages"
-  go test -run '^$' ./...
+  echo "[go] running all Go tests (same suite as CI)"
+  go test ./...
 
   . scripts/dev/go-tool-versions.sh
   echo "[go] running repo-specific static checks"
@@ -144,31 +136,6 @@ if [[ "$go_changed" -eq 1 ]]; then
   echo "[go] running govulncheck"
   go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
 
-  declare -A go_tests_by_package=()
-  for test_file in "${!go_test_file_set[@]}"; do
-    dir="${test_file%/*}"
-    [[ "$dir" == "$test_file" ]] && dir="."
-    package="./$dir"
-    while IFS= read -r test_name; do
-      [[ -z "$test_name" ]] && continue
-      if [[ -n "${go_tests_by_package[$package]:-}" ]]; then
-        go_tests_by_package["$package"]+="|"
-      fi
-      go_tests_by_package["$package"]+="$test_name"
-    done < <(
-      sed -nE 's/^[[:space:]]*func[[:space:]]+(Test[A-Za-z0-9_]+|Example[A-Za-z0-9_]*|Fuzz[A-Za-z0-9_]+)[[:space:]]*\(.*/\1/p' "$test_file"
-    )
-  done
-
-  if [[ "${#go_tests_by_package[@]}" -eq 0 ]]; then
-    echo "[go] no changed Go test files"
-  else
-    mapfile -t go_test_packages < <(printf '%s\n' "${!go_tests_by_package[@]}" | sort)
-    for package in "${go_test_packages[@]}"; do
-      echo "[go] testing $package: ${go_tests_by_package[$package]//|/, }"
-      go test -count=1 -run "^(${go_tests_by_package[$package]})$" "$package"
-    done
-  fi
 fi
 
 if [[ "${#node_tests[@]}" -gt 0 ]]; then
