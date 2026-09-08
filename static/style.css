@@ -2672,10 +2672,11 @@ select.input:focus {
 
 /* Label autocomplete suggestions */
 .bookmark-label-suggestions {
+    position: fixed;
+    z-index: 43000;
     background: var(--bg-primary);
     border: 1px solid rgba(var(--accent-primary-rgb), 0.25);
     border-radius: 8px;
-    margin-top: 2px;
     max-height: 180px;
     overflow-y: auto;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);

@@ -66,6 +66,7 @@ export function closeBookmarkMenu() {
   if (!bookmarkMenu) return
   var menu = bookmarkMenu
   bookmarkMenu = null
+  if (menu._labelSuggestionsCleanup) menu._labelSuggestionsCleanup()
   if (menu._accountPicker && menu._accountPicker.parentNode) menu._accountPicker.remove()
   if (menu.parentNode) menu.remove()
   if (_bmOutsideHandler) { document.removeEventListener('mousedown', _bmOutsideHandler); _bmOutsideHandler = null }
@@ -567,6 +568,24 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
     labelWrap.appendChild(suggestBox)
     body.appendChild(labelWrap)
 
+    function positionLabelSuggestions() {
+      if (suggestBox.style.display === 'none') return
+      var rect = titleInput.getBoundingClientRect()
+      var below = window.innerHeight - rect.bottom - 10
+      var above = rect.top - 10
+      var openAbove = below < Math.min(180, suggestBox.scrollHeight) && above > below
+      suggestBox.style.width = rect.width + 'px'
+      suggestBox.style.left = rect.left + 'px'
+      suggestBox.style.maxHeight = Math.max(0, Math.min(180, openAbove ? above : below)) + 'px'
+      suggestBox.style.top = (openAbove ? rect.top - suggestBox.getBoundingClientRect().height - 2 : rect.bottom + 2) + 'px'
+    }
+    window.addEventListener('scroll', positionLabelSuggestions, true)
+    window.addEventListener('resize', positionLabelSuggestions)
+    popover._labelSuggestionsCleanup = function () {
+      window.removeEventListener('scroll', positionLabelSuggestions, true)
+      window.removeEventListener('resize', positionLabelSuggestions)
+    }
+
     var _labelActiveIdx = -1
     function updateLabelSuggestions() {
       var q = (titleInput.value || '').trim().toLowerCase()
@@ -620,6 +639,7 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
         suggestBox.appendChild(item)
       })
       suggestBox.style.display = ''
+      positionLabelSuggestions()
     }
 
     function moveLabelActive(delta) {
