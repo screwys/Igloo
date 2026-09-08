@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,6 +56,7 @@ fun MomentsRoute(
     val useEmbedFriendlyShareLinks by prefs.shareEmbedFriendlyLinks()
         .collectAsStateWithLifecycle(initialValue = PreferencesRepo.Defaults.SHARE_EMBED_FRIENDLY_LINKS)
     var showStoryTray by remember { mutableStateOf(false) }
+    var playbackSpeed by rememberSaveable { mutableStateOf(1f) }
     var showAllMomentsGrid by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -95,6 +97,7 @@ fun MomentsRoute(
         } else {
             UiStateSwitch(state = playerRouteState.uiState, modifier = Modifier.fillMaxSize()) {
                 MomentsPlayer(
+                    playbackSpeed = playbackSpeed,
                     items = playerRouteState.items,
                     startIndex = playerRouteState.selection.index,
                     startVideoId = sessionVideoId ?: playerRouteState.selection.videoId,
@@ -173,6 +176,8 @@ fun MomentsRoute(
     pendingMomentActions?.let { item ->
         MomentActionSheet(
             item = item,
+            playbackSpeed = playbackSpeed,
+            onPlaybackSpeedChanged = { playbackSpeed = it },
             onDismissRequest = vm::dismissMomentActions,
             onRepostsEnabledChanged = vm::setRepostsEnabled,
             onChannelMutedChanged = vm::setChannelMuted,

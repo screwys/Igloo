@@ -2321,7 +2321,11 @@
   if (compactSearchButton) {
     compactSearchButton.addEventListener('click', function () {
       if (q('.modal:not(.hidden)')) return;
-      openSearchOverlay();
+      var search = q('#header-search');
+      var input = q('#global-search-input');
+      if (!search || !input) return;
+      search.classList.add('is-expanded');
+      input.focus();
     });
   }
 

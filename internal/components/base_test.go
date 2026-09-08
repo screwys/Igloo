@@ -581,68 +581,6 @@ func TestWideModalsUseTheSameDesktopScaleOnMoments(t *testing.T) {
 	}
 }
 
-func TestHeaderSearchResizesConsistentlyAcrossPages(t *testing.T) {
-	css, err := os.ReadFile("../../static/style.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(css)
-	for _, check := range []string{
-		".header-search {\n    width: clamp(84px, 8vw, 140px)",
-		".header-search.is-expanded {\n    width: min(520px, 42vw)",
-		"body.shorts-mode .floating-header",
-		"top: max(0.5rem, env(safe-area-inset-top))",
-	} {
-		if !strings.Contains(text, check) {
-			t.Errorf("shared responsive header search sizing missing %q", check)
-		}
-	}
-	if strings.Contains(text, "body.shorts-mode .header-search:not(.is-expanded)") ||
-		strings.Contains(text, "body.shorts-mode .header-search.is-expanded") {
-		t.Fatal("Moments should not resize the shared header search to fit the story tray")
-	}
-}
-
-func TestMomentsHeaderCompactsBeforeItCanOverlapTheStoryRail(t *testing.T) {
-	cssBytes, err := os.ReadFile("../../static/style.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	css := string(cssBytes)
-	compactStart := strings.Index(css, "@media (max-width: 420px) {")
-	if compactStart < 0 {
-		t.Fatal("missing the compact Moments header boundary")
-	}
-	compactRules := css[compactStart:]
-	for _, check := range []string{
-		"body.shorts-mode .header-search",
-		"body.shorts-mode .compact-header-search-btn",
-		"right: calc(var(--shorts-story-tray-width) + 0.5rem)",
-		"top: var(--shorts-compact-header-height)",
-		"height: calc(100dvh - var(--shorts-compact-header-height))",
-		"top: calc(var(--shorts-compact-header-height) + 57px)",
-		"body.shorts-mode .shorts-story-tray-toggle",
-	} {
-		if !strings.Contains(compactRules, check) {
-			t.Errorf("compact Moments header missing %q", check)
-		}
-	}
-
-	siteBaseBytes, err := os.ReadFile("../../static/js/site_base.js")
-	if err != nil {
-		t.Fatal(err)
-	}
-	siteBase := string(siteBaseBytes)
-	for _, check := range []string{
-		"var compactSearchButton = q('#compact-search-btn')",
-		"compactSearchButton.addEventListener('click'",
-		"openSearchOverlay()",
-	} {
-		if !strings.Contains(siteBase, check) {
-			t.Errorf("compact search button wiring missing %q", check)
-		}
-	}
-}
 
 func TestSidebarNavPlatforms(t *testing.T) {
 	t.Run("all platforms", func(t *testing.T) {

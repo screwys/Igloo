@@ -153,6 +153,7 @@ internal fun shouldRewindInactiveMomentPlayback(
 
 @Composable
 internal fun MomentPage(
+    playbackSpeed: Float = 1f,
     pageIndex: Int,
     item: MomentItem,
     storyMode: Boolean,
@@ -263,6 +264,7 @@ internal fun MomentPage(
                 )
             MomentMediaMode.Video -> {
                 MomentVideoLayer(
+                    playbackSpeed = playbackSpeed,
                     pageIndex = pageIndex,
                     item = item,
                     thumbnailUri = thumbnailUri,
@@ -451,6 +453,7 @@ private fun MomentRepostLongPressLayer(onLongPress: () -> Unit, modifier: Modifi
 
 @Composable
 private fun BoxScope.MomentVideoLayer(
+    playbackSpeed: Float,
     pageIndex: Int,
     item: MomentItem,
     thumbnailUri: MediaUri,
@@ -549,6 +552,9 @@ private fun BoxScope.MomentVideoLayer(
     }
 
     LaunchedEffect(player, muted) { player.volume = if (muted) 0f else 1f }
+    LaunchedEffect(player, playbackSpeed, isActive) {
+        if (!playerIsShared || isActive) player.setPlaybackSpeed(playbackSpeed)
+    }
     if (!playerIsShared || isActive) {
         LaunchedEffect(
             player,

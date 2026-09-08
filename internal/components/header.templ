@@ -4,13 +4,13 @@ package components
 templ Header(p PageProps) {
 	<div class="floating-header">
 		<div class="header-search" id="header-search">
+			<button type="button" id="compact-search-btn" class="compact-header-search-btn" title={ L(p, "search_title", "Search") } aria-label={ L(p, "search_title", "Search") } data-i18n-title="search_title" data-i18n-aria-label="search_title">
+				@MaterialIcon("Search", "")
+			</button>
 			<input type="text" id="global-search-input" class="input" placeholder={ L(p, "search_global_placeholder", "Search") } data-i18n-placeholder="search_global_placeholder" autocomplete="off" value=""/>
 			<button type="button" id="global-search-clear" class="input-clear-btn hidden" aria-label={ L(p, "action_clear", "Clear") } data-i18n-aria-label="action_clear">@MaterialIcon("Close", "")</button>
 			<div id="search-dropdown" class="search-dropdown hidden"></div>
 		</div>
-		<button type="button" id="compact-search-btn" class="compact-header-search-btn" title={ L(p, "search_title", "Search") } aria-label={ L(p, "search_title", "Search") } data-i18n-title="search_title" data-i18n-aria-label="search_title">
-			@MaterialIcon("Search", "")
-		</button>
 		<div id="stop-play-container">
 			@StopPlayButton(p, p.DownloadsStopped)
 		</div>

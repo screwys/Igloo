@@ -168,10 +168,6 @@ func TestShortsPlayerMoreMenuUsesMomentMutationOwners(t *testing.T) {
 	if strings.Contains(css, ".shorts-media-stage:-webkit-full-screen") {
 		t.Error("Firefox must not discard Moment fullscreen rules because of a WebKit-only selector")
 	}
-	controlsBody := cssRuleBody(t, css, ".shorts-player-controls")
-	if !strings.Contains(controlsBody, "top: max(0.75rem") {
-		t.Errorf("Moment controls should share the top chrome row: %s", controlsBody)
-	}
 	actionBody := cssRuleBody(t, css, ".shorts-actions .action-btn")
 	for _, check := range []string{"width: 52px", "height: 52px", "background: rgba(36, 36, 39, 0.94)"} {
 		if !strings.Contains(actionBody, check) {

@@ -204,6 +204,7 @@ fun MomentsPlayer(
     // when someone forgets to plumb the setting.
     autoSwipeDefault: Boolean = false,
     muteDefault: Boolean = true,
+    playbackSpeed: Float = 1f,
     onAutoSwipeChanged: (Boolean) -> Unit = {},
     onMuteChanged: (Boolean) -> Unit = {},
     onIndexChange: (MomentItem) -> Unit,
@@ -452,6 +453,7 @@ fun MomentsPlayer(
         val pageContent: @Composable (Int) -> Unit = { page ->
             val item = pagerItems[page]
             MomentPage(
+                playbackSpeed = playbackSpeed,
                 pageIndex = page,
                 item = item,
                 storyMode = storyMode,

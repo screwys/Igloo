@@ -783,7 +783,6 @@ export function makeShortItem(entryData, existingEl) {
     '</nav>' +
     '</div>'
   safeSetMarkup(header, headerHtml)
-  wrapper.appendChild(header)
 
   var topControls = doc.createElement('div')
   topControls.className = 'shorts-player-controls'
@@ -797,7 +796,7 @@ export function makeShortItem(entryData, existingEl) {
     '<button class="shorts-top-control-btn shorts-more-btn" type="button" data-short-top-action="more" title="' + escapeHtml(t('action_more', 'More')) + '" aria-label="' + escapeHtml(t('action_more', 'More')) + '" aria-haspopup="menu" aria-expanded="false">' + iconSvg('more') + '</button>' +
     '<button class="shorts-top-control-btn shorts-fullscreen-btn" type="button" data-short-top-action="fullscreen" title="' + escapeHtml(t('action_enter_fullscreen', 'Enter fullscreen')) + '" aria-label="' + escapeHtml(t('action_enter_fullscreen', 'Enter fullscreen')) + '">' + iconSvg('fullscreen') + '</button>' +
     '</div>')
-  wrapper.appendChild(topControls)
+  topControls.insertBefore(header, topControls.lastElementChild)
 
   var storyChrome = null
   if (_state.storyMode) {
@@ -944,6 +943,7 @@ export function makeShortItem(entryData, existingEl) {
 
   item.appendChild(wrapper)
   item.appendChild(actions)
+  item.appendChild(topControls)
 
   var refs = {
     video: video,

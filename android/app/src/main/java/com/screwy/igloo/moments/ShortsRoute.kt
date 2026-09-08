@@ -8,6 +8,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +62,7 @@ fun ShortsRoute(
     val useEmbedFriendlyShareLinks by prefs.shareEmbedFriendlyLinks()
         .collectAsStateWithLifecycle(initialValue = PreferencesRepo.Defaults.SHARE_EMBED_FRIENDLY_LINKS)
     var showStoryTray by remember { mutableStateOf(false) }
+    var playbackSpeed by rememberSaveable { mutableStateOf(1f) }
     val navigator = rememberIglooNavigator(navController)
     val context = LocalContext.current
     val activeMomentsTab = when (spec.type) {
@@ -77,6 +79,7 @@ fun ShortsRoute(
     ) {
         UiStateSwitch(state = uiState, modifier = Modifier.fillMaxSize()) {
             MomentsPlayer(
+                playbackSpeed = playbackSpeed,
                 items = items,
                 startIndex = startSelection.index,
                 startVideoId = startSelection.videoId,
@@ -175,6 +178,8 @@ fun ShortsRoute(
     pendingMomentActions?.let { item ->
         MomentActionSheet(
             item = item,
+            playbackSpeed = playbackSpeed,
+            onPlaybackSpeedChanged = { playbackSpeed = it },
             onDismissRequest = vm::dismissMomentActions,
             onRepostsEnabledChanged = vm::setRepostsEnabled,
             onChannelMutedChanged = vm::setChannelMuted,

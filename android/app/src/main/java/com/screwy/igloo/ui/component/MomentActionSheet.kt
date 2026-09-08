@@ -8,6 +8,7 @@ import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -20,6 +21,10 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -46,6 +51,7 @@ import com.screwy.igloo.R
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.platformKeyFromChannelId
 import com.screwy.igloo.data.stripPlatformPrefix
+import com.screwy.igloo.player.SPEED_CHOICES
 import org.koin.compose.koinInject
 
 internal data class MomentActionAvailability(
@@ -125,6 +131,8 @@ internal fun momentMiniPlayerAvailable(item: MomentItem, pictureInPictureSupport
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun MomentActionSheet(
     item: MomentItem,
+    playbackSpeed: Float,
+    onPlaybackSpeedChanged: (Float) -> Unit,
     onDismissRequest: () -> Unit,
     onRepostsEnabledChanged: (channelId: String, enabled: Boolean) -> Unit,
     onChannelMutedChanged: (channelId: String, muted: Boolean) -> Unit,
@@ -174,6 +182,7 @@ internal fun MomentActionSheet(
         if (actions.canVisitReposter) accountLabels.reposter else accountLabels.author
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     var showUnfollowConfirmation by remember(item.videoId, reposterChannelId) { mutableStateOf(false) }
+    var showPlaybackSpeeds by remember(item.videoId) { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -182,6 +191,35 @@ internal fun MomentActionSheet(
         // Do not let this context menu claim player-sized vertical space. With the partial sheet
         // state above, it wraps to compact rows on phones as well.
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+            if (momentMediaMode(item.mediaKind, item.slideCount) == MomentMediaMode.Video) {
+                Box {
+                    MomentActionRow(
+                        icon = Icons.Default.Speed,
+                        label = stringResource(R.string.player_playback_speed_value, "${playbackSpeed}×"),
+                        onClick = { showPlaybackSpeeds = true },
+                    )
+                    DropdownMenu(
+                        expanded = showPlaybackSpeeds,
+                        onDismissRequest = { showPlaybackSpeeds = false },
+                    ) {
+                        SPEED_CHOICES.forEach { speed ->
+                            DropdownMenuItem(
+                                text = { Text("${speed}×") },
+                                trailingIcon = {
+                                    if (speed == playbackSpeed) {
+                                        Icon(Icons.Default.Check, contentDescription = null)
+                                    }
+                                },
+                                onClick = {
+                                    onPlaybackSpeedChanged(speed)
+                                    showPlaybackSpeeds = false
+                                    onDismissRequest()
+                                },
+                            )
+                        }
+                    }
+                }
+            }
             if (actions.canToggleReposts) {
                 MomentActionRow(
                     icon = Icons.Default.Repeat,
