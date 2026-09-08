@@ -123,7 +123,7 @@ body.feed-media-overlay-open {
 }
 
 .sidebar-header {
-    padding: 1.25rem;
+    padding: 20px 18px;
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -142,8 +142,9 @@ body.feed-media-overlay-open {
 }
 
 .logo-icon {
-    width: 42px;
-    height: 42px;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
     display: block;
 }
 
@@ -169,21 +170,23 @@ body.feed-media-overlay-open {
 .nav-item {
     display: flex;
     align-items: center;
-    gap: 0.85rem;
-    padding: 0.55rem 0.75rem;
+    gap: 10px;
+    padding: 9px 12px;
     color: var(--text-secondary);
     text-decoration: none;
     border-radius: var(--border-radius-sm);
-    transition: all var(--transition-fast);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
     margin-bottom: 0.15rem;
     font-size: 0.875rem;
+    font-weight: 500;
 }
 
 .nav-icon {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     flex-shrink: 0;
     opacity: 0.85;
+    transform: translateY(-1px);
 }
 
 .nav-item.active .nav-icon {
@@ -1060,22 +1063,12 @@ html.sidebar-resizing .sidebar-resize-handle {
         user-select: none !important;
     }
 
-    html.sidebar-resizing .sidebar,
-    html.sidebar-resizing .main {
-        transition: none;
-    }
-
     html.sidebar-collapsed {
         --sidebar-width: var(--sidebar-compact-width);
     }
 
     html.sidebar-collapsed .sidebar {
         width: var(--sidebar-compact-width);
-    }
-
-    html.sidebar-collapsed .sidebar-header {
-        padding-inline: 0.75rem;
-        justify-content: center;
     }
 
     html.sidebar-collapsed .sidebar-header .logo > span {
@@ -1087,34 +1080,33 @@ html.sidebar-resizing .sidebar-resize-handle {
         gap: 0;
     }
 
-    html.sidebar-collapsed .sidebar-header .logo-icon {
-        width: 36px;
-        height: 36px;
-    }
-
     html.sidebar-collapsed .nav {
-        padding: 0.35rem 0.5rem 0.6rem;
+        padding: 12px 8px;
     }
 
     html.sidebar-collapsed .nav-item {
-        justify-content: center;
-        gap: 0;
-        min-height: 42px;
-        padding: 0.55rem;
+        width: 56px;
+        flex-direction: column;
+        justify-content: flex-start;
+        gap: 5px;
+        min-height: 64px;
+        padding: 9px 0;
         margin-bottom: 0.25rem;
+        font-size: 10px;
+        line-height: 1.2;
+        text-align: center;
     }
 
-    html.sidebar-collapsed .nav-item > span,
+    html.sidebar-collapsed .nav-item > span {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+
     html.sidebar-collapsed .sidebar-section-block,
     html.sidebar-collapsed .filter-row,
     html.sidebar-collapsed .sidebar-scroll,
     html.sidebar-collapsed .sidebar-footer {
         display: none;
-    }
-
-    html.sidebar-collapsed .nav-icon {
-        width: 22px;
-        height: 22px;
     }
 
     html.sidebar-collapsed .sidebar-compact-actions {
@@ -2444,30 +2436,30 @@ select.input:focus {
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.75rem 0.85rem;
-    border-bottom: 1px solid var(--border-color);
+    min-height: 44px;
+    padding: 7px 16px;
 }
 .moment-actions-speed-label {
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
-    gap: 0.55rem;
+    gap: 10px;
     color: var(--text-primary);
-    font-size: 0.88rem;
-    font-weight: 750;
+    font: inherit;
+    font-weight: 500;
 }
 .moment-actions-speed-options {
     display: flex;
     align-items: center;
     gap: 0.2rem;
     min-width: 0;
-    padding: 0.18rem;
+    padding: 2px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.07);
 }
 .moment-actions-rate {
     min-width: 2.4rem;
-    height: 1.8rem;
+    height: 26px;
     padding: 0 0.42rem;
     border: 0;
     border-radius: 999px;
@@ -2490,40 +2482,42 @@ select.input:focus {
 .moment-actions-sheet-item {
     display: flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: 10px;
     width: 100%;
     border: 0;
-    border-bottom: 1px solid var(--border-color);
-    padding: 15px 18px;
+    min-height: 44px;
+    padding: 9px 16px;
     background: transparent;
     color: var(--text-primary);
     cursor: pointer;
     font: inherit;
+    font-weight: 500;
     text-align: left;
 }
 .moment-actions-item-icon {
-    width: 26px;
+    width: 22px;
     height: 26px;
-    flex: 0 0 26px;
+    flex: 0 0 22px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 .moment-actions-item-icon svg {
     display: block;
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
+    /* Align the artwork with the label's visible ink, above its line-box center. */
+    transform: translateY(-2px);
 }
 .moment-actions-sheet-item > span:last-child,
 .moment-actions-speed-label > span:last-child {
-    display: inline-flex;
-    align-items: center;
-    min-height: 24px;
-    line-height: 1.25;
+    line-height: 1.5;
 }
-.moment-actions-sheet-item:last-child { border-bottom: 0; }
 .moment-actions-sheet-item:hover { background: rgba(var(--accent-primary-rgb), 0.12); }
-.moment-actions-sheet-item.danger { color: var(--status-error); }
+.moment-actions-sheet-item.danger {
+    color: var(--status-error);
+    border-top: 1px solid var(--border-color);
+}
 .bookmark-sheet.expanded {
     max-height: min(88vh, 900px);
 }
@@ -7694,7 +7688,7 @@ body.shorts-mode .sidebar {
 }
 
 .shorts-volume-control:hover,
-.shorts-volume-control:focus-within {
+.shorts-volume-control:has(:focus-visible) {
     width: 10.8rem;
     margin-right: calc(clamp(32px, 8cqw, 2.8rem) - 10.8rem);
     background: rgba(255, 255, 255, 0.13);
@@ -7716,7 +7710,7 @@ body.shorts-mode .sidebar {
 }
 
 .shorts-volume-control:hover .shorts-volume-slider,
-.shorts-volume-control:focus-within .shorts-volume-slider {
+.shorts-volume-control:has(:focus-visible) .shorts-volume-slider {
     width: 7rem;
     opacity: 1;
 }

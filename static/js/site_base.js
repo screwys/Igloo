@@ -750,6 +750,7 @@
   const sidebarCompactLogs = q('[data-sidebar-compact-logs]');
   const quickDownloadModal = q('#quick-download-modal');
   const desktopSidebar = window.matchMedia('(min-width: 769px)');
+  const narrowDesktopSidebar = window.matchMedia('(min-width: 769px) and (max-width: 1200px)');
   const SIDEBAR_COMPACT_WIDTH = 72;
   const SIDEBAR_FULL_MIN_WIDTH = 200;
   const SIDEBAR_MAX_WIDTH = 420;
@@ -869,6 +870,7 @@
     fullSidebarWidth = storedSidebarFullWidth();
     var initialSidebarWidth = sidebar.getBoundingClientRect().width;
     setSidebarWidth(initialSidebarWidth, false, false);
+    if (narrowDesktopSidebar.matches) setSidebarWidth(SIDEBAR_COMPACT_WIDTH, false, false);
 
     sidebarResizeHandle.addEventListener('pointerdown', function (event) {
       if (!desktopSidebar.matches || event.button !== 0) return;
@@ -889,8 +891,6 @@
       if (event.pointerId !== resizingPointerId) return;
       setSidebarWidth(event.type === 'pointerup' ? event.clientX : currentSidebarWidth, true);
       sidebarResizeHandle.style.removeProperty('transform');
-      // Apply the committed width before restoring transitions so it lands on the preview edge.
-      sidebar.getBoundingClientRect();
       resizingPointerId = null;
       doc.documentElement.classList.remove('sidebar-resizing');
       if (sidebarResizeHandle.hasPointerCapture(event.pointerId)) {
@@ -970,11 +970,19 @@
   });
   desktopSidebar.addEventListener('change', function () {
     body.classList.remove('sidebar-open');
-    if (desktopSidebar.matches && currentSidebarWidth > sidebarMaxWidth()) {
-      setSidebarWidth(sidebarMaxWidth(), true, false);
-    }
+    syncResponsiveSidebarWidth();
     syncSidebarControls();
   });
+  function syncResponsiveSidebarWidth() {
+    if (!desktopSidebar.matches) return;
+    var width = fullSidebarWidth;
+    try {
+      var stored = window.localStorage.getItem(sidebarStorageKey);
+      if (stored !== null && Number.isFinite(Number(stored))) width = Number(stored);
+    } catch (_) {}
+    setSidebarWidth(narrowDesktopSidebar.matches ? SIDEBAR_COMPACT_WIDTH : width, false, false);
+  }
+  narrowDesktopSidebar.addEventListener('change', syncResponsiveSidebarWidth);
   window.addEventListener('resize', function () {
     if (!desktopSidebar.matches || currentSidebarWidth <= sidebarMaxWidth()) return;
     setSidebarWidth(sidebarMaxWidth(), true, false);

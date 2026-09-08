@@ -346,7 +346,7 @@ function openMomentActions(entry, trigger) {
   speedRow.className = 'moment-actions-speed'
   var speedLabel = document.createElement('span')
   speedLabel.className = 'moment-actions-speed-label'
-  safeSetMarkup(speedLabel, '<span class="moment-actions-item-icon">' + menuIconSvg('speed') + '</span><span>' + escapeHtml(t('player_playback_speed', 'Playback speed')) + '</span>')
+  safeSetMarkup(speedLabel, '<span class="moment-actions-item-icon">' + menuIconSvg('speed') + '</span><span>' + escapeHtml(t('player_speed', 'Speed')) + '</span>')
   speedRow.appendChild(speedLabel)
   var speedOptions = document.createElement('div')
   speedOptions.className = 'moment-actions-speed-options'

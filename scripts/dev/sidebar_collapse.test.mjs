@@ -72,7 +72,6 @@ test("dragging previews the resize without laying out the page on every pointer 
   assert.doesNotMatch(pointerMove[0], /setSidebarWidth\(/);
   assert.match(siteBase, /setSidebarWidth\(event\.type === 'pointerup' \? event\.clientX : currentSidebarWidth, true\);/);
   assert.match(siteBase, /style\.removeProperty\('transform'\)/);
-  assert.match(siteBase, /style\.removeProperty\('transform'\);[\s\S]*?sidebar\.getBoundingClientRect\(\);\s*resizingPointerId = null;/);
   assert.match(css, /html\.sidebar-resizing \.sidebar-resize-handle\s*\{[^}]*will-change:\s*transform;/);
 });
 

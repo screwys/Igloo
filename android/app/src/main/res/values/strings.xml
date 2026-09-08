@@ -522,6 +522,7 @@
     <string name="player_seek_forward_10_seconds">Seek forward 10 seconds</string>
     <string name="player_seek_video">Seek video</string>
     <string name="player_show_subtitles">Show subtitles</string>
+    <string name="player_speed">Speed</string>
     <string name="player_speed_set_to">Speed %1$s</string>
     <string name="player_subscribe_failed">Failed to subscribe</string>
     <string name="player_subscribed_to_channel">Subscribed to channel</string>
