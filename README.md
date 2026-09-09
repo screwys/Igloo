@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <img alt="License: GPLv3" src="https://img.shields.io/badge/license-GPLv3-blue">
-  <img alt="Go" src="https://img.shields.io/badge/Go-server-00ADD8?logo=go&logoColor=white">
-  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Android-7F52FF?logo=kotlin&logoColor=white">
+  <img alt="License: GPLv3" src="https://img.shields.io/badge/license-GPLv3-blue?style=for-the-badge">
+  <img alt="Go" src="https://img.shields.io/badge/Go-server-00ADD8?style=for-the-badge&logo=go&logoColor=white">
+  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-Android-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white">
 </p>
 
 ![Igloo web app](static/screenshots/igloo.png)
@@ -109,7 +109,13 @@ The basic installation runs through the Igloo tray icon. Its menu opens Igloo an
 
 ### Android 
 
-Android app is not a standalone package, it is a client for the Igloo server. Set up [Obtanium](https://github.com/ImranR98/Obtainium) to follow the [GitHub Releases](https://github.com/screwys/Igloo/releases) for automatic updates or download the APK manually.
+Android app is not a standalone package, it is a client for the Igloo server. Set up [Obtainium](https://github.com/ImranR98/Obtainium) to follow the [GitHub Releases](https://github.com/screwys/Igloo/releases) for automatic updates or download the APK manually.
+
+<p align="center">
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.screwy.igloo%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fscrewys%2FIgloo%22%2C%22author%22%3A%22screwys%22%2C%22name%22%3A%22Igloo%22%2C%22overrideSource%22%3A%22GitHub%22%7D"><img alt="Add to Obtainium" src="https://img.shields.io/badge/Add_to_Obtainium-6750A3?style=for-the-badge"></a>
+  &nbsp;&nbsp;
+  <a href="https://github.com/screwys/Igloo/releases/latest"><img alt="Download APK" src="https://img.shields.io/badge/Download_APK-3DDC84?style=for-the-badge&logo=android"></a>
+</p>
 
 
 ### Container
