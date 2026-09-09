@@ -8,7 +8,9 @@ $config = Join-Path $env:ProgramData 'Igloo\config'
 if ((Test-Path $settingsKey) -or (Test-Path $config) -or (Get-Service Igloo -ErrorAction SilentlyContinue)) {
     throw 'Installer tests require a Windows runner without an existing Igloo installation.'
 }
-$root = Join-Path $env:TEMP ('igloo-installer-test-' + [Guid]::NewGuid())
+# LocalService must be able to resolve ancestors of its data directory.
+$root = Join-Path $env:ProgramData ('igloo-installer-test-' + [Guid]::NewGuid())
+$privateRoot = Join-Path $env:TEMP ('igloo-installer-denied-' + [Guid]::NewGuid())
 $app = Join-Path $root 'application'
 $data = Join-Path $root 'data'
 $media = Join-Path $data 'media'
@@ -40,6 +42,16 @@ function Run-Uninstall([int] $Mode) {
 }
 
 try {
+    $process = Start-Process $installerPath -ArgumentList (
+        "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=`"$root\setup.log`" /DIR=`"$app`" " +
+        "/DATADIR=`"$privateRoot\data`" /MEDIADIR=`"$privateRoot\media`" /TASKS=runsystem"
+    ) -Wait -PassThru
+    Assert ($process.ExitCode -eq 1) 'Service configuration failure was not reported by setup.'
+    $startupError = Get-WinEvent -FilterHashtable @{LogName = 'Application'; ProviderName = 'Igloo'} -MaxEvents 1
+    Assert ($startupError.Message -match 'Access is denied') 'The denied-access fixture failed for an unexpected reason.'
+    Run-Uninstall 2
+    Remove-Item $settingsKey -Recurse -Force
+
     Run-Setup 'runmanual,desktopicon'
     Assert ((Get-ItemProperty $settingsKey).RunMode -eq 2) 'Manual mode was not selected.'
     Assert ((Get-ItemProperty $settingsKey).AutomaticUpdates -eq 0) 'Unchecked updates were enabled.'
@@ -78,5 +90,5 @@ try {
 } finally {
     if (Test-Path "$app\unins000.exe") { Run-Uninstall 2 }
     Remove-Item $settingsKey, 'HKCU:\Software\Igloo' -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $root, $privateRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
