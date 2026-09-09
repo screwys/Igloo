@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/eventlog"
 )
 
 const windowsServiceName = "Igloo"
@@ -36,11 +37,7 @@ func (windowsServiceHandler) Execute(_ []string, requests <-chan svc.ChangeReque
 	case <-ready:
 		statuses <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
 	case err := <-done:
-		statuses <- svc.Status{State: svc.Stopped}
-		if err == nil {
-			return false, 0
-		}
-		return false, 1
+		return serviceResult(err)
 	}
 
 	for {
@@ -52,16 +49,22 @@ func (windowsServiceHandler) Execute(_ []string, requests <-chan svc.ChangeReque
 			case svc.Stop, svc.Shutdown:
 				statuses <- svc.Status{State: svc.StopPending}
 				close(stop)
-				if err := <-done; err != nil {
-					return false, 1
-				}
-				return false, 0
+				return serviceResult(<-done)
 			}
 		case err := <-done:
-			if err != nil {
-				return false, 1
-			}
-			return false, 0
+			return serviceResult(err)
 		}
 	}
+}
+
+func serviceResult(err error) (bool, uint32) {
+	if err == nil {
+		return false, 0
+	}
+	if events, openErr := eventlog.Open(windowsServiceName); openErr == nil {
+		_ = events.Error(1, err.Error())
+		_ = events.Close()
+	}
+	// svc.Run reports Stopped with this code; sending Stopped earlier loses it.
+	return true, 1
 }

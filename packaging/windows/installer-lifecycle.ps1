@@ -114,6 +114,8 @@ try {
         Get-WinEvent -FilterHashtable @{LogName = 'System'; StartTime = (Get-Date).AddMinutes(-2)} -ErrorAction SilentlyContinue |
             Where-Object { $_.ProviderName -eq 'Service Control Manager' -and $_.Message -match '\bIgloo\b' } |
             Format-List TimeCreated, Id, Message
+        Get-WinEvent -FilterHashtable @{LogName = 'Application'; ProviderName = 'Igloo'; StartTime = (Get-Date).AddMinutes(-2)} -ErrorAction SilentlyContinue |
+            Format-List TimeCreated, Id, Message
         $settings = Get-ItemProperty 'HKLM:\Software\Igloo' -ErrorAction SilentlyContinue
         if ($settings.DataDirectory) {
             Get-Content (Join-Path $settings.DataDirectory 'logs\server\server.log') -Tail 80 -ErrorAction SilentlyContinue

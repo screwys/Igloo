@@ -53,6 +53,8 @@ Name: "{group}\Igloo"; Filename: "{app}\app\current\igloo-launch.exe"
 Name: "{commondesktop}\Igloo"; Filename: "{app}\app\current\igloo-launch.exe"; Tasks: desktopicon
 
 [Registry]
+Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Services\EventLog\Application\Igloo"; ValueType: expandsz; ValueName: "EventMessageFile"; ValueData: "{sys}\EventCreate.exe"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Services\EventLog\Application\Igloo"; ValueType: dword; ValueName: "TypesSupported"; ValueData: "7"
 Root: HKLM; Subkey: "Software\Igloo"; ValueType: string; ValueName: "InstallDirectory"; ValueData: "{app}"
 Root: HKLM; Subkey: "Software\Igloo"; ValueType: string; ValueName: "DataDirectory"; ValueData: "{code:DataDirectory}"
 Root: HKLM; Subkey: "Software\Igloo"; ValueType: string; ValueName: "MediaDirectory"; ValueData: "{code:MediaDirectory}"
