@@ -105,6 +105,8 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
 
 Download and run `IglooSetup-x64.exe` from the [GitHub Releases](https://github.com/screwys/Igloo/releases). This package comes with automatic updates with `nightly` and `stable` channels. Dependency updates can be set to follow the package, or update periodically automatically. The latter ensures stability in the case there is no active development, or a package gets a quick fix.  
 
+The basic installation runs through the Igloo tray icon. Its menu opens Igloo and logs, starts or stops the server, and lets you turn **Start at login** on or off. Choose **Install as a service** during setup to run the server at Windows startup, before anyone logs in. Exiting the tray stops a basic installation; a service keeps running. Server and runtime updates are automatic when enabled; tray updates come with the installer.
+
 ### Android 
 
 Android app is not a standalone package, it is a client for the Igloo server. Set up [Obtanium](https://github.com/ImranR98/Obtainium) to follow the [GitHub Releases](https://github.com/screwys/Igloo/releases) for automatic updates or download the APK manually.

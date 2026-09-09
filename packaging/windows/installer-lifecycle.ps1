@@ -28,7 +28,7 @@ function Stop-Igloo {
     $roots = @($InstallDirectory)
     $settings = Get-ItemProperty 'HKLM:\Software\Igloo' -ErrorAction SilentlyContinue
     if ($settings.InstallDirectory) { $roots += $settings.InstallDirectory }
-    Get-CimInstance Win32_Process -Filter "Name = 'igloo.exe' OR Name = 'igloo-user.exe' OR Name = 'igloo-update.exe'" |
+    Get-CimInstance Win32_Process -Filter "Name = 'igloo.exe' OR Name = 'igloo-user.exe' OR Name = 'igloo-update.exe' OR Name = 'igloo-tray.exe'" |
         Where-Object {
             $path = $_.ExecutablePath
             $path -and ($roots | Where-Object { $path.StartsWith($_.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase) })
@@ -85,7 +85,7 @@ try {
             if ($result.ReturnValue -ne 0) { throw "Service configuration failed: $($result.ReturnValue)" }
             $createdService = -not $service
             Invoke-CheckedProcess "$env:SystemRoot\System32\sc.exe" 'failure Igloo reset= 86400 actions= restart/10000/restart/10000/restart/10000'
-            Invoke-CheckedProcess "$env:SystemRoot\System32\sc.exe" 'sdset Igloo D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;LCRPWP;;;LS)(A;;LCRP;;;BU)'
+            Invoke-CheckedProcess "$env:SystemRoot\System32\sc.exe" 'sdset Igloo D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;LCRPWP;;;LS)(A;;LCRPWP;;;BU)'
         } elseif ($service) {
             $result = Invoke-CimMethod -InputObject $service -MethodName Delete
             if ($result.ReturnValue -ne 0) { throw "Service removal failed: $($result.ReturnValue)" }

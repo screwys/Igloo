@@ -21,7 +21,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 SetupIconFile=InstallerIcon.ico
-UninstallDisplayIcon={app}\app\current\igloo-launch.exe
+UninstallDisplayIcon={app}\igloo-tray.exe
 OutputBaseFilename=IglooSetup-x64
 Compression=lzma2
 SolidCompression=yes
@@ -30,9 +30,7 @@ RestartApplications=no
 SetupLogging=yes
 
 [Tasks]
-Name: "runsystem"; Description: "System service (starts with Windows)"; GroupDescription: "Run Igloo:"; Flags: exclusive
-Name: "runuser"; Description: "At user login"; GroupDescription: "Run Igloo:"; Flags: exclusive unchecked
-Name: "runmanual"; Description: "Only when I open Igloo"; GroupDescription: "Run Igloo:"; Flags: exclusive unchecked
+Name: "runsystem"; Description: "Install as a service (starts with Windows)"; GroupDescription: "Run Igloo:"; Flags: unchecked
 Name: "updates"; Description: "Install updates automatically"; GroupDescription: "Additional tasks:"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional tasks:"
 
@@ -43,14 +41,15 @@ Name: "{code:MediaDirectory}"; Permissions: users-modify service-modify; Flags: 
 Name: "{code:ConfigDirectory}"; Permissions: users-modify service-modify; Flags: uninsneveruninstall
 
 [Files]
+Source: "{#PayloadDir}\igloo-tray.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\app\current\*"; DestDir: "{app}\app\current"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\runtime\current\*"; DestDir: "{app}\runtime\current"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "installer-lifecycle.ps1"; DestDir: "{app}\setup"; Flags: ignoreversion
 Source: "installer-lifecycle.ps1"; Flags: dontcopy
 
 [Icons]
-Name: "{group}\Igloo"; Filename: "{app}\app\current\igloo-launch.exe"
-Name: "{commondesktop}\Igloo"; Filename: "{app}\app\current\igloo-launch.exe"; Tasks: desktopicon
+Name: "{group}\Igloo"; Filename: "{app}\igloo-tray.exe"
+Name: "{commondesktop}\Igloo"; Filename: "{app}\igloo-tray.exe"; Tasks: desktopicon
 
 [Registry]
 Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Services\EventLog\Application\Igloo"; ValueType: expandsz; ValueName: "EventMessageFile"; ValueData: "{sys}\EventCreate.exe"; Flags: uninsdeletekey
@@ -61,12 +60,12 @@ Root: HKLM; Subkey: "Software\Igloo"; ValueType: string; ValueName: "MediaDirect
 Root: HKLM; Subkey: "Software\Igloo"; ValueType: string; ValueName: "ConfigDirectory"; ValueData: "{code:ConfigDirectory}"
 Root: HKLM; Subkey: "Software\Igloo"; ValueType: dword; ValueName: "AutomaticUpdates"; ValueData: "{code:AutomaticUpdates}"
 Root: HKCU; Subkey: "Software\Igloo"; ValueType: dword; ValueName: "DesktopShortcut"; ValueData: "{code:DesktopShortcut}"
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Igloo"; ValueData: """{app}\app\current\igloo-user.exe"""; Tasks: runuser; Flags: uninsdeletevalue
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "Igloo"; Tasks: not runuser; Flags: deletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Igloo"; ValueData: """{app}\igloo-tray.exe"" --background"; Check: StartAtLogin; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "Igloo"; Check: not StartAtLogin; Flags: deletevalue
 Root: HKLM; Subkey: "Software\Igloo"; ValueType: dword; ValueName: "RunMode"; ValueData: "{code:RunMode}"
 
 [Run]
-Filename: "{app}\app\current\igloo-launch.exe"; Description: "Open Igloo"; Flags: nowait postinstall skipifsilent runasoriginaluser; Check: ConfigurationSucceeded
+Filename: "{app}\igloo-tray.exe"; Description: "Open Igloo"; Flags: nowait postinstall skipifsilent runasoriginaluser; Check: ConfigurationSucceeded
 
 [Code]
 var
@@ -74,6 +73,12 @@ var
   SavedConfigDirectory: String;
   UninstallMode: Integer;
   ConfigurationError: String;
+  SavedStartAtLogin: Boolean;
+
+function StartAtLogin: Boolean;
+begin
+  Result := SavedStartAtLogin;
+end;
 
 function ConfigurationSucceeded: Boolean;
 begin
@@ -108,9 +113,8 @@ end;
 
 function RunMode(Param: String): String;
 begin
-  Result := '0';
-  if WizardIsTaskSelected('runuser') then Result := '1';
-  if WizardIsTaskSelected('runmanual') then Result := '2';
+  Result := '2';
+  if WizardIsTaskSelected('runsystem') then Result := '0';
 end;
 
 function AutomaticUpdates(Param: String): String;
@@ -131,7 +135,10 @@ var
   I: Integer;
   TaskOverride: Boolean;
   MergeTasks: String;
+  StartupCommand: String;
 begin
+  SavedStartAtLogin := not RegKeyExists(HKLM64, 'Software\Igloo') or
+    RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'Igloo', StartupCommand);
   StoragePage := CreateInputDirPage(wpSelectDir, 'Storage folders',
     'Where should Igloo store your data and media?',
     'Use a fast disk for the data folder. Media can be stored on a slower disk.',
@@ -143,7 +150,7 @@ begin
   StoragePage.Values[1] := ExpandConstant('{param:MEDIADIR|' +
     InstallSetting('MediaDirectory', ExpandConstant('{commonappdata}\Igloo\media')) + '}');
   SavedConfigDirectory := InstallSetting('ConfigDirectory', ExpandConstant('{commonappdata}\Igloo\config'));
-  { Inno remembers its tasks itself. Import saved choices when it has no previous installation. }
+  { Import existing service and startup choices, including installations made by WiX. }
   TaskOverride := False;
   for I := 1 to ParamCount do
   begin
@@ -151,12 +158,11 @@ begin
     if Pos('/MERGETASKS=', Uppercase(ParamStr(I))) = 1 then
       MergeTasks := RemoveQuotes(Copy(ParamStr(I), Length('/MERGETASKS=') + 1, Length(ParamStr(I))));
   end;
-  if not TaskOverride and not RegKeyExists(HKLM64, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{8D22BFFA-EFA6-4D43-964F-F8826C7AEE71}_is1') then
+  if not TaskOverride then
   begin
     if RegQueryDWordValue(HKLM64, 'Software\Igloo', 'RunMode', Mode) then
     begin
-      if Mode = 1 then WizardSelectTasks('runuser');
-      if Mode = 2 then WizardSelectTasks('runmanual');
+      if Mode = 0 then WizardSelectTasks('runsystem') else WizardSelectTasks('!runsystem');
       if not RegQueryDWordValue(HKCU, 'Software\Igloo', 'DesktopShortcut', Desktop) or (Desktop = 0) then
         WizardSelectTasks('!desktopicon');
     end;

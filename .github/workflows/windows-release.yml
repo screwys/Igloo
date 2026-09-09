@@ -143,7 +143,7 @@ jobs:
 
       - name: Verify installer lifecycle
         shell: pwsh
-        run: packaging/windows/test-installer.ps1 -Installer release-artifacts/IglooSetup-x64.exe
+        run: powershell.exe -NoProfile -File packaging/windows/test-installer.ps1 -Installer release-artifacts/IglooSetup-x64.exe
 
       - name: Generate artifact attestations
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4

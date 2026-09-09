@@ -3,8 +3,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/eventlog"
 )
@@ -17,9 +19,38 @@ func runEntrypoint() error {
 		return fmt.Errorf("detect Windows service session: %w", err)
 	}
 	if !isService {
-		return runServer(nil, nil, false)
+		return runUserServer()
 	}
 	return svc.Run(windowsServiceName, windowsServiceHandler{})
+}
+
+func runUserServer() error {
+	name, err := windows.UTF16PtrFromString(`Local\Igloo.Server.Stop`)
+	if err != nil {
+		return err
+	}
+	event, err := windows.CreateEvent(nil, 1, 0, name)
+	if event != 0 {
+		defer func() { _ = windows.CloseHandle(event) }()
+	}
+	if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("create server stop event: %w", err)
+	}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if result, waitErr := windows.WaitForSingleObject(event, windows.INFINITE); waitErr == nil && result == windows.WAIT_OBJECT_0 {
+			close(stop)
+		}
+	}()
+	err = runServer(stop, nil, false)
+	_ = windows.SetEvent(event)
+	<-done
+	return err
 }
 
 type windowsServiceHandler struct{}

@@ -28,14 +28,27 @@ func main() {
 	target := healthyURL()
 	if target == "" {
 		if err := startService(); err != nil {
-			_ = startUserServer()
+			if errors.Is(err, windows.ERROR_SERVICE_DOES_NOT_EXIST) {
+				err = startUserServer()
+			}
+			if err != nil {
+				showError(err.Error())
+				return
+			}
 		}
 		target = waitForHealth(30 * time.Second)
 	}
 	if target == "" {
-		target = localHTTPURL
+		showError("Igloo did not become ready. Open the server logs from the tray for details.")
+		return
 	}
 	_ = openBrowser(target)
+}
+
+func showError(message string) {
+	text, _ := syscall.UTF16PtrFromString(message)
+	title, _ := syscall.UTF16PtrFromString("Igloo")
+	_, _ = windows.MessageBox(0, text, title, windows.MB_OK|windows.MB_ICONERROR)
 }
 
 func startService() error {

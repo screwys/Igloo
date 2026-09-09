@@ -106,7 +106,7 @@ build-windows-installer version app runtime output:
 
 # Exercise installation, service setup, and uninstall on a disposable Windows host.
 test-windows-installer installer:
-    pwsh -NoProfile -File packaging/windows/test-installer.ps1 -Installer {{ quote(installer) }}
+    powershell.exe -NoProfile -File packaging/windows/test-installer.ps1 -Installer {{ quote(installer) }}
 
 # Create, publish, and dispatch a signed release after an explicit request with a user-written summary.
 release bump summary:
