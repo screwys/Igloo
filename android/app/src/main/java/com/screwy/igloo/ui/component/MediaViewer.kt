@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -50,6 +51,7 @@ import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
 import com.screwy.igloo.player.buildIglooPlayer
+import com.screwy.igloo.player.PlayerOverlay
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlin.math.abs
 import org.koin.compose.koinInject
@@ -145,6 +147,7 @@ fun MediaViewer(
                         active = active,
                         muted = false,
                         loop = true,
+                        onDismiss = onDismiss,
                     )
                 is MediaItem.Gif ->
                     MediaVideoPage(
@@ -241,6 +244,7 @@ private fun MediaVideoPage(
     active: Boolean,
     muted: Boolean,
     loop: Boolean,
+    onDismiss: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val authTokens: AuthTokenProvider = koinInject()
@@ -270,6 +274,7 @@ private fun MediaVideoPage(
         }
     var firstFrame by remember(player) { mutableStateOf(false) }
     var isPlaying by remember(player) { mutableStateOf(player?.isPlaying == true) }
+    var controlsVisible by remember(player, active) { mutableStateOf(true) }
 
     DisposableEffect(player) {
         val current = player ?: return@DisposableEffect onDispose {}
@@ -301,10 +306,11 @@ private fun MediaVideoPage(
     val playLabel = stringResource(R.string.action_play)
     Box(
         modifier =
-            Modifier.fillMaxSize().background(Color.Black).pointerInput(player) {
+            Modifier.fillMaxSize().background(Color.Black).pointerInput(player, onDismiss) {
                 detectTapGestures {
                     val current = player ?: return@detectTapGestures
-                    current.playWhenReady = !current.isPlaying
+                    if (onDismiss != null) controlsVisible = !controlsVisible
+                    else current.playWhenReady = !current.isPlaying
                 }
             },
         contentAlignment = Alignment.Center,
@@ -315,7 +321,7 @@ private fun MediaVideoPage(
         if (!firstFrame || player == null) {
             Poster(posterUri = posterUri, dimOffline = remoteOffline)
         }
-        if (player == null || !isPlaying) {
+        if (player == null || (onDismiss == null && !isPlaying)) {
             Icon(
                 imageVector = Icons.Filled.PlayArrow,
                 contentDescription = playLabel,
@@ -324,6 +330,24 @@ private fun MediaVideoPage(
             )
         }
         if (remoteOffline) DownloadPendingBadge()
+        if (player != null && onDismiss != null && active) {
+            PlayerOverlay(
+                player = player,
+                title = "",
+                onBack = onDismiss,
+                onPreviousVideo = null,
+                onNextVideo = null,
+                segments = emptyList(),
+                showSubtitles = false,
+                onToggleSubtitles = null,
+                isFullscreen = true,
+                onToggleFullscreen = onDismiss,
+                onEnterPictureInPicture = null,
+                controlsVisible = controlsVisible,
+                onControlsVisibleChange = { controlsVisible = it },
+                modifier = Modifier.navigationBarsPadding(),
+            )
+        }
     }
 }
 

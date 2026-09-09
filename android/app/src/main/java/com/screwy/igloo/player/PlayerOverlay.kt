@@ -73,7 +73,7 @@ fun PlayerOverlay(
     onNextVideo: (() -> Unit)?,
     segments: List<SponsorBlockSegmentEntity>,
     showSubtitles: Boolean,
-    onToggleSubtitles: () -> Unit,
+    onToggleSubtitles: (() -> Unit)?,
     isFullscreen: Boolean,
     onToggleFullscreen: () -> Unit,
     onEnterPictureInPicture: (() -> Unit)?,
@@ -259,7 +259,7 @@ fun PlayerOverlay(
                         color = Color.White.copy(alpha = 0.7f),
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    IconButton(
+                    if (onToggleSubtitles != null) IconButton(
                         onClick = {
                             onToggleSubtitles()
                             keepVisible()

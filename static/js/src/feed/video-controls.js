@@ -13,6 +13,7 @@ const videoControlIcons = {
   mini: materialIconMarkup('PictureInPictureAlt'),
   cinema: materialIconMarkup('VerticalSplit'),
   fullscreen: materialIconMarkup('Fullscreen'),
+  fullscreenExit: materialIconMarkup('FullscreenExit'),
   autoplay: materialIconMarkup('PlayCircleOutline'),
   autoplayActive: materialIconMarkup('PlayCircle')
 }
@@ -167,14 +168,16 @@ export function exitFeedVideoFullscreen(video) {
   }
 }
 
-export function toggleFeedVideoFullscreen(video) {
+export function toggleFeedVideoFullscreen(video, surface) {
   if (!(video instanceof HTMLVideoElement)) return false
   const ownerDocument = video.ownerDocument || document
   if (fullscreenElement(ownerDocument)) return exitFeedVideoFullscreen(video)
-  const request = video.requestFullscreen || video.webkitRequestFullscreen
+  const target = surface || video.parentElement
+  if (!target) return false
+  const request = target.requestFullscreen || target.webkitRequestFullscreen
   if (!request) return false
   try {
-    const result = request.call(video)
+    const result = request.call(target)
     if (result && typeof result.catch === 'function') result.catch(function () {})
     return true
   } catch (_) {
@@ -385,6 +388,10 @@ export function bindFeedVideoControls(wrap, video, options) {
     mini.addEventListener('click', function (event) {
       event.preventDefault()
       event.stopPropagation()
+      if (typeof opts.onMini === 'function') {
+        opts.onMini()
+        return
+      }
       let manager = null
       try { manager = window.top && window.top.IglooMiniPlayer } catch (_) {}
       if (!manager || typeof manager.toggleSurface !== 'function') return
@@ -397,9 +404,16 @@ export function bindFeedVideoControls(wrap, video, options) {
     })
   }
   if (cinema) {
-    cinema.addEventListener('click', function (event) {
+    cinema.addEventListener('click', async function (event) {
       event.preventDefault()
       event.stopPropagation()
+      const ownerDocument = video.ownerDocument || document
+      const active = fullscreenElement(ownerDocument)
+      if (active && active.contains(video)) {
+        const exit = ownerDocument.exitFullscreen || ownerDocument.webkitExitFullscreen
+        if (!exit) return
+        try { await exit.call(ownerDocument) } catch (_) { return }
+      }
       if (options && typeof options.onCinema === 'function') {
         options.onCinema()
         return
@@ -444,8 +458,10 @@ export function bindFeedVideoControls(wrap, video, options) {
   function syncFullscreen() {
     if (!fullscreen) return
     const ownerDocument = wrap.ownerDocument || document
-    const active = fullscreenElement(ownerDocument) === video
+    const element = fullscreenElement(ownerDocument)
+    const active = !!element && (element === video || element.contains(video))
     fullscreen.setAttribute('aria-label', active ? t('action_exit_fullscreen', 'Exit fullscreen') : t('action_enter_fullscreen', 'Enter fullscreen'))
+    setSvgContent(fullscreen, videoControlIcons[active ? 'fullscreenExit' : 'fullscreen'])
   }
   if (fullscreen) {
     fullscreen.addEventListener('click', function (event) {
@@ -455,7 +471,7 @@ export function bindFeedVideoControls(wrap, video, options) {
         opts.onFullscreen()
         return
       }
-      toggleFeedVideoFullscreen(video)
+      toggleFeedVideoFullscreen(video, wrap)
     })
     const ownerDocument = wrap.ownerDocument || document
     ownerDocument.addEventListener('fullscreenchange', syncFullscreen)

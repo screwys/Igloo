@@ -991,12 +991,11 @@ export function makeShortItem(entryData, existingEl) {
     video.volume = _state.volume
     video.playbackRate = _state.playbackRate
 
-    var miniControls = createFeedVideoControls({ mini: false, cinema: false, autoplay: true })
+    var miniControls = createFeedVideoControls({ cinema: false, autoplay: true })
     miniControls.classList.add('shorts-mini-controls')
-    wrapper.appendChild(miniControls)
+    mediaStage.appendChild(miniControls)
     refs.miniControls = miniControls
-    bindFeedVideoControls(wrapper, video, {
-      mini: false,
+    bindFeedVideoControls(mediaStage, video, {
       cinema: false,
       autoplay: true,
       volumeKey: 'shortsVolume',
@@ -1035,6 +1034,9 @@ export function makeShortItem(entryData, existingEl) {
       },
       onFullscreen: function () {
         toggleMomentFullscreen(entryObj)
+      },
+      onMini: function () {
+        toggleMomentMiniPlayer(entryObj)
       },
     })
     video.addEventListener('ended', function () {

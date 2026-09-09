@@ -86,7 +86,7 @@ class FakeElement {
 
   dispatch(name, details = {}) {
     const event = { preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...details }
-    for (const listener of this.listeners.get(name) || []) listener(event)
+    return Promise.all((this.listeners.get(name) || []).map((listener) => listener(event)))
   }
 
   querySelector(selector) {
@@ -325,8 +325,8 @@ test('feed cinema and fullscreen controls own different presentation modes', asy
   media.window.FeedMediaOverlay = {
     open(root, trigger) { opened = { root, trigger } },
   }
-  video.requestFullscreen = function () {
-    media.document.fullscreenElement = video
+  wrap.requestFullscreen = function () {
+    media.document.fullscreenElement = wrap
     media.document.dispatch('fullscreenchange')
     return Promise.resolve()
   }
@@ -348,13 +348,35 @@ test('feed cinema and fullscreen controls own different presentation modes', asy
   assert.equal(media.document.fullscreenElement, undefined)
 
   fullscreen.dispatch('click')
-  assert.equal(media.document.fullscreenElement, video)
+  assert.equal(media.document.fullscreenElement, wrap)
+  assert.ok(media.document.fullscreenElement.contains(controls))
+  controls.querySelector('[data-feed-video-play]').dispatch('click')
+  assert.equal(video.paused, false)
+  controls.querySelector('[data-rate="1.5"]').dispatch('click')
+  assert.equal(video.playbackRate, 1.5)
   assert.equal(fullscreen.getAttribute('aria-label'), 'Exit fullscreen')
   assert.equal(fullscreen.classList.contains('active'), false)
 
   video.dispatch('dblclick')
   assert.equal(media.document.fullscreenElement, null)
   assert.equal(fullscreen.getAttribute('aria-label'), 'Enter fullscreen')
+
+  fullscreen.dispatch('click')
+  opened = null
+  let finishExit
+  media.document.exitFullscreen = () => new Promise((resolve) => {
+    finishExit = () => {
+      media.document.fullscreenElement = null
+      media.document.dispatch('fullscreenchange')
+      resolve()
+    }
+  })
+  const openingCinema = cinema.dispatch('click')
+  assert.equal(opened, null)
+  finishExit()
+  await openingCinema
+  assert.equal(media.document.fullscreenElement, null)
+  assert.deepEqual(opened, { root: wrap, trigger: wrap })
 })
 
 test('video shortcuts seek, change volume, play, and mute', async () => {

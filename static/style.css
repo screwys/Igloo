@@ -7403,14 +7403,19 @@ body.shorts-open:has(.shorts-story-tray.open) .shorts-story-tray-controls {
     display: none;
 }
 
-.shorts-mini-controls {
+.shorts-video-wrapper .shorts-mini-controls {
     display: none;
 }
 
+.shorts-media-stage:fullscreen .shorts-mini-controls,
 .mini-player-media-host .shorts-video-wrapper .shorts-mini-controls {
     display: flex;
     z-index: 10;
     border-radius: 0;
+}
+
+.mini-player-media-host .shorts-video-wrapper [data-feed-video-mini] {
+    display: none;
 }
 
 .mini-player-media-host .shorts-video-wrapper video {
@@ -10816,6 +10821,31 @@ body.shorts-mode .sidebar {
     display: block;
     border-radius: 4px;
     cursor: pointer;
+}
+
+.feed-media-wrap:not(.feed-media-wrap-grid):fullscreen,
+.feed-overlay-video-wrap:fullscreen {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: #000;
+}
+
+.feed-media-wrap:not(.feed-media-wrap-grid):fullscreen .feed-media-video,
+.feed-overlay-video-wrap:fullscreen .feed-overlay-video {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    object-fit: contain;
+}
+
+:fullscreen > .feed-video-controls {
+    border-radius: 0;
 }
 .feed-overlay-repost {
     color: var(--text-muted);
