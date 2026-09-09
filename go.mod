@@ -3,6 +3,7 @@ module github.com/screwys/igloo
 go 1.26.6
 
 require (
+	github.com/Microsoft/go-winio v0.6.2
 	github.com/a-h/templ v0.3.1020
 	github.com/evanw/esbuild v0.28.0
 	github.com/gorilla/sessions v1.4.0

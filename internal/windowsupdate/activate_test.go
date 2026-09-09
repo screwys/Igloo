@@ -9,21 +9,44 @@ import (
 )
 
 type fakeLifecycle struct {
-	healthErr error
-	starts    int
-	stops     int
+	healthErr    error
+	healthCancel context.CancelFunc
+	starts       int
+	stops        int
 }
 
 func (f *fakeLifecycle) WaitForProcess(context.Context, int) error { return nil }
-func (f *fakeLifecycle) Start(context.Context, ApplyPlan) error {
+func (f *fakeLifecycle) Start(ctx context.Context, _ ApplyPlan) error {
 	f.starts++
-	return nil
+	return ctx.Err()
 }
-func (f *fakeLifecycle) Stop(context.Context, ApplyPlan) error {
+func (f *fakeLifecycle) Stop(ctx context.Context, _ ApplyPlan) error {
 	f.stops++
-	return nil
+	return ctx.Err()
 }
-func (f *fakeLifecycle) WaitHealthy(context.Context, ApplyPlan) error { return f.healthErr }
+func (f *fakeLifecycle) WaitHealthy(ctx context.Context, _ ApplyPlan) error {
+	if f.healthCancel != nil {
+		f.healthCancel()
+		return ctx.Err()
+	}
+	return f.healthErr
+}
+
+func TestExecutePlanRecoversAfterHealthContextExpires(t *testing.T) {
+	root := t.TempDir()
+	appIncoming := prepareComponent(t, root, "app", "new-app")
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	lifecycle := &fakeLifecycle{healthCancel: cancel}
+	plan := ApplyPlan{InstallRoot: root, ProcessID: 42, StagingRoot: filepath.Join(root, "updates"), AppIncoming: appIncoming}
+	if err := ExecutePlan(ctx, plan, lifecycle); err == nil {
+		t.Fatal("unhealthy update returned success")
+	}
+	assertComponent(t, root, "app", "old-app")
+	if lifecycle.starts != 2 || lifecycle.stops != 1 {
+		t.Fatalf("server was not stopped and restored: %+v", lifecycle)
+	}
+}
 
 func TestExecutePlanActivatesBothComponents(t *testing.T) {
 	root := t.TempDir()

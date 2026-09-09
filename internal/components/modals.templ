@@ -417,7 +417,7 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 					</div>
 					if p.UserRole == "admin" && p.RuntimeOS == "windows" {
 						<h4 style="margin:1.25rem 0 1rem; color: var(--accent-primary); font-size: 0.9rem;">{ L(p, "settings_section_updates", "Updates") }</h4>
-						<div class="windows-update-row">
+						<div class="windows-update-row" hx-get="/api/windows-update/status" hx-trigger="load" hx-target="#windows-update-panel" hx-swap="outerHTML">
 							<div class="windows-update-control">
 								<label class="windows-update-enable"><span class="settings-toggle">
 										<input type="checkbox" role="switch" name="windows_update_enabled" value="true" checked?={ prefs.Bool("windows_update_enabled") } aria-label={ L(p, "settings_update_enabled", "Automatically update Igloo") }/>
@@ -779,7 +779,7 @@ templ WindowsUpdatePanel(p PageProps, status windowsupdate.Status) {
 	<div id="windows-update-panel"
 		class="windows-update-panel"
 		hx-get="/api/windows-update/status"
-		hx-trigger="load, every 5s"
+		hx-trigger="every 5s"
 		hx-target="this"
 		hx-swap="outerHTML"
 	>
@@ -795,6 +795,9 @@ templ WindowsUpdatePanel(p PageProps, status windowsupdate.Status) {
 			}
 			if status.LastError != "" {
 				<span class="windows-update-detail error">{ status.LastError }</span>
+			}
+			if !status.LastCheckedAt.IsZero() && !status.Checking && !status.Applying && status.LastError == "" && status.AvailableApp == "" && status.AvailableRuntime == "" {
+				<span class="windows-update-detail">{ L(p, "status_up_to_date", "You're up to date!") }</span>
 			}
 			<div class="windows-update-actions">
 				<button type="button" class="btn btn-secondary btn-sm"

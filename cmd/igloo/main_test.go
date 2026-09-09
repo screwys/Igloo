@@ -2,10 +2,52 @@ package main
 
 import (
 	"errors"
+	"log"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/screwys/igloo/internal/config"
+	"github.com/screwys/igloo/internal/storage"
 )
+
+func TestServerLoggingWithoutStderr(t *testing.T) {
+	root := t.TempDir()
+	layout, err := storage.New(root, filepath.Join(root, "media"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed, err := os.CreateTemp(t.TempDir(), "stderr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := closed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stderr, logger, output := os.Stderr, slog.Default(), log.Writer()
+	os.Stderr = closed
+	t.Cleanup(func() { os.Stderr = stderr; slog.SetDefault(logger); log.SetOutput(output) })
+	file := setupServerLogging(&config.Config{Storage: layout})
+	if file == nil {
+		t.Fatal("log file was not opened")
+	}
+	slog.Info("server logging is available")
+	log.Print("standard logging is available")
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "logs", "server", "server.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, message := range []string{"server logging is available", "standard logging is available"} {
+		if !strings.Contains(string(data), message) {
+			t.Fatalf("log file is missing %q: %s", message, data)
+		}
+	}
+}
 
 func TestInitialConfigErrorAllowsPendingRestore(t *testing.T) {
 	injected := errors.New("invalid current config")

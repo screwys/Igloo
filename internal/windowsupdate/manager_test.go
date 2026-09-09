@@ -2,8 +2,55 @@ package windowsupdate
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
+
+type retrySource struct{ runtimeCalls int }
+
+func (s *retrySource) Latest(_ context.Context, feed, etag string) (Available, string, bool, error) {
+	if feed == "runtime" {
+		s.runtimeCalls++
+		if s.runtimeCalls == 1 {
+			return Available{}, "", false, errors.New("runtime request failed")
+		}
+		return Available{}, "runtime", false, nil
+	}
+	if etag == "new-app" {
+		return Available{}, etag, true, nil
+	}
+	return Available{Manifest: Manifest{App: &Payload{Version: "3.5.0"}}, AppURL: "https://example.test/app.zip"}, "new-app", false, nil
+}
+
+func TestManagerRetainsAppAfterRuntimeRetry(t *testing.T) {
+	manager := NewManager(fakeSettings{}, &retrySource{}, &fakeInstaller{}, "3.4.0", "18")
+	manager.check(t.Context(), true)
+	if manager.Status().LastError == "" {
+		t.Fatal("runtime error was not reported")
+	}
+	manager.check(t.Context(), true)
+	status := manager.Status()
+	if status.LastError != "" || status.AvailableApp != "3.5.0" {
+		t.Fatalf("retry lost the app update: %+v", status)
+	}
+	manager.check(t.Context(), true)
+	if manager.Status().AvailableApp != "3.5.0" {
+		t.Fatal("unchanged response lost the cached update")
+	}
+}
+
+func TestManagerQueuedActionsAreVisibleImmediately(t *testing.T) {
+	manager := NewManager(fakeSettings{}, fakeSource{}, &fakeInstaller{}, "3.4.0", "18")
+	manager.CheckNow()
+	if !manager.Status().Checking {
+		t.Fatal("queued check was invisible to its caller")
+	}
+	manager = NewManager(fakeSettings{}, fakeSource{}, &fakeInstaller{}, "3.4.0", "18")
+	manager.ApplyNow()
+	if !manager.Status().Applying {
+		t.Fatal("queued apply was invisible to its caller")
+	}
+}
 
 type fakeSettings map[string]string
 

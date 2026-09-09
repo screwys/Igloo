@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type Lifecycle interface {
@@ -41,13 +42,16 @@ func ExecutePlan(ctx context.Context, plan ApplyPlan, lifecycle Lifecycle) error
 		return fmt.Errorf("restart Igloo after update; previous version restored: %w", err)
 	}
 	if err := lifecycle.WaitHealthy(ctx, plan); err != nil {
-		if stopErr := lifecycle.Stop(ctx, plan); stopErr != nil {
+		// A health timeout must not also cancel stopping and restoring the server.
+		recoveryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+		defer cancel()
+		if stopErr := lifecycle.Stop(recoveryCtx, plan); stopErr != nil {
 			return fmt.Errorf("updated Igloo failed health check (%v) and could not be stopped for rollback: %w", err, stopErr)
 		}
 		if rollbackErr := rollback(); rollbackErr != nil {
 			return fmt.Errorf("updated Igloo failed health check (%v) and previous files could not be restored: %w", err, rollbackErr)
 		}
-		if restartErr := lifecycle.Start(ctx, plan); restartErr != nil {
+		if restartErr := lifecycle.Start(recoveryCtx, plan); restartErr != nil {
 			return fmt.Errorf("updated Igloo failed health check (%v) and rollback restart failed: %w", err, restartErr)
 		}
 		return fmt.Errorf("updated Igloo failed health check and was rolled back: %w", err)

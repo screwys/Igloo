@@ -52,6 +52,30 @@ function Wait-Healthy {
     throw 'Tray server did not become healthy.'
 }
 
+function Run-UpdateFixture([bool] $ServiceMode) {
+    $stage = Join-Path $app ('updates\stage-' + [Guid]::NewGuid())
+    New-Item -ItemType Directory -Force "$stage\runner" | Out-Null
+    Copy-Item "$app\app\current" "$stage\app" -Recurse
+    Copy-Item "$stage\app\igloo-update.exe" "$stage\runner\igloo-update.exe"
+    $serverID = if ($ServiceMode) { (Get-CimInstance Win32_Service -Filter "Name = 'Igloo'").ProcessId } else { (Get-Process igloo-user).Id }
+    @{
+        install_root = $app
+        service_name = 'Igloo'
+        service_mode = $ServiceMode
+        process_id = $serverID
+        health_url = 'http://127.0.0.1:5001/api/health/live'
+        app_incoming = "$stage\app"
+        staging_root = $stage
+    } | ConvertTo-Json | Set-Content "$stage\plan.json" -Encoding Ascii
+    $controller.Stop()
+    $helper = Start-Process "$stage\runner\igloo-update.exe" -ArgumentList "--plan `"$stage\plan.json`"" -PassThru
+    Assert ($helper.WaitForExit(360000)) 'Update helper did not finish.'
+    Assert ($helper.ExitCode -eq 0) 'Update helper could not replace and restart the server.'
+    Wait-Healthy
+    Assert ((Get-Content "$app\updates\update.log" -Raw) -match 'Windows update completed') 'Update result was not logged.'
+    Assert ($controller.Update('status').supported) 'Tray lost the updater after server replacement.'
+}
+
 try {
     $process = Start-Process $installerPath -ArgumentList (
         "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=`"$root\setup.log`" /DIR=`"$app`" " +
@@ -71,14 +95,21 @@ try {
     $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut("$env:PUBLIC\Desktop\Igloo.lnk")
     Assert ($shortcut.TargetPath -eq "$app\igloo-tray.exe") 'Shortcut does not open the tray.'
     # Load the same controller used by tray menu actions without locking the installed executable.
-    Add-Type -AssemblyName System.Windows.Forms, System.Drawing, System.ServiceProcess
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing, System.ServiceProcess, System.Web.Extensions
     $assembly = [Reflection.Assembly]::Load([IO.File]::ReadAllBytes("$app\igloo-tray.exe"))
+    Assert ([Igloo.Windows.UpdateStatus]::Reached('3.7.1.40', '3.7.1.38')) 'A newer nightly was not accepted as an update.'
+    Assert (-not [Igloo.Windows.UpdateStatus]::Reached('3.7.1.8', '3.7.1.38')) 'An older nightly was accepted as an update.'
     $icon = $assembly.GetManifestResourceStream('Igloo.ico')
     Assert ($null -ne $icon -and $icon.Length -gt 0) 'Igloo tray icon is missing.'
     $icon.Dispose()
     $controller = $assembly.CreateInstance('Igloo.Windows.ServerController')
     $tray = Start-Process "$app\igloo-tray.exe" -ArgumentList '--background' -PassThru
     Wait-Healthy
+    $serverLog = Join-Path $data 'logs\server\server.log'
+    Assert ((Get-Item $serverLog).Length -gt 0) 'GUI server did not write its log file.'
+    Assert ((Get-Content $serverLog -Raw) -match 'database opened') 'Server startup is missing from the log.'
+    $updateStatus = $controller.Update('status')
+    Assert ($updateStatus.supported -and $updateStatus.current_app) 'Tray could not read the server updater.'
     Assert (-not $tray.HasExited) 'Tray exited after starting the server.'
     $duplicate = Start-Process "$app\igloo-tray.exe" -ArgumentList '--background' -PassThru -Wait
     Assert ($duplicate.ExitCode -eq 0) 'Opening the tray twice failed.'
@@ -88,11 +119,10 @@ try {
     $controller.Stop()
     Assert ($server.HasExited -and $server.ExitCode -eq 0) 'Tray stop did not shut down the server cleanly.'
     $server.Dispose()
-    Move-Item "$app\app\current" "$app\app\previous"
-    Move-Item "$app\app\previous" "$app\app\current"
-    Assert (-not $tray.HasExited) 'Tray could not remain open while server files rotated.'
     $controller.Start()
     Wait-Healthy
+    Run-UpdateFixture $false
+    Assert (-not $tray.HasExited) 'Tray could not remain open during a server update.'
     $controller.StartAtLogin = $false
     Assert (-not $controller.StartAtLogin) 'Tray could not disable login startup.'
     $controller.Stop()
@@ -123,6 +153,8 @@ try {
     $controller.Start()
     Wait-Healthy
     Assert (-not (Get-Process igloo-user -ErrorAction SilentlyContinue)) 'Service tray started a second user server.'
+    Assert ($controller.Update('status').supported) 'Tray could not access the service updater.'
+    Run-UpdateFixture $true
     Run-Uninstall 1
     Assert (-not (Test-Path "$data\saved.txt")) 'Data-only uninstall retained application data.'
     Assert (Test-Path "$media\saved.txt") 'Data-only uninstall deleted nested media.'

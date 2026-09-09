@@ -2,16 +2,44 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
 using System.Reflection;
 using System.ServiceProcess;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
 namespace Igloo.Windows
 {
+    public sealed class UpdateStatus
+    {
+        public bool supported, checking, applying;
+        public string current_app, current_runtime, available_app, available_runtime, last_error;
+
+        public static bool Reached(string current, string target)
+        {
+            if (string.IsNullOrEmpty(target)) return true;
+            if (string.IsNullOrEmpty(current)) return false;
+            current = current.Trim().TrimStart('v');
+            target = target.Trim().TrimStart('v');
+            var installed = current.Split('.');
+            var offered = target.Split('.');
+            if (installed.Concat(offered).Any(p => p.Length == 0 || p.Any(c => c < '0' || c > '9')))
+                return string.CompareOrdinal(current, target) >= 0;
+            for (int i = 0; i < Math.Max(installed.Length, offered.Length); i++)
+            {
+                long a = i < installed.Length ? long.Parse(installed[i]) : 0;
+                long b = i < offered.Length ? long.Parse(offered[i]) : 0;
+                if (a != b) return a > b;
+            }
+            return true;
+        }
+    }
+
     public sealed class ServerController
     {
         private const string StartupKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -118,6 +146,23 @@ namespace Igloo.Windows
         {
             using (Process.Start(Path.Combine(root, "app", "current", "igloo-launch.exe"))) { }
         }
+
+        public UpdateStatus Update(string command)
+        {
+            using (var pipe = new NamedPipeClientStream(".", "Igloo.Updates", PipeDirection.InOut))
+            {
+                pipe.Connect(5000);
+                using (var writer = new StreamWriter(pipe, new UTF8Encoding(false), 1024, true))
+                using (var reader = new StreamReader(pipe, Encoding.UTF8, false, 1024, true))
+                {
+                    writer.WriteLine(command);
+                    writer.Flush();
+                    var response = reader.ReadLine();
+                    if (response == null) throw new IOException("The server closed the update connection.");
+                    return new JavaScriptSerializer().Deserialize<UpdateStatus>(response);
+                }
+            }
+        }
     }
 
     internal sealed class TrayContext : ApplicationContext
@@ -127,6 +172,7 @@ namespace Igloo.Windows
         private readonly ToolStripMenuItem start = new ToolStripMenuItem("Start Igloo");
         private readonly ToolStripMenuItem stop = new ToolStripMenuItem("Stop Igloo");
         private readonly ToolStripMenuItem login = new ToolStripMenuItem("Start at login");
+        private readonly ToolStripMenuItem update = new ToolStripMenuItem("Check for updates…");
         private bool busy;
 
         public TrayContext(bool background)
@@ -137,6 +183,7 @@ namespace Igloo.Windows
             menu.Items.Add(start);
             menu.Items.Add(stop);
             menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(update);
             menu.Items.Add(login);
             menu.Items.Add("Open logs", null, (s, e) => Perform(() =>
             {
@@ -150,6 +197,7 @@ namespace Igloo.Windows
             start.Click += (s, e) => Perform(server.Start);
             stop.Click += (s, e) => Perform(server.Stop);
             login.Click += (s, e) => Perform(() => server.StartAtLogin = !server.StartAtLogin);
+            update.Click += (s, e) => CheckForUpdates();
             menu.Opening += (s, e) =>
             {
                 try
@@ -157,6 +205,7 @@ namespace Igloo.Windows
                     start.Enabled = !busy && !server.Running;
                     stop.Enabled = !busy && server.Running;
                     login.Checked = server.StartAtLogin;
+                    update.Enabled = !busy;
                 }
                 catch (Exception error) { ShowError(error); }
             };
@@ -180,6 +229,58 @@ namespace Igloo.Windows
             try { await Task.Run(action); if (exit) ExitThread(); }
             catch (Exception error) { ShowError(error); }
             finally { busy = false; }
+        }
+
+        private async void CheckForUpdates()
+        {
+            if (busy) return;
+            busy = true;
+            try
+            {
+                update.Text = "Checking for updates…";
+                await Task.Run(server.Start);
+                var status = await Task.Run(() => server.Update("check"));
+                while (status.checking || status.applying)
+                {
+                    await Task.Delay(1000);
+                    status = await Task.Run(() => server.Update("status"));
+                }
+                if (!string.IsNullOrEmpty(status.last_error)) throw new InvalidOperationException(status.last_error);
+                if (!status.supported) throw new InvalidOperationException("Updates are unavailable in this server build.");
+                if (string.IsNullOrEmpty(status.available_app) && string.IsNullOrEmpty(status.available_runtime))
+                {
+                    MessageBox.Show("Igloo is up to date.", "Igloo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                string versions = string.IsNullOrEmpty(status.available_app) ? "" : "Igloo " + status.available_app + "\r\n";
+                if (!string.IsNullOrEmpty(status.available_runtime)) versions += "Runtime " + status.available_runtime + "\r\n";
+                if (MessageBox.Show(versions + "\r\nInstall these updates and restart Igloo?", "Igloo updates",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+                var target = status;
+                update.Text = "Installing updates…";
+                status = await Task.Run(() => server.Update("apply"));
+                DateTime lastResponse = DateTime.UtcNow;
+                while (true)
+                {
+                    if (!string.IsNullOrEmpty(status.last_error)) throw new InvalidOperationException(status.last_error);
+                    if (UpdateStatus.Reached(status.current_app, target.available_app) &&
+                        UpdateStatus.Reached(status.current_runtime, target.available_runtime)) break;
+                    if (status.applying) lastResponse = DateTime.UtcNow;
+                    else if (DateTime.UtcNow - lastResponse > TimeSpan.FromSeconds(60))
+                        throw new System.TimeoutException("Igloo did not restart with the update. See the update log in the installation's updates folder.");
+                    await Task.Delay(1000);
+                    try { status = await Task.Run(() => server.Update("status")); }
+                    catch (Exception error)
+                    {
+                        if (!(error is IOException) && !(error is System.TimeoutException)) throw;
+                        status = new UpdateStatus();
+                    }
+                }
+                MessageBox.Show("Igloo was updated successfully.", "Igloo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception error) { ShowError(error); }
+            finally { update.Text = "Check for updates…"; busy = false; }
         }
 
         private static void ShowError(Exception error)

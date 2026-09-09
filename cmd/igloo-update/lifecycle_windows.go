@@ -19,9 +19,9 @@ import (
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-type platformLifecycle struct{}
+type platformLifecycle struct{ startedProcessID int }
 
-func newPlatformLifecycle() windowsupdate.Lifecycle { return platformLifecycle{} }
+func newPlatformLifecycle() windowsupdate.Lifecycle { return &platformLifecycle{} }
 
 func (platformLifecycle) WaitForProcess(ctx context.Context, processID int) error {
 	handle, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(processID))
@@ -48,7 +48,7 @@ func (platformLifecycle) WaitForProcess(ctx context.Context, processID int) erro
 	}
 }
 
-func (platformLifecycle) Start(ctx context.Context, plan windowsupdate.ApplyPlan) error {
+func (l *platformLifecycle) Start(ctx context.Context, plan windowsupdate.ApplyPlan) error {
 	if plan.ServiceMode {
 		manager, service, err := openService(plan.ServiceName)
 		if err != nil {
@@ -69,14 +69,34 @@ func (platformLifecycle) Start(ctx context.Context, plan windowsupdate.ApplyPlan
 		}
 	}
 	executable := filepath.Join(plan.InstallRoot, "app", "current", "igloo-user.exe")
-	command := exec.CommandContext(ctx, executable)
+	// The restarted server must outlive this update helper and its context.
+	command := exec.Command(executable)
 	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.DETACHED_PROCESS, HideWindow: true}
-	return command.Start()
+	if err := command.Start(); err != nil {
+		return err
+	}
+	l.startedProcessID = command.Process.Pid
+	return command.Process.Release()
 }
 
-func (platformLifecycle) Stop(ctx context.Context, plan windowsupdate.ApplyPlan) error {
+func (l *platformLifecycle) Stop(ctx context.Context, plan windowsupdate.ApplyPlan) error {
 	if !plan.ServiceMode {
-		return nil
+		if l.startedProcessID == 0 {
+			return nil
+		}
+		name, err := windows.UTF16PtrFromString(`Local\Igloo.Server.Stop`)
+		if err != nil {
+			return err
+		}
+		event, err := windows.OpenEvent(windows.EVENT_MODIFY_STATE, false, name)
+		if err == nil {
+			err = windows.SetEvent(event)
+			_ = windows.CloseHandle(event)
+		}
+		if err != nil && !errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
+			return err
+		}
+		return l.WaitForProcess(ctx, l.startedProcessID)
 	}
 	manager, service, err := openService(plan.ServiceName)
 	if err != nil {

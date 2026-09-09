@@ -3,6 +3,7 @@ package windowsupdate
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -93,6 +94,13 @@ func (m *Manager) CheckNow() {
 	if m == nil {
 		return
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.status.Checking || m.status.Applying {
+		return
+	}
+	m.status.Checking = true
+	m.status.LastError = ""
 	select {
 	case m.checkNow <- struct{}{}:
 	default:
@@ -103,6 +111,13 @@ func (m *Manager) ApplyNow() {
 	if m == nil {
 		return
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.status.Checking || m.status.Applying {
+		return
+	}
+	m.status.Applying = true
+	m.status.LastError = ""
 	select {
 	case m.applyNow <- struct{}{}:
 	default:
@@ -132,12 +147,11 @@ func (m *Manager) queryAvailable(ctx context.Context) (Available, error) {
 		RuntimeURL: m.lastAvailable.RuntimeURL,
 	}
 
-	app, etag, unchanged, err := m.source.Latest(ctx, m.channel(), m.appETag)
+	app, appETag, unchanged, err := m.source.Latest(ctx, m.channel(), m.appETag)
 	if err != nil {
 		return available, err
 	}
 	if !unchanged {
-		m.appETag = etag
 		available.Manifest.App = app.Manifest.App
 		available.AppURL = app.AppURL
 		if app.Manifest.MinimumAppVersion != "" {
@@ -145,12 +159,11 @@ func (m *Manager) queryAvailable(ctx context.Context) (Available, error) {
 		}
 	}
 
-	runtimeAvailable, etag, unchanged, err := m.source.Latest(ctx, "runtime", m.runtimeETag)
+	runtimeAvailable, runtimeETag, unchanged, err := m.source.Latest(ctx, "runtime", m.runtimeETag)
 	if err != nil {
 		return available, err
 	}
 	if !unchanged {
-		m.runtimeETag = etag
 		available.Manifest.Runtime = runtimeAvailable.Manifest.Runtime
 		available.RuntimeURL = runtimeAvailable.RuntimeURL
 		if runtimeAvailable.Manifest.MinimumAppVersion != "" {
@@ -158,7 +171,8 @@ func (m *Manager) queryAvailable(ctx context.Context) (Available, error) {
 		}
 	}
 
-	m.lastAvailable = available
+	// Publish validators with their payloads only after both requests succeed.
+	m.appETag, m.runtimeETag, m.lastAvailable = appETag, runtimeETag, available
 
 	needsApp := available.Manifest.App != nil && NewerVersion(available.Manifest.App.Version, m.currentApp)
 	needsRuntime := available.Manifest.Runtime != nil && NewerVersion(available.Manifest.Runtime.Version, m.currentRuntime)
@@ -182,6 +196,7 @@ func (m *Manager) queryAvailable(ctx context.Context) (Available, error) {
 }
 
 func (m *Manager) check(ctx context.Context, forced bool) {
+	slog.Info("checking Windows updates", "channel", m.channel(), "manual", forced)
 	m.updateStatus(func(status *Status) {
 		status.Checking = true
 		status.LastError = ""
@@ -208,6 +223,7 @@ func (m *Manager) check(ctx context.Context, forced bool) {
 	})
 
 	if forced {
+		slog.Info("Windows update check complete", "app", m.Status().AvailableApp, "runtime", m.Status().AvailableRuntime)
 		return
 	}
 
@@ -294,6 +310,7 @@ func (m *Manager) channel() string {
 }
 
 func (m *Manager) fail(err error) {
+	slog.Error("Windows update failed", "err", err)
 	m.updateStatus(func(status *Status) {
 		status.LastCheckedAt = time.Now().UTC()
 		status.LastError = err.Error()

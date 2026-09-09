@@ -112,6 +112,9 @@ func runServer(externalStop <-chan struct{}, ready chan<- struct{}, serviceMode 
 	go workers.StartAll()
 	if windowsUpdater != nil {
 		go windowsUpdater.Run(appCtx)
+		if err := windowsupdate.StartControl(appCtx, windowsUpdater); err != nil {
+			slog.Error("Windows tray update controls unavailable", "err", err)
+		}
 	}
 	go translate.RunBackground(appCtx, database)
 	logStartupPhase("worker_launch", time.Since(phaseStart))
@@ -217,7 +220,8 @@ func setupServerLogging(cfg *config.Config) io.Closer {
 	if err != nil {
 		return nil
 	}
-	w := io.MultiWriter(os.Stderr, lf)
+	// GUI and service processes can have no usable stderr handle.
+	w := io.MultiWriter(lf, os.Stderr)
 	log.SetOutput(w)
 	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	return lf

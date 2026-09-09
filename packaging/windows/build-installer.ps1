@@ -20,6 +20,7 @@ try {
     $source = Join-Path $PSScriptRoot 'IglooTray.cs'
     & $csharp /nologo /target:winexe /platform:x64 "/out:$tray" `
         /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.ServiceProcess.dll `
+        /reference:System.Web.Extensions.dll `
         "/win32icon:$icon" "/resource:$icon,Igloo.ico" $source
     if ($LASTEXITCODE -ne 0) { throw "Tray compiler failed: $LASTEXITCODE" }
     & $compiler "/DProductVersion=$ProductVersion" "/DPayloadDir=$payload" `
