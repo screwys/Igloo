@@ -61,16 +61,22 @@ Root: HKLM; Subkey: "Software\Igloo"; ValueType: dword; ValueName: "AutomaticUpd
 Root: HKCU; Subkey: "Software\Igloo"; ValueType: dword; ValueName: "DesktopShortcut"; ValueData: "{code:DesktopShortcut}"
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Igloo"; ValueData: """{app}\app\current\igloo-user.exe"""; Tasks: runuser; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "Igloo"; Tasks: not runuser; Flags: deletevalue
-Root: HKLM; Subkey: "Software\Igloo"; ValueType: dword; ValueName: "RunMode"; ValueData: "{code:RunMode}"; AfterInstall: ConfigureInstallation
+Root: HKLM; Subkey: "Software\Igloo"; ValueType: dword; ValueName: "RunMode"; ValueData: "{code:RunMode}"
 
 [Run]
-Filename: "{app}\app\current\igloo-launch.exe"; Description: "Open Igloo"; Flags: nowait postinstall skipifsilent runasoriginaluser
+Filename: "{app}\app\current\igloo-launch.exe"; Description: "Open Igloo"; Flags: nowait postinstall skipifsilent runasoriginaluser; Check: ConfigurationSucceeded
 
 [Code]
 var
   StoragePage: TInputDirWizardPage;
   SavedConfigDirectory: String;
   UninstallMode: Integer;
+  ConfigurationError: String;
+
+function ConfigurationSucceeded: Boolean;
+begin
+  Result := ConfigurationError = '';
+end;
 
 function InstallSetting(Name, Default: String): String;
 begin
@@ -195,6 +201,28 @@ begin
     DeleteFile(ExpandConstant('{commondesktop}\Igloo.lnk'));
   if not RunLifecycle(ExpandConstant('{app}\setup\installer-lifecycle.ps1'), 'Install', RunMode('')) then
     RaiseException('Could not configure Igloo. See the Igloo installer lifecycle log in your temporary folder.');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    try
+      ConfigureInstallation;
+    except
+      ConfigurationError := GetExceptionMessage;
+      Log(ConfigurationError);
+      WizardForm.FinishedHeadingLabel.Caption := 'Igloo setup could not finish';
+      WizardForm.FinishedLabel.Caption := ConfigurationError + #13#10 + #13#10 +
+        'Correct the problem and run Setup again, or uninstall Igloo from Windows Settings.';
+    end;
+  end;
+end;
+
+function GetCustomSetupExitCode: Integer;
+begin
+  Result := 0;
+  if not ConfigurationSucceeded then Result := 1;
 end;
 
 function InitializeUninstall: Boolean;

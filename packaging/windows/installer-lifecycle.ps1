@@ -109,6 +109,15 @@ try {
 } catch {
     Write-Error $_ -ErrorAction Continue
     if ($Action -eq 'Install') {
+        Get-CimInstance Win32_Service -Filter "Name = 'Igloo'" |
+            Format-List Name, State, StartName, PathName, ExitCode, ServiceSpecificExitCode
+        Get-WinEvent -FilterHashtable @{LogName = 'System'; StartTime = (Get-Date).AddMinutes(-2)} -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -eq 'Service Control Manager' -and $_.Message -match '\bIgloo\b' } |
+            Format-List TimeCreated, Id, Message
+        $settings = Get-ItemProperty 'HKLM:\Software\Igloo' -ErrorAction SilentlyContinue
+        if ($settings.DataDirectory) {
+            Get-Content (Join-Path $settings.DataDirectory 'logs\server\server.log') -Tail 80 -ErrorAction SilentlyContinue
+        }
         Stop-Igloo
         if ($createdService) {
             $service = Get-CimInstance Win32_Service -Filter "Name = 'Igloo'"
