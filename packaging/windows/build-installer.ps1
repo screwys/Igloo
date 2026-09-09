@@ -15,10 +15,12 @@ try {
     Copy-Item -Recurse "$RuntimeDirectory/*" "$payload/runtime/current/"
     # The tray stays outside the server directories rotated by automatic updates.
     $csharp = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-    & $csharp /nologo /target:winexe /platform:x64 "/out:$payload/igloo-tray.exe" `
+    $tray = Join-Path $payload 'igloo-tray.exe'
+    $icon = Join-Path $PSScriptRoot 'InstallerIcon.ico'
+    $source = Join-Path $PSScriptRoot 'IglooTray.cs'
+    & $csharp /nologo /target:winexe /platform:x64 "/out:$tray" `
         /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.ServiceProcess.dll `
-        "/win32icon:$PSScriptRoot/InstallerIcon.ico" "/resource:$PSScriptRoot/InstallerIcon.ico,Igloo.ico" `
-        "$PSScriptRoot/IglooTray.cs"
+        "/win32icon:$icon" "/resource:$icon,Igloo.ico" $source
     if ($LASTEXITCODE -ne 0) { throw "Tray compiler failed: $LASTEXITCODE" }
     & $compiler "/DProductVersion=$ProductVersion" "/DPayloadDir=$payload" `
         "/O$([IO.Path]::GetFullPath($OutputDirectory))" "$PSScriptRoot/Igloo.iss"
