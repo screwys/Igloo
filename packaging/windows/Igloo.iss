@@ -214,10 +214,17 @@ begin
     except
       ConfigurationError := GetExceptionMessage;
       Log(ConfigurationError);
-      WizardForm.FinishedHeadingLabel.Caption := 'Igloo setup could not finish';
-      WizardForm.FinishedLabel.Caption := ConfigurationError + #13#10 + #13#10 +
-        'Correct the problem and run Setup again, or uninstall Igloo from Windows Settings.';
     end;
+  end;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpFinished) and not ConfigurationSucceeded then
+  begin
+    WizardForm.FinishedHeadingLabel.Caption := 'Igloo setup could not finish';
+    WizardForm.FinishedLabel.Caption := ConfigurationError + #13#10 + #13#10 +
+      'Correct the problem and run Setup again, or uninstall Igloo from Windows Settings.';
   end;
 end;
 
