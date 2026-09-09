@@ -179,7 +179,7 @@ func (db *DB) listAndroidSyncDesiredFeed(feedDays int, nowMs int64) (map[string]
 		)
 		SELECT DISTINCT fi.tweet_id
 		FROM reply_chain rc
-		JOIN feed_items fi ON fi.tweet_id = rc.tweet_id
+		CROSS JOIN feed_items fi ON fi.tweet_id = rc.tweet_id
 		WHERE rc.is_ancestor = 1
 		   OR EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = fi.tweet_id)
 		   OR EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = fi.tweet_id)
