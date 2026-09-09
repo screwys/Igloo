@@ -402,12 +402,10 @@
     var rows = qa('[data-sidebar-route]', container);
     var input = container.parentElement && container.parentElement.querySelector('[data-sidebar-route-order-input]');
     if (input) input.value = rows.map(function (row) { return row.getAttribute('data-sidebar-route'); }).join(',');
-  }
-
-  function sidebarRouteOrderValue(container) {
-    return qa('[data-sidebar-route]', container).map(function (row) {
-      return row.getAttribute('data-sidebar-route');
-    }).join(',');
+    var hiddenInput = container.parentElement && container.parentElement.querySelector('[data-sidebar-hidden-routes-input]');
+    if (hiddenInput) hiddenInput.value = rows.filter(function (row) {
+      return !row.querySelector('[data-sidebar-route-toggle]').checked;
+    }).map(function (row) { return row.getAttribute('data-sidebar-route'); }).join(',');
   }
 
   function notifySidebarRouteOrderChanged(container) {
@@ -436,88 +434,128 @@
     var input = form && form.querySelector('[data-sidebar-route-order-input]');
     var nav = doc.querySelector('.sidebar .nav');
     if (!input || !nav) return;
+    var hiddenInput = form.querySelector('[data-sidebar-hidden-routes-input]');
+    var hidden = hiddenInput ? hiddenInput.value.split(',') : [];
     input.value.split(',').forEach(function (route) {
       var item = nav.querySelector('[data-sidebar-nav-route="' + route + '"]');
-      if (item) nav.appendChild(item);
+      if (item) {
+        item.hidden = hidden.indexOf(route) !== -1;
+        nav.appendChild(item);
+      }
+    });
+    navShortcutsPopulated = false;
+    var shortcuts = doc.querySelector('#shortcuts-nav-list');
+    if (shortcuts) shortcuts.replaceChildren();
+  }
+
+  doc.addEventListener('change', function (event) {
+    if (!event.target.matches('[data-sidebar-route-toggle]')) return;
+    notifySidebarRouteOrderChanged(event.target.closest('[data-sidebar-route-order]'));
+  });
+
+  var sidebarDrag = null;
+
+  function drawSidebarDrag() {
+    var drag = sidebarDrag;
+    if (!drag) return;
+    var scroll = drag.container.closest('.prefs-tabs-content');
+    var viewport = scroll.getBoundingClientRect();
+    if (drag.y < viewport.top + 28) scroll.scrollTop -= 6;
+    else if (drag.y > viewport.bottom - 28) scroll.scrollTop += 6;
+
+    var origin = drag.container.getBoundingClientRect().top + drag.container.clientTop;
+    var height = drag.row.offsetHeight;
+    var top = Math.max(0, Math.min(drag.container.clientHeight - height, drag.y - drag.grabOffset - origin));
+    var center = top + height / 2;
+    drag.targetIndex = drag.order.filter(function (row) {
+      return row !== drag.row && center > row.offsetTop + row.offsetHeight / 2;
+    }).length;
+    drag.order.forEach(function (row, i) {
+      var shift = 0;
+      if (row === drag.row) shift = top - row.offsetTop;
+      else if (i < drag.startIndex && i >= drag.targetIndex) shift = height;
+      else if (i > drag.startIndex && i <= drag.targetIndex) shift = -height;
+      row.style.transform = 'translateY(' + shift + 'px)';
+    });
+    drag.frame = requestAnimationFrame(drawSidebarDrag);
+  }
+
+  function finishSidebarRouteDrag(cancelled) {
+    var drag = sidebarDrag;
+    if (!drag) return;
+    sidebarDrag = null;
+    cancelAnimationFrame(drag.frame);
+    if (drag.row.hasPointerCapture(drag.pointerID)) drag.row.releasePointerCapture(drag.pointerID);
+    var positions = drag.order.map(function (row) { return row.getBoundingClientRect().top; });
+    drag.container.classList.remove('sorting');
+    drag.row.classList.remove('dragging');
+    drag.order.forEach(function (row) {
+      row.getAnimations().forEach(function (animation) { animation.cancel(); });
+      row.style.transform = '';
+    });
+    if (!cancelled && drag.targetIndex !== drag.startIndex) {
+      var siblings = drag.order.filter(function (row) { return row !== drag.row; });
+      drag.container.insertBefore(drag.row, siblings[drag.targetIndex] || null);
+      notifySidebarRouteOrderChanged(drag.container);
+    }
+    if (!drag.reducedMotion) drag.order.forEach(function (row, i) {
+      var delta = positions[i] - row.getBoundingClientRect().top;
+      if (delta) row.animate([
+        { transform: 'translateY(' + delta + 'px)' }, { transform: 'translateY(0)' }
+      ], { duration: 120, easing: 'ease-out' });
     });
   }
 
-  var draggedSidebarRoute = null;
-
-  function moveDraggedSidebarRoute(row, clientY) {
-    if (!draggedSidebarRoute || !row || row === draggedSidebarRoute) return;
-    var container = draggedSidebarRoute.closest('[data-sidebar-route-order]');
-    if (!container || row.closest('[data-sidebar-route-order]') !== container) return;
-    var rect = row.getBoundingClientRect();
-    container.insertBefore(draggedSidebarRoute, clientY > rect.top + rect.height / 2 ? row.nextElementSibling : row);
-  }
-
-  function finishSidebarRouteDrag() {
-    if (!draggedSidebarRoute) return;
-    var row = draggedSidebarRoute;
-    var container = row.closest('[data-sidebar-route-order]');
-    row.classList.remove('dragging');
-    draggedSidebarRoute = null;
-    if (container && container.dataset.dragStartOrder !== sidebarRouteOrderValue(container)) {
-      notifySidebarRouteOrderChanged(container);
-    }
-    if (container) delete container.dataset.dragStartOrder;
-  }
-
   doc.addEventListener('pointerdown', function (event) {
-    if (event.button !== 0) return;
-	if (event.target && event.target.closest && event.target.closest('button, input, select, textarea, a')) return;
-	var row = event.target && event.target.closest && event.target.closest('[data-sidebar-route]');
+    if (event.button !== 0 || sidebarDrag) return;
+    if (event.target.closest('button, input, select, textarea, a, label')) return;
+    var row = event.target.closest('[data-sidebar-route]');
     var container = row && row.closest('[data-sidebar-route-order]');
     if (!row || !container) return;
     event.preventDefault();
-    draggedSidebarRoute = row;
-    container.dataset.dragStartOrder = sidebarRouteOrderValue(container);
+    row.getAnimations().forEach(function (animation) { animation.cancel(); });
+    sidebarDrag = {
+      row: row,
+      container: container,
+      pointerID: event.pointerId,
+      grabOffset: event.clientY - row.getBoundingClientRect().top,
+      y: event.clientY,
+      order: qa('[data-sidebar-route]', container),
+      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    };
+    sidebarDrag.startIndex = sidebarDrag.order.indexOf(row);
+    sidebarDrag.targetIndex = sidebarDrag.startIndex;
+    container.classList.add('sorting');
     row.classList.add('dragging');
-	if (row.setPointerCapture) row.setPointerCapture(event.pointerId);
+    row.setPointerCapture(event.pointerId);
+    sidebarDrag.frame = requestAnimationFrame(drawSidebarDrag);
   });
 
   doc.addEventListener('pointermove', function (event) {
-    if (!draggedSidebarRoute) return;
-    event.preventDefault();
-    var target = doc.elementFromPoint(event.clientX, event.clientY);
-    moveDraggedSidebarRoute(target && target.closest('[data-sidebar-route]'), event.clientY);
+    if (!sidebarDrag || sidebarDrag.pointerID !== event.pointerId) return;
+    sidebarDrag.y = event.clientY;
   });
 
-  doc.addEventListener('pointerup', finishSidebarRouteDrag);
-  doc.addEventListener('pointercancel', finishSidebarRouteDrag);
-
-  doc.addEventListener('dragstart', function (event) {
-    var row = event.target && event.target.closest && event.target.closest('[data-sidebar-route]');
-    var container = row && row.closest('[data-sidebar-route-order]');
-    if (!row || !container) return;
-    draggedSidebarRoute = row;
-    container.dataset.dragStartOrder = sidebarRouteOrderValue(container);
-    row.classList.add('dragging');
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', row.getAttribute('data-sidebar-route') || '');
+  doc.addEventListener('pointerup', function (event) {
+    if (sidebarDrag && sidebarDrag.pointerID === event.pointerId) finishSidebarRouteDrag(false);
+  });
+  doc.addEventListener('pointercancel', function (event) {
+    if (sidebarDrag && sidebarDrag.pointerID === event.pointerId) finishSidebarRouteDrag(true);
+  });
+  doc.addEventListener('lostpointercapture', function (event) {
+    if (sidebarDrag && sidebarDrag.pointerID === event.pointerId) finishSidebarRouteDrag(true);
+  });
+  doc.addEventListener('keydown', function (event) {
+    if (sidebarDrag && event.key === 'Escape') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      finishSidebarRouteDrag(true);
     }
   });
 
-  doc.addEventListener('dragover', function (event) {
-    if (!draggedSidebarRoute) return;
-    var row = event.target && event.target.closest && event.target.closest('[data-sidebar-route]');
-    var container = draggedSidebarRoute.closest('[data-sidebar-route-order]');
-    if (!row || !container || row === draggedSidebarRoute || row.closest('[data-sidebar-route-order]') !== container) return;
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-    moveDraggedSidebarRoute(row, event.clientY);
-  });
-
-  doc.addEventListener('drop', function (event) {
-    if (draggedSidebarRoute && event.target && event.target.closest('[data-sidebar-route-order]')) event.preventDefault();
-  });
-
-  doc.addEventListener('dragend', finishSidebarRouteDrag);
-
   doc.addEventListener('keydown', function (event) {
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    if (event.target.matches('[data-sidebar-route-toggle]')) return;
     var row = event.target && event.target.closest && event.target.closest('[data-sidebar-route]');
     var container = row && row.closest('[data-sidebar-route-order]');
     if (!row || !container) return;
@@ -2122,7 +2160,7 @@
       navShortcutsPopulated = true;
       var container = q('#shortcuts-nav-list');
       if (container) {
-        var navItems = qa('.sidebar .nav .nav-item');
+        var navItems = qa('.sidebar .nav .nav-item:not([hidden])');
         navItems.forEach(function (item, i) {
           if (i > 8) return;
           var row = doc.createElement('div');
@@ -2218,7 +2256,7 @@
     if (!event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
     var digit = parseInt(event.key, 10);
     if (isNaN(digit) || digit < 1 || digit > 9) return;
-    var navItems = qa('.sidebar .nav .nav-item');
+    var navItems = qa('.sidebar .nav .nav-item:not([hidden])');
     var target = navItems[digit - 1];
     if (!target) return;
     event.preventDefault();

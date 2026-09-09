@@ -22,37 +22,37 @@ templ Sidebar(p PageProps) {
 					@SidebarDiscoverNavItem(p)
 				}
 				if route == "videos" && p.PlatformsContain("youtube") {
-				<a href="/videos" class={ "nav-item", templ.KV("active", p.ActiveNav == "videos") } data-sidebar-nav-route="videos" title={ L(p, "nav_videos", "Videos") } aria-label={ L(p, "nav_videos", "Videos") }>
+				<a href="/videos" class={ "nav-item", templ.KV("active", p.ActiveNav == "videos") } data-sidebar-nav-route="videos" hidden?={ p.Prefs.SidebarRouteHidden("videos") } title={ L(p, "nav_videos", "Videos") } aria-label={ L(p, "nav_videos", "Videos") }>
 					@MaterialIcon("VideoLibrary", "nav-icon")
 					<span data-i18n="nav_videos">{ L(p, "nav_videos", "Videos") }</span>
 				</a>
 				}
 				if route == "feed" && p.PlatformsContain("twitter") {
-				<a href="/feed" class={ "nav-item", templ.KV("active", p.ActiveNav == "feed") } data-sidebar-nav-route="feed" title={ L(p, "nav_feed", "Feed") } aria-label={ L(p, "nav_feed", "Feed") }>
+				<a href="/feed" class={ "nav-item", templ.KV("active", p.ActiveNav == "feed") } data-sidebar-nav-route="feed" hidden?={ p.Prefs.SidebarRouteHidden("feed") } title={ L(p, "nav_feed", "Feed") } aria-label={ L(p, "nav_feed", "Feed") }>
 					@MaterialIcon("DynamicFeed", "nav-icon")
 					<span data-i18n="nav_feed">{ L(p, "nav_feed", "Feed") }</span>
 				</a>
 			}
 				if route == "shorts" && (p.PlatformsContain("tiktok") || p.PlatformsContain("instagram")) {
-				<a href="/shorts" class={ "nav-item", templ.KV("active", p.ActiveNav == "shorts") } data-sidebar-nav-route="shorts" title={ L(p, "nav_moments", "Moments") } aria-label={ L(p, "nav_moments", "Moments") }>
+				<a href="/shorts" class={ "nav-item", templ.KV("active", p.ActiveNav == "shorts") } data-sidebar-nav-route="shorts" hidden?={ p.Prefs.SidebarRouteHidden("shorts") } title={ L(p, "nav_moments", "Moments") } aria-label={ L(p, "nav_moments", "Moments") }>
 					@MaterialIcon("PlayCircle", "nav-icon")
 					<span data-i18n="nav_moments">{ L(p, "nav_moments", "Moments") }</span>
 				</a>
 			}
 				if route == "channels" {
-				<a href="/channels" class={ "nav-item", templ.KV("active", p.ActiveNav == "channels") } data-sidebar-nav-route="channels" title={ L(p, "nav_channels", "Channels") } aria-label={ L(p, "nav_channels", "Channels") }>
+				<a href="/channels" class={ "nav-item", templ.KV("active", p.ActiveNav == "channels") } data-sidebar-nav-route="channels" hidden?={ p.Prefs.SidebarRouteHidden("channels") } title={ L(p, "nav_channels", "Channels") } aria-label={ L(p, "nav_channels", "Channels") }>
 				@MaterialIcon("GridView", "nav-icon")
 				<span data-i18n="nav_channels">{ L(p, "nav_channels", "Channels") }</span>
 			</a>
 				}
 				if route == "bookmarks" {
-				<a href="/bookmarks" class={ "nav-item", templ.KV("active", p.ActiveNav == "bookmarks") } data-sidebar-nav-route="bookmarks" title={ L(p, "nav_bookmarks", "Bookmarks") } aria-label={ L(p, "nav_bookmarks", "Bookmarks") }>
+				<a href="/bookmarks" class={ "nav-item", templ.KV("active", p.ActiveNav == "bookmarks") } data-sidebar-nav-route="bookmarks" hidden?={ p.Prefs.SidebarRouteHidden("bookmarks") } title={ L(p, "nav_bookmarks", "Bookmarks") } aria-label={ L(p, "nav_bookmarks", "Bookmarks") }>
 				@MaterialIcon("Bookmark", "nav-icon")
 				<span data-i18n="nav_bookmarks">{ L(p, "nav_bookmarks", "Bookmarks") }</span>
 			</a>
 				}
 				if route == "liked" && p.PlatformsContain("twitter") {
-				<a href="/liked" class={ "nav-item", templ.KV("active", p.ActiveNav == "liked") } data-sidebar-nav-route="liked" title={ L(p, "nav_liked", "Liked") } aria-label={ L(p, "nav_liked", "Liked") }>
+				<a href="/liked" class={ "nav-item", templ.KV("active", p.ActiveNav == "liked") } data-sidebar-nav-route="liked" hidden?={ p.Prefs.SidebarRouteHidden("liked") } title={ L(p, "nav_liked", "Liked") } aria-label={ L(p, "nav_liked", "Liked") }>
 					@MaterialIcon("Favorite", "nav-icon")
 					<span data-i18n="nav_liked">{ L(p, "nav_liked", "Liked") }</span>
 				</a>
@@ -150,7 +150,7 @@ templ Sidebar(p PageProps) {
 }
 
 templ SidebarDiscoverNavItem(p PageProps) {
-	<a href="/discover" class={ "nav-item", templ.KV("active", p.ActiveNav == "discover") } data-sidebar-nav-route="discover" title={ L(p, "nav_discover", "Discover") } aria-label={ L(p, "nav_discover", "Discover") }>
+	<a href="/discover" class={ "nav-item", templ.KV("active", p.ActiveNav == "discover") } data-sidebar-nav-route="discover" hidden?={ p.Prefs.SidebarRouteHidden("discover") } title={ L(p, "nav_discover", "Discover") } aria-label={ L(p, "nav_discover", "Discover") }>
 		@MaterialIcon("Explore", "nav-icon")
 		<span>{ L(p, "nav_discover", "Discover") }</span>
 	</a>

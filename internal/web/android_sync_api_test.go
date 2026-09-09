@@ -615,6 +615,57 @@ func TestAndroidSyncFeedHeadDoesNotExpandToSameHashPeers(t *testing.T) {
 	}
 }
 
+func TestAndroidSyncLargeThreadChangesAdvanceCursor(t *testing.T) {
+	for _, query := range []string{androidSyncTestFullYoutubeMetadataQuery, androidSyncTestV3Query} {
+		t.Run(query, func(t *testing.T) {
+			srv := newAndroidSyncTestServer(t)
+			now := time.Now().UnixMilli()
+			if err := srv.db.ExecRaw(`
+				INSERT INTO feed_items (tweet_id, body_text, published_at, fetched_at)
+				VALUES ('sample_root', 'Root', ?, ?);
+				WITH RECURSIVE seq(n) AS (
+					VALUES (1) UNION ALL SELECT n + 1 FROM seq WHERE n < 501
+				)
+				INSERT INTO feed_items (tweet_id, body_text, published_at, fetched_at,
+					is_ghost, reply_to_status, quote_tweet_id)
+				SELECT printf('sample_context_%03d', n), 'Context', ?, ?, 1,
+					CASE WHEN n % 2 = 0 THEN 'sample_root' ELSE '' END,
+					CASE WHEN n % 2 = 1 THEN 'sample_root' ELSE '' END
+				FROM seq
+			`, now, now, now, now); err != nil {
+				t.Fatal(err)
+			}
+			page := requestAndroidSyncPage(t, srv, "/api/android/sync/bootstrap?"+query)
+			for !page.EndOfStream {
+				page = requestAndroidSyncPage(t, srv, "/api/android/sync/bootstrap?"+query+"&after="+page.NextCursor)
+			}
+			before := page.NextCursor
+			if err := srv.db.ExecRaw(`UPDATE feed_items SET body_text = 'Changed root' WHERE tweet_id = 'sample_root'`); err != nil {
+				t.Fatal(err)
+			}
+			page = requestAndroidSyncPage(t, srv, "/api/android/sync/changes?"+query+"&after="+before)
+			if page.NextCursor == before || !page.EndOfStream {
+				t.Fatal("large thread did not advance to end of stream")
+			}
+			assertAndroidSyncChangesUnique(t, page.Changes)
+			for i := 0; i <= 501; i++ {
+				id := "sample_root"
+				if i > 0 {
+					id = fmt.Sprintf("sample_context_%03d", i)
+				}
+				change := findAndroidSyncChange(page.Changes, "feed", id)
+				if change == nil || change.Operation != model.AndroidSyncOperationUpsert {
+					t.Fatalf("thread content %s missing from incremental page", id)
+				}
+			}
+			page = requestAndroidSyncPage(t, srv, "/api/android/sync/changes?"+query+"&after="+page.NextCursor)
+			if !page.EndOfStream || len(page.Changes) != 0 {
+				t.Fatal("completed thread was replayed")
+			}
+		})
+	}
+}
+
 func TestAndroidSyncChangesApplyCanonicalSelectionInBothDirections(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	now := time.Now().UnixMilli()

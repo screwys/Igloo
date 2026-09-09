@@ -231,6 +231,7 @@ var Defaults = map[string]any{
 	"sponsorblock_categories":          SponsorBlockCategoriesDefault,
 	"starting_page":                    "videos",
 	"sidebar_route_order":              "discover,videos,feed,shorts,channels,bookmarks,liked",
+	"sidebar_hidden_routes":            "",
 	"dearrow_mode":                     "off",
 	"algorithmic_feed_enabled":         false,
 }

@@ -258,8 +258,9 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 		RuntimeOS:               buildinfo.Current().OS,
 		StaticV:                 s.staticV,
 		Prefs: components.PrefsData{Settings: map[string]any{
-			"dearrow_mode":        dearrowMode,
-			"sidebar_route_order": sidebarRouteOrder,
+			"dearrow_mode":          dearrowMode,
+			"sidebar_route_order":   sidebarRouteOrder,
+			"sidebar_hidden_routes": s.setting("sidebar_hidden_routes", ""),
 		}},
 	}
 }

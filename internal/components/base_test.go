@@ -177,7 +177,7 @@ func TestPrefsBodyRendersMiniPlayerSettings(t *testing.T) {
 	}
 }
 
-func TestPrefsBodyRendersWindowsUpdateControlsInOneRow(t *testing.T) {
+func TestPrefsBodyRendersWindowsUpdateControls(t *testing.T) {
 	p := newTestPageProps()
 	p.UserRole = "admin"
 	p.RuntimeOS = "windows"
@@ -196,20 +196,13 @@ func TestPrefsBodyRendersWindowsUpdateControlsInOneRow(t *testing.T) {
 	channelStart := strings.Index(html, `id="global-setting-windows-update-channel"`)
 	runtimeToggleStart := strings.Index(html, `name="windows_runtime_update_enabled"`)
 	panelStart := strings.Index(html, `id="windows-update-panel" class="windows-update-panel"`)
-	if rowStart < 0 || channelStart < rowStart || runtimeToggleStart < channelStart || panelStart < runtimeToggleStart {
-		t.Fatalf("update channel, dependency toggle, and status should share one row:\n%s", html)
+	if rowStart < 0 || channelStart < rowStart || runtimeToggleStart < rowStart || panelStart < channelStart {
+		t.Fatalf("update channel, dependency toggle, and status should share one section:\n%s", html)
 	}
 	if !strings.Contains(html, `<option value="nightly" selected>Nightly</option>`) {
 		t.Fatalf("nightly update channel is missing:\n%s", html)
 	}
 
-	css, err := os.ReadFile("../../static/style.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(css), "grid-template-columns: minmax(11rem, 1fr) auto auto;") {
-		t.Fatal("Windows update row is missing its desktop side-by-side grid")
-	}
 }
 
 func TestPrefsBodyRendersAppearanceThemeControls(t *testing.T) {
@@ -374,7 +367,7 @@ func TestPrefsBodyRendersPersistedSidebarRouteOrder(t *testing.T) {
 	if !strings.Contains(html, `name="sidebar_route_order" value="feed,discover,videos,liked,channels,bookmarks,shorts"`) {
 		t.Fatalf("preferences should preserve the configured sidebar route order:\n%s", html)
 	}
-	if !strings.Contains(html, `data-sidebar-route="feed" draggable="true" tabindex="0"`) {
+	if !strings.Contains(html, `data-sidebar-route="feed" tabindex="0"`) {
 		t.Fatalf("sidebar routes should render as draggable, keyboard-focusable rows:\n%s", html)
 	}
 	if strings.Contains(html, `Choose the order of routes in the sidebar.`) || strings.Contains(html, `data-sidebar-route-move`) {
@@ -398,6 +391,28 @@ func TestSidebarUsesConfiguredRouteOrder(t *testing.T) {
 	videos := strings.Index(html, `href="/videos" class="nav-item`)
 	if feed < 0 || discover < 0 || videos < 0 || !(feed < discover && discover < videos) {
 		t.Fatalf("sidebar routes are not rendered in the configured order:\n%s", html)
+	}
+}
+
+func TestSidebarVisibilityPreservesRoutesForReenabling(t *testing.T) {
+	p := newTestPageProps()
+	p.UserPlatforms = []string{"youtube", "twitter", "tiktok"}
+	for _, hidden := range []string{"discover,liked", ""} {
+		p.Prefs = PrefsData{Settings: map[string]any{"sidebar_hidden_routes": hidden}}
+		var buf bytes.Buffer
+		if err := Sidebar(p).Render(context.Background(), &buf); err != nil {
+			t.Fatal(err)
+		}
+		for _, route := range defaultSidebarRouteOrder {
+			attr := `data-sidebar-nav-route="` + route + `"`
+			if !strings.Contains(buf.String(), attr) {
+				t.Fatalf("route %q must remain available for reenabling", route)
+			}
+			wantHidden := hidden != "" && (route == "discover" || route == "liked")
+			if got := strings.Contains(buf.String(), attr+` hidden`); got != wantHidden {
+				t.Fatalf("route %q hidden = %v, want %v", route, got, wantHidden)
+			}
+		}
 	}
 }
 
@@ -580,7 +595,6 @@ func TestWideModalsUseTheSameDesktopScaleOnMoments(t *testing.T) {
 		}
 	}
 }
-
 
 func TestSidebarNavPlatforms(t *testing.T) {
 	t.Run("all platforms", func(t *testing.T) {

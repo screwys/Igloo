@@ -26,6 +26,26 @@ import (
 	"github.com/screwys/igloo/internal/storage"
 )
 
+func TestSettingsFromFormSidebarVisibility(t *testing.T) {
+	srv := newTestServer(t)
+	for _, hidden := range []string{"discover,liked", ""} {
+		form := url.Values{"sidebar_hidden_routes": {hidden}}
+		req := httptest.NewRequest("POST", "/api/settings", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if err := req.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		body := srv.settingsFromForm(req)
+		if got, present := body["sidebar_hidden_routes"]; !present || got != hidden {
+			t.Fatalf("sidebar visibility = %q (present %v), want %q", got, present, hidden)
+		}
+	}
+	req := httptest.NewRequest("POST", "/api/settings", nil)
+	if _, present := srv.settingsFromForm(req)["sidebar_hidden_routes"]; present {
+		t.Fatal("unrelated settings updates must preserve sidebar visibility")
+	}
+}
+
 func TestSettingsFromForm_PersistsDearrowMode(t *testing.T) {
 	srv := newTestServer(t)
 	form := url.Values{}

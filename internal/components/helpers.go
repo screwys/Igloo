@@ -1685,6 +1685,15 @@ type PrefsData struct {
 
 var defaultSidebarRouteOrder = []string{"discover", "videos", "feed", "shorts", "channels", "bookmarks", "liked"}
 
+func (p PrefsData) SidebarRouteHidden(route string) bool {
+	for _, hidden := range strings.Split(p.Str("sidebar_hidden_routes", ""), ",") {
+		if strings.TrimSpace(hidden) == route {
+			return true
+		}
+	}
+	return false
+}
+
 // sidebarRouteOrder returns every known route exactly once, preserving valid
 // stored choices and appending routes introduced after the preference was saved.
 func sidebarRouteOrder(raw string) []string {

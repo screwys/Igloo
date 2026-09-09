@@ -204,7 +204,8 @@ func (db *DB) listAndroidSyncFeedRecencyNodes(roots []string) (map[string]androi
 				  AND reply_to_status IN (`+placeholders(len(chunk))+`)
 				UNION
 				SELECT tweet_id FROM feed_items
-				WHERE is_ghost = 1 AND quote_tweet_id IN (`+placeholders(len(chunk))+`)
+				WHERE is_ghost = 1 AND quote_tweet_id IS NOT NULL AND quote_tweet_id != ''
+				  AND quote_tweet_id IN (`+placeholders(len(chunk))+`)
 			`, append(stringsToAny(chunk), stringsToAny(chunk)...)...)
 			if err != nil {
 				return nil, err
@@ -333,8 +334,16 @@ func (db *DB) ListAndroidSyncFeedHydrationIDs(tweetIDs []string) ([]string, erro
 				       COALESCE(reply_to_status, '')
 				FROM feed_items
 				WHERE tweet_id IN (`+placeholders(len(chunk))+`)
-				   OR (is_ghost = 1 AND (reply_to_status IN (`+placeholders(len(chunk))+`)
-				       OR quote_tweet_id IN (`+placeholders(len(chunk))+`)))
+				UNION
+				SELECT tweet_id, COALESCE(quote_tweet_id, ''), COALESCE(reply_to_status, '')
+				FROM feed_items
+				WHERE is_ghost = 1 AND reply_to_status IS NOT NULL AND reply_to_status != ''
+				  AND reply_to_status IN (`+placeholders(len(chunk))+`)
+				UNION
+				SELECT tweet_id, COALESCE(quote_tweet_id, ''), COALESCE(reply_to_status, '')
+				FROM feed_items
+				WHERE is_ghost = 1 AND quote_tweet_id IS NOT NULL AND quote_tweet_id != ''
+				  AND quote_tweet_id IN (`+placeholders(len(chunk))+`)
 			`, args...)
 			if err != nil {
 				return nil, err

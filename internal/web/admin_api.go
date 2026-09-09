@@ -461,6 +461,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 		}
 	}
 	clearableFields := []string{
+		"sidebar_hidden_routes",
 		"translate_api_site", "translate_api_key", "translate_model", "web_custom_css",
 		"share_embed_host_youtube", "share_embed_host_twitter", "share_embed_host_tiktok", "share_embed_host_instagram",
 	}

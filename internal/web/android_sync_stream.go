@@ -446,23 +446,15 @@ func (s *Server) materializeAndroidSyncChangePage(
 		if err != nil {
 			return 0, nil, err
 		}
-		if len(changes) <= androidSyncChangePageSize {
+		// A single owner's dependency closure is atomic: the cursor cannot
+		// advance past it after returning only part of its content and assets.
+		if len(changes) <= androidSyncChangePageSize || count == 1 {
 			return count, changes, nil
 		}
-		if count == 1 {
-			return 0, nil, fmt.Errorf(
-				"android sync owner %s/%s materialized %d changes, limit %d",
-				pageHeads[0].OwnerKind,
-				pageHeads[0].OwnerID,
-				len(changes),
-				androidSyncChangePageSize,
-			)
-		}
 		next := count * androidSyncChangePageSize / len(changes)
-		if next >= count {
-			next = count - 1
-		}
-		count = max(1, next)
+		// Overlapping thread closures may stay the same size as heads are
+		// removed. Halve at minimum to avoid rebuilding them once per head.
+		count = max(1, min(next, count/2))
 	}
 }
 
