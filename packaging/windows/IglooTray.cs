@@ -238,7 +238,7 @@ namespace Igloo.Windows
             try
             {
                 update.Text = "Checking for updates…";
-                await Task.Run(server.Start);
+                await Task.Run(new Action(server.Start));
                 var status = await Task.Run(() => server.Update("check"));
                 while (status.checking || status.applying)
                 {
