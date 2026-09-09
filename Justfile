@@ -100,6 +100,14 @@ doctor:
 diff-check:
     git diff --check
 
+# Build the Windows setup executable from prepared application and runtime folders.
+build-windows-installer version app runtime output:
+    pwsh -NoProfile -File packaging/windows/build-installer.ps1 -ProductVersion {{ quote(version) }} -AppDirectory {{ quote(app) }} -RuntimeDirectory {{ quote(runtime) }} -OutputDirectory {{ quote(output) }}
+
+# Exercise installation, service setup, and uninstall on a disposable Windows host.
+test-windows-installer installer:
+    pwsh -NoProfile -File packaging/windows/test-installer.ps1 -Installer {{ quote(installer) }}
+
 # Create, publish, and dispatch a signed release after an explicit request with a user-written summary.
 release bump summary:
     .github/scripts/create-release-tag.sh --push {{ quote(bump) }} {{ quote(summary) }}

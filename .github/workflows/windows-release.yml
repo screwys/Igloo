@@ -36,10 +36,13 @@ jobs:
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           go install github.com/a-h/templ/cmd/templ@v0.3.1020
-          dotnet tool install --global wix --version 6.0.2
-          wix extension add -g WixToolset.BootstrapperApplications.wixext/6.0.2
-          wix extension add -g WixToolset.Util.wixext/6.0.2
-          wix extension add -g WixToolset.Firewall.wixext/6.0.2
+          $installer = "$env:RUNNER_TEMP/inno-setup.exe"
+          Invoke-WebRequest "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe" -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne '0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f') {
+            throw "Inno Setup download checksum mismatch"
+          }
+          $process = Start-Process $installer -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /ALLUSERS' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed: $($process.ExitCode)" }
 
       - name: Generate application assets
         shell: pwsh
@@ -126,46 +129,21 @@ jobs:
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          $payload = "$env:RUNNER_TEMP/installer-payload"
-          New-Item -ItemType Directory -Force "$payload/app/current" | Out-Null
-          New-Item -ItemType Directory -Force "$payload/runtime/current" | Out-Null
-          Copy-Item -Recurse "$env:RUNNER_TEMP/igloo-app/*" "$payload/app/current/"
-          Copy-Item -Recurse "$env:RUNNER_TEMP/igloo-runtime/*" "$payload/runtime/current/"
-          $marker = "$env:RUNNER_TEMP/.igloo-state-root"
-          $mediaMarker = "$env:RUNNER_TEMP/.igloo-media-root"
-          $configMarker = "$env:RUNNER_TEMP/.igloo-config-root"
-          New-Item -ItemType File -Force $marker | Out-Null
-          New-Item -ItemType File -Force $mediaMarker | Out-Null
-          New-Item -ItemType File -Force $configMarker | Out-Null
-          wix build packaging/windows/Package.wxs `
-            -arch x64 `
-            -ext WixToolset.Util.wixext `
-            -ext WixToolset.Firewall.wixext `
-            -d "PayloadDir=$payload" `
-            -d "ProductVersion=${{ steps.versions.outputs.product_version }}" `
-            -d "StateMarker=$marker" `
-            -d "MediaMarker=$mediaMarker" `
-            -d "ConfigMarker=$configMarker" `
-            -d "InstallerIcon=$env:GITHUB_WORKSPACE/packaging/windows/InstallerIcon.ico" `
-            -o "$env:RUNNER_TEMP/Igloo-x64.msi"
-          wix msi validate "$env:RUNNER_TEMP/Igloo-x64.msi"
-          wix build packaging/windows/Bundle.wxs `
-            -arch x64 `
-            -ext WixToolset.BootstrapperApplications.wixext `
-            -ext WixToolset.Util.wixext `
-            -d "MsiPath=$env:RUNNER_TEMP/Igloo-x64.msi" `
-            -d "ProductVersion=${{ steps.versions.outputs.product_version }}" `
-            -d "InstallerIcon=$env:GITHUB_WORKSPACE/packaging/windows/InstallerIcon.ico" `
-            -d "InstallerLogo=$env:GITHUB_WORKSPACE/packaging/windows/InstallerLogo.png" `
-            -d "InstallerTheme=$env:GITHUB_WORKSPACE/packaging/windows/InstallerTheme.xml" `
-            -o "release-artifacts/IglooSetup-x64.exe"
-          Remove-Item "release-artifacts/IglooSetup-x64.wixpdb" -ErrorAction SilentlyContinue
+          packaging/windows/build-installer.ps1 `
+            -ProductVersion "${{ steps.versions.outputs.product_version }}" `
+            -AppDirectory "$env:RUNNER_TEMP/igloo-app" `
+            -RuntimeDirectory "$env:RUNNER_TEMP/igloo-runtime" `
+            -OutputDirectory "release-artifacts"
 
       - name: Run Windows-focused tests
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           go test ./internal/buildinfo ./internal/config ./internal/toolenv ./internal/windowsupdate ./internal/windowsuninstall ./cmd/igloo ./cmd/igloo-update ./cmd/igloo-sign-update ./cmd/igloo-uninstall
+
+      - name: Verify installer lifecycle
+        shell: pwsh
+        run: packaging/windows/test-installer.ps1 -Installer release-artifacts/IglooSetup-x64.exe
 
       - name: Generate artifact attestations
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
