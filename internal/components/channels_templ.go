@@ -738,7 +738,7 @@ func ChannelListItem(p PageProps, ch model.Channel) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\" style=\"position:relative; margin-bottom:1rem;\"><div class=\"channel-row-header\" style=\"display:flex; align-items:center; gap:0.5rem;\"><img class=\"channel-avatar-img\" src=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\" style=\"position:relative;\"><div class=\"channel-row-header\" style=\"display:flex; align-items:center; gap:0.5rem;\"><img class=\"channel-avatar-img\" src=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

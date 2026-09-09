@@ -2706,7 +2706,6 @@ select.input:focus {
 }
 
 .channel-row {
-    margin-bottom: 2rem;
     position: relative;
 }
 
@@ -6830,11 +6829,6 @@ body.shorts-mode .sidebar-toggle {
     }
 
     /* Channels list view */
-    .channel-row {
-        margin-bottom: 1rem;
-        /* Reduced from default 2rem */
-    }
-
     .channel-row-videos {
         gap: 0.5rem;
         grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

@@ -150,7 +150,7 @@ templ ChannelsList(p PageProps, channels []model.Channel) {
 }
 
 templ ChannelListItem(p PageProps, ch model.Channel) {
-	<div class="channel-row" data-channel-id={ ch.ChannelID } data-channel-name={ ch.Name } data-channel-platform={ ch.Platform } style="position:relative; margin-bottom:1rem;">
+	<div class="channel-row" data-channel-id={ ch.ChannelID } data-channel-name={ ch.Name } data-channel-platform={ ch.Platform } style="position:relative;">
 		<div class="channel-row-header" style="display:flex; align-items:center; gap:0.5rem;">
 			<img class="channel-avatar-img" src={ ch.AvatarURL } alt="" loading="lazy" onload="window.MpaSiteBase&&window.MpaSiteBase.avatarLoad(this)" onerror="if(window.MpaSiteBase&&window.MpaSiteBase.avatarError(this))return;this.style.display='none';this.nextElementSibling.style.display='flex'"/>
 			<div class="channel-avatar" style="display:none; width:32px; height:32px; font-size:0.9rem;">{ strings.ToUpper(FirstChar(ch.Name)) }</div>
