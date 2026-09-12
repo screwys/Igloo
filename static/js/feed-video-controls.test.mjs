@@ -189,7 +189,13 @@ async function loadVideoControls() {
   window.top = window
   const document = new FakeElement('document')
   document.createElement = (tagName) => new FakeElement(tagName)
-  const context = vm.createContext({ document, window, HTMLVideoElement: FakeVideo })
+  const context = vm.createContext({
+    document,
+    window,
+    HTMLVideoElement: FakeVideo,
+    setTimeout: (...args) => window.setTimeout(...args),
+    clearTimeout: (...args) => window.clearTimeout(...args),
+  })
   vm.runInContext(runnable, context, { filename: 'video-controls.js' })
   context.runPendingTimer = function () {
     const callback = pendingTimer
@@ -500,21 +506,25 @@ test('feed controls attach feedback bezel and respond to user actions only', asy
   assert.equal(bezel.classList.contains('is-animating'), true)
   assert.equal(bezel.innerHTML, '<svg>PlayArrow</svg>')
 
-  // Video starts muted; clicking mute button unmutes and triggers sound wave icon
+  const volBezel = wrap.querySelector('[data-video-volume-bezel]')
+  assert.ok(volBezel, 'volume bezel should be created')
+  assert.equal(volBezel.classList.contains('is-visible'), false)
+
+  // Video starts muted; clicking mute button unmutes and shows volume level pill
   const muteBtn = controls.querySelector('[data-feed-video-mute]')
   muteBtn.dispatch('click')
-  assert.equal(bezel.classList.contains('is-animating'), true)
-  assert.equal(bezel.innerHTML, '<svg>VolumeUp</svg>')
+  assert.equal(volBezel.classList.contains('is-visible'), true)
+  assert.equal(volBezel.textContent, '80%')
 
-  // Clicking mute button again mutes and triggers mute icon
+  // Clicking mute button again mutes and shows 0%
   muteBtn.dispatch('click')
-  assert.equal(bezel.classList.contains('is-animating'), true)
-  assert.equal(bezel.innerHTML, '<svg>VolumeOff</svg>')
+  assert.equal(volBezel.classList.contains('is-visible'), true)
+  assert.equal(volBezel.textContent, '0%')
 
-  // Arrow shortcut triggers volume feedback
+  // Arrow shortcut triggers volume percentage feedback
   media.handleFeedVideoShortcut({ key: 'ArrowDown' }, video)
   video.dispatch('volumechange')
-  assert.equal(bezel.classList.contains('is-animating'), true)
+  assert.equal(volBezel.classList.contains('is-visible'), true)
 })
 
 test('bindVideoFeedback supports main player surface with shortcuts and volume changes', async () => {
@@ -525,11 +535,14 @@ test('bindVideoFeedback supports main player surface with shortcuts and volume c
 
   const feedback = media.bindVideoFeedback(playerWrapper, video)
   const bezel = playerWrapper.querySelector('[data-video-feedback-bezel]')
+  const volBezel = playerWrapper.querySelector('[data-video-volume-bezel]')
   assert.ok(bezel, 'feedback bezel should be created')
+  assert.ok(volBezel, 'volume bezel should be created')
 
   // Background play without user interaction -> no bezel
   video.dispatch('play')
   assert.equal(bezel.classList.contains('is-animating'), false)
+  assert.equal(volBezel.classList.contains('is-visible'), false)
 
   // User presses Space or 'k'
   feedback.markUserAction()
@@ -543,12 +556,18 @@ test('bindVideoFeedback supports main player surface with shortcuts and volume c
   assert.equal(bezel.classList.contains('is-animating'), true)
   assert.equal(bezel.innerHTML, '<svg>Pause</svg>')
 
-  // User changes volume via ArrowUp/ArrowDown (volume 0.3 = low)
+  // User changes volume via ArrowUp/ArrowDown (volume 0.9 = 90%)
   feedback.markUserAction()
   video.muted = false
-  video.volume = 0.3
-  assert.equal(bezel.classList.contains('is-animating'), true)
-  assert.equal(bezel.innerHTML, '<svg>VolumeDown</svg>')
+  video.volume = 0.9
+  assert.equal(volBezel.classList.contains('is-visible'), true)
+  assert.equal(volBezel.textContent, '90%')
+
+  // User sets volume to 0.85 = 85%
+  feedback.markUserAction()
+  video.volume = 0.85
+  assert.equal(volBezel.classList.contains('is-visible'), true)
+  assert.equal(volBezel.textContent, '85%')
 
   // Destroy disconnects feedback
   feedback.destroy()

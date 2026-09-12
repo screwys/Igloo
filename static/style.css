@@ -10391,6 +10391,45 @@ body.shorts-mode .sidebar {
     }
 }
 
+/* Video player top volume pill feedback (YouTube style) */
+.video-volume-bezel {
+    position: absolute;
+    top: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 58px;
+    height: 32px;
+    padding: 0 14px;
+    box-sizing: border-box;
+    border-radius: 16px;
+    background: rgba(0, 0, 0, 0.65);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 32px;
+    text-align: center;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    z-index: 25;
+    opacity: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    transition: opacity 0.25s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.video-volume-bezel.is-visible {
+    opacity: 1;
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .video-volume-bezel {
+        transition: opacity 0.1s linear;
+    }
+}
+
 .feed-media-wrap-grid {
     background: transparent;
     border: none;
