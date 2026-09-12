@@ -159,6 +159,7 @@ type Video struct {
 	SourceKind         string   // ""|story
 	PlaybackPosition   float64
 	EagerLoad          bool // skip loading="lazy" for above-the-fold images
+	NextInLine         bool `json:"-"` // badge next-in-line indicator for player sidebar
 	Metadata           *VideoMetadata
 	// Repost fields are joined for Moments. A repost-introduced video still
 	// appears once; RepostCount tells the UI how many followed sources surfaced it.

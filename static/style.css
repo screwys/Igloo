@@ -206,7 +206,8 @@ body.feed-media-overlay-open {
     color: var(--text-secondary);
 }
 
-.discover-ready-badge {
+.discover-ready-badge,
+.player-next-badge {
     position: absolute;
     left: 0.45rem;
     bottom: 0.45rem;
@@ -219,6 +220,9 @@ body.feed-media-overlay-open {
     backdrop-filter: blur(6px);
 }
 
+.player-next-badge {
+    display: none;
+}
 
 .discover-rail-loading {
     padding: 0.75rem;
@@ -5878,6 +5882,7 @@ html.mini-player-moving * {
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
+.player-layout.fullscreen-browse #player-discovery-rail,
 .player-layout.fullscreen-browse .more-videos-list {
     display: contents;
 }
@@ -5894,6 +5899,9 @@ html.mini-player-moving * {
     grid-column: 1 / -1;
 }
 
+.player-layout.fullscreen-browse .player-next-badge {
+    display: block;
+}
 
 .player-layout:fullscreen.fullscreen-immersive {
     grid-template-columns: 1fr;

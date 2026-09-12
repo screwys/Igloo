@@ -229,7 +229,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 				if nextVideo != nil {
 					<h3>{ L(p, "player_next_in_line", "Next in line") }</h3>
 					<div class="more-videos-list">
-						@VideoCard(p, *nextVideo)
+						@VideoCard(p, nextInLineVideoCard(*nextVideo))
 					</div>
 				}
 				@PlayerDiscoveryRail(p, video.VideoID, moreFromChannel, recommendations, recommendationsPending)
@@ -237,6 +237,11 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 		</div>
 		<script type="module" src={ p.StaticV("js/media-chrome-loader.js") }></script>
 	}
+}
+
+func nextInLineVideoCard(v model.Video) model.Video {
+	v.NextInLine = true
+	return v
 }
 
 func nextVideoURL(v *model.Video) string {

@@ -1,5 +1,4 @@
 import { materialIconMarkup, setSvgContent } from './utils.js'
-import { volumeIconLevel } from './volume.js'
 
 function getFeedbackIcon(kind) {
   switch (kind) {
@@ -7,12 +6,6 @@ function getFeedbackIcon(kind) {
       return materialIconMarkup('PlayArrow')
     case 'pause':
       return materialIconMarkup('Pause')
-    case 'muted':
-      return materialIconMarkup('VolumeOff')
-    case 'low':
-      return materialIconMarkup('VolumeDown')
-    case 'high':
-      return materialIconMarkup('VolumeUp')
     default:
       return typeof kind === 'string' && kind.startsWith('<') ? kind : materialIconMarkup(kind)
   }
@@ -29,6 +22,23 @@ export function ensureFeedbackBezel(surface) {
     bezel = doc.createElement('div')
     bezel.className = 'video-feedback-bezel'
     bezel.setAttribute('data-video-feedback-bezel', '')
+    bezel.setAttribute('aria-hidden', 'true')
+    surface.appendChild(bezel)
+  }
+  return bezel
+}
+
+export function ensureVolumeBezel(surface) {
+  if (!surface) return null
+  let bezel = null
+  if (typeof surface.querySelector === 'function') {
+    bezel = surface.querySelector('[data-video-volume-bezel]')
+  }
+  if (!bezel) {
+    const doc = surface.ownerDocument || document
+    bezel = doc.createElement('div')
+    bezel.className = 'video-volume-bezel'
+    bezel.setAttribute('data-video-volume-bezel', '')
     bezel.setAttribute('aria-hidden', 'true')
     surface.appendChild(bezel)
   }
@@ -57,6 +67,29 @@ export function showVideoFeedback(surface, iconKind) {
     }
     bezel.addEventListener('animationend', onEnd)
   }
+  return bezel
+}
+
+export function showVideoVolumeFeedback(surface, percent) {
+  if (!surface) return null
+  const bezel = ensureVolumeBezel(surface)
+  if (!bezel) return null
+
+  bezel.textContent = String(percent)
+  if (bezel.classList && typeof bezel.classList.add === 'function') {
+    bezel.classList.add('is-visible')
+  }
+
+  if (bezel._hideTimeout) {
+    clearTimeout(bezel._hideTimeout)
+  }
+  bezel._hideTimeout = setTimeout(function () {
+    if (bezel.classList && typeof bezel.classList.remove === 'function') {
+      bezel.classList.remove('is-visible')
+    }
+    bezel._hideTimeout = null
+  }, 800)
+
   return bezel
 }
 
@@ -92,8 +125,9 @@ export function bindVideoFeedback(surface, video, options) {
 
   function onVolumeChange() {
     if (Date.now() - lastUserActionTime < 1000) {
-      const level = volumeIconLevel(video.muted, video.volume)
-      showVideoFeedback(surface, level)
+      const isMuted = Boolean(video.muted)
+      const vol = isMuted ? 0 : Math.round((Number(video.volume) || 0) * 100)
+      showVideoVolumeFeedback(surface, `${vol}%`)
     }
   }
 
@@ -118,15 +152,24 @@ export function bindVideoFeedback(surface, video, options) {
   })
 
   ensureFeedbackBezel(surface)
+  ensureVolumeBezel(surface)
 
   const feedback = {
     showFeedback: function (kind) {
       showVideoFeedback(surface, kind)
     },
+    showVolumeFeedback: function (percent) {
+      showVideoVolumeFeedback(surface, percent)
+    },
     markUserAction: markUserAction,
     destroy: function () {
       if (video._videoFeedback === feedback) {
         video._videoFeedback = null
+      }
+      const volBezel = surface.querySelector ? surface.querySelector('[data-video-volume-bezel]') : null
+      if (volBezel && volBezel._hideTimeout) {
+        clearTimeout(volBezel._hideTimeout)
+        volBezel._hideTimeout = null
       }
       if (typeof surface.removeEventListener === 'function') {
         surface.removeEventListener('pointerdown', onPointerDown, { capture: true })

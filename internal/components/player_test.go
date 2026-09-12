@@ -141,3 +141,32 @@ func TestPlayerRendersChannelActionFromFollowState(t *testing.T) {
 		})
 	}
 }
+
+func TestPlayerRendersNextInLineBadge(t *testing.T) {
+	p := newTestPageProps()
+	video := model.Video{
+		VideoID:   "video1",
+		ChannelID: "ch1",
+		Title:     "Current Video",
+		Platform:  "youtube",
+	}
+	nextVideo := &model.Video{
+		VideoID:   "video2",
+		ChannelID: "ch2",
+		Title:     "Upcoming Video",
+		Platform:  "youtube",
+	}
+
+	var buf bytes.Buffer
+	if err := PlayerPage(p, video, nil, nil, nextVideo, nil, false, "").Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+
+	if !strings.Contains(html, `class="player-next-badge"`) {
+		t.Fatalf("expected player-next-badge in player sidebar for next video:\n%s", html)
+	}
+	if !strings.Contains(html, "Next in line") {
+		t.Fatalf("expected Next in line text in badge:\n%s", html)
+	}
+}

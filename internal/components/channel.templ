@@ -189,6 +189,9 @@ templ VideoCard(p PageProps, v model.Video) {
 					<span class="video-duration">{ dur }</span>
 				}
 			}
+			if v.NextInLine {
+				<span class="player-next-badge">{ L(p, "player_next_in_line", "Next in line") }</span>
+			}
 			@VideoMediaTypeBadge(p, v)
 		</div>
 		<div class="video-info">
