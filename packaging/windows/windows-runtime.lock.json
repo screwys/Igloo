@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026.08.30.1",
+  "revision": "2026.08.31.1",
   "artifacts": {
     "yt-dlp": {
       "version": "2026.08.29.232711",
@@ -25,10 +25,10 @@
     },
     "ffmpeg": {
       "version": "9.0.1-11-ge47273f4d9",
-      "release": "autobuild-2026-08-30-13-12",
-      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-30-13-12/ffmpeg-n9.0.1-11-ge47273f4d9-win64-gpl-shared-9.0.zip",
-      "sha256": "c1f9d0c6fae2e906588202d39d2f25f808452f20baa8a6ce709c7b10bfd66454",
-      "size": 76434041,
+      "release": "autobuild-2026-08-31-13-27",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-31-13-27/ffmpeg-n9.0.1-11-ge47273f4d9-win64-gpl-shared-9.0.zip",
+      "sha256": "00d78694632f17a1de325c639d0acf04a6b3ab8f20ce0a2e5bedd2d5e21e3adb",
+      "size": 76434028,
       "output": "ffmpeg.zip"
     }
   }
