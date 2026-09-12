@@ -292,14 +292,7 @@ internal class NativeFeedCardViews(context: Context) {
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
     }
-    val menu: ImageButton = ImageButton(context).apply {
-        background = null
-        scaleType = ImageView.ScaleType.CENTER
-        setPadding(dp(10), dp(6), dp(10), dp(6))
-        setImageResource(R.drawable.ic_feed_more_vert_24)
-        contentDescription = context.getString(R.string.action_more)
-        layoutParams = LinearLayout.LayoutParams(dp(48), dp(36))
-    }
+    val menu: ImageButton get() = header.menu
 
     init {
         root.addView(thread)
@@ -359,10 +352,10 @@ internal class NativeIdentityHeaderViews(context: Context) {
     private val nameRow: LinearLayout = object : LinearLayout(context) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             val unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-            val reserved = listOf(follow).filter { it.visibility != View.GONE }.sumOf {
+            val reserved = listOf(follow, menu).filter { it.visibility != View.GONE }.sumOf {
                 it.measure(unspecified, heightMeasureSpec)
                 it.measuredWidth
-            }
+            } + if (follow.visibility != View.GONE && menu.visibility != View.GONE) dp(4) else 0
             name.maxWidth = (View.MeasureSpec.getSize(widthMeasureSpec) - reserved - dp(6)).coerceAtLeast(0)
             super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         }
@@ -398,6 +391,14 @@ internal class NativeIdentityHeaderViews(context: Context) {
         ellipsize = TextUtils.TruncateAt.END
         setPadding(dp(10), dp(4), dp(10), dp(4))
     }
+    val menu: ImageButton = ImageButton(context).apply {
+        background = null
+        scaleType = ImageView.ScaleType.CENTER
+        setPadding(dp(4), dp(3), dp(4), dp(3))
+        setImageResource(R.drawable.ic_feed_more_vert_24)
+        contentDescription = context.getString(R.string.action_more)
+        visibility = View.GONE
+    }
     val meta: TextView = smallText(context).apply {
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
@@ -425,6 +426,12 @@ internal class NativeIdentityHeaderViews(context: Context) {
         nameRow.addView(name, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         nameRow.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
         nameRow.addView(follow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)))
+        nameRow.addView(
+            menu,
+            LinearLayout.LayoutParams(dp(30), dp(30)).apply {
+                marginStart = dp(4)
+            },
+        )
         textColumn.addView(nameRow)
         metaRow.addView(meta, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         metaRow.addView(accountBadge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(24)).apply {

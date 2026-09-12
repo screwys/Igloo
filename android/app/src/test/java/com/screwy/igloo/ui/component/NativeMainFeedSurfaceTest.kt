@@ -20,6 +20,7 @@ import java.io.FileOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -64,6 +65,42 @@ class NativeMainFeedSurfaceTest {
         assertEquals(header.meta.right + dp(6), header.accountBadge.left)
         assertTrue(header.date.right <= (header.date.parent as View).width)
         assertTrue(header.follow.right <= (header.follow.parent as View).width)
+    }
+
+    @Test
+    fun feedCardViewsMenuDelegatesToHeaderMenu() {
+        val cardViews = NativeFeedCardViews(ApplicationProvider.getApplicationContext<Context>())
+        assertSame(cardViews.header.menu, cardViews.menu)
+    }
+
+    @Test
+    fun headerTripledotMenuStaysOnTopRightAndLeavesRoomForFollow() {
+        val header = NativeIdentityHeaderViews(ApplicationProvider.getApplicationContext<Context>())
+        header.follow.text = "Follow"
+        header.follow.visibility = View.VISIBLE
+        header.menu.visibility = View.VISIBLE
+        fun layout(name: String) {
+            header.name.text = name
+            header.meta.text = name
+            header.root.measure(
+                View.MeasureSpec.makeMeasureSpec(500, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            )
+            header.root.layout(0, 0, 500, header.root.measuredHeight)
+        }
+        layout("Sample")
+        assertTrue(header.follow.right <= header.menu.left)
+        assertTrue(header.menu.right <= (header.menu.parent as View).width)
+
+        layout("A very long display name ".repeat(20))
+        assertTrue(header.name.right <= header.follow.left)
+        assertTrue(header.follow.right <= header.menu.left)
+        assertTrue(header.menu.right <= (header.menu.parent as View).width)
+
+        header.follow.visibility = View.GONE
+        layout("A very long display name ".repeat(20))
+        assertTrue(header.name.right <= header.menu.left)
+        assertTrue(header.menu.right <= (header.menu.parent as View).width)
     }
 
     @Test

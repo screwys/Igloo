@@ -128,6 +128,7 @@ internal class NativeFeedViewHolder(
             timestamp = localizedRelativeTime(views.root.context, item.publishedAt),
             showFollow = item.channelId?.isNotBlank() == true,
             isFollowed = row.channelIsFollowed == 1,
+            showMenu = true,
             colors = colors,
             translation = translationPill,
             onClick = {
@@ -144,6 +145,9 @@ internal class NativeFeedViewHolder(
                 } else {
                     callbacks.onFollowToggle(channelId, true)
                 }
+            },
+            onMenuClick = {
+                showMenu(views.menu, row)
             },
             onTranslationClick = {
                 if (bodyTranslation != null) {
@@ -279,10 +283,8 @@ internal class NativeFeedViewHolder(
                 views.thread.findViewWithTag<LinearLayout>(
                     nativeThreadActionsTag(post.row.item.tweetId)
                 ) ?: return@forEach
-            val menu = actions.getChildAt(0) as? ImageButton ?: ImageButton(views.root.context)
             bindActionRow(
                 container = actions,
-                menu = menu,
                 row = post.row,
                 post = post,
                 shareUrl = feedShareUrl(post.row).trim(),
@@ -355,6 +357,7 @@ internal class NativeFeedViewHolder(
             timestamp = localizedRelativeTime(views.root.context, item.publishedAt),
             showFollow = false,
             isFollowed = false,
+            showMenu = true,
             colors = colors,
             translation = null,
             onClick = {
@@ -363,6 +366,9 @@ internal class NativeFeedViewHolder(
                 }
             },
             onFollowClick = {},
+            onMenuClick = {
+                showMenu(header.menu, row)
+            },
         )
         container.addView(header.root)
 
@@ -703,7 +709,6 @@ internal class NativeFeedViewHolder(
     ) {
         bindActionRow(
             container = views.actionContainer,
-            menu = views.menu,
             row = row,
             post = post,
             shareUrl = shareUrl,
@@ -773,14 +778,12 @@ internal class NativeFeedViewHolder(
         val context = views.root.context
         val row = post.row
         val shareUrl = feedShareUrl(row).trim()
-        val menu = ImageButton(context)
         return LinearLayout(context).apply {
             tag = nativeThreadActionsTag(row.item.tweetId)
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             bindActionRow(
                 container = this,
-                menu = menu,
                 row = row,
                 post = post,
                 shareUrl = shareUrl,
@@ -792,7 +795,6 @@ internal class NativeFeedViewHolder(
 
     private fun bindActionRow(
         container: LinearLayout,
-        menu: ImageButton,
         row: FeedRow,
         post: SocialPostModel,
         shareUrl: String,
@@ -801,8 +803,6 @@ internal class NativeFeedViewHolder(
     ) {
         val canOpenExternal = shareUrl.isNotBlank()
         container.removeAllViews()
-        configureMenuButton(menu, colors)
-        menu.setOnClickListener { showMenu(menu, row) }
         NativeFeedPrimaryActions.forEach { action ->
             val button = actionIconButton(views.root.context, colors)
             button.contentDescription = action.contentDescription(views.root.context, post)
@@ -852,7 +852,6 @@ internal class NativeFeedViewHolder(
             }
             container.addView(button, equalActionLayoutParams())
         }
-        container.addView(menu, equalActionLayoutParams())
     }
 
     private fun equalActionLayoutParams(): LinearLayout.LayoutParams =
@@ -861,10 +860,10 @@ internal class NativeFeedViewHolder(
     private fun configureMenuButton(menu: ImageButton, colors: NativeFeedColors) {
         menu.background = null
         menu.scaleType = ImageView.ScaleType.CENTER
-        menu.setPadding(dp(10), dp(6), dp(10), dp(6))
+        menu.setPadding(dp(4), dp(3), dp(4), dp(3))
         menu.setImageResource(R.drawable.ic_feed_more_vert_24)
         menu.setColorFilter(colors.onSurfaceMuted)
-        menu.contentDescription = views.root.context.getString(R.string.action_more)
+        menu.contentDescription = menu.context.getString(R.string.action_more)
     }
 
     private fun threadCapsulePostCount(threaded: ThreadedFeedRow): Int = threaded.chain.size + 1
@@ -919,10 +918,12 @@ internal class NativeFeedViewHolder(
         timestamp: String,
         showFollow: Boolean,
         isFollowed: Boolean,
+        showMenu: Boolean = false,
         colors: NativeFeedColors,
         translation: NativeTranslationPill? = null,
         onClick: () -> Unit,
         onFollowClick: () -> Unit,
+        onMenuClick: (() -> Unit)? = null,
         onTranslationClick: () -> Unit = {},
     ) {
         header.root.setOnClickListener { onClick() }
@@ -952,6 +953,14 @@ internal class NativeFeedViewHolder(
         header.follow.background =
             roundedFill(if (isFollowed) colors.surfaceHighest else colors.primary, dp(999))
         header.follow.setOnClickListener { onFollowClick() }
+        if (showMenu && onMenuClick != null) {
+            header.menu.visibility = View.VISIBLE
+            configureMenuButton(header.menu, colors)
+            header.menu.setOnClickListener { onMenuClick() }
+        } else {
+            header.menu.visibility = View.GONE
+            header.menu.setOnClickListener(null)
+        }
     }
 
     private fun bindTranslationPill(
