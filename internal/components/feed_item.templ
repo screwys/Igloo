@@ -314,11 +314,23 @@ templ feedAuthorAside(p PageProps, item model.FeedItem, authorLabel string) {
 	}
 	@accountDetailsBadge(p, item.AuthorAccountRegion, item.AuthorAccountDetailsJSON, authorLabel, item.AuthorHandle)
 	if item.PublishedAt != nil {
-		<span
-			class="feed-date-inline"
-			data-feed-date-raw={ feedPublishedAtStr(item.PublishedAt) }
-			title={ feedPublishedAtStr(item.PublishedAt) }
-			>&middot; { RelativeTimeText(p, item.PublishedAt) }</span>
+		<span class="feed-date-inline feed-date-sep">&middot;</span>
+		if item.TweetID != "" {
+			<a
+				class="feed-date-inline feed-date-link"
+				href={ templ.SafeURL("/thread/" + item.TweetID) }
+				data-feed-thread-open
+				data-thread-tweet-id={ item.TweetID }
+				data-feed-date-raw={ feedPublishedAtStr(item.PublishedAt) }
+				title={ feedPublishedAtStr(item.PublishedAt) }
+			>{ RelativeTimeText(p, item.PublishedAt) }</a>
+		} else {
+			<span
+				class="feed-date-inline"
+				data-feed-date-raw={ feedPublishedAtStr(item.PublishedAt) }
+				title={ feedPublishedAtStr(item.PublishedAt) }
+			>{ RelativeTimeText(p, item.PublishedAt) }</span>
+		}
 	}
 	if hasBodyTranslatePill(item) && (item.ArticleTitle == "" || p.ArticleReader) {
 		<span class="feed-date-inline">&middot;</span>
@@ -711,7 +723,19 @@ templ feedQuoteCard(p PageProps, item model.FeedItem, deferMedia bool) {
 				}
 				@accountDetailsBadge(p, item.QuoteAccountRegion, item.QuoteAccountDetailsJSON, qLabel, item.QuoteAuthorHandle)
 				if item.QuotePublishedAt != nil {
-							<span class="feed-quote-date" data-feed-date-raw={ feedPublishedAtStr(item.QuotePublishedAt) } title={ feedPublishedAtStr(item.QuotePublishedAt) }>&middot; { RelativeTimeText(p, item.QuotePublishedAt) }</span>
+					<span class="feed-quote-date feed-date-sep">&middot;</span>
+					if item.QuoteTweetID != "" {
+						<a
+							class="feed-quote-date feed-date-link"
+							href={ templ.SafeURL("/thread/" + item.QuoteTweetID) }
+							data-feed-thread-open
+							data-thread-tweet-id={ item.QuoteTweetID }
+							data-feed-date-raw={ feedPublishedAtStr(item.QuotePublishedAt) }
+							title={ feedPublishedAtStr(item.QuotePublishedAt) }
+						>{ RelativeTimeText(p, item.QuotePublishedAt) }</a>
+					} else {
+						<span class="feed-quote-date" data-feed-date-raw={ feedPublishedAtStr(item.QuotePublishedAt) } title={ feedPublishedAtStr(item.QuotePublishedAt) }>{ RelativeTimeText(p, item.QuotePublishedAt) }</span>
+					}
 				}
 					if hasQuoteTranslatePill(item) && (item.QuoteArticleTitle == "" || p.ArticleReader) {
 					<span class="feed-quote-date">&middot;</span>

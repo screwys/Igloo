@@ -26,5 +26,12 @@ func TestFeedContextShowsSnapshotAndHonorsNotesOptOut(t *testing.T) {
 		if strings.Contains(body, "Community Note") != enabled || strings.Contains(body, "https://example.test/evidence") != enabled {
 			t.Fatalf("note opt-out ignored: %s", body)
 		}
+		if enabled {
+			for _, noteClass := range []string{"feed-community-note-header", "feed-community-note-icon", "feed-community-note-body"} {
+				if !strings.Contains(body, noteClass) {
+					t.Fatalf("missing note element %q: %s", noteClass, body)
+				}
+			}
+		}
 	}
 }

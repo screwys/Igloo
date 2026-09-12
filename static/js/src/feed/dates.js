@@ -13,19 +13,8 @@ export function initDates(container) {
     const abs = formatAbsolute(raw)
     el.setAttribute('data-date-relative', rel)
     el.setAttribute('data-date-absolute', abs)
-    el.textContent = '\u00b7 ' + (rel || raw)
+    el.textContent = rel || raw
     el.title = abs || raw
-    if (el.dataset.feedDateBound === '1') return
-    el.dataset.feedDateBound = '1'
-    el.addEventListener('mouseenter', function () {
-      const absolute = String(el.getAttribute('data-date-absolute') || '').trim()
-      if (absolute) el.textContent = '\u00b7 ' + absolute
-    })
-    el.addEventListener('mouseleave', function () {
-      const relative = String(el.getAttribute('data-date-relative') || '').trim()
-      const fallback = String(el.getAttribute('data-feed-date-raw') || '').trim()
-      el.textContent = '\u00b7 ' + (relative || fallback)
-    })
   })
 }
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/screwys/igloo/internal/model"
 )
@@ -850,5 +851,54 @@ func TestFeedGIFPreservesOverlayNavigationKind(t *testing.T) {
 	}
 	if html := buf.String(); !strings.Contains(html, `data-feed-video-kind="gif"`) {
 		t.Fatalf("GIF playback kind missing; html=%s", html)
+	}
+}
+
+func TestFeedTimestampsRenderThreadLinks(t *testing.T) {
+	now := time.Unix(1700000000, 0).UTC()
+	item := model.FeedItem{
+		TweetID:          "parent_tweet_123",
+		AuthorHandle:     "parent_author",
+		PublishedAt:      &now,
+		QuoteTweetID:     "quoted_tweet_456",
+		QuotePublishedAt: &now,
+		QuoteBodyText:    "Quoted text",
+	}
+
+	var buf bytes.Buffer
+	if err := FeedItem(PageProps{}, item).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render feed item: %v", err)
+	}
+	html := buf.String()
+
+	wantParentLink := `href="/thread/parent_tweet_123"`
+	if !strings.Contains(html, wantParentLink) {
+		t.Fatalf("parent timestamp should link to thread: %s", html)
+	}
+	if !strings.Contains(html, `class="feed-date-inline feed-date-link"`) {
+		t.Fatalf("parent timestamp should have feed-date-link class: %s", html)
+	}
+	if !strings.Contains(html, `data-thread-tweet-id="parent_tweet_123"`) {
+		t.Fatalf("parent timestamp should have data-thread-tweet-id: %s", html)
+	}
+
+	wantQuoteLink := `href="/thread/quoted_tweet_456"`
+	if !strings.Contains(html, wantQuoteLink) {
+		t.Fatalf("quote timestamp should link to thread: %s", html)
+	}
+	if !strings.Contains(html, `class="feed-quote-date feed-date-link"`) {
+		t.Fatalf("quote timestamp should have feed-quote-date feed-date-link class: %s", html)
+	}
+	if !strings.Contains(html, `data-thread-tweet-id="quoted_tweet_456"`) {
+		t.Fatalf("quote timestamp should have quote thread tweet id: %s", html)
+	}
+	if strings.Contains(html, `class="feed-date-inline feed-date-link">&middot;`) || strings.Contains(html, `class="feed-quote-date feed-date-link">&middot;`) {
+		t.Fatalf("separator middot should not be inside timestamp link: %s", html)
+	}
+	if !strings.Contains(html, `<span class="feed-date-inline feed-date-sep">&middot;</span>`) {
+		t.Fatalf("parent separator middot missing outside link: %s", html)
+	}
+	if !strings.Contains(html, `<span class="feed-quote-date feed-date-sep">&middot;</span>`) {
+		t.Fatalf("quote separator middot missing outside link: %s", html)
 	}
 }

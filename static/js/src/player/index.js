@@ -760,12 +760,6 @@ if (root && video) {
     const abs = formatAbsolute(raw)
     playerDateEl.textContent = rel || raw
     playerDateEl.title = abs || raw
-    playerDateEl.addEventListener('mouseenter', function () {
-      playerDateEl.textContent = abs || raw
-    })
-    playerDateEl.addEventListener('mouseleave', function () {
-      playerDateEl.textContent = rel || raw
-    })
   }
 
   function setupDescriptionBox() {

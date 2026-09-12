@@ -34,8 +34,13 @@ templ feedContext(p PageProps, pollJSON string, note string) {
 	}
 	if p.CommunityNotesEnabled && note != "" {
 		<aside class="feed-community-note">
-			<strong>{ L(p, "feed_community_note", "Community Note") }</strong>
-			<p class="feed-community-note-text">@templ.Raw(Linkify(note))</p>
+			<div class="feed-community-note-header">
+				@MaterialIcon("People", "feed-community-note-icon")
+				<strong>{ L(p, "feed_community_note", "Community Note") }</strong>
+			</div>
+			<div class="feed-community-note-body">
+				<p class="feed-community-note-text">@templ.Raw(Linkify(note))</p>
+			</div>
 		</aside>
 	}
 }
