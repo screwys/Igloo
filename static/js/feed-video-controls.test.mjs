@@ -22,6 +22,12 @@ class FakeClassList {
     this.element.className = Array.from(values).join(' ')
   }
 
+  remove(name) {
+    const values = this.values()
+    values.delete(name)
+    this.element.className = Array.from(values).join(' ')
+  }
+
   toggle(name, force) {
     const values = this.values()
     const enabled = force === undefined ? !values.has(name) : force
@@ -121,12 +127,24 @@ class FakeVideo extends FakeElement {
   constructor() {
     super('video')
     this.paused = true
-    this.muted = true
-    this.volume = 0.8
+    this._muted = true
+    this._volume = 0.8
     this.playbackRate = 1
     this.defaultPlaybackRate = 1
     this.currentTime = 0
     this.duration = 60
+  }
+
+  get muted() { return this._muted }
+  set muted(value) {
+    this._muted = Boolean(value)
+    this.dispatch('volumechange')
+  }
+
+  get volume() { return this._volume }
+  set volume(value) {
+    this._volume = Number(value)
+    this.dispatch('volumechange')
   }
 
   play() {
@@ -145,11 +163,13 @@ async function loadVideoControls() {
   const source = await readFile(new URL('./src/feed/video-controls.js', import.meta.url), 'utf8')
   const visibilitySource = await readFile(new URL('./src/video-controls-visibility.js', import.meta.url), 'utf8')
   const volumeSource = await readFile(new URL('./src/volume.js', import.meta.url), 'utf8')
+  const feedbackSource = await readFile(new URL('./src/video-feedback.js', import.meta.url), 'utf8')
   const runnable = "const attachSeekTooltip = () => {}; const makeDraggableSeekbar = () => {}; const materialIconMarkup = (name) => '<svg>' + name + '</svg>'; const setSvgContent = (element, html) => { element.innerHTML = html }; const t = (_key, fallback) => fallback; const tf = (_key, fallback) => fallback;\n" +
     volumeSource.replace(/\bexport\s+/g, '') + '\n' +
     visibilitySource.replace(/\bexport\s+/g, '') + '\n' +
+    feedbackSource.replace(/^import .*$/gm, '').replace(/\bexport\s+/g, '') + '\n' +
     source.replace(/^import .*$/gm, '').replace(/\bexport\s+/g, '') +
-    '\nObject.assign(globalThis, { createFeedVideoControls, bindFeedVideoControls, exitFeedVideoFullscreen, handleFeedVideoShortcut, toggleFeedVideoFullscreen, toggleFeedVideoMute });'
+    '\nObject.assign(globalThis, { createFeedVideoControls, bindFeedVideoControls, exitFeedVideoFullscreen, handleFeedVideoShortcut, toggleFeedVideoFullscreen, toggleFeedVideoMute, showVideoFeedback, bindVideoFeedback, ensureFeedbackBezel });'
 
   let pendingTimer = null
   const window = {
@@ -455,4 +475,82 @@ test('moments toolbox options support omitting mini/cinema and binding autoplay'
   assert.equal(toggled, true)
   assert.equal(autoplayState, true)
   assert.equal(autoplay.getAttribute('aria-pressed'), 'true')
+})
+
+test('feed controls attach feedback bezel and respond to user actions only', async () => {
+  const media = await loadVideoControls()
+  const wrap = new FakeElement('div')
+  const controls = media.createFeedVideoControls()
+  const video = new FakeVideo()
+  wrap.appendChild(video)
+  wrap.appendChild(controls)
+
+  media.bindFeedVideoControls(wrap, video)
+  const bezel = wrap.querySelector('[data-video-feedback-bezel]')
+  assert.ok(bezel, 'feedback bezel should be created')
+  assert.equal(bezel.classList.contains('is-animating'), false)
+
+  // Autoplay without user interaction does NOT trigger bezel
+  video.dispatch('play')
+  assert.equal(bezel.classList.contains('is-animating'), false)
+
+  // Clicking play button triggers play feedback
+  const playBtn = controls.querySelector('[data-feed-video-play]')
+  playBtn.dispatch('click')
+  assert.equal(bezel.classList.contains('is-animating'), true)
+  assert.equal(bezel.innerHTML, '<svg>PlayArrow</svg>')
+
+  // Video starts muted; clicking mute button unmutes and triggers sound wave icon
+  const muteBtn = controls.querySelector('[data-feed-video-mute]')
+  muteBtn.dispatch('click')
+  assert.equal(bezel.classList.contains('is-animating'), true)
+  assert.equal(bezel.innerHTML, '<svg>VolumeUp</svg>')
+
+  // Clicking mute button again mutes and triggers mute icon
+  muteBtn.dispatch('click')
+  assert.equal(bezel.classList.contains('is-animating'), true)
+  assert.equal(bezel.innerHTML, '<svg>VolumeOff</svg>')
+
+  // Arrow shortcut triggers volume feedback
+  media.handleFeedVideoShortcut({ key: 'ArrowDown' }, video)
+  video.dispatch('volumechange')
+  assert.equal(bezel.classList.contains('is-animating'), true)
+})
+
+test('bindVideoFeedback supports main player surface with shortcuts and volume changes', async () => {
+  const media = await loadVideoControls()
+  const playerWrapper = new FakeElement('div')
+  const video = new FakeVideo()
+  playerWrapper.appendChild(video)
+
+  const feedback = media.bindVideoFeedback(playerWrapper, video)
+  const bezel = playerWrapper.querySelector('[data-video-feedback-bezel]')
+  assert.ok(bezel, 'feedback bezel should be created')
+
+  // Background play without user interaction -> no bezel
+  video.dispatch('play')
+  assert.equal(bezel.classList.contains('is-animating'), false)
+
+  // User presses Space or 'k'
+  feedback.markUserAction()
+  video.dispatch('play')
+  assert.equal(bezel.classList.contains('is-animating'), true)
+  assert.equal(bezel.innerHTML, '<svg>PlayArrow</svg>')
+
+  // User pauses
+  feedback.markUserAction()
+  video.dispatch('pause')
+  assert.equal(bezel.classList.contains('is-animating'), true)
+  assert.equal(bezel.innerHTML, '<svg>Pause</svg>')
+
+  // User changes volume via ArrowUp/ArrowDown (volume 0.3 = low)
+  feedback.markUserAction()
+  video.muted = false
+  video.volume = 0.3
+  assert.equal(bezel.classList.contains('is-animating'), true)
+  assert.equal(bezel.innerHTML, '<svg>VolumeDown</svg>')
+
+  // Destroy disconnects feedback
+  feedback.destroy()
+  assert.equal(video._videoFeedback, null)
 })

@@ -118,6 +118,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							</div>
 						</media-control-bar>
 					</media-controller>
+					<div class="video-feedback-bezel" data-video-feedback-bezel aria-hidden="true"></div>
 				</div>
 
 				<div class="player-controls-custom">
@@ -226,7 +227,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 
 			<aside class="player-sidebar">
 				if nextVideo != nil {
-						<h3>{ L(p, "player_next_in_line", "Next in line") }</h3>
+					<h3>{ L(p, "player_next_in_line", "Next in line") }</h3>
 					<div class="more-videos-list">
 						@VideoCard(p, *nextVideo)
 					</div>

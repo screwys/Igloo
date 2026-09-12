@@ -1214,6 +1214,9 @@ function handleInlineVideoClick(mediaTrigger, event) {
   clearPendingInlineVideoClick(mediaTrigger)
   mediaTrigger._feedVideoClickTimer = window.setTimeout(function () {
     mediaTrigger._feedVideoClickTimer = 0
+    if (inlineVideo && inlineVideo._videoFeedback && typeof inlineVideo._videoFeedback.markUserAction === 'function') {
+      inlineVideo._videoFeedback.markUserAction()
+    }
     if (inlineVideo && inlineVideo.muted) {
       inlineVideo.muted = false
       inlineVideo.play().catch(function () {})

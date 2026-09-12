@@ -6,6 +6,7 @@ import { initProgress } from './progress.js'
 import { initCinemaView } from './cinema.js'
 import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
 import { readStoredVolume, writeStoredVolume } from '../volume.js'
+import { bindVideoFeedback } from '../video-feedback.js'
 
 const doc = document
 const root = doc.getElementById('player-root')
@@ -214,6 +215,15 @@ if (root && video) {
     })
   }
 
+  let playerFeedback = null
+  function setupPlayerFeedback() {
+    if (!playerWrapper || !video) return
+    const controller = doc.getElementById('main-media-controller')
+    playerFeedback = bindVideoFeedback(playerWrapper, video, {
+      interactiveElements: [controller, volumeRange, volumeControl].filter(Boolean),
+    })
+  }
+
   function setupYouTubeVolumePreference() {
     if (channelPlatform !== 'youtube') return
     video.volume = readStoredVolume(localStorage, YOUTUBE_VOLUME_KEY, 1)
@@ -232,6 +242,7 @@ if (root && video) {
 
     if (volumeRange) {
       volumeRange.addEventListener('input', function () {
+        if (playerFeedback) playerFeedback.markUserAction()
         const nextVolume = Math.max(0, Math.min(1, Number(volumeRange.value || 0)))
         video.volume = nextVolume
         video.muted = nextVolume === 0
@@ -855,6 +866,11 @@ if (root && video) {
 
   function init() {
     bindSeekLinks(doc)
+    try {
+      setupPlayerFeedback()
+    } catch (e) {
+      console.error('Failed to setup player feedback:', e)
+    }
     setupPlayerActions()
     setupSeekButtons()
     setupFullscreenButton()
@@ -1107,6 +1123,9 @@ if (root && video) {
       if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) return
 
       var sc = window.cfShortcuts
+      if (event.key === ' ' || event.key === 'k' || event.key === 'K' || event.key === 'm' || event.key === 'M') {
+        if (playerFeedback) playerFeedback.markUserAction()
+      }
       if (sc.match('player.fullscreen', event.key)) {
         event.preventDefault()
         event.stopImmediatePropagation()
@@ -1126,12 +1145,14 @@ if (root && video) {
       } else if (event.key === 'ArrowUp') {
         event.preventDefault()
         event.stopImmediatePropagation()
+        if (playerFeedback) playerFeedback.markUserAction()
         var vol = Math.min(1, (video.volume || 0) + 0.05)
         video.volume = vol
         video.muted = false
       } else if (event.key === 'ArrowDown') {
         event.preventDefault()
         event.stopImmediatePropagation()
+        if (playerFeedback) playerFeedback.markUserAction()
         var vol = Math.max(0, (video.volume || 0) - 0.05)
         video.volume = vol
       } else if (sc.match('player.bookmark', event.key) && bookmarkBtn) {

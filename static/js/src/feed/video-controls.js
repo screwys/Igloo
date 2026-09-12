@@ -1,6 +1,7 @@
 import { attachSeekTooltip, makeDraggableSeekbar, materialIconMarkup, setSvgContent, t, tf } from '../utils.js'
 import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
 import { readStoredVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
+import { bindVideoFeedback } from '../video-feedback.js'
 
 const FEED_VOLUME_KEY = 'feedVolume'
 
@@ -203,6 +204,9 @@ export function handleFeedVideoShortcut(event, video, options) {
     return true
   }
   if (key === 'ArrowUp' || key === 'ArrowDown') {
+    if (video._videoFeedback && typeof video._videoFeedback.markUserAction === 'function') {
+      video._videoFeedback.markUserAction()
+    }
     const delta = key === 'ArrowUp' ? 0.05 : -0.05
     video.volume = Math.max(0, Math.min(1, Number(video.volume || 0) + delta))
     if (key === 'ArrowUp') video.muted = false
@@ -210,12 +214,20 @@ export function handleFeedVideoShortcut(event, video, options) {
     return true
   }
   if (key === ' ') {
+    if (video._videoFeedback && typeof video._videoFeedback.markUserAction === 'function') {
+      video._videoFeedback.markUserAction()
+    }
     if (video.paused) video.play().catch(function () {})
     else video.pause()
     return true
   }
   const shortcuts = window.cfShortcuts
-  if (shortcuts && shortcuts.match('feed.mute', key)) return toggleFeedVideoMute(video)
+  if (shortcuts && shortcuts.match('feed.mute', key)) {
+    if (video._videoFeedback && typeof video._videoFeedback.markUserAction === 'function') {
+      video._videoFeedback.markUserAction()
+    }
+    return toggleFeedVideoMute(video)
+  }
   return false
 }
 
@@ -225,6 +237,9 @@ export function bindFeedVideoControls(wrap, video, options) {
   const controls = wrap.querySelector('[data-feed-video-controls]')
   if (!controls || controls.dataset.feedVideoControlsBound === '1') return
   controls.dataset.feedVideoControlsBound = '1'
+  const feedback = bindVideoFeedback(wrap, video, {
+    interactiveElements: [wrap.querySelector('[data-feed-video-play]'), wrap.querySelector('[data-feed-video-mute]'), wrap.querySelector('[data-feed-video-volume]'), wrap.querySelector('[data-feed-video-volume-control]')].filter(Boolean),
+  })
   const volumeKey = opts.volumeKey || FEED_VOLUME_KEY
   video.volume = readStoredVolume(window.localStorage, volumeKey, video.volume)
 
@@ -319,6 +334,9 @@ export function bindFeedVideoControls(wrap, video, options) {
     play.addEventListener('click', function (event) {
       event.preventDefault()
       event.stopPropagation()
+      if (feedback && typeof feedback.markUserAction === 'function') {
+        feedback.markUserAction()
+      }
       if (typeof opts.onPlayToggle === 'function') {
         opts.onPlayToggle()
         return
@@ -331,6 +349,9 @@ export function bindFeedVideoControls(wrap, video, options) {
     mute.addEventListener('click', function (event) {
       event.preventDefault()
       event.stopPropagation()
+      if (feedback && typeof feedback.markUserAction === 'function') {
+        feedback.markUserAction()
+      }
       video.muted = !video.muted
       if (typeof opts.onVolumeChange === 'function') {
         opts.onVolumeChange(video.volume, video.muted)
@@ -341,6 +362,9 @@ export function bindFeedVideoControls(wrap, video, options) {
   if (volume) {
     volume.addEventListener('input', function (event) {
       event.stopPropagation()
+      if (feedback && typeof feedback.markUserAction === 'function') {
+        feedback.markUserAction()
+      }
       const nextVolume = Math.max(0, Math.min(1, Number(volume.value || 0)))
       video.volume = nextVolume
       video.muted = nextVolume === 0
@@ -499,6 +523,7 @@ export function bindFeedVideoControls(wrap, video, options) {
   syncFullscreen()
   syncAutoplay()
   return function () {
+    if (feedback && typeof feedback.destroy === 'function') feedback.destroy()
     video.removeEventListener('play', syncPlay)
     video.removeEventListener('pause', syncPlay)
     video.removeEventListener('volumechange', syncMute)

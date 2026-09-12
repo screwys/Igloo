@@ -621,6 +621,9 @@ export function openMediaOverlay(root, triggerEl) {
 
     var togglePlayback = function (event) {
       event.stopPropagation()
+      if (v && v._videoFeedback && typeof v._videoFeedback.markUserAction === 'function') {
+        v._videoFeedback.markUserAction()
+      }
       if (v.paused) v.play().catch(function () {}); else v.pause()
     }
     v.addEventListener('click', togglePlayback)
