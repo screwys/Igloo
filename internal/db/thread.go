@@ -30,6 +30,44 @@ func (db *DB) GetFeedItemByTweetID(tweetID string) (*model.FeedItem, error) {
 	return &f, nil
 }
 
+// getThreadItem also resolves content captured inside another post's quote.
+// Keep this separate from row lookup so reply fetching still detects missing rows.
+func (db *DB) getThreadItem(tweetID string) (*model.FeedItem, error) {
+	item, err := db.GetFeedItemByTweetID(tweetID)
+	if err != nil || item != nil {
+		return item, err
+	}
+	quotedBy, err := scanFeedItem(db.conn.QueryRow(`
+		SELECT `+feedItemSelectSQL("feed_items")+`
+		FROM feed_items_resolved AS feed_items
+		WHERE quote_tweet_id = ?
+		ORDER BY fetched_at DESC, tweet_id DESC
+		LIMIT 1`, tweetID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getThreadItem quote: %w", err)
+	}
+	quote := model.FeedItem{
+		TweetID: tweetID, CanonicalTweetID: tweetID,
+		ChannelID:         quotedBy.QuoteChannelID,
+		AuthorHandle:      quotedBy.QuoteAuthorHandle,
+		AuthorDisplayName: quotedBy.QuoteAuthorDisplayName,
+		AuthorAvatarURL:   quotedBy.QuoteAuthorAvatarURL,
+		BodyText:          quotedBy.QuoteBodyText, ArticleTitle: quotedBy.QuoteArticleTitle,
+		PollJSON: quotedBy.QuotePollJSON, CommunityNote: quotedBy.QuoteCommunityNote,
+		Lang: quotedBy.QuoteLang, MediaJSON: quotedBy.QuoteMediaJSON,
+		PublishedAt: quotedBy.QuotePublishedAt, FetchedAt: quotedBy.FetchedAt,
+		IsGhost: true,
+	}
+	if quote.AuthorHandle != "" {
+		quote.CanonicalURL = fmt.Sprintf("https://x.com/%s/status/%s", quote.AuthorHandle, tweetID)
+	}
+	quote.ParseMedia()
+	return &quote, nil
+}
+
 // UpsertGhostFeedItem stores a single feed_items row with is_ghost=1. The row
 // represents a parent tweet fetched from fxtwitter to maintain thread continuity
 // — the user does not follow this account, so we don't want it polluting feed
@@ -97,8 +135,7 @@ func (db *DB) GetThreadChain(tweetID string) ([]model.FeedItem, error) {
 	}
 	const q = `
 		WITH RECURSIVE chain(tweet_id, depth) AS (
-			SELECT tweet_id, 0 FROM feed_items
-			WHERE tweet_id = COALESCE((SELECT tweet_id FROM feed_items WHERE tweet_id = ?), ?)
+			SELECT COALESCE((SELECT tweet_id FROM feed_items WHERE tweet_id = ?), ?), 0
 			UNION ALL
 			SELECT fi.reply_to_status, c.depth + 1
 			FROM chain c
@@ -133,7 +170,7 @@ func (db *DB) GetThreadChain(tweetID string) ([]model.FeedItem, error) {
 
 	out := make([]model.FeedItem, 0, len(ids))
 	for _, id := range ids {
-		fi, err := db.GetFeedItemByTweetID(id)
+		fi, err := db.getThreadItem(id)
 		if err != nil {
 			return nil, err
 		}
@@ -159,9 +196,7 @@ func (db *DB) GetThreadTree(tweetID string) ([]model.FeedItem, error) {
 
 	const q = `
 		WITH RECURSIVE subtree(tweet_id, parent_id, depth, published_at) AS (
-			SELECT tweet_id, '', 0, COALESCE(published_at, 0)
-			FROM feed_items
-			WHERE tweet_id = ?
+			SELECT ?, '', 0, 0
 			UNION ALL
 			SELECT child.tweet_id, child.reply_to_status, subtree.depth + 1, COALESCE(child.published_at, 0)
 			FROM feed_items child
@@ -213,6 +248,7 @@ func (db *DB) GetThreadTree(tweetID string) ([]model.FeedItem, error) {
 	if err != nil {
 		return nil, err
 	}
+	itemsByID[rootID] = chain[0]
 	for parentID := range children {
 		sort.Slice(children[parentID], func(i, j int) bool {
 			left := children[parentID][i]
