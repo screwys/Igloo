@@ -510,6 +510,14 @@ test('feed controls attach feedback bezel and respond to user actions only', asy
   assert.ok(volBezel, 'volume bezel should be created')
   assert.equal(volBezel.classList.contains('is-visible'), false)
 
+  // Starting playback automatically unmutes without a volume adjustment.
+  video.muted = false
+  video.dispatch('volumechange')
+  assert.equal(volBezel.classList.contains('is-visible'), false)
+  video.muted = true
+  video.dispatch('volumechange')
+  assert.equal(volBezel.classList.contains('is-visible'), false)
+
   // Video starts muted; clicking mute button unmutes and shows volume level pill
   const muteBtn = controls.querySelector('[data-feed-video-mute]')
   muteBtn.dispatch('click')

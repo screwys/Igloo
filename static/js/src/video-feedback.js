@@ -97,9 +97,11 @@ export function bindVideoFeedback(surface, video, options) {
   if (!surface || !video) return null
 
   let lastUserActionTime = 0
+  let lastVolumeActionTime = 0
 
-  function markUserAction() {
+  function markUserAction(kind) {
     lastUserActionTime = Date.now()
+    if (kind === 'volume') lastVolumeActionTime = lastUserActionTime
   }
 
   function onPointerDown() {
@@ -124,7 +126,8 @@ export function bindVideoFeedback(surface, video, options) {
   }
 
   function onVolumeChange() {
-    if (Date.now() - lastUserActionTime < 1000) {
+    const actionTime = options && options.explicitVolumeActions ? lastVolumeActionTime : lastUserActionTime
+    if (Date.now() - actionTime < 1000) {
       const isMuted = Boolean(video.muted)
       const vol = isMuted ? 0 : Math.round((Number(video.volume) || 0) * 100)
       showVideoVolumeFeedback(surface, `${vol}%`)

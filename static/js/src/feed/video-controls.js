@@ -205,7 +205,7 @@ export function handleFeedVideoShortcut(event, video, options) {
   }
   if (key === 'ArrowUp' || key === 'ArrowDown') {
     if (video._videoFeedback && typeof video._videoFeedback.markUserAction === 'function') {
-      video._videoFeedback.markUserAction()
+      video._videoFeedback.markUserAction('volume')
     }
     const delta = key === 'ArrowUp' ? 0.05 : -0.05
     video.volume = Math.max(0, Math.min(1, Number(video.volume || 0) + delta))
@@ -224,7 +224,7 @@ export function handleFeedVideoShortcut(event, video, options) {
   const shortcuts = window.cfShortcuts
   if (shortcuts && shortcuts.match('feed.mute', key)) {
     if (video._videoFeedback && typeof video._videoFeedback.markUserAction === 'function') {
-      video._videoFeedback.markUserAction()
+      video._videoFeedback.markUserAction('volume')
     }
     return toggleFeedVideoMute(video)
   }
@@ -238,6 +238,7 @@ export function bindFeedVideoControls(wrap, video, options) {
   if (!controls || controls.dataset.feedVideoControlsBound === '1') return
   controls.dataset.feedVideoControlsBound = '1'
   const feedback = bindVideoFeedback(wrap, video, {
+    explicitVolumeActions: true,
     interactiveElements: [wrap.querySelector('[data-feed-video-play]'), wrap.querySelector('[data-feed-video-mute]'), wrap.querySelector('[data-feed-video-volume]'), wrap.querySelector('[data-feed-video-volume-control]')].filter(Boolean),
   })
   const volumeKey = opts.volumeKey || FEED_VOLUME_KEY
@@ -350,7 +351,7 @@ export function bindFeedVideoControls(wrap, video, options) {
       event.preventDefault()
       event.stopPropagation()
       if (feedback && typeof feedback.markUserAction === 'function') {
-        feedback.markUserAction()
+        feedback.markUserAction('volume')
       }
       video.muted = !video.muted
       if (typeof opts.onVolumeChange === 'function') {
@@ -363,7 +364,7 @@ export function bindFeedVideoControls(wrap, video, options) {
     volume.addEventListener('input', function (event) {
       event.stopPropagation()
       if (feedback && typeof feedback.markUserAction === 'function') {
-        feedback.markUserAction()
+        feedback.markUserAction('volume')
       }
       const nextVolume = Math.max(0, Math.min(1, Number(volume.value || 0)))
       video.volume = nextVolume
