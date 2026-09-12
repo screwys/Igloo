@@ -7,6 +7,8 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.media.OwnerKind
+import com.screwy.igloo.ui.theme.contrastRatio
+import com.screwy.igloo.ui.theme.resolveIglooColors
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
@@ -70,6 +72,32 @@ class MomentsPlayerTest {
     fun caption_background_only_appears_while_expanded() {
         assertEquals(Color.Transparent, momentCaptionBackgroundColor(expanded = false))
         assertEquals(Color.Black.copy(alpha = 0.28f), momentCaptionBackgroundColor(expanded = true))
+    }
+
+    @Test
+    fun caption_link_color_uses_readable_red_for_occult_umbral_theme() {
+        val occultUmbral = resolveIglooColors("occult-umbral", "", systemDark = true)
+        assertEquals(Color(0xFF8B2E2E), occultUmbral.primary)
+        assertEquals(Color(0xFFC25B5B), occultUmbral.error)
+
+        val linkColor = momentCaptionLinkColor(occultUmbral)
+        assertEquals(Color(0xFFC25B5B), linkColor)
+        assertTrue(
+            "Occult Umbral link color contrast on dark overlay",
+            contrastRatio(Color.Black, linkColor) >= 4.5,
+        )
+    }
+
+    @Test
+    fun caption_link_color_preserves_readable_primary_accents() {
+        val mocha = resolveIglooColors("catppuccin-mocha", "", systemDark = true)
+        assertEquals(mocha.primary, momentCaptionLinkColor(mocha))
+
+        val occultAmber = resolveIglooColors("occult-umbral", "#e6c27a", systemDark = true)
+        assertEquals(occultAmber.primary, momentCaptionLinkColor(occultAmber))
+
+        val dracula = resolveIglooColors("dracula", "", systemDark = true)
+        assertEquals(dracula.primary, momentCaptionLinkColor(dracula))
     }
 
     @Test

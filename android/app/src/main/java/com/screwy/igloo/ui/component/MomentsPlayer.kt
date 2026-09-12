@@ -53,6 +53,9 @@ import com.screwy.igloo.net.ServerBaseUrlProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
 import com.screwy.igloo.player.buildIglooPlayer
 import com.screwy.igloo.ui.nav.LocalDrawerController
+import com.screwy.igloo.ui.theme.IglooColors
+import com.screwy.igloo.ui.theme.contrastRatio
+import com.screwy.igloo.ui.theme.firstReadableColor
 import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
@@ -122,6 +125,21 @@ internal fun momentCaptionExpandedAfterPlainTextClick(
 
 internal fun momentCaptionBackgroundColor(expanded: Boolean): Color =
     if (expanded) Color.Black.copy(alpha = 0.28f) else Color.Transparent
+
+internal fun momentCaptionLinkColor(colors: IglooColors): Color {
+    val primary = colors.primary
+    if (contrastRatio(Color.Black, primary) >= 4.5) {
+        return primary
+    }
+    if (contrastRatio(Color.Black, colors.error) >= 4.5) {
+        return colors.error
+    }
+    return firstReadableColor(
+        background = Color.Black,
+        candidates = listOf(primary, colors.error, colors.onSurfaceMuted, colors.onSurface, Color.White),
+        minimumContrast = 4.5,
+    )
+}
 
 internal const val MOMENTS_PREPARE_RADIUS = 1
 internal const val AUTO_SWIPE_SCROLL_DURATION_MS = 850

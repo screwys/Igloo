@@ -299,7 +299,7 @@ internal fun CollapsedDescription(
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val linkColor = MaterialTheme.iglooColors.primary
+    val linkColor = momentCaptionLinkColor(MaterialTheme.iglooColors)
     val uriHandler = LocalUriHandler.current
     val collapsedDescription =
         remember(item.description) { collapseMomentCaptionWhitespace(item.description) }
