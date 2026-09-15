@@ -53,7 +53,15 @@ var qualityFormats = map[string]string{
 	"1080p": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
 	"720p":  "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
 	"480p":  "bestvideo[height<=480]+bestaudio/best[height<=480]/best",
-	"best":  "best",
+	"best":  "bestvideo+bestaudio/best",
+}
+
+var qualityHeight = map[string]int{
+	"2160p": 2160,
+	"1440p": 1440,
+	"1080p": 1080,
+	"720p":  720,
+	"480p":  480,
 }
 
 func (m *Manager) runMediaWorkLoop(ctx context.Context) {
@@ -235,8 +243,12 @@ func (m *Manager) processDownloadBatch(ctx context.Context, lane db.DownloadLane
 			quality = settings.Quality
 		}
 	}
+	if quality == "" {
+		quality, _ = m.db.GetSetting("quality", "best")
+	}
+	minQuality, _ := m.db.GetSetting("min_quality", "")
 
-	m.downloadVideo(ctx, job, platform, ch.SourceID, quality, subtitles)
+	m.downloadVideo(ctx, job, platform, ch.SourceID, quality, minQuality, subtitles)
 	return true
 }
 
@@ -268,7 +280,7 @@ func (m *Manager) claimDownloadWorkInLane(owner string, lane db.DownloadLane, no
 }
 
 // downloadVideo handles a single video download job.
-func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadWork, platform, sourceID, quality string, subtitles bool) {
+func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadWork, platform, sourceID, quality, minQuality string, subtitles bool) {
 	if stopRenew := m.startDownloadWorkLeaseRenewal(ctx, job); stopRenew != nil {
 		defer stopRenew()
 	}
@@ -330,7 +342,7 @@ func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadWork, platfo
 		return
 	}
 	sourceURL := buildSourceURL(platform, safeSourceID, job.VideoID)
-	formatStr := resolveFormatString(platform, quality)
+	formatStr := resolveFormatString(platform, quality, minQuality)
 
 	cookiesFile, cookiesBrowser := m.cookiesFor(platform)
 	opts := download.Opts{
@@ -770,16 +782,28 @@ func nativeStoryID(platform, videoID string) (string, bool) {
 	return nativeID, nativeID != "" && nativeID != videoID
 }
 
-// resolveFormatString returns the yt-dlp format string for a platform and quality.
-// TikTok always uses its own format. YouTube defaults to 1080p if quality is empty or unknown.
-func resolveFormatString(platform, quality string) string {
+// resolveFormatString returns the yt-dlp format string for a platform, max quality, and min quality.
+// TikTok and Instagram always use their own format. YouTube defaults to bestvideo+bestaudio/best if quality is empty or unknown.
+// If minQuality is specified (e.g. "1080p", "720p"), a minimum height constraint is applied so formats below
+// that resolution are rejected.
+func resolveFormatString(platform, quality, minQuality string) string {
 	if platform == "tiktok" || platform == "instagram" {
 		return "bv*+ba/bv*/b"
 	}
+	minH := qualityHeight[minQuality]
+	maxH := qualityHeight[quality]
+
+	if minH > 0 {
+		if maxH > 0 {
+			return fmt.Sprintf("bestvideo[height<=%d][height>=%d]+bestaudio/best[height<=%d][height>=%d]", maxH, minH, maxH, minH)
+		}
+		return fmt.Sprintf("bestvideo[height>=%d]+bestaudio/best[height>=%d]", minH, minH)
+	}
+
 	if f, ok := qualityFormats[quality]; ok {
 		return f
 	}
-	return qualityFormats["1080p"]
+	return qualityFormats["best"]
 }
 
 // extractPublishedAt extracts a published date from yt-dlp or gallery-dl metadata.

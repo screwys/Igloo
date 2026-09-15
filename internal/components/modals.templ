@@ -117,6 +117,8 @@ templ ChannelSettingsForm(p PageProps, channelID string, platform string, cs Cha
 					<select id="setting-quality" name="quality" class="input">
 						<option value="" selected?={ cs.Quality == "" }>{ L(p, "settings_quality_global_default", "Global (default)") }</option>
 						<option value="best" selected?={ cs.Quality == "best" }>{ L(p, "settings_quality_best_available", "Best Available") }</option>
+						<option value="2160p" selected?={ cs.Quality == "2160p" }>2160p</option>
+						<option value="1440p" selected?={ cs.Quality == "1440p" }>1440p</option>
 						<option value="1080p" selected?={ cs.Quality == "1080p" }>1080p</option>
 						<option value="720p" selected?={ cs.Quality == "720p" }>720p</option>
 						<option value="480p" selected?={ cs.Quality == "480p" }>480p</option>
@@ -410,9 +412,22 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 						<label for="global-setting-quality">{ L(p, "settings_quality_default", "Default Quality") }</label>
 						<select data-setting-choices id="global-setting-quality" name="quality" class="input">
 							<option value="best" selected?={ prefs.Str("quality","best") == "best" }>{ L(p, "settings_quality_best_available", "Best Available") }</option>
+							<option value="2160p" selected?={ prefs.Str("quality","best") == "2160p" }>2160p</option>
+							<option value="1440p" selected?={ prefs.Str("quality","best") == "1440p" }>1440p</option>
 							<option value="1080p" selected?={ prefs.Str("quality","best") == "1080p" }>1080p</option>
 							<option value="720p" selected?={ prefs.Str("quality","best") == "720p" }>720p</option>
 							<option value="480p" selected?={ prefs.Str("quality","best") == "480p" }>480p</option>
+						</select>
+					</div>
+					<div class="form-group">
+						<label for="global-setting-min-quality">{ L(p, "settings_min_quality_default", "Minimum Quality") }</label>
+						<select data-setting-choices id="global-setting-min-quality" name="min_quality" class="input">
+							<option value="" selected?={ prefs.Str("min_quality","") == "" || prefs.Str("min_quality","") == "none" }>{ L(p, "settings_min_quality_none", "None (download any)") }</option>
+							<option value="2160p" selected?={ prefs.Str("min_quality","") == "2160p" }>2160p</option>
+							<option value="1440p" selected?={ prefs.Str("min_quality","") == "1440p" }>1440p</option>
+							<option value="1080p" selected?={ prefs.Str("min_quality","") == "1080p" }>1080p</option>
+							<option value="720p" selected?={ prefs.Str("min_quality","") == "720p" }>720p</option>
+							<option value="480p" selected?={ prefs.Str("min_quality","") == "480p" }>480p</option>
 						</select>
 					</div>
 					if p.UserRole == "admin" && p.RuntimeOS == "windows" {

@@ -138,23 +138,32 @@ func TestVideoTitleFromMetadataKeepsNonTruncatedQueuedTitle(t *testing.T) {
 
 func TestResolveFormatString(t *testing.T) {
 	tests := []struct {
-		platform string
-		quality  string
-		want     string
+		platform   string
+		quality    string
+		minQuality string
+		want       string
 	}{
-		{"tiktok", "", "bv*+ba/bv*/b"},
-		{"tiktok", "1080p", "bv*+ba/bv*/b"},
-		{"tiktok", "best", "bv*+ba/bv*/b"},
-		{"instagram", "", "bv*+ba/bv*/b"},
-		{"instagram", "720p", "bv*+ba/bv*/b"},
-		{"youtube", "2160p", "bestvideo[height<=2160]+bestaudio/best[height<=2160]/best"},
-		{"youtube", "1440p", "bestvideo[height<=1440]+bestaudio/best[height<=1440]/best"},
-		{"youtube", "1080p", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"},
-		{"youtube", "720p", "bestvideo[height<=720]+bestaudio/best[height<=720]/best"},
-		{"youtube", "480p", "bestvideo[height<=480]+bestaudio/best[height<=480]/best"},
-		{"youtube", "best", "best"},
-		{"youtube", "", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"},
-		{"youtube", "unknown", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"},
+		{"tiktok", "", "", "bv*+ba/bv*/b"},
+		{"tiktok", "1080p", "", "bv*+ba/bv*/b"},
+		{"tiktok", "best", "", "bv*+ba/bv*/b"},
+		{"tiktok", "1080p", "720p", "bv*+ba/bv*/b"},
+		{"instagram", "", "", "bv*+ba/bv*/b"},
+		{"instagram", "720p", "", "bv*+ba/bv*/b"},
+		{"instagram", "720p", "720p", "bv*+ba/bv*/b"},
+		{"youtube", "2160p", "", "bestvideo[height<=2160]+bestaudio/best[height<=2160]/best"},
+		{"youtube", "1440p", "", "bestvideo[height<=1440]+bestaudio/best[height<=1440]/best"},
+		{"youtube", "1080p", "", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"},
+		{"youtube", "720p", "", "bestvideo[height<=720]+bestaudio/best[height<=720]/best"},
+		{"youtube", "480p", "", "bestvideo[height<=480]+bestaudio/best[height<=480]/best"},
+		{"youtube", "best", "", "bestvideo+bestaudio/best"},
+		{"youtube", "best", "none", "bestvideo+bestaudio/best"},
+		{"youtube", "", "", "bestvideo+bestaudio/best"},
+		{"youtube", "unknown", "", "bestvideo+bestaudio/best"},
+		{"youtube", "best", "1080p", "bestvideo[height>=1080]+bestaudio/best[height>=1080]"},
+		{"youtube", "", "1080p", "bestvideo[height>=1080]+bestaudio/best[height>=1080]"},
+		{"youtube", "1080p", "1080p", "bestvideo[height<=1080][height>=1080]+bestaudio/best[height<=1080][height>=1080]"},
+		{"youtube", "2160p", "1080p", "bestvideo[height<=2160][height>=1080]+bestaudio/best[height<=2160][height>=1080]"},
+		{"youtube", "1080p", "720p", "bestvideo[height<=1080][height>=720]+bestaudio/best[height<=1080][height>=720]"},
 	}
 
 	for _, tt := range tests {
@@ -162,10 +171,13 @@ func TestResolveFormatString(t *testing.T) {
 		if tt.quality == "" {
 			name = tt.platform + "/default"
 		}
+		if tt.minQuality != "" {
+			name += "/min=" + tt.minQuality
+		}
 		t.Run(name, func(t *testing.T) {
-			got := resolveFormatString(tt.platform, tt.quality)
+			got := resolveFormatString(tt.platform, tt.quality, tt.minQuality)
 			if got != tt.want {
-				t.Errorf("resolveFormatString(%q, %q) = %q, want %q", tt.platform, tt.quality, got, tt.want)
+				t.Errorf("resolveFormatString(%q, %q, %q) = %q, want %q", tt.platform, tt.quality, tt.minQuality, got, tt.want)
 			}
 		})
 	}

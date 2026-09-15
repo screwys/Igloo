@@ -111,7 +111,7 @@ func ClassifyError(err error, output []byte) string {
 	if containsAny(text, "403 forbidden", "http error 403", "error 403", "status 403", "unexpected status 403", "forbidden") {
 		return ErrorKindPermanentHTTP
 	}
-	if containsAny(text, "no files downloaded", "no video formats", "no results", "empty result", "returned no info", "returned no") {
+	if containsAny(text, "no files downloaded", "no video formats", "no results", "empty result", "returned no info", "returned no", "requested format is not available", "no formats matching", "requested format not available") {
 		return ErrorKindEmptyResult
 	}
 	if containsAny(text, "invalid character", "unexpected eof", "parse", "decode", "unmarshal") {
@@ -252,8 +252,13 @@ func containsAuthSignal(s string) bool {
 		"cookies missing",
 		"cookies are missing",
 		"cookies required",
+		"cookies are needed",
 		"cookies are no longer valid",
 		"invalid cookies",
 		"expired cookies",
+		"bot detection",
+		"robot check",
+		"sign in to confirm",
+		"sign in if you've been granted",
 	)
 }
