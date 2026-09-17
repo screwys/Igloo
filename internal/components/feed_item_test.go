@@ -902,3 +902,48 @@ func TestFeedTimestampsRenderThreadLinks(t *testing.T) {
 		t.Fatalf("quote separator middot missing outside link: %s", html)
 	}
 }
+
+func TestXProfileMediaGridRendersAvatarInOverlaySource(t *testing.T) {
+	item := model.FeedItem{
+		TweetID:           "tweet_media_1",
+		ChannelID:         "twitter_sample_channel",
+		AuthorHandle:      "sample_channel",
+		AuthorDisplayName: "Sample Channel",
+		AuthorAvatarURL:   "/api/media/avatar/twitter_sample_channel",
+		MediaPreviewURL:   "/api/media/slide/tweet_media_1/0",
+		BodyText:          "media post body",
+		Media: []model.MediaRef{
+			{Type: "photo", URL: "https://cdn.example/photo.jpg", ThumbnailURL: "/api/media/slide/tweet_media_1/0"},
+		},
+		MediaSlideURLs: []string{"/api/media/slide/tweet_media_1/0"},
+	}
+
+	var buf bytes.Buffer
+	if err := XProfileMediaGrid(PageProps{}, []model.FeedItem{item}, "twitter_sample_channel").Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render x profile media grid: %v", err)
+	}
+	html := buf.String()
+	for _, want := range []string{
+		`class="x-profile-media-tile"`,
+		`data-avatar-url="/api/media/avatar/twitter_sample_channel"`,
+		`class="x-profile-media-overlay-source"`,
+		`class="feed-avatar"`,
+		`src="/api/media/avatar/twitter_sample_channel"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("missing %q in html: %s", want, html)
+		}
+	}
+
+	// Test fallback to channelID when AuthorAvatarURL is empty
+	itemNoAvatar := item
+	itemNoAvatar.AuthorAvatarURL = ""
+	buf.Reset()
+	if err := XProfileMediaGrid(PageProps{}, []model.FeedItem{itemNoAvatar}, "twitter_sample_channel").Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render x profile media grid fallback: %v", err)
+	}
+	htmlFallback := buf.String()
+	if !strings.Contains(htmlFallback, `src="/api/media/avatar/twitter_sample_channel"`) {
+		t.Fatalf("missing fallback avatar in html: %s", htmlFallback)
+	}
+}

@@ -81,6 +81,12 @@ templ XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) {
 			{{ thumbnail := xProfileMediaThumbnail(item) }}
 			if thumbnail != "" {
 				{{ authorLabel := feedAuthorLabel(item) }}
+				{{
+					avatarURL := item.AuthorAvatarURL
+					if avatarURL == "" && channelID != "" {
+						avatarURL = "/api/media/avatar/" + channelID
+					}
+				}}
 				<button
 					class="x-profile-media-tile"
 					type="button"
@@ -99,6 +105,7 @@ templ XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) {
 					data-channel-platform="twitter"
 					data-author-handle={ item.AuthorHandle }
 					data-source-handle={ item.SourceHandle }
+					data-avatar-url={ avatarURL }
 					data-feed-date={ feedPublishedAtStr(item.PublishedAt) }
 					data-feed-media-kind={ item.Media[0].Type }
 					data-feed-media-url={ feedMediaURLAt(item.MediaSlideURLs, 0) }
@@ -109,6 +116,7 @@ templ XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) {
 						<span class="x-profile-media-video" aria-hidden="true">&#9654;</span>
 					}
 					<span class="x-profile-media-overlay-source" hidden>
+						@feedAvatar(p, avatarURL, authorLabel)
 						<span class="feed-author">{ authorLabel }</span>
 						if item.AuthorHandle != "" {
 							<span class="feed-author-handle">{ "@" + item.AuthorHandle }</span>

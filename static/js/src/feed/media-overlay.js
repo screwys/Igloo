@@ -442,12 +442,44 @@ export function openMediaOverlay(root, triggerEl) {
       }
       if (headlineId) headline.setAttribute('data-feed-channel-id', headlineId)
       var avatarSource = isQuote ? sourceCard.querySelector('.feed-quote-avatar') : article.querySelector('.feed-avatar')
+      var avatarUrl = !avatarSource ? String(article.getAttribute('data-avatar-url') || (sourceCard && sourceCard.getAttribute('data-avatar-url')) || '').trim() : ''
       if (avatarSource) {
         var avatarClone = avatarSource.cloneNode(true)
         avatarClone.className = 'feed-avatar'
+        var cloneImg = avatarClone.querySelector('.feed-avatar-image, img')
+        var cloneFallback = avatarClone.querySelector('.feed-avatar-fallback')
+        if (cloneImg && cloneFallback) {
+          if (cloneImg.complete && cloneImg.naturalWidth > 0) {
+            cloneImg.style.display = ''
+            cloneFallback.style.display = 'none'
+          } else if (cloneImg.complete && cloneImg.naturalWidth === 0 && cloneImg.src) {
+            cloneImg.style.display = 'none'
+            cloneFallback.style.display = 'inline-flex'
+          }
+        }
         headline.appendChild(avatarClone)
+      } else if (avatarUrl) {
+        const avatarEl = document.createElement('span')
+        avatarEl.className = 'feed-avatar'
+        const fallbackChar = document.createElement('span')
+        fallbackChar.className = 'feed-avatar-fallback'
+        fallbackChar.style.display = 'none'
+        fallbackChar.textContent = (authorLabel.charAt(0) || 'X').toUpperCase()
+        const avatarImg = document.createElement('img')
+        avatarImg.className = 'feed-avatar-image'
+        avatarImg.src = avatarUrl
+        avatarImg.alt = ''
+        avatarImg.onload = function () { if (window.MpaSiteBase) window.MpaSiteBase.avatarLoad(avatarImg) }
+        avatarImg.onerror = function () {
+          if (window.MpaSiteBase && window.MpaSiteBase.avatarError(avatarImg)) return
+          avatarImg.style.display = 'none'
+          fallbackChar.style.display = 'inline-flex'
+        }
+        avatarEl.appendChild(avatarImg)
+        avatarEl.appendChild(fallbackChar)
+        headline.appendChild(avatarEl)
       } else {
-        const fallbackAvatar = document.createElement('div')
+        const fallbackAvatar = document.createElement('span')
         fallbackAvatar.className = 'feed-avatar'
         const fallbackChar = document.createElement('span')
         fallbackChar.className = 'feed-avatar-fallback'

@@ -287,7 +287,7 @@ templ feedHeader(p PageProps, item model.FeedItem, authorLabel string, pure bool
 }
 
 templ feedAvatar(p PageProps, avatarURL string, authorLabel string) {
-	<div class="feed-avatar">
+	<span class="feed-avatar">
 		if avatarURL != "" {
 			<img
 				class="feed-avatar-image"
@@ -302,7 +302,7 @@ templ feedAvatar(p PageProps, avatarURL string, authorLabel string) {
 		} else {
 			<span class="feed-avatar-fallback">{ strings.ToUpper(FirstChar(authorLabel)) }</span>
 		}
-	</div>
+	</span>
 }
 
 // feedAuthorAside renders @handle, date, and translate pill alongside the
