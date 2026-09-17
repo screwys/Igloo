@@ -411,6 +411,15 @@ func applyCookieAuth(cmd *ytdlp.Command, opts Opts) *ytdlp.Command {
 	return cmd
 }
 
+const youtubePlayerClientExtractorArgs = "youtube:player_client=web_embedded,web_safari,web"
+
+func applyYouTubeExtractorArgs(cmd *ytdlp.Command, url string) *ytdlp.Command {
+	if isYouTubeURL(url) {
+		return cmd.ExtractorArgs(youtubePlayerClientExtractorArgs)
+	}
+	return cmd
+}
+
 func fetchInfoCommand(opts Opts) *ytdlp.Command {
 	return applyCookieAuth(ytdlp.New().
 		SkipDownload().
@@ -444,7 +453,7 @@ func fetchCommentsCommand(maxComments int, opts Opts) *ytdlp.Command {
 func (y *YtDlpWrapper) FetchInfo(ctx context.Context, url string, opts ...Opts) (map[string]any, error) {
 	start := time.Now()
 	opt := firstOpts(opts)
-	result, err := fetchInfoCommand(opt).Run(ctx, url)
+	result, err := applyYouTubeExtractorArgs(fetchInfoCommand(opt), url).Run(ctx, url)
 	if err != nil {
 		y.recordYtDlpOperationWithCounts(ctx, "youtube.info", url, start, err, opt, 0, 0, 0)
 		return nil, fmt.Errorf("yt-dlp info: %w", err)
@@ -536,6 +545,8 @@ func (y *YtDlpWrapper) DownloadCompleted(ctx context.Context, url string, opts O
 		PrintJSON().
 		WriteThumbnail().
 		ConvertThumbnails("jpg")
+
+	cmd = applyYouTubeExtractorArgs(cmd, url)
 
 	if opts.Format != "" {
 		cmd = cmd.Format(opts.Format)
@@ -651,6 +662,7 @@ func (y *YtDlpWrapper) DownloadSubtitles(ctx context.Context, url string, opts O
 		SubLangs("en").
 		SubFormat("vtt")
 
+	cmd = applyYouTubeExtractorArgs(cmd, url)
 	cmd = applyCookieAuth(cmd, opts)
 
 	if _, err := cmd.Run(ctx, url); err != nil {
