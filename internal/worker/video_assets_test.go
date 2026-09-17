@@ -55,6 +55,28 @@ func TestPrepareInstagramCarouselKeepsMusicSeparateFromSlides(t *testing.T) {
 	}
 }
 
+func TestPrepareCompletedVideoFilesRejectsAudioOnly(t *testing.T) {
+	cfg := testCfg(t.TempDir())
+	mediaDir, err := cfg.Storage.WritePath("media/tiktok/sample_author")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(mediaDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	audioPath := filepath.Join(mediaDir, "sample.mp3")
+	if err := os.WriteFile(audioPath, []byte("audio data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = (&Manager{cfg: cfg}).prepareCompletedVideoFiles(
+		context.Background(), download.MediaLaneBulkRegular,
+		download.CompletedDownload{MediaPaths: []string{audioPath}},
+	)
+	if err == nil {
+		t.Fatal("expected error for audio-only completed download, got nil")
+	}
+}
+
 func TestPrepareCompletedVideoFilesKeepsMediaExternalAndDefersExactThumbnail(t *testing.T) {
 	stateRoot := filepath.Join(t.TempDir(), "state")
 	mediaRoot := filepath.Join(t.TempDir(), "bulk")

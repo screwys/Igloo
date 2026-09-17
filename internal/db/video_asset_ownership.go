@@ -421,7 +421,7 @@ func readyVideoMediaExistsSQL(videoAlias string) string {
 		JOIN media_objects ready_video_object ON ready_video_object.object_id = ready_video_media.object_id
 		WHERE ready_video_media.owner_kind = ` + videoAlias + `.owner_kind
 		  AND ready_video_media.owner_id = ` + videoAlias + `.video_id
-		  AND ready_video_media.asset_kind IN ('video_stream', 'post_media', 'post_audio')
+		  AND ready_video_media.asset_kind IN ('video_stream', 'post_media')
 		  AND ready_video_object.published_revision > 0
 		  AND ready_video_object.file_path != ''
 	)`
@@ -438,14 +438,13 @@ func (db *DB) GetReadyVideoPrimaryAsset(videoID string) (*Asset, error) {
 		JOIN media_objects current ON current.object_id = a.object_id
 		JOIN media_objects desired ON desired.object_id = a.desired_object_id
 		WHERE v.video_id = ?
-		  AND a.asset_kind IN ('video_stream', 'post_media', 'post_audio')
+		  AND a.asset_kind IN ('video_stream', 'post_media')
 		  AND a.media_index = 0
 		  AND current.published_revision > 0
 		  AND current.file_path != ''
 		ORDER BY CASE a.asset_kind
 		           WHEN 'video_stream' THEN 1
 		           WHEN 'post_media' THEN 2
-		           ELSE 3
 		         END
 		LIMIT 1
 	`, videoID)

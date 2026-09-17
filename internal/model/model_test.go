@@ -163,10 +163,21 @@ func TestComputeMediaKind_Video(t *testing.T) {
 }
 
 func TestComputeMediaKind_TikTokSlideshow(t *testing.T) {
+	meta := &VideoMetadata{
+		VCodec: "none",
+		Slides: make([]json.RawMessage, 2),
+	}
+	kind, count := ComputeMediaKind(meta, "video.mp4")
+	if kind != "slideshow" || count != 2 {
+		t.Errorf("expected slideshow/2, got %s/%d", kind, count)
+	}
+}
+
+func TestComputeMediaKind_VCodecNoneWithoutSlides(t *testing.T) {
 	meta := &VideoMetadata{VCodec: "none"}
-	kind, _ := ComputeMediaKind(meta, "video.mp4")
-	if kind != "slideshow" {
-		t.Errorf("expected slideshow, got %s", kind)
+	kind, count := ComputeMediaKind(meta, "video.mp4")
+	if kind != "video" || count != 0 {
+		t.Errorf("expected video/0, got %s/%d", kind, count)
 	}
 }
 

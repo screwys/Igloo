@@ -150,23 +150,44 @@ func TestVideoCardRendersMediaTypesForMixedSlides(t *testing.T) {
 }
 
 func TestVideoCardUsesTweetAssetOwner(t *testing.T) {
-	v := model.Video{
+	vVideo := model.Video{
+		VideoID: "sample_post", OwnerKind: "tweet", MediaOwnerID: "sample_media", MediaOwnerKind: "tweet",
+		MediaKind: "video",
+	}
+	var bufVideo bytes.Buffer
+	if err := VideoCard(newTestPageProps(), vVideo).Render(context.Background(), &bufVideo); err != nil {
+		t.Fatal(err)
+	}
+	htmlVideo := bufVideo.String()
+	for _, want := range []string{
+		`data-stream-url="/api/media/stream/sample_media?owner_kind=tweet"`,
+		`src="/api/media/thumbnail/sample_media?owner_kind=tweet"`,
+	} {
+		if !strings.Contains(htmlVideo, want) {
+			t.Fatalf("rendered video card missing %q: %s", want, htmlVideo)
+		}
+	}
+
+	vSlideshow := model.Video{
 		VideoID: "sample_post", OwnerKind: "tweet", MediaOwnerID: "sample_media", MediaOwnerKind: "tweet",
 		MediaKind: "slideshow", MediaSlideCount: 2,
 	}
-	var buf bytes.Buffer
-	if err := VideoCard(newTestPageProps(), v).Render(context.Background(), &buf); err != nil {
+	var bufSlideshow bytes.Buffer
+	if err := VideoCard(newTestPageProps(), vSlideshow).Render(context.Background(), &bufSlideshow); err != nil {
 		t.Fatal(err)
 	}
-	html := buf.String()
+	htmlSlideshow := bufSlideshow.String()
 	for _, want := range []string{
-		`data-stream-url="/api/media/stream/sample_media?owner_kind=tweet"`,
 		`data-slide-url-suffix="?owner_kind=tweet&amp;owner_id=sample_media"`,
+		`data-audio-url="/api/media/audio/sample_media?owner_kind=tweet"`,
 		`src="/api/media/thumbnail/sample_media?owner_kind=tweet"`,
 	} {
-		if !strings.Contains(html, want) {
-			t.Fatalf("rendered card missing %q: %s", want, html)
+		if !strings.Contains(htmlSlideshow, want) {
+			t.Fatalf("rendered slideshow card missing %q: %s", want, htmlSlideshow)
 		}
+	}
+	if strings.Contains(htmlSlideshow, `data-stream-url=`) {
+		t.Fatalf("slideshow card should not render data-stream-url: %s", htmlSlideshow)
 	}
 }
 

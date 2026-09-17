@@ -788,7 +788,7 @@ func nativeStoryID(platform, videoID string) (string, bool) {
 // that resolution are rejected.
 func resolveFormatString(platform, quality, minQuality string) string {
 	if platform == "tiktok" || platform == "instagram" {
-		return "bv*+ba/bv*/b"
+		return "bv*+ba/b"
 	}
 	minH := qualityHeight[minQuality]
 	maxH := qualityHeight[quality]

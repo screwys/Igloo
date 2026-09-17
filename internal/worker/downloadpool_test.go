@@ -143,13 +143,13 @@ func TestResolveFormatString(t *testing.T) {
 		minQuality string
 		want       string
 	}{
-		{"tiktok", "", "", "bv*+ba/bv*/b"},
-		{"tiktok", "1080p", "", "bv*+ba/bv*/b"},
-		{"tiktok", "best", "", "bv*+ba/bv*/b"},
-		{"tiktok", "1080p", "720p", "bv*+ba/bv*/b"},
-		{"instagram", "", "", "bv*+ba/bv*/b"},
-		{"instagram", "720p", "", "bv*+ba/bv*/b"},
-		{"instagram", "720p", "720p", "bv*+ba/bv*/b"},
+		{"tiktok", "", "", "bv*+ba/b"},
+		{"tiktok", "1080p", "", "bv*+ba/b"},
+		{"tiktok", "best", "", "bv*+ba/b"},
+		{"tiktok", "1080p", "720p", "bv*+ba/b"},
+		{"instagram", "", "", "bv*+ba/b"},
+		{"instagram", "720p", "", "bv*+ba/b"},
+		{"instagram", "720p", "720p", "bv*+ba/b"},
 		{"youtube", "2160p", "", "bestvideo[height<=2160]+bestaudio/best[height<=2160]/best"},
 		{"youtube", "1440p", "", "bestvideo[height<=1440]+bestaudio/best[height<=1440]/best"},
 		{"youtube", "1080p", "", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"},

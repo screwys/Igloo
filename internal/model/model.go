@@ -441,9 +441,6 @@ func ComputeMediaKind(meta *VideoMetadata, filePath string) (string, int) {
 		if meta.Duration == 0 && len(meta.Slides) == 0 && isImagePath(filePath) {
 			return "image", 1
 		}
-		if meta.VCodec == "none" && len(meta.Slides) == 0 {
-			return "slideshow", 0
-		}
 	}
 	if isImagePath(filePath) {
 		return "image", 1

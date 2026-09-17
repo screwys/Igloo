@@ -743,7 +743,7 @@ export function makeShortItem(entryData, existingEl) {
       mediaStage.appendChild(slideshowAudio)
       slideshow.audio = slideshowAudio
     }
-  } else {
+  } else if (!hasSlides && entryData.streamUrl) {
     if (entryData.thumbUrl) {
       poster = doc.createElement('img')
       poster.className = 'shorts-video-poster-frame'
@@ -762,8 +762,16 @@ export function makeShortItem(entryData, existingEl) {
     video.setAttribute('playsinline', '')
     video.dataset.videoId = entryData.id
     if (entryData.thumbUrl) video.poster = entryData.thumbUrl
-    if (entryData.streamUrl) video.src = entryData.streamUrl
+    video.src = entryData.streamUrl
     mediaStage.appendChild(video)
+  } else if (entryData.thumbUrl) {
+    poster = doc.createElement('img')
+    poster.className = 'shorts-video-poster-frame'
+    poster.alt = ''
+    poster.decoding = 'async'
+    poster.loading = 'eager'
+    poster.src = entryData.thumbUrl
+    mediaStage.appendChild(poster)
   }
 
   var header = doc.createElement('div')
@@ -1057,10 +1065,12 @@ export function makeShortItem(entryData, existingEl) {
     video.addEventListener('error', function () {
       revealVideoFrame()
       wrapper.classList.add('shorts-video-error')
-      showToast(t('shorts_media_unavailable_skipping', 'Short media unavailable, skipping'))
-      var cur = _fns.currentData()
+      var cur = _fns && typeof _fns.currentData === 'function' ? _fns.currentData() : null
       if (cur && entryData.id === cur.id) {
-        setTimeout(_fns.goNext, 120)
+        showToast(t('shorts_media_unavailable_skipping', 'Short media unavailable, skipping'))
+        if (_fns && typeof _fns.goNext === 'function') {
+          setTimeout(_fns.goNext, 120)
+        }
       }
     })
     attachShortVideoDebug(entryObj)
@@ -1069,10 +1079,12 @@ export function makeShortItem(entryData, existingEl) {
     if (firstSlide) {
       firstSlide.addEventListener('error', function () {
         wrapper.classList.add('shorts-video-error')
-        showToast(t('shorts_media_unavailable_skipping', 'Short media unavailable, skipping'))
-        var cur = _fns.currentData()
+        var cur = _fns && typeof _fns.currentData === 'function' ? _fns.currentData() : null
         if (cur && entryData.id === cur.id) {
-          setTimeout(_fns.goNext, 120)
+          showToast(t('shorts_media_unavailable_skipping', 'Short media unavailable, skipping'))
+          if (_fns && typeof _fns.goNext === 'function') {
+            setTimeout(_fns.goNext, 120)
+          }
         }
       }, { once: true })
     }

@@ -84,6 +84,9 @@ func (m *Manager) prepareCompletedVideoFilesAdmitted(completed download.Complete
 	if out.primaryPath == "" {
 		return out, fmt.Errorf("completed download returned no supported media")
 	}
+	if firstVideo == "" && len(out.imageKeys) == 0 {
+		return out, fmt.Errorf("completed download returned neither video stream nor image media")
+	}
 	info, err := os.Stat(out.primaryPath)
 	if err != nil || !info.Mode().IsRegular() {
 		if err == nil {
