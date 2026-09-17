@@ -1898,6 +1898,18 @@ select.input:focus {
     padding: 1rem;
 }
 
+.x-profile-media-grid.is-empty,
+.x-profile-media-grid:has(.empty-state) {
+    display: flex;
+    flex-direction: column;
+}
+
+.x-profile-media-grid .empty-state {
+    grid-column: 1 / -1;
+    margin: 1.5rem;
+    width: auto;
+}
+
 .x-profile-media-tile {
     aspect-ratio: 1;
     background: var(--bg-tertiary);

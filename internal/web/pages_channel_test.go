@@ -228,6 +228,30 @@ func TestHandlePageTwitterProfileShowsPostsAndOriginalMedia(t *testing.T) {
 	}
 }
 
+func TestHandlePageTwitterProfileEmptyMediaGrid(t *testing.T) {
+	srv := newTestServer(t)
+	srv.staticV = func(path string) string { return "/static/" + path }
+	if err := srv.db.UpsertChannelProfile(model.ChannelProfile{
+		ChannelID: "twitter_no_media_user", Platform: "twitter", Handle: "no_media_user", DisplayName: "No Media User",
+	}); err != nil {
+		t.Fatalf("UpsertChannelProfile: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/channels/twitter_no_media_user?tab=media", nil)
+	req.SetPathValue("channelID", "twitter_no_media_user")
+	rec := httptest.NewRecorder()
+	srv.handlePageChannel(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("media status = %d", rec.Code)
+	}
+	html := rec.Body.String()
+	if !strings.Contains(html, `x-profile-media-grid is-empty`) {
+		t.Fatalf("expected x-profile-media-grid is-empty class, got:\n%s", html)
+	}
+	if !strings.Contains(html, `aria-label="Media"><div class="empty-state">`) {
+		t.Fatalf("expected empty-state inside x-profile-media-grid, got:\n%s", html)
+	}
+}
+
 func TestHandlePageTwitterChannelFeedPaginatesPastFirstChunk(t *testing.T) {
 	srv := newTestServer(t)
 	srv.staticV = func(path string) string { return "/static/" + path }

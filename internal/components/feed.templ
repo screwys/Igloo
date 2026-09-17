@@ -73,7 +73,10 @@ templ XProfileTabs(p PageProps, xChannel *XChannelInfo) {
 }
 
 templ XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) {
-	<div class="x-profile-media-grid" aria-label={ L(p, "profile_media", "Media") }>
+	<div
+		class={ "x-profile-media-grid", templ.KV("is-empty", len(items) == 0) }
+		aria-label={ L(p, "profile_media", "Media") }
+	>
 		for _, item := range items {
 			{{ thumbnail := xProfileMediaThumbnail(item) }}
 			if thumbnail != "" {
@@ -135,10 +138,10 @@ templ XProfileMediaGrid(p PageProps, items []model.FeedItem, channelID string) {
 				</button>
 			}
 		}
+		if len(items) == 0 {
+			<div class="empty-state"><h3>{ L(p, "profile_media_empty_title", "No media") }</h3><p>{ L(p, "profile_media_empty", "No original media posts found.") }</p></div>
+		}
 	</div>
-	if len(items) == 0 {
-		<div class="empty-state"><h3>{ L(p, "profile_media_empty_title", "No media") }</h3><p>{ L(p, "profile_media_empty", "No original media posts found.") }</p></div>
-	}
 }
 
 // LikedPage renders the liked posts page.
