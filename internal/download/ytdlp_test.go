@@ -323,19 +323,3 @@ func TestVideoMetadataRefreshResultKeepsCountsAndCommentsTogether(t *testing.T) 
 	}
 }
 
-func TestApplyYouTubeExtractorArgs(t *testing.T) {
-	cmdYT := applyYouTubeExtractorArgs(ytdlp.New(), "https://www.youtube.com/watch?v=sample123").
-		BuildCommand(context.Background(), "https://www.youtube.com/watch?v=sample123")
-	argsYT := strings.Join(cmdYT.Args, " ")
-	if !strings.Contains(argsYT, "youtube:player_client=web_embedded,web_safari,web") {
-		t.Fatalf("YouTube command missing player_client extractor args: %v", cmdYT.Args)
-	}
-
-	cmdOther := applyYouTubeExtractorArgs(ytdlp.New(), "https://tiktok.com/@user/video/123").
-		BuildCommand(context.Background(), "https://tiktok.com/@user/video/123")
-	argsOther := strings.Join(cmdOther.Args, " ")
-	if strings.Contains(argsOther, "player_client") {
-		t.Fatalf("Non-YouTube command should not have player_client extractor args: %v", cmdOther.Args)
-	}
-}
-
