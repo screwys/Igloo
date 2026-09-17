@@ -359,3 +359,21 @@ func (s *Server) resetDownloadAuthFailuresAfterCookieChange(platform string) {
 		slog.Info("reset auth-failed downloads after cookie change", "platform", platform, "count", n)
 	}
 }
+
+func (s *Server) cookieOptsFor(platform string) download.Opts {
+	fileEnabled := "1"
+	if s.db != nil {
+		fileEnabled, _ = s.db.GetSetting("cookies_"+platform+"_enabled", "1")
+	}
+	browser := ""
+	if s.db != nil {
+		browser, _ = s.db.GetSetting("cookies_"+platform+"_browser", "")
+	}
+	cookiesDir := ""
+	if s.cfg != nil {
+		cookiesDir = s.cfg.CookiesDir
+	}
+	sets := download.ResolveCookieSets(cookiesDir, platform, fileEnabled != "0", browser)
+	cookiesFile, cookiesBrowser := download.CookieFileAndBrowser(sets)
+	return download.Opts{Cookies: cookiesFile, CookiesFromBrowser: cookiesBrowser, CookieAlternates: sets}
+}

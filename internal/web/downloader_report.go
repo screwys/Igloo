@@ -473,22 +473,11 @@ func skipRow(name, platform, operation, reason string) downloaderReportRow {
 }
 
 func (s *Server) reportDownloadOpts(platform, outputDir, id string) download.Opts {
-	fileEnabled := "1"
-	if s.db != nil {
-		fileEnabled, _ = s.db.GetSetting("cookies_"+platform+"_enabled", "1")
-	}
-	browser := ""
-	if s.db != nil {
-		browser, _ = s.db.GetSetting("cookies_"+platform+"_browser", "")
-	}
-	cookiesDir := ""
-	if s.cfg != nil {
-		cookiesDir = s.cfg.CookiesDir
-	}
-	sets := download.ResolveCookieSets(cookiesDir, platform, fileEnabled != "0", browser)
-	cookiesFile, cookiesBrowser := download.CookieFileAndBrowser(sets)
+	opts := s.cookieOptsFor(platform)
+	opts.OutputDir = outputDir
+	opts.ID = id
 	_ = os.MkdirAll(outputDir, 0o755)
-	return download.Opts{OutputDir: outputDir, ID: id, Cookies: cookiesFile, CookiesFromBrowser: cookiesBrowser, CookieAlternates: sets}
+	return opts
 }
 
 func (s *Server) reportVideoSample(platform string) reportVideoSample {

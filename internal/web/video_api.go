@@ -569,9 +569,8 @@ func (s *Server) handleVideoCommentsRefresh(w http.ResponseWriter, r *http.Reque
 	if video.Platform == "youtube" {
 		s.refreshVideoSubtitles(r.Context(), mediaDownloader, videoID, sourceURL)
 	}
-	parsed, err := commentsDownloader.FetchComments(ctx, sourceURL, download.DefaultCommentFetchLimit, download.Opts{
-		CookiesFromBrowser: "firefox",
-	})
+	commentOpts := s.cookieOptsFor(video.Platform)
+	parsed, err := commentsDownloader.FetchComments(ctx, sourceURL, download.DefaultCommentFetchLimit, commentOpts)
 	if err != nil {
 		slog.Warn("comments refresh yt-dlp failed", "video", videoID, "err", err)
 		// Return existing comments on failure
@@ -649,11 +648,10 @@ func (s *Server) refreshVideoSubtitles(parent context.Context, downloader *downl
 	var paths []string
 	err = downloader.RunMedia(ctx, download.MediaLaneState, func() error {
 		var err error
-		paths, err = downloader.YtDlp.DownloadSubtitles(ctx, sourceURL, download.Opts{
-			ID:                 fmt.Sprintf("%s-sub-%d", videoID, time.Now().UnixNano()),
-			SubtitleDir:        subtitleDir,
-			CookiesFromBrowser: "firefox",
-		})
+		subOpts := s.cookieOptsFor("youtube")
+		subOpts.ID = fmt.Sprintf("%s-sub-%d", videoID, time.Now().UnixNano())
+		subOpts.SubtitleDir = subtitleDir
+		paths, err = downloader.YtDlp.DownloadSubtitles(ctx, sourceURL, subOpts)
 		return err
 	})
 	if err != nil {
