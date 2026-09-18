@@ -17,6 +17,7 @@
 html {
     /* Keep the document width stable while modal scroll locking hides the bar. */
     scrollbar-gutter: stable;
+    background-color: var(--bg-primary);
 }
 
 * {
@@ -53,31 +54,46 @@ body.feed-media-overlay-open {
 
 /* Global Scrollbar */
 ::-webkit-scrollbar {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+}
+
+::-webkit-scrollbar:hover,
+::-webkit-scrollbar-track:hover {
+    background: rgba(var(--text-primary-rgb), 0.12);
+}
+
+::-webkit-scrollbar:active,
+::-webkit-scrollbar-track:active {
+    background: rgba(var(--text-primary-rgb), 0.18);
 }
 
 ::-webkit-scrollbar-track {
-    background: var(--bg-tertiary);
+    background: transparent;
+    border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
     background: var(--accent-primary);
-    /* Orangey */
-    border-radius: 8px;
+    border-radius: 10px;
     background-clip: padding-box;
-}
-
-::-webkit-scrollbar-thumb:vertical {
-    border-right: 4px solid transparent;
-}
-
-::-webkit-scrollbar-thumb:horizontal {
-    border-bottom: 4px solid transparent;
+    border: 4px solid transparent;
+    transition: background-color var(--transition-fast, 0.15s ease);
 }
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--accent-secondary);
+    border-width: 1px;
+}
+
+::-webkit-scrollbar-thumb:active {
+    background: var(--accent-secondary);
+    border-width: 1px;
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
 }
 
 ::selection {
@@ -85,10 +101,16 @@ body.feed-media-overlay-open {
     color: var(--text-primary);
 }
 
-/* Firefox scrollbar */
-* {
-    scrollbar-width: thin;
-    scrollbar-color: var(--accent-primary) var(--bg-tertiary);
+/* Firefox scrollbar (standard syntax) */
+@supports not selector(::-webkit-scrollbar) {
+    * {
+        scrollbar-width: auto;
+        scrollbar-color: var(--accent-primary) transparent;
+    }
+
+    *:hover {
+        scrollbar-color: var(--accent-secondary) rgba(var(--text-primary-rgb), 0.12);
+    }
 }
 
 /* Improved Stats Readability */
