@@ -9,12 +9,12 @@ description: Use when changing or debugging Igloo web UI, static assets, templ c
 
 Never assume Chromium. Igloo web behavior must work in Firefox and Chromium. Start with standard APIs and CSS, then isolate any vendor-specific fallback. Do not combine a vendor-only selector with standard selectors in one comma-separated rule: browsers use unforgiving selector-list parsing and may discard the entire rule when one selector is unsupported. A pass in one engine is evidence only for that engine; when the reported browser is known, reason from and verify that engine's behavior.
 
-Inspect the running UI before editing source when a UI symptom is visible or reproducible.
+Start from the user's report, supplied screenshots, and relevant source. Basic edits do not require browser use. Inspect the running UI only when a specific unresolved question about runtime behavior, layout, or events could change the fix and cannot be answered from the available evidence. Do not reopen the browser just to reconfirm a clearly reported symptom.
 
 ## Flow
 
 1. Identify whether the problem is absence, hidden content, wrong data, wrong layout, stale generated output, or client-side mutation.
-2. Inspect the live DOM when possible: element HTML, computed visibility, display, opacity, layout box, classes, inline styles, event handlers, and console errors.
+2. If runtime inspection is needed, inspect only the evidence relevant to that question: element HTML, computed visibility, display, opacity, layout box, classes, inline styles, event handlers, or console errors. Otherwise trace the relevant source directly.
    For icon-and-label alignment, DOM boxes are only structural evidence. Compare the rendered icon height with the visible font ink or cap height in a screenshot before deciding the problem is positional. Equal box centers can still look wrong when a 20px icon is paired with roughly 11px-tall text; a shared top edge often exposes a scale mismatch, not an offset bug.
 3. If the element is absent, trace the render path through handler, enrichment, templ component, generated output, and JavaScript caller.
 4. If the element is present but wrong or hidden, inspect CSS cascade, responsive rules, container dimensions, runtime classes, and media query behavior before changing markup.
@@ -47,7 +47,7 @@ Inspect the running UI before editing source when a UI symptom is visible or rep
 - After server, web, static, or component changes that affect the running app, run `just restart`.
 - For Go handler or template behavior, run focused Go tests and `just test-go` when practical.
 - For generated catalog or templ drift, run `just i18n-check` or `just check-drift` and inspect the resulting diff.
-- For visual or interaction fixes, give the user the relevant viewport and state to confirm; do not claim visual confirmation yourself.
+- Choose verification that answers a concrete remaining question. Browser checks and requests for user confirmation are not automatic gates for visual or interaction edits. Describe visual behavior as verified only when it was actually observed.
 
 Useful commands:
 

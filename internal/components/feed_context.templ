@@ -39,7 +39,7 @@ templ feedContext(p PageProps, pollJSON string, note string) {
 				<strong>{ L(p, "feed_community_note", "Community Note") }</strong>
 			</div>
 			<div class="feed-community-note-body">
-				<p class="feed-community-note-text">@templ.Raw(Linkify(note))</p>
+				<p class="feed-community-note-text">@templ.Raw(LinkifyCommunityNote(note))</p>
 			</div>
 		</aside>
 	}

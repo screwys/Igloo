@@ -112,7 +112,7 @@ For Go code, protect the success path. Do not allocate rollback journals, diagno
 
 - Feed-item endpoints in `internal/web/` must return the enriched shape callers expect: `feed.EnrichFeedItems(...)`, bookmark state, subscribe/follow URLs, and every field the caller reads.
 - Do not narrow a shared query for one caller if another caller needs the data. Add a separate query.
-- For web UI bugs, inspect the live DOM before source: element HTML, computed visibility, layout box, inline style, and classes.
+- For web UI bugs, start from the user's report, screenshots, and relevant source. Use the browser only to answer a specific unresolved runtime question that could change the fix; basic edits do not require live DOM inspection.
 - For missing avatars, banners, names, bios, or hover profile cards, separate presentation bugs from readiness bugs. A presentation fix is valid only when the DB row and cached file already existed before render; otherwise fix the source path: parser, ingest batch, identity seed, profile refresh candidate query, worker queue/backfill, or failed download retry.
 - After server, web, static, or component changes that affect the running app, run `just restart`.
 

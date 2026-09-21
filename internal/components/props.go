@@ -335,10 +335,11 @@ func RelativeTimeText(p PageProps, t *time.Time) string {
 }
 
 var (
-	urlRe              = regexp.MustCompile(`(https?://[^\s<>"']+)`)
-	anchorRe           = regexp.MustCompile(`(?s)<a\b[^>]*>.*?</a>`)
-	shortFormMentionRe = regexp.MustCompile(`@[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,30}[A-Za-z0-9_])?`)
-	emailTLD           = regexp.MustCompile(`^\.[A-Za-z]{2,12}\b`)
+	urlRe               = regexp.MustCompile(`(https?://[^\s<>"']+)`)
+	communityNoteLinkRe = regexp.MustCompile(`(?m)(^|[\s])((?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}(?:/[^\s()]*)?)\s+\((https?://[^\s()]+)\)`)
+	anchorRe            = regexp.MustCompile(`(?s)<a\b[^>]*>.*?</a>`)
+	shortFormMentionRe  = regexp.MustCompile(`@[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,30}[A-Za-z0-9_])?`)
+	emailTLD            = regexp.MustCompile(`^\.[A-Za-z]{2,12}\b`)
 )
 
 // Linkify escapes text and converts URLs and @mentions to HTML links.
@@ -346,6 +347,37 @@ var (
 // by checking surrounding characters.
 func Linkify(s string) string {
 	return LinkifyForPlatform(s, "twitter")
+}
+
+// LinkifyCommunityNote links the readable source labels emitted by X next to
+// their shortened URLs, such as `example.com/article… (https://t.co/...)`.
+// The label is what users see in the note, so it should be clickable too.
+func LinkifyCommunityNote(s string) string {
+	type sourceLink struct {
+		token string
+		label string
+		url   string
+	}
+
+	matches := communityNoteLinkRe.FindAllStringSubmatchIndex(s, -1)
+	links := make([]sourceLink, 0, len(matches))
+	for i, match := range matches {
+		label := s[match[4]:match[5]]
+		url := s[match[6]:match[7]]
+		token := fmt.Sprintf("__igloo_community_note_link_%d__", i)
+		links = append(links, sourceLink{token: token, label: label, url: url})
+	}
+	for i := len(links) - 1; i >= 0; i-- {
+		match := matches[i]
+		s = s[:match[4]] + links[i].token + s[match[5]:]
+	}
+
+	linked := Linkify(s)
+	for _, link := range links {
+		anchor := `<a href="` + html.EscapeString(link.url) + `" class="feed-inline-link" target="_blank" rel="noopener">` + html.EscapeString(link.label) + `</a>`
+		linked = strings.ReplaceAll(linked, html.EscapeString(link.token), anchor)
+	}
+	return linked
 }
 
 // LinkifyForPlatform escapes text and converts URLs plus @mentions to links for

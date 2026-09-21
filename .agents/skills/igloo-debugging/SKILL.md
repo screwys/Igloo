@@ -46,7 +46,7 @@ Use the GitHub CI skill for GitHub Actions mechanics, but keep these Igloo-speci
 
 ## Web And Server Debugging
 
-- For web UI bugs, inspect the live DOM before source when possible: element presence, HTML, visibility, layout box, inline style, and classes.
+- For web UI bugs, start from the user's report, screenshots, and relevant source. Use the browser only to answer a specific unresolved runtime question that could change the fix; basic edits do not require live DOM inspection.
 - If an element is absent, trace the render path. If present but hidden, inspect CSS and runtime mutation.
 - For feed item API behavior, trace handler, enrichment, bookmark/follow state, templates, JS callers, and Android callers before tightening shared queries.
 - For data repairs, use bounded one-time repair tools only when requested or clearly appropriate. Do not put one-off repairs in normal startup paths.
