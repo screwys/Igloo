@@ -197,10 +197,6 @@ The supported
 
 To contribute, please check [CONTRIBUTING.md](CONTRIBUTING.md). You can also contribute by providing translations.
 
-## Translations
-
-Currently there are only English and Turkish language options. To add a new language (or if you hate my tone), copy `locales/app/en.toml` and translate values while keeping keys unchanged.
-
 ## Privacy
 
 See [PRIVACY.md](PRIVACY.md).
