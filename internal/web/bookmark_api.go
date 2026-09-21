@@ -711,9 +711,13 @@ func (s *Server) waitForBookmarkArchiveSlides(ctx context.Context, tweetID strin
 	}
 }
 
-// collectSlides gathers canonical local media paths for a tweet ID.
-func (s *Server) collectSlides(tweetID string) []string {
-	files := s.canonicalAssets(db.AssetOwnerRef{OwnerKind: "tweet", OwnerID: tweetID}, "post_media", "video_stream")
+// collectSlides gathers canonical local media paths for a video or feed tweet.
+func (s *Server) collectSlides(videoID string) []string {
+	owner, ok := s.videoAssetOwner(videoID)
+	if !ok {
+		owner = db.AssetOwnerRef{OwnerKind: "tweet", OwnerID: videoID}
+	}
+	files := s.canonicalAssets(owner, "post_media", "video_stream")
 	slides := make([]string, 0, len(files))
 	for _, file := range files {
 		slides = append(slides, file.path)

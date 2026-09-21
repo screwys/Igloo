@@ -107,6 +107,48 @@ func TestHandleBookmarkAdd_DoesNotRearchiveUnchangedBookmark(t *testing.T) {
 	assertFileDoesNotAppear(t, filepath.Join(archiveDir, "author_handle Saved Label 002.jpg"), 300*time.Millisecond)
 }
 
+func TestBookmarkArchivesVideoOwnersFromBothClients(t *testing.T) {
+	for _, owner := range []struct{ platform, kind string }{
+		{"instagram", "instagram_reel"},
+		{"tiktok", "tiktok_video"},
+		{"youtube", "youtube_video"},
+		{"twitter", "tweet"},
+	} {
+		for _, client := range []string{"web", "android"} {
+			t.Run(owner.kind+"/"+client, func(t *testing.T) {
+				srv := newTestServer(t)
+				archiveDir := t.TempDir()
+				categoryID, err := srv.db.CreateBookmarkCategory("Archive", archiveDir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				const videoID = "sample_video"
+				storeReadyMediaAsset(t, srv, owner.platform, owner.kind, videoID, "video_stream", 0,
+					filepath.Join("media", "sample.mp4"), "video/mp4", []byte("saved-video-bytes"))
+				path := "/api/bookmark/" + videoID
+				body := fmt.Sprintf(`{"category_id":%d,"custom_title":"Saved"}`, categoryID)
+				if client == "android" {
+					path = "/api/mutations/bookmark"
+					body = fmt.Sprintf(`{"video_id":%q,"action":"set","category_id":%d,"custom_title":"Saved","updated_at_ms":100}`, videoID, categoryID)
+				}
+				req := attachTestAuthRole(httptest.NewRequest("POST", path, strings.NewReader(body)), "alice", "admin")
+				req.Header.Set("Content-Type", "application/json")
+				rr := httptest.NewRecorder()
+				srv.mux.ServeHTTP(rr, req)
+				if rr.Code != http.StatusOK {
+					t.Fatalf("status %d: %s", rr.Code, rr.Body.String())
+				}
+				dest := filepath.Join(archiveDir, "Unknown Saved 001.mp4")
+				waitForFile(t, dest)
+				got, err := os.ReadFile(dest)
+				if err != nil || string(got) != "saved-video-bytes" {
+					t.Fatalf("archived bytes = %q, err = %v", got, err)
+				}
+			})
+		}
+	}
+}
+
 func TestHandleBookmarkCategoryCreateRejectsRelativeArchivePath(t *testing.T) {
 	srv := newTestServer(t)
 
