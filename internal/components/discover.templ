@@ -82,7 +82,7 @@ templ DiscoveryCard(p PageProps, video model.DiscoveryVideo) {
 			}
 		</div>
 		<div class="video-info">
-			<div class="video-title" title={ video.Title }>{ video.Title }</div>
+			<div class="video-title" title={ discoveryTitle(p, video) }>{ discoveryTitle(p, video) }</div>
 			<div class="video-meta">
 				<span class="video-channel-wrap">
 					if video.AvatarURL != "" {
@@ -113,5 +113,10 @@ func localVideoDiscoveryCard(p PageProps, video model.Video) model.DiscoveryVide
 		PublishedAt: video.PublishedAt,
 		ChannelID: video.ChannelID, ChannelName: videoChannelName(video), AvatarURL: videoAvatarURL(video),
 		ThumbnailURL: p.Prefs.VideoThumbURL(video), Ready: true,
+		DearrowTitle: video.DearrowTitle, DearrowTitleCasual: video.DearrowTitleCasual,
 	}
+}
+
+func discoveryTitle(p PageProps, video model.DiscoveryVideo) string {
+	return resolveDearrowTitle(p.Prefs.DearrowMode(), video.Title, video.DearrowTitle, video.DearrowTitleCasual)
 }

@@ -134,6 +134,7 @@ var _ = []string{
 	N("settings_default_speed", "Default speed"),
 	N("settings_dearrow_section", "DeArrow"),
 	N("settings_dearrow_description", "Community-voted titles and thumbnails for YouTube videos. Off, Community, or Casual."),
+	N("player_toggle_title", "Toggle video title"),
 	N("settings_export_help", "Subscriptions, likes, bookmarks, and avatars."),
 	N("settings_export_unavailable", "Export not available yet"),
 	N("settings_feed_include_reposts", "Include reposts"),

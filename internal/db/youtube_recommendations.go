@@ -379,20 +379,41 @@ func (db *DB) projectDiscoveryMedia(candidates []model.DiscoveryVideo) error {
 		)
 	}
 	rows, err := db.reader().Query(`
-		SELECT v.video_id, v.published_at FROM videos v
-		WHERE v.video_id IN (`+placeholders(len(ids))+`) AND `+readyVideoMediaExistsSQL("v"), stringsToAny(ids)...)
+		SELECT v.video_id, v.published_at, v.dearrow_title, v.dearrow_title_casual,
+		       CASE WHEN `+readyVideoMediaExistsSQL("v")+` THEN 1 ELSE 0 END
+		FROM videos v WHERE v.video_id IN (`+placeholders(len(ids))+`)`, stringsToAny(ids)...)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = rows.Close() }()
-	ready := make(map[string]*time.Time)
+	type readyVideo struct {
+		publishedAt   *time.Time
+		dearrowTitle  *string
+		dearrowCasual *string
+		ready         bool
+	}
+	ready := make(map[string]readyVideo)
 	for rows.Next() {
 		var id string
 		var publishedAt sql.NullInt64
-		if err := rows.Scan(&id, &publishedAt); err != nil {
+		var dearrowTitle, dearrowCasual sql.NullString
+		var isReady bool
+		if err := rows.Scan(&id, &publishedAt, &dearrowTitle, &dearrowCasual, &isReady); err != nil {
 			return err
 		}
-		ready[id] = millisToTimePtr(publishedAt)
+		var title, casual *string
+		if dearrowTitle.Valid {
+			title = &dearrowTitle.String
+		}
+		if dearrowCasual.Valid {
+			casual = &dearrowCasual.String
+		}
+		ready[id] = readyVideo{
+			publishedAt:   millisToTimePtr(publishedAt),
+			dearrowTitle:  title,
+			dearrowCasual: casual,
+			ready:         isReady,
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return err
@@ -418,10 +439,18 @@ func (db *DB) projectDiscoveryMedia(candidates []model.DiscoveryVideo) error {
 		}
 	}
 	for i := range candidates {
-		publishedAt, isReady := ready[candidates[i].VideoID]
-		candidates[i].Ready = isReady
-		if publishedAt != nil {
-			candidates[i].PublishedAt = publishedAt
+		video, found := ready[candidates[i].VideoID]
+		candidates[i].Ready = found && video.ready
+		if !found {
+			continue
+		}
+		candidates[i].DearrowTitle = video.dearrowTitle
+		candidates[i].DearrowTitleCasual = video.dearrowCasual
+		if !video.ready {
+			continue
+		}
+		if video.publishedAt != nil {
+			candidates[i].PublishedAt = video.publishedAt
 		}
 		if readyThumbnails[candidates[i].VideoID] {
 			candidates[i].ThumbnailURL = "/api/media/thumbnail/" + candidates[i].VideoID

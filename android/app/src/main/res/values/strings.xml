@@ -530,6 +530,7 @@
     <string name="player_subtitles_abbrev">CC</string>
     <string name="player_subtitles_off">Subtitles (Off)</string>
     <string name="player_subtitles_on">Subtitles (On)</string>
+    <string name="player_toggle_title">Toggle video title</string>
     <string name="player_unsubscribe_channel_confirm_body">Remove channel and files for %1$s?</string>
     <string name="player_unsubscribe_failed">Failed to unsubscribe</string>
     <string name="player_video_deleted">Video deleted</string>

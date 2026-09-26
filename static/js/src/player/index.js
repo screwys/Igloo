@@ -40,6 +40,28 @@ if (root && video) {
   const descCard = doc.getElementById('player-description-card')
   const descText = doc.getElementById('player-description-text')
   const playerTitle = doc.getElementById('player-title')
+  if (playerTitle && playerTitle.getAttribute('data-alternate-title')) {
+    const alternateTitle = playerTitle.getAttribute('data-alternate-title')
+    const initialTitle = playerTitle.textContent || ''
+    let showingAlternate = false
+    const toggleLabel = playerTitle.getAttribute('data-title-toggle-label') || ''
+    playerTitle.setAttribute('role', 'button')
+    playerTitle.setAttribute('tabindex', '0')
+    playerTitle.setAttribute('aria-pressed', 'false')
+    playerTitle.setAttribute('aria-label', toggleLabel)
+    playerTitle.setAttribute('title', toggleLabel)
+    const togglePlayerTitle = () => {
+      showingAlternate = !showingAlternate
+      playerTitle.textContent = showingAlternate ? alternateTitle : initialTitle
+      playerTitle.setAttribute('aria-pressed', String(showingAlternate))
+    }
+    playerTitle.addEventListener('click', togglePlayerTitle)
+    playerTitle.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return
+      event.preventDefault()
+      togglePlayerTitle()
+    })
+  }
   const descFade = doc.getElementById('player-description-fade')
   const descToggle = doc.getElementById('player-description-toggle')
   const playerDateEl = doc.getElementById('player-video-date')

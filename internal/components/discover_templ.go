@@ -412,9 +412,9 @@ func DiscoveryCard(p PageProps, video model.DiscoveryVideo) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var19 string
-		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(video.Title)
+		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(discoveryTitle(p, video))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/discover.templ`, Line: 85, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/discover.templ`, Line: 85, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 		if templ_7745c5c3_Err != nil {
@@ -425,9 +425,9 @@ func DiscoveryCard(p PageProps, video model.DiscoveryVideo) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var20 string
-		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(video.Title)
+		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(discoveryTitle(p, video))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/discover.templ`, Line: 85, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/discover.templ`, Line: 85, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -565,7 +565,12 @@ func localVideoDiscoveryCard(p PageProps, video model.Video) model.DiscoveryVide
 		PublishedAt: video.PublishedAt,
 		ChannelID:   video.ChannelID, ChannelName: videoChannelName(video), AvatarURL: videoAvatarURL(video),
 		ThumbnailURL: p.Prefs.VideoThumbURL(video), Ready: true,
+		DearrowTitle: video.DearrowTitle, DearrowTitleCasual: video.DearrowTitleCasual,
 	}
+}
+
+func discoveryTitle(p PageProps, video model.DiscoveryVideo) string {
+	return resolveDearrowTitle(p.Prefs.DearrowMode(), video.Title, video.DearrowTitle, video.DearrowTitleCasual)
 }
 
 var _ = templruntime.GeneratedTemplate

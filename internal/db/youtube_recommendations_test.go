@@ -89,6 +89,18 @@ func TestDiscoverReadyProjectsCanonicalLocalMediaWithoutPrefetchProvenance(t *te
 	if err := d.InsertVideo(videoID, channelID, "youtube_video", "Interactive Ready", "", 60, 1, "", "video", 0, true); err != nil {
 		t.Fatal(err)
 	}
+	dearrowTitle := "Community title"
+	if err := d.SetDearrowTitles(videoID, &dearrowTitle, nil, 1); err != nil {
+		t.Fatal(err)
+	}
+	const unreadyVideoID = "sample_discover_unready"
+	if err := d.InsertVideo(unreadyVideoID, channelID, "youtube_video", "Unready Discover", "", 60, 1, "", "video", 0, true); err != nil {
+		t.Fatal(err)
+	}
+	unreadyDearrowTitle := "Unready community title"
+	if err := d.SetDearrowTitles(unreadyVideoID, &unreadyDearrowTitle, nil, 1); err != nil {
+		t.Fatal(err)
+	}
 	storeReadyAssetForTest(t, d, Asset{
 		AssetID: BuildAssetID("youtube", "youtube_video", videoID, "video_stream", 0), AssetKind: "video_stream",
 		OwnerKind: "youtube_video", OwnerID: videoID, FilePath: "media/youtube/" + videoID + ".mp4", ContentType: "video/mp4",
@@ -112,12 +124,19 @@ func TestDiscoverReadyProjectsCanonicalLocalMediaWithoutPrefetchProvenance(t *te
 			ThumbnailURL: "https://i.ytimg.com/vi/sample_remote_only/mqdefault.jpg",
 			AvatarURL:    "https://images.example.test/remote-avatar.jpg",
 		},
+		{
+			VideoID: unreadyVideoID, ChannelID: channelID,
+			ThumbnailURL: "https://i.ytimg.com/vi/" + unreadyVideoID + "/mqdefault.jpg",
+		},
 	}
 	if err := d.projectDiscoveryMedia(videos); err != nil {
 		t.Fatal(err)
 	}
 	if !videos[0].Ready {
 		t.Fatal("canonical playable Discover video was not marked Ready")
+	}
+	if videos[0].DearrowTitle == nil || *videos[0].DearrowTitle != dearrowTitle {
+		t.Fatalf("ready Discover DeArrow title = %v, want %q", videos[0].DearrowTitle, dearrowTitle)
 	}
 	if videos[0].PublishedAt == nil || videos[0].PublishedAt.UnixMilli() != 1 {
 		t.Fatalf("ready Discover published time = %v", videos[0].PublishedAt)
@@ -127,6 +146,9 @@ func TestDiscoverReadyProjectsCanonicalLocalMediaWithoutPrefetchProvenance(t *te
 	}
 	if videos[1].Ready || videos[1].ThumbnailURL != "https://i.ytimg.com/vi/sample_remote_only/mqdefault.jpg" || videos[1].AvatarURL != "https://images.example.test/remote-avatar.jpg" {
 		t.Fatalf("unprepared Discover media changed: %+v", videos[1])
+	}
+	if videos[2].Ready || videos[2].DearrowTitle == nil || *videos[2].DearrowTitle != unreadyDearrowTitle {
+		t.Fatalf("unready Discover DeArrow projection = %+v", videos[2])
 	}
 	if got := testRowCount(t, d, `SELECT COUNT(*) FROM discover_temp_downloads WHERE video_id = 'sample_interactive_ready'`); got != 0 {
 		t.Fatal("test unexpectedly created Discover prefetch provenance")

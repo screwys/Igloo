@@ -6680,6 +6680,10 @@ body.shorts-mode .sidebar-toggle {
     min-width: 0;
 }
 
+#player-title[role="button"] {
+    cursor: pointer;
+}
+
 /* Channel refresh button */
 .channel-actions {
     display: flex;

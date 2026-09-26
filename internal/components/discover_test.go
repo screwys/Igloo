@@ -45,6 +45,20 @@ func TestDiscoveryCardUsesTemporaryWatchUntilMediaIsReady(t *testing.T) {
 	}
 }
 
+func TestDiscoveryCardUsesDearrowTitleWhenEnabled(t *testing.T) {
+	p := newTestPageProps()
+	p.Prefs.Settings = map[string]any{"dearrow_mode": "default"}
+	dearrow := "Community title"
+	video := model.DiscoveryVideo{VideoID: "sample_discover", Title: "Recommendation title", DearrowTitle: &dearrow}
+	var buf bytes.Buffer
+	if err := DiscoveryCard(p, video).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	if html := buf.String(); !strings.Contains(html, `title="Community title">Community title</div>`) {
+		t.Fatalf("Discover card did not use the DeArrow title: %s", html)
+	}
+}
+
 func TestPlayerDiscoveryRailPollsOnlyWhileEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	if err := PlayerDiscoveryRail(newTestPageProps(), "sample_anchor", nil, nil, true).Render(context.Background(), &buf); err != nil {

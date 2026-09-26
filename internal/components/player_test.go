@@ -91,6 +91,30 @@ func TestYouTubePlayerRendersMiniPlayerHandoff(t *testing.T) {
 	}
 }
 
+func TestPlayerTitleCanToggleToDearrowTitle(t *testing.T) {
+	p := newTestPageProps()
+	dearrow := "Community title"
+	video := model.Video{
+		VideoID: "sample_video", Title: "Original title", Platform: "youtube",
+		DearrowTitle: &dearrow,
+	}
+	var buf bytes.Buffer
+	if err := PlayerPage(p, video, nil, nil, nil, nil, false, "").Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	for _, expected := range []string{
+		`id="player-title"`,
+		`data-alternate-title="Community title"`,
+		`data-title-toggle-label="Toggle video title"`,
+		`>Original title</h2>`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("player title toggle missing %q: %s", expected, html)
+		}
+	}
+}
+
 func TestNonYouTubePlayerDoesNotRenderMiniPlayerHandoff(t *testing.T) {
 	p := newTestPageProps()
 	video := model.Video{

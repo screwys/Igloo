@@ -1757,6 +1757,33 @@ func (p PrefsData) VideoTitle(v model.Video) string {
 	return resolveDearrowTitle(p.DearrowMode(), v.Title, v.DearrowTitle, v.DearrowTitleCasual)
 }
 
+// VideoTitleAlternative returns the other available title for the player toggle.
+// The configured DeArrow title is the default when enabled; otherwise the
+// original YouTube title is shown first and DeArrow is available on demand.
+func (p PrefsData) VideoTitleAlternative(v model.Video) (string, bool) {
+	dearrow := resolveDearrowTitle("default", "", v.DearrowTitle, v.DearrowTitleCasual)
+	if p.DearrowMode() == "casual" && v.DearrowTitleCasual != nil && *v.DearrowTitleCasual != "" {
+		dearrow = *v.DearrowTitleCasual
+	}
+	original := fallbackVideoTitle(v)
+	if dearrow == "" || original == "" {
+		return "", false
+	}
+	if p.DearrowMode() == "off" {
+		if dearrow == original {
+			return "", false
+		}
+		return dearrow, true
+	}
+	if p.VideoTitle(v) == dearrow {
+		if original == dearrow {
+			return "", false
+		}
+		return original, true
+	}
+	return dearrow, true
+}
+
 // VideoThumbURL returns the thumbnail URL for v, respecting DeArrow mode.
 func (p PrefsData) VideoThumbURL(v model.Video) string {
 	mode := p.DearrowMode()

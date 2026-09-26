@@ -199,6 +199,8 @@ type DiscoveryVideo struct {
 	Source        string     `json:"source"`
 	Rank          int        `json:"rank"`
 	Ready         bool       `json:"-"`
+	DearrowTitle       *string `json:"-"`
+	DearrowTitleCasual *string `json:"-"`
 }
 
 // VideoRepostSource records a followed TikTok account that introduced a TikTok
