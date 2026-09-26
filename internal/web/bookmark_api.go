@@ -563,20 +563,7 @@ func (s *Server) archiveBookmarkCombined(ctx context.Context, tweetID, archivePa
 		return nil
 	}
 
-	// Build the combined slide list: parent first, then quote.
-	// This matches the JS download-order indexing.
-	var allSlides []string
-
-	// Parent slides
-	parentSlides := s.collectSlides(tweetID)
-	allSlides = append(allSlides, parentSlides...)
-
-	// Quote slides
-	items, _ := s.db.GetFeedItemsForTweetIDs([]string{tweetID})
-	if fi, ok := items[tweetID]; ok && fi.QuoteTweetID != "" {
-		quoteSlides := s.collectSlides(fi.QuoteTweetID)
-		allSlides = append(allSlides, quoteSlides...)
-	}
+	allSlides := s.collectBookmarkSlides(tweetID)
 
 	if len(allSlides) == 0 {
 		allSlides = s.waitForBookmarkArchiveSlides(ctx, tweetID, 15*time.Second)
@@ -699,28 +686,36 @@ func (s *Server) waitForBookmarkArchiveSlides(ctx context.Context, tweetID strin
 			return nil
 		case <-ticker.C:
 		}
-		var slides []string
-		slides = append(slides, s.collectSlides(tweetID)...)
-		items, _ := s.db.GetFeedItemsForTweetIDs([]string{tweetID})
-		if fi, ok := items[tweetID]; ok && fi.QuoteTweetID != "" {
-			slides = append(slides, s.collectSlides(fi.QuoteTweetID)...)
-		}
+		slides := s.collectBookmarkSlides(tweetID)
 		if len(slides) > 0 {
 			return slides
 		}
 	}
 }
 
-// collectSlides gathers canonical local media paths for a video or feed tweet.
-func (s *Server) collectSlides(videoID string) []string {
-	owner, ok := s.videoAssetOwner(videoID)
-	if !ok {
-		owner = db.AssetOwnerRef{OwnerKind: "tweet", OwnerID: videoID}
+// Collect parent media before quote media to match the client's selection order.
+func (s *Server) collectBookmarkSlides(videoID string) []string {
+	ids := []string{videoID}
+	items, _ := s.db.GetFeedItemsForTweetIDs(ids)
+	if fi, ok := items[videoID]; ok && fi.QuoteTweetID != "" {
+		ids = append(ids, fi.QuoteTweetID)
 	}
-	files := s.canonicalAssets(owner, "post_media", "video_stream")
-	slides := make([]string, 0, len(files))
-	for _, file := range files {
-		slides = append(slides, file.path)
+	var slides []string
+	var parentOwner db.AssetOwnerRef
+	for i, id := range ids {
+		owner, ok := s.videoAssetOwner(id)
+		if !ok {
+			owner = db.AssetOwnerRef{OwnerKind: "tweet", OwnerID: id}
+		}
+		if i == 0 {
+			parentOwner = owner
+		} else if owner == parentOwner {
+			// A parent without its own media can already resolve to the quote.
+			continue
+		}
+		for _, file := range s.canonicalAssets(owner, "post_media", "video_stream") {
+			slides = append(slides, file.path)
+		}
 	}
 	return slides
 }
