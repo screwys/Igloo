@@ -96,7 +96,10 @@ export function setSlideshowIndex(entry, index) {
   })
   pauseSlideshowVideos(slideshow, next)
   ;(slideshow.dots || []).forEach(function (dot, idx) {
-    if (dot) dot.classList.toggle('active', idx === next)
+    if (dot) {
+      dot.classList.toggle('active', idx === next)
+      dot.setAttribute('aria-current', idx === next ? 'true' : 'false')
+    }
   })
   if (slideshow.counter) {
     slideshow.counter.textContent = String(next + 1) + ' / ' + String(slideshow.count)
@@ -114,6 +117,13 @@ export function stepSlideshow(entry, delta) {
   var currentIdx = slideshow.index || 0
   var next = currentIdx + (delta > 0 ? 1 : -1)
   if (next < 0 || next >= slideshow.count) return false
+  return goToSlideshowSlide(entry, next)
+}
+
+export function goToSlideshowSlide(entry, index) {
+  var slideshow = entry && entry.refs && entry.refs.slideshow
+  if (!slideshow || !slideshow.count) return false
+  var next = Math.max(0, Math.min(slideshow.count - 1, parseInt(index, 10) || 0))
   if (slideshow.timer) {
     try { clearTimeout(slideshow.timer) } catch (_) { }
     slideshow.timer = 0

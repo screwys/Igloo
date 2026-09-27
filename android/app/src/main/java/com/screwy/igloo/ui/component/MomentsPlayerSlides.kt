@@ -249,6 +249,17 @@ internal fun MomentSlideshowSurface(
             MomentSlideDots(
                 currentPage = pagerState.currentPage,
                 pageCount = effectiveSlideCount,
+                onPageSelected = { page ->
+                    pagerScope.launch {
+                        pagerState.animateScrollToPage(
+                            page = page,
+                            animationSpec = tween(
+                                durationMillis = AUTO_SWIPE_SCROLL_DURATION_MS,
+                                easing = FastOutSlowInEasing,
+                            ),
+                        )
+                    }
+                },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 96.dp),

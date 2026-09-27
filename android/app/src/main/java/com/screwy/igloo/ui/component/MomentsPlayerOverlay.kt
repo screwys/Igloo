@@ -50,6 +50,10 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.buildAnnotatedString
@@ -71,22 +75,42 @@ import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.delay
 
 @Composable
-internal fun MomentSlideDots(currentPage: Int, pageCount: Int, modifier: Modifier = Modifier) {
+internal fun MomentSlideDots(
+    currentPage: Int,
+    pageCount: Int,
+    onPageSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         repeat(pageCount) { page ->
+            val isSelected = page == currentPage
+            val slideLabel = stringResource(R.string.content_description_slide_number, page + 1)
             Box(
                 modifier =
-                    Modifier.size(if (page == currentPage) 8.dp else 6.dp)
+                    Modifier.width(18.dp)
+                        .height(32.dp)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button) { onPageSelected(page) }
+                        .semantics {
+                            contentDescription = slideLabel
+                            selected = isSelected
+                        },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(if (isSelected) 8.dp else 6.dp)
                         .clip(CircleShape)
                         .background(
-                            if (page == currentPage) Color.White
-                            else Color.White.copy(alpha = 0.45f)
-                        )
-            )
+                            if (isSelected) Color.White
+                            else Color.White.copy(alpha = 0.45f),
+                        ),
+                )
+            }
         }
     }
 }

@@ -1,6 +1,12 @@
 // Keep overflowing post media in one continuous, keyboard-accessible row.
-export function mediaRowTarget(position, viewport, extent, direction) {
+export function mediaRowTarget(position, viewport, extent, direction, slidePositions = null) {
   const distance = Math.max(0, extent - viewport)
+  if (slidePositions?.length) {
+    if (direction > 0) {
+      return Math.min(distance, slidePositions.find(slide => slide > position + 1) ?? distance)
+    }
+    return Math.max(0, [...slidePositions].reverse().find(slide => slide < position - 1) ?? 0)
+  }
   const steps = Math.max(Math.ceil(distance / Math.max(1, viewport)), 1)
   return Math.max(0, Math.min(distance, position + direction * distance / steps))
 }
@@ -35,13 +41,25 @@ export function initMediaRows(scope) {
   scope.querySelectorAll('.feed-media-row-container').forEach(root => {
     if (root.dataset.mediaRowReady) return
     root.dataset.mediaRowReady = '1'
+    const row = root.querySelector('.feed-media-row')
     const viewport = root.querySelector('[data-feed-media-scroll]')
     let target = null
     for (const event of ['pointerdown', 'touchstart', 'wheel']) {
       viewport.addEventListener(event, () => { target = null }, { passive: true })
     }
     function move(direction) {
-      target = mediaRowTarget(target ?? viewport.scrollLeft, viewport.clientWidth, viewport.scrollWidth, direction)
+      const slidePositions = row
+        ? [...row.children].map(slide =>
+          slide.getBoundingClientRect().left - viewport.getBoundingClientRect().left + viewport.scrollLeft,
+        )
+        : null
+      target = mediaRowTarget(
+        target ?? viewport.scrollLeft,
+        viewport.clientWidth,
+        viewport.scrollWidth,
+        direction,
+        slidePositions,
+      )
       viewport.scrollTo({
         left: target,
         behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',

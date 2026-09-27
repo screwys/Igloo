@@ -2,7 +2,7 @@
 
 import { apiFetch, askConfirm, cssEscape, escapeHtml, showToast, copyText, makeDraggableSeekbar, attachSeekTooltip, formatRelative, materialIconMarkup, t, tf, toFxTwitterUrl } from '../utils.js'
 import { openBookmarkMenu } from '../bookmark-menu.js'
-import { maybeMarkAspect, handleVideoTimeUpdate, toggleShortPlayback, setSlideshowIndex, stepSlideshow, syncRenderedShortVideoLoop } from './playback.js'
+import { maybeMarkAspect, handleVideoTimeUpdate, toggleShortPlayback, goToSlideshowSlide, stepSlideshow, syncRenderedShortVideoLoop } from './playback.js'
 import { attachShortVideoDebug } from './debug.js'
 import { normalizeVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
 import { createFeedVideoControls, bindFeedVideoControls } from '../feed/video-controls.js'
@@ -897,9 +897,17 @@ export function makeShortItem(entryData, existingEl) {
 
     var dotsEl = doc.createElement('div')
     dotsEl.className = 'slide-dots'
-    for (var di = 0; di < slideshow.count; di += 1) {
-      var dot = doc.createElement('span')
+    for (let di = 0; di < slideshow.count; di += 1) {
+      const dot = doc.createElement('button')
       dot.className = 'slide-dot' + (di === 0 ? ' active' : '')
+      dot.type = 'button'
+      dot.setAttribute('aria-label', tf('content_description_slide_number', 'Slide %1$d', di + 1))
+      dot.setAttribute('aria-current', di === 0 ? 'true' : 'false')
+      dot.addEventListener('click', function (e) {
+        e.preventDefault()
+        e.stopPropagation()
+        goToSlideshowSlide({ refs: { slideshow: slideshow } }, di)
+      })
       dotsEl.appendChild(dot)
       slideshow.dots.push(dot)
     }

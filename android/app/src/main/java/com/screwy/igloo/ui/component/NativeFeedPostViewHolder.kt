@@ -1061,13 +1061,23 @@ internal class NativeFeedViewHolder(
             val gap = dp(2)
             val displayCells = grid.cells
             val cellAspectRatios = displayCells.map(::nativeStableSingleMediaAspectRatio)
-            fun frameFor(index: Int, cell: FeedMediaCellModel): FrameLayout {
-                val imageDimensions =
-                    nativeMultiMediaCellDimensions(
-                        cellAspectRatios = cellAspectRatios,
-                        cellIndex = index,
-                        gridWidthPx = gridWidth,
-                    )
+            val preferredRowHeight =
+                nativeMultiMediaCellDimensions(cellAspectRatios, 0, gridWidth).heightPx
+            val widestAspectRatio = cellAspectRatios.maxOrNull()?.takeIf { it > 0f } ?: 1f
+            val rowHeight =
+                minOf(preferredRowHeight, (gridWidth / widestAspectRatio).toInt())
+                    .coerceAtLeast(1)
+            val dimensions = cellAspectRatios.map { ratio ->
+                NativeMediaDimensions(
+                    widthPx = (rowHeight * ratio).toInt().coerceAtLeast(1),
+                    heightPx = rowHeight,
+                )
+            }
+            fun frameFor(
+                index: Int,
+                cell: FeedMediaCellModel,
+                imageDimensions: NativeMediaDimensions,
+            ): FrameLayout {
                 val frame =
                     FrameLayout(container.context).apply {
                         setBackgroundColor(colors.surface)
@@ -1089,15 +1099,18 @@ internal class NativeFeedViewHolder(
                 return frame
             }
 
-            val dimensions = displayCells.indices.map { index ->
-                nativeMultiMediaCellDimensions(cellAspectRatios, index, gridWidth)
-            }
             val rowWidth = dimensions.sumOf { it.widthPx } + gap * (displayCells.size - 1)
-            val rowHeight = dimensions.first().heightPx
+            val slideStarts = buildList(dimensions.size) {
+                var start = 0
+                dimensions.forEachIndexed { index, dimension ->
+                    add(start)
+                    start += dimension.widthPx + if (index < dimensions.lastIndex) gap else 0
+                }
+            }
             val rowLayout = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
             displayCells.forEachIndexed { index, cell ->
                 rowLayout.addView(
-                    frameFor(index, cell),
+                    frameFor(index, cell, dimensions[index]),
                     LinearLayout.LayoutParams(dimensions[index].widthPx, rowHeight)
                         .apply { if (index > 0) marginStart = gap },
                 )
@@ -1131,11 +1144,16 @@ internal class NativeFeedViewHolder(
                     isFocusable = true
                     setOnClickListener {
                         val distance = rowWidth - gridWidth
-                        val steps = maxOf(1, (distance + gridWidth - 1) / gridWidth)
-                        val position = (scrollTarget ?: scroller.scrollX) + direction * ((distance + steps - 1) / steps)
-                        scrollTarget = position.coerceIn(0, distance)
+                        val currentPosition = scrollTarget ?: scroller.scrollX
+                        val nextPosition = if (direction > 0) {
+                            slideStarts.firstOrNull { it > currentPosition } ?: distance
+                        } else {
+                            slideStarts.lastOrNull { it < currentPosition } ?: 0
+                        }
+                        val position = nextPosition.coerceIn(0, distance)
+                        scrollTarget = position
                         scrollAnimation?.cancel()
-                        scrollAnimation = ObjectAnimator.ofInt(scroller, "scrollX", position.coerceIn(0, rowWidth - gridWidth)).apply {
+                        scrollAnimation = ObjectAnimator.ofInt(scroller, "scrollX", position).apply {
                             duration = 320
                             interpolator = DecelerateInterpolator()
                             start()
