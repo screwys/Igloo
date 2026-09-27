@@ -54,6 +54,7 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 	"moment_views":                schemaLifecycleUserState,
 	"moments_cursors":             schemaLifecycleUserState,
 	"moments_order_counters":      schemaLifecycleMaintainedState,
+	"moments_order_history":       schemaLifecycleMaintainedState,
 	"mutation_clocks":             schemaLifecycleUserState,
 	"muted_channels":              schemaLifecycleUserState,
 	"profile_jobs":                schemaLifecycleQueue,

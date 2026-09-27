@@ -24,6 +24,10 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260927_add_moments_order_history",
+		apply: addMomentsOrderHistory,
+	},
+	{
 		name:  "20260906_add_x_account_details",
 		apply: addXAccountDetails,
 	},
@@ -131,6 +135,20 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addMomentsOrderHistory(tx *sql.Tx) error {
+	if _, err := tx.Exec(momentsOrderHistoryTableStatement()); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`
+		INSERT INTO moments_order_history (scope, video_id, order_position)
+		SELECT 'all', video_id, moments_all_position FROM videos WHERE moments_all_position > 0
+		UNION ALL
+		SELECT 'following', video_id, moments_following_position FROM videos WHERE moments_following_position > 0
+		ON CONFLICT(scope, video_id) DO NOTHING
+	`)
+	return err
 }
 
 func addXAccountDetails(tx *sql.Tx) error {

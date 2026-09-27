@@ -58,6 +58,8 @@ func schemaUserStateStatements() []string {
 			next_position INTEGER NOT NULL DEFAULT 1
 		) WITHOUT ROWID`,
 
+		momentsOrderHistoryTableStatement(),
+
 		`CREATE TABLE IF NOT EXISTS watch_history (
 			video_id          TEXT PRIMARY KEY,
 			playback_position REAL NOT NULL DEFAULT 0,
@@ -102,4 +104,13 @@ func schemaUserStateStatements() []string {
 			muted_at INTEGER NOT NULL DEFAULT 0
 		)`,
 	}
+}
+
+func momentsOrderHistoryTableStatement() string {
+	return `CREATE TABLE IF NOT EXISTS moments_order_history (
+		scope          TEXT NOT NULL CHECK (scope IN ('all', 'following')),
+		video_id       TEXT NOT NULL,
+		order_position INTEGER NOT NULL CHECK (order_position > 0),
+		PRIMARY KEY (scope, video_id)
+	) WITHOUT ROWID`
 }

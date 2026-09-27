@@ -286,6 +286,9 @@ CREATE TABLE moments_cursors ( scope TEXT PRIMARY KEY CHECK (scope IN ('all', 'f
 -- table: moments_order_counters on moments_order_counters
 CREATE TABLE moments_order_counters ( scope TEXT PRIMARY KEY CHECK (scope IN ('all', 'following')), next_position INTEGER NOT NULL DEFAULT 1 ) WITHOUT ROWID;
 
+-- table: moments_order_history on moments_order_history
+CREATE TABLE moments_order_history ( scope TEXT NOT NULL CHECK (scope IN ('all', 'following')), video_id TEXT NOT NULL, order_position INTEGER NOT NULL CHECK (order_position > 0), PRIMARY KEY (scope, video_id) ) WITHOUT ROWID;
+
 -- table: mutation_clocks on mutation_clocks
 CREATE TABLE mutation_clocks ( kind TEXT NOT NULL CHECK (kind IN ('like', 'bookmark', 'follow', 'star', 'mute', 'progress')), item_key TEXT NOT NULL, action TEXT NOT NULL CHECK (action IN ('set', 'clear')), updated_at_ms INTEGER NOT NULL, PRIMARY KEY (kind, item_key) ) WITHOUT ROWID;
 

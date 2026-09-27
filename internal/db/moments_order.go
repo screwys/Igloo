@@ -16,9 +16,9 @@ func momentsPositionColumn(scope string) (string, bool) {
 	}
 }
 
-// ReconcileMomentsOrder appends every newly eligible video as one server-owned batch. Assigned
-// positions survive temporary invisibility; the batch uses effective event time only to mix its
-// members before assigning final positions after the current tail.
+// ReconcileMomentsOrder restores returning videos to their saved positions and appends
+// first arrivals. Positions survive content deletion. Event time only orders new arrivals
+// within their batch before assigning positions after the current tail.
 func (db *DB) ReconcileMomentsOrder(scope string) error {
 	scope = NormalizeMomentsTab(scope)
 	positionColumn, ok := momentsPositionColumn(scope)
@@ -28,32 +28,41 @@ func (db *DB) ReconcileMomentsOrder(scope string) error {
 	visibleCTE := db.shortsVisibleCTE(scope)
 	return db.WithWrite(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`INSERT INTO moments_order_counters (scope, next_position)
-			SELECT ?, COALESCE(MAX(`+positionColumn+`), 0) + 1 FROM videos WHERE 1
-			ON CONFLICT(scope) DO NOTHING`, scope); err != nil {
+			SELECT ?, COALESCE((SELECT MAX(order_position) FROM moments_order_history WHERE scope = ?), 0) + 1
+			WHERE NOT EXISTS (SELECT 1 FROM moments_order_counters WHERE scope = ?)`, scope, scope, scope); err != nil {
 			return err
 		}
-		rows, err := tx.Query(visibleCTE + `
-			SELECT v.video_id
+		rows, err := tx.Query(visibleCTE+`
+			SELECT v.video_id, COALESCE(history.order_position, 0)
 			FROM visible v
 			JOIN videos stored ON stored.video_id = v.video_id
-			WHERE stored.` + positionColumn + ` = 0
-			ORDER BY v.effective_moment_at_ms ASC, v.video_id ASC`)
+			LEFT JOIN moments_order_history history ON history.video_id = v.video_id AND history.scope = ?
+			WHERE stored.`+positionColumn+` = 0
+			ORDER BY v.effective_moment_at_ms ASC, v.video_id ASC`, scope)
 		if err != nil {
 			return err
 		}
-		var videoIDs []string
+		type momentPosition struct {
+			videoID  string
+			position int64
+		}
+		var positions []momentPosition
 		for rows.Next() {
-			var videoID string
-			if err := rows.Scan(&videoID); err != nil {
+			var item momentPosition
+			if err := rows.Scan(&item.videoID, &item.position); err != nil {
 				_ = rows.Close()
 				return err
 			}
-			videoIDs = append(videoIDs, videoID)
+			positions = append(positions, item)
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return err
 		}
 		if err := rows.Close(); err != nil {
 			return err
 		}
-		if len(videoIDs) == 0 {
+		if len(positions) == 0 {
 			return nil
 		}
 		var next int64
@@ -65,11 +74,18 @@ func (db *DB) ReconcileMomentsOrder(scope string) error {
 			return err
 		}
 		defer func() { _ = stmt.Close() }()
-		for _, videoID := range videoIDs {
-			if _, err := stmt.Exec(next, videoID); err != nil {
+		for _, item := range positions {
+			if item.position == 0 {
+				item.position = next
+				if _, err := tx.Exec(`INSERT INTO moments_order_history (scope, video_id, order_position)
+					VALUES (?, ?, ?)`, scope, item.videoID, item.position); err != nil {
+					return err
+				}
+				next++
+			}
+			if _, err := stmt.Exec(item.position, item.videoID); err != nil {
 				return fmt.Errorf("assign %s Moments position: %w", scope, err)
 			}
-			next++
 		}
 		_, err = tx.Exec(`UPDATE moments_order_counters SET next_position = ? WHERE scope = ?`, next, scope)
 		return err
