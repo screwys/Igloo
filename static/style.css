@@ -7146,7 +7146,6 @@ body.shorts-open:has(.shorts-story-tray.open) .shorts-layout {
     pointer-events: none;
 }
 
-.shorts-layout.shorts-story-mode > .shorts-close-btn,
 .shorts-layout.shorts-story-mode .shorts-story-close {
     display: none !important;
 }
@@ -7614,39 +7613,6 @@ body.landscape-mode .shorts-video-wrapper.is-wide video {
     width: 100vw;
     height: 100vh;
     object-fit: contain;
-}
-
-/* Close Button (Top Right - Moved from Left) */
-.shorts-close-btn {
-    position: absolute;
-    top: 3.5rem;
-    right: 1.5rem;
-    z-index: 300;
-    /* Ensure strictly above everything */
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-size: 1.2rem;
-    backdrop-filter: blur(4px);
-}
-
-.shorts-close-btn:hover {
-    background: rgba(0, 0, 0, 0.8);
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 15px rgba(var(--accent-primary-rgb), 0.5);
-}
-
-.shorts-close-btn .material-icon {
-    width: 22px;
-    height: 22px;
 }
 
 /* Hide Channel Search Bar in Shorts Mode */
@@ -12327,9 +12293,6 @@ body.shorts-mode .sidebar {
         max-width: none;
     }
 
-    .shorts-close-btn {
-        right: 0.75rem;
-    }
 }
 
 @media (max-width: 768px) {

@@ -47,7 +47,6 @@ if (layout) {
     var infiniteContainerSelector = String(layout.getAttribute('data-infinite-container-selector') || sourceContainerSelector).trim() || sourceContainerSelector
     var sourceContainer = (doc.querySelector(sourceContainerSelector)) || grid
     var shortsContainer = doc.getElementById('shorts-container')
-    var closeBtn = doc.getElementById('close-shorts-btn')
     var reopenBtn = doc.getElementById('shorts-reopen-btn')
     var prevBtn = doc.getElementById('shorts-prev-btn')
     var nextBtn = doc.getElementById('shorts-next-btn')
@@ -1793,7 +1792,6 @@ if (layout) {
 
     function initButtons() {
       initTopControlIcons()
-      if (closeBtn) closeBtn.addEventListener('click', function (e) { e.preventDefault(); showGrid() })
       if (reopenBtn) reopenBtn.addEventListener('click', function () {
         if (!state.items.length) return
         openOverlayAtIndex(state.currentIndex >= 0 ? state.currentIndex : 0, true, { persistCursor: false })

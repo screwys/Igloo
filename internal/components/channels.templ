@@ -43,7 +43,6 @@ templ ChannelsPage(p PageProps, sections []ChannelWithVideos, query string, hasM
 			data-source-card-selector="a.video-card"
 			tabindex="-1"
 		>
-			<button id="close-shorts-btn" class="shorts-close-btn" title={ L(p, "action_back_to_grid", "Back to Grid") }>@MaterialIcon("Close", "")</button>
 			<div id="shorts-container" class="shorts-container"></div>
 			<div id="shorts-uptodate-overlay" class="shorts-uptodate-overlay hidden">
 				<div class="uptodate-content"><span>{ L(p, "status_up_to_date", "You're up to date!") }</span></div>
