@@ -2,6 +2,12 @@ package com.screwy.igloo.player
 
 import android.app.Activity
 import android.content.Context
+import android.content.ComponentName
+import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
+import android.app.PendingIntent
+import android.net.Uri
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Rect
@@ -56,6 +62,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
+import androidx.media3.common.MediaMetadata
 import androidx.navigation.NavController
 import com.screwy.igloo.R
 import com.screwy.igloo.data.Dearrow
@@ -66,8 +73,7 @@ import com.screwy.igloo.data.dao.ChannelStarDao
 import com.screwy.igloo.data.dao.OfflineVideoDownloadDao
 import com.screwy.igloo.data.dao.VideoDao
 import com.screwy.igloo.media.MediaUri
-import com.screwy.igloo.net.IglooHostProvider
-import com.screwy.igloo.net.auth.AuthTokenProvider
+import com.screwy.igloo.MainActivity
 import com.screwy.igloo.outbox.OutboxKind
 import com.screwy.igloo.outbox.OutboxWriter
 import com.screwy.igloo.sync.OfflineVideoActions
@@ -82,7 +88,6 @@ import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -101,11 +106,40 @@ import kotlin.math.roundToInt
  * The player route is hosted directly so orientation changes cannot swap it into the app shell or
  * permanent sidebar.
  *
- * ExoPlayer lifecycle lives here (route-owned) and is released via `DisposableEffect` on dispose.
- * The VM exposes state as Flows and the progress-sampler via `onProgressSample`.
+ * PlaybackService owns ExoPlayer so playback and system controls can outlive this screen.
+ * The VM exposes screen data as Flows.
  */
 @Composable
 fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifier = Modifier) {
+    val context = LocalContext.current.applicationContext
+    var service by remember { mutableStateOf<PlaybackService?>(null) }
+    DisposableEffect(context) {
+        val connection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+                service = (binder as PlaybackService.LocalBinder).service
+            }
+
+            override fun onServiceDisconnected(name: ComponentName) {
+                service = null
+            }
+        }
+        context.bindService(
+            Intent(context, PlaybackService::class.java).setAction(PlaybackService.LOCAL_BIND),
+            connection,
+            Context.BIND_AUTO_CREATE,
+        )
+        onDispose { context.unbindService(connection) }
+    }
+    service?.let { PlayerContent(videoId, navController, it, modifier) }
+}
+
+@Composable
+private fun PlayerContent(
+    videoId: String,
+    navController: NavController,
+    service: PlaybackService,
+    modifier: Modifier,
+) {
     val brightnessLabel = stringResource(R.string.player_brightness)
     val volumeLabel = stringResource(R.string.player_volume)
 
@@ -131,8 +165,6 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
     val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val authTokens: AuthTokenProvider = koinInject()
-    val iglooHostProvider: IglooHostProvider = koinInject()
     val prefs: PreferencesRepo = koinInject()
     val bookmarkDao: BookmarkDao = koinInject()
     val channelFollowDao: ChannelFollowDao = koinInject()
@@ -142,12 +174,7 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
     val uiEffects: UiEffects = koinInject()
     val videoDao: VideoDao = koinInject()
     val outboxWriter: OutboxWriter = koinInject()
-    val player =
-        remember(authTokens.bearerTokenSync()) {
-            buildIglooPlayer(ctx, authTokens, iglooHostProvider).also {}
-        }
-    val mediaSession =
-        remember(player) { buildIglooMediaSession(ctx.applicationContext, player) }
+    val player = service.player
     val playbackCoordinator = remember { PlaybackCoordinator() }
     val playbackPlayer = remember(player) { ExoPlayerPlaybackPlayer(player) }
     val activity = ctx.findActivity()
@@ -238,10 +265,9 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
         produceState<String?>(initialValue = null, key1 = videoId) {
             value = videoDao.getNextVideoId(videoId)
         }
-    DisposableEffect(player, mediaSession) {
+    DisposableEffect(player) {
         onDispose {
-            mediaSession.release()
-            player.release()
+            if (!service.backgroundPlayback) player.pause()
         }
     }
     DisposableEffect(activity) {
@@ -259,11 +285,11 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
+                    service.backgroundPlayback = false
                     if (isFullscreen) hidePlayerSystemBars(activity)
                 }
                 Lifecycle.Event.ON_STOP -> {
-                    if (componentActivity?.isInPictureInPictureMode != true) {
-                        player.playWhenReady = false
+                    if (!service.backgroundPlayback) {
                         player.pause()
                     }
                 }
@@ -321,30 +347,30 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
     // file after playback started. Stop first so a mid-session swap doesn't leak
     // a black frame or audio tail from the old item.
     LaunchedEffect(streamUri, videoId) {
+        val uri = when (val source = streamUri) {
+            is MediaUri.Local -> source.file.toURI().toString()
+            is MediaUri.Remote -> source.url
+            is MediaUri.Missing -> return@LaunchedEffect
+        }
+        if (service.videoId == videoId && service.sourceUri == uri) return@LaunchedEffect
+        val resumeMs = if (service.videoId == videoId) player.currentPosition else
+            ((watchHistory?.playbackPosition ?: 0.0) * 1000).toLong()
+        player.stop()
+        service.videoId = videoId
+        service.sourceUri = uri
         playbackCoordinator.bind(
             player = playbackPlayer,
             source =
                 PlaybackSource(
                     mediaUri = streamUri,
-                    resumeMs = ((watchHistory?.playbackPosition ?: 0.0) * 1000).toLong(),
+                    resumeMs = resumeMs,
                 ),
         )
     }
 
-    // Progress sampler: every 5s while playing + on pause/seek events. The
-    // Listener wiring + periodic loop live together so either signal fires a
-    // sample without duplicating call sites.
-    LaunchedEffect(player) {
+    DisposableEffect(player) {
         val listener =
             object : Player.Listener {
-                override fun onIsPlayingChanged(playing: Boolean) {
-                    // `isPlaying == false` covers both user-pause and buffer-pause —
-                    // either way, the current position is a valid sample to persist.
-                    if (!playing) {
-                        vm.onProgressSample(player.currentPosition, player.duration)
-                    }
-                }
-
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                     playerPlayWhenReady = playWhenReady
                 }
@@ -353,29 +379,11 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
                     playerPlaybackState = playbackState
                 }
 
-                override fun onPositionDiscontinuity(
-                    oldPosition: Player.PositionInfo,
-                    newPosition: Player.PositionInfo,
-                    reason: Int,
-                ) {
-                    if (reason == Player.DISCONTINUITY_REASON_SEEK) {
-                        vm.onProgressSample(newPosition.positionMs, player.duration)
-                    }
-                }
             }
         player.addListener(listener)
         playerPlayWhenReady = player.playWhenReady
         playerPlaybackState = player.playbackState
-        try {
-            while (isActive) {
-                delay(5_000L)
-                if (player.isPlaying) {
-                    vm.onProgressSample(player.currentPosition, player.duration)
-                }
-            }
-        } finally {
-            player.removeListener(listener)
-        }
+        onDispose { player.removeListener(listener) }
     }
 
     var showSubtitles by remember(videoId) { mutableStateOf(false) }
@@ -411,13 +419,16 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
                 music = sbMusic,
             )
         }
-    val sponsorBlockPlayback =
-        rememberSponsorBlockPlaybackState(
-            videoId = videoId,
-            player = player,
-            segments = segments,
-            modes = sponsorBlockModes,
-        )
+    val activeSegments = remember(segments, sponsorBlockModes) {
+        buildSponsorBlockUiSegments(segments, sponsorBlockModes)
+    }
+    LaunchedEffect(videoId, activeSegments) { service.segments = activeSegments }
+    val sponsorBlockPlayback = SponsorBlockPlaybackState(
+        visibleSegments = activeSegments.map { it.source },
+        skipSegment = service.sponsorBlock.skipSegment,
+        autoSkipMessage = service.sponsorBlock.autoSkipMessage,
+        onSkip = service.sponsorBlock::skip,
+    )
     LaunchedEffect(
         playerControlsVisible,
         showSubtitles,
@@ -456,6 +467,27 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
             video?.dearrowTitleCasual,
         )
     val canonicalShareUrl = video?.canonicalUrl?.takeIf { it.isNotBlank() }
+    LaunchedEffect(playerTitle, channel?.name, thumbnailUri, streamUri, videoId) {
+        if (service.videoId != videoId) return@LaunchedEffect
+        val item = player.currentMediaItem ?: return@LaunchedEffect
+        val artworkUri = when (val thumbnail = thumbnailUri) {
+            is MediaUri.Local -> Uri.fromFile(thumbnail.file)
+            is MediaUri.Remote -> Uri.parse(thumbnail.url)
+            is MediaUri.Missing -> null
+        }
+        player.replaceMediaItem(0, item.buildUpon().setMediaId(videoId)
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(playerTitle)
+                .setArtist(channel?.name).setArtworkUri(artworkUri).build()).build())
+        service.setSessionActivity(PendingIntent.getActivity(
+            ctx, 0,
+            Intent(ctx, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                data = Uri.parse("igloo://youtube/$videoId")
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        ))
+    }
     val onPreviousVideo =
         previousVideoId?.let { prevId ->
             { navigator.openVideo(prevId, IglooNavigationSource.Player) }
@@ -464,7 +496,7 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
         nextVideoId?.let { nextId -> { navigator.openVideo(nextId, IglooNavigationSource.Player) } }
     val autoMiniPlayerEligible =
         shouldAutoEnterMiniPlayer(
-            preferenceEnabled = miniPlayerAutoEnter,
+            preferenceEnabled = miniPlayerAutoEnter && !service.backgroundPlayback,
             playWhenReady = playerPlayWhenReady,
             playbackState = playerPlaybackState,
             streamAvailable = streamUri !is MediaUri.Missing,
@@ -492,7 +524,7 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
 
         val leaveListener =
             Runnable {
-                if (currentAutoMiniPlayerEligible) {
+                if (currentAutoMiniPlayerEligible && !service.backgroundPlayback) {
                     playerControlsVisible = false
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
                         componentActivity.enterPictureInPictureMode(
@@ -527,6 +559,7 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
 
     fun enterMiniPlayer() {
         if (!pictureInPictureSupported || componentActivity == null) return
+        service.backgroundPlayback = false
         playerControlsVisible = false
         componentActivity.enterPictureInPictureMode(
             buildPictureInPictureParams(
@@ -572,6 +605,18 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
         } else {
             null
         }
+    val backgroundAction: (() -> Unit)? = if (streamUri !is MediaUri.Missing) {
+        {
+            service.backgroundPlayback = true
+            if (pictureInPictureSupported) {
+                componentActivity?.setPictureInPictureParams(
+                    PictureInPictureParamsCompat.Builder().setEnabled(false).build()
+                )
+            }
+            player.play()
+            activity?.moveTaskToBack(true)
+        }
+    } else null
     if (isFullscreen || pictureInPicturePresentation) {
         PlayerSurface(
             mode = PlayerSurfaceMode.Fullscreen,
@@ -587,6 +632,7 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
             onToggleSubtitles = { showSubtitles = !showSubtitles },
             onToggleFullscreen = { exitFullscreen() },
             onEnterPictureInPicture = miniPlayerAction,
+            onPlayInBackground = backgroundAction,
             controlsVisible = playerControlsVisible && !pictureInPicturePresentation,
             onControlsVisibleChange = {
                 if (!pictureInPicturePresentation) playerControlsVisible = it
@@ -630,6 +676,7 @@ fun PlayerRoute(videoId: String, navController: NavController, modifier: Modifie
                     onToggleSubtitles = { showSubtitles = !showSubtitles },
                     onToggleFullscreen = { enterFullscreen() },
                     onEnterPictureInPicture = miniPlayerAction,
+                    onPlayInBackground = backgroundAction,
                     controlsVisible = playerControlsVisible,
                     onControlsVisibleChange = { playerControlsVisible = it },
                     previewSpritePath = previewSpritePath,

@@ -514,6 +514,7 @@
     <string name="player_more_from_channel">More videos from this channel</string>
     <string name="player_next_in_line">Next in line</string>
     <string name="player_next_video">Next video</string>
+    <string name="player_play_in_background">Play in background</string>
     <string name="player_playback_speed">Playback speed</string>
     <string name="player_playback_speed_menu">Playback speed menu</string>
     <string name="player_playback_speed_value">Playback speed (%1$s)</string>

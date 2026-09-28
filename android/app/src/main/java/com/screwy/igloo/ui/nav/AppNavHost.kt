@@ -1,8 +1,12 @@
 package com.screwy.igloo.ui.nav
 
+import android.content.Intent
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -15,6 +19,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navDeepLink
 import androidx.navigation.navigation
+import androidx.core.util.Consumer
 import com.screwy.igloo.auth.AuthRepo
 import com.screwy.igloo.auth.LoginRoute
 import com.screwy.igloo.bookmarks.BookmarksRoute
@@ -51,6 +56,20 @@ import org.koin.compose.koinInject
 @Composable
 fun AppNavHost() {
     val navController = rememberNavController()
+    val activity = LocalActivity.current as? ComponentActivity
+    DisposableEffect(activity, navController) {
+        val listener = Consumer<Intent> { intent ->
+            val current = navController.currentBackStackEntry
+            val currentVideo = current?.arguments?.getString("video_id")
+            if (current?.destination?.route != RouteRegistry.Player.route ||
+                intent.dataString != "igloo://youtube/$currentVideo"
+            ) {
+                navController.handleDeepLink(intent)
+            }
+        }
+        activity?.addOnNewIntentListener(listener)
+        onDispose { activity?.removeOnNewIntentListener(listener) }
+    }
     val adaptiveLayout = rememberIglooAdaptiveLayout()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val authRepo: AuthRepo = koinInject()

@@ -1,20 +1,10 @@
 package com.screwy.igloo.player
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalResources
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import com.screwy.igloo.R
 import com.screwy.igloo.data.entity.SponsorBlockSegmentEntity
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 
 internal class SponsorBlockPlaybackController(
     private val seekTo: (Long) -> Unit,
@@ -31,11 +21,15 @@ internal class SponsorBlockPlaybackController(
     private var lastSeekPositionMs by mutableStateOf<Long?>(null)
     private var manualSegmentKey: String? = null
 
-    fun reset() {
+    fun reset(clearSeekHistory: Boolean = false) {
         skipSegment = null
         autoSkipMessage = null
         activeKey = null
         manualSegmentKey = null
+        if (clearSeekHistory) {
+            lastSeekAtMs = 0L
+            lastSeekPositionMs = null
+        }
     }
 
     fun onSeek(positionMs: Long) {
@@ -100,73 +94,3 @@ internal data class SponsorBlockPlaybackState(
     val autoSkipMessage: String?,
     val onSkip: (SponsorBlockUiSegment) -> Unit,
 )
-
-@Composable
-internal fun rememberSponsorBlockPlaybackState(
-    videoId: String,
-    player: ExoPlayer,
-    segments: List<SponsorBlockSegmentEntity>,
-    modes: Map<String, String>,
-): SponsorBlockPlaybackState {
-    val resources = LocalResources.current
-    val activeSegments = remember(segments, modes) {
-        buildSponsorBlockUiSegments(segments, modes)
-    }
-    val visibleSegments = remember(activeSegments) {
-        activeSegments.map { it.source }
-    }
-    val controller = remember(videoId, player, resources) {
-        SponsorBlockPlaybackController(
-            seekTo = player::seekTo,
-            skippedMessage = { category ->
-                resources.getString(
-                    R.string.sponsorblock_segment_skipped,
-                    resources.getString(sponsorBlockLabelRes(category)),
-                )
-            },
-        )
-    }
-
-    DisposableEffect(player, controller) {
-        val listener = object : Player.Listener {
-            override fun onPositionDiscontinuity(
-                oldPosition: Player.PositionInfo,
-                newPosition: Player.PositionInfo,
-                reason: Int,
-            ) {
-                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
-                    controller.onSeek(newPosition.positionMs)
-                }
-            }
-        }
-        player.addListener(listener)
-        onDispose {
-            player.removeListener(listener)
-        }
-    }
-
-    LaunchedEffect(activeSegments, player, videoId, controller) {
-        controller.reset()
-        while (isActive) {
-            delay(500L)
-            controller.onTick(
-                isPlaying = player.isPlaying,
-                positionMs = player.currentPosition,
-                segments = activeSegments,
-            )
-        }
-    }
-    LaunchedEffect(controller.autoSkipMessage) {
-        if (controller.autoSkipMessage != null) {
-            delay(2_000L)
-            controller.clearAutoSkipMessage()
-        }
-    }
-
-    return SponsorBlockPlaybackState(
-        visibleSegments = visibleSegments,
-        skipSegment = controller.skipSegment,
-        autoSkipMessage = controller.autoSkipMessage,
-        onSkip = controller::skip,
-    )
-}

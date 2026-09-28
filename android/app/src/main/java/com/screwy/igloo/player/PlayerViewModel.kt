@@ -13,8 +13,6 @@ import com.screwy.igloo.data.entity.WatchHistoryEntity
 import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.media.OwnerKind
-import com.screwy.igloo.outbox.OutboxKind
-import com.screwy.igloo.outbox.OutboxWriter
 import com.screwy.igloo.sync.SyncCoordinator
 import com.screwy.igloo.ui.UiEffect
 import com.screwy.igloo.ui.UiEffects
@@ -43,15 +41,12 @@ import kotlinx.coroutines.launch
  *  - [streamUri] — the playable URI, local if cached else remote (resolver rules).
  *  - [watchHistory] — resume position + duration for the last-known sync.
  *
- * Progress sampling is driven by the route (route owns `ExoPlayer`); this VM
- * exposes `onProgressSample` which coalesces through the outbox (`CODE_PROGRESS`
- * coalesces on `(kind, item_id)` per `OutboxKind`).
+ * PlaybackService saves playback progress through the outbox.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class PlayerViewModel(
     private val videoId: String,
     private val db: IglooDatabase,
-    private val outboxWriter: OutboxWriter,
     private val prefs: PreferencesRepo,
     private val scheduler: SyncCoordinator,
     private val uiEffects: UiEffects,
@@ -153,29 +148,6 @@ class PlayerViewModel(
             started = SharingStarted.WhileSubscribed(5_000L),
             initialValue = null,
         )
-
-    /**
-     * Enqueue a `progress` outbox row. `positionMs`/`durationMs` are millis from
-     * ExoPlayer; the outbox payload stores seconds (Double) per the server
-     * contract in `OutboxKind.Progress`.
-     *
-     * Coalesces on `(kind, item_id)` so back-to-back samples collapse — the drain
-     * sees one row per video with the latest position. Caller throttling (route
-     * samples every 5s + on pause/seek) keeps the queue warm but not noisy.
-     */
-    fun onProgressSample(positionMs: Long, durationMs: Long) {
-        if (positionMs < 0L) return
-        val safeDuration = durationMs.coerceAtLeast(0L)
-        viewModelScope.launch {
-            outboxWriter.enqueue(
-                OutboxKind.Progress(
-                    videoId = videoId,
-                    position = positionMs / 1000.0,
-                    duration = safeDuration / 1000.0,
-                )
-            )
-        }
-    }
 
     fun refreshComments() {
         viewModelScope.launch {

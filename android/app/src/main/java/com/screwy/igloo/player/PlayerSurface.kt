@@ -77,6 +77,7 @@ internal fun PlayerSurface(
     onBrightnessChange: (Float) -> Unit,
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    onPlayInBackground: (() -> Unit)? = null,
 ) {
     val fullscreen = mode == PlayerSurfaceMode.Fullscreen
     val subtitleBottomPadding = playerSubtitleBottomPaddingDp(fullscreen, controlsVisible).dp
@@ -151,6 +152,7 @@ internal fun PlayerSurface(
             isFullscreen = fullscreen,
             onToggleFullscreen = onToggleFullscreen,
             onEnterPictureInPicture = onEnterPictureInPicture,
+            onPlayInBackground = onPlayInBackground,
             controlsVisible = controlsVisible,
             onControlsVisibleChange = onControlsVisibleChange,
             previewSpritePath = previewSpritePath,

@@ -5,6 +5,8 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -42,18 +44,7 @@ internal fun buildIglooPlayer(
     tokenProvider: AuthTokenProvider,
     iglooHostResolver: () -> String,
 ): ExoPlayer {
-    val httpFactory = DefaultHttpDataSource.Factory()
-        .setUserAgent(NetDefaults.PUBLIC_BROWSER_USER_AGENT)
-    val resolvingHttpFactory = ResolvingDataSource.Factory(httpFactory) { dataSpec ->
-        val authHeaders = iglooMediaRequestHeaders(
-            url = dataSpec.uri.toString(),
-            iglooHost = iglooHostResolver(),
-            bearerToken = tokenProvider.bearerTokenSync(),
-            existingHeaders = dataSpec.httpRequestHeaders,
-        )
-        if (authHeaders.isEmpty()) dataSpec else dataSpec.withAdditionalHeaders(authHeaders)
-    }
-    val dataSourceFactory = DefaultDataSource.Factory(context, resolvingHttpFactory)
+    val dataSourceFactory = buildIglooDataSourceFactory(context, tokenProvider, iglooHostResolver)
     val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(
             /* minBufferMs = */ 1_500,
@@ -79,8 +70,38 @@ internal fun buildIglooPlayer(
 }
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
-internal fun buildIglooMediaSession(context: Context, player: Player): MediaSession =
+private fun buildIglooDataSourceFactory(
+    context: Context,
+    tokenProvider: AuthTokenProvider,
+    iglooHostResolver: () -> String,
+): DataSource.Factory {
+    val httpFactory = DefaultHttpDataSource.Factory()
+        .setUserAgent(NetDefaults.PUBLIC_BROWSER_USER_AGENT)
+    val resolvingHttpFactory = ResolvingDataSource.Factory(httpFactory) { dataSpec ->
+        val authHeaders = iglooMediaRequestHeaders(
+            url = dataSpec.uri.toString(),
+            iglooHost = iglooHostResolver(),
+            bearerToken = tokenProvider.bearerTokenSync(),
+            existingHeaders = dataSpec.httpRequestHeaders,
+        )
+        if (authHeaders.isEmpty()) dataSpec else dataSpec.withAdditionalHeaders(authHeaders)
+    }
+    return DefaultDataSource.Factory(context, resolvingHttpFactory)
+}
+
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
+internal fun buildIglooMediaSession(
+    context: Context,
+    player: Player,
+    tokenProvider: AuthTokenProvider,
+    hostProvider: IglooHostProvider,
+): MediaSession =
     MediaSession.Builder(context, player)
+        .setBitmapLoader(
+            DataSourceBitmapLoader.Builder(context)
+                .setDataSourceFactory(buildIglooDataSourceFactory(context, tokenProvider, hostProvider::hostSync))
+                .build()
+        )
         .setMediaButtonPreferences(
             playerMediaButtonPreferences(
                 backLabel = context.getString(R.string.player_back_10_seconds),

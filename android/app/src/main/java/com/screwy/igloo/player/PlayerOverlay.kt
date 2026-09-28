@@ -1,5 +1,7 @@
 package com.screwy.igloo.player
 
+import androidx.compose.material.icons.filled.Headphones
+
 import android.content.Context
 import android.media.AudioManager
 import androidx.compose.foundation.background
@@ -82,6 +84,7 @@ fun PlayerOverlay(
     previewSpritePath: String? = null,
     previewTrackJsonPath: String? = null,
     modifier: Modifier = Modifier,
+    onPlayInBackground: (() -> Unit)? = null,
 ) {
     val backLabel = stringResource(R.string.action_back)
     val previousVideoLabel = stringResource(R.string.player_previous_video)
@@ -345,6 +348,15 @@ fun PlayerOverlay(
                                     },
                                 )
                             }
+                        }
+                    }
+                    if (onPlayInBackground != null) {
+                        IconButton(onClick = onPlayInBackground) {
+                            Icon(
+                                imageVector = Icons.Default.Headphones,
+                                contentDescription = stringResource(R.string.player_play_in_background),
+                                tint = Color.White,
+                            )
                         }
                     }
                     if (onEnterPictureInPicture != null) {

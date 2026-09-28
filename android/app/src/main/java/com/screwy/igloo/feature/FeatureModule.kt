@@ -113,7 +113,6 @@ val iglooFeatureModule = module {
         PlayerViewModel(
             videoId = videoId,
             db = get<IglooDatabase>(),
-            outboxWriter = get(),
             prefs = get(),
             scheduler = get(),
             uiEffects = get(),
