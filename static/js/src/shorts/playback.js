@@ -8,6 +8,23 @@ export function initPlayback(stateRef, goNextFn) {
   _goNext = goNextFn
 }
 
+export function disposeShortItem(entry) {
+  if (!entry) return
+  var refs = entry.refs
+  if (refs.disposeVideoControls) refs.disposeVideoControls()
+  var slideshow = refs.slideshow
+  if (slideshow) {
+    clearTimeout(slideshow.timer)
+    slideshow.timer = 0
+    slideshow.playing = false
+  }
+  refs.wrapper.querySelectorAll('video, audio').forEach(function (media) {
+    media.pause()
+    media.removeAttribute('src')
+    media.load()
+  })
+}
+
 function currentData() {
   if (_state.currentIndex < 0 || _state.currentIndex >= _state.items.length) return null
   return _state.items[_state.currentIndex] ? _state.items[_state.currentIndex].data : null

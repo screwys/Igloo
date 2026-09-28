@@ -1,7 +1,7 @@
 // Shorts page ES module entry point.
 
 import { apiFetch, cssEscape, escapeHtml, showToast, t, tf } from '../utils.js'
-import { initPlayback, toggleShortPlayback, stepSlideshow, syncRenderedShortVideoLoop } from './playback.js'
+import { initPlayback, disposeShortItem, toggleShortPlayback, stepSlideshow, syncRenderedShortVideoLoop } from './playback.js'
 import {
   initOverlay,
   goNext,
@@ -897,6 +897,7 @@ if (layout) {
       gridHydrationPending = false
       observedGridSkeletons = new WeakSet()
       observedGridImages = new WeakSet()
+      state.items.forEach(disposeShortItem)
       shortsContainer.replaceChildren()
       sourceContainer.innerHTML = snapshot.gridHTML
       replaceTabsHTML(snapshot.tabsHTML)
@@ -1280,6 +1281,7 @@ if (layout) {
       layout.classList.add('shorts-story-mode')
       ensureStoryContainerScrollBehavior()
       closeBookmarkMenu()
+      state.items.forEach(disposeShortItem)
       shortsContainer.replaceChildren()
       state.cards = []
       state.items = []
@@ -1317,6 +1319,7 @@ if (layout) {
       if (buffer && buffer.parentNode) buffer.parentNode.removeChild(buffer)
       removeStoryChrome()
       ensureContainerScrollBehavior()
+      state.items.forEach(disposeShortItem)
       shortsContainer.replaceChildren()
       state.cards = []
       state.items = []

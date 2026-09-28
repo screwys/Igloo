@@ -177,6 +177,7 @@ async function loadOverlay() {
     performance: { now: () => Date.now() },
     localStorage: { setItem() {}, getItem() { return ''; } },
     pauseAllShorts(exceptId) { calls.pausedExcept.push(exceptId || ''); },
+    disposeShortItem() {},
     setSlideshowIndex(entryArg, index) {
       calls.slideshowIndexes.push({ id: entryArg && entryArg.data && entryArg.data.id, index });
       if (entryArg && entryArg.refs && entryArg.refs.slideshow) entryArg.refs.slideshow.index = index;

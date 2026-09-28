@@ -1,6 +1,6 @@
 // Shorts overlay — visibility, navigation, virtual windowing, scroll.
 
-import { pauseAllShorts } from './playback.js'
+import { pauseAllShorts, disposeShortItem } from './playback.js'
 import { setSlideshowIndex, startSlideshowPlayback } from './playback.js'
 import { materialIconMarkup, t, tf } from '../utils.js'
 import { recordShortsDebugEvent } from './debug.js'
@@ -152,6 +152,7 @@ function pruneDeckWindow(centerIndex) {
   var end = Math.min(_state.cards.length - 1, centerIndex + DECK_WINDOW)
   _state.items.forEach(function (entry, index) {
     if (!entry || (index >= start && index <= end)) return
+    disposeShortItem(entry)
     if (entry.el && entry.el.parentNode) entry.el.parentNode.removeChild(entry.el)
     if (entry.data && entry.data.id) _state.byId.delete(entry.data.id)
     _state.items[index] = null
@@ -656,6 +657,7 @@ export function renderShortsWindow(centerIndex) {
     _state.observer.disconnect()
     _state.observer = null
   }
+  _state.items.forEach(disposeShortItem)
   while (_dom.shortsContainer.firstChild) _dom.shortsContainer.removeChild(_dom.shortsContainer.firstChild)
   _state.items = new Array(_state.cards.length).fill(null)
   _state.byId = new Map()

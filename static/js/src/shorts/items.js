@@ -1011,7 +1011,7 @@ export function makeShortItem(entryData, existingEl) {
     miniControls.classList.add('shorts-mini-controls')
     mediaStage.appendChild(miniControls)
     refs.miniControls = miniControls
-    bindFeedVideoControls(mediaStage, video, {
+    refs.disposeVideoControls = bindFeedVideoControls(mediaStage, video, {
       cinema: false,
       autoplay: true,
       volumeKey: 'shortsVolume',
