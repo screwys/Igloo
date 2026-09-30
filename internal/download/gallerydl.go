@@ -45,6 +45,9 @@ type GalleryDLWrapper struct {
 }
 
 func (g *GalleryDLWrapper) Run(ctx context.Context, operation, platform, subject string, args []string, cookiesFile string, opts CommandOptions, cookiesBrowser ...string) CommandResult {
+	if platform == "instagram" {
+		args = append([]string{"-o", "extractor.instagram.sleep-extractor=6-12"}, args...)
+	}
 	result := g.Runner.Run(ctx, "gallery-dl", args, opts)
 	if result.Err == nil {
 		result.Err = GalleryDLSemanticError(result.Stdout)
@@ -494,6 +497,7 @@ func (g *GalleryDLWrapper) DownloadCompleted(ctx context.Context, rawURL, destDi
 		"-D", tmpDir,
 	}
 	if IsInstagramURL(rawURL) {
+		args = append(args, "-o", "extractor.instagram.sleep-extractor=6-12")
 		// Single posts carry carousel music. Keep reel audio in the video and
 		// leave account discovery ranges counting the existing media records.
 		args = append(args, "-o", "extractor.instagram.post.audio=true")

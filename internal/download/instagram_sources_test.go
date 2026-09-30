@@ -298,9 +298,9 @@ func TestInstagramTaggedArgsUseBrowserCookies(t *testing.T) {
 	}
 }
 
-func TestInstagramCookieAuthAttemptsUseOnlyBrowserWhenFileDisabled(t *testing.T) {
+func TestInstagramCookieAuthAttemptsTryAnonymousBeforeBrowserWhenFileDisabled(t *testing.T) {
 	got := instagramCookieAuthAttempts("", "firefox")
-	want := []CookieSet{{Browser: "firefox"}}
+	want := []CookieSet{{}, {Browser: "firefox"}}
 	if len(got) != len(want) {
 		t.Fatalf("cookie attempts = %#v, want %#v", got, want)
 	}

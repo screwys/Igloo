@@ -66,6 +66,12 @@ func (m *Manager) runYouTubeRecommendationLoop(ctx context.Context) {
 		if m.maintainDiscoverGeneration() {
 			continue
 		}
+		if backoff, cooling := m.activeDownloadPlatformBackoff("youtube", time.Now()); cooling {
+			if !waitForVideoMetadata(ctx, m.youtubeRecommendationKick, time.Until(backoff.Until)) {
+				return
+			}
+			continue
+		}
 		if delay := m.externalRetryDelay(time.Now()); delay > 0 {
 			if !waitForVideoMetadata(ctx, m.youtubeRecommendationKick, delay) {
 				return

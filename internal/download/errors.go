@@ -65,8 +65,6 @@ func ClassifyError(err error, output []byte) string {
 	switch {
 	case errors.Is(err, context.Canceled):
 		return ErrorKindCanceled
-	case errors.Is(err, context.DeadlineExceeded):
-		return ErrorKindTemporary
 	}
 	var httpErr *HTTPStatusError
 	if errors.As(err, &httpErr) {
@@ -91,6 +89,9 @@ func ClassifyError(err error, output []byte) string {
 	}
 	if containsInstagramAccessThrottleSignal(text) {
 		return ErrorKindRateLimit
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ErrorKindTemporary
 	}
 	if containsAny(text, "service unavailable", "http error 500", "http error 502", "http error 503", "http error 504") {
 		return ErrorKindTemporary
@@ -153,6 +154,10 @@ func IsTransportFailure(err error, output []byte) bool {
 
 func ErrorKind(err error) string {
 	return ClassifyError(err, nil)
+}
+
+func IsBotChallenge(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "not a bot")
 }
 
 func ClassifyFailure(err error, output []byte, attempt int) FailureClassification {
@@ -240,6 +245,8 @@ func containsAuthSignal(s string) bool {
 	return containsAny(s,
 		"login required",
 		"redirect to login",
+		"redirect to home page (https://www.instagram.com/)",
+		"redirect to challenge page (https://www.instagram.com/",
 		"login page",
 		"locked behind the login",
 		"not logged in",

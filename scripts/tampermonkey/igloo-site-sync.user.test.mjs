@@ -1369,7 +1369,7 @@ test("offline X follows are queued without confirmed follow wording", async () =
   );
   assert.ok(
     harness.toasts.some((message) =>
-      message.includes("Follow queued. Will sync when the server is reachable."),
+      message.includes("Follow for @sample_user queued. Will sync when the server is reachable."),
     ),
     `expected queued follow toast, got ${harness.toasts.join(", ")}`,
   );
@@ -1403,7 +1403,7 @@ test("offline cross-site follows are cached for button state", async () => {
   );
   assert.ok(
     harness.toasts.some((message) =>
-      message.includes("Follow queued. Will sync when the server is reachable."),
+      message.includes("Follow for @sample_creator queued. Will sync when the server is reachable."),
     ),
     `expected queued follow toast, got ${harness.toasts.join(", ")}`,
   );

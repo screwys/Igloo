@@ -73,6 +73,12 @@ func (m *Manager) runScheduler(ctx context.Context) {
 				}
 				continue
 			}
+			if backoff, cooling := m.activeDownloadPlatformBackoff(platform, now); cooling {
+				if backoff.Until.Before(nextWake) {
+					nextWake = backoff.Until
+				}
+				continue
+			}
 			channel, count, err := m.db.NextSubscribedChannel(platform)
 			if err != nil {
 				log.Printf("[scheduler] next %s channel: %v", platform, err)
@@ -190,10 +196,13 @@ func (m *Manager) processDiscoveryChannel(ctx context.Context, platform string, 
 		m.applyPartialDiscoveryAfterTransportFailure(channel, snapshot, fetchErr)
 		return
 	}
-	if platform == "tiktok" || platform == "instagram" {
+	classification := download.ClassifyFailure(fetchErr, nil, 0)
+	m.recordDownloadPlatformBackoff(platform, classification, fetchErr)
+	if (platform == "tiktok" || platform == "instagram") && classification.Kind != download.ErrorKindRateLimit {
 		storyWindow, storyErr := m.nativeStoryWindow(ctx, channel)
 		snapshot.Windows = append(snapshot.Windows, storyWindow)
 		fetchErr = errors.Join(fetchErr, storyErr)
+		m.recordDownloadPlatformBackoff(platform, download.ClassifyFailure(storyErr, nil, 0), storyErr)
 	}
 	if ctx.Err() != nil || !m.db.IsChannelFollowed(channel.ChannelID) {
 		return

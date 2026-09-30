@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -107,7 +108,7 @@ func (d *Downloader) DownloadSubtitles(ctx context.Context, lane MediaLane, rawU
 	var paths []string
 	err := d.RunMedia(ctx, lane, func() error {
 		var err error
-		attempts := opts.cookieAttempts()
+		attempts := opts.cookieAttempts(platformFromURL(rawURL))
 		for index, auth := range attempts {
 			usedOpts := opts.withCookieSet(auth)
 			paths, err = d.YtDlp.DownloadSubtitles(ctx, rawURL, usedOpts)
@@ -149,11 +150,27 @@ func (d *Downloader) downloadCompletedAdmitted(ctx context.Context, rawURL strin
 			MediaCount:  files,
 		})
 	}()
-	attempts := opts.cookieAttempts()
+	attempts := opts.cookieAttempts(platform)
 	for i, auth := range attempts {
 		usedOpts = opts.withCookieSet(auth)
 		completed, err = d.downloadCompletedOnce(ctx, rawURL, mediaType, usedOpts)
 		if err == nil {
+			if platform == "instagram" && i == 0 && instagramPhotoFallback(completed) {
+				// gallery-dl can include carousel music that yt-dlp does not expose.
+				for _, extraAuth := range attempts[1:] {
+					richer, richerErr := d.GalleryDL.DownloadCompleted(ctx, rawURL, opts.OutputDir, opts.ID, extraAuth.File, extraAuth.Browser)
+					if richerErr == nil && len(richer.MediaPaths) > 0 {
+						removeCompletedDownloadFiles(completed)
+						usedOpts = opts.withCookieSet(extraAuth)
+						completed = richer
+						return completed, nil
+					}
+					if ctx.Err() != nil {
+						err = ctx.Err()
+						return completed, err
+					}
+				}
+			}
 			return completed, nil
 		}
 		if i+1 >= len(attempts) || !shouldTryNextCookieAttempt(err) {
@@ -162,6 +179,18 @@ func (d *Downloader) downloadCompletedAdmitted(ctx context.Context, rawURL strin
 		removeCompletedDownloadFiles(completed)
 	}
 	return completed, err
+}
+
+func instagramPhotoFallback(completed CompletedDownload) bool {
+	if completed.Metadata["extractor_key"] != "Instagram" || len(completed.MediaPaths) == 0 {
+		return false
+	}
+	for _, p := range completed.MediaPaths {
+		if filepath.Ext(p) != ".jpg" {
+			return false
+		}
+	}
+	return true
 }
 
 func (d *Downloader) RunMedia(ctx context.Context, lane MediaLane, work func() error) error {
@@ -235,9 +264,10 @@ func (d *Downloader) downloadInstagram(ctx context.Context, rawURL string, opts 
 	return ytResult, fallbackDownloadError(gdlErr, ytErr)
 }
 
-func (opts Opts) cookieAttempts() []CookieSet {
+func (opts Opts) cookieAttempts(platform string) []CookieSet {
+	var sets []CookieSet
 	if len(opts.CookieAlternates) > 0 {
-		sets := make([]CookieSet, 0, len(opts.CookieAlternates))
+		sets = make([]CookieSet, 0, len(opts.CookieAlternates))
 		seen := map[string]struct{}{}
 		for _, set := range opts.CookieAlternates {
 			set = normalizeCookieSet(set)
@@ -248,11 +278,14 @@ func (opts Opts) cookieAttempts() []CookieSet {
 			seen[key] = struct{}{}
 			sets = append(sets, set)
 		}
-		if len(sets) > 0 {
-			return sets
-		}
 	}
-	return []CookieSet{normalizeCookieSet(CookieSet{File: opts.Cookies, Browser: opts.CookiesFromBrowser})}
+	if len(sets) == 0 {
+		sets = []CookieSet{normalizeCookieSet(CookieSet{File: opts.Cookies, Browser: opts.CookiesFromBrowser})}
+	}
+	if platform == "instagram" && (sets[0].File != "" || sets[0].Browser != "") {
+		sets = append([]CookieSet{{}}, sets...)
+	}
+	return sets
 }
 
 func (opts Opts) withCookieSet(set CookieSet) Opts {
@@ -343,20 +376,9 @@ func (d *Downloader) downloadGalleryDLFirst(ctx context.Context, rawURL string, 
 
 func fallbackDownloadError(primaryErr, fallbackErr error) error {
 	if fallbackErr == nil {
-		return fallbackErr
+		return nil
 	}
-	if primaryErr == nil {
-		return fallbackErr
-	}
-	primaryKind := ClassifyError(primaryErr, nil)
-	fallbackKind := ClassifyError(fallbackErr, nil)
-	switch primaryKind {
-	case ErrorKindAuth, ErrorKindRateLimit:
-		if fallbackKind == ErrorKindUnknown || fallbackKind == ErrorKindEmptyResult {
-			return primaryErr
-		}
-	}
-	return fallbackErr
+	return errors.Join(primaryErr, fallbackErr)
 }
 
 // isDirectMedia reports whether the URL or mediaType indicates media that

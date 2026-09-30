@@ -40,7 +40,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/igloo-py \
     && /opt/igloo-py/bin/pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" \
-    && /opt/igloo-py/bin/pip install --no-cache-dir /tmp/yt-dlp.tar.gz /tmp/gallery-dl.tar.gz \
+    && /opt/igloo-py/bin/pip install --no-cache-dir /tmp/yt-dlp.tar.gz /tmp/gallery-dl.tar.gz curl-cffi \
     && rm /tmp/yt-dlp.tar.gz /tmp/gallery-dl.tar.gz
 
 ENV PATH="/opt/igloo-py/bin:${PATH}" \

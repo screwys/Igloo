@@ -17,11 +17,35 @@ import (
 var instagramSourceSuffixes = []string{"reels", "posts"}
 var instagramHandleRe = regexp.MustCompile(`^[a-z0-9._]{1,64}$`)
 
+func (d *Downloader) InstagramPostChannelInfo(ctx context.Context, rawURL string, opts Opts) (ChannelInfoResult, error) {
+	var galleryErr error
+	if d.GalleryDL != nil {
+		info, err := d.GalleryDL.InstagramPostChannelInfo(ctx, rawURL, opts)
+		if err == nil {
+			return info, nil
+		}
+		galleryErr = err
+	}
+	if d.YtDlp == nil {
+		return ChannelInfoResult{}, galleryErr
+	}
+	metadata, err := d.YtDlp.FetchInfo(ctx, rawURL, opts.withCookieSet(CookieSet{}))
+	if err != nil {
+		return ChannelInfoResult{}, errors.Join(galleryErr, err)
+	}
+	handle := normalizeInstagramHandle(firstExactString(metadata, "channel"))
+	if handle == "" {
+		return ChannelInfoResult{}, errors.Join(galleryErr, errors.New("yt-dlp did not return an Instagram author"))
+	}
+	name := firstExactString(metadata, "uploader", "channel")
+	return ChannelInfoResult{ID: handle, Name: name, URL: "https://www.instagram.com/" + handle + "/"}, nil
+}
+
 // InstagramPostChannelInfo resolves the owner of one post without fetching
 // the owner's feed or downloading media.
 func (g *GalleryDLWrapper) InstagramPostChannelInfo(ctx context.Context, rawURL string, opts Opts) (ChannelInfoResult, error) {
 	var lastErr error
-	for _, auth := range opts.cookieAttempts() {
+	for _, auth := range opts.cookieAttempts("instagram") {
 		args := instagramDumpArgs(1, auth.File, rawURL, false, auth.Browser)
 		args = append([]string{"--no-input"}, args...)
 		result := g.Run(ctx, "instagram.channel_info", "instagram", rawURL, args, auth.File, CommandOptions{Timeout: 30 * time.Second}, auth.Browser)
@@ -184,15 +208,12 @@ func instagramProfileScore(profile instagramProfile, fallbackHandle string) int 
 }
 
 func instagramCookieAuthAttempts(cookiesFile, cookiesBrowser string) []CookieSet {
-	var out []CookieSet
+	out := []CookieSet{{}}
 	if strings.TrimSpace(cookiesFile) != "" {
 		out = append(out, CookieSet{File: strings.TrimSpace(cookiesFile)})
 	}
 	if strings.TrimSpace(cookiesBrowser) != "" {
 		out = append(out, CookieSet{Browser: strings.TrimSpace(cookiesBrowser)})
-	}
-	if len(out) == 0 {
-		return []CookieSet{{}}
 	}
 	return out
 }

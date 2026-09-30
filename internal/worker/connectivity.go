@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -113,7 +114,7 @@ func (m *Manager) externalRetryDelay(now time.Time) time.Duration {
 	return m.externalNetwork.retryDelay(now)
 }
 
-// ReportExternalResult updates the shared connectivity circuit breaker. The
+// ReportExternalResult updates connectivity and pauses YouTube after a bot challenge. The
 // return value tells the caller that this was a transport failure and should
 // not be charged to the individual channel or job.
 func (m *Manager) ReportExternalResult(err error) bool {
@@ -122,6 +123,9 @@ func (m *Manager) ReportExternalResult(err error) bool {
 	}
 	if m == nil {
 		return download.IsTransportFailure(err, nil)
+	}
+	if download.IsBotChallenge(err) && strings.Contains(strings.ToLower(err.Error()), "youtube") {
+		m.recordDownloadPlatformBackoff("youtube", download.ClassifyFailure(err, nil, 0), err)
 	}
 	transport, opened, recovered, retryAt := m.externalNetwork.finish(time.Now(), err)
 	if opened {

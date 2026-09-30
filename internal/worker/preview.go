@@ -238,6 +238,11 @@ func (m *Manager) hasPreviewHint() bool {
 }
 
 func (m *Manager) previewRetryDelay(candidate db.VideoPreviewCandidate, now time.Time) time.Duration {
+	if candidate.OwnerKind == "youtube_video" {
+		if backoff, cooling := m.activeDownloadPlatformBackoff("youtube", now); cooling {
+			return backoff.Until.Sub(now)
+		}
+	}
 	m.previewMu.Lock()
 	defer m.previewMu.Unlock()
 	state, ok := m.previewRetry[previewRetryKey(candidate)]
@@ -366,6 +371,7 @@ func (m *Manager) downloadYouTubeStoryboard(ctx context.Context, req PreviewRequ
 		download.Opts{Cookies: cookies, CookiesFromBrowser: browser},
 	)
 	if err != nil {
+		m.ReportExternalResult(err)
 		return nil, 0, err
 	}
 	storyboard, err := selectYouTubeStoryboard(info, req.Duration)

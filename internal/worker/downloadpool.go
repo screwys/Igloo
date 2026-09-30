@@ -507,7 +507,11 @@ func (m *Manager) failDownloadJob(job db.DownloadWork, err error) {
 	newRetry := job.RetryCount + 1
 	classification := download.ClassifyFailure(err, nil, newRetry)
 	classification = retryCredentialFailure(classification)
-	m.recordDownloadPlatformBackoff(job, classification)
+	platform := job.Platform
+	if platform == "" {
+		platform = platformFromDownloadChannelID(job.OwnerChannelID)
+	}
+	m.recordDownloadPlatformBackoff(platform, classification, err)
 	if classification.Kind == download.ErrorKindNotFound && terminalHTTPNotFound(err) {
 		log.Printf("[downloadpool] blocking missing video %s: %v", job.VideoID, err)
 		if blockErr := m.db.BlockDownloadWork(job.VideoID, job.LeaseOwner, err.Error()); blockErr != nil {
@@ -539,11 +543,7 @@ func retryCredentialFailure(classification download.FailureClassification) downl
 	return classification
 }
 
-func (m *Manager) recordDownloadPlatformBackoff(job db.DownloadWork, classification download.FailureClassification) {
-	platform := job.Platform
-	if platform == "" {
-		platform = platformFromDownloadChannelID(job.OwnerChannelID)
-	}
+func (m *Manager) recordDownloadPlatformBackoff(platform string, classification download.FailureClassification, cause error) {
 	if platform == "" {
 		return
 	}
@@ -554,6 +554,11 @@ func (m *Manager) recordDownloadPlatformBackoff(job db.DownloadWork, classificat
 		if delay <= 0 {
 			delay = time.Hour
 		}
+	case download.ErrorKindAuth:
+		if !download.IsBotChallenge(cause) {
+			return
+		}
+		delay = downloadAuthBackoff
 	default:
 		return
 	}
@@ -664,6 +669,7 @@ func (m *Manager) ClearDownloadPlatformBackoff(platform string) {
 	m.downloadBackoffMu.Lock()
 	delete(m.downloadBackoff, platform)
 	m.downloadBackoffMu.Unlock()
+	m.wakeExternalWorkers()
 }
 
 func downloadPoolLeaseOwner() string {

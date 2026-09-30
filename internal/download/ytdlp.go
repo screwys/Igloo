@@ -443,7 +443,11 @@ func fetchCommentsCommand(maxComments int, opts Opts) *ytdlp.Command {
 func (y *YtDlpWrapper) FetchInfo(ctx context.Context, url string, opts ...Opts) (map[string]any, error) {
 	start := time.Now()
 	opt := firstOpts(opts)
-	result, err := fetchInfoCommand(opt).Run(ctx, url)
+	cmd := fetchInfoCommand(opt)
+	if IsInstagramURL(url) {
+		cmd = cmd.IgnoreNoFormatsError().SleepRequests(6)
+	}
+	result, err := cmd.Run(ctx, url)
 	if err != nil {
 		y.recordYtDlpOperationWithCounts(ctx, "youtube.info", url, start, err, opt, 0, 0, 0)
 		return nil, fmt.Errorf("yt-dlp info: %w", err)
@@ -522,11 +526,22 @@ func (y *YtDlpWrapper) Download(ctx context.Context, url string, opts Opts) ([]s
 
 // DownloadCompleted returns every exact output owned by this yt-dlp run.
 func (y *YtDlpWrapper) DownloadCompleted(ctx context.Context, url string, opts Opts) (CompletedDownload, error) {
+	if IsInstagramURL(url) {
+		// yt-dlp's request delay skips the first request of each CLI run.
+		select {
+		case <-ctx.Done():
+			return CompletedDownload{}, ctx.Err()
+		case <-time.After(6 * time.Second):
+		}
+	}
 	// Output template: {outputDir}/{id}.%(ext)s
 	// If the caller provided an ID, use it; otherwise let yt-dlp pick.
 	template := fmt.Sprintf("%s/%%(id)s.%%(ext)s", opts.OutputDir)
 	if opts.ID != "" {
 		template = fmt.Sprintf("%s/%s.%%(ext)s", opts.OutputDir, sanitizeDownloadID(opts.ID))
+	}
+	if IsInstagramURL(url) {
+		template = strings.TrimSuffix(template, ".%(ext)s") + ".%(playlist_index|0)03d.%(ext)s"
 	}
 
 	cmd := ytdlp.New().
@@ -548,6 +563,9 @@ func (y *YtDlpWrapper) DownloadCompleted(ctx context.Context, url string, opts O
 	// 429) abort the video download entirely.
 
 	cmd = applyCookieAuth(cmd, opts)
+	if IsInstagramURL(url) {
+		cmd = cmd.SleepRequests(6).IgnoreNoFormatsError()
+	}
 
 	paths, metadata, err := runVideoDownload(ctx, cmd, url)
 	if err != nil {
@@ -578,13 +596,13 @@ func completedYtDlpOutputs(opts Opts, paths []string, metadata map[string]any) C
 }
 
 func completedOutputBase(opts Opts, paths []string) string {
+	if len(paths) > 0 {
+		return strings.TrimSuffix(paths[0], filepath.Ext(paths[0]))
+	}
 	if opts.ID != "" {
 		return filepath.Join(opts.OutputDir, sanitizeDownloadID(opts.ID))
 	}
-	if len(paths) == 0 {
-		return ""
-	}
-	return strings.TrimSuffix(paths[0], filepath.Ext(paths[0]))
+	return ""
 }
 
 // runVideoDownload executes the main yt-dlp download and extracts output paths,
@@ -601,7 +619,8 @@ func runVideoDownload(ctx context.Context, cmd *ytdlp.Command, url string) ([]st
 				existing = append(existing, p)
 			}
 		}
-		if len(existing) > 0 {
+		expected := max(intFromAny(metadata["playlist_count"]), intFromAny(metadata["n_entries"]))
+		if len(existing) > 0 && (!IsInstagramURL(url) || (len(existing) == len(paths) && len(existing) >= expected)) {
 			return existing, metadata, nil
 		}
 		return nil, metadata, fmt.Errorf("yt-dlp: %w: %s", result.Err, strings.TrimSpace(string(result.Stderr)))
@@ -615,6 +634,10 @@ func parseVideoDownloadOutput(output []byte) ([]string, map[string]any) {
 	for _, payload := range JSONPayloads(output) {
 		for _, raw := range FlattenJSONObjects(payload) {
 			if filename, _ := raw["filename"].(string); filename != "" {
+				if formats, ok := raw["formats"].([]any); ok && len(formats) == 0 && raw["extractor_key"] == "Instagram" {
+					// yt-dlp writes a photo entry's source image as its thumbnail.
+					filename = strings.TrimSuffix(filename, filepath.Ext(filename)) + ".jpg"
+				}
 				paths = append(paths, filename)
 				metadata = raw
 			}

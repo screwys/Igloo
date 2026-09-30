@@ -37,6 +37,12 @@ func (m *Manager) QueueVideoMetadataRefresh(videoID string) error {
 func (m *Manager) runVideoMetadataLoop(ctx context.Context) {
 	log.Printf("[video-metadata] durable worker started")
 	for {
+		if backoff, cooling := m.activeDownloadPlatformBackoff("youtube", time.Now()); cooling {
+			if !waitForVideoMetadata(ctx, m.videoMetadataKick, time.Until(backoff.Until)) {
+				return
+			}
+			continue
+		}
 		if delay := m.externalRetryDelay(time.Now()); delay > 0 {
 			if !waitForVideoMetadata(ctx, m.videoMetadataKick, delay) {
 				return

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.37
+// @version      8.0.38
 // @author       screwys
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @homepageURL  https://github.com/screwys/Igloo
@@ -36,7 +36,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.37";
+  const SCRIPT_VERSION = "8.0.38";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -1062,8 +1062,8 @@
     );
   }
 
-  function queuedFollowToast() {
-    showToast("Follow queued. Will sync when the server is reachable.");
+  function queuedFollowToast(account) {
+    showToast(`Follow for ${account} queued. Will sync when the server is reachable.`);
   }
 
   function isInLocalList(handle) {
@@ -1275,6 +1275,7 @@
     const map = {};
     const cachedEntries = [];
     for (const ch of channels) {
+      if (ch.is_subscribed === false) continue;
       const channelId = String(ch.channel_id || ch.id || "");
       for (const h of twitterChannelHandleKeys(ch)) {
         set.add(h);
@@ -3232,7 +3233,7 @@
       pending: true,
     });
     saveLocal(handle);
-    showToast("Follow queued. Syncing to server...", "Undo", () => {
+    showToast(`Follow for @${handle} queued. Syncing to server...`, "Undo", () => {
       if (serverHandleSet) serverHandleSet.delete(key);
       removeLocal(handle);
       removeCachedFollow("twitter", key);
@@ -3250,14 +3251,14 @@
           pending: !!save.skipped,
         });
         if (save.skipped) {
-          showToast("Follow saved locally.");
+          showToast(`Follow for @${handle} saved locally.`);
         } else {
           showSaveToast(handle, () => handleUnsave(handle, triggerBtn));
         }
         return;
       }
       if (isRetryableFollowFailure(save)) {
-        queuedFollowToast();
+        queuedFollowToast(`@${handle}`);
         console.warn(`[XSync] server follow queued handle=${handle}`);
         return;
       }
@@ -3265,7 +3266,7 @@
       removeLocal(handle);
       removeCachedFollow("twitter", key);
       if (triggerBtn) setCustomButtonState(triggerBtn, false);
-      showToast(`Follow failed (${save.status || save.error || "error"})`);
+      showToast(`Follow for @${handle} failed (${save.status || save.error || "error"})`);
       console.warn(`[XSync] server follow failed handle=${handle}`);
     });
 
@@ -4040,6 +4041,7 @@
     const map = new Map();
     const cachedEntries = [];
     for (const ch of channels) {
+      if (ch.is_subscribed === false) continue;
       for (const key of platformChannelKeys(ch, platform)) {
         map.set(key, String(ch.channel_id || ch.id || ""));
         cachedEntries.push({
@@ -4072,10 +4074,12 @@
     );
   }
 
-  function setCrossButtonState(btn, saved) {
+  function setCrossButtonState(btn, saved, key = btn.dataset.key) {
+    if (btn.dataset.key !== key) return;
     btn.textContent = saved ? "Following" : "Follow";
     btn.dataset.saved = saved ? "1" : "0";
-    btn.title = saved ? "Remove from Igloo subscriptions" : "Follow in Igloo";
+    const account = btn.dataset.account || key;
+    btn.title = saved ? `Unfollow ${account} in Igloo` : `Follow ${account} in Igloo`;
   }
 
   function makeCrossSaveButton(id, platform, key, url) {
@@ -4086,6 +4090,7 @@
     btn.dataset.platform = platform;
     btn.dataset.key = key;
     btn.dataset.url = url;
+    btn.dataset.account = platform === "youtube" ? key : `@${key}`;
     setCrossButtonState(btn, isPlatformSaved(platform, key));
     btn.addEventListener("click", handleCrossSaveClick);
     return btn;
@@ -4106,16 +4111,18 @@
     e.preventDefault();
     e.stopPropagation();
     const btn = e.currentTarget;
+    if (btn.id === "igloo-instagram-save-fab") updateInstagramFab();
     const platform = btn.dataset.platform;
     const key = btn.dataset.key;
     const url = btn.dataset.url;
     if (!platform || !key || !url || btn.disabled) return;
-    if (btn.dataset.saved === "1") await unsaveCrossChannel(platform, key, btn);
+    if (isPlatformSaved(platform, key)) await unsaveCrossChannel(platform, key, btn);
     else await saveCrossChannel(platform, key, url, btn);
   }
 
   async function saveCrossChannel(platform, key, url, btn) {
     const normalized = normalizeFollowKey(key);
+    const account = btn.dataset.account || (platform === "youtube" ? key : `@${normalized}`);
     btn.disabled = true;
     btn.textContent = "Following...";
     setCachedFollow(platform, normalized, { url, pending: true });
@@ -4123,11 +4130,11 @@
     btn.disabled = false;
     setCrossButtonState(btn, true);
     if (!syncToDashboardEnabled()) {
-      showToast("Follow saved locally.");
+      showToast(`Follow for ${account} saved locally.`);
       return;
     }
-    showToast("Follow queued. Syncing to server...", "Undo", () =>
-      unsaveCrossChannel(platform, normalized, btn),
+    showToast(`Follow for ${account} queued. Syncing to server...`, "Undo", () =>
+      unsaveCrossChannel(platform, key, btn),
     );
     const resp = await apiRequest(
       "POST",
@@ -4147,25 +4154,25 @@
         channel_id: channelID,
         pending: false,
       });
-      setCrossButtonState(btn, true);
+      setCrossButtonState(btn, true, key);
       showToast(
-        "Followed in Igloo",
+        `Followed ${account} in Igloo`,
         "Undo",
-        () => unsaveCrossChannel(platform, normalized, btn),
+        () => unsaveCrossChannel(platform, key, btn),
         4000,
       );
       fetchPlatformChannels(platform);
       return;
     }
     if (isRetryableFollowFailure(resp)) {
-      queuedFollowToast();
+      queuedFollowToast(account);
       console.warn("[IglooSync] follow queued", resp);
       return;
     }
     removeCachedFollow(platform, normalized);
     platformChannelMaps[platform].delete(normalized);
-    setCrossButtonState(btn, false);
-    showToast(`Follow failed (${resp.status || resp.error || "error"})`);
+    setCrossButtonState(btn, false, key);
+    showToast(`Follow for ${account} failed (${resp.status || resp.error || "error"})`);
     console.warn("[IglooSync] follow failed", resp);
   }
 
@@ -4174,7 +4181,7 @@
     if (!channelID) {
       removeCachedFollow(platform, key);
       platformChannelMaps[platform].delete(normalizeFollowKey(key));
-      if (btn) setCrossButtonState(btn, false);
+      if (btn) setCrossButtonState(btn, false, key);
       showToast("Removed locally");
       return;
     }
@@ -4193,7 +4200,7 @@
       removeCachedFollow(platform, key);
       if (btn) {
         btn.disabled = false;
-        setCrossButtonState(btn, false);
+        setCrossButtonState(btn, false, key);
       }
       showToast("Removed from Igloo");
       fetchPlatformChannels(platform);
@@ -4201,7 +4208,7 @@
     }
     if (btn) {
       btn.disabled = false;
-      setCrossButtonState(btn, true);
+      setCrossButtonState(btn, true, key);
     }
     showToast(`Remove failed (${resp.status || resp.error || "error"})`);
   }
@@ -4312,12 +4319,6 @@
     return normalizePlatformHandle(parts[0]);
   }
 
-  function instagramRouteKind() {
-    const first = location.pathname.split("/").filter(Boolean)[0] || "";
-    if (first === "p" || first === "reel" || first === "reels") return first;
-    return "";
-  }
-
   function instagramHandleFromHref(href) {
     try {
       const parsed = new URL(href, location.origin);
@@ -4336,12 +4337,13 @@
     }
   }
 
-  function visibleInstagramOwnerLinks(root) {
+  function visibleInstagramOwnerLinks(root, requireVisible = true) {
     if (!root) return [];
     const links = [];
     for (const a of root.querySelectorAll(
       'a[href^="/"], a[href^="https://www.instagram.com/"], a[href^="https://instagram.com/"]',
     )) {
+      if (a.closest('nav, aside, [role="navigation"]')) continue;
       const handle = instagramHandleFromHref(
         a.getAttribute("href") || a.href || "",
       );
@@ -4350,10 +4352,11 @@
       if (
         !rect.width ||
         !rect.height ||
-        rect.bottom < 0 ||
-        rect.top > window.innerHeight ||
-        rect.right < 0 ||
-        rect.left > window.innerWidth
+        (requireVisible &&
+          (rect.bottom <= 0 ||
+            rect.top >= window.innerHeight ||
+            rect.right <= 0 ||
+            rect.left >= window.innerWidth))
       )
         continue;
       links.push({ handle, link: a, rect });
@@ -4367,49 +4370,53 @@
   }
 
   function currentInstagramMediaOwner() {
-    if (!instagramRouteKind()) return null;
-    const roots = [
-      document.querySelector('div[role="dialog"] article'),
-      document.querySelector('div[role="dialog"]'),
-      ...document.querySelectorAll("article"),
-      document.querySelector("main"),
-    ].filter(Boolean);
-    for (const root of roots) {
-      const links = visibleInstagramOwnerLinks(root);
-      if (links.length) return links[0];
+    const dialog = Array.from(document.querySelectorAll('[role="dialog"]')).find(
+      (node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width && rect.height && rect.bottom > 0 &&
+          rect.top < window.innerHeight;
+      },
+    );
+    const scope = dialog || document.querySelector("main");
+    if (!scope) return null;
+    let best = null;
+    let bestArea = 0;
+    let bestDistance = Infinity;
+    for (const media of scope.querySelectorAll("article, video, img")) {
+      const rect = media.getBoundingClientRect();
+      const width = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
+      const height = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+      const area = width * height;
+      if (!area) continue;
+      const article = media.closest("article");
+      let owner = null;
+      if (article) {
+        const header = article.querySelector("header");
+        owner = visibleInstagramOwnerLinks(header || article, !header)[0];
+      } else {
+        // Reels can omit article markup. Find the author beside this video.
+        for (let root = media.parentElement; root && scope.contains(root); root = root.parentElement) {
+          owner = visibleInstagramOwnerLinks(root)[0];
+          if (owner || root === scope) break;
+        }
+      }
+      if (!owner) continue;
+      const distance = Math.abs((rect.top + rect.bottom) / 2 - window.innerHeight / 2);
+      if (area > bestArea || (area === bestArea && distance < bestDistance)) {
+        best = owner;
+        bestArea = area;
+        bestDistance = distance;
+      }
     }
-    return null;
+    return best;
   }
 
   function getVisibleInstagramHandle() {
     const pathHandle = getInstagramHandleFromPath();
-    if (pathHandle) return pathHandle;
+    if (pathHandle && !document.querySelector('[role="dialog"]')) return pathHandle;
     const mediaOwner = currentInstagramMediaOwner();
     if (mediaOwner && mediaOwner.handle) return mediaOwner.handle;
-    const cy = window.innerHeight / 2;
-    let best = "";
-    let bestDist = Infinity;
-    for (const a of document.querySelectorAll('a[href^="/"]')) {
-      const href = a.getAttribute("href") || "";
-      const parts = href.split("?")[0].split("/").filter(Boolean);
-      if (parts.length !== 1 || instagramReservedPaths.has(parts[0])) continue;
-      const handle = normalizePlatformHandle(parts[0]);
-      if (!handle || !/^[a-z0-9_.]{1,64}$/.test(handle)) continue;
-      const rect = a.getBoundingClientRect();
-      if (
-        !rect.width ||
-        !rect.height ||
-        rect.bottom < 0 ||
-        rect.top > window.innerHeight
-      )
-        continue;
-      const dist = Math.abs((rect.top + rect.bottom) / 2 - cy);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = handle;
-      }
-    }
-    return best;
+    return "";
   }
 
   function ensureInstagramFab() {
@@ -4423,53 +4430,20 @@
     document.body.appendChild(btn);
   }
 
-  function mountInstagramProfileButton() {
-    const handle = getInstagramHandleFromPath();
-    if (!handle) return;
-    const header = document.querySelector("header");
-    if (!header) return;
-    const existing = document.getElementById("igloo-instagram-save-btn");
-    if (existing && existing.dataset.key === handle) return;
-    existing?.remove();
-    const btn = makeCrossSaveButton(
-      "igloo-instagram-save-btn",
-      "instagram",
-      handle,
-      `https://www.instagram.com/${handle}/`,
-    );
-    const anchor = header.querySelector('button, a[role="button"]') || header;
-    anchor.insertAdjacentElement(
-      anchor === header ? "beforeend" : "afterend",
-      btn,
-    );
-  }
-
-  function mountInstagramMediaButton() {
-    const owner = currentInstagramMediaOwner();
-    if (!owner || !owner.handle || !owner.link) return;
-    const existing = document.getElementById("igloo-instagram-media-save-btn");
-    if (existing && existing.dataset.key === owner.handle) return;
-    existing?.remove();
-    const btn = makeCrossSaveButton(
-      "igloo-instagram-media-save-btn",
-      "instagram",
-      owner.handle,
-      `https://www.instagram.com/${owner.handle}/`,
-    );
-    btn.style.marginLeft = "10px";
-    owner.link.insertAdjacentElement("afterend", btn);
-  }
-
   function updateInstagramFab() {
     const btn = document.getElementById("igloo-instagram-save-fab");
     if (!btn) return;
     const handle = getVisibleInstagramHandle();
     if (!handle) {
+      btn.dataset.key = "";
+      btn.dataset.url = "";
+      btn.dataset.account = "";
       btn.style.display = "none";
       return;
     }
     btn.dataset.key = handle;
     btn.dataset.url = `https://www.instagram.com/${handle}/`;
+    btn.dataset.account = `@${handle}`;
     setCrossButtonState(btn, isPlatformSaved("instagram", handle));
     btn.style.display = "inline-flex";
   }
@@ -4556,7 +4530,8 @@
       info.key,
       subscribeURL,
     );
-    btn.title = info.name ? `Follow ${info.name} in Igloo` : btn.title;
+    btn.dataset.account = info.name || info.key;
+    setCrossButtonState(btn, isPlatformSaved("youtube", info.key));
     anchor.insertAdjacentElement("afterend", btn);
     currentYouTubeKey = stateKey;
   }

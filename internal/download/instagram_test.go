@@ -90,6 +90,7 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+out=$(printf '%s' "$out" | sed 's/%(playlist_index|0)03d/0/g')
 file="${out%.*}.mp4"
 mkdir -p "$(dirname "$file")"
 printf 'video data' > "$file"
@@ -106,8 +107,8 @@ printf '{"_type":"video","id":"source","filename":"%s"}\n' "$file"
 	if err != nil {
 		t.Fatalf("Download returned error: %v", err)
 	}
-	if len(paths) != 1 || paths[0] != filepath.Join(outDir, "sample.mp4") {
-		t.Fatalf("paths = %#v, want sample.mp4", paths)
+	if len(paths) != 1 || paths[0] != filepath.Join(outDir, "sample.0.mp4") {
+		t.Fatalf("paths = %#v, want sample.0.mp4", paths)
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("gallery-dl was called for a reel; marker stat err=%v", err)

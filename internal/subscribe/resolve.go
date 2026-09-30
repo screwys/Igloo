@@ -253,10 +253,10 @@ func ResolveChannel(ctx context.Context, rawURL, platform string, dl *download.D
 		handle := ParseInstagramHandle(rawURL)
 		name := handle
 		if handle == "" {
-			if dl == nil || dl.GalleryDL == nil {
+			if dl == nil || (dl.GalleryDL == nil && dl.YtDlp == nil) {
 				return model.Channel{}, fmt.Errorf("could not resolve Instagram author from %q", rawURL)
 			}
-			info, err := dl.GalleryDL.InstagramPostChannelInfo(ctx, rawURL, opts)
+			info, err := dl.InstagramPostChannelInfo(ctx, rawURL, opts)
 			if err != nil {
 				return model.Channel{}, fmt.Errorf("resolve instagram channel: %w", err)
 			}

@@ -8,7 +8,7 @@ test("runtime downloaders follow upstream HEAD", () => {
   const flake = readFileSync(new URL("../../flake.nix", import.meta.url), "utf8");
   const ci = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
   const release = readFileSync(new URL("../../.github/workflows/container-release.yml", import.meta.url), "utf8");
-  const sourceLines = requirements.split("\n").filter((line) => line && !line.startsWith("#"));
+  const sourceLines = requirements.split("\n").filter((line) => !line.startsWith("#") && line.includes(" @ "));
   const sources = Object.fromEntries(sourceLines.map((line) => line.split(" @ ")));
 
   assert.deepEqual(sources, {

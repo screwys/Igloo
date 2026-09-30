@@ -111,6 +111,7 @@
 
             dependencies = [
               pythonPackages.requests
+              pythonPackages.curl-cffi
             ];
 
             doCheck = false;
