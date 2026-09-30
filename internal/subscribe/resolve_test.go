@@ -3,6 +3,8 @@ package subscribe
 import (
 	"context"
 	"testing"
+
+	"github.com/screwys/igloo/internal/download"
 )
 
 func TestDetectPlatform(t *testing.T) {
@@ -157,7 +159,7 @@ func TestParseTikTokHandleUsesOnlyURLPath(t *testing.T) {
 }
 
 func TestResolveChannelTwitterSetsSourceID(t *testing.T) {
-	got, err := ResolveChannel(context.Background(), "https://x.com/User_A/status/123", "twitter", nil)
+	got, err := ResolveChannel(context.Background(), "https://x.com/User_A/status/123", "twitter", nil, download.Opts{})
 	if err != nil {
 		t.Fatalf("ResolveChannel: %v", err)
 	}
@@ -170,7 +172,7 @@ func TestResolveChannelTwitterSetsSourceID(t *testing.T) {
 }
 
 func TestResolveChannelTikTokSetsSourceID(t *testing.T) {
-	got, err := ResolveChannel(context.Background(), "https://www.tiktok.com/@sample_user", "tiktok", nil)
+	got, err := ResolveChannel(context.Background(), "https://www.tiktok.com/@sample_user", "tiktok", nil, download.Opts{})
 	if err != nil {
 		t.Fatalf("ResolveChannel: %v", err)
 	}
@@ -183,7 +185,7 @@ func TestResolveChannelTikTokSetsSourceID(t *testing.T) {
 }
 
 func TestResolveChannelInstagramSetsSourceID(t *testing.T) {
-	got, err := ResolveChannel(context.Background(), "https://www.instagram.com/User.Example/", "instagram", nil)
+	got, err := ResolveChannel(context.Background(), "https://www.instagram.com/User.Example/", "instagram", nil, download.Opts{})
 	if err != nil {
 		t.Fatalf("ResolveChannel: %v", err)
 	}
@@ -199,7 +201,7 @@ func TestResolveChannelInstagramSetsSourceID(t *testing.T) {
 }
 
 func TestResolveChannelYouTubeLocalChannelURL(t *testing.T) {
-	got, err := ResolveChannel(context.Background(), "https://www.youtube.com/channel/UCabc123456789", "youtube", nil)
+	got, err := ResolveChannel(context.Background(), "https://www.youtube.com/channel/UCabc123456789", "youtube", nil, download.Opts{})
 	if err != nil {
 		t.Fatalf("ResolveChannel: %v", err)
 	}

@@ -56,7 +56,7 @@ func (s *Server) importSubscriptionList(ctx context.Context, urls []string) (int
 			continue
 		}
 		subCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		ch, err := subscribe.ResolveChannel(subCtx, rawURL, platform, s.workers.Downloader())
+		ch, err := subscribe.ResolveChannel(subCtx, rawURL, platform, s.workers.Downloader(), s.cookieOptsFor(platform))
 		cancel()
 		if err != nil {
 			slog.Warn("importSubscriptionList resolve", "url", rawURL, "err", err)

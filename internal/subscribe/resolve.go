@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/model"
@@ -126,7 +127,7 @@ func ParseInstagramHandle(input string) string {
 	}
 	var handle string
 	switch strings.ToLower(parts[0]) {
-	case "p", "reel", "tv":
+	case "p", "reel", "reels", "tv", "share":
 		handle = ""
 	case "stories":
 		if len(parts) > 1 {
@@ -188,12 +189,18 @@ func parseYouTubeChannelID(rawURL string) string {
 }
 
 // ResolveChannel resolves a URL and platform into a model.Channel suitable for
-// insertion into the channels table. For Twitter the channel is built locally
-// (no network call). For YouTube and TikTok yt-dlp is consulted.
-func ResolveChannel(ctx context.Context, rawURL, platform string, dl *download.Downloader) (model.Channel, error) {
+// insertion into the channels table. URLs containing an author are resolved
+// locally; other URLs need a bounded metadata lookup without downloading media.
+func ResolveChannel(ctx context.Context, rawURL, platform string, dl *download.Downloader, opts download.Opts) (model.Channel, error) {
 	if err := ValidateInput(rawURL, platform); err != nil {
 		return model.Channel{}, err
 	}
+	u, err := parseHTTPInput(rawURL)
+	if err == nil {
+		rawURL = u.String()
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	switch platform {
 	case "twitter":
 		handle := ParseTwitterHandle(rawURL)
@@ -225,11 +232,14 @@ func ResolveChannel(ctx context.Context, rawURL, platform string, dl *download.D
 		if dl == nil || dl.YtDlp == nil {
 			return model.Channel{}, fmt.Errorf("could not parse TikTok handle from %q", rawURL)
 		}
-		info, err := dl.YtDlp.ChannelInfo(ctx, rawURL)
+		info, err := dl.YtDlp.ChannelInfo(ctx, rawURL, opts)
 		if err != nil {
 			return model.Channel{}, fmt.Errorf("resolve tiktok channel: %w", err)
 		}
-		sourceID := strings.ToLower(info.ID)
+		sourceID := parseTikTokHandle(info.URL)
+		if sourceID == "" {
+			sourceID = strings.ToLower(strings.TrimPrefix(info.ID, "@"))
+		}
 		return model.Channel{
 			ChannelID:    "tiktok_" + sourceID,
 			SourceID:     sourceID,
@@ -241,13 +251,21 @@ func ResolveChannel(ctx context.Context, rawURL, platform string, dl *download.D
 
 	case "instagram":
 		handle := ParseInstagramHandle(rawURL)
+		name := handle
 		if handle == "" {
-			return model.Channel{}, fmt.Errorf("could not parse Instagram handle from %q", rawURL)
+			if dl == nil || dl.GalleryDL == nil {
+				return model.Channel{}, fmt.Errorf("could not resolve Instagram author from %q", rawURL)
+			}
+			info, err := dl.GalleryDL.InstagramPostChannelInfo(ctx, rawURL, opts)
+			if err != nil {
+				return model.Channel{}, fmt.Errorf("resolve instagram channel: %w", err)
+			}
+			handle, name = info.ID, info.Name
 		}
 		return model.Channel{
 			ChannelID:    "instagram_" + handle,
 			SourceID:     handle,
-			Name:         handle,
+			Name:         name,
 			URL:          "https://www.instagram.com/" + handle + "/",
 			Platform:     "instagram",
 			IsSubscribed: true,
@@ -268,7 +286,7 @@ func ResolveChannel(ctx context.Context, rawURL, platform string, dl *download.D
 		if dl == nil || dl.YtDlp == nil {
 			return model.Channel{}, fmt.Errorf("youtube channel URL must include a /channel/UC... id")
 		}
-		info, err := dl.YtDlp.ChannelInfo(ctx, rawURL)
+		info, err := dl.YtDlp.ChannelInfo(ctx, rawURL, opts)
 		if err != nil {
 			return model.Channel{}, fmt.Errorf("resolve youtube channel: %w", err)
 		}

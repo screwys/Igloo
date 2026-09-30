@@ -76,7 +76,7 @@ printf '%s\n' '{"_type":"url","id":"sample_video","title":"Sample video","playli
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	info, err := (&YtDlpWrapper{}).ChannelInfo(context.Background(), "https://www.youtube.com/@samplechannel")
+	info, err := (&YtDlpWrapper{}).ChannelInfo(context.Background(), "https://www.youtube.com/@samplechannel", Opts{})
 	if err != nil {
 		t.Fatalf("ChannelInfo: %v", err)
 	}
@@ -322,4 +322,3 @@ func TestVideoMetadataRefreshResultKeepsCountsAndCommentsTogether(t *testing.T) 
 		t.Fatalf("comments = %+v", result.Comments)
 	}
 }
-

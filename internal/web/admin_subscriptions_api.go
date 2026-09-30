@@ -71,7 +71,7 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	ch, localResolved, err := s.resolveLocalYouTubeSubscribeChannel(rawURL, platform)
 	if err == nil && !localResolved {
-		ch, err = subscribe.ResolveChannel(ctx, rawURL, platform, s.workers.Downloader())
+		ch, err = subscribe.ResolveChannel(ctx, rawURL, platform, s.workers.Downloader(), s.cookieOptsFor(platform))
 	}
 	if err != nil {
 		slog.Error("ResolveChannel", "url", rawURL, "platform", platform, "err", err)

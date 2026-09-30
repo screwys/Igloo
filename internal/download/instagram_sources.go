@@ -17,6 +17,39 @@ import (
 var instagramSourceSuffixes = []string{"reels", "posts"}
 var instagramHandleRe = regexp.MustCompile(`^[a-z0-9._]{1,64}$`)
 
+// InstagramPostChannelInfo resolves the owner of one post without fetching
+// the owner's feed or downloading media.
+func (g *GalleryDLWrapper) InstagramPostChannelInfo(ctx context.Context, rawURL string, opts Opts) (ChannelInfoResult, error) {
+	var lastErr error
+	for _, auth := range opts.cookieAttempts() {
+		args := instagramDumpArgs(1, auth.File, rawURL, false, auth.Browser)
+		args = append([]string{"--no-input"}, args...)
+		result := g.Run(ctx, "instagram.channel_info", "instagram", rawURL, args, auth.File, CommandOptions{Timeout: 30 * time.Second}, auth.Browser)
+		if result.Err != nil {
+			lastErr = fmt.Errorf("gallery-dl Instagram author: %w: %s", result.Err, RedactText(string(result.CombinedOutput())))
+			if ctx.Err() != nil || !shouldTryNextCookieAttempt(lastErr) {
+				return ChannelInfoResult{}, lastErr
+			}
+			continue
+		}
+		for _, ref := range ParseInstagramChannelDump(result.Stdout) {
+			if ref.AuthorHandle == "" {
+				continue
+			}
+			name := ref.AuthorDisplayName
+			if name == "" {
+				name = ref.AuthorHandle
+			}
+			return ChannelInfoResult{
+				ID: ref.AuthorHandle, Name: name,
+				URL: "https://www.instagram.com/" + ref.AuthorHandle + "/",
+			}, nil
+		}
+		return ChannelInfoResult{}, fmt.Errorf("gallery-dl did not return an Instagram author")
+	}
+	return ChannelInfoResult{}, lastErr
+}
+
 func normalizeInstagramHandle(raw string) string {
 	handle := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(raw), "@"))
 	if !instagramHandleRe.MatchString(handle) {

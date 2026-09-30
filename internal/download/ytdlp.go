@@ -21,7 +21,7 @@ import (
 
 const DefaultCommentFetchLimit = 500
 
-// ChannelInfoResult holds the resolved channel identity from yt-dlp.
+// ChannelInfoResult holds the resolved channel identity from metadata.
 type ChannelInfoResult struct {
 	ID   string
 	Name string
@@ -30,26 +30,25 @@ type ChannelInfoResult struct {
 
 // ChannelInfo fetches channel metadata for the given URL without downloading any
 // media. It uses --flat-playlist and limits to one item to minimise latency.
-func (y *YtDlpWrapper) ChannelInfo(ctx context.Context, url string) (ChannelInfoResult, error) {
+func (y *YtDlpWrapper) ChannelInfo(ctx context.Context, url string, opts Opts) (ChannelInfoResult, error) {
 	start := time.Now()
-	result, err := ytdlp.New().
+	result, err := applyCookieAuth(ytdlp.New().
 		FlatPlaylist().
 		PlaylistItems("1:1").
 		NoWarnings().
-		DumpJSON().
-		Run(ctx, url)
+		DumpJSON(), opts).Run(ctx, url)
 	if err != nil {
-		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, err, Opts{}, 0, 0, 0)
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, err, opts, 0, 0, 0)
 		return ChannelInfoResult{}, fmt.Errorf("yt-dlp channel info: %w", err)
 	}
 
 	infos, err := result.GetExtractedInfo()
 	if err != nil {
-		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, err, Opts{}, 0, 0, 0)
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, err, opts, 0, 0, 0)
 		return ChannelInfoResult{}, fmt.Errorf("parse yt-dlp channel info: %w", err)
 	}
 	if len(infos) == 0 {
-		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, fmt.Errorf("yt-dlp returned no info"), Opts{}, 0, 0, 0)
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, fmt.Errorf("yt-dlp returned no info"), opts, 0, 0, 0)
 		return ChannelInfoResult{}, fmt.Errorf("yt-dlp returned no info for %s", url)
 	}
 
@@ -90,10 +89,10 @@ func (y *YtDlpWrapper) ChannelInfo(ctx context.Context, url string) (ChannelInfo
 	}
 
 	if res.ID == "" {
-		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, fmt.Errorf("yt-dlp did not return a channel ID"), Opts{}, 1, 0, 0)
+		y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, fmt.Errorf("yt-dlp did not return a channel ID"), opts, 1, 0, 0)
 		return res, fmt.Errorf("yt-dlp did not return a channel ID for %s", url)
 	}
-	y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, nil, Opts{}, 1, 0, 0)
+	y.recordYtDlpOperationWithCounts(ctx, "youtube.channel_info", url, start, nil, opts, 1, 0, 0)
 	return res, nil
 }
 
