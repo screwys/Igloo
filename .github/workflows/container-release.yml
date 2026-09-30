@@ -27,7 +27,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: .github/scripts/verify-signed-release-tag.sh
 
-      - uses: DeterminateSystems/determinate-nix-action@bafaa638b9d5ec0e7e3ac1a7fc80453ef1fd265f # v3
+      - uses: DeterminateSystems/determinate-nix-action@8d87e8d5e5b8a8309d4281094560f127d9a265f1 # v3
 
       - uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d # main
         with:
