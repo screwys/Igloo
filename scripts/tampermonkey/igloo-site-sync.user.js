@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.38
+// @version      8.0.39
 // @author       screwys
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @homepageURL  https://github.com/screwys/Igloo
@@ -36,7 +36,7 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.38";
+  const SCRIPT_VERSION = "8.0.39";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
@@ -3820,11 +3820,20 @@
       return true;
     }
     const platform = currentPlatform();
+    if (platform === "instagram") {
+      mountInstagramButtons();
+      const target = getInstagramFollowTargets()[0];
+      if (target?.link) {
+        const btn = target.link.nextElementSibling;
+        if (!btn?.classList.contains("igloo-cross-save-btn") || btn.disabled)
+          return false;
+        btn.click();
+        return true;
+      }
+    }
     const selectorsByPlatform = {
       tiktok: ["#igloo-tiktok-save-btn", "#igloo-tiktok-save-fab"],
       instagram: [
-        "#igloo-instagram-media-save-btn",
-        "#igloo-instagram-save-btn",
         "#igloo-instagram-save-fab",
       ],
       youtube: ["#igloo-youtube-save-btn"],
@@ -3887,7 +3896,6 @@
     youtube: new Map(),
   };
   let lastTikTokPath = "";
-  let lastInstagramPath = "";
   let currentYouTubeKey = "";
 
   function ensureCrossSiteStyles() {
@@ -3950,16 +3958,12 @@
     const channelID = String(ch.channel_id || ch.id || "").trim();
     const rawURL = String(ch.url || "").trim();
     if (channelID) {
-      keys.push(channelID.toLowerCase());
-      if (platform === "tiktok" && channelID.startsWith("tiktok_")) {
-        keys.push(channelID.slice("tiktok_".length).toLowerCase());
-      }
-      if (platform === "instagram" && channelID.startsWith("instagram_")) {
-        keys.push(channelID.slice("instagram_".length).toLowerCase());
-      }
-      if (platform === "youtube") {
-        keys.push(normalizeYouTubeChannelID(channelID).toLowerCase());
-      }
+      const prefix = `${platform}_`;
+      keys.push(
+        (channelID.startsWith(prefix)
+          ? channelID.slice(prefix.length)
+          : channelID).toLowerCase(),
+      );
     }
     try {
       const parsed = new URL(rawURL);
@@ -4076,7 +4080,8 @@
 
   function setCrossButtonState(btn, saved, key = btn.dataset.key) {
     if (btn.dataset.key !== key) return;
-    btn.textContent = saved ? "Following" : "Follow";
+    const label = saved ? "Following" : "Follow";
+    if (btn.textContent !== label) btn.textContent = label;
     btn.dataset.saved = saved ? "1" : "0";
     const account = btn.dataset.account || key;
     btn.title = saved ? `Unfollow ${account} in Igloo` : `Follow ${account} in Igloo`;
@@ -4112,6 +4117,16 @@
     e.stopPropagation();
     const btn = e.currentTarget;
     if (btn.id === "igloo-instagram-save-fab") updateInstagramFab();
+    else if (btn.dataset.platform === "instagram") {
+      const handle = instagramHandleFromHref(
+        btn.previousElementSibling?.getAttribute("href"),
+      );
+      if (!handle) return;
+      btn.dataset.key = handle;
+      btn.dataset.url = `https://www.instagram.com/${handle}/`;
+      btn.dataset.account = `@${handle}`;
+      setCrossButtonState(btn, isPlatformSaved("instagram", handle));
+    }
     const platform = btn.dataset.platform;
     const key = btn.dataset.key;
     const url = btn.dataset.url;
@@ -4122,7 +4137,8 @@
 
   async function saveCrossChannel(platform, key, url, btn) {
     const normalized = normalizeFollowKey(key);
-    const account = btn.dataset.account || (platform === "youtube" ? key : `@${normalized}`);
+    const account =
+      btn.dataset.account || (platform === "youtube" ? key : `@${normalized}`);
     btn.disabled = true;
     btn.textContent = "Following...";
     setCachedFollow(platform, normalized, { url, pending: true });
@@ -4320,6 +4336,7 @@
   }
 
   function instagramHandleFromHref(href) {
+    if (!href) return "";
     try {
       const parsed = new URL(href, location.origin);
       if (parsed.hostname && !/(^|\.)instagram\.com$/i.test(parsed.hostname))
@@ -4362,6 +4379,9 @@
       links.push({ handle, link: a, rect });
     }
     links.sort((a, b) => {
+      const aIsUsername = normalizePlatformHandle(a.link.textContent) === a.handle;
+      const bIsUsername = normalizePlatformHandle(b.link.textContent) === b.handle;
+      if (aIsUsername !== bIsUsername) return aIsUsername ? -1 : 1;
       const top = Math.abs(a.rect.top - b.rect.top);
       if (top > 8) return a.rect.top - b.rect.top;
       return a.rect.left - b.rect.left;
@@ -4369,23 +4389,24 @@
     return links;
   }
 
-  function currentInstagramMediaOwner() {
-    const dialog = Array.from(document.querySelectorAll('[role="dialog"]')).find(
-      (node) => {
-        const rect = node.getBoundingClientRect();
-        return rect.width && rect.height && rect.bottom > 0 &&
-          rect.top < window.innerHeight;
-      },
-    );
-    const scope = dialog || document.querySelector("main");
-    if (!scope) return null;
-    let best = null;
-    let bestArea = 0;
-    let bestDistance = Infinity;
+  function instagramMediaOwners(scope) {
+    if (!scope) return [];
+    const owners = new Map();
     for (const media of scope.querySelectorAll("article, video, img")) {
+      if (
+        media.tagName === "IMG" &&
+        instagramHandleFromHref(media.closest("a")?.getAttribute("href"))
+      )
+        continue;
       const rect = media.getBoundingClientRect();
-      const width = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
-      const height = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+      const width = Math.max(
+        0,
+        Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0),
+      );
+      const height = Math.max(
+        0,
+        Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0),
+      );
       const area = width * height;
       if (!area) continue;
       const article = media.closest("article");
@@ -4394,29 +4415,43 @@
         const header = article.querySelector("header");
         owner = visibleInstagramOwnerLinks(header || article, !header)[0];
       } else {
-        // Reels can omit article markup. Find the author beside this video.
-        for (let root = media.parentElement; root && scope.contains(root); root = root.parentElement) {
+        // Reels can omit article markup. Find the author beside the media.
+        for (
+          let root = media.parentElement;
+          root && scope.contains(root);
+          root = root.parentElement
+        ) {
           owner = visibleInstagramOwnerLinks(root)[0];
           if (owner || root === scope) break;
         }
       }
       if (!owner) continue;
-      const distance = Math.abs((rect.top + rect.bottom) / 2 - window.innerHeight / 2);
-      if (area > bestArea || (area === bestArea && distance < bestDistance)) {
-        best = owner;
-        bestArea = area;
-        bestDistance = distance;
+      const distance = Math.abs(
+        (rect.top + rect.bottom) / 2 - window.innerHeight / 2,
+      );
+      const previous = owners.get(owner.link);
+      if (!previous || area > previous.area) {
+        owners.set(owner.link, { owner, area, distance });
       }
     }
-    return best;
+    return Array.from(owners.values())
+      .sort((a, b) => b.area - a.area || a.distance - b.distance)
+      .map((entry) => entry.owner);
   }
 
-  function getVisibleInstagramHandle() {
+  function getInstagramFollowTargets() {
     const pathHandle = getInstagramHandleFromPath();
-    if (pathHandle && !document.querySelector('[role="dialog"]')) return pathHandle;
-    const mediaOwner = currentInstagramMediaOwner();
-    if (mediaOwner && mediaOwner.handle) return mediaOwner.handle;
-    return "";
+    const dialog = Array.from(document.querySelectorAll('[role="dialog"]')).find(
+      (node) => {
+        const rect = node.getBoundingClientRect();
+        return (
+          rect.width && rect.height && rect.bottom > 0 &&
+          rect.top < window.innerHeight
+        );
+      },
+    );
+    if (pathHandle && !dialog) return [{ handle: pathHandle, link: null }];
+    return instagramMediaOwners(dialog || document.querySelector("main"));
   }
 
   function ensureInstagramFab() {
@@ -4430,11 +4465,11 @@
     document.body.appendChild(btn);
   }
 
-  function updateInstagramFab() {
+  function updateInstagramFab(target = getInstagramFollowTargets()[0]) {
     const btn = document.getElementById("igloo-instagram-save-fab");
     if (!btn) return;
-    const handle = getVisibleInstagramHandle();
-    if (!handle) {
+    const handle = target?.handle;
+    if (!handle || target.link) {
       btn.dataset.key = "";
       btn.dataset.url = "";
       btn.dataset.account = "";
@@ -4451,19 +4486,37 @@
   function mountInstagramButtons() {
     ensureCrossSiteStyles();
     ensureInstagramFab();
-    const changed = lastInstagramPath !== location.pathname;
-    lastInstagramPath = location.pathname;
-    if (changed) {
-      document.getElementById("igloo-instagram-save-btn")?.remove();
-      document.getElementById("igloo-instagram-media-save-btn")?.remove();
-      const fab = document.getElementById("igloo-instagram-save-fab");
-      if (fab) {
-        fab.dataset.key = "";
-        fab.dataset.url = "";
-        fab.style.display = "none";
+    const targets = getInstagramFollowTargets();
+    const buttons = Array.from(document.querySelectorAll(
+      '.igloo-cross-save-btn[data-platform="instagram"]',
+    )).filter((btn) => btn.id !== "igloo-instagram-save-fab");
+    for (const btn of buttons) {
+      if (!targets.some((target) =>
+        target.link === btn.previousElementSibling && target.handle === btn.dataset.key,
+      )) {
+        btn.remove();
       }
     }
-    updateInstagramFab();
+    for (const target of targets) {
+      if (!target.link) continue;
+      const next = target.link.nextElementSibling;
+      if (
+        next?.classList.contains("igloo-cross-save-btn") &&
+        next.dataset.key === target.handle
+      ) {
+        setCrossButtonState(next, isPlatformSaved("instagram", target.handle));
+        continue;
+      }
+      const btn = makeCrossSaveButton(
+        "",
+        "instagram",
+        target.handle,
+        `https://www.instagram.com/${target.handle}/`,
+      );
+      btn.style.color = "inherit";
+      target.link.insertAdjacentElement("afterend", btn);
+    }
+    updateInstagramFab(targets[0]);
   }
 
   function extractYouTubeChannelFromPage() {
