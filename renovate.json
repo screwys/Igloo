@@ -51,6 +51,18 @@
       ],
       "datasourceTemplate": "custom.pypi-sdist",
       "autoReplaceStringTemplate": "# renovate: packageName={{{packageName}}} pypiName={{{pypiName}}} versioning={{{versioning}}} sha256={{{newDigest}}}\n{{{depName}}}=={{{newValue}}}"
+    },
+    {
+      "customType": "regex",
+      "description": "Follow gallery-dl master with a shared Docker and Nix commit pin.",
+      "managerFilePatterns": ["/(^|/)requirements-runtime\\.txt$/"],
+      "matchStrings": [
+        "gallery-dl @ https://codeberg\\.org/mikf/gallery-dl/archive/(?<currentDigest>[a-f0-9]{40})\\.tar\\.gz"
+      ],
+      "depNameTemplate": "gallery-dl",
+      "packageNameTemplate": "https://codeberg.org/mikf/gallery-dl.git",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "master"
     }
   ],
   "packageRules": [
@@ -81,14 +93,14 @@
         "pip_requirements",
         "custom.regex"
       ],
-      "matchPackageNames": ["!yt-dlp", "!gallery-dl"],
+      "matchDepNames": ["!yt-dlp", "!gallery-dl"],
       "groupName": "container runtime dependencies",
       "groupSlug": "container-runtime"
     },
     {
       "description": "yt-dlp and gallery-dl updates are most of the time urgent.",
       "matchManagers": ["custom.regex"],
-      "matchPackageNames": ["yt-dlp", "gallery-dl"],
+      "matchDepNames": ["yt-dlp", "gallery-dl"],
       "minimumReleaseAge": null,
       "automerge": true,
       "prPriority": 10,

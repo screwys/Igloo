@@ -290,7 +290,7 @@ func TestInstagramTaggedArgsUseConfiguredLimit(t *testing.T) {
 
 func TestInstagramTaggedArgsUseBrowserCookies(t *testing.T) {
 	args := instagramTaggedArgs(30, "", "https://www.instagram.com/sample_followed/tagged/", "firefox")
-	if !containsString(args, "--cookies-from-browser") || !containsString(args, "firefox") {
+	if !containsString(args, "--cookies-from-browser") || !containsString(args, "firefox::all") {
 		t.Fatalf("args should preserve browser cookies: %#v", args)
 	}
 	if containsString(args, "--cookies") {

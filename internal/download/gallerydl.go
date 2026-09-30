@@ -46,6 +46,9 @@ type GalleryDLWrapper struct {
 
 func (g *GalleryDLWrapper) Run(ctx context.Context, operation, platform, subject string, args []string, cookiesFile string, opts CommandOptions, cookiesBrowser ...string) CommandResult {
 	result := g.Runner.Run(ctx, "gallery-dl", args, opts)
+	if result.Err == nil {
+		result.Err = GalleryDLSemanticError(result.Stdout)
+	}
 	browser := ""
 	if len(cookiesBrowser) > 0 {
 		browser = cookiesBrowser[0]
@@ -84,9 +87,52 @@ func appendCookieAuthArgs(args []string, cookiesFile, cookiesBrowser string) []s
 		return append(args, "--cookies", cookiesFile)
 	}
 	if cookiesBrowser != "" {
+		// Match yt-dlp's Firefox default, which includes container cookies.
+		if (cookiesBrowser == "firefox" || strings.HasPrefix(cookiesBrowser, "firefox:")) && !strings.Contains(cookiesBrowser, "::") {
+			cookiesBrowser += "::all"
+		}
 		return append(args, "--cookies-from-browser", cookiesBrowser)
 	}
 	return args
+}
+
+// GalleryDLSemanticError reads failures that --dump-json reports with exit code 0.
+func GalleryDLSemanticError(output []byte) error {
+	for _, payload := range JSONPayloads(output) {
+		if err := galleryDLSemanticErrorFromPayload(payload); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func galleryDLSemanticErrorFromPayload(payload any) error {
+	values, ok := payload.([]any)
+	if !ok {
+		return nil
+	}
+	if len(values) >= 2 && intFromAny(values[0]) == -1 {
+		if detail, ok := values[1].(map[string]any); ok {
+			name := strings.TrimSpace(firstString(detail, "error", "type", "code"))
+			message := strings.TrimSpace(firstString(detail, "message", "detail", "description"))
+			if name != "" && message != "" {
+				return fmt.Errorf("gallery-dl reported %s: %s", name, message)
+			}
+			if name != "" {
+				return fmt.Errorf("gallery-dl reported %s", name)
+			}
+			if message != "" {
+				return fmt.Errorf("gallery-dl reported: %s", message)
+			}
+		}
+		return fmt.Errorf("gallery-dl reported an error")
+	}
+	for _, value := range values {
+		if err := galleryDLSemanticErrorFromPayload(value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Reposts fetches TikTok repost metadata from gallery-dl's /@USER/reposts

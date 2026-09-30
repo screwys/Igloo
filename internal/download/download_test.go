@@ -266,7 +266,7 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
-if [ "$cookie" = "browser:firefox" ]; then
+if [ "$cookie" = "browser:firefox::all" ]; then
   mkdir -p "$out"
   printf 'video data' > "$out/source.mp4"
   printf '{"id":"source"}' > "$out/source.json"
@@ -397,7 +397,7 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
-if [ "$cookie" = "browser:firefox" ]; then
+if [ "$cookie" = "browser:firefox::all" ]; then
   mkdir -p "$out"
   printf 'video data' > "$out/source.mp4"
   printf '{"id":"source"}' > "$out/source.json"

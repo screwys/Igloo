@@ -106,11 +106,14 @@
               };
           runtimeTools = lib.genAttrs [
             "yt-dlp"
-            "gallery-dl"
           ] runtimeToolMetadata;
           runtimeToolVersion = package: runtimeTools.${package}.version;
           runtimeToolPypiName = package: runtimeTools.${package}.pypiName;
           runtimeToolSha256 = package: runtimeTools.${package}.sha256;
+          galleryDlPin = builtins.match
+            "gallery-dl @ (https://codeberg.org/mikf/gallery-dl)/archive/([a-f0-9]{40})\\.tar\\.gz"
+            (builtins.head (builtins.filter (line: lib.hasPrefix "gallery-dl @ " line) runtimeRequirementLines));
+          galleryDlRevision = builtins.elemAt galleryDlPin 1;
 
           ytDlp = pythonPackages.buildPythonApplication rec {
             pname = "yt-dlp";
@@ -145,13 +148,13 @@
 
           galleryDl = pythonPackages.buildPythonApplication rec {
             pname = "gallery_dl";
-            version = runtimeToolVersion "gallery-dl";
+            version = "unstable-${builtins.substring 0 7 galleryDlRevision}";
             pyproject = true;
 
-            src = pkgs.fetchPypi {
-              pname = runtimeToolPypiName "gallery-dl";
-              inherit version;
-              sha256 = runtimeToolSha256 "gallery-dl";
+            src = builtins.fetchGit {
+              url = "${builtins.elemAt galleryDlPin 0}.git";
+              ref = "master";
+              rev = galleryDlRevision;
             };
 
             build-system = [
@@ -167,7 +170,7 @@
 
             meta = {
               description = "Command-line program to download image galleries";
-              homepage = "https://github.com/mikf/gallery-dl";
+              homepage = "https://codeberg.org/mikf/gallery-dl";
               license = lib.licenses.gpl2Only;
               mainProgram = "gallery-dl";
               platforms = lib.platforms.linux;

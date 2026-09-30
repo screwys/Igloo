@@ -37,7 +37,10 @@ test("runtime downloader tool versions come from shared requirements", () => {
   };
 
   assert.match(requirements, /^yt-dlp==[^\s]+$/m);
-  assert.match(requirements, /^gallery-dl==[^\s]+$/m);
+  const galleryPin = requirements.match(
+    /^gallery-dl @ (https:\/\/codeberg\.org\/mikf\/gallery-dl)\/archive\/([a-f0-9]{40})\.tar\.gz$/m,
+  );
+  assert.ok(galleryPin, "gallery-dl must use a pinned source commit");
   assert.match(
     runtimeVersion("yt-dlp"),
     /\.dev0$/,
@@ -48,14 +51,14 @@ test("runtime downloader tool versions come from shared requirements", () => {
   assert.doesNotMatch(dockerfile, /ARG YT_DLP_VERSION|ARG GALLERY_DL_VERSION/);
   assert.doesNotMatch(dockerfile, /yt-dlp==|gallery-dl==/);
   assert.match(flake, /runtimeToolVersion "yt-dlp"/);
-  assert.match(flake, /runtimeToolVersion "gallery-dl"/);
+  assert.match(flake, /rev = galleryDlRevision/);
+  assert.match(flake, /src = builtins\.fetchGit/);
   runtimeToolMetadata("yt-dlp", "yt_dlp");
-  runtimeToolMetadata("gallery-dl", "gallery_dl");
   assert.match(flake, /builtins\.readFile \.\/requirements-runtime\.txt/);
   assert.match(flake, /runtimeTools = lib\.genAttrs/);
   assert.doesNotMatch(flake, /version = "2026\.|sha256 = "[a-f0-9]{64}"/);
   assert.doesNotMatch(flake, /pname = "yt-dlp";\n\s+version = "/);
-  assert.doesNotMatch(flake, /pname = "gallery_dl";\n\s+version = "/);
+  assert.doesNotMatch(flake, /pname = "gallery_dl";\n\s+version = "[0-9]/);
 
   assert.ok(!renovate.enabledManagers.includes("pip_requirements"));
   const runtimeManager = renovate.customManagers.find((manager) =>
@@ -80,12 +83,17 @@ test("runtime downloader tool versions come from shared requirements", () => {
         version: runtimeVersion("yt-dlp"),
         sha256: runtimeToolMetadata("yt-dlp", "yt_dlp"),
       },
-      {
-        name: "gallery-dl",
-        version: runtimeVersion("gallery-dl"),
-        sha256: runtimeToolMetadata("gallery-dl", "gallery_dl"),
-      },
     ],
+  );
+  const galleryManager = renovate.customManagers.find(
+    (manager) => manager.depNameTemplate === "gallery-dl",
+  );
+  assert.equal(galleryManager.datasourceTemplate, "git-refs");
+  assert.equal(galleryManager.currentValueTemplate, "master");
+  assert.equal(galleryManager.packageNameTemplate, `${galleryPin[1]}.git`);
+  assert.equal(
+    requirements.match(new RegExp(galleryManager.matchStrings[0]))?.groups.currentDigest,
+    galleryPin[2],
   );
   const ytDlpNightlyRule = renovate.packageRules.find(
     (rule) =>
