@@ -497,6 +497,9 @@ func (g *GalleryDLWrapper) DownloadCompleted(ctx context.Context, rawURL, destDi
 		// Single posts carry carousel music. Keep reel audio in the video and
 		// leave account discovery ranges counting the existing media records.
 		args = append(args, "-o", "extractor.instagram.post.audio=true")
+		// Instagram can name audio-only MP4 tracks .mp4. Use the extractor's
+		// audio metadata so they do not become video streams or hide photos.
+		args = append(args, "-o", `extractor.instagram.filename={"audio_url and extension == 'mp4'":"{sidecar_media_id:?/_/}{media_id}.m4a"}`)
 	}
 	args = appendCookieAuthArgs(args, cookiesFile, browser)
 	args = append(args, rawURL)
