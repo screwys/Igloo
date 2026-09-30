@@ -337,9 +337,6 @@ func RelativeTimeText(p PageProps, t *time.Time) string {
 var (
 	urlRe               = regexp.MustCompile(`(https?://[^\s<>"']+)`)
 	communityNoteLinkRe = regexp.MustCompile(`(?m)(^|[\s])((?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}(?:/[^\s()]*)?)\s+\((https?://[^\s()]+)\)`)
-	anchorRe            = regexp.MustCompile(`(?s)<a\b[^>]*>.*?</a>`)
-	shortFormMentionRe  = regexp.MustCompile(`@[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,30}[A-Za-z0-9_])?`)
-	emailTLD            = regexp.MustCompile(`^\.[A-Za-z]{2,12}\b`)
 )
 
 // Linkify escapes text and converts URLs and @mentions to HTML links.
@@ -418,51 +415,22 @@ func linkifyMentionsForPlatform(s, platform string) string {
 	if normalized := strings.ToLower(strings.TrimSpace(platform)); normalized != "tiktok" && normalized != "instagram" {
 		return linkifyTwitterMentions(s)
 	}
-	prefix, re := mentionLinkPrefixAndPattern(platform)
-	matches := re.FindAllStringIndex(s, -1)
+	prefix := strings.ToLower(strings.TrimSpace(platform)) + "_"
+	matches := model.LinkableShortFormMentions(s)
 	if len(matches) == 0 {
 		return s
 	}
-	anchors := anchorRe.FindAllStringIndex(s, -1)
 	var b strings.Builder
 	last := 0
-	anchorIdx := 0
-	for _, m := range matches {
-		start, end := m[0], m[1]
-		b.WriteString(s[last:start])
-
-		skip := false
-		for anchorIdx < len(anchors) && anchors[anchorIdx][1] <= start {
-			anchorIdx++
-		}
-		if anchorIdx < len(anchors) && start >= anchors[anchorIdx][0] && start < anchors[anchorIdx][1] {
-			skip = true
-		}
-		// Preceded by a word char → looks like `foo@bar` (email).
-		if !skip && start > 0 && isMentionWordByte(s[start-1]) {
-			skip = true
-		}
-		// Followed by another `@` → looks like `@foo@bar.com`.
-		if !skip && end < len(s) && s[end] == '@' {
-			skip = true
-		}
-		// Followed by `.tld` → looks like an email domain part.
-		if !skip && end < len(s) && emailTLD.MatchString(s[end:]) {
-			skip = true
-		}
-
-		if skip {
-			b.WriteString(s[start:end])
-		} else {
-			handle := strings.ToLower(s[start+1 : end])
-			b.WriteString(`<a href="/channels/`)
-			b.WriteString(prefix)
-			b.WriteString(handle)
-			b.WriteString(`" class="feed-inline-link">@`)
-			b.WriteString(s[start+1 : end])
-			b.WriteString(`</a>`)
-		}
-		last = end
+	for _, match := range matches {
+		b.WriteString(s[last:match.Start])
+		b.WriteString(`<a href="/channels/`)
+		b.WriteString(prefix)
+		b.WriteString(match.Handle)
+		b.WriteString(`" class="feed-inline-link">`)
+		b.WriteString(s[match.Start:match.End])
+		b.WriteString(`</a>`)
+		last = match.End
 	}
 	b.WriteString(s[last:])
 	return b.String()
@@ -486,19 +454,6 @@ func linkifyTwitterMentions(s string) string {
 	}
 	b.WriteString(s[last:])
 	return b.String()
-}
-
-func mentionLinkPrefixAndPattern(platform string) (string, *regexp.Regexp) {
-	switch strings.ToLower(strings.TrimSpace(platform)) {
-	case "tiktok":
-		return "tiktok_", shortFormMentionRe
-	default:
-		return "instagram_", shortFormMentionRe
-	}
-}
-
-func isMentionWordByte(b byte) bool {
-	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
 }
 
 // Nl2br escapes text and converts newlines to <br>.

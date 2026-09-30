@@ -87,8 +87,8 @@ func TestProfileCardMissIsReadOnly(t *testing.T) {
 	srv := newTestServer(t)
 	rec := httptest.NewRecorder()
 	srv.mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/profile-card/twitter_missing", nil))
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	profile, err := srv.db.GetChannelProfile("twitter_missing")
 	if err != nil || profile != nil {

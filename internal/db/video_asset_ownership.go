@@ -393,6 +393,20 @@ func upsertVideoMetadataTx(tx *sql.Tx, video CompletedVideo) error {
 	if err != nil {
 		return err
 	}
+	platform, _ := videoPlatformForOwnerKind(video.OwnerKind)
+	if platform == "instagram" || platform == "tiktok" {
+		observedAt := time.Now().UnixMilli()
+		for _, text := range []string{video.Title, video.Description} {
+			for _, mention := range model.LinkableShortFormMentions(text) {
+				if err := observeProfileTx(tx, profileObservation{
+					channelID: platform + "_" + mention.Handle, platform: platform,
+					handle: mention.Handle, observedAt: observedAt,
+				}); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	if tempChanged > 0 {
 		return touchAndroidSyncHeadTx(tx, "video", video.VideoID)
 	}

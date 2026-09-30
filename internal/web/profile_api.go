@@ -15,8 +15,7 @@ func (s *Server) registerProfileAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/profile-card/{channelID}", s.handleProfileCard)
 }
 
-// handleProfileCard renders only identity already committed by ingest. Profile
-// discovery and refresh belong to the durable profile job queue, never hover.
+// Profile discovery and refresh belong to the durable job queue, never hover.
 func (s *Server) handleProfileCard(w http.ResponseWriter, r *http.Request) {
 	channelID := canonicalProfileChannelID(r.PathValue("channelID"))
 	if !channelIDRe.MatchString(channelID) {
@@ -29,10 +28,11 @@ func (s *Server) handleProfileCard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "profile lookup failed", http.StatusInternalServerError)
 		return
 	}
-	if !profileCardRenderable(p) {
+	if p != nil && p.Tombstone {
 		http.NotFound(w, r)
 		return
 	}
+	p = profileForChannelID(p, channelID)
 
 	s.writeProfileCard(w, r, s.profileForPresentation(p), s.isChannelFollowed(channelID))
 }
@@ -45,11 +45,12 @@ func (s *Server) isChannelStarred(channelID string) bool {
 	return s.db.IsChannelStarred(channelID)
 }
 
-func profileCardRenderable(p *model.ChannelProfile) bool {
-	if p == nil || p.Tombstone {
-		return false
+func profileForChannelID(p *model.ChannelProfile, channelID string) *model.ChannelProfile {
+	if p == nil {
+		platform, handle := channelIDPlatformHandle(channelID)
+		return &model.ChannelProfile{ChannelID: channelID, Platform: platform, Handle: handle}
 	}
-	return p.FetchedAt != nil || strings.TrimSpace(p.DisplayName) != "" || strings.TrimSpace(p.Handle) != ""
+	return p
 }
 
 // profileForPresentation keeps source metadata intact in the database while

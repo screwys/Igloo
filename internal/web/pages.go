@@ -707,7 +707,7 @@ func (s *Server) handlePageVideos(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePageChannel(w http.ResponseWriter, r *http.Request) {
-	channelID := r.PathValue("channelID")
+	channelID := canonicalProfileChannelID(r.PathValue("channelID"))
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1
@@ -719,9 +719,9 @@ func (s *Server) handlePageChannel(w http.ResponseWriter, r *http.Request) {
 	channel, err := s.db.GetChannel(channelID)
 	var profile *model.ChannelProfile
 	if (err != nil || channel == nil) && !isTwitterChannelID(channelID) {
-		if p, profileErr := s.db.GetChannelProfile(channelID); profileErr == nil && p != nil && !p.Tombstone {
-			profile = p
-			channel = channelFromProfileOnly(channelID, p, s.db.ResolveSubscribeURL(channelID))
+		if p, profileErr := s.db.GetChannelProfile(channelID); profileErr == nil && channelIDRe.MatchString(channelID) && (p == nil || !p.Tombstone) {
+			profile = profileForChannelID(p, channelID)
+			channel = channelFromProfileOnly(channelID, profile, s.db.ResolveSubscribeURL(channelID))
 			err = nil
 		}
 	}
@@ -753,6 +753,8 @@ func (s *Server) handlePageChannel(w http.ResponseWriter, r *http.Request) {
 		}
 		if profile != nil && profile.Tombstone {
 			profile = nil
+		} else {
+			profile = profileForChannelID(profile, channelID)
 		}
 		profile = s.profileForPresentation(profile)
 	}
@@ -935,6 +937,8 @@ func (s *Server) renderTwitterChannelFeed(w http.ResponseWriter, r *http.Request
 	profile, _ := s.db.GetChannelProfile(channelID)
 	if profile != nil && profile.Tombstone {
 		profile = nil
+	} else {
+		profile = profileForChannelID(profile, channelID)
 	}
 	profile = s.profileForPresentation(profile)
 	if profile != nil && profile.DisplayName != "" {
