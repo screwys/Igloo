@@ -87,20 +87,15 @@
                 line: lib.hasPrefix requirementPrefix line
               ) runtimeRequirementLines;
               archiveURL = lib.removePrefix requirementPrefix (builtins.head requirementMatches);
-              repositoryURL = lib.removeSuffix "/archive/master.tar.gz" archiveURL;
             in
             if builtins.length requirementMatches != 1 then
               throw "expected exactly one ${package} source in requirements-runtime.txt"
             else
-              builtins.fetchGit {
-                url = "${repositoryURL}.git";
-                ref = "master";
-                shallow = true;
-              };
+              builtins.fetchTarball archiveURL;
 
           ytDlp = pythonPackages.buildPythonApplication rec {
             pname = "yt-dlp";
-            version = "head-${builtins.substring 0 7 src.rev}";
+            version = "head-${builtins.substring 0 7 (builtins.baseNameOf src)}";
             pyproject = true;
 
             src = runtimeToolSource "yt-dlp";
@@ -128,7 +123,7 @@
 
           galleryDl = pythonPackages.buildPythonApplication rec {
             pname = "gallery_dl";
-            version = "head-${builtins.substring 0 7 src.rev}";
+            version = "head-${builtins.substring 0 7 (builtins.baseNameOf src)}";
             pyproject = true;
 
             src = runtimeToolSource "gallery-dl";
