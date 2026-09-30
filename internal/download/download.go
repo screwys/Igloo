@@ -297,11 +297,8 @@ func directMediaHTTPOptions(rawURL, mediaType string) HTTPDownloadOptions {
 }
 
 // downloadTikTok handles TikTok URLs with slideshow detection.
-// gallery-dl is tried first — it handles slideshows natively (images + audio)
-// with clean 1-based numbering. For regular videos, falls back to yt-dlp.
+// gallery-dl downloads photo posts; yt-dlp selects and merges video streams.
 func (d *Downloader) downloadTikTok(ctx context.Context, rawURL string, opts Opts) (CompletedDownload, error) {
-	// gallery-dl handles TikTok slideshows natively (images + audio).
-	// It fails fast on regular videos, so there's no significant overhead.
 	gdlResult, gdlErr := d.GalleryDL.DownloadCompleted(ctx, rawURL, opts.OutputDir, opts.ID, opts.Cookies, opts.CookiesFromBrowser)
 	if gdlErr == nil && len(gdlResult.MediaPaths) > 0 {
 		return gdlResult, nil
@@ -313,7 +310,7 @@ func (d *Downloader) downloadTikTok(ctx context.Context, rawURL string, opts Opt
 		return CompletedDownload{}, gdlErr
 	}
 
-	// gallery-dl failed or returned nothing — it's a regular video. Use yt-dlp.
+	// Retry extraction through yt-dlp when gallery-dl could not produce media.
 	ytResult, ytErr := d.YtDlp.DownloadCompleted(ctx, rawURL, opts)
 	if ytErr == nil && len(ytResult.MediaPaths) > 0 {
 		return ytResult, nil

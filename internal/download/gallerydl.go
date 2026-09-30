@@ -501,6 +501,11 @@ func (g *GalleryDLWrapper) DownloadCompleted(ctx context.Context, rawURL, destDi
 		// audio metadata so they do not become video streams or hide photos.
 		args = append(args, "-o", `extractor.instagram.filename={"audio_url and extension == 'mp4'":"{sidecar_media_id:?/_/}{media_id}.m4a"}`)
 	}
+	if IsTikTokURL(rawURL) {
+		// Photo posts stay with gallery-dl. Video streams need yt-dlp to
+		// select and merge their audio; its CLI is owned by Downloader.
+		args = append(args, "-o", "extractor.tiktok.videos=false", "-o", "extractor.tiktok.covers=false")
+	}
 	args = appendCookieAuthArgs(args, cookiesFile, browser)
 	args = append(args, rawURL)
 	result := g.Runner.Run(ctx, "gallery-dl", args, CommandOptions{Timeout: galleryDLDefaultTimeout})

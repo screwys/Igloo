@@ -32,15 +32,16 @@ ARG DEBIAN_FRONTEND=noninteractive
 # renovate: datasource=pypi packageName=pip versioning=pep440
 ARG PIP_VERSION=26.1.1
 
-COPY requirements-runtime.txt /tmp/requirements-runtime.txt
+ADD https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz /tmp/yt-dlp.tar.gz
+ADD https://codeberg.org/mikf/gallery-dl/archive/master.tar.gz /tmp/gallery-dl.tar.gz
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates ffmpeg python3 python3-venv \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/igloo-py \
     && /opt/igloo-py/bin/pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" \
-    && /opt/igloo-py/bin/pip install --no-cache-dir -r /tmp/requirements-runtime.txt \
-    && rm /tmp/requirements-runtime.txt
+    && /opt/igloo-py/bin/pip install --no-cache-dir /tmp/yt-dlp.tar.gz /tmp/gallery-dl.tar.gz \
+    && rm /tmp/yt-dlp.tar.gz /tmp/gallery-dl.tar.gz
 
 ENV PATH="/opt/igloo-py/bin:${PATH}" \
     HOME=/tmp \

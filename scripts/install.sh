@@ -162,8 +162,8 @@ if [ "$CHECK_ONLY" = false ] && command -v go >/dev/null 2>&1 && ! command -v te
     go install "$TEMPL_CMD@$TEMPL_VERSION"
 fi
 check_required templ     "templ code generator — go install $TEMPL_CMD@$TEMPL_VERSION"
-check_required yt-dlp    "video downloader — brew install yt-dlp, pip install yt-dlp, or install your distro package"
-check_required gallery-dl "image downloader — brew install gallery-dl, pip install gallery-dl, or install your distro package"
+check_required yt-dlp    "video downloader — brew install --HEAD yt-dlp or pip install --force-reinstall https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz"
+check_required gallery-dl "image downloader — brew install --HEAD gallery-dl or pip install --force-reinstall https://codeberg.org/mikf/gallery-dl/archive/master.tar.gz"
 check_required ffmpeg    "media processing — brew install ffmpeg or install your distro package"
 check_required nginx     "reverse proxy — install nginx with brew or your distro package manager"
 check_required sqlite3   "database CLI — brew install sqlite or install your distro package"

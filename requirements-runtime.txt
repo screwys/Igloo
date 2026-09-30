@@ -1,4 +1,4 @@
-# renovate: packageName=yt-dlp pypiName=yt_dlp versioning=pep440 sha256=776bf1ca11985dfb9a3ba3f7fbda021720c70a064e1125bca51e76d5f456dd1c
-yt-dlp==2026.8.4.234419.dev0
-# gallery-dl follows master, pinned to the same commit for Docker and Nix.
-gallery-dl @ https://codeberg.org/mikf/gallery-dl/archive/b9679191a07e8acac4fea7bc422ac5b3a27f555c.tar.gz
+# Fetch current upstream HEAD when installing the runtime tools.
+# To refresh an existing environment: pip install --force-reinstall -r requirements-runtime.txt
+yt-dlp @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz
+gallery-dl @ https://codeberg.org/mikf/gallery-dl/archive/master.tar.gz

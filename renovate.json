@@ -17,14 +17,6 @@
   "platformAutomerge": false,
   "prConcurrentLimit": 3,
   "prHourlyLimit": 0,
-  "customDatasources": {
-    "pypi-sdist": {
-      "defaultRegistryUrlTemplate": "https://pypi.org/pypi/{{packageName}}/json",
-      "transformTemplates": [
-        "{ \"releases\": $map($filter($keys(releases), function($v) { $exists($lookup(releases, $v)[packagetype=\"sdist\"]) }), function($v) { ( $sdist := $lookup(releases, $v)[packagetype=\"sdist\"][0]; {\"version\": $v, \"digest\": $sdist.digests.sha256, \"releaseTimestamp\": $sdist.upload_time_iso_8601} ) }), \"sourceUrl\": info.project_urls.Source, \"homepage\": info.project_url }"
-      ]
-    }
-  },
   "customManagers": [
     {
       "customType": "regex",
@@ -41,28 +33,6 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[a-z-]+) packageName=(?<packageName>[^\\s]+) versioning=(?<versioning>[a-z0-9-]+)\\s+[A-Z0-9_]+_VERSION=(?<currentValue>[^\\s]+)"
       ]
-    },
-    {
-      "customType": "regex",
-      "description": "Update runtime downloader versions and Nix source hashes together.",
-      "managerFilePatterns": ["/(^|/)requirements-runtime\\.txt$/"],
-      "matchStrings": [
-        "# renovate: packageName=(?<packageName>[^\\s]+) pypiName=(?<pypiName>[^\\s]+) versioning=(?<versioning>[^\\s]+) sha256=(?<currentDigest>[a-f0-9]+)\\s+(?<depName>[^=\\s]+)==(?<currentValue>[^\\s]+)"
-      ],
-      "datasourceTemplate": "custom.pypi-sdist",
-      "autoReplaceStringTemplate": "# renovate: packageName={{{packageName}}} pypiName={{{pypiName}}} versioning={{{versioning}}} sha256={{{newDigest}}}\n{{{depName}}}=={{{newValue}}}"
-    },
-    {
-      "customType": "regex",
-      "description": "Follow gallery-dl master with a shared Docker and Nix commit pin.",
-      "managerFilePatterns": ["/(^|/)requirements-runtime\\.txt$/"],
-      "matchStrings": [
-        "gallery-dl @ https://codeberg\\.org/mikf/gallery-dl/archive/(?<currentDigest>[a-f0-9]{40})\\.tar\\.gz"
-      ],
-      "depNameTemplate": "gallery-dl",
-      "packageNameTemplate": "https://codeberg.org/mikf/gallery-dl.git",
-      "datasourceTemplate": "git-refs",
-      "currentValueTemplate": "master"
     }
   ],
   "packageRules": [
@@ -93,26 +63,8 @@
         "pip_requirements",
         "custom.regex"
       ],
-      "matchDepNames": ["!yt-dlp", "!gallery-dl"],
       "groupName": "container runtime dependencies",
       "groupSlug": "container-runtime"
-    },
-    {
-      "description": "yt-dlp and gallery-dl updates are most of the time urgent.",
-      "matchManagers": ["custom.regex"],
-      "matchDepNames": ["yt-dlp", "gallery-dl"],
-      "minimumReleaseAge": null,
-      "automerge": true,
-      "prPriority": 10,
-      "groupName": "downloader runtime dependencies",
-      "groupSlug": "downloader-runtime"
-    },
-    {
-      "description": "Follow yt-dlp nightly releases.",
-      "matchManagers": ["custom.regex"],
-      "matchPackageNames": ["yt-dlp"],
-      "ignoreUnstable": false,
-      "respectLatest": false
     }
   ]
 }

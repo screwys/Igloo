@@ -76,6 +76,10 @@ check-drift:
 check-nix-deps revision="":
     bash scripts/dev/check-nix-deps.sh {{ quote(revision) }}
 
+# Build both downloader tools from current upstream HEAD.
+build-downloaders:
+    nix build --impure --refresh .#yt-dlp .#gallery-dl --no-link --print-out-paths
+
 # Validate the SQLite schema and Android Room mirror contract.
 check-schema:
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/schema-check.sh

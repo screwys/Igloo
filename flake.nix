@@ -79,52 +79,31 @@
           buildGoModule = pkgs.buildGoModule.override { inherit go; };
           pythonPackages = pkgs.python3Packages;
           runtimeRequirementLines = lib.splitString "\n" (builtins.readFile ./requirements-runtime.txt);
-          runtimeToolMetadata =
+          runtimeToolSource =
             package:
             let
-              requirementPrefix = "${package}==";
+              requirementPrefix = "${package} @ ";
               requirementMatches = builtins.filter (
                 line: lib.hasPrefix requirementPrefix line
               ) runtimeRequirementLines;
-              metadataPrefix = "# renovate: packageName=${package} ";
-              metadataMatches = builtins.filter (
-                line: lib.hasPrefix metadataPrefix line
-              ) runtimeRequirementLines;
-              metadataFields = builtins.match (
-                "# renovate: packageName=[^ ]+ pypiName=([^ ]+) versioning=[^ ]+ sha256=([a-f0-9]+)"
-              ) (builtins.head metadataMatches);
+              archiveURL = lib.removePrefix requirementPrefix (builtins.head requirementMatches);
+              repositoryURL = lib.removeSuffix "/archive/master.tar.gz" archiveURL;
             in
             if builtins.length requirementMatches != 1 then
-              throw "expected exactly one ${package} pin in requirements-runtime.txt"
-            else if builtins.length metadataMatches != 1 || metadataFields == null then
-              throw "expected exactly one valid ${package} metadata line in requirements-runtime.txt"
+              throw "expected exactly one ${package} source in requirements-runtime.txt"
             else
-              {
-                pypiName = builtins.elemAt metadataFields 0;
-                version = lib.removePrefix requirementPrefix (builtins.head requirementMatches);
-                sha256 = builtins.elemAt metadataFields 1;
+              builtins.fetchGit {
+                url = "${repositoryURL}.git";
+                ref = "master";
+                shallow = true;
               };
-          runtimeTools = lib.genAttrs [
-            "yt-dlp"
-          ] runtimeToolMetadata;
-          runtimeToolVersion = package: runtimeTools.${package}.version;
-          runtimeToolPypiName = package: runtimeTools.${package}.pypiName;
-          runtimeToolSha256 = package: runtimeTools.${package}.sha256;
-          galleryDlPin = builtins.match
-            "gallery-dl @ (https://codeberg.org/mikf/gallery-dl)/archive/([a-f0-9]{40})\\.tar\\.gz"
-            (builtins.head (builtins.filter (line: lib.hasPrefix "gallery-dl @ " line) runtimeRequirementLines));
-          galleryDlRevision = builtins.elemAt galleryDlPin 1;
 
           ytDlp = pythonPackages.buildPythonApplication rec {
             pname = "yt-dlp";
-            version = runtimeToolVersion "yt-dlp";
+            version = "head-${builtins.substring 0 7 src.rev}";
             pyproject = true;
 
-            src = pkgs.fetchPypi {
-              pname = runtimeToolPypiName "yt-dlp";
-              inherit version;
-              sha256 = runtimeToolSha256 "yt-dlp";
-            };
+            src = runtimeToolSource "yt-dlp";
 
             build-system = [
               pythonPackages.hatchling
@@ -148,14 +127,10 @@
 
           galleryDl = pythonPackages.buildPythonApplication rec {
             pname = "gallery_dl";
-            version = "unstable-${builtins.substring 0 7 galleryDlRevision}";
+            version = "head-${builtins.substring 0 7 src.rev}";
             pyproject = true;
 
-            src = builtins.fetchGit {
-              url = "${builtins.elemAt galleryDlPin 0}.git";
-              ref = "master";
-              rev = galleryDlRevision;
-            };
+            src = runtimeToolSource "gallery-dl";
 
             build-system = [
               pythonPackages.setuptools

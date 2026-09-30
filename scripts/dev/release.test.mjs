@@ -175,7 +175,7 @@ test("container release keeps latest on main HEAD and signs release images", () 
   assert.match(workflow, /authToken: \$\{\{ secrets\.CACHIX_AUTH_TOKEN \}\}/);
   assert.match(workflow, /useDaemon: true/);
   assert.match(workflow, /pushFilter: "\(-source\$\|\\\\\.tar\\\\\.gz\$\)"/);
-  assert.match(workflow, /nix build \.#container --print-build-logs/);
+  assert.match(workflow, /nix build --impure --refresh \.#container --print-build-logs/);
   assert.match(workflow, /docker load < result/);
   assert.match(workflow, /type=ref,event=tag/);
   assert.match(
@@ -459,7 +459,7 @@ test("CI covers pull requests and pushes to main with static, Go, runtime, and A
   assert.match(workflow, /DeterminateSystems\/magic-nix-cache-action@[0-9a-f]{40}/);
   assert.match(
     workflow,
-    /run: nix build \.#igloo \.#yt-dlp \.#gallery-dl --no-link --print-build-logs/,
+    /run: nix build --impure --refresh \.#igloo \.#yt-dlp \.#gallery-dl --no-link --print-build-logs/,
   );
   assert.match(workflow, /run: \.\/test\.sh/);
   assert.doesNotMatch(workflow, /workflow-pin-check\.sh/);
