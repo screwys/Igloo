@@ -25,7 +25,7 @@ func (db *DB) ReconcileMomentsOrder(scope string) error {
 	if !ok {
 		return nil
 	}
-	visibleCTE := db.shortsVisibleCTE(scope)
+	visibleCTE := db.shortsVisibleCTEForUnpositioned(scope, positionColumn)
 	return db.WithWrite(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`INSERT INTO moments_order_counters (scope, next_position)
 			SELECT ?, COALESCE((SELECT MAX(order_position) FROM moments_order_history WHERE scope = ?), 0) + 1
@@ -35,9 +35,7 @@ func (db *DB) ReconcileMomentsOrder(scope string) error {
 		rows, err := tx.Query(visibleCTE+`
 			SELECT v.video_id, COALESCE(history.order_position, 0)
 			FROM visible v
-			JOIN videos stored ON stored.video_id = v.video_id
 			LEFT JOIN moments_order_history history ON history.video_id = v.video_id AND history.scope = ?
-			WHERE stored.`+positionColumn+` = 0
 			ORDER BY v.effective_moment_at_ms ASC, v.video_id ASC`, scope)
 		if err != nil {
 			return err

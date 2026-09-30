@@ -82,6 +82,15 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 	"video_repost_sources":        schemaLifecycleArchive,
 	"videos":                      schemaLifecycleArchive,
 	"watch_history":               schemaLifecycleUserState,
+
+	"search_feed_text_fts":           schemaLifecycleDerivedCache,
+	"search_feed_text_fts_config":    schemaLifecycleDerivedCache,
+	"search_feed_text_fts_data":      schemaLifecycleDerivedCache,
+	"search_feed_text_fts_idx":       schemaLifecycleDerivedCache,
+	"search_profile_text_fts":        schemaLifecycleDerivedCache,
+	"search_profile_text_fts_config": schemaLifecycleDerivedCache,
+	"search_profile_text_fts_data":   schemaLifecycleDerivedCache,
+	"search_profile_text_fts_idx":    schemaLifecycleDerivedCache,
 }
 
 // SchemaTableLifecycle returns the lifecycle classification for a schema table.

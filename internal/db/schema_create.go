@@ -9,6 +9,7 @@ func schemaCreateStatements() []string {
 		schemaMaintainedStateStatements(),
 		schemaDerivedCacheStatements(),
 		schemaSearchStatements(),
+		schemaSubstringSearchStatements(),
 		schemaQueueStatements(),
 		schemaSecurityStateStatements(),
 		schemaAndroidSyncRevisionStatements(),

@@ -63,45 +63,45 @@ func androidEligibleFeedCTE(cutoffMs int64) (string, []any) {
 	return `
 		WITH RECURSIVE
 		recent_hashes AS (
-			SELECT DISTINCT content_hash
-			FROM feed_items
+			SELECT content_hash
+			FROM feed_items INDEXED BY idx_feed_items_published
 			WHERE content_hash IS NOT NULL AND content_hash != ''
 			  AND published_at >= ?
 
 			UNION
 
-			SELECT DISTINCT content_hash
-			FROM retweet_sources
+			SELECT content_hash
+			FROM retweet_sources INDEXED BY idx_retweet_sources_published
 			WHERE content_hash IS NOT NULL AND content_hash != ''
 			  AND published_at >= ?
 
 			UNION
 
-			SELECT DISTINCT q.content_hash
-			FROM feed_items parent
-			JOIN feed_items q ON q.tweet_id = parent.quote_tweet_id
+			SELECT q.content_hash
+			FROM feed_items parent INDEXED BY idx_feed_items_published
+			CROSS JOIN feed_items q ON q.tweet_id = parent.quote_tweet_id
 			WHERE parent.published_at >= ?
 			  AND q.content_hash IS NOT NULL
 			  AND q.content_hash != ''
 		),
 		protected_hashes AS (
-			SELECT DISTINCT fi.content_hash
-			FROM feed_items fi
-			JOIN feed_likes fl ON fl.tweet_id = fi.tweet_id
+			SELECT fi.content_hash
+			FROM feed_likes fl
+			CROSS JOIN feed_items fi ON fi.tweet_id = fl.tweet_id
 			WHERE fi.content_hash IS NOT NULL
 			  AND fi.content_hash != ''
 
 			UNION
 
-			SELECT DISTINCT fi.content_hash
-			FROM feed_items fi
-			JOIN bookmarks b ON b.video_id = fi.tweet_id
+			SELECT fi.content_hash
+			FROM bookmarks b
+			CROSS JOIN feed_items fi ON fi.tweet_id = b.video_id
 			WHERE fi.content_hash IS NOT NULL
 			  AND fi.content_hash != ''
 		),
 		eligible_tweet_ids AS (
 			SELECT tweet_id
-			FROM feed_items
+			FROM feed_items INDEXED BY idx_feed_items_published
 			WHERE published_at >= ?
 
 			UNION
@@ -116,7 +116,7 @@ func androidEligibleFeedCTE(cutoffMs int64) (string, []any) {
 			UNION
 
 			SELECT quote_tweet_id AS tweet_id
-			FROM feed_items
+			FROM feed_items INDEXED BY idx_feed_items_published
 			WHERE quote_tweet_id IS NOT NULL
 			  AND quote_tweet_id != ''
 			  AND published_at >= ?
@@ -361,17 +361,22 @@ func (db *DB) ListAndroidSyncDesiredSetsForMode(
 	}
 	if err := collect("feed_channels", `
 		WITH desired(tweet_id) AS (SELECT value FROM json_each(?)),
+		selected AS MATERIALIZED (
+			SELECT fi.source_channel_id, fi.channel_id, fi.quote_channel_id,
+			       fi.reply_channel_id, fi.reposter_channel_id, fi.content_hash
+			FROM desired d
+			CROSS JOIN feed_items fi ON fi.tweet_id = d.tweet_id
+		),
 		candidates(channel_id) AS (
-			SELECT source_channel_id FROM feed_items fi JOIN desired d ON d.tweet_id = fi.tweet_id
-			UNION SELECT channel_id FROM feed_items fi JOIN desired d ON d.tweet_id = fi.tweet_id
-			UNION SELECT quote_channel_id FROM feed_items fi JOIN desired d ON d.tweet_id = fi.tweet_id
-			UNION SELECT reply_channel_id FROM feed_items fi JOIN desired d ON d.tweet_id = fi.tweet_id
-			UNION SELECT reposter_channel_id FROM feed_items fi JOIN desired d ON d.tweet_id = fi.tweet_id
+			SELECT source_channel_id FROM selected
+			UNION SELECT channel_id FROM selected
+			UNION SELECT quote_channel_id FROM selected
+			UNION SELECT reply_channel_id FROM selected
+			UNION SELECT reposter_channel_id FROM selected
 			UNION
 			SELECT rs.retweeter_channel_id
-			FROM retweet_sources rs
-			JOIN feed_items fi ON fi.content_hash = rs.content_hash
-			JOIN desired d ON d.tweet_id = fi.tweet_id
+			FROM selected fi
+			CROSS JOIN retweet_sources rs ON rs.content_hash = fi.content_hash
 		)
 		SELECT candidates.channel_id
 		FROM candidates

@@ -48,6 +48,8 @@ type Server struct {
 	i18n        *i18n.Catalog
 	authLimiter *authAttemptLimiter
 
+	authSessionTouches sync.Map
+
 	// Channel preview cache — populated in background on first page load
 	channelPreviewMu   sync.Mutex
 	channelPreviewVids map[string][]model.Video

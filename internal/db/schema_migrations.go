@@ -24,6 +24,18 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name:  "20260930_add_feed_substring_search",
+		apply: addFeedSubstringSearch,
+	},
+	{
+		name:  "20260930_index_content_reads",
+		apply: addContentReadIndexes,
+	},
+	{
+		name:  "20260930_guard_search_update_triggers",
+		apply: guardSearchUpdateTriggers,
+	},
+	{
 		name:  "20260927_add_moments_order_history",
 		apply: addMomentsOrderHistory,
 	},
@@ -135,6 +147,43 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addContentReadIndexes(tx *sql.Tx) error {
+	for _, statement := range schemaContentReadIndexStatements() {
+		if _, err := tx.Exec(statement); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func addFeedSubstringSearch(tx *sql.Tx) error {
+	for _, statement := range schemaSubstringSearchStatements() {
+		if _, err := tx.Exec(statement); err != nil {
+			return err
+		}
+	}
+	for _, table := range []string{"search_feed_text_fts", "search_profile_text_fts"} {
+		if _, err := tx.Exec(`INSERT INTO ` + table + ` (` + table + `) VALUES ('rebuild')`); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func guardSearchUpdateTriggers(tx *sql.Tx) error {
+	for _, statement := range []string{
+		`DROP TRIGGER IF EXISTS trg_search_channels_au`,
+		`DROP TRIGGER IF EXISTS trg_search_videos_au`,
+		searchChannelsUpdateTriggerStatement(),
+		searchVideosUpdateTriggerStatement(),
+	} {
+		if _, err := tx.Exec(statement); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func addMomentsOrderHistory(tx *sql.Tx) error {

@@ -99,36 +99,29 @@ func (db *DB) ListFeedItemsPage(limit int, cursor *model.FeedCursor, excludeSeen
 
 // GetFeedItemsForTweetIDs fetches full feed items by tweet IDs.
 func (db *DB) GetFeedItemsForTweetIDs(tweetIDs []string) (map[string]model.FeedItem, error) {
-	if len(tweetIDs) == 0 {
-		return make(map[string]model.FeedItem), nil
-	}
-	placeholders := strings.Repeat("?,", len(tweetIDs))
-	placeholders = placeholders[:len(placeholders)-1]
-
-	var args []any
-	for _, id := range tweetIDs {
-		args = append(args, id)
-	}
-
-	rows, err := db.reader().Query(`
+	result := make(map[string]model.FeedItem, len(tweetIDs))
+	for _, chunk := range stringChunks(tweetIDs, 400) {
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
+		args := make([]any, 0, len(chunk))
+		for _, id := range chunk {
+			args = append(args, id)
+		}
+		rows, err := db.reader().Query(`
 		SELECT `+feedItemSelectSQL("feed_items")+`
 		FROM feed_items_resolved AS feed_items
 		WHERE tweet_id IN (`+placeholders+`)
 	`, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
+		if err != nil {
+			return nil, err
+		}
+		items, err := scanFeedItems(rows)
 		_ = rows.Close()
-	}()
-
-	items, err := scanFeedItems(rows)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]model.FeedItem, len(items))
-	for _, item := range items {
-		result[item.TweetID] = item
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range items {
+			result[item.TweetID] = item
+		}
 	}
 	return result, nil
 }

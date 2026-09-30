@@ -30,22 +30,15 @@ func (db *DB) ListAndroidSyncCommentAuthorAssets(videoIDs []string, limitPerVide
 		}
 		args = append(args, limitPerVideo)
 		rows, err := db.reader().Query(`
-			WITH ranked AS (
-				SELECT
-					COALESCE(vc.author_id, '') AS author_id,
-					COALESCE(NULLIF(vc.published_at, 0), NULLIF(v.published_at, 0), 0) AS recency_ms,
-					ROW_NUMBER() OVER (
-						PARTITION BY vc.video_id
-						ORDER BY COALESCE(vc.like_count, 0) DESC, vc.comment_id ASC
-					) AS video_rank
-				FROM video_comments vc
-				JOIN videos v ON v.video_id = vc.video_id
-				WHERE vc.video_id IN (`+placeholders(len(chunk))+`)
-				  AND v.channel_id LIKE 'youtube_%'
+			WITH desired(video_id) AS (
+				SELECT DISTINCT column1 FROM (VALUES `+androidSyncProjectionValues(len(chunk))+`)
 			)
-			SELECT author_id, recency_ms
-			FROM ranked
-			WHERE video_rank <= ?
+			SELECT COALESCE(vc.author_id, ''),
+			       COALESCE(NULLIF(vc.published_at, 0), NULLIF(v.published_at, 0), 0)
+			FROM desired d
+			JOIN videos v ON v.video_id = d.video_id
+			`+androidSyncTopCommentsJoinSQL+`
+			WHERE v.channel_id LIKE 'youtube_%'
 		`, args...)
 		if err != nil {
 			return nil, err

@@ -21,6 +21,8 @@ var ErrRefreshTokenExpired = errors.New("refresh token expired")
 var ErrRefreshTokenConsumed = errors.New("refresh token already consumed")
 var ErrRefreshTokenUnknown = errors.New("refresh token unknown")
 
+const AuthSessionActivityInterval = time.Minute
+
 // AuthSession is the row shape returned from lookup calls.
 type AuthSession struct {
 	SessionID      string
@@ -81,13 +83,15 @@ func (db *DB) GetAuthSession(sessionID string) (*AuthSession, error) {
 	return &s, nil
 }
 
-// TouchAuthSession bumps last_active_at_ms. Best-effort — errors logged
-// by caller, never fatal.
+// TouchAuthSession updates activity at most once per interval. Callers use the
+// authenticated session's timestamp to avoid scheduling writes before it is due.
 func (db *DB) TouchAuthSession(sessionID string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
+		nowMs := time.Now().UnixMilli()
 		_, err := tx.Exec(
-			`UPDATE auth_sessions SET last_active_at_ms = ? WHERE session_id = ?`,
-			time.Now().UnixMilli(), sessionID,
+			`UPDATE auth_sessions SET last_active_at_ms = ?
+			 WHERE session_id = ? AND last_active_at_ms <= ?`,
+			nowMs, sessionID, nowMs-AuthSessionActivityInterval.Milliseconds(),
 		)
 		return err
 	})

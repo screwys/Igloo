@@ -1027,15 +1027,32 @@ func (db *DB) GetNearestShortsOrdinal(sortAt int64, cursorVideoID, momentsMode s
 }
 
 func (db *DB) shortsVisibleCTE(momentsMode string) string {
+	return db.shortsVisibleCTEForUnpositioned(momentsMode, "")
+}
+
+func (db *DB) shortsVisibleCTEForUnpositioned(momentsMode, positionColumn string) string {
 	momentsMode = NormalizeMomentsTab(momentsMode)
 	includeMomentReposts := momentsMode == "all" && db.MomentsIncludeRepostsEnabled()
 	includeInstagramTagged := momentsMode == "all" && db.InstagramIncludeTaggedEnabled()
 	includeSourceWindows := includeMomentReposts || includeInstagramTagged
+	withPrefix := "WITH "
+	videoSource := "videos"
+	repostSource := "video_repost_sources vrs INNER JOIN videos owner ON owner.video_id = vrs.video_id"
+	if positionColumn != "" {
+		videoSource = "unpositioned_videos"
+		withPrefix += `unpositioned_videos AS MATERIALIZED (
+			SELECT v.video_id, v.channel_id, v.owner_kind, v.source_kind, v.is_temp, v.published_at
+			FROM channels c
+			CROSS JOIN videos v INDEXED BY idx_videos_moments_` + momentsMode + `_unpositioned
+			  ON v.channel_id = c.channel_id
+			WHERE c.platform IN ('tiktok', 'instagram') AND v.` + positionColumn + ` = 0
+		), `
+		repostSource = "unpositioned_videos owner CROSS JOIN video_repost_sources vrs ON vrs.video_id = owner.video_id"
+	}
 	if !includeSourceWindows {
-		return `
-		WITH visible AS (
+		return withPrefix + `visible AS (
 			SELECT v.video_id, COALESCE(v.published_at, 0) AS effective_moment_at_ms
-			FROM videos v
+			FROM ` + videoSource + ` v
 			LEFT JOIN channels c ON v.channel_id = c.channel_id
 			LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id
 			WHERE COALESCE(c.platform, '') IN ('tiktok','instagram')
@@ -1045,16 +1062,14 @@ func (db *DB) shortsVisibleCTE(momentsMode string) string {
 			  AND ` + momentOwnerUnmutedSQL("v") + `
 		)`
 	}
-	return `
-		WITH allowed_moment_reposts AS (
+	return withPrefix + `allowed_moment_reposts AS (
 			SELECT vrs.*,
 			       COUNT(*) OVER (PARTITION BY vrs.video_id) AS repost_count,
 			       ROW_NUMBER() OVER (
 			           PARTITION BY vrs.video_id
 			           ORDER BY ` + momentRepostHeadOrderSQL("vrs") + `
 			       ) AS rn
-			FROM video_repost_sources vrs
-			INNER JOIN videos owner ON owner.video_id = vrs.video_id
+			FROM ` + repostSource + `
 			INNER JOIN channel_follows rcf ON rcf.channel_id = vrs.reposter_channel_id
 			LEFT JOIN channel_settings rcs ON rcs.channel_id = vrs.reposter_channel_id
 			WHERE COALESCE(rcs.include_reposts, 1) != 0
@@ -1072,7 +1087,7 @@ func (db *DB) shortsVisibleCTE(momentsMode string) string {
 			            THEN ` + momentRepostTimeSQL("mr", "v") + `
 			            ELSE COALESCE(v.published_at, 0)
 			        END AS effective_moment_at_ms
-			FROM videos v
+			FROM ` + videoSource + ` v
 			LEFT JOIN channels c ON v.channel_id = c.channel_id
 			LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id
 			LEFT JOIN moments_repost_heads mr ON mr.video_id = v.video_id

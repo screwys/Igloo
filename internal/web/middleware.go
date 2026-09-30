@@ -14,6 +14,7 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/screwys/igloo/internal/auth"
+	"github.com/screwys/igloo/internal/db"
 )
 
 type contextKey string
@@ -111,7 +112,7 @@ func (s *Server) enforceAuth(next http.Handler) http.Handler {
 					}
 					// Non-API path — fall through to session-cookie check below.
 				} else {
-					go func(id string) { _ = s.db.TouchAuthSession(id) }(claims.SessionID)
+					s.touchAuthSessionActivity(sess)
 					ctx := context.WithValue(r.Context(), userContextKey, &userInfo{
 						Username:  claims.Username,
 						Role:      claims.Role,
@@ -157,6 +158,19 @@ func (s *Server) enforceAuth(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (s *Server) touchAuthSessionActivity(session *db.AuthSession) {
+	if time.Now().UnixMilli()-session.LastActiveAtMs < db.AuthSessionActivityInterval.Milliseconds() {
+		return
+	}
+	if _, pending := s.authSessionTouches.LoadOrStore(session.SessionID, struct{}{}); pending {
+		return
+	}
+	go func() {
+		defer s.authSessionTouches.Delete(session.SessionID)
+		_ = s.db.TouchAuthSession(session.SessionID)
+	}()
 }
 
 func (s *Server) csrfProtect(next http.Handler) http.Handler {

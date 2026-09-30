@@ -12,6 +12,18 @@ import (
 
 const androidSyncProjectionChunkSize = 400
 
+// Select comment IDs with an ordered index seek before reading their payloads.
+const androidSyncTopCommentsJoinSQL = `
+	JOIN video_comments vc ON vc.video_id = d.video_id
+		AND vc.comment_id IN (
+			SELECT comment_id
+			FROM video_comments
+			WHERE video_id = d.video_id
+			ORDER BY COALESCE(like_count, 0) DESC, comment_id ASC
+			LIMIT ?
+		)
+`
+
 type AndroidSyncChannelProjection struct {
 	ChannelID string
 	Channel   *model.Channel
@@ -338,20 +350,15 @@ func (db *DB) listAndroidSyncVideoComments(videoIDs []string, limit int) (map[st
 	for _, chunk := range stringChunks(videoIDs, androidSyncProjectionChunkSize) {
 		args := append(stringsToAny(chunk), limit)
 		rows, err := db.reader().Query(`
-			SELECT video_id, comment_id, parent_id, author_name, author_id,
-			       text, like_count, published_at
-			FROM (
-				SELECT video_id, comment_id, COALESCE(parent_id, '') AS parent_id,
-				       COALESCE(author_name, '') AS author_name, COALESCE(author_id, '') AS author_id,
-				       COALESCE(text, '') AS text, COALESCE(like_count, 0) AS like_count, published_at,
-				       ROW_NUMBER() OVER (
-				           PARTITION BY video_id ORDER BY COALESCE(like_count, 0) DESC, comment_id ASC
-				       ) AS row_number
-				FROM video_comments
-				WHERE video_id IN (`+placeholders(len(chunk))+`)
+			WITH desired(video_id) AS (
+				SELECT DISTINCT column1 FROM (VALUES `+androidSyncProjectionValues(len(chunk))+`)
 			)
-			WHERE row_number <= ?
-			ORDER BY video_id, row_number
+			SELECT vc.video_id, vc.comment_id, COALESCE(vc.parent_id, ''),
+			       COALESCE(vc.author_name, ''), COALESCE(vc.author_id, ''),
+			       COALESCE(vc.text, ''), COALESCE(vc.like_count, 0), vc.published_at
+			FROM desired d
+			`+androidSyncTopCommentsJoinSQL+`
+			ORDER BY vc.video_id, COALESCE(vc.like_count, 0) DESC, vc.comment_id ASC
 		`, args...)
 		if err != nil {
 			return nil, fmt.Errorf("list Android sync video comments: %w", err)

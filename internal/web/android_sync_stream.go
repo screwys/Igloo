@@ -283,17 +283,6 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 				RetentionHash: retentionHash,
 				CreatedAt:     time.Now(),
 			}
-			if cursor.Version >= androidSyncModelVersion {
-				selection, selectionErr := s.buildAndroidSyncV3Selection(
-					snapshot,
-					retention,
-					time.Now().UnixMilli(),
-				)
-				if selectionErr != nil {
-					return selectionErr
-				}
-				session.Selection = &selection
-			}
 		}
 		if cursor.Revision > session.Through {
 			return errAndroidSyncResetRequired
@@ -314,6 +303,17 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 		finished = len(heads) <= androidSyncChangePageSize
 		if !finished {
 			heads = heads[:androidSyncChangePageSize]
+		}
+		if newSession && cursor.Version >= androidSyncModelVersion && len(heads) > 0 {
+			selection, selectionErr := s.buildAndroidSyncV3Selection(
+				snapshot,
+				retention,
+				session.CreatedAt.UnixMilli(),
+			)
+			if selectionErr != nil {
+				return selectionErr
+			}
+			session.Selection = &selection
 		}
 		var processed int
 		processed, changes, err = s.materializeAndroidSyncChangePage(

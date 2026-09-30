@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/screwys/igloo/internal/model"
 )
@@ -28,44 +29,6 @@ func (db *DB) GetFeedItemByTweetID(tweetID string) (*model.FeedItem, error) {
 		return nil, fmt.Errorf("GetFeedItemByTweetID: %w", err)
 	}
 	return &f, nil
-}
-
-// getThreadItem also resolves content captured inside another post's quote.
-// Keep this separate from row lookup so reply fetching still detects missing rows.
-func (db *DB) getThreadItem(tweetID string) (*model.FeedItem, error) {
-	item, err := db.GetFeedItemByTweetID(tweetID)
-	if err != nil || item != nil {
-		return item, err
-	}
-	quotedBy, err := scanFeedItem(db.conn.QueryRow(`
-		SELECT `+feedItemSelectSQL("feed_items")+`
-		FROM feed_items_resolved AS feed_items
-		WHERE quote_tweet_id = ?
-		ORDER BY fetched_at DESC, tweet_id DESC
-		LIMIT 1`, tweetID))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("getThreadItem quote: %w", err)
-	}
-	quote := model.FeedItem{
-		TweetID: tweetID, CanonicalTweetID: tweetID,
-		ChannelID:         quotedBy.QuoteChannelID,
-		AuthorHandle:      quotedBy.QuoteAuthorHandle,
-		AuthorDisplayName: quotedBy.QuoteAuthorDisplayName,
-		AuthorAvatarURL:   quotedBy.QuoteAuthorAvatarURL,
-		BodyText:          quotedBy.QuoteBodyText, ArticleTitle: quotedBy.QuoteArticleTitle,
-		PollJSON: quotedBy.QuotePollJSON, CommunityNote: quotedBy.QuoteCommunityNote,
-		Lang: quotedBy.QuoteLang, MediaJSON: quotedBy.QuoteMediaJSON,
-		PublishedAt: quotedBy.QuotePublishedAt, FetchedAt: quotedBy.FetchedAt,
-		IsGhost: true,
-	}
-	if quote.AuthorHandle != "" {
-		quote.CanonicalURL = fmt.Sprintf("https://x.com/%s/status/%s", quote.AuthorHandle, tweetID)
-	}
-	quote.ParseMedia()
-	return &quote, nil
 }
 
 // UpsertGhostFeedItem stores a single feed_items row with is_ghost=1. The row
@@ -125,57 +88,163 @@ func (db *DB) UpdateReplyToStatus(tweetID, parentTweetID string) error {
 // (the leaf row is always returned, even with no ancestors).
 // Reposts use their original once it is stored; until then the captured repost
 // remains available as the thread's content.
-//
-// Implementation uses a recursive CTE walking up via reply_to_status, then
-// reverses to root → leaf order.
 func (db *DB) GetThreadChain(tweetID string) ([]model.FeedItem, error) {
-	canonicalID, err := db.ResolveFeedStateID(tweetID)
+	chains, err := db.GetThreadChains([]string{tweetID})
 	if err != nil {
 		return nil, err
 	}
-	const q = `
-		WITH RECURSIVE chain(tweet_id, depth) AS (
-			SELECT COALESCE((SELECT tweet_id FROM feed_items WHERE tweet_id = ?), ?), 0
+	return chains[tweetID], nil
+}
+
+// GetThreadChains walks all seed chains together and hydrates shared ancestors
+// once. Missing rows may still resolve to their latest captured quote.
+func (db *DB) GetThreadChains(tweetIDs []string) (map[string][]model.FeedItem, error) {
+	out := make(map[string][]model.FeedItem, len(tweetIDs))
+	if len(tweetIDs) == 0 {
+		return out, nil
+	}
+	seeds := make(map[string]string, len(tweetIDs))
+	for _, id := range tweetIDs {
+		seeds[id] = strings.TrimSpace(id)
+		out[id] = []model.FeedItem{}
+	}
+	encoded, err := json.Marshal(seeds)
+	if err != nil {
+		return nil, err
+	}
+	seedRows, err := db.reader().Query(`
+		SELECT seeds.key, COALESCE(item.canonical_url, '')
+		FROM json_each(?) seeds
+		LEFT JOIN feed_items item
+		  ON item.tweet_id = CAST(seeds.value AS TEXT) AND seeds.value != ''
+	`, string(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("GetThreadChains seeds: %w", err)
+	}
+	defer func() { _ = seedRows.Close() }()
+	for seedRows.Next() {
+		var id, canonicalURL string
+		if err := seedRows.Scan(&id, &canonicalURL); err != nil {
+			return nil, err
+		}
+		if canonicalID := model.TwitterStatusIDFromURL(canonicalURL); canonicalID != "" {
+			seeds[id] = canonicalID
+		}
+	}
+	if err := seedRows.Err(); err != nil {
+		return nil, err
+	}
+	if err := seedRows.Close(); err != nil {
+		return nil, err
+	}
+	encoded, err = json.Marshal(seeds)
+	if err != nil {
+		return nil, err
+	}
+	chainRows, err := db.reader().Query(`
+		WITH RECURSIVE
+		seeds(seed_id, state_id) AS MATERIALIZED (
+			SELECT key, CAST(value AS TEXT) FROM json_each(?)
+		),
+		chain(seed_id, tweet_id, depth) AS (
+			SELECT seeds.seed_id, COALESCE(item.tweet_id, seeds.seed_id), 0
+			FROM seeds
+			LEFT JOIN feed_items item ON item.tweet_id = seeds.state_id
 			UNION ALL
-			SELECT fi.reply_to_status, c.depth + 1
+			SELECT c.seed_id, fi.reply_to_status, c.depth + 1
 			FROM chain c
 			JOIN feed_items fi ON fi.tweet_id = c.tweet_id
 			WHERE fi.reply_to_status IS NOT NULL
 			  AND fi.reply_to_status != ''
 			  AND c.depth < 50
 		)
-		SELECT tweet_id FROM chain
+		SELECT seed_id, tweet_id FROM chain
 		WHERE tweet_id IS NOT NULL AND tweet_id != ''
-		ORDER BY depth DESC`
-
-	rows, err := db.conn.Query(q, canonicalID, tweetID)
+		ORDER BY seed_id, depth DESC
+	`, string(encoded))
 	if err != nil {
-		return nil, fmt.Errorf("GetThreadChain query: %w", err)
+		return nil, fmt.Errorf("GetThreadChains query: %w", err)
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
+	defer func() { _ = chainRows.Close() }()
+	idsBySeed := make(map[string][]string, len(seeds))
+	uniqueIDs := make(map[string]bool)
 	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+	for chainRows.Next() {
+		var seedID, id string
+		if err := chainRows.Scan(&seedID, &id); err != nil {
 			return nil, err
 		}
-		ids = append(ids, id)
+		idsBySeed[seedID] = append(idsBySeed[seedID], id)
+		if !uniqueIDs[id] {
+			uniqueIDs[id] = true
+			ids = append(ids, id)
+		}
 	}
-	if err := rows.Err(); err != nil {
+	if err := chainRows.Err(); err != nil {
 		return nil, err
 	}
-
-	out := make([]model.FeedItem, 0, len(ids))
+	if err := chainRows.Close(); err != nil {
+		return nil, err
+	}
+	itemsByID, err := db.GetFeedItemsForTweetIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	var missingIDs []string
 	for _, id := range ids {
-		fi, err := db.getThreadItem(id)
+		if _, ok := itemsByID[id]; !ok {
+			missingIDs = append(missingIDs, id)
+		}
+	}
+	if len(missingIDs) > 0 {
+		encoded, err := json.Marshal(missingIDs)
 		if err != nil {
 			return nil, err
 		}
-		if fi != nil {
-			out = append(out, *fi)
+		quoteRows, err := db.reader().Query(`
+			SELECT `+feedItemSelectSQL("feed_items")+`
+			FROM json_each(?) missing
+			JOIN feed_items_resolved AS feed_items ON feed_items.tweet_id = (
+				SELECT tweet_id FROM feed_items
+				WHERE quote_tweet_id = CAST(missing.value AS TEXT)
+				ORDER BY fetched_at DESC, tweet_id DESC
+				LIMIT 1
+			)
+		`, string(encoded))
+		if err != nil {
+			return nil, fmt.Errorf("GetThreadChains quotes: %w", err)
+		}
+		defer func() { _ = quoteRows.Close() }()
+		quotes, err := scanFeedItems(quoteRows)
+		if err != nil {
+			return nil, err
+		}
+		for _, quotedBy := range quotes {
+			id := quotedBy.QuoteTweetID
+			quote := model.FeedItem{
+				TweetID: id, CanonicalTweetID: id,
+				ChannelID:         quotedBy.QuoteChannelID,
+				AuthorHandle:      quotedBy.QuoteAuthorHandle,
+				AuthorDisplayName: quotedBy.QuoteAuthorDisplayName,
+				AuthorAvatarURL:   quotedBy.QuoteAuthorAvatarURL,
+				BodyText:          quotedBy.QuoteBodyText, ArticleTitle: quotedBy.QuoteArticleTitle,
+				PollJSON: quotedBy.QuotePollJSON, CommunityNote: quotedBy.QuoteCommunityNote,
+				Lang: quotedBy.QuoteLang, MediaJSON: quotedBy.QuoteMediaJSON,
+				PublishedAt: quotedBy.QuotePublishedAt, FetchedAt: quotedBy.FetchedAt,
+				IsGhost: true,
+			}
+			if quote.AuthorHandle != "" {
+				quote.CanonicalURL = fmt.Sprintf("https://x.com/%s/status/%s", quote.AuthorHandle, id)
+			}
+			quote.ParseMedia()
+			itemsByID[id] = quote
+		}
+	}
+	for seedID, chainIDs := range idsBySeed {
+		for _, id := range chainIDs {
+			if item, ok := itemsByID[id]; ok {
+				out[seedID] = append(out[seedID], item)
+			}
 		}
 	}
 	return out, nil

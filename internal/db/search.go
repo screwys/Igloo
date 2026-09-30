@@ -7,6 +7,8 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
+const feedSearchCandidateLimit = 400
+
 // compileFTSQuery converts a user query into FTS5 syntax.
 // Wraps each term in quotes for prefix matching.
 func compileFTSQuery(q string) string {
@@ -131,14 +133,82 @@ func (db *DB) SearchFeedItems(q string, limit int) ([]model.FeedItem, error) {
 		limit = 50
 	}
 	like := "%" + q + "%"
-
-	rows, err := db.conn.Query(`
-		SELECT `+feedItemSelectSQL("feed_items")+`
+	query := `
+		SELECT ` + feedItemSelectSQL("feed_items") + `
 		FROM feed_items_resolved AS feed_items
 		WHERE body_text LIKE ? OR author_handle LIKE ? OR author_display_name LIKE ?
-		ORDER BY published_at DESC
-		LIMIT ?
-	`, like, like, like, limit)
+		ORDER BY published_at DESC, tweet_id DESC
+		LIMIT ?`
+	args := []any{like, like, like, limit}
+	if feedSearchHasIndexedTerm(q) {
+		if db.readTx == nil {
+			var items []model.FeedItem
+			err := db.WithReadSnapshot(func(snapshot *DB) error {
+				var err error
+				items, err = snapshot.SearchFeedItems(q, limit)
+				return err
+			})
+			return items, err
+		}
+		candidates, err := db.reader().Query(`
+			WITH matching_profiles AS MATERIALIZED (
+				SELECT DISTINCT rowid FROM (
+					SELECT rowid FROM search_profile_text_fts WHERE handle LIKE ?1
+					UNION ALL
+					SELECT rowid FROM search_profile_text_fts WHERE display_name LIKE ?2
+				) LIMIT ?4
+			), matching_posts AS (
+				SELECT fi.tweet_id
+				FROM search_feed_text_fts search
+				JOIN feed_items fi ON fi.rowid = search.rowid
+				WHERE search.body_text LIKE ?3
+				UNION ALL
+				SELECT NULL WHERE (SELECT COUNT(*) FROM matching_profiles) = ?4
+				UNION ALL
+				SELECT fi.tweet_id
+				FROM matching_profiles matched
+				CROSS JOIN channel_profiles cp ON cp.rowid = matched.rowid AND cp.tombstone = 0
+				CROSS JOIN feed_items fi ON fi.channel_id = cp.channel_id
+			)
+			SELECT DISTINCT tweet_id FROM matching_posts LIMIT ?4
+		`, like, like, like, feedSearchCandidateLimit)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = candidates.Close() }()
+		var ids []string
+		broadProfiles := false
+		for candidates.Next() {
+			var id sql.NullString
+			if err := candidates.Scan(&id); err != nil {
+				return nil, err
+			}
+			if !id.Valid {
+				broadProfiles = true
+				break
+			}
+			ids = append(ids, id.String)
+		}
+		if err := candidates.Err(); err != nil {
+			return nil, err
+		}
+		if err := candidates.Close(); err != nil {
+			return nil, err
+		}
+		if len(ids) == 0 && !broadProfiles {
+			return nil, nil
+		}
+		// Broad matches use publication order's early stop instead of sorting
+		// every index hit. The limit bounds query work, never search results.
+		if !broadProfiles && len(ids) < feedSearchCandidateLimit {
+			query = `SELECT ` + feedItemSelectSQL("feed_items") + `
+				FROM feed_items_resolved AS feed_items
+				WHERE tweet_id IN (` + placeholders(len(ids)) + `)
+				ORDER BY published_at DESC, tweet_id DESC LIMIT ?`
+			args = append(stringsToAny(ids), limit)
+		}
+	}
+	rows, err := db.reader().Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -146,4 +216,23 @@ func (db *DB) SearchFeedItems(q string, limit int) ([]model.FeedItem, error) {
 		_ = rows.Close()
 	}()
 	return scanFeedItems(rows)
+}
+
+// LIKE needs three consecutive literal characters to use a trigram index.
+func feedSearchHasIndexedTerm(query string) bool {
+	literals := 0
+	for _, char := range query {
+		switch char {
+		case 0:
+			return false
+		case '%', '_':
+			literals = 0
+		default:
+			literals++
+			if literals >= 3 {
+				return true
+			}
+		}
+	}
+	return false
 }

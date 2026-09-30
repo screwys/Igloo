@@ -46,7 +46,7 @@ func HasPending(dataDir string) bool {
 	return err == nil && info.Mode().IsRegular()
 }
 
-// StageZip extracts and validates a current DB-bearing zip before making it
+// StageZip extracts and validates a DB-bearing zip before making it
 // visible to startup restore.
 func StageZip(readerAt io.ReaderAt, size int64, layout storage.Layout) (stageErr error) {
 	if err := layout.Ensure(); err != nil {
@@ -73,7 +73,7 @@ func StageZip(readerAt io.ReaderAt, size int64, layout storage.Layout) (stageErr
 		return ErrMissingDatabase
 	}
 	stagedDB := filepath.Join(stage, config.DatabaseFilename)
-	if err := validateStagedDatabase(stagedDB, layout); err != nil {
+	if err := validateStagedDatabase(stagedDB); err != nil {
 		return fmt.Errorf("validate staged db: %w", err)
 	}
 	if err := validateStagedRestoreConfig(stage); err != nil {
@@ -173,7 +173,7 @@ func ApplyPending(cfg *config.Config) error {
 	if _, err := os.Stat(stagedDB); err != nil {
 		return fmt.Errorf("staged db missing: %w", err)
 	}
-	if err := validateStagedDatabase(stagedDB, cfg.Storage); err != nil {
+	if err := validateStagedDatabase(stagedDB); err != nil {
 		return fmt.Errorf("validate staged db: %w", err)
 	}
 	if err := validateStagedRestoreConfig(stage); err != nil {
@@ -278,37 +278,49 @@ func resetPreparedAndroidSyncIdentity(path string) error {
 	return errors.Join(file.Sync(), file.Close())
 }
 
-func validateStagedDatabase(path string, layout storage.Layout) error {
-	staged, err := db.OpenReadOnlyLayout(path, layout)
+func validateStagedDatabase(path string) error {
+	conn, err := sql.Open("sqlite", "file:"+path+"?mode=rw&_pragma=journal_mode(delete)&_pragma=foreign_keys(on)&_pragma=busy_timeout(30000)")
 	if err != nil {
 		return err
 	}
-	defer func() { _ = staged.Close() }()
-	if err := validateDatabaseIntegrity(staged); err != nil {
+	defer func() { _ = conn.Close() }()
+	conn.SetMaxOpenConns(1)
+	if err := validateDatabaseIntegrity(conn); err != nil {
 		return err
 	}
-	return staged.WithRead(db.ValidateCurrentSchema)
+	if err := db.ApplySchemaMigrations(conn); err != nil {
+		return err
+	}
+	if err := db.ValidateCurrentSchema(conn); err != nil {
+		return err
+	}
+	if err := conn.Close(); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_RDONLY, 0)
+	if err != nil {
+		return err
+	}
+	return errors.Join(file.Sync(), file.Close())
 }
 
-func validateDatabaseIntegrity(store *db.DB) error {
-	return store.WithRead(func(conn *sql.DB) error {
-		var quickCheck string
-		if err := conn.QueryRow(`PRAGMA quick_check`).Scan(&quickCheck); err != nil {
-			return err
-		}
-		if quickCheck != "ok" {
-			return fmt.Errorf("quick_check failed: %s", quickCheck)
-		}
-		fkRows, err := conn.Query(`PRAGMA foreign_key_check`)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = fkRows.Close() }()
-		if fkRows.Next() {
-			return fmt.Errorf("foreign_key_check failed")
-		}
-		return fkRows.Err()
-	})
+func validateDatabaseIntegrity(conn *sql.DB) error {
+	var quickCheck string
+	if err := conn.QueryRow(`PRAGMA quick_check`).Scan(&quickCheck); err != nil {
+		return err
+	}
+	if quickCheck != "ok" {
+		return fmt.Errorf("quick_check failed: %s", quickCheck)
+	}
+	fkRows, err := conn.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = fkRows.Close() }()
+	if fkRows.Next() {
+		return fmt.Errorf("foreign_key_check failed")
+	}
+	return fkRows.Err()
 }
 
 func prepareFileFromPath(sourcePath, targetPath string, mode os.FileMode) (string, error) {

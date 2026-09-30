@@ -136,11 +136,17 @@ CREATE INDEX idx_moment_views_date ON moment_views(viewed_at DESC);
 -- index: idx_profile_jobs_claim on profile_jobs
 CREATE INDEX idx_profile_jobs_claim ON profile_jobs(requested_at_ms DESC, channel_id, next_attempt_at_ms, lease_until_ms, lease_owner) WHERE requested_revision > completed_revision;
 
+-- index: idx_retweet_sources_published on retweet_sources
+CREATE INDEX idx_retweet_sources_published ON retweet_sources(published_at, content_hash);
+
 -- index: idx_temp_download_queue_ready on temp_download_queue
 CREATE INDEX idx_temp_download_queue_ready ON temp_download_queue(origin, status, next_attempt_at_ms, lease_until_ms, added_at_ms);
 
 -- index: idx_translation_jobs_ready on translation_jobs
 CREATE INDEX idx_translation_jobs_ready ON translation_jobs(target_lang, status, priority DESC, updated_at, tweet_id, field, next_attempt_at);
+
+-- index: idx_video_comments_video_likes on video_comments
+CREATE INDEX idx_video_comments_video_likes ON video_comments(video_id, COALESCE(like_count, 0) DESC, comment_id ASC);
 
 -- index: idx_video_desires_source_position on video_desires
 CREATE INDEX idx_video_desires_source_position ON video_desires(source_channel_id, source_component, source_position, video_id);
@@ -165,6 +171,12 @@ CREATE INDEX idx_videos_channel_published ON videos(channel_id, published_at DES
 
 -- index: idx_videos_media_shape on videos
 CREATE INDEX idx_videos_media_shape ON videos(media_kind, slide_count);
+
+-- index: idx_videos_moments_all_unpositioned on videos
+CREATE INDEX idx_videos_moments_all_unpositioned ON videos(channel_id, video_id) WHERE moments_all_position = 0;
+
+-- index: idx_videos_moments_following_unpositioned on videos
+CREATE INDEX idx_videos_moments_following_unpositioned ON videos(channel_id, video_id) WHERE moments_following_position = 0;
 
 -- index: idx_videos_source_kind on videos
 CREATE INDEX idx_videos_source_kind ON videos(source_kind, published_at DESC);
@@ -321,6 +333,30 @@ CREATE TABLE 'search_channels_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
 
 -- table: search_channels_fts_idx on search_channels_fts_idx
 CREATE TABLE 'search_channels_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
+
+-- table: search_feed_text_fts on search_feed_text_fts
+CREATE VIRTUAL TABLE search_feed_text_fts USING fts5( body_text, content = 'feed_items', content_rowid = 'rowid', tokenize = 'trigram', detail = 'none', columnsize = 0 );
+
+-- table: search_feed_text_fts_config on search_feed_text_fts_config
+CREATE TABLE 'search_feed_text_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID;
+
+-- table: search_feed_text_fts_data on search_feed_text_fts_data
+CREATE TABLE 'search_feed_text_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
+
+-- table: search_feed_text_fts_idx on search_feed_text_fts_idx
+CREATE TABLE 'search_feed_text_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
+
+-- table: search_profile_text_fts on search_profile_text_fts
+CREATE VIRTUAL TABLE search_profile_text_fts USING fts5( handle, display_name, content = 'channel_profiles', content_rowid = 'rowid', tokenize = 'trigram', detail = 'none', columnsize = 0 );
+
+-- table: search_profile_text_fts_config on search_profile_text_fts_config
+CREATE TABLE 'search_profile_text_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID;
+
+-- table: search_profile_text_fts_data on search_profile_text_fts_data
+CREATE TABLE 'search_profile_text_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
+
+-- table: search_profile_text_fts_idx on search_profile_text_fts_idx
+CREATE TABLE 'search_profile_text_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
 
 -- table: search_videos_fts on search_videos_fts
 CREATE VIRTUAL TABLE search_videos_fts USING fts5( video_id_pk UNINDEXED, title, dearrow_title, dearrow_title_casual, channel_name, tokenize = 'unicode61' );
@@ -710,7 +746,25 @@ CREATE TRIGGER trg_search_channels_ad AFTER DELETE ON channels BEGIN DELETE FROM
 CREATE TRIGGER trg_search_channels_ai AFTER INSERT ON channels BEGIN INSERT INTO search_channels_fts(rowid, channel_id_pk, name, source_id, display_name, handle) VALUES ( new.id, new.channel_id, COALESCE(new.name, ''), COALESCE(new.source_id, ''), COALESCE((SELECT display_name FROM channel_profiles WHERE channel_id = new.channel_id AND COALESCE(tombstone, 0) = 0), ''), COALESCE((SELECT handle FROM channel_profiles WHERE channel_id = new.channel_id AND COALESCE(tombstone, 0) = 0), '') ); END;
 
 -- trigger: trg_search_channels_au on channels
-CREATE TRIGGER trg_search_channels_au AFTER UPDATE ON channels BEGIN DELETE FROM search_channels_fts WHERE rowid = old.id; INSERT INTO search_channels_fts(rowid, channel_id_pk, name, source_id, display_name, handle) VALUES ( new.id, new.channel_id, COALESCE(new.name, ''), COALESCE(new.source_id, ''), COALESCE((SELECT display_name FROM channel_profiles WHERE channel_id = new.channel_id AND COALESCE(tombstone, 0) = 0), ''), COALESCE((SELECT handle FROM channel_profiles WHERE channel_id = new.channel_id AND COALESCE(tombstone, 0) = 0), '') ); END;
+CREATE TRIGGER trg_search_channels_au AFTER UPDATE OF id, channel_id, name, source_id ON channels WHEN old.id IS NOT new.id OR old.channel_id IS NOT new.channel_id OR old.name IS NOT new.name OR old.source_id IS NOT new.source_id BEGIN DELETE FROM search_channels_fts WHERE rowid = old.id; INSERT INTO search_channels_fts(rowid, channel_id_pk, name, source_id, display_name, handle) VALUES ( new.id, new.channel_id, COALESCE(new.name, ''), COALESCE(new.source_id, ''), COALESCE((SELECT display_name FROM channel_profiles WHERE channel_id = new.channel_id AND COALESCE(tombstone, 0) = 0), ''), COALESCE((SELECT handle FROM channel_profiles WHERE channel_id = new.channel_id AND COALESCE(tombstone, 0) = 0), '') ); END;
+
+-- trigger: trg_search_feed_text_ad on feed_items
+CREATE TRIGGER trg_search_feed_text_ad AFTER DELETE ON feed_items BEGIN INSERT INTO search_feed_text_fts(search_feed_text_fts, rowid, body_text) VALUES ('delete', old.rowid, old.body_text); END;
+
+-- trigger: trg_search_feed_text_ai on feed_items
+CREATE TRIGGER trg_search_feed_text_ai AFTER INSERT ON feed_items BEGIN INSERT INTO search_feed_text_fts(rowid, body_text) VALUES (new.rowid, new.body_text); END;
+
+-- trigger: trg_search_feed_text_au on feed_items
+CREATE TRIGGER trg_search_feed_text_au AFTER UPDATE ON feed_items WHEN old.rowid IS NOT new.rowid OR old.body_text IS NOT new.body_text BEGIN INSERT INTO search_feed_text_fts(search_feed_text_fts, rowid, body_text) VALUES ('delete', old.rowid, old.body_text); INSERT INTO search_feed_text_fts(rowid, body_text) VALUES (new.rowid, new.body_text); END;
+
+-- trigger: trg_search_profile_text_ad on channel_profiles
+CREATE TRIGGER trg_search_profile_text_ad AFTER DELETE ON channel_profiles BEGIN INSERT INTO search_profile_text_fts(search_profile_text_fts, rowid, handle, display_name) VALUES ('delete', old.rowid, old.handle, old.display_name); END;
+
+-- trigger: trg_search_profile_text_ai on channel_profiles
+CREATE TRIGGER trg_search_profile_text_ai AFTER INSERT ON channel_profiles BEGIN INSERT INTO search_profile_text_fts(rowid, handle, display_name) VALUES (new.rowid, new.handle, new.display_name); END;
+
+-- trigger: trg_search_profile_text_au on channel_profiles
+CREATE TRIGGER trg_search_profile_text_au AFTER UPDATE ON channel_profiles WHEN old.rowid IS NOT new.rowid OR old.handle IS NOT new.handle OR old.display_name IS NOT new.display_name BEGIN INSERT INTO search_profile_text_fts(search_profile_text_fts, rowid, handle, display_name) VALUES ('delete', old.rowid, old.handle, old.display_name); INSERT INTO search_profile_text_fts(rowid, handle, display_name) VALUES (new.rowid, new.handle, new.display_name); END;
 
 -- trigger: trg_search_videos_ad on videos
 CREATE TRIGGER trg_search_videos_ad AFTER DELETE ON videos BEGIN DELETE FROM search_videos_fts WHERE rowid = old.id; END;
@@ -719,7 +773,7 @@ CREATE TRIGGER trg_search_videos_ad AFTER DELETE ON videos BEGIN DELETE FROM sea
 CREATE TRIGGER trg_search_videos_ai AFTER INSERT ON videos BEGIN INSERT INTO search_videos_fts(rowid, video_id_pk, title, dearrow_title, dearrow_title_casual, channel_name) VALUES ( new.id, new.video_id, COALESCE(new.title, ''), COALESCE(new.dearrow_title, ''), COALESCE(new.dearrow_title_casual, ''), COALESCE((SELECT display_name FROM channel_profiles WHERE channel_id = new.channel_id), '') ); END;
 
 -- trigger: trg_search_videos_au on videos
-CREATE TRIGGER trg_search_videos_au AFTER UPDATE ON videos BEGIN DELETE FROM search_videos_fts WHERE rowid = old.id; INSERT INTO search_videos_fts(rowid, video_id_pk, title, dearrow_title, dearrow_title_casual, channel_name) VALUES ( new.id, new.video_id, COALESCE(new.title, ''), COALESCE(new.dearrow_title, ''), COALESCE(new.dearrow_title_casual, ''), COALESCE((SELECT display_name FROM channel_profiles WHERE channel_id = new.channel_id), '') ); END;
+CREATE TRIGGER trg_search_videos_au AFTER UPDATE OF id, video_id, channel_id, title, dearrow_title, dearrow_title_casual ON videos WHEN old.id IS NOT new.id OR old.video_id IS NOT new.video_id OR old.channel_id IS NOT new.channel_id OR old.title IS NOT new.title OR old.dearrow_title IS NOT new.dearrow_title OR old.dearrow_title_casual IS NOT new.dearrow_title_casual BEGIN DELETE FROM search_videos_fts WHERE rowid = old.id; INSERT INTO search_videos_fts(rowid, video_id_pk, title, dearrow_title, dearrow_title_casual, channel_name) VALUES ( new.id, new.video_id, COALESCE(new.title, ''), COALESCE(new.dearrow_title, ''), COALESCE(new.dearrow_title_casual, ''), COALESCE((SELECT display_name FROM channel_profiles WHERE channel_id = new.channel_id), '') ); END;
 
 -- view: feed_items_resolved on feed_items_resolved
 CREATE VIEW feed_items_resolved AS SELECT fi.*, COALESCE(source_profile.handle, '') AS source_handle, COALESCE(author_profile.handle, '') AS author_handle, COALESCE(author_profile.display_name, '') AS author_display_name, CASE WHEN COALESCE(fi.channel_id, '') = '' THEN '' ELSE '/api/media/avatar/' || fi.channel_id END AS author_avatar_url, COALESCE(reposter_profile.handle, '') AS retweeted_by_handle, COALESCE(reposter_profile.display_name, '') AS retweeted_by_display_name, COALESCE(quote_profile.display_name, '') AS quote_author_display_name, COALESCE(quote_profile.handle, '') AS quote_author_handle, CASE WHEN COALESCE(fi.quote_channel_id, '') = '' THEN '' ELSE '/api/media/avatar/' || fi.quote_channel_id END AS quote_author_avatar_url, COALESCE(reply_profile.handle, '') AS reply_to_handle FROM feed_items fi LEFT JOIN channel_profiles source_profile ON source_profile.channel_id = fi.source_channel_id AND source_profile.tombstone = 0 LEFT JOIN channel_profiles author_profile ON author_profile.channel_id = fi.channel_id AND author_profile.tombstone = 0 LEFT JOIN channel_profiles reposter_profile ON reposter_profile.channel_id = fi.reposter_channel_id AND reposter_profile.tombstone = 0 LEFT JOIN channel_profiles quote_profile ON quote_profile.channel_id = fi.quote_channel_id AND quote_profile.tombstone = 0 LEFT JOIN channel_profiles reply_profile ON reply_profile.channel_id = fi.reply_channel_id AND reply_profile.tombstone = 0;

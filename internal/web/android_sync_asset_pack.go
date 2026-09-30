@@ -68,10 +68,15 @@ func (s *Server) handleAndroidSyncAssetPack(w http.ResponseWriter, r *http.Reque
 			_ = entry.file.Close()
 		}
 	}()
+	assetIDs := make([]string, len(body.Assets))
+	for i := range body.Assets {
+		body.Assets[i].AssetID = strings.TrimSpace(body.Assets[i].AssetID)
+		assetIDs[i] = body.Assets[i].AssetID
+	}
+	var assets map[string]db.Asset
 	seen := make(map[string]struct{}, len(body.Assets))
 	var totalBytes int64
 	for _, requested := range body.Assets {
-		requested.AssetID = strings.TrimSpace(requested.AssetID)
 		if requested.AssetID == "" || requested.Revision <= 0 {
 			writeJSONError(w, http.StatusBadRequest, "invalid_asset_revision", "asset id and positive revision are required")
 			return
@@ -81,12 +86,16 @@ func (s *Server) handleAndroidSyncAssetPack(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		seen[requested.AssetID] = struct{}{}
-		asset, err := s.db.GetAndroidSyncAssetByID(requested.AssetID)
-		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "asset_lookup_failed", "asset lookup failed")
-			return
+		if assets == nil {
+			var err error
+			assets, err = s.db.ListAndroidSyncAssetsByIDs(assetIDs)
+			if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, "asset_lookup_failed", "asset lookup failed")
+				return
+			}
 		}
-		if asset == nil || asset.State != db.AssetStateReady || asset.Revision != requested.Revision ||
+		asset, found := assets[requested.AssetID]
+		if !found || asset.State != db.AssetStateReady || asset.Revision != requested.Revision ||
 			asset.SizeBytes <= 0 || asset.SizeBytes > androidSyncAssetPackMaxEntryBytes || asset.FilePath == "" {
 			writeJSONError(w, http.StatusConflict, "asset_changed", "asset descriptor changed")
 			return
@@ -98,13 +107,13 @@ func (s *Server) handleAndroidSyncAssetPack(w http.ResponseWriter, r *http.Reque
 		}
 		path, err := s.cfg.Storage.Path(asset.FilePath)
 		if err != nil {
-			s.withdrawAndroidSyncPackAsset(w, *asset)
+			s.withdrawAndroidSyncPackAsset(w, asset)
 			return
 		}
 		file, err := os.Open(path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				s.withdrawAndroidSyncPackAsset(w, *asset)
+				s.withdrawAndroidSyncPackAsset(w, asset)
 				return
 			}
 			writeJSONError(w, http.StatusInternalServerError, "asset_read_failed", "asset file could not be read")
@@ -114,10 +123,10 @@ func (s *Server) handleAndroidSyncAssetPack(w http.ResponseWriter, r *http.Reque
 		if err != nil || !info.Mode().IsRegular() || info.Size() != asset.SizeBytes ||
 			(asset.FileMtimeNs > 0 && info.ModTime().UnixNano() != asset.FileMtimeNs) {
 			_ = file.Close()
-			s.withdrawAndroidSyncPackAsset(w, *asset)
+			s.withdrawAndroidSyncPackAsset(w, asset)
 			return
 		}
-		opened = append(opened, androidSyncOpenPackAsset{asset: *asset, file: file})
+		opened = append(opened, androidSyncOpenPackAsset{asset: asset, file: file})
 	}
 
 	w.Header().Set("Content-Type", "application/x-igloo-asset-pack")

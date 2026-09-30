@@ -10,8 +10,12 @@ import (
 )
 
 func EnrichFeedItems(database *db.DB, items []model.FeedItem) []model.FeedItem {
-	items = enrichFeedItems(database, items, true)
-	items = attachThreadChains(database, items)
+	if len(items) == 0 {
+		return items
+	}
+	stateAccount, _ := database.BuildStateAccountScores()
+	items = enrichFeedItems(database, items, true, stateAccount)
+	items = attachThreadChains(database, items, stateAccount)
 	return items
 }
 
@@ -20,7 +24,11 @@ func EnrichFeedItems(database *db.DB, items []model.FeedItem) []model.FeedItem {
 // renderer, so presentation deduplication would make Room miss authoritative
 // sibling clears.
 func EnrichFeedItemsPreserveRows(database *db.DB, items []model.FeedItem) []model.FeedItem {
-	return enrichFeedItems(database, items, false)
+	if len(items) == 0 {
+		return items
+	}
+	stateAccount, _ := database.BuildStateAccountScores()
+	return enrichFeedItems(database, items, false, stateAccount)
 }
 
 // ThreadContextRow is the server-owned Android mirror row for one ancestor in a
@@ -56,7 +64,7 @@ func ThreadContextRows(database *db.DB, item model.FeedItem) []ThreadContextRow 
 }
 
 // enrichFeedItems attaches media status, channel flags, and personalization.
-func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool) []model.FeedItem {
+func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool, stateAccount map[string]float64) []model.FeedItem {
 	if len(items) == 0 {
 		return items
 	}
@@ -248,7 +256,7 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool) 
 	}
 
 	// Personalization: compute affinity-based interest scores
-	PersonalizeItems(database, items)
+	PersonalizeItems(database, items, stateAccount)
 
 	if deduplicate {
 		// Collapse retweets sharing the same content into one card for web/feed
@@ -360,12 +368,22 @@ func normalizeTranslationText(text string) string {
 // proper feed cards. We don't recurse into chains for the chain ancestors —
 // only one level of threading is materialized per page, which is enough to
 // reconstruct the conversation in the UI.
-func attachThreadChains(database *db.DB, items []model.FeedItem) []model.FeedItem {
+func attachThreadChains(database *db.DB, items []model.FeedItem, stateAccount map[string]float64) []model.FeedItem {
 	if len(items) == 0 {
 		return items
 	}
 
 	// Phase 1: fetch chains for every reply with a known parent.
+	var seedIDs []string
+	for _, item := range items {
+		if item.IsReply && item.ReplyToStatus != "" {
+			seedIDs = append(seedIDs, item.TweetID)
+		}
+	}
+	chains, err := database.GetThreadChains(seedIDs)
+	if err != nil {
+		return items
+	}
 	chainsByLeaf := make(map[string][]model.FeedItem, len(items))
 	rootIDsByLeaf := make(map[string]string, len(items))
 	ancestorIDs := make(map[string]bool)
@@ -374,8 +392,8 @@ func attachThreadChains(database *db.DB, items []model.FeedItem) []model.FeedIte
 		if !items[i].IsReply || items[i].ReplyToStatus == "" {
 			continue
 		}
-		chain, err := database.GetThreadChain(items[i].TweetID)
-		if err != nil || len(chain) <= 1 {
+		chain := chains[items[i].TweetID]
+		if len(chain) <= 1 {
 			continue
 		}
 		// chain is [root, ..., leaf]; strip the leaf (it's `items[i]` itself).
@@ -396,7 +414,7 @@ func attachThreadChains(database *db.DB, items []model.FeedItem) []model.FeedIte
 
 	// Phase 2: enrich the ancestors so cards render properly. Pass deduplicate=false
 	// — we don't want retweet collapsing to drop chain entries.
-	enrichedAncestors := enrichFeedItems(database, ancestorList, false)
+	enrichedAncestors := enrichFeedItems(database, ancestorList, false, stateAccount)
 	enrichedByID := make(map[string]model.FeedItem, len(enrichedAncestors))
 	for _, a := range enrichedAncestors {
 		enrichedByID[a.TweetID] = a

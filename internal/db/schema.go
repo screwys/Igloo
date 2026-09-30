@@ -83,6 +83,7 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 		"CREATE INDEX IF NOT EXISTS idx_video_repost_sources_reposter ON video_repost_sources(reposter_channel_id)",
 		"CREATE INDEX IF NOT EXISTS idx_video_repost_sources_time ON video_repost_sources(reposted_at_ms DESC, first_seen_at_ms DESC)",
 	}
+	indexes = append(indexes, schemaContentReadIndexStatements()...)
 	for _, idx := range indexes {
 		if _, err := conn.Exec(idx); err != nil {
 			return err
@@ -92,6 +93,15 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 
 	reportPhase(opts.Phase, "schema.total", totalStart)
 	return nil
+}
+
+func schemaContentReadIndexStatements() []string {
+	return []string{
+		`CREATE INDEX IF NOT EXISTS idx_retweet_sources_published ON retweet_sources(published_at, content_hash)`,
+		`CREATE INDEX IF NOT EXISTS idx_video_comments_video_likes ON video_comments(video_id, COALESCE(like_count, 0) DESC, comment_id ASC)`,
+		`CREATE INDEX IF NOT EXISTS idx_videos_moments_all_unpositioned ON videos(channel_id, video_id) WHERE moments_all_position = 0`,
+		`CREATE INDEX IF NOT EXISTS idx_videos_moments_following_unpositioned ON videos(channel_id, video_id) WHERE moments_following_position = 0`,
+	}
 }
 
 func schemaPresent(conn *sql.DB) (bool, error) {
