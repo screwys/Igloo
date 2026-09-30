@@ -7016,7 +7016,7 @@ body.shorts-mode .sidebar-toggle {
 /* Shorts Feed Layout */
 body.shorts-open {
     --shorts-player-max-width: 750px;
-    --shorts-action-rail-width: 56px;
+    --shorts-action-rail-width: 64px;
     --shorts-action-rail-gap: 0.9rem;
     --shorts-player-footprint: calc(var(--shorts-player-max-width) + var(--shorts-action-rail-width) + var(--shorts-action-rail-gap));
     --shorts-story-tray-width: clamp(76px, calc(100vw - var(--sidebar-width) - var(--shorts-player-footprint) - 2rem), 390px);
@@ -7118,6 +7118,12 @@ body.shorts-open:has(.shorts-story-tray.open) .shorts-layout {
     will-change: transform;
 }
 
+@media (max-width: 768px) {
+    .shorts-item {
+        grid-template-columns: minmax(0, calc(100% - var(--shorts-action-rail-width) - var(--shorts-action-rail-gap))) var(--shorts-action-rail-width);
+    }
+}
+
 .shorts-layout.shorts-story-mode .shorts-container {
     display: flex;
     overflow-x: auto !important;
@@ -7162,7 +7168,7 @@ body.shorts-open:has(.shorts-story-tray.open) .shorts-layout {
     position: absolute;
     top: max(3.55rem, calc(env(safe-area-inset-top) + 3.05rem));
     left: 50%;
-    width: min(390px, calc(100vw - 2rem));
+    width: min(390px, calc(100% - 1rem));
     transform: translateX(-50%);
     display: flex;
     gap: 0.25rem;
@@ -8319,9 +8325,12 @@ body.shorts-mode .sidebar {
 
 /* Adjusted gap to 0.75rem */
 .shorts-actions {
-    position: relative;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: calc(var(--shorts-action-rail-width) + var(--shorts-action-rail-gap));
     align-self: end;
-    margin-bottom: 1.25rem;
+    margin: 0 0 1.25rem;
     display: flex;
     flex-direction: column;
     align-items: center;

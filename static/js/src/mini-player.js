@@ -258,7 +258,7 @@ function initMiniPlayer() {
   }
 
   function normalizeSurface(value) {
-    if (!value || !value.element || !value.video) return null
+    if (!value || !value.element || (!value.video && value.kind !== 'moments')) return null
     const sourceDocument = value.sourceDocument || value.element.ownerDocument
     const kind = value.kind === 'feed' ? 'feed' : value.kind === 'moments' ? 'moments' : 'videos'
     const feedReturn = kind === 'feed' ? feedReturnDetails(value.element, value.video) : {}
@@ -266,6 +266,7 @@ function initMiniPlayer() {
     return {
       element: value.element,
       video: value.video,
+      onPause: typeof value.onPause === 'function' ? value.onPause : null,
       button: value.button || null,
       title: String(value.title || feedTitle || sourceDocument.title || 'Mini player').trim(),
       kind: kind,
@@ -366,7 +367,10 @@ function initMiniPlayer() {
     const surface = activeSurface
     if (!surface) return null
     if (opts.pause === true) {
-      try { surface.video.pause() } catch (_) {}
+      try {
+        if (surface.onPause) surface.onPause()
+        else if (surface.video) surface.video.pause()
+      } catch (_) {}
     }
 
     if (surface.placeholder && surface.placeholder.isConnected) {

@@ -128,14 +128,27 @@ function setShortPlaybackRate(rate) {
 
 function momentSurface(entry) {
   var refs = entry && entry.refs
-  if (!refs || !refs.wrapper || !refs.video) return null
+  if (!refs || !refs.wrapper || (!refs.video && !refs.slideshow)) return null
+  var slideshow = refs.slideshow
+  var activeSlide = slideshow && slideshow.slides && slideshow.slides[slideshow.index || 0]
   return {
     element: refs.wrapper,
-    video: refs.video,
+    video: refs.video || (activeSlide && activeSlide.tagName === 'VIDEO' ? activeSlide : null),
     button: refs.miniPlayerBtn,
     title: String(entry.data && (entry.data.channelName || entry.data.title) || '').trim() || t('mini_player_title', 'Mini player'),
     kind: 'moments',
     homeURL: window.location.pathname + window.location.search,
+    onPause: function () {
+      if (!slideshow) {
+        if (refs.video) refs.video.pause()
+        return
+      }
+      slideshow.playing = false
+      if (slideshow.timer) { clearTimeout(slideshow.timer); slideshow.timer = 0 }
+      if (slideshow.audio) slideshow.audio.pause()
+      var currentSlide = slideshow.slides && slideshow.slides[slideshow.index || 0]
+      if (currentSlide && currentSlide.tagName === 'VIDEO') currentSlide.pause()
+    },
     onNext: function () {
       if (_state && _state.storyMode) {
         if (_fns && typeof _fns.goStoryNext === 'function') _fns.goStoryNext()
@@ -379,7 +392,7 @@ function openMomentActions(entry, trigger) {
   if (isRepost) {
     actions.push({ key: 'disable_reposts', icon: 'repost', label: tf('action_turn_off_reposts_for_account', 'Turn off reposts for %1$s', reposterLabel) })
   }
-  if (entry.refs && entry.refs.video) {
+  if (entry.refs && (entry.refs.video || entry.refs.slideshow)) {
     actions.push({ key: 'mini_player', icon: 'mini', label: t('mini_player_title', 'Mini player') })
   }
   actions.push({ key: 'share', icon: 'share', label: t('action_share', 'Share') })
@@ -846,7 +859,7 @@ export function makeShortItem(entryData, existingEl) {
     '<button class="action-btn shorts-autoplay-btn" type="button" data-short-action="autoplay" title="' + escapeHtml(t('shorts_autoplay_next', 'Auto-play next short')) + '">' + iconSvg('autoplay', false) + '</button>' +
     '<button class="action-btn bookmark-btn shorts-bookmark-btn" type="button" data-short-action="bookmark" title="' + escapeHtml(t('action_bookmark', 'Bookmark')) + '">' + iconSvg('bookmark', !!entryData.bookmarked) + '</button>' +
     '<button class="action-btn shorts-share-btn" type="button" data-short-action="share" title="' + escapeHtml(t('action_share', 'Share')) + '">' + iconSvg('share', false) + '</button>' +
-    (video ? '<button class="action-btn shorts-mini-player-btn" type="button" data-short-action="mini-player" title="' + escapeHtml(t('mini_player_title', 'Mini player')) + '" aria-label="' + escapeHtml(t('mini_player_title', 'Mini player')) + '">' + menuIconSvg('mini') + '</button>' : '') +
+    ((video || slideshow) ? '<button class="action-btn shorts-mini-player-btn" type="button" data-short-action="mini-player" title="' + escapeHtml(t('mini_player_title', 'Mini player')) + '" aria-label="' + escapeHtml(t('mini_player_title', 'Mini player')) + '">' + menuIconSvg('mini') + '</button>' : '') +
     externalAction
   safeSetMarkup(actions, actionsHtml)
 
