@@ -182,9 +182,7 @@ func (m *Manager) processDiscoveryChannel(ctx context.Context, platform string, 
 		return
 	}
 
-	checkCtx, cancel := context.WithTimeout(ctx, discoveryChannelCheckTimeout)
-	snapshot, fetchErr := m.checkChannel(checkCtx, channel)
-	cancel()
+	snapshot, fetchErr := m.checkChannel(ctx, channel)
 	if ctx.Err() != nil || !m.db.IsChannelFollowed(channel.ChannelID) {
 		return
 	}
@@ -193,9 +191,7 @@ func (m *Manager) processDiscoveryChannel(ctx context.Context, platform string, 
 		return
 	}
 	if platform == "tiktok" || platform == "instagram" {
-		storyCtx, storyCancel := context.WithTimeout(ctx, discoveryChannelCheckTimeout)
-		storyWindow, storyErr := m.nativeStoryWindow(storyCtx, channel)
-		storyCancel()
+		storyWindow, storyErr := m.nativeStoryWindow(ctx, channel)
 		snapshot.Windows = append(snapshot.Windows, storyWindow)
 		fetchErr = errors.Join(fetchErr, storyErr)
 	}
@@ -443,6 +439,9 @@ func (m *Manager) checkChannel(ctx context.Context, channel model.Channel) (down
 		snapshot.Windows = append(snapshot.Windows, taggedWindow)
 		return snapshot, errors.Join(channelErr, taggedErr)
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, discoveryChannelCheckTimeout)
+	defer cancel()
 
 	if m.downloader.YtDlp == nil {
 		return download.SourceSnapshot{}, errors.New("yt-dlp channel checker is unavailable")

@@ -14,8 +14,6 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
-const instagramGalleryDLTimeout = 90 * time.Second
-
 var instagramSourceSuffixes = []string{"reels", "posts"}
 var instagramHandleRe = regexp.MustCompile(`^[a-z0-9._]{1,64}$`)
 
@@ -173,15 +171,25 @@ func optionalCookieBrowser(cookiesBrowser []string) string {
 	return strings.TrimSpace(cookiesBrowser[0])
 }
 
+func instagramGalleryDLTimeout(limit int) time.Duration {
+	if limit <= 0 {
+		limit = 20
+	}
+	// Reels and tagged posts need a request per item. gallery-dl waits 6-12
+	// seconds between requests; allow response time and initial profile lookup.
+	return 90*time.Second + time.Duration(limit)*15*time.Second
+}
+
 func (g *GalleryDLWrapper) instagramDumpOutput(ctx context.Context, rawURL string, limit int, cookiesFile string, detailedProfile bool, cookiesBrowser ...string) ([]byte, error) {
 	browser := optionalCookieBrowser(cookiesBrowser)
 	args := instagramDumpArgs(limit, cookiesFile, rawURL, detailedProfile, browser)
-	result := g.Run(ctx, "instagram.dump", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: instagramGalleryDLTimeout}, browser)
+	timeout := instagramGalleryDLTimeout(limit)
+	result := g.Run(ctx, "instagram.dump", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: timeout}, browser)
 	output := result.CombinedOutput()
 	err := result.Err
 	if err != nil {
 		if errors.Is(result.Err, context.DeadlineExceeded) {
-			return output, fmt.Errorf("gallery-dl Instagram timed out after %s for %s", instagramGalleryDLTimeout, rawURL)
+			return output, fmt.Errorf("gallery-dl Instagram timed out after %s for %s: %w", timeout, rawURL, err)
 		}
 		return output, fmt.Errorf("gallery-dl Instagram: %w: %s", err, RedactText(string(output)))
 	}
@@ -191,12 +199,13 @@ func (g *GalleryDLWrapper) instagramDumpOutput(ctx context.Context, rawURL strin
 func (g *GalleryDLWrapper) instagramTaggedDumpOutput(ctx context.Context, rawURL string, limit int, cookiesFile string, cookiesBrowser ...string) ([]byte, error) {
 	browser := optionalCookieBrowser(cookiesBrowser)
 	args := instagramTaggedArgs(limit, cookiesFile, rawURL, browser)
-	result := g.Run(ctx, "instagram.tagged", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: instagramGalleryDLTimeout}, browser)
+	timeout := instagramGalleryDLTimeout(limit)
+	result := g.Run(ctx, "instagram.tagged", "instagram", rawURL, args, cookiesFile, CommandOptions{Timeout: timeout}, browser)
 	output := result.CombinedOutput()
 	err := result.Err
 	if err != nil {
 		if errors.Is(result.Err, context.DeadlineExceeded) {
-			return nil, fmt.Errorf("gallery-dl Instagram tagged timed out after %s for %s", instagramGalleryDLTimeout, rawURL)
+			return nil, fmt.Errorf("gallery-dl Instagram tagged timed out after %s for %s: %w", timeout, rawURL, err)
 		}
 		return nil, fmt.Errorf("gallery-dl Instagram tagged: %w: %s", err, RedactText(string(output)))
 	}
