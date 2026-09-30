@@ -2,8 +2,11 @@ package download
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +27,9 @@ type StoryRef struct {
 	PublishedAtMs     int64
 }
 
+//go:embed galleryextractors/tiktok_stories.py
+var tiktokStoryExtractor string
+
 // TikTokStories fetches native TikTok stories through gallery-dl's /stories
 // extractor without downloading media.
 func (g *GalleryDLWrapper) TikTokStories(ctx context.Context, handle string, limit int, cookiesFile string) ([]StoryRef, error) {
@@ -36,13 +42,19 @@ func (g *GalleryDLWrapper) TikTokStories(ctx context.Context, handle string, lim
 	}
 	rawURL := "https://www.tiktok.com/@" + handle + "/stories"
 	args := storyDumpArgs(limit, cookiesFile, rawURL)
+	extractorDir, err := os.MkdirTemp("", "igloo-extractors-*")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(extractorDir) }()
+	if err := os.WriteFile(filepath.Join(extractorDir, "tiktok_stories.py"), []byte(tiktokStoryExtractor), 0o600); err != nil {
+		return nil, err
+	}
+	args = append([]string{"--extractors", extractorDir}, args...)
 	result := g.Run(ctx, "tiktok.stories", "tiktok", rawURL, args, cookiesFile, CommandOptions{Timeout: 90 * time.Second})
 	output := result.CombinedOutput()
-	err := result.Err
+	err = result.Err
 	if err != nil {
-		if isEmptyTikTokStoryResult(output) {
-			return nil, nil
-		}
 		return nil, fmt.Errorf("gallery-dl TikTok stories: %w: %s", err, RedactText(string(output)))
 	}
 	return parseTikTokStoryDump(output, handle), nil
@@ -80,11 +92,6 @@ func storyDumpArgs(limit int, cookiesFile, rawURL string) []string {
 	}
 	args = append(args, rawURL)
 	return args
-}
-
-func isEmptyTikTokStoryResult(output []byte) bool {
-	text := strings.ToLower(string(output))
-	return strings.Contains(text, "story/item_list") && strings.Contains(text, "(0 items)")
 }
 
 func parseTikTokStoryDump(output []byte, fallbackHandle string) []StoryRef {

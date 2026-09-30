@@ -53,6 +53,7 @@ type profileObservationState struct {
 	avatarURL   string
 	identityAt  int64
 	fetchedAt   int64
+	failedAt    int64
 	tombstone   bool
 	requested   int64
 	completed   int64
@@ -94,7 +95,7 @@ func (db *DB) ObserveChannelProfile(profile model.ChannelProfile) error {
 		return nil
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		if err := observeProfileTx(tx, profileObservation{
+		return observeProfileTx(tx, profileObservation{
 			channelID:       profile.ChannelID,
 			platform:        profile.Platform,
 			handle:          profile.Handle,
@@ -107,18 +108,7 @@ func (db *DB) ObserveChannelProfile(profile model.ChannelProfile) error {
 			profileMetadata: true,
 			avatarURL:       profile.AvatarURL,
 			observedAt:      time.Now().UnixMilli(),
-		}); err != nil {
-			return err
-		}
-		avatarURL := strings.TrimSpace(profile.AvatarURL)
-		if avatarURL == "" {
-			return nil
-		}
-		return upsertAssetTx(tx, normalizeAsset(Asset{
-			AssetID:   BuildAssetID(profile.Platform, "channel", profile.ChannelID, "avatar", 0),
-			AssetKind: "avatar", OwnerKind: "channel", OwnerID: profile.ChannelID,
-			SourceURL: avatarURL, State: AssetStateQueued, RequiredReason: "identity",
-		}, time.Now().UnixMilli()))
+		})
 	})
 }
 
@@ -185,6 +175,15 @@ func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 			return err
 		}
 	}
+	if currentObservation && observation.avatarURL != "" && (shouldRequest || observation.profileMetadata) {
+		if err := upsertAssetTx(tx, normalizeAsset(Asset{
+			AssetID:   BuildAssetID(observation.platform, "channel", observation.channelID, "avatar", 0),
+			AssetKind: "avatar", OwnerKind: "channel", OwnerID: observation.channelID,
+			SourceURL: observation.avatarURL, State: AssetStateQueued, RequiredReason: "identity",
+		}, observation.observedAt)); err != nil {
+			return err
+		}
+	}
 
 	if !state.hasJob {
 		_, err := tx.Exec(`
@@ -203,6 +202,7 @@ func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 		UPDATE profile_jobs
 		SET requested_revision = requested_revision + 1,
 			requested_at_ms = ?,
+			attempts = 0,
 			next_attempt_at_ms = 0,
 			last_error = '',
 			updated_at_ms = ?
@@ -287,7 +287,8 @@ func profileObservationDecision(state profileObservationState, observation profi
 	}
 
 	pending := state.requested > state.completed
-	stale := state.fetchedAt == 0 || observation.observedAt-state.fetchedAt >= profileObservationRefreshInterval.Milliseconds()
+	checkedAt := max(state.fetchedAt, state.failedAt)
+	stale := checkedAt == 0 || observation.observedAt-checkedAt >= profileObservationRefreshInterval.Milliseconds()
 	return currentObservation, !pending && (visibleChanged || stale)
 }
 
@@ -299,6 +300,8 @@ func readProfileObservationStateTx(tx *sql.Tx, channelID string) (profileObserva
 		       COALESCE(mo.source_url, ''),
 		       MAX(COALESCE(cp.observed_at_ms, 0), COALESCE(cp.fetched_at, 0)),
 		       COALESCE(cp.fetched_at, 0), COALESCE(cp.tombstone, 0),
+		       CASE WHEN pj.requested_revision = pj.completed_revision AND pj.last_error != ''
+		            THEN pj.updated_at_ms ELSE 0 END,
 		       COALESCE(pj.requested_revision, 0), COALESCE(pj.completed_revision, 0),
 		       CASE WHEN pj.channel_id IS NULL THEN 0 ELSE 1 END
 		FROM channel_profiles cp
@@ -312,7 +315,7 @@ func readProfileObservationStateTx(tx *sql.Tx, channelID string) (profileObserva
 		WHERE cp.channel_id = ?
 	`, channelID).Scan(
 		&state.handle, &state.displayName, &state.avatarURL,
-		&state.identityAt, &state.fetchedAt, &tombstone,
+		&state.identityAt, &state.fetchedAt, &tombstone, &state.failedAt,
 		&state.requested, &state.completed, &state.hasJob,
 	)
 	if err == sql.ErrNoRows {
@@ -367,6 +370,7 @@ func (db *DB) RequestProfileJob(channelID string, nowMs int64) error {
 			ON CONFLICT(channel_id) DO UPDATE SET
 				requested_revision = profile_jobs.requested_revision + 1,
 				requested_at_ms = excluded.requested_at_ms,
+				attempts = 0,
 				next_attempt_at_ms = 0,
 				last_error = '',
 				updated_at_ms = excluded.updated_at_ms

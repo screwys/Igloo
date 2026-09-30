@@ -409,17 +409,6 @@ templ prefsGeneralTab(p PageProps, prefs PrefsData) {
 					</div>
 				</div>
 					<div class="form-group">
-						<label for="global-setting-quality">{ L(p, "settings_quality_default", "Default Quality") }</label>
-						<select data-setting-choices id="global-setting-quality" name="quality" class="input">
-							<option value="best" selected?={ prefs.Str("quality","best") == "best" }>{ L(p, "settings_quality_best_available", "Best Available") }</option>
-							<option value="2160p" selected?={ prefs.Str("quality","best") == "2160p" }>2160p</option>
-							<option value="1440p" selected?={ prefs.Str("quality","best") == "1440p" }>1440p</option>
-							<option value="1080p" selected?={ prefs.Str("quality","best") == "1080p" }>1080p</option>
-							<option value="720p" selected?={ prefs.Str("quality","best") == "720p" }>720p</option>
-							<option value="480p" selected?={ prefs.Str("quality","best") == "480p" }>480p</option>
-						</select>
-					</div>
-					<div class="form-group">
 						<label for="global-setting-min-quality">{ L(p, "settings_min_quality_default", "Minimum Quality") }</label>
 						<select data-setting-choices id="global-setting-min-quality" name="min_quality" class="input">
 							<option value="" selected?={ prefs.Str("min_quality","") == "" || prefs.Str("min_quality","") == "none" }>{ L(p, "settings_min_quality_none", "None (download any)") }</option>

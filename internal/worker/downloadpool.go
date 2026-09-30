@@ -243,9 +243,6 @@ func (m *Manager) processDownloadBatch(ctx context.Context, lane db.DownloadLane
 			quality = settings.Quality
 		}
 	}
-	if quality == "" {
-		quality, _ = m.db.GetSetting("quality", "best")
-	}
 	minQuality, _ := m.db.GetSetting("min_quality", "")
 
 	m.downloadVideo(ctx, job, platform, ch.SourceID, quality, minQuality, subtitles)

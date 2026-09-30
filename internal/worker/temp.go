@@ -240,13 +240,11 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 		return TempDownloadResult{Message: fmt.Sprintf("Subtitle storage: %v", err), Cause: err}
 	}
 
-	quality := ""
 	minQuality := ""
 	if m.db != nil {
-		quality, _ = m.db.GetSetting("quality", "best")
 		minQuality, _ = m.db.GetSetting("min_quality", "")
 	}
-	formatStr := resolveFormatString(platform, quality, minQuality)
+	formatStr := resolveFormatString(platform, "", minQuality)
 
 	opts := download.Opts{
 		OutputDir:          tempDir,
@@ -464,13 +462,11 @@ func (m *Manager) downloadPlaylist(ctx context.Context, rawURL, playlistID strin
 			failed++
 			continue
 		}
-		quality := ""
 		minQuality := ""
 		if m.db != nil {
-			quality, _ = m.db.GetSetting("quality", "best")
 			minQuality, _ = m.db.GetSetting("min_quality", "")
 		}
-		formatStr := resolveFormatString("youtube", quality, minQuality)
+		formatStr := resolveFormatString("youtube", "", minQuality)
 
 		opts := download.Opts{
 			OutputDir:          targetDir,

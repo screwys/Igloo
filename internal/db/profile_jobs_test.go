@@ -100,8 +100,8 @@ func TestUpsertFeedItemsPersistsAndQueuesRoleIdentities(t *testing.T) {
 
 	for _, channelID := range []string{"twitter_sample_author", "twitter_sample_quote"} {
 		asset, err := d.GetAssetByOwnerIdentity("avatar", "channel", channelID, 0)
-		if err != nil || asset != nil {
-			t.Fatalf("observation created channel avatar %s: %+v err=%v", channelID, asset, err)
+		if err != nil || asset == nil || asset.State != AssetStateQueued || asset.FilePath != "" || asset.SourceURL == "" {
+			t.Fatalf("observed avatar source %s: %+v err=%v", channelID, asset, err)
 		}
 	}
 	handleless, err := d.GetAssetByOwnerIdentity("avatar", "tweet", "sample_handleless_quote", 0)
@@ -697,8 +697,8 @@ func TestLikeStubPersistsIdentityWithTheUserAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAsset: %v", err)
 	}
-	if asset != nil {
-		t.Fatalf("liked observation created channel avatar before profile completion: %#v", asset)
+	if asset == nil || asset.State != AssetStateQueued || asset.FilePath != "" || asset.SourceURL == "" {
+		t.Fatalf("liked observation did not retain its avatar source: %#v", asset)
 	}
 }
 

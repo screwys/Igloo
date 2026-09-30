@@ -411,7 +411,6 @@ func applyCookieAuth(cmd *ytdlp.Command, opts Opts) *ytdlp.Command {
 	return cmd
 }
 
-
 func fetchInfoCommand(opts Opts) *ytdlp.Command {
 	return applyCookieAuth(ytdlp.New().
 		SkipDownload().
@@ -647,6 +646,7 @@ func (y *YtDlpWrapper) DownloadSubtitles(ctx context.Context, url string, opts O
 		Output(template).
 		NoPlaylist().
 		SkipDownload().
+		IgnoreNoFormatsError().
 		WriteSubs().
 		WriteAutoSubs().
 		SubLangs("en").
@@ -659,7 +659,7 @@ func (y *YtDlpWrapper) DownloadSubtitles(ctx context.Context, url string, opts O
 	}
 	tmpPath := regularPath(filepath.Join(tmpDir, "subtitle.en.vtt"))
 	if tmpPath == "" {
-		return nil, fmt.Errorf("yt-dlp returned no English VTT for %s", opts.ID)
+		return nil, nil
 	}
 	if err := os.Rename(tmpPath, outputPath); err != nil {
 		return nil, err

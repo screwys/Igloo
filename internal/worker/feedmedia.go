@@ -72,6 +72,12 @@ func (m *Manager) processContentAsset(ctx context.Context, asset db.Asset, workL
 		return
 	}
 	m.ReportExternalResult(nil)
+	if asset.AssetKind == "subtitle" && finalPath == "" {
+		if err := m.db.MarkContentAssetPermanentMissing(asset.AssetID, asset.AssetKind, asset.LeaseOwner, "", "", time.Now().UnixMilli()); err != nil {
+			log.Printf("[feedmedia] record absent subtitle %s: %v", asset.AssetID, err)
+		}
+		return
+	}
 	key, err := m.cfg.Storage.Key(finalPath)
 	if err != nil {
 		m.removeMediaPaths(ctx, mediaLaneForAsset(asset, bulkLane), finalPath)
@@ -160,6 +166,9 @@ func (m *Manager) downloadContentAsset(ctx context.Context, asset db.Asset, lane
 		})
 		if err != nil {
 			return "", "", err
+		}
+		if len(paths) == 0 {
+			return "", "", nil
 		}
 		if len(paths) != 1 {
 			m.removeMediaPaths(ctx, download.MediaLaneState, paths...)
