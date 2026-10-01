@@ -541,7 +541,7 @@ func instagramVideoRefFromGalleryDLObject(obj map[string]any, sourceHandle strin
 		title = "Instagram " + prefix
 	}
 	ref := VideoRef{
-		VideoID:           "instagram_" + prefix + "_" + shortcode,
+		VideoID:           "instagram_post_" + shortcode,
 		Title:             title,
 		URL:               firstString(obj, "post_url", "url", "webpage_url"),
 		ChannelID:         "instagram_" + handle,

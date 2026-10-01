@@ -555,11 +555,11 @@ func TestIdenticalTimestampFreeComponentsDoNotOscillateAtLimit(t *testing.T) {
 		if _, err := manager.reconcileSourceSnapshot(channel, snapshot); err != nil {
 			t.Fatalf("pass %d: %v", pass, err)
 		}
-		if got := desireIDs(desireWindow(t, database, sourceID, download.SourceComponentReels)); fmt.Sprint(got) != "[instagram_reel_sample]" {
+		if got := desireIDs(desireWindow(t, database, sourceID, download.SourceComponentReels)); fmt.Sprint(got) != "[instagram_post_sample]" {
 			t.Fatalf("pass %d reels = %v", pass, got)
 		}
-		if got := desireWindow(t, database, sourceID, download.SourceComponentPosts); len(got) != 0 {
-			t.Fatalf("pass %d posts = %#v", pass, got)
+		if got := desireIDs(desireWindow(t, database, sourceID, download.SourceComponentPosts)); fmt.Sprint(got) != "[instagram_post_sample]" {
+			t.Fatalf("pass %d posts = %v", pass, got)
 		}
 	}
 }

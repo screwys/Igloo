@@ -36,7 +36,7 @@ esac
 		t.Fatalf("windows = %#v", snapshot.Windows)
 	}
 	reels, posts := snapshot.Windows[0], snapshot.Windows[1]
-	if reels.Component != SourceComponentReels || !reels.Complete || len(reels.Refs) != 1 || reels.Refs[0].VideoID != "instagram_reel_sample_reel" {
+	if reels.Component != SourceComponentReels || !reels.Complete || len(reels.Refs) != 1 || reels.Refs[0].VideoID != "instagram_post_sample_reel" {
 		t.Fatalf("reels window = %#v", reels)
 	}
 	if reels.Profile == nil || reels.Profile.Bio != "Profile biography" || reels.Profile.Followers != 42 {
@@ -140,7 +140,7 @@ func TestParseInstagramChannelDump(t *testing.T) {
 	if refs[0].AuthorAvatarURL != "https://cdn.example/avatar.jpg" {
 		t.Fatalf("first avatar = %q", refs[0].AuthorAvatarURL)
 	}
-	if refs[1].VideoID != "instagram_reel_REEL123" {
+	if refs[1].VideoID != "instagram_post_REEL123" {
 		t.Fatalf("second VideoID = %q", refs[1].VideoID)
 	}
 	if refs[1].PublishedAtMs == 0 {

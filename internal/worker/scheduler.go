@@ -652,6 +652,17 @@ func (m *Manager) getChannelRepostMaxVideos(channel model.Channel) int {
 }
 
 func (m *Manager) reconcileSourceSnapshot(channel model.Channel, snapshot download.SourceSnapshot) (int, error) {
+	if channel.Platform == "instagram" {
+		for _, window := range snapshot.Windows {
+			for index := range window.Refs {
+				id, err := m.db.InstagramVideoID(window.Refs[index].VideoID)
+				if err != nil {
+					return 0, err
+				}
+				window.Refs[index].VideoID = id
+			}
+		}
+	}
 	authoredLimit := m.getChannelMaxVideos(channel)
 	repostLimit := m.getChannelRepostMaxVideos(channel)
 	owners := desiredOwnersForSnapshot(channel, snapshot)
