@@ -19,6 +19,7 @@ import com.screwy.igloo.net.MuteRequest
 import com.screwy.igloo.net.OutboxApi
 import com.screwy.igloo.net.ProgressRequest
 import com.screwy.igloo.net.SeenRequest
+import com.screwy.igloo.net.SubscribeRequest
 import com.screwy.igloo.net.ToggleRequest
 import com.screwy.igloo.net.classify
 import com.screwy.igloo.net.iglooJson
@@ -26,6 +27,7 @@ import com.screwy.igloo.ui.UiEffect
 import com.screwy.igloo.ui.UiEffects
 import io.ktor.client.call.body
 import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -74,6 +76,7 @@ class OutboxDispatcher(
                 OutboxKind.CODE_LIKE -> dispatchLike(batch)
                 OutboxKind.CODE_BOOKMARK -> dispatchBookmark(batch)
                 OutboxKind.CODE_FOLLOW -> dispatchFollow(batch)
+                OutboxKind.CODE_SUBSCRIBE -> dispatchSubscribe(batch)
                 OutboxKind.CODE_STAR -> dispatchStar(batch)
                 OutboxKind.CODE_MUTE -> dispatchMute(batch)
                 OutboxKind.CODE_CHANNEL_SETTING -> dispatchChannelSetting(batch)
@@ -107,6 +110,21 @@ class OutboxDispatcher(
     }
 
     // ─── Per-kind recipes ─────────────────────────────────────────────────────
+
+    private suspend fun dispatchSubscribe(batch: List<OutboxEntity>): Map<Long, Result> {
+        val results = perRow(batch) { row ->
+            api.subscribe(SubscribeRequest(url = row.payload().string("url") ?: row.itemId.orEmpty()))
+        }.mapValues { (_, result) ->
+            // A retry can reach a channel that the first request already followed.
+            if (result is Result.Rejected && result.error.status == HttpStatusCode.Conflict.value) {
+                Result.Ack
+            } else result
+        }
+        if (results.values.any { it is Result.Rejected }) {
+            uiEffects.emit(UiEffect.ToastRes(R.string.channel_add_failed))
+        }
+        return results
+    }
 
     private suspend fun dispatchLike(batch: List<OutboxEntity>): Map<Long, Result> =
         perRow(batch) { row ->

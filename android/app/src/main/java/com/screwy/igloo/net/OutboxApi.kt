@@ -1,6 +1,7 @@
 package com.screwy.igloo.net
 
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -52,6 +53,13 @@ class OutboxApi(private val client: HttpClient, private val baseUrlProvider: () 
         client.post(baseUrlProvider() + "/api/mutations/follow") {
             contentType(ContentType.Application.Json)
             setBody(req)
+        }
+
+    suspend fun subscribe(req: SubscribeRequest): HttpResponse =
+        client.post(baseUrlProvider() + "/api/subscribe") {
+            contentType(ContentType.Application.Json)
+            setBody(req)
+            timeout { requestTimeoutMillis = 35_000; socketTimeoutMillis = 35_000 }
         }
 
     suspend fun star(req: ToggleRequest): HttpResponse =
@@ -139,6 +147,9 @@ data class ToggleRequest(
     val action: String,
     val updated_at_ms: Long,
 )
+
+@Serializable
+data class SubscribeRequest(val url: String)
 
 @Serializable
 data class MuteRequest(val channel_id: String, val action: String, val updated_at_ms: Long)

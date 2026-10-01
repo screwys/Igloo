@@ -15,6 +15,7 @@ sealed class OutboxKind {
         const val CODE_LIKE = "like"
         const val CODE_BOOKMARK = "bookmark"
         const val CODE_FOLLOW = "follow"
+        const val CODE_SUBSCRIBE = "subscribe"
         const val CODE_STAR = "star"
         const val CODE_MUTE = "mute"
         const val CODE_CHANNEL_SETTING = "channel_setting"
@@ -60,6 +61,11 @@ sealed class OutboxKind {
     data class Follow(val channelId: String, val action: Action) : OutboxKind() {
         override val code = CODE_FOLLOW
         override val itemId: String = channelId
+    }
+
+    data class Subscribe(val url: String) : OutboxKind() {
+        override val code = CODE_SUBSCRIBE
+        override val itemId: String = url
     }
 
     data class Star(val channelId: String, val action: Action) : OutboxKind() {
@@ -158,6 +164,7 @@ internal val OutboxKind.isInteractiveAction: Boolean
             is OutboxKind.Like,
             is OutboxKind.Bookmark,
             is OutboxKind.Follow,
+            is OutboxKind.Subscribe,
             is OutboxKind.Star,
             is OutboxKind.Mute,
             is OutboxKind.ChannelSetting,

@@ -67,7 +67,8 @@ class OutboxWriter(
             val previousPending = outbox.pendingRows().firstOrNull { it.matches(kind) }
             val selectionBaseline =
                 previousPending?.selectionBaseline() ?: selectionBaseline(kind)
-            val selectionWidening = selectionBaseline?.expandsTo(kind) == true
+            val selectionWidening =
+                kind is OutboxKind.Subscribe || selectionBaseline?.expandsTo(kind) == true
             val row =
                 buildOutboxRow(kind, nowMs, selectionWidening, selectionBaseline)
             when (kind.coalesceKey) {
@@ -174,6 +175,7 @@ class OutboxWriter(
                     put("channel_id", kind.channelId)
                     put("action", kind.action.wire)
                 }
+                is OutboxKind.Subscribe -> put("url", kind.url)
                 is OutboxKind.Star -> {
                     put("channel_id", kind.channelId)
                     put("action", kind.action.wire)

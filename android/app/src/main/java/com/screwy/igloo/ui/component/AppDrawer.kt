@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Subject
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Download
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.NavigationDrawerItem
@@ -49,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -153,6 +156,7 @@ private fun AppDrawerContent(
     val currentChannelId = backStackEntry?.arguments?.getString("channel_id")
 
     var query by remember { mutableStateOf("") }
+    var showAddChannel by rememberSaveable { mutableStateOf(false) }
     val trimmed = query.trim().lowercase()
     // Filter on display-name OR fallback-name OR handle. Handle match lets
     // Latin queries find alternate-script display names via the profile handle.
@@ -232,12 +236,17 @@ private fun AppDrawerContent(
                 HorizontalDivider()
             }
 
-            Text(
-                text = stringResource(R.string.drawer_accounts).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = colors.onSurfaceMuted,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.drawer_accounts).uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceMuted,
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp, vertical = 4.dp),
+                )
+                IconButton(onClick = { showAddChannel = true }) {
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_add_channel))
+                }
+            }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -296,6 +305,9 @@ private fun AppDrawerContent(
                 onClick = onLogoutClick,
             )
         }
+    if (showAddChannel) {
+        AddChannelDialog(onDismiss = { showAddChannel = false })
+    }
 }
 
 @Composable
