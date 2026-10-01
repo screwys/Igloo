@@ -948,20 +948,30 @@ if (layout) {
       momentsTailRefresh = loadTabSnapshot(requestTab).then(function (snapshot) {
         if (currentTab !== requestTab) return 0
         syncCardList()
-        var known = new Set(state.cards.map(function (card) {
-          return String(card.getAttribute('data-video-id') || '').trim()
+        var known = new Map(state.cards.map(function (card) {
+          return [String(card.getAttribute('data-video-id') || '').trim(), card]
         }))
+        var activeCard = state.cards[state.currentIndex]
+        var oldCards = state.cards
         var template = doc.createElement('template')
         template.innerHTML = snapshot.gridHTML
         var added = 0
-        Array.prototype.slice.call(template.content.querySelectorAll(sourceCardSelector)).forEach(function (card) {
+        var cards = Array.prototype.slice.call(template.content.querySelectorAll(sourceCardSelector)).map(function (card, index) {
           var videoId = String(card.getAttribute('data-video-id') || '').trim()
-          if (!videoId || known.has(videoId)) return
-          known.add(videoId)
-          sourceContainer.appendChild(card)
-          added += 1
+          var existing = known.get(videoId)
+          if (!existing) added += 1
+          card = existing || card
+          card.setAttribute('data-card-index', String(index))
+          return card
         })
-        if (added > 0) appendNewItemsFromGrid()
+        // Keep a removed active card playing until the user leaves it.
+        if (activeCard && cards.indexOf(activeCard) < 0) {
+          var nextCard = oldCards.slice(state.currentIndex + 1).find(function (card) { return cards.indexOf(card) >= 0 })
+          cards.splice(nextCard ? cards.indexOf(nextCard) : cards.length, 0, activeCard)
+        }
+        sourceContainer.replaceChildren.apply(sourceContainer, cards)
+        appendNewItemsFromGrid()
+        if (state.currentIndex + 1 < state.cards.length && upToDateOverlay) upToDateOverlay.classList.add('hidden')
         return added
       }).finally(function () {
         momentsTailRefresh = null
@@ -1824,6 +1834,9 @@ if (layout) {
       })
       window.addEventListener('pagehide', function () {
         state.momentsCursorWrites.flushLatest()
+      })
+      doc.addEventListener('visibilitychange', function () {
+        if (!doc.hidden && state.persistLastViewed) refreshMomentsSession().catch(function () {})
       })
       layout.addEventListener('wheel', onWheel, { passive: false })
       layout.addEventListener('touchstart', onTouchStart, { passive: true })

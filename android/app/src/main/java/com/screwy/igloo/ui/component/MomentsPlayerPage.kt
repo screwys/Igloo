@@ -101,8 +101,7 @@ private fun prepareMomentVideo(
     if (
         loadedKey == targetLoadKey &&
             player.mediaItemCount > 0 &&
-            player.currentMediaItem?.mediaId == item.videoId &&
-            player.playbackState != Player.STATE_ENDED
+            player.currentMediaItem?.mediaId == item.videoId
     ) {
 
         return loadedKey
@@ -129,11 +128,8 @@ private fun replaceMomentPlayerMediaItem(
     player: ExoPlayer,
     mediaItem: MediaItem,
 ) {
-    if (player.mediaItemCount > 0) {
-        player.stop()
-        player.clearMediaItems()
-    }
-    player.setMediaItem(mediaItem)
+    val positionMs = if (player.currentMediaItem?.mediaId == mediaItem.mediaId) player.currentPosition else 0L
+    player.setMediaItem(mediaItem, positionMs)
     player.prepare()
 }
 

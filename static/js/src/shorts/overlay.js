@@ -174,15 +174,13 @@ function hydrateCardAtIndex(index, opts) {
   if (!Number.isFinite(index) || index < 0 || index >= _state.cards.length) return false
   var card = _state.cards[index]
   if (!isSkeletonCard(card) || typeof _state.hydrateCardElement !== 'function') return false
+  var videoId = String(card.getAttribute('data-video-id') || '').trim()
   _state.hydrateCardElement(card).then(function () {
-    if (opts && opts.open && Number(_state.openRequestSeq || 0) !== Number(opts.openRequestSeq || 0)) return
-    if (opts && opts.open && !String(opts.openVideoId || '').trim()) return
+    if (opts && (opts.open || opts.navigate) && Number(_state.openRequestSeq || 0) !== Number(opts.openRequestSeq || 0)) return
+    if (opts && (opts.open || opts.navigate) && !String(opts.openVideoId || '').trim()) return
     appendNewItemsFromGrid()
-    var hydratedIndex = index
-    if (opts && opts.open) {
-      hydratedIndex = _state.cardIndexById.get(String(opts.openVideoId || '').trim())
-      if (hydratedIndex === undefined) return
-    }
+    var hydratedIndex = _state.cardIndexById.get(videoId)
+    if (hydratedIndex === undefined) return
     var hydrated = _state.cards[hydratedIndex]
     if (!hydrated || isSkeletonCard(hydrated)) return
     if (opts && opts.open) {
@@ -194,8 +192,11 @@ function hydrateCardAtIndex(index, opts) {
     }
     if (!_state.overlayOpen) return
     if (!_state.storyMode) {
-      ensureEntryAtIndex(index)
-      ensureDeckRange(_state.currentIndex >= 0 ? _state.currentIndex : index)
+      ensureEntryAtIndex(hydratedIndex)
+      ensureDeckRange(_state.currentIndex >= 0 ? _state.currentIndex : hydratedIndex)
+      if (opts && opts.navigate) {
+        scrollToIndex(hydratedIndex, (opts && opts.behavior) || 'smooth')
+      }
       return
     }
     if (!_state.items[index] && index >= _state.renderedStart && index <= _state.renderedEnd) {
@@ -443,13 +444,19 @@ function startDeckTransition(index) {
   return true
 }
 
-export function scrollToIndex(index, behavior) {
+export function scrollToIndex(index, behavior, options) {
   if (!Number.isFinite(index)) return false
   if (index < 0 || index >= _state.cards.length) return false
   if (_state.storyMode) return scrollStoryToIndex(index, behavior)
   if (deckIsTransitioning()) return true
   if (isSkeletonCard(_state.cards[index])) {
-    hydrateCardAtIndex(index, { preloadOnly: true })
+    hydrateCardAtIndex(index, {
+      preloadOnly: !(options && options.navigate),
+      navigate: !!(options && options.navigate),
+      behavior: behavior,
+      openRequestSeq: Number(_state.openRequestSeq || 0),
+      openVideoId: String(_state.cards[index].getAttribute('data-video-id') || '').trim()
+    })
     return true
   }
   var entry = ensureEntryAtIndex(index)
@@ -479,7 +486,7 @@ export function requestMoreIfNeeded() {
 
 export function goNext(options) {
   if (options && options.explicit && _fns && typeof _fns.beginOpenRequest === 'function') _fns.beginOpenRequest()
-  if (scrollToIndex(_state.currentIndex + 1, _state.storyMode ? 'instant' : 'smooth')) return
+  if (scrollToIndex(_state.currentIndex + 1, _state.storyMode ? 'instant' : 'smooth', { navigate: true })) return
   if (_state.storyMode) {
     if (_fns && typeof _fns.handleStoryEnd === 'function' && _fns.handleStoryEnd()) return
     showGrid()
@@ -487,8 +494,10 @@ export function goNext(options) {
   }
   requestMoreIfNeeded()
   if (_fns && typeof _fns.refreshMomentsSession === 'function') {
+    var requestSeq = Number(_state.openRequestSeq || 0)
     _fns.refreshMomentsSession().then(function (added) {
-      if (added > 0 && scrollToIndex(_state.currentIndex + 1, 'smooth')) return
+      if (!_state.overlayOpen || Number(_state.openRequestSeq || 0) !== requestSeq) return
+      if (added > 0 && _state.currentIndex + 1 < _state.cards.length) { goNext(); return }
       showUpToDateOverlay()
     }).catch(showUpToDateOverlay)
     return
@@ -498,7 +507,7 @@ export function goNext(options) {
 
 export function goPrev(options) {
   if (options && options.explicit && _fns && typeof _fns.beginOpenRequest === 'function') _fns.beginOpenRequest()
-  scrollToIndex(_state.currentIndex - 1, 'smooth')
+  scrollToIndex(_state.currentIndex - 1, 'smooth', { navigate: true })
 }
 
 export function ensureCurrentVisible(index, immediate) {
@@ -743,15 +752,35 @@ export function extendShortsWindow() {
 
 export function appendNewItemsFromGrid() {
   var prevLength = _state.items.length
+  var currentCard = _state.cards[_state.currentIndex]
+  var deck = deckState()
+  var fromCard = _state.cards[deck.fromIndex]
+  var targetCard = _state.cards[deck.targetIndex]
+  var warmIds = (_state.warmVideoIndexes || []).map(function (index) {
+    return _state.items[index] && _state.items[index].data.id
+  })
   syncCardList()
   _state.cardIndexById = new Map()
   _state.cards.forEach(function (card, i) {
     var id = String(card.getAttribute('data-video-id') || '').trim()
     if (id) _state.cardIndexById.set(id, i)
   })
-  if (_state.cards.length > _state.items.length) {
-    var extra = new Array(_state.cards.length - _state.items.length).fill(null)
-    _state.items = _state.items.concat(extra)
+  var previousItems = _state.items
+  _state.items = _state.cards.map(function (card) {
+    return _state.byId.get(String(card.getAttribute('data-video-id') || '').trim()) || null
+  })
+  _state.warmVideoIndexes = warmIds.map(function (id) { return _state.cardIndexById.get(id) }).filter(function (index) { return index !== undefined })
+  previousItems.forEach(function (entry) {
+    if (!entry || _state.cardIndexById.has(entry.data.id)) return
+    disposeShortItem(entry)
+    if (entry.el && entry.el.parentNode) entry.el.parentNode.removeChild(entry.el)
+    _state.byId.delete(entry.data.id)
+  })
+  if (currentCard) _state.currentIndex = _state.cardIndexById.get(currentCard.getAttribute('data-video-id')) ?? -1
+  if (deck.phase === 'transitioning') {
+    deck.fromIndex = _state.cardIndexById.get(fromCard && fromCard.getAttribute('data-video-id')) ?? -1
+    deck.targetIndex = _state.cardIndexById.get(targetCard && targetCard.getAttribute('data-video-id')) ?? -1
+    if (deck.fromIndex < 0 || deck.targetIndex < 0) clearDeckTransition()
   }
   _state.cards.forEach(function (card, i) {
     var entry = _state.items[i]
@@ -766,7 +795,10 @@ export function appendNewItemsFromGrid() {
   })
   if (_state.currentIndex >= 0) {
     if (_state.storyMode) extendShortsWindow()
-    else ensureDeckRange(_state.currentIndex)
+    else {
+      ensureDeckRange(_state.currentIndex, { skipPosition: deckIsTransitioning() })
+      if (deckIsTransitioning()) positionDeckItems(deck.targetIndex, true)
+    }
   }
   _fns.updateTopControls()
   updateCurrentActionButtons()

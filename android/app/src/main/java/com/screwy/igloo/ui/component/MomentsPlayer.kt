@@ -22,7 +22,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -293,6 +292,10 @@ fun MomentsPlayer(
     val initialPage = momentPagerStartIndex(pagerItems, startVideoId, startIndex)
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { pagerItems.size })
     val currentIndex = pagerState.currentPage.coerceIn(0, pagerItems.lastIndex)
+    // Layout keys keep playback on the same video while Pager updates its page index.
+    val currentVideoId = pagerState.layoutInfo.visiblePagesInfo
+        .firstOrNull { it.index == pagerState.currentPage }?.key
+        ?: pagerItems[currentIndex].videoId
     var lastAppliedStartRequest by remember { mutableStateOf<MomentPagerStartRequest?>(null) }
     val settlementTracker = remember { MomentPagerSettlementTracker() }
     var settledVideoId by remember { mutableStateOf(pagerItems[initialPage].videoId) }
@@ -492,10 +495,10 @@ fun MomentsPlayer(
                 showAutoSwipeControl = !forceAutoSwipe,
                 isActive =
                     lifecycleStarted &&
-                        shouldPlayMomentPage(page == currentIndex, pagerState.isScrollInProgress),
+                        shouldPlayMomentPage(item.videoId == currentVideoId, pagerState.isScrollInProgress),
                 settledVideoId = settledVideoId,
                 pagerScrolling = pagerState.isScrollInProgress,
-                shouldPrepare = abs(page - currentIndex) <= MOMENTS_PREPARE_RADIUS,
+                shouldPrepare = item.videoId == currentVideoId || abs(page - currentIndex) <= MOMENTS_PREPARE_RADIUS,
                 onAutoAdvance = { advanceTick++ },
                 onChannelClick = onChannelClick,
                 onStoryClick = onStoryClick,
@@ -575,46 +578,16 @@ private tailrec fun Context.findMomentsComponentActivity(): ComponentActivity? =
     }
 
 /**
- * Keeps the order already shown by this player session while applying metadata updates, removals,
- * and newly synced rows. A Room backfill can sort new rows before the current page; exposing that
- * reorder directly to Pager replaces the page at the same numeric position before key anchoring
- * finishes. New rows remain available at the end of the current session and take their canonical
- * order the next time the player opens.
+ * Applies each Room playlist as one update. Pager keys preserve the active video when its index
+ * changes, and new rows keep the server's order within the open session.
  */
 @Composable
 internal fun rememberMomentPagerSessionItems(items: List<MomentItem>): List<MomentItem> {
-    val sessionItems = remember { mutableStateListOf<MomentItem>().apply { addAll(items) } }
+    var sessionItems by remember { mutableStateOf(items) }
     LaunchedEffect(items) {
-        val merged = mergeMomentPagerSessionItems(sessionItems, items)
-        if (merged == sessionItems) return@LaunchedEffect
-        while (sessionItems.size > merged.size) sessionItems.removeAt(sessionItems.lastIndex)
-        merged.forEachIndexed { index, item ->
-            if (index < sessionItems.size) {
-                if (sessionItems[index] != item) sessionItems[index] = item
-            } else {
-                sessionItems += item
-            }
-        }
+        sessionItems = items
     }
     return sessionItems
-}
-
-internal fun mergeMomentPagerSessionItems(
-    previous: List<MomentItem>,
-    incoming: List<MomentItem>,
-): List<MomentItem> {
-    val incomingById = incoming.associateBy(MomentItem::videoId)
-    val included = HashSet<String>(incoming.size)
-    val merged = ArrayList<MomentItem>(incoming.size)
-
-    previous.forEach { oldItem ->
-        val updated = incomingById[oldItem.videoId]
-        if (updated != null && included.add(updated.videoId)) merged += updated
-    }
-    incoming.forEach { item ->
-        if (included.add(item.videoId)) merged += item
-    }
-    return merged
 }
 
 /**
