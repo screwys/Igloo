@@ -149,7 +149,7 @@ data class ToggleRequest(
 )
 
 @Serializable
-data class SubscribeRequest(val url: String)
+data class SubscribeRequest(val url: String, val platform: String = "")
 
 @Serializable
 data class MuteRequest(val channel_id: String, val action: String, val updated_at_ms: Long)

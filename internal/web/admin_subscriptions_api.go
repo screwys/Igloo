@@ -54,6 +54,7 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	platform := subscribe.DetectPlatform(rawURL, rawPlatform)
+	rawURL = subscribe.NormalizeChannelInput(rawURL, platform)
 	if !s.platformEnabled(platform) {
 		msg := fmt.Sprintf("%s is not enabled on this Igloo server", platformChoiceLabel(platform))
 		if isHTMX {

@@ -184,9 +184,13 @@
     <string name="cache_feed_items">Feed items</string>
     <string name="cache_subtitles">Subtitles</string>
     <string name="cache_x_media">X media</string>
-    <string name="channel_add_description">Paste a channel, video, reel, or post link from YouTube, TikTok, Instagram, or X. Igloo will find the channel to follow. You can also enter an X handle.</string>
     <string name="channel_add_failed">Couldn\'t add channel. Try again.</string>
-    <string name="channel_add_input">URL or X handle</string>
+    <string name="channel_add_handle">Handle</string>
+    <string name="channel_add_handle_input">Enter a handle</string>
+    <string name="channel_add_input">Paste a link</string>
+    <string name="channel_add_mode">Input type</string>
+    <string name="channel_add_platform">Platform</string>
+    <string name="channel_add_url">URL</string>
     <string name="channel_empty_videos">No channel videos found.</string>
     <string name="channel_videos_count">%1$d videos</string>
     <string name="channels_empty">No channels</string>
@@ -862,8 +866,6 @@
     <string name="stories_count_many">%1$d stories</string>
     <string name="stories_count_one">1 story</string>
     <string name="stories_empty">No stories</string>
-    <string name="subscribe_modal_description">Paste any video URL (YouTube, TikTok, Instagram) to subscribe to that channel</string>
-    <string name="subscribe_modal_url_example">e.g., https://tiktok.com/@user/video/123</string>
     <string name="system_browser">browser</string>
     <string name="temp_download_action_back_to_videos">Back to videos</string>
     <string name="temp_download_status_cancelled">Cancelled.</string>

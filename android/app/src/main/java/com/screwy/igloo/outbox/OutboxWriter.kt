@@ -175,7 +175,10 @@ class OutboxWriter(
                     put("channel_id", kind.channelId)
                     put("action", kind.action.wire)
                 }
-                is OutboxKind.Subscribe -> put("url", kind.url)
+                is OutboxKind.Subscribe -> {
+                    put("url", kind.url)
+                    put("platform", kind.platform)
+                }
                 is OutboxKind.Star -> {
                     put("channel_id", kind.channelId)
                     put("action", kind.action.wire)

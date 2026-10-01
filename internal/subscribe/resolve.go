@@ -192,6 +192,7 @@ func parseYouTubeChannelID(rawURL string) string {
 // insertion into the channels table. URLs containing an author are resolved
 // locally; other URLs need a bounded metadata lookup without downloading media.
 func ResolveChannel(ctx context.Context, rawURL, platform string, dl *download.Downloader, opts download.Opts) (model.Channel, error) {
+	rawURL = NormalizeChannelInput(rawURL, platform)
 	if err := ValidateInput(rawURL, platform); err != nil {
 		return model.Channel{}, err
 	}
@@ -303,6 +304,30 @@ func ResolveChannel(ctx context.Context, rawURL, platform string, dl *download.D
 	default:
 		return model.Channel{}, fmt.Errorf("unsupported platform: %q", platform)
 	}
+}
+
+// NormalizeChannelInput turns a bare handle into a profile URL for its platform.
+func NormalizeChannelInput(input, platform string) string {
+	input = strings.TrimSpace(input)
+	if _, ok := inputURLHost(input); ok && ValidateInput(input, platform) == nil {
+		return input
+	}
+	handle := strings.TrimPrefix(input, "@")
+	switch platform {
+	case "instagram":
+		if instagramHandleRe.MatchString(handle) {
+			return "https://www.instagram.com/" + handle + "/"
+		}
+	case "tiktok":
+		if tiktokHandleOnlyRe.MatchString(handle) {
+			return "https://www.tiktok.com/@" + handle
+		}
+	case "youtube":
+		if handle != "" && !strings.ContainsAny(handle, "/:?#") {
+			return "https://www.youtube.com/@" + url.PathEscape(handle)
+		}
+	}
+	return input
 }
 
 func inputURLHost(raw string) (string, bool) {

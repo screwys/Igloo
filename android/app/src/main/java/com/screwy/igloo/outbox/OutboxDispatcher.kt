@@ -113,7 +113,11 @@ class OutboxDispatcher(
 
     private suspend fun dispatchSubscribe(batch: List<OutboxEntity>): Map<Long, Result> {
         val results = perRow(batch) { row ->
-            api.subscribe(SubscribeRequest(url = row.payload().string("url") ?: row.itemId.orEmpty()))
+            val payload = row.payload()
+            api.subscribe(SubscribeRequest(
+                url = payload.string("url") ?: row.itemId.orEmpty(),
+                platform = payload.string("platform").orEmpty(),
+            ))
         }.mapValues { (_, result) ->
             // A retry can reach a channel that the first request already followed.
             if (result is Result.Rejected && result.error.status == HttpStatusCode.Conflict.value) {

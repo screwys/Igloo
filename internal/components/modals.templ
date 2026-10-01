@@ -215,15 +215,16 @@ templ AddSubModal(p PageProps) {
 		<div class="modal-content modal-small">
 			<button class="modal-close" type="button">@MaterialIcon("Close", "")</button>
 			<h2>{ L(p, "action_add_channel", "Add Channel") }</h2>
-			<p class="modal-description">{ L(p, "subscribe_modal_description", "Paste any video URL (YouTube, TikTok, Instagram) to subscribe to that channel") }</p>
 			<form
 				hx-post="/api/subscribe"
 				hx-target="#add-sub-status"
 				hx-swap="innerHTML"
 				hx-indicator="#add-sub-submit"
 				hx-disabled-elt="#add-sub-submit"
+				onchange="var handle=this.elements.input_mode.value==='handle';var platforms=this.querySelector('.channel-add-platforms');platforms.disabled=!handle;platforms.classList.toggle('is-visible',handle);this.elements.url.placeholder=this.elements.input_mode.selectedOptions[0].textContent;this.elements.url.setAttribute('aria-label',this.elements.url.placeholder)"
 			>
-					<input type="text" name="url" id="sub-input" class="input" autocomplete="off" placeholder={ L(p, "subscribe_modal_url_example", "e.g., https://tiktok.com/@user/video/123") }/>
+				@AddSubSelectors(p)
+				<input type="text" name="url" id="sub-input" class="input" autocomplete="off" required aria-label={ L(p, "channel_add_input", "Paste a link") } placeholder={ L(p, "channel_add_input", "Paste a link") }/>
 				<div class="modal-actions">
 					<button id="add-sub-submit" class="btn btn-primary" type="submit">
 							<span class="btn-text">{ L(p, "action_add_channel", "Add Channel") }</span>
@@ -2488,5 +2489,30 @@ templ miniPlayerFeedSetting(p PageProps, prefs PrefsData) {
 			{ L(p, "settings_enable_mini_player", "Enable mini player") }
 		</label>
 		<small class="form-hint">{ L(p, "settings_mini_player_feed_help", "Automatically move a playing Feed video into the mini player when you browse away.") }</small>
+	</div>
+}
+
+templ AddSubSelectors(p PageProps) {
+	{{
+		platforms := []struct{ Value, Logo, Key, Label string }{
+			{"twitter", "x", "platform_x", "X"},
+			{"youtube", "youtube", "platform_youtube", "YouTube"},
+			{"tiktok", "tiktok", "platform_tiktok", "TikTok"},
+			{"instagram", "instagram", "platform_instagram", "Instagram"},
+		}
+	}}
+	<div class="channel-add-selectors">
+		<select name="input_mode" class="input" data-setting-choices aria-label={ L(p, "channel_add_mode", "Input type") }>
+			<option value="url">{ L(p, "channel_add_url", "URL") }</option>
+			<option value="handle">{ L(p, "channel_add_handle", "Handle") }</option>
+		</select>
+		<fieldset class="channel-add-platforms" aria-label={ L(p, "channel_add_platform", "Platform") } disabled>
+			for _, platform := range platforms {
+				<label class="channel-add-choice" title={ L(p, platform.Key, platform.Label) }>
+					<input type="radio" name="platform" value={ platform.Value } checked?={ platform.Value == "twitter" } aria-label={ L(p, platform.Key, platform.Label) }/>
+					<span class="channel-add-logo" data-platform={ platform.Logo }></span>
+				</label>
+			}
+		</fieldset>
 	</div>
 }

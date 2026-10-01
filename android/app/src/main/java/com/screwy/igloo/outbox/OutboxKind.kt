@@ -63,9 +63,9 @@ sealed class OutboxKind {
         override val itemId: String = channelId
     }
 
-    data class Subscribe(val url: String) : OutboxKind() {
+    data class Subscribe(val url: String, val platform: String = "") : OutboxKind() {
         override val code = CODE_SUBSCRIBE
-        override val itemId: String = url
+        override val itemId: String = if (platform.isEmpty()) url else "$platform:$url"
     }
 
     data class Star(val channelId: String, val action: Action) : OutboxKind() {
