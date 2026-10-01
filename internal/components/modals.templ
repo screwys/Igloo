@@ -2214,7 +2214,7 @@ templ feedDashboardStats(p PageProps, d FeedDashboardData) {
 	<!-- Stat strip -->
 	<div class="stat-strip" style="grid-template-columns: repeat(3, 1fr);">
 		<div class="glass stat-card">
-			<div class="sc-label">{ L(p, "logs_ingest_label", "Ingest") } <span class="sc-meta">{ d.IngestMeta }</span></div>
+			<div class="sc-label">{ L(p, "logs_ingest_label", "Ingest") } <span class="sc-meta" data-timestamp={ fmt.Sprintf("%d", d.IngestAtMs) }>{ d.IngestMeta }</span></div>
 			<div class="sc-value">
 				{ fmt.Sprintf("%d", d.IngestDone) }
 				<span class="u">/{ fmt.Sprintf("%d", d.IngestTotal) }</span>
@@ -2386,7 +2386,7 @@ templ feedDashboardSourcesCard(p PageProps, d FeedDashboardData) {
 												<span class="feed-source-error">{ FeedSourceShortError(s) }</span>
 											}
 										</td>
-										<td class={ LastOkClass(s.LastSuccessAt) }>{ TimeAgoText(p, s.LastSuccessAt) }</td>
+										<td class={ LastOkClass(s.LastSuccessAt) } data-timestamp={ fmt.Sprintf("%d", s.LastSuccessAt * 1000) }>{ TimeAgoText(p, s.LastSuccessAt) }</td>
 										<td>{ fmt.Sprintf("%d", s.ItemCount) }</td>
 										<td>
 											if s.Status != "ok" {

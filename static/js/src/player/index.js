@@ -1,4 +1,4 @@
-import { apiFetch, showToast, copyText, escapeHtml, askConfirm, formatRelative, formatAbsolute, materialIconMarkup, setSvgContent, animateFeedActionButton, t, tf, toFxTwitterUrl } from '../utils.js'
+import { apiFetch, showToast, copyText, escapeHtml, askConfirm, formatRelative, materialIconMarkup, setSvgContent, animateFeedActionButton, t, tf, toFxTwitterUrl } from '../utils.js'
 import { openBookmarkMenu, closeBookmarkMenu, isBookmarkMenuOpen } from '../bookmark-menu.js'
 import { initSponsorBlock } from './sponsorblock.js'
 import { initPreviewHover } from './preview.js'
@@ -774,14 +774,12 @@ if (root && video) {
 
   // --- UI: date hover, description, seek links, video stats ---
 
-  function setupPlayerDateHover() {
+  function setupPlayerDate() {
     if (!playerDateEl) return
     const raw = String(playerDateEl.getAttribute('data-video-date') || '').trim()
     if (!raw) return
     const rel = formatRelative(raw)
-    const abs = formatAbsolute(raw)
     playerDateEl.textContent = rel || raw
-    playerDateEl.title = abs || raw
   }
 
   function setupDescriptionBox() {
@@ -905,7 +903,7 @@ if (root && video) {
     setupResponsiveMoreControls()
     setupPlayerControlsVisibility()
     setupChannelInlineActions()
-    setupPlayerDateHover()
+    setupPlayerDate()
     setupCommentTranslation()
 
     // Populate video stats from data attributes

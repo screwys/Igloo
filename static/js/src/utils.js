@@ -378,13 +378,6 @@ export function formatRelative(raw) {
   return tf(future ? 'time_years_from_now' : 'time_years_ago', future ? '%1$dy from now' : '%1$dy ago', Math.round(days / 365))
 }
 
-// formatAbsolute returns the locale-formatted full date-time.
-export function formatAbsolute(raw) {
-  var d = parseAppDate(raw)
-  if (!d) return String(raw || '')
-  try { return d.toLocaleString() } catch (_) { return String(raw || '') }
-}
-
 // formatVideoTime returns m:ss for a duration in seconds.
 function formatVideoTime(s) {
   if (!isFinite(s) || s < 0) return '0:00'

@@ -479,6 +479,7 @@ func (s *Server) feedDashboardLiveData() components.FeedDashboardData {
 		d.IngestTotal = totalTwitterChannels
 		if cycleAt > 0 {
 			d.IngestMeta = components.TimeAgo(cycleAt)
+			d.IngestAtMs = cycleAt * 1000
 		}
 	}
 	d.IngestFailures = len(failures)

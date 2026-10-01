@@ -202,7 +202,7 @@ templ VideoCard(p PageProps, v model.Video) {
 					<img class="video-channel-avatar" src={ videoAvatarURL(v) } alt="" loading="lazy" data-profile-channel-id={ v.ChannelID } onerror="this.style.display='none'"/>
 					<span class="video-channel" data-profile-channel-id={ v.ChannelID }>{ videoChannelName(v) }</span>
 				</span>
-				<span class="video-date" data-video-date={ publishedAtStr(v.PublishedAt) } title={ publishedAtStr(v.PublishedAt) }>
+				<span class="video-date" data-video-date={ publishedAtStr(v.PublishedAt) } data-timestamp={ publishedAtStr(v.PublishedAt) }>
 					{ RelativeTimeText(p, v.PublishedAt) }
 				</span>
 			</div>

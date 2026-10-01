@@ -1453,6 +1453,7 @@ type FeedDashboardData struct {
 	IngestDone     int
 	IngestTotal    int
 	IngestMeta     string // "fetching", "starting", "3m ago", etc.
+	IngestAtMs     int64
 	IngestFailures int
 	IngestCooling  int
 	IngestNotDue   int

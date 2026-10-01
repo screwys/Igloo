@@ -91,7 +91,7 @@ templ DiscoveryCard(p PageProps, video model.DiscoveryVideo) {
 					<span class="video-channel" data-profile-channel-id={ video.ChannelID }>{ video.ChannelName }</span>
 				</span>
 				if video.PublishedAt != nil {
-					<span class="video-date" data-video-date={ publishedAtStr(video.PublishedAt) } title={ publishedAtStr(video.PublishedAt) }>
+					<span class="video-date" data-video-date={ publishedAtStr(video.PublishedAt) } data-timestamp={ publishedAtStr(video.PublishedAt) }>
 						{ RelativeTimeText(p, video.PublishedAt) }
 					</span>
 				}

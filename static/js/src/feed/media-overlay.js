@@ -7,7 +7,6 @@ import {
   getFeedActionIconSvg,
   syncFeedActionIcons,
   formatRelative,
-  formatAbsolute,
   materialIconMarkup,
   t,
 } from '../utils.js'
@@ -390,7 +389,7 @@ export function openMediaOverlay(root, triggerEl) {
       while (top.firstChild) top.removeChild(top.firstChild)
       top.classList.add('channel-row')
 
-      var authorLabel, authorHandleRaw, showAuthorHandle, dateText, dateAbsolute, bodySourceEl, titleText, summaryText, repostText
+      var authorLabel, authorHandleRaw, showAuthorHandle, dateText, dateRaw, bodySourceEl, titleText, summaryText, repostText
       var overlayChannelId = channelId
 
       if (isQuote) {
@@ -399,7 +398,7 @@ export function openMediaOverlay(root, triggerEl) {
         overlayChannelId = 'twitter_' + authorHandleRaw
         bodySourceEl = sourceCard.querySelector('.feed-quote-text')
         dateText = ''
-        dateAbsolute = ''
+        dateRaw = ''
         titleText = ''
         summaryText = ''
         repostText = ''
@@ -410,9 +409,8 @@ export function openMediaOverlay(root, triggerEl) {
           || t('feed_x_post', 'X post')
         authorHandleRaw = textContentTrim(article.querySelector('.feed-author-handle')).replace(/^@+/, '')
         var dateEl = article.querySelector('.feed-date-inline')
-        var dateRaw = String((dateEl && dateEl.getAttribute('data-feed-date-raw')) || article.getAttribute('data-feed-date') || '').trim()
+        dateRaw = String((dateEl && dateEl.getAttribute('data-feed-date-raw')) || article.getAttribute('data-feed-date') || '').trim()
         dateText = textContentTrim(dateEl).replace(/^·\s*/, '') || formatRelative(dateRaw) || dateRaw
-        dateAbsolute = formatAbsolute(dateRaw)
         bodySourceEl = article.querySelector('.feed-body-text')
         titleText = textContentTrim(article.querySelector('.feed-text'))
         summaryText = textContentTrim(article.querySelector('.feed-summary'))
@@ -509,7 +507,7 @@ export function openMediaOverlay(root, triggerEl) {
         var dateSpan = document.createElement('span')
         dateSpan.className = 'feed-overlay-date'
         dateSpan.textContent = dateText
-        if (dateAbsolute && dateAbsolute !== dateText) dateSpan.title = dateAbsolute
+        dateSpan.setAttribute('data-timestamp', dateRaw)
         subLine.appendChild(dateSpan)
       }
       if (subLine.childNodes.length) authorMeta.appendChild(subLine)

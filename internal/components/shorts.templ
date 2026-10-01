@@ -71,7 +71,7 @@ templ StoryChannelList(p PageProps, stories []model.StoryChannel) {
 							<span class="story-channel-handle">{ "@" + story.Handle }</span>
 						}
 					</span>
-					<span class="story-channel-meta">{ storyChannelMeta(p, story) }</span>
+					<span class="story-channel-meta" data-timestamp={ fmt.Sprintf("%d", story.LatestAtMs) }>{ storyChannelMeta(p, story) }</span>
 				</button>
 			}
 		</div>

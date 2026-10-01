@@ -20,7 +20,7 @@ templ feedContext(p PageProps, pollJSON string, note string) {
 				<span>{ LF(p, "feed_poll_votes", "%1$s votes", poll.TotalVotes) }</span>
 				if poll.CapturedAt > 0 {
 					{{ captured := time.UnixMilli(poll.CapturedAt).UTC() }}
-					<time datetime={ captured.Format(time.RFC3339) } title={ captured.Format(time.RFC3339) }>{ LF(p, "feed_poll_captured", "Captured %1$s", RelativeTimeText(p, &captured)) }</time>
+					<time datetime={ captured.Format(time.RFC3339) } data-timestamp={ publishedAtStr(&captured) }>{ LF(p, "feed_poll_captured", "Captured %1$s", RelativeTimeText(p, &captured)) }</time>
 					if _, err := time.Parse(time.RFC3339, poll.EndsAt); err == nil {
 						if poll.ClosedAtCapture() {
 							<span>{ L(p, "feed_poll_closed_at_capture", "Closed when captured") }</span>

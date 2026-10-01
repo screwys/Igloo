@@ -43,7 +43,11 @@ templ playerCommentCard(p PageProps, node *CommentNode, depth int, creatorAuthor
 					<div class="player-comment-head" style="display:flex; gap:0.45rem; align-items:center; flex-wrap:wrap;">
 						<strong class={ "player-comment-author", templ.KV("is-creator", CommentIsCreator(c, creatorAuthorID)) }>{ CommentAuthorNameText(p, c) }</strong>
 					if metaText != "" {
-						<span class="player-comment-meta">{ metaText }</span>
+						<span class="player-comment-meta"
+							if c.PublishedAt != nil {
+								data-timestamp={ publishedAtStr(c.PublishedAt) }
+							}
+						>{ metaText }</span>
 					}
 					if c.Text != "" {
 						<button

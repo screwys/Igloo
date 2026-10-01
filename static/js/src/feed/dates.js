@@ -1,7 +1,7 @@
 // Dates module — extracted from feed_page.js
-// Hydrates relative/absolute dates on feed cards.
+// Hydrates relative dates on feed cards.
 
-import { formatRelative, formatAbsolute } from '../utils.js'
+import { formatRelative } from '../utils.js'
 
 export function initDates(container) {
   const scope = container || document
@@ -10,11 +10,8 @@ export function initDates(container) {
     const raw = String(el.getAttribute('data-feed-date-raw') || '').trim()
     if (!raw) return
     const rel = formatRelative(raw)
-    const abs = formatAbsolute(raw)
     el.setAttribute('data-date-relative', rel)
-    el.setAttribute('data-date-absolute', abs)
     el.textContent = rel || raw
-    el.title = abs || raw
   })
 }
 

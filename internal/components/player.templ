@@ -148,7 +148,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 								</div>
 							}
 							if video.PublishedAt != nil {
-								<span class="badge" id="player-video-date" data-video-date={ publishedAtStr(video.PublishedAt) }>{ RelativeTimeText(p, video.PublishedAt) }</span>
+								<span class="badge" id="player-video-date" data-video-date={ publishedAtStr(video.PublishedAt) } data-timestamp={ publishedAtStr(video.PublishedAt) }>{ RelativeTimeText(p, video.PublishedAt) }</span>
 							}
 						</div>
 					</div>

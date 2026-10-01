@@ -1,6 +1,6 @@
 // Shorts items — DOM builder, action button handlers, card parsing.
 
-import { apiFetch, askConfirm, cssEscape, escapeHtml, showToast, copyText, makeDraggableSeekbar, attachSeekTooltip, formatRelative, materialIconMarkup, t, tf, toFxTwitterUrl } from '../utils.js'
+import { apiFetch, askConfirm, cssEscape, escapeHtml, showToast, copyText, makeDraggableSeekbar, attachSeekTooltip, formatRelative, parseAppDate, materialIconMarkup, t, tf, toFxTwitterUrl } from '../utils.js'
 import { openBookmarkMenu } from '../bookmark-menu.js'
 import { maybeMarkAspect, handleVideoTimeUpdate, toggleShortPlayback, goToSlideshowSlide, stepSlideshow, syncRenderedShortVideoLoop } from './playback.js'
 import { attachShortVideoDebug } from './debug.js'
@@ -868,6 +868,8 @@ export function makeShortItem(entryData, existingEl) {
   var ts = doc.createElement('div')
   ts.className = 'shorts-timestamp'
   ts.textContent = timeLabel || ''
+  var publishedAt = parseAppDate(entryData.publishedAt)
+  if (publishedAt) ts.setAttribute('data-timestamp', String(publishedAt.getTime()))
   var repost = makeRepostLabel(entryData)
   var title = doc.createElement('div')
   title.className = 'shorts-video-title'

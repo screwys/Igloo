@@ -73,6 +73,21 @@
   const i18n = window.IglooI18n || {};
   var previewLanguageSeq = 0;
 
+  // Timestamp labels share full-date tooltips, including dynamically added content.
+  function showTimestampTitle(event) {
+    var el = event.target.closest('[data-timestamp]');
+    if (!el) return;
+    var raw = el.getAttribute('data-timestamp');
+    if (!raw || raw === '0') return;
+    var date = new Date(Number(raw));
+    if (!Number.isFinite(date.getTime())) return;
+    var title = date.toLocaleString();
+    if (el.title !== title) el.title = title;
+  }
+
+  doc.addEventListener('mouseover', showTimestampTitle, true);
+  doc.addEventListener('focusin', showTimestampTitle, true);
+
   function formatMessage(message, args) {
     var out = String(message == null ? '' : message);
     if (!args || !args.length) return out;

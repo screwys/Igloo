@@ -322,13 +322,13 @@ templ feedAuthorAside(p PageProps, item model.FeedItem, authorLabel string) {
 				data-feed-thread-open
 				data-thread-tweet-id={ item.TweetID }
 				data-feed-date-raw={ feedPublishedAtStr(item.PublishedAt) }
-				title={ feedPublishedAtStr(item.PublishedAt) }
+				data-timestamp={ feedPublishedAtStr(item.PublishedAt) }
 			>{ RelativeTimeText(p, item.PublishedAt) }</a>
 		} else {
 			<span
 				class="feed-date-inline"
 				data-feed-date-raw={ feedPublishedAtStr(item.PublishedAt) }
-				title={ feedPublishedAtStr(item.PublishedAt) }
+				data-timestamp={ feedPublishedAtStr(item.PublishedAt) }
 			>{ RelativeTimeText(p, item.PublishedAt) }</span>
 		}
 	}
@@ -731,10 +731,10 @@ templ feedQuoteCard(p PageProps, item model.FeedItem, deferMedia bool) {
 							data-feed-thread-open
 							data-thread-tweet-id={ item.QuoteTweetID }
 							data-feed-date-raw={ feedPublishedAtStr(item.QuotePublishedAt) }
-							title={ feedPublishedAtStr(item.QuotePublishedAt) }
+							data-timestamp={ feedPublishedAtStr(item.QuotePublishedAt) }
 						>{ RelativeTimeText(p, item.QuotePublishedAt) }</a>
 					} else {
-						<span class="feed-quote-date" data-feed-date-raw={ feedPublishedAtStr(item.QuotePublishedAt) } title={ feedPublishedAtStr(item.QuotePublishedAt) }>{ RelativeTimeText(p, item.QuotePublishedAt) }</span>
+						<span class="feed-quote-date" data-feed-date-raw={ feedPublishedAtStr(item.QuotePublishedAt) } data-timestamp={ feedPublishedAtStr(item.QuotePublishedAt) }>{ RelativeTimeText(p, item.QuotePublishedAt) }</span>
 					}
 				}
 					if hasQuoteTranslatePill(item) && (item.QuoteArticleTitle == "" || p.ArticleReader) {

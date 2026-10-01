@@ -71,26 +71,13 @@
     return i18nFormat(future ? 'time_years_from_now' : 'time_years_ago', future ? '%1$dy from now' : '%1$dy ago', Math.round(days / 365));
   }
 
-  function formatAbsolute(raw) {
-    var d = parseAppDate(raw);
-    if (!d) return String(raw || '');
-    try {
-      return d.toLocaleString();
-    } catch (_) {
-      return String(raw || '');
-    }
-  }
-
   function hydrateCardDates(root) {
     qa('.video-card .video-date[data-video-date]', root || doc).forEach(function (el) {
       var raw = String(el.getAttribute('data-video-date') || '').trim();
       if (!raw) return;
       var rel = formatRelative(raw);
-      var abs = formatAbsolute(raw);
       el.setAttribute('data-date-relative', rel);
-      el.setAttribute('data-date-absolute', abs);
       if (!el.closest('.video-card:hover')) el.textContent = rel || raw;
-      el.title = abs || raw;
     });
   }
 
