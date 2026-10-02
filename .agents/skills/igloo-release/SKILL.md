@@ -1,60 +1,24 @@
 ---
 name: igloo-release
-description: Use when preparing, committing, tagging, pushing, publishing, repairing, or checking an Igloo release, including Android version bumps, GitHub Releases, release notes, artifact workflows, or release tags.
+description: Use when preparing or publishing an Igloo release, changing release workflows, or recovering a partial release.
 ---
 
-# Igloo Release
+# Igloo release
 
-Use the repository release scripts through the named `just` recipes. Do not assemble the release sequence by hand unless recovering from a partial release.
+Follow AGENTS.md for publishing authorization and verification. Obtain both the requested bump and exact user-written summary, finish product changes, and start with a clean working tree.
 
-## Default Release Flow
+Use `just release <patch|minor|major> "<user summary>"` to publish, or `just release-local ...` for an explicitly local signed tag. The recipe owns metadata, the signed commit/tag, generated notes, and publishing. Notes put the user's summary first, followed by the exact commits since the previous tag.
 
-1. Read the `Releases` section in `AGENTS.md` and keep its constraints active.
-2. Require the requested bump and exact user-written summary. If either is missing, ask for it; do not choose a bump or invent public release text.
-3. Finish and commit product changes first. Release creation requires a clean working tree.
-4. Run the relevant proof for the touched area before release. If Android files changed, `just build-android` is required.
-5. Create and publish the release with one command:
+## Signing and artifacts
 
-```bash
-just release <patch|minor|major> "<user summary>"
-```
+Release signing uses `RELEASE_GPG_PRIVATE_KEY` and `RELEASE_GPG_PASSPHRASE`. Optional `RELEASE_GIT_USER_NAME` and `RELEASE_GIT_USER_EMAIL` set the commit identity. Keep secret values private.
 
-This recipe delegates to the release script, which prepares release metadata, creates the signed release commit and tag, pushes `main` and the tag atomically, creates the GitHub Release from the generated notes file, and dispatches release artifact workflows.
+Artifact workflows verify tags against `.github/release-gpg.pub` before publication. APKs and containers carry GitHub attestations, and containers use keyless cosign signatures.
 
-Generated notes should link commit SHAs. If links are missing, check that `scripts/dev/release.mjs` can infer the GitHub repository from `GITHUB_REPOSITORY` or `git remote get-url origin`.
+## Partial-release recovery
 
-## Local-Only Release Tags
+Inspect the existing commit, tag, GitHub Release, and workflow runs before retrying. Use `.github/scripts/create-release-tag.sh` and `scripts/dev/release.mjs` as the source of the release sequence.
 
-Use this only when the user explicitly wants a local signed tag without publishing:
+When building notes from a signed tag, use `git for-each-ref` with `%(contents:subject)` and `%(contents:body)`. Full tag contents include the PGP signature. Supply notes to `gh` with `--notes-file`.
 
-```bash
-just release-local <patch|minor|major> "<user summary>"
-```
-
-Do not then create the GitHub Release from `git show`, `git cat-file tag`, or `git for-each-ref --format='%(contents)'`. Signed annotated tag contents include the PGP signature block.
-
-If publishing an already-created signed tag, build the notes file from the tag subject and body only:
-
-```bash
-tag=vX.Y.Z
-notes_file="$(mktemp)"
-{
-  git for-each-ref "refs/tags/$tag" --format='%(contents:subject)'
-  printf '\n\n'
-  git for-each-ref "refs/tags/$tag" --format='%(contents:body)'
-} > "$notes_file"
-gh release create "$tag" --title "$tag" --notes-file "$notes_file" --verify-tag
-rm -f "$notes_file"
-```
-
-## Recovery Checks
-
-- If the GitHub Release body contains `-----BEGIN PGP SIGNATURE-----`, regenerate notes from `%(contents:subject)` and `%(contents:body)`, then run `gh release edit "$tag" --notes-file "$notes_file"`.
-- Verify workflow dispatches with:
-
-```bash
-gh run list --workflow container-release.yml --limit 1
-gh run list --workflow android-release.yml --limit 1
-```
-
-- End by checking `git status --short`, `git log --oneline -3 --decorate`, the release URL, and workflow URLs.
+Check the final release body and dispatched `container-release.yml`, `android-release.yml`, and `windows-release.yml` runs. Report the release URL, workflow status, and remaining failures.

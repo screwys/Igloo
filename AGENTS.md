@@ -1,159 +1,68 @@
-# Igloo Agent Guide
+# Igloo agent guide
 
 ## Project
 
-- Igloo is a Go/SQLite server with web and Android clients. In Igloo requests, unqualified "mobile" means the Android app; use the web client only when the user says web, browser, mobile web, or names a browser viewport.
-- Implement web behavior using standards-based APIs and CSS that work in both Firefox and Chromium.
-- `android/` is the current Android app.
-- Runtime/config defaults: native `~/.local/share/igloo/` and `~/.config/igloo/`; container `/igloo/data` and `/igloo/config`; bundled container assets `/app/static`.
+Igloo is a Go/SQLite server with web and Android clients. `android/` is the current Android app. Unqualified "mobile" means Android. Web behavior must work in Firefox and Chromium using standard APIs and CSS.
 
-## Commands
+Runtime defaults are `~/.local/share/igloo/` and `~/.config/igloo/` on the host, `/igloo/data` and `/igloo/config` in containers, and `/app/static` for bundled assets.
 
-- Run routine build, test, generated-output, Android, and release workflows through `just` from the repository root. Bare `just` lists the recipes and their side effects.
-- Recipes delegate to the existing scripts; do not reconstruct script combinations by hand. Use a raw command only for installer bootstrap, read-only evidence, an exact CI reproduction, a partial-release recovery, or a narrowly scoped proof that has no recipe.
-- Release recipes remain explicit: only run `just release <patch|minor|major> "<user summary>"` or `just release-local ...` after the user has supplied both the requested bump and exact summary. Never invent public release text.
+## Development
+
+- Build the behavior the user needs with as little machinery as possible. Add controls, states, fallbacks, and dependencies when they serve that outcome.
+- Preserve supported behavior, stored data, and client contracts. Base changes and restrictions on established requirements and demonstrated failures.
+- Fix the responsible code with the simplest complete change. Prefer correcting or removing a mechanism over adding recovery layers around it. Keep unrelated cleanup and speculative hardening outside the task.
+- Judge optimizations across supported platform mixes, archive sizes, and retention settings. Treat local measurements as one workload sample.
+- Preserve local state until network operations succeed. Keep one-time repairs separate from normal startup.
+- In Go, keep the success path lean. Recompute cleanup work on failure when safe, retaining rollback state when side effects cannot be reconstructed.
+- Use plain English and generic names in comments, examples, and commits. Keep real handles, IDs, and private runtime values out of tracked files.
+
+## Upstream tools
+
+Let yt-dlp and gallery-dl own platform extraction. Use their documented CLI and output formats, with rolling HEAD/nightly builds across host and packaged environments.
+
+Keep Igloo's integration thin and compatible with upstream updates. Use upstream's default extractor behavior. Configure documented integration options such as output paths, cookies, and format selection for established Igloo requirements. Assess new features against what upstream supplies before taking on custom extraction, private API parsing, or extractor/client overrides.
+
+## Design
+
+- Reuse established controls and layouts, adapting them to each client's available space. Keep controls readable, visually consistent, and easy to use.
+- Use short functional labels and one clear control for each action. Add a short helper line only when the user would otherwise be stuck.
+- Judge interface changes by how they affect the user's activity and existing workflow. Prefer fewer coherent interactions over extra modes, decorations, and explanations.
+- Confirm destructive actions with an Igloo modal on web or Compose `AlertDialog` on Android.
 
 ## Evidence
 
-- Start from local evidence: files, DB rows, logs, running DOM, then code. For Android UI,
-  prefer source and log evidence; live device interaction belongs to the user unless they ask for it.
-- The canonical local browser target is `https://localhost:8443`. Use it directly for live web and DOM checks; do not rediscover Igloo from listening ports or substitute another local URL.
-- When the Igloo MCP is available, prefer its read-only tools for first-pass
-  orientation and runtime evidence: `doctor_status`, `server_query`,
-  `db_schema`, `list_logs`, `read_log`, `recent_errors`, `pipeline_status`,
-  `android_sync_status`, `identity_media_status`, `trace_endpoint`,
-  `trace_page`, `trace_screen`, `trace_data_flow`, and `get_context`. Use raw
-  shell commands when MCP is unavailable, missing the needed view, or a result
-  needs independent verification.
-- Inspect the DB read-only when possible:
-  `sqlite3 "file:$HOME/.local/share/igloo/igloo.db?mode=ro"`
-- Do not fetch public X, YouTube, TikTok, or Instagram pages when stored identifiers or local data can answer the question.
-- Check private runtime material only for existence; mask values as `***` if a format check is unavoidable.
+Start from the user's report and relevant source. Trust their observations and corrections, revisiting ruled-out explanations only with new evidence. Follow the reported failure through its responsible path. An unsuccessful reproduction or passing unrelated check leaves that investigation open.
 
-For profile/avatar/banner readiness bugs, prove the data timeline before changing UI:
+Use local rows, files, and logs for data questions, preferring read-only Igloo MCP tools when available. The database is `sqlite3 "file:$HOME/.local/share/igloo/igloo.db?mode=ro"`. Use stored identifiers and data before fetching public platform pages.
 
-- When did the content row enter Igloo (`feed_items`, `videos`, source tables)?
-- Which stored author, quote, mention, coauthor, or source identity should have created a `channel_profiles` row?
-- When did `channel_profiles.fetched_at` change, and when did the avatar/banner file appear on disk?
-- Which ingest, seed, profile-worker, or backfill step should have fetched it before the user hovered or opened the page?
+Use the browser for a specific unresolved runtime question that could change the fix. The local target is `https://localhost:8443`. Basic edits can be completed from the report and source. Check private material only for existence, masking values as `***` if a format check is necessary. Do not capture private data or screenshots.
 
-If profile media only becomes ready after hover/page render, treat that as a pipeline bug until proven otherwise.
+## Commands and verification
 
-## Coding Rules
+Use `just` from the repository root for routine builds, checks, generators, and releases. Bare `just` lists recipes and side effects. Raw commands are appropriate for read-only evidence, installer bootstrap, exact CI reproduction, partial-release recovery, or a narrow proof with no recipe.
 
-- Keep changes scoped. Do not mix unrelated cleanup, formatting, generated churn, or private workflow notes into product work.
-- Maintainability is part of the fix. Existing code is evidence, not something
-  to preserve at all costs; when the owner model or owner function is wrong,
-  change or delete that mechanism instead of building layers around it.
-- Do not make "avoid disturbing code" the goal. Preserve user-visible behavior,
-  stored data, and API contracts while reducing concept count. Parallel recovery
-  paths, compatibility paths, startup sweeps, broad backfills, and new
-  abstractions need a concrete reason the owner path cannot be corrected.
-- When a diff grows beyond the shape of the bug, stop and shrink it before
-  continuing.
-- Use generic names in tests, docs, examples, comments, and commits.
-  Do not commit real handles, usernames, channel IDs, post IDs, or local data
-  values from bug reports or runtime state. Preserve the shape of the case with
-  generic equivalents instead, such as `_sample_handle` for a leading-underscore
-  X handle.
-- Do not clear local state before a network call succeeds.
-- A successful like/bookmark means the app presented real content to the user.
-  Treat missing persisted body, identity, media JSON, media files, assets, or
-  video file paths after that action as a capture/persistence bug, not evidence
-  that the saved item was empty. Empty client action payloads are a client/server
-  contract failure when rendered content existed.
-- Destructive UI actions need product confirmation: Igloo modal on web, Compose `AlertDialog` on Android.
-- One-off repair/backfill utilities must not become normal startup behavior.
-- Fix root causes, not display-only symptoms.
-- If multiple causes are found, fix all in the same pass unless the user narrows the scope.
-- Do not invent client-side fallbacks for server-owned identity or ingest-time data before tracing why the real data is missing.
-- Do not patch render-time retry, hover-card fetch, or local media serving as the first fix for missing identity/media. First trace why the ingest/profile pipeline failed to prepare that identity when the relevant content was stored.
-- Keep status updates factual: what is fixed, what is still broken, and what is being worked on next.
-
-For Go code, protect the success path. Do not allocate rollback journals, diagnostic collections, or per-item bookkeeping on the happy path just to make rare failures easier to unwind. If the affected work can be enumerated again safely, let the error path recompute it and clean up there. Keep explicit rollback state only when side effects are non-idempotent, external, ordered in a way that cannot be rebuilt, or otherwise impossible to reconstruct.
-
-## Test Gates
-
-- Do not add tests that merely restate an implementation detail or assert that code was added or removed. Test observable behavior when deterministic coverage is valuable; otherwise omit the test.
-- Use focused tests while developing; rely on `.githooks/pre-push` for push checks without repeating them manually.
-- When full-suite verification is needed, use `just test-full` and inspect skips, ignored errors, and Android warnings.
-- Treat new or high-signal production `errcheck` findings as blockers. If
-  existing findings remain, report them plainly with the reason they were not
-  fixed.
-- For CI-fix work, commit and push the verified fix unless the user explicitly
-  asks not to, publishing is unavailable, or the repository state makes a safe
-  push impossible. Report the exact blocker when a verified fix cannot be
-  published.
-
-## Git Workflow
-
-- "Push", "lets push", "ship it", or similar requests mean commit and push all
-  current repository changes, including pre-existing edits and untracked project
-  files, unless the user explicitly narrows the scope. Use the current branch;
-  on `main`, push directly to `origin/main`.
-- Do not create a feature branch, PR, or review branch for Igloo unless the
-  user explicitly asks for one, the current branch is not the intended target,
-  or repository state makes a direct push unsafe.
-- If `origin/main` moved before a direct-main push, fetch and rebase or
-  fast-forward the current work onto `origin/main`, then push.
-- These Igloo rules override generic GitHub branch/PR publishing defaults.
-
-## Releases
-
-- Releases are manually dispatched from the release workflow with an explicit patch, minor, or major bump.
-- Use `just release <patch|minor|major> "<user summary>"` for a published release and `just release-local ...` for a local signed release tag. They delegate to `.github/scripts/create-release-tag.sh`; use the underlying scripts only for partial-release recovery.
-- Release scripts take the user-written summary as input and put it first in the generated notes, then a `Changelog` section with commits since the previous tag.
-- Release commits and tags are GPG-signed with `RELEASE_GPG_PRIVATE_KEY` and `RELEASE_GPG_PASSPHRASE`; optional `RELEASE_GIT_USER_NAME` and `RELEASE_GIT_USER_EMAIL` repository variables set the non-secret commit identity.
-- Release artifact workflows verify tags against `.github/release-gpg.pub` before accessing release secrets or publishing assets.
-- Release APKs and container images publish GitHub artifact attestations; container images are also signed keylessly with cosign.
-- Release notes should list the exact commits since the previous tag.
-
-## Server And Web
-
-- Feed-item endpoints in `internal/web/` must return the enriched shape callers expect: `feed.EnrichFeedItems(...)`, bookmark state, subscribe/follow URLs, and every field the caller reads.
-- Do not narrow a shared query for one caller if another caller needs the data. Add a separate query.
-- For web UI bugs, start from the user's report, screenshots, and relevant source. Use the browser only to answer a specific unresolved runtime question that could change the fix; basic edits do not require live DOM inspection.
-- For missing avatars, banners, names, bios, or hover profile cards, separate presentation bugs from readiness bugs. A presentation fix is valid only when the DB row and cached file already existed before render; otherwise fix the source path: parser, ingest batch, identity seed, profile refresh candidate query, worker queue/backfill, or failed download retry.
+- Write tests only when requested. Run relevant existing checks. Use focused recipes during development, `just test` for the proportional gate, and `just test-full` when the full suite is needed. Inspect skips and ignored errors.
+- Rely on `.githooks/pre-push` for push checks without repeating them manually. Treat new or high-signal production `errcheck` findings as blockers and explain existing findings left unresolved.
+- Regenerate templ and bundled assets with `just check-drift`. Update localization with `just i18n-sync` and verify it with `just i18n-check`.
 - After server, web, static, or component changes that affect the running app, run `just restart`.
+- After Android app source, resources, manifest, Gradle configuration, or Room schema changes, run `just build-android` before finishing or committing. It builds, installs, and relaunches the app. JVM tests and compilation alone do not replace it. Report unavailable tooling or devices explicitly.
+- Host-only Android scripts need shell validation and the relevant script proof. Generated `android/app/src/main/res/values/strings.xml` changes solely from shared localization need localization and proportional checks, without Android JVM tests or device installation. Other Android resources use the normal Android gate.
+- Treat Android JVM final-field mutation warnings as failures. Use fakes or interfaces instead of concrete-class mocks that cause them.
+- Keep automated Android device interaction to installation and relaunch unless the user explicitly requests more. Source and build evidence establish implementation, not live appearance or playback. Request user verification for a concrete unresolved question.
 
-## Android
+## Data contracts
 
-- Android must render normal UI state without live Igloo server access.
-- `latest` may run the next-release server ahead of the Android release. It must
-  remain compatible with the latest released APK; during the 3.3 development
-  cycle that means the server at HEAD must preserve the Android 3.2.0 request
-  and wire contract. Track compatibility by shipped app version, not by the
-  current Room or server sync-model number. Passing current Android CI is not
-  evidence that an installed older APK remains compatible; verify the released
-  client contract before publishing `latest` or changing its materialization.
-- Room mirrors the documented server schema; schema bumps need migrations in `IglooMigrations`.
-- User state belongs in thin side tables joined at read time.
-- Cursors are opaque. Server-owned identifiers stay server-owned.
-- Sync must converge for the retention window, associated assets, bookmarks, likes, and their assets. Partial sync is not success.
-- Retention widening triggers replay/backfill; narrowing prunes; bookmarks and likes survive prune.
-- Use the named Android recipes: `just test-android`, `just build-android`, `just build-android-with-server`, and `just restart-and-build-android`.
-- Treat Android JVM final-field mutation warnings as test failures. Replace
-  concrete-class mocks with fakes/interfaces rather than adding JVM flags to
-  silence the warning.
-- If Android app source, resources, manifest, Gradle build configuration, or Room schema changes, `just build-android` is the required final
-  Android proof before final response or commit. It builds, installs, and
-  relaunches the app on the device. Do not treat `just test-android`, a focused
-  Gradle test, or `BUILD SUCCESSFUL` from compilation as a substitute. If
-  `just build-android` cannot run because no device or Android tool is available,
-  say that explicitly in the final response. Host-only Android scripts such as
-  `android/test.sh` and `android/build.sh` require shell validation and the
-  relevant script behavior proof, not an APK build/install.
-- The install and relaunch performed by `just build-android` are the full default
-  device interaction for automated proof. Do not navigate the installed app,
-  simulate taps, gestures, Back, or Home, inspect its UI tree, or capture screenshots
-  unless the user explicitly requests device interaction. Ask the user to confirm
-  live visual, gesture, timing, and playback behavior.
-- Generated Android localization catalog changes caused solely by synchronizing
-  web-only strings do not require an APK build, install, or relaunch. Verify
-  those changes with the localization drift check and the proportional test
-  gate instead. The device proof above still applies when Android-owned copy or
-  behavior changes.
-- The proportional gate must treat `android/app/src/main/res/values/strings.xml`
-  as generated localization output, not Android-owned behavior. When it changes
-  only alongside shared locale sources, run the localization drift proof and do
-  not launch Android JVM tests. Other Android resources remain Android-owned.
+- Trace changed fields and queries through every affected caller. Compare returned data and state transitions when changing shared queries.
+- Server storage owns channel and media identity, assets, and cursors. Prepare identity and media during capture and ingest. Preserve profile navigation and following when metadata is empty.
+- Feed-item responses need `feed.EnrichFeedItems(...)`, bookmark state, follow or subscription URLs, and every field the caller reads. Give callers separate queries when their data needs differ.
+- Likes and bookmarks must persist the content the user saw, including body, identity, media, and files. Trace sparse action payloads as capture problems.
+- Preserve saved content and its dependencies across pruning and restoration. Keep user state separate from mirrored content.
+
+The server published as `latest` must remain compatible with the latest released APK, even when development is ahead. Verify the shipped client's request and wire contract when changing sync materialization or publishing `latest`. Current Android CI and schema version numbers do not establish released-client compatibility.
+
+Use `igloo-android-sync` for the Android mirror, `igloo-debugging` for investigations, and `igloo-web-ui-guidance` for web UI work.
+
+## Git and releases
+
+- For CI fixes, commit and push the verified fix unless the user says otherwise or publishing is blocked. Report the exact blocker.
+- Releases require both the user's bump and exact summary. Use `just release <patch|minor|major> "<user summary>"` to publish or `just release-local ...` for a local signed tag. Use `igloo-release` for release details and recovery.
