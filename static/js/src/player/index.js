@@ -5,7 +5,7 @@ import { initPreviewHover } from './preview.js'
 import { initProgress } from './progress.js'
 import { initCinemaView } from './cinema.js'
 import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
-import { readStoredVolume, writeStoredVolume } from '../volume.js'
+import { bindVolumeWheel, readStoredVolume, writeStoredVolume } from '../volume.js'
 import { bindVideoFeedback } from '../video-feedback.js'
 import { initStreaming } from './streaming.js'
 
@@ -550,6 +550,7 @@ if (root && video) {
     doc.addEventListener('webkitfullscreenchange', onFullscreenChange)
 
     function handleFullscreenWheel(e) {
+      if (e.target.closest && e.target.closest('.dashboard-volume-control')) return
       if (!isPlayerLayoutFullscreen() || playerFullscreenTarget() !== playerLayout) return
       var deltaY = normalizeWheelDeltaY(e)
       if (Math.abs(deltaY) < 0.01) return
@@ -900,6 +901,13 @@ if (root && video) {
       },
     })
     setupYouTubeVolumePreference()
+    if (volumeControl) {
+      bindVolumeWheel(volumeControl, function () { return video.muted ? 0 : video.volume }, function (nextVolume) {
+        if (playerFeedback) playerFeedback.markUserAction('volume')
+        video.volume = nextVolume
+        video.muted = nextVolume === 0
+      })
+    }
     setupSpeedMenu()
     setupResponsiveMoreControls()
     setupPlayerControlsVisibility()

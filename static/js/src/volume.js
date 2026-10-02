@@ -30,3 +30,15 @@ export function volumeIconLevel(muted, value) {
   if (muted || volume === 0) return 'muted'
   return volume < 0.5 ? 'low' : 'high'
 }
+
+export function bindVolumeWheel(control, getVolume, setVolume) {
+  function onWheel(event) {
+    if (event.deltaY === 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    const volume = normalizeVolume(getVolume() - Math.sign(event.deltaY) * 0.05, 1)
+    setVolume(volume)
+  }
+  control.addEventListener('wheel', onWheel, { passive: false })
+  return function () { control.removeEventListener('wheel', onWheel) }
+}

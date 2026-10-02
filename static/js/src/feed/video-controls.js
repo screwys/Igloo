@@ -1,6 +1,6 @@
 import { attachSeekTooltip, makeDraggableSeekbar, materialIconMarkup, setSvgContent, t, tf } from '../utils.js'
 import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
-import { readStoredVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
+import { bindVolumeWheel, readStoredVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
 import { bindVideoFeedback } from '../video-feedback.js'
 
 const FEED_VOLUME_KEY = 'feedVolume'
@@ -371,19 +371,24 @@ export function bindFeedVideoControls(wrap, video, options) {
       syncMute()
     })
   }
+  function applyVolume(nextVolume) {
+    if (feedback && typeof feedback.markUserAction === 'function') {
+      feedback.markUserAction('volume')
+    }
+    setVideoVolume(video, nextVolume, volumeKey)
+    video.muted = nextVolume === 0
+    if (typeof opts.onVolumeChange === 'function') {
+      opts.onVolumeChange(nextVolume, video.muted)
+    }
+    syncMute()
+  }
+  const unbindVolumeWheel = volumeControl
+    ? bindVolumeWheel(volumeControl, function () { return video.muted ? 0 : video.volume }, applyVolume)
+    : null
   if (volume) {
     volume.addEventListener('input', function (event) {
       event.stopPropagation()
-      if (feedback && typeof feedback.markUserAction === 'function') {
-        feedback.markUserAction('volume')
-      }
-      const nextVolume = Math.max(0, Math.min(1, Number(volume.value || 0)))
-      setVideoVolume(video, nextVolume, volumeKey)
-      video.muted = nextVolume === 0
-      if (typeof opts.onVolumeChange === 'function') {
-        opts.onVolumeChange(nextVolume, video.muted)
-      }
-      syncMute()
+      applyVolume(Math.max(0, Math.min(1, Number(volume.value || 0))))
     })
     volume.addEventListener('click', function (event) { event.stopPropagation() })
     volume.addEventListener('mousedown', function (event) { event.stopPropagation() })
@@ -534,6 +539,7 @@ export function bindFeedVideoControls(wrap, video, options) {
   syncFullscreen()
   syncAutoplay()
   return function () {
+    if (unbindVolumeWheel) unbindVolumeWheel()
     if (feedback && typeof feedback.destroy === 'function') feedback.destroy()
     video.removeEventListener('play', syncPlay)
     video.removeEventListener('pause', syncPlay)

@@ -4,7 +4,7 @@ import { apiFetch, askConfirm, cssEscape, escapeHtml, showToast, copyText, makeD
 import { openBookmarkMenu } from '../bookmark-menu.js'
 import { maybeMarkAspect, handleVideoTimeUpdate, toggleShortPlayback, goToSlideshowSlide, stepSlideshow, syncRenderedShortVideoLoop } from './playback.js'
 import { attachShortVideoDebug } from './debug.js'
-import { normalizeVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
+import { bindVolumeWheel, normalizeVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
 import { createFeedVideoControls, bindFeedVideoControls } from '../feed/video-controls.js'
 
 var _state = null
@@ -1213,6 +1213,9 @@ export function makeShortItem(entryData, existingEl) {
     }
     else if (action === 'fullscreen') toggleMomentFullscreen(entryObj)
   })
+  bindVolumeWheel(topControls.querySelector('.shorts-volume-control'), function () {
+    return _state.muted ? 0 : _state.volume
+  }, setShortVolume)
   refs.volumeSlider.addEventListener('input', function (e) {
     e.stopPropagation()
     setShortVolume(refs.volumeSlider.value)
