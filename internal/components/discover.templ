@@ -41,6 +41,7 @@ templ DiscoverGrid(p PageProps, videos []model.DiscoveryVideo, pending bool) {
 templ PlayerDiscoveryRail(p PageProps, anchorVideoID string, localVideos []model.Video, videos []model.DiscoveryVideo, pending bool) {
 	<div
 		id="player-discovery-rail"
+		data-youtube-origin="related"
 		if pending {
 			hx-get={ "/api/videos/" + anchorVideoID + "/recommendations" }
 			hx-trigger="load delay:2s"
@@ -71,6 +72,7 @@ templ DiscoveryCard(p PageProps, video model.DiscoveryVideo) {
 		data-video-id={ video.VideoID }
 		data-channel-id={ video.ChannelID }
 		data-platform="youtube"
+		data-youtube-origin="discover"
 	>
 		<div class="video-thumbnail">
 			<img src={ video.ThumbnailURL } loading="lazy" alt=""/>

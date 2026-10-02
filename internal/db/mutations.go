@@ -177,60 +177,69 @@ type LikeMutation struct {
 
 func (db *DB) MutateLike(m LikeMutation) (MutationResult, error) {
 	var result MutationResult
-	rawTweetID := strings.TrimSpace(m.TweetID)
-	m.UpdatedAtMs = mutationTimestamp(m.UpdatedAtMs)
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		if m.Action == "set" && len(m.Fields) > 0 {
-			if err := db.ensureFeedItemStubFromLikeTx(tx, rawTweetID, m.Fields); err != nil {
-				return err
-			}
-		}
-		var err error
-		if m.Action == "set" {
-			result.CanonicalID, err = db.resolveFeedStateIDForWriteTx(tx, rawTweetID)
-		} else {
-			result.CanonicalID, err = resolveFeedStateIDTx(tx, rawTweetID)
-		}
-		if err != nil {
-			return err
-		}
-		result.Applied, err = claimMutationClockTx(tx, "like", result.CanonicalID, m.Action, m.UpdatedAtMs)
-		if err != nil || !result.Applied {
-			return err
-		}
-		switch m.Action {
-		case "set":
-			if _, err := tx.Exec(
-				`INSERT INTO feed_likes (tweet_id, liked_at) VALUES (?, ?)
-				 ON CONFLICT(tweet_id) DO UPDATE SET liked_at = excluded.liked_at`,
-				result.CanonicalID, m.UpdatedAtMs,
-			); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(
-				`INSERT INTO feed_seen (tweet_id, seen_at) VALUES (?, ?)
-				 ON CONFLICT(tweet_id) DO UPDATE SET seen_at = MAX(feed_seen.seen_at, excluded.seen_at)`,
-				result.CanonicalID, m.UpdatedAtMs,
-			); err != nil {
-				return err
-			}
-			if err := requireXContentAssetsForUserStateTx(tx, []string{rawTweetID, result.CanonicalID}, "like", m.UpdatedAtMs); err != nil {
-				return err
-			}
-		case "clear":
-			if _, err := tx.Exec(
-				`DELETE FROM feed_likes WHERE tweet_id = ?`,
-				result.CanonicalID,
-			); err != nil {
-				return err
-			}
-			if err := refreshXContentUserStateRequirementTx(tx, []string{rawTweetID, result.CanonicalID}, m.UpdatedAtMs); err != nil {
-				return err
-			}
-		}
-		return nil
+		return db.mutateLikeTx(tx, m, &result)
 	})
 	return result, err
+}
+
+func (db *DB) mutateLikeTx(tx *sql.Tx, m LikeMutation, result *MutationResult) error {
+	rawTweetID := strings.TrimSpace(m.TweetID)
+	m.UpdatedAtMs = mutationTimestamp(m.UpdatedAtMs)
+	if m.Action == "set" && len(m.Fields) > 0 {
+		if err := db.ensureFeedItemStubFromLikeTx(tx, rawTweetID, m.Fields); err != nil {
+			return err
+		}
+	}
+	var err error
+	if m.Action == "set" {
+		result.CanonicalID, err = db.resolveFeedStateIDForWriteTx(tx, rawTweetID)
+	} else {
+		result.CanonicalID, err = resolveFeedStateIDTx(tx, rawTweetID)
+	}
+	if err != nil {
+		return err
+	}
+	result.Applied, err = claimMutationClockTx(tx, "like", result.CanonicalID, m.Action, m.UpdatedAtMs)
+	if err != nil || !result.Applied {
+		return err
+	}
+	if m.Action == "clear" {
+		if err := clearStreamSaveIntentTx(tx, result.CanonicalID, "like", m.UpdatedAtMs); err != nil {
+			return err
+		}
+	}
+	switch m.Action {
+	case "set":
+		if _, err := tx.Exec(
+			`INSERT INTO feed_likes (tweet_id, liked_at) VALUES (?, ?)
+				 ON CONFLICT(tweet_id) DO UPDATE SET liked_at = excluded.liked_at`,
+			result.CanonicalID, m.UpdatedAtMs,
+		); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO feed_seen (tweet_id, seen_at) VALUES (?, ?)
+				 ON CONFLICT(tweet_id) DO UPDATE SET seen_at = MAX(feed_seen.seen_at, excluded.seen_at)`,
+			result.CanonicalID, m.UpdatedAtMs,
+		); err != nil {
+			return err
+		}
+		if err := requireXContentAssetsForUserStateTx(tx, []string{rawTweetID, result.CanonicalID}, "like", m.UpdatedAtMs); err != nil {
+			return err
+		}
+	case "clear":
+		if _, err := tx.Exec(
+			`DELETE FROM feed_likes WHERE tweet_id = ?`,
+			result.CanonicalID,
+		); err != nil {
+			return err
+		}
+		if err := refreshXContentUserStateRequirementTx(tx, []string{rawTweetID, result.CanonicalID}, m.UpdatedAtMs); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (db *DB) ApplyLikeMutation(tweetID, action string, updatedAtMs int64) error {
@@ -252,58 +261,69 @@ type BookmarkMutation struct {
 
 func (db *DB) MutateBookmark(m BookmarkMutation) (MutationResult, error) {
 	var result MutationResult
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		return db.mutateBookmarkTx(tx, m, &result)
+	})
+	return result, err
+}
+
+func (db *DB) mutateBookmarkTx(tx *sql.Tx, m BookmarkMutation, result *MutationResult) error {
 	rawVideoID := strings.TrimSpace(m.VideoID)
 	m.UpdatedAtMs = mutationTimestamp(m.UpdatedAtMs)
-	err := db.WithWrite(func(tx *sql.Tx) error {
-		var err error
-		if m.Action == "set" {
-			result.CanonicalID, err = db.resolveFeedStateIDForWriteTx(tx, rawVideoID)
-		} else {
-			result.CanonicalID, err = resolveFeedStateIDTx(tx, rawVideoID)
-		}
-		if err != nil {
+	var err error
+	if m.Action == "set" {
+		result.CanonicalID, err = db.resolveFeedStateIDForWriteTx(tx, rawVideoID)
+	} else {
+		result.CanonicalID, err = resolveFeedStateIDTx(tx, rawVideoID)
+	}
+	if err != nil {
+		return err
+	}
+	result.Applied, err = claimMutationClockTx(tx, "bookmark", result.CanonicalID, m.Action, m.UpdatedAtMs)
+	if err != nil || !result.Applied {
+		return err
+	}
+	if m.Action == "clear" {
+		if err := clearStreamSaveIntentTx(tx, result.CanonicalID, "bookmark", m.UpdatedAtMs); err != nil {
 			return err
 		}
-		result.Applied, err = claimMutationClockTx(tx, "bookmark", result.CanonicalID, m.Action, m.UpdatedAtMs)
-		if err != nil || !result.Applied {
+	}
+	switch m.Action {
+	case "set":
+		if err := db.ensureBookmarkTargetStubsTx(tx, result.CanonicalID); err != nil {
 			return err
 		}
-		switch m.Action {
-		case "set":
-			if err := db.ensureBookmarkTargetStubsTx(tx, result.CanonicalID); err != nil {
-				return err
-			}
-			var categoryID int64
-			var customTitle, accountHandles, mediaIndices sql.NullString
-			err := tx.QueryRow(`
+		var categoryID int64
+		var customTitle, accountHandles, mediaIndices sql.NullString
+		err := tx.QueryRow(`
 				SELECT category_id, custom_title, account_handles, media_indices
 				FROM bookmarks WHERE video_id = ?
 			`, result.CanonicalID).Scan(&categoryID, &customTitle, &accountHandles, &mediaIndices)
-			if err != nil && err != sql.ErrNoRows {
-				return err
-			}
-			hadBookmark := err == nil
-			oldCategoryID := categoryID
-			oldCustomTitle := customTitle
-			oldAccountHandles := accountHandles
-			oldMediaIndices := mediaIndices
-			if m.CategoryID != nil {
-				categoryID = *m.CategoryID
-			}
-			if m.CustomTitle != nil {
-				customTitle = sql.NullString{String: *m.CustomTitle, Valid: true}
-			}
-			if m.AccountHandles != nil {
-				accountHandles = sql.NullString{String: *m.AccountHandles, Valid: true}
-			}
-			if m.MediaIndices != nil {
-				mediaIndices = sql.NullString{String: *m.MediaIndices, Valid: true}
-			}
-			if !hadBookmark || categoryID != oldCategoryID || customTitle != oldCustomTitle ||
-				accountHandles != oldAccountHandles || mediaIndices != oldMediaIndices {
-				result.Affected = 1
-			}
-			_, err = tx.Exec(`
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		hadBookmark := err == nil
+		oldCategoryID := categoryID
+		oldCustomTitle := customTitle
+		oldAccountHandles := accountHandles
+		oldMediaIndices := mediaIndices
+		if m.CategoryID != nil {
+			categoryID = *m.CategoryID
+		}
+		if m.CustomTitle != nil {
+			customTitle = sql.NullString{String: *m.CustomTitle, Valid: true}
+		}
+		if m.AccountHandles != nil {
+			accountHandles = sql.NullString{String: *m.AccountHandles, Valid: true}
+		}
+		if m.MediaIndices != nil {
+			mediaIndices = sql.NullString{String: *m.MediaIndices, Valid: true}
+		}
+		if !hadBookmark || categoryID != oldCategoryID || customTitle != oldCustomTitle ||
+			accountHandles != oldAccountHandles || mediaIndices != oldMediaIndices {
+			result.Affected = 1
+		}
+		_, err = tx.Exec(`
 				INSERT INTO bookmarks (video_id, category_id,
 				  custom_title, account_handles, media_indices, bookmarked_at)
 				VALUES (?, ?, ?, ?, ?, ?)
@@ -313,32 +333,30 @@ func (db *DB) MutateBookmark(m BookmarkMutation) (MutationResult, error) {
 				  account_handles = excluded.account_handles,
 				  media_indices = excluded.media_indices,
 				  bookmarked_at = excluded.bookmarked_at`,
-				result.CanonicalID, categoryID, customTitle, accountHandles, mediaIndices, m.UpdatedAtMs,
-			)
-			if err != nil {
-				return err
-			}
-			if err := requireXContentAssetsForUserStateTx(tx, []string{rawVideoID, result.CanonicalID}, "bookmark", m.UpdatedAtMs); err != nil {
-				return err
-			}
-		case "clear":
-			res, err := tx.Exec(
-				`DELETE FROM bookmarks WHERE video_id = ?`,
-				result.CanonicalID,
-			)
-			if err != nil {
-				return err
-			}
-			if n, rowsErr := res.RowsAffected(); rowsErr == nil {
-				result.Affected = int(n)
-			}
-			if err := refreshXContentUserStateRequirementTx(tx, []string{rawVideoID, result.CanonicalID}, m.UpdatedAtMs); err != nil {
-				return err
-			}
+			result.CanonicalID, categoryID, customTitle, accountHandles, mediaIndices, m.UpdatedAtMs,
+		)
+		if err != nil {
+			return err
 		}
-		return nil
-	})
-	return result, err
+		if err := requireXContentAssetsForUserStateTx(tx, []string{rawVideoID, result.CanonicalID}, "bookmark", m.UpdatedAtMs); err != nil {
+			return err
+		}
+	case "clear":
+		res, err := tx.Exec(
+			`DELETE FROM bookmarks WHERE video_id = ?`,
+			result.CanonicalID,
+		)
+		if err != nil {
+			return err
+		}
+		if n, rowsErr := res.RowsAffected(); rowsErr == nil {
+			result.Affected = int(n)
+		}
+		if err := refreshXContentUserStateRequirementTx(tx, []string{rawVideoID, result.CanonicalID}, m.UpdatedAtMs); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (db *DB) ApplyBookmarkMutation(m BookmarkMutation) error {

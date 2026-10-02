@@ -979,6 +979,12 @@ func normalizeXProfileTab(raw string) string {
 
 func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {
 	videoID := r.PathValue("videoID")
+	if r.URL.Query().Get("stream") == "" {
+		if pending, err := s.db.StreamVideoNeedsCapture(videoID); err == nil && pending {
+			http.Redirect(w, r, "/temp/watch?v="+url.QueryEscape(videoID)+"&mode=stream", http.StatusSeeOther)
+			return
+		}
+	}
 
 	video, err := s.db.GetVideo(videoID)
 	if err != nil || video == nil {
@@ -1036,6 +1042,18 @@ func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {
 	p.PageTitle = ResolveDearrowTitle(dearrowMode, video.Title, video.DearrowTitle, video.DearrowTitleCasual)
 	p.ActiveNav = "videos"
 	p.PageScripts = []string{"js/videojs_compat.js"}
+	if streamID := r.URL.Query().Get("stream"); streamID != "" {
+		session := s.youtubeStream(streamID)
+		if session == nil || session.videoID != videoID {
+			http.Redirect(w, r, "/temp/watch?v="+url.QueryEscape(videoID)+"&mode=stream", http.StatusSeeOther)
+			return
+		}
+		p.StreamManifestURL = "/api/youtube/streams/" + session.id + "/manifest"
+		p.StreamManifestType = session.manifestType
+		p.StreamSessionID = session.id
+		p.StreamIndexed = session.indexed
+		p.StreamTextTracks = session.textTracks
+	}
 	p.ESBundle = "js/dist/player.js"
 	p.Sidebar = s.mustBuildSidebar(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1686,9 +1704,17 @@ func (s *Server) handlePageTempWatch(w http.ResponseWriter, r *http.Request) {
 	p.PageTitle = "Downloading..."
 	p.ActiveNav = "videos"
 	p.Sidebar = s.mustBuildSidebar(r)
+	videoTitle := r.URL.Query().Get("title")
+	thumbnailURL := r.URL.Query().Get("thumbnail")
+	if video, err := s.db.GetVideo(videoID); err == nil && video != nil {
+		videoTitle = p.Prefs.VideoTitle(*video)
+	}
+	if thumbnailURL == "" {
+		thumbnailURL = "https://i.ytimg.com/vi/" + url.PathEscape(videoID) + "/mqdefault.jpg"
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = components.TempDownloadPage(p, videoID, youtubeURL).Render(r.Context(), w)
+	_ = components.TempDownloadPage(p, videoID, youtubeURL, videoTitle, thumbnailURL).Render(r.Context(), w)
 }
 
 func boolToInt(b bool) int {

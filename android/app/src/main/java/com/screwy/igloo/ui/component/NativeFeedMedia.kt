@@ -73,7 +73,7 @@ internal fun nativeInlineVideoPosterVisibility(
     if (shouldRenderVideoPosterOverlay(hasPlayer, firstFrameRendered)) View.VISIBLE else View.GONE
 
 internal class NativeInlineVideoManager(
-    private val player: ExoPlayer,
+    private var player: ExoPlayer,
 ) {
     private var activeKey: String? = null
     private var activeStreamUri: MediaUri? = null
@@ -147,6 +147,18 @@ internal class NativeInlineVideoManager(
     fun pause() {
         player.playWhenReady = false
         player.pause()
+    }
+
+    fun replacePlayer(replacement: ExoPlayer) {
+        val previous = player
+        previous.removeListener(listener)
+        player = replacement
+        player.addListener(listener)
+        firstFrameRendered = false
+        activePlayerView?.player = player
+        activePlayerView?.alpha = 0f
+        updateActivePosterVisibility()
+        previous.release()
     }
 
     fun release() {

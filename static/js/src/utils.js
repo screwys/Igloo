@@ -129,6 +129,41 @@ export function showToast(message) {
   console.log(String(message || ''))
 }
 
+export async function waitForSavedContent(payload, button) {
+  if (!payload || !payload.success) throw new Error(payload && (payload.error || payload.message) || t('bookmark_save_failed', 'Failed to save bookmark'))
+  if (!payload.pending) return payload
+  const oldTitle = button && button.title
+  const oldLabel = button && button.getAttribute('aria-label')
+  const saving = t('content_saving', 'Saving...')
+  showToast(saving)
+  if (button) {
+    button.title = saving
+    button.setAttribute('aria-label', saving)
+    button.setAttribute('aria-busy', 'true')
+  }
+  try {
+    for (;;) {
+      const status = await apiFetch(payload.save_status_url)
+      if (status && status.complete) {
+        const saved = await apiFetch(payload.save_result_url)
+        if (!saved || !saved.success) throw new Error(t('bookmark_save_failed', 'Failed to save bookmark'))
+        return Object.assign({}, payload, saved, { pending: false })
+      }
+      if (status && ['blocked', 'failed', 'cancelled'].includes(status.status)) {
+        throw new Error(status.error || t('content_save_cancelled', 'Saving stopped before the content was captured.'))
+      }
+      await new Promise(function (resolve) { setTimeout(resolve, 1000) })
+    }
+  } finally {
+    if (button) {
+      button.title = oldTitle
+      if (oldLabel == null) button.removeAttribute('aria-label')
+      else button.setAttribute('aria-label', oldLabel)
+      button.removeAttribute('aria-busy')
+    }
+  }
+}
+
 export function copyText(text) {
   if (window.MpaSiteBase && typeof window.MpaSiteBase.copyText === 'function') {
     return window.MpaSiteBase.copyText(text)

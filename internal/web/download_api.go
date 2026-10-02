@@ -1,12 +1,14 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
 
 	"github.com/screwys/igloo/internal/components"
+	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/subscribe"
 )
 
@@ -87,12 +89,17 @@ func (s *Server) handleQuickDownload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "error": msg})
 		return
 	}
-	if isHTMX {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = fmt.Fprint(w, `<span data-download-success="true">Queued for download</span>`)
+	state, _, err := s.db.TempDownloadState(rawURL)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "temporary_download_status", "Could not read download status")
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]any{"success": true, "queued": true})
+	if isHTMX {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = fmt.Fprintf(w, `<span data-download-success="true" data-download-request-id="%s">Queued for download</span>`, template.HTMLEscapeString(state.RequestID))
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"success": true, "queued": true, "request_id": state.RequestID})
 }
 
 func (s *Server) handleTempDownloadStatus(w http.ResponseWriter, r *http.Request) {
@@ -113,27 +120,54 @@ func (s *Server) handleTempDownloadStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if !found {
-		writeJSON(w, http.StatusOK, map[string]any{"success": true, "complete": true})
+		writeJSON(w, http.StatusOK, map[string]any{"success": true, "complete": true, "status": "complete"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success":  true,
-		"complete": false,
-		"status":   state.Status,
-		"error":    state.Error,
+		"success":    true,
+		"complete":   false,
+		"status":     state.Status,
+		"error":      state.Error,
+		"request_id": state.RequestID,
 	})
 }
 
 func (s *Server) handleCancelDownload(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		VideoID string `json:"video_id"`
-	}
-	if err := decodeJSON(w, r, &body); err != nil && requestBodyTooLarge(err) {
-		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+	if !requireAdmin(w, r) {
 		return
 	}
-	// Stub: full cancellation requires tracking active download contexts
-	writeJSON(w, 200, map[string]any{"success": true, "video_id": body.VideoID})
+	var body struct {
+		URL       string `json:"url"`
+		RequestID string `json:"request_id"`
+		VideoID   string `json:"video_id"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		if requestBodyTooLarge(err) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": requestBodyTooLargeMessage})
+			return
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "url required"})
+		return
+	}
+	rawURL := strings.TrimSpace(body.URL)
+	if rawURL == "" && body.VideoID != "" {
+		rawURL = "https://www.youtube.com/watch?v=" + strings.TrimSpace(body.VideoID)
+	}
+	platform := subscribe.DetectPlatform(rawURL, "")
+	if rawURL == "" || subscribe.ValidateInput(rawURL, platform) != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "supported YouTube, TikTok, or X URL required"})
+		return
+	}
+	state, err := s.workers.CancelTempDownload(r.Context(), rawURL, body.RequestID)
+	if errors.Is(err, db.ErrTempDownloadSuperseded) {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": err.Error(), "code": "temporary_download_superseded", "request_id": state.RequestID})
+		return
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "temporary_download_cancel", "Could not cancel download")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "status": state.Status, "request_id": state.RequestID})
 }
 
 func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {

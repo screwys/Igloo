@@ -889,6 +889,7 @@ func (db *DB) videoRetentionCutoffs(nowMs int64) (int64, int64) {
 
 const collectibleVideoWhereSQL = `
 	COALESCE(v.owner_kind, '') != 'tweet'
+	AND NOT EXISTS (SELECT 1 FROM web_video_streams streamed WHERE streamed.video_id = v.video_id)
 	AND COALESCE(v.source_kind, '') = ''
 	AND COALESCE(v.is_temp, 0) = 0
 	AND COALESCE(v.is_pinned, 0) = 0
@@ -911,6 +912,10 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 	var retiredKeys []string
 	collected := 0
 	err := db.WithWrite(func(tx *sql.Tx) error {
+		if _, err := tx.Exec(`DELETE FROM web_video_streams WHERE observed_at_ms < ?
+			AND NOT EXISTS (SELECT 1 FROM watch_history history WHERE history.video_id = web_video_streams.video_id)`, tempCutoffMs); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(`
 			DELETE FROM video_desires
 			WHERE source_channel_id IN (

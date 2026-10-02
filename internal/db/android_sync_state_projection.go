@@ -23,7 +23,8 @@ func (db *DB) ListAndroidSyncStateKeys() ([]AndroidSyncStateKey, error) {
 			UNION ALL SELECT 'bookmark_category', CAST(id AS TEXT) FROM bookmark_categories
 			UNION ALL SELECT 'feed_seen', tweet_id FROM feed_seen
 			UNION ALL SELECT 'moment_view', video_id FROM moment_views
-			UNION ALL SELECT 'watch_history', video_id FROM watch_history
+			UNION ALL SELECT 'watch_history', video_id FROM watch_history history
+			WHERE NOT ` + webOnlyStreamExistsSQL("history.video_id") + `
 			UNION ALL SELECT 'muted_channel', channel_id FROM muted_channels
 			UNION ALL SELECT 'channel_follow', channel_id FROM channel_follows
 			UNION ALL SELECT 'channel_star', channel_id FROM channel_stars
@@ -103,6 +104,7 @@ func (db *DB) ListAndroidSyncStateProjections(keys []AndroidSyncStateKey) ([]And
 			         'duration', s.duration, 'updated_at_ms', s.updated_at_ms)
 			FROM watch_history s
 			JOIN wanted w ON w.owner_kind = 'watch_history' AND w.owner_id = s.video_id
+			WHERE NOT `+webOnlyStreamExistsSQL("s.video_id")+`
 			UNION ALL
 			SELECT 'muted_channel', s.channel_id, s.channel_id,
 			       json_object('channel_id', s.channel_id, 'muted_at', s.muted_at)

@@ -1,0 +1,6 @@
+{
+  "version": "5.2.12",
+  "source": "https://github.com/shaka-project/shaka-player/releases/tag/v5.2.12",
+  "archive": "https://github.com/shaka-project/shaka-player/releases/download/v5.2.12/shaka-player-5.2.12.tgz",
+  "sha256": "b22dfdba631104c48a654cb623b08b0f79e2d52c83c0e9b4b7cff54730b55894"
+}

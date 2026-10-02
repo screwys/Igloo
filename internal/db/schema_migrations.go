@@ -24,6 +24,17 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name: "20261002_add_web_video_streams",
+		apply: func(tx *sql.Tx) error {
+			_, err := tx.Exec(webVideoStreamsTableStatement)
+			return err
+		},
+	},
+	{
+		name:  "20261002_add_temp_download_request_identity",
+		apply: addTempDownloadRequestIdentity,
+	},
+	{
 		name:  "20260930_add_feed_substring_search",
 		apply: addFeedSubstringSearch,
 	},
@@ -147,6 +158,22 @@ var schemaMigrations = []schemaMigration{
 		name:  "20260718_add_videos_is_temp",
 		apply: addVideosIsTempColumn,
 	},
+}
+
+func addTempDownloadRequestIdentity(tx *sql.Tx) error {
+	for _, column := range []string{"request_id", "save_intent_json"} {
+		exists, err := schemaColumnExists(tx, "temp_download_queue", column)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			if _, err := tx.Exec(`ALTER TABLE temp_download_queue ADD COLUMN ` + column + ` TEXT NOT NULL DEFAULT ''`); err != nil {
+				return err
+			}
+		}
+	}
+	_, err := tx.Exec(`UPDATE temp_download_queue SET request_id = lower(hex(randomblob(16))) WHERE request_id = ''`)
+	return err
 }
 
 func addContentReadIndexes(tx *sql.Tx) error {

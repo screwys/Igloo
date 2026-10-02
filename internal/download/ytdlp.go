@@ -447,7 +447,7 @@ func (y *YtDlpWrapper) FetchInfo(ctx context.Context, url string, opts ...Opts) 
 	if IsInstagramURL(url) {
 		cmd = cmd.IgnoreNoFormatsError().SleepRequests(6)
 	}
-	result, err := cmd.Run(ctx, url)
+	result, err := runYtDlpCommand(ctx, cmd, url)
 	if err != nil {
 		y.recordYtDlpOperationWithCounts(ctx, "youtube.info", url, start, err, opt, 0, 0, 0)
 		return nil, fmt.Errorf("yt-dlp info: %w", err)
@@ -485,7 +485,7 @@ func fetchPlaylistInfoCommand(opts Opts) *ytdlp.Command {
 func (y *YtDlpWrapper) FetchPlaylistInfo(ctx context.Context, url string, opts ...Opts) (map[string]any, error) {
 	start := time.Now()
 	opt := firstOpts(opts)
-	result, err := fetchPlaylistInfoCommand(opt).Run(ctx, url)
+	result, err := runYtDlpCommand(ctx, fetchPlaylistInfoCommand(opt), url)
 	if err != nil {
 		y.recordYtDlpOperationWithCounts(ctx, "youtube.playlist_info", url, start, err, opt, 0, 0, 0)
 		return nil, fmt.Errorf("yt-dlp playlist info: %w", err)
@@ -676,7 +676,7 @@ func (y *YtDlpWrapper) DownloadSubtitles(ctx context.Context, url string, opts O
 
 	cmd = applyCookieAuth(cmd, opts)
 
-	if _, err := cmd.Run(ctx, url); err != nil {
+	if _, err := runYtDlpCommand(ctx, cmd, url); err != nil {
 		return nil, err
 	}
 	tmpPath := regularPath(filepath.Join(tmpDir, "subtitle.en.vtt"))
@@ -723,7 +723,7 @@ func (y *YtDlpWrapper) FetchComments(ctx context.Context, url string, maxComment
 
 func (y *YtDlpWrapper) fetchVideoMetadata(ctx context.Context, url string, maxComments int, opts Opts, operation string) (db.VideoMetadataRefreshResult, error) {
 	start := time.Now()
-	result, err := fetchCommentsCommand(maxComments, opts).Run(ctx, url)
+	result, err := runYtDlpCommand(ctx, fetchCommentsCommand(maxComments, opts), url)
 	if err != nil {
 		y.recordYtDlpOperationWithCounts(ctx, operation, url, start, err, opts, 0, 0, 0)
 		return db.VideoMetadataRefreshResult{}, fmt.Errorf("yt-dlp metadata: %w", err)

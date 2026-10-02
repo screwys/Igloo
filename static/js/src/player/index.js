@@ -7,6 +7,7 @@ import { initCinemaView } from './cinema.js'
 import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
 import { readStoredVolume, writeStoredVolume } from '../volume.js'
 import { bindVideoFeedback } from '../video-feedback.js'
+import { initStreaming } from './streaming.js'
 
 const doc = document
 const root = doc.getElementById('player-root')
@@ -917,7 +918,7 @@ if (root && video) {
 
     // CC toggle — fetch tracks, inject <track>, show button if any exist
     var ccBtn = doc.getElementById('player-cc-btn')
-    if (ccBtn && videoId) {
+    if (ccBtn && videoId && !root.dataset.streamManifest) {
       var ccOn = false
       apiFetch('/api/videos/' + encodeURIComponent(videoId) + '/subtitles')
         .then(function (payload) {
@@ -1114,7 +1115,10 @@ if (root && video) {
     // Module inits
     initSponsorBlock(video, root)
     initPreviewHover(video, videoId, playerWrapper)
-    initProgress(video, videoId, root)
+    const progress = initProgress(video, videoId, root)
+    const autoplay = channelPlatform === 'youtube' || new URLSearchParams(window.location.search).get('autoplay') === '1'
+    if (root.dataset.streamManifest) initStreaming(video, root, autoplay, progress && progress.resumePosition)
+    else if (autoplay) video.play().catch(function () {})
 
     // Global click: close popup menus
     doc.addEventListener('click', function (event) {

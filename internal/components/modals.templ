@@ -271,6 +271,7 @@ templ PrefsBody(p PageProps, prefs PrefsData) {
 				<nav class="prefs-tabs-nav">
 					<button class="prefs-tab active" data-prefs-tab="general" type="button">{ L(p, "settings_tab_general", "General") }</button>
 					<button class="prefs-tab" data-prefs-tab="appearance" type="button">{ L(p, "settings_appearance", "Appearance") }</button>
+					<button class="prefs-tab" data-prefs-tab="playback" type="button">{ L(p, "settings_tab_playback", "Playback") }</button>
 					<button class="prefs-tab" data-prefs-tab="feed" type="button">{ L(p, "settings_tab_platform_settings", "Platform Settings") }</button>
 					<button class="prefs-tab" data-prefs-tab="sponsorblock" type="button">{ L(p, "settings_tab_sponsorblock", "SponsorBlock") }</button>
 					<button class="prefs-tab" data-prefs-tab="account" type="button">{ L(p, "settings_tab_account", "Account") }</button>
@@ -287,6 +288,7 @@ templ PrefsBody(p PageProps, prefs PrefsData) {
 				<div class="prefs-tabs-content">
 					@prefsGeneralTab(p, prefs)
 					@prefsAppearanceTab(p, prefs)
+					@prefsBrowserPlaybackTab(p)
 					@prefsFeedTab(p, prefs)
 					@prefsSponsorBlockTab(p, prefs)
 					@prefsAccountTab(p)
@@ -313,6 +315,61 @@ templ PrefsBody(p PageProps, prefs PrefsData) {
 		</div>
 		<div id="prefs-status" class="status-msg" style="margin-top:0.5rem; min-height:1.2em; text-align:right;"></div>
 	</form>
+}
+
+templ prefsBrowserPlaybackTab(p PageProps) {
+	<div class="prefs-tab-panel" data-prefs-panel="playback" data-browser-playback style="display:none;">
+		<div class="account-tab-grid">
+		for _, choice := range []PlatformChoice{
+			{Value: "search", Label: L(p, "settings_youtube_search", "Search")},
+			{Value: "discover", Label: L(p, "nav_discover", "Discover")},
+			{Value: "related", Label: L(p, "settings_youtube_related", "Related")},
+		} {
+			<div class="form-group">
+				<label for={ "browser-youtube-mode-" + choice.Value }>{ choice.Label }</label>
+				<select data-setting-choices id={ "browser-youtube-mode-" + choice.Value } class="input" data-playback-mode={ choice.Value }>
+					<option value="download">{ L(p, "settings_youtube_download_first", "Download first") }</option>
+					<option value="stream">{ L(p, "settings_youtube_stream", "Stream") }</option>
+				</select>
+			</div>
+		}
+		<div class="form-group">
+			<label for="browser-stream-cap">{ L(p, "settings_stream_quality_cap", "Stream quality limit") }</label>
+			<select data-setting-choices id="browser-stream-cap" class="input" data-playback-cap>
+				for _, height := range []string{"240", "360", "480", "720", "1080", "1440", "2160"} {
+					<option value={ height } selected?={ height == "720" }>{ height + "p" }</option>
+				}
+				<option value="0">{ L(p, "settings_stream_best", "Best") }</option>
+			</select>
+		</div>
+		</div>
+		<div class="account-tab-grid">
+			<div data-buffer-origin="youtube">
+				<div class="form-group">
+					<label for="browser-buffer-profile-youtube">{ L(p, "settings_buffer_youtube", "Stream buffering") }</label>
+					<select data-setting-choices id="browser-buffer-profile-youtube" class="input" data-buffer-profile>
+						<option value="quick">{ L(p, "settings_buffer_quick", "Quick") }</option>
+						<option value="balanced" selected>{ L(p, "settings_buffer_balanced", "Balanced") }</option>
+						<option value="smooth">{ L(p, "settings_buffer_smooth", "Smooth") }</option>
+						<option value="custom">{ L(p, "settings_buffer_custom", "Custom") }</option>
+					</select>
+				</div>
+				<div class="hidden" data-buffer-custom style="display:flex;gap:1rem;flex-wrap:wrap;">
+					for _, setting := range []PlatformChoice{
+						{Value: "startup", Label: L(p, "settings_buffer_startup", "Startup (seconds)")},
+						{Value: "refill", Label: L(p, "settings_buffer_refill", "Refill (seconds)")},
+						{Value: "ahead", Label: L(p, "settings_buffer_ahead", "Buffer ahead (seconds)")},
+					} {
+						<div class="form-group" style="flex:1;min-width:140px;">
+							<label for={ "browser-buffer-youtube-" + setting.Value }>{ setting.Label }</label>
+							<input id={ "browser-buffer-youtube-" + setting.Value } type="number" class="input" data-buffer-value={ setting.Value } min="0" step="any" disabled/>
+						</div>
+					}
+				</div>
+			</div>
+		</div>
+		<p class="form-hint" data-playback-status role="status"></p>
+	</div>
 }
 
 // prefsAppearanceTab renders the web-only theme controls.

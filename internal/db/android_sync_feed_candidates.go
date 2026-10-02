@@ -329,6 +329,7 @@ func (db *DB) listAndroidSyncDesiredVideoIDsAmong(
 	includeInstagramTagged := db.InstagramIncludeTaggedEnabled()
 	youtubeSelection := `(v.channel_id LIKE 'youtube_%'
 		AND COALESCE(v.published_at, 0) >= ?
+		AND NOT ` + webOnlyStreamExistsSQL("v.video_id") + `
 		AND EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.channel_id = v.channel_id))`
 	if fullYoutubeMetadata {
 		youtubeSelection = `(` + androidSyncWebYoutubeLibraryPredicate("v") + `)

@@ -132,6 +132,13 @@ func (s *Server) handleBookmarkAdd(w http.ResponseWriter, r *http.Request) {
 	if mediaIndicesJSON != "" {
 		mutation.MediaIndices = &mediaIndicesJSON
 	}
+	if s.queueStreamSave(w, r, rawVideoID, db.TempDownloadSaveIntent{
+		Bookmark: &mutation, ArchiveBookmark: bookmarkArchivePathsAllowed(user), CombineImages: body.CombineImages,
+	}, map[string]any{
+		"bookmarked": false, "category_id": body.CategoryID, "category_name": category.Name,
+	}) {
+		return
+	}
 	result, err := s.db.MutateBookmark(mutation)
 	if err != nil {
 		slog.Error("MutateBookmark", "video", rawVideoID, "err", err)

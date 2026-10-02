@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.os.Binder
 import android.os.IBinder
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -15,6 +16,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.screwy.igloo.AppRuntime
 import com.screwy.igloo.R
+import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
 import com.screwy.igloo.outbox.OutboxKind
@@ -27,13 +29,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.collect
 import org.koin.core.context.GlobalContext
 
 @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 class PlaybackService : MediaSessionService() {
-    lateinit var player: ExoPlayer
-        private set
+    private lateinit var playerState: MutableState<ExoPlayer>
+    val player: ExoPlayer get() = playerState.value
     private lateinit var session: MediaSession
+    private lateinit var playbackListener: Player.Listener
+    private lateinit var prefs: PreferencesRepo
+    private var bufferDurations = PlaybackBufferDurations()
     var backgroundPlayback by mutableStateOf(false)
     var videoId: String? = null
         set(value) {
@@ -58,13 +64,16 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         AppRuntime.prepareLocalSession(application)
         val koin = GlobalContext.get()
-        player = buildIglooPlayer(this, koin.get<AuthTokenProvider>(), koin.get<IglooHostProvider>()).apply {
-            setWakeMode(C.WAKE_MODE_LOCAL)
-        }
+        prefs = koin.get()
+        playerState = mutableStateOf(
+            buildIglooPlayer(this, koin.get<AuthTokenProvider>(), koin.get<IglooHostProvider>()).apply {
+                setWakeMode(C.WAKE_MODE_LOCAL)
+            },
+        )
         session = buildIglooMediaSession(this, player, koin.get(), koin.get())
         addSession(session)
         sponsorBlock = SponsorBlockPlaybackController(
-            seekTo = player::seekTo,
+            seekTo = { positionMs -> player.seekTo(positionMs) },
             skippedMessage = { category ->
                 getString(R.string.sponsorblock_segment_skipped, getString(sponsorBlockLabelRes(category)))
             },
@@ -76,7 +85,7 @@ class PlaybackService : MediaSessionService() {
             val duration = player.duration.coerceAtLeast(0L) / 1000.0
             scope.launch { outbox.enqueue(OutboxKind.Progress(id, position, duration)) }
         }
-        player.addListener(object : Player.Listener {
+        playbackListener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (!isPlaying) saveProgress()
             }
@@ -91,7 +100,11 @@ class PlaybackService : MediaSessionService() {
                     saveProgress()
                 }
             }
-        })
+        }
+        player.addListener(playbackListener)
+        scope.launch {
+            prefs.playbackBuffering().collect { applyBufferDurations(it.durations) }
+        }
         scope.launch {
             while (isActive) {
                 delay(500L)
@@ -121,6 +134,31 @@ class PlaybackService : MediaSessionService() {
 
     fun setSessionActivity(activity: PendingIntent) {
         session.setSessionActivity(activity)
+    }
+
+    suspend fun playerForPlayback(): ExoPlayer {
+        applyBufferDurations(prefs.getPlaybackBuffering().durations)
+        return player
+    }
+
+    private fun applyBufferDurations(requestedDurations: PlaybackBufferDurations) {
+        if (requestedDurations == bufferDurations) return
+        val previous = player
+        val koin = GlobalContext.get()
+        val replacement = buildIglooPlayer(
+            this,
+            koin.get<AuthTokenProvider>(),
+            koin.get<IglooHostProvider>(),
+            requestedDurations,
+            previous.applicationLooper,
+        ).apply { setWakeMode(C.WAKE_MODE_LOCAL) }
+        previous.removeListener(playbackListener)
+        copyIglooPlaybackState(previous, replacement)
+        replacement.addListener(playbackListener)
+        session.setPlayer(replacement)
+        playerState.value = replacement
+        bufferDurations = requestedDurations
+        previous.release()
     }
 
     override fun onDestroy() {

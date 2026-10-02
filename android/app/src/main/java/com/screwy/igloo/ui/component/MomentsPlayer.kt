@@ -46,11 +46,9 @@ import com.screwy.igloo.log.Logger
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.media.OwnerKind
 import com.screwy.igloo.media.assetOwnerKind
-import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.Reachability
 import com.screwy.igloo.net.ServerBaseUrlProvider
-import com.screwy.igloo.net.auth.AuthTokenProvider
-import com.screwy.igloo.player.buildIglooPlayer
+import com.screwy.igloo.player.rememberIglooPlayer
 import com.screwy.igloo.ui.nav.LocalDrawerController
 import com.screwy.igloo.ui.theme.IglooColors
 import com.screwy.igloo.ui.theme.contrastRatio
@@ -251,8 +249,6 @@ fun MomentsPlayer(
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val authTokens: AuthTokenProvider = koinInject()
-    val iglooHostProvider: IglooHostProvider = koinInject()
     val syncDao: AndroidSyncDao = koinInject()
     val baseUrlProvider: ServerBaseUrlProvider = koinInject()
     val reachability: Reachability = koinInject()
@@ -275,11 +271,7 @@ fun MomentsPlayer(
     val effectiveChromeVisible = chromeVisible && !isInPictureInPicture
     // IglooPlayerFactory resolves the bearer token for each media request. Rotating a
     // token must not throw away a slideshow's current audio position.
-    val slideshowAudioPlayer =
-        remember(context, authTokens, iglooHostProvider) {
-            buildIglooPlayer(context, authTokens, iglooHostProvider)
-        }
-    DisposableEffect(slideshowAudioPlayer) { onDispose { slideshowAudioPlayer.release() } }
+    val slideshowAudioPlayer = rememberIglooPlayer() ?: return
 
     var lifecycleStarted by remember {
         mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
@@ -372,10 +364,10 @@ fun MomentsPlayer(
 
     var muted by remember { mutableStateOf(muteDefault) }
     LaunchedEffect(muteDefault) { muted = muteDefault }
-    LaunchedEffect(muted) { slideshowAudioPlayer.volume = if (muted) 0f else 1f }
+    LaunchedEffect(slideshowAudioPlayer, muted) { slideshowAudioPlayer.volume = if (muted) 0f else 1f }
     var pendingUnfollowItem by remember { mutableStateOf<MomentItem?>(null) }
 
-    LaunchedEffect(pagerState, pagerItems, syncDao, baseUrlProvider.baseUrl()) {
+    LaunchedEffect(slideshowAudioPlayer, pagerState, pagerItems, syncDao, baseUrlProvider.baseUrl()) {
         val baseUrl = baseUrlProvider.baseUrl()
         combine(
                 snapshotFlow { pagerState.currentPage.coerceIn(0, pagerItems.lastIndex) },

@@ -253,7 +253,7 @@ private fun VideoSurface(
     )
     DisposableEffect(player) {
         onDispose {
-            playerView.player = null
+            if (playerView.player === player) playerView.player = null
         }
     }
 }

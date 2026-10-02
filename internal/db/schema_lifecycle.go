@@ -82,6 +82,7 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 	"video_repost_sources":        schemaLifecycleArchive,
 	"videos":                      schemaLifecycleArchive,
 	"watch_history":               schemaLifecycleUserState,
+	"web_video_streams":           schemaLifecycleArchive,
 
 	"search_feed_text_fts":           schemaLifecycleDerivedCache,
 	"search_feed_text_fts_config":    schemaLifecycleDerivedCache,

@@ -27,6 +27,13 @@ type LanguageChoice struct {
 	Name string
 }
 
+type StreamTextTrack struct {
+	URL       string `json:"url"`
+	Language  string `json:"language"`
+	Label     string `json:"label"`
+	Automatic bool   `json:"automatic"`
+}
+
 // IsShortsPlatform returns true for platforms that use vertical (9:16) thumbnails.
 func (c ChannelWithVideos) IsShortsPlatform() bool {
 	return c.Channel.Platform == "tiktok" || c.Channel.Platform == "instagram" || c.Channel.Platform == "twitter"
@@ -68,6 +75,11 @@ type PageProps struct {
 	StaticV                 func(string) string
 	PageScripts             []string // JS files to include after base scripts.
 	ESBundle                string   // esbuild bundle to load (e.g. "js/dist/feed.js")
+	StreamManifestURL       string
+	StreamManifestType      string
+	StreamSessionID         string
+	StreamIndexed           bool
+	StreamTextTracks        []StreamTextTrack
 	Prefs                   PrefsData
 }
 

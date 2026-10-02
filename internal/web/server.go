@@ -67,6 +67,8 @@ type Server struct {
 	androidSyncSessions            map[string]*androidSyncSession
 	androidSyncAssetServeSemOnce   sync.Once
 	androidSyncAssetServeSemaphore chan struct{}
+	youtubeStreamsMu               sync.Mutex
+	youtubeStreams                 map[string]*youtubeStreamSession
 }
 
 func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, staticV func(string) string) http.Handler {
@@ -82,6 +84,11 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 		staticV:     staticV,
 		i18n:        catalog,
 		authLimiter: newAuthAttemptLimiter(time.Now),
+	}
+	if workers != nil {
+		workers.SetTempBookmarkArchive(func(archive db.TempDownloadBookmarkArchive) {
+			go s.startMutationBookmarkArchive(true, archive.VideoID, archive.CombineImages)
+		})
 	}
 	s.loadServerDashboardInventory()
 
@@ -143,6 +150,8 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 	s.registerXAPIRoutes(mux)
 	s.registerPreviewAPIRoutes(mux)
 	s.registerDownloadAPIRoutes(mux)
+	s.registerYouTubeStreamRoutes(mux)
+	mux.HandleFunc("GET /api/youtube/{videoID}/saved-state", s.handleYouTubeSavedState)
 	s.registerDownloaderReportRoutes(mux)
 	s.registerTweetMediaAPIRoutes(mux)
 	s.registerAndroidSyncAPIRoutes(mux)

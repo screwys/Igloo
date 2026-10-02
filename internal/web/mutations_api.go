@@ -63,9 +63,13 @@ func (s *Server) handleMutationLike(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, 400, "invalid_body", err.Error())
 		return
 	}
-	result, err := s.db.MutateLike(db.LikeMutation{
+	mutation := db.LikeMutation{
 		TweetID: body.TweetID, Action: body.Action, UpdatedAtMs: body.UpdatedAtMs,
-	})
+	}
+	if body.Action == "set" && s.queueStreamSave(w, r, body.TweetID, db.TempDownloadSaveIntent{Like: &mutation}, map[string]any{"is_liked": false}) {
+		return
+	}
+	result, err := s.db.MutateLike(mutation)
 	if writeMutationError(w, "MutateLike", err) {
 		return
 	}
@@ -112,7 +116,7 @@ func (s *Server) handleMutationBookmark(w http.ResponseWriter, r *http.Request) 
 		categoryID := category.ID
 		body.CategoryID = &categoryID
 	}
-	result, err := s.db.MutateBookmark(db.BookmarkMutation{
+	mutation := db.BookmarkMutation{
 		VideoID:        body.VideoID,
 		Action:         body.Action,
 		CategoryID:     body.CategoryID,
@@ -120,7 +124,13 @@ func (s *Server) handleMutationBookmark(w http.ResponseWriter, r *http.Request) 
 		AccountHandles: body.AccountHandles,
 		MediaIndices:   body.MediaIndices,
 		UpdatedAtMs:    body.UpdatedAtMs,
-	})
+	}
+	if body.Action == "set" && s.queueStreamSave(w, r, body.VideoID, db.TempDownloadSaveIntent{
+		Bookmark: &mutation, ArchiveBookmark: bookmarkArchivePathsAllowed(user), CombineImages: body.CombineImages,
+	}, map[string]any{"bookmarked": false}) {
+		return
+	}
+	result, err := s.db.MutateBookmark(mutation)
 	if writeMutationError(w, "MutateBookmark", err) {
 		return
 	}
@@ -128,7 +138,7 @@ func (s *Server) handleMutationBookmark(w http.ResponseWriter, r *http.Request) 
 		if body.Action == "set" {
 			s.requestXStatusRecovery(result.CanonicalID, true)
 			if result.Affected > 0 || body.CombineImages {
-				go s.startMutationBookmarkArchive(user, result.CanonicalID, body.CombineImages)
+				go s.startMutationBookmarkArchive(bookmarkArchivePathsAllowed(user), result.CanonicalID, body.CombineImages)
 			}
 		}
 		s.wakeFeedOrderInvalidation()
@@ -136,7 +146,7 @@ func (s *Server) handleMutationBookmark(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, 200, map[string]any{})
 }
 
-func (s *Server) startMutationBookmarkArchive(user *userInfo, videoID string, combineImages bool) {
+func (s *Server) startMutationBookmarkArchive(archivePathsAllowed bool, videoID string, combineImages bool) {
 	var categoryID int64
 	var customTitle, accountHandles, mediaIndices string
 	err := s.db.QueryRow(`
@@ -148,12 +158,15 @@ func (s *Server) startMutationBookmarkArchive(user *userInfo, videoID string, co
 		slog.Warn("bookmark mutation archive state read failed", "video", videoID, "err", err)
 		return
 	}
+	if categoryID <= 0 {
+		return
+	}
 	category, ok, err := s.resolveBookmarkCategory(categoryID)
 	if err != nil || !ok {
 		return
 	}
 	archivePath := ""
-	if bookmarkArchivePathsAllowed(user) {
+	if archivePathsAllowed {
 		archivePath = category.ArchivePath
 	}
 	s.archiveBookmark(videoID, archivePath, customTitle, accountHandles, parseBookmarkMediaIndices(mediaIndices), combineImages)

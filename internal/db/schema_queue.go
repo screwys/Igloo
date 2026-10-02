@@ -91,6 +91,8 @@ func discoverTempDownloadsTableStatement() string {
 func tempDownloadQueueTableStatement() string {
 	return `CREATE TABLE IF NOT EXISTS temp_download_queue (
 		url                TEXT PRIMARY KEY,
+		request_id         TEXT NOT NULL DEFAULT '',
+		save_intent_json   TEXT NOT NULL DEFAULT '',
 		platform           TEXT NOT NULL,
 		origin             TEXT NOT NULL DEFAULT 'interactive' CHECK(origin IN ('interactive', 'discover')),
 		status             TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')),

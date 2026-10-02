@@ -89,7 +89,11 @@ func (s *Server) handleFeedLike(w http.ResponseWriter, r *http.Request) {
 		fields = make(map[string]string)
 	}
 
-	result, err := s.db.MutateLike(db.LikeMutation{TweetID: displayTweetID, Action: "set", Fields: fields})
+	mutation := db.LikeMutation{TweetID: displayTweetID, Action: "set", Fields: fields}
+	if s.queueStreamSave(w, r, displayTweetID, db.TempDownloadSaveIntent{Like: &mutation}, map[string]any{"is_liked": false}) {
+		return
+	}
+	result, err := s.db.MutateLike(mutation)
 	if err != nil {
 		slog.Error("MutateLike", "tweet", displayTweetID, "err", err)
 		writeJSON(w, 500, map[string]any{"success": false, "error": "db error"})

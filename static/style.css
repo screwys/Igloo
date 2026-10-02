@@ -6237,6 +6237,107 @@ html.mini-player-moving * {
     }
 }
 
+.temp-dl-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    padding-top: 3rem;
+}
+
+.temp-dl-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    width: min(100%, 28rem);
+    padding: 2rem 1rem;
+    text-align: center;
+}
+
+.temp-dl-card h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    line-height: 1.3;
+}
+
+#temp-dl-status {
+    margin: 0;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+
+#temp-dl-status.is-error {
+    color: var(--error);
+}
+
+.temp-dl-video {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 22rem;
+}
+
+.temp-dl-thumbnail {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: var(--border-radius-sm);
+}
+
+.temp-dl-video-title {
+    margin: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.temp-dl-video-id {
+    margin: 0;
+    color: var(--text-muted);
+    font-family: monospace;
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+}
+
+.temp-dl-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 22rem;
+    margin-top: 0.5rem;
+}
+
+.temp-dl-actions .btn {
+    min-width: 0;
+    min-height: 44px;
+    margin: 0;
+}
+
+.temp-dl-actions .btn:hover {
+    color: var(--text-secondary);
+}
+
+.temp-dl-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid var(--border-color);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: tdl-spin 1s linear infinite;
+}
+
+.temp-dl-spinner.stopped {
+    display: none;
+    animation: none;
+}
+
+@keyframes tdl-spin {
+    to { transform: rotate(360deg); }
+}
+
 .empty-state {
     display: flex;
     flex-direction: column;

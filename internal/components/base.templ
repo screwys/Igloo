@@ -61,6 +61,7 @@ templ Base(p PageProps) {
 		@templ.Raw("<script>" + p.ShortcutConfigJSON() + "</script>")
 		@templ.Raw("<script>" + p.PreferencesConfigJSON() + "</script>")
 		<script src={ p.StaticV("js/web_theme.js") }></script>
+		<script src={ p.StaticV("js/playback_preferences.js") }></script>
 		<script src={ p.StaticV("js/site_base.js") }></script>
 		<script src={ p.StaticV("js/video_cards.js") }></script>
 		<script defer src={ p.StaticV("js/dist/mini-player.js") }></script>

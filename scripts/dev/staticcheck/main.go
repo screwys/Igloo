@@ -196,7 +196,7 @@ func scanCall(fset *token.FileSet, displayPath string, call *ast.CallExpr) []fin
 			)
 		}
 	case pkg == "io" && name == "Copy":
-		if len(call.Args) >= 2 && selectorEndsWith(call.Args[1], "Body") {
+		if len(call.Args) >= 2 && selectorEndsWith(call.Args[1], "Body") && !isResponseWriterParameter(call.Args[0]) {
 			add(
 				"igloo.network-copy-without-cap",
 				"WARNING",
@@ -206,6 +206,19 @@ func scanCall(fset *token.FileSet, displayPath string, call *ast.CallExpr) []fin
 	}
 
 	return findings
+}
+
+func isResponseWriterParameter(expr ast.Expr) bool {
+	ident, ok := expr.(*ast.Ident)
+	if !ok || ident.Obj == nil {
+		return false
+	}
+	field, ok := ident.Obj.Decl.(*ast.Field)
+	if !ok {
+		return false
+	}
+	pkg, name, ok := selectorName(field.Type)
+	return ok && pkg == "http" && name == "ResponseWriter"
 }
 
 func commandUsesShell(args []ast.Expr, commandIndex int) bool {

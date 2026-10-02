@@ -109,7 +109,6 @@ func runServer(externalStop <-chan struct{}, ready chan<- struct{}, serviceMode 
 		requestUpdateStop.Do(func() { close(updateStop) })
 	})
 	workers.SetWindowsUpdater(windowsUpdater)
-	go workers.StartAll()
 	if windowsUpdater != nil {
 		go windowsUpdater.Run(appCtx)
 		if err := windowsupdate.StartControl(appCtx, windowsUpdater); err != nil {
@@ -120,6 +119,7 @@ func runServer(externalStop <-chan struct{}, ready chan<- struct{}, serviceMode 
 	logStartupPhase("worker_launch", time.Since(phaseStart))
 
 	handler := web.NewServer(database, cfg, workers, staticV)
+	go workers.StartAll()
 	srv := newHTTPServer(cfg.ListenAddr, handler)
 
 	var shutdownOnce sync.Once

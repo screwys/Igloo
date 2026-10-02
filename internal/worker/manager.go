@@ -41,6 +41,9 @@ type Manager struct {
 	wg                        sync.WaitGroup
 	mediaKick                 chan struct{} // buffered(1): coalescing durable media wake-up
 	tempDownloadKick          chan struct{} // buffered(1): durable user-download wake-up
+	tempDownloadMu            sync.Mutex
+	tempDownloadActive        *tempDownloadAttempt
+	tempBookmarkArchive       func(db.TempDownloadBookmarkArchive)
 	discoveryKick             chan struct{} // buffered(1): coalescing kick for platform discovery
 	profileKick               chan struct{} // buffered(1): durable profile job wake-up
 	videoMetadataKick         chan struct{} // buffered(1): durable YouTube metadata wake-up

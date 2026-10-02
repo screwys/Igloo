@@ -433,6 +433,7 @@ func androidSyncDesiredVideoRowsSQL(selectExpr string, fullYoutubeMetadata bool)
 			JOIN videos v ON v.channel_id = cf.channel_id
 			WHERE v.channel_id LIKE 'youtube_%%'
 			  AND COALESCE(v.published_at, 0) >= ?
+			  AND NOT %s
 
 			UNION
 			SELECT %s
@@ -461,7 +462,7 @@ func androidSyncDesiredVideoRowsSQL(selectExpr string, fullYoutubeMetadata bool)
 			    OR v.channel_id LIKE 'tiktok_%%'
 			    OR v.channel_id LIKE 'instagram_%%'
 			  )
-		`, selectExpr, selectExpr, selectExpr, selectExpr)
+		`, selectExpr, webOnlyStreamExistsSQL("v.video_id"), selectExpr, selectExpr, selectExpr)
 	}
 
 	youtubeLibrary := androidSyncWebYoutubeLibraryPredicate("v")

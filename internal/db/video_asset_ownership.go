@@ -51,18 +51,30 @@ type VideoPreviewCandidate struct {
 // together. Derived assets are published separately and remain available while
 // a replacement is produced.
 func (db *DB) StoreCompletedVideo(video CompletedVideo) error {
+	_, err := db.storeCompletedVideo(video, nil, false)
+	return err
+}
+
+// StoreTempDownloadVideo publishes only while this request still owns its lease.
+// Finishing the queue in the same transaction makes cancellation preserve a
+// video whose primary media was already committed.
+func (db *DB) StoreTempDownloadVideo(work TempDownloadWork, video CompletedVideo, complete bool) (*TempDownloadBookmarkArchive, error) {
+	return db.storeCompletedVideo(video, &work, complete)
+}
+
+func (db *DB) storeCompletedVideo(video CompletedVideo, work *TempDownloadWork, complete bool) (*TempDownloadBookmarkArchive, error) {
 	video.VideoID = strings.TrimSpace(video.VideoID)
 	video.ChannelID = strings.TrimSpace(video.ChannelID)
 	video.OwnerKind = strings.TrimSpace(video.OwnerKind)
 	if video.VideoID == "" {
-		return fmt.Errorf("completed video id is empty")
+		return nil, fmt.Errorf("completed video id is empty")
 	}
 	platform, ok := videoPlatformForOwnerKind(video.OwnerKind)
 	if !ok || video.OwnerKind == "tweet" {
-		return fmt.Errorf("completed video %s has invalid non-X owner kind %q", video.VideoID, video.OwnerKind)
+		return nil, fmt.Errorf("completed video %s has invalid non-X owner kind %q", video.VideoID, video.OwnerKind)
 	}
 	if len(video.Assets) == 0 {
-		return fmt.Errorf("completed video %s has no primary media", video.VideoID)
+		return nil, fmt.Errorf("completed video %s has no primary media", video.VideoID)
 	}
 	var instagramAccounts []model.InstagramAccount
 	if platform == "instagram" {
@@ -71,7 +83,7 @@ func (db *DB) StoreCompletedVideo(video CompletedVideo) error {
 
 	prepared, newKeys, err := db.prepareCompletedVideoAssets(video, platform)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	hasPrimaryMedia := false
 	for _, asset := range prepared {
@@ -80,10 +92,20 @@ func (db *DB) StoreCompletedVideo(video CompletedVideo) error {
 		}
 	}
 	if !hasPrimaryMedia {
-		return fmt.Errorf("completed video %s has no primary media asset", video.VideoID)
+		return nil, fmt.Errorf("completed video %s has no primary media asset", video.VideoID)
 	}
 	var retiredKeys []string
+	var bookmarkArchive *TempDownloadBookmarkArchive
 	err = db.WithWrite(func(tx *sql.Tx) error {
+		origin := ""
+		if work != nil {
+			if err := tx.QueryRow(`SELECT origin FROM temp_download_queue WHERE url = ? AND request_id = ? AND status = 'processing' AND lease_owner = ?`, work.URL, work.RequestID, work.LeaseOwner).Scan(&origin); err != nil {
+				if err == sql.ErrNoRows {
+					return ErrTempDownloadInactive
+				}
+				return err
+			}
+		}
 		if err := upsertVideoMetadataTx(tx, video); err != nil {
 			return err
 		}
@@ -94,13 +116,34 @@ func (db *DB) StoreCompletedVideo(video CompletedVideo) error {
 		retiredKeys, err = replaceVideoAssetsTx(
 			tx, prepared[0].OwnerKind, video.VideoID, completedVideoPrimaryAssetKinds, prepared, 0,
 		)
+		if err != nil {
+			return err
+		}
+		if err := finishStreamCaptureTx(tx, video.VideoID); err != nil {
+			return err
+		}
+		if work == nil {
+			return nil
+		}
+		bookmarkArchive, err = db.applyTempDownloadSaveIntentTx(tx, work.URL, video.VideoID)
+		if err != nil {
+			return err
+		}
+		if complete {
+			if origin == "discover" {
+				if _, err := tx.Exec(`INSERT INTO discover_temp_downloads (video_id, downloaded_at_ms) VALUES (?, ?) ON CONFLICT(video_id) DO UPDATE SET downloaded_at_ms = excluded.downloaded_at_ms`, video.VideoID, time.Now().UnixMilli()); err != nil {
+					return err
+				}
+			}
+			_, err = tx.Exec(`DELETE FROM temp_download_queue WHERE url = ? AND request_id = ? AND lease_owner = ?`, work.URL, work.RequestID, work.LeaseOwner)
+		}
 		return err
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	db.removeRetiredCanonicalFiles(retiredKeys, newKeys)
-	return nil
+	return bookmarkArchive, nil
 }
 
 func sanitizeInstagramVideoMetadata(raw string) (string, []model.InstagramAccount) {

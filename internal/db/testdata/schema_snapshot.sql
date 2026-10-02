@@ -386,7 +386,7 @@ CREATE TABLE sponsorblock_checked ( video_id TEXT PRIMARY KEY, checked_at INTEGE
 CREATE TABLE sponsorblock_segments ( video_id TEXT NOT NULL, start_time REAL NOT NULL, end_time REAL NOT NULL, category TEXT NOT NULL, PRIMARY KEY (video_id, start_time) );
 
 -- table: temp_download_queue on temp_download_queue
-CREATE TABLE temp_download_queue ( url TEXT PRIMARY KEY, platform TEXT NOT NULL, origin TEXT NOT NULL DEFAULT 'interactive' CHECK(origin IN ('interactive', 'discover')), status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')), retry_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER NOT NULL DEFAULT 0, last_error_kind TEXT NOT NULL DEFAULT '', last_error TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL DEFAULT '', lease_until_ms INTEGER NOT NULL DEFAULT 0, added_at_ms INTEGER NOT NULL DEFAULT 0, started_at_ms INTEGER NOT NULL DEFAULT 0 );
+CREATE TABLE temp_download_queue ( url TEXT PRIMARY KEY, request_id TEXT NOT NULL DEFAULT '', save_intent_json TEXT NOT NULL DEFAULT '', platform TEXT NOT NULL, origin TEXT NOT NULL DEFAULT 'interactive' CHECK(origin IN ('interactive', 'discover')), status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'blocked')), retry_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER NOT NULL DEFAULT 0, last_error_kind TEXT NOT NULL DEFAULT '', last_error TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL DEFAULT '', lease_until_ms INTEGER NOT NULL DEFAULT 0, added_at_ms INTEGER NOT NULL DEFAULT 0, started_at_ms INTEGER NOT NULL DEFAULT 0 );
 
 -- table: translation_jobs on translation_jobs
 CREATE TABLE translation_jobs ( tweet_id TEXT NOT NULL, field TEXT NOT NULL, target_lang TEXT NOT NULL, source_hash TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'queued', priority INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at INTEGER NOT NULL DEFAULT 0, last_error_kind TEXT NOT NULL DEFAULT '', last_error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (tweet_id, field, target_lang) );
@@ -414,6 +414,9 @@ CREATE TABLE videos ( id INTEGER PRIMARY KEY AUTOINCREMENT, video_id TEXT UNIQUE
 
 -- table: watch_history on watch_history
 CREATE TABLE watch_history ( video_id TEXT PRIMARY KEY, playback_position REAL NOT NULL DEFAULT 0, duration REAL, updated_at_ms INTEGER NOT NULL DEFAULT 0 );
+
+-- table: web_video_streams on web_video_streams
+CREATE TABLE web_video_streams ( video_id TEXT PRIMARY KEY REFERENCES videos(video_id) ON DELETE CASCADE, observed_at_ms INTEGER NOT NULL ) WITHOUT ROWID;
 
 -- table: youtube_recommendations on youtube_recommendations
 CREATE TABLE youtube_recommendations ( anchor_video_id TEXT PRIMARY KEY, candidates_json TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'ready', 'blocked')), fetched_at_ms INTEGER NOT NULL DEFAULT 0, expires_at_ms INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL DEFAULT '', lease_until_ms INTEGER NOT NULL DEFAULT 0, requested_at_ms INTEGER NOT NULL DEFAULT 0, updated_at_ms INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (anchor_video_id) REFERENCES videos(video_id) ON DELETE CASCADE );

@@ -249,6 +249,9 @@ internal fun NativeFeedSurface(
     var showScrollToTop by remember { mutableStateOf(false) }
     var scrollAnchorRowId by rememberSaveable { mutableStateOf<String?>(null) }
     var scrollAnchorOffsetPx by rememberSaveable { mutableStateOf(0) }
+    val buffering by remember(prefs) { prefs.playbackBuffering() }
+        .collectAsStateWithLifecycle(initialValue = null)
+    val bufferDurations = buffering?.durations ?: return
     val controller = remember(context, imageLoader, authTokens, iglooHostProvider, mediaResolvers, seenBatcher) {
         NativeMainFeedController(
             context = context,
@@ -256,6 +259,7 @@ internal fun NativeFeedSurface(
             authTokens = authTokens,
             iglooHostProvider = iglooHostProvider,
             mediaResolvers = mediaResolvers,
+            bufferDurations = bufferDurations,
             colors = colors,
             callbacks = currentCallbacks,
             seenBatcher = seenBatcher,
@@ -330,6 +334,7 @@ internal fun NativeFeedSurface(
                             colors = colors,
                             callbacks = currentCallbacks,
                             isRefreshing = isRefreshing,
+                            bufferDurations = bufferDurations,
                         )
                     },
                     modifier = Modifier

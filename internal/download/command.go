@@ -95,6 +95,7 @@ func (r CommandRunner) RunBuilt(ctx context.Context, cmd *exec.Cmd) CommandResul
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	configureCommandCancellation(cmd)
 	err := cmd.Run()
 	ended := time.Now()
 	exitCode := 0
@@ -128,6 +129,7 @@ func runCommand(ctx context.Context, tool string, args []string, stdout, stderr 
 	cmd.Dir = workingDir
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	configureCommandCancellation(cmd)
 	return cmd.Run()
 }
 

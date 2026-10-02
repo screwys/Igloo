@@ -2136,6 +2136,7 @@
 
   // Up/Down arrow keys to navigate prefs tabs (and shortcuts sub-tabs)
   doc.addEventListener('keydown', function (e) {
+    if (e.defaultPrevented) return;
     if (!prefsModal || prefsModal.classList.contains('hidden')) return;
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     var tag = (e.target.tagName || '').toLowerCase();

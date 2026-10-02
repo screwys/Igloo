@@ -44,7 +44,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -61,9 +60,7 @@ import com.screwy.igloo.data.stripPlatformPrefix
 import com.screwy.igloo.log.Logger
 import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.media.MediaUri
-import com.screwy.igloo.net.IglooHostProvider
-import com.screwy.igloo.net.auth.AuthTokenProvider
-import com.screwy.igloo.player.buildIglooPlayer
+import com.screwy.igloo.player.rememberIglooPlayer
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlin.math.max
 import kotlinx.coroutines.delay
@@ -467,9 +464,6 @@ private fun BoxScope.MomentVideoLayer(
     sharedPlayerView: PlayerView? = null,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val authTokens: AuthTokenProvider = koinInject()
-    val iglooHostProvider: IglooHostProvider = koinInject()
     val resolvers: MediaResolvers = koinInject()
     val ownerKind = item.ownerKind
     val streamFlow =
@@ -491,16 +485,7 @@ private fun BoxScope.MomentVideoLayer(
     }
 
     val playerIsShared = sharedVideoPlayer != null
-    val player =
-        sharedVideoPlayer
-            ?: remember(item.videoId, context, authTokens, iglooHostProvider) {
-                buildIglooPlayer(context, authTokens, iglooHostProvider).apply {
-                    repeatMode = Player.REPEAT_MODE_OFF
-                }
-            }
-    if (!playerIsShared) {
-        DisposableEffect(player) { onDispose { player.release() } }
-    }
+    val player = sharedVideoPlayer ?: rememberIglooPlayer() ?: return
     var loadedKey by remember(item.videoId) { mutableStateOf<String?>(null) }
     var surfaceState by remember(item.videoId) { mutableStateOf(MomentVideoSurfaceState()) }
     var hasBeenActive by remember(item.videoId) { mutableStateOf(false) }

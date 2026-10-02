@@ -571,7 +571,7 @@ internal fun VideoSurface(
 
     DisposableEffect(player) {
         onDispose {
-            if (sharedPlayerView == null) {
+            if (sharedPlayerView == null && playerView.player === player) {
                 playerView.player = null
             }
         }

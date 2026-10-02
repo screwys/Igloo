@@ -3,6 +3,9 @@ package com.screwy.igloo.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.screwy.igloo.data.PreferencesRepo
+import com.screwy.igloo.player.PlaybackBufferDurations
+import com.screwy.igloo.player.PlaybackBufferProfile
+import com.screwy.igloo.player.PlaybackBuffering
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -39,6 +42,25 @@ class PlaybackSettingsViewModel(
             SharingStarted.WhileSubscribed(5_000L),
             PreferencesRepo.Defaults.MINI_PLAYER_AUTO_ENTER,
         )
+
+    val buffering: StateFlow<PlaybackBuffering?> =
+        prefs.playbackBuffering().stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000L),
+            null,
+        )
+
+    fun setBufferProfile(profile: PlaybackBufferProfile) {
+        viewModelScope.launch {
+            prefs.setPlaybackBuffering(prefs.getPlaybackBuffering().copy(profile = profile))
+        }
+    }
+
+    fun setCustomBuffer(durations: PlaybackBufferDurations) {
+        viewModelScope.launch {
+            prefs.setPlaybackBuffering(PlaybackBuffering(PlaybackBufferProfile.Custom, durations))
+        }
+    }
 
     fun setAutoplay(value: Boolean) {
         viewModelScope.launch { prefs.setAutoplay(value) }

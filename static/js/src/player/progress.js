@@ -51,19 +51,6 @@ export function initProgress(video, videoId, root) {
   window.addEventListener('pagehide', saveProgress)
   window.addEventListener('beforeunload', saveProgress)
 
-  // Autoplay
-  const autoplayCurrent = new URLSearchParams(window.location.search).get('autoplay') === '1'
-  const autoplayYoutube = channelPlatform === 'youtube'
-  if (autoplayCurrent || autoplayYoutube) {
-    video.autoplay = true
-    video.play().catch(function () {})
-  }
-  if (autoplayYoutube) {
-    video.addEventListener('loadedmetadata', function () {
-      video.play().catch(function () {})
-    })
-  }
-
   // Autoplay next on ended
   const AUTOPLAY_NEXT_KEY = 'playerAutoplayNextV1'
   video.addEventListener('ended', function () {
@@ -72,5 +59,5 @@ export function initProgress(video, videoId, root) {
     if (!autoplayNext || !nextUrl) return
     window.location.assign(nextUrl)
   })
-	return { saveNow: saveProgress }
+	return { saveNow: saveProgress, resumePosition: resumePos > resumeThreshold ? resumePos : 0 }
 }

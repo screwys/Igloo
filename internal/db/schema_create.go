@@ -4,6 +4,7 @@ func schemaCreateStatements() []string {
 	groups := [][]string{
 		schemaMigrationStatements(),
 		schemaArchiveStatements(),
+		{webVideoStreamsTableStatement},
 		schemaUserStateStatements(),
 		schemaDiagnosticStatements(),
 		schemaMaintainedStateStatements(),

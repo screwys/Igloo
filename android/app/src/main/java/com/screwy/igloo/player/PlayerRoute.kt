@@ -176,7 +176,6 @@ private fun PlayerContent(
     val outboxWriter: OutboxWriter = koinInject()
     val player = service.player
     val playbackCoordinator = remember { PlaybackCoordinator() }
-    val playbackPlayer = remember(player) { ExoPlayerPlaybackPlayer(player) }
     val activity = ctx.findActivity()
     val componentActivity = activity as? ComponentActivity
     val pictureInPictureSupported =
@@ -267,7 +266,7 @@ private fun PlayerContent(
         }
     DisposableEffect(player) {
         onDispose {
-            if (!service.backgroundPlayback) player.pause()
+            if (service.player === player && !service.backgroundPlayback) player.pause()
         }
     }
     DisposableEffect(activity) {
@@ -352,14 +351,15 @@ private fun PlayerContent(
             is MediaUri.Remote -> source.url
             is MediaUri.Missing -> return@LaunchedEffect
         }
+        val playbackPlayer = service.playerForPlayback()
         if (service.videoId == videoId && service.sourceUri == uri) return@LaunchedEffect
-        val resumeMs = if (service.videoId == videoId) player.currentPosition else
+        val resumeMs = if (service.videoId == videoId) playbackPlayer.currentPosition else
             ((watchHistory?.playbackPosition ?: 0.0) * 1000).toLong()
-        player.stop()
+        playbackPlayer.stop()
         service.videoId = videoId
         service.sourceUri = uri
         playbackCoordinator.bind(
-            player = playbackPlayer,
+            player = ExoPlayerPlaybackPlayer(playbackPlayer),
             source =
                 PlaybackSource(
                     mediaUri = streamUri,
@@ -467,7 +467,7 @@ private fun PlayerContent(
             video?.dearrowTitleCasual,
         )
     val canonicalShareUrl = video?.canonicalUrl?.takeIf { it.isNotBlank() }
-    LaunchedEffect(playerTitle, channel?.name, thumbnailUri, streamUri, videoId) {
+    LaunchedEffect(player, playerTitle, channel?.name, thumbnailUri, streamUri, videoId) {
         if (service.videoId != videoId) return@LaunchedEffect
         val item = player.currentMediaItem ?: return@LaunchedEffect
         val artworkUri = when (val thumbnail = thumbnailUri) {

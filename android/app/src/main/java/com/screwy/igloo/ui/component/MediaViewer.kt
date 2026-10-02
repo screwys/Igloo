@@ -38,7 +38,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
@@ -48,13 +47,10 @@ import androidx.media3.common.Player
 import coil3.compose.AsyncImage
 import com.screwy.igloo.R
 import com.screwy.igloo.media.MediaUri
-import com.screwy.igloo.net.IglooHostProvider
-import com.screwy.igloo.net.auth.AuthTokenProvider
-import com.screwy.igloo.player.buildIglooPlayer
+import com.screwy.igloo.player.rememberIglooPlayer
 import com.screwy.igloo.player.PlayerOverlay
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlin.math.abs
-import org.koin.compose.koinInject
 
 /** Shape for one media viewer page. */
 sealed class MediaItem {
@@ -246,32 +242,22 @@ private fun MediaVideoPage(
     loop: Boolean,
     onDismiss: (() -> Unit)? = null,
 ) {
-    val context = LocalContext.current
-    val authTokens: AuthTokenProvider = koinInject()
-    val iglooHostProvider: IglooHostProvider = koinInject()
     val remoteOffline = isIglooRemoteOffline(streamUri)
-    val player =
-        remember(streamUri, loop, remoteOffline, authTokens.bearerTokenSync()) {
-            if (streamUri is MediaUri.Missing || remoteOffline) {
-                null
-            } else {
-                buildIglooPlayer(context, authTokens, iglooHostProvider).also { player ->
-                    player.repeatMode = if (loop) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
-                    val mediaItem =
-                        when (streamUri) {
-                            is MediaUri.Local ->
-                                Media3Item.fromUri(streamUri.file.toURI().toString())
-                            is MediaUri.Remote -> Media3Item.fromUri(streamUri.url)
-                            is MediaUri.Missing -> null
-                        }
-                    mediaItem?.let {
-                        player.setMediaItem(it)
-                        player.prepare()
-                    }
-                    player.playWhenReady = active
-                }
-            }
+    val player = if (streamUri is MediaUri.Missing || remoteOffline) null else rememberIglooPlayer()
+    LaunchedEffect(player, streamUri, loop) {
+        val current = player ?: return@LaunchedEffect
+        current.repeatMode = if (loop) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        val mediaItem = when (streamUri) {
+            is MediaUri.Local -> Media3Item.fromUri(streamUri.file.toURI().toString())
+            is MediaUri.Remote -> Media3Item.fromUri(streamUri.url)
+            is MediaUri.Missing -> return@LaunchedEffect
         }
+        if (current.currentMediaItem?.localConfiguration?.uri != mediaItem.localConfiguration?.uri) {
+            current.setMediaItem(mediaItem)
+            current.prepare()
+            current.playWhenReady = active
+        }
+    }
     var firstFrame by remember(player) { mutableStateOf(false) }
     var isPlaying by remember(player) { mutableStateOf(player?.isPlaying == true) }
     var controlsVisible by remember(player, active) { mutableStateOf(true) }
@@ -291,11 +277,10 @@ private fun MediaVideoPage(
         current.addListener(listener)
         onDispose {
             current.removeListener(listener)
-            current.release()
         }
     }
     LaunchedEffect(player, muted) { player?.volume = if (muted) 0f else 1f }
-    LaunchedEffect(player, active) {
+    LaunchedEffect(active) {
         if (active) {
             player?.playWhenReady = true
         } else {

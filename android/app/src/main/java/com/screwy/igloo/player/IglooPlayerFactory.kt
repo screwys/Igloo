@@ -1,6 +1,7 @@
 package com.screwy.igloo.player
 
 import android.content.Context
+import android.os.Looper
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -32,10 +33,14 @@ fun buildIglooPlayer(
     context: Context,
     tokenProvider: AuthTokenProvider,
     hostProvider: IglooHostProvider,
+    bufferDurations: PlaybackBufferDurations = PlaybackBufferDurations(),
+    applicationLooper: Looper = Looper.getMainLooper(),
 ): ExoPlayer = buildIglooPlayer(
     context = context,
     tokenProvider = tokenProvider,
     iglooHostResolver = hostProvider::hostSync,
+    bufferDurations = bufferDurations,
+    applicationLooper = applicationLooper,
 )
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
@@ -43,17 +48,28 @@ internal fun buildIglooPlayer(
     context: Context,
     tokenProvider: AuthTokenProvider,
     iglooHostResolver: () -> String,
+    bufferDurations: PlaybackBufferDurations = PlaybackBufferDurations(),
+    applicationLooper: Looper = Looper.getMainLooper(),
 ): ExoPlayer {
     val dataSourceFactory = buildIglooDataSourceFactory(context, tokenProvider, iglooHostResolver)
     val loadControl = DefaultLoadControl.Builder()
-        .setBufferDurationsMs(
+        .setBufferDurationsMsForLocalPlayback(
             /* minBufferMs = */ 1_500,
             /* maxBufferMs = */ 12_000,
             /* bufferForPlaybackMs = */ 100,
             /* bufferForPlaybackAfterRebufferMs = */ 250,
         )
+        .setPrioritizeTimeOverSizeThresholdsForLocalPlayback(false)
+        .setBufferDurationsMsForStreaming(
+            /* minBufferMs = */ bufferDurations.aheadMs,
+            /* maxBufferMs = */ bufferDurations.aheadMs,
+            /* bufferForPlaybackMs = */ bufferDurations.startupMs,
+            /* bufferForPlaybackAfterRebufferMs = */ bufferDurations.refillMs,
+        )
+        .setPrioritizeTimeOverSizeThresholdsForStreaming(true)
         .build()
     return ExoPlayer.Builder(context)
+        .setLooper(applicationLooper)
         .setLoadControl(loadControl)
         .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
         .setAudioAttributes(
@@ -67,6 +83,28 @@ internal fun buildIglooPlayer(
         .setSeekBackIncrementMs(PLAYER_SEEK_INCREMENT_MS)
         .setSeekForwardIncrementMs(PLAYER_SEEK_INCREMENT_MS)
         .build()
+}
+
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
+internal fun copyIglooPlaybackState(previous: ExoPlayer, replacement: ExoPlayer) {
+    val playWhenReady = previous.playWhenReady
+    replacement.playbackParameters = previous.playbackParameters
+    replacement.volume = previous.volume
+    replacement.repeatMode = previous.repeatMode
+    replacement.shuffleModeEnabled = previous.shuffleModeEnabled
+    replacement.trackSelectionParameters = previous.trackSelectionParameters
+    replacement.videoScalingMode = previous.videoScalingMode
+    replacement.pauseAtEndOfMediaItems = previous.pauseAtEndOfMediaItems
+    if (previous.mediaItemCount > 0) {
+        replacement.setMediaItems(
+            (0 until previous.mediaItemCount).map(previous::getMediaItemAt),
+            previous.currentMediaItemIndex,
+            previous.currentPosition,
+        )
+        if (previous.playbackState != Player.STATE_IDLE) replacement.prepare()
+    }
+    previous.pause()
+    replacement.playWhenReady = playWhenReady
 }
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])

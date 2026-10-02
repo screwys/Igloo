@@ -37,6 +37,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.screwy.igloo.player.rememberIglooPlayer
 import coil3.compose.AsyncImage
 import com.screwy.igloo.R
 import com.screwy.igloo.data.dao.AndroidSyncDao
@@ -390,11 +391,7 @@ private fun MomentVideoSlide(
 
     val context = LocalContext.current
     val currentOnEnded by rememberUpdatedState(onEnded)
-    val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            repeatMode = Player.REPEAT_MODE_OFF
-        }
-    }
+    val player = rememberIglooPlayer() ?: return
     val playerView = remember { createMomentPlayerView(context) }
 
     DisposableEffect(player) {
@@ -406,7 +403,6 @@ private fun MomentVideoSlide(
         player.addListener(listener)
         onDispose {
             player.removeListener(listener)
-            player.release()
         }
     }
 
@@ -417,8 +413,10 @@ private fun MomentVideoSlide(
             player.clearMediaItems()
             return@LaunchedEffect
         }
-        player.setMediaItem(item)
-        player.prepare()
+        if (player.currentMediaItem?.localConfiguration?.uri != item.localConfiguration?.uri) {
+            player.setMediaItem(item)
+            player.prepare()
+        }
     }
 
     LaunchedEffect(player, isActive, muted) {

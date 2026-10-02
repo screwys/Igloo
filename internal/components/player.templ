@@ -5,11 +5,19 @@ import "github.com/screwys/igloo/internal/model"
 // PlayerPage renders the full video player page wrapped in the Base layout.
 templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFromChannel []model.Video, nextVideo *model.Video, recommendations []model.DiscoveryVideo, recommendationsPending bool, sbCategories string) {
 	@Base(p) {
+		if p.StreamManifestURL != "" {
+			<script defer src={ p.StaticV("vendor/shaka-player/shaka-player.compiled.js") }></script>
+		}
 		{{ taggedAccounts := videoTaggedAccounts(video) }}
 		<div
 			class="player-layout"
 			id="player-root"
 			data-video-id={ video.VideoID }
+			data-stream-manifest={ p.StreamManifestURL }
+			data-stream-manifest-type={ p.StreamManifestType }
+			data-stream-session-id={ p.StreamSessionID }
+			data-stream-indexed={ boolDataAttr(p.StreamIndexed) }
+			data-stream-text-tracks={ toJSONAttr(p.StreamTextTracks) }
 			data-next-url={ nextVideoURL(nextVideo) }
 			data-bookmarked={ boolDataAttr(video.BookmarkCategoryID != nil) }
 			data-bookmark-category-id={ bookmarkCategoryIDStr(video.BookmarkCategoryID) }
@@ -38,12 +46,11 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							preload="metadata"
 							style="width:100%; height:100%;"
 							poster={ p.Prefs.VideoThumbURL(video) }
-							if video.Platform == "youtube" {
-								autoplay
-							}
 							playsinline
 						>
-							<source src={ videoMediaURL("stream", video) } type="video/mp4"/>
+							if p.StreamManifestURL == "" {
+								<source src={ videoMediaURL("stream", video) } type="video/mp4"/>
+							}
 						</video>
 						<media-loading-indicator noautohide></media-loading-indicator>
 						<media-control-bar class="vjs-control-bar dashboard-media-control-bar">
@@ -67,6 +74,11 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 								</div>
 							}
 							<div class="dashboard-right-controls">
+							if p.StreamManifestURL != "" {
+								<select id="player-quality-select" class="mc-custom-btn" style="width:auto;max-width:10rem;font:inherit;color:inherit;background:var(--bg-glass);" aria-label={ L(p, "player_quality", "Quality") } title={ L(p, "player_quality", "Quality") } disabled>
+									<option value="auto">{ L(p, "player_quality_auto", "Auto") }</option>
+								</select>
+							}
 							if video.Platform == "youtube" {
 								<button id="player-more-controls-btn" class="mc-custom-btn player-more-controls-btn" type="button" title={ L(p, "action_more", "More") } aria-label={ L(p, "action_more", "More") } aria-expanded="false">
 									@MaterialIcon("MoreHoriz", "")
@@ -161,7 +173,11 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							if playerPlatform(video.Platform) == "youtube" {
 								@playerOpenButton(p, videoWebpageURL(video))
 							}
-							@playerDeleteButton(p)
+							if p.StreamManifestURL != "" {
+								<button id="player-stream-download-btn" type="button" class="btn btn-secondary btn-sm">{ L(p, "action_download", "Download") }</button>
+							} else {
+								@playerDeleteButton(p)
+							}
 							if video.Platform != "youtube" {
 								@playerAutoplayButton(p)
 							}

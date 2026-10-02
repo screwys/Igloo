@@ -2,6 +2,7 @@ package com.screwy.igloo.data
 
 import com.screwy.igloo.BuildConfig
 import com.screwy.igloo.data.dao.PreferenceDao
+import com.screwy.igloo.player.PlaybackBuffering
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -55,6 +56,7 @@ class PreferencesRepo(
         const val MUTE_DEFAULT               = "mute_default"
         const val PLAYBACK_SPEED_DEFAULT     = "playback_speed_default"
         const val MINI_PLAYER_AUTO_ENTER     = "mini_player_auto_enter"
+        const val PLAYBACK_BUFFERING         = "playback_buffering"
 
         // Feed
         const val INCLUDE_REPOSTS_DEFAULT    = "include_reposts_default"
@@ -217,6 +219,19 @@ class PreferencesRepo(
     fun miniPlayerAutoEnter(): Flow<Boolean> =
         flowBool(Keys.MINI_PLAYER_AUTO_ENTER, default = Defaults.MINI_PLAYER_AUTO_ENTER)
 
+    fun playbackBuffering(): Flow<PlaybackBuffering> =
+        dao.flowByKey(Keys.PLAYBACK_BUFFERING)
+            .map { decodePlaybackBuffering(it?.value) }
+            .distinctUntilChanged()
+
+    suspend fun getPlaybackBuffering(): PlaybackBuffering =
+        decodePlaybackBuffering(dao.getValue(Keys.PLAYBACK_BUFFERING))
+
+    private fun decodePlaybackBuffering(value: String?): PlaybackBuffering =
+        value?.let { runCatching { Json.decodeFromString<PlaybackBuffering>(it) }.getOrNull() }
+            ?.takeIf { it.custom.isValid }
+            ?: PlaybackBuffering()
+
     fun debugMode(): Flow<Boolean> = flowBool(Keys.DEBUG_MODE, default = Defaults.DEBUG_MODE)
     fun serverTimeOffsetMs(): Flow<Long> =
         flowLong(Keys.SERVER_TIME_OFFSET_MS, default = Defaults.SERVER_TIME_OFFSET_MS)
@@ -297,6 +312,11 @@ class PreferencesRepo(
     suspend fun setPlaybackSpeedDefault(value: String) = putString(Keys.PLAYBACK_SPEED_DEFAULT, value)
     suspend fun setMiniPlayerAutoEnter(value: Boolean) =
         putBool(Keys.MINI_PLAYER_AUTO_ENTER, value)
+
+    suspend fun setPlaybackBuffering(value: PlaybackBuffering) {
+        require(value.custom.isValid)
+        putString(Keys.PLAYBACK_BUFFERING, Json.encodeToString(value))
+    }
 
     suspend fun setDebugMode(value: Boolean) = putBool(Keys.DEBUG_MODE, value)
     suspend fun setServerTimeOffsetMs(offsetMs: Long) = putLong(Keys.SERVER_TIME_OFFSET_MS, offsetMs)

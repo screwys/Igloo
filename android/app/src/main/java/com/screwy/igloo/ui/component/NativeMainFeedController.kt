@@ -18,6 +18,8 @@ import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
 import com.screwy.igloo.player.buildIglooPlayer
+import com.screwy.igloo.player.PlaybackBufferDurations
+import com.screwy.igloo.player.copyIglooPlaybackState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,6 +30,7 @@ internal class NativeMainFeedController(
     private val authTokens: AuthTokenProvider,
     private val iglooHostProvider: IglooHostProvider,
     private val mediaResolvers: MediaResolvers,
+    bufferDurations: PlaybackBufferDurations,
     private var colors: NativeFeedColors,
     private var callbacks: NativeFeedCallbacks,
     seenBatcher: SeenBatcher,
@@ -39,8 +42,10 @@ internal class NativeMainFeedController(
     private val scope = CoroutineScope(scopeJob + Dispatchers.Main.immediate)
     private val layoutManager = LinearLayoutManager(context)
     private val seenTracker = PassedFeedRowsTracker(seenBatcher)
+    private var bufferDurations = bufferDurations
+    private var inlinePlayer = buildIglooPlayer(context, authTokens, iglooHostProvider, bufferDurations)
     private val inlineVideoManager =
-        NativeInlineVideoManager(player = buildIglooPlayer(context, authTokens, iglooHostProvider))
+        NativeInlineVideoManager(player = inlinePlayer)
     private var pendingInitialScrollAnchor: NativeFeedScrollAnchor? =
         initialScrollAnchor.takeIf { it.rowId != null }
     private var currentPosts: List<NativeFeedAdapterItem.Post> = emptyList()
@@ -105,7 +110,17 @@ internal class NativeMainFeedController(
         colors: NativeFeedColors,
         callbacks: NativeFeedCallbacks,
         isRefreshing: Boolean,
+        bufferDurations: PlaybackBufferDurations,
     ) {
+        if (this.bufferDurations != bufferDurations) {
+            val replacement = buildIglooPlayer(
+                context, authTokens, iglooHostProvider, bufferDurations, inlinePlayer.applicationLooper,
+            )
+            copyIglooPlaybackState(inlinePlayer, replacement)
+            inlineVideoManager.replacePlayer(replacement)
+            inlinePlayer = replacement
+            this.bufferDurations = bufferDurations
+        }
         this.colors = colors
         this.callbacks = callbacks
         rootView.setColorSchemeColors(colors.primary)

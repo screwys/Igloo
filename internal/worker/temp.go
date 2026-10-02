@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/model"
@@ -20,13 +21,28 @@ import (
 
 const tempDownloadLeaseDuration = 3 * time.Hour
 
+var errTempDownloadCancelled = errors.New("temporary download cancelled")
+
+type tempDownloadAttempt struct {
+	work   db.TempDownloadWork
+	cancel context.CancelCauseFunc
+}
+
 // TempDownloadResult holds the outcome of a temp download.
 type TempDownloadResult struct {
-	Success    bool
-	Message    string
-	VideoID    string
-	PlaylistID string
-	Cause      error
+	Success         bool
+	Message         string
+	VideoID         string
+	PlaylistID      string
+	Cause           error
+	queueCompleted  bool
+	bookmarkArchive *db.TempDownloadBookmarkArchive
+}
+
+func (m *Manager) SetTempBookmarkArchive(callback func(db.TempDownloadBookmarkArchive)) {
+	m.tempDownloadMu.Lock()
+	m.tempBookmarkArchive = callback
+	m.tempDownloadMu.Unlock()
 }
 
 // EnqueueTempDownload persists a user request before network work begins.
@@ -39,15 +55,51 @@ func (m *Manager) EnqueueTempDownload(rawURL string) (bool, error) {
 	if m.cfg != nil && !m.cfg.PlatformEnabled(platform) {
 		return false, fmt.Errorf("%s is not enabled", platform)
 	}
+	m.tempDownloadMu.Lock()
 	queued, err := m.db.EnqueueTempDownload(rawURL, platform)
+	m.tempDownloadMu.Unlock()
 	if err != nil {
 		return false, err
 	}
+	m.KickTempDownloads()
+	return queued, nil
+}
+
+func (m *Manager) KickTempDownloads() {
 	select {
 	case m.tempDownloadKick <- struct{}{}:
 	default:
 	}
-	return queued, nil
+}
+
+// CancelTempDownload stops only the temporary request shown by the caller.
+func (m *Manager) CancelTempDownload(ctx context.Context, rawURL, requestID string) (db.TempDownloadState, error) {
+	if err := ctx.Err(); err != nil {
+		return db.TempDownloadState{}, err
+	}
+	m.tempDownloadMu.Lock()
+	state, owner, err := m.db.CancelTempDownloadWork(rawURL, requestID)
+	if err != nil {
+		m.tempDownloadMu.Unlock()
+		return state, err
+	}
+	if owner != "" && m.tempDownloadActive != nil && m.tempDownloadActive.work.LeaseOwner == owner {
+		m.tempDownloadActive.cancel(errTempDownloadCancelled)
+	}
+	m.tempDownloadMu.Unlock()
+	if state.Status == "cancelled" {
+		work := db.TempDownloadWork{
+			URL: rawURL, RequestID: state.RequestID, Platform: subscribe.DetectPlatform(rawURL, ""),
+		}
+		m.wg.Add(1)
+		go func() {
+			defer m.wg.Done()
+			if err := m.removeCancelledTempOutputs(work); err != nil {
+				log.Printf("[temp-download] cancellation cleanup: %v", err)
+			}
+		}()
+	}
+	return state, err
 }
 
 func (m *Manager) runTempDownloadLoop(ctx context.Context) {
@@ -65,7 +117,15 @@ func (m *Manager) runTempDownloadLoop(ctx context.Context) {
 			continue
 		}
 
-		work, claimed, err := m.db.ClaimTempDownloadWork(downloadPoolLeaseOwner(), time.Now().UnixMilli(), tempDownloadLeaseDuration)
+		m.tempDownloadMu.Lock()
+		work, claimed, err := m.db.ClaimTempDownloadWork(uuid.NewString(), time.Now().UnixMilli(), tempDownloadLeaseDuration)
+		var attemptCtx context.Context
+		if err == nil && claimed {
+			var cancel context.CancelCauseFunc
+			attemptCtx, cancel = context.WithCancelCause(ctx)
+			m.tempDownloadActive = &tempDownloadAttempt{work: work, cancel: cancel}
+		}
+		m.tempDownloadMu.Unlock()
 		if err != nil {
 			log.Printf("[temp-download] claim: %v", err)
 			resetMediaTimer(timer, time.Minute)
@@ -77,17 +137,23 @@ func (m *Manager) runTempDownloadLoop(ctx context.Context) {
 		}
 
 		lane := tempDownloadLane(work.Origin)
-		result := m.downloadTemp(ctx, work.URL, false, lane, tempDownloadSeedsRecommendations(work.Origin), work.Origin)
-		if result.Success {
-			if origin, originErr := m.db.TempDownloadOrigin(work.URL); originErr != nil {
-				log.Printf("[temp-download] read origin %s: %v", work.URL, originErr)
-			} else if origin == "discover" && result.VideoID != "" {
-				if err := m.db.MarkDiscoverTempVideo(result.VideoID, time.Now().UnixMilli()); err != nil {
-					log.Printf("[temp-download] mark discover video %s: %v", result.VideoID, err)
-				}
+		result := m.downloadTemp(attemptCtx, work.URL, false, lane, tempDownloadSeedsRecommendations(work.Origin), work.Origin, &work)
+		m.tempDownloadMu.Lock()
+		cancelled := errors.Is(context.Cause(attemptCtx), errTempDownloadCancelled) || errors.Is(result.Cause, db.ErrTempDownloadInactive)
+		if cancelled {
+			m.tempDownloadMu.Unlock()
+			if err := m.removeCancelledTempOutputs(work); err != nil {
+				log.Printf("[temp-download] cancellation cleanup: %v", err)
 			}
-			if err := m.db.CompleteTempDownloadWork(work.URL, work.LeaseOwner); err != nil {
-				log.Printf("[temp-download] complete %s: %v", work.URL, err)
+			m.tempDownloadMu.Lock()
+			if err := m.db.FinishCancelledTempDownloadWork(work.URL, work.LeaseOwner); err != nil {
+				log.Printf("[temp-download] finish cancellation: %v", err)
+			}
+		} else if result.Success {
+			if !result.queueCompleted {
+				if err := m.db.CompleteTempDownloadWork(work.URL, work.LeaseOwner); err != nil {
+					log.Printf("[temp-download] complete %s: %v", work.URL, err)
+				}
 			}
 		} else {
 			classification := classifyTempDownloadFailure(result, work.RetryCount+1)
@@ -98,6 +164,13 @@ func (m *Manager) runTempDownloadLoop(ctx context.Context) {
 			} else if err := m.db.RetryTempDownloadWork(work.URL, work.LeaseOwner, classification.Kind, result.Message, classification.RetryDelay); err != nil {
 				log.Printf("[temp-download] retry %s: %v", work.URL, err)
 			}
+		}
+		m.tempDownloadActive.cancel(nil)
+		m.tempDownloadActive = nil
+		archiveCallback := m.tempBookmarkArchive
+		m.tempDownloadMu.Unlock()
+		if !cancelled && result.Success && result.bookmarkArchive != nil && archiveCallback != nil {
+			archiveCallback(*result.bookmarkArchive)
 		}
 		if work.Origin == "discover" {
 			m.reconcileDiscoverPrefetch()
@@ -127,10 +200,10 @@ func classifyTempDownloadFailure(result TempDownloadResult, attempt int) downloa
 
 // DownloadTemp handles an ad-hoc URL download.
 func (m *Manager) DownloadTemp(ctx context.Context, rawURL string, saveChannel bool) TempDownloadResult {
-	return m.downloadTemp(ctx, rawURL, saveChannel, download.MediaLaneBulkInteractive, true, "interactive")
+	return m.downloadTemp(ctx, rawURL, saveChannel, download.MediaLaneBulkInteractive, true, "interactive", nil)
 }
 
-func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel bool, lane download.MediaLane, seedRecommendations bool, origin string) TempDownloadResult {
+func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel bool, lane download.MediaLane, seedRecommendations bool, origin string, work *db.TempDownloadWork) TempDownloadResult {
 	platform := subscribe.DetectPlatform(rawURL, "")
 	if err := subscribe.ValidateInput(rawURL, platform); err != nil {
 		return TempDownloadResult{Message: "Unsupported download URL"}
@@ -150,7 +223,7 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 	// Check for YouTube playlist.
 	if platform == "youtube" {
 		if playlistID := extractPlaylistID(rawURL); playlistID != "" {
-			return m.downloadPlaylist(ctx, rawURL, playlistID, authOpts)
+			return m.downloadPlaylist(ctx, rawURL, playlistID, authOpts, work)
 		}
 	}
 
@@ -224,7 +297,11 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 	}
 
 	// Download to temp dir.
-	tempDir, err := m.cfg.Storage.WritePath("media/temp")
+	tempKey := "media/temp"
+	if work != nil {
+		tempKey += "/requests/" + work.RequestID
+	}
+	tempDir, err := m.cfg.Storage.WritePath(tempKey)
 	if err != nil {
 		return TempDownloadResult{Message: fmt.Sprintf("Storage path: %v", err), Cause: err}
 	}
@@ -235,7 +312,11 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 	if err != nil {
 		return TempDownloadResult{Message: fmt.Sprintf("Download output: %v", err), Cause: err}
 	}
-	subtitleDir, err := m.cfg.Storage.WritePath("subtitles/" + platform)
+	subtitleKey := "subtitles/" + platform
+	if work != nil {
+		subtitleKey += "/requests/" + work.RequestID
+	}
+	subtitleDir, err := m.cfg.Storage.WritePath(subtitleKey)
 	if err != nil {
 		return TempDownloadResult{Message: fmt.Sprintf("Subtitle storage: %v", err), Cause: err}
 	}
@@ -340,12 +421,14 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 		}
 	}
 
-	if err := m.db.StoreCompletedVideo(db.CompletedVideo{
+	video := db.CompletedVideo{
 		VideoID: videoID, ChannelID: channelID, OwnerKind: ownerKind, Title: title, Description: description,
 		Duration: duration, PublishedAtMs: publishedAt, MetadataJSON: metadataJSON,
 		MediaKind: mediaKind, SlideCount: slideCount, IsTemp: true,
 		Assets: files.assets,
-	}); err != nil {
+	}
+	bookmarkArchive, err := m.storeTempDownloadedVideo(work, video, true)
+	if err != nil {
 		m.removeFailedAttempt(ctx, lane, files, completed)
 		return TempDownloadResult{Message: fmt.Sprintf("DB insert: %v", err), Cause: err}
 	}
@@ -393,10 +476,51 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 	}
 
 	return TempDownloadResult{
-		Success: true,
-		Message: fmt.Sprintf("Downloaded: %s", title),
-		VideoID: videoID,
+		Success:         true,
+		Message:         fmt.Sprintf("Downloaded: %s", title),
+		VideoID:         videoID,
+		queueCompleted:  work != nil,
+		bookmarkArchive: bookmarkArchive,
 	}
+}
+
+func (m *Manager) storeTempDownloadedVideo(work *db.TempDownloadWork, video db.CompletedVideo, complete bool) (*db.TempDownloadBookmarkArchive, error) {
+	if work == nil {
+		return nil, m.db.StoreCompletedVideo(video)
+	}
+	return m.db.StoreTempDownloadVideo(*work, video, complete)
+}
+
+// A stopped producer cannot add more files here. Canonical inventory protects
+// completed playlist items while partial files from this request are removed.
+func (m *Manager) removeCancelledTempOutputs(work db.TempDownloadWork) error {
+	for _, key := range []string{"media/temp/requests/" + work.RequestID, "subtitles/" + work.Platform + "/requests/" + work.RequestID} {
+		dir, err := m.cfg.Storage.WritePath(key)
+		if err != nil {
+			return err
+		}
+		err = filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
+			if os.IsNotExist(walkErr) {
+				return nil
+			}
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			fileKey, err := m.cfg.Storage.Key(path)
+			if err != nil {
+				return err
+			}
+			_, err = m.db.RemoveAssetFileIfUnreferenced(fileKey)
+			return err
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func preparedDiscoverMetadata(candidate model.DiscoveryVideo) map[string]any {
@@ -408,7 +532,7 @@ func preparedDiscoverMetadata(candidate model.DiscoveryVideo) map[string]any {
 	}
 }
 
-func (m *Manager) downloadPlaylist(ctx context.Context, rawURL, playlistID string, authOpts download.Opts) TempDownloadResult {
+func (m *Manager) downloadPlaylist(ctx context.Context, rawURL, playlistID string, authOpts download.Opts, work *db.TempDownloadWork) TempDownloadResult {
 	info, err := m.downloader.YtDlp.FetchPlaylistInfo(ctx, rawURL, authOpts)
 	if err != nil {
 		return TempDownloadResult{Message: fmt.Sprintf("Could not inspect playlist: %v", err)}
@@ -424,7 +548,11 @@ func (m *Manager) downloadPlaylist(ctx context.Context, rawURL, playlistID strin
 		playlistTitle = "Playlist " + playlistID
 	}
 
-	targetDir, err := m.cfg.Storage.WritePath("media/playlists/" + safeFolderName(playlistTitle))
+	targetKey := "media/playlists/" + safeFolderName(playlistTitle)
+	if work != nil {
+		targetKey = "media/temp/requests/" + work.RequestID
+	}
+	targetDir, err := m.cfg.Storage.WritePath(targetKey)
 	if err != nil {
 		return TempDownloadResult{Message: fmt.Sprintf("Storage path: %v", err)}
 	}
@@ -437,6 +565,9 @@ func (m *Manager) downloadPlaylist(ctx context.Context, rawURL, playlistID strin
 	downloaded := 0
 	failed := 0
 	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return TempDownloadResult{Message: "Playlist download cancelled", Cause: err}
+		}
 		entryMap, ok := entry.(map[string]any)
 		if !ok {
 			continue
@@ -498,12 +629,16 @@ func (m *Manager) downloadPlaylist(ctx context.Context, rawURL, playlistID strin
 		if b, err := json.Marshal(metadata); err == nil {
 			metaJSON = string(b)
 		}
-		if err := m.db.StoreCompletedVideo(db.CompletedVideo{
+		video := db.CompletedVideo{
 			VideoID: videoID, ChannelID: playlistChannelID, OwnerKind: "youtube_video", Title: entryTitle, Description: description,
 			Duration: duration, PublishedAtMs: publishedAt, MetadataJSON: metaJSON,
 			SourceKind: "playlist", Assets: files.assets,
-		}); err != nil {
+		}
+		if _, err := m.storeTempDownloadedVideo(work, video, false); err != nil {
 			m.removeFailedAttempt(ctx, download.MediaLaneBulkInteractive, files, completed)
+			if errors.Is(err, db.ErrTempDownloadInactive) {
+				return TempDownloadResult{Message: "Playlist download cancelled", Cause: err}
+			}
 			log.Printf("[temp] playlist item %s DB insert failed: %v", videoID, err)
 			failed++
 			continue

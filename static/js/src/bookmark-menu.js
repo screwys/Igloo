@@ -2,7 +2,7 @@
 // Usable from feed, videos, shorts, or any page. Dispatches callbacks for
 // page-specific state sync (e.g. icon updates, sibling propagation).
 
-import { apiFetch, materialIconMarkup, showToast, stateBool, setStateBool, t, tf } from './utils.js'
+import { apiFetch, materialIconMarkup, showToast, stateBool, setStateBool, t, tf, waitForSavedContent } from './utils.js'
 
 var bookmarkMenu = null
 var bookmarkCategories = []
@@ -775,9 +775,6 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
         if (selIndices.length < mediaIdxBtns.length) bookmarkBody.media_indices = selIndices
       }
 
-      // Resolve category name locally so we can apply UI state before the
-      // server responds. Server uses the same fallback (first category when
-      // category_id is null), so optimistic state matches the eventual reply.
       var localCategory = null
       var matchId = categoryIdNum
       if (matchId == null && bookmarkCategories.length) matchId = bookmarkCategories[0].id
@@ -789,49 +786,32 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
       var localCategoryName = localCategory ? localCategory.name : ''
       var resolvedCategoryId = localCategory ? localCategory.id : matchId
 
-      // Snapshot prior state for revert on failure.
-      var priorBookmarked = stateBool(root, 'bookmarked')
-      var priorCategoryAttr = root.getAttribute('data-bookmark-category-id') || ''
-      var priorPrefs = null
-      if (channelKey) {
-        try { priorPrefs = localStorage.getItem('bookmarkAccountPrefsV1') } catch (_) {}
-      }
-
-      // Apply optimistic state + close menu before the network roundtrip.
-      setStateBool(root, 'bookmarked', true)
-      root.setAttribute('data-bookmark-category-id', String(resolvedCategoryId || ''))
-      onStateChange(root, true, { id: resolvedCategoryId, name: localCategoryName })
-      setLastBookmarkCategoryId(resolvedCategoryId)
-      if (channelKey) {
-        try {
-          var prefs = JSON.parse(localStorage.getItem('bookmarkAccountPrefsV1') || '{}')
-          prefs[channelKey] = selOriginals
-          localStorage.setItem('bookmarkAccountPrefsV1', JSON.stringify(prefs))
-        } catch (_) {}
-      }
       closeBookmarkMenu()
-      showToast(localCategoryName ? tf('bookmark_saved_to', 'Bookmarked to %1$s', localCategoryName) : t('bookmark_saved', 'Bookmarked'))
-
-      var revert = function () {
-        setStateBool(root, 'bookmarked', priorBookmarked)
-        root.setAttribute('data-bookmark-category-id', priorCategoryAttr)
-        onStateChange(root, priorBookmarked, priorBookmarked ? { id: Number(priorCategoryAttr) || null, name: '' } : null)
-        if (channelKey) {
-          try {
-            if (priorPrefs == null) localStorage.removeItem('bookmarkAccountPrefsV1')
-            else localStorage.setItem('bookmarkAccountPrefsV1', priorPrefs)
-          } catch (_) {}
-        }
-        showToast(t('bookmark_save_failed', 'Failed to save bookmark'))
-      }
-
+      anchorEl.disabled = true
       return apiFetch('/api/bookmark/' + encodeURIComponent(itemId), {
         method: 'POST',
         body: JSON.stringify(bookmarkBody)
-      }).then(function (result) {
-        if (!result || !result.success) { revert(); return false }
-		return true
-      }).catch(function () { revert(); return false })
+      }).then(function (result) { return waitForSavedContent(result, anchorEl) }).then(function (result) {
+        var categoryId = result.category_id || resolvedCategoryId
+        var categoryName = result.category_name || localCategoryName
+        var saved = result.bookmarked !== false
+        setStateBool(root, 'bookmarked', saved)
+        root.setAttribute('data-bookmark-category-id', saved ? String(categoryId || '') : '')
+        onStateChange(root, saved, saved ? { id: categoryId, name: categoryName } : null)
+        if (saved) setLastBookmarkCategoryId(categoryId)
+        if (channelKey && saved) {
+          try {
+            var prefs = JSON.parse(localStorage.getItem('bookmarkAccountPrefsV1') || '{}')
+            prefs[channelKey] = selOriginals
+            localStorage.setItem('bookmarkAccountPrefsV1', JSON.stringify(prefs))
+          } catch (_) {}
+        }
+        showToast(saved ? categoryName ? tf('bookmark_saved_to', 'Bookmarked to %1$s', categoryName) : t('bookmark_saved', 'Bookmarked') : t('bookmark_removed', 'Bookmark removed'))
+        return saved
+      }).catch(function (error) {
+        showToast(error.message || t('bookmark_save_failed', 'Failed to save bookmark'))
+        return false
+      }).finally(function () { anchorEl.disabled = false })
     }
 
     function selectPill(catId) {

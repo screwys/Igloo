@@ -33,7 +33,7 @@ import { openBookmarkMenu, isBookmarkMenuOpen } from '../bookmark-menu.js'
 import {
   cssEscape, apiFetch, showToast, copyText, toFxTwitterUrl, askConfirm,
   getFeedActionIconSvg, syncFeedActionIcons, setSvgContent, animateFeedActionButton,
-  showFeedShareSuccess, stateBool, setStateBool, itemRootFromNode, t, tf
+  showFeedShareSuccess, stateBool, setStateBool, itemRootFromNode, t, tf, waitForSavedContent
 } from '../utils.js'
 
 var feedList = document.getElementById('feed-list')
@@ -543,12 +543,11 @@ function runFeedAction(root, actionType, form) {
     var method = currentlyLiked ? 'DELETE' : 'POST'
     var heartBtn = getFeedActionUiButton(root, 'heart')
     if (heartBtn) animateFeedActionButton(heartBtn, currentlyLiked)
-    applyLikeState(root, tweetId, !currentlyLiked)
     return apiFetch('/api/feed/like/' + encodeURIComponent(tweetId), {
       method: method,
       body: method === 'POST' ? JSON.stringify({ item: feedItemPayloadFromForm(form, tweetId) }) : undefined
-    }).then(function (payload) {
-      var nextLiked = payload && typeof payload.is_liked === 'boolean' ? payload.is_liked : !currentlyLiked
+    }).then(function (payload) { return waitForSavedContent(payload, heartBtn) }).then(function (payload) {
+      var nextLiked = typeof payload.is_liked === 'boolean' ? payload.is_liked : !currentlyLiked
       applyLikeState(root, tweetId, nextLiked)
     }).catch(function (err) {
       applyLikeState(root, tweetId, currentlyLiked)
@@ -561,8 +560,8 @@ function runFeedAction(root, actionType, form) {
     return apiFetch('/api/bookmark/' + encodeURIComponent(tweetId), {
       method: bmethod,
       body: bmethod === 'POST' ? JSON.stringify({}) : undefined
-    }).then(function (payload) {
-      var nextBookmarked = payload && typeof payload.bookmarked === 'boolean' ? payload.bookmarked : !currentlyBookmarked
+    }).then(waitForSavedContent).then(function (payload) {
+      var nextBookmarked = typeof payload.bookmarked === 'boolean' ? payload.bookmarked : !currentlyBookmarked
       setStateBool(root, 'bookmarked', nextBookmarked)
       syncFeedButtons(root)
       syncSiblingCards(root)
@@ -622,12 +621,11 @@ function runQuoteOverlayLike(quoteTweetId, btn) {
   animateFeedActionButton(btn, isLiked)
   var method = isLiked ? 'DELETE' : 'POST'
   btn.disabled = true
-  propagateLikeState(quoteTweetId, !isLiked)
   apiFetch('/api/feed/like/' + encodeURIComponent(quoteTweetId), {
     method: method,
     body: method === 'POST' ? JSON.stringify({ item: { tweet_id: quoteTweetId } }) : undefined
-  }).then(function (payload) {
-    var nextLiked = payload && typeof payload.is_liked === 'boolean' ? payload.is_liked : !isLiked
+  }).then(function (payload) { return waitForSavedContent(payload, btn) }).then(function (payload) {
+    var nextLiked = typeof payload.is_liked === 'boolean' ? payload.is_liked : !isLiked
     propagateLikeState(quoteTweetId, nextLiked)
     showToast(nextLiked ? t('toast_liked', 'Liked') : t('toast_unliked', 'Unliked'))
   }).catch(function () {
@@ -1594,7 +1592,32 @@ document.body.addEventListener('htmx:beforeSend', function (e) {
   if (nextLiked === null) return
   card.setAttribute('data-feed-like-before', stateBool(card, 'liked') ? '1' : '0')
   animateFeedActionButton(elt, !nextLiked)
-  applyLikeState(card, tid, nextLiked)
+})
+
+document.body.addEventListener('htmx:beforeRequest', function (event) {
+  var button = event.detail && event.detail.elt
+  if (button && button.dataset.savePending === '1') event.preventDefault()
+})
+
+document.body.addEventListener('htmx:beforeSwap', function (event) {
+  var xhr = event.detail && event.detail.xhr
+  var button = event.detail && event.detail.elt
+  if (!xhr || xhr.status !== 202 || !button || button.getAttribute('data-feed-action') !== 'heart') return
+  var payload = JSON.parse(xhr.responseText)
+  if (!payload.pending) return
+  event.detail.shouldSwap = false
+  var card = button.closest('[data-feed-item]')
+  var id = card && card.getAttribute('data-tweet-id')
+  button.dataset.savePending = '1'
+  waitForSavedContent(payload, button).then(function (saved) {
+    applyLikeState(card, id, saved.is_liked)
+    showToast(saved.is_liked ? t('toast_liked', 'Liked') : t('toast_unliked', 'Unliked'))
+  }).catch(function (error) {
+    showToast(error.message || t('logs_status_failed', 'Failed'))
+  }).finally(function () {
+    delete button.dataset.savePending
+    if (card) card.removeAttribute('data-feed-like-before')
+  })
 })
 
 function rollbackHTMXLikeState(e) {

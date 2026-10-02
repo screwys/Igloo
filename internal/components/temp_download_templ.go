@@ -8,8 +8,10 @@ package components
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "net/url"
+
 // TempDownloadPage renders the temp download / watch page wrapped in the Base layout.
-func TempDownloadPage(p PageProps, videoID string, youtubeURL string) templ.Component {
+func TempDownloadPage(p PageProps, videoID string, youtubeURL string, videoTitle string, thumbnailURL string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -42,14 +44,14 @@ func TempDownloadPage(p PageProps, videoID string, youtubeURL string) templ.Comp
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;align-items:center;justify-content:center;min-height:60vh;\"><div style=\"text-align:center;max-width:500px;padding:2rem;\"><div id=\"temp-dl-config\" data-video-id=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"temp-dl-page\"><div class=\"temp-dl-card\"><div id=\"temp-dl-config\" data-video-id=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(videoID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 10, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 12, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
@@ -62,284 +64,211 @@ func TempDownloadPage(p PageProps, videoID string, youtubeURL string) templ.Comp
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(youtubeURL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 11, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 13, Col: 34}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" data-title-cancelled=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" data-status-url=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
-			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_title_cancelled", "Download cancelled"))
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/temp-download-status?url=" + url.QueryEscape(youtubeURL))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 12, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 14, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" data-status-cancelled=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" data-title-cancelled=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var6 string
-			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_status_cancelled", "Cancelled."))
+			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_title_cancelled", "Download cancelled"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 13, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 15, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" data-action-back-to-videos=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" data-status-cancelled=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var7 string
-			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_action_back_to_videos", "Back to videos"))
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_status_cancelled", "Cancelled."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 14, Col: 95}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 16, Col: 81}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" data-title-failed=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" data-action-back-to-videos=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var8 string
-			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_title_failed", "Download failed"))
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_action_back_to_videos", "Back to videos"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 15, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 17, Col: 95}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" data-status-failed=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" data-title-failed=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var9 string
-			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_status_failed", "Download failed"))
+			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_title_failed", "Download failed"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 16, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 18, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" data-status-error-prefix=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" data-status-failed=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var10 string
-			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_status_error_prefix", "Error:"))
+			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_status_failed", "Download failed"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 17, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 19, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" style=\"display:none\"></div><div class=\"temp-dl-spinner\"></div><h1 id=\"temp-dl-title\" style=\"font-size:1.5rem;margin-bottom:0.5rem;\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\" data-status-error-prefix=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var11 string
-			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "temp_download_title_downloading", "Downloading..."))
+			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "temp_download_status_error_prefix", "Error:"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 21, Col: 133}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 20, Col: 83}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</h1><p style=\"color:var(--text-muted);font-family:monospace;margin-bottom:2rem;word-break:break-all;\" id=\"temp-dl-video-id\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" style=\"display:none\"></div><div class=\"temp-dl-spinner\" aria-hidden=\"true\"></div><h1 id=\"temp-dl-title\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var12 string
-			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(videoID)
+			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "temp_download_title_downloading", "Downloading..."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 22, Col: 133}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 24, Col: 86}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</p><p id=\"temp-dl-status\" style=\"color:var(--accent-secondary);\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</h1><div class=\"temp-dl-video\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var13 string
-			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "temp_download_status_downloading_video", "Downloading the video"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 23, Col: 139}
+			if thumbnailURL != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<img class=\"temp-dl-thumbnail\" src=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var13 string
+				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(thumbnailURL)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 27, Col: 55}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" alt=\"\"> ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
+			if videoTitle != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<p class=\"temp-dl-video-title\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var14 string
+				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(videoTitle)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 30, Col: 49}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<p class=\"temp-dl-video-id\" id=\"temp-dl-video-id\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</p><button type=\"button\" id=\"temp-dl-cancel-btn\" class=\"btn\" style=\"display:block;padding:0.75rem 2rem;border-radius:12px;font-weight:600;font-size:1rem;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:inherit;cursor:pointer;margin:1.5rem auto 0;width:fit-content;\">")
+			var templ_7745c5c3_Var15 string
+			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(videoID)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 32, Col: 64}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var14 string
-			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_cancel", "Cancel"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 24, Col: 331}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</p></div><p id=\"temp-dl-status\" class=\"hidden\" role=\"status\"></p><div id=\"temp-dl-actions\" class=\"temp-dl-actions\"><button type=\"button\" id=\"temp-dl-stream-btn\" class=\"btn btn-secondary\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</button></div></div><style>\n\t\t\t.temp-dl-spinner{width:50px;height:50px;border:4px solid rgba(255,255,255,0.1);border-top-color:var(--accent-primary);border-radius:50%;animation:tdl-spin 1s linear infinite;margin:0 auto 1.5rem;}\n\t\t\t.temp-dl-spinner.stopped{display:none;animation:none;}\n\t\t\t@keyframes tdl-spin{to{transform:rotate(360deg);}}\n\t\t</style> ")
+			var templ_7745c5c3_Var16 string
+			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_stream_instead", "Stream instead"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 36, Col: 126}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templ.Raw(`<script>
-(function(){
-  var cfg = document.getElementById('temp-dl-config');
-  var videoID = cfg ? cfg.dataset.videoId : '';
-  var youtubeUrl = cfg ? cfg.dataset.youtubeUrl : '';
-  var titleCancelled = cfg ? cfg.dataset.titleCancelled : '';
-  var statusCancelled = cfg ? cfg.dataset.statusCancelled : '';
-  var actionBackToVideos = cfg ? cfg.dataset.actionBackToVideos : '';
-  var titleFailed = cfg ? cfg.dataset.titleFailed : '';
-  var statusFailed = cfg ? cfg.dataset.statusFailed : '';
-  var statusErrorPrefix = cfg ? cfg.dataset.statusErrorPrefix : '';
-  var csrfMeta = document.querySelector('meta[name="csrf-token"]');
-  var csrfToken = csrfMeta ? csrfMeta.content : '';
-  var spinnerEl = document.querySelector('.temp-dl-spinner');
-  var titleEl = document.getElementById('temp-dl-title');
-  var statusEl = document.getElementById('temp-dl-status');
-  var cancelBtn = document.getElementById('temp-dl-cancel-btn');
-  var cancelled = false;
-  var downloadedVideoId = null;
-  var requestController = window.AbortController ? new AbortController() : null;
-  function stopSpinner() {
-    if (spinnerEl) spinnerEl.className = 'temp-dl-spinner stopped';
-  }
-  function setCancelledState() {
-    cancelled = true;
-    stopSpinner();
-    if (titleEl) titleEl.textContent = titleCancelled;
-    if (statusEl) statusEl.textContent = statusCancelled;
-    if (cancelBtn) {
-      cancelBtn.disabled = false;
-      cancelBtn.dataset.cancelled = '1';
-      cancelBtn.textContent = actionBackToVideos;
-    }
-  }
-  function setFailedState(message) {
-    stopSpinner();
-    if (titleEl) titleEl.textContent = titleFailed;
-    if (statusEl) statusEl.textContent = message || statusFailed;
-  }
-  function scheduleStatusPoll() {
-    window.setTimeout(function(){
-      if (!cancelled) pollStatus();
-    }, 2000);
-  }
-  function pollStatus() {
-    fetch('/api/temp-download-status?url=' + encodeURIComponent(youtubeUrl))
-    .then(function(r){
-      return r.text().then(function(text){
-        var data = {};
-        if (text) {
-          try {
-            data = JSON.parse(text);
-          } catch (parseErr) {
-            data = {success: false, message: parseErr.message};
-          }
-        }
-        if (!r.ok && !data.error && !data.message) {
-          data.message = (r.status ? r.status + ' ' : '') + (r.statusText || statusFailed);
-        }
-        return data;
-      });
-    })
-    .then(function(data){
-      if (cancelled) return;
-      if (data.status === 'blocked') {
-        setFailedState(data.error || data.message || statusFailed);
-        return;
-      }
-      if (data.success && data.complete) {
-        window.location.href = '/temp/watch?v=' + encodeURIComponent(videoID);
-        return;
-      }
-      scheduleStatusPoll();
-    })
-    .catch(function(){
-      if (!cancelled) scheduleStatusPoll();
-    });
-  }
-  var requestOptions = {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
-    body: JSON.stringify({url: youtubeUrl})
-  };
-  if (requestController) requestOptions.signal = requestController.signal;
-  fetch('/api/quick-download', requestOptions)
-  .then(function(r){
-    return r.text().then(function(text){
-      var data = {};
-      if (text) {
-        try {
-          // parse download response, but tolerate proxy/plain-text failures
-          data = JSON.parse(text);
-        } catch (parseErr) {
-          var body = text.trim();
-          data = {
-            success: false,
-            message: body.charAt(0) === '<' ? (r.statusText || statusFailed) : (body || parseErr.message)
-          };
-        }
-      }
-      if (!r.ok && !data.error && !data.message) {
-        data.message = (r.status ? r.status + ' ' : '') + (r.statusText || statusFailed);
-      }
-      return data;
-    });
-  })
-  .then(function(data){
-    if (cancelled) return;
-    if (data.success && data.queued) {
-      pollStatus();
-      return;
-    }
-    if (data.success && data.video_id) {
-      downloadedVideoId = data.video_id;
-      window.location.href = '/player/' + data.video_id;
-    } else {
-      setFailedState(data.message || data.error || statusFailed);
-    }
-  })
-  .catch(function(e){
-    if (cancelled || (e && e.name === 'AbortError')) return;
-    setFailedState(statusErrorPrefix + ' ' + e.message);
-  });
-  cancelBtn.addEventListener('click', function(){
-    if (cancelBtn.dataset.cancelled === '1') {
-      window.location.href = '/videos';
-      return;
-    }
-    if (requestController) requestController.abort();
-    setCancelledState();
-    fetch('/api/cancel-download', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
-      body: JSON.stringify({video_id: downloadedVideoId || ''})
-    }).catch(function(){});
-  });
-})();
-</script>`).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</button> <button type=\"button\" id=\"temp-dl-cancel-btn\" class=\"btn btn-secondary\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var17 string
+			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_cancel", "Cancel"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 37, Col: 110}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</button></div></div></div><script defer src=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var18 string
+			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.StaticV("js/temp_download.js"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/temp_download.templ`, Line: 41, Col: 54}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\"></script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
