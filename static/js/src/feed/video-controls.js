@@ -5,6 +5,17 @@ import { bindVideoFeedback } from '../video-feedback.js'
 
 const FEED_VOLUME_KEY = 'feedVolume'
 
+function setVideoVolume(video, value, volumeKey) {
+  const volume = writeStoredVolume(window.localStorage, volumeKey, value)
+  video.volume = volume
+  if (volumeKey === FEED_VOLUME_KEY) {
+    const ownerDocument = video.ownerDocument || document
+    ownerDocument.querySelectorAll('video[data-feed-volume-key="feedVolume"]').forEach(function (other) {
+      if (other !== video) other.volume = volume
+    })
+  }
+}
+
 const videoControlIcons = {
   play: materialIconMarkup('PlayArrow'),
   pause: materialIconMarkup('Pause'),
@@ -208,9 +219,8 @@ export function handleFeedVideoShortcut(event, video, options) {
       video._videoFeedback.markUserAction('volume')
     }
     const delta = key === 'ArrowUp' ? 0.05 : -0.05
-    video.volume = Math.max(0, Math.min(1, Number(video.volume || 0) + delta))
+    setVideoVolume(video, Number(video.volume || 0) + delta, FEED_VOLUME_KEY)
     if (key === 'ArrowUp') video.muted = false
-    writeStoredVolume(window.localStorage, FEED_VOLUME_KEY, video.volume)
     return true
   }
   if (key === ' ') {
@@ -242,6 +252,7 @@ export function bindFeedVideoControls(wrap, video, options) {
     interactiveElements: [wrap.querySelector('[data-feed-video-play]'), wrap.querySelector('[data-feed-video-mute]'), wrap.querySelector('[data-feed-video-volume]'), wrap.querySelector('[data-feed-video-volume-control]')].filter(Boolean),
   })
   const volumeKey = opts.volumeKey || FEED_VOLUME_KEY
+  video.setAttribute('data-feed-volume-key', volumeKey)
   video.volume = readStoredVolume(window.localStorage, volumeKey, video.volume)
 
   const play = controls.querySelector('[data-feed-video-play]')
@@ -367,9 +378,8 @@ export function bindFeedVideoControls(wrap, video, options) {
         feedback.markUserAction('volume')
       }
       const nextVolume = Math.max(0, Math.min(1, Number(volume.value || 0)))
-      video.volume = nextVolume
+      setVideoVolume(video, nextVolume, volumeKey)
       video.muted = nextVolume === 0
-      writeStoredVolume(window.localStorage, volumeKey, nextVolume)
       if (typeof opts.onVolumeChange === 'function') {
         opts.onVolumeChange(nextVolume, video.muted)
       }
