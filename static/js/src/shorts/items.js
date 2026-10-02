@@ -562,6 +562,7 @@ function handleBookmarkAction(entryData, anchorEl) {
   var syntheticRoot = document.createElement('div')
   syntheticRoot.setAttribute('data-bookmarked', entryData.bookmarked ? '1' : '0')
   syntheticRoot.setAttribute('data-bookmark-category-id', entryData.bookmarkCategoryId || '')
+  syntheticRoot.setAttribute('data-media-count', String(entryData.mediaSlideCount || 0))
   // Prefer the raw handle (derived from channel_id) over display_name so the
   // bookmark account pill uses filesystem-safe text.
   var rawHandle = String(entryData.channelId || '').replace(/^(twitter|tiktok|instagram|youtube)_/, '')

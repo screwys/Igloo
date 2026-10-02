@@ -535,9 +535,7 @@ class MomentsViewModel(
         BookmarkTarget(
             itemId = item.videoId,
             authorHandle = item.authorHandle,
-            // Moments are single-media video posts; the multi-image picker row
-            // is hidden when mediaCount <= 1.
-            mediaCount = 0,
+            mediaCount = item.slideCount.coerceAtLeast(0),
             currentBookmark = currentBookmark,
             defaultTitle = item.description.lineSequence().firstOrNull(),
             bodyText = item.description,
