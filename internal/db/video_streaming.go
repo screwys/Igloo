@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -185,7 +186,7 @@ func clearStreamSaveIntentTx(tx *sql.Tx, videoID, kind string, updatedAtMs int64
 	rawURL := "https://www.youtube.com/watch?v=" + videoID
 	var raw string
 	err := tx.QueryRow(`SELECT save_intent_json FROM temp_download_queue WHERE url = ?`, rawURL).Scan(&raw)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
 	if err != nil {

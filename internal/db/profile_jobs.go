@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -338,7 +339,7 @@ func (db *DB) GetProfileJob(channelID string) (*model.ProfileJob, error) {
 		FROM profile_jobs
 		WHERE channel_id = ?
 	`, strings.TrimSpace(channelID)))
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

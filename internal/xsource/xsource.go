@@ -1,3 +1,4 @@
+// Package xsource resolves X list and community feed sources.
 package xsource
 
 import (

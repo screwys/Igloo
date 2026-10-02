@@ -1,3 +1,4 @@
+// Package download runs media extractors and stores downloaded content.
 package download
 
 import (
@@ -184,10 +185,7 @@ func RedactText(s string) string {
 	}
 	for _, repl := range replacers {
 		search := 0
-		for {
-			if search >= len(s) {
-				break
-			}
+		for search < len(s) {
 			idx := strings.Index(strings.ToLower(s[search:]), strings.ToLower(repl.prefix))
 			if idx < 0 {
 				break
@@ -214,10 +212,7 @@ func RedactText(s string) string {
 	}
 	for _, prefix := range jsonPrefixes {
 		search := 0
-		for {
-			if search >= len(s) {
-				break
-			}
+		for search < len(s) {
 			idx := strings.Index(strings.ToLower(s[search:]), strings.ToLower(prefix))
 			if idx < 0 {
 				break
@@ -234,10 +229,7 @@ func RedactText(s string) string {
 	}
 	for _, prefix := range []string{`"/home/`, `"/var/home/`, `"/tmp/`} {
 		search := 0
-		for {
-			if search >= len(s) {
-				break
-			}
+		for search < len(s) {
 			idx := strings.Index(s[search:], prefix)
 			if idx < 0 {
 				break

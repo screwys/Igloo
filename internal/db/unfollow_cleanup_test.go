@@ -25,6 +25,9 @@ func TestUnfollowXContentPlanUsesIdentityAndThreadIndexes(t *testing.T) {
 		}
 		details = append(details, detail)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
 	plan := strings.Join(details, "\n")
 	for _, scan := range []string{"SCAN fi", "SCAN current", "SCAN peer"} {
 		if strings.Contains(plan, scan) {

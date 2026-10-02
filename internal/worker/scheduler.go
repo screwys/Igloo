@@ -637,9 +637,10 @@ func (m *Manager) getChannelMaxVideos(channel model.Channel) int {
 		return settings.MaxVideos
 	}
 	key := "youtube_max_videos"
-	if channel.Platform == "tiktok" {
+	switch channel.Platform {
+	case "tiktok":
 		key = "shorts_max_videos"
-	} else if channel.Platform == "instagram" {
+	case "instagram":
 		key = "instagram_max_videos"
 	}
 	return m.db.IntSetting(key)
@@ -1030,9 +1031,10 @@ func introducedRowsForSource(channel model.Channel, refs []download.VideoRef) []
 		return nil
 	}
 	sourceHandle := ""
-	if channel.Platform == "instagram" {
+	switch channel.Platform {
+	case "instagram":
 		sourceHandle = instagramHandleForChannel(channel)
-	} else if channel.Platform == "tiktok" {
+	case "tiktok":
 		sourceHandle = tiktokHandleForChannel(channel)
 	}
 	rows := make([]model.VideoRepostSource, 0)

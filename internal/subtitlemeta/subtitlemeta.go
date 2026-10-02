@@ -1,3 +1,4 @@
+// Package subtitlemeta reads language and track details from subtitle metadata.
 package subtitlemeta
 
 import (

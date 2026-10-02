@@ -226,6 +226,9 @@ func TestFeedSeenRankingProjectionUsesCoveringIndex(t *testing.T) {
 		}
 		details = append(details, detail)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
 	plan := strings.Join(details, "\n")
 	if !strings.Contains(plan, "USING COVERING INDEX idx_feed_items_seen_cover") {
 		t.Fatalf("seen feed plan = %s", plan)

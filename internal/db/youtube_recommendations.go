@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -194,7 +195,7 @@ func (db *DB) GetYouTubeRecommendations(anchorVideoID string, limit int) ([]mode
 		SELECT candidates_json, status, expires_at_ms
 		FROM youtube_recommendations WHERE anchor_video_id = ?
 	`, strings.TrimSpace(anchorVideoID)).Scan(&payload, &status, &expiresAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil
 	}
 	if err != nil {

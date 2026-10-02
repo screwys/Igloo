@@ -74,7 +74,7 @@ func claimMutationClockTx(tx *sql.Tx, kind, itemKey, action string, updatedAtMs 
 		FROM mutation_clocks
 		WHERE kind = ? AND item_key = ?
 	`, kind, itemKey).Scan(&currentAction, &currentUpdatedAtMs)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
 	if err == nil {
@@ -299,7 +299,7 @@ func (db *DB) mutateBookmarkTx(tx *sql.Tx, m BookmarkMutation, result *MutationR
 				SELECT category_id, custom_title, account_handles, media_indices
 				FROM bookmarks WHERE video_id = ?
 			`, result.CanonicalID).Scan(&categoryID, &customTitle, &accountHandles, &mediaIndices)
-		if err != nil && err != sql.ErrNoRows {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
 		hadBookmark := err == nil
@@ -599,7 +599,7 @@ func mutateChannelSettingsTx(tx *sql.Tx, channelID string, fields map[string]any
 
 	var currentUpdatedAt int64
 	err := tx.QueryRow(`SELECT updated_at FROM channel_settings WHERE channel_id = ?`, channelID).Scan(&currentUpdatedAt)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
 	if err == nil && updatedAtMs <= currentUpdatedAt {
@@ -777,12 +777,12 @@ func (db *DB) mutateProgress(videoID string, position, duration float64, action 
 	var result ProgressResult
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		var existingPosition float64
-		var existingTs int64
+		var existingTS int64
 		var existingDuration sql.NullFloat64
 		rowErr := tx.QueryRow(
 			`SELECT playback_position, duration, updated_at_ms FROM watch_history WHERE video_id = ?`,
 			videoID,
-		).Scan(&existingPosition, &existingDuration, &existingTs)
+		).Scan(&existingPosition, &existingDuration, &existingTS)
 		if rowErr != nil && rowErr != sql.ErrNoRows {
 			return rowErr
 		}
@@ -801,11 +801,11 @@ func (db *DB) mutateProgress(videoID string, position, duration float64, action 
 			return err
 		}
 		if !applied {
-			if action == "set" && rowErr == nil && updatedAtMs == existingTs &&
+			if action == "set" && rowErr == nil && updatedAtMs == existingTS &&
 				position == existingPosition && duration == existingDuration.Float64 {
 				result.Accepted = true
 				result.ResolvedPosition = existingPosition
-				result.ResolvedUpdatedAtMs = existingTs
+				result.ResolvedUpdatedAtMs = existingTS
 				return nil
 			}
 			if action == "clear" && rowErr == sql.ErrNoRows {
@@ -982,7 +982,7 @@ func (db *DB) ApplyCreateCategoryMutation(name, provisionalID, requestID string,
 		if err == nil {
 			return nil
 		}
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
 		res, err := tx.Exec(

@@ -1,3 +1,4 @@
+// Package i18n loads message catalogs and resolves translated strings.
 package i18n
 
 import (

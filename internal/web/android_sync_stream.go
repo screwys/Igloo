@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -189,7 +190,7 @@ func (s *Server) writeAndroidSyncBootstrapPage(w http.ResponseWriter, cursor and
 		return err
 	})
 	if err != nil {
-		if err == errAndroidSyncResetRequired {
+		if errors.Is(err, errAndroidSyncResetRequired) {
 			writeAndroidSyncResetRequired(w)
 			return
 		}
@@ -343,7 +344,7 @@ func (s *Server) handleAndroidSyncChanges(w http.ResponseWriter, r *http.Request
 		return nil
 	})
 	if err != nil {
-		if err == errAndroidSyncResetRequired {
+		if errors.Is(err, errAndroidSyncResetRequired) {
 			writeAndroidSyncResetRequired(w)
 			return
 		}
@@ -544,7 +545,7 @@ func (s *Server) handleAndroidSyncPriorityState(w http.ResponseWriter, r *http.R
 		return nil
 	})
 	if err != nil {
-		if err == errAndroidSyncResetRequired {
+		if errors.Is(err, errAndroidSyncResetRequired) {
 			writeAndroidSyncResetRequired(w)
 			return
 		}

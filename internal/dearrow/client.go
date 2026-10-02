@@ -1,3 +1,4 @@
+// Package dearrow fetches alternative video titles and thumbnails.
 package dearrow
 
 import (

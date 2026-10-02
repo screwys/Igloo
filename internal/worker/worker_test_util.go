@@ -1,12 +1,9 @@
 package worker
 
 import (
-	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"testing"
 
 	"github.com/screwys/igloo/internal/config"
@@ -17,10 +14,6 @@ import (
 
 func newTestWorkerDB(t *testing.T) *db.DB {
 	return newTestWorkerDBAt(t, t.TempDir())
-}
-
-func openWorkerTestDB(t *testing.T) *db.DB {
-	return newTestWorkerDB(t)
 }
 
 func newTestWorkerDBAt(t *testing.T, stateRoot string) *db.DB {
@@ -70,22 +63,4 @@ func testDownloader() *download.Downloader {
 	d := download.NewDownloader(filepath.Join(os.TempDir(), "no-such-cookies"))
 	d.HTTP = &download.HTTPDownloader{Client: &http.Client{}, AllowPrivateHosts: true}
 	return d
-}
-
-type stubBannerSrv struct {
-	*httptest.Server
-	hits atomic.Int32
-}
-
-func (s *stubBannerSrv) Hits() int32 { return s.hits.Load() }
-
-func startStubBannerServer(t *testing.T) *stubBannerSrv {
-	t.Helper()
-	s := &stubBannerSrv{}
-	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.hits.Add(1)
-		w.Header().Set("Content-Type", "image/jpeg")
-		_, _ = fmt.Fprint(w, "fakebannerbytes")
-	}))
-	return s
 }

@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	rJSApiJson  = regexp.MustCompile(`apiJson\s*\(\s*['"]([^'"]+)['"]`)
+	rJSApiJSON  = regexp.MustCompile(`apiJson\s*\(\s*['"]([^'"]+)['"]`)
 	rJSApiFetch = regexp.MustCompile(`apiFetch\s*\(\s*['"]([^'"]+)['"]`)
 	rJSFetch    = regexp.MustCompile(`fetch\s*\(\s*['"]([^'"]*\/api\/[^'"]+)['"]`)
 	rJSApi      = regexp.MustCompile(`(?:^|[^\w])api\s*\(\s*['"]([^'"]*\/api\/[^'"]+)['"]`)
@@ -77,7 +77,7 @@ func ScanJS(source, filepath string) []JSCall {
 			nextLine = lines[lineno]
 		}
 		method := extractMethod(line, nextLine)
-		for _, re := range []*regexp.Regexp{rJSApiJson, rJSApiFetch, rJSFetch, rJSApi} {
+		for _, re := range []*regexp.Regexp{rJSApiJSON, rJSApiFetch, rJSFetch, rJSApi} {
 			for _, m := range re.FindAllStringSubmatch(line, -1) {
 				calls = append(calls, JSCall{URL: m[1], Method: method, Line: lineno})
 			}

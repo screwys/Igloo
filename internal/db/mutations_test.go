@@ -88,7 +88,6 @@ func TestBookmarkMutationUsesCurrentTimeWhenUpdatedAtMissing(t *testing.T) {
 	if bookmarkedAt <= 0 {
 		t.Fatalf("bookmarked_at = %d, want positive timestamp", bookmarkedAt)
 	}
-
 }
 
 func TestMomentsCursorMutationKeepsNewerClientTimestamp(t *testing.T) {

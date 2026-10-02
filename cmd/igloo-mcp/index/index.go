@@ -1,3 +1,4 @@
+// Package index maps Igloo source files, symbols, API calls, and storage references.
 package index
 
 import (
@@ -211,7 +212,7 @@ func (idx *CodeIndex) scanJS() {
 	jsDir := filepath.Join(idx.root, "static", "js")
 	_ = filepath.WalkDir(jsDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".js") {
-			return nil
+			return nil //nolint:nilerr // Keep indexing available files if a source path cannot be read.
 		}
 		relpath := idx.relpath(path)
 		// jsKey is relative to static/js/ (e.g. "src/feed/index.js", "site_base.js")
@@ -250,7 +251,7 @@ func (idx *CodeIndex) scanAndroid() {
 	ktBase := filepath.Join(idx.root, "android", "app", "src", "main", "java")
 	_ = filepath.WalkDir(ktBase, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".kt") {
-			return nil
+			return nil //nolint:nilerr // Keep indexing available files if a source path cannot be read.
 		}
 		relpath := idx.relpath(path)
 		if strings.Contains(relpath, ".gradle-home") || strings.Contains(relpath, "/build/") {
@@ -321,7 +322,7 @@ func (idx *CodeIndex) scanCSSSymbols() {
 	cssDir := filepath.Join(idx.root, "static")
 	_ = filepath.WalkDir(cssDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".css") {
-			return nil
+			return nil //nolint:nilerr // Keep indexing available files if a source path cannot be read.
 		}
 		relpath := idx.relpath(path)
 		source := idx.readFile(relpath)
@@ -368,7 +369,7 @@ func (idx *CodeIndex) configCandidates() []string {
 	workflowsDir := filepath.Join(idx.root, ".github", "workflows")
 	_ = filepath.WalkDir(workflowsDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
-			return nil
+			return nil //nolint:nilerr // Keep indexing available files if a source path cannot be read.
 		}
 		if strings.HasSuffix(d.Name(), ".yml") || strings.HasSuffix(d.Name(), ".yaml") {
 			add(idx.relpath(path))
@@ -1640,7 +1641,7 @@ func (idx *CodeIndex) computeAndroidGraph() {
 	ktBase := filepath.Join(idx.root, "android", "app", "src", "main", "java")
 	_ = filepath.WalkDir(ktBase, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".kt") {
-			return nil
+			return nil //nolint:nilerr // Keep indexing available files if a source path cannot be read.
 		}
 		relpath := idx.relpath(path)
 		if strings.Contains(relpath, ".gradle-home") || strings.Contains(relpath, "/build/") {
@@ -2134,7 +2135,7 @@ func androidKindForPath(relpath, className string) string {
 
 func scanIglooDatabaseDAOMap(source string) map[string]string {
 	out := map[string]string{}
-	for _, m := range rDbAbstractDao.FindAllStringSubmatch(source, -1) {
+	for _, m := range rDBAbstractDao.FindAllStringSubmatch(source, -1) {
 		out[m[1]] = m[2]
 	}
 	return out
@@ -2142,7 +2143,7 @@ func scanIglooDatabaseDAOMap(source string) map[string]string {
 
 func scanDirectDAOUsage(source string, daoMethodToType map[string]string) []string {
 	var out []string
-	for _, m := range rDbDaoCall.FindAllStringSubmatch(source, -1) {
+	for _, m := range rDBDaoCall.FindAllStringSubmatch(source, -1) {
 		if daoType := daoMethodToType[m[1]]; daoType != "" {
 			out = append(out, daoType)
 		}
@@ -2333,7 +2334,7 @@ func (idx *CodeIndex) TraceSetting(key string) string {
 	ktBase := filepath.Join(idx.root, "android", "app", "src", "main", "java")
 	_ = filepath.WalkDir(ktBase, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".kt") {
-			return nil
+			return nil //nolint:nilerr // Keep indexing available files if a source path cannot be read.
 		}
 		grepFile(idx.relpath(path), "android")
 		return nil

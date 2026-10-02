@@ -3,7 +3,6 @@ package download
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -201,13 +200,6 @@ func retryDelayForKind(kind string, attempt int) time.Duration {
 		}
 		return delay
 	}
-}
-
-func commandError(tool string, result CommandResult) error {
-	if result.Err == nil {
-		return nil
-	}
-	return fmt.Errorf("%s: %w: %s", tool, result.Err, RedactText(string(result.CombinedOutput())))
 }
 
 func errorString(err error, output []byte) string {

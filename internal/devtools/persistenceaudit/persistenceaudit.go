@@ -1,3 +1,4 @@
+// Package persistenceaudit reports database storage usage and budgets.
 package persistenceaudit
 
 import (

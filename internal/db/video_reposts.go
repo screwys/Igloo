@@ -205,6 +205,10 @@ func (db *DB) ReplaceVideoRepostSourcesForReposter(reposterChannelID string, row
 			}
 			existing = append(existing, videoID)
 		}
+		if err := existingRows.Err(); err != nil {
+			_ = existingRows.Close()
+			return err
+		}
 		if err := existingRows.Close(); err != nil {
 			return err
 		}

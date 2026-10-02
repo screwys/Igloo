@@ -51,7 +51,7 @@ if ! scripts/dev/drift-check.sh --write; then
 fi
 
 echo "[go] running tests..."
-go test -json ./... >"$go_json"
+go test -race -timeout 30m -json ./... >"$go_json"
 go_status=$?
 if [[ "$go_status" -ne 0 ]]; then
   echo "[go] tests failed with exit code $go_status" >&2
@@ -129,19 +129,11 @@ then
   status=1
 fi
 
-echo "[go] running errcheck..."
-go run "github.com/kisielk/errcheck@${ERRCHECK_VERSION}" ./...
-errcheck_status=$?
-if [[ "$errcheck_status" -ne 0 ]]; then
-  echo "[go] errcheck failed with exit code $errcheck_status" >&2
-  status=1
-fi
-
-echo "[go] running staticcheck..."
-go run "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}" ./...
-staticcheck_status=$?
-if [[ "$staticcheck_status" -ne 0 ]]; then
-  echo "[go] staticcheck failed with exit code $staticcheck_status" >&2
+echo "[go] running golangci-lint..."
+scripts/dev/lint-go.sh run
+lint_status=$?
+if [[ "$lint_status" -ne 0 ]]; then
+  echo "[go] golangci-lint failed with exit code $lint_status" >&2
   status=1
 fi
 

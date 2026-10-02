@@ -33,6 +33,8 @@ __pycache__/
 .codex
 .mcp.local.json
 /.local/go-cache/
+/.local/tools/
+/.local/golangci-lint-cache/
 .agents/*
 !.agents/skills/
 .agents/skills/*

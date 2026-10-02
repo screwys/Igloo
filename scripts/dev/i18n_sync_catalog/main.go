@@ -31,14 +31,14 @@ type localeMeta struct {
 func main() {
 	outputs, err := generateCatalogOutputs()
 	if err != nil {
-		fail("%v", err)
+		failf("%v", err)
 	}
 	for _, output := range outputs {
 		if err := os.MkdirAll(filepath.Dir(output.Path), 0o755); err != nil {
-			fail("%v", err)
+			failf("%v", err)
 		}
 		if err := os.WriteFile(output.Path, output.Data, 0o644); err != nil {
-			fail("%v", err)
+			failf("%v", err)
 		}
 	}
 }
@@ -98,7 +98,7 @@ func mustCollectWebMessages() map[string]string {
 		}
 		return collectFile(path, messages)
 	}); err != nil {
-		fail("%v", err)
+		failf("%v", err)
 	}
 	return messages
 }
@@ -221,11 +221,11 @@ func readOptionalTOML(path string) map[string]string {
 		if os.IsNotExist(err) {
 			return map[string]string{}
 		}
-		fail("%v", err)
+		failf("%v", err)
 	}
 	messages, err := parseFlatTOML(string(data))
 	if err != nil {
-		fail("%s: %v", path, err)
+		failf("%s: %v", path, err)
 	}
 	return messages
 }
@@ -359,10 +359,6 @@ func parseTOMLString(raw string) (string, error) {
 	return "", fmt.Errorf("expected quoted string")
 }
 
-func writeTOML(path string, messages map[string]string, lang, name string) error {
-	return os.WriteFile(path, renderTOML(messages, lang, name), 0o644)
-}
-
 func renderTOML(messages map[string]string, lang, name string) []byte {
 	keys := sortedKeys(messages)
 	var buf bytes.Buffer
@@ -377,35 +373,6 @@ func renderTOML(messages map[string]string, lang, name string) []byte {
 	return buf.Bytes()
 }
 
-func writeAndroidResources(catalogs map[string]map[string]string) error {
-	for lang, messages := range catalogs {
-		path := androidStringsPath(lang)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return err
-		}
-		if err := writeAndroidStrings(path, lang, messages); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func writeAndroidLocaleMetadata(catalogDir string) error {
-	outputs, err := renderAndroidLocaleMetadata(catalogDir)
-	if err != nil {
-		return err
-	}
-	for _, output := range outputs {
-		if err := os.MkdirAll(filepath.Dir(output.Path), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(output.Path, output.Data, 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func renderAndroidLocaleMetadata(catalogDir string) ([]generatedOutput, error) {
 	metas, err := readLocaleMetas(catalogDir)
 	if err != nil {
@@ -418,13 +385,6 @@ func renderAndroidLocaleMetadata(catalogDir string) ([]generatedOutput, error) {
 		{Path: androidLocaleOptions, Data: renderAndroidLocaleOptions(metas)},
 		{Path: androidLocaleConfig, Data: renderAndroidLocaleConfig(metas)},
 	}, nil
-}
-
-func writeAndroidLocaleOptions(metas []localeMeta) error {
-	if err := os.MkdirAll(filepath.Dir(androidLocaleOptions), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(androidLocaleOptions, renderAndroidLocaleOptions(metas), 0o644)
 }
 
 func renderAndroidLocaleOptions(metas []localeMeta) []byte {
@@ -442,13 +402,6 @@ func renderAndroidLocaleOptions(metas []localeMeta) []byte {
 	buf.WriteString("    </string-array>\n")
 	buf.WriteString("</resources>\n")
 	return buf.Bytes()
-}
-
-func writeAndroidLocaleConfig(metas []localeMeta) error {
-	if err := os.MkdirAll(filepath.Dir(androidLocaleConfig), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(androidLocaleConfig, renderAndroidLocaleConfig(metas), 0o644)
 }
 
 func renderAndroidLocaleConfig(metas []localeMeta) []byte {
@@ -486,10 +439,6 @@ func languageTag(lang string) string {
 		return strings.ToLower(parts[0])
 	}
 	return strings.ToLower(parts[0]) + "-" + strings.ToUpper(parts[1])
-}
-
-func writeAndroidStrings(path, lang string, messages map[string]string) error {
-	return os.WriteFile(path, renderAndroidStrings(lang, messages), 0o644)
 }
 
 func renderAndroidStrings(lang string, messages map[string]string) []byte {
@@ -686,7 +635,7 @@ func unindexedAndroidFormatEnd(s string, pos int) (int, bool) {
 	}
 }
 
-func fail(format string, args ...any) {
+func failf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "i18n_sync_catalog: "+format+"\n", args...)
 	os.Exit(1)
 }

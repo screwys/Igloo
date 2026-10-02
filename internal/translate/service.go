@@ -124,7 +124,7 @@ func FeedText(ctx context.Context, database *db.DB, tweetID, field, targetLang s
 			Provider:       "cache",
 		}, nil
 	}
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		slog.Error("GetTranslation cache check", "tweet_id", tweetID, "err", err)
 	}
 
@@ -185,7 +185,7 @@ func CommentText(ctx context.Context, database *db.DB, videoID, commentID, targe
 	}
 
 	sourceText, err := database.GetCommentText(videoID, commentID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrCommentNotFound
 	}
 	if err != nil {
@@ -205,7 +205,7 @@ func CommentText(ctx context.Context, database *db.DB, videoID, commentID, targe
 			TargetLang:     targetLang,
 			Provider:       "cache",
 		}, nil
-	} else if cacheErr != sql.ErrNoRows {
+	} else if !errors.Is(cacheErr, sql.ErrNoRows) {
 		slog.Error("GetTranslation comment cache check", "video_id", videoID, "comment_id", commentID, "err", cacheErr)
 	}
 
@@ -391,7 +391,7 @@ func translateTextWithDB(ctx context.Context, database *db.DB, text, targetLang,
 
 func reusableTranslation(database *db.DB, tweetID, field, sourceText, targetLang string, skipSet map[string]bool) (db.TranslationEntry, bool, error) {
 	entry, err := database.GetReusableTranslation(tweetID, field, targetLang)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return db.TranslationEntry{}, false, nil
 	}
 	if err != nil {

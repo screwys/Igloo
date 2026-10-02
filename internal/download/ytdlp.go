@@ -689,25 +689,6 @@ func (y *YtDlpWrapper) DownloadSubtitles(ctx context.Context, url string, opts O
 	return []string{outputPath}, nil
 }
 
-// extractFilenamesFromRaw parses filenames from raw yt-dlp JSON output logs.
-// Used as a fallback when GetExtractedInfo fails due to schema mismatches
-// in fields we don't need (e.g. requested_subtitles format changes).
-func extractFilenamesFromRaw(result *ytdlp.Result) []string {
-	var paths []string
-	for _, log := range result.OutputLogs {
-		if log.JSON == nil {
-			continue
-		}
-		var raw struct {
-			Filename string `json:"filename"`
-		}
-		if err := json.Unmarshal(*log.JSON, &raw); err == nil && raw.Filename != "" {
-			paths = append(paths, raw.Filename)
-		}
-	}
-	return paths
-}
-
 // FetchVideoMetadata fetches changing video metadata and comments without
 // re-downloading media. One yt-dlp call owns the consistent snapshot.
 func (y *YtDlpWrapper) FetchVideoMetadata(ctx context.Context, url string, maxComments int, opts Opts) (db.VideoMetadataRefreshResult, error) {

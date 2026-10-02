@@ -1,3 +1,4 @@
+// Package storage manages data roots, media paths, and file durability.
 package storage
 
 import (

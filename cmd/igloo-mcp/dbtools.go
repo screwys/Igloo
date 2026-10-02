@@ -107,6 +107,9 @@ func serverQuery(query string) (string, error) {
 		}
 		allRows = append(allRows, row)
 	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("iterate query: %w", err)
+	}
 
 	// Compute column widths
 	widths := make([]int, len(cols))
@@ -181,8 +184,13 @@ func listDBTables() (string, error) {
 	var tables []string
 	for rows.Next() {
 		var name string
-		_ = rows.Scan(&name)
+		if err := rows.Scan(&name); err != nil {
+			return "", fmt.Errorf("scan table name: %w", err)
+		}
 		tables = append(tables, name)
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("iterate tables: %w", err)
 	}
 
 	var sb strings.Builder
@@ -220,8 +228,13 @@ func dbSchema(tableName string) (string, error) {
 	var sb strings.Builder
 	for rows.Next() {
 		var name, ddl string
-		_ = rows.Scan(&name, &ddl)
+		if err := rows.Scan(&name, &ddl); err != nil {
+			return "", fmt.Errorf("scan table schema: %w", err)
+		}
 		fmt.Fprintf(&sb, "%s\n\n", ddl)
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("iterate table schemas: %w", err)
 	}
 	return strings.TrimRight(sb.String(), "\n"), nil
 }
@@ -250,7 +263,9 @@ func singleTableSchema(conn *sql.DB, table string) (string, error) {
 			var name, typ string
 			var notNull, pk int
 			var dflt sql.NullString
-			_ = rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk)
+			if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+				return "", fmt.Errorf("scan columns for %s: %w", table, err)
+			}
 			def := ""
 			if dflt.Valid {
 				def = dflt.String
@@ -265,6 +280,9 @@ func singleTableSchema(conn *sql.DB, table string) (string, error) {
 			}
 			fmt.Fprintf(&sb, "%-4d %-25s %-15s %-8s %-15s %s\n", cid, name, typ, nn, def, pkStr)
 		}
+		if err := rows.Err(); err != nil {
+			return "", fmt.Errorf("iterate columns for %s: %w", table, err)
+		}
 	}
 
 	// Indexes
@@ -278,12 +296,17 @@ func singleTableSchema(conn *sql.DB, table string) (string, error) {
 			var seq int
 			var name, origin string
 			var unique, partial int
-			_ = idxRows.Scan(&seq, &name, &unique, &origin, &partial)
+			if err := idxRows.Scan(&seq, &name, &unique, &origin, &partial); err != nil {
+				return "", fmt.Errorf("scan indexes for %s: %w", table, err)
+			}
 			u := ""
 			if unique == 1 {
 				u = " UNIQUE"
 			}
 			indexes = append(indexes, fmt.Sprintf("  %s%s (%s)", name, u, origin))
+		}
+		if err := idxRows.Err(); err != nil {
+			return "", fmt.Errorf("iterate indexes for %s: %w", table, err)
 		}
 		if len(indexes) > 0 {
 			sb.WriteString("\nIndexes:\n")
@@ -305,7 +328,10 @@ func singleTableSchema(conn *sql.DB, table string) (string, error) {
 			defer func() {
 				_ = sample.Close()
 			}()
-			cols, _ := sample.Columns()
+			cols, err := sample.Columns()
+			if err != nil {
+				return "", fmt.Errorf("sample columns for %s: %w", table, err)
+			}
 			sb.WriteString("\n\nSample (5 rows):\n")
 			for i, c := range cols {
 				if i > 0 {
@@ -320,7 +346,9 @@ func singleTableSchema(conn *sql.DB, table string) (string, error) {
 				scanPtrs[i] = &scanDest[i]
 			}
 			for sample.Next() {
-				_ = sample.Scan(scanPtrs...)
+				if err := sample.Scan(scanPtrs...); err != nil {
+					return "", fmt.Errorf("scan sample for %s: %w", table, err)
+				}
 				for i, v := range scanDest {
 					if i > 0 {
 						sb.WriteString(" | ")
@@ -335,6 +363,9 @@ func singleTableSchema(conn *sql.DB, table string) (string, error) {
 					sb.WriteString(s)
 				}
 				sb.WriteByte('\n')
+			}
+			if err := sample.Err(); err != nil {
+				return "", fmt.Errorf("iterate sample for %s: %w", table, err)
 			}
 		}
 	}
@@ -368,10 +399,15 @@ func dbSummary() (string, error) {
 	var tables []tableInfo
 	for rows.Next() {
 		var name string
-		_ = rows.Scan(&name)
+		if err := rows.Scan(&name); err != nil {
+			return "", fmt.Errorf("scan table name: %w", err)
+		}
 		var count int
 		_ = conn.QueryRow("SELECT COUNT(*) FROM `" + name + "`").Scan(&count)
 		tables = append(tables, tableInfo{name, count})
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("iterate tables: %w", err)
 	}
 
 	sort.Slice(tables, func(i, j int) bool { return tables[i].count > tables[j].count })
@@ -395,10 +431,17 @@ func dbSummary() (string, error) {
 		for qrows.Next() {
 			var status string
 			var count int
-			_ = qrows.Scan(&status, &count)
+			if err := qrows.Scan(&status, &count); err != nil {
+				_ = qrows.Close()
+				return "", fmt.Errorf("scan queue statuses for %s: %w", table, err)
+			}
 			parts = append(parts, fmt.Sprintf("%s=%d", status, count))
 		}
+		err = qrows.Err()
 		_ = qrows.Close()
+		if err != nil {
+			return "", fmt.Errorf("iterate queue statuses for %s: %w", table, err)
+		}
 		if len(parts) > 0 {
 			fmt.Fprintf(&sb, "  %-20s %s\n", table+":", strings.Join(parts, ", "))
 		}

@@ -13,7 +13,7 @@ import (
 
 const ManifestSchema = 1
 
-var ErrUnsignedBuild = errors.New("Windows update signing key is not configured")
+var ErrUnsignedBuild = errors.New("the Windows update signing key is not configured")
 
 type Manifest struct {
 	Schema            int      `json:"schema"`
@@ -39,7 +39,7 @@ func ParseSignedManifest(raw, signature []byte, publicKeyBase64 string) (Manifes
 	sigText := strings.TrimSpace(string(signature))
 	sig, err := base64.StdEncoding.DecodeString(sigText)
 	if err != nil || len(sig) != ed25519.SignatureSize || !ed25519.Verify(ed25519.PublicKey(publicKey), raw, sig) {
-		return Manifest{}, errors.New("Windows update manifest signature is invalid")
+		return Manifest{}, errors.New("the Windows update manifest signature is invalid")
 	}
 	var manifest Manifest
 	if err := json.Unmarshal(raw, &manifest); err != nil {
@@ -59,10 +59,10 @@ func (m Manifest) Validate() error {
 		return fmt.Errorf("unsupported Windows update target %s/%s", m.OS, m.Arch)
 	}
 	if m.App == nil && m.Runtime == nil {
-		return errors.New("Windows update manifest has no payloads")
+		return errors.New("the Windows update manifest has no payloads")
 	}
 	if strings.TrimSpace(m.MinimumAppVersion) == "" {
-		return errors.New("Windows update manifest minimum app version is empty")
+		return errors.New("the Windows update manifest minimum app version is empty")
 	}
 	for name, payload := range map[string]*Payload{"app": m.App, "runtime": m.Runtime} {
 		if payload == nil {

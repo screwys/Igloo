@@ -1,3 +1,4 @@
+// Package language resolves language codes and display names.
 package language
 
 import (

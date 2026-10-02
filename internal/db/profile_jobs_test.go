@@ -80,6 +80,9 @@ func TestUpsertFeedItemsPersistsAndQueuesRoleIdentities(t *testing.T) {
 		}
 		gotJobs[id] = true
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
 	if len(gotJobs) != len(wantJobs) {
 		t.Fatalf("profile jobs = %v, want %v", gotJobs, wantJobs)
 	}
@@ -371,6 +374,9 @@ func TestProfileJobPendingQueriesUsePartialIndex(t *testing.T) {
 					t.Fatal(err)
 				}
 				details = append(details, detail)
+			}
+			if err := rows.Err(); err != nil {
+				t.Fatal(err)
 			}
 			plan := strings.Join(details, "\n")
 			if !strings.Contains(plan, "USING INDEX idx_profile_jobs_claim") {

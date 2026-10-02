@@ -1,3 +1,4 @@
+// Package xfeed imports X feed content through gallery-dl.
 package xfeed
 
 import (

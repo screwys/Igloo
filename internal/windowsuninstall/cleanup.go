@@ -1,3 +1,4 @@
+// Package windowsuninstall removes files owned by a Windows installation.
 package windowsuninstall
 
 import (

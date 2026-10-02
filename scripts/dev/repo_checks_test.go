@@ -155,8 +155,7 @@ func TestChangedGoGateRunsCIStaticChecks(t *testing.T) {
 	contents := string(gate)
 	checks := []string{
 		`go run ./scripts/dev/staticcheck`,
-		`go run "github.com/kisielk/errcheck@${ERRCHECK_VERSION}" ./...`,
-		`go run "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}" ./...`,
+		`scripts/dev/lint-go.sh run`,
 		`go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...`,
 	}
 	for _, check := range checks {

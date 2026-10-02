@@ -688,17 +688,6 @@ func removePaths(paths []string) {
 	}
 }
 
-// stringFromAny safely extracts a string from an any value.
-func stringFromAny(v any) string {
-	if v == nil {
-		return ""
-	}
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return fmt.Sprint(v)
-}
-
 func (s *Server) handleVideoSegments(w http.ResponseWriter, r *http.Request) {
 	videoID := r.PathValue("videoID")
 

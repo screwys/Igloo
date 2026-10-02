@@ -48,6 +48,7 @@ func TestMomentsOrderKeepsSeenRowsAndAppendsLateOlderVideos(t *testing.T) {
 		t.Fatal(err)
 	}
 	var positions []int64
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var videoID string
 		var position int64
@@ -55,6 +56,9 @@ func TestMomentsOrderKeepsSeenRowsAndAppendsLateOlderVideos(t *testing.T) {
 			t.Fatal(err)
 		}
 		positions = append(positions, position)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 	if got, want := positions, []int64{1, 2, 3, 4}; !sameInt64s(got, want) {
 		t.Fatalf("following positions = %v, want %v", got, want)

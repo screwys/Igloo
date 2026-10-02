@@ -2,6 +2,7 @@ package fxtwitter
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -50,7 +51,7 @@ func TestFetchQuotingPostsEmptyPage(t *testing.T) {
 	if err != nil || len(quotes) != 0 {
 		t.Fatalf("empty quotes = %v, %v", quotes, err)
 	}
-	if _, err := c.FetchConversation(context.Background(), "100"); err != ErrNotFound {
+	if _, err := c.FetchConversation(context.Background(), "100"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing conversation error = %v", err)
 	}
 }

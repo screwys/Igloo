@@ -326,6 +326,9 @@ func TestQueueFollowedYouTubeChannelRecommendationsUsesOneEligibleAnchorPerChann
 		}
 		got = append(got, videoID)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 2 || got[1] != "second_recent" || (got[0] != "first_old" && got[0] != "first_recent") {
 		t.Fatalf("anchors=%v", got)
 	}

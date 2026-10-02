@@ -1,3 +1,4 @@
+// Package web serves the web interface and client APIs.
 package web
 
 import (
@@ -332,14 +333,6 @@ func (s *Server) supportedLanguageChoices(lang string) []components.LanguageChoi
 		out = append(out, components.LanguageChoice{Code: lang.Code, Name: lang.Name})
 	}
 	return out
-}
-
-func resolveDataPath(layout storage.Layout, key string) string {
-	resolved, err := layout.Path(key)
-	if err != nil {
-		return ""
-	}
-	return resolved
 }
 
 func resolveDataPathUnder(layout storage.Layout, key string) (string, bool) {

@@ -235,7 +235,7 @@ func buildStaticVersionCache(staticDir string) map[string]string {
 	versions := make(map[string]string)
 	_ = filepath.Walk(staticDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
-			return nil
+			return nil //nolint:nilerr // Skip unreadable files while caching the remaining assets.
 		}
 		rel, _ := filepath.Rel(staticDir, path)
 		rel = strings.ReplaceAll(rel, string(filepath.Separator), "/")

@@ -7,7 +7,7 @@ type MomentView struct {
 	ViewedAt time.Time
 }
 
-// Returns the resulting viewed_at as stored.
+// UpsertMomentView returns the resulting viewed_at as stored.
 func (db *DB) UpsertMomentView(videoID string) (time.Time, error) {
 	nowMs := time.Now().UnixMilli()
 	if _, err := db.MutateMomentView(videoID, nowMs); err != nil {

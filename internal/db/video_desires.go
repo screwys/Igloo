@@ -251,6 +251,10 @@ func (db *DB) ReconcileVideoDesireSource(snapshot VideoDesireSourceSnapshot) (in
 				}
 				oldSourceComponents[videoID][component] = struct{}{}
 			}
+			if err := rows.Err(); err != nil {
+				_ = rows.Close()
+				return err
+			}
 			if err := rows.Close(); err != nil {
 				return err
 			}
@@ -512,23 +516,6 @@ func reconcileVideoOwnerTx(tx *sql.Tx, item VideoDesire, sourceComponent string)
 		}
 	}
 	return false, queueStatus, canonicalOwner, nil
-}
-
-func queryVideoIDsTx(tx *sql.Tx, query string, args ...any) ([]string, error) {
-	rows, err := tx.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
 }
 
 func queryAssetFileKeysTx(tx *sql.Tx, query string, args ...any) ([]string, error) {

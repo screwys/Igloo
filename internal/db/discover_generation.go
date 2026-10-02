@@ -164,6 +164,10 @@ func (db *DB) PublishDiscoverGeneration(nowMs int64, limit int) (bool, []string,
 				batches = append(batches, batch)
 			}
 		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return err
+		}
 		if err := rows.Close(); err != nil {
 			return err
 		}

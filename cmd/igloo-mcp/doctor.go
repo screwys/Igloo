@@ -124,10 +124,15 @@ func writeDoctorDBStat(sb *strings.Builder, conn *sql.DB) {
 		var name string
 		var bytes int64
 		if err := rows.Scan(&name, &bytes); err != nil {
-			continue
+			fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+			return
 		}
 		wrote = true
 		fmt.Fprintf(sb, "  %-32s %s\n", name, formatSize(bytes))
+	}
+	if err := rows.Err(); err != nil {
+		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+		return
 	}
 	if !wrote {
 		sb.WriteString("  none\n")
@@ -370,17 +375,25 @@ func writeDoctorAndroidSync(sb *strings.Builder, conn *sql.DB) {
 func writeDoctorQueues(sb *strings.Builder, conn *sql.DB) {
 	sb.WriteString("Queue counts:\n")
 	for _, table := range []string{"download_queue", "translation_jobs"} {
-		parts := doctorStatusCounts(conn, table, "status", "")
+		parts, err := doctorStatusCounts(conn, table, "status", "")
+		if err != nil {
+			fmt.Fprintf(sb, "  %-18s unavailable: %v\n", table+":", err)
+			continue
+		}
 		if len(parts) == 0 {
 			parts = []string{"empty=0"}
 		}
 		fmt.Fprintf(sb, "  %-18s %s\n", table+":", strings.Join(parts, ", "))
 	}
-	parts := doctorAssetStatusCounts(conn, "")
-	if len(parts) == 0 {
-		parts = []string{"empty=0"}
+	parts, err := doctorAssetStatusCounts(conn, "")
+	if err != nil {
+		fmt.Fprintf(sb, "  %-18s unavailable: %v\n", "assets:", err)
+	} else {
+		if len(parts) == 0 {
+			parts = []string{"empty=0"}
+		}
+		fmt.Fprintf(sb, "  %-18s %s\n", "assets:", strings.Join(parts, ", "))
 	}
-	fmt.Fprintf(sb, "  %-18s %s\n", "assets:", strings.Join(parts, ", "))
 	sb.WriteString("\n")
 }
 
@@ -403,25 +416,31 @@ func writeDoctorProfileReadiness(sb *strings.Builder, conn *sql.DB) {
 	`).Scan(&pendingJobs, &leasedJobs, &failedJobs)
 	fmt.Fprintf(sb, "  profile_jobs: pending=%d leased=%d failed=%d\n", pendingJobs, leasedJobs, failedJobs)
 
-	avatarStates := doctorAssetStatusCounts(conn, "a.owner_kind = 'channel' AND a.asset_kind = 'avatar'")
-	if len(avatarStates) == 0 {
-		avatarStates = []string{"empty=0"}
+	for _, kind := range []string{"avatar", "banner"} {
+		states, err := doctorAssetStatusCounts(conn, fmt.Sprintf("a.owner_kind = 'channel' AND a.asset_kind = '%s'", kind))
+		if err != nil {
+			fmt.Fprintf(sb, "  %s assets: unavailable: %v\n", kind, err)
+			continue
+		}
+		if len(states) == 0 {
+			states = []string{"empty=0"}
+		}
+		fmt.Fprintf(sb, "  %s assets: %s\n", kind, strings.Join(states, ", "))
 	}
-	bannerStates := doctorAssetStatusCounts(conn, "a.owner_kind = 'channel' AND a.asset_kind = 'banner'")
-	if len(bannerStates) == 0 {
-		bannerStates = []string{"empty=0"}
-	}
-	fmt.Fprintf(sb, "  avatar assets: %s\n", strings.Join(avatarStates, ", "))
-	fmt.Fprintf(sb, "  banner assets: %s\n\n", strings.Join(bannerStates, ", "))
+	sb.WriteString("\n")
 }
 
 func writeDoctorAssetInventory(sb *strings.Builder, conn *sql.DB) {
 	sb.WriteString("Asset inventory:\n")
-	parts := doctorAssetStatusCounts(conn, "")
-	if len(parts) == 0 {
-		parts = []string{"empty=0"}
+	parts, err := doctorAssetStatusCounts(conn, "")
+	if err != nil {
+		fmt.Fprintf(sb, "  inventory states: unavailable: %v\n", err)
+	} else {
+		if len(parts) == 0 {
+			parts = []string{"empty=0"}
+		}
+		fmt.Fprintf(sb, "  inventory states: %s\n", strings.Join(parts, ", "))
 	}
-	fmt.Fprintf(sb, "  inventory states: %s\n", strings.Join(parts, ", "))
 	activeLeases, expiredLeases := doctorAssetLeaseCounts(conn, time.Now().UnixMilli())
 	fmt.Fprintf(sb, "  asset leases: active_downloading=%d expired_downloading=%d\n", activeLeases, expiredLeases)
 	for _, kind := range []string{
@@ -429,7 +448,11 @@ func writeDoctorAssetInventory(sb *strings.Builder, conn *sql.DB) {
 		"dearrow_thumbnail", "subtitle", "avatar", "banner",
 		"preview_track_json", "preview_sprite",
 	} {
-		states := doctorAssetStatusCounts(conn, fmt.Sprintf("a.asset_kind = '%s'", kind))
+		states, err := doctorAssetStatusCounts(conn, fmt.Sprintf("a.asset_kind = '%s'", kind))
+		if err != nil {
+			fmt.Fprintf(sb, "  %-20s unavailable: %v\n", kind+":", err)
+			continue
+		}
 		if len(states) == 0 {
 			states = []string{"empty=0"}
 		}
@@ -451,7 +474,11 @@ func doctorAssetLeaseCounts(conn *sql.DB, nowMs int64) (active int, expired int)
 
 func writeDoctorDownloaderFailures(sb *strings.Builder, conn *sql.DB) {
 	sb.WriteString("Downloader failures:\n")
-	parts := doctorStatusCounts(conn, "downloader_operations", "error_kind", "status IN ('failed', 'error')")
+	parts, err := doctorStatusCounts(conn, "downloader_operations", "error_kind", "status IN ('failed', 'error')")
+	if err != nil {
+		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+		return
+	}
 	if len(parts) == 0 {
 		sb.WriteString("  none\n\n")
 		return
@@ -484,7 +511,7 @@ func doctorAndroidSyncMetadataRetryCounts(minutes int) ([]string, error) {
 	}
 	err := filepath.WalkDir(logsDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d == nil || d.IsDir() {
-			return nil
+			return nil //nolint:nilerr // Keep scanning available Android logs if a path cannot be read.
 		}
 		rel, _ := filepath.Rel(logsDir, path)
 		if !strings.Contains(rel, "android") {
@@ -492,11 +519,11 @@ func doctorAndroidSyncMetadataRetryCounts(minutes int) ([]string, error) {
 		}
 		info, err := d.Info()
 		if err != nil || time.Since(info.ModTime()) > cutoff {
-			return nil
+			return nil //nolint:nilerr // Logs can disappear during rotation.
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // Skip unavailable logs and scan the remaining files.
 		}
 		for _, line := range strings.Split(string(data), "\n") {
 			line = strings.TrimSpace(line)
@@ -558,7 +585,7 @@ func writeDoctorRecentErrors(sb *strings.Builder) {
 	}
 }
 
-func doctorStatusCounts(conn *sql.DB, table, groupColumn, where string) []string {
+func doctorStatusCounts(conn *sql.DB, table, groupColumn, where string) ([]string, error) {
 	query := fmt.Sprintf("SELECT COALESCE(NULLIF(%s, ''), 'unknown'), COUNT(*) FROM %s", groupColumn, table)
 	if where != "" {
 		query += " WHERE " + where
@@ -566,7 +593,7 @@ func doctorStatusCounts(conn *sql.DB, table, groupColumn, where string) []string
 	query += " GROUP BY 1"
 	rows, err := conn.Query(query)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer func() {
 		_ = rows.Close()
@@ -576,15 +603,18 @@ func doctorStatusCounts(conn *sql.DB, table, groupColumn, where string) []string
 		var key string
 		var count int
 		if err := rows.Scan(&key, &count); err != nil {
-			continue
+			return nil, err
 		}
 		parts = append(parts, fmt.Sprintf("%s=%d", key, count))
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	sort.Strings(parts)
-	return parts
+	return parts, nil
 }
 
-func doctorAssetStatusCounts(conn *sql.DB, where string) []string {
+func doctorAssetStatusCounts(conn *sql.DB, where string) ([]string, error) {
 	query := `
 		SELECT CASE WHEN a.lifecycle_state = 'pruned' THEN 'pruned'
 		            WHEN current.published_revision > 0 AND current.file_path != '' THEN 'ready'
@@ -599,27 +629,23 @@ func doctorAssetStatusCounts(conn *sql.DB, where string) []string {
 	query += " GROUP BY state"
 	rows, err := conn.Query(query)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	var parts []string
 	for rows.Next() {
 		var state string
 		var count int
-		if rows.Scan(&state, &count) == nil {
-			parts = append(parts, fmt.Sprintf("%s=%d", state, count))
+		if err := rows.Scan(&state, &count); err != nil {
+			return nil, err
 		}
+		parts = append(parts, fmt.Sprintf("%s=%d", state, count))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	sort.Strings(parts)
-	return parts
-}
-
-func doctorCount(conn *sql.DB, query string, args ...any) int {
-	var count int
-	if err := conn.QueryRow(query, args...).Scan(&count); err != nil {
-		return 0
-	}
-	return count
+	return parts, nil
 }
 
 var sensitiveMaskers = []struct {

@@ -1,3 +1,4 @@
+// Package home defines home widgets and their layout.
 package home
 
 import (

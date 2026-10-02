@@ -36,8 +36,8 @@ func TestHealthLiveHandlerShape(t *testing.T) {
 func TestHealthReportsStaleFeedSnapshot(t *testing.T) {
 	srv := newTestServer(t)
 	now := time.Now().UnixMilli()
-	staleAt := now - int64((2 * time.Hour).Milliseconds())
-	freshAt := now - int64((45 * time.Minute).Milliseconds())
+	staleAt := now - (2 * time.Hour).Milliseconds()
+	freshAt := now - (45 * time.Minute).Milliseconds()
 
 	insertFeedItemAt(t, srv, "old_ranked", "old_author", staleAt, 1)
 	if err := srv.db.ReplaceFeedRankSnapshot([]db.SnapshotRow{
@@ -73,7 +73,7 @@ func TestHealthReportsStaleFeedSnapshot(t *testing.T) {
 func TestHealthReportsStaleAndroidSyncHealth(t *testing.T) {
 	srv := newTestServer(t)
 	now := time.Now().UnixMilli()
-	old := now - int64((7 * time.Hour).Milliseconds())
+	old := now - (7 * time.Hour).Milliseconds()
 	clock, err := srv.db.GetAndroidSyncClock()
 	if err != nil {
 		t.Fatal(err)

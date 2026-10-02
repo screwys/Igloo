@@ -187,7 +187,7 @@ func TestTranslateBackgroundSkipsProviderDetectedSkipLanguage(t *testing.T) {
 	if requests != 0 {
 		t.Fatalf("provider requests = %d, want 0; body=%#v", requests, gotBody)
 	}
-	if _, _, err := d.GetTranslation("tweet-ja-misdetected", "body", "en"); err != sql.ErrNoRows {
+	if _, _, err := d.GetTranslation("tweet-ja-misdetected", "body", "en"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("GetTranslation err = %v, want sql.ErrNoRows", err)
 	}
 }
@@ -236,7 +236,7 @@ func TestTranslateBackgroundSkipsAmbiguousUnchangedText(t *testing.T) {
 	if requests != 1 {
 		t.Fatalf("provider requests = %d, want 1", requests)
 	}
-	if _, _, err := d.GetTranslation("ambiguous_social_caption", "body", "en"); err != sql.ErrNoRows {
+	if _, _, err := d.GetTranslation("ambiguous_social_caption", "body", "en"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("GetTranslation err = %v, want sql.ErrNoRows", err)
 	}
 }
@@ -387,7 +387,7 @@ func TestTranslateBackgroundRetriesOnlyRejectedBatchItem(t *testing.T) {
 	if got, _, err := d.GetTranslation("sample_root", "body", "en"); err != nil || got != "root translated" {
 		t.Fatalf("root translation = (%q, %v), want root translated", got, err)
 	}
-	if _, _, err := d.GetTranslation("sample_reply", "body", "en"); err != sql.ErrNoRows {
+	if _, _, err := d.GetTranslation("sample_reply", "body", "en"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("reply translation err = %v, want sql.ErrNoRows", err)
 	}
 	var status, kind string
@@ -773,7 +773,7 @@ func TestTranslateBackgroundContinuesAfterCandidateProviderError(t *testing.T) {
 	if got != "good text" || src != "Chinese" {
 		t.Fatalf("success translation = (%q, %q), want (good text, Chinese)", got, src)
 	}
-	if _, _, err := d.GetTranslation("tweet-provider-error", "body", "en"); err != sql.ErrNoRows {
+	if _, _, err := d.GetTranslation("tweet-provider-error", "body", "en"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("GetTranslation error candidate err = %v, want sql.ErrNoRows", err)
 	}
 
@@ -798,7 +798,7 @@ func TestTranslateBackgroundContinuesAfterCandidateProviderError(t *testing.T) {
 	if requests != 2 {
 		t.Fatalf("provider requests after third batch = %d, want 2 while retry is delayed", requests)
 	}
-	if _, _, err := d.GetTranslation("tweet-provider-error", "body", "en"); err != sql.ErrNoRows {
+	if _, _, err := d.GetTranslation("tweet-provider-error", "body", "en"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("GetTranslation delayed retry candidate err = %v, want sql.ErrNoRows", err)
 	}
 }

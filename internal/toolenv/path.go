@@ -1,3 +1,4 @@
+// Package toolenv configures paths for external downloader tools.
 package toolenv
 
 import (

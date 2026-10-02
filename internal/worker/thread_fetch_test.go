@@ -23,11 +23,12 @@ func TestRefreshThreadStoresRepliesAndQuotesAsContextWhenAutomaticDisabled(t *te
 	requests := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		if r.URL.Path == "/2/conversation/100" {
+		switch r.URL.Path {
+		case "/2/conversation/100":
 			_, _ = w.Write([]byte(`{"code":200,"status":{"id":"100","text":"Root","author":{"screen_name":"sample_author"}},"thread":[{"id":"100","text":"Root","author":{"screen_name":"sample_author"}}],"replies":[{"id":"101","text":"Reply","author":{"screen_name":"reply_author"},"replying_to":{"screen_name":"sample_author","status":"100"},"media":{"all":[{"type":"photo","url":"https://pbs.twimg.com/media/sample.jpg"}]}}]}`))
-		} else if r.URL.Path == "/2/status/100/quotes" {
+		case "/2/status/100/quotes":
 			_, _ = w.Write([]byte(`{"code":200,"results":[{"id":"102","text":"Quote","author":{"screen_name":"quote_author"},"quote":{"type":"tombstone","id":"100"}}]}`))
-		} else {
+		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))

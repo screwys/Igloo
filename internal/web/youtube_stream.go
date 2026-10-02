@@ -377,7 +377,7 @@ func (session *youtubeStreamSession) prepareUpstreamManifest() error {
 		session.textTracks = session.captionTracks()
 		return nil
 	}
-	return errors.New("No indexed video or segment manifest available")
+	return errors.New("no indexed video or segment manifest available")
 }
 
 func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *http.Request, resourceID, suffix string) {
@@ -396,7 +396,7 @@ func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *htt
 	}
 	response, err := session.requestResource(r.Context(), resource, target, initialRange)
 	if err != nil {
-		http.Error(w, "Could not read the upstream media", 502)
+		http.Error(w, "Could not read the upstream media", http.StatusBadGateway)
 		return
 	}
 	defer func(body io.ReadCloser) { _ = body.Close() }(response.Body)
@@ -416,7 +416,7 @@ func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *htt
 		if response.StatusCode == http.StatusPartialContent {
 			_, _, size, err := streamContentRange(response)
 			if err != nil || size > 8<<20 {
-				http.Error(w, "Could not read the media manifest", 502)
+				http.Error(w, "Could not read the media manifest", http.StatusBadGateway)
 				return
 			}
 			err = session.copyResourceRange(&data, r.Context(), resource, target, streamByteRange{0, size - 1}, response)
@@ -431,7 +431,7 @@ func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *htt
 			}
 		} else {
 			if _, err := io.Copy(&data, io.LimitReader(response.Body, (8<<20)+1)); err != nil || data.Len() > 8<<20 {
-				http.Error(w, "Could not read the media manifest", 502)
+				http.Error(w, "Could not read the media manifest", http.StatusBadGateway)
 				return
 			}
 		}
@@ -449,7 +449,7 @@ func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *htt
 		}
 		if err != nil {
 			session.replaceManifestChildren("", nil)
-			http.Error(w, "Could not read the media manifest", 502)
+			http.Error(w, "Could not read the media manifest", http.StatusBadGateway)
 			return
 		}
 		session.replaceManifestChildren(resourceID, children)
@@ -472,13 +472,13 @@ func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *htt
 	}
 	_, _, size, err := streamContentRange(response)
 	if err != nil {
-		http.Error(w, "Invalid upstream media range", 502)
+		http.Error(w, "Invalid upstream media range", http.StatusBadGateway)
 		return
 	}
 	ranges, err := parseStreamRanges(r.Header.Get("Range"), size)
 	if err != nil {
 		w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
-		http.Error(w, "Invalid media range", 416)
+		http.Error(w, "Invalid media range", http.StatusRequestedRangeNotSatisfiable)
 		return
 	}
 	w.Header().Set("Accept-Ranges", "bytes")
@@ -502,19 +502,19 @@ func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *htt
 	var overhead bytes.Buffer
 	count := multipart.NewWriter(&overhead)
 	if err := count.SetBoundary(writer.Boundary()); err != nil {
-		http.Error(w, "Could not prepare media ranges", 502)
+		http.Error(w, "Could not prepare media ranges", http.StatusBadGateway)
 		return
 	}
 	length := int64(0)
 	for _, selected := range ranges {
 		if _, err := count.CreatePart(streamRangeMIMEHeader(selected, size, contentType)); err != nil {
-			http.Error(w, "Could not prepare media ranges", 502)
+			http.Error(w, "Could not prepare media ranges", http.StatusBadGateway)
 			return
 		}
 		length += selected.end - selected.start + 1
 	}
 	if err := count.Close(); err != nil {
-		http.Error(w, "Could not prepare media ranges", 502)
+		http.Error(w, "Could not prepare media ranges", http.StatusBadGateway)
 		return
 	}
 	w.Header().Set("Content-Type", "multipart/byteranges; boundary="+writer.Boundary())
@@ -713,7 +713,7 @@ func (session *youtubeStreamSession) rewriteHLS(data []byte, base *url.URL, head
 		start += len(`URI="`)
 		end := strings.Index(line[start:], `"`)
 		if end < 0 {
-			return nil, nil, errors.New("Invalid media manifest URI")
+			return nil, nil, errors.New("invalid media manifest URI")
 		}
 		end += start
 		resourcePath, err := add(line[start:end])
@@ -856,7 +856,7 @@ func (session *youtubeStreamSession) replaceManifestChildren(id string, children
 func stripDASHNamespaceDeclarations(element xml.StartElement) xml.StartElement {
 	attrs := element.Attr[:0]
 	for _, attr := range element.Attr {
-		if attr.Name.Space != "xmlns" && !(attr.Name.Space == "" && attr.Name.Local == "xmlns") {
+		if attr.Name.Space != "xmlns" && (attr.Name.Space != "" || attr.Name.Local != "xmlns") {
 			attrs = append(attrs, attr)
 		}
 	}
@@ -881,7 +881,7 @@ func (session *youtubeStreamSession) rewriteDASH(data []byte, base *url.URL, hea
 	depth, rootHasBase := 0, false
 	for {
 		token, err := scan.Token()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -911,7 +911,7 @@ func (session *youtubeStreamSession) rewriteDASH(data []byte, base *url.URL, hea
 	}
 	for {
 		token, err := decoder.Token()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

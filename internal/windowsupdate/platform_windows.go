@@ -69,12 +69,12 @@ func currentInstallRoot() (string, error) {
 	if strings.EqualFold(filepath.Base(dir), "current") && strings.EqualFold(filepath.Base(filepath.Dir(dir)), "app") {
 		return filepath.Dir(filepath.Dir(dir)), nil
 	}
-	return "", errors.New("Igloo is not running from a managed Windows installation")
+	return "", errors.New("current process is not running from a managed Windows installation")
 }
 
 func (i PlatformInstaller) Apply(ctx context.Context, available Available) error {
 	if i.RequestStop == nil {
-		return errors.New("Windows update restart callback is unavailable")
+		return errors.New("the Windows update restart callback is unavailable")
 	}
 	plan, helper, err := i.stage(ctx, available)
 	if err != nil {

@@ -2,6 +2,8 @@ package db
 
 import (
 	"database/sql"
+	"errors"
+	"log/slog"
 	"math"
 	"sort"
 	"time"
@@ -84,7 +86,7 @@ func (db *DB) recordIngestFailureClassified(handle string, lastError string, htt
 		err := tx.QueryRow(
 			"SELECT COALESCE(fail_count,0) FROM ingest_state WHERE handle=?", handle,
 		).Scan(&failCount)
-		if err != nil && err != sql.ErrNoRows {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
 
@@ -201,6 +203,9 @@ func (db *DB) FilterReadyHandles(handles []string, intervalSec float64) (ready [
 				blocked[h] = reason
 			}
 		}
+		if err := rows.Err(); err != nil {
+			slog.Warn("read ingest backoff", "err", err)
+		}
 	}
 
 	ready = make([]string, 0, len(handles))
@@ -234,6 +239,9 @@ func (db *DB) FilterReadyHandles(handles []string, intervalSec float64) (ready [
 				if staleRows.Scan(&h, &ts) == nil {
 					staleness[h] = ts
 				}
+			}
+			if err := staleRows.Err(); err != nil {
+				slog.Warn("read ingest fetch times", "err", err)
 			}
 		}
 		sort.Slice(ready, func(i, j int) bool {

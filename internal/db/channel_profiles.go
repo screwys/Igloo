@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -128,7 +129,7 @@ func scanChannelProfile(row channelProfileScanner) (*model.ChannelProfile, error
 		&profile.AvatarURL, &profile.BannerURL,
 		&observedAt, &fetchedAt, &tombstone,
 	)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

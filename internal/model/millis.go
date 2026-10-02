@@ -30,10 +30,10 @@ func NowMillis() Millis { return Millis{time.Now()} }
 
 // UnixMs returns the unix-millis value, 0 for zero.
 func (m Millis) UnixMs() int64 {
-	if m.Time.IsZero() {
+	if m.IsZero() {
 		return 0
 	}
-	return m.Time.UnixMilli()
+	return m.UnixMilli()
 }
 
 // MarshalJSON emits an integer. Zero values emit 0.

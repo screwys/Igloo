@@ -470,7 +470,7 @@ func feedDebugRankInputExclusionReasons(item feedDebugItem, viewer feedDebugView
 		reasons = append(reasons, "ghost_item")
 	}
 	if item.CanonicalTweetID != "" && item.CanonicalTweetID != item.TweetID &&
-		!(item.IsRetweet && item.QuoteTweetID == "") {
+		(!item.IsRetweet || item.QuoteTweetID != "") {
 		reasons = append(reasons, "non_canonical_tweet")
 	}
 	if item.PublishedAtMs <= 0 {

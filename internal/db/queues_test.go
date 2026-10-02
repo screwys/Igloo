@@ -272,6 +272,9 @@ func TestContentAssetClaimPlanUsesOnlyDurableQueueIndexes(t *testing.T) {
 		}
 		details = append(details, detail)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
 	plan := strings.Join(details, "\n")
 	if !strings.Contains(plan, "idx_media_objects_claim (download_lane=? AND next_attempt_at_ms<?)") ||
 		!strings.Contains(plan, "idx_assets_desired_object") {

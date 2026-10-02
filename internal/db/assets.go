@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -490,7 +491,7 @@ func (db *DB) GetAsset(assetID, assetKind string) (*Asset, error) {
 		WHERE a.asset_id = ? AND a.asset_kind = ?
 	`, strings.TrimSpace(assetID), strings.TrimSpace(assetKind))
 	asset, err := scanAsset(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -534,12 +535,6 @@ func (db *DB) MarkReadyAssetUnavailable(expected Asset, nowMs int64) (bool, erro
 		return err
 	})
 	return changed, err
-}
-
-func readAssetTx(tx *sql.Tx, assetID string) (Asset, error) {
-	return scanAsset(tx.QueryRow(`SELECT `+assetProjectionSQL+assetJoinsSQL+`
-		WHERE a.asset_id = ?
-	`, assetID))
 }
 
 // CompleteAssetDownload publishes a file for a content asset claimed by its
@@ -944,7 +939,7 @@ func sniffAssetContentType(path, assetKind string) (string, error) {
 	defer func() { _ = f.Close() }()
 	buf := make([]byte, 512)
 	n, err := f.Read(buf)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return "", err
 	}
 	buf = buf[:n]
@@ -1107,7 +1102,7 @@ func (db *DB) GetAssetByOwnerIdentity(assetKind, ownerKind, ownerID string, medi
 		WHERE a.asset_kind = ? AND a.owner_kind = ? AND a.owner_id = ? AND a.media_index = ?
 	`, strings.TrimSpace(assetKind), strings.TrimSpace(ownerKind), strings.TrimSpace(ownerID), mediaIndex)
 	asset, err := scanAsset(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

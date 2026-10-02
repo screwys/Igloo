@@ -1,3 +1,4 @@
+// Package queryaudit inspects database queries and their execution plans.
 package queryaudit
 
 import (

@@ -473,7 +473,7 @@ func TestHandlePageShortsUsesStableAppendOrdering(t *testing.T) {
 	if oldest < 0 || viewed < 0 || newest < 0 {
 		t.Fatalf("rendered page missing seeded shorts\n%s", html)
 	}
-	if !(oldest < viewed && viewed < newest) {
+	if oldest >= viewed || viewed >= newest {
 		t.Fatalf("Moments order = oldest:%d viewed:%d newest:%d\n%s", oldest, viewed, newest, html)
 	}
 

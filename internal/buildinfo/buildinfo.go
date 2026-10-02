@@ -1,3 +1,4 @@
+// Package buildinfo reports application versions and build metadata.
 package buildinfo
 
 import (

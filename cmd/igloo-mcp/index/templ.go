@@ -6,12 +6,12 @@ import (
 )
 
 var (
-	rTemplFunc    = regexp.MustCompile(`(?m)^templ\s+(\w+)\s*\(([^)]*)\)\s*\{`)
-	rTemplCSS     = regexp.MustCompile(`(?m)^css\s+(\w+)\s*\(([^)]*)\)\s*\{`)
-	rTemplCall    = regexp.MustCompile(`@(\w+)\s*\(`)
-	rTemplGoFunc  = regexp.MustCompile(`(?m)^func\s+(\w+)\s*\(([^)]*)\)(?:\s+\S+)?\s*\{`)
-	rTemplMethod  = regexp.MustCompile(`(?m)^func\s+\(\s*\w+\s+\*?(\w+)\s*\)\s+(\w+)\s*\(([^)]*)\)`)
-	rTemplGoType  = regexp.MustCompile(`(?m)^type\s+(\w+)\s+(struct|interface)\s*\{`)
+	rTemplFunc   = regexp.MustCompile(`(?m)^templ\s+(\w+)\s*\(([^)]*)\)\s*\{`)
+	rTemplCSS    = regexp.MustCompile(`(?m)^css\s+(\w+)\s*\(([^)]*)\)\s*\{`)
+	rTemplCall   = regexp.MustCompile(`@(\w+)\s*\(`)
+	rTemplGoFunc = regexp.MustCompile(`(?m)^func\s+(\w+)\s*\(([^)]*)\)(?:\s+\S+)?\s*\{`)
+	rTemplMethod = regexp.MustCompile(`(?m)^func\s+\(\s*\w+\s+\*?(\w+)\s*\)\s+(\w+)\s*\(([^)]*)\)`)
+	rTemplGoType = regexp.MustCompile(`(?m)^type\s+(\w+)\s+(struct|interface)\s*\{`)
 )
 
 // TemplResult is the output of ScanTempl.
@@ -78,7 +78,7 @@ func ScanTempl(source, fp string) TemplResult {
 		args := strings.TrimSpace(source[m[6]:m[7]])
 		result.Symbols = append(result.Symbols, Symbol{
 			Name: name, Kind: "method", File: fp, Line: lineOf(m[0]),
-			Language: "go",
+			Language:  "go",
 			Signature: "func (" + receiver + ") " + name + "(" + args + ")",
 			Parent:    receiver,
 		})

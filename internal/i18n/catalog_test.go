@@ -126,17 +126,6 @@ msgstr "` + msgstr + `"
 	}
 }
 
-func writeProperties(t *testing.T, path, lang, name string, messages map[string]string) {
-	t.Helper()
-	data := "# Language: " + lang + "\n# Language-Name: " + name + "\n\n"
-	for key, msg := range messages {
-		data += key + " = " + msg + "\n"
-	}
-	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
-		t.Fatalf("write %s: %v", path, err)
-	}
-}
-
 func writeTOML(t *testing.T, path, lang, name string, messages map[string]string) {
 	t.Helper()
 	data := "# Language: " + lang + "\n# Language-Name: " + name + "\n\n"

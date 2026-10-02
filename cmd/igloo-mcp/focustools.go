@@ -54,9 +54,15 @@ func writeAndroidSyncClockAndHeads(sb *strings.Builder, conn *sql.DB) {
 	for rows.Next() {
 		var kind string
 		var count, latest int64
-		if err := rows.Scan(&kind, &count, &latest); err == nil {
-			fmt.Fprintf(sb, "  %-20s count=%d latest_revision=%d\n", kind, count, latest)
+		if err := rows.Scan(&kind, &count, &latest); err != nil {
+			fmt.Fprintf(sb, "  head summary unavailable: %v\n\n", err)
+			return
 		}
+		fmt.Fprintf(sb, "  %-20s count=%d latest_revision=%d\n", kind, count, latest)
+	}
+	if err := rows.Err(); err != nil {
+		fmt.Fprintf(sb, "  head summary unavailable: %v\n\n", err)
+		return
 	}
 	sb.WriteString("\n")
 }
@@ -80,11 +86,16 @@ func writeAndroidSyncHealthReports(sb *strings.Builder, conn *sql.DB) {
 		var cursor string
 		var reportedAtMs, verified, pending, missing, total, verifiedBytes int64
 		if err := rows.Scan(&cursor, &reportedAtMs, &verified, &pending, &missing, &total, &verifiedBytes); err != nil {
-			continue
+			fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+			return
 		}
 		wrote = true
 		fmt.Fprintf(sb, "  cursor=%s reported=%s verified=%d pending=%d missing=%d total=%d bytes=%s\n",
 			compactLong(cursor, 80), formatMillis(reportedAtMs), verified, pending, missing, total, formatSize(verifiedBytes))
+	}
+	if err := rows.Err(); err != nil {
+		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+		return
 	}
 	if !wrote {
 		sb.WriteString("  none\n")
@@ -112,10 +123,16 @@ func writeAndroidSyncMissingSamples(sb *strings.Builder, conn *sql.DB) {
 	for rows.Next() {
 		var kind, ownerKind string
 		var count int
-		if err := rows.Scan(&kind, &ownerKind, &count); err == nil {
-			wrote = true
-			fmt.Fprintf(sb, "  %s/%s=%d\n", kind, ownerKind, count)
+		if err := rows.Scan(&kind, &ownerKind, &count); err != nil {
+			fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+			return
 		}
+		wrote = true
+		fmt.Fprintf(sb, "  %s/%s=%d\n", kind, ownerKind, count)
+	}
+	if err := rows.Err(); err != nil {
+		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+		return
 	}
 	if !wrote {
 		sb.WriteString("  none\n")
@@ -148,10 +165,15 @@ func writeAndroidSyncInventory(sb *strings.Builder, conn *sql.DB) {
 		var state, kind string
 		var count int
 		if err := rows.Scan(&state, &kind, &count); err != nil {
-			continue
+			fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+			return
 		}
 		wrote = true
 		fmt.Fprintf(sb, "  %-15s %-20s %d\n", state, kind, count)
+	}
+	if err := rows.Err(); err != nil {
+		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
+		return
 	}
 	if !wrote {
 		sb.WriteString("  none\n")
@@ -504,6 +526,7 @@ func writeIdentityFeedTimeline(sb *strings.Builder, conn *sql.DB, candidate iden
 		LIMIT ?
 	`, handle, handle, handle, handle, handle, handle, handle, handle, handle, handle, limit)
 	if err != nil {
+		fmt.Fprintf(sb, "  recent feed rows unavailable: %v\n", err)
 		return
 	}
 	defer func() {
@@ -514,9 +537,13 @@ func writeIdentityFeedTimeline(sb *strings.Builder, conn *sql.DB, candidate iden
 		var tweetID, role string
 		var publishedAt, fetchedAt int64
 		if err := rows.Scan(&tweetID, &publishedAt, &fetchedAt, &role); err != nil {
-			continue
+			fmt.Fprintf(sb, "  recent feed rows unavailable: %v\n", err)
+			return
 		}
 		fmt.Fprintf(sb, "    %s role=%s published=%s fetched=%s\n", tweetID, role, formatMillis(publishedAt), formatMillis(fetchedAt))
+	}
+	if err := rows.Err(); err != nil {
+		fmt.Fprintf(sb, "  recent feed rows unavailable: %v\n", err)
 	}
 }
 

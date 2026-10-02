@@ -1,3 +1,4 @@
+// Package sponsorblock fetches video segments that playback can skip.
 package sponsorblock
 
 import (

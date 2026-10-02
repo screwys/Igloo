@@ -65,9 +65,10 @@ func (s GitHubSource) Latest(ctx context.Context, channel, etag string) (Availab
 		return Available{}, etag, false, errors.New("GitHub API URL is not HTTPS")
 	}
 	releasesURL := apiBaseURL + "/repos/" + repository + "/releases?per_page=20"
-	if channel == "nightly" {
+	switch channel {
+	case "nightly":
 		releasesURL = apiBaseURL + "/repos/" + repository + "/releases/tags/" + nightlyReleaseTag
-	} else if channel == "runtime" {
+	case "runtime":
 		releasesURL = apiBaseURL + "/repos/" + repository + "/releases/tags/" + runtimeReleaseTag
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releasesURL, nil)
@@ -153,14 +154,14 @@ func (s GitHubSource) Latest(ctx context.Context, channel, etag string) (Availab
 		if manifest.App != nil && channel != "runtime" {
 			asset, ok := assets[manifest.App.Asset]
 			if !ok || asset.Size != manifest.App.Size {
-				return Available{}, newETag, false, errors.New("Windows app update asset is missing or has the wrong size")
+				return Available{}, newETag, false, errors.New("the Windows app update asset is missing or has the wrong size")
 			}
 			available.AppURL = asset.BrowserDownloadURL
 		}
 		if manifest.Runtime != nil && channel == "runtime" {
 			asset, ok := assets[manifest.Runtime.Asset]
 			if !ok || asset.Size != manifest.Runtime.Size {
-				return Available{}, newETag, false, errors.New("Windows runtime update asset is missing or has the wrong size")
+				return Available{}, newETag, false, errors.New("the Windows runtime update asset is missing or has the wrong size")
 			}
 			available.RuntimeURL = asset.BrowserDownloadURL
 		}
@@ -176,7 +177,7 @@ func (s GitHubSource) Latest(ctx context.Context, channel, etag string) (Availab
 
 func fetchLimited(ctx context.Context, client *http.Client, url string, limit int64) ([]byte, error) {
 	if !strings.HasPrefix(url, "https://") {
-		return nil, errors.New("Windows update URL is not HTTPS")
+		return nil, errors.New("the Windows update URL is not HTTPS")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -196,7 +197,7 @@ func fetchLimited(ctx context.Context, client *http.Client, url string, limit in
 		return nil, err
 	}
 	if int64(len(data)) > limit {
-		return nil, errors.New("Windows update metadata is too large")
+		return nil, errors.New("the Windows update metadata is too large")
 	}
 	return data, nil
 }

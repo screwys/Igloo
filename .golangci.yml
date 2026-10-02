@@ -1,0 +1,52 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - asasalint
+    - bidichk
+    - bodyclose
+    - copyloopvar
+    - durationcheck
+    - errorlint
+    - gocritic
+    - goprintffuncname
+    - misspell
+    - nilerr
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - whitespace
+  settings:
+    gocritic:
+      disable-all: true
+      enabled-checks:
+        - deprecatedComment
+    govet:
+      enable:
+        - nilness
+    staticcheck:
+      checks:
+        - all
+  exclusions:
+    rules:
+      # Chunked queries close rows before starting the next query.
+      - linters:
+          - sqlclosecheck
+        text: "^Close should use defer$"
+      # MCP tool failures are encoded in the result, with no transport error.
+      - linters:
+          - nilerr
+        path: ^cmd/igloo-mcp/
+        source: 'return mcp.NewToolResultText\("Error: '
+
+formatters:
+  enable:
+    - gofmt
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

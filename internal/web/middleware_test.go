@@ -46,7 +46,7 @@ func TestRecoverPanicPropagatesHTTPAbort(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/config/export/full", nil)
 	rec := httptest.NewRecorder()
 	defer func() {
-		if recovered := recover(); recovered != http.ErrAbortHandler {
+		if recovered := recover(); recovered != http.ErrAbortHandler { //nolint:errorlint // Check the exact panic value passed to net/http.
 			t.Fatalf("recovered panic = %v, want http.ErrAbortHandler", recovered)
 		}
 		if strings.Contains(rec.Body.String(), "internal_error") {

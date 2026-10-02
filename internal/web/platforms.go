@@ -113,16 +113,3 @@ func platformChoiceLabel(platform string) string {
 		return platform
 	}
 }
-
-func filterEnabledPlatforms(platforms []string, enabled map[string]bool) []string {
-	var out []string
-	seen := make(map[string]bool)
-	for _, p := range platforms {
-		p = config.NormalizePlatform(p)
-		if enabled[p] && !seen[p] {
-			seen[p] = true
-			out = append(out, p)
-		}
-	}
-	return out
-}

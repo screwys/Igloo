@@ -251,7 +251,10 @@ templ homeBroadcastCard(p PageProps, broadcast model.YouTubeBroadcast, channel m
 			</a>
 			<div class="home-broadcast-meta">
 				if broadcast.ConcurrentViewCount != nil && broadcast.LiveStatus == "is_live" {
-					<span title={ L(p, "home_viewers", "Viewers") }>@MaterialIcon("Visibility", ""){ homeViewerCount(broadcast) }</span>
+					<span title={ L(p, "home_viewers", "Viewers") }>
+						@MaterialIcon("Visibility", "")
+						{ homeViewerCount(broadcast) }
+					</span>
 				}
 				if at := homeBroadcastTime(broadcast); at != nil {
 					<time datetime={ at.Format("2006-01-02T15:04:05Z07:00") } data-timestamp={ strconv.FormatInt(at.UnixMilli(), 10) }>{ RelativeTimeText(p, at) }</time>

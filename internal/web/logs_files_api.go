@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -108,61 +107,6 @@ var knownLogTypes = []string{
 	"android", "android-stats",
 }
 
-// appendToFile opens a file for append (creating dirs if needed) and writes lines.
-func appendToFile(path string, lines []string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = f.Close()
-	}()
-	w := bufio.NewWriter(f)
-	for _, l := range lines {
-		_, _ = w.WriteString(l)
-		_ = w.WriteByte('\n')
-	}
-	return w.Flush()
-}
-
-// parseLogLine extracts structured fields from a log line.
-// Handles formats like: "2026-04-01 13:44:13,430 [INFO] [android] Android: client_log:FeedSync - DEBUG - message"
-var logLineRe = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,.]?\d*)\s+\[(\w+)\]\s+\[(\w+)\]\s+(?:Android:\s+)?(?:client_log:)?(.*)$`)
-
-func parseLogLine(line string) androidLogEvent {
-	m := logLineRe.FindStringSubmatch(line)
-	if m != nil {
-		msg := strings.TrimSpace(m[4])
-		tag := m[3]
-		level := strings.ToUpper(m[2])
-		// Extract inner tag from "FeedSync - DEBUG - actual message"
-		if parts := strings.SplitN(msg, " - ", 3); len(parts) >= 3 {
-			tag = parts[0]
-			level = strings.ToUpper(parts[1])
-			msg = parts[2]
-		} else if parts := strings.SplitN(msg, " - ", 2); len(parts) == 2 {
-			tag = parts[0]
-			msg = parts[1]
-		}
-		return androidLogEvent{
-			Timestamp: m[1],
-			Level:     level,
-			Tag:       tag,
-			Message:   msg,
-		}
-	}
-	// Fallback: treat entire line as message
-	return androidLogEvent{
-		Timestamp: time.Now().Format("2006-01-02 15:04:05"),
-		Level:     "INFO",
-		Tag:       "android",
-		Message:   line,
-	}
-}
-
 // ── Server logs ───────────────────────────────────────────────────────────────
 
 func (s *Server) handleLogsServer(w http.ResponseWriter, r *http.Request) {
@@ -249,11 +193,12 @@ func (s *Server) handleLogsSummary(w http.ResponseWriter, r *http.Request) {
 	var summary []fileSummary
 	for _, t := range knownLogTypes {
 		var path string
-		if t == "android" {
+		switch t {
+		case "android":
 			path = filepath.Join(s.cfg.Storage.StateRoot(), "logs", "android", "android.log")
-		} else if t == "android-stats" {
+		case "android-stats":
 			path = filepath.Join(s.cfg.Storage.StateRoot(), "logs", "android", "stats.jsonl")
-		} else {
+		default:
 			path = filepath.Join(s.cfg.Storage.StateRoot(), "logs", "server", t+".log")
 		}
 		fs := fileSummary{Name: t}
@@ -288,7 +233,7 @@ func (s *Server) handleLogsCleanup(w http.ResponseWriter, r *http.Request) {
 
 	err := filepath.Walk(logsDir, func(path string, fi os.FileInfo, err error) error {
 		if err != nil || fi.IsDir() {
-			return nil
+			return nil //nolint:nilerr // Keep cleaning other logs when an entry cannot be read.
 		}
 		if fi.ModTime().Before(cutoff) {
 			freedBytes += fi.Size()

@@ -1,3 +1,4 @@
+// Package storagemaintenance runs database and media cleanup commands.
 package storagemaintenance
 
 import (

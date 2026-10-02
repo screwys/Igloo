@@ -1184,14 +1184,6 @@ func TestInstagramUsesOwnGlobalSchedulerSettings(t *testing.T) {
 	}
 }
 
-func sourceWindowIDs(window download.SourceWindow) []string {
-	ids := make([]string, 0, len(window.Refs))
-	for _, ref := range window.Refs {
-		ids = append(ids, ref.VideoID)
-	}
-	return ids
-}
-
 func desireWindow(t *testing.T, database *db.DB, sourceID, component string) []db.VideoDesireWindowItem {
 	t.Helper()
 	items, err := database.GetVideoDesireWindow(sourceID, component)

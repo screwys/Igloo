@@ -1847,6 +1847,10 @@ func (db *DB) GetNewPosterAvatars(knownHeadTweetID string, limit int) ([]model.N
 			}
 			appendRow(channelID, handle, display)
 		}
+		if rows.Err() != nil {
+			out = out[:0]
+			clear(seen)
+		}
 		_ = rows.Close()
 	}
 
@@ -1871,6 +1875,10 @@ func (db *DB) GetNewPosterAvatars(knownHeadTweetID string, limit int) ([]model.N
 					break
 				}
 				appendRow(channelID, handle, display)
+			}
+			if err := rows.Err(); err != nil {
+				_ = rows.Close()
+				return out, err
 			}
 			_ = rows.Close()
 		}

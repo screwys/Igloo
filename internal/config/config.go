@@ -1,3 +1,4 @@
+// Package config loads server configuration and storage paths.
 package config
 
 import (

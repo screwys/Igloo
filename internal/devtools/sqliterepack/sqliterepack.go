@@ -1,3 +1,4 @@
+// Package sqliterepack compacts SQLite databases and checks disk space.
 package sqliterepack
 
 import (
@@ -196,7 +197,7 @@ func availableBytes(path string) (int64, error) {
 	if err := syscall.Statfs(path, &st); err != nil {
 		return 0, err
 	}
-	return int64(st.Bavail) * int64(st.Bsize), nil
+	return int64(st.Bavail) * int64(st.Bsize), nil //nolint:unconvert // Statfs field types vary by OS and architecture.
 }
 
 func formatText(rep report) string {

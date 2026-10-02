@@ -1,3 +1,4 @@
+// Package translate translates saved content through configured providers.
 package translate
 
 import (
@@ -210,7 +211,7 @@ func runTranslateBackgroundBatch(ctx context.Context, database *db.DB, cfg trans
 			if _, _, err := database.GetTranslation(job.TweetID, job.Field, job.TargetLang); err == nil {
 				_ = database.CompleteTranslationJob(job.TweetID, job.Field, job.TargetLang)
 				continue
-			} else if err != sql.ErrNoRows {
+			} else if !errors.Is(err, sql.ErrNoRows) {
 				_ = database.RetryTranslationJob(job.TweetID, job.Field, job.TargetLang, "cache_read", err.Error(), translateBackgroundErrorDelay)
 				return translated, err
 			}

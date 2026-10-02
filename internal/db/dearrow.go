@@ -67,7 +67,6 @@ func (db *DB) SetDearrowData(videoID string, title, titleCasual, thumbPath *stri
 	}
 	if thumbPath != nil {
 		key := strings.TrimSpace(*thumbPath)
-		thumbPath = &key
 		asset := Asset{
 			AssetID:        BuildAssetID(platform, ownerKind, videoID, "dearrow_thumbnail", 0),
 			AssetKind:      "dearrow_thumbnail",

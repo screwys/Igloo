@@ -181,8 +181,7 @@ func (m *Manager) queryAvailable(ctx context.Context) (Available, error) {
 		effectiveApp = available.Manifest.App.Version
 	}
 	if needsRuntime && NewerVersion(available.Manifest.MinimumAppVersion, effectiveApp) {
-		needsRuntime = false
-		return available, fmt.Errorf("Windows runtime %s requires Igloo %s", available.Manifest.Runtime.Version, available.Manifest.MinimumAppVersion)
+		return available, fmt.Errorf("the Windows runtime %s requires Igloo %s", available.Manifest.Runtime.Version, available.Manifest.MinimumAppVersion)
 	}
 	if !needsApp {
 		available.Manifest.App = nil
@@ -241,7 +240,7 @@ func (m *Manager) check(ctx context.Context, forced bool) {
 		return
 	}
 	if m.installer == nil {
-		m.fail(fmt.Errorf("Windows update installer is unavailable"))
+		m.fail(fmt.Errorf("the Windows update installer is unavailable"))
 		return
 	}
 	m.updateStatus(func(status *Status) { status.Applying = true })
@@ -254,7 +253,7 @@ func (m *Manager) check(ctx context.Context, forced bool) {
 
 func (m *Manager) apply(ctx context.Context) {
 	if m.installer == nil {
-		m.fail(fmt.Errorf("Windows update installer is unavailable"))
+		m.fail(fmt.Errorf("the Windows update installer is unavailable"))
 		return
 	}
 	m.updateStatus(func(status *Status) {

@@ -75,7 +75,7 @@ type PageProps struct {
 	StaticV                 func(string) string
 	PageScripts             []string // JS files to include after base scripts.
 	PageStyles              []string
-	ESBundle                string   // esbuild bundle to load (e.g. "js/dist/feed.js")
+	ESBundle                string // esbuild bundle to load (e.g. "js/dist/feed.js")
 	StreamManifestURL       string
 	StreamManifestType      string
 	StreamSessionID         string

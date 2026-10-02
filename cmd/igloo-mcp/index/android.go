@@ -27,8 +27,8 @@ var (
 	rSQLTable      = regexp.MustCompile(`(?i)\b(?:FROM|JOIN|INTO|UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+(\w+)`)
 	rKtConstructor = regexp.MustCompile(`(?ms)class\s+(\w+)\s*\(([^)]+)\)`)
 	rKtCtorParam   = regexp.MustCompile(`(?:(?:private|protected|internal|public)\s+)?(?:(?:val|var)\s+)?(\w+)\s*:\s*(\w+)`)
-	rDbDaoCall     = regexp.MustCompile(`\bdb\.(\w+Dao)\s*\(\s*\)`)
-	rDbAbstractDao = regexp.MustCompile(`(?m)^\s*abstract\s+fun\s+(\w+)\s*\(\s*\)\s*:\s*(\w+)`)
+	rDBDaoCall     = regexp.MustCompile(`\bdb\.(\w+Dao)\s*\(\s*\)`)
+	rDBAbstractDao = regexp.MustCompile(`(?m)^\s*abstract\s+fun\s+(\w+)\s*\(\s*\)\s*:\s*(\w+)`)
 )
 
 var ktSQLSkip = map[string]bool{
@@ -79,9 +79,10 @@ func ScanDebugEvents(source, fp string) []DebugEvent {
 		for j := i; j < len(lines); j++ {
 			blockLines = append(blockLines, lines[j])
 			for _, ch := range lines[j] {
-				if ch == '(' {
+				switch ch {
+				case '(':
 					depth++
-				} else if ch == ')' {
+				case ')':
 					depth--
 				}
 			}

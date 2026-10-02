@@ -44,7 +44,7 @@ func (db *DB) ReplaceYouTubeBroadcasts(channelID string, broadcasts []model.YouT
 	})
 }
 
-// ListYouTubeBroadcasts always limits results to followed channels.
+// YouTubeBroadcastQuery selects broadcasts from followed channels.
 type YouTubeBroadcastQuery struct {
 	ChannelIDs  []string
 	StarredOnly bool

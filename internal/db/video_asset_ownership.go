@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -506,7 +507,7 @@ func (db *DB) GetReadyVideoPrimaryAsset(videoID string) (*Asset, error) {
 		LIMIT 1
 	`, videoID)
 	asset, err := scanAsset(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -726,6 +727,10 @@ func (db *DB) DeleteVideoAssetsTx(videoID string) ([]string, error) {
 				return err
 			}
 			keys[key] = struct{}{}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return err
 		}
 		if err := rows.Close(); err != nil {
 			return err

@@ -27,16 +27,6 @@ func TestVacuumIntoHonorsCanceledContext(t *testing.T) {
 	}
 }
 
-func testDBPath() string {
-	home, _ := os.UserHomeDir()
-	return home + "/.local/share/igloo/igloo.db"
-}
-
-func testDataDir() string {
-	home, _ := os.UserHomeDir()
-	return home + "/.local/share/igloo"
-}
-
 func markDBTestStateRoot(t *testing.T, stateRoot string) {
 	t.Helper()
 	if err := os.MkdirAll(stateRoot, 0o755); err != nil {

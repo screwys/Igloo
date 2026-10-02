@@ -1,3 +1,4 @@
+// Package lifecycleaudit checks database tables and their cleanup rules.
 package lifecycleaudit
 
 import (

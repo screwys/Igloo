@@ -27,6 +27,9 @@ func TestCandidateServerXMediaParentPlanUsesIdentityIndexes(t *testing.T) {
 		}
 		details = append(details, detail)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
 	plan := strings.Join(details, "\n")
 	if strings.Contains(plan, "SCAN feed_items") {
 		t.Fatalf("candidate owner plan scans feed_items: %s", plan)

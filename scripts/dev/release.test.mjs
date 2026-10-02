@@ -257,10 +257,8 @@ test("CI Go analysis tools are pinned and Renovate-managed", () => {
   assert.match(fullGate, /\. scripts\/dev\/go-tool-versions\.sh/);
   assert.match(workflow, /github\.com\/rhysd\/actionlint\/cmd\/actionlint@\$\{ACTIONLINT_VERSION\}/);
   assert.match(fullGate, /github\.com\/rhysd\/actionlint\/cmd\/actionlint@\$\{ACTIONLINT_VERSION\}/);
-  assert.match(versions, /packageName=github\.com\/kisielk\/errcheck/);
-  assert.match(versions, /ERRCHECK_VERSION=v\d+\.\d+\.\d+/);
-  assert.match(versions, /packageName=honnef\.co\/go\/tools/);
-  assert.match(versions, /STATICCHECK_VERSION=v\d+\.\d+\.\d+/);
+  assert.match(versions, /packageName=golangci\/golangci-lint/);
+  assert.match(versions, /GOLANGCI_LINT_VERSION=v\d+\.\d+\.\d+/);
   assert.match(versions, /packageName=golang\.org\/x\/vuln/);
   assert.match(versions, /GOVULNCHECK_VERSION=v\d+\.\d+\.\d+/);
   assert.match(versions, /packageName=github\.com\/rhysd\/actionlint/);
@@ -453,7 +451,7 @@ test("CI covers pull requests and pushes to main with static, Go, runtime, and A
   assert.match(workflow, /\n  go:\n/);
   assert.match(workflow, /\n  runtime:\n/);
   assert.match(workflow, /\n  android:\n/);
-  assert.match(workflow, /run: go test \.\/\.\.\./);
+  assert.match(workflow, /run: go test -race -timeout 30m \.\/\.\.\./);
   assert.match(workflow, /run: scripts\/dev\/web-test\.sh/);
   assert.match(workflow, /DeterminateSystems\/determinate-nix-action@[0-9a-f]{40}/);
   assert.match(workflow, /DeterminateSystems\/magic-nix-cache-action@[0-9a-f]{40}/);

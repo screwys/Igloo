@@ -239,13 +239,6 @@ func storyRingClass(base, state string) string {
 	return strings.Join(classes, " ")
 }
 
-func storyFirstVideoID(status model.StoryStatus) string {
-	if status.FirstUnseenVideoID != "" {
-		return status.FirstUnseenVideoID
-	}
-	return status.FirstVideoID
-}
-
 func storyChannelFirstVideoID(ch model.StoryChannel) string {
 	if ch.FirstUnseenVideoID != "" {
 		return ch.FirstUnseenVideoID
@@ -397,11 +390,6 @@ func feedReadyMediaCount(urls []string) int {
 		}
 	}
 	return count
-}
-
-// hasForeignLang returns true if the feed item has non-English or unknown language text.
-func hasForeignLang(item model.FeedItem) bool {
-	return hasBodyTranslatePill(item) || hasQuoteTranslatePill(item)
 }
 
 func hasBodyTranslatePill(item model.FeedItem) bool {
@@ -728,14 +716,6 @@ func feedQuoteLabel(item model.FeedItem) string {
 		return item.QuoteAuthorHandle
 	}
 	return "Quoted post"
-}
-
-// heartFill returns "currentColor" or "none" for SVG fill based on active state.
-func heartFill(active bool) string {
-	if active {
-		return "currentColor"
-	}
-	return "none"
 }
 
 // resumePosition returns the playback resume position as a formatted string.
@@ -1628,28 +1608,6 @@ func intOrEmpty(n int) string {
 	return fmt.Sprintf("%d", n)
 }
 
-// translateBackendLabel returns the display label for a translate backend value.
-func translateBackendLabel(val string) string {
-	switch val {
-	case "google":
-		return "Google Cloud Translation"
-	case "deepl":
-		return "DeepL API"
-	case "kagi_cli":
-		return "Kagi CLI"
-	default:
-		return "Disabled"
-	}
-}
-
-// customSelectOptionClass returns the CSS class for a custom-select-option.
-func customSelectOptionClass(current, value string) string {
-	if current == value {
-		return "custom-select-option active"
-	}
-	return "custom-select-option"
-}
-
 // translateAPIConfigStyle returns display style for translate API config section.
 func translateAPIConfigStyle(backend string) string {
 	if backend == "google" || backend == "deepl" || backend == "openai_compat" {
@@ -1723,7 +1681,7 @@ func sidebarRouteOrder(raw string) []string {
 	return order
 }
 
-// str returns a string setting value or the given fallback.
+// Str returns a string setting value or the given fallback.
 func (p PrefsData) Str(key, fallback string) string {
 	if v, ok := p.Settings[key]; ok {
 		return fmt.Sprintf("%v", v)

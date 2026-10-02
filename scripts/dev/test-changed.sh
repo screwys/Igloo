@@ -42,7 +42,7 @@ declare -a node_tests=()
 
 for path in "${changed[@]}"; do
   case "$path" in
-    *.go|*.templ|go.mod|go.sum|scripts/dev/test-changed.sh)
+    *.go|*.templ|go.mod|go.sum|.golangci.yml|scripts/dev/lint-go.sh|scripts/dev/go-tool-versions.sh|scripts/dev/test-changed.sh)
       go_changed=1
       ;;
   esac
@@ -123,16 +123,14 @@ if [[ "$i18n_changed" -eq 1 ]]; then
 fi
 
 if [[ "$go_changed" -eq 1 ]]; then
-  echo "[go] running all Go tests (same suite as CI)"
+  echo "[go] running all Go tests"
   go test ./...
 
   . scripts/dev/go-tool-versions.sh
   echo "[go] running repo-specific static checks"
   go run ./scripts/dev/staticcheck
-  echo "[go] running errcheck"
-  go run "github.com/kisielk/errcheck@${ERRCHECK_VERSION}" ./...
-  echo "[go] running staticcheck"
-  go run "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}" ./...
+  echo "[go] running golangci-lint"
+  scripts/dev/lint-go.sh run
   echo "[go] running govulncheck"
   go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
 

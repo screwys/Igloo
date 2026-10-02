@@ -1,3 +1,4 @@
+// Package windowsupdate verifies, stages, and applies Windows updates.
 package windowsupdate
 
 import (
@@ -27,17 +28,17 @@ func ExecutePlan(ctx context.Context, plan ApplyPlan, lifecycle Lifecycle) error
 	rollbacks, err := activateDirectories(plan)
 	if err != nil {
 		if restartErr := lifecycle.Start(ctx, plan); restartErr != nil {
-			return fmt.Errorf("activate Windows update (%v) and restart existing Igloo: %w", err, restartErr)
+			return fmt.Errorf("activate Windows update (%w) and restart existing Igloo: %w", err, restartErr)
 		}
 		return err
 	}
 	rollback := func() error { return rollbackAll(rollbacks) }
 	if err := lifecycle.Start(ctx, plan); err != nil {
 		if rollbackErr := rollback(); rollbackErr != nil {
-			return fmt.Errorf("restart updated Igloo (%v) and restore previous files: %w", err, rollbackErr)
+			return fmt.Errorf("restart updated Igloo (%w) and restore previous files: %w", err, rollbackErr)
 		}
 		if restartErr := lifecycle.Start(ctx, plan); restartErr != nil {
-			return fmt.Errorf("restart updated Igloo (%v) and restart rolled-back Igloo: %w", err, restartErr)
+			return fmt.Errorf("restart updated Igloo (%w) and restart rolled-back Igloo: %w", err, restartErr)
 		}
 		return fmt.Errorf("restart Igloo after update; previous version restored: %w", err)
 	}
@@ -46,13 +47,13 @@ func ExecutePlan(ctx context.Context, plan ApplyPlan, lifecycle Lifecycle) error
 		recoveryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 		defer cancel()
 		if stopErr := lifecycle.Stop(recoveryCtx, plan); stopErr != nil {
-			return fmt.Errorf("updated Igloo failed health check (%v) and could not be stopped for rollback: %w", err, stopErr)
+			return fmt.Errorf("updated Igloo failed health check (%w) and could not be stopped for rollback: %w", err, stopErr)
 		}
 		if rollbackErr := rollback(); rollbackErr != nil {
-			return fmt.Errorf("updated Igloo failed health check (%v) and previous files could not be restored: %w", err, rollbackErr)
+			return fmt.Errorf("updated Igloo failed health check (%w) and previous files could not be restored: %w", err, rollbackErr)
 		}
 		if restartErr := lifecycle.Start(recoveryCtx, plan); restartErr != nil {
-			return fmt.Errorf("updated Igloo failed health check (%v) and rollback restart failed: %w", err, restartErr)
+			return fmt.Errorf("updated Igloo failed health check (%w) and rollback restart failed: %w", err, restartErr)
 		}
 		return fmt.Errorf("updated Igloo failed health check and was rolled back: %w", err)
 	}

@@ -4,13 +4,6 @@ import (
 	"net/http"
 )
 
-type androidLogEvent struct {
-	Timestamp string `json:"timestamp"`
-	Level     string `json:"level"`
-	Tag       string `json:"tag"`
-	Message   string `json:"message"`
-}
-
 // ── Route registration ────────────────────────────────────────────────────────
 
 func (s *Server) registerLogsAPIRoutes(mux *http.ServeMux) {

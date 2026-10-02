@@ -263,7 +263,7 @@ func (db *DB) xRetainedMediaOwnerSet(nowMs int64, followedOverride int, candidat
 		return nil, err
 	}
 	if state == nil {
-		return nil, fmt.Errorf("Android feed retention is not initialized")
+		return nil, fmt.Errorf("android feed retention is not initialized")
 	}
 	return db.xRetainedMediaOwnerSetForFeedDays(nowMs, followedOverride, candidates, state.FeedDays)
 }

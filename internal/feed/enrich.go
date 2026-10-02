@@ -1,3 +1,4 @@
+// Package feed attaches saved state, media, and thread context to feed items.
 package feed
 
 import (

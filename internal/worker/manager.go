@@ -237,7 +237,6 @@ func (m *Manager) StartAll() {
 	m.launch("feed_scoring", m.runFeedScoringWorker)
 	m.launchDelayed("downloader_operation_prune", 5*time.Minute, m.runDownloaderOperationPruner)
 	m.launchDelayed("backup", 5*time.Minute, m.runBackupWorker)
-
 }
 
 // Shutdown cancels the context and waits for all goroutines to stop.
@@ -613,21 +612,6 @@ func (m *Manager) startOnce(name string, fn func(context.Context)) {
 			}
 		}()
 		fn(m.ctx)
-	}()
-}
-
-func (m *Manager) startOnceDelayed(name string, delay time.Duration, fn func(context.Context)) {
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
-		timer := time.NewTimer(delay)
-		select {
-		case <-m.ctx.Done():
-			timer.Stop()
-			return
-		case <-timer.C:
-		}
-		m.startOnce(name, fn)
 	}()
 }
 

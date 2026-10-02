@@ -74,7 +74,7 @@ func TestParseYouTubeDumpRejectsMismatchedChannel(t *testing.T) {
 }
 
 func TestParseYouTubeEmptyOutput(t *testing.T) {
-	if _, err := parseYouTubeDump("UCx", []byte("")); err != ErrNotFound {
+	if _, err := parseYouTubeDump("UCx", []byte("")); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }

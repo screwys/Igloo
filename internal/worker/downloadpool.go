@@ -738,19 +738,6 @@ func (m *Manager) cookieSetsFor(platform string) []download.CookieSet {
 	return download.ResolveCookieSets(cookiesDir, platform, fileEnabled != "0", browser)
 }
 
-func cookieFileCandidates(cookiesDir, platform string) []string {
-	candidates := download.DiscoverCookieFiles(cookiesDir, platform)
-	out := make([]string, 0, len(candidates))
-	for _, candidate := range candidates {
-		out = append(out, candidate.Path)
-	}
-	return out
-}
-
-func isShortFormDownloadPlatform(platform string) bool {
-	return platform == "tiktok" || platform == "instagram"
-}
-
 // --- Pure helper functions (testable) ---
 
 // buildSourceURL constructs the video URL from platform, source ID, and video ID.

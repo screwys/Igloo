@@ -180,7 +180,7 @@ func (db *DB) GetAuthUsers() ([]AuthUser, error) {
 	}
 	var users []AuthUser
 	if err := json.Unmarshal([]byte(val), &users); err != nil {
-		return nil, nil
+		return nil, err
 	}
 	return users, nil
 }

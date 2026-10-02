@@ -1,3 +1,4 @@
+// Package db stores Igloo content, user state, and work queues in SQLite.
 package db
 
 import (

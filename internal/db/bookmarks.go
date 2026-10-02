@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ func (db *DB) IsBookmarked(videoID string) (bool, int64, error) {
 	}
 	var categoryID int64
 	err = db.conn.QueryRow("SELECT category_id FROM bookmarks WHERE video_id = ?", videoID).Scan(&categoryID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return false, 0, nil
 	}
 	if err != nil {
@@ -488,6 +489,9 @@ func (db *DB) GetBookmarkedHandles() ([]string, error) {
 			}
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	result := make([]string, 0, len(seen))
 	for h := range seen {
 		result = append(result, h)
@@ -525,7 +529,7 @@ func (db *DB) GetBookmarkLabels(categoryID string) ([]string, error) {
 	if labels == nil {
 		labels = []string{}
 	}
-	return labels, nil
+	return labels, rows.Err()
 }
 
 // ClearBookmarkLabel removes a custom_title from all bookmarks that use it.

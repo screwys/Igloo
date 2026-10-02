@@ -94,7 +94,7 @@ func decodePrivateKey(encoded string) (ed25519.PrivateKey, error) {
 	case ed25519.PrivateKeySize:
 		return ed25519.PrivateKey(raw), nil
 	default:
-		return nil, fmt.Errorf("Windows update signing key must contain a 32-byte seed or 64-byte private key")
+		return nil, fmt.Errorf("update signing key must contain a 32-byte seed or 64-byte private key")
 	}
 }
 

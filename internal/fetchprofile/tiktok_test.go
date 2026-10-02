@@ -2,6 +2,7 @@ package fetchprofile
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -126,7 +127,7 @@ func TestParseTikTokAvatarFallsBackToHandleForInvisibleNickname(t *testing.T) {
 }
 
 func TestParseTikTokEmpty(t *testing.T) {
-	if _, err := parseTikTokAvatar("ghost", []byte("[]")); err != ErrNotFound {
+	if _, err := parseTikTokAvatar("ghost", []byte("[]")); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }

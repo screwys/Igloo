@@ -49,11 +49,6 @@ func newTestPageProps() PageProps {
 	}
 }
 
-func renderToString(t *testing.T, c func() string) string {
-	t.Helper()
-	return c()
-}
-
 func renderBase(t *testing.T, p PageProps) string {
 	t.Helper()
 	var buf bytes.Buffer
@@ -202,7 +197,6 @@ func TestPrefsBodyRendersWindowsUpdateControls(t *testing.T) {
 	if !strings.Contains(html, `<option value="nightly" selected>Nightly</option>`) {
 		t.Fatalf("nightly update channel is missing:\n%s", html)
 	}
-
 }
 
 func TestPrefsBodyRendersAppearanceThemeControls(t *testing.T) {
@@ -389,7 +383,7 @@ func TestSidebarUsesConfiguredRouteOrder(t *testing.T) {
 	feed := strings.Index(html, `href="/feed"`)
 	discover := strings.Index(html, `href="/discover"`)
 	videos := strings.Index(html, `href="/videos" class="nav-item`)
-	if feed < 0 || discover < 0 || videos < 0 || !(feed < discover && discover < videos) {
+	if feed < 0 || discover < 0 || videos < 0 || feed >= discover || discover >= videos {
 		t.Fatalf("sidebar routes are not rendered in the configured order:\n%s", html)
 	}
 }

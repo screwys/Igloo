@@ -28,11 +28,11 @@ func listLogFiles() (string, error) {
 	}
 	_ = filepath.WalkDir(logsDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
-			return nil
+			return nil //nolint:nilerr // Keep listing available logs if a path cannot be read.
 		}
 		info, err := d.Info()
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // Logs can disappear during rotation.
 		}
 		rel, _ := filepath.Rel(logsDir, path)
 		files = append(files, struct {
@@ -216,7 +216,7 @@ func searchLogs(pattern, file string, contextLines int) (string, error) {
 	} else {
 		_ = filepath.WalkDir(logsDir, func(path string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
-				return nil
+				return nil //nolint:nilerr // Keep searching available logs if a path cannot be read.
 			}
 			rel, _ := filepath.Rel(logsDir, path)
 			searchFile(path, rel)
@@ -265,7 +265,7 @@ func recentErrors(minutes int, source string) (string, error) {
 	}
 	_ = filepath.WalkDir(logsDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
-			return nil
+			return nil //nolint:nilerr // Keep scanning available logs if a path cannot be read.
 		}
 		rel, _ := filepath.Rel(logsDir, path)
 		fileSource := classifySource(rel)
@@ -275,7 +275,7 @@ func recentErrors(minutes int, source string) (string, error) {
 
 		info, err := d.Info()
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // Logs can disappear during rotation.
 		}
 		if time.Since(info.ModTime()).Minutes() > float64(minutes*2) {
 			return nil
@@ -283,7 +283,7 @@ func recentErrors(minutes int, source string) (string, error) {
 
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // Skip unavailable logs and scan the remaining files.
 		}
 		lines := strings.Split(string(data), "\n")
 
@@ -315,7 +315,7 @@ func recentErrors(minutes int, source string) (string, error) {
 	}
 
 	if len(entries) >= maxEntries {
-		sb.WriteString(fmt.Sprintf("(truncated at %d entries)\n", maxEntries))
+		fmt.Fprintf(&sb, "(truncated at %d entries)\n", maxEntries)
 	}
 	return strings.TrimRight(sb.String(), "\n"), nil
 }

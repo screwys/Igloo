@@ -21,6 +21,9 @@ func TestXProfileHistoryRetentionPlanUsesThreadIndexes(t *testing.T) {
 		}
 		details = append(details, detail)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
 	plan := strings.Join(details, "\n")
 	if strings.Contains(plan, "SCAN reply") || strings.Contains(plan, "SCAN quote") {
 		t.Fatalf("profile history retention scans feed_items for thread references: %s", plan)

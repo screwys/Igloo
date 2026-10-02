@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -982,7 +983,7 @@ func (db *DB) GetShortsCursorSortAt(videoID, momentsMode string) (int64, bool, e
 		  AND COALESCE(v.is_temp,0) = 0
 		LIMIT 1
 	`, videoID).Scan(&sortAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}
 	if err != nil {

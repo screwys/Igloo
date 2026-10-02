@@ -53,7 +53,7 @@ func recoverPanic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				if err == http.ErrAbortHandler {
+				if err == http.ErrAbortHandler { //nolint:errorlint // net/http requires the exact panic value.
 					panic(err)
 				}
 				slog.Error("panic", "err", err, "stack", string(debug.Stack()))

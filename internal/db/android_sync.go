@@ -140,10 +140,7 @@ func androidEligibleFeedCTE(cutoffMs int64) (string, []any) {
 			  AND fi.content_hash IS NOT NULL
 			  AND fi.content_hash != ''
 		)
-	`, []any{
-			cutoffMs, cutoffMs, cutoffMs,
-			cutoffMs, cutoffMs,
-		}
+	`, []any{cutoffMs, cutoffMs, cutoffMs, cutoffMs, cutoffMs}
 }
 
 func (db *DB) listAndroidSyncDesiredFeed(feedDays int, nowMs int64) (map[string]struct{}, map[string]struct{}, error) {

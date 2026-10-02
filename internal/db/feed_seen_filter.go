@@ -20,7 +20,3 @@ func feedUnseenPredicate(alias string) string {
 			)
 		)`, alias)
 }
-
-func feedUnseenPredicateArgs() []any {
-	return nil
-}

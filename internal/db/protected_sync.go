@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 
@@ -110,7 +111,7 @@ func (db *DB) ensureFeedItemStubFromBookmarkTx(tx *sql.Tx, videoID string) error
 		ORDER BY COALESCE(fi.fetched_at, 0) DESC, fi.tweet_id DESC
 		LIMIT 1
 	`, videoID).Scan(&channelID, &authorHandle, &authorName, &avatarURL, &bodyText, &articleTitle, &pollJSON, &communityNote, &mediaJSON, &publishedAt, &observedAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
 	if err != nil {

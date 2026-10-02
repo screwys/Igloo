@@ -1,3 +1,4 @@
+// Package persistencebudget checks storage usage against database budgets.
 package persistencebudget
 
 import "fmt"

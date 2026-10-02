@@ -440,7 +440,7 @@ func validateTweetMediaStagingFile(path, ext string) error {
 
 	buf := make([]byte, 512)
 	n, err := f.Read(buf)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
 	if n >= 12 && string(buf[4:8]) == "ftyp" {

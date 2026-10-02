@@ -160,10 +160,19 @@ func pipelineStatus() (string, error) {
 		for rows.Next() {
 			var status string
 			var count int
-			_ = rows.Scan(&status, &count)
+			if err = rows.Scan(&status, &count); err != nil {
+				break
+			}
 			parts = append(parts, fmt.Sprintf("%s=%d", status, count))
 		}
+		if err == nil {
+			err = rows.Err()
+		}
 		_ = rows.Close()
+		if err != nil {
+			fmt.Fprintf(&sb, "  error: %v\n\n", err)
+			continue
+		}
 		if len(parts) > 0 {
 			fmt.Fprintf(&sb, "  counts: %s\n", strings.Join(parts, ", "))
 		} else {
@@ -314,11 +323,11 @@ func pipelineErrorKinds(conn *sql.DB, q pipelineQueue) ([]string, error) {
 		var kind string
 		var count int
 		if err := rows.Scan(&kind, &count); err != nil {
-			continue
+			return nil, err
 		}
 		parts = append(parts, fmt.Sprintf("%s=%d", maskSensitive(kind), count))
 	}
-	return parts, nil
+	return parts, rows.Err()
 }
 
 func pipelineRecentErrors(conn *sql.DB, q pipelineQueue) ([]string, error) {
@@ -350,7 +359,7 @@ func pipelineRecentErrors(conn *sql.DB, q pipelineQueue) ([]string, error) {
 		var ts int64
 		var kind, message string
 		if err := rows.Scan(&ts, &kind, &message); err != nil {
-			continue
+			return nil, err
 		}
 		prefix := formatMillis(ts)
 		if kind != "" {
@@ -358,7 +367,7 @@ func pipelineRecentErrors(conn *sql.DB, q pipelineQueue) ([]string, error) {
 		}
 		errors = append(errors, fmt.Sprintf("    %s: %s", prefix, maskSensitive(compactLong(message, 140))))
 	}
-	return errors, nil
+	return errors, rows.Err()
 }
 
 func (q pipelineQueue) errorKindSelect() string {

@@ -106,7 +106,6 @@ func (m *Manager) processProfileJobBatch(ctx context.Context, fetch fetchFn) boo
 
 	var wg sync.WaitGroup
 	for _, job := range jobs {
-		job := job
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

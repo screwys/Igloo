@@ -106,7 +106,7 @@ func TestFeedItemThreadRendersCapsuleBelowReply(t *testing.T) {
 	rootAt := strings.Index(html, `data-tweet-id="root_1"`)
 	leafAt := strings.Index(html, `data-tweet-id="leaf_1"`)
 	capsuleAt := strings.Index(html, `data-feed-thread-capsule`)
-	if rootAt < 0 || leafAt < 0 || capsuleAt < 0 || !(rootAt < leafAt && leafAt < capsuleAt) {
+	if rootAt < 0 || leafAt < 0 || capsuleAt < 0 || rootAt >= leafAt || leafAt >= capsuleAt {
 		t.Fatalf("thread order should be post, reply, capsule; root=%d leaf=%d capsule=%d html=%s", rootAt, leafAt, capsuleAt, html)
 	}
 	if got := strings.Count(html, `data-feed-repost-line`); got != 1 {

@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -38,7 +39,7 @@ func TestGetTranslationMissing(t *testing.T) {
 	d := openWritableTestDB(t)
 
 	_, _, err := d.GetTranslation("nonexistent_tweet", "body", "de")
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("expected sql.ErrNoRows, got %v", err)
 	}
 }
@@ -262,6 +263,9 @@ func TestUpsertFeedItemsQueuesTranslationJobs(t *testing.T) {
 		}
 		seen[field] = true
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
 	if len(seen) != len(wantHashes) {
 		t.Fatalf("queued fields = %#v", seen)
 	}
@@ -323,6 +327,9 @@ func TestTranslationJobClaimUsesReadyOrderIndex(t *testing.T) {
 			t.Fatal(err)
 		}
 		details = append(details, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 	plan := strings.Join(details, "\n")
 	if !strings.Contains(plan, "USING COVERING INDEX idx_translation_jobs_ready") {
@@ -424,7 +431,7 @@ func TestUpsertFeedItemsChangedTranslationSourceRequeuesJob(t *testing.T) {
 			priority != 1 || attempts != 0 || nextAttempt != 0 || errorKind != "" || errorText != "" {
 			t.Fatalf("job %s = %q %q %d %d %d %q %q", item.TweetID, status, sourceHash, priority, attempts, nextAttempt, errorKind, errorText)
 		}
-		if _, _, err := d.GetTranslation(item.TweetID, "body", "en"); err != sql.ErrNoRows {
+		if _, _, err := d.GetTranslation(item.TweetID, "body", "en"); !errors.Is(err, sql.ErrNoRows) {
 			t.Fatalf("translation %s err = %v", item.TweetID, err)
 		}
 	}

@@ -23,7 +23,7 @@ func (s *stubClient) Fetch(_ context.Context, _ string) (Result, error) {
 type stubExtractor struct {
 	called     bool
 	gotPath    string
-	gotTs      float64
+	gotTS      float64
 	gotOut     string
 	err        error
 	writeBytes []byte
@@ -32,7 +32,7 @@ type stubExtractor struct {
 func (e *stubExtractor) Extract(_ context.Context, videoPath string, ts float64, outPath string) error {
 	e.called = true
 	e.gotPath = videoPath
-	e.gotTs = ts
+	e.gotTS = ts
 	e.gotOut = outPath
 	if e.err != nil {
 		return e.err
@@ -84,8 +84,8 @@ func TestFetchAndProcess_WritesThumbFromTimestamp(t *testing.T) {
 	if !ext.called {
 		t.Fatal("extractor was not called")
 	}
-	if ext.gotTs != 12.5 {
-		t.Errorf("extractor timestamp = %v, want 12.5", ext.gotTs)
+	if ext.gotTS != 12.5 {
+		t.Errorf("extractor timestamp = %v, want 12.5", ext.gotTS)
 	}
 	if filepath.Dir(ext.gotOut) != dir || !strings.HasPrefix(filepath.Base(ext.gotOut), "dearrow-") || !strings.HasSuffix(ext.gotOut, ".jpg") {
 		t.Errorf("extractor outPath = %q, want unique jpg under %q", ext.gotOut, dir)

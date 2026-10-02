@@ -677,23 +677,6 @@ func firstReadableColorAcross(backgrounds []string, candidates []string, minimum
 	return strings.ToLower(best)
 }
 
-func firstReadableColor(background string, candidates []string, minimumContrast float64) string {
-	bg := mustRGB(background)
-	best := candidates[len(candidates)-1]
-	bestContrast := 0.0
-	for _, candidate := range candidates {
-		ratio := contrastRatio(bg, mustRGB(candidate))
-		if ratio > bestContrast {
-			best = candidate
-			bestContrast = ratio
-		}
-		if ratio >= minimumContrast {
-			return strings.ToLower(candidate)
-		}
-	}
-	return strings.ToLower(best)
-}
-
 func minimumContrastAcross(backgrounds []string, foreground string) float64 {
 	minimum := math.Inf(1)
 	fg := mustRGB(foreground)
@@ -721,7 +704,7 @@ func normalizeHex(raw string) (string, bool) {
 		return "", false
 	}
 	for _, ch := range raw[1:] {
-		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')) {
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
 			return "", false
 		}
 	}

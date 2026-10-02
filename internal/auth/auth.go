@@ -1,3 +1,4 @@
+// Package auth manages password credentials and session authentication.
 package auth
 
 import (

@@ -34,6 +34,18 @@ test-full:
 test-go:
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test ./...
 
+# Run the Go test suite with the race detector.
+test-go-race:
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test -race -timeout 30m ./...
+
+# Run the pinned Go linters and formatting checks.
+lint-go:
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/lint-go.sh run
+
+# Format Go source with the pinned formatter.
+fmt-go:
+    scripts/dev/lint-go.sh fmt
+
 # Run Go tests for one package, optionally matching a test-name regexp.
 test-go-package package filter="":
     if [ -n {{ quote(filter) }} ]; then GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test {{ quote(package) }} -run {{ quote(filter) }} -count=1; else GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test {{ quote(package) }}; fi

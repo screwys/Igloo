@@ -15,7 +15,9 @@ func (db *DB) GetAccountAffinityScores(handles []string) (map[string]AffinityRow
 		return nil, nil
 	}
 	result := make(map[string]AffinityRow)
-	db.queryAffinityTable("feed_share_account_affinity", "handle", handles, result)
+	if err := db.queryAffinityTable("feed_share_account_affinity", "handle", handles, result); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -25,11 +27,13 @@ func (db *DB) GetTokenAffinityScores(tokens []string) (map[string]AffinityRow, e
 		return nil, nil
 	}
 	result := make(map[string]AffinityRow)
-	db.queryAffinityTable("feed_share_token_affinity", "token", tokens, result)
+	if err := db.queryAffinityTable("feed_share_token_affinity", "token", tokens, result); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
-func (db *DB) queryAffinityTable(table, keyCol string, keys []string, result map[string]AffinityRow) {
+func (db *DB) queryAffinityTable(table, keyCol string, keys []string, result map[string]AffinityRow) error {
 	placeholders := make([]byte, 0, len(keys)*2)
 	args := make([]any, 0, len(keys))
 	for i, k := range keys {
@@ -45,7 +49,7 @@ func (db *DB) queryAffinityTable(table, keyCol string, keys []string, result map
 
 	rows, err := db.conn.Query(query, args...)
 	if err != nil {
-		return // Table may not exist — graceful fallback
+		return nil // A missing affinity table leaves scores empty.
 	}
 	defer func() {
 		_ = rows.Close()
@@ -65,6 +69,7 @@ func (db *DB) queryAffinityTable(table, keyCol string, keys []string, result map
 		existing.EventCount += row.EventCount
 		result[key] = existing
 	}
+	return rows.Err()
 }
 
 // UpsertShareAccountAffinity updates the share-based account affinity score.
@@ -134,6 +139,9 @@ func (db *DB) BuildStateAccountScores() (map[string]float64, error) {
 			_ = rows.Scan(&handle, &count)
 			accountScores[handle] += count
 		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 	}
 
 	bRows, err := db.conn.Query(`
@@ -153,6 +161,9 @@ func (db *DB) BuildStateAccountScores() (map[string]float64, error) {
 			var count float64
 			_ = bRows.Scan(&handle, &count)
 			accountScores[handle] += count * 2
+		}
+		if err := bRows.Err(); err != nil {
+			return nil, err
 		}
 	}
 
@@ -194,6 +205,9 @@ func (db *DB) FindSiblingTweetIDsForLikes(tweetIDs []string) (map[string][]strin
 		tweetToHash[tid] = hash
 		hashSet[hash] = true
 	}
+	if err := hashRows.Err(); err != nil {
+		return nil, err
+	}
 
 	if len(hashSet) == 0 {
 		return nil, nil
@@ -227,6 +241,9 @@ func (db *DB) FindSiblingTweetIDsForLikes(tweetIDs []string) (map[string][]strin
 		var tid, hash string
 		_ = sibRows.Scan(&tid, &hash)
 		hashToTweets[hash] = append(hashToTweets[hash], tid)
+	}
+	if err := sibRows.Err(); err != nil {
+		return nil, err
 	}
 
 	result := make(map[string][]string)
