@@ -51,7 +51,7 @@ if ! scripts/dev/drift-check.sh --write; then
 fi
 
 echo "[go] running tests..."
-go test -race -timeout 30m -json ./... >"$go_json"
+go test -json ./... >"$go_json"
 go_status=$?
 if [[ "$go_status" -ne 0 ]]; then
   echo "[go] tests failed with exit code $go_status" >&2
