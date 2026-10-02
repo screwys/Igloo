@@ -32,6 +32,7 @@ import kotlinx.serialization.Serializable
         ),
         Index(value = ["quote_tweet_id"], name = "idx_feed_items_quote"),
         Index(value = ["content_hash"], name = "idx_feed_items_content_hash"),
+        Index(value = ["canonical_tweet_id"], name = "idx_feed_items_canonical_tweet"),
     ],
 )
 data class FeedItemEntity(

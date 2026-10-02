@@ -595,7 +595,6 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) buildSidebarContext(r *http.Request, channels []model.Channel) model.SidebarContext {
-	stats, _ := s.db.GetStats()
 	groups := sidebarGroupsFromChannels(channels)
 	username := ""
 	if user := userFromContext(r.Context()); user != nil {
@@ -610,7 +609,6 @@ func (s *Server) buildSidebarContext(r *http.Request, channels []model.Channel) 
 		Username:           username,
 		Channels:           channels,
 		Groups:             groups,
-		Stats:              stats,
 		CurrentlyWatching:  currentlyWatching,
 		CurrentlyAvailable: currentlyAvailable,
 		PinnedVideos:       pinnedVideos,

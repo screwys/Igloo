@@ -452,6 +452,7 @@ private fun shouldShowScaffoldBackButton(
 ): Boolean {
     if (!wideLayout) return !compactDrawerEnabled
     return route !in setOf(
+        RouteRegistry.Home.route,
         RouteRegistry.Feed.route,
         RouteRegistry.Videos.route,
         RouteRegistry.Moments.route,

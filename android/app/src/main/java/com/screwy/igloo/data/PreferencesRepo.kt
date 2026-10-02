@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Typed reactive wrapper over the `preferences` key-value DAO.
@@ -135,7 +138,7 @@ class PreferencesRepo(
          * options exposed in SettingsHubRoute. If the stored pref is outside this
          * set (e.g. dropped from a future build), NavHost falls back to "feed".
          */
-        val VALID_STARTING_PAGES = setOf("feed", "videos", "moments", "bookmarks", "liked")
+        val VALID_STARTING_PAGES = setOf("home", "feed", "videos", "moments", "bookmarks", "liked")
 
         const val SB_SPONSOR                 = "silent"
         const val SB_SELF_PROMO              = "silent"
@@ -248,6 +251,20 @@ class PreferencesRepo(
 
     fun startingPage(): Flow<String> =
         flowString(Keys.STARTING_PAGE, default = Defaults.STARTING_PAGE)
+
+    private val homeCacheMutex = Mutex()
+
+    suspend fun homeCache(accountKey: String): String? = homeCacheMutex.withLock {
+        dao.getValue("home_cache:$accountKey")
+    }
+
+    suspend fun setHomeCache(accountKey: String, value: String) = homeCacheMutex.withLock {
+        putString("home_cache:$accountKey", value)
+    }
+
+    fun persistHomeCache(accountKey: String, value: String) = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+        setHomeCache(accountKey, value)
+    }
 
     fun shareEmbedFriendlyLinks(): Flow<Boolean> =
         flowBool(Keys.SHARE_EMBED_FRIENDLY_LINKS, default = Defaults.SHARE_EMBED_FRIENDLY_LINKS)

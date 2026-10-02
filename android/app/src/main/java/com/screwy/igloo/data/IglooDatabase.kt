@@ -19,6 +19,7 @@ import com.screwy.igloo.data.dao.FeedLikeDao
 import com.screwy.igloo.data.dao.FeedRankDao
 import com.screwy.igloo.data.dao.FeedReadDao
 import com.screwy.igloo.data.dao.FeedSeenDao
+import com.screwy.igloo.data.dao.HomeReadDao
 import com.screwy.igloo.data.dao.MomentReadDao
 import com.screwy.igloo.data.dao.MomentViewDao
 import com.screwy.igloo.data.dao.MomentsCursorDao
@@ -96,7 +97,7 @@ import com.screwy.igloo.data.entity.WatchHistoryEntity
             AndroidSyncAssetEntity::class,
             OfflineVideoDownloadEntity::class,
         ],
-	version = 50,
+	version = 51,
     exportSchema = true,
 )
 abstract class IglooDatabase : RoomDatabase() {
@@ -153,6 +154,8 @@ abstract class IglooDatabase : RoomDatabase() {
     abstract fun offlineVideoDownloadDao(): OfflineVideoDownloadDao
 
     // Composite read DAOs
+    abstract fun homeReadDao(): HomeReadDao
+
     abstract fun feedReadDao(): FeedReadDao
 
     abstract fun momentReadDao(): MomentReadDao
@@ -180,6 +183,7 @@ abstract class IglooDatabase : RoomDatabase() {
 					IglooMigrations.MIGRATION_47_48,
 					IglooMigrations.MIGRATION_48_49,
 					IglooMigrations.MIGRATION_49_50,
+					IglooMigrations.MIGRATION_50_51,
                 )
                 .build()
         }

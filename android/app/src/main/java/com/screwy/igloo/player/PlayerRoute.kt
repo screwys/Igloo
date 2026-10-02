@@ -152,9 +152,9 @@ private fun PlayerContent(
     val subtitleIsAuto by vm.subtitleIsAuto.collectAsStateWithLifecycle()
     val previewSpritePath by vm.previewSpritePath.collectAsStateWithLifecycle()
     val previewTrackJsonPath by vm.previewTrackJsonPath.collectAsStateWithLifecycle()
-    val streamUri by vm.streamUri.collectAsStateWithLifecycle()
+    val playbackSource by vm.playbackSource.collectAsStateWithLifecycle()
+    val streamUri = playbackSource?.mediaUri ?: MediaUri.Missing
     val thumbnailUri by vm.thumbnailUri.collectAsStateWithLifecycle()
-    val watchHistory by vm.watchHistory.collectAsStateWithLifecycle()
     val isRefreshingComments by vm.isRefreshingComments.collectAsStateWithLifecycle()
     val dearrowMode by vm.dearrowMode.collectAsStateWithLifecycle()
 
@@ -345,7 +345,7 @@ private fun PlayerContent(
     // Bind media item when the stream URI resolves. Re-run if Sync verifies a local
     // file after playback started. Stop first so a mid-session swap doesn't leak
     // a black frame or audio tail from the old item.
-    LaunchedEffect(streamUri, videoId) {
+    LaunchedEffect(playbackSource, videoId) {
         val uri = when (val source = streamUri) {
             is MediaUri.Local -> source.file.toURI().toString()
             is MediaUri.Remote -> source.url
@@ -354,7 +354,7 @@ private fun PlayerContent(
         val playbackPlayer = service.playerForPlayback()
         if (service.videoId == videoId && service.sourceUri == uri) return@LaunchedEffect
         val resumeMs = if (service.videoId == videoId) playbackPlayer.currentPosition else
-            ((watchHistory?.playbackPosition ?: 0.0) * 1000).toLong()
+            playbackSource?.resumeMs ?: 0L
         playbackPlayer.stop()
         service.videoId = videoId
         service.sourceUri = uri

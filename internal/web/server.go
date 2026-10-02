@@ -100,6 +100,7 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 
 	// Page routes
 	mux.HandleFunc("GET /", s.handleIndex)
+	s.registerHomeRoutes(mux)
 	mux.HandleFunc("GET /channels", s.handlePageChannels)
 	mux.HandleFunc("GET /feed", s.handlePageFeed)
 	mux.HandleFunc("GET /thread/{tweetID}", s.handlePageThread)
@@ -230,7 +231,7 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 		translateLookahead = settings.IntDefault("translate_auto_lookahead")
 	}
 	dearrowMode := s.setting("dearrow_mode", "off")
-	sidebarRouteOrder := s.setting("sidebar_route_order", "discover,videos,feed,shorts,channels,bookmarks,liked")
+	sidebarRouteOrder := s.setting("sidebar_route_order", "home,discover,videos,feed,shorts,channels,bookmarks,liked")
 	lang := s.requestLanguage(r)
 	if w != nil {
 		w.Header().Set("Content-Language", lang)

@@ -4,6 +4,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 object IglooMigrations {
+    val MIGRATION_50_51 =
+        object : Migration(50, 51) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS `idx_feed_items_canonical_tweet` ON `feed_items` (`canonical_tweet_id`)")
+            }
+        }
+
     val MIGRATION_40_41 =
         object : Migration(40, 41) {
             override fun migrate(db: SupportSQLiteDatabase) {

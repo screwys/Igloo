@@ -212,6 +212,10 @@ func (m *Manager) processDiscoveryChannel(ctx context.Context, platform string, 
 		return
 	}
 
+	if platform == "youtube" {
+		m.refreshYouTubeBroadcasts(ctx, channel)
+	}
+
 	added, reconcileErr := m.applyDiscoverySnapshot(channel, snapshot)
 	if added > 0 {
 		m.KickMediaWork()

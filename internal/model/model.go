@@ -94,7 +94,6 @@ type SidebarContext struct {
 	Username           string
 	Channels           []Channel
 	Groups             []ChannelGroup
-	Stats              DBStats
 	CurrentlyWatching  []Video
 	CurrentlyAvailable []Video
 	PinnedVideos       []Video

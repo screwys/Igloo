@@ -26,6 +26,7 @@ import com.screwy.igloo.bookmarks.BookmarksRoute
 import com.screwy.igloo.channel.ChannelRoute
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.feed.FeedRoute
+import com.screwy.igloo.home.HomeRoute
 import com.screwy.igloo.liked.LikedRoute
 import com.screwy.igloo.logs.LogFilter
 import com.screwy.igloo.logs.LogsRoute
@@ -113,6 +114,7 @@ fun AppNavHost() {
     ) {
         directDestination(RouteRegistry.Login) { LoginRoute(navController) }
 
+        scaffoldDestination(navController, RouteRegistry.Home) { HomeRoute(navController) }
         scaffoldDestination(navController, RouteRegistry.Feed) { FeedRoute(navController) }
         scaffoldDestination(navController, RouteRegistry.Videos) { VideosRoute(navController) }
 

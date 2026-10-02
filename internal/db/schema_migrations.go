@@ -24,6 +24,23 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name: "20261002_index_retweet_sources_by_actor",
+		apply: func(tx *sql.Tx) error {
+			_, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_retweet_sources_actor_hash ON retweet_sources(retweeter_channel_id, content_hash)`)
+			return err
+		},
+	},
+	{
+		name: "20261002_add_home_widgets",
+		apply: func(tx *sql.Tx) error {
+			if _, err := tx.Exec(HomeLayoutsSchema); err != nil {
+				return err
+			}
+			_, err := tx.Exec(YouTubeBroadcastSchema)
+			return err
+		},
+	},
+	{
 		name: "20261002_add_web_video_streams",
 		apply: func(tx *sql.Tx) error {
 			_, err := tx.Exec(webVideoStreamsTableStatement)

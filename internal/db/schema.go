@@ -98,6 +98,7 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 func schemaContentReadIndexStatements() []string {
 	return []string{
 		`CREATE INDEX IF NOT EXISTS idx_retweet_sources_published ON retweet_sources(published_at, content_hash)`,
+		`CREATE INDEX IF NOT EXISTS idx_retweet_sources_actor_hash ON retweet_sources(retweeter_channel_id, content_hash)`,
 		`CREATE INDEX IF NOT EXISTS idx_video_comments_video_likes ON video_comments(video_id, COALESCE(like_count, 0) DESC, comment_id ASC)`,
 		`CREATE INDEX IF NOT EXISTS idx_videos_moments_all_unpositioned ON videos(channel_id, video_id) WHERE moments_all_position = 0`,
 		`CREATE INDEX IF NOT EXISTS idx_videos_moments_following_unpositioned ON videos(channel_id, video_id) WHERE moments_following_position = 0`,

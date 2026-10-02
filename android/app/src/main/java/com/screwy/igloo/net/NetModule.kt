@@ -56,6 +56,7 @@ val iglooNetModule = module {
     single { AuthApi(client = get(), baseUrlProvider = get<ServerBaseUrlProvider>()::baseUrl) }
     single { AndroidSyncApi(client = get(), baseUrlProvider = get<ServerBaseUrlProvider>()::baseUrl) }
     single { OutboxApi(client = get(), baseUrlProvider = get<ServerBaseUrlProvider>()::baseUrl) }
+    single { HomeApi(client = get(), baseUrlProvider = get<ServerBaseUrlProvider>()::baseUrl) }
     // ─── Reachability ───────────────────────────────────────────────────────
     single {
         Reachability(

@@ -1685,7 +1685,7 @@ type PrefsData struct {
 	Settings map[string]any
 }
 
-var defaultSidebarRouteOrder = []string{"discover", "videos", "feed", "shorts", "channels", "bookmarks", "liked"}
+var defaultSidebarRouteOrder = []string{"home", "discover", "videos", "feed", "shorts", "channels", "bookmarks", "liked"}
 
 func (p PrefsData) SidebarRouteHidden(route string) bool {
 	for _, hidden := range strings.Split(p.Str("sidebar_hidden_routes", ""), ",") {
@@ -1696,8 +1696,7 @@ func (p PrefsData) SidebarRouteHidden(route string) bool {
 	return false
 }
 
-// sidebarRouteOrder returns every known route exactly once, preserving valid
-// stored choices and appending routes introduced after the preference was saved.
+// sidebarRouteOrder preserves stored positions and places Home first when absent.
 func sidebarRouteOrder(raw string) []string {
 	valid := make(map[string]bool, len(defaultSidebarRouteOrder))
 	for _, route := range defaultSidebarRouteOrder {
@@ -1711,6 +1710,10 @@ func sidebarRouteOrder(raw string) []string {
 			seen[route] = true
 			order = append(order, route)
 		}
+	}
+	if !seen["home"] {
+		order = append([]string{"home"}, order...)
+		seen["home"] = true
 	}
 	for _, route := range defaultSidebarRouteOrder {
 		if !seen[route] {

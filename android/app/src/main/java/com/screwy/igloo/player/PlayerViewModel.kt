@@ -9,7 +9,6 @@ import com.screwy.igloo.data.entity.ChannelEntity
 import com.screwy.igloo.data.entity.SponsorBlockSegmentEntity
 import com.screwy.igloo.data.entity.VideoCommentEntity
 import com.screwy.igloo.data.entity.VideoEntity
-import com.screwy.igloo.data.entity.WatchHistoryEntity
 import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.media.OwnerKind
@@ -20,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -38,8 +38,7 @@ import kotlinx.coroutines.launch
  *  - [segments] — SponsorBlock segments for the scrubber overlay.
  *  - [subtitlePath] — local VTT path resolved from the retained subtitle row.
  *    Nice-to-have — nulls when no verified local subtitle is available yet.
- *  - [streamUri] — the playable URI, local if cached else remote (resolver rules).
- *  - [watchHistory] — resume position + duration for the last-known sync.
+ *  - [playbackSource]: the playable URI and its stored resume position.
  *
  * PlaybackService saves playback progress through the outbox.
  */
@@ -126,11 +125,14 @@ class PlayerViewModel(
     /**
      * Playable URI. Re-resolved when Sync or the retained inventory fallback changes.
      */
-    val streamUri: StateFlow<MediaUri> = resolvers.videoStreamFlow(videoId, OwnerKind.YouTubeVideo)
+    val playbackSource: StateFlow<PlaybackSource?> = combine(
+        resolvers.videoStreamFlow(videoId, OwnerKind.YouTubeVideo),
+        db.watchHistoryDao().getByIdFlow(videoId),
+    ) { uri, history -> PlaybackSource(uri, ((history?.playbackPosition ?: 0.0) * 1000).toLong()) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = MediaUri.Missing,
+            initialValue = null,
         )
 
     val thumbnailUri: StateFlow<MediaUri> = resolvers.thumbnailForPostFlow(videoId, OwnerKind.YouTubeVideo)
@@ -138,15 +140,6 @@ class PlayerViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),
             initialValue = MediaUri.Missing,
-        )
-
-    /** Watch-history for resume-position (in seconds per the server contract). */
-    val watchHistory: StateFlow<WatchHistoryEntity?> = db.watchHistoryDao()
-        .getByIdFlow(videoId)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = null,
         )
 
     fun refreshComments() {

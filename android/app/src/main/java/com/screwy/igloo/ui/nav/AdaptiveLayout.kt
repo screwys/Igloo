@@ -71,6 +71,7 @@ internal fun wideContentKindForRoute(route: String?): WideContentKind =
 
         RouteRegistry.Player.route -> WideContentKind.Player
 
+        RouteRegistry.Home.route,
         RouteRegistry.Videos.route,
         RouteRegistry.Bookmarks.route,
         RouteRegistry.Downloaded.route,

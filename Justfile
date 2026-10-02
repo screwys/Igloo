@@ -84,6 +84,10 @@ build-downloaders:
 check-schema:
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/schema-check.sh
 
+# Regenerate the server schema snapshot.
+update-schema-snapshot:
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test ./internal/db -run TestSchemaSnapshot -update -count=1
+
 # Build an image and exercise its basic container runtime contract.
 check-container:
     scripts/dev/container-check.sh

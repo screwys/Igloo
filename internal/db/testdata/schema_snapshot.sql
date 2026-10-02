@@ -136,6 +136,9 @@ CREATE INDEX idx_moment_views_date ON moment_views(viewed_at DESC);
 -- index: idx_profile_jobs_claim on profile_jobs
 CREATE INDEX idx_profile_jobs_claim ON profile_jobs(requested_at_ms DESC, channel_id, next_attempt_at_ms, lease_until_ms, lease_owner) WHERE requested_revision > completed_revision;
 
+-- index: idx_retweet_sources_actor_hash on retweet_sources
+CREATE INDEX idx_retweet_sources_actor_hash ON retweet_sources(retweeter_channel_id, content_hash);
+
 -- index: idx_retweet_sources_published on retweet_sources
 CREATE INDEX idx_retweet_sources_published ON retweet_sources(published_at, content_hash);
 
@@ -283,6 +286,9 @@ CREATE TABLE feed_share_token_affinity ( token TEXT PRIMARY KEY, score REAL DEFA
 -- table: feed_sources on feed_sources
 CREATE TABLE feed_sources ( source_id TEXT PRIMARY KEY, platform TEXT NOT NULL, source_type TEXT NOT NULL, external_id TEXT NOT NULL, label TEXT NOT NULL, url TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, last_checked INTEGER, last_ok INTEGER, last_error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0 );
 
+-- table: home_layouts on home_layouts
+CREATE TABLE home_layouts ( username TEXT PRIMARY KEY, layout_json TEXT NOT NULL, updated_at_ms INTEGER NOT NULL ) WITHOUT ROWID;
+
 -- table: ingest_state on ingest_state
 CREATE TABLE ingest_state ( handle TEXT PRIMARY KEY, fail_count INTEGER DEFAULT 0, next_retry_at REAL, last_success_at REAL, last_attempt_at REAL, last_error TEXT, last_http_status INTEGER, avg_latency_ms REAL, updated_at INTEGER NOT NULL DEFAULT 0 );
 
@@ -417,6 +423,9 @@ CREATE TABLE watch_history ( video_id TEXT PRIMARY KEY, playback_position REAL N
 
 -- table: web_video_streams on web_video_streams
 CREATE TABLE web_video_streams ( video_id TEXT PRIMARY KEY REFERENCES videos(video_id) ON DELETE CASCADE, observed_at_ms INTEGER NOT NULL ) WITHOUT ROWID;
+
+-- table: youtube_broadcasts on youtube_broadcasts
+CREATE TABLE youtube_broadcasts ( channel_id TEXT NOT NULL, video_id TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', thumbnail_url TEXT NOT NULL DEFAULT '', live_status TEXT NOT NULL DEFAULT '', published_at_ms INTEGER NOT NULL DEFAULT 0, starts_at_ms INTEGER NOT NULL DEFAULT 0, concurrent_view_count INTEGER, observed_at_ms INTEGER NOT NULL, source_rank INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (channel_id, video_id) );
 
 -- table: youtube_recommendations on youtube_recommendations
 CREATE TABLE youtube_recommendations ( anchor_video_id TEXT PRIMARY KEY, candidates_json TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'ready', 'blocked')), fetched_at_ms INTEGER NOT NULL DEFAULT 0, expires_at_ms INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '', lease_owner TEXT NOT NULL DEFAULT '', lease_until_ms INTEGER NOT NULL DEFAULT 0, requested_at_ms INTEGER NOT NULL DEFAULT 0, updated_at_ms INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (anchor_video_id) REFERENCES videos(video_id) ON DELETE CASCADE );

@@ -67,6 +67,7 @@ func bookmarkCategoryNewRowColumns(canEditArchivePath bool) string {
 
 func startingPageChoices(p PageProps) []struct{ Key, Label string } {
 	return []struct{ Key, Label string }{
+		{"home", L(p, "nav_home", "Home")},
 		{"feed", L(p, "nav_feed", "Feed")},
 		{"videos", L(p, "nav_videos", "Videos")},
 		{"shorts", L(p, "nav_moments", "Moments")},
@@ -78,6 +79,7 @@ func startingPageChoices(p PageProps) []struct{ Key, Label string } {
 
 func sidebarRouteLabel(p PageProps, key string) string {
 	switch key {
+	case "home": return L(p, "nav_home", "Home")
 	case "discover": return L(p, "nav_discover", "Discover")
 	case "videos": return L(p, "nav_videos", "Videos")
 	case "feed": return L(p, "nav_feed", "Feed")

@@ -78,6 +78,7 @@ private data class StartingPageOption(
 )
 
 private val startingPageOptions = listOf(
+    StartingPageOption(RouteRegistry.Home.route, R.string.nav_home),
     StartingPageOption(RouteRegistry.Feed.route, R.string.nav_feed),
     StartingPageOption(RouteRegistry.Videos.route, R.string.nav_videos),
     StartingPageOption(RouteRegistry.Moments.route, R.string.nav_moments),

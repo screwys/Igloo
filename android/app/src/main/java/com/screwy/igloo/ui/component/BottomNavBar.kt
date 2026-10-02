@@ -3,6 +3,7 @@ package com.screwy.igloo.ui.component
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -31,6 +32,7 @@ private data class NavTab(
 )
 
 private val TABS = listOf(
+    NavTab(RouteRegistry.Home.route, R.string.nav_home, Icons.Default.Home),
     NavTab(RouteRegistry.Feed.route, R.string.nav_feed, Icons.Default.DynamicFeed),
     NavTab(RouteRegistry.Videos.route, R.string.nav_videos, Icons.Default.VideoLibrary),
     NavTab(RouteRegistry.Moments.route, R.string.nav_moments, Icons.Default.PlayCircle),
@@ -38,7 +40,7 @@ private val TABS = listOf(
 )
 
 /**
- * Four-tab Material3 `NavigationBar`. Tab selection tracks the back stack
+ * Material3 `NavigationBar`. Tab selection tracks the back stack
  * (including the nested `moments-graph`). Taps use saveState/restoreState round-tripping.
  */
 @Composable

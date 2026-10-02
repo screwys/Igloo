@@ -27,6 +27,11 @@ object RouteRegistry {
         chrome = feedStylePolicy(topBarTitle = TopBarTitle.Resource(R.string.nav_feed)),
     )
 
+    val Home = IglooRouteSpec(
+        route = "home",
+        chrome = scrollContentHeaderPolicy(),
+    )
+
     val Videos = IglooRouteSpec(
         route = "videos",
         chrome = feedStylePolicy(topBarTitle = TopBarTitle.Resource(R.string.nav_videos)),
@@ -115,6 +120,7 @@ object RouteRegistry {
 
     val routes: List<IglooRouteSpec> = listOf(
         Login,
+        Home,
         Feed,
         Videos,
         Moments,
