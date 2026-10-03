@@ -123,14 +123,6 @@
 }
 
 @media (min-width: 1025px) {
-    .player-layout.has-live-chat:not(.chat-closed) .player-main {
-        padding-right: 0;
-    }
-
-    .player-layout.has-live-chat:not(.chat-closed) .player-sidebar {
-        padding-inline: var(--player-chat-gutter);
-    }
-
     .main:has(> #player-root.has-live-chat.cinema-view:not(.chat-closed)) > .floating-header {
         right: calc(var(--player-sidebar-width) + 1.5rem);
         width: auto;
@@ -170,6 +162,5 @@
     }
 }
 .main:has(> #player-root.has-live-chat:not(.chat-closed)) {
-    --player-chat-gutter: calc(1.5rem - 2px);
-    --player-sidebar-width: calc((100% - 1.5rem + 6 * var(--player-chat-gutter) + 3px) / 4);
+    --player-sidebar-width: calc((100% + 5 * var(--player-layout-gutter) + 3px) / 4);
 }

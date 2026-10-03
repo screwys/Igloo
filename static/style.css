@@ -4,6 +4,7 @@
     --sidebar-compact-width: 72px;
     --sidebar-width: var(--sidebar-panel-width);
     --player-sidebar-width: 320px;
+    --player-layout-gutter: 20px;
     --header-height: 0px;
     --border-radius: 16px;
     --border-radius-sm: 10px;
@@ -145,7 +146,7 @@ body.feed-media-overlay-open {
 }
 
 .sidebar-header {
-    padding: 20px 18px;
+    padding: 20px;
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -187,6 +188,7 @@ body.feed-media-overlay-open {
 
 .nav {
     padding: 0.75rem;
+    padding-inline: 8px;
 }
 
 .nav-item {
@@ -1108,7 +1110,7 @@ html.sidebar-resizing .sidebar-resize-handle {
     }
 
     html.sidebar-collapsed .nav {
-        padding: 12px 8px;
+        padding: 12px 4px;
     }
 
     html.sidebar-collapsed .nav-item {
@@ -4560,7 +4562,7 @@ html.mini-player-moving * {
 
 .player-main {
     /* Keep the video below the fixed navigation controls on narrow desktop layouts. */
-    padding: 3.75rem 1.5rem 1.5rem;
+    padding: 3.75rem 0 1.5rem var(--player-layout-gutter);
     min-width: 0;
 }
 
@@ -5832,7 +5834,8 @@ html.mini-player-moving * {
 .player-sidebar {
     background: linear-gradient(180deg, rgba(var(--surface-soft-rgb), 0.9), rgba(var(--bg-tertiary-rgb), 0.94));
     border-left: 1px solid rgba(255, 255, 255, 0.14);
-    padding: 3.5rem 1.5rem 1.5rem;
+    margin-inline: var(--player-layout-gutter);
+    padding: 3.5rem 0 1.5rem;
     overflow-y: auto;
     min-width: 0;
     opacity: 1;

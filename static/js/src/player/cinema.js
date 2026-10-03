@@ -2,7 +2,7 @@ export const CINEMA_MIN_PLAYER_WIDTH = 720
 export const CINEMA_HIDE_LEFT_SIDEBAR_WIDTH = 800
 export const CINEMA_COMPACT_LEFT_SIDEBAR_WIDTH = 1000
 export const PLAYER_SIDEBAR_WIDTH = 320
-export const PLAYER_MAIN_HORIZONTAL_PADDING = 48
+export const PLAYER_MAIN_HORIZONTAL_PADDING = 20
 
 export function shouldAutoEnableCinema(layoutWidth, sidebarIsStacked, sidebarWidth = PLAYER_SIDEBAR_WIDTH) {
   if (sidebarIsStacked) return false
@@ -50,7 +50,7 @@ export function initCinemaView({ root, button, onCinemaRequested }) {
 
   function recommendedCinemaView() {
     return shouldAutoEnableCinema(root.getBoundingClientRect().width, stackedSidebar.matches,
-      hasChat ? sidebar.getBoundingClientRect().width : PLAYER_SIDEBAR_WIDTH)
+      hasChat ? sidebar.getBoundingClientRect().width + 2 * PLAYER_MAIN_HORIZONTAL_PADDING : PLAYER_SIDEBAR_WIDTH)
   }
 
   function syncCinemaView() {
