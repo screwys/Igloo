@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/screwys/igloo/internal/db"
 )
 
 func TestHandleVideoWatched_RequiresAuth(t *testing.T) {
@@ -87,14 +89,27 @@ func TestHandleShortsHistoryReadsAndroidMomentsCursor(t *testing.T) {
 }
 
 func TestHandleShortsHistoryDoesNotReportDatabaseFailureAsEmptyHistory(t *testing.T) {
-	srv := newTestServer(t)
-	if err := srv.db.ExecRaw(`DROP TABLE moments_cursors`); err != nil {
+	t.Setenv("IGLOO_DATABASE_URL", "")
+	cfg := testWebConfig(t, t.TempDir())
+	d, err := db.OpenAtStateRoot(cfg.Storage.StateRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	srv := &Server{db: d, cfg: cfg}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/shorts/history", srv.handleShortsHistory)
+	if err := d.ExecRaw(`DROP TABLE moments_cursors`); err != nil {
 		t.Fatal(err)
 	}
 
 	req := httptest.NewRequest("GET", "/api/shorts/history?tab=all", nil)
 	rr := httptest.NewRecorder()
-	srv.mux.ServeHTTP(rr, req)
+	mux.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusInternalServerError, rr.Body.String())

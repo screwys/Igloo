@@ -10,14 +10,14 @@ if [[ -n "${IGLOO_TEST_BASE:-}" || -n "${IGLOO_TEST_HEAD:-}" ]]; then
     exit 2
   fi
   mapfile -t changed < <(
-    git diff --name-only --diff-filter=ACMR "$IGLOO_TEST_BASE" "$IGLOO_TEST_HEAD" |
+    git diff --name-only --no-renames --diff-filter=ACDM "$IGLOO_TEST_BASE" "$IGLOO_TEST_HEAD" |
       sed '/^$/d' |
       sort -u
   )
 else
   mapfile -t changed < <(
     {
-      git diff --name-only --diff-filter=ACMR HEAD
+      git diff --name-only --no-renames --diff-filter=ACDM HEAD
       git ls-files --others --exclude-standard
     } | sed '/^$/d' | sort -u
   )
@@ -31,6 +31,7 @@ fi
 printf '[test] checking %d changed files\n' "${#changed[@]}"
 
 go_changed=0
+go_full=0
 drift_changed=0
 web_changed=0
 android_changed=0
@@ -39,11 +40,20 @@ workflow_changed=0
 contract_changed=0
 declare -a shell_files=()
 declare -a node_tests=()
+declare -a go_files=()
 
 for path in "${changed[@]}"; do
   case "$path" in
-    *.go|*.templ|go.mod|go.sum|sqlc.yaml|internal/db/queries/*|internal/db/postgres/*|.golangci.yml|scripts/dev/lint-go.sh|scripts/dev/go-tool-versions.sh|scripts/dev/test-changed.sh)
+    *.go|*.templ)
       go_changed=1
+      go_files+=("$path")
+      ;;
+  esac
+
+  case "$path" in
+    go.mod|go.sum|sqlc.yaml|internal/db/queries/*|internal/db/query/*|internal/db/postgres/*|.golangci.yml|.githooks/pre-push|scripts/dev/lint-go.sh|scripts/dev/go-tool-versions.sh|scripts/dev/test-changed.sh|scripts/dev/changed-go/*)
+      go_changed=1
+      go_full=1
       ;;
   esac
 
@@ -87,10 +97,10 @@ for path in "${changed[@]}"; do
 
   case "$path" in
     *.sh)
-      shell_files+=("$path")
+      if [[ -f "$path" ]]; then shell_files+=("$path"); fi
       ;;
     *.test.mjs)
-      node_tests+=("$path")
+      if [[ -f "$path" ]]; then node_tests+=("$path"); fi
       ;;
   esac
 done
@@ -107,7 +117,9 @@ fi
 
 if [[ "${#shell_files[@]}" -gt 0 ]]; then
   echo "[shell] checking changed scripts"
-  bash -n "${shell_files[@]}"
+  for path in "${shell_files[@]}"; do
+    bash -n "$path"
+  done
 fi
 
 if [[ "$workflow_changed" -eq 1 ]]; then
@@ -127,8 +139,14 @@ if [[ "$i18n_changed" -eq 1 ]]; then
 fi
 
 if [[ "$go_changed" -eq 1 ]]; then
-  echo "[go] running all Go tests"
-  go test -timeout 30m ./...
+  if [[ "$go_full" -eq 1 ]]; then
+    go_packages=(./...)
+  else
+    package_selection="$(go run ./scripts/dev/changed-go/main.go packages "${go_files[@]}")"
+    mapfile -t go_packages <<<"$package_selection"
+  fi
+  printf '[go] running tests for %s\n' "${go_packages[*]}"
+  go test -timeout 30m "${go_packages[@]}"
 
   . scripts/dev/go-tool-versions.sh
   echo "[go] running repo-specific static checks"
@@ -152,11 +170,7 @@ fi
 
 if [[ "$android_changed" -eq 1 ]]; then
   echo "[android] running JVM tests"
-  if [[ -n "${IGLOO_TEST_BASE:-}" ]]; then
-    IGLOO_ANDROID_RERUN_TASKS=1 android/test.sh
-  else
-    android/test.sh
-  fi
+  android/test.sh
 fi
 
 git diff --check

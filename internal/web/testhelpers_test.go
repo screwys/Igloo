@@ -2,10 +2,13 @@ package web
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/gorilla/sessions"
@@ -15,6 +18,30 @@ import (
 	"github.com/screwys/igloo/internal/storage"
 	"github.com/screwys/igloo/internal/worker"
 )
+
+var webFixtureOwner *db.DB
+var webFixtureURL string
+var webFixtureRoot string
+var webFixtureError error
+var webFixtureOnce sync.Once
+var webFixtureResetSQL string
+
+func TestMain(m *testing.M) {
+	status := m.Run()
+	if webFixtureOwner != nil {
+		if err := webFixtureOwner.Close(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			status = 1
+		}
+	}
+	if webFixtureRoot != "" {
+		if err := os.RemoveAll(webFixtureRoot); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			status = 1
+		}
+	}
+	os.Exit(status)
+}
 
 func testWebConfig(t *testing.T, stateRoot string) *config.Config {
 	t.Helper()
@@ -61,28 +88,90 @@ type testServer struct {
 func newTestServer(t *testing.T) *testServer {
 	t.Helper()
 
-	tmp, err := os.CreateTemp("", "igloo-test-*.db")
-	if err != nil {
-		t.Fatalf("temp db: %v", err)
+	webFixtureOnce.Do(func() {
+		webFixtureError = func() error {
+			var err error
+			webFixtureRoot, err = os.MkdirTemp("", "igloo-web-suite-")
+			if err != nil {
+				return err
+			}
+			// Start only the suite's server, without changing the configured benchmark connection.
+			configured, hadConfigured := os.LookupEnv("IGLOO_DATABASE_URL")
+			if err := os.Unsetenv("IGLOO_DATABASE_URL"); err != nil {
+				return err
+			}
+			var openErr error
+			webFixtureOwner, openErr = db.OpenAtStateRoot(webFixtureRoot)
+			if hadConfigured {
+				if err := os.Setenv("IGLOO_DATABASE_URL", configured); err != nil {
+					return err
+				}
+			}
+			if openErr != nil {
+				return openErr
+			}
+			var connection struct {
+				URL string `json:"url"`
+			}
+			raw, err := os.ReadFile(filepath.Join(webFixtureRoot, ".postgresql-connection.json"))
+			if err != nil {
+				return err
+			}
+			if err := json.Unmarshal(raw, &connection); err != nil {
+				return err
+			}
+			webFixtureURL = connection.URL
+			if err := webFixtureOwner.QueryRow(`
+				SELECT 'TRUNCATE TABLE ' ||
+					string_agg(format('%I.%I', schemaname, tablename), ', ' ORDER BY tablename) ||
+					' RESTART IDENTITY CASCADE'
+				FROM pg_tables
+				WHERE schemaname = 'public' AND tablename <> 'goose_db_version'
+			`).Scan(&webFixtureResetSQL); err != nil {
+				return err
+			}
+			return webFixtureOwner.RecordAndroidFeedRetention(0, 1)
+		}()
+	})
+	if webFixtureError != nil {
+		t.Fatal(webFixtureError)
 	}
-	path := tmp.Name()
-	_ = tmp.Close()
 
 	stateRoot := t.TempDir()
-	d, err := db.OpenAtStateRoot(stateRoot)
+	cfg := testWebConfig(t, stateRoot)
+	d, err := db.OpenWithOptions(cfg.Storage, db.OpenOptions{DatabaseURL: webFixtureURL})
 	if err != nil {
-		_ = os.Remove(path)
 		t.Fatalf("db.Open: %v", err)
 	}
-	if err := d.RecordAndroidFeedRetention(0, 1); err != nil {
-		t.Fatalf("initialize Android feed retention: %v", err)
-	}
 	t.Cleanup(func() {
-		_ = d.Close()
-		_ = os.Remove(path)
+		if err := d.Close(); err != nil {
+			t.Error(err)
+		}
+		if err := webFixtureOwner.WithWrite(func(tx *sql.Tx) error {
+			if _, err := tx.Exec(webFixtureResetSQL); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(`INSERT INTO android_sync_clock (id, epoch, revision)
+				VALUES (1, replace(gen_random_uuid()::TEXT, '-', ''), 0)`); err != nil {
+				return err
+			}
+			_, err := tx.Exec(`INSERT INTO android_feed_retention (id, feed_days, reconciled_at_ms)
+				VALUES (1, 0, 1)`)
+			return err
+		}); err != nil {
+			t.Error(err)
+		}
 	})
-
-	cfg := testWebConfig(t, stateRoot)
+	descriptor, err := json.Marshal(struct {
+		URL      string `json:"url"`
+		OwnerPID int    `json:"owner_pid"`
+	}{webFixtureURL, os.Getpid()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateRoot, ".postgresql-connection.json"), descriptor, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	s := &Server{
 		db:      d,
 		cfg:     cfg,

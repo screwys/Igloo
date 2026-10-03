@@ -15,10 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/sessions"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/model"
-	"github.com/screwys/igloo/internal/worker"
 )
 
 type androidSyncPageResponse struct {
@@ -1738,31 +1736,10 @@ func storeReadyWebTestAsset(t *testing.T, srv *testServer, asset db.Asset) db.As
 
 func newAndroidSyncTestServer(t *testing.T) *testServer {
 	t.Helper()
-	tmp, err := os.CreateTemp("", "igloo-sync-test-*.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dbPath := tmp.Name()
-	_ = tmp.Close()
-	dataDir := t.TempDir()
-	database, err := db.OpenAtStateRoot(dataDir)
-	if err != nil {
-		_ = os.Remove(dbPath)
-		t.Fatal(err)
-	}
-	if err := database.RecordAndroidFeedRetention(0, 1); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		_ = database.Close()
-		_ = os.Remove(dbPath)
-	})
-
-	cfg := testWebConfig(t, dataDir)
-	server := &Server{db: database, cfg: cfg, store: sessions.NewCookieStore([]byte("test-key")), workers: worker.NewManager(database, cfg)}
+	fixture := newTestServer(t)
 	mux := http.NewServeMux()
-	server.registerAndroidSyncAPIRoutes(mux)
-	return &testServer{Server: server, mux: mux}
+	fixture.registerAndroidSyncAPIRoutes(mux)
+	return &testServer{Server: fixture.Server, mux: mux}
 }
 
 func mustWriteFile(t *testing.T, path string, body []byte) {

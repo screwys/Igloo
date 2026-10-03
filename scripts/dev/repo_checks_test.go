@@ -166,20 +166,27 @@ func TestChangedGoGateRunsCIStaticChecks(t *testing.T) {
 	}
 }
 
-func TestPrePushRunsAndroidFromAColdBuild(t *testing.T) {
+func TestPrePushKeepsColdAndroidBuildsExplicit(t *testing.T) {
 	root := repoRoot(t)
 	hook, err := os.ReadFile(filepath.Join(root, ".githooks/pre-push"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	contents := string(hook)
+	fullStart := strings.Index(contents, `echo "pre-push: running scripts/dev/test-full.sh"`)
+	fullEnd := strings.Index(contents[fullStart:], "    continue") + fullStart
+	fullGate := contents[fullStart:fullEnd]
+	changedGate := contents[fullEnd:]
 	for _, setting := range []string{
 		"IGLOO_ANDROID_CLEAN=1",
 		"IGLOO_ANDROID_NO_DAEMON=1",
 		"IGLOO_ANDROID_RERUN_TASKS=1",
 	} {
-		if !strings.Contains(contents, setting) {
-			t.Errorf("pre-push hook does not set %s", setting)
+		if !strings.Contains(fullGate, setting) {
+			t.Errorf("full pre-push gate does not set %s", setting)
+		}
+		if strings.Contains(changedGate, setting) {
+			t.Errorf("ordinary pre-push gate forces %s", setting)
 		}
 	}
 
@@ -200,7 +207,12 @@ func TestPrePushRunsAndroidFromAColdBuild(t *testing.T) {
 }
 
 func TestPrePushRejectsNixDependencyFailureForGoChanges(t *testing.T) {
-	hook := filepath.Join(repoRoot(t), ".githooks/pre-push")
+	root := repoRoot(t)
+	hook := filepath.Join(root, ".githooks/pre-push")
+	selector, err := os.ReadFile(filepath.Join(root, "scripts/dev/changed-go/main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		name, file, contents string
 		checksNix            bool
@@ -239,6 +251,8 @@ func TestPrePushRejectsNixDependencyFailureForGoChanges(t *testing.T) {
 			runGit("config", "user.name", "Test")
 			runGit("config", "user.email", "test@example.invalid")
 			runGit("config", "commit.gpgsign", "false")
+			write("go.mod", "module example.invalid/project\n\ngo 1.23\n")
+			runGit("add", "go.mod")
 			runGit("commit", "--allow-empty", "-qm", "initial")
 			base := runGit("rev-parse", "HEAD")
 			write(tc.file, tc.contents)
@@ -247,6 +261,7 @@ func TestPrePushRejectsNixDependencyFailureForGoChanges(t *testing.T) {
 			head := runGit("rev-parse", "HEAD")
 			write("bin/just", "#!/bin/sh\nprintf '%s\\n' \"$@\" > nix-arguments\nexit 1\n")
 			write("scripts/dev/test-changed.sh", "#!/bin/sh\nexit 0\n")
+			write("scripts/dev/changed-go/main.go", string(selector))
 			cmd := exec.Command("bash", hook)
 			cmd.Dir = dir
 			cmd.Env = append(os.Environ(), "PATH="+filepath.Join(dir, "bin")+":"+os.Getenv("PATH"), "IGLOO_PRE_PUSH_FULL=0")
