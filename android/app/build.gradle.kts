@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
+    id("androidx.room")
 }
 
 fun String.asBuildConfigString(): String =
@@ -123,18 +124,25 @@ kotlin {
     }
 }
 
-ksp {
-    // Room schema export for the current app schema.
-    arg("room.schemaLocation", "$projectDir/schemas")
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
-val roomVersion = "2.8.4"
+val roomVersion = "2.8.5"
+val sqliteVersion = "2.7.1"
 val ktorVersion = "3.5.0"
 val lifecycleVersion = "2.10.0"
 val koinVersion = "4.2.1"
 val coilVersion = "3.4.0"
 val media3Version = "1.10.1"
 val asmVersion = "9.10"
+
+configurations.matching { it.name.endsWith("UnitTestRuntimeClasspath") }.configureEach {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("androidx.sqlite:sqlite-bundled-android"))
+            .using(module("androidx.sqlite:sqlite-bundled-jvm:$sqliteVersion"))
+    }
+}
 
 dependencies {
     // Core Android
@@ -160,6 +168,7 @@ dependencies {
     // Room
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
+    implementation("androidx.sqlite:sqlite-bundled:$sqliteVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
     // Ktor
@@ -195,8 +204,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:5.3.2")
     testImplementation("io.ktor:ktor-client-mock:$ktorVersion")
-    // Room tests run on JVM via Robolectric — spins up enough Android framework for
-    // Room's SQLiteOpenHelper to initialize without a device.
+    // Robolectric supplies Android resources for Room's JVM checks.
     testImplementation("androidx.room:room-testing:$roomVersion")
     testImplementation("org.robolectric:robolectric:4.16.1")
     // Robolectric 4.16.1 still resolves ASM 9.8; 9.9.x is needed for Java 26 class files.

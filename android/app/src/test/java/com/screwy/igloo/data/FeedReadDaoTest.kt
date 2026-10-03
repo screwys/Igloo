@@ -1,5 +1,9 @@
 package com.screwy.igloo.data
 
+import com.screwy.igloo.data.ContentPayloads
+import com.screwy.igloo.data.entity.StoredChannel
+import com.screwy.igloo.data.entity.StoredChannelProfile
+import com.screwy.igloo.data.entity.StoredFeedItem
 import com.screwy.igloo.data.entity.ChannelEntity
 import com.screwy.igloo.data.entity.ChannelProfileEntity
 import com.screwy.igloo.data.entity.ChannelSettingEntity
@@ -35,18 +39,18 @@ class FeedReadDaoTest {
 
     @Test
     fun retweetThreadUsesSavedWrapperUntilCanonicalConversationArrives() = runBlocking {
-        db.feedItemDao().upsert(FeedItemEntity(
+        db.feedItemDao().upsertCaptured(FeedItemEntity(
             tweetId = "sample_wrapper", canonicalTweetId = "sample_original", isRetweet = true,
             bodyText = "Saved post", publishedAt = 10,
-        ))
+        ).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         assertEquals(
             listOf("sample_wrapper"),
             db.feedReadDao().getThreadTree("sample_wrapper").map { it.item.tweetId },
         )
 
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_original", bodyText = "Original post", publishedAt = 1))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_reply", replyToStatus = "sample_original", isReply = true, publishedAt = 2))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_quote", quoteTweetId = "sample_original", publishedAt = 3))
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_original", bodyText = "Original post", publishedAt = 1).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_reply", replyToStatus = "sample_original", isReply = true, publishedAt = 2).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_quote", quoteTweetId = "sample_original", publishedAt = 3).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
 
         assertEquals(
             listOf("sample_original", "sample_reply", "sample_quote"),
@@ -56,11 +60,11 @@ class FeedReadDaoTest {
 
     @Test
     fun threadIncludesDirectQuotesAndRepliesOnceWithoutUnrelatedPosts() = runBlocking {
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_root", bodyText = "Root", publishedAt = 1))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_reply", bodyText = "Reply", replyToStatus = "sample_root", isReply = true, publishedAt = 2))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_quote", bodyText = "Quote", quoteTweetId = "sample_root", publishedAt = 3))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_reply_quote", replyToStatus = "sample_root", quoteTweetId = "sample_root", isReply = true, publishedAt = 4))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_other_quote", quoteTweetId = "other_root", publishedAt = 5))
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_root", bodyText = "Root", publishedAt = 1).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_reply", bodyText = "Reply", replyToStatus = "sample_root", isReply = true, publishedAt = 2).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_quote", bodyText = "Quote", quoteTweetId = "sample_root", publishedAt = 3).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_reply_quote", replyToStatus = "sample_root", quoteTweetId = "sample_root", isReply = true, publishedAt = 4).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_other_quote", quoteTweetId = "other_root", publishedAt = 5).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
 
         assertEquals(
             listOf("sample_root", "sample_reply", "sample_reply_quote", "sample_quote"),
@@ -76,8 +80,7 @@ class FeedReadDaoTest {
         seedIdentity("sample_reply", "sample_reply_handle", "Sample Reply")
         seedIdentity("sample_reposter", "sample_reposter_handle", "Sample Reposter")
         db.feedItemDao()
-            .upsert(
-                FeedItemEntity(
+            .upsertCaptured(FeedItemEntity(
                     tweetId = "item-1",
                     sourceChannelId = "sample_source",
                     reposterChannelId = "sample_reposter",
@@ -85,8 +88,7 @@ class FeedReadDaoTest {
                     replyChannelId = "sample_reply",
                     channelId = "sample_author",
                     publishedAt = 1,
-                )
-            )
+                ).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
 
         val row = db.feedReadDao().feedFlow().first().single()
 
@@ -107,8 +109,7 @@ class FeedReadDaoTest {
         seedIdentity("sample_author_b", "sample_b", "Sample B")
         seedIdentity("sample_reposter", "sample_r", "Sample R")
         db.feedItemDao()
-            .upsert(
-                listOf(
+            .upsertCaptured(listOf(
                     FeedItemEntity(
                         tweetId = "sample_author_muted",
                         channelId = "sample_author_a",
@@ -126,8 +127,7 @@ class FeedReadDaoTest {
                         channelId = "sample_author_b",
                         publishedAt = 1,
                     ),
-                )
-            )
+                ).map { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.mutedChannelDao()
             .upsert(
                 listOf(MutedChannelEntity("sample_author_a"), MutedChannelEntity("sample_reposter"))
@@ -141,8 +141,7 @@ class FeedReadDaoTest {
     @Test
     fun mainFeedAppliesRepostVisibilityToRowsAndHeadCandidates() = runBlocking {
         db.feedItemDao()
-            .upsert(
-                listOf(
+            .upsertCaptured(listOf(
                     FeedItemEntity(
                         tweetId = "sample_repost_hidden",
                         sourceChannelId = "sample_muted_reposter",
@@ -159,8 +158,7 @@ class FeedReadDaoTest {
                         contentHash = "sample_visible_hash",
                         publishedAt = 1,
                     ),
-                )
-            )
+                ).map { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.channelSettingDao()
             .upsert(
                 listOf(
@@ -203,15 +201,11 @@ class FeedReadDaoTest {
     fun explicitSurfacesKeepMutedRowsAndJoinCurrentProfileValues() = runBlocking {
         seedIdentity("sample_author", "sample_old_handle", "Sample Old")
         db.feedItemDao()
-            .upsert(
-                FeedItemEntity(tweetId = "item-1", channelId = "sample_author", publishedAt = 1)
-            )
+            .upsertCaptured(FeedItemEntity(tweetId = "item-1", channelId = "sample_author", publishedAt = 1).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.feedLikeDao().upsert(FeedLikeEntity("item-1", 1))
         db.mutedChannelDao().upsert(MutedChannelEntity("sample_author"))
         db.channelProfileDao()
-            .upsert(
-                ChannelProfileEntity("sample_author", "twitter", "sample_new_handle", "Sample New")
-            )
+            .upsertCaptured(ChannelProfileEntity("sample_author", "twitter", "sample_new_handle", "Sample New").let { item -> StoredChannelProfile.from(item, ContentPayloads.profile(item, null)) })
 
         val liked = db.feedReadDao().likedFlow().first().single()
         val channel =
@@ -224,8 +218,8 @@ class FeedReadDaoTest {
     }
 
     private suspend fun seedIdentity(channelId: String, handle: String, displayName: String) {
-        db.channelDao().upsert(ChannelEntity(channelId, handle, handle, null, "twitter"))
+        db.channelDao().upsertCaptured(ChannelEntity(channelId, handle, handle, null, "twitter").let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.channelProfileDao()
-            .upsert(ChannelProfileEntity(channelId, "twitter", handle, displayName))
+            .upsertCaptured(ChannelProfileEntity(channelId, "twitter", handle, displayName).let { item -> StoredChannelProfile.from(item, ContentPayloads.profile(item, null)) })
     }
 }

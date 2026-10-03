@@ -1,5 +1,7 @@
 package com.screwy.igloo.data
 
+import com.screwy.igloo.data.ContentPayloads
+import com.screwy.igloo.data.entity.StoredFeedItem
 import com.screwy.igloo.data.entity.BookmarkEntity
 import com.screwy.igloo.data.entity.FeedItemEntity
 import kotlinx.coroutines.flow.first
@@ -31,12 +33,10 @@ class BookmarkReadDaoTest {
     @Test
     fun tweetBookmarkDoesNotMaterializeMissingVideo() = runBlocking {
         db.feedItemDao()
-            .upsert(
-                FeedItemEntity(
+            .upsertCaptured(FeedItemEntity(
                     tweetId = "sample_tweet",
                     mediaJson = """[{"type":"image"}]""",
-                )
-            )
+                ).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.bookmarkDao().upsert(BookmarkEntity(videoId = "sample_tweet", bookmarkedAt = 1L))
 
         val item = db.bookmarkReadDao().bookmarksFlow().first().single()

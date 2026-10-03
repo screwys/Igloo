@@ -1,6 +1,7 @@
 package com.screwy.igloo.outbox
 
-import androidx.room.withTransaction
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.entity.MomentsCursorEntity
@@ -62,20 +63,22 @@ class OutboxWriter(
             return
         }
         val nowMs = serverCorrectedNowMs()
-        db.withTransaction {
-            val outbox = db.outboxDao()
-            val previousPending = outbox.pendingRows().firstOrNull { it.matches(kind) }
-            val selectionBaseline =
-                previousPending?.selectionBaseline() ?: selectionBaseline(kind)
-            val selectionWidening =
-                kind is OutboxKind.Subscribe || selectionBaseline?.expandsTo(kind) == true
-            val row =
-                buildOutboxRow(kind, nowMs, selectionWidening, selectionBaseline)
-            when (kind.coalesceKey) {
-                OutboxKind.CoalesceKey.ByKindItemField -> outbox.coalesceAndInsert(row)
-                OutboxKind.CoalesceKey.Fifo -> outbox.insert(row)
+        db.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                val outbox = db.outboxDao()
+                val previousPending = outbox.pendingRow(kind.code, kind.itemId, kind.field)
+                val selectionBaseline =
+                    previousPending?.selectionBaseline() ?: selectionBaseline(kind)
+                val selectionWidening =
+                    kind is OutboxKind.Subscribe || selectionBaseline?.expandsTo(kind) == true
+                val row =
+                    buildOutboxRow(kind, nowMs, selectionWidening, selectionBaseline)
+                when (kind.coalesceKey) {
+                    OutboxKind.CoalesceKey.ByKindItemField -> outbox.coalesceAndInsert(row)
+                    OutboxKind.CoalesceKey.Fifo -> outbox.insert(row)
+                }
+                applyOptimisticMutation(db, row)
             }
-            applyOptimisticMutation(db, row)
         }
         if (kind.isInteractiveAction) {
             onDrainRequested(true)
@@ -92,33 +95,35 @@ class OutboxWriter(
         orderPosition: Long? = null,
     ) {
         val normalized = PreferencesRepo.Defaults.normalizeMomentsTab(scope)
-        db.withTransaction {
-            val cursorDao = db.momentsCursorDao()
-            val current = cursorDao.get(normalized)
+        db.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                val cursorDao = db.momentsCursorDao()
+                val current = cursorDao.get(normalized)
 
-            val updatedAtMs = nextMomentsCursorTimestamp(current?.updatedAtMs)
-            val next =
-                MomentsCursorEntity(
-                    scope = normalized,
-                    videoId = videoId,
-                    positionMs = positionMs,
-                    sortAtMs = sortAtMs ?: 0L,
-                    orderPosition = orderPosition ?: 0L,
-                    updatedAtMs = updatedAtMs,
-                )
-            if (normalized == "stories") {
-                cursorDao.upsert(next)
-            } else {
-                val kind =
-                    OutboxKind.MomentsCursor(
+                val updatedAtMs = nextMomentsCursorTimestamp(current?.updatedAtMs)
+                val next =
+                    MomentsCursorEntity(
+                        scope = normalized,
                         videoId = videoId,
                         positionMs = positionMs,
-                        scope = normalized,
-                        sortAtMs = sortAtMs,
-                        orderPosition = orderPosition,
+                        sortAtMs = sortAtMs ?: 0L,
+                        orderPosition = orderPosition ?: 0L,
+                        updatedAtMs = updatedAtMs,
                     )
-                db.outboxDao().coalesceAndInsert(buildOutboxRow(kind, updatedAtMs))
-                cursorDao.upsert(next)
+                if (normalized == "stories") {
+                    cursorDao.upsert(next)
+                } else {
+                    val kind =
+                        OutboxKind.MomentsCursor(
+                            videoId = videoId,
+                            positionMs = positionMs,
+                            scope = normalized,
+                            sortAtMs = sortAtMs,
+                            orderPosition = orderPosition,
+                        )
+                    db.outboxDao().coalesceAndInsert(buildOutboxRow(kind, updatedAtMs))
+                    cursorDao.upsert(next)
+                }
             }
         }
         if (normalized != "stories") _debounceSignal.tryEmit(Unit)
@@ -322,9 +327,6 @@ internal fun OutboxEntity.selectionWidening(): Boolean =
             (payload[SELECTION_WIDENING_KEY] as? JsonPrimitive)?.booleanOrNull == true
         }
         .getOrDefault(false)
-
-private fun OutboxEntity.matches(kind: OutboxKind): Boolean =
-    this.kind == kind.code && itemId == kind.itemId && field == kind.field
 
 private fun OutboxEntity.selectionBaseline(): SelectionBaseline? =
     runCatching {

@@ -1,5 +1,7 @@
 package com.screwy.igloo.sync
 
+import com.screwy.igloo.data.cleaned
+import com.screwy.igloo.data.ContentPayloads
 import com.screwy.igloo.data.entity.BookmarkCategoryEntity
 import com.screwy.igloo.data.entity.BookmarkEntity
 import com.screwy.igloo.data.entity.ChannelEntity
@@ -21,6 +23,7 @@ import com.screwy.igloo.data.entity.VideoCommentEntity
 import com.screwy.igloo.data.entity.VideoEntity
 import com.screwy.igloo.data.entity.VideoRepostSourceEntity
 import com.screwy.igloo.data.entity.WatchHistoryEntity
+import com.screwy.igloo.data.entity.StoredFeedItem
 import com.screwy.igloo.net.AndroidSyncAssetDto
 import com.screwy.igloo.net.AndroidSyncChangeDto
 import com.screwy.igloo.net.iglooJson
@@ -30,6 +33,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNamingStrategy
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 
 internal data class AndroidVideoUpsert(
@@ -38,11 +42,13 @@ internal data class AndroidVideoUpsert(
     val sponsorBlockSegments: List<SponsorBlockSegmentEntity>,
     val sponsorBlockChecked: SponsorBlockCheckedEntity?,
     val repostSources: List<VideoRepostSourceEntity>,
+    val ownerPayloadJson: String,
 )
 
 internal data class AndroidChannelUpsert(
     val channel: ChannelEntity?,
     val profile: ChannelProfileEntity?,
+    val ownerPayloadJson: String,
 )
 
 internal data class AndroidFeedRankSnapshot(
@@ -54,6 +60,11 @@ internal object AndroidSyncChangeDecoder {
     fun feed(change: AndroidSyncChangeDto): FeedItemEntity =
         change.decode<FeedPayload>().item.cleaned().also { require(it.tweetId == change.owner_id) }
 
+    fun captureFeed(change: AndroidSyncChangeDto): StoredFeedItem {
+        val item = feed(change)
+        return StoredFeedItem.from(item, ContentPayloads.feed(item, change.ownerPayload()))
+    }
+
     fun video(change: AndroidSyncChangeDto): AndroidVideoUpsert {
         val payload = change.decode<VideoPayload>()
         val item = payload.item.cleaned()
@@ -64,6 +75,7 @@ internal object AndroidSyncChangeDecoder {
             payload.sponsorBlockSegments.map { it.toEntity(item.videoId) },
             payload.sponsorBlockChecked?.toEntity(item.videoId),
             payload.repostSources.map { it.toEntity(item.videoId) },
+            ContentPayloads.video(item, change.ownerPayload()),
         )
     }
 
@@ -72,7 +84,9 @@ internal object AndroidSyncChangeDecoder {
         require(payload.channel != null || payload.profile != null) { "empty channel owner" }
         require(payload.channel?.channelId in setOf(null, change.owner_id)) { "channel owner id mismatch" }
         require(payload.profile?.channelId in setOf(null, change.owner_id)) { "profile owner id mismatch" }
-        return AndroidChannelUpsert(payload.channel?.cleaned(), payload.profile?.cleaned())
+        val channel = payload.channel?.cleaned()
+        val profile = payload.profile?.cleaned()
+        return AndroidChannelUpsert(channel, profile, ContentPayloads.channel(channel, profile, change.ownerPayload()))
     }
 
     fun retweetSources(change: AndroidSyncChangeDto): List<RetweetSourceEntity> =
@@ -143,6 +157,9 @@ internal object AndroidSyncChangeDecoder {
         require(operation == "upsert") { "cannot decode delete payload" }
         return syncPayloadJson.decodeFromJsonElement(requireNotNull(payload) { "missing $owner_kind payload" })
     }
+
+    private fun AndroidSyncChangeDto.ownerPayload(): JsonObject =
+        requireNotNull(payload) { "missing $owner_kind payload" }
 }
 
 @Serializable private data class FeedPayload(val item: FeedItemEntity)
@@ -227,39 +244,6 @@ internal fun feedRankSnapshotDigest(rows: List<FeedRankEntity>): String {
     }
     return digest.digest().joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
 }
-
-private fun FeedItemEntity.cleaned() =
-    copy(
-        sourceChannelId = sourceChannelId.clean(), bodyText = bodyText.clean(), lang = lang.clean(),
-        articleTitle = articleTitle.clean(), quoteArticleTitle = quoteArticleTitle.clean(),
-        pollJson = pollJson.clean(), quotePollJson = quotePollJson.clean(),
-        communityNote = communityNote.clean(), quoteCommunityNote = quoteCommunityNote.clean(),
-        reposterChannelId = reposterChannelId.clean(), quoteTweetId = quoteTweetId.clean(),
-        quoteChannelId = quoteChannelId.clean(), quoteBodyText = quoteBodyText.clean(),
-        quoteLang = quoteLang.clean(), quoteMediaJson = quoteMediaJson.clean(),
-        quoteCanonicalUrl = quoteCanonicalUrl.clean(), mediaJson = mediaJson.clean(),
-        canonicalUrl = canonicalUrl.clean(), canonicalTweetId = canonicalTweetId.clean(),
-        replyChannelId = replyChannelId.clean(), replyToStatus = replyToStatus.clean(),
-        contentHash = contentHash.clean(), bodyTranslation = bodyTranslation.clean(),
-        bodySourceLang = bodySourceLang.clean(), quoteTranslation = quoteTranslation.clean(),
-        quoteSourceLang = quoteSourceLang.clean(), channelId = channelId.clean(),
-    )
-
-private fun VideoEntity.cleaned() =
-    copy(
-        title = title.clean(), description = description.clean(), mediaKind = mediaKind.clean(),
-        sourceKind = sourceKind.clean(), metadataJson = metadataJson.clean(), canonicalUrl = canonicalUrl.clean(),
-        dearrowTitle = dearrowTitle.clean(), dearrowTitleCasual = dearrowTitleCasual.clean(),
-    )
-
-private fun ChannelEntity.cleaned() = copy(sourceId = sourceId.clean(), url = url.clean())
-
-private fun ChannelProfileEntity.cleaned() =
-    copy(
-        handle = handle.clean(), displayName = displayName.clean(), bio = bio.clean(),
-        website = website.clean(), verifiedType = verifiedType.clean(), accountRegion = accountRegion.clean(),
-        accountDetailsJson = accountDetailsJson.clean(),
-    )
 
 private fun String?.clean(): String? = this?.trim()?.takeIf(String::isNotEmpty)
 

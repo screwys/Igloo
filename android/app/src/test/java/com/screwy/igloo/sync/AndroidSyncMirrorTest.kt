@@ -1,5 +1,7 @@
 package com.screwy.igloo.sync
 
+import com.screwy.igloo.data.ContentPayloads
+import com.screwy.igloo.data.entity.StoredFeedItem
 import androidx.test.core.app.ApplicationProvider
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
@@ -273,7 +275,7 @@ class AndroidSyncMirrorTest {
     @Test
     fun priorityStateAppliesUserStateWithoutWaitingForContentCatchUp() = runBlocking {
         db.androidSyncDao().upsertSyncState(changesState("content-cursor"))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_post"))
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_post").let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.momentsCursorDao()
             .upsert(MomentsCursorEntity("all", "local_equal", updatedAtMs = nowMs))
         val requests = mutableListOf<String>()
@@ -794,7 +796,7 @@ class AndroidSyncMirrorTest {
 
     @Test
     fun interruptedBootstrapResumesWithoutHidingCanonicalRows() = runBlocking {
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_old_post"))
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_old_post").let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.androidSyncDao().upsertHead(AndroidSyncHeadEntity("feed", "sample_old_post", "feed", nowMs))
         db.androidSyncDao().upsertAsset(
             readyAsset("sample_old_asset").copy(ownerId = "sample_old_owner")
@@ -845,9 +847,9 @@ class AndroidSyncMirrorTest {
 
     @Test
     fun v3FeedRankSnapshotAtomicallyReplacesRowsAndLegacyHeads() = runBlocking {
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_rank_old"))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_rank_first"))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_rank_second"))
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_rank_old").let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_rank_first").let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_rank_second").let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.feedRankDao().upsert(listOf(FeedRankEntity("sample_rank_old", 1, nowMs)))
         db.androidSyncDao()
             .upsertHead(AndroidSyncHeadEntity("feed_rank", "sample_rank_old", "feed", nowMs))
@@ -881,14 +883,12 @@ class AndroidSyncMirrorTest {
     @Test
     fun resetBootstrapSweepsAbsentOwnersAndRestoresPendingState() = runBlocking {
         db.androidSyncDao().upsertSyncState(changesState("old-cursor"))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_deleted_post"))
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_deleted_post").let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.feedItemDao()
-            .upsert(
-                FeedItemEntity(
+            .upsertCaptured(FeedItemEntity(
                     tweetId = "sample_existing_post",
                     contentHash = "hash-sample_existing_post",
-                )
-            )
+                ).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.androidSyncDao().upsertHead(AndroidSyncHeadEntity("feed", "sample_deleted_post", "feed", nowMs))
         db.androidSyncDao().upsertHead(AndroidSyncHeadEntity("feed", "sample_existing_post", "feed", nowMs))
         db.feedRankDao().upsert(listOf(FeedRankEntity("sample_existing_post", 1, nowMs)))
@@ -1048,7 +1048,7 @@ class AndroidSyncMirrorTest {
             FeedItemEntity(tweetId = "ordinary_quote", quoteTweetId = "context_root", publishedAt = oldTime),
         )
         rows.forEach { row ->
-            db.feedItemDao().upsert(row)
+            db.feedItemDao().upsertCaptured(row.let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
             db.androidSyncDao().upsertHead(AndroidSyncHeadEntity("feed", row.tweetId, "feed", oldTime))
         }
         db.feedLikeDao().upsert(FeedLikeEntity("context_root", nowMs))
@@ -1080,7 +1080,7 @@ class AndroidSyncMirrorTest {
     @Test
     fun protectedTombstoneBecomesCollectableAfterProtectionIsRemoved() = runBlocking {
         db.androidSyncDao().upsertSyncState(changesState("cursor-a"))
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "sample_bookmark_post"))
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "sample_bookmark_post").let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.feedLikeDao().upsert(FeedLikeEntity("sample_bookmark_post", nowMs))
         db.androidSyncDao().upsertHead(AndroidSyncHeadEntity("feed", "sample_bookmark_post", "feed", nowMs))
         val engine = MockEngine { request ->

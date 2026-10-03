@@ -1,5 +1,8 @@
 package com.screwy.igloo.channel
 
+import com.screwy.igloo.data.ContentPayloads
+import com.screwy.igloo.data.entity.StoredChannel
+import com.screwy.igloo.data.entity.StoredChannelProfile
 import com.screwy.igloo.data.RoomTestSupport
 import com.screwy.igloo.data.entity.ChannelEntity
 import com.screwy.igloo.data.entity.ChannelProfileEntity
@@ -18,14 +21,12 @@ class ChannelRouteResolverTest {
     fun routeForHandle_prefersExistingSourceIdMatch() = runBlocking {
         val db = RoomTestSupport.freshDb()
         try {
-            db.channelDao().upsert(
-                ChannelEntity(
+            db.channelDao().upsertCaptured(ChannelEntity(
                     channelId = "twitter_alice_real",
                     sourceId = "alice",
                     name = "Alice",
                     platform = "twitter",
-                ),
-            )
+                ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
 
             val route = ChannelRouteResolver.routeForHandle(db, "@Alice")
 
@@ -39,8 +40,7 @@ class ChannelRouteResolverTest {
     fun routeForHandle_prefersSourceIdMatchOnFallbackPlatform() = runBlocking {
         val db = RoomTestSupport.freshDb()
         try {
-            db.channelDao().upsert(
-                listOf(
+            db.channelDao().upsertCaptured(listOf(
                     ChannelEntity(
                         channelId = "twitter_alice",
                         sourceId = "alice",
@@ -53,8 +53,7 @@ class ChannelRouteResolverTest {
                         name = "Alice TikTok",
                         platform = "tiktok",
                     ),
-                ),
-            )
+                ).map { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
 
             val route = ChannelRouteResolver.routeForHandle(db, "@Alice", fallbackPlatform = "tiktok")
 
@@ -68,14 +67,12 @@ class ChannelRouteResolverTest {
     fun routeForHandle_keepsNonTwitterFallbackWhenOnlyOtherPlatformHandleExists() = runBlocking {
         val db = RoomTestSupport.freshDb()
         try {
-            db.channelDao().upsert(
-                ChannelEntity(
+            db.channelDao().upsertCaptured(ChannelEntity(
                     channelId = "twitter_alice",
                     sourceId = "alice",
                     name = "Alice X",
                     platform = "twitter",
-                ),
-            )
+                ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
 
             val route = ChannelRouteResolver.routeForHandle(db, "@Alice", fallbackPlatform = "tiktok")
 
@@ -100,14 +97,12 @@ class ChannelRouteResolverTest {
     fun routeForHandle_usesProfileOnlyMatchOnFallbackPlatform() = runBlocking {
         val db = RoomTestSupport.freshDb()
         try {
-            db.channelProfileDao().upsert(
-                ChannelProfileEntity(
+            db.channelProfileDao().upsertCaptured(ChannelProfileEntity(
                     channelId = "youtube_UCprofileonly",
                     platform = "youtube",
                     handle = "@ProfileOnly",
                     displayName = "Profile Only",
-                ),
-            )
+                ).let { item -> StoredChannelProfile.from(item, ContentPayloads.profile(item, null)) })
 
             val route = ChannelRouteResolver.routeForHandle(
                 db = db,
@@ -125,14 +120,12 @@ class ChannelRouteResolverTest {
     fun routeForHandle_usesProfileOnlyTwitterBeforeSyntheticFallback() = runBlocking {
         val db = RoomTestSupport.freshDb()
         try {
-            db.channelProfileDao().upsert(
-                ChannelProfileEntity(
+            db.channelProfileDao().upsertCaptured(ChannelProfileEntity(
                     channelId = "twitter_alice_real",
                     platform = "twitter",
                     handle = "alice",
                     displayName = "Alice",
-                ),
-            )
+                ).let { item -> StoredChannelProfile.from(item, ContentPayloads.profile(item, null)) })
 
             val route = ChannelRouteResolver.routeForHandle(db, "@Alice")
 
@@ -146,14 +139,12 @@ class ChannelRouteResolverTest {
     fun routeForHandle_encodesExistingChannelIdsAsPathSegments() = runBlocking {
         val db = RoomTestSupport.freshDb()
         try {
-            db.channelDao().upsert(
-                ChannelEntity(
+            db.channelDao().upsertCaptured(ChannelEntity(
                     channelId = "twitter_alice/real",
                     sourceId = "alice",
                     name = "Alice",
                     platform = "twitter",
-                ),
-            )
+                ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
 
             val route = ChannelRouteResolver.routeForHandle(db, "@Alice")
 

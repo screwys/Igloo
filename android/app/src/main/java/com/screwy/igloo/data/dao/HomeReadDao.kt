@@ -24,17 +24,6 @@ data class HomeFeedRow(
     @ColumnInfo(name = "home_reposter_name") val reposterName: String?,
 )
 
-private const val HOME_FEED_HAS_CONTENT = """
-    NULLIF(TRIM(COALESCE(fi.body_text, '')), '') IS NOT NULL
-    OR NULLIF(TRIM(COALESCE(fi.article_title, '')), '') IS NOT NULL
-    OR COALESCE(fi.poll_json, '') NOT IN ('', '{}', 'null')
-    OR COALESCE(fi.media_json, '') NOT IN ('', '[]', 'null')
-    OR NULLIF(TRIM(COALESCE(fi.quote_body_text, '')), '') IS NOT NULL
-    OR NULLIF(TRIM(COALESCE(fi.quote_article_title, '')), '') IS NOT NULL
-    OR COALESCE(fi.quote_poll_json, '') NOT IN ('', '{}', 'null')
-    OR COALESCE(fi.quote_media_json, '') NOT IN ('', '[]', 'null')
-"""
-
 private const val HOME_VIDEO_QUERY = """
         WITH tweet_video_feeds AS (
             SELECT v.video_id, fi.tweet_id, fi.canonical_tweet_id, fi.content_hash,
@@ -126,7 +115,7 @@ private const val HOME_VIDEO_QUERY = """
               OR EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.channel_id = v.channel_id))
           AND (:type IN ('continue', 'latest') OR NOT EXISTS (SELECT 1 FROM feed_items fi
               WHERE (fi.tweet_id = v.video_id OR fi.canonical_tweet_id = v.video_id)
-                AND COALESCE(fi.is_ghost, 0) = 0 AND (""" + HOME_FEED_HAS_CONTENT + """)))
+                AND COALESCE(fi.is_ghost, 0) = 0 AND fi.has_content))
           AND (:allChannels OR v.channel_id IN (:channels) OR er.video_id IS NOT NULL)
           AND (:allContent OR CASE WHEN v.source_kind = 'story' THEN 'story'
               WHEN v.media_kind = 'slideshow' THEN 'slideshow'
@@ -137,7 +126,8 @@ private const val HOME_VIDEO_QUERY = """
               wh.playback_position > 0
               AND (COALESCE(wh.duration, v.duration, 0) <= 0
                   OR wh.playback_position < COALESCE(wh.duration, v.duration) * 0.95)))
-          AND (:type != 'moments' OR v.owner_kind IN ('tiktok_video', 'instagram_reel', 'youtube_video'))
+          AND (:type != 'moments' OR (
+              v.owner_kind IN ('tiktok_video', 'instagram_reel', 'youtube_video') AND v.is_moment))
           AND (:type != 'latest' OR COALESCE(v.media_kind, 'video') NOT IN ('image', 'slideshow'))
           AND (:type IN ('saved', 'continue') OR COALESCE(v.source_kind, '') != 'story'
               OR v.published_at >= :storyCutoffMs)
@@ -145,7 +135,7 @@ private const val HOME_VIDEO_QUERY = """
               SELECT 1 FROM muted_channels mc WHERE mc.channel_id = v.channel_id))
         ORDER BY CASE WHEN :ordering = 'account' THEN channel_name END COLLATE NOCASE ASC,
                  home_sort_at_ms DESC, v.video_id DESC
-        LIMIT :limit OFFSET :offset
+        LIMIT :limit
         """
 
 private const val HOME_FEED_QUERY = """
@@ -193,12 +183,10 @@ private const val HOME_FEED_QUERY = """
                COALESCE(NULLIF(cp.display_name, ''), c.name, cp.handle, '') AS channel_name,
                COALESCE(c.platform, cp.platform, 'twitter') AS channel_platform,
                cp.handle AS author_handle, cp.display_name AS author_display_name,
-               cp.account_region AS author_account_region,
-               cp.account_details_json AS author_account_details_json,
+               cp.payload_json AS author_profile_payload_json,
                sp.handle AS source_handle, sp.display_name AS source_display_name,
                qp.handle AS quote_author_handle, qp.display_name AS quote_author_display_name,
-               qp.account_region AS quote_author_account_region,
-               qp.account_details_json AS quote_author_account_details_json,
+               qp.payload_json AS quote_profile_payload_json,
                replyp.handle AS reply_handle, rp.handle AS reposter_handle,
                rp.display_name AS reposter_display_name,
                CASE WHEN fl.tweet_id IS NOT NULL THEN 1 ELSE 0 END AS is_liked,
@@ -221,7 +209,7 @@ private const val HOME_FEED_QUERY = """
                      THEN 'canonical:' || COALESCE(NULLIF(fi.canonical_tweet_id, ''), fi.tweet_id)
                    WHEN COALESCE(fi.content_hash, '') != '' THEN 'hash:' || fi.content_hash
                    ELSE 'tweet:' || fi.tweet_id END
-                 ORDER BY CASE WHEN """ + HOME_FEED_HAS_CONTENT + """ THEN 0 ELSE 1 END,
+                 ORDER BY CASE WHEN fi.has_content THEN 0 ELSE 1 END,
                    CASE WHEN COALESCE(fi.canonical_tweet_id, '') IN ('', fi.tweet_id) THEN 0 ELSE 1 END,
                    fi.published_at DESC, fi.tweet_id DESC
                ) AS home_item_rank
@@ -251,9 +239,10 @@ private const val HOME_FEED_QUERY = """
               SELECT 1 FROM muted_channels mc WHERE mc.channel_id = fi.channel_id))
     )
     SELECT * FROM candidates WHERE home_item_rank = 1
+      AND (:allContent OR 'post' IN (:contentTypes) OR content_type IN (:contentTypes))
     ORDER BY CASE WHEN :ordering = 'account' THEN channel_name END COLLATE NOCASE ASC,
              home_sort_at_ms DESC, tweet_id DESC
-    LIMIT :limit OFFSET :offset
+    LIMIT :limit
 """
 
 @Dao
@@ -264,29 +253,14 @@ interface HomeReadDao {
         type: String, allPlatforms: Boolean, platforms: List<String>, allChannels: Boolean,
         channels: List<String>, allContent: Boolean, contentTypes: List<String>,
         starredOnly: Boolean, includeReposts: Boolean, includeTagged: Boolean, storyCutoffMs: Long,
-        ordering: String, limit: Int, offset: Int = 0,
+        ordering: String, limit: Int,
     ): Flow<List<HomeVideoRow>>
-
-    @RewriteQueriesToDropUnusedColumns
-    @Query(HOME_VIDEO_QUERY)
-    suspend fun videosPage(
-        type: String, allPlatforms: Boolean, platforms: List<String>, allChannels: Boolean,
-        channels: List<String>, allContent: Boolean, contentTypes: List<String>,
-        starredOnly: Boolean, includeReposts: Boolean, includeTagged: Boolean, storyCutoffMs: Long,
-        ordering: String, limit: Int, offset: Int,
-    ): List<HomeVideoRow>
 
     @RewriteQueriesToDropUnusedColumns
     @Query(HOME_FEED_QUERY)
     fun feedFlow(
         type: String, allPlatforms: Boolean, platforms: List<String>, allChannels: Boolean,
-        channels: List<String>, starredOnly: Boolean, ordering: String, limit: Int, offset: Int = 0,
+        channels: List<String>, allContent: Boolean, contentTypes: List<String>,
+        starredOnly: Boolean, ordering: String, limit: Int,
     ): Flow<List<HomeFeedRow>>
-
-    @RewriteQueriesToDropUnusedColumns
-    @Query(HOME_FEED_QUERY)
-    suspend fun feedPage(
-        type: String, allPlatforms: Boolean, platforms: List<String>, allChannels: Boolean,
-        channels: List<String>, starredOnly: Boolean, ordering: String, limit: Int, offset: Int,
-    ): List<HomeFeedRow>
 }

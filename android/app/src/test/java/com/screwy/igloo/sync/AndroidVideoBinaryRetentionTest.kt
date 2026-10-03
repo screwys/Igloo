@@ -1,5 +1,7 @@
 package com.screwy.igloo.sync
 
+import com.screwy.igloo.data.ContentPayloads
+import com.screwy.igloo.data.entity.StoredVideo
 import androidx.test.core.app.ApplicationProvider
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
@@ -84,8 +86,8 @@ class AndroidVideoBinaryRetentionTest {
 
     @Test
     fun oldAndTemporaryStreamsAreNotClaimableButAuxiliaryAssetsRemainClaimable() = runBlocking {
-        db.videoDao().upsert(video("sample_old_video", publishedAt = 0))
-        db.videoDao().upsert(video("sample_temp_video", publishedAt = nowMs, isTemp = true))
+        db.videoDao().upsertCaptured(video("sample_old_video", publishedAt = 0).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
+        db.videoDao().upsertCaptured(video("sample_temp_video", publishedAt = nowMs, isTemp = true).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         db.bookmarkDao().upsert(BookmarkEntity(videoId = "sample_old_video", bookmarkedAt = nowMs))
         db.feedLikeDao().upsert(FeedLikeEntity(tweetId = "sample_old_video", likedAt = nowMs))
         for (asset in listOf(
@@ -127,7 +129,7 @@ class AndroidVideoBinaryRetentionTest {
     @Test
     fun requestedOldPrimaryAssetBecomesClaimableAndCompletesAsManualDownload() = runBlocking {
         val videoId = "sample_old_video"
-        db.videoDao().upsert(video(videoId, publishedAt = 0))
+        db.videoDao().upsertCaptured(video(videoId, publishedAt = 0).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         db.androidSyncDao().upsertAsset(
             youtubeAsset(
                 assetId = "sample_video_audio",
@@ -178,7 +180,7 @@ class AndroidVideoBinaryRetentionTest {
     @Test
     fun pruningOldAutomaticStreamKeepsVideoAndAuxiliaryMetadata() = runBlocking {
         val videoId = "sample_old_video"
-        db.videoDao().upsert(video(videoId, publishedAt = 0))
+        db.videoDao().upsertCaptured(video(videoId, publishedAt = 0).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         db.bookmarkDao().upsert(BookmarkEntity(videoId = videoId, bookmarkedAt = nowMs))
         db.feedLikeDao().upsert(FeedLikeEntity(tweetId = videoId, likedAt = nowMs))
         db.androidSyncDao().upsertHead(
@@ -230,7 +232,7 @@ class AndroidVideoBinaryRetentionTest {
     fun temporaryVideoTombstoneRemovesAllAndroidStateDespiteSavedState() = runBlocking {
         val videoId = "sample_temp_video"
         val streamFile = syncFile("sample_temp_stream.mp4", "stream")
-        db.videoDao().upsert(video(videoId, publishedAt = nowMs, isTemp = true))
+        db.videoDao().upsertCaptured(video(videoId, publishedAt = nowMs, isTemp = true).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         db.androidSyncDao().upsertHead(
             AndroidSyncHeadEntity("video", videoId, "youtube", nowMs),
         )
@@ -315,7 +317,7 @@ class AndroidVideoBinaryRetentionTest {
     @Test
     fun deletingPrimaryStreamLeavesThumbnailAndSubtitleMetadataIntact() = runBlocking {
         val videoId = "sample_video"
-        db.videoDao().upsert(video(videoId, publishedAt = nowMs))
+        db.videoDao().upsertCaptured(video(videoId, publishedAt = nowMs).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         val streamFile = syncFile("sample_stream.mp4", "stream")
         val thumbnailFile = syncFile("sample_thumbnail.jpg", "image")
         val previewFile = syncFile("sample_preview.jpg", "image")

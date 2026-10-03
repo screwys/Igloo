@@ -1,6 +1,7 @@
 package com.screwy.igloo.outbox
 
-import androidx.room.withTransaction
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.dao.OutboxDao
@@ -147,32 +148,34 @@ class OutboxDrain(
     private suspend fun applyAcks(rows: List<OutboxEntity>): Boolean {
         if (rows.isEmpty()) return false
         var selectionExpanded = false
-        db.withTransaction {
-            val currentIds = outboxDao.rowsByIds(rows.map(OutboxEntity::id)).mapTo(hashSetOf()) { it.id }
-            val currentRows = rows.filter { it.id in currentIds }
-            selectionExpanded = currentRows.any(OutboxEntity::selectionWidening)
-            if (selectionExpanded) {
-                db.androidSyncDao().syncState()?.let { state ->
-                    if (!state.bootstrapRequired) {
-                        db.androidSyncDao()
-                            .upsertSyncState(state.copy(bootstrapRequired = true))
+        db.useWriterConnection { writer ->
+            writer.immediateTransaction {
+                val currentIds = outboxDao.rowsByIds(rows.map(OutboxEntity::id)).mapTo(hashSetOf()) { it.id }
+                val currentRows = rows.filter { it.id in currentIds }
+                selectionExpanded = currentRows.any(OutboxEntity::selectionWidening)
+                if (selectionExpanded) {
+                    db.androidSyncDao().syncState()?.let { state ->
+                        if (!state.bootstrapRequired) {
+                            db.androidSyncDao()
+                                .upsertSyncState(state.copy(bootstrapRequired = true))
+                        }
                     }
                 }
+                currentRows.filter(OutboxEntity::isClear).forEach { finalizeClear(it) }
+                currentRows
+                    .filterNot(OutboxEntity::isLogKind)
+                    .map(OutboxEntity::id)
+                    .takeIf(List<Long>::isNotEmpty)
+                    ?.let { outboxDao.completeAndDeleteAll(it) }
+                currentRows
+                    .filter(OutboxEntity::isLogKind)
+                    .map(OutboxEntity::id)
+                    .takeIf(List<Long>::isNotEmpty)
+                    ?.let {
+                        outboxDao.markAcked(it)
+                        outboxDao.trimAckedLogs(LOGS_INSPECTOR_CAP)
+                    }
             }
-            currentRows.filter(OutboxEntity::isClear).forEach { finalizeClear(it) }
-            currentRows
-                .filterNot(OutboxEntity::isLogKind)
-                .map(OutboxEntity::id)
-                .takeIf(List<Long>::isNotEmpty)
-                ?.let { outboxDao.completeAndDeleteAll(it) }
-            currentRows
-                .filter(OutboxEntity::isLogKind)
-                .map(OutboxEntity::id)
-                .takeIf(List<Long>::isNotEmpty)
-                ?.let {
-                    outboxDao.markAcked(it)
-                    outboxDao.trimAckedLogs(LOGS_INSPECTOR_CAP)
-                }
         }
         return selectionExpanded
     }
@@ -200,8 +203,10 @@ class OutboxDrain(
     }
 
     private suspend fun discardRejected(row: OutboxEntity, error: IglooError) {
-        db.withTransaction {
-            outboxDao.completeAndDelete(row.id)
+        db.useWriterConnection { writer ->
+            writer.immediateTransaction {
+                outboxDao.completeAndDelete(row.id)
+            }
         }
         if (!row.isLogKind()) {
             logger.error(

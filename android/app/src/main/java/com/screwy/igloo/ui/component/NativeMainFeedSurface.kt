@@ -187,10 +187,14 @@ internal fun NativeFeedSurface(
             val regionsVisible = showAccountRegion && accountRegionEnabled
             val notesVisible = showCommunityNotes && communityNotesEnabled
             fun FeedRow.withDisplayPreferences() = copy(
-                authorAccountRegion = authorAccountRegion.takeIf { regionsVisible },
-                quoteAuthorAccountRegion = quoteAuthorAccountRegion.takeIf { regionsVisible },
-                authorAccountDetailsJson = authorAccountDetailsJson.takeIf { regionsVisible },
-                quoteAuthorAccountDetailsJson = quoteAuthorAccountDetailsJson.takeIf { regionsVisible },
+                authorProfile = authorProfile?.copy(
+                    accountRegion = authorAccountRegion.takeIf { regionsVisible },
+                    accountDetailsJson = authorAccountDetailsJson.takeIf { regionsVisible },
+                ),
+                quoteProfile = quoteProfile?.copy(
+                    accountRegion = quoteAuthorAccountRegion.takeIf { regionsVisible },
+                    accountDetailsJson = quoteAuthorAccountDetailsJson.takeIf { regionsVisible },
+                ),
                 item = if (notesVisible) item else item.copy(communityNote = null, quoteCommunityNote = null),
             )
             if (regionsVisible && notesVisible) actionRows

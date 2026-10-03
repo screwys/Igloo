@@ -1,6 +1,7 @@
 package com.screwy.igloo.outbox
 
-import androidx.room.withTransaction
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.screwy.igloo.R
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.entity.BookmarkCategoryEntity
@@ -317,21 +318,22 @@ class OutboxDispatcher(
         if (ok == null)
             return Result.Rejected(IglooError.Malformed("create_category response parse failed"))
 
-        // Cascade provisional → real: update both tables in one tx.
-        db.withTransaction {
-            val catDao = db.bookmarkCategoryDao()
-            val bookmarksDao = db.bookmarkDao()
-            // `remapCategory` flips any bookmark currently pointing at the provisional id.
-            bookmarksDao.remapCategory(oldId = provisionalId, newId = ok.category_id)
-            catDao.delete(provisionalId)
-            catDao.upsert(
-                BookmarkCategoryEntity(
-                    categoryId = ok.category_id,
-                    name = row.payload().string("name").orEmpty(),
-                    archivePath = null,
-                    createdAt = row.createdAtMs,
+        // Replace the provisional category in both tables together.
+        db.useWriterConnection { writer ->
+            writer.immediateTransaction {
+                val catDao = db.bookmarkCategoryDao()
+                val bookmarksDao = db.bookmarkDao()
+                bookmarksDao.remapCategory(oldId = provisionalId, newId = ok.category_id)
+                catDao.delete(provisionalId)
+                catDao.upsert(
+                    BookmarkCategoryEntity(
+                        categoryId = ok.category_id,
+                        name = row.payload().string("name").orEmpty(),
+                        archivePath = null,
+                        createdAt = row.createdAtMs,
+                    )
                 )
-            )
+            }
         }
         return Result.Ack
     }

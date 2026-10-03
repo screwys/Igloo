@@ -1,5 +1,8 @@
 package com.screwy.igloo.feed
 
+import com.screwy.igloo.data.ContentPayloads
+import com.screwy.igloo.data.entity.StoredChannel
+import com.screwy.igloo.data.entity.StoredFeedItem
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.RoomTestSupport
 import com.screwy.igloo.data.entity.ChannelEntity
@@ -35,16 +38,13 @@ class ThreadAttachmentTest {
     @Test
     fun attachThreadChains_setsChainOnReplyLeafs() = runBlocking {
         db.channelDao()
-            .upsert(
-                ChannelEntity(
+            .upsertCaptured(ChannelEntity(
                     channelId = "twitter_sample_alpha",
                     name = "Alpha",
                     platform = "twitter",
-                )
-            )
+                ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.feedItemDao()
-            .upsert(
-                listOf(
+            .upsertCaptured(listOf(
                     FeedItemEntity(tweetId = "t1", channelId = "twitter_sample_alpha"),
                     FeedItemEntity(
                         tweetId = "t2",
@@ -52,8 +52,7 @@ class ThreadAttachmentTest {
                         isReply = true,
                         replyToStatus = "t1",
                     ),
-                )
-            )
+                ).map { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
 
         val rows = db.feedReadDao().feedFlow(limit = 10).first()
         val threaded = attachThreadChains(db.feedReadDao(), rows)
@@ -66,8 +65,7 @@ class ThreadAttachmentTest {
     @Test
     fun attachThreadChains_collapsesSiblingReplyBranchesToFirstRankedLeaf() = runBlocking {
         db.channelDao()
-            .upsert(
-                listOf(
+            .upsertCaptured(listOf(
                     ChannelEntity(
                         channelId = "twitter_sample_alpha",
                         name = "Alpha",
@@ -83,11 +81,9 @@ class ThreadAttachmentTest {
                         name = "Gamma",
                         platform = "twitter",
                     ),
-                )
-            )
+                ).map { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.feedItemDao()
-            .upsert(
-                listOf(
+            .upsertCaptured(listOf(
                     FeedItemEntity(
                         tweetId = "root",
                         channelId = "twitter_sample_alpha",
@@ -118,8 +114,7 @@ class ThreadAttachmentTest {
                         isReply = true,
                         replyToStatus = "parent_b",
                     ),
-                )
-            )
+                ).map { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.feedRankDao()
             .upsert(
                 listOf(
@@ -141,14 +136,12 @@ class ThreadAttachmentTest {
     @Test
     fun attachThreadChains_keepsNonReplyRows() = runBlocking {
         db.channelDao()
-            .upsert(
-                ChannelEntity(
+            .upsertCaptured(ChannelEntity(
                     channelId = "twitter_sample_alpha",
                     name = "Alpha",
                     platform = "twitter",
-                )
-            )
-        db.feedItemDao().upsert(FeedItemEntity(tweetId = "t1", channelId = "twitter_sample_alpha"))
+                ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
+        db.feedItemDao().upsertCaptured(FeedItemEntity(tweetId = "t1", channelId = "twitter_sample_alpha").let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
 
         val rows = db.feedReadDao().feedFlow(limit = 10).first()
         val threaded = attachThreadChains(db.feedReadDao(), rows)
@@ -161,24 +154,20 @@ class ThreadAttachmentTest {
     @Test
     fun attachThreadChains_matchesServerFiftyParentDepthLimit() = runBlocking {
         db.channelDao()
-            .upsert(
-                ChannelEntity(
+            .upsertCaptured(ChannelEntity(
                     channelId = "twitter_sample_alpha",
                     name = "Alpha",
                     platform = "twitter",
-                )
-            )
+                ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.feedItemDao()
-            .upsert(
-                (0..50).map { depth ->
+            .upsertCaptured((0..50).map { depth ->
                     FeedItemEntity(
                         tweetId = "sample_thread_$depth",
                         channelId = "twitter_sample_alpha",
                         isReply = depth > 0,
                         replyToStatus = if (depth > 0) "sample_thread_${depth - 1}" else "",
                     )
-                }
-            )
+                }.map { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
 
         val leaf = db.feedReadDao().feedRowsByTweetIdsFlow(listOf("sample_thread_50")).first()
         val threaded = attachThreadChains(db.feedReadDao(), leaf)
@@ -192,22 +181,18 @@ class ThreadAttachmentTest {
     @Test
     fun attachThreadChains_replyWithMissingParentHasEmptyChain() = runBlocking {
         db.channelDao()
-            .upsert(
-                ChannelEntity(
+            .upsertCaptured(ChannelEntity(
                     channelId = "twitter_sample_alpha",
                     name = "Alpha",
                     platform = "twitter",
-                )
-            )
+                ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.feedItemDao()
-            .upsert(
-                FeedItemEntity(
+            .upsertCaptured(FeedItemEntity(
                     tweetId = "t1",
                     channelId = "twitter_sample_alpha",
                     isReply = true,
                     replyToStatus = "9999",
-                )
-            )
+                ).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
 
         val rows = db.feedReadDao().feedFlow(limit = 10).first()
         val threaded = attachThreadChains(db.feedReadDao(), rows)

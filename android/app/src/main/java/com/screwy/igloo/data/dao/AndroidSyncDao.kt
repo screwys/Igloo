@@ -33,6 +33,39 @@ data class AndroidSyncBucketStats(
 
 @Dao
 interface AndroidSyncDao {
+    @Query("DELETE FROM feed_likes WHERE NOT EXISTS (SELECT 1 FROM android_sync_heads h WHERE h.owner_kind = 'feed_like' AND h.owner_id = feed_likes.tweet_id)")
+    suspend fun deleteHeadlessFeedLikes()
+
+    @Query("DELETE FROM bookmarks WHERE NOT EXISTS (SELECT 1 FROM android_sync_heads h WHERE h.owner_kind = 'bookmark' AND h.owner_id = bookmarks.video_id)")
+    suspend fun deleteHeadlessBookmarks()
+
+    @Query("DELETE FROM bookmark_categories WHERE NOT EXISTS (SELECT 1 FROM android_sync_heads h WHERE h.owner_kind = 'bookmark_category' AND h.owner_id = CAST(bookmark_categories.category_id AS TEXT))")
+    suspend fun deleteHeadlessBookmarkCategories()
+
+    @Query("DELETE FROM feed_seen WHERE NOT EXISTS (SELECT 1 FROM android_sync_heads h WHERE h.owner_kind = 'feed_seen' AND h.owner_id = feed_seen.tweet_id)")
+    suspend fun deleteHeadlessFeedSeen()
+
+    @Query("DELETE FROM moment_views WHERE NOT EXISTS (SELECT 1 FROM android_sync_heads h WHERE h.owner_kind = 'moment_view' AND h.owner_id = moment_views.video_id)")
+    suspend fun deleteHeadlessMomentViews()
+
+    @Query("DELETE FROM watch_history WHERE NOT EXISTS (SELECT 1 FROM android_sync_heads h WHERE h.owner_kind = 'watch_history' AND h.owner_id = watch_history.video_id)")
+    suspend fun deleteHeadlessWatchHistory()
+
+    @Query("DELETE FROM muted_channels WHERE NOT EXISTS (SELECT 1 FROM android_sync_heads h WHERE h.owner_kind = 'muted_channel' AND h.owner_id = muted_channels.channel_id)")
+    suspend fun deleteHeadlessMutedChannels()
+
+    @Query("DELETE FROM channel_follows WHERE NOT EXISTS (SELECT 1 FROM android_sync_heads h WHERE h.owner_kind = 'channel_follow' AND h.owner_id = channel_follows.channel_id)")
+    suspend fun deleteHeadlessChannelFollows()
+
+    @Query("DELETE FROM channel_stars WHERE NOT EXISTS (SELECT 1 FROM android_sync_heads h WHERE h.owner_kind = 'channel_star' AND h.owner_id = channel_stars.channel_id)")
+    suspend fun deleteHeadlessChannelStars()
+
+    @Query("DELETE FROM channel_settings WHERE NOT EXISTS (SELECT 1 FROM android_sync_heads h WHERE h.owner_kind = 'channel_setting' AND h.owner_id = channel_settings.channel_id)")
+    suspend fun deleteHeadlessChannelSettings()
+
+    @Query("DELETE FROM moments_cursors WHERE scope != 'stories' AND NOT EXISTS (SELECT 1 FROM android_sync_heads h WHERE h.owner_kind = 'moments_cursor' AND h.owner_id = moments_cursors.scope)")
+    suspend fun deleteHeadlessMomentsCursors()
+
     @Query("SELECT * FROM android_sync_state WHERE id = 1")
     suspend fun syncState(): AndroidSyncStateEntity?
 

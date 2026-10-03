@@ -1,6 +1,7 @@
 package com.screwy.igloo.sync
 
-import androidx.room.withTransaction
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.dao.AndroidSyncDao
@@ -8,6 +9,9 @@ import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
 import com.screwy.igloo.data.entity.AndroidSyncHeadEntity
 import com.screwy.igloo.data.entity.AndroidSyncStateEntity
 import com.screwy.igloo.data.entity.VideoEntity
+import com.screwy.igloo.data.entity.StoredVideo
+import com.screwy.igloo.data.entity.StoredChannel
+import com.screwy.igloo.data.entity.StoredChannelProfile
 import com.screwy.igloo.log.Logger
 import com.screwy.igloo.media.ForegroundPromoter
 import com.screwy.igloo.net.AndroidSyncApi
@@ -134,22 +138,24 @@ class AndroidSyncMirror(
                         ) {
                             "priority state response contained a non-state owner"
                         }
-                        val pageNeedsMetadata = db.withTransaction {
-                            val pendingRows = db.outboxDao().pendingRows()
-                            val overlay = PendingMutationOverlay.capture(pendingRows)
-                            val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
-                            val selectionExpanded = expandsSelection(fetched.changes)
-                            fetched.changes.forEach { applyThinState(it, deletedAssets) }
-                            overlay.restore(db)
-                            if (selectionExpanded) markBootstrapRequired()
-                            db.preferenceDao().put(
-                                PRIORITY_STATE_CURSOR_KEY,
-                                fetched.next_cursor,
-                                serverNowMsProvider(),
-                            )
-                            selectionExpanded ||
-                                fetched.changes.any(AndroidSyncChangeDto::protectsContent) ||
-                                dao.syncState()?.bootstrapRequired == true
+                        val pageNeedsMetadata = db.useWriterConnection { connection ->
+                            connection.immediateTransaction {
+                                val pendingRows = db.outboxDao().pendingRows()
+                                val overlay = PendingMutationOverlay.capture(pendingRows)
+                                val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
+                                val selectionExpanded = expandsSelection(fetched.changes)
+                                fetched.changes.forEach { applyThinState(it, deletedAssets) }
+                                overlay.restore(db)
+                                if (selectionExpanded) markBootstrapRequired()
+                                db.preferenceDao().put(
+                                    PRIORITY_STATE_CURSOR_KEY,
+                                    fetched.next_cursor,
+                                    serverNowMsProvider(),
+                                )
+                                selectionExpanded ||
+                                    fetched.changes.any(AndroidSyncChangeDto::protectsContent) ||
+                                    dao.syncState()?.bootstrapRequired == true
+                            }
                         }
                         PriorityPageResult(fetched, pageNeedsMetadata)
                     }
@@ -185,12 +191,14 @@ class AndroidSyncMirror(
             metadataPageMutex.withLock {
                 val response = api.reconcile(owners)
                 response.validate(owners)
-                db.withTransaction {
-                    db.outboxDao().completeAndDeleteAll(rejected.map(OutboxRejectedMutation::rowId))
-                    val overlay = PendingMutationOverlay.capture(db.outboxDao().pendingRows())
-                    val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
-                    response.changes.forEach { applyThinState(it, deletedAssets) }
-                    overlay.restore(db)
+                db.useWriterConnection { connection ->
+                    connection.immediateTransaction {
+                        db.outboxDao().completeAndDeleteAll(rejected.map(OutboxRejectedMutation::rowId))
+                        val overlay = PendingMutationOverlay.capture(db.outboxDao().pendingRows())
+                        val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
+                        response.changes.forEach { applyThinState(it, deletedAssets) }
+                        overlay.restore(db)
+                    }
                 }
             }
         }
@@ -234,18 +242,20 @@ class AndroidSyncMirror(
 
     private suspend fun beginBootstrap(retention: AndroidSyncRetentionRequest) {
         metadataPageMutex.withLock {
-            db.withTransaction {
-                dao.markHeadsUnseen()
-                dao.upsertSyncState(
-                    AndroidSyncStateEntity(
-                        mode = MODE_BOOTSTRAP,
-                        cursor = "",
-                        feedDays = retention.feedDays,
-                        youtubeDays = retention.youtubeDays,
-                        momentsDays = retention.momentsDays,
-                        storyHours = retention.storyHours,
+            db.useWriterConnection { connection ->
+                connection.immediateTransaction {
+                    dao.markHeadsUnseen()
+                    dao.upsertSyncState(
+                        AndroidSyncStateEntity(
+                            mode = MODE_BOOTSTRAP,
+                            cursor = "",
+                            feedDays = retention.feedDays,
+                            youtubeDays = retention.youtubeDays,
+                            momentsDays = retention.momentsDays,
+                            storyHours = retention.storyHours,
+                        )
                     )
-                )
+                }
             }
         }
     }
@@ -284,139 +294,141 @@ class AndroidSyncMirror(
         retention: AndroidSyncRetentionRequest,
         bootstrap: Boolean,
     ): List<AndroidSyncAssetEntity> =
-        db.withTransaction {
-            val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
-            val pendingRows = db.outboxDao().pendingRows()
-            val overlay = PendingMutationOverlay.capture(pendingRows)
+        db.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
+                val pendingRows = db.outboxDao().pendingRows()
+                val overlay = PendingMutationOverlay.capture(pendingRows)
 
-            val selectionExpanded = !bootstrap && expandsSelection(page.changes)
+                val selectionExpanded = !bootstrap && expandsSelection(page.changes)
 
-            page.changes.filter(AndroidSyncChangeDto::isThinState).forEach { change ->
-                applyThinState(change, deletedAssets)
-            }
-            overlay.restore(db)
-
-            val protectedContent =
-                if (page.changes.any { it.isPrimaryContent() && it.operation == OP_DELETE }) {
-                    dao.protectedContentIds().toHashSet()
-                } else {
-                    emptySet()
+                page.changes.filter(AndroidSyncChangeDto::isThinState).forEach { change ->
+                    applyThinState(change, deletedAssets)
                 }
-            val primaryChanges = page.changes.filter(AndroidSyncChangeDto::isPrimaryContent)
-            val feedUpserts =
-                primaryChanges.filter { it.owner_kind == "feed" && it.operation == OP_UPSERT }
-            if (feedUpserts.isNotEmpty()) {
-                db.feedItemDao().upsert(feedUpserts.map(AndroidSyncChangeDecoder::feed))
-                dao.upsertHeads(feedUpserts.map(AndroidSyncChangeDto::toHead))
-            }
-            val videoUpserts =
-                primaryChanges.filter { it.owner_kind == "video" && it.operation == OP_UPSERT }
-            if (videoUpserts.isNotEmpty()) applyVideoBatch(videoUpserts)
-            primaryChanges.filterNot {
-                it.operation == OP_UPSERT && (it.owner_kind == "feed" || it.owner_kind == "video")
-            }.forEach { change ->
-                applyPrimary(change, protectedContent, deletedAssets)
-            }
+                overlay.restore(db)
 
-            val retweetChanges = page.changes.filter { it.owner_kind == "retweet_sources" }
-            val retweetUpserts = retweetChanges.filter { it.operation == OP_UPSERT }
-            if (retweetUpserts.isNotEmpty()) {
-                val hashes = retweetUpserts.map(AndroidSyncChangeDto::owner_id)
-                db.retweetSourceDao().deleteForContentHashes(hashes)
-                val rows = retweetUpserts.flatMap(AndroidSyncChangeDecoder::retweetSources)
-                if (rows.isNotEmpty()) db.retweetSourceDao().upsert(rows)
-                dao.upsertHeads(retweetUpserts.map(AndroidSyncChangeDto::toHead))
-            }
-            retweetChanges.filter { it.operation == OP_DELETE }.forEach { change ->
-                applySecondary(change, emptySet(), emptySet(), false, deletedAssets)
-            }
-
-            val protectedChannels = emptySet<String>()
-            val secondaryChanges =
-                page.changes
-                .filterNot {
-                    it.isThinState() || it.isPrimaryContent() ||
-                        it.owner_kind == "retweet_sources" || it.owner_kind == "asset"
+                val protectedContent =
+                    if (page.changes.any { it.isPrimaryContent() && it.operation == OP_DELETE }) {
+                        dao.protectedContentIds().toHashSet()
+                    } else {
+                        emptySet()
+                    }
+                val primaryChanges = page.changes.filter(AndroidSyncChangeDto::isPrimaryContent)
+                val feedUpserts =
+                    primaryChanges.filter { it.owner_kind == "feed" && it.operation == OP_UPSERT }
+                if (feedUpserts.isNotEmpty()) {
+                    db.feedItemDao().upsertCaptured(feedUpserts.map(AndroidSyncChangeDecoder::captureFeed))
+                    dao.upsertHeads(feedUpserts.map(AndroidSyncChangeDto::toHead))
                 }
-            val channelUpserts =
-                secondaryChanges.filter {
+                val videoUpserts =
+                    primaryChanges.filter { it.owner_kind == "video" && it.operation == OP_UPSERT }
+                if (videoUpserts.isNotEmpty()) applyVideoBatch(videoUpserts)
+                primaryChanges.filterNot {
+                    it.operation == OP_UPSERT && (it.owner_kind == "feed" || it.owner_kind == "video")
+                }.forEach { change ->
+                    applyPrimary(change, protectedContent, deletedAssets)
+                }
+
+                val retweetChanges = page.changes.filter { it.owner_kind == "retweet_sources" }
+                val retweetUpserts = retweetChanges.filter { it.operation == OP_UPSERT }
+                if (retweetUpserts.isNotEmpty()) {
+                    val hashes = retweetUpserts.map(AndroidSyncChangeDto::owner_id)
+                    db.retweetSourceDao().deleteForContentHashes(hashes)
+                    val rows = retweetUpserts.flatMap(AndroidSyncChangeDecoder::retweetSources)
+                    if (rows.isNotEmpty()) db.retweetSourceDao().upsert(rows)
+                    dao.upsertHeads(retweetUpserts.map(AndroidSyncChangeDto::toHead))
+                }
+                retweetChanges.filter { it.operation == OP_DELETE }.forEach { change ->
+                    applySecondary(change, emptySet(), emptySet(), false, deletedAssets)
+                }
+
+                val protectedChannels = emptySet<String>()
+                val secondaryChanges =
+                    page.changes
+                    .filterNot {
+                        it.isThinState() || it.isPrimaryContent() ||
+                            it.owner_kind == "retweet_sources" || it.owner_kind == "asset"
+                    }
+                val channelUpserts =
+                    secondaryChanges.filter {
+                        it.owner_kind == "channel" && it.operation == OP_UPSERT
+                    }
+                if (channelUpserts.isNotEmpty()) applyChannelBatch(channelUpserts)
+                secondaryChanges.filterNot {
                     it.owner_kind == "channel" && it.operation == OP_UPSERT
-                }
-            if (channelUpserts.isNotEmpty()) applyChannelBatch(channelUpserts)
-            secondaryChanges.filterNot {
-                it.owner_kind == "channel" && it.operation == OP_UPSERT
-            }.forEach { change ->
-                    applySecondary(change, protectedChannels, emptySet(), bootstrap, deletedAssets)
-                }
+                }.forEach { change ->
+                        applySecondary(change, protectedChannels, emptySet(), bootstrap, deletedAssets)
+                    }
 
-            val retainedAssetOwners = emptySet<String>()
-            val assetChanges = page.changes.filter { it.owner_kind == "asset" }
-            val assetUpserts = assetChanges.filter { it.operation == OP_UPSERT }
-            if (assetUpserts.isNotEmpty()) {
-                val decoded = assetUpserts.map { it to AndroidSyncChangeDecoder.asset(it) }
-                if (decoded.isNotEmpty()) {
-                    val existing =
-                        dao.assets(decoded.map { (_, asset) -> asset.asset_id })
-                            .associateBy(AndroidSyncAssetEntity::assetId)
-                    val nextRows =
-                        decoded.map { (_, asset) ->
-                            asset.validate()
-                            val previous = existing[asset.asset_id]
-                            asset.toEntity(previous).also { next ->
-                                if (previous?.localPath != null && next.localPath == null) {
-                                    deletedAssets += previous
+                val retainedAssetOwners = emptySet<String>()
+                val assetChanges = page.changes.filter { it.owner_kind == "asset" }
+                val assetUpserts = assetChanges.filter { it.operation == OP_UPSERT }
+                if (assetUpserts.isNotEmpty()) {
+                    val decoded = assetUpserts.map { it to AndroidSyncChangeDecoder.asset(it) }
+                    if (decoded.isNotEmpty()) {
+                        val existing =
+                            dao.assets(decoded.map { (_, asset) -> asset.asset_id })
+                                .associateBy(AndroidSyncAssetEntity::assetId)
+                        val nextRows =
+                            decoded.map { (_, asset) ->
+                                asset.validate()
+                                val previous = existing[asset.asset_id]
+                                asset.toEntity(previous).also { next ->
+                                    if (previous?.localPath != null && next.localPath == null) {
+                                        deletedAssets += previous
+                                    }
                                 }
                             }
-                        }
-                    dao.upsertAssets(nextRows)
-                    dao.upsertHeads(decoded.map { (change, _) -> change.toHead() })
+                        dao.upsertAssets(nextRows)
+                        dao.upsertHeads(decoded.map { (change, _) -> change.toHead() })
+                    }
                 }
-            }
-            assetChanges.filter { it.operation == OP_DELETE }.forEach { change ->
-                applySecondary(change, protectedChannels, retainedAssetOwners, bootstrap, deletedAssets)
-            }
-
-            val cleanupRequired =
-                state.cleanupRequired ||
-                    (!bootstrap &&
-                        page.changes.any { it.operation == OP_DELETE || it.replacesDependencies() })
-            if (bootstrap) {
-                if (page.end_of_stream) {
-                    sweepBootstrap(deletedAssets)
-                    sweepHeadlessThinState()
-                    overlay.restore(db)
-                    cleanupOrphans(deletedAssets, sweepHeadlessContent = true)
+                assetChanges.filter { it.operation == OP_DELETE }.forEach { change ->
+                    applySecondary(change, protectedChannels, retainedAssetOwners, bootstrap, deletedAssets)
                 }
-            } else if (page.end_of_stream && cleanupRequired) {
-                cleanupOrphans(
-                    deletedAssets,
-                    sweepHeadlessContent = true,
-                )
-            }
 
-            val durableReplayRequired = dao.syncState()?.bootstrapRequired == true
-            val nextState =
-                if (bootstrap && page.end_of_stream) {
-                    state.copy(
-                        mode = MODE_CHANGES,
-                        cursor = page.next_cursor,
-                        bootstrapRequired = durableReplayRequired,
-                        cleanupRequired = false,
-                    )
-                } else {
-                    state.copy(
-                        cursor = page.next_cursor,
-                        feedDays = retention.feedDays,
-                        youtubeDays = retention.youtubeDays,
-                        momentsDays = retention.momentsDays,
-                        storyHours = retention.storyHours,
-                        bootstrapRequired =
-                            state.bootstrapRequired || durableReplayRequired || selectionExpanded,
-                        cleanupRequired = if (page.end_of_stream) false else cleanupRequired,
+                val cleanupRequired =
+                    state.cleanupRequired ||
+                        (!bootstrap &&
+                            page.changes.any { it.operation == OP_DELETE || it.replacesDependencies() })
+                if (bootstrap) {
+                    if (page.end_of_stream) {
+                        sweepBootstrap(deletedAssets)
+                        sweepHeadlessThinState()
+                        overlay.restore(db)
+                        cleanupOrphans(deletedAssets, sweepHeadlessContent = true)
+                    }
+                } else if (page.end_of_stream && cleanupRequired) {
+                    cleanupOrphans(
+                        deletedAssets,
+                        sweepHeadlessContent = true,
                     )
                 }
-            if (nextState != state) dao.upsertSyncState(nextState)
-            deletedAssets
+
+                val durableReplayRequired = dao.syncState()?.bootstrapRequired == true
+                val nextState =
+                    if (bootstrap && page.end_of_stream) {
+                        state.copy(
+                            mode = MODE_CHANGES,
+                            cursor = page.next_cursor,
+                            bootstrapRequired = durableReplayRequired,
+                            cleanupRequired = false,
+                        )
+                    } else {
+                        state.copy(
+                            cursor = page.next_cursor,
+                            feedDays = retention.feedDays,
+                            youtubeDays = retention.youtubeDays,
+                            momentsDays = retention.momentsDays,
+                            storyHours = retention.storyHours,
+                            bootstrapRequired =
+                                state.bootstrapRequired || durableReplayRequired || selectionExpanded,
+                            cleanupRequired = if (page.end_of_stream) false else cleanupRequired,
+                        )
+                    }
+                if (nextState != state) dao.upsertSyncState(nextState)
+                deletedAssets
+            }
         }
 
     private suspend fun expandsSelection(changes: List<AndroidSyncChangeDto>): Boolean {
@@ -475,21 +487,18 @@ class AndroidSyncMirror(
         dao.deleteUnseenHeads()
     }
 
-    private fun sweepHeadlessThinState() {
-        val sqlite = db.openHelper.writableDatabase
-        MIRRORED_THIN_STATE.forEach { owner ->
-            sqlite.execSQL(
-                """
-                DELETE FROM ${owner.table}
-                WHERE ${owner.predicate}
-                  AND NOT EXISTS (
-                      SELECT 1 FROM android_sync_heads h
-                      WHERE h.owner_kind = '${owner.kind}'
-                        AND h.owner_id = ${owner.idExpression}
-                  )
-                """.trimIndent()
-            )
-        }
+    private suspend fun sweepHeadlessThinState() {
+        dao.deleteHeadlessFeedLikes()
+        dao.deleteHeadlessBookmarks()
+        dao.deleteHeadlessBookmarkCategories()
+        dao.deleteHeadlessFeedSeen()
+        dao.deleteHeadlessMomentViews()
+        dao.deleteHeadlessWatchHistory()
+        dao.deleteHeadlessMutedChannels()
+        dao.deleteHeadlessChannelFollows()
+        dao.deleteHeadlessChannelStars()
+        dao.deleteHeadlessChannelSettings()
+        dao.deleteHeadlessMomentsCursors()
     }
 
     private suspend fun applyThinState(
@@ -552,7 +561,7 @@ class AndroidSyncMirror(
             return
         }
         when (change.owner_kind) {
-            "feed" -> applyFeed(AndroidSyncChangeDecoder.feed(change))
+            "feed" -> applyFeed(change)
             "video" -> applyVideo(AndroidSyncChangeDecoder.video(change))
         }
         dao.upsertHead(change.toHead())
@@ -625,12 +634,12 @@ class AndroidSyncMirror(
         if (accepted) dao.upsertHead(change.toHead())
     }
 
-    private suspend fun applyFeed(row: com.screwy.igloo.data.entity.FeedItemEntity) {
-        db.feedItemDao().upsert(row)
+    private suspend fun applyFeed(change: AndroidSyncChangeDto) {
+        db.feedItemDao().upsertCaptured(AndroidSyncChangeDecoder.captureFeed(change))
     }
 
     private suspend fun applyVideo(decoded: AndroidVideoUpsert) {
-        db.videoDao().upsert(decoded.item)
+        db.videoDao().upsertCaptured(StoredVideo.from(decoded.item, decoded.ownerPayloadJson))
         val id = decoded.item.videoId
         db.videoCommentDao().deleteForVideo(id)
         db.videoRepostSourceDao().deleteForVideo(id)
@@ -646,7 +655,7 @@ class AndroidSyncMirror(
     private suspend fun applyVideoBatch(changes: List<AndroidSyncChangeDto>) {
         val rows = changes.map(AndroidSyncChangeDecoder::video)
         val videoIds = rows.map { it.item.videoId }
-        db.videoDao().upsert(rows.map { it.item })
+        db.videoDao().upsertCaptured(rows.map { StoredVideo.from(it.item, it.ownerPayloadJson) })
         db.videoCommentDao().deleteForVideos(videoIds)
         db.videoRepostSourceDao().deleteForVideos(videoIds)
         db.sponsorBlockSegmentDao().deleteForVideos(videoIds)
@@ -663,24 +672,24 @@ class AndroidSyncMirror(
     }
 
     private suspend fun applyChannelBundle(decoded: AndroidChannelUpsert) {
-        decoded.channel?.let { db.channelDao().upsert(it) }
+        decoded.channel?.let { db.channelDao().upsertCaptured(StoredChannel.from(it, decoded.ownerPayloadJson)) }
         if (decoded.profile == null) {
             decoded.channel?.let { db.channelProfileDao().delete(it.channelId) }
         } else {
-            db.channelProfileDao().upsert(decoded.profile)
+            db.channelProfileDao().upsertCaptured(StoredChannelProfile.from(decoded.profile, decoded.ownerPayloadJson))
         }
     }
 
     private suspend fun applyChannelBatch(changes: List<AndroidSyncChangeDto>) {
         val rows = changes.map(AndroidSyncChangeDecoder::channel)
-        val channels = rows.mapNotNull { it.channel }
-        val profiles = rows.mapNotNull { it.profile }
+        val channels = rows.mapNotNull { row -> row.channel?.let { StoredChannel.from(it, row.ownerPayloadJson) } }
+        val profiles = rows.mapNotNull { row -> row.profile?.let { StoredChannelProfile.from(it, row.ownerPayloadJson) } }
         val removedProfiles =
             rows.filter { it.channel != null && it.profile == null }
                 .map { requireNotNull(it.channel).channelId }
-        if (channels.isNotEmpty()) db.channelDao().upsert(channels)
+        if (channels.isNotEmpty()) db.channelDao().upsertCaptured(channels)
         if (removedProfiles.isNotEmpty()) db.channelProfileDao().deleteByIds(removedProfiles)
-        if (profiles.isNotEmpty()) db.channelProfileDao().upsert(profiles)
+        if (profiles.isNotEmpty()) db.channelProfileDao().upsertCaptured(profiles)
         dao.upsertHeads(changes.map(AndroidSyncChangeDto::toHead))
     }
 
@@ -801,64 +810,66 @@ class AndroidSyncMirror(
         sweepHeadlessContent: Boolean,
     ) {
         val deleted =
-            db.withTransaction {
-                val now = serverNowMsProvider()
-                val expired =
-                    dao.expiredHeads(
-                        retention.feedDays,
-                        now - retention.feedDays.daysMs(),
-                        retention.youtubeDays,
-                        now - retention.youtubeDays.daysMs(),
-                        retention.momentsDays,
-                        now - retention.momentsDays.daysMs(),
-                        retention.storyHours,
-                        now - retention.storyHours.hoursMs(),
-                    )
-                val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
+            db.useWriterConnection { connection ->
+                connection.immediateTransaction {
+                    val now = serverNowMsProvider()
+                    val expired =
+                        dao.expiredHeads(
+                            retention.feedDays,
+                            now - retention.feedDays.daysMs(),
+                            retention.youtubeDays,
+                            now - retention.youtubeDays.daysMs(),
+                            retention.momentsDays,
+                            now - retention.momentsDays.daysMs(),
+                            retention.storyHours,
+                            now - retention.storyHours.hoursMs(),
+                        )
+                    val deletedAssets = mutableListOf<AndroidSyncAssetEntity>()
 
-                if (expired.isNotEmpty()) {
-                    val protectedContent = dao.protectedContentIds().toHashSet()
-                    val protectedChannels = dao.protectedChannelIds().toHashSet()
-                    val retainedAssetOwners = dao.retainedAssetOwnerIds().toHashSet()
-                    expired.forEach { head ->
-                        if (removeAndroidLocalCursorHead(head)) return@forEach
-                        deleteOwner(
-                            ownerKind = head.ownerKind,
-                            ownerId = head.ownerId,
-                            protectedContent = protectedContent,
-                            protectedChannels = protectedChannels,
-                            retainedAssetOwners = retainedAssetOwners,
-                            deletedAssets = deletedAssets,
+                    if (expired.isNotEmpty()) {
+                        val protectedContent = dao.protectedContentIds().toHashSet()
+                        val protectedChannels = dao.protectedChannelIds().toHashSet()
+                        val retainedAssetOwners = dao.retainedAssetOwnerIds().toHashSet()
+                        expired.forEach { head ->
+                            if (removeAndroidLocalCursorHead(head)) return@forEach
+                            deleteOwner(
+                                ownerKind = head.ownerKind,
+                                ownerId = head.ownerId,
+                                protectedContent = protectedContent,
+                                protectedChannels = protectedChannels,
+                                retainedAssetOwners = retainedAssetOwners,
+                                deletedAssets = deletedAssets,
+                            )
+                        }
+                    }
+                    val expiredPrimaryAssets = dao.expiredAutomaticYoutubeVideoPrimaryAssets(youtubeCutoffMs(retention))
+                    if (expiredPrimaryAssets.isNotEmpty()) {
+                        dao.resetVerifiedLocalPaths(expiredPrimaryAssets.map(AndroidSyncAssetEntity::assetId))
+                        deletedAssets += expiredPrimaryAssets
+                    }
+                    if (expired.isNotEmpty() || sweepHeadlessContent) {
+                        cleanupOrphans(deletedAssets, sweepHeadlessContent)
+                    }
+                    dao.syncState()
+                        ?.takeIf {
+                            it.mode == MODE_CHANGES &&
+                                (it.feedDays != retention.feedDays ||
+                                    it.youtubeDays != retention.youtubeDays ||
+                                    it.momentsDays != retention.momentsDays ||
+                                    it.storyHours != retention.storyHours)
+                        }
+                        ?.let {
+                        dao.upsertSyncState(
+                            it.copy(
+                                feedDays = retention.feedDays,
+                                youtubeDays = retention.youtubeDays,
+                                momentsDays = retention.momentsDays,
+                                storyHours = retention.storyHours,
+                            )
                         )
                     }
+                    deletedAssets
                 }
-                val expiredPrimaryAssets = dao.expiredAutomaticYoutubeVideoPrimaryAssets(youtubeCutoffMs(retention))
-                if (expiredPrimaryAssets.isNotEmpty()) {
-                    dao.resetVerifiedLocalPaths(expiredPrimaryAssets.map(AndroidSyncAssetEntity::assetId))
-                    deletedAssets += expiredPrimaryAssets
-                }
-                if (expired.isNotEmpty() || sweepHeadlessContent) {
-                    cleanupOrphans(deletedAssets, sweepHeadlessContent)
-                }
-                dao.syncState()
-                    ?.takeIf {
-                        it.mode == MODE_CHANGES &&
-                            (it.feedDays != retention.feedDays ||
-                                it.youtubeDays != retention.youtubeDays ||
-                                it.momentsDays != retention.momentsDays ||
-                                it.storyHours != retention.storyHours)
-                    }
-                    ?.let {
-                    dao.upsertSyncState(
-                        it.copy(
-                            feedDays = retention.feedDays,
-                            youtubeDays = retention.youtubeDays,
-                            momentsDays = retention.momentsDays,
-                            storyHours = retention.storyHours,
-                        )
-                    )
-                }
-                deletedAssets
             }
         deleteFiles(deleted)
     }
@@ -963,29 +974,6 @@ class AndroidSyncMirror(
                 "instagram_include_tagged_default",
                 "include_reposts_default",
             )
-        val MIRRORED_THIN_STATE =
-            listOf(
-                MirroredThinState("feed_like", "feed_likes", "feed_likes.tweet_id"),
-                MirroredThinState("bookmark", "bookmarks", "bookmarks.video_id"),
-                MirroredThinState(
-                    "bookmark_category",
-                    "bookmark_categories",
-                    "CAST(bookmark_categories.category_id AS TEXT)",
-                ),
-                MirroredThinState("feed_seen", "feed_seen", "feed_seen.tweet_id"),
-                MirroredThinState("moment_view", "moment_views", "moment_views.video_id"),
-                MirroredThinState("watch_history", "watch_history", "watch_history.video_id"),
-                MirroredThinState("muted_channel", "muted_channels", "muted_channels.channel_id"),
-                MirroredThinState("channel_follow", "channel_follows", "channel_follows.channel_id"),
-                MirroredThinState("channel_star", "channel_stars", "channel_stars.channel_id"),
-                MirroredThinState("channel_setting", "channel_settings", "channel_settings.channel_id"),
-                MirroredThinState(
-                    "moments_cursor",
-                    "moments_cursors",
-                    "moments_cursors.scope",
-                    "moments_cursors.scope != 'stories'",
-                ),
-            )
         val PRIORITY_STATE_OWNER_KINDS =
             setOf(
                 "feed_like",
@@ -1001,13 +989,6 @@ class AndroidSyncMirror(
             )
     }
 }
-
-private data class MirroredThinState(
-    val kind: String,
-    val table: String,
-    val idExpression: String,
-    val predicate: String = "1",
-)
 
 private data class PriorityPageResult(
     val page: AndroidSyncPageResponse,

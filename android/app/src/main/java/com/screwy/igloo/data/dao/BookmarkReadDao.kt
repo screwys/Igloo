@@ -10,8 +10,7 @@ import kotlinx.coroutines.flow.Flow
  * Bookmarks tab mixed-platform list. Orders by `bookmarked_at DESC` and LEFT JOINs both content sources — exactly one matches per
  * row outside a cross-namespace identifier collision.
  *
- * The projection uses `@Embedded(prefix = ...)` on both sides so Room can disambiguate
- * the column collisions (both tables have `video_id`/`tweet_id`-ish keys).
+ * Feed and video payloads have separate aliases so either side can be absent.
  */
 @Dao
 interface BookmarkReadDao {
@@ -50,8 +49,7 @@ interface BookmarkReadDao {
             LEFT JOIN feed_items fi ON b.video_id = fi.tweet_id
             LEFT JOIN videos     v  ON b.video_id = v.video_id
             WHERE fi.tweet_id IS NULL
-               OR NULLIF(TRIM(COALESCE(fi.media_json, '')), '') IS NOT NULL
-               OR NULLIF(TRIM(COALESCE(fi.quote_media_json, '')), '') IS NOT NULL
+               OR fi.has_media = 1
         ),
         ranked_bookmarks AS (
             SELECT
@@ -70,64 +68,13 @@ interface BookmarkReadDao {
         SELECT
             b.*,
 
-            fi.tweet_id                    AS tw_tweet_id,
-            fi.source_channel_id           AS tw_source_channel_id,
-            fi.body_text                   AS tw_body_text,
-            fi.article_title               AS tw_article_title,
-            fi.poll_json                   AS tw_poll_json,
-            fi.community_note              AS tw_community_note,
-            fi.lang                        AS tw_lang,
-            fi.is_retweet                  AS tw_is_retweet,
-            fi.reposter_channel_id         AS tw_reposter_channel_id,
-            fi.quote_tweet_id              AS tw_quote_tweet_id,
-            fi.quote_channel_id            AS tw_quote_channel_id,
-            fi.quote_body_text             AS tw_quote_body_text,
-            fi.quote_article_title         AS tw_quote_article_title,
-            fi.quote_poll_json             AS tw_quote_poll_json,
-            fi.quote_community_note        AS tw_quote_community_note,
-            fi.quote_lang                  AS tw_quote_lang,
-            fi.quote_media_json            AS tw_quote_media_json,
-            fi.quote_published_at          AS tw_quote_published_at,
-            fi.quote_canonical_url         AS tw_quote_canonical_url,
-            fi.media_json                  AS tw_media_json,
-            fi.views                       AS tw_views,
-            fi.likes                       AS tw_likes,
-            fi.retweets                    AS tw_retweets,
-            fi.canonical_url               AS tw_canonical_url,
-            fi.canonical_tweet_id          AS tw_canonical_tweet_id,
-            fi.reply_channel_id            AS tw_reply_channel_id,
-            fi.reply_to_status             AS tw_reply_to_status,
-            fi.is_reply                    AS tw_is_reply,
-            fi.is_ghost                    AS tw_is_ghost,
-            fi.content_hash                AS tw_content_hash,
-            fi.body_translation            AS tw_body_translation,
-            fi.body_source_lang            AS tw_body_source_lang,
-            fi.quote_translation           AS tw_quote_translation,
-            fi.quote_source_lang           AS tw_quote_source_lang,
-            fi.published_at                AS tw_published_at,
-            fi.channel_id                  AS tw_channel_id,
-            cp.handle                      AS feed_author_handle,
+            fi.payload_json AS tw_payload_json,
+            cp.handle AS feed_author_handle,
             COALESCE(NULLIF(cp.display_name, ''), fc.name) AS feed_author_display_name,
             sp.handle                      AS feed_source_handle,
             qp.handle                      AS feed_quote_author_handle,
 
-            v.video_id                     AS vd_video_id,
-            v.channel_id                   AS vd_channel_id,
-            v.owner_kind                   AS vd_owner_kind,
-            v.title                        AS vd_title,
-            v.description                  AS vd_description,
-            v.duration                     AS vd_duration,
-            v.published_at                 AS vd_published_at,
-            v.is_temp                      AS vd_is_temp,
-            v.media_kind                   AS vd_media_kind,
-            v.slide_count                  AS vd_slide_count,
-            v.source_kind                  AS vd_source_kind,
-            v.metadata_json                AS vd_metadata_json,
-            v.canonical_url                AS vd_canonical_url,
-            v.dearrow_title                AS vd_dearrow_title,
-            v.dearrow_title_casual         AS vd_dearrow_title_casual,
-            v.moments_all_position          AS vd_moments_all_position,
-            v.moments_following_position    AS vd_moments_following_position,
+            v.payload_json AS vd_payload_json,
 
             COALESCE((
                 SELECT COUNT(DISTINCT asa.media_index)

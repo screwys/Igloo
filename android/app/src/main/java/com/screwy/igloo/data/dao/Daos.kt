@@ -26,7 +26,13 @@ import com.screwy.igloo.data.entity.VideoEntity
 import com.screwy.igloo.data.entity.VideoRepostSourceEntity
 import com.screwy.igloo.data.entity.WatchHistoryEntity
 import com.screwy.igloo.data.entity.BookmarkEntity
+import com.screwy.igloo.data.ContentPayloads
+import com.screwy.igloo.data.entity.StoredFeedItem
+import com.screwy.igloo.data.entity.StoredVideo
+import com.screwy.igloo.data.entity.StoredChannel
+import com.screwy.igloo.data.entity.StoredChannelProfile
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /**
  * Per-entity CRUD DAOs. Composite read queries (joins across side tables) live in
@@ -42,14 +48,20 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FeedItemDao {
-    @Upsert suspend fun upsert(rows: List<FeedItemEntity>)
-    @Upsert suspend fun upsert(row: FeedItemEntity)
+    @Upsert suspend fun upsertCaptured(rows: List<StoredFeedItem>)
+    @Upsert suspend fun upsertCaptured(row: StoredFeedItem)
 
-    @Query("SELECT * FROM feed_items WHERE tweet_id = :tweetId")
-    fun getByIdFlow(tweetId: String): Flow<FeedItemEntity?>
 
-    @Query("SELECT * FROM feed_items WHERE tweet_id = :tweetId")
-    suspend fun getById(tweetId: String): FeedItemEntity?
+    @Query("SELECT payload_json FROM feed_items WHERE tweet_id = :tweetId")
+    fun payloadByIdFlow(tweetId: String): Flow<String?>
+
+    @Query("SELECT payload_json FROM feed_items WHERE tweet_id = :tweetId")
+    suspend fun payloadById(tweetId: String): String?
+
+    fun getByIdFlow(tweetId: String): Flow<FeedItemEntity?> =
+        payloadByIdFlow(tweetId).map { value -> value?.let(ContentPayloads::feed) }
+
+    suspend fun getById(tweetId: String): FeedItemEntity? = payloadById(tweetId)?.let(ContentPayloads::feed)
 
     @Query("DELETE FROM feed_items WHERE tweet_id IN (:tweetIds)")
     suspend fun deleteByIds(tweetIds: List<String>)
@@ -67,14 +79,20 @@ interface FeedItemDao {
 
 @Dao
 interface VideoDao {
-    @Upsert suspend fun upsert(rows: List<VideoEntity>)
-    @Upsert suspend fun upsert(row: VideoEntity)
+    @Upsert suspend fun upsertCaptured(rows: List<StoredVideo>)
+    @Upsert suspend fun upsertCaptured(row: StoredVideo)
 
-    @Query("SELECT * FROM videos WHERE video_id = :videoId")
-    fun getByIdFlow(videoId: String): Flow<VideoEntity?>
 
-    @Query("SELECT * FROM videos WHERE video_id = :videoId")
-    suspend fun getById(videoId: String): VideoEntity?
+    @Query("SELECT payload_json FROM videos WHERE video_id = :videoId")
+    fun payloadByIdFlow(videoId: String): Flow<String?>
+
+    @Query("SELECT payload_json FROM videos WHERE video_id = :videoId")
+    suspend fun payloadById(videoId: String): String?
+
+    fun getByIdFlow(videoId: String): Flow<VideoEntity?> =
+        payloadByIdFlow(videoId).map { value -> value?.let(ContentPayloads::video) }
+
+    suspend fun getById(videoId: String): VideoEntity? = payloadById(videoId)?.let(ContentPayloads::video)
 
     @Query("DELETE FROM videos WHERE video_id IN (:videoIds)")
     suspend fun deleteByIds(videoIds: List<String>)
@@ -126,14 +144,20 @@ interface VideoDao {
 
 @Dao
 interface ChannelDao {
-    @Upsert suspend fun upsert(rows: List<ChannelEntity>)
-    @Upsert suspend fun upsert(row: ChannelEntity)
+    @Upsert suspend fun upsertCaptured(rows: List<StoredChannel>)
+    @Upsert suspend fun upsertCaptured(row: StoredChannel)
 
-    @Query("SELECT * FROM channels WHERE channel_id = :channelId")
-    fun getByIdFlow(channelId: String): Flow<ChannelEntity?>
 
-    @Query("SELECT * FROM channels WHERE channel_id = :channelId")
-    suspend fun getById(channelId: String): ChannelEntity?
+    @Query("SELECT payload_json FROM channels WHERE channel_id = :channelId")
+    fun payloadByIdFlow(channelId: String): Flow<String?>
+
+    @Query("SELECT payload_json FROM channels WHERE channel_id = :channelId")
+    suspend fun payloadById(channelId: String): String?
+
+    fun getByIdFlow(channelId: String): Flow<ChannelEntity?> =
+        payloadByIdFlow(channelId).map { value -> value?.let(ContentPayloads::channel) }
+
+    suspend fun getById(channelId: String): ChannelEntity? = payloadById(channelId)?.let(ContentPayloads::channel)
 
     @Query("SELECT channel_id FROM channels")
     suspend fun allIds(): List<String>
@@ -141,18 +165,23 @@ interface ChannelDao {
     @Query("DELETE FROM channels WHERE channel_id IN (:channelIds)")
     suspend fun deleteByIds(channelIds: List<String>)
 
-    @Query("SELECT * FROM channels WHERE LOWER(COALESCE(source_id, '')) = LOWER(:sourceId) LIMIT 1")
-    suspend fun findBySourceId(sourceId: String): ChannelEntity?
+    @Query("SELECT payload_json FROM channels WHERE LOWER(COALESCE(source_id, '')) = LOWER(:sourceId) LIMIT 1")
+    suspend fun payloadBySourceId(sourceId: String): String?
+
+    suspend fun findBySourceId(sourceId: String): ChannelEntity? = payloadBySourceId(sourceId)?.let(ContentPayloads::channel)
 
     @Query(
         """
-        SELECT * FROM channels
+        SELECT payload_json FROM channels
         WHERE LOWER(COALESCE(source_id, '')) = LOWER(:sourceId)
           AND LOWER(COALESCE(platform, '')) = LOWER(:platform)
         LIMIT 1
         """
     )
-    suspend fun findBySourceIdAndPlatform(sourceId: String, platform: String): ChannelEntity?
+    suspend fun payloadBySourceIdAndPlatform(sourceId: String, platform: String): String?
+
+    suspend fun findBySourceIdAndPlatform(sourceId: String, platform: String): ChannelEntity? =
+        payloadBySourceIdAndPlatform(sourceId, platform)?.let(ContentPayloads::channel)
 
     @Query("DELETE FROM channels")
     suspend fun deleteAll()
@@ -160,8 +189,9 @@ interface ChannelDao {
 
 @Dao
 interface ChannelProfileDao {
-    @Upsert suspend fun upsert(rows: List<ChannelProfileEntity>)
-    @Upsert suspend fun upsert(row: ChannelProfileEntity)
+    @Upsert suspend fun upsertCaptured(rows: List<StoredChannelProfile>)
+    @Upsert suspend fun upsertCaptured(row: StoredChannelProfile)
+
 
     @Query("DELETE FROM channel_profiles WHERE channel_id = :channelId")
     suspend fun delete(channelId: String)
@@ -197,33 +227,43 @@ interface ChannelProfileDao {
     )
     suspend fun deleteUnreferenced()
 
-    @Query("SELECT * FROM channel_profiles WHERE channel_id = :channelId")
-    suspend fun getById(channelId: String): ChannelProfileEntity?
+    @Query("SELECT payload_json FROM channel_profiles WHERE channel_id = :channelId")
+    suspend fun payloadById(channelId: String): String?
 
-    @Query("SELECT * FROM channel_profiles WHERE channel_id = :channelId")
-    fun getByIdFlow(channelId: String): Flow<ChannelProfileEntity?>
+    @Query("SELECT payload_json FROM channel_profiles WHERE channel_id = :channelId")
+    fun payloadByIdFlow(channelId: String): Flow<String?>
+
+    suspend fun getById(channelId: String): ChannelProfileEntity? = payloadById(channelId)?.let(ContentPayloads::profile)
+
+    fun getByIdFlow(channelId: String): Flow<ChannelProfileEntity?> =
+        payloadByIdFlow(channelId).map { value -> value?.let(ContentPayloads::profile) }
 
     @Query(
         """
-        SELECT * FROM channel_profiles
+        SELECT payload_json FROM channel_profiles
         WHERE LOWER(COALESCE(platform, '')) = LOWER(:platform)
           AND LOWER(REPLACE(COALESCE(handle, ''), '@', '')) = LOWER(:handle)
         ORDER BY channel_id ASC
         LIMIT 1
         """
     )
-    suspend fun findByHandleAndPlatform(handle: String, platform: String): ChannelProfileEntity?
+    suspend fun payloadByHandleAndPlatform(handle: String, platform: String): String?
+
+    suspend fun findByHandleAndPlatform(handle: String, platform: String): ChannelProfileEntity? =
+        payloadByHandleAndPlatform(handle, platform)?.let(ContentPayloads::profile)
 
     @Query(
         """
-        SELECT * FROM channel_profiles
+        SELECT payload_json FROM channel_profiles
         WHERE LOWER(REPLACE(COALESCE(handle, ''), '@', '')) = LOWER(:handle)
         ORDER BY CASE WHEN LOWER(COALESCE(platform, '')) IN ('twitter', 'x') THEN 0 ELSE 1 END,
                  channel_id ASC
         LIMIT 1
         """
     )
-    suspend fun findByHandle(handle: String): ChannelProfileEntity?
+    suspend fun payloadByHandle(handle: String): String?
+
+    suspend fun findByHandle(handle: String): ChannelProfileEntity? = payloadByHandle(handle)?.let(ContentPayloads::profile)
 
     @Query("DELETE FROM channel_profiles")
     suspend fun deleteAll()

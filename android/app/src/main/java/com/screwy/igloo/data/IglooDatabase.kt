@@ -1,9 +1,12 @@
 package com.screwy.igloo.data
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.screwy.igloo.data.dao.AndroidSyncDao
 import com.screwy.igloo.data.dao.BookmarkCategoryDao
 import com.screwy.igloo.data.dao.BookmarkDao
@@ -40,12 +43,9 @@ import com.screwy.igloo.data.entity.AndroidSyncHeadEntity
 import com.screwy.igloo.data.entity.AndroidSyncStateEntity
 import com.screwy.igloo.data.entity.BookmarkCategoryEntity
 import com.screwy.igloo.data.entity.BookmarkEntity
-import com.screwy.igloo.data.entity.ChannelEntity
 import com.screwy.igloo.data.entity.ChannelFollowEntity
-import com.screwy.igloo.data.entity.ChannelProfileEntity
 import com.screwy.igloo.data.entity.ChannelSettingEntity
 import com.screwy.igloo.data.entity.ChannelStarEntity
-import com.screwy.igloo.data.entity.FeedItemEntity
 import com.screwy.igloo.data.entity.FeedLikeEntity
 import com.screwy.igloo.data.entity.FeedRankEntity
 import com.screwy.igloo.data.entity.FeedSeenEntity
@@ -59,18 +59,21 @@ import com.screwy.igloo.data.entity.RetweetSourceEntity
 import com.screwy.igloo.data.entity.SponsorBlockCheckedEntity
 import com.screwy.igloo.data.entity.SponsorBlockSegmentEntity
 import com.screwy.igloo.data.entity.VideoCommentEntity
-import com.screwy.igloo.data.entity.VideoEntity
 import com.screwy.igloo.data.entity.VideoRepostSourceEntity
 import com.screwy.igloo.data.entity.WatchHistoryEntity
+import com.screwy.igloo.data.entity.StoredChannel
+import com.screwy.igloo.data.entity.StoredChannelProfile
+import com.screwy.igloo.data.entity.StoredFeedItem
+import com.screwy.igloo.data.entity.StoredVideo
 
 @Database(
     entities =
         [
             // Server-mirrored core
-            FeedItemEntity::class,
-            VideoEntity::class,
-            ChannelEntity::class,
-            ChannelProfileEntity::class,
+            StoredFeedItem::class,
+            StoredVideo::class,
+            StoredChannel::class,
+            StoredChannelProfile::class,
             VideoCommentEntity::class,
             RetweetSourceEntity::class,
             VideoRepostSourceEntity::class,
@@ -97,9 +100,21 @@ import com.screwy.igloo.data.entity.WatchHistoryEntity
             AndroidSyncAssetEntity::class,
             OfflineVideoDownloadEntity::class,
         ],
-	version = 51,
+    version = 52,
     exportSchema = true,
+    autoMigrations = [
+        AutoMigration(from = 40, to = 41, spec = IglooMigrations.DropAssetChecksum::class),
+        AutoMigration(from = 41, to = 42),
+        AutoMigration(from = 42, to = 43),
+        AutoMigration(from = 45, to = 46),
+        AutoMigration(from = 46, to = 47, spec = IglooMigrations.FillCursorOrder::class),
+        AutoMigration(from = 47, to = 48),
+        AutoMigration(from = 48, to = 49),
+        AutoMigration(from = 49, to = 50),
+        AutoMigration(from = 50, to = 51),
+    ],
 )
+@TypeConverters(ContentPayloadConverters::class)
 abstract class IglooDatabase : RoomDatabase() {
 
     // Per-entity DAOs
@@ -172,19 +187,8 @@ abstract class IglooDatabase : RoomDatabase() {
         fun build(context: Context): IglooDatabase {
             val appCtx = context.applicationContext
             return Room.databaseBuilder(appCtx, IglooDatabase::class.java, DB_FILE_NAME)
-                .addMigrations(
-                    IglooMigrations.MIGRATION_40_41,
-                    IglooMigrations.MIGRATION_41_42,
-                    IglooMigrations.MIGRATION_42_43,
-                    IglooMigrations.MIGRATION_43_44,
-					IglooMigrations.MIGRATION_44_45,
-					IglooMigrations.MIGRATION_45_46,
-					IglooMigrations.MIGRATION_46_47,
-					IglooMigrations.MIGRATION_47_48,
-					IglooMigrations.MIGRATION_48_49,
-					IglooMigrations.MIGRATION_49_50,
-					IglooMigrations.MIGRATION_50_51,
-                )
+                .setDriver(BundledSQLiteDriver())
+                .addMigrations(IglooMigrations.MIGRATION_43_44, IglooMigrations.MIGRATION_44_45, IglooMigrations.MIGRATION_51_52)
                 .build()
         }
     }

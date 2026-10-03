@@ -1,5 +1,8 @@
 package com.screwy.igloo.moments
 
+import com.screwy.igloo.data.ContentPayloads
+import com.screwy.igloo.data.entity.StoredChannel
+import com.screwy.igloo.data.entity.StoredVideo
 import androidx.lifecycle.SavedStateHandle
 import com.screwy.igloo.bookmarks.BookmarkFilter
 import com.screwy.igloo.bookmarks.bookmarkPlaylistId
@@ -85,19 +88,19 @@ class ShortsRouteViewModelTest {
         SavedStateHandle(source.keys().associateWith { key -> source.get<Any?>(key) })
 
     @Test fun allMomentsItemsExposeSyncedCanonicalUrlWithoutSynthesis() = runBlocking {
-        db.channelDao().upsert(ChannelEntity(
+        db.channelDao().upsertCaptured(ChannelEntity(
             channelId = "tiktok_alice", name = "Alice", platform = "tiktok",
             sourceId = "alice",
-        ))
+        ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_alice"))
-        db.videoDao().upsert(VideoEntity(
+        db.videoDao().upsertCaptured(VideoEntity(
 			videoId = "tiktok_clip_1",
 			channelId = "tiktok_alice",
 			ownerKind = "tiktok_video",
             title = "Short",
             canonicalUrl = "https://www.tiktok.com/@canonical/video/clip_1",
             publishedAt = 1L,
-        ))
+        ).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
 
         val vm = viewModels.track(ShortsRouteViewModel(
             playlistSpec = ShortsPlaylistSpec.allMoments(),
@@ -121,18 +124,18 @@ class ShortsRouteViewModelTest {
     }
 
     @Test fun storyTrayPlaylistWrapsFromSelectedChannel() = runBlocking {
-        db.channelDao().upsert(listOf(
+        db.channelDao().upsertCaptured(listOf(
             ChannelEntity("tiktok_newer", name = "Newer", platform = "tiktok", sourceId = "newer"),
             ChannelEntity("tiktok_older", name = "Older", platform = "tiktok", sourceId = "older"),
-        ))
+        ).map { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_newer"))
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_older"))
         val now = System.currentTimeMillis()
-        db.videoDao().upsert(listOf(
+        db.videoDao().upsertCaptured(listOf(
             VideoEntity("v_newer_first", "tiktok_newer", "tiktok_video", title = "Newer first", publishedAt = now - 2_000L, sourceKind = "story"),
             VideoEntity("v_newer_last", "tiktok_newer", "tiktok_video", title = "Newer last", publishedAt = now - 1_000L, sourceKind = "story"),
             VideoEntity("v_older", "tiktok_older", "tiktok_video", title = "Older story", publishedAt = now - 3_000L, sourceKind = "story"),
-        ))
+        ).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
 
         val vm = viewModels.track(ShortsRouteViewModel(
             playlistSpec = ShortsPlaylistSpec.storyTray(),
@@ -157,20 +160,20 @@ class ShortsRouteViewModelTest {
     }
 
     @Test fun storyTrayPlaylistOrderDoesNotChangeAfterViewingStories() = runBlocking {
-        db.channelDao().upsert(listOf(
+        db.channelDao().upsertCaptured(listOf(
             ChannelEntity("tiktok_sample_one", name = "Sample One", platform = "tiktok", sourceId = "sample_one"),
             ChannelEntity("tiktok_sample_two", name = "Sample Two", platform = "tiktok", sourceId = "sample_two"),
             ChannelEntity("tiktok_sample_old", name = "Sample Old", platform = "tiktok", sourceId = "sample_old"),
-        ))
+        ).map { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_sample_one"))
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_sample_two"))
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_sample_old"))
         val now = System.currentTimeMillis()
-        db.videoDao().upsert(listOf(
+        db.videoDao().upsertCaptured(listOf(
             VideoEntity("v_sample_one", "tiktok_sample_one", "tiktok_video", title = "Sample One", publishedAt = now - 1_000L, sourceKind = "story"),
             VideoEntity("v_sample_two", "tiktok_sample_two", "tiktok_video", title = "Sample Two", publishedAt = now - 2_000L, sourceKind = "story"),
             VideoEntity("v_sample_old", "tiktok_sample_old", "tiktok_video", title = "Sample Old", publishedAt = now - 3_000L, sourceKind = "story"),
-        ))
+        ).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
 
         val vm = viewModels.track(ShortsRouteViewModel(
             playlistSpec = ShortsPlaylistSpec.storyTray(),
@@ -198,11 +201,11 @@ class ShortsRouteViewModelTest {
     }
 
     @Test fun bookmarksPlaylistUsesRouteFilter() = runBlocking {
-        db.videoDao().upsert(listOf(
+        db.videoDao().upsertCaptured(listOf(
             VideoEntity("art_new", "tiktok_artist", "tiktok_video", title = "Art new", mediaKind = "video", publishedAt = 30L),
             VideoEntity("music_new", "tiktok_artist", "tiktok_video", title = "Music new", mediaKind = "video", publishedAt = 20L),
             VideoEntity("art_old", "tiktok_artist", "tiktok_video", title = "Art old", mediaKind = "video", publishedAt = 10L),
-        ))
+        ).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         db.bookmarkDao().upsert(BookmarkEntity("art_new", categoryId = 34L, customTitle = "art", bookmarkedAt = 300L))
         db.bookmarkDao().upsert(BookmarkEntity("music_new", categoryId = 5L, customTitle = "music", bookmarkedAt = 200L))
         db.bookmarkDao().upsert(BookmarkEntity("art_old", categoryId = 34L, customTitle = "art", bookmarkedAt = 100L))
@@ -230,17 +233,14 @@ class ShortsRouteViewModelTest {
     }
 
     @Test fun passiveCarriedVideoUsesTheDestinationCursorAndIgnoresLateArrival() = runBlocking {
-        db.channelDao().upsert(
-            ChannelEntity(
+        db.channelDao().upsertCaptured(ChannelEntity(
                 channelId = "tiktok_sample",
                 name = "Sample",
                 platform = "tiktok",
                 sourceId = "sample",
-            )
-        )
+            ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_sample"))
-        db.videoDao().upsert(
-            listOf(
+        db.videoDao().upsertCaptured(listOf(
                 VideoEntity(
                     videoId = "older",
                     channelId = "tiktok_sample",
@@ -255,8 +255,7 @@ class ShortsRouteViewModelTest {
                     title = "Resume",
                     publishedAt = 200L,
                 ),
-            )
-        )
+            ).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         db.momentsCursorDao()
             .upsert(
                 MomentsCursorEntity(
@@ -294,15 +293,13 @@ class ShortsRouteViewModelTest {
                 true
             }
 
-        db.videoDao().upsert(
-            VideoEntity(
+        db.videoDao().upsertCaptured(VideoEntity(
                 videoId = "missing_from_following",
                 channelId = "tiktok_sample",
                 ownerKind = "tiktok_video",
                 title = "Late carried row",
                 publishedAt = 250L,
-            )
-        )
+            ).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         val lateRowLoaded =
             withTimeoutOrNull(2_000L) {
                 while (vm.items.value.none { it.videoId == "missing_from_following" }) delay(10)
@@ -321,8 +318,7 @@ class ShortsRouteViewModelTest {
     }
 
     @Test fun legacyFollowingCursorUsesPublishedTimelineInsteadOfRepostTime() = runBlocking {
-        db.channelDao().upsert(
-            listOf(
+        db.channelDao().upsertCaptured(listOf(
                 ChannelEntity(
                     channelId = "tiktok_visible",
                     sourceId = "visible",
@@ -341,17 +337,14 @@ class ShortsRouteViewModelTest {
                     name = "Reposter",
                     platform = "tiktok",
                 ),
-            )
-        )
+            ).map { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_visible"))
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_reposter"))
-        db.videoDao().upsert(
-            listOf(
+        db.videoDao().upsertCaptured(listOf(
                 VideoEntity("older", "tiktok_visible", "tiktok_video", publishedAt = 100L),
                 VideoEntity("hidden", "tiktok_hidden", "tiktok_video", publishedAt = 50L),
                 VideoEntity("next", "tiktok_visible", "tiktok_video", publishedAt = 300L),
-            )
-        )
+            ).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         db.videoRepostSourceDao()
             .upsert(
                 listOf(
@@ -411,8 +404,7 @@ class ShortsRouteViewModelTest {
     }
 
     @Test fun legacyFollowingCursorUsesVideoIdToBreakEqualSortTies() = runBlocking {
-        db.channelDao().upsert(
-            listOf(
+        db.channelDao().upsertCaptured(listOf(
                 ChannelEntity(
                     channelId = "tiktok_visible",
                     sourceId = "visible",
@@ -425,16 +417,13 @@ class ShortsRouteViewModelTest {
                     name = "Hidden",
                     platform = "tiktok",
                 ),
-            )
-        )
+            ).map { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_visible"))
-        db.videoDao().upsert(
-            listOf(
+        db.videoDao().upsertCaptured(listOf(
                 VideoEntity("a", "tiktok_visible", "tiktok_video", publishedAt = 100L),
                 VideoEntity("b", "tiktok_hidden", "tiktok_video", publishedAt = 100L),
                 VideoEntity("c", "tiktok_visible", "tiktok_video", publishedAt = 100L),
-            )
-        )
+            ).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         db.momentsCursorDao()
             .upsert(
                 MomentsCursorEntity(
@@ -482,17 +471,14 @@ class ShortsRouteViewModelTest {
     }
 
     @Test fun restoredSavedStateUsesDurableCursorWithoutRepublishingRouteSelection() = runBlocking {
-        db.channelDao().upsert(
-            ChannelEntity(
+        db.channelDao().upsertCaptured(ChannelEntity(
                 channelId = "tiktok_sample",
                 name = "Sample",
                 platform = "tiktok",
                 sourceId = "sample",
-            )
-        )
+            ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_sample"))
-        db.videoDao().upsert(
-            listOf(
+        db.videoDao().upsertCaptured(listOf(
                 VideoEntity(
                     videoId = "older",
                     channelId = "tiktok_sample",
@@ -514,8 +500,7 @@ class ShortsRouteViewModelTest {
                     title = "Newer",
                     publishedAt = 300L,
                 ),
-            )
-        )
+            ).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         val writeClock = AtomicInteger()
         val routeWriter =
             OutboxWriter(
@@ -607,14 +592,12 @@ class ShortsRouteViewModelTest {
     }
 
     @Test fun freshInitialSelectionWaitsForItsRequestedRoomRow() = runBlocking {
-        db.channelDao().upsert(
-            ChannelEntity(
+        db.channelDao().upsertCaptured(ChannelEntity(
                 channelId = "tiktok_sample",
                 name = "Sample",
                 platform = "tiktok",
                 sourceId = "sample",
-            )
-        )
+            ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_sample"))
         val writeClock = AtomicInteger()
         val routeWriter =
@@ -648,15 +631,13 @@ class ShortsRouteViewModelTest {
 
         assertEquals(true, emptyLoaded)
         assertEquals(0, writeClock.get())
-        db.videoDao().upsert(
-            VideoEntity(
+        db.videoDao().upsertCaptured(VideoEntity(
                 videoId = "selected",
                 channelId = "tiktok_sample",
                 ownerKind = "tiktok_video",
                 title = "Selected",
                 publishedAt = 200L,
-            )
-        )
+            ).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         val recorded =
             withTimeoutOrNull(2_000L) {
                 while (db.momentsCursorDao().get("following")?.videoId != "selected") delay(10)
@@ -672,17 +653,14 @@ class ShortsRouteViewModelTest {
     }
 
     @Test fun explicitRouteSelectionWinsOverThePreviousCursor() = runBlocking {
-        db.channelDao().upsert(
-            ChannelEntity(
+        db.channelDao().upsertCaptured(ChannelEntity(
                 channelId = "tiktok_sample",
                 name = "Sample",
                 platform = "tiktok",
                 sourceId = "sample",
-            )
-        )
+            ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_sample"))
-        db.videoDao().upsert(
-            listOf(
+        db.videoDao().upsertCaptured(listOf(
                 VideoEntity(
                     videoId = "selected",
                     channelId = "tiktok_sample",
@@ -697,8 +675,7 @@ class ShortsRouteViewModelTest {
                     title = "Newer",
                     publishedAt = 300L,
                 ),
-            )
-        )
+            ).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         db.momentsCursorDao()
             .upsert(
                 MomentsCursorEntity(
@@ -755,14 +732,12 @@ class ShortsRouteViewModelTest {
     }
 
     @Test fun restoredPendingRouteIdentityStaysPassiveWhenTheRowArrives() = runBlocking {
-        db.channelDao().upsert(
-            ChannelEntity(
+        db.channelDao().upsertCaptured(ChannelEntity(
                 channelId = "tiktok_sample",
                 name = "Sample",
                 platform = "tiktok",
                 sourceId = "sample",
-            )
-        )
+            ).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId = "tiktok_sample"))
         val writeClock = AtomicInteger()
         val routeWriter =
@@ -822,15 +797,13 @@ class ShortsRouteViewModelTest {
             }
         assertEquals(true, restoredEmptyLoaded)
 
-        db.videoDao().upsert(
-            VideoEntity(
+        db.videoDao().upsertCaptured(VideoEntity(
                 videoId = "selected",
                 channelId = "tiktok_sample",
                 ownerKind = "tiktok_video",
                 title = "Selected",
                 publishedAt = 200L,
-            )
-        )
+            ).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         val restoredRowLoaded =
             withTimeoutOrNull(2_000L) {
                 while (restoredVm.items.value.none { it.videoId == "selected" }) delay(10)

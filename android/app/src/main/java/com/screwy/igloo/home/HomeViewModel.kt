@@ -9,9 +9,6 @@ import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.Dearrow
 import com.screwy.igloo.data.entity.ChannelDisplay
 import com.screwy.igloo.data.entity.displayOrName
-import com.screwy.igloo.data.dao.HomeVideoRow
-import com.screwy.igloo.data.dao.HomeFeedRow
-import com.screwy.igloo.feed.parseFeedMediaDescriptors
 import com.screwy.igloo.net.HomeApi
 import com.screwy.igloo.net.Reachability
 import com.screwy.igloo.ui.UiEffect
@@ -33,15 +30,11 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.doubleOrNull
 import java.net.URI
 import java.security.MessageDigest
 import java.util.UUID
@@ -295,74 +288,13 @@ class HomeViewModel(
     private fun videoRows(widget: HomeWidget, includeReposts: Boolean, includeTagged: Boolean, storyCutoffMs: Long) = db.homeReadDao().videosFlow(
         widget.type, widget.platforms.isEmpty(), widget.platforms,
         widget.channels.isEmpty(), widget.channels, widget.contentTypes.isEmpty(), widget.contentTypes,
-        widget.starredOnly, includeReposts, includeTagged, storyCutoffMs, widget.order, if (widget.type == "moments") 32 else widget.count,
-    ).mapLatest { firstPage ->
-        if (widget.type != "moments") firstPage
-        else {
-            val moments = ArrayList<HomeVideoRow>()
-            var page = firstPage
-            var offset = 0
-            while (true) {
-                for (row in page) {
-                    if (isMoment(row)) moments.add(row)
-                    if (moments.size == widget.count) break
-                }
-                if (moments.size == widget.count || page.size < 32) break
-                offset += page.size
-                page = db.homeReadDao().videosPage(
-                    widget.type, widget.platforms.isEmpty(), widget.platforms,
-                    widget.channels.isEmpty(), widget.channels, widget.contentTypes.isEmpty(), widget.contentTypes,
-                    widget.starredOnly, includeReposts, includeTagged, storyCutoffMs, widget.order, 32, offset,
-                )
-            }
-            moments
-        }
-    }
-
-    private fun isMoment(row: HomeVideoRow): Boolean {
-        val video = row.item.video
-        if (video.ownerKind != "youtube_video") return true
-        val metadata = video.metadataJson?.takeIf { it.isNotBlank() }?.let {
-            runCatching { json.parseToJsonElement(it).jsonObject }.getOrNull()
-        }
-        val duration = metadata?.get("duration")?.jsonPrimitive?.doubleOrNull ?: video.duration?.toDouble() ?: 0.0
-        val width = metadata?.get("width")?.jsonPrimitive?.doubleOrNull ?: 0.0
-        val height = metadata?.get("height")?.jsonPrimitive?.doubleOrNull ?: 0.0
-        return (duration > 0 && duration <= 90) || (width > 0 && height > 0 && height / width > 1.3)
-    }
+        widget.starredOnly, includeReposts, includeTagged, storyCutoffMs, widget.order, widget.count,
+    )
 
     private fun feedRows(widget: HomeWidget) = db.homeReadDao().feedFlow(
         widget.type, widget.platforms.isEmpty(), widget.platforms, widget.channels.isEmpty(), widget.channels,
-        widget.starredOnly, widget.order,
-        if (widget.contentTypes.isEmpty() || "post" in widget.contentTypes) widget.count else 32,
-    ).mapLatest { firstPage ->
-        if (widget.contentTypes.isEmpty() || "post" in widget.contentTypes) firstPage
-        else {
-            val posts = ArrayList<HomeFeedRow>()
-            var page = firstPage
-            var offset = 0
-            while (true) {
-                for (row in page) {
-                    val media = parseFeedMediaDescriptors(row.item.item.mediaJson)
-                    val kind = when {
-                        media.size > 1 -> "slideshow"
-                        media.singleOrNull()?.type?.lowercase() in listOf("video", "gif", "animated_gif") -> "video"
-                        media.size == 1 -> "image"
-                        else -> "post"
-                    }
-                    if (kind in widget.contentTypes) posts.add(row)
-                    if (posts.size == widget.count) break
-                }
-                if (posts.size == widget.count || page.size < 32) break
-                offset += page.size
-                page = db.homeReadDao().feedPage(
-                    widget.type, widget.platforms.isEmpty(), widget.platforms, widget.channels.isEmpty(), widget.channels,
-                    widget.starredOnly, widget.order, 32, offset,
-                )
-            }
-            posts
-        }
-    }
+        widget.contentTypes.isEmpty(), widget.contentTypes, widget.starredOnly, widget.order, widget.count,
+    )
 
     private fun broadcastCards(widget: HomeWidget, broadcasts: List<HomeBroadcast>, channels: List<ChannelDisplay>): List<HomeCard> {
         if (widget.platforms.isNotEmpty() && "youtube" !in widget.platforms) return emptyList()

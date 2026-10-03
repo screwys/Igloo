@@ -7,26 +7,22 @@ import androidx.room.Embedded
  * Typed projection classes returned by the composite read DAOs. Kept next to entities because they
  * are joined row shapes: data, not logic.
  *
- * `@Embedded(prefix = "")` wraps the base entity so Room can populate all of its columns from the
- * query result without re-enumerating every field. Joined columns live at the top level of the
- * projection.
+ * Content records decode from their complete synced payload. Joined user state stays in columns.
  */
 
 /** Feed query result row. */
 data class FeedRow(
-    @Embedded val item: FeedItemEntity,
+    @ColumnInfo(name = "payload_json") val item: FeedItemEntity,
     @ColumnInfo(name = "channel_name") val channelName: String?,
     @ColumnInfo(name = "channel_platform") val channelPlatform: String?,
     @ColumnInfo(name = "author_handle") val authorHandle: String? = null,
     @ColumnInfo(name = "author_display_name") val authorDisplayName: String? = null,
-    @ColumnInfo(name = "author_account_region") val authorAccountRegion: String? = null,
-    @ColumnInfo(name = "author_account_details_json") val authorAccountDetailsJson: String? = null,
+    @ColumnInfo(name = "author_profile_payload_json") val authorProfile: ChannelProfileEntity? = null,
     @ColumnInfo(name = "source_handle") val sourceHandle: String? = null,
     @ColumnInfo(name = "source_display_name") val sourceDisplayName: String? = null,
     @ColumnInfo(name = "quote_author_handle") val quoteAuthorHandle: String? = null,
     @ColumnInfo(name = "quote_author_display_name") val quoteAuthorDisplayName: String? = null,
-    @ColumnInfo(name = "quote_author_account_region") val quoteAuthorAccountRegion: String? = null,
-    @ColumnInfo(name = "quote_author_account_details_json") val quoteAuthorAccountDetailsJson: String? = null,
+    @ColumnInfo(name = "quote_profile_payload_json") val quoteProfile: ChannelProfileEntity? = null,
     @ColumnInfo(name = "reply_handle") val replyHandle: String? = null,
     @ColumnInfo(name = "is_liked") val isLiked: Int,
     @ColumnInfo(name = "liked_at") val likedAt: Long?,
@@ -42,6 +38,14 @@ data class FeedRow(
     @ColumnInfo(name = "reposter_handle") val reposterHandle: String? = null,
     @ColumnInfo(name = "reposter_display_name") val reposterDisplayName: String? = null,
 ) {
+    val authorAccountRegion: String?
+        get() = authorProfile?.accountRegion
+    val authorAccountDetailsJson: String?
+        get() = authorProfile?.accountDetailsJson
+    val quoteAuthorAccountRegion: String?
+        get() = quoteProfile?.accountRegion
+    val quoteAuthorAccountDetailsJson: String?
+        get() = quoteProfile?.accountDetailsJson
     val quoteChannelId: String?
         get() = item.quoteChannelId
 }
@@ -89,7 +93,7 @@ data class MutedChannelDisplay(
 
 /** Shorts/moments grid item — TikTok + Instagram. */
 data class MomentItem(
-    @Embedded val video: VideoEntity,
+    @ColumnInfo(name = "payload_json") val video: VideoEntity,
     @ColumnInfo(name = "is_viewed") val isViewed: Int,
     @ColumnInfo(name = "viewed_at") val viewedAt: Long?,
     @ColumnInfo(name = "channel_name") val channelName: String?,
@@ -118,12 +122,10 @@ data class StoryChannelItem(
 )
 
 /**
- * YouTube Videos tab row — long-form only, with resume progress. `wh_*` aliasing keeps the joined
- * `watch_history` columns from colliding with embedded `VideoEntity` names (both tables carry
- * `duration`).
+ * YouTube video row with local resume progress.
  */
 data class VideoGridItem(
-    @Embedded val video: VideoEntity,
+    @ColumnInfo(name = "payload_json") val video: VideoEntity,
     @ColumnInfo(name = "wh_playback_position") val playbackPosition: Double?,
     @ColumnInfo(name = "wh_duration") val watchDuration: Double?,
     @ColumnInfo(name = "channel_name") val channelName: String?,
@@ -137,8 +139,8 @@ data class VideoGridItem(
  */
 data class BookmarkItem(
     @Embedded val bookmark: BookmarkEntity,
-    @Embedded(prefix = "tw_") val feedItem: FeedItemEntity?,
-    @Embedded(prefix = "vd_") val video: VideoEntity?,
+    @ColumnInfo(name = "tw_payload_json") val feedItem: FeedItemEntity?,
+    @ColumnInfo(name = "vd_payload_json") val video: VideoEntity?,
     @ColumnInfo(name = "feed_author_handle") val feedAuthorHandle: String? = null,
     @ColumnInfo(name = "feed_author_display_name") val feedAuthorDisplayName: String? = null,
     @ColumnInfo(name = "feed_source_handle") val feedSourceHandle: String? = null,
@@ -154,7 +156,7 @@ data class BookmarkItem(
 
 /** Channel drawer row — starred-first ordering. */
 data class ChannelDisplay(
-    @Embedded val channel: ChannelEntity,
+    @ColumnInfo(name = "payload_json") val channel: ChannelEntity,
     @ColumnInfo(name = "is_starred") val isStarred: Int,
     @ColumnInfo(name = "is_followed") val isFollowed: Int,
     // Joined from channel_profiles — Twitter/TikTok near-100% coverage, YouTube ~95%.

@@ -32,10 +32,10 @@ type roomIndex struct {
 	Orders      []string `json:"orders"`
 }
 
-func TestAndroidRoomSchemaV51Owners(t *testing.T) {
+func TestAndroidRoomSchemaV52Owners(t *testing.T) {
 	schema := readAndroidRoomSchema(t)
-	if schema.Database.Version != 51 {
-		t.Fatalf("Room schema version = %d, want 51", schema.Database.Version)
+	if schema.Database.Version != 52 {
+		t.Fatalf("Room schema version = %d, want 52", schema.Database.Version)
 	}
 
 	tables := make(map[string][]string, len(schema.Database.Entities))
@@ -68,10 +68,11 @@ func TestAndroidRoomSchemaV51Owners(t *testing.T) {
 
 	assertRoomContains(t, tables, "feed_items",
 		"tweet_id", "source_channel_id", "reposter_channel_id", "quote_channel_id",
-		"reply_channel_id", "channel_id", "article_title", "quote_article_title", "poll_json", "quote_poll_json", "community_note", "quote_community_note")
+		"reply_channel_id", "channel_id", "payload_json", "content_type", "has_content", "has_media")
 	assertRoomContains(t, tables, "channel_profiles",
-		"channel_id", "handle", "display_name", "bio", "followers", "following", "account_region", "account_details_json")
-	assertRoomContains(t, tables, "videos", "video_id", "is_temp", "moments_all_position", "moments_following_position")
+		"channel_id", "handle", "display_name", "platform", "payload_json")
+	assertRoomContains(t, tables, "channels", "channel_id", "platform", "payload_json")
+	assertRoomContains(t, tables, "videos", "video_id", "is_temp", "moments_all_position", "moments_following_position", "is_moment", "payload_json")
 	assertRoomIndex(t, indexes, "videos", "idx_videos_owner_published",
 		[]string{"owner_kind", "published_at", "video_id"}, []string{"ASC", "DESC", "DESC"})
 
@@ -90,7 +91,7 @@ func TestAndroidRoomSchemaV51Owners(t *testing.T) {
 	assertRoomExcludes(t, tables, "feed_items",
 		"source_handle", "author_handle", "author_display_name", "author_avatar_url",
 		"quote_author_handle", "quote_author_display_name", "quote_author_avatar_url",
-		"reply_to_handle", "sync_seq")
+		"reply_to_handle", "sync_seq", "body_text", "article_title", "poll_json", "community_note")
 	assertRoomExcludes(t, tables, "android_sync_assets",
 		"sha256",
 		"generation_id", "server_url", "server_state", "required_reason",
@@ -167,10 +168,10 @@ func readAndroidRoomSchema(t *testing.T) roomSchemaFile {
 		}
 	}
 	sort.Strings(names)
-	if !reflect.DeepEqual(names, []string{"40.json", "41.json", "42.json", "43.json", "44.json", "45.json", "46.json", "47.json", "48.json", "49.json", "50.json", "51.json"}) {
-		t.Fatalf("Room schema files = %v, want 40.json through 51.json", names)
+	if !reflect.DeepEqual(names, []string{"40.json", "41.json", "42.json", "43.json", "44.json", "45.json", "46.json", "47.json", "48.json", "49.json", "50.json", "51.json", "52.json"}) {
+		t.Fatalf("Room schema files = %v, want 40.json through 52.json", names)
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, "51.json"))
+	raw, err := os.ReadFile(filepath.Join(dir, "52.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

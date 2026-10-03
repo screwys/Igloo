@@ -7,153 +7,103 @@ import androidx.room.PrimaryKey
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/**
- * Room entities that mirror the server schema in snake_case. Every @ColumnInfo
- * carries an explicit name so cross-table greps stay honest and Kotlin property
- * renames cannot drift the schema.
- *
- * Room can't express partial indexes with WHERE clauses. The full-column indexes
- * here cover the query shapes they would service; revisit only if profiling says
- * the partial form matters.
- */
+/** Decoded content records and local Room entities. StoredContent owns the content tables. */
 
 // ─── Server-mirrored core tables ──────────────────────────────────────────────────────
 
 @Serializable
-@Entity(
-    tableName = "feed_items",
-    indices = [
-        Index(value = ["published_at"], orders = [Index.Order.DESC], name = "idx_feed_items_published"),
-        Index(value = ["reply_to_status"], name = "idx_feed_items_reply_parent"),
-        Index(
-            value = ["channel_id", "published_at"],
-            orders = [Index.Order.ASC, Index.Order.DESC],
-            name = "idx_feed_items_channel",
-        ),
-        Index(value = ["quote_tweet_id"], name = "idx_feed_items_quote"),
-        Index(value = ["content_hash"], name = "idx_feed_items_content_hash"),
-        Index(value = ["canonical_tweet_id"], name = "idx_feed_items_canonical_tweet"),
-    ],
-)
 data class FeedItemEntity(
-    @PrimaryKey @ColumnInfo(name = "tweet_id") val tweetId: String,
-    @ColumnInfo(name = "source_channel_id") val sourceChannelId: String? = null,
-    @ColumnInfo(name = "body_text") val bodyText: String? = null,
-    @ColumnInfo(name = "article_title") val articleTitle: String? = null,
-    @ColumnInfo(name = "poll_json") val pollJson: String? = null,
-    @ColumnInfo(name = "community_note") val communityNote: String? = null,
-    @ColumnInfo(name = "lang") val lang: String? = null,
-    @ColumnInfo(name = "is_retweet") val isRetweet: Boolean = false,
-    @ColumnInfo(name = "reposter_channel_id") val reposterChannelId: String? = null,
+    val tweetId: String,
+    val sourceChannelId: String? = null,
+    val bodyText: String? = null,
+    val articleTitle: String? = null,
+    val pollJson: String? = null,
+    val communityNote: String? = null,
+    val lang: String? = null,
+    val isRetweet: Boolean = false,
+    val reposterChannelId: String? = null,
 
-    @ColumnInfo(name = "quote_tweet_id") val quoteTweetId: String? = null,
-    @ColumnInfo(name = "quote_channel_id") val quoteChannelId: String? = null,
-    @ColumnInfo(name = "quote_body_text") val quoteBodyText: String? = null,
-    @ColumnInfo(name = "quote_article_title") val quoteArticleTitle: String? = null,
-    @ColumnInfo(name = "quote_poll_json") val quotePollJson: String? = null,
-    @ColumnInfo(name = "quote_community_note") val quoteCommunityNote: String? = null,
-    @ColumnInfo(name = "quote_lang") val quoteLang: String? = null,
-    @ColumnInfo(name = "quote_media_json") val quoteMediaJson: String? = null,
-    @ColumnInfo(name = "quote_published_at") val quotePublishedAt: Long = 0,
-    @ColumnInfo(name = "quote_canonical_url") val quoteCanonicalUrl: String? = null,
+    val quoteTweetId: String? = null,
+    val quoteChannelId: String? = null,
+    val quoteBodyText: String? = null,
+    val quoteArticleTitle: String? = null,
+    val quotePollJson: String? = null,
+    val quoteCommunityNote: String? = null,
+    val quoteLang: String? = null,
+    val quoteMediaJson: String? = null,
+    val quotePublishedAt: Long = 0,
+    val quoteCanonicalUrl: String? = null,
 
-    @ColumnInfo(name = "media_json") val mediaJson: String? = null,
+    val mediaJson: String? = null,
 
-    @ColumnInfo(name = "views") val views: Long? = null,
-    @ColumnInfo(name = "likes") val likes: Long? = null,
-    @ColumnInfo(name = "retweets") val retweets: Long? = null,
+    val views: Long? = null,
+    val likes: Long? = null,
+    val retweets: Long? = null,
 
-    @ColumnInfo(name = "canonical_url") val canonicalUrl: String? = null,
-    @ColumnInfo(name = "canonical_tweet_id") val canonicalTweetId: String? = null,
-    @ColumnInfo(name = "reply_channel_id") val replyChannelId: String? = null,
-    @ColumnInfo(name = "reply_to_status") val replyToStatus: String? = null,
-    @ColumnInfo(name = "is_reply") val isReply: Boolean = false,
-    @ColumnInfo(name = "is_ghost") val isGhost: Boolean = false,
-    @ColumnInfo(name = "content_hash") val contentHash: String? = null,
+    val canonicalUrl: String? = null,
+    val canonicalTweetId: String? = null,
+    val replyChannelId: String? = null,
+    val replyToStatus: String? = null,
+    val isReply: Boolean = false,
+    val isGhost: Boolean = false,
+    val contentHash: String? = null,
 
-    @ColumnInfo(name = "body_translation") val bodyTranslation: String? = null,
-    @ColumnInfo(name = "body_source_lang") val bodySourceLang: String? = null,
-    @ColumnInfo(name = "quote_translation") val quoteTranslation: String? = null,
-    @ColumnInfo(name = "quote_source_lang") val quoteSourceLang: String? = null,
+    val bodyTranslation: String? = null,
+    val bodySourceLang: String? = null,
+    val quoteTranslation: String? = null,
+    val quoteSourceLang: String? = null,
 
-    @ColumnInfo(name = "published_at") val publishedAt: Long = 0,
-    @ColumnInfo(name = "channel_id") val channelId: String? = null,
+    val publishedAt: Long = 0,
+    val channelId: String? = null,
 )
 
 @Serializable
-@Entity(
-    tableName = "videos",
-    indices = [
-        Index(
-            value = ["channel_id", "published_at"],
-            orders = [Index.Order.ASC, Index.Order.DESC],
-            name = "idx_videos_channel_published",
-        ),
-        Index(
-            value = ["source_kind", "published_at"],
-            orders = [Index.Order.ASC, Index.Order.DESC],
-            name = "idx_videos_source_kind",
-        ),
-        Index(
-            value = ["owner_kind", "published_at", "video_id"],
-            orders = [Index.Order.ASC, Index.Order.DESC, Index.Order.DESC],
-            name = "idx_videos_owner_published",
-        ),
-    ],
-)
 data class VideoEntity(
-    @PrimaryKey @ColumnInfo(name = "video_id") val videoId: String,
-    @ColumnInfo(name = "channel_id") val channelId: String,
+    val videoId: String,
+    val channelId: String,
     @SerialName("owner_kind")
-    @ColumnInfo(name = "owner_kind") val ownerKind: String,
-    @ColumnInfo(name = "title") val title: String? = null,
-    @ColumnInfo(name = "description") val description: String? = null,
-    @ColumnInfo(name = "duration") val duration: Long? = null,
-    @ColumnInfo(name = "published_at") val publishedAt: Long = 0,
-    @ColumnInfo(name = "is_temp", defaultValue = "0") val isTemp: Boolean = false,
-    @ColumnInfo(name = "media_kind") val mediaKind: String? = null,
-    @ColumnInfo(name = "slide_count") val slideCount: Int = 0,
-    @ColumnInfo(name = "source_kind") val sourceKind: String? = null,
-    @ColumnInfo(name = "metadata_json") val metadataJson: String? = null,
-    @ColumnInfo(name = "canonical_url") val canonicalUrl: String? = null,
-    @ColumnInfo(name = "dearrow_title") val dearrowTitle: String? = null,
-    @ColumnInfo(name = "dearrow_title_casual") val dearrowTitleCasual: String? = null,
-    @ColumnInfo(name = "moments_all_position", defaultValue = "0") val momentsAllPosition: Long = 0,
-    @ColumnInfo(name = "moments_following_position", defaultValue = "0") val momentsFollowingPosition: Long = 0,
+    val ownerKind: String,
+    val title: String? = null,
+    val description: String? = null,
+    val duration: Long? = null,
+    val publishedAt: Long = 0,
+    val isTemp: Boolean = false,
+    val mediaKind: String? = null,
+    val slideCount: Int = 0,
+    val sourceKind: String? = null,
+    val metadataJson: String? = null,
+    val canonicalUrl: String? = null,
+    val dearrowTitle: String? = null,
+    val dearrowTitleCasual: String? = null,
+    val momentsAllPosition: Long = 0,
+    val momentsFollowingPosition: Long = 0,
 )
 
 @Serializable
-@Entity(
-    tableName = "channels",
-    indices = [
-        Index(value = ["platform"], name = "idx_channels_platform"),
-    ],
-)
 data class ChannelEntity(
-    @PrimaryKey @ColumnInfo(name = "channel_id") val channelId: String,
-    @ColumnInfo(name = "source_id") val sourceId: String? = null,
-    @ColumnInfo(name = "name") val name: String,
-    @ColumnInfo(name = "url") val url: String? = null,
-    @ColumnInfo(name = "platform") val platform: String,
+    val channelId: String,
+    val sourceId: String? = null,
+    val name: String,
+    val url: String? = null,
+    val platform: String,
 )
 
 @Serializable
-@Entity(tableName = "channel_profiles")
 data class ChannelProfileEntity(
-    @PrimaryKey @ColumnInfo(name = "channel_id") val channelId: String,
-    @ColumnInfo(name = "platform") val platform: String,
-    @ColumnInfo(name = "handle") val handle: String? = null,
-    @ColumnInfo(name = "display_name") val displayName: String? = null,
-    @ColumnInfo(name = "bio") val bio: String? = null,
-    @ColumnInfo(name = "website") val website: String? = null,
-    @ColumnInfo(name = "followers") val followers: Int = 0,
-    @ColumnInfo(name = "following") val following: Int = 0,
-    @ColumnInfo(name = "verified") val verified: Boolean = false,
-    @ColumnInfo(name = "verified_type") val verifiedType: String? = null,
-    @ColumnInfo(name = "account_region") val accountRegion: String? = null,
-    @ColumnInfo(name = "account_details_json") val accountDetailsJson: String? = null,
+    val channelId: String,
+    val platform: String,
+    val handle: String? = null,
+    val displayName: String? = null,
+    val bio: String? = null,
+    val website: String? = null,
+    val followers: Int = 0,
+    val following: Int = 0,
+    val verified: Boolean = false,
+    val verifiedType: String? = null,
+    val accountRegion: String? = null,
+    val accountDetailsJson: String? = null,
     @SerialName("protected")
-    @ColumnInfo(name = "protected") val isProtected: Boolean = false,
+    val isProtected: Boolean = false,
 )
 
 @Serializable

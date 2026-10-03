@@ -1,5 +1,8 @@
 package com.screwy.igloo.data
 
+import com.screwy.igloo.data.ContentPayloads
+import com.screwy.igloo.data.entity.StoredChannel
+import com.screwy.igloo.data.entity.StoredVideo
 import com.screwy.igloo.data.entity.ChannelEntity
 import com.screwy.igloo.data.entity.ChannelFollowEntity
 import com.screwy.igloo.data.entity.ChannelSettingEntity
@@ -81,8 +84,7 @@ class MomentReadDaoTest {
         seedChannel(channelId, "tiktok")
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId, 1L))
         db.videoDao()
-            .upsert(
-                listOf(
+            .upsertCaptured(listOf(
                     VideoEntity(
                         videoId = "published_newer",
                         channelId = channelId,
@@ -99,8 +101,7 @@ class MomentReadDaoTest {
                         momentsAllPosition = 1L,
                         momentsFollowingPosition = 1L,
                     ),
-                )
-            )
+                ).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
 
         assertEquals(
             listOf("appended_first", "published_newer"),
@@ -271,15 +272,13 @@ class MomentReadDaoTest {
         seedChannel(channelId, "tiktok")
         db.channelFollowDao().upsert(ChannelFollowEntity(channelId, 1L))
         db.videoDao()
-            .upsert(
-                VideoEntity(
+            .upsertCaptured(VideoEntity(
                     videoId = "tiktok_story_video",
                     channelId = channelId,
                     ownerKind = "channel",
                     publishedAt = 100L,
                     sourceKind = "story",
-                )
-            )
+                ).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
 
         assertEquals(
             listOf(channelId),
@@ -327,14 +326,12 @@ class MomentReadDaoTest {
         seedChannel(ownerId, platform)
         seedReposter(reposterId, platform)
         db.videoDao()
-            .upsert(
-                VideoEntity(
+            .upsertCaptured(VideoEntity(
                     videoId = videoId,
                     channelId = ownerId,
                     ownerKind = "channel",
                     publishedAt = 1L,
-                )
-            )
+                ).let { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         db.videoRepostSourceDao()
             .upsert(
                 listOf(
@@ -355,6 +352,6 @@ class MomentReadDaoTest {
     }
 
     private suspend fun seedChannel(channelId: String, platform: String) {
-        db.channelDao().upsert(ChannelEntity(channelId, channelId, channelId, null, platform))
+        db.channelDao().upsertCaptured(ChannelEntity(channelId, channelId, channelId, null, platform).let { item -> StoredChannel.from(item, ContentPayloads.channel(item, null)) })
     }
 }

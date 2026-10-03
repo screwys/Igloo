@@ -111,6 +111,17 @@ interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE state = 'pending' ORDER BY created_at_ms, id")
     suspend fun pendingRows(): List<OutboxEntity>
 
+    @Query(
+        """
+        SELECT * FROM outbox
+        WHERE state = 'pending' AND kind = :kind
+          AND item_id IS :itemId AND field IS :field
+        ORDER BY created_at_ms, id
+        LIMIT 1
+        """
+    )
+    suspend fun pendingRow(kind: String, itemId: String?, field: String?): OutboxEntity?
+
     @Query("SELECT * FROM outbox WHERE id IN (:ids)")
     suspend fun rowsByIds(ids: List<Long>): List<OutboxEntity>
 

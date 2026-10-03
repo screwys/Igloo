@@ -1,6 +1,7 @@
 package com.screwy.igloo.sync
 
-import androidx.room.withTransaction
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.dao.AndroidSyncDao
 import com.screwy.igloo.data.dao.OfflineVideoDownloadDao
@@ -40,19 +41,21 @@ class OfflineVideoDownloads(
         val id = videoId.trim()
         if (id.isEmpty()) return
 
-        db.withTransaction {
-            if (!syncDao.hasVideo(id)) return@withTransaction
-            val state =
-                if (syncDao.localYoutubeVideoPrimaryAssets(id).isNotEmpty()) STATE_DOWNLOADED
-                else STATE_REQUESTED
-            downloads.upsert(
-                OfflineVideoDownloadEntity(
-                    videoId = id,
-                    state = state,
-                    updatedAtMs = nowMsProvider(),
-                ),
-            )
-            syncDao.prioritizeYoutubeVideoPrimaryAssets(id)
+        db.useWriterConnection { writer ->
+            writer.immediateTransaction<Unit> {
+                if (!syncDao.hasVideo(id)) return@immediateTransaction
+                val state =
+                    if (syncDao.localYoutubeVideoPrimaryAssets(id).isNotEmpty()) STATE_DOWNLOADED
+                    else STATE_REQUESTED
+                downloads.upsert(
+                    OfflineVideoDownloadEntity(
+                        videoId = id,
+                        state = state,
+                        updatedAtMs = nowMsProvider(),
+                    ),
+                )
+                syncDao.prioritizeYoutubeVideoPrimaryAssets(id)
+            }
         }
         syncTrigger()
     }
@@ -62,17 +65,19 @@ class OfflineVideoDownloads(
         if (id.isEmpty()) return
 
         val files =
-            db.withTransaction {
-                val localPrimaryAssets = syncDao.localYoutubeVideoPrimaryAssets(id)
-                downloads.upsert(
-                    OfflineVideoDownloadEntity(
-                        videoId = id,
-                        state = STATE_REMOVED,
-                        updatedAtMs = nowMsProvider(),
-                    ),
-                )
-                syncDao.resetVerifiedLocalPathsForYoutubeVideoPrimaryAssets(id)
-                localPrimaryAssets.mapNotNull { it.localPath }
+            db.useWriterConnection { writer ->
+                writer.immediateTransaction {
+                    val localPrimaryAssets = syncDao.localYoutubeVideoPrimaryAssets(id)
+                    downloads.upsert(
+                        OfflineVideoDownloadEntity(
+                            videoId = id,
+                            state = STATE_REMOVED,
+                            updatedAtMs = nowMsProvider(),
+                        ),
+                    )
+                    syncDao.resetVerifiedLocalPathsForYoutubeVideoPrimaryAssets(id)
+                    localPrimaryAssets.mapNotNull { it.localPath }
+                }
             }
         files.forEach(::deleteSyncFile)
         syncTrigger()

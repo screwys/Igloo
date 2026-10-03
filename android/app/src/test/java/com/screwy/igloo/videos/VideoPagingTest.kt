@@ -1,5 +1,7 @@
 package com.screwy.igloo.videos
 
+import com.screwy.igloo.data.ContentPayloads
+import com.screwy.igloo.data.entity.StoredVideo
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.RoomTestSupport
 import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
@@ -38,8 +40,7 @@ class VideoPagingTest {
     }
 
     @Test fun youtubePagingIsBoundedAndKeepsPublishedThenVideoIdOrder() = runBlocking {
-        db.videoDao().upsert(
-            listOf(
+        db.videoDao().upsertCaptured(listOf(
                 video("video_new", publishedAt = 50L),
                 video("video_same_a", publishedAt = 40L),
                 video("video_same_z", publishedAt = 40L),
@@ -51,8 +52,7 @@ class VideoPagingTest {
                     channelId = "tiktok_channel",
                     ownerKind = "tiktok_video",
                 ),
-            ),
-        )
+            ).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
 
         val loader = VideoPageLoader(
             scope = scope,
@@ -88,7 +88,7 @@ class VideoPagingTest {
         val imageOnly = video("image_only_video", publishedAt = 35L)
         val requested = video("requested_video", publishedAt = 30L)
         val ordinary = video("ordinary_video", publishedAt = 20L)
-        db.videoDao().upsert(listOf(temporary, completed, completedWithoutStream, imageOnly, requested, ordinary))
+        db.videoDao().upsertCaptured(listOf(temporary, completed, completedWithoutStream, imageOnly, requested, ordinary).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
         db.offlineVideoDownloadDao().upsert(
             OfflineVideoDownloadEntity("completed_video", state = "downloaded", updatedAtMs = 1L),
         )
@@ -132,12 +132,10 @@ class VideoPagingTest {
     }
 
     @Test fun playerNavigationUsesCanonicalYoutubeOwnerKind() = runBlocking {
-        db.videoDao().upsert(
-            listOf(
+        db.videoDao().upsertCaptured(listOf(
                 video("older_video", publishedAt = 10L, channelId = "unprefixed_channel"),
                 video("newer_video", publishedAt = 20L, channelId = "unprefixed_channel"),
-            ),
-        )
+            ).map { item -> StoredVideo.from(item, ContentPayloads.video(item, null)) })
 
         assertEquals("older_video", db.videoDao().getNextVideoId("newer_video"))
         assertEquals("newer_video", db.videoDao().getPreviousVideoId("older_video"))

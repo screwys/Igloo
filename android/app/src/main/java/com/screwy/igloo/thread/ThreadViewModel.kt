@@ -336,8 +336,10 @@ class ThreadViewModel(
                 ?: "twitter",
             authorHandle = quoteHandle,
             authorDisplayName = quoteDisplayName,
-            authorAccountRegion = quoteProfile?.accountRegion ?: sourceRow.quoteAuthorAccountRegion,
-            authorAccountDetailsJson = quoteProfile?.accountDetailsJson ?: sourceRow.quoteAuthorAccountDetailsJson,
+            authorProfile = (quoteProfile ?: sourceRow.quoteProfile)?.copy(
+                accountRegion = quoteProfile?.accountRegion ?: sourceRow.quoteAuthorAccountRegion,
+                accountDetailsJson = quoteProfile?.accountDetailsJson ?: sourceRow.quoteAuthorAccountDetailsJson,
+            ),
             sourceHandle = quoteHandle,
             isLiked = quoteIsLiked,
             likedAt = null,

@@ -13,9 +13,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 private val feedMediaJson = Json { ignoreUnknownKeys = true }
 
@@ -250,10 +250,10 @@ private fun parseFeedMediaDescriptor(element: JsonElement): FeedMediaDescriptor?
 }
 
 private fun JsonObject.string(key: String): String? =
-    get(key)?.jsonPrimitive?.contentOrNull
+    (get(key) as? JsonPrimitive)?.contentOrNull
 
 private fun JsonObject.int(key: String): Int? =
-    get(key)?.jsonPrimitive?.intOrNull
+    (get(key) as? JsonPrimitive)?.intOrNull
 
 private fun AndroidSyncAssetEntity?.toMediaUri(baseUrl: String, allowRemote: Boolean): MediaUri? {
     if (this == null) return null
