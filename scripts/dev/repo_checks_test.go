@@ -259,7 +259,7 @@ func TestPrePushRejectsNixDependencyFailureForGoChanges(t *testing.T) {
 			runGit("add", tc.file)
 			runGit("commit", "-qm", "change")
 			head := runGit("rev-parse", "HEAD")
-			write("bin/just", "#!/bin/sh\nprintf '%s\\n' \"$@\" > nix-arguments\nexit 1\n")
+			write("bin/just", "#!/bin/sh\nif [ \"$1\" = test ]; then exec scripts/dev/test-changed.sh; fi\nprintf '%s\\n' \"$@\" > nix-arguments\nexit 1\n")
 			write("scripts/dev/test-changed.sh", "#!/bin/sh\nexit 0\n")
 			write("scripts/dev/changed-go/main.go", string(selector))
 			cmd := exec.Command("bash", hook)
