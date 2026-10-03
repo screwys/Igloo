@@ -43,6 +43,7 @@ Use `just` from the repository root for routine builds, checks, generators, and 
 
 - Write tests only when requested. Run relevant existing checks. Use focused recipes during development, `just test` for the proportional gate, and `just test-full` when the full suite is needed. Inspect skips and ignored errors.
 - Rely on `.githooks/pre-push` for push checks without repeating them manually. Treat new or high-signal production `errcheck` findings as blockers and explain existing findings left unresolved.
+- Ordinary push checks select affected Go packages and callers and reuse Go and Gradle caches. Use `IGLOO_PRE_PUSH_FULL=1 git push` for an explicit full cold check.
 - Regenerate templ and bundled assets with `just check-drift`. Update localization with `just i18n-sync` and verify it with `just i18n-check`.
 - After server, web, static, or component changes that affect the running app, run `just restart`.
 - After Android app source, resources, manifest, Gradle configuration, or Room schema changes, run `just build-android` before finishing or committing. It builds, installs, and relaunches the app. JVM tests and compilation alone do not replace it. Report unavailable tooling or devices explicitly.
@@ -52,6 +53,8 @@ Use `just` from the repository root for routine builds, checks, generators, and 
 
 ## Data contracts
 
+- PostgreSQL schema and triggers live in `internal/db/postgres/migrations/` and use Goose. Add a new migration for changes to an applied schema. Fixed sqlc queries live in `internal/db/queries/`; regenerate their bindings with `just check-drift`. The SQLite server schema supports legacy archive conversion.
+- Android stores complete synced owner payloads with typed columns for joins, filters, and ordering. Preserve unknown payload fields and normalize known fields at capture. Presentation fields belong in decoded records; changes to stored query columns require a Room migration. Compute content classification during capture and migration.
 - Trace changed fields and queries through every affected caller. Compare returned data and state transitions when changing shared queries.
 - Server storage owns channel and media identity, assets, and cursors. Prepare identity and media during capture and ingest. Preserve profile navigation and following when metadata is empty.
 - Feed-item responses need `feed.EnrichFeedItems(...)`, bookmark state, follow or subscription URLs, and every field the caller reads. Give callers separate queries when their data needs differ.
@@ -62,7 +65,9 @@ The server published as `latest` must remain compatible with the latest released
 
 Use `igloo-android-sync` for the Android mirror, `igloo-debugging` for investigations, and `igloo-web-ui-guidance` for web UI work.
 
+The web tests reuse one database and reset its data between fixtures. Keep tests using `newTestServer` sequential. Use a separate database for schema deletion or process lifecycle checks.
+
 ## Git and releases
 
 - For CI fixes, commit and push the verified fix unless the user says otherwise or publishing is blocked. Report the exact blocker.
-- Releases require both the user's bump and exact summary. Use `just release <patch|minor|major> "<user summary>"` to publish or `just release-local ...` for a local signed tag. Use `igloo-release` for release details and recovery.
+- Releases require both the user's bump and exact summary. Use `just release <patch|minor|major> "<user summary>"` to publish or `just release-local ...` for a local signed tag.
