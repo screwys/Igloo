@@ -130,7 +130,9 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 			UNION ALL
 			SELECT bp.video_id AS action_id, fi.*, 1 AS presentation_rank
 			FROM bookmark_page bp
-			JOIN feed_items fi ON fi.canonical_tweet_id = bp.video_id AND fi.tweet_id != bp.video_id
+			JOIN feed_items fi ON fi.canonical_tweet_id = bp.video_id
+			  AND fi.canonical_tweet_id IS NOT NULL AND fi.canonical_tweet_id != ''
+			  AND fi.tweet_id != bp.video_id
 			WHERE NULLIF(TRIM(COALESCE(fi.body_text, '')), '') IS NOT NULL
 			   OR NULLIF(TRIM(COALESCE(fi.media_json, '')), '') IS NOT NULL
 			   OR NULLIF(TRIM(COALESCE(fi.quote_tweet_id, '')), '') IS NOT NULL

@@ -215,7 +215,7 @@ func (db *DB) GetHomeVideos(widget home.Widget) ([]HomeVideo, error) {
 	return videos, rows.Err()
 }
 
-func homeFeedCandidatesSQL(widget home.Widget, args *[]any) string {
+func homeFeedCandidatesSQL(widget home.Widget, args *[]any, sourceProbe bool) string {
 	if widget.Type == "saved" {
 		return `home_feed_candidates AS (
 			SELECT fi.tweet_id FROM bookmarks b
@@ -238,20 +238,24 @@ func homeFeedCandidatesSQL(widget home.Widget, args *[]any) string {
 		channels = `VALUES ` + strings.Join(values, ",")
 	}
 	scope := homeSourceScopeSQL(widget, "selected.channel_id", args)
+	union := "UNION"
+	if sourceProbe {
+		union = "UNION ALL"
+	}
 	return `home_selected_channels(channel_id) AS (` + channels + `),
 		home_source_channels AS (
 			SELECT selected.channel_id FROM home_selected_channels selected WHERE ` + scope + `
 		), home_feed_candidates AS (
 			SELECT fi.tweet_id FROM home_source_channels source
 			JOIN feed_items fi ON fi.channel_id = source.channel_id
-			UNION
+			` + union + `
 			SELECT fi.tweet_id FROM home_source_channels source
 			JOIN feed_items fi ON fi.source_channel_id = source.channel_id
-			UNION
+			` + union + `
 			SELECT fi.tweet_id FROM home_source_channels source
 			JOIN feed_items fi ON fi.reposter_channel_id = source.channel_id
 			WHERE fi.reposter_channel_id IS NOT NULL AND fi.reposter_channel_id != ''
-			UNION
+			` + union + `
 			SELECT fi.tweet_id FROM home_source_channels source
 			JOIN retweet_sources rs ON rs.retweeter_channel_id = source.channel_id
 			JOIN feed_items fi ON fi.content_hash = rs.content_hash
@@ -267,7 +271,8 @@ func (db *DB) GetHomeFeedItems(widget home.Widget) ([]model.FeedItem, error) {
 		return nil, nil
 	}
 	var args []any
-	candidates := homeFeedCandidatesSQL(widget, &args)
+	recentPosts := widget.Type == "starred" && len(widget.Channels) == 0 && widget.Order != "account" && widget.IncludesContent("post")
+	candidates := homeFeedCandidatesSQL(widget, &args, recentPosts)
 	where := []string{feedPrimaryItemPredicate("fi")}
 	if widget.Type != "saved" {
 		where = append(where, retweetFilterClause("fi"))
@@ -327,16 +332,40 @@ func (db *DB) GetHomeFeedItems(widget home.Widget) ([]model.FeedItem, error) {
 		where = append(where, `(`+strings.Join(content, ` OR `)+`)`)
 	}
 	args = append(args, widget.Count)
-	rows, err := db.reader().Query(bind(`WITH `+candidates+`eligible AS (
-		SELECT `+projection+`, ROW_NUMBER() OVER(PARTITION BY COALESCE(NULLIF(fi.canonical_tweet_id,''),
+	eligible := `eligible AS (
+		SELECT ` + projection + `, ROW_NUMBER() OVER(PARTITION BY COALESCE(NULLIF(fi.canonical_tweet_id,''),
 			CASE WHEN EXISTS (SELECT 1 FROM feed_items wrapper WHERE wrapper.canonical_tweet_id IS NOT NULL AND wrapper.canonical_tweet_id != '' AND wrapper.canonical_tweet_id = fi.tweet_id AND wrapper.tweet_id != fi.tweet_id) THEN fi.tweet_id END,
 			NULLIF(fi.content_hash,''),fi.tweet_id)
-			ORDER BY CASE WHEN `+homeFeedHasContentSQL("fi")+` THEN 0 ELSE 1 END, COALESCE(fi.is_retweet,0), fi.fetched_at DESC,fi.tweet_id) AS home_row
+			ORDER BY CASE WHEN ` + homeFeedHasContentSQL("fi") + ` THEN 0 ELSE 1 END, COALESCE(fi.is_retweet,0), fi.fetched_at DESC,fi.tweet_id) AS home_row
 		FROM home_feed_candidates candidate
 		JOIN feed_items fi ON fi.tweet_id = candidate.tweet_id
-		`+profileJoin+`
-		WHERE `+strings.Join(where, ` AND `)+`), home_feed_page AS (
-		SELECT fi.tweet_id FROM eligible fi WHERE fi.home_row = 1 ORDER BY `+order+` LIMIT ?)
+		` + profileJoin + `
+		WHERE ` + strings.Join(where, ` AND `) + `)`
+	pageWhere := `fi.home_row = 1`
+	pageMaterialization := ""
+	if recentPosts {
+		pageMaterialization = "MATERIALIZED "
+		eligible = `eligible AS NOT MATERIALIZED (
+			SELECT ` + projection + `, fi.content_hash, fi.fetched_at,
+			       COALESCE(fi.is_retweet,0) AS home_retweet,
+			       CASE WHEN ` + homeFeedHasContentSQL("fi") + ` THEN 0 ELSE 1 END AS home_content_rank,
+			       COALESCE(NULLIF(fi.canonical_tweet_id,''),
+			           CASE WHEN EXISTS (SELECT 1 FROM feed_items wrapper WHERE wrapper.canonical_tweet_id IS NOT NULL AND wrapper.canonical_tweet_id != '' AND wrapper.canonical_tweet_id = fi.tweet_id AND wrapper.tweet_id != fi.tweet_id) THEN fi.tweet_id END,
+			           NULLIF(fi.content_hash,''),fi.tweet_id) AS home_group_key
+			FROM feed_items fi
+			WHERE EXISTS (SELECT 1 FROM home_feed_candidates)
+			  AND ` + strings.Join(where, ` AND `) + `)`
+		pageWhere = `fi.tweet_id = (
+			SELECT peer.tweet_id FROM eligible peer
+			WHERE (peer.tweet_id = fi.home_group_key
+			    OR (peer.canonical_tweet_id IS NOT NULL AND peer.canonical_tweet_id != '' AND peer.canonical_tweet_id = fi.home_group_key)
+			    OR (peer.content_hash IS NOT NULL AND peer.content_hash != '' AND peer.content_hash = fi.home_group_key))
+			  AND peer.home_group_key = fi.home_group_key
+			ORDER BY peer.home_content_rank,peer.home_retweet,peer.fetched_at DESC,peer.tweet_id
+			LIMIT 1)`
+	}
+	rows, err := db.reader().Query(bind(`WITH `+candidates+eligible+`, home_feed_page AS `+pageMaterialization+`(
+		SELECT fi.tweet_id FROM eligible fi WHERE `+pageWhere+` ORDER BY `+order+` LIMIT ?)
 		SELECT `+feedItemSelectSQL("fi")+` FROM home_feed_page page
 		JOIN feed_items_resolved fi ON fi.tweet_id = page.tweet_id ORDER BY `+order), args...)
 	if err != nil {

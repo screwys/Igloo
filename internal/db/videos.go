@@ -352,7 +352,7 @@ func (db *DB) GetVideos(opts GetVideosOpts) ([]model.Video, error) {
 		where = append(where, "COALESCE(v.source_kind, '') != 'story'")
 	}
 	if opts.Platform == "shorts" {
-		where = append(where, "COALESCE(c.platform,'') IN ('tiktok','instagram')")
+		where = append(where, "c.platform IN ('tiktok','instagram')")
 		if isMomentsQuery {
 			where = append(where, momentOwnerUnmutedSQL("v"))
 			if includeSourceWindows {
@@ -716,7 +716,7 @@ func (db *DB) GetVideoCount(opts GetVideosOpts) (int, error) {
 		where = append(where, "COALESCE(v.source_kind, '') != 'story'")
 	}
 	if opts.Platform == "shorts" {
-		where = append(where, "COALESCE(c.platform,'') IN ('tiktok','instagram')")
+		where = append(where, "c.platform IN ('tiktok','instagram')")
 		if isMomentsQuery {
 			where = append(where, momentOwnerUnmutedSQL("v"))
 			if includeSourceWindows {
@@ -821,7 +821,7 @@ func (db *DB) GetShortsOrdinal(videoID, momentsMode string) (int, bool, error) {
 				FROM videos v
 				LEFT JOIN channels c ON v.channel_id = c.channel_id
 				LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id
-				WHERE COALESCE(c.platform, '') IN ('tiktok','instagram')
+				WHERE c.platform IN ('tiktok','instagram')
 				  AND COALESCE(v.source_kind, '') != 'story'
 				  AND COALESCE(v.is_temp,0) = 0
 				  AND `+visibility+`
@@ -876,7 +876,7 @@ func (db *DB) GetShortsOrdinal(videoID, momentsMode string) (int, bool, error) {
 			LEFT JOIN channels c ON v.channel_id = c.channel_id
 			LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id
 			LEFT JOIN moments_repost_heads mr ON mr.video_id = v.video_id
-			WHERE COALESCE(c.platform, '') IN ('tiktok','instagram')
+			WHERE c.platform IN ('tiktok','instagram')
 			  AND COALESCE(v.source_kind, '') != 'story'
 			  AND COALESCE(v.is_temp,0) = 0
 			  AND `+visibility+`
@@ -978,7 +978,7 @@ func (db *DB) GetShortsCursorSortAt(videoID, momentsMode string) (int64, bool, e
 		FROM videos v
 		LEFT JOIN channels c ON v.channel_id = c.channel_id
 		WHERE v.video_id = $1
-		  AND COALESCE(c.platform, '') IN ('tiktok','instagram')
+		  AND c.platform IN ('tiktok','instagram')
 		  AND COALESCE(v.source_kind, '') != 'story'
 		  AND COALESCE(v.is_temp,0) = 0
 		LIMIT 1
@@ -1056,7 +1056,7 @@ func (db *DB) shortsVisibleCTEForUnpositioned(momentsMode, positionColumn string
 			FROM ` + videoSource + ` v
 			LEFT JOIN channels c ON v.channel_id = c.channel_id
 			LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id
-			WHERE COALESCE(c.platform, '') IN ('tiktok','instagram')
+			WHERE c.platform IN ('tiktok','instagram')
 			  AND COALESCE(v.source_kind, '') != 'story'
 			  AND COALESCE(v.is_temp,0) = 0
 			  AND cf.channel_id IS NOT NULL
@@ -1092,7 +1092,7 @@ func (db *DB) shortsVisibleCTEForUnpositioned(momentsMode, positionColumn string
 			LEFT JOIN channels c ON v.channel_id = c.channel_id
 			LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id
 			LEFT JOIN moments_repost_heads mr ON mr.video_id = v.video_id
-			WHERE COALESCE(c.platform, '') IN ('tiktok','instagram')
+			WHERE c.platform IN ('tiktok','instagram')
 			  AND COALESCE(v.source_kind, '') != 'story'
 			  AND COALESCE(v.is_temp,0) = 0
 			  AND (cf.channel_id IS NOT NULL OR mr.video_id IS NOT NULL)
