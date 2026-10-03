@@ -71,6 +71,8 @@ type PageProps struct {
 	MiniPlayerVideosEnabled bool
 	MiniPlayerFeedEnabled   bool
 	DownloadsStopped        bool
+	BroadcastsEnabled       bool
+	HasLiveBroadcasts       bool
 	RuntimeOS               string
 	StaticV                 func(string) string
 	PageScripts             []string // JS files to include after base scripts.

@@ -29,6 +29,12 @@ exit 1
 	t.Setenv("IGLOO_YTDLP_CALLS", calls)
 
 	database := newTestWorkerDB(t)
+	if err := database.SetSetting("youtube_broadcasts_enabled", "false"); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetSetting("youtube_check_replays", "false"); err != nil {
+		t.Fatal(err)
+	}
 	if err := database.ExecRaw(`
 		INSERT INTO channels (channel_id, name, url, platform, created_at)
 		VALUES ('youtube_sample_source', 'Sample Source',

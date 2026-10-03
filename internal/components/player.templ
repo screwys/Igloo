@@ -75,9 +75,12 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							}
 							<div class="dashboard-right-controls">
 							if p.StreamManifestURL != "" {
-								<select id="player-quality-select" class="mc-custom-btn" style="width:auto;max-width:10rem;font:inherit;color:inherit;background:var(--bg-glass);" aria-label={ L(p, "player_quality", "Quality") } title={ L(p, "player_quality", "Quality") } disabled>
-									<option value="auto">{ L(p, "player_quality_auto", "Auto") }</option>
-								</select>
+								<div id="player-quality-menu-wrap" class="mc-speed-menu-wrap">
+									<button id="player-quality-menu-btn" class="mc-custom-btn" type="button" aria-label={ L(p, "player_quality", "Quality") } title={ L(p, "player_quality", "Quality") } aria-haspopup="menu" aria-controls="player-quality-menu" aria-expanded="false" disabled>
+										@MaterialIcon("Settings", "")
+									</button>
+									<div id="player-quality-menu" class="mc-speed-menu hidden" role="menu" aria-label={ L(p, "player_quality", "Quality") }></div>
+								</div>
 							}
 							if video.Platform == "youtube" {
 								<button id="player-more-controls-btn" class="mc-custom-btn player-more-controls-btn" type="button" title={ L(p, "action_more", "More") } aria-label={ L(p, "action_more", "More") } aria-expanded="false">
@@ -85,13 +88,17 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 								</button>
 								@playerAutoplayButton(p)
 							}
+							<div id="player-captions-menu-wrap" class="mc-speed-menu-wrap hidden">
 							<button
 								id="player-cc-btn"
-								class="mc-custom-btn mc-label-btn hidden"
+								class="mc-custom-btn mc-label-btn"
 								type="button"
 								title={ L(p, "player_subtitles", "Subtitles") }
 								aria-label={ L(p, "player_subtitles", "Subtitles") }
+								aria-haspopup="menu" aria-expanded="false" aria-controls="player-captions-menu"
 								>@MaterialIcon("ClosedCaption", "")</button>
+							<div id="player-captions-menu" class="mc-speed-menu hidden" role="menu" aria-label={ L(p, "player_subtitles", "Subtitles") }></div>
+							</div>
 							<div id="player-speed-menu-wrap" class="mc-speed-menu-wrap">
 								<button id="player-speed-menu-btn" class="mc-custom-btn mc-label-btn mc-speed-btn" type="button" title={ L(p, "player_playback_speed", "Playback speed") } aria-label={ L(p, "player_playback_speed", "Playback speed") } aria-haspopup="menu" aria-expanded="false">
 									@MaterialIcon("Speed", "")
@@ -174,7 +181,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 								@playerOpenButton(p, videoWebpageURL(video))
 							}
 							if p.StreamManifestURL != "" {
-								<button id="player-stream-download-btn" type="button" class="btn btn-secondary btn-sm">{ L(p, "action_download", "Download") }</button>
+								<button id="player-stream-download-btn" type="button" class="player-btn" title={ L(p, "action_download", "Download") } aria-label={ L(p, "action_download", "Download") }>@MaterialIcon("Download", "")</button>
 							} else {
 								@playerDeleteButton(p)
 							}
@@ -216,13 +223,16 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 						<button
 							id="player-comments-refresh-btn"
 							type="button"
-							style="margin-left:auto; padding:0.15rem 0.5rem; font-size:0.72rem; line-height:1.4; background:rgba(20,22,30,0.78); color:var(--text-muted); border:1px solid var(--border-color); border-radius:var(--border-radius-sm); cursor:pointer; flex-shrink:0; font-family:inherit; font-weight:600;"
+							class="player-btn"
+							style="margin-left:auto;"
+							title={ L(p, "action_refresh", "Refresh") }
+							aria-label={ L(p, "action_refresh", "Refresh") }
 							hx-post={ "/api/videos/" + video.VideoID + "/comments/refresh?fmt=html" }
 							hx-target="#player-comments-list"
 							hx-swap="innerHTML"
 							hx-indicator="this"
 							hx-disabled-elt="this"
-							>{ L(p, "action_refresh", "Refresh") }</button>
+							>@MaterialIcon("Refresh", "")</button>
 					</div>
 					<div
 						id="player-comments-list"
@@ -249,6 +259,20 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 			</section>
 
 			<aside class="player-sidebar">
+				if p.UserRole == "admin" && p.BroadcastsEnabled && video.Metadata != nil && (video.Metadata.LiveStatus == "is_live" || video.Metadata.LiveStatus == "post_live" || video.Metadata.LiveStatus == "was_live") {
+					<section id="player-chat" class="player-chat" data-live={ boolDataAttr(video.Metadata.LiveStatus == "is_live") } aria-labelledby="player-chat-heading">
+						<header class="player-chat-header">
+							<h3 id="player-chat-heading">{ L(p, "player_live_chat", "Live chat") }</h3>
+							<button id="player-chat-refresh" class="player-btn hidden" type="button" title={ L(p, "action_refresh", "Refresh") } aria-label={ L(p, "action_refresh", "Refresh") }>@MaterialIcon("Refresh", "")</button>
+							<button id="player-chat-toggle" class="player-btn" type="button" aria-expanded="true" aria-controls="player-chat-body" title={ L(p, "action_hide", "Hide") } aria-label={ L(p, "action_hide", "Hide") }>@MaterialIcon("KeyboardArrowUp", "")</button>
+						</header>
+						<div id="player-chat-body">
+							<div id="player-chat-messages" class="player-chat-messages" tabindex="0" role="log" aria-live="off" aria-label={ L(p, "player_live_chat", "Live chat") }></div>
+							<p id="player-chat-status" class="player-chat-status">{ L(p, "status_loading_ellipsis", "Loading...") }</p>
+							<button id="player-chat-latest" class="player-btn hidden" type="button" title={ L(p, "player_chat_latest", "Latest messages") } aria-label={ L(p, "player_chat_latest", "Latest messages") }>@MaterialIcon("KeyboardArrowDown", "")</button>
+						</div>
+					</section>
+				}
 				if nextVideo != nil {
 					<h3>{ L(p, "player_next_in_line", "Next in line") }</h3>
 					<div class="more-videos-list">

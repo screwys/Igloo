@@ -164,6 +164,8 @@ func homeBroadcastLabel(p PageProps, status string) string {
 		return L(p, "home_live", "Live")
 	case "is_upcoming":
 		return L(p, "home_upcoming", "Upcoming")
+	case "post_live":
+		return L(p, "home_processing", "Processing")
 	default:
 		return L(p, "home_replay", "Replay")
 	}
@@ -186,7 +188,7 @@ func homeBroadcastHref(p PageProps, broadcast model.YouTubeBroadcast) string {
 		return "https://www.youtube.com/watch?v=" + url.QueryEscape(broadcast.VideoID)
 	}
 	href := "/temp/watch?v=" + url.QueryEscape(broadcast.VideoID)
-	if broadcast.LiveStatus == "is_live" {
+	if broadcast.LiveStatus == "is_live" || broadcast.LiveStatus == "post_live" {
 		href += "&mode=stream"
 	}
 	return href

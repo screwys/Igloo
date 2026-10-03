@@ -106,7 +106,7 @@ func (s *Server) handleSettingsForm(w http.ResponseWriter, r *http.Request) {
 var shortcutDefaults = map[string]string{
 	"feed.like": "l", "feed.bookmark": "b", "feed.share": "s", "feed.translate": "t", "feed.media": "f", "feed.mute": "m",
 	"shorts.autoplay": "a", "shorts.bookmark": "b", "shorts.share": "s", "shorts.grid": "c",
-	"player.fullscreen": "f", "player.cinema": "c", "player.bookmark": "b", "player.share": "s", "player.autoplay": "a",
+	"player.fullscreen": "f", "player.cinema": "t", "player.subtitles": "c", "player.bookmark": "b", "player.share": "s", "player.autoplay": "a",
 	"global.sidebar":    "z",
 	"global.addChannel": "n",
 	"global.download":   "d",
@@ -249,6 +249,8 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	previousXMediaLimit := s.db.IntSetting("media_download_limit_default")
 	previousXProfileHistoryLimit := s.db.IntSetting("x_profile_history_limit")
 	previousYouTubeMemberOnly := s.db.BoolSetting("youtube_include_member_only")
+	previousYouTubeBroadcasts := s.db.BoolSetting("youtube_broadcasts_enabled")
+	previousYouTubeReplays := s.db.BoolSetting("youtube_check_replays")
 	previousDiscoverPrefetch := s.db.IntSetting("discover_prefetch_count")
 	previousDiscoverReset := s.db.IntSetting("discover_reset_hours")
 	previousDiscoverMaxDuration := s.db.IntSetting("discover_max_duration_minutes")
@@ -268,7 +270,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			platform, settingKey, repostSettingKey string
 			extraChanged                           bool
 		}{
-			{"youtube", "youtube_max_videos", "", previousYouTubeMemberOnly != s.db.BoolSetting("youtube_include_member_only")},
+			{"youtube", "youtube_max_videos", "", previousYouTubeMemberOnly != s.db.BoolSetting("youtube_include_member_only") || previousYouTubeReplays != s.db.BoolSetting("youtube_check_replays") || !previousYouTubeBroadcasts && s.db.BoolSetting("youtube_broadcasts_enabled")},
 			{"tiktok", "shorts_max_videos", "tiktok_repost_max_videos", previousTiktokReposts != s.db.MomentsIncludeRepostsEnabled()},
 			{"instagram", "instagram_max_videos", "instagram_repost_max_videos", previousInstagramTagged != s.db.InstagramIncludeTaggedEnabled()},
 		}
@@ -319,6 +321,9 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isHTMX {
+		if previousYouTubeBroadcasts != s.db.BoolSetting("youtube_broadcasts_enabled") {
+			w.Header().Set("HX-Refresh", "true")
+		}
 		w.WriteHeader(200)
 	} else {
 		writeJSON(w, 200, map[string]any{"success": true})
@@ -475,7 +480,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 	// Checkboxes: present=true, absent=false.
 	checkboxFields := []string{
 		"x_account_region_enabled", "x_community_notes_enabled", "instagram_profile_details",
-		"youtube_include_member_only", "download_subtitles", "media_only_default",
+		"youtube_include_member_only", "youtube_broadcasts_enabled", "youtube_check_replays", "download_subtitles", "media_only_default",
 		"mini_player_videos_enabled", "mini_player_feed_enabled",
 		"archive_bookmarks", "backup_enabled",
 		"algorithmic_feed_enabled", "moments_include_reposts_default",

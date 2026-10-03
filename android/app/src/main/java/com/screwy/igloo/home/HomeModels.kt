@@ -61,6 +61,7 @@ data class HomeCache(
     val broadcasts: List<HomeBroadcast> = emptyList(),
     @SerialName("include_reposts") val includeReposts: Boolean = true,
     @SerialName("include_tagged") val includeTagged: Boolean = true,
+    @SerialName("broadcasts_enabled") val broadcastsEnabled: Boolean = true,
 )
 
 data class HomeCard(

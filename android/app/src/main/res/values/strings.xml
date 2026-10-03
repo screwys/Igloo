@@ -47,6 +47,7 @@
     <string name="action_following">Following</string>
     <string name="action_full_export">Full Export</string>
     <string name="action_grid">Grid</string>
+    <string name="action_hide">Hide</string>
     <string name="action_import">Import</string>
     <string name="action_like">Like</string>
     <string name="action_logout">Logout</string>
@@ -180,6 +181,7 @@
     <string name="bookmark_waiting_for_category_sync_before_saving">Waiting for category sync before saving.</string>
     <string name="bookmarks_all_with_count">All (%1$d)</string>
     <string name="bookmarks_empty">No bookmarks</string>
+    <string name="broadcasts_empty">No broadcasts</string>
     <string name="cache_avatars">Avatars</string>
     <string name="cache_banners">Banners</string>
     <string name="cache_feed_items">Feed items</string>
@@ -579,6 +581,7 @@
     <string name="nav_feed">Feed</string>
     <string name="nav_home">Home</string>
     <string name="nav_liked">Liked</string>
+    <string name="nav_lives">Lives</string>
     <string name="nav_moments">Moments</string>
     <string name="nav_videos">Videos</string>
     <string name="notification_background_sync_channel_description">Shown while Igloo catches up downloads in the background</string>
@@ -603,6 +606,10 @@
     <string name="player_back_10_seconds">Back 10 seconds</string>
     <string name="player_brightness">Brightness</string>
     <string name="player_channel_unsubscribed">Channel unsubscribed</string>
+    <string name="player_chat_ended">Chat ended</string>
+    <string name="player_chat_failed">Chat could not load</string>
+    <string name="player_chat_latest">Latest messages</string>
+    <string name="player_chat_unavailable">Chat unavailable</string>
     <string name="player_cinema_view">Cinema view</string>
     <string name="player_comment_author_unknown">User</string>
     <string name="player_comments_empty">No comments found.</string>
@@ -612,6 +619,7 @@
     <string name="player_delete_video_title">Delete video</string>
     <string name="player_forward_10_seconds">Forward 10 seconds</string>
     <string name="player_hide_subtitles">Hide subtitles</string>
+    <string name="player_live_chat">Live chat</string>
     <string name="player_more_from_channel">More videos from this channel</string>
     <string name="player_next_in_line">Next in line</string>
     <string name="player_next_video">Next video</string>
@@ -733,6 +741,7 @@
     <string name="settings_export_help">Subscriptions, likes, bookmarks, and avatars.</string>
     <string name="settings_export_unavailable">Export not available yet</string>
     <string name="settings_feed_include_reposts">Include reposts</string>
+    <string name="settings_fetch_broadcasts">Fetch broadcasts</string>
     <string name="settings_fetch_delay_seconds">Fetch Delay (seconds)</string>
     <string name="settings_instagram_profile_details">Fetch detailed profiles</string>
     <string name="settings_instagram_profile_details_hint">Retrieve bios, websites, and follower counts while checking accounts. Instagram may rate limit this lookup.</string>
@@ -895,6 +904,7 @@
     <string name="settings_x_thread_fetch_never">Never</string>
     <string name="settings_x_thread_fetch_starred">Starred only</string>
     <string name="settings_youtube_actions">Opening YouTube videos</string>
+    <string name="settings_youtube_check_replays">Also check replays</string>
     <string name="settings_youtube_download_first">Download first</string>
     <string name="settings_youtube_include_member_only">Include member-only content</string>
     <string name="settings_youtube_max_videos">Default YouTube Max Videos</string>
@@ -1059,6 +1069,7 @@
     <string name="video_views_count">%1$s views</string>
     <string name="videos_empty_body">No videos found.</string>
     <string name="videos_empty_title">No Videos</string>
+    <string name="videos_tab_lives">Lives</string>
     <string name="youtube_search_empty_prompt">Enter a query to search YouTube.</string>
     <string name="youtube_search_placeholder">Search YouTube</string>
     <string name="youtube_search_title">YouTube Search</string>

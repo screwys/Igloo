@@ -8,6 +8,9 @@ import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
 import { bindVolumeWheel, readStoredVolume, writeStoredVolume } from '../volume.js'
 import { bindVideoFeedback } from '../video-feedback.js'
 import { initStreaming } from './streaming.js'
+import { initLiveChat } from './chat.js'
+import { initSubtitles } from './subtitles.js'
+import { playVideo } from './playback.js'
 
 const doc = document
 const root = doc.getElementById('player-root')
@@ -27,13 +30,17 @@ if (root && video) {
   const speedMenuWrap = doc.getElementById('player-speed-menu-wrap')
   const speedMenuBtn = doc.getElementById('player-speed-menu-btn')
   const speedMenu = doc.getElementById('player-speed-menu')
+  const qualityMenuWrap = doc.getElementById('player-quality-menu-wrap')
+  const qualityMenuBtn = doc.getElementById('player-quality-menu-btn')
+  const qualityMenu = doc.getElementById('player-quality-menu')
+  const captionsMenuWrap = doc.getElementById('player-captions-menu-wrap')
+  const captionsMenuBtn = doc.getElementById('player-cc-btn')
+  const captionsMenu = doc.getElementById('player-captions-menu')
   const fullscreenBtn = doc.getElementById('player-fullscreen-btn')
   const cinemaBtn = doc.getElementById('player-cinema-btn')
   const moreControlsBtn = doc.getElementById('player-more-controls-btn')
   const volumeRange = doc.getElementById('player-volume-range')
   const volumeControl = root.querySelector('.dashboard-volume-control')
-  // Note: no custom subtitle menu in the template — media-chrome's
-  // built-in <media-captions-button> handles CC when tracks exist.
   const deleteBtn = doc.getElementById('player-delete-btn')
   const channelUnsubBtn = doc.getElementById('player-channel-unsub-btn')
   const channelSubBtn = doc.getElementById('player-channel-sub-btn')
@@ -200,6 +207,8 @@ if (root && video) {
 
   function closeAllPlayerMenus(except) {
     if (speedMenu && speedMenu !== except) closePopupMenu(speedMenu, speedMenuBtn)
+    if (qualityMenu && qualityMenu !== except) closePopupMenu(qualityMenu, qualityMenuBtn)
+    if (captionsMenu && captionsMenu !== except) closePopupMenu(captionsMenu, captionsMenuBtn)
   }
 
   function setupPlayerControlsVisibility() {
@@ -208,7 +217,7 @@ if (root && video) {
     return bindVideoControlsVisibility({
       stateElement: controller,
       surface: playerWrapper,
-      popupElements: [speedMenu],
+      popupElements: [speedMenu, qualityMenu, captionsMenu],
       readyAttribute: 'data-player-controls-ready',
       visibleAttribute: 'data-player-controls-visible',
       inactiveAttribute: 'userinactive',
@@ -295,14 +304,6 @@ if (root && video) {
       syncVolumeRange()
     })
     syncVolumeRange()
-  }
-
-  function controllerControlsVisible(controller) {
-    if (!controller) return false
-    if (controller.hasAttribute('data-player-controls-ready')) {
-      return controller.getAttribute('data-player-controls-visible') === '1'
-    }
-    return !controller.hasAttribute('userinactive')
   }
 
   // --- Bookmark button state ---
@@ -394,33 +395,73 @@ if (root && video) {
     }
   }
 
+  function setupControlMenu(menu, button) {
+    if (!menu || !button) return
+    // Keep menus outside the controller's clipped area.
+    doc.body.appendChild(menu)
+    menu.classList.add('player-control-menu')
+    function repositionMenu() {
+      var rect = button.getBoundingClientRect()
+      menu.style.bottom = (window.innerHeight - rect.top + 6) + 'px'
+      menu.style.right = Math.max(8, window.innerWidth - rect.right) + 'px'
+    }
+    button.addEventListener('click', function (event) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      closeAllPlayerMenus(menu)
+      var isHidden = menu.classList.contains('hidden')
+      if (isHidden) {
+        repositionMenu()
+        openPopupMenu(menu, button)
+      } else {
+        closePopupMenu(menu, button)
+      }
+    })
+    button.addEventListener('keydown', function (event) {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+      event.preventDefault()
+      event.stopPropagation()
+      closeAllPlayerMenus(menu)
+      repositionMenu()
+      openPopupMenu(menu, button)
+      const options = menu.querySelectorAll('[role="menuitemradio"]')
+      const selected = menu.querySelector('[aria-checked="true"]')
+      const target = selected || options[event.key === 'ArrowUp' ? options.length - 1 : 0]
+      if (target) target.focus()
+    })
+    menu.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        closePopupMenu(menu, button)
+        button.focus()
+        return
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+      event.preventDefault()
+      event.stopPropagation()
+      const options = Array.from(menu.querySelectorAll('[role="menuitemradio"]'))
+      let index = options.indexOf(doc.activeElement)
+      if (event.key === 'Home') index = 0
+      else if (event.key === 'End') index = options.length - 1
+      else index = (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length
+      if (options[index]) options[index].focus()
+    })
+    window.addEventListener('resize', function () {
+      if (!menu.classList.contains('hidden')) repositionMenu()
+    })
+    window.addEventListener('scroll', function () {
+      if (!menu.classList.contains('hidden')) repositionMenu()
+    }, true)
+  }
+
   function setupSpeedMenu() {
     if (!speedMenuWrap || !speedMenuBtn || !speedMenu) return
     applyPreferredPlaybackRate()
     renderSpeedMenu()
-    // Portal to body to escape overflow:hidden in media-controller.
-    // Must add inline styles since CSS ancestor selectors no longer match.
-    doc.body.appendChild(speedMenu)
-    speedMenu.style.cssText = 'position:fixed; z-index:99999; margin:0; display:grid; gap:0.12rem; min-width:92px; max-height:min(50vh,320px); overflow-y:auto; padding:0.3rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-glass); box-shadow:var(--shadow); backdrop-filter:var(--glass-blur);'
-    function repositionSpeedMenu() {
-      var rect = speedMenuBtn.getBoundingClientRect()
-      speedMenu.style.bottom = (window.innerHeight - rect.top + 6) + 'px'
-      speedMenu.style.right = (window.innerWidth - rect.right) + 'px'
-      speedMenu.style.left = 'auto'
-      speedMenu.style.top = 'auto'
-    }
-    speedMenuBtn.addEventListener('click', function (event) {
-      event.preventDefault()
-      event.stopImmediatePropagation()
-      closeAllPlayerMenus(speedMenu)
-      var isHidden = speedMenu.classList.contains('hidden')
-      if (isHidden) {
-        repositionSpeedMenu()
-        openPopupMenu(speedMenu, speedMenuBtn)
-      } else {
-        closePopupMenu(speedMenu, speedMenuBtn)
-      }
-    })
+    setupControlMenu(speedMenu, speedMenuBtn)
+    setupControlMenu(qualityMenu, qualityMenuBtn)
+    setupControlMenu(captionsMenu, captionsMenuBtn)
     speedMenu.addEventListener('click', function (event) {
       const btn = event.target && event.target.closest ? event.target.closest('[data-rate]') : null
       if (!btn) return
@@ -432,6 +473,7 @@ if (root && video) {
       persistPlaybackRate(rate)
       renderSpeedMenu()
       closePopupMenu(speedMenu, speedMenuBtn)
+      speedMenuBtn.focus()
       showToast(tf('player_speed_set_to', 'Speed %1$s', formatRateLabel(rate)))
     })
     video.addEventListener('ratechange', function () {
@@ -533,10 +575,14 @@ if (root && video) {
           if (cinemaView) cinemaBeforeFullscreen = cinemaView.suspendForFullscreen()
         }
         if (speedMenu && speedMenu.parentNode !== target) target.appendChild(speedMenu)
+        if (qualityMenu && qualityMenu.parentNode !== target) target.appendChild(qualityMenu)
+        if (captionsMenu && captionsMenu.parentNode !== target) target.appendChild(captionsMenu)
       } else if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
         playerLayout.classList.remove('fullscreen-immersive', 'fullscreen-browse')
         playerLayout.scrollTop = 0
         if (speedMenu && speedMenu.parentNode !== doc.body) doc.body.appendChild(speedMenu)
+        if (qualityMenu && qualityMenu.parentNode !== doc.body) doc.body.appendChild(qualityMenu)
+        if (captionsMenu && captionsMenu.parentNode !== doc.body) doc.body.appendChild(captionsMenu)
         if (cinemaView) {
           cinemaView.restoreAfterFullscreen(
             cinemaOnFullscreenExit === null ? cinemaBeforeFullscreen : cinemaOnFullscreenExit,
@@ -924,235 +970,65 @@ if (root && video) {
 
     setupDescriptionBox()
 
-    // CC toggle — fetch tracks, inject <track>, show button if any exist
-    var ccBtn = doc.getElementById('player-cc-btn')
-    if (ccBtn && videoId && !root.dataset.streamManifest) {
-      var ccOn = false
-      apiFetch('/api/videos/' + encodeURIComponent(videoId) + '/subtitles')
-        .then(function (payload) {
-          var tracks = Array.isArray(payload && payload.tracks) ? payload.tracks : []
-          if (!tracks.length) return
-          var track = tracks.find(function (candidate) { return !(candidate && candidate.is_auto) }) || tracks[0]
-          var controller = doc.getElementById('main-media-controller')
-          var subtitleOverlay = null
-          var subtitleCues = []
-          var subtitleTrackUrl = '/api/media/subtitle/' + encodeURIComponent(videoId) + '?track=' + encodeURIComponent(track.track_id || '')
-          function readSubtitleOffsetPx(name, fallback) {
-            if (!playerWrapper) return fallback
-            var raw = window.getComputedStyle(playerWrapper).getPropertyValue(name)
-            var value = parseFloat(raw)
-            return Number.isFinite(value) ? value : fallback
-          }
-          function readSubtitleOffset(name, fallback) {
-            if (!playerWrapper) return fallback
-            var raw = window.getComputedStyle(playerWrapper).getPropertyValue(name).trim()
-            var value = parseFloat(raw)
-            if (!Number.isFinite(value)) return fallback
-            if (raw.endsWith('%')) {
-              var rect = playerWrapper.getBoundingClientRect()
-              return rect && rect.height > 0 ? rect.height * value / 100 : fallback
-            }
-            return value
-          }
-          function controlsSubtitleOffsetPx(isFs) {
-            var fallback = readSubtitleOffset(isFs ? '--player-subtitles-offset-fullscreen-controls' : '--player-subtitles-offset-controls', isFs ? 104 : 72)
-            if (!controller || !playerWrapper) return fallback
-            var bar = controller.querySelector('media-control-bar.dashboard-media-control-bar, media-control-bar, .dashboard-media-control-bar')
-            if (!bar || typeof bar.getBoundingClientRect !== 'function') return fallback
-            var wrapperRect = playerWrapper.getBoundingClientRect()
-            var barRect = bar.getBoundingClientRect()
-            if (!(wrapperRect && wrapperRect.height > 0 && barRect && barRect.height > 0)) return fallback
-            var gap = readSubtitleOffsetPx(isFs ? '--player-subtitles-controls-gap-fullscreen' : '--player-subtitles-controls-gap', isFs ? 12 : 6)
-            var measured = wrapperRect.bottom - barRect.top + gap
-            if (!Number.isFinite(measured) || measured <= 0) return fallback
-            return Math.max(0, Math.min(wrapperRect.height, measured))
-          }
-          function subtitleOffsetPx() {
-            var isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement)
-            var controlsVisible = controllerControlsVisible(controller)
-            if (controlsVisible) return controlsSubtitleOffsetPx(isFs)
-            if (isFs) return readSubtitleOffset('--player-subtitles-offset-fullscreen-idle', 52)
-            return readSubtitleOffset('--player-subtitles-offset-idle', 36)
-          }
-          function ensureSubtitleOverlay() {
-            if (subtitleOverlay) return subtitleOverlay
-            subtitleOverlay = doc.createElement('div')
-            subtitleOverlay.className = 'player-subtitle-overlay hidden'
-            subtitleOverlay.setAttribute('aria-hidden', 'true')
-            playerWrapper.appendChild(subtitleOverlay)
-            return subtitleOverlay
-          }
-          function parseVttTimestamp(raw) {
-            var value = String(raw || '').trim().split(/\s+/)[0]
-            if (!value) return Number.NaN
-            var parts = value.split(':')
-            if (parts.length < 2 || parts.length > 3) return Number.NaN
-            var secondsPart = parts.pop().replace(',', '.')
-            var minutesPart = parts.pop()
-            var hoursPart = parts.length ? parts.pop() : '0'
-            var hours = Number(hoursPart)
-            var minutes = Number(minutesPart)
-            var seconds = Number(secondsPart)
-            if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) return Number.NaN
-            return hours * 3600 + minutes * 60 + seconds
-          }
-          function parseVtt(text) {
-            var lines = String(text || '').replace(/\r/g, '').split('\n')
-            var cues = []
-            for (var i = 0; i < lines.length; i++) {
-              var line = lines[i].trim()
-              if (!line) continue
-              if (line === 'WEBVTT' || line.indexOf('Kind:') === 0 || line.indexOf('Language:') === 0) continue
-              if (line.indexOf('-->') < 0) continue
-              var parts = line.split('-->')
-              var start = parseVttTimestamp(parts[0])
-              var end = parseVttTimestamp(parts[1])
-              if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue
-              var cueLines = []
-              for (i = i + 1; i < lines.length; i++) {
-                var cueLine = lines[i]
-                if (!cueLine.trim()) break
-                cueLines.push(cueLine)
-              }
-              if (cueLines.length) cues.push({ start: start, end: end, text: cueLines.join('\n') })
-            }
-            return cues
-          }
-          function subtitleTextHtml(text) {
-            return escapeHtml(sanitizeVttCueText(text).replace(/\s*\r?\n\s*/g, ' '))
-          }
-          function sanitizeVttCueText(text) {
-            return decodeVttEntities(
-              String(text || '')
-                .replace(/<(?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{3}>/g, '')
-                .replace(/<\/?(?:c(?:\.[^>\s]+)*|v(?:\s+[^>]*)?|lang(?:\s+[^>]*)?|b|i|u|ruby|rt)>/g, '')
-                .replace(/<[^>]+>/g, '')
-            ).trim()
-          }
-          function decodeVttEntities(text) {
-            return String(text || '')
-              .replace(/&nbsp;|&#160;|&#x0*a0;/gi, ' ')
-              .replace(/&amp;/gi, '&')
-              .replace(/&lt;/gi, '<')
-              .replace(/&gt;/gi, '>')
-              .replace(/&quot;/gi, '"')
-              .replace(/&apos;|&#39;/gi, "'")
-          }
-          function updateSubtitleOverlayPosition() {
-            var overlay = ensureSubtitleOverlay()
-            overlay.style.bottom = subtitleOffsetPx() + 'px'
-          }
-          function activeSubtitleCues() {
-            var time = Number(video.currentTime || 0)
-            if (!Number.isFinite(time)) return []
-            return subtitleCues.filter(function (cue) {
-              return time >= cue.start && time < cue.end
-            })
-          }
-          function renderSubtitleOverlay() {
-            var overlay = ensureSubtitleOverlay()
-            updateSubtitleOverlayPosition()
-            var activeCues = ccOn ? activeSubtitleCues() : []
-            if (!activeCues.length) {
-              overlay.classList.add('hidden')
-              overlay.replaceChildren()
-              return
-            }
-            var html = []
-            for (var i = 0; i < activeCues.length; i++) {
-              var cue = activeCues[i]
-              html.push('<div class="player-subtitle-cue">' + subtitleTextHtml(cue && cue.text) + '</div>')
-            }
-            overlay.innerHTML = html.join('')
-            overlay.classList.remove('hidden')
-          }
-          if (controller) {
-            new MutationObserver(function () {
-              renderSubtitleOverlay()
-            }).observe(controller, { attributes: true, attributeFilter: ['userinactive', 'data-player-controls-visible'] })
-            controller.addEventListener('playercontrolsvisibilitychange', function () {
-              requestAnimationFrame(renderSubtitleOverlay)
-            })
-          }
-          video.addEventListener('timeupdate', renderSubtitleOverlay, { passive: true })
-          video.addEventListener('seeked', renderSubtitleOverlay)
-          video.addEventListener('play', renderSubtitleOverlay)
-          video.addEventListener('pause', renderSubtitleOverlay)
-          video.addEventListener('loadedmetadata', renderSubtitleOverlay)
-          window.addEventListener('resize', function () { renderSubtitleOverlay() }, { passive: true })
-          doc.addEventListener('fullscreenchange', function () { requestAnimationFrame(renderSubtitleOverlay) })
-          doc.addEventListener('webkitfullscreenchange', function () { requestAnimationFrame(renderSubtitleOverlay) })
-          if (playerLayout) {
-            playerLayout.addEventListener('scroll', function () { requestAnimationFrame(renderSubtitleOverlay) }, { passive: true })
-          }
-
-          ccBtn.classList.remove('hidden')
-
-          // Auto-enable manual subtitle tracks. Auto-generated captions stay
-          // available through the CC button but do not appear by default.
-          if (!(track && track.is_auto)) {
-            ccOn = true
-            ccBtn.classList.add('active')
-            ccBtn.title = t('player_subtitles_on', 'Subtitles (On)')
-          }
-
-          fetch(subtitleTrackUrl, { credentials: 'same-origin' })
-            .then(function (resp) {
-              if (!resp.ok) throw new Error('subtitle fetch failed')
-              return resp.text()
-            })
-            .then(function (text) {
-              subtitleCues = parseVtt(text)
-              renderSubtitleOverlay()
-            })
-            .catch(function () {
-              subtitleCues = []
-              renderSubtitleOverlay()
-            })
-
-          ccBtn.addEventListener('click', function () {
-            ccOn = !ccOn
-            ccBtn.classList.toggle('active', ccOn)
-            ccBtn.title = ccOn ? t('player_subtitles_on', 'Subtitles (On)') : t('player_subtitles', 'Subtitles')
-            renderSubtitleOverlay()
-          })
-        })
-        .catch(function () {})
-    }
-
+    initSubtitles(video, root)
     // Module inits
     initSponsorBlock(video, root)
     initPreviewHover(video, videoId, playerWrapper)
     const progress = initProgress(video, videoId, root)
     const autoplay = channelPlatform === 'youtube' || new URLSearchParams(window.location.search).get('autoplay') === '1'
     if (root.dataset.streamManifest) initStreaming(video, root, autoplay, progress && progress.resumePosition)
-    else if (autoplay) video.play().catch(function () {})
+    else if (autoplay) playVideo(video).catch(function () {})
+    initLiveChat(video, root)
 
-    // Global click: close popup menus
+    // Dismiss menus before the player handles the same click.
     doc.addEventListener('click', function (event) {
       var path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target]
       var inSpeed = speedMenuWrap && (path.indexOf(speedMenuWrap) >= 0 || (speedMenu && path.indexOf(speedMenu) >= 0))
+      var inQuality = qualityMenuWrap && (path.indexOf(qualityMenuWrap) >= 0 || (qualityMenu && path.indexOf(qualityMenu) >= 0))
+      var inCaptions = captionsMenuWrap && (path.indexOf(captionsMenuWrap) >= 0 || (captionsMenu && path.indexOf(captionsMenu) >= 0))
+      var dismissing = (!inSpeed && speedMenu && !speedMenu.classList.contains('hidden')) ||
+        (!inQuality && qualityMenu && !qualityMenu.classList.contains('hidden')) ||
+        (!inCaptions && captionsMenu && !captionsMenu.classList.contains('hidden'))
+      if (dismissing && !inSpeed && !inQuality && !inCaptions) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      }
       if (!inSpeed) closePopupMenu(speedMenu, speedMenuBtn)
-    })
+      if (!inQuality) closePopupMenu(qualityMenu, qualityMenuBtn)
+      if (!inCaptions) closePopupMenu(captionsMenu, captionsMenuBtn)
+    }, true)
 
     // Keyboard shortcuts — capture phase so we fire BEFORE media-chrome
     doc.addEventListener('keydown', function (event) {
+      var activeEl = doc.activeElement
+      var sc = window.cfShortcuts
+      if (activeEl && activeEl.closest('.player-control-menu')) return
+      if (activeEl && (activeEl === speedMenuBtn || activeEl === qualityMenuBtn || activeEl === captionsMenuBtn) && ['ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter', ' ', 'Escape'].includes(event.key)) return
       if (event.key === 'Escape') { closeAllPlayerMenus(null); return }
       if (event.ctrlKey || event.metaKey || event.altKey) return
       var miniPlayer = window.IglooMiniPlayer
       if (miniPlayer && miniPlayer.isMini && miniPlayer.isMini()) {
         var miniShell = event.target && event.target.closest ? event.target.closest('#mini-player-shell') : null
         if (!miniShell) return
-        if (event.target && event.target.closest && event.target.closest('button')) return
+        if (event.target && event.target.closest && event.target.closest('button') && !sc.match('player.subtitles', event.key) && !sc.match('player.cinema', event.key)) return
       }
-      var activeEl = doc.activeElement
+      if (activeEl && activeEl.closest('#player-chat')) return
       if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) return
 
-      var sc = window.cfShortcuts
       if (event.key === ' ' || event.key === 'k' || event.key === 'K' || event.key === 'm' || event.key === 'M') {
         if (playerFeedback) playerFeedback.markUserAction()
       }
-      if (sc.match('player.fullscreen', event.key)) {
+      if (sc.match('player.subtitles', event.key)) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        if (!event.repeat) {
+          closeAllPlayerMenus(null)
+          const targetVideo = miniPlayer && miniPlayer.isMini && miniPlayer.isMini()
+            ? doc.querySelector('#mini-player-media-host video')
+            : video
+          if (targetVideo) targetVideo.dispatchEvent(new Event('togglesubtitles'))
+        }
+      } else if (sc.match('player.fullscreen', event.key)) {
         event.preventDefault()
         event.stopImmediatePropagation()
         toggleFullscreen()

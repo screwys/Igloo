@@ -1,0 +1,123 @@
+.player-chat {
+    position: relative;
+    min-width: 0;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    background: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.player-chat-header {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.player-sidebar .player-chat-header h3 {
+    flex: 1;
+    margin: 0;
+    font-size: .9rem;
+}
+
+.player-chat-messages {
+    height: clamp(18rem, 50vh, 32rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    overflow-anchor: none;
+    scrollbar-width: thin;
+}
+
+.chat-message {
+    display: flex;
+    align-items: flex-start;
+    gap: .5rem;
+    padding: .35rem .75rem;
+    font-size: .8rem;
+    line-height: 1.5;
+}
+
+.chat-avatar {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    border-radius: 50%;
+}
+
+.chat-message-content {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.chat-author {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.chat-owner .chat-author {
+    color: var(--accent-primary);
+}
+
+.chat-moderator .chat-author {
+    color: #6ba4ff;
+}
+
+.chat-badge {
+    margin-right: .25rem;
+    color: var(--accent-primary);
+}
+
+.chat-badge .chat-emote, .chat-badge .material-icon {
+    width: 14px;
+    height: 14px;
+}
+
+.chat-emote {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    vertical-align: middle;
+    object-fit: contain;
+}
+
+.chat-paid {
+    margin: .35rem;
+    padding: .75rem;
+    border-radius: var(--border-radius-sm);
+    background: var(--chat-paid-color, #ffca28);
+    color: #151515;
+}
+
+.chat-paid .chat-author {
+    color: inherit;
+}
+
+.chat-amount {
+    display: block;
+}
+
+.chat-member, .chat-pinned {
+    background: rgba(var(--accent-primary-rgb), .12);
+}
+
+.player-chat-status {
+    margin: 0;
+    padding: .5rem .75rem;
+    color: var(--text-secondary);
+    font-size: .8rem;
+}
+
+.player-chat-status:empty {
+    display: none;
+}
+
+#player-chat-latest {
+    position: absolute;
+    bottom: .75rem;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}

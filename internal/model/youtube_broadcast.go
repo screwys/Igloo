@@ -12,4 +12,5 @@ type YouTubeBroadcast struct {
 	ConcurrentViewCount *int64 `json:"concurrent_view_count,omitempty"`
 	ObservedAtMs        int64  `json:"observed_at_ms"`
 	SourceRank          int    `json:"source_rank"`
+	Availability        string `json:"-"`
 }

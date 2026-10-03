@@ -612,7 +612,7 @@ function initMiniPlayer() {
     if (frameDocument.documentElement.dataset.iglooMiniNavigationBound === '1') return
     frameDocument.documentElement.dataset.iglooMiniNavigationBound = '1'
 
-    frameDocument.addEventListener('play', function (event) {
+    frameDocument.addEventListener('playing', function (event) {
       const video = event.target
       const root = video && video.closest ? video.closest('#player-root') : null
       if (!root || String(root.getAttribute('data-channel-platform') || '').toLowerCase() !== 'youtube') return
@@ -835,7 +835,7 @@ function initMiniPlayer() {
     const surface = youtubeSurface(ownerDocument)
     if (!surface || surface.button.dataset.miniPlayerBound === '1') return
     surface.button.dataset.miniPlayerBound = '1'
-    surface.video.addEventListener('play', function () { handleYouTubePlayback(surface.video) })
+    surface.video.addEventListener('playing', function () { handleYouTubePlayback(surface.video) })
     surface.button.addEventListener('click', function (event) {
       event.preventDefault()
       event.stopPropagation()
@@ -972,11 +972,11 @@ function initFramePlayerBridge() {
     const owner = manager()
     if (owner && typeof owner.toggleSurface === 'function') owner.toggleSurface(surface)
   })
-  video.addEventListener('play', function () {
+  video.addEventListener('playing', function () {
     const owner = manager()
     if (owner && typeof owner.youtubePlaybackStarted === 'function') owner.youtubePlaybackStarted(video)
   })
-  if (!video.paused) {
+  if (!video.paused && video.readyState >= 3) {
     const owner = manager()
     if (owner && typeof owner.youtubePlaybackStarted === 'function') owner.youtubePlaybackStarted(video)
   }

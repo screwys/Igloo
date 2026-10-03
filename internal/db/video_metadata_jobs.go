@@ -23,6 +23,7 @@ type VideoMetadataJob struct {
 }
 
 type VideoMetadataRefreshResult struct {
+	LiveStatus   string
 	Comments     []CommentInput
 	ViewCount    *int64
 	LikeCount    *int64
@@ -128,6 +129,9 @@ func (db *DB) CompleteVideoMetadataJob(job VideoMetadataJob, result VideoMetadat
 		if result.ViewCount != nil {
 			metadata["view_count"] = *result.ViewCount
 			metadata["view_count_label"] = model.CompactCountLabel(*result.ViewCount)
+		}
+		if result.LiveStatus != "" {
+			metadata["live_status"] = result.LiveStatus
 		}
 		if result.LikeCount != nil {
 			metadata["like_count"] = *result.LikeCount

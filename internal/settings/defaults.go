@@ -186,6 +186,8 @@ var Defaults = map[string]any{
 	"youtube_fetch_delay":              120,
 	"youtube_max_videos":               12,
 	"youtube_include_member_only":      false,
+	"youtube_check_replays":            true,
+	"youtube_broadcasts_enabled":       true,
 	"discover_prefetch_count":          10,
 	"discover_reset_hours":             24,
 	"discover_max_duration_minutes":    120,

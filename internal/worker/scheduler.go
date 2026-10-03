@@ -212,10 +212,6 @@ func (m *Manager) processDiscoveryChannel(ctx context.Context, platform string, 
 		return
 	}
 
-	if platform == "youtube" {
-		m.refreshYouTubeBroadcasts(ctx, channel)
-	}
-
 	added, reconcileErr := m.applyDiscoverySnapshot(channel, snapshot)
 	if added > 0 {
 		m.KickMediaWork()
@@ -484,6 +480,21 @@ func (m *Manager) checkChannel(ctx context.Context, channel model.Channel) (down
 		}
 	}
 	snapshot = ensureSourceWindows(snapshot, download.SourceComponentDirect)
+	if channel.Platform == "youtube" {
+		for i := range snapshot.Windows {
+			refs := snapshot.Windows[i].Refs[:0]
+			for _, ref := range snapshot.Windows[i].Refs {
+				if ref.LiveStatus == "is_live" || ref.LiveStatus == "is_upcoming" || ref.LiveStatus == "post_live" || ref.LiveStatus == "was_live" {
+					continue
+				}
+				refs = append(refs, ref)
+			}
+			snapshot.Windows[i].Refs = refs
+		}
+		replays, err := m.checkYouTubeBroadcasts(ctx, channel, authoredLimit, includeMemberOnly)
+		snapshot.Windows = append(snapshot.Windows, replays)
+		channelErr = errors.Join(channelErr, err)
+	}
 
 	if channel.Platform == "tiktok" {
 		repostWindow := download.SourceWindow{Component: sourceComponentReposts, Complete: true}

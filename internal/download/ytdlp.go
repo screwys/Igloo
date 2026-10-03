@@ -173,6 +173,7 @@ type VideoRef struct {
 	VideoID             string
 	Title               string
 	Duration            int
+	LiveStatus          string
 	URL                 string
 	ChannelID           string
 	AuthorHandle        string
@@ -188,9 +189,10 @@ type VideoRef struct {
 }
 
 const (
-	SourceComponentDirect = "direct"
-	SourceComponentReels  = "reels"
-	SourceComponentPosts  = "posts"
+	SourceComponentDirect  = "direct"
+	SourceComponentReplays = "replays"
+	SourceComponentReels   = "reels"
+	SourceComponentPosts   = "posts"
 )
 
 // SourceWindow keeps authority scoped to the producer surface that was
@@ -221,13 +223,16 @@ func (s SourceSnapshot) FlattenRefs(limit int) []VideoRef {
 func (y *YtDlpWrapper) ChannelCheck(ctx context.Context, url string, limit int, includeMemberOnly bool) (SourceSnapshot, error) {
 	start := time.Now()
 	snapshot := SourceSnapshot{Windows: []SourceWindow{{Component: SourceComponentDirect}}}
-	result, err := ytdlp.New().
+	command := ytdlp.New().
 		FlatPlaylist().
 		SkipDownload().
 		NoWarnings().
 		PlaylistItems(fmt.Sprintf(":%d", limit)).
-		DumpJSON().
-		Run(ctx, url)
+		DumpJSON()
+	if isYouTubeURL(url) {
+		command = command.ExtractorArgs("youtubetab:approximate_date")
+	}
+	result, err := command.Run(ctx, url)
 	if err != nil {
 		// Try to parse partial results even on error
 		if result == nil {
@@ -261,6 +266,9 @@ func (y *YtDlpWrapper) ChannelCheck(ctx context.Context, url string, limit int, 
 		}
 		if info.Duration != nil {
 			r.Duration = int(*info.Duration)
+		}
+		if info.LiveStatus != nil {
+			r.LiveStatus = string(*info.LiveStatus)
 		}
 		if info.WebpageURL != nil {
 			r.URL = *info.WebpageURL
@@ -732,6 +740,9 @@ func videoMetadataRefreshResult(info *ytdlp.ExtractedInfo) db.VideoMetadataRefre
 	var result db.VideoMetadataRefreshResult
 	if info == nil {
 		return result
+	}
+	if info.LiveStatus != nil {
+		result.LiveStatus = string(*info.LiveStatus)
 	}
 	if info.ViewCount != nil {
 		value := int64(*info.ViewCount)

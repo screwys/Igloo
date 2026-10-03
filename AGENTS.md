@@ -22,9 +22,13 @@ Let yt-dlp and gallery-dl own platform extraction. Use their documented CLI and 
 
 Keep Igloo's integration thin and compatible with upstream updates. Use upstream's default extractor behavior. Configure documented integration options such as output paths, cookies, and format selection for established Igloo requirements. Assess new features against what upstream supplies before taking on custom extraction, private API parsing, or extractor/client overrides.
 
+Prove new yt-dlp and gallery-dl flags, arguments, endpoints, and output formats through Igloo before building features around them. Confirm the requested result, including real playback when relevant, and report cookie requirements or failures upfront.
+
 ## Design
 
 - Reuse established controls and layouts, adapting them to each client's available space. Keep controls readable, visually consistent, and easy to use.
+- Use Igloo's existing icon buttons and icon set (Material) for actions. Reuse their size and styling, with tooltip and accessibility labels, instead of adding large text buttons.
+- Before adding a control, inspect and reuse its closest existing template, CSS, and JavaScript. Use Igloo's dropdowns instead of native selects. Check the rendered icon and menu interaction; builds alone are insufficient.
 - Use short functional labels and one clear control for each action. Add a short helper line only when the user would otherwise be stuck.
 - Judge interface changes by how they affect the user's activity and existing workflow. Prefer fewer coherent interactions over extra modes, decorations, and explanations.
 - Confirm destructive actions with an Igloo modal on web or Compose `AlertDialog` on Android.

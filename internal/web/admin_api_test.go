@@ -168,8 +168,8 @@ func TestShortcutDefaultsIncludeCinemaSidebarAndSettings(t *testing.T) {
 	if got := defaultShortcutConfig()["feed.mute"]; got != "m" {
 		t.Fatalf("default feed mute shortcut = %q, want m", got)
 	}
-	if got := defaultShortcutConfig()["player.cinema"]; got != "c" {
-		t.Fatalf("default cinema shortcut = %q, want c", got)
+	if got := defaultShortcutConfig()["player.cinema"]; got != "t" {
+		t.Fatalf("default cinema shortcut = %q, want t", got)
 	}
 	if got := defaultShortcutConfig()["global.sidebar"]; got != "z" {
 		t.Fatalf("default sidebar shortcut = %q, want z", got)
@@ -182,8 +182,8 @@ func TestShortcutDefaultsIncludeCinemaSidebarAndSettings(t *testing.T) {
 	if !ok {
 		t.Fatalf("shortcuts = %#v, want map[string]string", settings["shortcuts"])
 	}
-	if got := shortcuts["player.cinema"]; got != "c" {
-		t.Fatalf("settings cinema shortcut = %q, want c", got)
+	if got := shortcuts["player.cinema"]; got != "t" {
+		t.Fatalf("settings cinema shortcut = %q, want t", got)
 	}
 	if got := shortcuts["feed.mute"]; got != "m" {
 		t.Fatalf("settings feed mute shortcut = %q, want m", got)

@@ -68,8 +68,17 @@ class HomeViewModel(
     val syncFailed = failed.asStateFlow()
     val activePlayback = playback.asStateFlow()
     val isPreparingPlayback = preparingPlayback.asStateFlow()
+    val broadcastsEnabled = cache.map { it.broadcastsEnabled }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val accounts: StateFlow<List<ChannelDisplay>> = db.channelReadDao().allFlow()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val broadcasts: StateFlow<List<HomeCard>> = combine(cache, accounts) { value, channels ->
+        if (!value.broadcastsEnabled) emptyList() else broadcastCards(
+            HomeWidget("broadcasts", "live", count = value.broadcasts.size, liveStates = emptyList(), order = "live"),
+            value.broadcasts, channels,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val content: StateFlow<List<HomeWidgetContent>> = combine(cache, accounts, prefs.dearrowMode(), prefs.storiesWindowHours()) { value, channels, mode, hours ->
         val cutoff = System.currentTimeMillis() - hours * 3_600_000L
@@ -180,6 +189,10 @@ class HomeViewModel(
                 if (currentAccountKey() != key) return@launch
                 val response = api.stream(card.id, baseUrl)
                 if (currentAccountKey() != key) return@launch
+                response.error_message?.takeIf { it.isNotBlank() }?.let {
+                    uiEffects.emit(UiEffect.Toast(it))
+                    return@launch
+                }
                 val path = response.manifest_url ?: response.media_url ?: error("Missing stream URL")
                 playback.value = HomePlayback(card.title, api.absoluteUrl(path, baseUrl), when (response.manifest_type) {
                     "hls" -> "application/x-mpegURL"
@@ -215,7 +228,8 @@ class HomeViewModel(
                 val next = cache.value.copy(broadcasts = response.broadcasts.map {
                     it.copy(thumbnailUrl = api.absoluteUrl(it.thumbnailUrl, baseUrl))
                 },
-                    includeReposts = response.include_reposts, includeTagged = response.include_tagged)
+                    includeReposts = response.include_reposts, includeTagged = response.include_tagged,
+                    broadcastsEnabled = response.broadcasts_enabled)
                 cache.value = next
                 prefs.setHomeCache(key, json.encodeToString(next))
             }

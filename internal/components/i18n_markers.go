@@ -3,6 +3,10 @@ package components
 // Strings used as arguments to other templ components can be opaque to the
 // i18n extractor, so keep them discoverable here.
 var _ = []string{
+	N("videos_tab_lives", "Lives"),
+	N("player_chat_ended", "Chat ended"),
+	N("player_chat_unavailable", "Chat unavailable"),
+	N("player_chat_failed", "Chat could not load"),
 	N("sidebar_continue_watching", "Continue Watching"),
 	N("sidebar_currently_available", "Currently Available"),
 	N("sidebar_pinned_videos", "Pinned Videos"),

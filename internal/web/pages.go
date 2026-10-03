@@ -692,6 +692,27 @@ func (s *Server) handlePageVideos(w http.ResponseWriter, r *http.Request) {
 	p.PageBadge = fmt.Sprintf("%d videos", count)
 	p.PageScripts = []string{"js/infinite_page.js"}
 	p.Sidebar = s.mustBuildSidebar(r)
+	var live []model.YouTubeBroadcast
+	channels := map[string]model.Channel{}
+	if p.BroadcastsEnabled && page == 1 {
+		live, err = s.db.ListYouTubeBroadcasts(db.YouTubeBroadcastQuery{States: []string{"is_live"}, Limit: -1, Order: "live"})
+		if err != nil {
+			s.homeError(w, err)
+			return
+		}
+		for _, channel := range s.enrichedChannels() {
+			channels[channel.ChannelID] = channel
+		}
+		if q != "" {
+			filtered := live[:0]
+			for _, broadcast := range live {
+				if strings.Contains(strings.ToLower(broadcast.Title+" "+components.ChannelDisplayName(channels[broadcast.ChannelID])), strings.ToLower(q)) {
+					filtered = append(filtered, broadcast)
+				}
+			}
+			live = filtered
+		}
+	}
 
 	// HTMX request — return video cards for infinite scroll
 	if r.Header.Get("HX-Request") != "" {
@@ -701,7 +722,7 @@ func (s *Server) handlePageVideos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = components.VideosPage(p, videos, pager, q).Render(r.Context(), w)
+	_ = components.VideosPage(p, videos, pager, q, live, channels).Render(r.Context(), w)
 }
 
 func (s *Server) handlePageChannel(w http.ResponseWriter, r *http.Request) {
@@ -1040,6 +1061,15 @@ func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {
 	p.PageTitle = ResolveDearrowTitle(dearrowMode, video.Title, video.DearrowTitle, video.DearrowTitleCasual)
 	p.ActiveNav = "videos"
 	p.PageScripts = []string{"js/videojs_compat.js"}
+	p.PageStyles = []string{"css/chat.css"}
+	if p.BroadcastsEnabled && video.Platform == "youtube" && (video.Metadata == nil || video.Metadata.LiveStatus == "") {
+		if status, err := s.db.YouTubeBroadcastLiveStatus(videoID); err == nil && status != "" {
+			if video.Metadata == nil {
+				video.Metadata = &model.VideoMetadata{}
+			}
+			video.Metadata.LiveStatus = status
+		}
+	}
 	if streamID := r.URL.Query().Get("stream"); streamID != "" {
 		session := s.youtubeStream(streamID)
 		if session == nil || session.videoID != videoID {
@@ -1051,6 +1081,12 @@ func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {
 		p.StreamSessionID = session.id
 		p.StreamIndexed = session.indexed
 		p.StreamTextTracks = session.textTracks
+		if video.Metadata == nil {
+			video.Metadata = &model.VideoMetadata{}
+		}
+		if status, ok := session.info.Metadata["live_status"].(string); ok {
+			video.Metadata.LiveStatus = status
+		}
 	}
 	p.ESBundle = "js/dist/player.js"
 	p.Sidebar = s.mustBuildSidebar(r)

@@ -6,14 +6,17 @@ import (
 )
 
 // VideosPage renders the full videos page wrapped in the Base layout.
-templ VideosPage(p PageProps, videos []model.Video, pager model.Pager, search string) {
+templ VideosPage(p PageProps, videos []model.Video, pager model.Pager, search string, live []model.YouTubeBroadcast, channels map[string]model.Channel) {
 	@Base(p) {
 		<div id="video-grid" class="video-grid">
+			for _, broadcast := range live {
+				@LiveVideoCard(p, broadcast, channels[broadcast.ChannelID])
+			}
 			if len(videos) > 0 {
 				for _, v := range videos {
 					@VideoCard(p, v)
 				}
-			} else {
+			} else if len(live) == 0 {
 				<div class="empty-state">
 					<h3>{ L(p, "videos_empty_title", "No Videos") }</h3>
 					<p>{ L(p, "videos_empty_body", "No videos found.") }</p>
@@ -24,6 +27,28 @@ templ VideosPage(p PageProps, videos []model.Video, pager model.Pager, search st
 			@InfiniteScrollTrigger(videosNextURL(pager, search))
 		}
 	}
+}
+
+templ LiveVideoCard(p PageProps, broadcast model.YouTubeBroadcast, channel model.Channel) {
+	<a class="video-card" href={ templ.SafeURL(homeBroadcastHref(p, broadcast)) }>
+		<div class="video-thumbnail">
+			if broadcast.ThumbnailURL != "" {
+				<img src={ broadcast.ThumbnailURL } alt="" loading="lazy"/>
+			}
+			<span class="broadcast-status is-live">LIVE</span>
+		</div>
+		<div class="video-info">
+			<div class="video-title">{ broadcast.Title }</div>
+			<div class="video-meta">
+				<span class="video-channel-wrap" data-profile-channel-id={ broadcast.ChannelID }>
+					if channel.AvatarURL != "" {
+						<img class="video-channel-avatar" src={ channel.AvatarURL } alt="" loading="lazy"/>
+					}
+					<span class="video-channel">{ ChannelDisplayName(channel) }</span>
+				</span>
+			</div>
+		</div>
+	</a>
 }
 
 // VideosPartial renders just the video cards and next trigger for HTMX infinite scroll responses.

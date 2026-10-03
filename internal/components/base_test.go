@@ -22,6 +22,7 @@ func newTestPageProps() PageProps {
 		UserPlatforms:       []string{"youtube", "twitter", "tiktok"},
 		PageTitle:           "Test Page",
 		ActiveNav:           "videos",
+		BroadcastsEnabled:   true,
 		ShortcutConfig:      map[string]string{"feed.like": "l"},
 		TranslateTargetLang: "en",
 		TranslateSkipLangs:  "zh,ja",

@@ -93,7 +93,6 @@ import com.screwy.igloo.ui.nav.IglooNavigationSource
 import com.screwy.igloo.ui.nav.LocalDrawerController
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
 import com.screwy.igloo.ui.theme.iglooColors
-import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import java.text.DateFormat
 import java.util.Date
@@ -101,8 +100,7 @@ import kotlinx.coroutines.flow.map
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeRoute(navController: NavController) {
-    val vm: HomeViewModel = koinViewModel()
+fun HomeRoute(navController: NavController, vm: HomeViewModel) {
     val layout by vm.layout.collectAsStateWithLifecycle()
     val content by vm.content.collectAsStateWithLifecycle()
     val accounts by vm.accounts.collectAsStateWithLifecycle()
@@ -313,7 +311,7 @@ private fun HomeWidgetView(
 }
 
 @Composable
-private fun HomeCardView(
+internal fun HomeCardView(
     card: HomeCard, widget: HomeWidget, compact: Boolean = false, portrait: Boolean = false,
     modifier: Modifier = Modifier, onOpen: () -> Unit, onChannel: () -> Unit,
 ) {
@@ -402,6 +400,7 @@ private fun HomeCardStatus(card: HomeCard) {
         Text(stringResource(when (broadcast.liveStatus) {
             "is_live" -> R.string.home_live_now
             "is_upcoming" -> R.string.home_upcoming
+            "post_live" -> R.string.home_processing
             else -> R.string.home_replays
         }), style = MaterialTheme.typography.labelSmall,
             color = if (broadcast.liveStatus == "is_live") MaterialTheme.iglooColors.primary else MaterialTheme.iglooColors.onSurfaceMuted)
@@ -429,6 +428,11 @@ private fun HomeArtwork(card: HomeCard, modifier: Modifier) {
     Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.iglooColors.surfaceVariant, modifier = modifier) {
         Box(Modifier.fillMaxSize()) {
             MediaCellArtwork(thumbnail, contentDescription = null)
+            if (card.broadcast?.liveStatus == "is_live") Text("LIVE", color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
+                    .background(MaterialTheme.iglooColors.primary, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 4.dp, vertical = 2.dp))
             card.video?.video?.let { video ->
                 val durationLabel = videoDurationBadgeLabel(video)
                 if (durationLabel.isNotEmpty()) Text(durationLabel, color = Color.White,
@@ -447,7 +451,7 @@ private fun HomeArtwork(card: HomeCard, modifier: Modifier) {
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
-private fun HomeLivePlayer(playback: HomePlayback, onClose: () -> Unit) {
+internal fun HomeLivePlayer(playback: HomePlayback, onClose: () -> Unit) {
     val context = LocalContext.current
     val player = rememberIglooPlayer() ?: return
     var error by remember(playback) { mutableStateOf(false) }

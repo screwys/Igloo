@@ -109,6 +109,7 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 	mux.HandleFunc("GET /shorts", s.handlePageShorts)
 	mux.HandleFunc("GET /channels/{channelID}", s.handlePageChannel)
 	mux.HandleFunc("GET /videos", s.handlePageVideos)
+	mux.HandleFunc("GET /api/youtube/{videoID}/chat", s.handleYouTubeChat)
 	mux.HandleFunc("GET /discover", s.handlePageDiscover)
 	mux.HandleFunc("GET /creators", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/channels", http.StatusMovedPermanently)
@@ -242,6 +243,11 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 		activeNav = activeNavForPath(r.URL.Path)
 	}
 	langs := s.supportedLanguageChoices(lang)
+	hasLive := false
+	if s.boolSetting("youtube_broadcasts_enabled") {
+		broadcasts, err := s.db.ListYouTubeBroadcasts(db.YouTubeBroadcastQuery{States: []string{"is_live"}, Limit: 1})
+		hasLive = err == nil && len(broadcasts) > 0
+	}
 	return components.PageProps{
 		CSRFToken:               s.mustEnsureCSRF(sess, w, r),
 		UserRole:                sessionStr(sess, "user_role", "user"),
@@ -268,6 +274,8 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 		MiniPlayerVideosEnabled: s.boolSetting("mini_player_videos_enabled"),
 		MiniPlayerFeedEnabled:   s.boolSetting("mini_player_feed_enabled"),
 		DownloadsStopped:        s.workers.IsStopRequested(),
+		BroadcastsEnabled:       s.boolSetting("youtube_broadcasts_enabled"),
+		HasLiveBroadcasts:       hasLive,
 		RuntimeOS:               buildinfo.Current().OS,
 		StaticV:                 s.staticV,
 		Prefs: components.PrefsData{Settings: map[string]any{
@@ -368,7 +376,7 @@ func defaultShortcutConfig() map[string]string {
 	return map[string]string{
 		"feed.like": "l", "feed.bookmark": "b", "feed.share": "s", "feed.translate": "t", "feed.media": "f", "feed.mute": "m",
 		"shorts.autoplay": "a", "shorts.bookmark": "b", "shorts.share": "s", "shorts.grid": "c",
-		"player.fullscreen": "f", "player.cinema": "c", "player.bookmark": "b", "player.share": "s", "player.autoplay": "a",
+		"player.fullscreen": "f", "player.cinema": "t", "player.subtitles": "c", "player.bookmark": "b", "player.share": "s", "player.autoplay": "a",
 		"global.sidebar":    "z",
 		"global.addChannel": "n",
 		"global.download":   "d",

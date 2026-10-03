@@ -124,7 +124,7 @@ func (s *Server) handleSaveHomeLayout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleHomeBroadcasts(w http.ResponseWriter, r *http.Request) {
 	p := s.pageProps(w, r)
 	broadcasts := []model.YouTubeBroadcast{}
-	if p.PlatformsContain("youtube") {
+	if p.PlatformsContain("youtube") && p.BroadcastsEnabled {
 		var err error
 		broadcasts, err = s.db.ListYouTubeBroadcasts(db.YouTubeBroadcastQuery{Limit: -1, Order: "live"})
 		if err != nil {
@@ -132,7 +132,7 @@ func (s *Server) handleHomeBroadcasts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeJSON(w, 200, map[string]any{"broadcasts": broadcasts, "include_reposts": s.db.MomentsIncludeRepostsEnabled(), "include_tagged": s.db.InstagramIncludeTaggedEnabled()})
+	writeJSON(w, 200, map[string]any{"broadcasts": broadcasts, "broadcasts_enabled": p.BroadcastsEnabled, "include_reposts": s.db.MomentsIncludeRepostsEnabled(), "include_tagged": s.db.InstagramIncludeTaggedEnabled()})
 }
 
 func (s *Server) homeError(w http.ResponseWriter, err error) {
@@ -172,7 +172,7 @@ func (s *Server) buildHomeData(p components.PageProps, layout home.Layout) (comp
 			continue
 		}
 		if widget.Type == "live" {
-			if !query.IncludesPlatform("youtube") || !query.IncludesContent("video") {
+			if !p.BroadcastsEnabled || !query.IncludesPlatform("youtube") || !query.IncludesContent("video") {
 				continue
 			}
 			broadcasts, err := s.db.ListYouTubeBroadcasts(db.YouTubeBroadcastQuery{ChannelIDs: query.Channels, StarredOnly: query.StarredOnly, States: query.LiveStates, Order: query.Order, Limit: query.Count})

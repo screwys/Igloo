@@ -271,6 +271,22 @@ fun MainScaffold(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 if (!suppressTopBar) {
+                    val navigationIcon: @Composable () -> Unit = {
+                        if (compactDrawerEnabled) {
+                            IconButton(onClick = ::openDrawer) {
+                                Icon(Icons.Default.Menu, stringResource(R.string.action_open_drawer))
+                            }
+                        } else if (showTopBarBackButton) {
+                            IconButton(onClick = { navController.popBackStack() }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                            }
+                        }
+                    }
+                    val colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.iglooColors.surface,
+                        titleContentColor = MaterialTheme.iglooColors.onSurface,
+                        navigationIconContentColor = MaterialTheme.iglooColors.onSurface,
+                    )
                     TopAppBar(
                         title = {
                             if (!topBarTitle.isNullOrBlank()) {
@@ -280,28 +296,8 @@ fun MainScaffold(
                                 )
                             }
                         },
-                        navigationIcon = {
-                            if (compactDrawerEnabled) {
-                                IconButton(onClick = ::openDrawer) {
-                                    Icon(
-                                        imageVector = Icons.Default.Menu,
-                                        contentDescription = stringResource(R.string.action_open_drawer),
-                                    )
-                                }
-                            } else if (showTopBarBackButton) {
-                                IconButton(onClick = { navController.popBackStack() }) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = stringResource(R.string.action_back),
-                                    )
-                                }
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.iglooColors.surface,
-                            titleContentColor = MaterialTheme.iglooColors.onSurface,
-                            navigationIconContentColor = MaterialTheme.iglooColors.onSurface,
-                        ),
+                        navigationIcon = navigationIcon,
+                        colors = colors,
                         scrollBehavior = topBarScrollBehavior,
                     )
                 }

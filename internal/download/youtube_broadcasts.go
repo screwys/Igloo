@@ -18,16 +18,20 @@ func (y *YtDlpWrapper) FetchYouTubeBroadcasts(ctx context.Context, channelURL, c
 	if err != nil {
 		return nil, err
 	}
-	if limit <= 0 {
+	if limit == 0 {
 		limit = 24
 	}
 	start := time.Now()
-	command := applyCookieAuth(ytdlp.New().
+	command := ytdlp.New().
 		FlatPlaylist().
 		SkipDownload().
 		NoWarnings().
-		PlaylistItems(fmt.Sprintf(":%d", limit)).
-		DumpJSON(), opts)
+		ExtractorArgs("youtubetab:approximate_date").
+		DumpJSON()
+	if limit > 0 {
+		command = command.PlaylistItems(fmt.Sprintf(":%d", limit))
+	}
+	command = applyCookieAuth(command, opts)
 	result, err := runYtDlpCommand(ctx, command, target)
 	if err != nil {
 		if ctx.Err() == nil && result != nil && result.ExitCode == 1 && result.Stdout == "" &&
@@ -58,6 +62,9 @@ func (y *YtDlpWrapper) FetchYouTubeBroadcasts(ctx context.Context, channelURL, c
 		}
 		if info.LiveStatus != nil {
 			broadcast.LiveStatus = string(*info.LiveStatus)
+		}
+		if info.Availability != nil {
+			broadcast.Availability = string(*info.Availability)
 		}
 		if info.Timestamp != nil {
 			broadcast.PublishedAtMs = int64(*info.Timestamp * 1000)

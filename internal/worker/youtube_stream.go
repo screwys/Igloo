@@ -24,7 +24,7 @@ func (m *Manager) ResolveYouTubePlayback(ctx context.Context, videoID string) (*
 		Cookies: file, CookiesFromBrowser: browser, CookieAlternates: m.cookieSetsFor("youtube"),
 	})
 	if err != nil {
-		return nil, err
+		return nil, download.WithOperationContext(err, "yt-dlp", "")
 	}
 	channelID := download.CanonicalizeYouTubeChannelID(info.ChannelID, info.ChannelURL, rawURL)
 	if channelID == "" {
@@ -50,6 +50,7 @@ func (m *Manager) ResolveYouTubePlayback(ctx context.Context, videoID string) (*
 	}
 	if info.Thumbnail != "" {
 		if err := m.db.DeclareAsset(db.Asset{
+			AssetID:   db.BuildAssetID("youtube", "youtube_video", info.ID, "post_thumbnail", 0),
 			AssetKind: "post_thumbnail", OwnerKind: "youtube_video", OwnerID: info.ID,
 			SourceURL: info.Thumbnail, RequiredReason: "retention",
 		}, 0); err != nil {

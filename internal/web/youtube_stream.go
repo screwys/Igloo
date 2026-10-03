@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -54,6 +55,7 @@ type youtubeStreamSession struct {
 
 func (s *Server) registerYouTubeStreamRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/youtube/{videoID}/stream", s.handleYouTubeStreamStart)
+	mux.HandleFunc("POST /api/youtube/{videoID}/captions", s.handleYouTubeCaptionTracks)
 	mux.HandleFunc("GET /api/youtube/streams/{sessionID}/manifest", s.handleYouTubeStreamManifest)
 	mux.HandleFunc("GET /api/youtube/streams/{sessionID}/media/{resourceID}/{rest...}", s.handleYouTubeStreamMedia)
 }
@@ -90,6 +92,14 @@ func (s *Server) handleYouTubeStreamStart(w http.ResponseWriter, r *http.Request
 	defer cancel()
 	info, err := s.workers.ResolveYouTubePlayback(ctx, videoID)
 	if err != nil {
+		if tool, _ := download.ErrorOperationContext(err); tool == "" {
+			writeJSONError(w, 500, "stream_storage", "Could not prepare the YouTube stream")
+			return
+		}
+		if download.ClassifyFailure(err, nil, 0).Kind == download.ErrorKindAuth {
+			writeJSONError(w, 502, "youtube_auth_required", "YouTube requires sign-in. Add YouTube cookies in Preferences.")
+			return
+		}
 		writeJSONError(w, 502, "stream_extraction", "Could not find a playable YouTube stream")
 		return
 	}
@@ -102,6 +112,44 @@ func (s *Server) handleYouTubeStreamStart(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, 502, "stream_prepare", "Could not prepare the YouTube stream")
 		return
 	}
+	s.storeYouTubeStream(session)
+	writeJSON(w, 200, map[string]any{"success": true, "video_id": info.ID,
+		"player_url":   "/player/" + url.PathEscape(info.ID) + "?stream=" + session.id,
+		"manifest_url": "/api/youtube/streams/" + session.id + "/manifest", "manifest_type": session.manifestType, "session_id": session.id,
+		"indexed": session.indexed, "text_tracks": session.textTracks})
+}
+
+func (s *Server) handleYouTubeCaptionTracks(w http.ResponseWriter, r *http.Request) {
+	if !requireAdmin(w, r) {
+		return
+	}
+	videoID := strings.TrimSpace(r.PathValue("videoID"))
+	if videoID == "" {
+		writeJSONError(w, 400, "invalid_video", "Video required")
+		return
+	}
+	downloader := s.workers.Downloader()
+	if downloader == nil || downloader.YtDlp == nil || !s.cfg.PlatformEnabled("youtube") {
+		writeJSONError(w, 503, "captions_unavailable", "Subtitles could not load")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+	info, err := downloader.YtDlp.FetchPlayback(ctx, "https://www.youtube.com/watch?v="+url.QueryEscape(videoID), s.cookieOptsFor("youtube"))
+	if err != nil {
+		writeJSONError(w, 502, "caption_extraction", "Subtitles could not load")
+		return
+	}
+	client := *download.NewHTTPDownloader().Client
+	client.Timeout = 0
+	session := &youtubeStreamSession{id: rand.Text(), videoID: info.ID, info: info, client: &client,
+		resources: make(map[string]youtubeStreamResource), resourceIDs: make(map[string]string), lastUsed: time.Now()}
+	session.textTracks = session.captionTracks()
+	s.storeYouTubeStream(session)
+	writeJSON(w, 200, map[string]any{"success": true, "text_tracks": session.textTracks})
+}
+
+func (s *Server) storeYouTubeStream(session *youtubeStreamSession) {
 	s.youtubeStreamsMu.Lock()
 	if s.youtubeStreams == nil {
 		s.youtubeStreams = make(map[string]*youtubeStreamSession)
@@ -116,10 +164,6 @@ func (s *Server) handleYouTubeStreamStart(w http.ResponseWriter, r *http.Request
 	}
 	s.youtubeStreams[session.id] = session
 	s.youtubeStreamsMu.Unlock()
-	writeJSON(w, 200, map[string]any{"success": true, "video_id": info.ID,
-		"player_url":   "/player/" + url.PathEscape(info.ID) + "?stream=" + session.id,
-		"manifest_url": "/api/youtube/streams/" + session.id + "/manifest", "manifest_type": session.manifestType, "session_id": session.id,
-		"indexed": session.indexed, "text_tracks": session.textTracks})
 }
 
 func (s *Server) youtubeStream(id string) *youtubeStreamSession {
@@ -457,6 +501,23 @@ func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *htt
 		w.Header().Set("Content-Length", strconv.Itoa(len(rewritten)))
 		_, _ = w.Write(rewritten)
 		return
+	}
+	// Empty subtitle segments still need a WebVTT header for the player.
+	if strings.HasPrefix(contentType, "text/vtt") {
+		reader := bufio.NewReader(response.Body)
+		if _, err := reader.Peek(1); errors.Is(err, io.EOF) {
+			w.Header().Set("Content-Type", "text/vtt")
+			w.Header().Set("Content-Length", "8")
+			_, _ = w.Write([]byte("WEBVTT\n\n"))
+			return
+		} else if err != nil {
+			http.Error(w, "Could not read the subtitle segment", http.StatusBadGateway)
+			return
+		}
+		response.Body = struct {
+			io.Reader
+			io.Closer
+		}{reader, response.Body}
 	}
 	if response.StatusCode == http.StatusOK {
 		for _, key := range []string{"Content-Type", "Content-Length", "Accept-Ranges"} {

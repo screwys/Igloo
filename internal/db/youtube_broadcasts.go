@@ -53,6 +53,15 @@ type YouTubeBroadcastQuery struct {
 	Limit       int
 }
 
+func (db *DB) YouTubeBroadcastLiveStatus(videoID string) (string, error) {
+	var status string
+	err := db.reader().QueryRow(`SELECT live_status FROM youtube_broadcasts WHERE video_id = $1 LIMIT 1`, videoID).Scan(&status)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return status, err
+}
+
 func (db *DB) ListYouTubeBroadcasts(opts YouTubeBroadcastQuery) ([]model.YouTubeBroadcast, error) {
 	channelIDs, starredOnly, limit, states := opts.ChannelIDs, opts.StarredOnly, opts.Limit, opts.States
 	if limit == 0 {
@@ -102,8 +111,11 @@ func (db *DB) ListYouTubeBroadcasts(opts YouTubeBroadcastQuery) ([]model.YouTube
 	if opts.Order == "newest" || opts.Order == "recent" {
 		order = ` ORDER BY COALESCE(NULLIF(b.starts_at_ms,0),b.published_at_ms) DESC,b.source_rank,b.channel_id,b.video_id`
 	}
-	query += order + ` LIMIT ?`
-	args = append(args, limit)
+	query += order
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
 	rows, err := db.reader().Query(bind(query), args...)
 	if err != nil {
 		return nil, err

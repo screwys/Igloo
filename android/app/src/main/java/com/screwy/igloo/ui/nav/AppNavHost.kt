@@ -27,6 +27,7 @@ import com.screwy.igloo.channel.ChannelRoute
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.feed.FeedRoute
 import com.screwy.igloo.home.HomeRoute
+import com.screwy.igloo.home.HomeViewModel
 import com.screwy.igloo.liked.LikedRoute
 import com.screwy.igloo.logs.LogFilter
 import com.screwy.igloo.logs.LogsRoute
@@ -47,6 +48,7 @@ import com.screwy.igloo.ui.UiEffects
 import com.screwy.igloo.videos.DownloadedRoute
 import com.screwy.igloo.videos.VideosRoute
 import org.koin.compose.koinInject
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * Root NavHost. Moments sits in a nested `moments-graph` so its player and grid share one VM.
@@ -114,9 +116,15 @@ fun AppNavHost() {
     ) {
         directDestination(RouteRegistry.Login) { LoginRoute(navController) }
 
-        scaffoldDestination(navController, RouteRegistry.Home) { HomeRoute(navController) }
+        scaffoldDestination(navController, RouteRegistry.Home) {
+            val homeVm: HomeViewModel = koinViewModel(viewModelStoreOwner = navController.getBackStackEntry(navController.graph.id))
+            HomeRoute(navController, homeVm)
+        }
         scaffoldDestination(navController, RouteRegistry.Feed) { FeedRoute(navController) }
-        scaffoldDestination(navController, RouteRegistry.Videos) { VideosRoute(navController) }
+        scaffoldDestination(navController, RouteRegistry.Videos) {
+            val homeVm: HomeViewModel = koinViewModel(viewModelStoreOwner = navController.getBackStackEntry(navController.graph.id))
+            VideosRoute(navController, homeVm)
+        }
 
         navigation(route = RouteRegistry.MomentsGraphRoute, startDestination = RouteRegistry.Moments.route) {
             scaffoldDestination(navController, RouteRegistry.Moments) { MomentsRoute(navController) }

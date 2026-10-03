@@ -47,6 +47,7 @@ data class HomeBroadcastResponse(
     val broadcasts: List<HomeBroadcast> = emptyList(),
     val include_reposts: Boolean = true,
     val include_tagged: Boolean = true,
+    val broadcasts_enabled: Boolean = true,
 )
 
 @Serializable
@@ -58,4 +59,5 @@ data class HomeStreamResponse(
     val manifest_type: String? = null,
     val media_url: String? = null,
     val media_type: String? = null,
+    val error_message: String? = null,
 )

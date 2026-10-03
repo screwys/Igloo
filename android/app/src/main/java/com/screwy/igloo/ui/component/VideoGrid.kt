@@ -39,6 +39,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.screwy.igloo.R
+import com.screwy.igloo.home.HomeCard
+import com.screwy.igloo.home.HomeCardView
+import com.screwy.igloo.home.HomeWidget
 import com.screwy.igloo.data.Dearrow
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.isYoutubeChannelId
@@ -69,6 +72,8 @@ fun VideoGrid(
     canLoadMore: Boolean = false,
     onLoadMore: (() -> Unit)? = null,
     headerContent: (@Composable () -> Unit)? = null,
+    liveBroadcasts: List<HomeCard> = emptyList(),
+    onBroadcastClick: (HomeCard) -> Unit = {},
     showScrollFabs: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
@@ -83,13 +88,13 @@ fun VideoGrid(
     }
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
-    val headerOffset = if (headerContent != null) 1 else 0
+    val headerOffset = (if (headerContent != null) 1 else 0) + liveBroadcasts.size
     val latestLoadMore by rememberUpdatedState(onLoadMore)
-    val scrollArrows by remember(items.size, showScrollFabs) {
+    val scrollArrows by remember(items.size, liveBroadcasts.size, showScrollFabs) {
         derivedStateOf {
             scrollArrowVisibility(
                 showScrollFabs = showScrollFabs,
-                itemCount = items.size,
+                itemCount = items.size + liveBroadcasts.size,
                 visibleItemCount = gridState.layoutInfo.visibleItemsInfo.size,
                 firstVisibleItemIndex = gridState.firstVisibleItemIndex,
                 firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset,
@@ -139,6 +144,15 @@ fun VideoGrid(
                 ) {
                     headerContent()
                 }
+            }
+            items(
+                count = liveBroadcasts.size,
+                key = { "live:${liveBroadcasts[it].id}" },
+                contentType = { "live_cell" },
+            ) { index ->
+                val card = liveBroadcasts[index]
+                HomeCardView(card, HomeWidget("live", "live"), modifier = Modifier.padding(8.dp),
+                    onOpen = { onBroadcastClick(card) }, onChannel = { onChannelClick(card.channelId) })
             }
             items(
                 count = items.size,

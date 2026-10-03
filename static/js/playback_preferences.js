@@ -18,7 +18,7 @@
     try { stored = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (_) {}
     var result = { modes: {}, cap: 720, buffers: {} };
     ['search', 'discover', 'related'].forEach(function (origin) {
-      result.modes[origin] = stored.modes && stored.modes[origin] === 'stream' ? 'stream' : 'download';
+      result.modes[origin] = stored.modes && stored.modes[origin] === 'download' ? 'download' : 'stream';
     });
     if (Number.isFinite(stored.cap) && stored.cap >= 0) result.cap = stored.cap;
     ['youtube'].forEach(function (origin) {
@@ -32,7 +32,7 @@
     return result;
   }
 
-  function mode(origin) { return read().modes[origin] || 'download'; }
+  function mode(origin) { return read().modes[origin] || 'stream'; }
   function buffer(origin) { return read().buffers[origin]; }
   function text(key, fallback) {
     return (window.IglooI18n && window.IglooI18n.messages && window.IglooI18n.messages[key]) || fallback;
