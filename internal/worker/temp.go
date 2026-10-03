@@ -442,6 +442,11 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 
 	if platform == "youtube" {
 		m.RequestVideoPreview(videoID)
+		if completed.Metadata["live_status"] == "was_live" {
+			if err := m.QueueYouTubeReplayChat(videoID); err != nil {
+				log.Printf("[youtube-chat] queue %s: %v", videoID, err)
+			}
+		}
 	}
 
 	// Channel creation owns the durable profile job. Wake its consumer without

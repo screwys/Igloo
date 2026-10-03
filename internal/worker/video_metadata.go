@@ -141,6 +141,11 @@ func (m *Manager) processVideoMetadataJob(ctx context.Context, fetcher youtubeMe
 		m.retryVideoMetadataJob(job, err)
 		return true
 	}
+	if result.LiveStatus == "was_live" {
+		if err := m.QueueYouTubeReplayChat(job.VideoID); err != nil {
+			log.Printf("[youtube-chat] queue %s: %v", job.VideoID, err)
+		}
+	}
 	if len(result.Comments) > 0 {
 		m.KickMediaWork()
 	}

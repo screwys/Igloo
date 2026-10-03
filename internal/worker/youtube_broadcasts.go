@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -57,6 +58,13 @@ func (m *Manager) checkYouTubeBroadcasts(ctx context.Context, channel model.Chan
 		if m.db.IsChannelFollowed(channel.ChannelID) {
 			if err := m.db.ReplaceYouTubeBroadcasts(channel.ChannelID, broadcasts, time.Now().UnixMilli()); err != nil {
 				return window, err
+			}
+			for _, broadcast := range broadcasts {
+				if broadcast.LiveStatus == "was_live" {
+					if err := m.QueueYouTubeReplayChat(broadcast.VideoID); err != nil {
+						log.Printf("[youtube-chat] queue %s: %v", broadcast.VideoID, err)
+					}
+				}
 			}
 		}
 		window.Complete = true

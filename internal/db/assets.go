@@ -435,7 +435,7 @@ func prepareAssetIdentity(asset Asset) Asset {
 	}
 	if asset.StorageClass == "" {
 		switch asset.AssetKind {
-		case "avatar", "banner", "post_thumbnail", "dearrow_thumbnail", "subtitle", "preview_track_json", "preview_sprite":
+		case "avatar", "banner", "post_thumbnail", "dearrow_thumbnail", "subtitle", "live_chat", "preview_track_json", "preview_sprite":
 			asset.StorageClass = "state_ssd"
 		default:
 			asset.StorageClass = "bulk_hdd"

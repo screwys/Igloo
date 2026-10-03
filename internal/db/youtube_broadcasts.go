@@ -39,6 +39,14 @@ func (db *DB) ReplaceYouTubeBroadcasts(channelID string, broadcasts []model.YouT
 				broadcast.ConcurrentViewCount, observedAtMs, broadcast.SourceRank); err != nil {
 				return err
 			}
+			if _, err := tx.Exec(`
+				UPDATE videos
+				SET metadata_json = (COALESCE(NULLIF(metadata_json,'')::jsonb, '{}'::jsonb) || jsonb_build_object('live_status', $2::text))::text
+				WHERE video_id = $1 AND (metadata_json IS NULL OR metadata_json = '' OR metadata_json IS JSON OBJECT)
+				  AND COALESCE(CASE WHEN metadata_json IS JSON OBJECT THEN metadata_json::jsonb->>'live_status' END,'') IS DISTINCT FROM $2
+			`, broadcast.VideoID, broadcast.LiveStatus); err != nil {
+				return err
+			}
 		}
 		return nil
 	})

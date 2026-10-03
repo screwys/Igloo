@@ -1,10 +1,15 @@
 package web
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"regexp"
 	"time"
 )
@@ -43,7 +48,7 @@ func (s *Server) handleYouTubeChat(w http.ResponseWriter, r *http.Request) {
 	}
 	count := 0
 	lastHeartbeat := time.Now()
-	err := s.workers.StreamYouTubeChat(r.Context(), videoID, func(record json.RawMessage) error {
+	emit := func(record json.RawMessage) error {
 		if len(record) == 0 {
 			if time.Since(lastHeartbeat) < 10*time.Second {
 				return nil
@@ -53,7 +58,24 @@ func (s *Server) handleYouTubeChat(w http.ResponseWriter, r *http.Request) {
 		}
 		count++
 		return send("chat", record)
-	})
+	}
+	var err error
+	owner, ok := s.videoAssetOwner(videoID)
+	if ok {
+		files := s.canonicalAssets(owner, "live_chat")
+		if len(files) > 0 {
+			err = readYouTubeChatFile(files[0].path, emit)
+		} else {
+			if video, videoErr := s.db.GetVideo(videoID); videoErr == nil && video != nil && video.LiveStatus == "was_live" {
+				if queueErr := s.workers.QueueYouTubeReplayChat(videoID); queueErr != nil {
+					slog.Warn("queue replay chat", "err", queueErr)
+				}
+			}
+			err = s.workers.StreamYouTubeChat(r.Context(), videoID, emit)
+		}
+	} else {
+		err = s.workers.StreamYouTubeChat(r.Context(), videoID, emit)
+	}
 	if r.Context().Err() != nil {
 		return
 	}
@@ -64,5 +86,28 @@ func (s *Server) handleYouTubeChat(w http.ResponseWriter, r *http.Request) {
 		_ = send("unavailable", []byte(`{}`))
 	} else {
 		_ = send("end", []byte(`{}`))
+	}
+}
+
+func readYouTubeChatFile(path string, emit func(json.RawMessage) error) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = file.Close() }()
+	reader := bufio.NewReader(file)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if record := bytes.TrimSpace(line); len(record) > 0 {
+			if emitErr := emit(record); emitErr != nil {
+				return emitErr
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
 	}
 }

@@ -473,6 +473,9 @@ func (db *DB) GetVideos(opts GetVideosOpts) ([]model.Video, error) {
 		       COALESCE(v.is_temp,0), COALESCE(v.is_pinned,0),
 		       %s,
 		       COALESCE(v.media_kind,''), COALESCE(v.slide_count,0), COALESCE(v.source_kind,''),
+		       COALESCE(CASE WHEN v.metadata_json IS JSON OBJECT THEN v.metadata_json::jsonb->>'live_status' END,
+		         (SELECT broadcast.live_status FROM youtube_broadcasts broadcast
+		          WHERE broadcast.channel_id = v.channel_id AND broadcast.video_id = v.video_id), ''),
 		       COALESCE(cp.display_name,''),
 		       COALESCE(c.platform,''),
 		       CASE WHEN cs.channel_id IS NOT NULL THEN 1 ELSE 0 END,
@@ -513,6 +516,7 @@ func (db *DB) GetVideos(opts GetVideosOpts) ([]model.Video, error) {
 			&v.Watched, &v.IsTemp, &v.IsPinned,
 			&v.MetadataJSON,
 			&v.MediaKind, &v.MediaSlideCount, &v.SourceKind,
+			&v.LiveStatus,
 			&v.ChannelName, &v.Platform,
 			&v.IsStarred, &v.IsSubscribed,
 			&bookmarkCatID,

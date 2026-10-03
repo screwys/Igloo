@@ -14,6 +14,7 @@ const contentAssetWorkerOwnerSQL = `(
 	(? AND a.owner_kind = 'tweet' AND a.asset_kind IN ('post_audio', 'post_media', 'post_thumbnail'))
 	OR (a.owner_kind = 'comment_author' AND a.asset_kind = 'avatar')
 	OR (a.owner_kind IN ('youtube_video', 'tiktok_video', 'instagram_reel') AND a.asset_kind = 'subtitle')
+	OR (a.owner_kind = 'youtube_video' AND a.asset_kind = 'live_chat')
 )`
 
 const AssetStatePruned = "pruned"

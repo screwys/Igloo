@@ -72,9 +72,9 @@ func (m *Manager) processContentAsset(ctx context.Context, asset db.Asset, workL
 		return
 	}
 	m.ReportExternalResult(nil)
-	if asset.AssetKind == "subtitle" && finalPath == "" {
+	if (asset.AssetKind == "subtitle" || asset.AssetKind == "live_chat") && finalPath == "" {
 		if err := m.db.MarkContentAssetPermanentMissing(asset.AssetID, asset.AssetKind, asset.LeaseOwner, "", "", time.Now().UnixMilli()); err != nil {
-			log.Printf("[feedmedia] record absent subtitle %s: %v", asset.AssetID, err)
+			log.Printf("[feedmedia] record absent %s %s: %v", asset.AssetKind, asset.AssetID, err)
 		}
 		return
 	}
@@ -175,6 +175,30 @@ func (m *Manager) downloadContentAsset(ctx context.Context, asset db.Asset, lane
 			return "", "", fmt.Errorf("subtitle source produced %d files", len(paths))
 		}
 		return paths[0], "text/vtt", nil
+	case "live_chat":
+		if !m.db.BoolSetting("youtube_broadcasts_enabled") || !m.cfg.PlatformEnabled("youtube") {
+			return "", "", fmt.Errorf("chat fetching is disabled")
+		}
+		dir, err := m.cfg.Storage.WritePath("chat/youtube")
+		if err != nil {
+			return "", "", err
+		}
+		path := filepath.Join(dir, unique+".jsonl")
+		cookies, browser := m.cookiesFor("youtube")
+		available := false
+		err = m.downloader.RunMedia(ctx, download.MediaLaneState, func() error {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return err
+			}
+			var err error
+			available, err = m.downloader.YtDlp.DownloadYouTubeChat(ctx, asset.SourceURL,
+				download.Opts{Cookies: cookies, CookiesFromBrowser: browser, CookieAlternates: m.cookieSetsFor("youtube")}, path)
+			return err
+		})
+		if err != nil || !available {
+			return "", "", err
+		}
+		return path, "application/x-ndjson", nil
 	default:
 		return "", "", fmt.Errorf("unsupported content asset kind: %s", asset.AssetKind)
 	}
@@ -213,7 +237,7 @@ func subtitleOwnerPlatform(ownerKind string) string {
 }
 
 func mediaLaneForAsset(asset db.Asset, bulkLane download.MediaLane) download.MediaLane {
-	if asset.AssetKind == "avatar" || asset.AssetKind == "post_thumbnail" || asset.AssetKind == "subtitle" {
+	if asset.AssetKind == "avatar" || asset.AssetKind == "post_thumbnail" || asset.AssetKind == "subtitle" || asset.AssetKind == "live_chat" {
 		return download.MediaLaneState
 	}
 	return bulkLane

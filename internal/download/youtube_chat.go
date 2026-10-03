@@ -14,6 +14,33 @@ import (
 	ytdlp "github.com/lrstanley/go-ytdlp"
 )
 
+// DownloadYouTubeChat writes the replay timeline using the same extractor as playback.
+func (y *YtDlpWrapper) DownloadYouTubeChat(ctx context.Context, rawURL string, opts Opts, path string) (bool, error) {
+	file, err := os.Create(path)
+	if err != nil {
+		return false, err
+	}
+	count := 0
+	err = y.StreamYouTubeChat(ctx, rawURL, opts, func(record json.RawMessage) error {
+		if len(record) == 0 {
+			return nil
+		}
+		if _, err := file.Write(append(record, '\n')); err != nil {
+			return err
+		}
+		count++
+		return nil
+	})
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil || count == 0 {
+		_ = os.Remove(path)
+		return false, err
+	}
+	return true, nil
+}
+
 // StreamYouTubeChat reads the JSON lines written by yt-dlp's chat downloader.
 // The caller owns the connection; closing it stops extraction and removes files.
 func (y *YtDlpWrapper) StreamYouTubeChat(ctx context.Context, rawURL string, opts Opts, emit func(json.RawMessage) error) error {

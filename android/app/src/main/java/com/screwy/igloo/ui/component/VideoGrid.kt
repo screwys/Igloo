@@ -275,6 +275,7 @@ private fun VideoCell(
             videoId = video.videoId,
             resolvers = resolvers,
             durationLabel = videoDurationBadgeLabel(video),
+            isReplay = remember(video.metadataJson) { video.liveStatus == "was_live" },
             progress = progressFraction(item.playbackPosition, item.watchDuration),
             onClick = onVideoClick,
             onLongClick = onBinaryLongClick,
@@ -351,6 +352,7 @@ private fun VideoThumbnail(
     videoId: String,
     resolvers: MediaResolvers,
     durationLabel: String,
+    isReplay: Boolean,
     progress: Float,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
@@ -392,6 +394,16 @@ private fun VideoThumbnail(
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.White,
                 )
+            }
+        }
+
+        if (isReplay) {
+            Box(
+                modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
+                    .clip(RoundedCornerShape(3.dp)).background(Color.Black.copy(alpha = 0.65f))
+                    .padding(horizontal = 4.dp, vertical = 1.dp),
+            ) {
+                Text(stringResource(R.string.home_replay), style = MaterialTheme.typography.labelSmall, color = Color.White)
             }
         }
 

@@ -4,9 +4,9 @@ export const CINEMA_COMPACT_LEFT_SIDEBAR_WIDTH = 1000
 export const PLAYER_SIDEBAR_WIDTH = 320
 export const PLAYER_MAIN_HORIZONTAL_PADDING = 48
 
-export function shouldAutoEnableCinema(layoutWidth, sidebarIsStacked) {
+export function shouldAutoEnableCinema(layoutWidth, sidebarIsStacked, sidebarWidth = PLAYER_SIDEBAR_WIDTH) {
   if (sidebarIsStacked) return false
-  return layoutWidth - PLAYER_SIDEBAR_WIDTH - PLAYER_MAIN_HORIZONTAL_PADDING < CINEMA_MIN_PLAYER_WIDTH
+  return layoutWidth - sidebarWidth - PLAYER_MAIN_HORIZONTAL_PADDING < CINEMA_MIN_PLAYER_WIDTH
 }
 
 export function cinemaSidebarDefaultMode(layoutWidth) {
@@ -20,16 +20,18 @@ export function initCinemaView({ root, button, onCinemaRequested }) {
   if (!root || !button || !sidebar) return
 
   const stackedSidebar = window.matchMedia('(max-width: 1024px)')
+  const hasChat = root.classList.contains('has-live-chat')
   let manualChoice = null
   let suspendedForFullscreen = false
 
   function sidebarDefaultMode() {
+    if (hasChat) return null
     return cinemaSidebarDefaultMode(root.getBoundingClientRect().width)
   }
 
   function setCinemaView(enabled, defaultSidebarMode, forceSidebarMode, notifySidebar) {
     const changed = root.classList.contains('cinema-view') !== enabled
-    const hidesPlayerSidebar = enabled && !stackedSidebar.matches
+    const hidesPlayerSidebar = enabled && !stackedSidebar.matches && !hasChat
     root.classList.toggle('cinema-view', enabled)
     root.classList.toggle('cinema-hides-player-sidebar', hidesPlayerSidebar)
     if (changed && notifySidebar !== false && typeof CustomEvent === 'function' && typeof root.dispatchEvent === 'function') {
@@ -47,7 +49,8 @@ export function initCinemaView({ root, button, onCinemaRequested }) {
   }
 
   function recommendedCinemaView() {
-    return shouldAutoEnableCinema(root.getBoundingClientRect().width, stackedSidebar.matches)
+    return shouldAutoEnableCinema(root.getBoundingClientRect().width, stackedSidebar.matches,
+      hasChat ? sidebar.getBoundingClientRect().width : PLAYER_SIDEBAR_WIDTH)
   }
 
   function syncCinemaView() {
@@ -70,7 +73,9 @@ export function initCinemaView({ root, button, onCinemaRequested }) {
   })
 
   if (typeof window.ResizeObserver === 'function') {
-    new window.ResizeObserver(syncCinemaView).observe(root)
+    const observer = new window.ResizeObserver(syncCinemaView)
+    observer.observe(root)
+    observer.observe(sidebar)
   } else {
     window.addEventListener('resize', syncCinemaView)
   }

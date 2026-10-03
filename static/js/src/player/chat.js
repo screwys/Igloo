@@ -45,9 +45,9 @@ function message(item) {
 }
 
 // yt-dlp emits both live messages and replays as chat actions in JSON lines.
-export function chatEvents(record, captureStartedAt) {
+export function chatEvents(record, captureStartedAt, liveStream = !!record.isLive) {
   const replay = record.replayChatItemAction
-  const live = !!record.isLive
+  const live = liveStream
   const offset = Number(replay && replay.videoOffsetTimeMsec || record.videoOffsetTimeMsec || 0)
   const actions = replay ? replay.actions || [] : [record]
   const out = []
@@ -150,7 +150,9 @@ export function initLiveChat(video, root) {
   let cursor = 0
   let previousTime = -Infinity
   let captureStartedAt = 0
-  let live = panel.dataset.live === '1'
+  const live = panel.dataset.live === '1'
+  let liveEpochOffset = null
+  let streamPosition = null
   let follow = true
   let visibleCount = 100
   let source = null
@@ -161,7 +163,11 @@ export function initLiveChat(video, root) {
   let hasEarlier = false
 
   function position() {
-    return live ? Date.now() : video.currentTime * 1000
+    const mediaTime = video.currentTime * 1000
+    if (!live) return mediaTime
+    const time = streamPosition && streamPosition()
+    if (Number.isFinite(time)) liveEpochOffset = time - mediaTime
+    return liveEpochOffset === null ? -Infinity : liveEpochOffset + mediaTime
   }
 
   function render(prepend = false) {
@@ -201,7 +207,7 @@ export function initLiveChat(video, root) {
     const time = position()
     let changed = renderPending
     renderPending = false
-    if (!live && (time < previousTime || video.seeking)) {
+    if (time < previousTime || video.seeking) {
       messages.clear()
       messageOrder.length = 0
       viewEnd = null
@@ -239,9 +245,8 @@ export function initLiveChat(video, root) {
     source = new EventSource('/api/youtube/' + encodeURIComponent(root.dataset.videoId) + '/chat')
     source.addEventListener('start', event => { captureStartedAt = JSON.parse(event.data).started_at_ms })
     source.addEventListener('chat', event => {
-      const incoming = chatEvents(JSON.parse(event.data), captureStartedAt)
+      const incoming = chatEvents(JSON.parse(event.data), captureStartedAt, live)
       if (!incoming.length) return
-      live = incoming[0].live
       if (events.length && incoming[0].time < events[events.length - 1].time) {
         events.push(...incoming)
         events.sort((a, b) => a.time - b.time)
@@ -251,8 +256,7 @@ export function initLiveChat(video, root) {
         cursor = 0
       } else events.push(...incoming)
       status.textContent = ''
-      renderPending = true
-      if (live || !video.paused || incoming[0].time <= position() || previousTime === -Infinity) schedule()
+      if (!video.paused || incoming[0].time <= position() || previousTime === -Infinity) schedule()
     })
     function finish(label, failed = false) {
       close()
@@ -286,11 +290,13 @@ export function initLiveChat(video, root) {
     viewEnd = null
     cursor = 0
     previousTime = -Infinity
+    renderPending = true
     status.textContent = t('status_loading_ellipsis', 'Loading...')
     connect()
   })
   toggle.addEventListener('click', () => {
     body.hidden = !body.hidden
+    root.classList.toggle('chat-closed', body.hidden)
     toggle.setAttribute('aria-expanded', String(!body.hidden))
     toggle.title = body.hidden ? t('action_show', 'Show') : t('action_hide', 'Hide')
     toggle.setAttribute('aria-label', toggle.title)
@@ -301,7 +307,12 @@ export function initLiveChat(video, root) {
   video.addEventListener('timeupdate', schedule)
   video.addEventListener('seeked', () => { follow = true; schedule() })
   video.addEventListener('seeking', schedule)
-  video.addEventListener('playing', schedule)
+  video.addEventListener('playing', () => {
+    if (liveEpochOffset === null) liveEpochOffset = Date.now() - video.currentTime * 1000
+    schedule()
+  })
+  root.addEventListener('streamclockready', event => { streamPosition = event.detail.position; schedule() })
+  if (!video.paused && liveEpochOffset === null) liveEpochOffset = Date.now() - video.currentTime * 1000
   window.addEventListener('pagehide', () => { close(); if (animation !== null) cancelAnimationFrame(animation); animation = null })
   window.addEventListener('pageshow', () => { if (!body.hidden) connect() })
   connect()

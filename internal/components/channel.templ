@@ -194,6 +194,9 @@ templ VideoCard(p PageProps, v model.Video) {
 				<span class="player-next-badge">{ L(p, "player_next_in_line", "Next in line") }</span>
 			}
 			@VideoMediaTypeBadge(p, v)
+			if v.LiveStatus == "was_live" {
+				<span class="broadcast-status">{ L(p, "home_replay", "Replay") }</span>
+			}
 		</div>
 		<div class="video-info">
 			<div class="video-title" title={ p.Prefs.VideoTitle(v) }>{ p.Prefs.VideoTitle(v) }</div>

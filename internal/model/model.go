@@ -157,6 +157,7 @@ type Video struct {
 	MediaSlideCount    int
 	MediaTypes         []string // image|video per slide for mixed local media
 	SourceKind         string   // ""|story
+	LiveStatus         string   `json:"-"`
 	PlaybackPosition   float64
 	EagerLoad          bool // skip loading="lazy" for above-the-fold images
 	NextInLine         bool `json:"-"` // badge next-in-line indicator for player sidebar
@@ -381,6 +382,9 @@ func (v *Video) EnrichForCard() {
 	}
 
 	if m := v.ParseMetadata(); m != nil {
+		if v.LiveStatus == "" {
+			v.LiveStatus = m.LiveStatus
+		}
 		if m.Duration > 0 && m.Duration <= 90 {
 			v.IsShortForm = true
 		}

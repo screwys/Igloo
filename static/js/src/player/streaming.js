@@ -112,6 +112,11 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
     })
     player.addEventListener('trackschanged', renderQualities)
     function loadCaptions(tracks) {
+      root.dispatchEvent(new CustomEvent('streamclockready', { detail: { position: function () {
+        if (!loaded || nativePlayback || !player.isLive()) return null
+        const date = player.getPlayheadTimeAsDate()
+        return date && date.getTime()
+      } } }))
       player.selectTextTrack(null)
       let requestedCaption = null
       root.dispatchEvent(new CustomEvent('captiontrackschanged', { detail: {

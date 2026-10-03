@@ -494,6 +494,11 @@ func (m *Manager) downloadVideo(ctx context.Context, job db.DownloadWork, platfo
 		Timestamp: time.Now().Unix(),
 	})
 	if platform == "youtube" {
+		if metadata["live_status"] == "was_live" {
+			if err := m.QueueYouTubeReplayChat(job.VideoID); err != nil {
+				log.Printf("[youtube-chat] queue %s: %v", job.VideoID, err)
+			}
+		}
 		if err := m.QueueVideoMetadataRefresh(job.VideoID); err != nil {
 			log.Printf("[video-metadata] queue %s: %v", job.VideoID, err)
 		}

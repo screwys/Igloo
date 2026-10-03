@@ -6,6 +6,10 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /** Decoded content records and local Room entities. StoredContent owns the content tables. */
 
@@ -77,7 +81,14 @@ data class VideoEntity(
     val dearrowTitleCasual: String? = null,
     val momentsAllPosition: Long = 0,
     val momentsFollowingPosition: Long = 0,
-)
+) {
+    val liveStatus: String
+        get() = metadataJson?.let { metadata ->
+            runCatching {
+                Json.parseToJsonElement(metadata).jsonObject["live_status"]?.jsonPrimitive?.contentOrNull
+            }.getOrNull()
+        }.orEmpty()
+}
 
 @Serializable
 data class ChannelEntity(

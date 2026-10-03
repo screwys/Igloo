@@ -9,8 +9,9 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 			<script defer src={ p.StaticV("vendor/shaka-player/shaka-player.compiled.js") }></script>
 		}
 		{{ taggedAccounts := videoTaggedAccounts(video) }}
+		{{ hasChat := p.UserRole == "admin" && p.BroadcastsEnabled && video.Metadata != nil && (video.Metadata.LiveStatus == "is_live" || video.Metadata.LiveStatus == "post_live" || video.Metadata.LiveStatus == "was_live") }}
 		<div
-			class="player-layout"
+			class={ "player-layout", templ.KV("has-live-chat", hasChat) }
 			id="player-root"
 			data-video-id={ video.VideoID }
 			data-stream-manifest={ p.StreamManifestURL }
@@ -166,6 +167,9 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 									}
 								</div>
 							}
+							if video.Metadata != nil && video.Metadata.LiveStatus == "was_live" {
+								<span class="badge">{ L(p, "home_replay", "Replay") }</span>
+							}
 							if video.PublishedAt != nil {
 								<span class="badge" id="player-video-date" data-video-date={ publishedAtStr(video.PublishedAt) } data-timestamp={ publishedAtStr(video.PublishedAt) }>{ RelativeTimeText(p, video.PublishedAt) }</span>
 							}
@@ -259,7 +263,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 			</section>
 
 			<aside class="player-sidebar">
-				if p.UserRole == "admin" && p.BroadcastsEnabled && video.Metadata != nil && (video.Metadata.LiveStatus == "is_live" || video.Metadata.LiveStatus == "post_live" || video.Metadata.LiveStatus == "was_live") {
+				if hasChat {
 					<section id="player-chat" class="player-chat" data-live={ boolDataAttr(video.Metadata.LiveStatus == "is_live") } aria-labelledby="player-chat-heading">
 						<header class="player-chat-header">
 							<h3 id="player-chat-heading">{ L(p, "player_live_chat", "Live chat") }</h3>
