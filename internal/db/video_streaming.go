@@ -24,7 +24,7 @@ func (db *DB) ObserveStreamVideo(video CompletedVideo) error {
 		if err := requireVideoOwnerKindTx(tx, video.VideoID, video.OwnerKind); err != nil {
 			return err
 		}
-		_, err := tx.Exec(`
+		_, err := tx.Exec(bind(`
 			INSERT INTO videos (video_id, channel_id, owner_kind, title, description,
 				duration, published_at, metadata_json, media_kind, downloaded_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'video', 0)
@@ -35,13 +35,13 @@ func (db *DB) ObserveStreamVideo(video CompletedVideo) error {
 				duration = CASE WHEN excluded.duration > 0 THEN excluded.duration ELSE videos.duration END,
 				published_at = CASE WHEN excluded.published_at > 0 THEN excluded.published_at ELSE videos.published_at END,
 				metadata_json = CASE WHEN excluded.metadata_json != '' THEN excluded.metadata_json ELSE videos.metadata_json END
-		`, video.VideoID, video.ChannelID, video.OwnerKind, video.Title, video.Description,
+		`), video.VideoID, video.ChannelID, video.OwnerKind, video.Title, video.Description,
 			video.Duration, video.PublishedAtMs, video.MetadataJSON)
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(`INSERT INTO web_video_streams (video_id, observed_at_ms) VALUES (?, ?)
-			ON CONFLICT(video_id) DO UPDATE SET observed_at_ms = excluded.observed_at_ms`, video.VideoID, time.Now().UnixMilli())
+		_, err = tx.Exec(bind(`INSERT INTO web_video_streams (video_id, observed_at_ms) VALUES (?, ?)
+			ON CONFLICT(video_id) DO UPDATE SET observed_at_ms = excluded.observed_at_ms`), video.VideoID, time.Now().UnixMilli())
 		return err
 	})
 }
@@ -74,7 +74,7 @@ func (db *DB) QueueStreamSave(videoID string, incoming TempDownloadSaveIntent) e
 			return err
 		}
 		var raw string
-		if err := tx.QueryRow(`SELECT save_intent_json FROM temp_download_queue WHERE url = ?`, rawURL).Scan(&raw); err != nil {
+		if err := tx.QueryRow(bind(`SELECT save_intent_json FROM temp_download_queue WHERE url = ?`), rawURL).Scan(&raw); err != nil {
 			return err
 		}
 		var intent TempDownloadSaveIntent
@@ -114,14 +114,14 @@ func (db *DB) QueueStreamSave(videoID string, incoming TempDownloadSaveIntent) e
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(`UPDATE temp_download_queue SET save_intent_json = ? WHERE url = ?`, string(encoded), rawURL)
+		_, err = tx.Exec(bind(`UPDATE temp_download_queue SET save_intent_json = ? WHERE url = ?`), string(encoded), rawURL)
 		return err
 	})
 }
 
 func (db *DB) applyTempDownloadSaveIntentTx(tx *sql.Tx, rawURL, videoID string) (*TempDownloadBookmarkArchive, error) {
 	var raw string
-	err := tx.QueryRow(`SELECT save_intent_json FROM temp_download_queue WHERE url = ?`, rawURL).Scan(&raw)
+	err := tx.QueryRow(bind(`SELECT save_intent_json FROM temp_download_queue WHERE url = ?`), rawURL).Scan(&raw)
 	if err == sql.ErrNoRows || raw == "" && err == nil {
 		return nil, nil
 	}
@@ -137,7 +137,7 @@ func (db *DB) applyTempDownloadSaveIntentTx(tx *sql.Tx, rawURL, videoID string) 
 		intent.Bookmark.VideoID = videoID
 		if intent.Bookmark.CategoryID != nil && *intent.Bookmark.CategoryID != 0 {
 			var exists bool
-			if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM bookmark_categories WHERE id = ?)`, *intent.Bookmark.CategoryID).Scan(&exists); err != nil {
+			if err := tx.QueryRow(bind(`SELECT EXISTS (SELECT 1 FROM bookmark_categories WHERE id = ?)`), *intent.Bookmark.CategoryID).Scan(&exists); err != nil {
 				return nil, err
 			}
 			if !exists {
@@ -164,7 +164,7 @@ func (db *DB) applyTempDownloadSaveIntentTx(tx *sql.Tx, rawURL, videoID string) 
 }
 
 func finishStreamCaptureTx(tx *sql.Tx, videoID string) error {
-	removed, err := tx.Exec(`DELETE FROM web_video_streams WHERE video_id = ?`, videoID)
+	removed, err := tx.Exec(bind(`DELETE FROM web_video_streams WHERE video_id = ?`), videoID)
 	if err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ func finishStreamCaptureTx(tx *sql.Tx, videoID string) error {
 		return err
 	}
 	var hasHistory bool
-	if err := tx.QueryRow(`SELECT EXISTS (SELECT 1 FROM watch_history WHERE video_id = ?)`, videoID).Scan(&hasHistory); err != nil {
+	if err := tx.QueryRow(bind(`SELECT EXISTS (SELECT 1 FROM watch_history WHERE video_id = ?)`), videoID).Scan(&hasHistory); err != nil {
 		return err
 	}
 	if hasHistory {
@@ -185,7 +185,7 @@ func finishStreamCaptureTx(tx *sql.Tx, videoID string) error {
 func clearStreamSaveIntentTx(tx *sql.Tx, videoID, kind string, updatedAtMs int64) error {
 	rawURL := "https://www.youtube.com/watch?v=" + videoID
 	var raw string
-	err := tx.QueryRow(`SELECT save_intent_json FROM temp_download_queue WHERE url = ?`, rawURL).Scan(&raw)
+	err := tx.QueryRow(bind(`SELECT save_intent_json FROM temp_download_queue WHERE url = ?`), rawURL).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
@@ -209,6 +209,6 @@ func clearStreamSaveIntentTx(tx *sql.Tx, videoID, kind string, updatedAtMs int64
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(`UPDATE temp_download_queue SET save_intent_json = ? WHERE url = ?`, string(encoded), rawURL)
+	_, err = tx.Exec(bind(`UPDATE temp_download_queue SET save_intent_json = ? WHERE url = ?`), string(encoded), rawURL)
 	return err
 }

@@ -21,13 +21,13 @@ func (db *DB) NextMediaWorkDelay(nowMs int64, downloadPlatforms []string, includ
 	query := `
 		WITH next_queued_content AS (
 			SELECT CASE WHEN mo.next_attempt_at_ms > 0 THEN mo.next_attempt_at_ms ELSE ? END AS due_ms
-			FROM media_objects mo INDEXED BY idx_media_objects_claim
+			FROM media_objects mo
 			WHERE mo.job_state IN ('queued', 'downloading')
 			  AND mo.job_state = 'queued'
 			  AND mo.download_lane = ?
-			  AND (mo.source_url != '' OR mo.object_key LIKE 'derived:video-thumbnail:%')
+			  AND (mo.source_url != '' OR mo.object_key ILIKE 'derived:video-thumbnail:%' COLLATE "C" ESCAPE '')
 			  AND EXISTS (
-			    SELECT 1 FROM assets a INDEXED BY idx_assets_desired_object
+			    SELECT 1 FROM assets a
 			    WHERE a.desired_object_id = mo.object_id AND a.lifecycle_state = 'active'
 			      AND ` + contentAssetWorkerOwnerSQL + `
 			  )
@@ -35,12 +35,12 @@ func (db *DB) NextMediaWorkDelay(nowMs int64, downloadPlatforms []string, includ
 			LIMIT 1
 		), next_leased_content AS (
 			SELECT mo.lease_until_ms AS due_ms
-			FROM media_objects mo INDEXED BY idx_media_objects_lease
+			FROM media_objects mo
 			WHERE mo.job_state = 'downloading'
 			  AND mo.download_lane = ?
-			  AND (mo.source_url != '' OR mo.object_key LIKE 'derived:video-thumbnail:%')
+			  AND (mo.source_url != '' OR mo.object_key ILIKE 'derived:video-thumbnail:%' COLLATE "C" ESCAPE '')
 			  AND EXISTS (
-			    SELECT 1 FROM assets a INDEXED BY idx_assets_desired_object
+			    SELECT 1 FROM assets a
 			    WHERE a.desired_object_id = mo.object_id AND a.lifecycle_state = 'active'
 			      AND ` + contentAssetWorkerOwnerSQL + `
 			  )
@@ -64,13 +64,13 @@ func (db *DB) NextMediaWorkDelay(nowMs int64, downloadPlatforms []string, includ
 			WHERE dq.status IN ('pending', 'processing')
 			  AND CASE WHEN EXISTS (
 			    SELECT 1
-			    FROM video_desires current_desire INDEXED BY idx_video_desires_video
+			    FROM video_desires current_desire
 			    JOIN channel_follows current_follow ON current_follow.channel_id = current_desire.source_channel_id
 			    WHERE current_desire.video_id = dq.video_id AND current_desire.lane = 'current'
 			  ) THEN 'current' ELSE 'backfill' END = ?
 			  AND EXISTS (
 			    SELECT 1
-			    FROM video_desires desired INDEXED BY idx_video_desires_video
+			    FROM video_desires desired
 			    JOIN channel_follows followed ON followed.channel_id = desired.source_channel_id
 			    WHERE desired.video_id = dq.video_id
 			  )
@@ -150,7 +150,7 @@ func (db *DB) xContentOwnerIDsForTweet(tweetID string) ([]string, error) {
 	}
 	ids := []string{tweetID}
 	var quoteID string
-	err := db.conn.QueryRow(`SELECT COALESCE(quote_tweet_id, '') FROM feed_items WHERE tweet_id = ?`, tweetID).Scan(&quoteID)
+	err := db.conn.QueryRow(bind(`SELECT COALESCE(quote_tweet_id, '') FROM feed_items WHERE tweet_id = ?`), tweetID).Scan(&quoteID)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
@@ -162,17 +162,17 @@ func (db *DB) xContentOwnerIDsForTweet(tweetID string) ([]string, error) {
 
 // ListPendingXContentDownloads projects owner-level queue state from assets.
 func (db *DB) ListPendingXContentDownloads() (processing, pending []XContentDownloadOwner, err error) {
-	rows, err := db.conn.Query(`
+	rows, err := db.conn.Query(bind(`
 		SELECT a.owner_id,
 		       COALESCE(fi.source_handle, ''),
 		       CASE WHEN SUM(CASE WHEN mo.job_state = 'downloading' THEN 1 ELSE 0 END) > 0
 		            THEN 'processing' ELSE 'queued' END,
-		       CASE WHEN SUM(CASE WHEN mo.content_type LIKE 'video/%' THEN 1 ELSE 0 END) > 0
+		       CASE WHEN SUM(CASE WHEN mo.content_type ILIKE 'video/%' COLLATE "C" ESCAPE '' THEN 1 ELSE 0 END) > 0
 		            THEN 'video' ELSE 'image' END,
 		       SUM(CASE WHEN a.asset_kind = 'post_media' THEN 1 ELSE 0 END),
 		       MAX(mo.attempts), MAX(mo.last_error)
 		FROM media_objects mo
-		CROSS JOIN assets a INDEXED BY idx_assets_desired_object
+		CROSS JOIN assets a
 		LEFT JOIN feed_items_resolved fi ON fi.tweet_id = a.owner_id
 		WHERE a.desired_object_id = mo.object_id
 		  AND a.lifecycle_state = 'active'
@@ -181,7 +181,7 @@ func (db *DB) ListPendingXContentDownloads() (processing, pending []XContentDown
 		  AND mo.job_state IN ('queued', 'downloading')
 		GROUP BY a.owner_id, fi.source_handle
 		ORDER BY MAX(mo.updated_at_ms) ASC, a.owner_id ASC
-	`)
+	`))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -206,12 +206,12 @@ func (db *DB) ListPendingXContentDownloads() (processing, pending []XContentDown
 }
 
 func (db *DB) CountPendingXContentDownloads() (queued int, processing int, err error) {
-	err = db.conn.QueryRow(`
+	err = db.conn.QueryRow(bind(`
 		WITH owner_state AS (
 			SELECT a.owner_id,
 			       MAX(CASE WHEN mo.job_state = 'downloading' THEN 1 ELSE 0 END) AS processing
 			FROM media_objects mo
-			CROSS JOIN assets a INDEXED BY idx_assets_desired_object
+			CROSS JOIN assets a
 			WHERE a.desired_object_id = mo.object_id
 			  AND a.lifecycle_state = 'active'
 			  AND a.owner_kind = 'tweet'
@@ -222,7 +222,7 @@ func (db *DB) CountPendingXContentDownloads() (queued int, processing int, err e
 		SELECT COALESCE(SUM(CASE WHEN processing = 0 THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(processing), 0)
 		FROM owner_state
-	`).Scan(&queued, &processing)
+	`)).Scan(&queued, &processing)
 	return queued, processing, err
 }
 
@@ -231,14 +231,14 @@ func (db *DB) HasPendingXContentDownloads() (bool, error) {
 	err := db.reader().QueryRow(`
 		SELECT EXISTS (
 			SELECT 1
-			FROM media_objects mo INDEXED BY idx_media_objects_claim
-			CROSS JOIN assets a INDEXED BY idx_assets_desired_object
+			FROM media_objects mo
+			CROSS JOIN assets a
 			WHERE a.desired_object_id = mo.object_id
 			  AND a.lifecycle_state = 'active'
 			  AND a.owner_kind = 'tweet'
 			  AND a.asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 			  AND mo.job_state IN ('queued', 'downloading')
-			  AND (mo.source_url != '' OR mo.object_key LIKE 'derived:video-thumbnail:%')
+			  AND (mo.source_url != '' OR mo.object_key ILIKE 'derived:video-thumbnail:%' COLLATE "C" ESCAPE '')
 			LIMIT 1
 		)
 	`).Scan(&pending)

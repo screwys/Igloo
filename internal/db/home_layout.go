@@ -16,7 +16,7 @@ const HomeLayoutsSchema = `CREATE TABLE IF NOT EXISTS home_layouts (
 
 func (db *DB) GetHomeLayout(username string) (home.Layout, error) {
 	var raw string
-	err := db.reader().QueryRow(`SELECT layout_json FROM home_layouts WHERE username = ?`, username).Scan(&raw)
+	err := db.reader().QueryRow(`SELECT layout_json FROM home_layouts WHERE username = $1`, username).Scan(&raw)
 	if err == sql.ErrNoRows {
 		return home.DefaultLayout(), nil
 	}
@@ -36,7 +36,7 @@ func (db *DB) SetHomeLayout(username string, layout home.Layout) error {
 		return err
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`INSERT INTO home_layouts (username, layout_json, updated_at_ms) VALUES (?, ?, ?)
+		_, err := tx.Exec(`INSERT INTO home_layouts (username, layout_json, updated_at_ms) VALUES ($1, $2, $3)
 			ON CONFLICT(username) DO UPDATE SET layout_json = excluded.layout_json, updated_at_ms = excluded.updated_at_ms`, username, string(raw), time.Now().UnixMilli())
 		return err
 	})

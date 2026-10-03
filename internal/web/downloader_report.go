@@ -490,7 +490,7 @@ func (s *Server) reportVideoSample(platform string) reportVideoSample {
 			SELECT v.video_id, v.channel_id, COALESCE(c.source_id, ''), COALESCE(c.url, '')
 			FROM videos v
 			JOIN channels c ON c.channel_id = v.channel_id
-			WHERE c.platform = ? AND COALESCE(v.is_temp, 0) = 0
+			WHERE c.platform = $1 AND COALESCE(v.is_temp, 0) = 0
 			ORDER BY v.downloaded_at DESC, v.id DESC
 			LIMIT 1`, platform)
 		if err := row.Scan(&sample.VideoID, &sample.ChannelID, &sample.SourceID, &sample.ChannelURL); err != nil {
@@ -498,14 +498,14 @@ func (s *Server) reportVideoSample(platform string) reportVideoSample {
 				SELECT q.video_id, q.owner_channel_id, COALESCE(c.source_id, ''), COALESCE(c.url, '')
 				FROM download_queue q
 				JOIN channels c ON c.channel_id = q.owner_channel_id
-				WHERE c.platform = ?
+				WHERE c.platform = $1
 				ORDER BY q.added_at_ms DESC
 				LIMIT 1`, platform)
 			if queueErr := queueRow.Scan(&sample.VideoID, &sample.ChannelID, &sample.SourceID, &sample.ChannelURL); queueErr != nil {
 				channelRow := conn.QueryRow(`
 					SELECT channel_id, COALESCE(source_id, ''), COALESCE(url, '')
 					FROM channels
-					WHERE platform = ?
+					WHERE platform = $1
 					ORDER BY last_checked ASC, id ASC
 					LIMIT 1`, platform)
 				_ = channelRow.Scan(&sample.ChannelID, &sample.SourceID, &sample.ChannelURL)

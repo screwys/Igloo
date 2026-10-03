@@ -58,7 +58,7 @@ func (db *DB) EnsureTikTokChannelForRepost(channelID, handle, displayName string
 	return db.WithWrite(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`
 			INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-			VALUES (?, ?, ?, ?, 'tiktok', ?)
+			VALUES ($1, $2, $3, $4, 'tiktok', $5)
 			ON CONFLICT(channel_id) DO UPDATE SET
 				source_id = COALESCE(NULLIF(channels.source_id, ''), excluded.source_id),
 				name = CASE WHEN TRIM(COALESCE(channels.name, '')) = '' THEN excluded.name ELSE channels.name END,
@@ -104,7 +104,7 @@ func (db *DB) EnsureInstagramChannelForTagged(channelID, handle, displayName, _ 
 	return db.WithWrite(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`
 			INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-			VALUES (?, ?, ?, ?, 'instagram', ?)
+			VALUES ($1, $2, $3, $4, 'instagram', $5)
 			ON CONFLICT(channel_id) DO UPDATE SET
 				source_id = COALESCE(NULLIF(channels.source_id, ''), excluded.source_id),
 				name = CASE WHEN TRIM(COALESCE(channels.name, '')) = '' THEN excluded.name ELSE channels.name END,
@@ -149,7 +149,7 @@ func (db *DB) ReplaceVideoRepostSources(videoID string, rows []model.VideoRepost
 		return nil
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`DELETE FROM video_repost_sources WHERE video_id = ?`, videoID); err != nil {
+		if _, err := tx.Exec(`DELETE FROM video_repost_sources WHERE video_id = $1`, videoID); err != nil {
 			return err
 		}
 		for _, row := range rows {
@@ -190,7 +190,7 @@ func (db *DB) ReplaceVideoRepostSourcesForReposter(reposterChannelID string, row
 		existingRows, err := tx.Query(`
 			SELECT video_id
 			FROM video_repost_sources
-			WHERE reposter_channel_id = ?
+			WHERE reposter_channel_id = $1
 			ORDER BY video_id
 		`, reposterChannelID)
 		if err != nil {
@@ -218,7 +218,7 @@ func (db *DB) ReplaceVideoRepostSourcesForReposter(reposterChannelID string, row
 			}
 			if _, err := tx.Exec(`
 				DELETE FROM video_repost_sources
-				WHERE video_id = ? AND reposter_channel_id = ?
+				WHERE video_id = $1 AND reposter_channel_id = $2
 			`, videoID, reposterChannelID); err != nil {
 				return err
 			}
@@ -265,7 +265,7 @@ func (db *DB) upsertVideoRepostSourceTx(tx *sql.Tx, row model.VideoRepostSource)
 	err := tx.QueryRow(`
 		SELECT reposted_at_ms, first_seen_at_ms
 		FROM video_repost_sources
-		WHERE video_id = ? AND reposter_channel_id = ?
+		WHERE video_id = $1 AND reposter_channel_id = $2
 	`, row.VideoID, row.ReposterChannelID).Scan(&oldReposted, &oldFirstSeen)
 	if err != nil && err != sql.ErrNoRows {
 		return false, err
@@ -286,7 +286,7 @@ func (db *DB) upsertVideoRepostSourceTx(tx *sql.Tx, row model.VideoRepostSource)
 	_, execErr := tx.Exec(`
 		INSERT INTO video_repost_sources (
 			video_id, reposter_channel_id, reposted_at_ms, first_seen_at_ms, updated_at_ms
-		) VALUES (?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT(video_id, reposter_channel_id) DO UPDATE SET
 			reposted_at_ms = CASE
 				WHEN excluded.reposted_at_ms > 0 THEN excluded.reposted_at_ms
@@ -336,7 +336,7 @@ func (db *DB) GetVideoRepostSources(videoID string) ([]model.VideoRepostSource, 
 		       COALESCE(reposter_display_name, ''), COALESCE(reposted_at_ms, 0),
 		       COALESCE(first_seen_at_ms, 0), COALESCE(updated_at_ms, 0)
 		FROM video_repost_sources_resolved
-		WHERE video_id = ?
+		WHERE video_id = $1
 		ORDER BY COALESCE(NULLIF(reposted_at_ms, 0), first_seen_at_ms) DESC, reposter_channel_id ASC
 	`, videoID)
 	if err != nil {
@@ -358,14 +358,14 @@ func (db *DB) GetVideoRepostSourcesForVideoIDs(videoIDs []string) (map[string][]
 		for i, id := range chunk {
 			args[i] = id
 		}
-		rows, err := db.reader().Query(`
+		rows, err := db.reader().Query(bind(`
 			SELECT video_id, reposter_channel_id, COALESCE(reposter_handle, ''),
 			       COALESCE(reposter_display_name, ''), COALESCE(reposted_at_ms, 0),
 			       COALESCE(first_seen_at_ms, 0), COALESCE(updated_at_ms, 0)
 			FROM video_repost_sources_resolved
 			WHERE video_id IN (`+placeholders(len(chunk))+`)
 			ORDER BY video_id, COALESCE(NULLIF(reposted_at_ms, 0), first_seen_at_ms) DESC, reposter_channel_id ASC
-		`, args...)
+		`), args...)
 		if err != nil {
 			return nil, err
 		}

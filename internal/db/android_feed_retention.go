@@ -39,7 +39,7 @@ func (db *DB) RecordAndroidFeedRetention(feedDays int, reconciledAtMs int64) err
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			INSERT INTO android_feed_retention (id, feed_days, reconciled_at_ms)
-			VALUES (1, ?, ?)
+			VALUES (1, $1, $2)
 			ON CONFLICT(id) DO UPDATE SET
 				feed_days = excluded.feed_days,
 				reconciled_at_ms = excluded.reconciled_at_ms

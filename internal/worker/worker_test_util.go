@@ -32,7 +32,7 @@ func newTestWorkerDBAt(t *testing.T, stateRoot string) *db.DB {
 	_ = f.Close()
 	t.Cleanup(func() { _ = os.Remove(dbPath) })
 
-	d, err := db.OpenPath(dbPath, stateRoot)
+	d, err := db.OpenAtStateRoot(stateRoot)
 	if err != nil {
 		t.Fatalf("db.Open: %v", err)
 	}

@@ -29,8 +29,7 @@ func validStoryVideoSQL(videoAlias, channelAlias string) string {
 	platform := channelAlias + ".platform"
 	suffix := "substr(" + videoID + ", 17)"
 	return "(COALESCE(" + platform + ", '') != 'instagram' OR " +
-		videoID + " NOT GLOB 'instagram_story_*' OR (" +
-		suffix + " != '' AND " + suffix + " NOT GLOB '*[^0-9]*'))"
+		videoID + " !~ '^instagram_story_' OR " + suffix + " ~ '^[0-9]+$')"
 }
 
 func (db *DB) StoryCutoffMs(nowMs int64) int64 {
@@ -55,7 +54,7 @@ func (db *DB) ListStoryChannels(nowMs int64, limit int) ([]model.StoryChannel, b
 			WHERE COALESCE(c.platform, '') IN ('tiktok','instagram')
 			  AND COALESCE(v.source_kind, '') = 'story'
 			  AND COALESCE(v.is_temp, 0) = 0
-			  AND (? = 0 OR COALESCE(v.published_at, 0) >= ?)
+			  AND (?::BIGINT = 0 OR COALESCE(v.published_at, 0) >= ?)
 			  AND ` + validStoryVideoSQL("v", "c") + `
 		)
 		SELECT a.channel_id,
@@ -87,10 +86,10 @@ func (db *DB) ListStoryChannels(nowMs int64, limit int) ([]model.StoryChannel, b
 		ORDER BY CASE WHEN COALESCE(SUM(a.unseen), 0) > 0 THEN 0 ELSE 1 END,
 		         CASE WHEN cs.channel_id IS NOT NULL THEN 0 ELSE 1 END,
 		         latest_at_ms DESC,
-		         display_name COLLATE NOCASE ASC
+		         LOWER(COALESCE(NULLIF(cp.display_name, ''), NULLIF(c.name, ''), NULLIF(cp.handle, ''), a.channel_id) COLLATE "C") ASC
 		LIMIT ?
 	`
-	rows, err := db.conn.Query(query, cutoff, cutoff, limit)
+	rows, err := db.conn.Query(bind(query), cutoff, cutoff, limit)
 	if err != nil {
 		return nil, false, err
 	}
@@ -149,7 +148,7 @@ func (db *DB) GetStoryStatusForChannelIDs(channelIDs []string, nowMs int64) (map
 			  AND COALESCE(c.platform, '') IN ('tiktok','instagram')
 			  AND COALESCE(v.source_kind, '') = 'story'
 			  AND COALESCE(v.is_temp, 0) = 0
-			  AND (? = 0 OR COALESCE(v.published_at, 0) >= ?)
+			  AND (?::BIGINT = 0 OR COALESCE(v.published_at, 0) >= ?)
 			  AND ` + validStoryVideoSQL("v", "c") + `
 		)
 		SELECT a.channel_id,
@@ -173,7 +172,7 @@ func (db *DB) GetStoryStatusForChannelIDs(channelIDs []string, nowMs int64) (map
 		FROM active a
 		GROUP BY a.channel_id
 	`
-	rows, err := db.conn.Query(query, args...)
+	rows, err := db.conn.Query(bind(query), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -300,11 +299,11 @@ func (db *DB) momentViewedSet(videos []model.Video) (map[string]bool, error) {
 	for _, id := range ids {
 		args = append(args, id)
 	}
-	rows, err := db.conn.Query(`
+	rows, err := db.conn.Query(bind(`
 		SELECT video_id
 		FROM moment_views
 		WHERE video_id IN (`+placeholders(len(ids))+`)
-	`, args...)
+	`), args...)
 	if err != nil {
 		return nil, err
 	}

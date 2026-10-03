@@ -250,7 +250,7 @@ func (s *Server) handleBookmarkGet(w http.ResponseWriter, r *http.Request) {
 			if err := s.db.QueryRow(`
 				SELECT account_handles
 				  FROM bookmarks
-				 WHERE video_id = ?
+				 WHERE video_id = $1
 			`, videoID).Scan(&raw); err != nil {
 				return nil
 			}

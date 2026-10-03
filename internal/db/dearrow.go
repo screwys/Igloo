@@ -11,7 +11,7 @@ import (
 func (db *DB) MarkDearrowChecked(videoID string, atMs int64) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(
-			`UPDATE videos SET dearrow_checked_at = ? WHERE video_id = ?`,
+			`UPDATE videos SET dearrow_checked_at = $1 WHERE video_id = $2`,
 			atMs, videoID,
 		)
 		return err
@@ -24,10 +24,10 @@ func (db *DB) SetDearrowTitles(videoID string, title, titleCasual *string, atMs 
 	return db.WithWrite(func(tx *sql.Tx) error {
 		result, err := tx.Exec(`
 			UPDATE videos
-			SET dearrow_title = COALESCE(?, dearrow_title),
-			    dearrow_title_casual = COALESCE(?, dearrow_title_casual),
-			    dearrow_checked_at = ?
-			WHERE video_id = ?
+			SET dearrow_title = COALESCE($1, dearrow_title),
+			    dearrow_title_casual = COALESCE($2, dearrow_title_casual),
+			    dearrow_checked_at = $3
+			WHERE video_id = $4
 		`, title, titleCasual, atMs, videoID)
 		if err != nil {
 			return err
@@ -52,7 +52,7 @@ func (db *DB) SetDearrowData(videoID string, title, titleCasual, thumbPath *stri
 		return fmt.Errorf("video id is empty")
 	}
 	var ownerKind string
-	if err := db.conn.QueryRow(`SELECT owner_kind FROM videos WHERE video_id = ?`, videoID).Scan(&ownerKind); err != nil {
+	if err := db.conn.QueryRow(`SELECT owner_kind FROM videos WHERE video_id = $1`, videoID).Scan(&ownerKind); err != nil {
 		return err
 	}
 	platform, ok := videoPlatformForOwnerKind(ownerKind)
@@ -90,10 +90,10 @@ func (db *DB) SetDearrowData(videoID string, title, titleCasual, thumbPath *stri
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		result, err := tx.Exec(`
 			UPDATE videos
-			SET dearrow_title = ?,
-			    dearrow_title_casual = ?,
-			    dearrow_checked_at = ?
-			WHERE video_id = ?`,
+			SET dearrow_title = $1,
+			    dearrow_title_casual = $2,
+			    dearrow_checked_at = $3
+			WHERE video_id = $4`,
 			title, titleCasual, atMs, videoID,
 		)
 		if err != nil {

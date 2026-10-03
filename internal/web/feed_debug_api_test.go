@@ -12,23 +12,21 @@ import (
 func TestHandleFeedDebugItemReturnsTimelineAndVisibility(t *testing.T) {
 	srv := newTestServer(t)
 
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channel_profiles (channel_id, platform, handle, display_name, observed_at_ms)
-		VALUES ('twitter_sample_user', 'twitter', 'sample_user', 'Sample User', 2000);
-		INSERT INTO feed_items (
+	if err := srv.db.ExecRaw(`INSERT INTO channel_profiles (channel_id, platform, handle, display_name, observed_at_ms)
+		VALUES ('twitter_sample_user', 'twitter', 'sample_user', 'Sample User', 2000)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO feed_items (
 			tweet_id, source_channel_id, channel_id, body_text, published_at,
 			fetched_at, content_hash, algo_interest, algo_scored_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		"tw_debug", "twitter_sample_user", "twitter_sample_user", "debug body", int64(1000),
-		int64(2000), "same-body", 4.5, int64(2100),
-	); err != nil {
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, "tw_debug", "twitter_sample_user", "twitter_sample_user", "debug body", int64(1000), int64(2000), "same-body", 4.5, int64(2100)); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.db.ExecRaw(`
 		INSERT INTO feed_sources (
 			source_id, platform, source_type, external_id, label, url, enabled,
 			last_checked, last_ok, last_error, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		"twitter_user_sample_user", "twitter", "user", "sample_user", "@sample_user", "https://x.com/sample_user", 1,
 		int64(2400), int64(2500), "", int64(1200), int64(2500),
 	); err != nil {
@@ -36,7 +34,7 @@ func TestHandleFeedDebugItemReturnsTimelineAndVisibility(t *testing.T) {
 	}
 	if err := srv.db.ExecRaw(`
 		INSERT INTO feed_item_sources (tweet_id, source_id, first_seen_at, last_seen_at)
-		VALUES (?, ?, ?, ?)`,
+		VALUES ($1, $2, $3, $4)`,
 		"tw_debug", "twitter_user_sample_user", int64(1800), int64(2000),
 	); err != nil {
 		t.Fatal(err)
@@ -45,7 +43,7 @@ func TestHandleFeedDebugItemReturnsTimelineAndVisibility(t *testing.T) {
 		INSERT INTO ingest_state (
 			handle, fail_count, next_retry_at, last_success_at, last_attempt_at,
 			last_error, last_http_status, avg_latency_ms, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		"twitter_sample_user", 0, float64(0), float64(2300), float64(2300),
 		"", nil, float64(33), int64(2350),
 	); err != nil {
@@ -64,25 +62,25 @@ func TestHandleFeedDebugItemReturnsTimelineAndVisibility(t *testing.T) {
 		t.Fatalf("replace snapshot: %v", err)
 	}
 	if err := srv.db.ExecRaw(
-		`UPDATE feed_rank_snapshot SET computed_at = ? WHERE tweet_id = ?`,
+		`UPDATE feed_rank_snapshot SET computed_at = $1 WHERE tweet_id = $2`,
 		int64(3000), "tw_debug",
 	); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.db.ExecRaw(
-		`INSERT INTO feed_seen (tweet_id, seen_at) VALUES (?, ?)`,
+		`INSERT INTO feed_seen (tweet_id, seen_at) VALUES ($1, $2)`,
 		"tw_debug", int64(4000),
 	); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.db.ExecRaw(
-		`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, ?)`,
+		`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, $2)`,
 		"twitter_sample_user", int64(1500),
 	); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.db.ExecRaw(
-		`INSERT INTO channel_stars (channel_id, starred_at) VALUES (?, ?)`,
+		`INSERT INTO channel_stars (channel_id, starred_at) VALUES ($1, $2)`,
 		"twitter_sample_user", int64(1600),
 	); err != nil {
 		t.Fatal(err)

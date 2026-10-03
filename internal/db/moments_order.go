@@ -28,15 +28,15 @@ func (db *DB) ReconcileMomentsOrder(scope string) error {
 	visibleCTE := db.shortsVisibleCTEForUnpositioned(scope, positionColumn)
 	return db.WithWrite(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`INSERT INTO moments_order_counters (scope, next_position)
-			SELECT ?, COALESCE((SELECT MAX(order_position) FROM moments_order_history WHERE scope = ?), 0) + 1
-			WHERE NOT EXISTS (SELECT 1 FROM moments_order_counters WHERE scope = ?)`, scope, scope, scope); err != nil {
+			SELECT $1, COALESCE((SELECT MAX(order_position) FROM moments_order_history WHERE scope = $2), 0) + 1
+			WHERE NOT EXISTS (SELECT 1 FROM moments_order_counters WHERE scope = $3)`, scope, scope, scope); err != nil {
 			return err
 		}
-		rows, err := tx.Query(visibleCTE+`
+		rows, err := tx.Query(bind(visibleCTE+`
 			SELECT v.video_id, COALESCE(history.order_position, 0)
 			FROM visible v
 			LEFT JOIN moments_order_history history ON history.video_id = v.video_id AND history.scope = ?
-			ORDER BY v.effective_moment_at_ms ASC, v.video_id ASC`, scope)
+			ORDER BY v.effective_moment_at_ms ASC, v.video_id ASC`), scope)
 		if err != nil {
 			return err
 		}
@@ -64,10 +64,10 @@ func (db *DB) ReconcileMomentsOrder(scope string) error {
 			return nil
 		}
 		var next int64
-		if err := tx.QueryRow(`SELECT next_position FROM moments_order_counters WHERE scope = ?`, scope).Scan(&next); err != nil {
+		if err := tx.QueryRow(`SELECT next_position FROM moments_order_counters WHERE scope = $1`, scope).Scan(&next); err != nil {
 			return err
 		}
-		stmt, err := tx.Prepare(`UPDATE videos SET ` + positionColumn + ` = ? WHERE video_id = ? AND ` + positionColumn + ` = 0`)
+		stmt, err := tx.Prepare(bind(`UPDATE videos SET ` + positionColumn + ` = ? WHERE video_id = ? AND ` + positionColumn + ` = 0`))
 		if err != nil {
 			return err
 		}
@@ -76,7 +76,7 @@ func (db *DB) ReconcileMomentsOrder(scope string) error {
 			if item.position == 0 {
 				item.position = next
 				if _, err := tx.Exec(`INSERT INTO moments_order_history (scope, video_id, order_position)
-					VALUES (?, ?, ?)`, scope, item.videoID, item.position); err != nil {
+					VALUES ($1, $2, $3)`, scope, item.videoID, item.position); err != nil {
 					return err
 				}
 				next++
@@ -85,7 +85,7 @@ func (db *DB) ReconcileMomentsOrder(scope string) error {
 				return fmt.Errorf("assign %s Moments position: %w", scope, err)
 			}
 		}
-		_, err = tx.Exec(`UPDATE moments_order_counters SET next_position = ? WHERE scope = ?`, next, scope)
+		_, err = tx.Exec(`UPDATE moments_order_counters SET next_position = $1 WHERE scope = $2`, next, scope)
 		return err
 	})
 }
@@ -96,7 +96,7 @@ func (db *DB) GetMomentsPosition(videoID, scope string) (int64, bool, error) {
 		return 0, false, nil
 	}
 	var position int64
-	err := db.reader().QueryRow(`SELECT `+positionColumn+` FROM videos WHERE video_id = ?`, videoID).Scan(&position)
+	err := db.reader().QueryRow(bind(`SELECT `+positionColumn+` FROM videos WHERE video_id = ?`), videoID).Scan(&position)
 	if err == sql.ErrNoRows || position <= 0 {
 		return 0, false, nil
 	}
@@ -121,13 +121,13 @@ func (db *DB) GetNearestShortsPositionTarget(position int64, scope string) (stri
 		)
 		SELECT candidate.video_id, COUNT(*)
 		FROM candidate
-		JOIN visible v
+		CROSS JOIN visible v
 		JOIN videos stored ON stored.video_id = v.video_id
 		  AND stored.` + positionColumn + ` <= candidate.position
 		GROUP BY candidate.video_id`
 	var videoID string
 	var ordinal int
-	err := db.reader().QueryRow(query, position, position, position).Scan(&videoID, &ordinal)
+	err := db.reader().QueryRow(bind(query), position, position, position).Scan(&videoID, &ordinal)
 	if err == sql.ErrNoRows {
 		return "", 0, false, nil
 	}

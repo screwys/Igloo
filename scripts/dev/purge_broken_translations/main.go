@@ -12,27 +12,22 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 
-	_ "modernc.org/sqlite"
+	"github.com/screwys/igloo/internal/config"
+	"github.com/screwys/igloo/internal/db"
 )
 
-var (
-	dataDir = os.ExpandEnv("$HOME/.local/share/igloo")
-	dbPath  = filepath.Join(dataDir, "igloo.db")
-	dryRun  = flag.Bool("dry-run", false, "report how many rows would be purged without deleting")
-)
+var dryRun = flag.Bool("dry-run", false, "report how many rows would be purged without deleting")
 
 const countSQL = `
 SELECT COUNT(*) FROM translations
 WHERE (field = 'body' AND tweet_id IN (
     SELECT tweet_id FROM feed_items
-    WHERE body_text LIKE '%@%' OR body_text LIKE '%#%' OR body_text LIKE '%http%'
+    WHERE body_text LIKE '%@%' ESCAPE '' OR body_text LIKE '%#%' ESCAPE '' OR LOWER(body_text COLLATE "C") LIKE '%http%' ESCAPE ''
 ))
 OR (field = 'quote' AND tweet_id IN (
     SELECT tweet_id FROM feed_items
-    WHERE quote_body_text LIKE '%@%' OR quote_body_text LIKE '%#%' OR quote_body_text LIKE '%http%'
+    WHERE quote_body_text LIKE '%@%' ESCAPE '' OR quote_body_text LIKE '%#%' ESCAPE '' OR LOWER(quote_body_text COLLATE "C") LIKE '%http%' ESCAPE ''
 ))
 `
 
@@ -40,36 +35,42 @@ const deleteSQL = `
 DELETE FROM translations
 WHERE (field = 'body' AND tweet_id IN (
     SELECT tweet_id FROM feed_items
-    WHERE body_text LIKE '%@%' OR body_text LIKE '%#%' OR body_text LIKE '%http%'
+    WHERE body_text LIKE '%@%' ESCAPE '' OR body_text LIKE '%#%' ESCAPE '' OR LOWER(body_text COLLATE "C") LIKE '%http%' ESCAPE ''
 ))
 OR (field = 'quote' AND tweet_id IN (
     SELECT tweet_id FROM feed_items
-    WHERE quote_body_text LIKE '%@%' OR quote_body_text LIKE '%#%' OR quote_body_text LIKE '%http%'
+    WHERE quote_body_text LIKE '%@%' ESCAPE '' OR quote_body_text LIKE '%#%' ESCAPE '' OR LOWER(quote_body_text COLLATE "C") LIKE '%http%' ESCAPE ''
 ))
 `
 
 func main() {
 	flag.Parse()
 
-	mode := "rw"
-	if *dryRun {
-		mode = "ro"
+	cfg := config.Load()
+	if cfg.ConfigError != nil {
+		log.Fatal(cfg.ConfigError)
 	}
-	db, err := sql.Open("sqlite", dbPath+"?mode="+mode+"&_journal_mode=WAL")
+	var store *db.DB
+	var err error
+	if *dryRun {
+		store, err = db.OpenReadOnlyLayout(cfg.Storage)
+	} else {
+		store, err = db.OpenExisting(cfg.Storage)
+	}
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
 	defer func() {
-		_ = db.Close()
+		_ = store.Close()
 	}()
 
 	var totalTranslations int
-	if err := db.QueryRow("SELECT COUNT(*) FROM translations").Scan(&totalTranslations); err != nil {
+	if err := store.QueryRow("SELECT COUNT(*) FROM translations").Scan(&totalTranslations); err != nil {
 		log.Fatalf("count total: %v", err)
 	}
 
 	var affected int
-	if err := db.QueryRow(countSQL).Scan(&affected); err != nil {
+	if err := store.QueryRow(countSQL).Scan(&affected); err != nil {
 		log.Fatalf("count affected: %v", err)
 	}
 
@@ -84,10 +85,17 @@ func main() {
 		return
 	}
 
-	res, err := db.Exec(deleteSQL)
+	var deleted int64
+	err = store.WithWrite(func(tx *sql.Tx) error {
+		res, err := tx.Exec(deleteSQL)
+		if err != nil {
+			return err
+		}
+		deleted, err = res.RowsAffected()
+		return err
+	})
 	if err != nil {
 		log.Fatalf("delete: %v", err)
 	}
-	deleted, _ := res.RowsAffected()
 	fmt.Printf("purged %d translations; they will re-populate on next view\n", deleted)
 }

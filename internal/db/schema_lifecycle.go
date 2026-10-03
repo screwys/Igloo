@@ -97,9 +97,11 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 }
 
 // SchemaTableLifecycle returns the lifecycle classification for a schema table.
-// It is used by runtime audit tooling; tests below keep this map in sync with
-// the fresh schema.
+// Runtime audits include Goose's ledger alongside the application tables.
 func SchemaTableLifecycle(table string) (string, bool) {
+	if table == "goose_db_version" {
+		return string(schemaLifecycleMaintainedState), true
+	}
 	lifecycle, ok := schemaTableLifecycles[table]
 	if !ok {
 		return "", false

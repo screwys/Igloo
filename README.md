@@ -176,6 +176,30 @@ state is stored at:
 clean the next time. Podman and Docker keep separate volume stores, so use
 Igloo's full export/import before changing runtimes.
 
+## Database
+
+Igloo stores content and user state in PostgreSQL. The default installation runs
+a private PostgreSQL server under the state directory. Native installations need
+`initdb`, `pg_ctl`, `postgres`, `psql`, `pg_dump`, and `pg_restore` on PATH.
+Set `IGLOO_POSTGRES_BIN` when those tools are in another directory.
+
+Set `IGLOO_DATABASE_URL` to use an existing PostgreSQL database instead. The
+database account needs permission to install `pg_trgm` and `unaccent`, apply schema migrations,
+and manage Igloo's tables. Use a database dedicated to Igloo.
+
+### Migrate an existing SQLite installation
+
+Stop the old Igloo service, tray process, or container before migrating. Run the
+new binary with the same `IGLOO_DATA_DIR`, `IGLOO_CONFIG_DIR`, and optional
+`IGLOO_DATABASE_URL` values as the server:
+
+```sh
+igloo migrate-sqlite
+```
+
+For a local user service built from this repository, `just migrate-database`
+builds the binary, stops the service, migrates, and restarts it after success.
+
 ## Back Ups
 
 You can enable automatic backups, and can include bookmarks inside as well, these do not store sensitive files. You can later import a single file or the whole .zip to merge/replace the database. There is also a manual full export option, but it includes .env/cookie files which lets you set up the server and make it continue from where it left on another machine just by running `install.sh`, because I am lazy :) 

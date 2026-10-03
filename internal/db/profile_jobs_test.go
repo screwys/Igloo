@@ -93,7 +93,7 @@ func TestUpsertFeedItemsPersistsAndQueuesRoleIdentities(t *testing.T) {
 	}
 	for _, forbiddenID := range []string{"twitter_avatarhash_"} {
 		var count int
-		if err := d.QueryRow(`SELECT COUNT(*) FROM channel_profiles WHERE channel_id = ? OR channel_id LIKE ?`, forbiddenID, forbiddenID+"%").Scan(&count); err != nil {
+		if err := d.QueryRow(`SELECT COUNT(*) FROM channel_profiles WHERE channel_id = $1 OR channel_id LIKE $2`, forbiddenID, forbiddenID+"%").Scan(&count); err != nil {
 			t.Fatalf("count forbidden profile %s: %v", forbiddenID, err)
 		}
 		if count != 0 {
@@ -145,7 +145,7 @@ func TestUpsertFeedItemsQueuesLinkedMentionIdentities(t *testing.T) {
 			SELECT cp.handle, pj.requested_revision, pj.completed_revision
 			FROM channel_profiles cp
 			JOIN profile_jobs pj ON pj.channel_id = cp.channel_id
-			WHERE cp.channel_id = ?
+			WHERE cp.channel_id = $1
 		`, channelID).Scan(&handle, &requested, &completed); err != nil {
 			t.Fatalf("read identity %s: %v", channelID, err)
 		}
@@ -156,7 +156,7 @@ func TestUpsertFeedItemsQueuesLinkedMentionIdentities(t *testing.T) {
 
 	for _, channelID := range []string{"twitter_sample_collection", "twitter_sample_domain", "twitter_sample_url"} {
 		var count int
-		if err := d.QueryRow(`SELECT COUNT(*) FROM profile_jobs WHERE channel_id = ?`, channelID).Scan(&count); err != nil {
+		if err := d.QueryRow(`SELECT COUNT(*) FROM profile_jobs WHERE channel_id = $1`, channelID).Scan(&count); err != nil {
 			t.Fatalf("count excluded identity %s: %v", channelID, err)
 		}
 		if count != 0 {
@@ -168,12 +168,15 @@ func TestUpsertFeedItemsQueuesLinkedMentionIdentities(t *testing.T) {
 func TestUpsertFeedItemsRollsBackFeedIdentityAndAssetsTogether(t *testing.T) {
 	d := openWritableTestDB(t)
 	if err := d.ExecRaw(`
-		CREATE TRIGGER fail_sample_profile_job
-		BEFORE INSERT ON profile_jobs
-		WHEN new.channel_id = 'twitter_sample_profile'
+		CREATE FUNCTION fail_sample_profile_job_fn() RETURNS trigger LANGUAGE plpgsql AS $fixture$
 		BEGIN
-			SELECT RAISE(ABORT, 'sample profile job failure');
-		END
+RAISE EXCEPTION 'sample profile job failure';
+			RETURN NEW;
+		END;
+		$fixture$;
+		CREATE TRIGGER fail_sample_profile_job BEFORE INSERT ON profile_jobs
+		FOR EACH ROW
+		WHEN (new.channel_id = 'twitter_sample_profile') EXECUTE FUNCTION fail_sample_profile_job_fn();
 	`); err != nil {
 		t.Fatalf("create failure trigger: %v", err)
 	}
@@ -352,6 +355,15 @@ func TestClaimProfileJobsClaimsNewestDueRequestFirst(t *testing.T) {
 
 func TestProfileJobPendingQueriesUsePartialIndex(t *testing.T) {
 	d := openWritableTestDB(t)
+	planTx, err := d.conn.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = planTx.Rollback() }()
+	// Empty fixtures check index availability, not the planner's cost estimates.
+	if _, err := planTx.Exec(`SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
 	for name, query := range map[string]string{
 		"claim": profileJobClaimCandidatesSQL,
 		"delay": profileJobNextDelaySQL,
@@ -361,16 +373,15 @@ func TestProfileJobPendingQueriesUsePartialIndex(t *testing.T) {
 			if name == "claim" {
 				args = []any{int64(1000), int64(1000), 4}
 			}
-			rows, err := d.conn.Query("EXPLAIN QUERY PLAN "+query, args...)
+			rows, err := planTx.Query(bind("EXPLAIN "+query), args...)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer func() { _ = rows.Close() }()
 			var details []string
 			for rows.Next() {
-				var id, parent, unused int
 				var detail string
-				if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+				if err := rows.Scan(&detail); err != nil {
 					t.Fatal(err)
 				}
 				details = append(details, detail)
@@ -379,13 +390,13 @@ func TestProfileJobPendingQueriesUsePartialIndex(t *testing.T) {
 				t.Fatal(err)
 			}
 			plan := strings.Join(details, "\n")
-			if !strings.Contains(plan, "USING INDEX idx_profile_jobs_claim") {
+			if !strings.Contains(plan, "idx_profile_jobs_claim") {
 				t.Fatalf("pending profile plan = %s", plan)
 			}
-			if strings.Contains(plan, "TEMP B-TREE") {
+			if strings.Contains(plan, "Sort") {
 				t.Fatalf("pending profile query sorts outside its index = %s", plan)
 			}
-			if strings.Contains(plan, "SCAN profile_jobs") && !strings.Contains(plan, "idx_profile_jobs_claim") {
+			if strings.Contains(plan, "Seq Scan on profile_jobs") && !strings.Contains(plan, "idx_profile_jobs_claim") {
 				t.Fatalf("pending profile query scans the table = %s", plan)
 			}
 		})
@@ -584,13 +595,16 @@ func TestCompleteProfileJobPreservesReadyAssetUntilReplacementAndRemovesAuthorit
 	}
 	job = claimed[0]
 	if err := d.ExecRaw(`
-		CREATE TRIGGER fail_sample_profile_completion
-		BEFORE UPDATE OF completed_revision ON profile_jobs
-		WHEN old.channel_id = 'twitter_sample_profile'
-		 AND new.completed_revision > old.completed_revision
+		CREATE FUNCTION fail_sample_profile_completion_fn() RETURNS trigger LANGUAGE plpgsql AS $fixture$
 		BEGIN
-			SELECT RAISE(ABORT, 'sample completion failure');
-		END
+RAISE EXCEPTION 'sample completion failure';
+			RETURN NEW;
+		END;
+		$fixture$;
+		CREATE TRIGGER fail_sample_profile_completion BEFORE UPDATE OF completed_revision ON profile_jobs
+		FOR EACH ROW
+		WHEN (old.channel_id = 'twitter_sample_profile'
+		 AND new.completed_revision > old.completed_revision) EXECUTE FUNCTION fail_sample_profile_completion_fn();
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -609,7 +623,7 @@ func TestCompleteProfileJobPreservesReadyAssetUntilReplacementAndRemovesAuthorit
 	if err != nil || asset == nil || asset.FilePath != oldAsset.FilePath || asset.SourceURL != oldSource {
 		t.Fatalf("asset after completion rollback: %+v err=%v", asset, err)
 	}
-	if err := d.ExecRaw(`DROP TRIGGER fail_sample_profile_completion`); err != nil {
+	if err := d.ExecRaw(`DROP TRIGGER fail_sample_profile_completion ON profile_jobs`); err != nil {
 		t.Fatal(err)
 	}
 	stored, complete, err = d.CompleteProfileJob(job, model.ChannelProfile{
@@ -686,7 +700,7 @@ func TestLikeStubPersistsIdentityWithTheUserAction(t *testing.T) {
 		t.Fatalf("InsertFeedLike: %v", err)
 	}
 	var storedChannelID string
-	if err := d.QueryRow(`SELECT COALESCE(channel_id, '') FROM feed_items WHERE tweet_id = ?`, tweetID).Scan(&storedChannelID); err != nil {
+	if err := d.QueryRow(`SELECT COALESCE(channel_id, '') FROM feed_items WHERE tweet_id = $1`, tweetID).Scan(&storedChannelID); err != nil {
 		t.Fatalf("read liked feed role: %v", err)
 	}
 	if storedChannelID != channelID {

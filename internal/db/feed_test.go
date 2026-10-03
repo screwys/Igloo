@@ -333,7 +333,7 @@ func TestInsertAndDeleteFeedLikeResolveCanonicalStatusURL(t *testing.T) {
 	)
 	if err := d.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, source_channel_id, channel_id, body_text, canonical_url)
-		VALUES (?, 'twitter_sample_reposter', 'twitter_sample_author', 'body', ?)`,
+		VALUES ($1, 'twitter_sample_reposter', 'twitter_sample_author', 'body', $2)`,
 		repostID, "https://x.com/sample_author/status/"+originalID,
 	); err != nil {
 		t.Fatalf("seed repost row: %v", err)
@@ -486,7 +486,7 @@ func TestUpsertFeedItemsNormalizesUnknownDirectAuthorFromSourceHandle(t *testing
 
 	var authorID, canonical string
 	if err := d.QueryRow(
-		`SELECT COALESCE(channel_id, ''), COALESCE(canonical_url, '') FROM feed_items WHERE tweet_id = ?`,
+		`SELECT COALESCE(channel_id, ''), COALESCE(canonical_url, '') FROM feed_items WHERE tweet_id = $1`,
 		tweetID,
 	).Scan(&authorID, &canonical); err != nil {
 		t.Fatalf("read feed item: %v", err)
@@ -514,7 +514,7 @@ func TestUpsertFeedItemsPreservesFetchedAtOnRefetch(t *testing.T) {
 
 	var firstFetchedAt int64
 	if err := d.QueryRow(
-		"SELECT fetched_at FROM feed_items WHERE tweet_id = ?",
+		"SELECT fetched_at FROM feed_items WHERE tweet_id = $1",
 		"stable_fetched_at",
 	).Scan(&firstFetchedAt); err != nil {
 		t.Fatalf("read initial fetched_at: %v", err)
@@ -537,7 +537,7 @@ func TestUpsertFeedItemsPreservesFetchedAtOnRefetch(t *testing.T) {
 	var secondFetchedAt int64
 	var bodyText string
 	if err := d.QueryRow(
-		"SELECT fetched_at, body_text FROM feed_items WHERE tweet_id = ?",
+		"SELECT fetched_at, body_text FROM feed_items WHERE tweet_id = $1",
 		"stable_fetched_at",
 	).Scan(&secondFetchedAt, &bodyText); err != nil {
 		t.Fatalf("read refetched row: %v", err)
@@ -579,7 +579,7 @@ func TestUpsertFeedItemsRepairsUnknownLanguages(t *testing.T) {
 	}
 
 	var lang, quoteLang string
-	if err := d.QueryRow(`SELECT COALESCE(lang,''), COALESCE(quote_lang,'') FROM feed_items WHERE tweet_id = ?`, "lang_repair").Scan(&lang, &quoteLang); err != nil {
+	if err := d.QueryRow(`SELECT COALESCE(lang,''), COALESCE(quote_lang,'') FROM feed_items WHERE tweet_id = $1`, "lang_repair").Scan(&lang, &quoteLang); err != nil {
 		t.Fatalf("read repaired langs: %v", err)
 	}
 	if lang != "ko" || quoteLang != "zh" {
@@ -620,7 +620,7 @@ func TestUpsertFeedItemsFillsMissingQuoteFields(t *testing.T) {
 	if err := d.QueryRow(`
 		SELECT COALESCE(quote_author_handle,''), COALESCE(quote_author_display_name,''),
 		       COALESCE(quote_body_text,''), COALESCE(quote_media_json,'')
-		FROM feed_items_resolved WHERE tweet_id = ?`, "quote_fill").Scan(&handle, &display, &body, &media); err != nil {
+		FROM feed_items_resolved WHERE tweet_id = $1`, "quote_fill").Scan(&handle, &display, &body, &media); err != nil {
 		t.Fatalf("read quote fields: %v", err)
 	}
 	if handle != "sample_quote" || display != "Sample Quote" || body != "quoted text" || media == "" {
@@ -634,7 +634,7 @@ func TestResolveFeedStateIDForWriteCopiesCanonicalReadyAsset(t *testing.T) {
 	const stateID = "1000000000000000999"
 	if err := d.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, channel_id, canonical_url, fetched_at)
-		VALUES (?, 'twitter_sample_author', ?, 1), (?, NULL, '', 1)
+		VALUES ($1, 'twitter_sample_author', $2, 1), ($3, NULL, '', 1)
 	`, sourceID, "https://x.com/sample_author/status/"+stateID, stateID); err != nil {
 		t.Fatalf("seed feed state: %v", err)
 	}

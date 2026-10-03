@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"path/filepath"
 	"strings"
@@ -10,11 +11,19 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func TestOpenRejectsExistingSchemaDrift(t *testing.T) {
+func TestLegacyArchiveRejectsExistingSchemaDrift(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
 		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {
@@ -33,23 +42,29 @@ func TestOpenRejectsExistingSchemaDrift(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
-	if store != nil {
-		_ = store.Close()
-	}
+	_, cleanup, err := PrepareLegacyArchive(context.Background(), path)
+	defer cleanup()
 	if err == nil || !strings.Contains(err.Error(), "database schema does not match the current contract") {
 		t.Fatalf("OpenPath schema drift error = %v", err)
 	}
 }
 
-func TestOpenMigratesKnownSchemaChange(t *testing.T) {
+func TestLegacyArchiveMigratesKnownSchemaChange(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ExecRaw(`INSERT INTO videos (video_id, channel_id, owner_kind) VALUES ('sample_video', 'sample_channel', 'youtube_video')`); err != nil {
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if _, err := store.Exec(`INSERT INTO videos (video_id, channel_id, owner_kind) VALUES ('sample_video', 'sample_channel', 'youtube_video')`); err != nil {
 		_ = store.Close()
 		t.Fatal(err)
 	}
@@ -73,9 +88,15 @@ func TestOpenMigratesKnownSchemaChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	var cleanup func()
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenPath legacy schema: %v", err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	var isTemp int
@@ -96,9 +117,14 @@ func TestOpenMigratesKnownSchemaChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenPath migrated schema: %v", err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
 	if err := store.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE name = '20260718_add_videos_is_temp'`).Scan(&migrations); err != nil {
@@ -109,11 +135,19 @@ func TestOpenMigratesKnownSchemaChange(t *testing.T) {
 	}
 }
 
-func TestOpenAddsFeedRelatedAnchorIndexes(t *testing.T) {
+func TestLegacyArchiveAddsFeedRelatedAnchorIndexes(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
 		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {
@@ -136,9 +170,15 @@ func TestOpenAddsFeedRelatedAnchorIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	var cleanup func()
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenPath legacy feed indexes: %v", err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
 	var indexes int
@@ -155,14 +195,22 @@ func TestOpenAddsFeedRelatedAnchorIndexes(t *testing.T) {
 	}
 }
 
-func TestOpenRetiresFeedItemPinSchema(t *testing.T) {
+func TestLegacyArchiveRetiresFeedItemPinSchema(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ExecRaw(`
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if _, err := store.Exec(`
 		INSERT INTO feed_items (tweet_id, body_text, published_at, fetched_at)
 		VALUES ('sample_post', 'Sample post', 1, 1)
 	`); err != nil {
@@ -192,9 +240,15 @@ func TestOpenRetiresFeedItemPinSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	var cleanup func()
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenPath pin schema: %v", err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
 
@@ -205,7 +259,7 @@ func TestOpenRetiresFeedItemPinSchema(t *testing.T) {
 	if body != "Sample post" {
 		t.Fatalf("retained post body = %q", body)
 	}
-	hasColumn, err := schemaColumnExists(store.conn, "feed_items", "is_pinned")
+	hasColumn, err := schemaColumnExists(store, "feed_items", "is_pinned")
 	if err != nil {
 		t.Fatalf("check retired pin column: %v", err)
 	}
@@ -221,14 +275,22 @@ func TestOpenRetiresFeedItemPinSchema(t *testing.T) {
 	}
 }
 
-func TestOpenMigratesYouTubeMemberOnlyChannelSettingAndSyncTrigger(t *testing.T) {
+func TestLegacyArchiveMigratesYouTubeMemberOnlyChannelSettingAndSyncTrigger(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ExecRaw(`
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if _, err := store.Exec(`
 		INSERT INTO channel_settings (channel_id, max_videos)
 		VALUES ('sample_channel', 25)
 	`); err != nil {
@@ -260,9 +322,15 @@ func TestOpenMigratesYouTubeMemberOnlyChannelSettingAndSyncTrigger(t *testing.T)
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	var cleanup func()
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenPath legacy channel settings schema: %v", err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
 
@@ -284,7 +352,7 @@ func TestOpenMigratesYouTubeMemberOnlyChannelSettingAndSyncTrigger(t *testing.T)
 	`).Scan(&beforeRevision); err != nil {
 		t.Fatalf("read channel settings revision before update: %v", err)
 	}
-	if err := store.ExecRaw(`
+	if _, err := store.Exec(`
 		UPDATE channel_settings SET include_member_only = 1
 		WHERE channel_id = 'sample_channel'
 	`); err != nil {
@@ -302,14 +370,22 @@ func TestOpenMigratesYouTubeMemberOnlyChannelSettingAndSyncTrigger(t *testing.T)
 	}
 }
 
-func TestOpenReplacesAndroidFeedPeerTriggersWithIndexedQueries(t *testing.T) {
+func TestLegacyArchiveReplacesAndroidFeedPeerTriggersWithIndexedQueries(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ExecRaw(`
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if _, err := store.Exec(`
 		DROP TRIGGER android_sync_head_feed_peers_delete;
 		CREATE TRIGGER android_sync_head_feed_peers_delete
 		AFTER DELETE ON feed_items BEGIN SELECT 1; END;
@@ -323,7 +399,13 @@ func TestOpenReplacesAndroidFeedPeerTriggersWithIndexedQueries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	var cleanup func()
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,11 +423,19 @@ func TestOpenReplacesAndroidFeedPeerTriggersWithIndexedQueries(t *testing.T) {
 	}
 }
 
-func TestOpenMigratesFeedOrderInvalidationQueue(t *testing.T) {
+func TestLegacyArchiveMigratesFeedOrderInvalidationQueue(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
 		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {
@@ -368,24 +458,40 @@ func TestOpenMigratesFeedOrderInvalidationQueue(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	var cleanup func()
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenPath schema without feed-order queue: %v", err)
 	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = store.Close() }()
-	if err := store.ExecRaw(`
+	if _, err := store.Exec(`
 		INSERT INTO feed_items (tweet_id, body_text)
 		VALUES ('sample_item', 'body')
 	`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.MutateLike(LikeMutation{
+	nativeRoot := t.TempDir()
+	markDBTestStateRoot(t, nativeRoot)
+	native, err := OpenAtStateRoot(nativeRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = native.Close() }()
+	if err := native.RestoreLegacyArchive(context.Background(), path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := native.MutateLike(LikeMutation{
 		TweetID: "sample_item", Action: "set", UpdatedAtMs: 10,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	var queued int
-	if err := store.QueryRow(`
+	if err := native.QueryRow(`
 		SELECT COUNT(*) FROM feed_order_invalidations
 		WHERE owner_kind = 'tweet' AND owner_id = 'sample_item'
 	`).Scan(&queued); err != nil {
@@ -396,11 +502,19 @@ func TestOpenMigratesFeedOrderInvalidationQueue(t *testing.T) {
 	}
 }
 
-func TestOpenInstallsAndroidSyncPeerTriggersBeforeSchemaValidation(t *testing.T) {
+func TestLegacyArchiveInstallsAndroidSyncPeerTriggersBeforeSchemaValidation(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
 		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {
@@ -423,9 +537,15 @@ func TestOpenInstallsAndroidSyncPeerTriggersBeforeSchemaValidation(t *testing.T)
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	var cleanup func()
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenPath schema without Android sync peer trigger: %v", err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
 	var installed int
@@ -440,14 +560,22 @@ func TestOpenInstallsAndroidSyncPeerTriggersBeforeSchemaValidation(t *testing.T)
 	}
 }
 
-func TestOpenBackfillsVideoFetchHistory(t *testing.T) {
+func TestLegacyArchiveBackfillsVideoFetchHistory(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ExecRaw(`
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if _, err := store.Exec(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, downloaded_at)
 		VALUES ('sample_fetched', 'tiktok_sample', 'tiktok_video', 1234)
 	`); err != nil {
@@ -473,9 +601,15 @@ func TestOpenBackfillsVideoFetchHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	var cleanup func()
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenPath legacy schema: %v", err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
 	var fetchedAtMs int64
@@ -489,15 +623,23 @@ func TestOpenBackfillsVideoFetchHistory(t *testing.T) {
 	}
 }
 
-func TestOpenQueuesRecentYouTubeMetadata(t *testing.T) {
+func TestLegacyArchiveQueuesRecentYouTubeMetadata(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
 	nowMs := time.Now().UnixMilli()
-	if err := store.ExecRaw(`
+	if _, err := store.Exec(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, downloaded_at) VALUES
 			('sample_recent_video', 'youtube_sample', 'youtube_video', ?),
 			('sample_old_video', 'youtube_sample', 'youtube_video', ?),
@@ -531,9 +673,15 @@ func TestOpenQueuesRecentYouTubeMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	var cleanup func()
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenPath legacy metadata schema: %v", err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
 	var videoID string
@@ -545,14 +693,22 @@ func TestOpenQueuesRecentYouTubeMetadata(t *testing.T) {
 	}
 }
 
-func TestOpenCollapsesFetchedIntroducedSources(t *testing.T) {
+func TestLegacyArchiveCollapsesFetchedIntroducedSources(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ExecRaw(`
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if _, err := store.Exec(`
 		INSERT INTO channels (channel_id, source_id, name, platform, created_at) VALUES
 			('tiktok_sample_author', 'sample_author', 'Sample Author', 'tiktok', 1),
 			('tiktok_sample_first', 'sample_first', 'Sample First', 'tiktok', 1),
@@ -584,9 +740,15 @@ func TestOpenCollapsesFetchedIntroducedSources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	var cleanup func()
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenPath legacy source windows: %v", err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
 	for table, want := range map[string]string{

@@ -76,7 +76,7 @@ func feedAbsenceBoostSelect(alias string) string {
 				 AND %[3]s = 1
 				THEN CASE
 					WHEN lps.last_seen_at IS NULL THEN ?
-					ELSE ? * MIN(?, MAX(0, ((CAST(strftime('%%s','now') AS INTEGER) * 1000) - lps.last_seen_at) / 3600000.0)) / ?
+					ELSE ? * LEAST(?, GREATEST(0, ((floor(extract(epoch FROM statement_timestamp()))::BIGINT * 1000) - lps.last_seen_at) / 3600000.0)) / ?
 				END
 				ELSE 0
 		END`, alias, feedRankingAccountIDSQL(alias), feedRankingAccountIsPrioritySQL(alias))
@@ -86,7 +86,7 @@ func feedRankingFromSQL(relatedSeenExpr, absenceExpr, candidateJoin string) stri
 	return fmt.Sprintf(`
 				FROM (
 				    SELECT fi.*,
-				           (CAST(strftime('%%s','now') AS INTEGER) * 1000 - fi.published_at) / 3600000.0 AS age_h,
+				           (floor(extract(epoch FROM statement_timestamp()))::BIGINT * 1000 - fi.published_at) / 3600000.0 AS age_h,
 				           %s AS related_seen_count,
 				           %s AS absence_boost
 				    FROM feed_items fi
@@ -153,7 +153,7 @@ func feedRelatedContentPenaltySQL(alias string) string {
 }
 
 func feedRankingBaseScoreSQL(alias string) string {
-	return fmt.Sprintf("MAX(0, %[1]s.algo_interest + %[1]s.absence_boost - (%[2]s))",
+	return fmt.Sprintf("CASE WHEN %[1]s.algo_interest IS NULL THEN NULL ELSE GREATEST(0, %[1]s.algo_interest + %[1]s.absence_boost - (%[2]s)) END",
 		alias, feedRelatedContentPenaltySQL(alias))
 }
 
@@ -194,7 +194,7 @@ func feedDecaySQL() string {
 }
 
 func feedFreshnessSQL() string {
-	return fmt.Sprintf("MAX(0, %.1f * (1.0 - age_h / %.1f))", feedFreshnessBonusPeak, feedFreshnessBonusWindowHours)
+	return fmt.Sprintf("GREATEST(0, %.1f * (1.0 - age_h / %.1f))", feedFreshnessBonusPeak, feedFreshnessBonusWindowHours)
 }
 
 // SnapshotRow is one row of a feed rank snapshot.
@@ -231,7 +231,7 @@ func (db *DB) ReplaceFeedRankSnapshot(rows []SnapshotRow) error {
 		stmt, err := tx.Prepare(`INSERT INTO feed_rank_snapshot
 			(tweet_id, rank_position, base_score, decay_factor, freshness_bonus,
 			 jitter, diversity_demoted_by, final_score, computed_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`)
 		if err != nil {
 			return fmt.Errorf("prepare insert: %w", err)
 		}
@@ -241,7 +241,7 @@ func (db *DB) ReplaceFeedRankSnapshot(rows []SnapshotRow) error {
 		historyStmt, err := tx.Prepare(`INSERT INTO feed_rank_snapshot_history
 			(computed_at, tweet_id, rank_position, base_score, decay_factor,
 			 freshness_bonus, jitter, diversity_demoted_by, final_score)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`)
 		if err != nil {
 			return fmt.Errorf("prepare snapshot history insert: %w", err)
 		}
@@ -264,7 +264,7 @@ func (db *DB) ReplaceFeedRankSnapshot(rows []SnapshotRow) error {
 			}
 		}
 		if _, err := tx.Exec(
-			"DELETE FROM feed_rank_snapshot_history WHERE computed_at < ?",
+			"DELETE FROM feed_rank_snapshot_history WHERE computed_at < $1",
 			now-feedSnapshotHistoryRetention.Milliseconds(),
 		); err != nil {
 			return fmt.Errorf("prune snapshot history: %w", err)
@@ -375,7 +375,7 @@ func (db *DB) ListPreDiversityRankedCandidatesContext(
 	// which breaks the SQL → Go scan. Items without a published_at can't meaningfully
 	// rank against time-decayed items anyway, so exclude them.
 	where = append(where, "fi.published_at > 0")
-	where = append(where, fmt.Sprintf("(%s > 0 OR fi.published_at > (CAST(strftime('%%s','now') AS INTEGER) - %.1f*3600) * 1000)", feedRankingBaseScoreSQL("fi"), feedFreshnessBonusWindowHours))
+	where = append(where, fmt.Sprintf("(%s > 0 OR fi.published_at > (floor(extract(epoch FROM statement_timestamp()))::BIGINT - %.1f*3600) * 1000)", feedRankingBaseScoreSQL("fi"), feedFreshnessBonusWindowHours))
 
 	whereClause := "WHERE " + strings.Join(where, " AND ")
 
@@ -405,26 +405,26 @@ func (db *DB) ListPreDiversityRankedCandidatesContext(
 				       fi.quote_tweet_id, fi.canonical_tweet_id,
 				       fi.channel_id, fi.source_channel_id, fi.is_ghost
 				FROM feed_seen fs
-				JOIN feed_items fi INDEXED BY idx_feed_items_seen_cover
+				JOIN feed_items fi
 				  ON fi.tweet_id = fs.tweet_id
 			),
 			dirty_ids(tweet_id) AS MATERIALIZED (
 				SELECT CAST(value AS TEXT)
-				FROM json_each(?)
+				FROM jsonb_array_elements_text(?::jsonb)
 				WHERE TRIM(CAST(value AS TEXT)) != ''
 			),
 			recent_refill(tweet_id) AS MATERIALIZED (
 				SELECT refill.tweet_id
-				FROM feed_items refill INDEXED BY idx_feed_items_published
+				FROM feed_items refill
 				WHERE %s
-				ORDER BY refill.published_at DESC, refill.tweet_id DESC
+				ORDER BY refill.published_at DESC, refill.tweet_id DESC NULLS LAST
 				LIMIT ?
 			),
 			interest_refill(tweet_id) AS MATERIALIZED (
 				SELECT refill.tweet_id
-				FROM feed_items refill INDEXED BY idx_feed_items_algo
+				FROM feed_items refill
 				WHERE %s
-				ORDER BY refill.algo_interest DESC, refill.published_at DESC
+				ORDER BY refill.algo_interest DESC NULLS LAST, refill.published_at DESC
 				LIMIT ?
 			),
 			candidate_ids(tweet_id) AS MATERIALIZED (
@@ -433,6 +433,7 @@ func (db *DB) ListPreDiversityRankedCandidatesContext(
 				UNION SELECT tweet_id FROM recent_refill
 				UNION SELECT tweet_id FROM interest_refill
 			)
+			SELECT ranked.* FROM (
 			SELECT fi.tweet_id,
 				       COALESCE(fi.channel_id,''),
 				       COALESCE(fi.source_channel_id,''),
@@ -449,7 +450,10 @@ func (db *DB) ListPreDiversityRankedCandidatesContext(
 				       %s AS reply_penalty
 				%s
 			%s
-			ORDER BY MAX(0, base * decay + freshness - reply_penalty) DESC, fi.tweet_id DESC
+			) ranked
+			ORDER BY CASE WHEN ranked.base IS NULL THEN NULL
+			         ELSE GREATEST(0, ranked.base * ranked.decay + ranked.freshness - ranked.reply_penalty) END DESC NULLS LAST,
+			         ranked.tweet_id DESC NULLS LAST
 			LIMIT %d
 			`, refillWhere, refillWhere,
 		feedRelatedContentKeySQL("fi"), feedRankingBaseScoreSQL("fi"), decaySQL, freshnessSQL,
@@ -625,8 +629,8 @@ func (db *DB) ListRecentSnapshotRelatedAnchorsContext(ctx context.Context, seenS
 			WHERE fs.seen_at >= ?
 			UNION ALL
 			SELECT history.tweet_id, 1, MIN(history.rank_position)
-			FROM feed_seen fs INDEXED BY idx_feed_seen_at
-			JOIN feed_rank_snapshot_history history INDEXED BY idx_feed_rank_snapshot_history_tweet
+			FROM feed_seen fs
+			JOIN feed_rank_snapshot_history history
 			  ON history.tweet_id = fs.tweet_id
 			WHERE fs.seen_at >= ?
 			  AND history.computed_at <= fs.seen_at
@@ -790,7 +794,7 @@ func (db *DB) ListSnapshotPage(snapshotAt int64, afterPos int, limit int) ([]Sna
 	if len(out) == 0 {
 		var exists bool
 		if err := db.reader().QueryRow(
-			"SELECT EXISTS(SELECT 1 FROM feed_rank_snapshot_history WHERE computed_at = ?)",
+			"SELECT EXISTS(SELECT 1 FROM feed_rank_snapshot_history WHERE computed_at = $1)",
 			snapshotAt,
 		).Scan(&exists); err != nil {
 			return nil, err

@@ -1,3 +1,4 @@
+// This historical repair uses the SQLite schema from before asset-backed profiles.
 // repair_invalid_twitter_profile_avatars clears bogus Twitter avatar source URLs
 // from channel_profiles so the profile worker can refetch the real profile image.
 //

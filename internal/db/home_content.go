@@ -27,10 +27,10 @@ func homeFeedHasContentSQL(alias string) string {
 		OR NULLIF(TRIM(COALESCE(%[1]s.article_title,'')),'') IS NOT NULL
 		OR NULLIF(TRIM(COALESCE(%[1]s.poll_json,'')),'') IS NOT NULL
 		OR NULLIF(TRIM(COALESCE(%[1]s.community_note,'')),'') IS NOT NULL
-		OR COALESCE(json_array_length(NULLIF(%[1]s.media_json,'')),0) > 0
+		OR CASE WHEN jsonb_typeof(NULLIF(%[1]s.media_json,'')::jsonb) = 'array' THEN jsonb_array_length(NULLIF(%[1]s.media_json,'')::jsonb) ELSE 0 END > 0
 		OR NULLIF(%[1]s.quote_tweet_id,'') IS NOT NULL
 		OR NULLIF(TRIM(COALESCE(%[1]s.quote_body_text,'')),'') IS NOT NULL
-		OR COALESCE(json_array_length(NULLIF(%[1]s.quote_media_json,'')),0) > 0)`, alias)
+		OR CASE WHEN jsonb_typeof(NULLIF(%[1]s.quote_media_json,'')::jsonb) = 'array' THEN jsonb_array_length(NULLIF(%[1]s.quote_media_json,'')::jsonb) ELSE 0 END > 0)`, alias)
 }
 
 func homeSourceScopeSQL(widget home.Widget, channelID string, args *[]any) string {
@@ -92,7 +92,7 @@ func (db *DB) GetHomeVideos(widget home.Widget) ([]HomeVideo, error) {
 	with := `WITH ` + videoFeedRows + `introductions AS (
 		SELECT video_id, reposter_channel_id, MAX(reposted_at_ms) AS reposted_at_ms,
 		       COALESCE(MIN(NULLIF(first_seen_at_ms,0)),0) AS first_seen_at_ms
-		FROM (` + sourceRows + `)
+		FROM (` + sourceRows + `) source_rows
 		GROUP BY video_id, reposter_channel_id
 	), eligible_reposts AS (
 		SELECT rs.*, COALESCE(cp.handle,'') AS reposter_handle,
@@ -137,14 +137,14 @@ func (db *DB) GetHomeVideos(widget home.Widget) ([]HomeVideo, error) {
 			sortAt = `COALESCE(b.bookmarked_at,0)`
 		}
 	case "moments":
-		where = append(where, `(`+platform+` IN ('instagram','tiktok') OR (v.owner_kind = 'youtube_video' AND (v.duration BETWEEN 1 AND 90 OR json_extract(NULLIF(v.metadata_json,''),'$.height') > json_extract(NULLIF(v.metadata_json,''),'$.width') * 1.3)))`)
+		where = append(where, `(`+platform+` IN ('instagram','tiktok') OR (v.owner_kind = 'youtube_video' AND (v.duration BETWEEN 1 AND 90 OR (NULLIF(v.metadata_json,'')::jsonb->>'height')::double precision > (NULLIF(v.metadata_json,'')::jsonb->>'width')::double precision * 1.3)))`)
 	case "latest":
 		where = append(where, `COALESCE(v.media_kind,'video') NOT IN ('image','slideshow')`)
 	}
 	order := `home_sort_at_ms DESC, v.video_id DESC`
 	channelName := `COALESCE(NULLIF(cp.display_name,''),NULLIF(c.name,''),NULLIF(cp.handle,''),v.channel_id)`
 	if widget.Order == "account" {
-		order = channelName + ` COLLATE NOCASE, ` + order
+		order = `LOWER(` + channelName + ` COLLATE "C"), ` + order
 	}
 	if len(widget.ContentTypes) > 0 {
 		var content []string
@@ -168,7 +168,7 @@ func (db *DB) GetHomeVideos(widget home.Widget) ([]HomeVideo, error) {
 		args = append(args, db.StoryCutoffMs(time.Now().UnixMilli()))
 	}
 	args = append(args, widget.Count)
-	rows, err := db.reader().Query(with+`SELECT v.id,v.video_id,v.channel_id,v.owner_kind,COALESCE(v.title,''),COALESCE(v.description,''),
+	rows, err := db.reader().Query(bind(with+`SELECT v.id,v.video_id,v.channel_id,v.owner_kind,COALESCE(v.title,''),COALESCE(v.description,''),
 		COALESCE(v.duration,0),v.published_at,v.downloaded_at,CASE WHEN `+videoFullyWatchedSQL("v")+` THEN 1 ELSE 0 END,
 		COALESCE(v.is_temp,0),COALESCE(v.is_pinned,0),COALESCE(v.metadata_json,''),COALESCE(v.media_kind,''),COALESCE(v.slide_count,0),COALESCE(v.source_kind,''),
 		`+channelName+`,`+platform+`,
@@ -179,7 +179,7 @@ func (db *DB) GetHomeVideos(widget home.Widget) ([]HomeVideo, error) {
 		FROM videos v LEFT JOIN channels c ON c.channel_id = v.channel_id LEFT JOIN channel_profiles cp ON cp.channel_id = v.channel_id
 		LEFT JOIN bookmarks b ON b.video_id = v.video_id LEFT JOIN watch_history wh ON wh.video_id = v.video_id
 		LEFT JOIN eligible_reposts er ON er.video_id = v.video_id AND er.source_rank = 1
-		WHERE `+strings.Join(where, ` AND `)+` ORDER BY `+order+` LIMIT ?`, args...)
+		WHERE `+strings.Join(where, ` AND `)+` ORDER BY `+order+` LIMIT ?`), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -219,11 +219,11 @@ func homeFeedCandidatesSQL(widget home.Widget, args *[]any) string {
 	if widget.Type == "saved" {
 		return `home_feed_candidates AS (
 			SELECT fi.tweet_id FROM bookmarks b
-			CROSS JOIN feed_items fi ON fi.tweet_id = b.video_id
+			JOIN feed_items fi ON fi.tweet_id = b.video_id
 			WHERE b.video_id IS NOT NULL
 			UNION
 			SELECT fi.tweet_id FROM bookmarks b
-			CROSS JOIN feed_items fi ON fi.canonical_tweet_id = b.video_id
+			JOIN feed_items fi ON fi.canonical_tweet_id = b.video_id
 			WHERE b.video_id IS NOT NULL
 			  AND fi.canonical_tweet_id IS NOT NULL AND fi.canonical_tweet_id != ''
 		), `
@@ -243,18 +243,18 @@ func homeFeedCandidatesSQL(widget home.Widget, args *[]any) string {
 			SELECT selected.channel_id FROM home_selected_channels selected WHERE ` + scope + `
 		), home_feed_candidates AS (
 			SELECT fi.tweet_id FROM home_source_channels source
-			CROSS JOIN feed_items fi ON fi.channel_id = source.channel_id
+			JOIN feed_items fi ON fi.channel_id = source.channel_id
 			UNION
 			SELECT fi.tweet_id FROM home_source_channels source
-			CROSS JOIN feed_items fi ON fi.source_channel_id = source.channel_id
+			JOIN feed_items fi ON fi.source_channel_id = source.channel_id
 			UNION
 			SELECT fi.tweet_id FROM home_source_channels source
-			CROSS JOIN feed_items fi ON fi.reposter_channel_id = source.channel_id
+			JOIN feed_items fi ON fi.reposter_channel_id = source.channel_id
 			WHERE fi.reposter_channel_id IS NOT NULL AND fi.reposter_channel_id != ''
 			UNION
 			SELECT fi.tweet_id FROM home_source_channels source
-			CROSS JOIN retweet_sources rs ON rs.retweeter_channel_id = source.channel_id
-			CROSS JOIN feed_items fi ON fi.content_hash = rs.content_hash
+			JOIN retweet_sources rs ON rs.retweeter_channel_id = source.channel_id
+			JOIN feed_items fi ON fi.content_hash = rs.content_hash
 			WHERE fi.content_hash IS NOT NULL AND fi.content_hash != ''
 		), `
 }
@@ -302,7 +302,7 @@ func (db *DB) GetHomeFeedItems(widget home.Widget) ([]model.FeedItem, error) {
 		}
 	}
 	if widget.Order == "account" {
-		order = `COALESCE(NULLIF(fi.author_display_name,''),'@' || NULLIF(fi.author_handle,''),fi.channel_id) COLLATE NOCASE,` + order
+		order = `LOWER(COALESCE(NULLIF(fi.author_display_name,''),'@' || NULLIF(fi.author_handle,''),fi.channel_id) COLLATE "C"),` + order
 	}
 	projection := `fi.tweet_id, fi.canonical_tweet_id, fi.published_at, fi.channel_id`
 	profileJoin := ""
@@ -313,13 +313,13 @@ func (db *DB) GetHomeFeedItems(widget home.Widget) ([]model.FeedItem, error) {
 	if len(widget.ContentTypes) > 0 && !widget.IncludesContent("post") {
 		var content []string
 		if widget.IncludesContent("image") {
-			content = append(content, `(json_array_length(NULLIF(fi.media_json,'')) = 1 AND json_extract(fi.media_json,'$[0].type') = 'photo')`)
+			content = append(content, `(CASE WHEN jsonb_typeof(NULLIF(fi.media_json,'')::jsonb) = 'array' THEN jsonb_array_length(NULLIF(fi.media_json,'')::jsonb) ELSE 0 END = 1 AND NULLIF(fi.media_json,'')::jsonb->0->>'type' = 'photo')`)
 		}
 		if widget.IncludesContent("slideshow") {
-			content = append(content, `json_array_length(NULLIF(fi.media_json,'')) > 1`)
+			content = append(content, `CASE WHEN jsonb_typeof(NULLIF(fi.media_json,'')::jsonb) = 'array' THEN jsonb_array_length(NULLIF(fi.media_json,'')::jsonb) ELSE 0 END > 1`)
 		}
 		if widget.IncludesContent("video") {
-			content = append(content, `(json_array_length(NULLIF(fi.media_json,'')) = 1 AND json_extract(fi.media_json,'$[0].type') IN ('video','gif'))`)
+			content = append(content, `(CASE WHEN jsonb_typeof(NULLIF(fi.media_json,'')::jsonb) = 'array' THEN jsonb_array_length(NULLIF(fi.media_json,'')::jsonb) ELSE 0 END = 1 AND NULLIF(fi.media_json,'')::jsonb->0->>'type' IN ('video','gif'))`)
 		}
 		if len(content) == 0 {
 			return nil, nil
@@ -327,18 +327,18 @@ func (db *DB) GetHomeFeedItems(widget home.Widget) ([]model.FeedItem, error) {
 		where = append(where, `(`+strings.Join(content, ` OR `)+`)`)
 	}
 	args = append(args, widget.Count)
-	rows, err := db.reader().Query(`WITH `+candidates+`eligible AS (
+	rows, err := db.reader().Query(bind(`WITH `+candidates+`eligible AS (
 		SELECT `+projection+`, ROW_NUMBER() OVER(PARTITION BY COALESCE(NULLIF(fi.canonical_tweet_id,''),
 			CASE WHEN EXISTS (SELECT 1 FROM feed_items wrapper WHERE wrapper.canonical_tweet_id IS NOT NULL AND wrapper.canonical_tweet_id != '' AND wrapper.canonical_tweet_id = fi.tweet_id AND wrapper.tweet_id != fi.tweet_id) THEN fi.tweet_id END,
 			NULLIF(fi.content_hash,''),fi.tweet_id)
 			ORDER BY CASE WHEN `+homeFeedHasContentSQL("fi")+` THEN 0 ELSE 1 END, COALESCE(fi.is_retweet,0), fi.fetched_at DESC,fi.tweet_id) AS home_row
 		FROM home_feed_candidates candidate
-		CROSS JOIN feed_items fi ON fi.tweet_id = candidate.tweet_id
+		JOIN feed_items fi ON fi.tweet_id = candidate.tweet_id
 		`+profileJoin+`
 		WHERE `+strings.Join(where, ` AND `)+`), home_feed_page AS (
 		SELECT fi.tweet_id FROM eligible fi WHERE fi.home_row = 1 ORDER BY `+order+` LIMIT ?)
 		SELECT `+feedItemSelectSQL("fi")+` FROM home_feed_page page
-		CROSS JOIN feed_items_resolved fi ON fi.tweet_id = page.tweet_id ORDER BY `+order, args...)
+		JOIN feed_items_resolved fi ON fi.tweet_id = page.tweet_id ORDER BY `+order), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -365,11 +365,11 @@ func (db *DB) GetHomeFeedItems(widget home.Widget) ([]model.FeedItem, error) {
 		var sourceArgs []any
 		sourceFilter := `rs.content_hash IN (` + homeValuesSQL(batch, &sourceArgs) + `)
 			AND COALESCE(rs_settings.include_reposts,1) != 0 AND ` + homeSourceScopeSQL(widget, "rs.retweeter_channel_id", &sourceArgs)
-		sources, err := db.reader().Query(`SELECT rs.content_hash, rs.retweeter_channel_id,
+		sources, err := db.reader().Query(bind(`SELECT rs.content_hash, rs.retweeter_channel_id,
 			COALESCE(rs.retweeter_handle,''),COALESCE(rs.retweeter_display_name,'')
 			FROM retweet_sources_resolved rs
 			LEFT JOIN channel_settings rs_settings ON rs_settings.channel_id = rs.retweeter_channel_id
-			WHERE `+sourceFilter+` ORDER BY rs.published_at DESC, rs.retweeter_channel_id`, sourceArgs...)
+			WHERE `+sourceFilter+` ORDER BY rs.published_at DESC, rs.retweeter_channel_id`), sourceArgs...)
 		if err != nil {
 			return nil, err
 		}

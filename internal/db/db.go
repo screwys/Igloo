@@ -1,35 +1,44 @@
-// Package db stores Igloo content, user state, and work queues in SQLite.
+// Package db stores Igloo content, user state, and work queues in PostgreSQL.
 package db
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/screwys/igloo/internal/storage"
 
-	_ "modernc.org/sqlite"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/jmoiron/sqlx"
+	dbquery "github.com/screwys/igloo/internal/db/query"
+	_ "modernc.org/sqlite" // Legacy archive import.
 )
 
 type PhaseFunc func(name string, elapsed time.Duration)
 
 type OpenOptions struct {
-	Phase PhaseFunc
+	Phase       PhaseFunc
+	DatabaseURL string
 }
 
 type EnsureSchemaOptions struct {
 	Phase PhaseFunc
 }
 
-const sqliteMaxOpenConnections = 8
+const databaseMaxOpenConnections = 8
 
 type DB struct {
-	conn    *sql.DB
-	readTx  *sql.Tx
-	mu      sync.Mutex // serialize writes
-	storage storage.Layout
+	conn        *sql.DB
+	readTx      *sql.Tx
+	mu          sync.Mutex // serialize writes
+	storage     storage.Layout
+	databaseURL string
+	postgresBin string
+	postgres    *postgresRuntime
 }
 
 type sqlReader interface {
@@ -41,19 +50,43 @@ type sqlReader interface {
 
 func (db *DB) reader() sqlReader {
 	if db.readTx != nil {
-		return db.readTx
+		return postgresReader{db.readTx}
 	}
-	return db.conn
+	return postgresReader{db.conn}
+}
+
+func (db *DB) queries() *dbquery.Queries {
+	if db.readTx != nil {
+		return dbquery.New(db.readTx)
+	}
+	return dbquery.New(db.conn)
+}
+
+type postgresReader struct{ sqlReader }
+
+func bind(query string) string { return sqlx.Rebind(sqlx.DOLLAR, query) }
+
+func (r postgresReader) Query(query string, args ...any) (*sql.Rows, error) {
+	return r.sqlReader.Query(bind(query), args...)
+}
+func (r postgresReader) QueryRow(query string, args ...any) *sql.Row {
+	return r.sqlReader.QueryRow(bind(query), args...)
+}
+func (r postgresReader) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return r.sqlReader.QueryContext(ctx, bind(query), args...)
+}
+func (r postgresReader) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	return r.sqlReader.QueryRowContext(ctx, bind(query), args...)
 }
 
 func (db *DB) WithReadSnapshot(fn func(*DB) error) error {
-	tx, err := db.conn.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
+	tx, err := db.conn.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 	snapshot := &DB{
-		conn: db.conn, readTx: tx, storage: db.storage,
+		conn: db.conn, readTx: tx, storage: db.storage, databaseURL: db.databaseURL, postgresBin: db.postgresBin,
 	}
 	if err := fn(snapshot); err != nil {
 		return err
@@ -61,75 +94,94 @@ func (db *DB) WithReadSnapshot(fn func(*DB) error) error {
 	return tx.Commit()
 }
 
-// Open opens the database for read-write with WAL mode.
+// Open opens the configured server database.
 func Open(layout storage.Layout) (*DB, error) {
 	return OpenWithOptions(layout, OpenOptions{})
 }
 
-// OpenWithOptions opens the database for read-write with WAL mode and optional
-// startup phase reporting.
+// OpenWithOptions opens PostgreSQL with optional startup phase reporting.
 func OpenWithOptions(layout storage.Layout, opts OpenOptions) (*DB, error) {
 	if err := layout.Ensure(); err != nil {
 		return nil, fmt.Errorf("validate storage layout: %w", err)
 	}
-	return openPathWithOptions(layout.DatabasePath(), layout, opts)
+	return openPostgres(layout, opts, false)
 }
 
-// OpenPath opens an explicit database copy with co-located local storage.
-// Runtime callers use Open; this boundary exists for maintenance tools and
-// schema or restore tests that intentionally operate on another database file.
-func OpenPath(path, stateRoot string) (*DB, error) {
+// OpenForRestore opens the target of an explicit database replacement.
+func OpenForRestore(layout storage.Layout, opts OpenOptions) (*DB, error) {
+	if err := layout.Ensure(); err != nil {
+		return nil, fmt.Errorf("validate storage layout: %w", err)
+	}
+	return openPostgres(layout, opts, true)
+}
+
+// OpenAtStateRoot opens an isolated PostgreSQL store for maintenance or fixtures.
+func OpenAtStateRoot(stateRoot string) (*DB, error) {
 	layout, err := storage.New(stateRoot, "")
 	if err != nil {
 		return nil, err
 	}
-	return openPathWithOptions(path, layout, OpenOptions{})
+	return openPostgres(layout, OpenOptions{}, false)
 }
 
-func OpenLayoutPath(path string, layout storage.Layout) (*DB, error) {
-	if err := layout.Ensure(); err != nil {
-		return nil, fmt.Errorf("validate storage layout: %w", err)
+func openPostgres(layout storage.Layout, opts OpenOptions, replacingDatabase bool) (*DB, error) {
+	if !replacingDatabase {
+		if _, err := os.Stat(layout.DatabasePath()); err == nil {
+			return nil, fmt.Errorf("SQLite migration required: stop Igloo and run 'igloo migrate-sqlite'")
+		} else if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("check legacy database: %w", err)
+		}
 	}
-	return openPathWithOptions(path, layout, OpenOptions{})
-}
-
-func openPathWithOptions(path string, layout storage.Layout, opts OpenOptions) (*DB, error) {
 	totalStart := time.Now()
 
 	phaseStart := time.Now()
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(wal)&_pragma=busy_timeout(30000)&_pragma=foreign_keys(on)", path)
-	conn, err := sql.Open("sqlite", dsn)
-	reportPhase(opts.Phase, "db.sql_open", phaseStart)
-	if err != nil {
-		return nil, fmt.Errorf("open db: %w", err)
+	dsn := opts.DatabaseURL
+	if dsn == "" {
+		dsn = os.Getenv("IGLOO_DATABASE_URL")
 	}
-	conn.SetMaxOpenConns(sqliteMaxOpenConnections)
-	conn.SetMaxIdleConns(sqliteMaxOpenConnections)
+	var managed *postgresRuntime
+	var err error
+	if dsn == "" {
+		managed, dsn, err = startPostgres(context.Background(), layout)
+	}
+	if err != nil {
+		return nil, err
+	}
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		if managed != nil {
+			_ = managed.stop()
+		}
+		return nil, fmt.Errorf("parse database connection: %w", err)
+	}
+	conn := stdlib.OpenDB(*config)
+	reportPhase(opts.Phase, "db.sql_open", phaseStart)
+	conn.SetMaxOpenConns(databaseMaxOpenConnections)
+	conn.SetMaxIdleConns(databaseMaxOpenConnections)
 
 	phaseStart = time.Now()
 	if err := conn.Ping(); err != nil {
 		_ = conn.Close()
+		if managed != nil {
+			_ = managed.stop()
+		}
 		reportPhase(opts.Phase, "db.ping", phaseStart)
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
 	reportPhase(opts.Phase, "db.ping", phaseStart)
 
-	d := &DB{conn: conn, storage: layout}
-	phaseStart = time.Now()
-	present, err := schemaPresent(conn)
-	if err == nil && present {
-		err = ApplySchemaMigrations(conn)
-		if err == nil {
-			err = ValidateCurrentSchema(conn)
-		}
-	} else if err == nil {
-		err = EnsureSchemaWithOptions(conn, EnsureSchemaOptions(opts))
-		if err == nil {
-			err = ApplySchemaMigrations(conn)
-		}
+	bin := ""
+	if managed != nil {
+		bin = managed.bin
 	}
+	d := &DB{conn: conn, storage: layout, databaseURL: dsn, postgresBin: bin, postgres: managed}
+	phaseStart = time.Now()
+	err = MigrateNativeSchema(context.Background(), conn)
 	if err != nil {
 		_ = conn.Close()
+		if managed != nil {
+			_ = managed.stop()
+		}
 		reportPhase(opts.Phase, "db.ensure_schema", phaseStart)
 		return nil, fmt.Errorf("ensure schema: %w", err)
 	}
@@ -139,37 +191,67 @@ func openPathWithOptions(path string, layout storage.Layout, opts OpenOptions) (
 	return d, nil
 }
 
-// OpenReadOnly opens the database in read-only mode.
-func OpenReadOnly(path, stateRoot string) (*DB, error) {
+// OpenReadOnlyAtStateRoot attaches a read-only connection to the state root.
+func OpenReadOnlyAtStateRoot(stateRoot string) (*DB, error) {
 	layout, err := storage.New(stateRoot, "")
 	if err != nil {
 		return nil, err
 	}
-	return OpenReadOnlyLayout(path, layout)
+	return OpenReadOnlyLayout(layout)
 }
 
-func OpenReadOnlyLayout(path string, layout storage.Layout) (*DB, error) {
-	dsn := fmt.Sprintf("file:%s?mode=ro&_pragma=query_only(1)&_pragma=busy_timeout(30000)", path)
-	conn, err := sql.Open("sqlite", dsn)
+func OpenReadOnlyLayout(layout storage.Layout) (*DB, error) {
+	dsn, err := readPostgresURL(layout.StateRoot())
 	if err != nil {
 		return nil, fmt.Errorf("open db readonly: %w", err)
 	}
-	conn.SetMaxOpenConns(sqliteMaxOpenConnections)
-	conn.SetMaxIdleConns(sqliteMaxOpenConnections)
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+	config.RuntimeParams["default_transaction_read_only"] = "on"
+	conn := stdlib.OpenDB(*config)
+	conn.SetMaxOpenConns(databaseMaxOpenConnections)
+	conn.SetMaxIdleConns(databaseMaxOpenConnections)
 	if err := conn.Ping(); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
-	return &DB{conn: conn, storage: layout}, nil
+	return &DB{conn: conn, storage: layout, databaseURL: dsn}, nil
+}
+
+// OpenExisting attaches maintenance tools to the configured running database.
+func OpenExisting(layout storage.Layout) (*DB, error) {
+	dsn, err := readPostgresURL(layout.StateRoot())
+	if err != nil {
+		return nil, err
+	}
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse database connection")
+	}
+	conn := stdlib.OpenDB(*config)
+	conn.SetMaxOpenConns(databaseMaxOpenConnections)
+	conn.SetMaxIdleConns(databaseMaxOpenConnections)
+	if err := conn.Ping(); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return &DB{conn: conn, storage: layout, databaseURL: dsn}, nil
 }
 
 // Close closes the database connection.
 func (db *DB) Close() error {
-	return db.conn.Close()
+	err := db.conn.Close()
+	if db.postgres != nil {
+		if stopErr := db.postgres.stop(); err == nil {
+			err = stopErr
+		}
+	}
+	return err
 }
 
-// WithRead executes a read-only function against the database.
-// No lock needed — WAL allows concurrent reads.
+// WithRead executes a read function against the database connection.
 func (db *DB) WithRead(fn func(conn *sql.DB) error) error {
 	if db.readTx != nil {
 		return fmt.Errorf("direct connection read unavailable inside read snapshot")
@@ -177,21 +259,18 @@ func (db *DB) WithRead(fn func(conn *sql.DB) error) error {
 	return fn(db.conn)
 }
 
-// ExecRaw exposes raw SQL execution (used by tests).
+// ExecRaw executes native PostgreSQL SQL without changing its placeholders.
 func (db *DB) ExecRaw(query string, args ...any) error {
 	_, err := db.conn.Exec(query, args...)
 	return err
 }
 
-// VacuumInto creates a consistent snapshot of the database at dstPath.
-func (db *DB) VacuumInto(ctx context.Context, dstPath string) error {
-	_, err := db.conn.ExecContext(ctx, `VACUUM INTO ?`, dstPath)
-	return err
-}
-
-// QueryRow exposes raw single-row queries (used by tests).
+// QueryRow reads one row from native PostgreSQL SQL without changing it.
 func (db *DB) QueryRow(query string, args ...any) *sql.Row {
-	return db.reader().QueryRow(query, args...)
+	if db.readTx != nil {
+		return db.readTx.QueryRow(query, args...)
+	}
+	return db.conn.QueryRow(query, args...)
 }
 
 // WithWrite executes a write function inside a transaction with mutex.

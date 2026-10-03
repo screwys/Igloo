@@ -39,13 +39,14 @@ jobs:
           gallery_url="$(jq -r '.assets[] | select(.name == "gallery-dl_windows.exe") | .browser_download_url' <<<"$gallery_release")"
           deno_version="$(jq -r '.artifacts.deno.version' packaging/windows/windows-runtime.lock.json)"
           ffmpeg_version="$(jq -r '.artifacts.ffmpeg.version' packaging/windows/windows-runtime.lock.json)"
+          postgres_version="$(jq -r '.artifacts.postgresql.version' packaging/windows/windows-runtime.lock.json)"
           test -n "$yt_version" && test -n "$yt_url" && test -n "$gallery_version" && test -n "$gallery_url"
 
           current_dir="$(mktemp -d)"
           changed=true
           if gh release download windows-runtime --pattern windows-runtime-sources.json --dir "$current_dir" 2>/dev/null; then
-            if jq -e --arg yt "$yt_version" --arg gallery "$gallery_version" --arg deno "$deno_version" --arg ffmpeg "$ffmpeg_version" \
-              '.yt_dlp == $yt and .gallery_dl == $gallery and .deno == $deno and .ffmpeg == $ffmpeg' \
+            if jq -e --arg yt "$yt_version" --arg gallery "$gallery_version" --arg deno "$deno_version" --arg ffmpeg "$ffmpeg_version" --arg postgres "$postgres_version" \
+              '.yt_dlp == $yt and .gallery_dl == $gallery and .deno == $deno and .ffmpeg == $ffmpeg and .postgresql == $postgres' \
               "$current_dir/windows-runtime-sources.json" >/dev/null; then
               changed=false
             fi
@@ -108,6 +109,7 @@ jobs:
             gallery_dl = $env:GALLERY_VERSION
             deno = $lock.artifacts.deno.version
             ffmpeg = $lock.artifacts.ffmpeg.version
+            postgresql = $lock.artifacts.postgresql.version
           } | ConvertTo-Json | Set-Content -Encoding utf8NoBOM "release-artifacts/windows-runtime-sources.json"
           "version=$($lock.revision)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
@@ -119,6 +121,12 @@ jobs:
           & "$env:RUNNER_TEMP/igloo-runtime/gallery-dl.exe" --version
           & "$env:RUNNER_TEMP/igloo-runtime/deno.exe" --version
           & "$env:RUNNER_TEMP/igloo-runtime/ffmpeg.exe" -version
+          & "$env:RUNNER_TEMP/igloo-runtime/postgresql/bin/initdb.exe" --version
+          & "$env:RUNNER_TEMP/igloo-runtime/postgresql/bin/pg_ctl.exe" --version
+          & "$env:RUNNER_TEMP/igloo-runtime/postgresql/bin/postgres.exe" --version
+          & "$env:RUNNER_TEMP/igloo-runtime/postgresql/bin/psql.exe" --version
+          & "$env:RUNNER_TEMP/igloo-runtime/postgresql/bin/pg_dump.exe" --version
+          & "$env:RUNNER_TEMP/igloo-runtime/postgresql/bin/pg_restore.exe" --version
 
       - name: Sign runtime update
         shell: pwsh

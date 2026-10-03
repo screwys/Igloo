@@ -17,7 +17,7 @@ func (db *DB) BootstrapPreparedDiscoverGeneration(nowMs int64, limit int) (bool,
 		nowMs = time.Now().UnixMilli()
 	}
 	var existing int
-	if err := db.reader().QueryRow(`SELECT COALESCE(json_array_length(candidates_json), 0) FROM discover_generation WHERE id = 1`).Scan(&existing); err != nil && err != sql.ErrNoRows {
+	if err := db.reader().QueryRow(`SELECT CASE WHEN jsonb_typeof(candidates_json::jsonb) = 'array' THEN jsonb_array_length(candidates_json::jsonb) ELSE 0 END FROM discover_generation WHERE id = 1`).Scan(&existing); err != nil && err != sql.ErrNoRows {
 		return false, err
 	}
 	if existing > 0 {
@@ -33,13 +33,13 @@ func (db *DB) BootstrapPreparedDiscoverGeneration(nowMs int64, limit int) (bool,
 	}
 	stored := false
 	err = db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO discover_generation (id) VALUES (1)`); err != nil {
+		if _, err := tx.Exec(`INSERT INTO discover_generation (id) VALUES (1) ON CONFLICT DO NOTHING`); err != nil {
 			return err
 		}
 		res, err := tx.Exec(`
 			UPDATE discover_generation
-			SET candidates_json = ?, prepared_at_ms = ?
-			WHERE id = 1 AND COALESCE(json_array_length(candidates_json), 0) = 0`, string(payload), nowMs)
+			SET candidates_json = $1, prepared_at_ms = $2
+			WHERE id = 1 AND CASE WHEN jsonb_typeof(candidates_json::jsonb) = 'array' THEN jsonb_array_length(candidates_json::jsonb) ELSE 0 END = 0`, string(payload), nowMs)
 		if err != nil {
 			return err
 		}
@@ -60,7 +60,7 @@ func (db *DB) BeginDiscoverRefresh(nowMs int64) (bool, int, error) {
 	started := false
 	anchors := 0
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO discover_generation (id) VALUES (1)`); err != nil {
+		if _, err := tx.Exec(`INSERT INTO discover_generation (id) VALUES (1) ON CONFLICT DO NOTHING`); err != nil {
 			return err
 		}
 		var expiresAt, refreshStarted int64
@@ -78,7 +78,7 @@ func (db *DB) BeginDiscoverRefresh(nowMs int64) (bool, int, error) {
 			return err
 		}
 		for _, id := range ids {
-			if _, err := tx.Exec(`INSERT INTO discover_refresh_anchors (anchor_video_id) VALUES (?)`, id); err != nil {
+			if _, err := tx.Exec(`INSERT INTO discover_refresh_anchors (anchor_video_id) VALUES ($1)`, id); err != nil {
 				return err
 			}
 			if err := queueYouTubeRecommendationsTx(tx, id, nowMs); err != nil {
@@ -90,12 +90,12 @@ func (db *DB) BeginDiscoverRefresh(nowMs int64) (bool, int, error) {
 				    attempts = CASE WHEN status = 'processing' THEN attempts ELSE 0 END,
 				    next_attempt_at_ms = CASE WHEN status = 'processing' THEN next_attempt_at_ms ELSE 0 END,
 				    last_error = CASE WHEN status = 'processing' THEN last_error ELSE '' END,
-				    requested_at_ms = ?, updated_at_ms = ?
-				WHERE anchor_video_id = ?`, nowMs, nowMs, id); err != nil {
+				    requested_at_ms = $1, updated_at_ms = $2
+				WHERE anchor_video_id = $3`, nowMs, nowMs, id); err != nil {
 				return err
 			}
 		}
-		if _, err := tx.Exec(`UPDATE discover_generation SET refresh_started_at_ms = ? WHERE id = 1`, nowMs); err != nil {
+		if _, err := tx.Exec(`UPDATE discover_generation SET refresh_started_at_ms = $1 WHERE id = 1`, nowMs); err != nil {
 			return err
 		}
 		started, anchors = true, len(ids)
@@ -209,7 +209,7 @@ func (db *DB) PublishDiscoverGeneration(nowMs int64, limit int) (bool, []string,
 			return err
 		}
 		expiresAt := nowMs + int64(resetHours)*time.Hour.Milliseconds()
-		if _, err := tx.Exec(`UPDATE discover_generation SET candidates_json = ?, history_video_ids_json = ?, prepared_at_ms = ?, expires_at_ms = ?, refresh_started_at_ms = 0 WHERE id = 1`, string(payload), string(historyPayload), nowMs, expiresAt); err != nil {
+		if _, err := tx.Exec(`UPDATE discover_generation SET candidates_json = $1, history_video_ids_json = $2, prepared_at_ms = $3, expires_at_ms = $4, refresh_started_at_ms = 0 WHERE id = 1`, string(payload), string(historyPayload), nowMs, expiresAt); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(`DELETE FROM discover_refresh_anchors`); err != nil {
@@ -306,7 +306,7 @@ func (db *DB) GetPreparedDiscoverVideo(videoID string) (*model.DiscoveryVideo, e
 func (db *DB) RescheduleDiscoverRefresh(force bool) error {
 	intervalMs := int64(settings.ClampDiscoverResetHours(db.IntSetting("discover_reset_hours"))) * time.Hour.Milliseconds()
 	return db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO discover_generation (id) VALUES (1)`); err != nil {
+		if _, err := tx.Exec(`INSERT INTO discover_generation (id) VALUES (1) ON CONFLICT DO NOTHING`); err != nil {
 			return err
 		}
 		if force {
@@ -315,7 +315,7 @@ func (db *DB) RescheduleDiscoverRefresh(force bool) error {
 		}
 		_, err := tx.Exec(`
 			UPDATE discover_generation
-			SET expires_at_ms = CASE WHEN prepared_at_ms > 0 THEN prepared_at_ms + ? ELSE 0 END
+			SET expires_at_ms = CASE WHEN prepared_at_ms > 0 THEN prepared_at_ms + $1 ELSE 0 END
 			WHERE id = 1 AND refresh_started_at_ms = 0`, intervalMs)
 		return err
 	})
@@ -331,10 +331,10 @@ func (db *DB) RetireDiscoverDownloads(videoIDs []string) error {
 			if id == "" {
 				continue
 			}
-			if _, err := tx.Exec(`DELETE FROM discover_temp_downloads WHERE video_id = ?`, id); err != nil {
+			if _, err := tx.Exec(`DELETE FROM discover_temp_downloads WHERE video_id = $1`, id); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(`UPDATE videos SET downloaded_at = 1 WHERE video_id = ? AND COALESCE(is_temp, 0) = 1 AND COALESCE(is_pinned, 0) = 0`, id); err != nil {
+			if _, err := tx.Exec(`UPDATE videos SET downloaded_at = 1 WHERE video_id = $1 AND COALESCE(is_temp, 0) = 1 AND COALESCE(is_pinned, 0) = 0`, id); err != nil {
 				return err
 			}
 		}

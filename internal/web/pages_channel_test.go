@@ -71,7 +71,7 @@ func TestHandlePageYouTubeChannelIncludesReadyTemporaryVideos(t *testing.T) {
 	const videoID = "sample_ready_discover"
 	storeReadyMediaAsset(t, srv, "youtube", "youtube_video", videoID, "video_stream", 0,
 		filepath.Join("media", "youtube", videoID+".mp4"), "video/mp4", []byte("fake-mp4"))
-	if err := srv.db.ExecRaw(`UPDATE videos SET title = 'Ready Discover Video', is_temp = 1 WHERE video_id = ?`, videoID); err != nil {
+	if err := srv.db.ExecRaw(`UPDATE videos SET title = 'Ready Discover Video', is_temp = 1 WHERE video_id = $1`, videoID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -432,13 +432,13 @@ func TestHandlePageShortsUsesStableAppendOrdering(t *testing.T) {
 	srv := newTestServer(t)
 	srv.staticV = func(path string) string { return "/static/" + path }
 	if err := srv.db.ExecRaw(
-		`INSERT INTO channels (channel_id, name, platform) VALUES (?, ?, ?)`,
+		`INSERT INTO channels (channel_id, name, platform) VALUES ($1, $2, $3)`,
 		"tiktok_demo", "Demo", "tiktok",
 	); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.db.ExecRaw(
-		`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`,
+		`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`,
 		"tiktok_demo",
 	); err != nil {
 		t.Fatal(err)
@@ -447,7 +447,7 @@ func TestHandlePageShortsUsesStableAppendOrdering(t *testing.T) {
 		videoID := "short_00" + string(rune('0'+i))
 		if err := srv.db.ExecRaw(
 			`INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
-			 VALUES (?, ?, 'tiktok_video', ?, 0, ?)`,
+			 VALUES ($1, $2, 'tiktok_video', $3, 0, $4)`,
 			videoID, "tiktok_demo", "Short 00"+string(rune('0'+i)), i,
 		); err != nil {
 			t.Fatal(err)

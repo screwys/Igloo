@@ -27,7 +27,7 @@ func TestHandleVideoWatchedWritesWatchHistory(t *testing.T) {
 	srv := newTestServer(t)
 
 	if err := srv.db.ExecRaw(
-		`INSERT INTO videos (video_id, channel_id, owner_kind, title, duration) VALUES (?, ?, ?, ?, ?)`,
+		`INSERT INTO videos (video_id, channel_id, owner_kind, title, duration) VALUES ($1, $2, $3, $4, $5)`,
 		"vid_abc", "youtube_UCtest", "youtube_video", "Hello", 120,
 	); err != nil {
 		t.Fatal(err)
@@ -46,7 +46,7 @@ func TestHandleVideoWatchedWritesWatchHistory(t *testing.T) {
 
 	var pos float64
 	err := srv.db.QueryRow(
-		`SELECT playback_position FROM watch_history WHERE video_id = ?`,
+		`SELECT playback_position FROM watch_history WHERE video_id = $1`,
 		"vid_abc",
 	).Scan(&pos)
 	if err != nil {
@@ -132,13 +132,13 @@ func TestHandleShortsHistoryReturnsPageHint(t *testing.T) {
 	srv := newTestServer(t)
 
 	if err := srv.db.ExecRaw(
-		`INSERT INTO channels (channel_id, name, platform) VALUES (?, ?, ?)`,
+		`INSERT INTO channels (channel_id, name, platform) VALUES ($1, $2, $3)`,
 		"tiktok_demo", "Demo", "tiktok",
 	); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.db.ExecRaw(
-		`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`,
+		`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`,
 		"tiktok_demo",
 	); err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func TestHandleShortsHistoryReturnsPageHint(t *testing.T) {
 	for i := 1; i <= 205; i++ {
 		if err := srv.db.ExecRaw(
 			`INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
-				 VALUES (?, ?, 'tiktok_video', ?, 0, ?)`,
+				 VALUES ($1, $2, 'tiktok_video', $3, 0, $4)`,
 			fmt.Sprintf("short_%03d", i), "tiktok_demo", fmt.Sprintf("Short %03d", i), i,
 		); err != nil {
 			t.Fatal(err)
@@ -186,13 +186,13 @@ func TestHandleShortsHistoryFallsBackToNearestVisibleWhenCursorHidden(t *testing
 
 	for _, ch := range []string{"tiktok_alpha", "tiktok_beta"} {
 		if err := srv.db.ExecRaw(
-			`INSERT INTO channels (channel_id, name, platform) VALUES (?, ?, 'tiktok')`,
+			`INSERT INTO channels (channel_id, name, platform) VALUES ($1, $2, 'tiktok')`,
 			ch, ch,
 		); err != nil {
 			t.Fatal(err)
 		}
 		if err := srv.db.ExecRaw(
-			`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`,
+			`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`,
 			ch,
 		); err != nil {
 			t.Fatal(err)
@@ -209,7 +209,7 @@ func TestHandleShortsHistoryFallsBackToNearestVisibleWhenCursorHidden(t *testing
 	} {
 		if err := srv.db.ExecRaw(
 			`INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
-				 VALUES (?, ?, 'tiktok_video', ?, 0, ?)`,
+				 VALUES ($1, $2, 'tiktok_video', $3, 0, $4)`,
 			row.id, row.channelID, row.id, row.published,
 		); err != nil {
 			t.Fatal(err)
@@ -315,14 +315,14 @@ func TestHandleShortsHistoryKeepsExactCursorWhenPresentationTimeChanges(t *testi
 		{"tiktok_direct", "tiktok", true},
 	} {
 		if err := srv.db.ExecRaw(
-			`INSERT INTO channels (channel_id, name, platform) VALUES (?, ?, ?)`,
+			`INSERT INTO channels (channel_id, name, platform) VALUES ($1, $2, $3)`,
 			row.id, row.id, row.platform,
 		); err != nil {
 			t.Fatal(err)
 		}
 		if row.followed {
 			if err := srv.db.ExecRaw(
-				`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`,
+				`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`,
 				row.id,
 			); err != nil {
 				t.Fatal(err)
@@ -341,7 +341,7 @@ func TestHandleShortsHistoryKeepsExactCursorWhenPresentationTimeChanges(t *testi
 	} {
 		if err := srv.db.ExecRaw(
 			`INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
-			 VALUES (?, ?, ?, ?, 0, ?)`,
+			 VALUES ($1, $2, $3, $4, 0, $5)`,
 			row.id, row.channelID, row.ownerKind, row.id, row.published,
 		); err != nil {
 			t.Fatal(err)
@@ -350,7 +350,7 @@ func TestHandleShortsHistoryKeepsExactCursorWhenPresentationTimeChanges(t *testi
 	if err := srv.db.ExecRaw(
 		`INSERT INTO video_repost_sources (
 			video_id, reposter_channel_id, reposted_at_ms, first_seen_at_ms, updated_at_ms
-		 ) VALUES (?, ?, 1000, 1100, 1100)`,
+		 ) VALUES ($1, $2, 1000, 1100, 1100)`,
 		"old_tagged_cursor", "instagram_reposter",
 	); err != nil {
 		t.Fatal(err)

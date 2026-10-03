@@ -81,7 +81,7 @@ func TestDiscoverPrefetchKeepsBlockedAttemptBoundedUntilGenerationReset(t *testi
 	url := "https://www.youtube.com/watch?v=" + videoID
 	if err := d.ExecRaw(`
 		INSERT INTO temp_download_queue (url, platform, origin, status, last_error_kind, last_error)
-		VALUES (?, 'youtube', 'discover', 'blocked', 'auth', 'sample failure')`, url); err != nil {
+		VALUES ($1, 'youtube', 'discover', 'blocked', 'auth', 'sample failure')`, url); err != nil {
 		t.Fatal(err)
 	}
 	added, err := d.EnqueueDiscoverTempDownloads([]model.DiscoveryVideo{{VideoID: videoID, Source: "related"}}, 1)
@@ -128,7 +128,7 @@ func TestDiscoverDownloadSurvivesGenericTempRetentionUntilHandoff(t *testing.T) 
 	if err := d.InsertVideo(videoID, "youtube_UCprepared", "youtube_video", "Prepared", "", 60, 1, "", "video", 0, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.ExecRaw(`UPDATE videos SET downloaded_at = 1 WHERE video_id = ?`, videoID); err != nil {
+	if err := d.ExecRaw(`UPDATE videos SET downloaded_at = 1 WHERE video_id = $1`, videoID); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.MarkDiscoverTempVideo(videoID, 1); err != nil {

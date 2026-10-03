@@ -105,17 +105,6 @@ func schemaContentReadIndexStatements() []string {
 	}
 }
 
-func schemaPresent(conn *sql.DB) (bool, error) {
-	var present bool
-	err := conn.QueryRow(`
-		SELECT EXISTS (
-			SELECT 1 FROM sqlite_schema
-			WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
-		)
-	`).Scan(&present)
-	return present, err
-}
-
 // ValidateCurrentSchema rejects databases that do not match the current
 // logical schema after ordered migrations have completed.
 func ValidateCurrentSchema(conn *sql.DB) error {

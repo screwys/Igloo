@@ -392,7 +392,7 @@ func TestTranslateBackgroundRetriesOnlyRejectedBatchItem(t *testing.T) {
 	}
 	var status, kind string
 	var attempts int
-	if err := d.QueryRow(`SELECT status, attempts, last_error_kind FROM translation_jobs WHERE tweet_id = ? AND field = 'body' AND target_lang = 'en'`, "sample_reply").Scan(&status, &attempts, &kind); err != nil {
+	if err := d.QueryRow(`SELECT status, attempts, last_error_kind FROM translation_jobs WHERE tweet_id = $1 AND field = 'body' AND target_lang = 'en'`, "sample_reply").Scan(&status, &attempts, &kind); err != nil {
 		t.Fatalf("read retry job: %v", err)
 	}
 	if status != "queued" || attempts != 1 || kind != "provider_error" {
@@ -929,22 +929,12 @@ func ptrTime(t time.Time) *time.Time {
 
 func openTranslateTestDB(t *testing.T) *db.DB {
 	t.Helper()
-	tmpFile, err := os.CreateTemp("", "igloo-translate-test-*.db")
+	d, err := db.OpenAtStateRoot(t.TempDir())
 	if err != nil {
-		t.Fatalf("create temp db: %v", err)
-	}
-	tmpPath := tmpFile.Name()
-	if err := tmpFile.Close(); err != nil {
-		t.Fatalf("close temp db: %v", err)
-	}
-	d, err := db.OpenPath(tmpPath, t.TempDir())
-	if err != nil {
-		_ = os.Remove(tmpPath)
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = d.Close()
-		_ = os.Remove(tmpPath)
 	})
 	return d
 }

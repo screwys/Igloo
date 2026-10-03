@@ -53,25 +53,25 @@ func TestGetBookmarksMarksFollowedChannel(t *testing.T) {
 
 	if err := d.ExecRaw(`
 		INSERT INTO channels (channel_id, name, platform)
-		VALUES (?, 'Followed Author', 'twitter')
+		VALUES ($1, 'Followed Author', 'twitter')
 	`, channelID); err != nil {
 		t.Fatalf("insert channel: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO channel_follows (channel_id, followed_at)
-		VALUES (?, 1)
+		VALUES ($1, 1)
 	`, channelID); err != nil {
 		t.Fatalf("insert channel follow: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
-		VALUES (?, ?, 'tweet', 'X post tweet_followed_bookmark', 0, 1)
+		VALUES ($1, $2, 'tweet', 'X post tweet_followed_bookmark', 0, 1)
 	`, videoID, channelID); err != nil {
 		t.Fatalf("insert video: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO bookmarks (video_id, category_id, bookmarked_at)
-		VALUES (?, 0, 2)
+		VALUES ($1, 0, 2)
 	`, videoID); err != nil {
 		t.Fatalf("insert bookmark: %v", err)
 	}
@@ -135,12 +135,12 @@ func TestBookmarkLabelFiltersAndCounts(t *testing.T) {
 		if f.insertNull {
 			err = d.ExecRaw(`
 				INSERT INTO bookmarks (video_id, category_id, bookmarked_at)
-				VALUES (?, ?, ?)
+				VALUES ($1, $2, $3)
 			`, f.videoID, f.categoryID, f.bookmarked)
 		} else {
 			err = d.ExecRaw(`
 				INSERT INTO bookmarks (video_id, category_id, custom_title, bookmarked_at)
-				VALUES (?, ?, ?, ?)
+				VALUES ($1, $2, $3, $4)
 			`, f.videoID, f.categoryID, f.customTitle, f.bookmarked)
 		}
 		if err != nil {
@@ -269,14 +269,14 @@ func TestAddAndRemoveBookmarkResolveCanonicalStatusURL(t *testing.T) {
 	)
 	if err := d.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, source_channel_id, channel_id, body_text, canonical_url)
-		VALUES (?, 'twitter_sample_reposter', 'twitter_sample_author', 'body', ?)`,
+		VALUES ($1, 'twitter_sample_reposter', 'twitter_sample_author', 'body', $2)`,
 		repostID, "https://x.com/sample_author/status/"+originalID,
 	); err != nil {
 		t.Fatalf("seed repost row: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, fetched_at)
-		VALUES (?, 1)`,
+		VALUES ($1, 1)`,
 		originalID,
 	); err != nil {
 		t.Fatalf("seed hollow canonical row: %v", err)
@@ -307,10 +307,10 @@ func TestAddAndRemoveBookmarkResolveCanonicalStatusURL(t *testing.T) {
 		t.Fatalf("repost bookmark state should resolve through canonical status URL")
 	}
 	var originalRows, repostRows int
-	if err := d.QueryRow(`SELECT COUNT(*) FROM bookmarks WHERE video_id = ?`, originalID).Scan(&originalRows); err != nil {
+	if err := d.QueryRow(`SELECT COUNT(*) FROM bookmarks WHERE video_id = $1`, originalID).Scan(&originalRows); err != nil {
 		t.Fatalf("count original bookmark: %v", err)
 	}
-	if err := d.QueryRow(`SELECT COUNT(*) FROM bookmarks WHERE video_id = ?`, repostID).Scan(&repostRows); err != nil {
+	if err := d.QueryRow(`SELECT COUNT(*) FROM bookmarks WHERE video_id = $1`, repostID).Scan(&repostRows); err != nil {
 		t.Fatalf("count repost bookmark: %v", err)
 	}
 	if originalRows != 1 || repostRows != 0 {
@@ -330,7 +330,7 @@ func TestAddAndRemoveBookmarkResolveCanonicalStatusURL(t *testing.T) {
 		SELECT v.channel_id, COALESCE(fi.body_text, '')
 		FROM videos v
 		JOIN feed_items fi ON fi.tweet_id = v.video_id
-		WHERE v.video_id = ?
+		WHERE v.video_id = $1
 	`, originalID).Scan(&channelID, &body); err != nil {
 		t.Fatalf("query canonical bookmark shape: %v", err)
 	}
@@ -409,7 +409,7 @@ func TestCreateAndDeleteBookmarkCategory(t *testing.T) {
 		t.Fatalf("UpdateBookmarkCategory: %v", err)
 	}
 	var name string
-	if err := d.QueryRow(`SELECT name FROM bookmark_categories WHERE id = ?`, catID).Scan(&name); err != nil {
+	if err := d.QueryRow(`SELECT name FROM bookmark_categories WHERE id = $1`, catID).Scan(&name); err != nil {
 		t.Fatalf("read updated category: %v", err)
 	}
 	if name != "Updated Category" {
@@ -417,7 +417,7 @@ func TestCreateAndDeleteBookmarkCategory(t *testing.T) {
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO bookmarks (video_id, category_id, bookmarked_at)
-		VALUES ('categorized', ?, 1000)
+		VALUES ('categorized', $1, 1000)
 	`, catID); err != nil {
 		t.Fatalf("seed categorized bookmark: %v", err)
 	}
@@ -427,7 +427,7 @@ func TestCreateAndDeleteBookmarkCategory(t *testing.T) {
 		t.Fatalf("DeleteBookmarkCategory: %v", err)
 	}
 	var count int
-	if err := d.QueryRow(`SELECT COUNT(*) FROM bookmark_categories WHERE id = ?`, catID).Scan(&count); err != nil {
+	if err := d.QueryRow(`SELECT COUNT(*) FROM bookmark_categories WHERE id = $1`, catID).Scan(&count); err != nil {
 		t.Fatalf("count deleted category: %v", err)
 	}
 	if count != 0 {
@@ -458,19 +458,19 @@ func TestGetBookmarksFallsBackToFeedPublishedAtForStubVideos(t *testing.T) {
 
 	if err := d.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
-		VALUES (?, ?, 'tweet', 'X post sample_bookmark_stub', 0, 0)
+		VALUES ($1, $2, 'tweet', 'X post sample_bookmark_stub', 0, 0)
 	`, videoID, channelID); err != nil {
 		t.Fatalf("insert video stub: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, source_channel_id, channel_id, body_text, canonical_url, published_at, fetched_at)
-		VALUES (?, 'twitter_sample_author', 'twitter_sample_author', 'stub body', 'https://x.com/sample_author/status/sample_bookmark_stub', ?, ?)
+		VALUES ($1, 'twitter_sample_author', 'twitter_sample_author', 'stub body', 'https://x.com/sample_author/status/sample_bookmark_stub', $2, $3)
 	`, videoID, feedPublishedAt, feedPublishedAt); err != nil {
 		t.Fatalf("insert feed item: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO bookmarks (video_id, category_id, bookmarked_at)
-		VALUES (?, 0, ?)
+		VALUES ($1, 0, $2)
 	`, videoID, feedPublishedAt+1000); err != nil {
 		t.Fatalf("insert bookmark: %v", err)
 	}
@@ -500,19 +500,19 @@ func TestGetBookmarksDerivesTikTokSlideshowFromCanonicalAssets(t *testing.T) {
 
 	if err := d.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
-		VALUES (?, ?, 'tiktok_video', 'TikTok slideshow', 0, 1)
+		VALUES ($1, $2, 'tiktok_video', 'TikTok slideshow', 0, 1)
 	`, videoID, channelID); err != nil {
 		t.Fatalf("insert video stub: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, source_channel_id, channel_id, media_json, published_at, fetched_at)
-		VALUES (?, 'tiktok_demo_author', 'tiktok_demo_author', '[{"type":"video"}]', 1, 1)
+		VALUES ($1, 'tiktok_demo_author', 'tiktok_demo_author', '[{"type":"video"}]', 1, 1)
 	`, videoID); err != nil {
 		t.Fatalf("insert feed item: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO bookmarks (video_id, category_id, bookmarked_at)
-		VALUES (?, 0, 2)
+		VALUES ($1, 0, 2)
 	`, videoID); err != nil {
 		t.Fatalf("insert bookmark: %v", err)
 	}
@@ -548,19 +548,19 @@ func TestGetBookmarksDerivesMixedTweetSlideshowFromCanonicalAssets(t *testing.T)
 
 	if err := d.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
-		VALUES (?, ?, 'tweet', 'X post sample_tweet_mixed_media', 0, 1)
+		VALUES ($1, $2, 'tweet', 'X post sample_tweet_mixed_media', 0, 1)
 	`, videoID, channelID); err != nil {
 		t.Fatalf("insert video stub: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, source_channel_id, channel_id, media_json, published_at, fetched_at)
-		VALUES (?, 'twitter_sample_source', 'twitter_sample_author', '[{"type":"photo"},{"type":"video"},{"type":"video"}]', 1, 1)
+		VALUES ($1, 'twitter_sample_source', 'twitter_sample_author', '[{"type":"photo"},{"type":"video"},{"type":"video"}]', 1, 1)
 	`, videoID); err != nil {
 		t.Fatalf("insert feed item: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO bookmarks (video_id, category_id, bookmarked_at)
-		VALUES (?, 0, 2)
+		VALUES ($1, 0, 2)
 	`, videoID); err != nil {
 		t.Fatalf("insert bookmark: %v", err)
 	}
@@ -602,20 +602,20 @@ func TestGetBookmarksDerivesImageFromCanonicalQuoteAsset(t *testing.T) {
 
 	if err := d.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
-		VALUES (?, ?, 'tweet', 'X post sample_direct_quote_media', 0, 1)
+		VALUES ($1, $2, 'tweet', 'X post sample_direct_quote_media', 0, 1)
 	`, videoID, channelID); err != nil {
 		t.Fatalf("insert video stub: %v", err)
 	}
 	const quoteID = "sample_quote_media"
 	if err := d.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, source_channel_id, channel_id, quote_tweet_id, published_at, fetched_at)
-		VALUES (?, 'twitter_sample_source', 'twitter_sample_author', ?, 1, 1)
+		VALUES ($1, 'twitter_sample_source', 'twitter_sample_author', $2, 1, 1)
 	`, videoID, quoteID); err != nil {
 		t.Fatalf("insert feed item: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO bookmarks (video_id, category_id, bookmarked_at)
-		VALUES (?, 0, 2)
+		VALUES ($1, 0, 2)
 	`, videoID); err != nil {
 		t.Fatalf("insert bookmark: %v", err)
 	}
@@ -658,17 +658,17 @@ func TestBookmarkProjectionKeepsActionIdentityAndResolvesCapturedContent(t *test
 		query string
 		args  []any
 	}{
-		{`INSERT INTO channels (channel_id, name, platform) VALUES (?, 'Captured Author', 'twitter')`, []any{channelID}},
-		{`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`, []any{channelID}},
+		{`INSERT INTO channels (channel_id, name, platform) VALUES ($1, 'Captured Author', 'twitter')`, []any{channelID}},
+		{`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, []any{channelID}},
 		{`INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
-		  VALUES (?, 'twitter_sample_missing', 'tweet', 'X post sample_saved_action', 0)`, []any{actionID}},
-		{`INSERT INTO feed_items (tweet_id, published_at, fetched_at) VALUES (?, 1, 1)`, []any{actionID}},
+		  VALUES ($1, 'twitter_sample_missing', 'tweet', 'X post sample_saved_action', 0)`, []any{actionID}},
+		{`INSERT INTO feed_items (tweet_id, published_at, fetched_at) VALUES ($1, 1, 1)`, []any{actionID}},
 		{`INSERT INTO feed_items (
 			tweet_id, source_channel_id, channel_id, body_text, media_json,
 			canonical_tweet_id, is_retweet, published_at, fetched_at
-		  ) VALUES (?, ?, ?, 'captured body', '[{"type":"photo"}]', ?, 1, 2, 2)`,
+		  ) VALUES ($1, $2, $3, 'captured body', '[{"type":"photo"}]', $4, 1, 2, 2)`,
 			[]any{contentID, channelID, channelID, actionID}},
-		{`INSERT INTO bookmarks (video_id, category_id, bookmarked_at) VALUES (?, 0, 3)`, []any{actionID}},
+		{`INSERT INTO bookmarks (video_id, category_id, bookmarked_at) VALUES ($1, 0, 3)`, []any{actionID}},
 	}
 	for _, statement := range statements {
 		if err := d.ExecRaw(statement.query, statement.args...); err != nil {
@@ -716,16 +716,16 @@ func TestBookmarkProjectionKeepsReadyCanonicalMediaWhenPresentationComesFromRepo
 		query string
 		args  []any
 	}{
-		{`INSERT INTO channels (channel_id, name, platform) VALUES (?, 'Sample Author', 'twitter')`, []any{channelID}},
+		{`INSERT INTO channels (channel_id, name, platform) VALUES ($1, 'Sample Author', 'twitter')`, []any{channelID}},
 		{`INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at, media_kind)
-		  VALUES (?, ?, 'tweet', 'X post sample_saved_status', 0, 'video')`, []any{actionID, channelID}},
-		{`INSERT INTO feed_items (tweet_id, published_at, fetched_at) VALUES (?, 1, 1)`, []any{actionID}},
+		  VALUES ($1, $2, 'tweet', 'X post sample_saved_status', 0, 'video')`, []any{actionID, channelID}},
+		{`INSERT INTO feed_items (tweet_id, published_at, fetched_at) VALUES ($1, 1, 1)`, []any{actionID}},
 		{`INSERT INTO feed_items (
 			tweet_id, source_channel_id, channel_id, body_text, media_json,
 			canonical_tweet_id, is_retweet, published_at, fetched_at
-		  ) VALUES (?, 'twitter_sample_reposter', ?, 'captured body', '[{"type":"video"}]', ?, 1, 2, 2)`,
+		  ) VALUES ($1, 'twitter_sample_reposter', $2, 'captured body', '[{"type":"video"}]', $3, 1, 2, 2)`,
 			[]any{repostID, channelID, actionID}},
-		{`INSERT INTO bookmarks (video_id, category_id, bookmarked_at) VALUES (?, 0, 3)`, []any{actionID}},
+		{`INSERT INTO bookmarks (video_id, category_id, bookmarked_at) VALUES ($1, 0, 3)`, []any{actionID}},
 	}
 	for _, statement := range statements {
 		if err := d.ExecRaw(statement.query, statement.args...); err != nil {

@@ -117,7 +117,7 @@ func (m *Manager) createBackup(ctx context.Context, dir string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	dbSnapFile, err := os.CreateTemp(m.cfg.Storage.StateRoot(), ".igloo-db-snapshot-*.db")
+	dbSnapFile, err := os.CreateTemp(m.cfg.Storage.StateRoot(), ".igloo-db-snapshot-*.pgdump")
 	if err != nil {
 		return fmt.Errorf("create db snapshot temp path: %w", err)
 	}
@@ -132,8 +132,8 @@ func (m *Manager) createBackup(ctx context.Context, dir string) error {
 	defer func() {
 		_ = os.Remove(dbSnap)
 	}()
-	if err := m.db.VacuumInto(ctx, dbSnap); err != nil {
-		return fmt.Errorf("vacuum into: %w", err)
+	if err := m.db.WithSnapshotExport(ctx, dbSnap, nil); err != nil {
+		return fmt.Errorf("dump database: %w", err)
 	}
 
 	return m.cfg.Storage.MediaExecutor().Run(ctx, storage.MediaLaneBulkBackground, func() error {
@@ -156,7 +156,7 @@ func (m *Manager) createBackup(ctx context.Context, dir string) error {
 		}()
 
 		zw := zip.NewWriter(f)
-		if err := addFileToZip(ctx, zw, dbSnap, config.DatabaseFilename); err != nil {
+		if err := addFileToZip(ctx, zw, dbSnap, config.DatabaseBackupFilename); err != nil {
 			_ = zw.Close()
 			return fmt.Errorf("zip db: %w", err)
 		}

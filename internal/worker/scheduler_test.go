@@ -63,12 +63,12 @@ func TestSuccessfulEmptyInstagramCheckPreservesExistingWindow(t *testing.T) {
 
 	database := newTestWorkerDB(t)
 	const sourceID = "instagram_sample_source"
-	if err := database.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source',
-		        'https://www.instagram.com/sample_source/', 'instagram', 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
-	`, sourceID, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
+		VALUES ($1, 'sample_source', 'Sample Source',
+		        'https://www.instagram.com/sample_source/', 'instagram', 1)`, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatal(err)
 	}
 	manager := &Manager{
@@ -195,7 +195,7 @@ printf '{"_type":"url","id":"sample_member","title":"Member item","availability"
 	}
 	if err := database.ExecRaw(`
 		INSERT INTO channels (channel_id, name, url, platform, created_at)
-		VALUES (?, 'Sample Source', ?, 'youtube', 1)
+		VALUES ($1, 'Sample Source', $2, 'youtube', 1)
 	`, channel.ChannelID, channel.URL); err != nil {
 		t.Fatal(err)
 	}
@@ -303,11 +303,11 @@ func TestFailedReconcileStillRotatesDiscoveryChannel(t *testing.T) {
 func TestCompleteMultiComponentSnapshotKeepsTimestampFreeNewHeadAtLimit(t *testing.T) {
 	database := newTestWorkerDB(t)
 	const sourceID = "instagram_sample_source"
-	if err := database.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'https://www.instagram.com/sample_source/', 'instagram', 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
-	`, sourceID, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
+		VALUES ($1, 'sample_source', 'Sample Source', 'https://www.instagram.com/sample_source/', 'instagram', 1)`, sourceID); err != nil {
+		t.Fatalf("seed source: %v", err)
+	}
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatalf("seed source: %v", err)
 	}
 	if err := database.SetSetting("instagram_max_videos", "1"); err != nil {
@@ -342,11 +342,11 @@ func TestCompleteMultiComponentSnapshotKeepsTimestampFreeNewHeadAtLimit(t *testi
 func TestInitialMultiComponentRetentionUsesContentTime(t *testing.T) {
 	database := newTestWorkerDB(t)
 	const sourceID = "instagram_sample_source"
-	if err := database.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'https://www.instagram.com/sample_source/', 'instagram', 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
-	`, sourceID, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
+		VALUES ($1, 'sample_source', 'Sample Source', 'https://www.instagram.com/sample_source/', 'instagram', 1)`, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.SetSetting("instagram_max_videos", "1"); err != nil {
@@ -371,11 +371,11 @@ func TestInitialMultiComponentRetentionUsesContentTime(t *testing.T) {
 func TestRepostRetentionDoesNotDisplaceAuthoredMoments(t *testing.T) {
 	database := newTestWorkerDB(t)
 	const sourceID = "tiktok_sample_source"
-	if err := database.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'tiktok', 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
-	`, sourceID, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform, created_at)
+		VALUES ($1, 'sample_source', 'Sample Source', 'tiktok', 1)`, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.SetSetting("shorts_max_videos", "3"); err != nil {
@@ -425,12 +425,12 @@ func TestFetchedRepostCannotEnterAnotherSourceWindow(t *testing.T) {
 		secondSource = "tiktok_sample_second"
 		videoID      = "sample_video"
 	)
-	if err := database.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, platform, created_at) VALUES
-			(?, 'sample_first', 'Sample First', 'tiktok', 1),
-			(?, 'sample_second', 'Sample Second', 'tiktok', 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1), (?, 1)
-	`, firstSource, secondSource, firstSource, secondSource); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform, created_at) VALUES
+			($1, 'sample_first', 'Sample First', 'tiktok', 1),
+			($2, 'sample_second', 'Sample Second', 'tiktok', 1)`, firstSource, secondSource); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1), ($2, 1)`, firstSource, secondSource); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.SetSetting("tiktok_repost_max_videos", "15"); err != nil {
@@ -455,7 +455,7 @@ func TestFetchedRepostCannotEnterAnotherSourceWindow(t *testing.T) {
 
 	reconcile(firstSource, []download.VideoRef{ref})
 	if err := database.ExecRaw(`
-		INSERT INTO video_fetch_history (video_id, fetched_at_ms) VALUES (?, 200)
+		INSERT INTO video_fetch_history (video_id, fetched_at_ms) VALUES ($1, 200)
 	`, videoID); err != nil {
 		t.Fatal(err)
 	}
@@ -483,11 +483,11 @@ func TestFetchedRepostCannotEnterAnotherSourceWindow(t *testing.T) {
 func TestStoryDesiresStayCurrentOutsideVideoLimit(t *testing.T) {
 	database := newTestWorkerDB(t)
 	const sourceID = "tiktok_sample_source"
-	if err := database.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'https://www.tiktok.com/@sample_source', 'tiktok', 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
-	`, sourceID, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
+		VALUES ($1, 'sample_source', 'Sample Source', 'https://www.tiktok.com/@sample_source', 'tiktok', 1)`, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.SetSetting("shorts_max_videos", "1"); err != nil {
@@ -535,11 +535,11 @@ func TestStoryDesiresStayCurrentOutsideVideoLimit(t *testing.T) {
 func TestIdenticalTimestampFreeComponentsDoNotOscillateAtLimit(t *testing.T) {
 	database := newTestWorkerDB(t)
 	const sourceID = "instagram_sample_source"
-	if err := database.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'instagram', 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
-	`, sourceID, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform, created_at)
+		VALUES ($1, 'sample_source', 'Sample Source', 'instagram', 1)`, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.SetSetting("instagram_max_videos", "1"); err != nil {
@@ -567,11 +567,11 @@ func TestIdenticalTimestampFreeComponentsDoNotOscillateAtLimit(t *testing.T) {
 func TestCompleteRecheckPreservesCurrentLane(t *testing.T) {
 	database := newTestWorkerDB(t)
 	const sourceID = "youtube_sample_source"
-	if err := database.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'youtube', 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
-	`, sourceID, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform, created_at)
+		VALUES ($1, 'sample_source', 'Sample Source', 'youtube', 1)`, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatal(err)
 	}
 	manager := &Manager{db: database, cfg: testCfg(t.TempDir())}
@@ -602,11 +602,11 @@ func TestCompleteRecheckPreservesCurrentLane(t *testing.T) {
 func TestPartialExpandedTailKeepsExactSourceOrder(t *testing.T) {
 	database := newTestWorkerDB(t)
 	const sourceID = "youtube_sample_source"
-	if err := database.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'youtube', 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
-	`, sourceID, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform, created_at)
+		VALUES ($1, 'sample_source', 'Sample Source', 'youtube', 1)`, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatal(err)
 	}
 	manager := &Manager{db: database, cfg: testCfg(t.TempDir())}
@@ -649,11 +649,11 @@ func TestPartialExpandedTailKeepsExactSourceOrder(t *testing.T) {
 func TestSharedInstagramItemUsesOneOwnerAcrossComponents(t *testing.T) {
 	database := newTestWorkerDB(t)
 	const sourceID = "instagram_sample_source"
-	if err := database.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'https://www.instagram.com/sample_source/', 'instagram', 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
-	`, sourceID, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
+		VALUES ($1, 'sample_source', 'Sample Source', 'https://www.instagram.com/sample_source/', 'instagram', 1)`, sourceID); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatal(err)
 	}
 	manager := &Manager{
@@ -750,11 +750,11 @@ func TestPartialSourceSnapshotsCannotGrowPastRetentionLimit(t *testing.T) {
 	const sourceID = "youtube_sample_source"
 	if err := database.ExecRaw(`
 		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'https://www.youtube.com/@sample_source', 'youtube', 1)
+		VALUES ($1, 'sample_source', 'Sample Source', 'https://www.youtube.com/@sample_source', 'youtube', 1)
 	`, sourceID); err != nil {
 		t.Fatalf("insert source channel: %v", err)
 	}
-	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatalf("follow source channel: %v", err)
 	}
 	if err := database.SetSetting("youtube_max_videos", "2"); err != nil {
@@ -801,11 +801,11 @@ func TestPartialIntroducedSnapshotsPruneProvenanceWithDesire(t *testing.T) {
 	const sourceID = "tiktok_sample_source"
 	if err := database.ExecRaw(`
 		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'https://www.tiktok.com/@sample_source', 'tiktok', 1)
+		VALUES ($1, 'sample_source', 'Sample Source', 'https://www.tiktok.com/@sample_source', 'tiktok', 1)
 	`, sourceID); err != nil {
 		t.Fatalf("insert source channel: %v", err)
 	}
-	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatalf("follow source channel: %v", err)
 	}
 	if err := database.SetSetting("shorts_max_videos", "1"); err != nil {
@@ -858,11 +858,11 @@ func TestComponentWindowsConvergeIndependently(t *testing.T) {
 	const sourceID = "instagram_sample_source"
 	if err := database.ExecRaw(`
 		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'https://www.instagram.com/sample_source/', 'instagram', 1)
+		VALUES ($1, 'sample_source', 'Sample Source', 'https://www.instagram.com/sample_source/', 'instagram', 1)
 	`, sourceID); err != nil {
 		t.Fatalf("insert source channel: %v", err)
 	}
-	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatalf("follow source channel: %v", err)
 	}
 	manager := &Manager{
@@ -952,11 +952,11 @@ func TestIntroducedOwnerFailureDoesNotReplacePriorWindow(t *testing.T) {
 	const sourceID = "instagram_sample_source"
 	if err := database.ExecRaw(`
 		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, 'sample_source', 'Sample Source', 'https://www.instagram.com/sample_source/', 'instagram', 1)
+		VALUES ($1, 'sample_source', 'Sample Source', 'https://www.instagram.com/sample_source/', 'instagram', 1)
 	`, sourceID); err != nil {
 		t.Fatalf("insert source channel: %v", err)
 	}
-	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`, sourceID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, sourceID); err != nil {
 		t.Fatalf("follow source channel: %v", err)
 	}
 	manager := &Manager{db: database, cfg: testCfg(t.TempDir()), profileKick: make(chan struct{}, 1)}
@@ -968,10 +968,15 @@ func TestIntroducedOwnerFailureDoesNotReplacePriorWindow(t *testing.T) {
 		t.Fatalf("seed tagged window: %v", err)
 	}
 	if err := database.ExecRaw(`
-		CREATE TRIGGER reject_introduced_owner
-		BEFORE INSERT ON channels
-		WHEN NEW.channel_id = 'instagram_sample_deleted'
-		BEGIN SELECT RAISE(ABORT, 'owner rejected'); END
+		CREATE FUNCTION reject_introduced_owner_fn() RETURNS trigger LANGUAGE plpgsql AS $fixture$
+		BEGIN
+			RAISE EXCEPTION 'owner rejected';
+			RETURN NEW;
+		END;
+		$fixture$;
+		CREATE TRIGGER reject_introduced_owner BEFORE INSERT ON channels
+		FOR EACH ROW WHEN (NEW.channel_id = 'instagram_sample_deleted')
+		EXECUTE FUNCTION reject_introduced_owner_fn();
 	`); err != nil {
 		t.Fatalf("create rejection trigger: %v", err)
 	}
@@ -1022,7 +1027,7 @@ func TestInstagramChannelCheckRequestsOnlyOneMissingAvatarRepair(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("AddChannel: %v", err)
 	}
-	if err := database.ExecRaw(`UPDATE profile_jobs SET completed_revision = requested_revision WHERE channel_id = ?`, channelID); err != nil {
+	if err := database.ExecRaw(`UPDATE profile_jobs SET completed_revision = requested_revision WHERE channel_id = $1`, channelID); err != nil {
 		t.Fatalf("complete initial profile job: %v", err)
 	}
 	manager := &Manager{db: database, profileKick: make(chan struct{}, 1)}
@@ -1057,11 +1062,11 @@ func TestInstagramChannelCheckObservesNativeAvatarAndRefreshesWhenStale(t *testi
 	}); err != nil {
 		t.Fatalf("AddChannel: %v", err)
 	}
-	if err := database.ExecRaw(`UPDATE profile_jobs SET completed_revision = requested_revision WHERE channel_id = ?`, channelID); err != nil {
+	if err := database.ExecRaw(`UPDATE profile_jobs SET completed_revision = requested_revision WHERE channel_id = $1`, channelID); err != nil {
 		t.Fatalf("complete fresh profile: %v", err)
 	}
 	storeReadyProfileAsset(t, database, stateRoot, channelID, "avatar", sourceURL, "ready")
-	if err := database.ExecRaw(`UPDATE channel_profiles SET fetched_at = ? WHERE channel_id = ?`, time.Now().UnixMilli(), channelID); err != nil {
+	if err := database.ExecRaw(`UPDATE channel_profiles SET fetched_at = $1 WHERE channel_id = $2`, time.Now().UnixMilli(), channelID); err != nil {
 		t.Fatalf("mark profile fresh: %v", err)
 	}
 	manager := &Manager{db: database, profileKick: make(chan struct{}, 1)}
@@ -1099,7 +1104,7 @@ func TestInstagramChannelCheckObservesNativeAvatarAndRefreshesWhenStale(t *testi
 	if err != nil || job == nil || job.RequestedRevision != 1 {
 		t.Fatalf("unchanged fresh avatar requested work = %+v, err=%v", job, err)
 	}
-	if err := database.ExecRaw(`UPDATE channel_profiles SET fetched_at = ? WHERE channel_id = ?`, time.Now().Add(-25*time.Hour).UnixMilli(), channelID); err != nil {
+	if err := database.ExecRaw(`UPDATE channel_profiles SET fetched_at = $1 WHERE channel_id = $2`, time.Now().Add(-25*time.Hour).UnixMilli(), channelID); err != nil {
 		t.Fatalf("age profile: %v", err)
 	}
 	if _, err := manager.applyDiscoverySnapshot(model.Channel{ChannelID: channelID, Platform: "instagram"}, snapshot); err != nil {
@@ -1124,11 +1129,11 @@ func TestInstagramChannelCheckDeclaresChangedNativeAvatar(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("AddChannel: %v", err)
 	}
-	if err := database.ExecRaw(`UPDATE profile_jobs SET completed_revision = requested_revision WHERE channel_id = ?`, channelID); err != nil {
+	if err := database.ExecRaw(`UPDATE profile_jobs SET completed_revision = requested_revision WHERE channel_id = $1`, channelID); err != nil {
 		t.Fatalf("complete profile job: %v", err)
 	}
 	storeReadyProfileAsset(t, database, stateRoot, channelID, "avatar", oldSource, "old")
-	if err := database.ExecRaw(`UPDATE channel_profiles SET fetched_at = ? WHERE channel_id = ?`, time.Now().UnixMilli(), channelID); err != nil {
+	if err := database.ExecRaw(`UPDATE channel_profiles SET fetched_at = $1 WHERE channel_id = $2`, time.Now().UnixMilli(), channelID); err != nil {
 		t.Fatalf("mark profile fresh: %v", err)
 	}
 	manager := &Manager{db: database, profileKick: make(chan struct{}, 1)}

@@ -79,7 +79,7 @@ func TestFeedOrderInvalidationResumesCommittedWorkAfterWorkerStarts(t *testing.T
 	}
 	for _, tweetID := range []string{"sample_direct", "sample_channel"} {
 		var scoredAt int64
-		if err := database.QueryRow(`SELECT algo_scored_at FROM feed_items WHERE tweet_id = ?`, tweetID).Scan(&scoredAt); err != nil {
+		if err := database.QueryRow(`SELECT algo_scored_at FROM feed_items WHERE tweet_id = $1`, tweetID).Scan(&scoredAt); err != nil {
 			t.Fatal(err)
 		}
 		if scoredAt != 0 {
@@ -137,7 +137,7 @@ func TestFeedOrderInvalidationCoalescesAndDrainsBoundedBatches(t *testing.T) {
 		tweetID := fmt.Sprintf("sample_%03d", i)
 		if err := database.ExecRaw(`
 			INSERT INTO feed_items (tweet_id, body_text, algo_scored_at)
-			VALUES (?, 'body', 303)
+			VALUES ($1, 'body', 303)
 		`, tweetID); err != nil {
 			t.Fatal(err)
 		}

@@ -54,7 +54,7 @@ func (db *DB) GetFeedSnapshotHealth() (FeedSnapshotHealth, error) {
 		FROM feed_items fi
 		WHERE %s
 	`, strings.Join(where, " AND "))
-	if err := db.conn.QueryRow(query, args...).Scan(
+	if err := db.reader().QueryRow(bind(query), args...).Scan(
 		&out.CandidateCount,
 		&out.LatestCandidateFetchedAtMs,
 		&out.LatestCandidatePublishedAtMs,

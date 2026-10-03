@@ -12,7 +12,7 @@ import (
 	"github.com/screwys/igloo/internal/db"
 )
 
-func TestCreateBackupWritesIglooDBAndSkipsStaleSnapshotName(t *testing.T) {
+func TestCreateBackupWritesPostgresArchiveAndSkipsStaleSnapshotName(t *testing.T) {
 	fx := newBackupFixture(t)
 
 	cfg := testCfg(fx.dataDir)
@@ -32,8 +32,8 @@ func TestCreateBackupWritesIglooDBAndSkipsStaleSnapshotName(t *testing.T) {
 		t.Fatalf("backups = %v, want exactly one", matches)
 	}
 	names := zipEntryNames(t, matches[0])
-	if !names[config.DatabaseFilename] {
-		t.Fatalf("backup missing %s; entries=%v", config.DatabaseFilename, names)
+	if !names[config.DatabaseBackupFilename] {
+		t.Fatalf("backup missing %s; entries=%v", config.DatabaseBackupFilename, names)
 	}
 	for _, name := range []string{"config/config.json", "config/nginx.conf", "config/server.crt"} {
 		if !names[name] {
@@ -95,7 +95,7 @@ func TestPruneBackupsUsesConfiguredKeepCount(t *testing.T) {
 
 func TestBackupKeepCountClampsSetting(t *testing.T) {
 	dataDir := t.TempDir()
-	database, err := db.OpenPath(filepath.Join(dataDir, config.DatabaseFilename), dataDir)
+	database, err := db.OpenAtStateRoot(dataDir)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestBackupKeepCountClampsSetting(t *testing.T) {
 
 func TestCreateBackupRejectsRelativeDir(t *testing.T) {
 	dataDir := t.TempDir()
-	database, err := db.OpenPath(filepath.Join(dataDir, config.DatabaseFilename), dataDir)
+	database, err := db.OpenAtStateRoot(dataDir)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -180,14 +180,14 @@ func newBackupFixture(t *testing.T) backupFixture {
 		}
 	}
 
-	database, err := db.OpenPath(filepath.Join(dataDir, config.DatabaseFilename), dataDir)
+	database, err := db.OpenAtStateRoot(dataDir)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = database.Close()
 	})
-	if err := database.ExecRaw(`INSERT OR REPLACE INTO settings (key, value) VALUES ('sample', 'ok')`); err != nil {
+	if err := database.SetSetting("sample", "ok"); err != nil {
 		t.Fatalf("seed db: %v", err)
 	}
 

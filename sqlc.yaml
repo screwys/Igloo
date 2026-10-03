@@ -1,0 +1,12 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: internal/db/postgres/migrations
+    queries: internal/db/queries
+    gen:
+      go:
+        package: query
+        out: internal/db/query
+        sql_package: database/sql
+        emit_pointers_for_null_types: false
+        omit_unused_structs: true

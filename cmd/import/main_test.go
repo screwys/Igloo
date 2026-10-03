@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -54,13 +55,18 @@ func TestRunImportsCurrentFullExportZipFreshInstall(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dataDir, "igloo.db")); !os.IsNotExist(err) {
 		t.Fatalf("import command applied database before startup: %v", err)
 	}
-	if err := restore.ApplyPending(config.Load()); err != nil {
+	cfg := config.Load()
+	if err := restore.ApplyPendingConfig(cfg); err != nil {
 		t.Fatalf("apply staged restore: %v", err)
 	}
 
-	store, err := db.OpenPath(filepath.Join(dataDir, "igloo.db"), dataDir)
+	store, err := db.OpenAtStateRoot(dataDir)
 	if err != nil {
 		t.Fatalf("open imported db: %v", err)
+	}
+	if err := restore.ApplyPendingDatabase(context.Background(), cfg, store); err != nil {
+		_ = store.Close()
+		t.Fatalf("apply staged database: %v", err)
 	}
 	defer func() {
 		_ = store.Close()
@@ -131,12 +137,17 @@ func TestRunImportsCurrentFullExportZipFreshInstall(t *testing.T) {
 	if code := run([]string{zipPath}, &stdout, &stderr); code != 0 {
 		t.Fatalf("second run exit = %d, stderr=%s stdout=%s", code, stderr.String(), stdout.String())
 	}
-	if err := restore.ApplyPending(config.Load()); err != nil {
+	cfg = config.Load()
+	if err := restore.ApplyPendingConfig(cfg); err != nil {
 		t.Fatalf("apply second staged restore: %v", err)
 	}
-	store, err = db.OpenPath(filepath.Join(dataDir, "igloo.db"), dataDir)
+	store, err = db.OpenAtStateRoot(dataDir)
 	if err != nil {
 		t.Fatalf("reopen imported db: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	if err := restore.ApplyPendingDatabase(context.Background(), cfg, store); err != nil {
+		t.Fatalf("apply second staged database: %v", err)
 	}
 	var bookmarkCount int
 	if err := store.QueryRow(`SELECT COUNT(*) FROM bookmarks WHERE video_id='test_bookmarked_video'`).Scan(&bookmarkCount); err != nil {
@@ -235,14 +246,19 @@ func writeFullExportZipFixture(t *testing.T, path string) {
 		_ = sourceStore.Close()
 		t.Fatalf("seed source database: %v", err)
 	}
+	sourceArchive := filepath.Join(sourceStateRoot, config.DatabaseBackupFilename)
+	if err := sourceStore.WithSnapshotExport(context.Background(), sourceArchive, nil); err != nil {
+		_ = sourceStore.Close()
+		t.Fatalf("export source database: %v", err)
+	}
 	if err := sourceStore.Close(); err != nil {
 		t.Fatalf("close source database: %v", err)
 	}
-	databaseFile, err := zw.Create(config.DatabaseFilename)
+	databaseFile, err := zw.Create(config.DatabaseBackupFilename)
 	if err != nil {
 		t.Fatalf("create database entry: %v", err)
 	}
-	databaseSource, err := os.Open(sourceLayout.DatabasePath())
+	databaseSource, err := os.Open(sourceArchive)
 	if err != nil {
 		t.Fatalf("open source database file: %v", err)
 	}

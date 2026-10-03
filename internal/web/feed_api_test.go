@@ -206,7 +206,7 @@ func TestHandleFeedInteractionQueuesAppliedFeedOrderChanges(t *testing.T) {
 		"sample_interaction_mute": 820,
 	} {
 		var scoredAt int64
-		if err := srv.db.QueryRow(`SELECT algo_scored_at FROM feed_items WHERE tweet_id = ?`, tweetID).Scan(&scoredAt); err != nil {
+		if err := srv.db.QueryRow(`SELECT algo_scored_at FROM feed_items WHERE tweet_id = $1`, tweetID).Scan(&scoredAt); err != nil {
 			t.Fatal(err)
 		}
 		if scoredAt != want {
@@ -217,7 +217,7 @@ func TestHandleFeedInteractionQueuesAppliedFeedOrderChanges(t *testing.T) {
 	processQueuedFeedOrderInvalidations(t, srv)
 	for _, tweetID := range []string{"sample_interaction_like", "sample_interaction_mute"} {
 		var scoredAt int64
-		if err := srv.db.QueryRow(`SELECT algo_scored_at FROM feed_items WHERE tweet_id = ?`, tweetID).Scan(&scoredAt); err != nil {
+		if err := srv.db.QueryRow(`SELECT algo_scored_at FROM feed_items WHERE tweet_id = $1`, tweetID).Scan(&scoredAt); err != nil {
 			t.Fatal(err)
 		}
 		if scoredAt != 0 {

@@ -37,11 +37,11 @@ func enqueueFeedOrderInvalidationTx(tx *sql.Tx, ownerKind, ownerID string) error
 	if ownerKind == "" || ownerID == "" {
 		return nil
 	}
-	_, err := tx.Exec(`
+	_, err := tx.Exec(bind(`
 		INSERT INTO feed_order_invalidations (owner_kind, owner_id)
 		VALUES (?, ?)
 		ON CONFLICT(owner_kind, owner_id) DO NOTHING
-	`, ownerKind, ownerID)
+	`), ownerKind, ownerID)
 	return err
 }
 
@@ -65,7 +65,7 @@ func enqueueFeedOrderInvalidationsForMutationQueryTx(
 	queryArgs := make([]any, 0, len(args)+1)
 	queryArgs = append(queryArgs, ownerKind)
 	queryArgs = append(queryArgs, args...)
-	_, err := tx.Exec(query, queryArgs...)
+	_, err := tx.Exec(bind(query), queryArgs...)
 	return err
 }
 
@@ -89,35 +89,35 @@ func (db *DB) DrainFeedOrderInvalidations(
 			return err
 		}
 		var queued int
-		if err := tx.QueryRowContext(ctx, `
+		if err := tx.QueryRowContext(ctx, bind(`
 			SELECT COUNT(*)
 			FROM (
 				SELECT 1 FROM feed_order_invalidations LIMIT ?
 			)
-		`, feedOrderInvalidationCoarseThreshold+1).Scan(&queued); err != nil {
+		`), feedOrderInvalidationCoarseThreshold+1).Scan(&queued); err != nil {
 			return err
 		}
 		if queued == 0 {
 			return nil
 		}
 		if queued > feedOrderInvalidationCoarseThreshold {
-			if _, err := tx.ExecContext(ctx, `
+			if _, err := tx.ExecContext(ctx, bind(`
 				UPDATE feed_items SET algo_scored_at = 0
 				WHERE algo_scored_at != 0
-			`); err != nil {
+			`)); err != nil {
 				return err
 			}
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `DELETE FROM feed_order_invalidations`); err != nil {
+			if _, err := tx.ExecContext(ctx, bind(`DELETE FROM feed_order_invalidations`)); err != nil {
 				return err
 			}
 			processed = queued
 			return nil
 		}
 
-		rows, err := tx.QueryContext(ctx, `
+		rows, err := tx.QueryContext(ctx, bind(`
 			WITH tweet_batch AS (
 				SELECT owner_kind, owner_id
 				FROM feed_order_invalidations
@@ -138,7 +138,7 @@ func (db *DB) DrainFeedOrderInvalidations(
 				SELECT owner_kind, owner_id, 1 AS lane FROM channel_batch
 			)
 			ORDER BY lane, owner_id
-		`, tweetLimit, channelLimit)
+		`), tweetLimit, channelLimit)
 		if err != nil {
 			return err
 		}
@@ -192,10 +192,10 @@ func (db *DB) DrainFeedOrderInvalidations(
 			}
 		}
 
-		deleteStatement, err := tx.PrepareContext(ctx, `
+		deleteStatement, err := tx.PrepareContext(ctx, bind(`
 			DELETE FROM feed_order_invalidations
 			WHERE owner_kind = ? AND owner_id = ?
-		`)
+		`))
 		if err != nil {
 			return err
 		}

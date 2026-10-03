@@ -198,7 +198,7 @@ func queryFeedDebugItem(conn *sql.DB, tweetID string) (feedDebugItem, error) {
 		       published_at, fetched_at,
 		       COALESCE(algo_interest,0), COALESCE(algo_scored_at,0)
 		FROM feed_items_resolved
-		WHERE tweet_id = ?
+		WHERE tweet_id = $1
 	`, tweetID).Scan(
 		&item.TweetID, &item.SourceHandle, &item.AuthorHandle,
 		&item.CanonicalTweetID, &item.QuoteTweetID, &item.ContentHash,
@@ -225,7 +225,7 @@ func queryFeedDebugSources(conn *sql.DB, tweetID string) ([]feedDebugSourceEntry
 		       COALESCE(fs.created_at,0), COALESCE(fs.updated_at,0)
 		FROM feed_item_sources fis
 		LEFT JOIN feed_sources fs ON fs.source_id = fis.source_id
-		WHERE fis.tweet_id = ?
+		WHERE fis.tweet_id = $1
 		ORDER BY fis.last_seen_at DESC, fis.source_id
 	`, tweetID)
 	if err != nil {
@@ -260,7 +260,7 @@ func queryFeedDebugRankSnapshot(conn *sql.DB, tweetID string) (feedDebugRankSnap
 		SELECT rank_position, base_score, decay_factor, freshness_bonus,
 		       jitter, diversity_demoted_by, final_score, computed_at
 		FROM feed_rank_snapshot
-		WHERE tweet_id = ?
+		WHERE tweet_id = $1
 	`, tweetID).Scan(
 		&rank.RankPosition, &rank.BaseScore, &rank.DecayFactor,
 		&rank.FreshnessBonus, &rank.Jitter, &rank.DiversityDemotedBy,
@@ -285,18 +285,18 @@ func queryFeedDebugViewerState(conn *sql.DB, username string, item feedDebugItem
 		SourceChannelID: sourceChannelID,
 	}
 
-	seenAt, err := queryOptionalInt64(conn, `SELECT seen_at FROM feed_seen WHERE tweet_id = ?`, item.TweetID)
+	seenAt, err := queryOptionalInt64(conn, `SELECT seen_at FROM feed_seen WHERE tweet_id = $1`, item.TweetID)
 	if err != nil {
 		return viewer, err
 	}
 	viewer.SeenAtMs = seenAt
 	if authorChannelID != "" {
-		viewer.AuthorFollowedAt, err = queryOptionalInt64(conn, `SELECT followed_at FROM channel_follows WHERE channel_id = ?`, authorChannelID)
+		viewer.AuthorFollowedAt, err = queryOptionalInt64(conn, `SELECT followed_at FROM channel_follows WHERE channel_id = $1`, authorChannelID)
 		if err != nil {
 			return viewer, err
 		}
 		viewer.AuthorIsFollowed = viewer.AuthorFollowedAt != nil
-		viewer.AuthorStarredAt, err = queryOptionalInt64(conn, `SELECT starred_at FROM channel_stars WHERE channel_id = ?`, authorChannelID)
+		viewer.AuthorStarredAt, err = queryOptionalInt64(conn, `SELECT starred_at FROM channel_stars WHERE channel_id = $1`, authorChannelID)
 		if err != nil {
 			return viewer, err
 		}
@@ -307,12 +307,12 @@ func queryFeedDebugViewerState(conn *sql.DB, username string, item feedDebugItem
 		}
 	}
 	if sourceChannelID != "" {
-		viewer.SourceFollowedAt, err = queryOptionalInt64(conn, `SELECT followed_at FROM channel_follows WHERE channel_id = ?`, sourceChannelID)
+		viewer.SourceFollowedAt, err = queryOptionalInt64(conn, `SELECT followed_at FROM channel_follows WHERE channel_id = $1`, sourceChannelID)
 		if err != nil {
 			return viewer, err
 		}
 		viewer.SourceIsFollowed = viewer.SourceFollowedAt != nil
-		viewer.SourceStarredAt, err = queryOptionalInt64(conn, `SELECT starred_at FROM channel_stars WHERE channel_id = ?`, sourceChannelID)
+		viewer.SourceStarredAt, err = queryOptionalInt64(conn, `SELECT starred_at FROM channel_stars WHERE channel_id = $1`, sourceChannelID)
 		if err != nil {
 			return viewer, err
 		}
@@ -339,7 +339,7 @@ func queryFeedDebugIngestState(conn *sql.DB, candidates []string) (*feedDebugIng
 			       COALESCE(last_error,''), last_http_status,
 			       COALESCE(avg_latency_ms,0), updated_at
 			FROM ingest_state
-			WHERE handle = ?
+			WHERE handle = $1
 		`, candidate).Scan(
 			&state.Handle, &state.FailCount, &state.NextRetryAtSec,
 			&state.LastSuccessAtSec, &state.LastAttemptAtSec,
@@ -367,8 +367,8 @@ func queryFeedDebugRelatedSeen(conn *sql.DB, item feedDebugItem) ([]feedDebugRel
 		SELECT fs.tweet_id, fs.seen_at
 		FROM feed_seen fs
 		JOIN feed_items fi ON fi.tweet_id = fs.tweet_id
-		WHERE fi.content_hash = ?
-		  AND fs.tweet_id != ?
+		WHERE fi.content_hash = $1
+		  AND fs.tweet_id != $2
 		ORDER BY fs.seen_at DESC, fs.tweet_id
 		LIMIT 10
 	`, item.ContentHash, item.TweetID)
@@ -411,7 +411,7 @@ func queryMutedAccountAt(conn *sql.DB, handle string) (*int64, error) {
 		SELECT mc.muted_at
 		FROM muted_channels mc
 		JOIN channel_profiles cp ON cp.channel_id = mc.channel_id
-		WHERE LOWER(LTRIM(TRIM(COALESCE(cp.handle, '')), '@')) = ?
+		WHERE LOWER(LTRIM(TRIM(COALESCE(cp.handle, '')), '@')) = $1
 		LIMIT 1
 	`, normalized)
 }

@@ -127,7 +127,7 @@ func TestRepairBookmarkVideoThumbnailsQueuesSourceLessDerivedWork(t *testing.T) 
 	const ownerID = "sample_imported_bookmark"
 	if err := d.ExecRaw(`
 		INSERT INTO bookmarks (video_id, category_id, bookmarked_at)
-		VALUES (?, 0, 1)
+		VALUES ($1, 0, 1)
 	`, ownerID); err != nil {
 		t.Fatal(err)
 	}
@@ -258,16 +258,15 @@ func TestContentAssetClaimPlanUsesOnlyDurableQueueIndexes(t *testing.T) {
 	d := openFreshTestDB(t)
 	opts := normalizeLeaseOptions(LeaseOptions{Owner: "worker", NowMs: 1000, LeaseMs: 1000, Limit: 1}, AssetStateQueued, AssetStateDownloading)
 	query, args := contentAssetClaimQuery(opts, true, DownloadLaneCurrent)
-	rows, err := d.conn.Query("EXPLAIN QUERY PLAN "+query, args...)
+	rows, err := d.conn.Query(bind("EXPLAIN "+query), args...)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = rows.Close() }()
 	var details []string
 	for rows.Next() {
-		var id, parent, unused int
 		var detail string
-		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+		if err := rows.Scan(&detail); err != nil {
 			t.Fatal(err)
 		}
 		details = append(details, detail)
@@ -276,11 +275,11 @@ func TestContentAssetClaimPlanUsesOnlyDurableQueueIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := strings.Join(details, "\n")
-	if !strings.Contains(plan, "idx_media_objects_claim (download_lane=? AND next_attempt_at_ms<?)") ||
+	if !strings.Contains(plan, "idx_media_objects_claim") ||
 		!strings.Contains(plan, "idx_assets_desired_object") {
 		t.Fatalf("claim plan = %s", plan)
 	}
-	if strings.Contains(plan, "TEMP B-TREE") {
+	if strings.Contains(plan, "Sort") {
 		t.Fatalf("claim plan sorts the queue = %s", plan)
 	}
 }
@@ -437,7 +436,7 @@ func TestPrunedXContentStopsQueueWorkWithoutRetiringSharedDemand(t *testing.T) {
 		SET job_state = 'downloading', attempts = 4,
 		    last_error_kind = 'temporary', last_error = 'retrying',
 		    lease_owner = 'sample-worker', lease_until_ms = 9000
-		WHERE object_key = ?
+		WHERE object_key = $1
 	`, "source:"+sourceURL); err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +462,7 @@ func TestPrunedXContentStopsQueueWorkWithoutRetiringSharedDemand(t *testing.T) {
 	if err := d.QueryRow(`
 		SELECT job_state, attempts, next_attempt_at_ms, last_error_kind, last_error,
 		       lease_owner, lease_until_ms
-		FROM media_objects WHERE object_key = ?
+		FROM media_objects WHERE object_key = $1
 	`, "source:"+sourceURL).Scan(&state, &attempts, &nextAttempt, &kind, &message, &leaseOwner, &leaseUntil); err != nil {
 		t.Fatal(err)
 	}

@@ -35,8 +35,16 @@ function Stop-Igloo {
         } | ForEach-Object {
             $process = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
             if ($process) {
-                $process | Stop-Process -Force
-                $process.WaitForExit()
+                if ($_.Name -in @('igloo.exe', 'igloo-user.exe')) {
+                    $stop = [Threading.EventWaitHandle]::OpenExisting('Local\Igloo.Server.Stop')
+                    try { $stop.Set() | Out-Null } finally { $stop.Dispose() }
+                    if (-not $process.WaitForExit(60000)) {
+                        throw 'Igloo has not finished shutting down. See the server logs.'
+                    }
+                } else {
+                    $process | Stop-Process -Force
+                    $process.WaitForExit()
+                }
                 $process.Dispose()
             }
         }
@@ -96,6 +104,7 @@ try {
                 -Direction Inbound -Action Allow -Protocol $protocol -LocalPort 5001 `
                 -Profile Private -RemoteAddress LocalSubnet | Out-Null
         }
+        Invoke-CheckedProcess (Join-Path $InstallDirectory 'app\current\igloo-user.exe') 'migrate-sqlite'
         if ($RunMode -eq 0) { Start-Service -Name Igloo }
     } else {
         Stop-Igloo

@@ -65,6 +65,7 @@ exit 42
 	writeExecutable(t, filepath.Join(bin, "go"), `#!/usr/bin/env bash
 echo "go $*" >>"$DRIFT_TEST_LOG"
 case "$*" in
+  "run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate") exit 0 ;;
   "run github.com/a-h/templ/cmd/templ@v0.3.1020 generate") exit 0 ;;
   "run ./cmd/igloo-assets")
     mkdir -p static/js/dist

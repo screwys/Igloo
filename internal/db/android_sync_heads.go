@@ -125,7 +125,7 @@ func touchAndroidSyncHeadTx(tx *sql.Tx, ownerKind, ownerID string) error {
 	}
 	if _, err := tx.Exec(`
 		INSERT INTO android_sync_heads (owner_kind, owner_id, revision)
-		VALUES (?, ?, (SELECT revision FROM android_sync_clock WHERE id = 1))
+		VALUES ($1, $2, (SELECT revision FROM android_sync_clock WHERE id = 1))
 		ON CONFLICT(owner_kind, owner_id) DO UPDATE SET
 			revision = excluded.revision
 	`, ownerKind, ownerID); err != nil {

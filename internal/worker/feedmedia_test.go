@@ -222,8 +222,8 @@ func claimedQueuedAsset(t *testing.T, asset db.Asset) (*db.DB, *Manager, db.Asse
 	}
 	if asset.Attempts > 0 {
 		if err := d.ExecRaw(`
-			UPDATE media_objects SET attempts = ?
-			WHERE object_id = (SELECT desired_object_id FROM assets WHERE asset_id = ?)
+			UPDATE media_objects SET attempts = $1
+			WHERE object_id = (SELECT desired_object_id FROM assets WHERE asset_id = $2)
 		`, asset.Attempts, asset.AssetID); err != nil {
 			t.Fatalf("set queued test attempts: %v", err)
 		}

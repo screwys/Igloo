@@ -8,9 +8,9 @@ import (
 
 func TestUpdateAlgoInterestStoresScoredAtInMilliseconds(t *testing.T) {
 	d := openWritableTestDB(t)
-	if _, err := d.conn.Exec(`INSERT INTO feed_items
+	if _, err := d.conn.Exec(bind(`INSERT INTO feed_items
 			(tweet_id, channel_id, body_text, published_at, algo_scored_at)
-			VALUES ('score_ms', 'twitter_sample_author', 'body', ?, 0)`,
+			VALUES ('score_ms', 'twitter_sample_author', 'body', ?, 0)`),
 		time.Now().UnixMilli(),
 	); err != nil {
 		t.Fatalf("insert feed item: %v", err)
@@ -81,9 +81,9 @@ func TestRankCandidatesExcludeGhostRows(t *testing.T) {
 		{id: "visible_item", score: 10},
 		{id: "context_parent", isGhost: 1, score: 100},
 	} {
-		if _, err := d.conn.Exec(`INSERT INTO feed_items
+		if _, err := d.conn.Exec(bind(`INSERT INTO feed_items
 			(tweet_id, channel_id, body_text, is_ghost, published_at, fetched_at, algo_interest, algo_scored_at)
-			VALUES (?, 'twitter_sample_author', 'body', ?, ?, ?, ?, 1)`,
+			VALUES (?, 'twitter_sample_author', 'body', ?, ?, ?, ?, 1)`),
 			row.id, row.isGhost, publishedAt, publishedAt, row.score,
 		); err != nil {
 			t.Fatalf("insert %s: %v", row.id, err)

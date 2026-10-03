@@ -1,15 +1,42 @@
 set default-list
 
+postgres_bin := ```
+    if [ -n "${IGLOO_POSTGRES_BIN:-}" ]; then
+      printf '%s' "$IGLOO_POSTGRES_BIN"
+    else
+      for directory in "${IGLOO_RUNTIME_DIR:-$PWD/runtime/current}/postgresql/bin" "$PWD/bin/runtime/current/postgresql/bin" "${HOMEBREW_PREFIX:-/opt/homebrew}/opt/postgresql@18/bin" /usr/lib/postgresql/18/bin /usr/pgsql-18/bin /home/linuxbrew/.linuxbrew/opt/postgresql@18/bin /usr/local/opt/postgresql@18/bin /opt/local/lib/postgresql18/bin /Applications/Postgres.app/Contents/Versions/18/bin; do
+        if [ -x "$directory/initdb" ]; then
+          printf '%s' "$directory"
+          exit 0
+        fi
+      done
+      if command -v initdb >/dev/null 2>&1; then
+        dirname "$(command -v initdb)"
+      fi
+    fi
+    ```
+
 # Build the server binary and generated web assets without restarting it.
 build:
+    #!/usr/bin/env bash
+    set -euo pipefail
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/build.sh
+
+# Stop the local service, migrate its SQLite database, and restart it.
+migrate-database:
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go build -o bin/igloo ./cmd/igloo
+    sh scripts/dev/migrate-database.sh
 
 # Build the server and restart the local service.
 restart:
+    #!/usr/bin/env bash
+    set -euo pipefail
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/build.sh restart
 
 # Build the server, reload its systemd unit, and restart the local service.
 restart-daemon:
+    #!/usr/bin/env bash
+    set -euo pipefail
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/build.sh full
 
 # Build server assets and install/relaunch the Android app on a connected device.
@@ -24,18 +51,26 @@ restart-and-build-android:
 
 # Run the proportional local gate for files changed from HEAD.
 test:
-    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/test-changed.sh
+    IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }} GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/test-changed.sh
 
 # Run every repository gate; stale generated files may be regenerated before the check.
 test-full:
-    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/test-full.sh
+    IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }} GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/test-full.sh
 
 # Run the Go test suite only.
 test-go:
-    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test ./...
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
+    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just test-go; fi
+    GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test -timeout 30m ./...
 
 # Run the Go test suite with the race detector.
 test-go-race:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
+    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just test-go-race; fi
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test -race -timeout 30m ./...
 
 # Run the pinned Go linters and formatting checks.
@@ -48,7 +83,11 @@ fmt-go:
 
 # Run Go tests for one package, optionally matching a test-name regexp.
 test-go-package package filter="":
-    if [ -n {{ quote(filter) }} ]; then GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test {{ quote(package) }} -run {{ quote(filter) }} -count=1; else GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test {{ quote(package) }}; fi
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
+    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just test-go-package {{ quote(package) }} {{ quote(filter) }}; fi
+    if [ -n {{ quote(filter) }} ]; then GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test -timeout 30m {{ quote(package) }} -run {{ quote(filter) }} -count=1; else GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test -timeout 30m {{ quote(package) }}; fi
 
 # Run Android JVM tests, optionally for one class: just test-android com.example.Test
 test-android filter="":
@@ -78,9 +117,13 @@ android-compile:
 
 # Run the throwaway-server web test.
 test-web:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
+    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just test-web; fi
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/web-test.sh
 
-# Regenerate templ and bundled assets.
+# Regenerate sqlc bindings, templ, and bundled assets.
 check-drift:
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/drift-check.sh --write
 
@@ -92,12 +135,20 @@ check-nix-deps revision="":
 build-downloaders:
     nix build --impure --refresh .#yt-dlp .#gallery-dl --no-link --print-out-paths
 
-# Validate the SQLite schema and Android Room mirror contract.
+# Validate the native schema, legacy archive, and Android Room contracts.
 check-schema:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
+    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just check-schema; fi
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/schema-check.sh
 
 # Regenerate the server schema snapshot.
 update-schema-snapshot:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
+    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just update-schema-snapshot; fi
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test ./internal/db -run TestSchemaSnapshot -update -count=1
 
 # Build an image and exercise its basic container runtime contract.

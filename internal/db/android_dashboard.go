@@ -64,7 +64,7 @@ func (db *DB) RecordAndroidSyncHealth(cursor string, reportedAtMs int64, payload
 			INSERT INTO android_sync_health_reports (
 				cursor, reported_at_ms, payload_json, verified_assets,
 				pending_assets, missing_assets, total_assets, verified_bytes
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		`, cursor, reportedAtMs, string(payload), verifiedAssets, pendingAssets, missingAssets, totalAssets, verifiedBytes)
 		return err
 	})

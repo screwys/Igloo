@@ -49,7 +49,7 @@ func TestRefreshThreadPreservesCapturedContentAndUpdatesPoll(t *testing.T) {
 	}
 	for owner, want := range map[string]string{"100": "https://pbs.twimg.com/media/captured.jpg", "200": "https://pbs.twimg.com/media/quoted.jpg"} {
 		var source string
-		if err := d.QueryRow(`SELECT desired.source_url FROM assets a JOIN media_objects desired ON desired.object_id = a.desired_object_id WHERE a.owner_kind='tweet' AND a.owner_id=? AND a.asset_kind='post_media' AND a.media_index=0`, owner).Scan(&source); err != nil {
+		if err := d.QueryRow(`SELECT desired.source_url FROM assets a JOIN media_objects desired ON desired.object_id = a.desired_object_id WHERE a.owner_kind='tweet' AND a.owner_id=$1 AND a.asset_kind='post_media' AND a.media_index=0`, owner).Scan(&source); err != nil {
 			t.Fatal(err)
 		}
 		if source != want {

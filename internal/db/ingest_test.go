@@ -366,7 +366,7 @@ func TestResetExpiredIngestBackoffKeepsActiveBackoff(t *testing.T) {
 		t.Fatalf("RecordIngestFailure expired: %v", err)
 	}
 	_, err := d.conn.Exec(
-		"UPDATE ingest_state SET next_retry_at = ?, fail_count = 3 WHERE handle = ?",
+		bind("UPDATE ingest_state SET next_retry_at = ?, fail_count = 3 WHERE handle = ?"),
 		float64(time.Now().Add(-time.Minute).Unix()),
 		expired,
 	)

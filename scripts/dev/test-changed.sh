@@ -42,19 +42,19 @@ declare -a node_tests=()
 
 for path in "${changed[@]}"; do
   case "$path" in
-    *.go|*.templ|go.mod|go.sum|.golangci.yml|scripts/dev/lint-go.sh|scripts/dev/go-tool-versions.sh|scripts/dev/test-changed.sh)
+    *.go|*.templ|go.mod|go.sum|sqlc.yaml|internal/db/queries/*|internal/db/postgres/*|.golangci.yml|scripts/dev/lint-go.sh|scripts/dev/go-tool-versions.sh|scripts/dev/test-changed.sh)
       go_changed=1
       ;;
   esac
 
   case "$path" in
-    internal/db/*.go|internal/model/*.go|internal/web/*.go)
+    internal/db/*.go|internal/db/queries/*|internal/db/postgres/*|sqlc.yaml|internal/model/*.go|internal/web/*.go)
       contract_changed=1
       ;;
   esac
 
   case "$path" in
-    *.templ|internal/components/*|static/js/src/*|static/style.css|locales/*)
+    sqlc.yaml|internal/db/queries/*|internal/db/postgres/*|internal/db/query/*|*.templ|internal/components/*|static/js/src/*|static/style.css|locales/*)
       drift_changed=1
       ;;
   esac
@@ -101,6 +101,10 @@ if [[ "${IGLOO_TEST_SELECTION_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 
+if [[ "$go_changed" -eq 1 || "$web_changed" -eq 1 ]] && [[ -z "${IGLOO_POSTGRES_BIN:-}" ]] && ! command -v initdb >/dev/null 2>&1 && command -v nix >/dev/null 2>&1; then
+  exec nix shell --impure .#postgresql --command bash "$0" "$@"
+fi
+
 if [[ "${#shell_files[@]}" -gt 0 ]]; then
   echo "[shell] checking changed scripts"
   bash -n "${shell_files[@]}"
@@ -124,7 +128,7 @@ fi
 
 if [[ "$go_changed" -eq 1 ]]; then
   echo "[go] running all Go tests"
-  go test ./...
+  go test -timeout 30m ./...
 
   . scripts/dev/go-tool-versions.sh
   echo "[go] running repo-specific static checks"

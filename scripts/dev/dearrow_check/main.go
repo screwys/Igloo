@@ -2,18 +2,18 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/screwys/igloo/internal/components"
+	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
 )
 
 func main() {
-	home, _ := os.UserHomeDir()
-	dataDir := filepath.Join(home, ".local", "share", "igloo")
-	dbPath := filepath.Join(dataDir, "igloo.db")
-	d, err := db.OpenReadOnly(dbPath, dataDir)
+	cfg := config.Load()
+	if cfg.ConfigError != nil {
+		panic(cfg.ConfigError)
+	}
+	d, err := db.OpenReadOnlyLayout(cfg.Storage)
 	if err != nil {
 		panic(err)
 	}

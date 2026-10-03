@@ -21,7 +21,7 @@ func TestQuickDownloadQueuesDurableWork(t *testing.T) {
 		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	var platform, status string
-	if err := srv.db.QueryRow(`SELECT platform, status FROM temp_download_queue WHERE url = ?`, rawURL).Scan(&platform, &status); err != nil {
+	if err := srv.db.QueryRow(`SELECT platform, status FROM temp_download_queue WHERE url = $1`, rawURL).Scan(&platform, &status); err != nil {
 		t.Fatal(err)
 	}
 	if platform != "youtube" || status != "pending" {

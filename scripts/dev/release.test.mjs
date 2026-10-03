@@ -451,7 +451,7 @@ test("CI covers pull requests and pushes to main with static, Go, runtime, and A
   assert.match(workflow, /\n  go:\n/);
   assert.match(workflow, /\n  runtime:\n/);
   assert.match(workflow, /\n  android:\n/);
-  assert.match(workflow, /run: go test \.\/\.\.\./);
+  assert.match(workflow, /run: go test -timeout 30m \.\/\.\.\./);
   assert.match(workflow, /run: scripts\/dev\/web-test\.sh/);
   assert.match(workflow, /DeterminateSystems\/determinate-nix-action@[0-9a-f]{40}/);
   assert.match(workflow, /DeterminateSystems\/magic-nix-cache-action@[0-9a-f]{40}/);

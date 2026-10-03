@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/subscribe"
 )
 
@@ -87,7 +89,7 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 	created := true
 	if err := s.db.AddChannel(ch); err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint") {
+		if errors.Is(err, db.ErrChannelExists) {
 			if !s.db.IsChannelFollowed(ch.ChannelID) {
 				if followErr := s.db.FollowChannel(ch.ChannelID); followErr != nil {
 					slog.Error("FollowChannel existing", "channel", ch.ChannelID, "err", followErr)

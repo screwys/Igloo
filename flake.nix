@@ -174,7 +174,7 @@
             version = "0.0.0-${revision}";
 
             src = source;
-            vendorHash = "sha256-R0+sAkFinKHni4PrpfjO4DdxZB45BLbj2SSoiArm2pM=";
+            vendorHash = "sha256-2lG3Bv4dlQOgxIpF2e8UTTMwFhbEvEPb6R+LWfz/Ydk=";
 
             subPackages = [
               "cmd/igloo"
@@ -185,6 +185,8 @@
               "-s"
               "-w"
             ];
+
+            nativeBuildInputs = [ pkgs.makeWrapper ];
 
             postBuild = ''
               go run ./cmd/igloo-assets
@@ -198,6 +200,8 @@
               mv "$out/bin/adduser" "$out/bin/igloo-adduser"
               mkdir -p "$out/share/igloo"
               cp -R static locales "$out/share/igloo/"
+              wrapProgram "$out/bin/igloo" --prefix PATH : "${lib.getBin pkgs.postgresql_18}/bin"
+              wrapProgram "$out/bin/igloo-adduser" --prefix PATH : "${lib.getBin pkgs.postgresql_18}/bin"
             '';
 
             doCheck = false;
@@ -219,6 +223,7 @@
               (lib.getBin pkgs.ffmpeg-headless)
               galleryDl
               ytDlp
+              (lib.getBin pkgs.postgresql_18)
             ];
             pathsToLink = [
               "/bin"
@@ -227,6 +232,10 @@
             ];
           };
 
+          containerEntrypoint = pkgs.writeShellScriptBin "igloo-entrypoint" (
+            builtins.readFile ./scripts/container-entrypoint.sh
+          );
+
           container = pkgs.dockerTools.buildLayeredImage {
             name = containerImageName;
             tag = "latest";
@@ -234,7 +243,14 @@
 
             contents = [
               runtimeEnv
-              pkgs.dockerTools.fakeNss
+              containerEntrypoint
+              (pkgs.dockerTools.fakeNss.override {
+                extraPasswdLines = [
+                  "igloo:x:10001:10001:Igloo:/tmp:/bin/sh"
+                  "postgres:x:999:999:PostgreSQL:/var/empty:/bin/sh"
+                ];
+                extraGroupLines = [ "igloo:x:10001:" "postgres:x:999:" ];
+              })
             ];
 
             extraCommands = ''
@@ -253,6 +269,7 @@
             '';
 
             config = {
+              Entrypoint = [ "${containerEntrypoint}/bin/igloo-entrypoint" ];
               Cmd = [ "/usr/local/bin/igloo" ];
               Env = [
                 "PATH=/usr/local/bin:${runtimeEnv}/bin:/bin"
@@ -280,6 +297,7 @@
         {
           default = igloo;
           inherit container igloo;
+          postgresql = lib.getBin pkgs.postgresql_18;
           gallery-dl = galleryDl;
           yt-dlp = ytDlp;
         }
@@ -318,6 +336,7 @@
               (pkgs.lib.getBin pkgs.ffmpeg-headless)
               self.packages.${system}.gallery-dl
               self.packages.${system}.yt-dlp
+              (pkgs.lib.getBin pkgs.postgresql_18)
             ];
           };
         }

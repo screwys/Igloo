@@ -26,7 +26,8 @@ func TestMutationResponseCommitsBeforeQueuedFeedOrderInvalidation(t *testing.T) 
 	if status != http.StatusOK {
 		t.Fatalf("like status = %d body %v", status, body)
 	}
-	var liked, scoredAt int
+	var liked bool
+	var scoredAt int
 	if err := srv.db.QueryRow(`
 		SELECT EXISTS(SELECT 1 FROM feed_likes WHERE tweet_id = 'sample_queued_like'),
 		       algo_scored_at
@@ -34,7 +35,7 @@ func TestMutationResponseCommitsBeforeQueuedFeedOrderInvalidation(t *testing.T) 
 	`).Scan(&liked, &scoredAt); err != nil {
 		t.Fatal(err)
 	}
-	if liked != 1 {
+	if !liked {
 		t.Fatal("like was not committed before the response")
 	}
 	if revision := mutationOwnerRevision(t, srv, "feed_like", "sample_queued_like"); revision <= 0 {
@@ -279,7 +280,7 @@ func mutationOwnerRevision(t *testing.T, srv *testServer, ownerKind, ownerID str
 	t.Helper()
 	var revision int64
 	if err := srv.db.QueryRow(`
-		SELECT revision FROM android_sync_heads WHERE owner_kind = ? AND owner_id = ?
+		SELECT revision FROM android_sync_heads WHERE owner_kind = $1 AND owner_id = $2
 	`, ownerKind, ownerID).Scan(&revision); err != nil {
 		t.Fatal(err)
 	}

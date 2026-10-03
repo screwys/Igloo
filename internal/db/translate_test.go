@@ -190,7 +190,7 @@ func TestReusableTranslationQueriesUseIdentityIndexes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rows, err := d.conn.Query("EXPLAIN QUERY PLAN "+tt.query, tt.args...)
+			rows, err := d.conn.Query(bind("EXPLAIN "+tt.query), tt.args...)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -198,9 +198,8 @@ func TestReusableTranslationQueriesUseIdentityIndexes(t *testing.T) {
 
 			var details []string
 			for rows.Next() {
-				var id, parent, unused int
 				var detail string
-				if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+				if err := rows.Scan(&detail); err != nil {
 					t.Fatal(err)
 				}
 				details = append(details, detail)
@@ -210,11 +209,11 @@ func TestReusableTranslationQueriesUseIdentityIndexes(t *testing.T) {
 			}
 			plan := strings.Join(details, "\n")
 			for _, index := range tt.indexes {
-				if !strings.Contains(plan, "USING INDEX "+index) {
+				if !strings.Contains(plan, ""+index) {
 					t.Fatalf("reuse plan does not use %s:\n%s", index, plan)
 				}
 			}
-			if strings.Contains(plan, "SCAN tr") {
+			if strings.Contains(plan, "Seq Scan on tweet_translations tr") {
 				t.Fatalf("reuse plan scans the translation cache:\n%s", plan)
 			}
 		})
@@ -307,23 +306,22 @@ func TestTranslationJobsClaimAndComplete(t *testing.T) {
 
 func TestTranslationJobClaimUsesReadyOrderIndex(t *testing.T) {
 	d := openWritableTestDB(t)
-	rows, err := d.conn.Query(`EXPLAIN QUERY PLAN
+	rows, err := d.conn.Query(bind(`EXPLAIN
 		SELECT tweet_id, field
-		FROM translation_jobs INDEXED BY idx_translation_jobs_ready
+		FROM translation_jobs
 		WHERE target_lang = ?
 		  AND status = 'queued'
 		  AND next_attempt_at <= ?
 		ORDER BY priority DESC, updated_at ASC, tweet_id ASC, field ASC
-		LIMIT ?`, "en", int64(1000), 10)
+		LIMIT ?`), "en", int64(1000), 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = rows.Close() }()
 	var details []string
 	for rows.Next() {
-		var id, parent, unused int
 		var detail string
-		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+		if err := rows.Scan(&detail); err != nil {
 			t.Fatal(err)
 		}
 		details = append(details, detail)
@@ -332,10 +330,10 @@ func TestTranslationJobClaimUsesReadyOrderIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := strings.Join(details, "\n")
-	if !strings.Contains(plan, "USING COVERING INDEX idx_translation_jobs_ready") {
+	if !strings.Contains(plan, "idx_translation_jobs_ready") {
 		t.Fatalf("translation claim plan = %s", plan)
 	}
-	if strings.Contains(plan, "TEMP B-TREE") {
+	if strings.Contains(plan, "Sort") {
 		t.Fatalf("translation claim sorts outside its queue index = %s", plan)
 	}
 }
@@ -371,7 +369,7 @@ func TestUpsertFeedItemsUnchangedTranslationSourceKeepsCompletedJob(t *testing.T
 		SELECT tj.status, tj.source_hash, tj.priority, f.views
 		FROM translation_jobs tj
 		JOIN feed_items f ON f.tweet_id = tj.tweet_id
-		WHERE tj.tweet_id = ? AND tj.field = 'body' AND tj.target_lang = 'en'
+		WHERE tj.tweet_id = $1 AND tj.field = 'body' AND tj.target_lang = 'en'
 	`, item.TweetID).Scan(&status, &sourceHash, &priority, &views); err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +419,7 @@ func TestUpsertFeedItemsChangedTranslationSourceRequeuesJob(t *testing.T) {
 			SELECT status, source_hash, priority, attempts, next_attempt_at,
 			       last_error_kind, last_error
 			FROM translation_jobs
-			WHERE tweet_id = ? AND field = 'body' AND target_lang = 'en'
+			WHERE tweet_id = $1 AND field = 'body' AND target_lang = 'en'
 		`, item.TweetID).Scan(
 			&status, &sourceHash, &priority, &attempts, &nextAttempt, &errorKind, &errorText,
 		); err != nil {

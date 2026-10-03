@@ -319,7 +319,7 @@ func (db *DB) xRetainedMediaOwnerSetForFeedDays(nowMs int64, followedOverride in
 			SELECT fi.tweet_id, COALESCE(fi.quote_tweet_id, '') AS quote_tweet_id,
 			       fi.reposter_channel_id, fi.source_channel_id, fi.channel_id, fi.published_at
 			FROM asset_owners ao
-			JOIN feed_items fi INDEXED BY idx_feed_items_quote ON fi.quote_tweet_id = ao.owner_id
+			JOIN feed_items fi ON fi.quote_tweet_id = ao.owner_id
 			WHERE fi.quote_tweet_id IS NOT NULL AND fi.quote_tweet_id != ''
 		), followed_base AS MATERIALIZED (
 			SELECT ci.tweet_id, ci.quote_tweet_id,
@@ -328,7 +328,7 @@ func (db *DB) xRetainedMediaOwnerSetForFeedDays(nowMs int64, followedOverride in
 			       CASE WHEN EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = ci.tweet_id)
 			              OR EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = ci.tweet_id)
 			            THEN 1 ELSE 0 END AS protected,
-			       CASE WHEN ? > 0 THEN ?
+			       CASE WHEN ?::bigint > 0 THEN ?
 			            WHEN COALESCE(cs.media_download_limit, 0) > 0 THEN cs.media_download_limit
 			            ELSE ? END AS retention_limit
 			FROM candidate_items ci
@@ -407,7 +407,7 @@ func (db *DB) addCandidateServerXMediaOwners(retained, candidates map[string]str
 	sourceIDs := map[string]struct{}{}
 	for _, chunk := range stringChunks(sortedKeys(candidates), 300) {
 		query, args := candidateServerXMediaParentsQuery(chunk)
-		rows, err := db.conn.Query(query, args...)
+		rows, err := db.conn.Query(bind(query), args...)
 		if err != nil {
 			return err
 		}
@@ -431,10 +431,10 @@ func (db *DB) addCandidateServerXMediaOwners(retained, candidates map[string]str
 
 	followed := map[string]struct{}{}
 	for _, chunk := range stringChunks(sortedKeys(sourceIDs), 400) {
-		rows, err := db.conn.Query(`
+		rows, err := db.conn.Query(bind(`
 			SELECT channel_id FROM channel_follows
 			WHERE channel_id IN (`+placeholders(len(chunk))+`)
-		`, stringsToAny(chunk)...)
+		`), stringsToAny(chunk)...)
 		if err != nil {
 			return err
 		}
@@ -471,12 +471,12 @@ func (db *DB) addCandidateServerXMediaOwners(retained, candidates map[string]str
 
 	feedSourceIDs := map[string]struct{}{}
 	for _, chunk := range stringChunks(sortedKeys(parentIDs), 400) {
-		rows, err := db.conn.Query(`
+		rows, err := db.conn.Query(bind(`
 			SELECT DISTINCT fis.source_id
 			FROM feed_item_sources fis
 			JOIN feed_sources fs ON fs.source_id = fis.source_id AND fs.enabled = 1
 			WHERE fis.tweet_id IN (`+placeholders(len(chunk))+`)
-		`, stringsToAny(chunk)...)
+		`), stringsToAny(chunk)...)
 		if err != nil {
 			return err
 		}
@@ -507,13 +507,13 @@ func (db *DB) addCandidateServerXMediaOwners(retained, candidates map[string]str
 	}
 	for _, chunk := range stringChunks(sortedKeys(parentIDs), 400) {
 		args := stringsToAny(chunk)
-		rows, err := db.conn.Query(`
+		rows, err := db.conn.Query(bind(`
 			SELECT video_id FROM bookmarks
 			WHERE video_id IN (`+placeholders(len(chunk))+`)
 			UNION
 			SELECT tweet_id FROM feed_likes
 			WHERE tweet_id IN (`+placeholders(len(chunk))+`)
-		`, append(append([]any{}, args...), args...)...)
+		`), append(append([]any{}, args...), args...)...)
 		if err != nil {
 			return err
 		}
@@ -542,7 +542,7 @@ func (db *DB) addCandidateServerXMediaOwners(retained, candidates map[string]str
 	}
 	for _, chunk := range stringChunks(sortedKeys(candidates), 400) {
 		args := stringsToAny(chunk)
-		rows, err := db.conn.Query(`
+		rows, err := db.conn.Query(bind(`
 			SELECT video_id AS owner_id
 			FROM bookmarks
 			WHERE video_id IN (`+placeholders(len(chunk))+`)
@@ -557,7 +557,7 @@ func (db *DB) addCandidateServerXMediaOwners(retained, candidates map[string]str
 			  AND owner_id IN (`+placeholders(len(chunk))+`)
 			  AND asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 			  AND required_reason IN ('bookmark', 'like', 'manual')
-		`, append(append(append([]any{}, args...), args...), args...)...)
+		`), append(append(append([]any{}, args...), args...), args...)...)
 		if err != nil {
 			return err
 		}
@@ -590,7 +590,7 @@ func candidateServerXMediaParentsQuery(ownerIDs []string) (string, []any) {
 
 		SELECT tweet_id,
 		       COALESCE(NULLIF(reposter_channel_id, ''), NULLIF(source_channel_id, ''), channel_id)
-		FROM feed_items INDEXED BY idx_feed_items_quote
+		FROM feed_items
 		WHERE quote_tweet_id IS NOT NULL AND quote_tweet_id != ''
 		  AND quote_tweet_id IN (` + ids + `)`
 	return query, append(stringsToAny(ownerIDs), stringsToAny(ownerIDs)...)
@@ -709,10 +709,10 @@ func (db *DB) xRetentionLimit(source xRetentionSource, override int) (int, error
 
 const xMediaRetentionSourceItemsSQL = `
 	SELECT fi.tweet_id, fi.published_at
-	FROM feed_items fi INDEXED BY idx_feed_items_reposter_channel
+	FROM feed_items fi
 	WHERE fi.reposter_channel_id IS NOT NULL
 	  AND fi.reposter_channel_id != ''
-	  AND fi.reposter_channel_id = ?
+	  AND fi.reposter_channel_id = $1
 	  AND (
 	    COALESCE(fi.media_json, '') NOT IN ('', '[]')
 	    OR COALESCE(fi.quote_media_json, '') NOT IN ('', '[]')
@@ -722,9 +722,9 @@ const xMediaRetentionSourceItemsSQL = `
 	UNION ALL
 
 	SELECT fi.tweet_id, fi.published_at
-	FROM feed_items fi INDEXED BY idx_feed_items_source_channel
+	FROM feed_items fi
 	WHERE COALESCE(fi.reposter_channel_id, '') = ''
-	  AND fi.source_channel_id = ?
+	  AND fi.source_channel_id = $2
 	  AND (
 	    COALESCE(fi.media_json, '') NOT IN ('', '[]')
 	    OR COALESCE(fi.quote_media_json, '') NOT IN ('', '[]')
@@ -734,10 +734,10 @@ const xMediaRetentionSourceItemsSQL = `
 	UNION ALL
 
 	SELECT fi.tweet_id, fi.published_at
-	FROM feed_items fi INDEXED BY idx_feed_items_channel
+	FROM feed_items fi
 	WHERE COALESCE(fi.reposter_channel_id, '') = ''
 	  AND COALESCE(fi.source_channel_id, '') = ''
-	  AND fi.channel_id = ?
+	  AND fi.channel_id = $3
 	  AND (
 	    COALESCE(fi.media_json, '') NOT IN ('', '[]')
 	    OR COALESCE(fi.quote_media_json, '') NOT IN ('', '[]')
@@ -745,7 +745,7 @@ const xMediaRetentionSourceItemsSQL = `
 	  )`
 
 func (db *DB) xMediaRetentionItems(channelID string) ([]xRetentionItem, error) {
-	rows, err := db.conn.Query(`
+	rows, err := db.conn.Query(bind(`
 		WITH source_items AS (
 			`+xMediaRetentionSourceItemsSQL+`
 		)
@@ -755,7 +755,7 @@ func (db *DB) xMediaRetentionItems(channelID string) ([]xRetentionItem, error) {
 		            THEN 1 ELSE 0 END
 		FROM source_items si
 		ORDER BY COALESCE(si.published_at, 0) DESC, si.tweet_id DESC
-	`, channelID, channelID, channelID)
+	`), channelID, channelID, channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -780,7 +780,7 @@ func (db *DB) xMediaRetentionWindowAndBoundary(channelID string, limit, boundary
 	if boundary < 0 {
 		boundary = 0
 	}
-	rows, err := db.conn.Query(`
+	rows, err := db.conn.Query(bind(`
 		WITH source_items AS (
 			`+xMediaRetentionSourceItemsSQL+`
 		)
@@ -789,8 +789,8 @@ func (db *DB) xMediaRetentionWindowAndBoundary(channelID string, limit, boundary
 		WHERE NOT EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = si.tweet_id)
 		  AND NOT EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = si.tweet_id)
 		ORDER BY COALESCE(si.published_at, 0) DESC, si.tweet_id DESC
-		LIMIT ?
-	`, channelID, channelID, channelID, limit+boundary)
+		LIMIT $4::BIGINT
+	`), channelID, channelID, channelID, limit+boundary)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -813,7 +813,7 @@ func (db *DB) xMediaRetentionWindowAndBoundary(channelID string, limit, boundary
 func (db *DB) xContentAssetPaths(ownerIDs []string) (map[string]int64, int64, error) {
 	seen := map[string]int64{}
 	for _, chunk := range stringChunks(uniqueStrings(ownerIDs), 400) {
-		rows, err := db.conn.Query(`
+		rows, err := db.conn.Query(bind(`
 			SELECT mo.file_path, MAX(mo.size_bytes)
 			FROM assets a JOIN media_objects mo ON mo.object_id = a.object_id
 			WHERE a.owner_kind = 'tweet'
@@ -821,7 +821,7 @@ func (db *DB) xContentAssetPaths(ownerIDs []string) (map[string]int64, int64, er
 			  AND a.asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 			  AND a.lifecycle_state = 'active' AND mo.published_revision > 0 AND mo.file_path != ''
 			GROUP BY mo.file_path
-		`, stringsToAny(chunk)...)
+		`), stringsToAny(chunk)...)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -865,7 +865,7 @@ func (db *DB) removeXContentPaths(pathSizes map[string]int64, result *DataFileRe
 		var refs int
 		if err := db.conn.QueryRow(`
 			SELECT COUNT(*) FROM assets a JOIN media_objects mo ON mo.object_id = a.object_id
-			WHERE a.lifecycle_state = 'active' AND mo.file_path = ? AND mo.published_revision > 0
+			WHERE a.lifecycle_state = 'active' AND mo.file_path = $1 AND mo.published_revision > 0
 		`, path).Scan(&refs); err == nil && refs > 0 {
 			result.StillReferenced++
 		} else {
@@ -890,14 +890,14 @@ func (db *DB) markXContentAssetsPruned(ownerIDs []string, nowMs int64) (int, err
 }
 
 func markXContentAssetsPrunedTx(tx *sql.Tx, ownerIDs []string, nowMs int64) (int, error) {
-	res, err := tx.Exec(`
+	res, err := tx.Exec(bind(`
 		UPDATE assets
 		SET lifecycle_state = 'pruned', revision = revision + 1, updated_at_ms = ?
 		WHERE owner_kind = 'tweet'
 		  AND owner_id IN (`+placeholders(len(ownerIDs))+`)
 		  AND asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 		  AND lifecycle_state != 'pruned'
-	`, append([]any{nowMs}, stringsToAny(ownerIDs)...)...)
+	`), append([]any{nowMs}, stringsToAny(ownerIDs)...)...)
 	if err != nil {
 		return 0, err
 	}

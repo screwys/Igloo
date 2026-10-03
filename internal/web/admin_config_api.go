@@ -120,19 +120,13 @@ func (s *Server) handleConfigExportFull(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	runtimeManifest := s.fullExportRuntimeManifest()
-	dbSnapshotPath, cleanupSnapshot, err := s.createFullExportDatabaseSnapshot(r.Context())
+	dbSnapshotPath, cfg, cleanupSnapshot, err := s.createFullExportDatabaseSnapshot(r.Context())
 	if err != nil {
 		slog.Error("ExportFullData database snapshot", "err", err)
 		writeJSON(w, 500, map[string]any{"error": "export snapshot error"})
 		return
 	}
 	defer cleanupSnapshot()
-	cfg, err := exportFullDataSnapshot(dbSnapshotPath, s.cfg.Storage)
-	if err != nil {
-		slog.Error("ExportFullData snapshot", "err", err)
-		writeJSON(w, 500, map[string]any{"error": "export snapshot error"})
-		return
-	}
 
 	if dir := s.configuredExportDir(); dir != "" {
 		path, err := writeExportFile(r.Context(), s.cfg.Storage.MediaExecutor(), dir, "igloo-full", ".zip", func(dst io.Writer) error {
@@ -232,19 +226,9 @@ func writeFullExportZip(w io.Writer, cfg db.ConfigExport, databasePath string, r
 	return zw.Close()
 }
 
-func exportFullDataSnapshot(path string, layout storage.Layout) (db.ConfigExport, error) {
-	store, err := db.OpenReadOnlyLayout(path, layout)
-	if err != nil {
-		return db.ConfigExport{}, err
-	}
-	cfg, exportErr := store.ExportFullData()
-	closeErr := store.Close()
-	return cfg, errors.Join(exportErr, closeErr)
-}
-
-func (s *Server) createFullExportDatabaseSnapshot(ctx context.Context) (string, func(), error) {
+func (s *Server) createFullExportDatabaseSnapshot(ctx context.Context) (string, db.ConfigExport, func(), error) {
 	if s == nil || s.db == nil {
-		return "", func() {}, fmt.Errorf("database is unavailable")
+		return "", db.ConfigExport{}, func() {}, fmt.Errorf("database is unavailable")
 	}
 	dir := ""
 	if s.cfg != nil {
@@ -254,25 +238,30 @@ func (s *Server) createFullExportDatabaseSnapshot(ctx context.Context) (string, 
 		dir = os.TempDir()
 	}
 	if err := storage.EnsureDirectory(dir, 0o755); err != nil {
-		return "", func() {}, fmt.Errorf("create database snapshot dir: %w", err)
+		return "", db.ConfigExport{}, func() {}, fmt.Errorf("create database snapshot dir: %w", err)
 	}
-	tmp, err := os.CreateTemp(dir, ".igloo-full-export-db-*.db")
+	tmp, err := os.CreateTemp(dir, ".igloo-full-export-db-*.pgdump")
 	if err != nil {
-		return "", func() {}, fmt.Errorf("create database snapshot temp path: %w", err)
+		return "", db.ConfigExport{}, func() {}, fmt.Errorf("create database snapshot temp path: %w", err)
 	}
 	path := tmp.Name()
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(path)
-		return "", func() {}, fmt.Errorf("close database snapshot temp path: %w", err)
+		return "", db.ConfigExport{}, func() {}, fmt.Errorf("close database snapshot temp path: %w", err)
 	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return "", func() {}, fmt.Errorf("prepare database snapshot path: %w", err)
+		return "", db.ConfigExport{}, func() {}, fmt.Errorf("prepare database snapshot path: %w", err)
 	}
-	if err := s.db.VacuumInto(ctx, path); err != nil {
+	var cfg db.ConfigExport
+	if err := s.db.WithSnapshotExport(ctx, path, func(snapshot *db.DB) error {
+		var err error
+		cfg, err = snapshot.ExportFullData()
+		return err
+	}); err != nil {
 		_ = os.Remove(path)
-		return "", func() {}, fmt.Errorf("vacuum database snapshot: %w", err)
+		return "", db.ConfigExport{}, func() {}, fmt.Errorf("dump database snapshot: %w", err)
 	}
-	return path, func() { _ = os.Remove(path) }, nil
+	return path, cfg, func() { _ = os.Remove(path) }, nil
 }
 
 func (s *Server) configuredExportDir() string {
@@ -395,7 +384,7 @@ func writeFullExportDatabaseFile(zw *zip.Writer, databasePath string) error {
 	if err != nil {
 		return err
 	}
-	hdr.Name = config.DatabaseFilename
+	hdr.Name = config.DatabaseBackupFilename
 	hdr.Method = zip.Deflate
 	dst, err := zw.CreateHeader(hdr)
 	if err != nil {

@@ -151,7 +151,7 @@ func TestEnrichFeedItemsUsesCDNImagesForPrunedPostAndQuoteAssets(t *testing.T) {
 		}, 1); err != nil {
 			t.Fatal(err)
 		}
-		if err := d.ExecRaw(`UPDATE assets SET lifecycle_state = 'pruned' WHERE owner_kind = 'tweet' AND owner_id = ?`, ownerID); err != nil {
+		if err := d.ExecRaw(`UPDATE assets SET lifecycle_state = 'pruned' WHERE owner_kind = 'tweet' AND owner_id = $1`, ownerID); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -353,13 +353,13 @@ func TestEnrichFeedItemsUsesCanonicalStatusURLForRepostUserState(t *testing.T) {
 		canonicalURL = "https://x.com/sample_author/status/" + originalID
 	)
 	if err := d.ExecRaw(
-		`INSERT INTO feed_likes (tweet_id, liked_at) VALUES (?, ?)`,
+		`INSERT INTO feed_likes (tweet_id, liked_at) VALUES ($1, $2)`,
 		originalID, int64(1),
 	); err != nil {
 		t.Fatalf("insert feed like: %v", err)
 	}
 	if err := d.ExecRaw(
-		`INSERT INTO bookmarks (video_id, bookmarked_at) VALUES (?, ?)`,
+		`INSERT INTO bookmarks (video_id, bookmarked_at) VALUES ($1, $2)`,
 		originalID, int64(1),
 	); err != nil {
 		t.Fatalf("insert bookmark: %v", err)
@@ -553,13 +553,6 @@ func openWritableFeedTestDB(t *testing.T) *db.DB {
 
 func openWritableFeedTestDBAt(t *testing.T) (*db.DB, string) {
 	t.Helper()
-	tmpFile, err := os.CreateTemp("", "igloo-feed-test-*.db")
-	if err != nil {
-		t.Fatalf("CreateTemp: %v", err)
-	}
-	tmpPath := tmpFile.Name()
-	_ = tmpFile.Close()
-
 	stateRoot := filepath.Join(t.TempDir(), "data")
 	if err := os.MkdirAll(stateRoot, 0o755); err != nil {
 		t.Fatal(err)
@@ -567,14 +560,12 @@ func openWritableFeedTestDBAt(t *testing.T) (*db.DB, string) {
 	if err := os.WriteFile(filepath.Join(stateRoot, ".igloo-state-root"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.OpenPath(tmpPath, stateRoot)
+	d, err := db.OpenAtStateRoot(stateRoot)
 	if err != nil {
-		_ = os.Remove(tmpPath)
 		t.Fatalf("db.Open: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = d.Close()
-		_ = os.Remove(tmpPath)
 	})
 	return d, stateRoot
 }

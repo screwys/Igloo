@@ -139,7 +139,8 @@ jobs:
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          go test ./internal/buildinfo ./internal/config ./internal/toolenv ./internal/windowsupdate ./internal/windowsuninstall ./cmd/igloo ./cmd/igloo-update ./cmd/igloo-sign-update ./cmd/igloo-uninstall
+          $env:IGLOO_POSTGRES_BIN = "$env:RUNNER_TEMP/igloo-runtime/postgresql/bin"
+          go test -timeout 30m ./internal/buildinfo ./internal/config ./internal/toolenv ./internal/windowsupdate ./internal/windowsuninstall ./cmd/igloo ./cmd/igloo-update ./cmd/igloo-sign-update ./cmd/igloo-uninstall
 
       - name: Verify installer lifecycle
         shell: pwsh

@@ -20,7 +20,6 @@ type options struct {
 	RetentionLimit int
 	Apply          bool
 	JSON           bool
-	DBPath         string
 	DataDir        string
 	MediaDir       string
 }
@@ -46,8 +45,8 @@ func parseOptions(args []string) (options, error) {
 	fs.IntVar(&opts.RetentionLimit, "retention-limit", 0, "override X media rows kept per followed source; 0 uses each channel setting")
 	fs.BoolVar(&opts.Apply, "apply", false, "write DB changes and remove unreferenced files; without this flag the command only reports")
 	fs.BoolVar(&opts.JSON, "json", false, "print JSON output")
-	fs.StringVar(&opts.DBPath, "db", "", "database path; defaults to configured Igloo database")
-	fs.StringVar(&opts.DataDir, "data-dir", "", "data directory; defaults to configured Igloo data dir")
+	fs.StringVar(&opts.DataDir, "db", "", "Igloo state directory; defaults to configured state directory")
+	fs.StringVar(&opts.DataDir, "data-dir", "", "Igloo state directory; defaults to configured state directory")
 	fs.StringVar(&opts.MediaDir, "media-dir", "", "media directory; defaults to configured Igloo media dir")
 	if err := fs.Parse(args); err != nil {
 		return options{}, err
@@ -95,16 +94,11 @@ func Run(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 	}
-	dbPath := strings.TrimSpace(opts.DBPath)
-	if dbPath == "" {
-		dbPath = layout.DatabasePath()
-	}
-
 	var store *db.DB
 	if opts.Apply {
-		store, err = db.OpenLayoutPath(dbPath, layout)
+		store, err = db.OpenExisting(layout)
 	} else {
-		store, err = db.OpenReadOnlyLayout(dbPath, layout)
+		store, err = db.OpenReadOnlyLayout(layout)
 	}
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "storage maintenance: open db: %v\n", err)
@@ -138,7 +132,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	out := report{
 		Mode:       mode,
 		Action:     opts.Action,
-		Database:   dbPath,
+		Database:   layout.StateRoot(),
 		DataDir:    layout.StateRoot(),
 		MediaDir:   layout.MediaRoot(),
 		DurationMs: time.Since(started).Milliseconds(),

@@ -11,7 +11,7 @@ func sourceWindowPlatformEnabledClause(videoAlias string, includeTikTok, include
 		videoAlias = "v"
 	}
 	return fmt.Sprintf(
-		"((%d != 0 AND %s.channel_id LIKE 'tiktok_%%') OR (%d != 0 AND %s.channel_id LIKE 'instagram_%%'))",
+		"((%d != 0 AND %s.channel_id ILIKE 'tiktok_%%') OR (%d != 0 AND %s.channel_id ILIKE 'instagram_%%'))",
 		boolToInt(includeTikTok),
 		videoAlias,
 		boolToInt(includeInstagram),

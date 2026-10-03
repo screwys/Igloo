@@ -2,8 +2,6 @@ package db
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 )
 
 // GetDashboardStats returns aggregate statistics for the server status dashboard.
@@ -140,14 +138,19 @@ func (db *DB) GetDashboardStats() (map[string]any, error) {
 			GROUP BY file_path
 		)
 	`)
-	dbPath := filepath.Join(db.storage.StateRoot(), "igloo.db")
-	if fi, statErr := os.Stat(dbPath); statErr == nil {
-		totalStorageBytes += fi.Size()
-		stats["db_size_mb"] = fmt.Sprintf("%.1f", float64(fi.Size())/1048576)
+	databaseStorage, storageErr := db.DatabaseStorage()
+	if storageErr != nil && queryErr == nil {
+		queryErr = storageErr
 	}
-	if fi, statErr := os.Stat(dbPath + "-wal"); statErr == nil {
-		totalStorageBytes += fi.Size()
-		stats["wal_size_mb"] = fmt.Sprintf("%.1f", float64(fi.Size())/1048576)
+	if storageErr == nil {
+		totalStorageBytes += databaseStorage.DatabaseBytes
+		stats["db_size_mb"] = fmt.Sprintf("%.1f", float64(databaseStorage.DatabaseBytes)/1048576)
+	}
+	stats["wal_size_mb"] = nil
+	stats["wal_size_available"] = databaseStorage.ClusterWALBytes != nil
+	stats["wal_size_scope"] = "cluster"
+	if databaseStorage.ClusterWALBytes != nil {
+		stats["wal_size_mb"] = fmt.Sprintf("%.1f", float64(*databaseStorage.ClusterWALBytes)/1048576)
 	}
 	stats["storage_total_gb"] = fmt.Sprintf("%.2f", float64(totalStorageBytes)/1073741824)
 	stats["video_storage_gb"] = fmt.Sprintf("%.2f", float64(totalVideoBytes)/1073741824)
@@ -177,7 +180,7 @@ func (db *DB) GetDashboardStats() (map[string]any, error) {
 	}
 
 	// Table count
-	stats["table_count"] = queryInt("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
+	stats["table_count"] = queryInt("SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public'")
 
 	// Video file size total
 	stats["total_video_bytes"] = totalVideoBytes

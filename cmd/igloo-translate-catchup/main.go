@@ -14,8 +14,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/language"
+	"github.com/screwys/igloo/internal/storage"
 	"github.com/screwys/igloo/internal/xfeed"
 )
 
@@ -55,12 +57,12 @@ type candidateRow struct {
 }
 
 func main() {
-	var mode, dbPath, dataDir, outPath, mapPath, inPath, target, skipRaw string
+	var mode, dataDir, outPath, mapPath, inPath, target, skipRaw string
 	var limit int
 	var apply bool
 	flag.StringVar(&mode, "mode", "dry-run", "dry-run, backfill-lang, export, or import")
-	flag.StringVar(&dbPath, "db", defaultDBPath(), "Igloo SQLite DB path")
-	flag.StringVar(&dataDir, "data-dir", defaultDataDir(), "Igloo data dir")
+	flag.StringVar(&dataDir, "db", defaultDataDir(), "Igloo state directory")
+	flag.StringVar(&dataDir, "data-dir", defaultDataDir(), "Igloo state directory")
 	flag.StringVar(&outPath, "out", "translation_batch.jsonl", "export JSONL path")
 	flag.StringVar(&mapPath, "map", "translation_batch.map.jsonl", "local row map JSONL path")
 	flag.StringVar(&inPath, "in", "translation_results.jsonl", "translated JSONL path for import")
@@ -81,10 +83,14 @@ func main() {
 
 	var database *db.DB
 	var err error
+	layout, err := storage.New(dataDir, "")
+	if err != nil {
+		log.Fatal(err)
+	}
 	if (mode == "backfill-lang" && apply) || mode == "import" {
-		database, err = db.OpenPath(dbPath, dataDir)
+		database, err = db.OpenExisting(layout)
 	} else {
-		database, err = db.OpenReadOnly(dbPath, dataDir)
+		database, err = db.OpenReadOnlyLayout(layout)
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -170,7 +176,7 @@ func runBackfillLang(ctx context.Context, database *db.DB, target string, skip [
 			if u.field == "quote" {
 				col = "quote_lang"
 			}
-			if _, err := tx.Exec(`UPDATE feed_items SET `+col+` = ? WHERE tweet_id = ?`, u.lang, u.tweetID); err != nil {
+			if _, err := tx.Exec(`UPDATE feed_items SET `+col+` = $1 WHERE tweet_id = $2`, u.lang, u.tweetID); err != nil {
 				return err
 			}
 		}
@@ -303,7 +309,7 @@ func loadCatchupCandidates(ctx context.Context, database *db.DB, target string, 
 				       COALESCE(f.quote_body_text,'') AS quote_body_text,
 				       f.published_at AS published_at
 				FROM feed_items f
-				LEFT JOIN translations tr ON tr.tweet_id = f.tweet_id AND tr.field = 'body' AND tr.target_lang = ?
+				LEFT JOIN translations tr ON tr.tweet_id = f.tweet_id AND tr.field = 'body' AND tr.target_lang = $1
 				WHERE tr.tweet_id IS NULL AND TRIM(COALESCE(f.body_text,'')) != ''
 				UNION ALL
 				SELECT f.tweet_id, 'quote' AS field, COALESCE(f.quote_body_text,'') AS source_text,
@@ -312,11 +318,11 @@ func loadCatchupCandidates(ctx context.Context, database *db.DB, target string, 
 				       COALESCE(f.quote_body_text,'') AS quote_body_text,
 				       f.published_at AS published_at
 				FROM feed_items f
-				LEFT JOIN translations tr ON tr.tweet_id = f.tweet_id AND tr.field = 'quote' AND tr.target_lang = ?
+				LEFT JOIN translations tr ON tr.tweet_id = f.tweet_id AND tr.field = 'quote' AND tr.target_lang = $2
 				WHERE tr.tweet_id IS NULL AND TRIM(COALESCE(f.quote_body_text,'')) != ''
 			)
 			ORDER BY published_at DESC, tweet_id DESC, field ASC
-			LIMIT ?`
+			LIMIT $3`
 		sqlRows, err := conn.QueryContext(ctx, query, target, target, limit)
 		if err != nil {
 			return err
@@ -449,16 +455,6 @@ func printCounts(label string, counts map[string]int) {
 	}
 }
 
-func defaultDBPath() string {
-	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".local", "share", "igloo", "igloo.db")
-	}
-	return "igloo.db"
-}
-
 func defaultDataDir() string {
-	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".local", "share", "igloo")
-	}
-	return "."
+	return config.Load().Storage.StateRoot()
 }

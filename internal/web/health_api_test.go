@@ -45,7 +45,7 @@ func TestHealthReportsStaleFeedSnapshot(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("replace snapshot: %v", err)
 	}
-	if err := srv.db.ExecRaw(`UPDATE feed_rank_snapshot SET computed_at = ?`, staleAt); err != nil {
+	if err := srv.db.ExecRaw(`UPDATE feed_rank_snapshot SET computed_at = $1`, staleAt); err != nil {
 		t.Fatalf("age snapshot: %v", err)
 	}
 	insertFeedItemAt(t, srv, "fresh_unranked", "fresh_author", freshAt, 2)
@@ -147,14 +147,14 @@ func healthCheckBody(t *testing.T, body map[string]any, name string) map[string]
 func insertFeedItemAt(t *testing.T, srv *testServer, tweetID, channelID string, fetchedAt int64, publishedAt int64) {
 	t.Helper()
 	if err := srv.db.ExecRaw(`
-		INSERT OR IGNORE INTO channel_follows (channel_id, followed_at)
-		VALUES (?, ?)
+		INSERT INTO channel_follows (channel_id, followed_at)
+		VALUES ($1, $2) ON CONFLICT DO NOTHING
 	`, channelID, fetchedAt); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.db.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, channel_id, published_at, fetched_at)
-		VALUES (?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4)
 	`, tweetID, channelID, publishedAt, fetchedAt); err != nil {
 		t.Fatal(err)
 	}

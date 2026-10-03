@@ -1550,7 +1550,13 @@ templ serverDashboardStaticStatCards(p PageProps, d ServerDashboardData) {
 	<div class="glass stat-card">
 		<div class="sc-label">{ L(p, "logs_stat_database", "Database") }</div>
 		<div class="sc-value"><span class="bl">{ fmt.Sprintf("%.1f", d.DBSizeMB) }</span><span class="u">MB</span></div>
-		<div class="sc-detail">{ fmt.Sprintf(L(p, "logs_wal_tables_detail", "WAL %s MB \u00b7 %d tables"), fmt.Sprintf("%.1f", d.WALSizeMB), d.TableCount) }</div>
+		<div class="sc-detail">
+			if d.WALSizeAvailable {
+				{ fmt.Sprintf(L(p, "logs_cluster_wal_tables_detail", "Cluster WAL %s MB \u00b7 %d tables"), fmt.Sprintf("%.1f", d.WALSizeMB), d.TableCount) }
+			} else {
+				{ fmt.Sprintf(L(p, "logs_cluster_wal_tables_detail", "Cluster WAL %s MB \u00b7 %d tables"), "-", d.TableCount) }
+			}
+		</div>
 	</div>
 	<div class="glass stat-card">
 		<div class="sc-label">{ L(p, "logs_stat_storage", "Storage") }</div>

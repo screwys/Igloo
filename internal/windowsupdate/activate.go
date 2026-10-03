@@ -13,6 +13,7 @@ import (
 
 type Lifecycle interface {
 	WaitForProcess(context.Context, int) error
+	MigrateSQLite(context.Context, ApplyPlan) (func() error, error)
 	Start(context.Context, ApplyPlan) error
 	Stop(context.Context, ApplyPlan) error
 	WaitHealthy(context.Context, ApplyPlan) error
@@ -32,7 +33,27 @@ func ExecutePlan(ctx context.Context, plan ApplyPlan, lifecycle Lifecycle) error
 		}
 		return err
 	}
-	rollback := func() error { return rollbackAll(rollbacks) }
+	restoreData, migrationErr := lifecycle.MigrateSQLite(ctx, plan)
+	rollback := func() error {
+		if err := rollbackAll(rollbacks); err != nil {
+			return err
+		}
+		if restoreData != nil {
+			return restoreData()
+		}
+		return nil
+	}
+	if migrationErr != nil {
+		if rollbackErr := rollback(); rollbackErr != nil {
+			return fmt.Errorf("migrate SQLite database (%w) and restore previous installation: %w", migrationErr, rollbackErr)
+		}
+		recoveryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+		defer cancel()
+		if restartErr := lifecycle.Start(recoveryCtx, plan); restartErr != nil {
+			return fmt.Errorf("migrate SQLite database (%w) and restart previous Igloo: %w", migrationErr, restartErr)
+		}
+		return fmt.Errorf("migrate SQLite database; previous version restored: %w", migrationErr)
+	}
 	if err := lifecycle.Start(ctx, plan); err != nil {
 		if rollbackErr := rollback(); rollbackErr != nil {
 			return fmt.Errorf("restart updated Igloo (%w) and restore previous files: %w", err, rollbackErr)

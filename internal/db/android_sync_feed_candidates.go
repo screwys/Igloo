@@ -33,7 +33,7 @@ func (db *DB) listAndroidSyncDesiredFeedIDsAmong(feedDays int, nowMs int64, cand
 		args := stringsToAny(chunk)
 		for _, query := range []string{
 			`SELECT content_hash, COALESCE(MAX(published_at), 0)
-			 FROM feed_items INDEXED BY idx_feed_items_content_hash
+			 FROM feed_items
 			 WHERE content_hash IS NOT NULL AND content_hash != ''
 			   AND content_hash IN (` + placeholders(len(chunk)) + `)
 			 GROUP BY content_hash`,
@@ -42,8 +42,8 @@ func (db *DB) listAndroidSyncDesiredFeedIDsAmong(feedDays int, nowMs int64, cand
 			 WHERE content_hash IN (` + placeholders(len(chunk)) + `)
 			 GROUP BY content_hash`,
 			`SELECT q.content_hash, COALESCE(MAX(parent.published_at), 0)
-			 FROM feed_items q INDEXED BY idx_feed_items_content_hash
-			 JOIN feed_items parent INDEXED BY idx_feed_items_quote
+			 FROM feed_items q
+			 JOIN feed_items parent
 			   ON parent.quote_tweet_id = q.tweet_id
 			 WHERE q.content_hash IS NOT NULL AND q.content_hash != ''
 			   AND q.content_hash IN (` + placeholders(len(chunk)) + `)
@@ -60,7 +60,7 @@ func (db *DB) listAndroidSyncDesiredFeedIDsAmong(feedDays int, nowMs int64, cand
 		}
 		if err := db.collectStrings(`
 			SELECT DISTINCT fi.content_hash
-			FROM feed_items fi INDEXED BY idx_feed_items_content_hash
+			FROM feed_items fi
 			WHERE fi.content_hash IS NOT NULL AND fi.content_hash != ''
 			  AND fi.content_hash IN (`+placeholders(len(chunk))+`)
 			  AND (
@@ -78,7 +78,7 @@ func (db *DB) listAndroidSyncDesiredFeedIDsAmong(feedDays int, nowMs int64, cand
 		args := stringsToAny(chunk)
 		rows, err := db.reader().Query(`
 			SELECT quote_tweet_id, COALESCE(MAX(published_at), 0)
-			FROM feed_items INDEXED BY idx_feed_items_quote
+			FROM feed_items
 			WHERE quote_tweet_id IS NOT NULL AND quote_tweet_id != ''
 			  AND quote_tweet_id IN (`+placeholders(len(chunk))+`)
 			GROUP BY quote_tweet_id
@@ -205,7 +205,7 @@ func (db *DB) ListAndroidSyncDesiredFeedAssetOwnersAmong(feedDays int, nowMs int
 	for _, chunk := range stringChunks(candidates, androidSyncProjectionChunkSize) {
 		rows, err := db.reader().Query(`
 			SELECT tweet_id, quote_tweet_id
-			FROM feed_items INDEXED BY idx_feed_items_quote
+			FROM feed_items
 			WHERE quote_tweet_id IS NOT NULL AND quote_tweet_id != ''
 			  AND quote_tweet_id IN (`+placeholders(len(chunk))+`)
 		`, stringsToAny(chunk)...)
@@ -327,13 +327,13 @@ func (db *DB) listAndroidSyncDesiredVideoIDsAmong(
 	}
 	includeMomentReposts := db.MomentsIncludeRepostsEnabled()
 	includeInstagramTagged := db.InstagramIncludeTaggedEnabled()
-	youtubeSelection := `(v.channel_id LIKE 'youtube_%'
+	youtubeSelection := `(v.channel_id ILIKE 'youtube_%'
 		AND COALESCE(v.published_at, 0) >= ?
 		AND NOT ` + webOnlyStreamExistsSQL("v.video_id") + `
 		AND EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.channel_id = v.channel_id))`
 	if fullYoutubeMetadata {
 		youtubeSelection = `(` + androidSyncWebYoutubeLibraryPredicate("v") + `)
-			OR (v.channel_id LIKE 'youtube_%' AND COALESCE(v.is_temp, 0) = 1)`
+			OR (v.channel_id ILIKE 'youtube_%' AND COALESCE(v.is_temp, 0) = 1)`
 	}
 
 	for _, chunk := range stringChunks(candidates, androidSyncProjectionChunkSize) {
@@ -350,12 +350,12 @@ func (db *DB) listAndroidSyncDesiredVideoIDsAmong(
 			  AND (
 			    (`+youtubeSelection+`)
 			    OR
-			    ((v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
+			    ((v.channel_id ILIKE 'tiktok_%' OR v.channel_id ILIKE 'instagram_%')
 			      AND COALESCE(v.source_kind, '') != 'story'
 			      AND COALESCE(v.published_at, 0) >= ?
 			      AND EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.channel_id = v.channel_id))
 			    OR
-			    ((v.channel_id LIKE 'youtube_%' OR v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
+			    ((v.channel_id ILIKE 'youtube_%' OR v.channel_id ILIKE 'tiktok_%' OR v.channel_id ILIKE 'instagram_%')
 			      AND (EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = v.video_id)
 			        OR EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = v.video_id)))
 			    OR

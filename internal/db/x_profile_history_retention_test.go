@@ -7,16 +7,15 @@ import (
 
 func TestXProfileHistoryRetentionPlanUsesThreadIndexes(t *testing.T) {
 	d := openFreshTestDB(t)
-	rows, err := d.conn.Query("EXPLAIN QUERY PLAN "+xProfileHistoryRetentionItemsQuery, 0, 0, "twitter_sample_profile")
+	rows, err := d.conn.Query(bind("EXPLAIN "+xProfileHistoryRetentionItemsQuery), 0, 0, "twitter_sample_profile")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = rows.Close() }()
 	var details []string
 	for rows.Next() {
-		var id, parent, unused int
 		var detail string
-		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+		if err := rows.Scan(&detail); err != nil {
 			t.Fatal(err)
 		}
 		details = append(details, detail)
@@ -25,7 +24,7 @@ func TestXProfileHistoryRetentionPlanUsesThreadIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := strings.Join(details, "\n")
-	if strings.Contains(plan, "SCAN reply") || strings.Contains(plan, "SCAN quote") {
+	if strings.Contains(plan, "Seq Scan on feed_items reply") || strings.Contains(plan, "Seq Scan on feed_items quote") {
 		t.Fatalf("profile history retention scans feed_items for thread references: %s", plan)
 	}
 	if !strings.Contains(plan, "idx_feed_items_reply_parent") || !strings.Contains(plan, "idx_feed_items_quote") {
@@ -104,9 +103,9 @@ func TestMarkXProfileHistorySeenDoesNotExpandAcrossThread(t *testing.T) {
 	}
 }
 
-func TestHideXProfileHistoryFromFeedRepairsOversizedFetchBatches(t *testing.T) {
-	d := openWritableTestDB(t)
-	if err := d.ExecRaw(`
+func TestLegacyArchiveHidesXProfileHistoryFromOversizedFetchBatches(t *testing.T) {
+	d := openSchemaSnapshotDB(t)
+	if _, err := d.Exec(`
 		INSERT INTO channels (channel_id, source_id, name, platform)
 		VALUES ('twitter_sample_profile', '@sample_profile', 'Sample profile', 'twitter');
 		INSERT INTO channel_settings (channel_id, media_download_limit)
@@ -120,7 +119,7 @@ func TestHideXProfileHistoryFromFeedRepairsOversizedFetchBatches(t *testing.T) {
 	`); err != nil {
 		t.Fatal(err)
 	}
-	tx, err := d.conn.Begin()
+	tx, err := d.Begin()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,10 +130,17 @@ func TestHideXProfileHistoryFromFeedRepairsOversizedFetchBatches(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM feed_seen WHERE tweet_id IN ('batch_newest','batch_second')`); got != 0 {
+	var got int
+	if err := d.QueryRow(`SELECT COUNT(*) FROM feed_seen WHERE tweet_id IN ('batch_newest','batch_second')`).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != 0 {
 		t.Fatalf("feed-window rows marked seen: %d", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM feed_seen WHERE tweet_id IN ('batch_history_a','batch_history_b')`); got != 2 {
+	if err := d.QueryRow(`SELECT COUNT(*) FROM feed_seen WHERE tweet_id IN ('batch_history_a','batch_history_b')`).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != 2 {
 		t.Fatalf("history rows marked seen = %d, want 2", got)
 	}
 }

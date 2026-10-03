@@ -64,22 +64,22 @@ func androidEligibleFeedCTE(cutoffMs int64) (string, []any) {
 		WITH RECURSIVE
 		recent_hashes AS (
 			SELECT content_hash
-			FROM feed_items INDEXED BY idx_feed_items_published
+			FROM feed_items
 			WHERE content_hash IS NOT NULL AND content_hash != ''
 			  AND published_at >= ?
 
 			UNION
 
 			SELECT content_hash
-			FROM retweet_sources INDEXED BY idx_retweet_sources_published
+			FROM retweet_sources
 			WHERE content_hash IS NOT NULL AND content_hash != ''
 			  AND published_at >= ?
 
 			UNION
 
 			SELECT q.content_hash
-			FROM feed_items parent INDEXED BY idx_feed_items_published
-			CROSS JOIN feed_items q ON q.tweet_id = parent.quote_tweet_id
+			FROM feed_items parent
+			JOIN feed_items q ON q.tweet_id = parent.quote_tweet_id
 			WHERE parent.published_at >= ?
 			  AND q.content_hash IS NOT NULL
 			  AND q.content_hash != ''
@@ -87,7 +87,7 @@ func androidEligibleFeedCTE(cutoffMs int64) (string, []any) {
 		protected_hashes AS (
 			SELECT fi.content_hash
 			FROM feed_likes fl
-			CROSS JOIN feed_items fi ON fi.tweet_id = fl.tweet_id
+			JOIN feed_items fi ON fi.tweet_id = fl.tweet_id
 			WHERE fi.content_hash IS NOT NULL
 			  AND fi.content_hash != ''
 
@@ -95,20 +95,20 @@ func androidEligibleFeedCTE(cutoffMs int64) (string, []any) {
 
 			SELECT fi.content_hash
 			FROM bookmarks b
-			CROSS JOIN feed_items fi ON fi.tweet_id = b.video_id
+			JOIN feed_items fi ON fi.tweet_id = b.video_id
 			WHERE fi.content_hash IS NOT NULL
 			  AND fi.content_hash != ''
 		),
 		eligible_tweet_ids AS (
 			SELECT tweet_id
-			FROM feed_items INDEXED BY idx_feed_items_published
+			FROM feed_items
 			WHERE published_at >= ?
 
 			UNION
 
 			SELECT fi.tweet_id
 			FROM recent_hashes rh
-			CROSS JOIN feed_items fi INDEXED BY idx_feed_items_content_hash
+			CROSS JOIN feed_items fi
 			WHERE fi.content_hash = rh.content_hash
 			  AND fi.content_hash IS NOT NULL
 			  AND fi.content_hash != ''
@@ -116,7 +116,7 @@ func androidEligibleFeedCTE(cutoffMs int64) (string, []any) {
 			UNION
 
 			SELECT quote_tweet_id AS tweet_id
-			FROM feed_items INDEXED BY idx_feed_items_published
+			FROM feed_items
 			WHERE quote_tweet_id IS NOT NULL
 			  AND quote_tweet_id != ''
 			  AND published_at >= ?
@@ -135,7 +135,7 @@ func androidEligibleFeedCTE(cutoffMs int64) (string, []any) {
 
 			SELECT fi.tweet_id
 			FROM protected_hashes ph
-			CROSS JOIN feed_items fi INDEXED BY idx_feed_items_content_hash
+			CROSS JOIN feed_items fi
 			WHERE fi.content_hash = ph.content_hash
 			  AND fi.content_hash IS NOT NULL
 			  AND fi.content_hash != ''
@@ -155,28 +155,27 @@ func (db *DB) listAndroidSyncDesiredFeed(feedDays int, nowMs int64) (map[string]
 
 			UNION
 
-			SELECT fi.reply_to_status, 1
-			FROM reply_chain rc
-			JOIN feed_items fi ON fi.tweet_id = rc.tweet_id
-			WHERE COALESCE(fi.reply_to_status, '') != ''
-
-			UNION
-
-			SELECT child.tweet_id, 1
+			SELECT linked.tweet_id, 1
 			FROM reply_chain rc
 			JOIN feed_items context_root ON context_root.tweet_id = rc.tweet_id
-			-- Match the partial-index predicates so each recursive step uses indexed lookups.
-			JOIN feed_items child ON (child.reply_to_status = rc.tweet_id AND child.reply_to_status != '')
-				OR (child.quote_tweet_id = rc.tweet_id AND child.quote_tweet_id != '')
-			WHERE child.is_ghost = 1
-			  AND (rc.is_ancestor = 1
-			    OR EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = context_root.tweet_id)
-			    OR EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = context_root.tweet_id)
-			    OR (`+retweetFilterClause("context_root")+`))
+			CROSS JOIN LATERAL (
+				SELECT context_root.reply_to_status AS tweet_id
+				WHERE COALESCE(context_root.reply_to_status, '') != ''
+				UNION
+				SELECT child.tweet_id
+				FROM feed_items child
+				WHERE ((child.reply_to_status = rc.tweet_id AND child.reply_to_status != '')
+				    OR (child.quote_tweet_id = rc.tweet_id AND child.quote_tweet_id != ''))
+				  AND child.is_ghost = 1
+				  AND (rc.is_ancestor = 1
+				    OR EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = context_root.tweet_id)
+				    OR EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = context_root.tweet_id)
+				    OR (`+retweetFilterClause("context_root")+`))
+			) linked
 		)
 		SELECT DISTINCT fi.tweet_id
 		FROM reply_chain rc
-		CROSS JOIN feed_items fi ON fi.tweet_id = rc.tweet_id
+		JOIN feed_items fi ON fi.tweet_id = rc.tweet_id
 		WHERE rc.is_ancestor = 1
 		   OR EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = fi.tweet_id)
 		   OR EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = fi.tweet_id)
@@ -198,7 +197,7 @@ func (db *DB) listAndroidSyncDesiredFeed(feedDays int, nowMs int64) (map[string]
 	err = db.collectStrings(`
 		SELECT DISTINCT quote_tweet_id
 		FROM feed_items
-		WHERE tweet_id IN (SELECT value FROM json_each(?))
+		WHERE tweet_id IN (SELECT value FROM jsonb_array_elements_text(?::jsonb))
 		  AND COALESCE(quote_tweet_id, '') != ''
 	`, []any{string(tweetIDsJSON)}, assetOwners)
 	androidSyncLogDesiredSetQuery("quote_asset_owners", len(assetOwners)-before, len(assetOwners), start, err)
@@ -357,12 +356,12 @@ func (db *DB) ListAndroidSyncDesiredSetsForMode(
 		return out, fmt.Errorf("android sync desired state channels: %w", err)
 	}
 	if err := collect("feed_channels", `
-		WITH desired(tweet_id) AS (SELECT value FROM json_each(?)),
+		WITH desired(tweet_id) AS (SELECT value FROM jsonb_array_elements_text(?::jsonb)),
 		selected AS MATERIALIZED (
 			SELECT fi.source_channel_id, fi.channel_id, fi.quote_channel_id,
 			       fi.reply_channel_id, fi.reposter_channel_id, fi.content_hash
 			FROM desired d
-			CROSS JOIN feed_items fi ON fi.tweet_id = d.tweet_id
+			JOIN feed_items fi ON fi.tweet_id = d.tweet_id
 		),
 		candidates(channel_id) AS (
 			SELECT source_channel_id FROM selected
@@ -373,7 +372,7 @@ func (db *DB) ListAndroidSyncDesiredSetsForMode(
 			UNION
 			SELECT rs.retweeter_channel_id
 			FROM selected fi
-			CROSS JOIN retweet_sources rs ON rs.content_hash = fi.content_hash
+			JOIN retweet_sources rs ON rs.content_hash = fi.content_hash
 		)
 		SELECT candidates.channel_id
 		FROM candidates
@@ -388,7 +387,7 @@ func (db *DB) ListAndroidSyncDesiredSetsForMode(
 		return out, err
 	}
 	if err := collect("video_channels", `
-		WITH desired(video_id) AS (SELECT value FROM json_each(?)),
+		WITH desired(video_id) AS (SELECT value FROM jsonb_array_elements_text(?::jsonb)),
 		candidates(channel_id) AS (
 			SELECT channel_id FROM videos v JOIN desired d ON d.video_id = v.video_id
 			UNION
@@ -428,7 +427,7 @@ func androidSyncDesiredVideoRowsSQL(selectExpr string, fullYoutubeMetadata bool)
 			SELECT %s
 			FROM channel_follows cf
 			JOIN videos v ON v.channel_id = cf.channel_id
-			WHERE v.channel_id LIKE 'youtube_%%'
+			WHERE v.channel_id ILIKE 'youtube_%%'
 			  AND COALESCE(v.published_at, 0) >= ?
 			  AND NOT %s
 
@@ -436,7 +435,7 @@ func androidSyncDesiredVideoRowsSQL(selectExpr string, fullYoutubeMetadata bool)
 			SELECT %s
 			FROM channel_follows cf
 			JOIN videos v ON v.channel_id = cf.channel_id
-			WHERE (v.channel_id LIKE 'tiktok_%%' OR v.channel_id LIKE 'instagram_%%')
+			WHERE (v.channel_id ILIKE 'tiktok_%%' OR v.channel_id ILIKE 'instagram_%%')
 			  AND COALESCE(v.source_kind, '') != 'story'
 			  AND COALESCE(v.published_at, 0) >= ?
 
@@ -445,9 +444,9 @@ func androidSyncDesiredVideoRowsSQL(selectExpr string, fullYoutubeMetadata bool)
 			FROM bookmarks b
 			JOIN videos v ON v.video_id = b.video_id
 			WHERE (
-			    v.channel_id LIKE 'youtube_%%'
-			    OR v.channel_id LIKE 'tiktok_%%'
-			    OR v.channel_id LIKE 'instagram_%%'
+			    v.channel_id ILIKE 'youtube_%%'
+			    OR v.channel_id ILIKE 'tiktok_%%'
+			    OR v.channel_id ILIKE 'instagram_%%'
 			  )
 
 			UNION
@@ -455,9 +454,9 @@ func androidSyncDesiredVideoRowsSQL(selectExpr string, fullYoutubeMetadata bool)
 			FROM feed_likes fl
 			JOIN videos v ON v.video_id = fl.tweet_id
 			WHERE (
-			    v.channel_id LIKE 'youtube_%%'
-			    OR v.channel_id LIKE 'tiktok_%%'
-			    OR v.channel_id LIKE 'instagram_%%'
+			    v.channel_id ILIKE 'youtube_%%'
+			    OR v.channel_id ILIKE 'tiktok_%%'
+			    OR v.channel_id ILIKE 'instagram_%%'
 			  )
 		`, selectExpr, webOnlyStreamExistsSQL("v.video_id"), selectExpr, selectExpr, selectExpr)
 	}
@@ -478,7 +477,7 @@ func androidSyncDesiredVideoRowsSQL(selectExpr string, fullYoutubeMetadata bool)
 		SELECT %s
 		FROM channel_follows cf
 		JOIN videos v ON v.channel_id = cf.channel_id
-		WHERE (v.channel_id LIKE 'tiktok_%%' OR v.channel_id LIKE 'instagram_%%')
+		WHERE (v.channel_id ILIKE 'tiktok_%%' OR v.channel_id ILIKE 'instagram_%%')
 		  AND COALESCE(v.source_kind, '') != 'story'
 		  AND COALESCE(v.published_at, 0) >= ?
 
@@ -487,9 +486,9 @@ func androidSyncDesiredVideoRowsSQL(selectExpr string, fullYoutubeMetadata bool)
 		FROM bookmarks b
 		JOIN videos v ON v.video_id = b.video_id
 		WHERE (
-		    v.channel_id LIKE 'youtube_%%'
-		    OR v.channel_id LIKE 'tiktok_%%'
-		    OR v.channel_id LIKE 'instagram_%%'
+		    v.channel_id ILIKE 'youtube_%%'
+		    OR v.channel_id ILIKE 'tiktok_%%'
+		    OR v.channel_id ILIKE 'instagram_%%'
 		  )
 
 		UNION
@@ -497,9 +496,9 @@ func androidSyncDesiredVideoRowsSQL(selectExpr string, fullYoutubeMetadata bool)
 		FROM feed_likes fl
 		JOIN videos v ON v.video_id = fl.tweet_id
 		WHERE (
-		    v.channel_id LIKE 'youtube_%%'
-		    OR v.channel_id LIKE 'tiktok_%%'
-		    OR v.channel_id LIKE 'instagram_%%'
+		    v.channel_id ILIKE 'youtube_%%'
+		    OR v.channel_id ILIKE 'tiktok_%%'
+		    OR v.channel_id ILIKE 'instagram_%%'
 		  )
 		`, selectExpr, youtubeLibrary, selectExpr, selectExpr, selectExpr, selectExpr)
 }
@@ -540,7 +539,7 @@ func (db *DB) excludeAndroidSyncMetadataOnlyVideoStreams(videoIDs map[string]str
 	if err := db.collectStrings(`
 		SELECT v.video_id
 		FROM videos v
-		WHERE v.video_id IN (SELECT value FROM json_each(?))
+		WHERE v.video_id IN (SELECT value FROM jsonb_array_elements_text(?::jsonb))
 		  AND v.owner_kind = 'youtube_video'
 		  AND (
 		    COALESCE(v.is_temp, 0) = 1
@@ -579,8 +578,8 @@ func (db *DB) excludeAndroidSyncLegacyVideoStreams(videoIDs map[string]struct{},
 	if err := db.collectStrings(`
 		SELECT v.video_id
 		FROM videos v
-		WHERE v.video_id IN (SELECT value FROM json_each(?))
-		  AND v.channel_id LIKE 'youtube_%'
+		WHERE v.video_id IN (SELECT value FROM jsonb_array_elements_text(?::jsonb))
+		  AND v.channel_id ILIKE 'youtube_%'
 		  AND COALESCE(v.published_at, 0) < ?
 		  AND NOT EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = v.video_id)
 		  AND NOT EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = v.video_id)

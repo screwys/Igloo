@@ -24,6 +24,16 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      - name: Install PostgreSQL 18 tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-common ca-certificates
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          echo 'create_main_cluster = false' | sudo tee /etc/postgresql-common/createcluster.conf
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-18
+          echo 'IGLOO_POSTGRES_BIN=/usr/lib/postgresql/18/bin' >> "$GITHUB_ENV"
+
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version-file: go.mod
@@ -32,7 +42,7 @@ jobs:
       - name: Check generated drift
         run: scripts/dev/drift-check.sh
 
-      - name: Check SQLite schema
+      - name: Check database contracts
         run: scripts/dev/schema-check.sh
 
       - name: Run repo-specific static checks
@@ -59,13 +69,22 @@ jobs:
       - name: Install media tools
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      - name: Install PostgreSQL 18 tools
+        run: |
+          sudo apt-get install -y --no-install-recommends postgresql-common ca-certificates
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          echo 'create_main_cluster = false' | sudo tee /etc/postgresql-common/createcluster.conf
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-18
+          echo 'IGLOO_POSTGRES_BIN=/usr/lib/postgresql/18/bin' >> "$GITHUB_ENV"
+
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Run Go tests
-        run: go test ./...
+        run: go test -timeout 30m ./...
 
       - name: Run web process-level test
         run: scripts/dev/web-test.sh

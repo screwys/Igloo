@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	dbquery "github.com/screwys/igloo/internal/db/query"
 	"github.com/screwys/igloo/internal/model"
 )
 
@@ -20,7 +22,7 @@ func (db *DB) IsBookmarked(videoID string) (bool, int64, error) {
 		return false, 0, err
 	}
 	var categoryID int64
-	err = db.conn.QueryRow("SELECT category_id FROM bookmarks WHERE video_id = ?", videoID).Scan(&categoryID)
+	err = db.conn.QueryRow(bind("SELECT category_id FROM bookmarks WHERE video_id = ?"), videoID).Scan(&categoryID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, 0, nil
 	}
@@ -48,14 +50,14 @@ type BookmarkLabelCountRow struct {
 
 // GetBookmarkCategories returns all categories for a user with bookmark counts.
 func (db *DB) GetBookmarkCategories() ([]BookmarkCategoryRow, error) {
-	rows, err := db.conn.Query(`
+	rows, err := db.conn.Query(bind(`
 		SELECT bc.id, bc.name, COALESCE(bc.archive_path,''), COALESCE(bc.created_at, 0),
 		       COUNT(b.video_id) AS bookmark_count
 		FROM bookmark_categories bc
 		LEFT JOIN bookmarks b ON bc.id = b.category_id
 		GROUP BY bc.id
 		ORDER BY bc.id
-	`)
+	`))
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +148,7 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 			SELECT * FROM ranked_feed WHERE presentation_row = 1
 		)
 		SELECT v.video_id, COALESCE(NULLIF(fi.channel_id, ''), v.channel_id), v.owner_kind,
-		       CASE WHEN v.title LIKE 'X post %%' THEN COALESCE(
+		       CASE WHEN v.title ILIKE 'X post %%' COLLATE "C" ESCAPE '' THEN COALESCE(
 		           NULLIF(fi.body_text, ''), NULLIF(fi.quote_body_text, ''), '') ELSE v.title END,
 		       COALESCE(v.description,''),
 		       COALESCE(v.duration,0), COALESCE(NULLIF(v.published_at, 0), fi.published_at), v.downloaded_at,
@@ -156,20 +158,20 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 		       COALESCE(cp.display_name,''),
 		       COALESCE(c.platform,
 		           CASE
-		               WHEN v.channel_id LIKE 'twitter_%%' THEN 'twitter'
-		               WHEN v.channel_id LIKE 'x_%%' THEN 'twitter'
-		               WHEN v.channel_id LIKE 'tiktok_%%' THEN 'tiktok'
-		               WHEN v.channel_id LIKE 'instagram_%%' THEN 'instagram'
+		               WHEN v.channel_id ILIKE 'twitter_%%' COLLATE "C" ESCAPE '' THEN 'twitter'
+		               WHEN v.channel_id ILIKE 'x_%%' COLLATE "C" ESCAPE '' THEN 'twitter'
+		               WHEN v.channel_id ILIKE 'tiktok_%%' COLLATE "C" ESCAPE '' THEN 'tiktok'
+		               WHEN v.channel_id ILIKE 'instagram_%%' COLLATE "C" ESCAPE '' THEN 'instagram'
 		               ELSE 'youtube'
 		           END),
 		       CASE WHEN cf.channel_id IS NOT NULL THEN 1 ELSE 0 END,
 		       bp.category_id, COALESCE(fi.quote_tweet_id,''),
 		       COALESCE(NULLIF(fi.tweet_id, ''), v.video_id),
 		       COALESCE((
-		           SELECT GROUP_CONCAT(media_type, ',')
+		           SELECT STRING_AGG(media_type, ',')
 		           FROM (
 		               SELECT CASE
-			                   WHEN a.asset_kind = 'video_stream' OR mo.content_type LIKE 'video/%%' THEN 'video'
+			                   WHEN a.asset_kind = 'video_stream' OR mo.content_type ILIKE 'video/%%' COLLATE "C" ESCAPE '' THEN 'video'
 		                   ELSE 'image'
 		               END AS media_type
 		               FROM assets a
@@ -183,10 +185,10 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 		           )
 		       ), ''),
 		       COALESCE((
-		           SELECT GROUP_CONCAT(media_type, ',')
+		           SELECT STRING_AGG(media_type, ',')
 		           FROM (
 		               SELECT CASE
-			                   WHEN a.asset_kind = 'video_stream' OR mo.content_type LIKE 'video/%%' THEN 'video'
+			                   WHEN a.asset_kind = 'video_stream' OR mo.content_type ILIKE 'video/%%' COLLATE "C" ESCAPE '' THEN 'video'
 		                   ELSE 'image'
 			               END AS media_type
 			               FROM assets a
@@ -200,10 +202,10 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 		           )
 		       ), ''),
 		       COALESCE((
-		           SELECT GROUP_CONCAT(media_type, ',')
+		           SELECT STRING_AGG(media_type, ',')
 		           FROM (
 		               SELECT CASE
-			                   WHEN a.asset_kind = 'video_stream' OR mo.content_type LIKE 'video/%%' THEN 'video'
+			                   WHEN a.asset_kind = 'video_stream' OR mo.content_type ILIKE 'video/%%' COLLATE "C" ESCAPE '' THEN 'video'
 		                   ELSE 'image'
 		               END AS media_type
 			               FROM assets a
@@ -226,7 +228,7 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 	`, whereClause, videoFullyWatchedSQL("v"), "v.owner_kind", "v.owner_kind")
 	args = append(args, opts.Limit, opts.Offset)
 
-	rows, err := db.conn.Query(query, args...)
+	rows, err := db.conn.Query(bind(query), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +305,7 @@ func (db *DB) GetBookmarkCount(opts GetBookmarksOpts) (int, error) {
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
-	err := db.conn.QueryRow(query, args...).Scan(&count)
+	err := db.conn.QueryRow(bind(query), args...).Scan(&count)
 	return count, err
 }
 
@@ -330,7 +332,7 @@ func appendBookmarkFilterWhere(where []string, args []any, opts GetBookmarksOpts
 
 // GetBookmarkLabelCounts returns bookmark label filters ordered by frequency.
 func (db *DB) GetBookmarkLabelCounts() ([]BookmarkLabelCountRow, error) {
-	rows, err := db.conn.Query(`
+	rows, err := db.conn.Query(bind(`
 		SELECT label, COUNT(*) AS bookmark_count
 		FROM (
 			SELECT
@@ -342,7 +344,7 @@ func (db *DB) GetBookmarkLabelCounts() ([]BookmarkLabelCountRow, error) {
 		)
 		GROUP BY label
 		ORDER BY bookmark_count DESC, LOWER(label) ASC
-	`)
+	`))
 	if err != nil {
 		return nil, err
 	}
@@ -392,18 +394,11 @@ func (db *DB) CreateBookmarkCategory(name, archivePath string) (int64, error) {
 	var id int64
 	createdAt := time.Now().UnixMilli()
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		res, err := tx.Exec(
-			"INSERT INTO bookmark_categories (name, archive_path, created_at) VALUES (?, ?, ?)",
-			name, archivePath, createdAt,
-		)
-		if err != nil {
-			return err
-		}
-		id, err = res.LastInsertId()
-		if err != nil {
-			return err
-		}
-		return nil
+		var err error
+		id, err = dbquery.New(tx).CreateBookmarkCategory(context.Background(), dbquery.CreateBookmarkCategoryParams{
+			Name: name, ArchivePath: sql.NullString{String: archivePath, Valid: true}, CreatedAt: createdAt,
+		})
+		return err
 	})
 	return id, err
 }
@@ -413,12 +408,12 @@ func (db *DB) DeleteBookmarkCategory(categoryID int64) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		nowMs := time.Now().UnixMilli()
 		if err := advanceMutationClocksTx(tx, "bookmark", "set", `
-			SELECT video_id AS item_key, ? AS updated_at_ms
+			SELECT video_id AS item_key, ?::BIGINT AS updated_at_ms
 			FROM bookmarks WHERE category_id = ?
 		`, nowMs, categoryID); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`
+		if _, err := tx.Exec(bind(`
 			UPDATE bookmarks
 			SET category_id = 0,
 			    bookmarked_at = (
@@ -426,10 +421,10 @@ func (db *DB) DeleteBookmarkCategory(categoryID int64) error {
 			      WHERE kind = 'bookmark' AND item_key = bookmarks.video_id
 			    )
 			WHERE category_id = ?
-		`, categoryID); err != nil {
+		`), categoryID); err != nil {
 			return err
 		}
-		_, err := tx.Exec("DELETE FROM bookmark_categories WHERE id = ?", categoryID)
+		_, err := tx.Exec(bind("DELETE FROM bookmark_categories WHERE id = ?"), categoryID)
 		if err != nil {
 			return err
 		}
@@ -440,18 +435,12 @@ func (db *DB) DeleteBookmarkCategory(categoryID int64) error {
 // UpdateBookmarkCategory updates a category's name and/or archive path.
 func (db *DB) UpdateBookmarkCategory(categoryID int64, name, archivePath string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(
-			"UPDATE bookmark_categories SET name = ?, archive_path = ? WHERE id = ?",
-			name, archivePath, categoryID,
-		)
+		_, err := tx.Exec(bind("UPDATE bookmark_categories SET name = ?, archive_path = ? WHERE id = ?"), name, archivePath, categoryID)
 		if err != nil {
 			return err
 		}
 		var createdAt int64
-		if err := tx.QueryRow(
-			"SELECT COALESCE(created_at, 0) FROM bookmark_categories WHERE id = ?",
-			categoryID,
-		).Scan(&createdAt); err != nil {
+		if err := tx.QueryRow(bind("SELECT COALESCE(created_at, 0) FROM bookmark_categories WHERE id = ?"), categoryID).Scan(&createdAt); err != nil {
 			if err == sql.ErrNoRows {
 				return nil
 			}
@@ -463,9 +452,7 @@ func (db *DB) UpdateBookmarkCategory(categoryID int64, name, archivePath string)
 
 // GetBookmarkedHandles returns all unique account handles from bookmarks for a user.
 func (db *DB) GetBookmarkedHandles() ([]string, error) {
-	rows, err := db.conn.Query(
-		"SELECT account_handles FROM bookmarks WHERE account_handles IS NOT NULL AND account_handles != ''",
-	)
+	rows, err := db.conn.Query(bind("SELECT account_handles FROM bookmarks WHERE account_handles IS NOT NULL AND account_handles != ''"))
 	if err != nil {
 		return nil, err
 	}
@@ -504,14 +491,9 @@ func (db *DB) GetBookmarkLabels(categoryID string) ([]string, error) {
 	var rows *sql.Rows
 	var err error
 	if categoryID != "" {
-		rows, err = db.conn.Query(
-			"SELECT DISTINCT TRIM(custom_title) FROM bookmarks WHERE category_id = ? AND NULLIF(TRIM(COALESCE(custom_title, '')), '') IS NOT NULL ORDER BY LOWER(TRIM(custom_title))",
-			categoryID,
-		)
+		rows, err = db.conn.Query(bind("SELECT label FROM (SELECT DISTINCT TRIM(custom_title) AS label FROM bookmarks WHERE category_id = ? AND NULLIF(TRIM(COALESCE(custom_title, '')), '') IS NOT NULL) labels ORDER BY LOWER(label)"), categoryID)
 	} else {
-		rows, err = db.conn.Query(
-			"SELECT DISTINCT TRIM(custom_title) FROM bookmarks WHERE NULLIF(TRIM(COALESCE(custom_title, '')), '') IS NOT NULL ORDER BY LOWER(TRIM(custom_title))",
-		)
+		rows, err = db.conn.Query(bind("SELECT label FROM (SELECT DISTINCT TRIM(custom_title) AS label FROM bookmarks WHERE NULLIF(TRIM(COALESCE(custom_title, '')), '') IS NOT NULL) labels ORDER BY LOWER(label)"))
 	}
 	if err != nil {
 		return []string{}, err
@@ -537,20 +519,18 @@ func (db *DB) ClearBookmarkLabel(label string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		nowMs := time.Now().UnixMilli()
 		if err := advanceMutationClocksTx(tx, "bookmark", "set", `
-			SELECT video_id AS item_key, ? AS updated_at_ms
+			SELECT video_id AS item_key, ?::BIGINT AS updated_at_ms
 			FROM bookmarks WHERE custom_title = ?
 		`, nowMs, label); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(
-			`UPDATE bookmarks
+		if _, err := tx.Exec(bind(`UPDATE bookmarks
 			 SET custom_title = '',
 			     bookmarked_at = (
 			       SELECT updated_at_ms FROM mutation_clocks
 			       WHERE kind = 'bookmark' AND item_key = bookmarks.video_id
 			     )
-			 WHERE custom_title = ?`,
-			label,
+			 WHERE custom_title = ?`), label,
 		); err != nil {
 			return err
 		}

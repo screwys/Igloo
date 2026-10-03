@@ -601,7 +601,7 @@ func TestSetPinned(t *testing.T) {
 		t.Fatalf("SetPinned: %v", err)
 	}
 	var pinned int
-	if err := d.QueryRow(`SELECT COALESCE(is_pinned, 0) FROM videos WHERE video_id = ?`, videoID).Scan(&pinned); err != nil {
+	if err := d.QueryRow(`SELECT COALESCE(is_pinned, 0) FROM videos WHERE video_id = $1`, videoID).Scan(&pinned); err != nil {
 		t.Fatalf("read pinned: %v", err)
 	}
 	if pinned != 1 {
@@ -628,7 +628,7 @@ func TestSaveProgress(t *testing.T) {
 	if err := d.QueryRow(`
 		SELECT playback_position, duration
 		FROM watch_history
-		WHERE video_id = ?
+		WHERE video_id = $1
 	`, videoID).Scan(&position, &duration); err != nil {
 		t.Fatalf("read watch history: %v", err)
 	}

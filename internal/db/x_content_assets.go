@@ -115,7 +115,7 @@ func declareSourceAssetChangeTx(tx *sql.Tx, asset Asset, nowMs int64) (bool, err
 		SELECT desired.source_url, desired.job_state
 		FROM assets a
 		JOIN media_objects desired ON desired.object_id = a.desired_object_id
-		WHERE a.asset_kind = ? AND a.owner_kind = ? AND a.owner_id = ? AND a.media_index = ?
+		WHERE a.asset_kind = $1 AND a.owner_kind = $2 AND a.owner_id = $3 AND a.media_index = $4
 	`, asset.AssetKind, asset.OwnerKind, asset.OwnerID, asset.MediaIndex).Scan(&existingSource, &existingState)
 	if err != nil && err != sql.ErrNoRows {
 		return false, err
@@ -141,16 +141,16 @@ func (db *DB) ClaimContentAssetDownloadBatch(opts LeaseOptions, includeTweets bo
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		query, args := contentAssetClaimQuery(opts, includeTweets, lane)
 		ids, err := claimLeasedIDsWithStateColumn(
-			tx, "media_objects", "object_id", "job_state", query, args, opts,
+			tx, "media_objects", "object_id", "job_state", bind(query), args, opts,
 		)
 		if err != nil {
 			return err
 		}
 		for _, id := range ids {
-			asset, err := scanAsset(tx.QueryRow(`SELECT `+assetProjectionSQL+assetJoinsSQL+`
+			asset, err := scanAsset(tx.QueryRow(bind(`SELECT `+assetProjectionSQL+assetJoinsSQL+`
 				WHERE a.desired_object_id = ?
 				ORDER BY CASE WHEN a.required_reason IN ('bookmark', 'like', 'manual') THEN 0 ELSE 1 END, a.id
-				LIMIT 1`, id))
+				LIMIT 1`), id))
 			if err != nil {
 				return err
 			}
@@ -164,7 +164,7 @@ func (db *DB) ClaimContentAssetDownloadBatch(opts LeaseOptions, includeTweets bo
 func contentAssetClaimQuery(opts LeaseOptions, includeTweets bool, lane DownloadLane) (string, []any) {
 	query := `
 		SELECT desired.object_id
-		FROM media_objects desired INDEXED BY idx_media_objects_claim
+		FROM media_objects desired
 		WHERE desired.download_lane = ?
 		  AND desired.job_state IN ('queued', 'downloading')
 		  AND (desired.source_url != '' OR desired.object_key LIKE 'derived:video-thumbnail:%')
@@ -183,7 +183,7 @@ func contentAssetClaimQuery(opts LeaseOptions, includeTweets bool, lane Download
 		  )
 		  AND EXISTS (
 		    SELECT 1
-		    FROM assets a INDEXED BY idx_assets_desired_object
+		    FROM assets a
 		    WHERE a.desired_object_id = desired.object_id
 		      AND a.lifecycle_state = 'active'
 		      AND ` + contentAssetWorkerOwnerSQL + `
@@ -214,16 +214,16 @@ func (db *DB) RequeueXContentAssets(ownerIDs []string, includePruned bool, reaso
 	for _, chunk := range stringChunks(ownerIDs, 400) {
 		err := db.WithWrite(func(tx *sql.Tx) error {
 			reason = strings.TrimSpace(reason)
-			if _, err := tx.Exec(`
+			if _, err := tx.Exec(bind(`
 				UPDATE assets
 				SET required_reason = CASE WHEN ? != '' THEN ? ELSE required_reason END,
 				    lifecycle_state = 'active', revision = revision + 1, updated_at_ms = ?
 				WHERE owner_kind = 'tweet' AND owner_id IN (`+placeholders(len(chunk))+`)
 				  AND asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
-			`, append([]any{reason, reason, nowMs}, stringsToAny(chunk)...)...); err != nil {
+			`), append([]any{reason, reason, nowMs}, stringsToAny(chunk)...)...); err != nil {
 				return err
 			}
-			res, err := tx.Exec(`
+			res, err := tx.Exec(bind(`
 				UPDATE media_objects
 				SET job_state = 'queued',
 				    download_lane = CASE WHEN ? IN ('bookmark', 'like', 'manual') THEN 'current' ELSE download_lane END,
@@ -237,7 +237,7 @@ func (db *DB) RequeueXContentAssets(ownerIDs []string, includePruned bool, reaso
 				    WHERE owner_kind = 'tweet' AND owner_id IN (`+placeholders(len(chunk))+`)
 				      AND asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 				  )
-			`, append([]any{reason, nowMs}, stringsToAny(chunk)...)...)
+			`), append([]any{reason, nowMs}, stringsToAny(chunk)...)...)
 			if err != nil {
 				return err
 			}
@@ -264,7 +264,7 @@ func (db *DB) WakeContentAssetAuthRetriesForPlatform(platform string) (int, erro
 	}
 	var affected int
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		res, err := tx.Exec(`
+		res, err := tx.Exec(bind(`
 			UPDATE media_objects AS mo
 			SET job_state = 'queued', attempts = 0, next_attempt_at_ms = 0,
 			    last_error_kind = '', last_error = '', lease_owner = '', lease_until_ms = 0,
@@ -277,7 +277,7 @@ func (db *DB) WakeContentAssetAuthRetriesForPlatform(platform string) (int, erro
 			      AND a.owner_kind = ?
 			      AND a.asset_kind IN (`+placeholders(len(assetKinds))+`)
 			  )
-		`, append([]any{time.Now().UnixMilli(), ownerKind}, stringsToAny(assetKinds)...)...)
+		`), append([]any{time.Now().UnixMilli(), ownerKind}, stringsToAny(assetKinds)...)...)
 		if err != nil {
 			return err
 		}
@@ -292,7 +292,7 @@ func retireUndesiredXContentObjectsTx(tx *sql.Tx, ownerIDs []string, nowMs int64
 	if len(ownerIDs) == 0 {
 		return nil
 	}
-	_, err := tx.Exec(`
+	_, err := tx.Exec(bind(`
 		UPDATE media_objects AS mo
 		SET job_state = 'pruned', attempts = 0, next_attempt_at_ms = 0,
 		    last_error_kind = '', last_error = '', lease_owner = '', lease_until_ms = 0,
@@ -309,7 +309,7 @@ func retireUndesiredXContentObjectsTx(tx *sql.Tx, ownerIDs []string, nowMs int64
 		      AND active.lifecycle_state = 'active'
 		  )
 		  AND mo.job_state != 'pruned'
-	`, append([]any{nowMs}, stringsToAny(ownerIDs)...)...)
+	`), append([]any{nowMs}, stringsToAny(ownerIDs)...)...)
 	return err
 }
 
@@ -322,15 +322,15 @@ func requireXContentAssetsForUserStateTx(tx *sql.Tx, tweetIDs []string, reason s
 	}
 	for _, chunk := range stringChunks(ownerIDs, 400) {
 		args := stringsToAny(chunk)
-		_, err := tx.Exec(`
+		_, err := tx.Exec(bind(`
 			UPDATE assets SET required_reason = ?, lifecycle_state = 'active', revision = revision + 1, updated_at_ms = ?
 			WHERE owner_kind = 'tweet' AND owner_id IN (`+placeholders(len(chunk))+`)
 			  AND asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
-		`, append([]any{strings.TrimSpace(reason), nowMs}, args...)...)
+		`), append([]any{strings.TrimSpace(reason), nowMs}, args...)...)
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(`
+		_, err = tx.Exec(bind(`
 				UPDATE media_objects
 				SET job_state = 'queued', download_lane = 'current', attempts = 0, next_attempt_at_ms = 0,
 			    last_error_kind = '', last_error = '', lease_owner = '', lease_until_ms = 0,
@@ -342,7 +342,7 @@ func requireXContentAssetsForUserStateTx(tx *sql.Tx, tweetIDs []string, reason s
 			    WHERE owner_kind = 'tweet' AND owner_id IN (`+placeholders(len(chunk))+`)
 			      AND asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 			  )
-		`, append([]any{nowMs}, args...)...)
+		`), append([]any{nowMs}, args...)...)
 		if err != nil {
 			return err
 		}
@@ -357,11 +357,11 @@ func xContentOwnerIDsForUserStateTx(tx *sql.Tx, tweetIDs []string) ([]string, er
 		owners[id] = struct{}{}
 	}
 	for _, chunk := range stringChunks(tweetIDs, 400) {
-		rows, err := tx.Query(`
+		rows, err := tx.Query(bind(`
 			SELECT COALESCE(quote_tweet_id, '')
 			FROM feed_items
 			WHERE tweet_id IN (`+placeholders(len(chunk))+`)
-		`, stringsToAny(chunk)...)
+		`), stringsToAny(chunk)...)
 		if err != nil {
 			return nil, err
 		}
@@ -393,7 +393,7 @@ func refreshXContentUserStateRequirementTx(tx *sql.Tx, tweetIDs []string, nowMs 
 		return err
 	}
 	for _, chunk := range stringChunks(ownerIDs, 400) {
-		_, err := tx.Exec(`
+		_, err := tx.Exec(bind(`
 			UPDATE assets AS a
 			SET required_reason = CASE
 					WHEN EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = a.owner_id)
@@ -415,7 +415,7 @@ func refreshXContentUserStateRequirementTx(tx *sql.Tx, tweetIDs []string, nowMs 
 			  AND a.owner_id IN (`+placeholders(len(chunk))+`)
 			  AND a.asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 			  AND a.required_reason IN ('bookmark', 'like')
-		`, append([]any{nowMs}, stringsToAny(chunk)...)...)
+		`), append([]any{nowMs}, stringsToAny(chunk)...)...)
 		if err != nil {
 			return err
 		}
@@ -438,11 +438,11 @@ func (db *DB) markContentAssetFailure(assetID, assetKind, owner, state, kind, me
 	return db.WithWrite(func(tx *sql.Tx) error {
 		res, err := tx.Exec(`
 			UPDATE media_objects
-			SET job_state = ?, attempts = attempts + 1,
-			    next_attempt_at_ms = 0, last_error_kind = ?, last_error = ?,
-			    lease_owner = '', lease_until_ms = 0, updated_at_ms = ?
-			WHERE object_id = (SELECT desired_object_id FROM assets WHERE asset_id = ? AND asset_kind = ?)
-			  AND job_state = 'downloading' AND lease_owner = ?
+			SET job_state = $1, attempts = attempts + 1,
+			    next_attempt_at_ms = 0, last_error_kind = $2, last_error = $3,
+			    lease_owner = '', lease_until_ms = 0, updated_at_ms = $4
+			WHERE object_id = (SELECT desired_object_id FROM assets WHERE asset_id = $5 AND asset_kind = $6)
+			  AND job_state = 'downloading' AND lease_owner = $7
 		`, state, trimJobError(kind), trimJobError(message), nowMs,
 			strings.TrimSpace(assetID), strings.TrimSpace(assetKind), strings.TrimSpace(owner))
 		if err != nil {

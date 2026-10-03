@@ -69,7 +69,7 @@ func newTestServer(t *testing.T) *testServer {
 	_ = tmp.Close()
 
 	stateRoot := t.TempDir()
-	d, err := db.OpenPath(path, stateRoot)
+	d, err := db.OpenAtStateRoot(stateRoot)
 	if err != nil {
 		_ = os.Remove(path)
 		t.Fatalf("db.Open: %v", err)

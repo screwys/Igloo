@@ -47,7 +47,7 @@ func (db *DB) queryAffinityTable(table, keyCol string, keys []string, result map
 	query := "SELECT " + keyCol + ", COALESCE(score,0), COALESCE(last_event_at_ms,0), COALESCE(event_count,0) " +
 		"FROM " + table + " WHERE " + keyCol + " IN (" + string(placeholders) + ")"
 
-	rows, err := db.conn.Query(query, args...)
+	rows, err := db.conn.Query(bind(query), args...)
 	if err != nil {
 		return nil // A missing affinity table leaves scores empty.
 	}
@@ -77,10 +77,11 @@ func (db *DB) UpsertShareAccountAffinity(handle string, scoreDelta float64, even
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			INSERT INTO feed_share_account_affinity (handle, score, last_event_at_ms, event_count)
-			VALUES (?, ?, ?, 1)
+			VALUES ($1, $2, $3, 1)
 			ON CONFLICT(handle) DO UPDATE SET
 				score = feed_share_account_affinity.score + excluded.score,
-				last_event_at_ms = MAX(feed_share_account_affinity.last_event_at_ms, excluded.last_event_at_ms),
+				last_event_at_ms = CASE WHEN feed_share_account_affinity.last_event_at_ms IS NULL THEN NULL
+					ELSE GREATEST(feed_share_account_affinity.last_event_at_ms, excluded.last_event_at_ms) END,
 				event_count = feed_share_account_affinity.event_count + 1
 		`, handle, scoreDelta, eventAtMs)
 		return err
@@ -92,10 +93,11 @@ func (db *DB) UpsertShareTokenAffinity(token string, scoreDelta float64, eventAt
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			INSERT INTO feed_share_token_affinity (token, score, last_event_at_ms, event_count)
-			VALUES (?, ?, ?, 1)
+			VALUES ($1, $2, $3, 1)
 			ON CONFLICT(token) DO UPDATE SET
 				score = feed_share_token_affinity.score + excluded.score,
-				last_event_at_ms = MAX(feed_share_token_affinity.last_event_at_ms, excluded.last_event_at_ms),
+				last_event_at_ms = CASE WHEN feed_share_token_affinity.last_event_at_ms IS NULL THEN NULL
+					ELSE GREATEST(feed_share_token_affinity.last_event_at_ms, excluded.last_event_at_ms) END,
 				event_count = feed_share_token_affinity.event_count + 1
 		`, token, scoreDelta, eventAtMs)
 		return err
@@ -109,8 +111,8 @@ func (db *DB) PruneShareTokenAffinity(keepTop int) error {
 			DELETE FROM feed_share_token_affinity
 			WHERE token NOT IN (
 				SELECT token FROM feed_share_token_affinity
-				ORDER BY score DESC
-				LIMIT ?
+				ORDER BY score DESC NULLS LAST
+				LIMIT $1
 			)
 		`, keepTop)
 		return err
@@ -187,7 +189,7 @@ func (db *DB) FindSiblingTweetIDsForLikes(tweetIDs []string) (map[string][]strin
 	}
 
 	hashRows, err := db.conn.Query(
-		"SELECT tweet_id, content_hash FROM feed_items WHERE tweet_id IN ("+string(placeholders)+") AND content_hash IS NOT NULL AND content_hash <> ''",
+		bind("SELECT tweet_id, content_hash FROM feed_items WHERE tweet_id IN ("+string(placeholders)+") AND content_hash IS NOT NULL AND content_hash <> ''"),
 		args...,
 	)
 	if err != nil {
@@ -226,7 +228,7 @@ func (db *DB) FindSiblingTweetIDsForLikes(tweetIDs []string) (map[string][]strin
 	}
 
 	sibRows, err := db.conn.Query(
-		"SELECT tweet_id, content_hash FROM feed_items WHERE content_hash IN ("+string(hashPH)+") AND content_hash IS NOT NULL AND content_hash <> ''",
+		bind("SELECT tweet_id, content_hash FROM feed_items WHERE content_hash IN ("+string(hashPH)+") AND content_hash IS NOT NULL AND content_hash <> ''"),
 		hashArgs...,
 	)
 	if err != nil {

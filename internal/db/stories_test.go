@@ -26,37 +26,37 @@ func TestStoriesUseCutoffSeenStateAndOwnChannels(t *testing.T) {
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO channel_follows (channel_id, followed_at)
-		VALUES ('tiktok_followed', ?), ('tiktok_reposter', ?), ('tiktok_starred', ?)
+		VALUES ('tiktok_followed', $1), ('tiktok_reposter', $2), ('tiktok_starred', $3)
 	`, nowMs, nowMs, nowMs); err != nil {
 		t.Fatalf("insert follows: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO channel_stars (channel_id, starred_at)
-		VALUES ('tiktok_starred', ?)
+		VALUES ('tiktok_starred', $1)
 	`, nowMs); err != nil {
 		t.Fatalf("insert star: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at, source_kind) VALUES
-			('followed_recent', 'tiktok_followed', 'tiktok_video', 'recent', ?, 'story'),
-			('followed_old', 'tiktok_followed', 'tiktok_video', 'old', ?, 'story'),
-			('author_story', 'tiktok_author', 'tiktok_video', 'author story', ?, 'story'),
-			('regular_repost', 'tiktok_author', 'tiktok_video', 'regular repost', ?, ''),
-			('starred_recent', 'tiktok_starred', 'tiktok_video', 'starred recent', ?, 'story'),
-			('regular_recent', 'tiktok_followed', 'tiktok_video', 'regular recent', ?, '')
+			('followed_recent', 'tiktok_followed', 'tiktok_video', 'recent', $1, 'story'),
+			('followed_old', 'tiktok_followed', 'tiktok_video', 'old', $2, 'story'),
+			('author_story', 'tiktok_author', 'tiktok_video', 'author story', $3, 'story'),
+			('regular_repost', 'tiktok_author', 'tiktok_video', 'regular repost', $4, ''),
+			('starred_recent', 'tiktok_starred', 'tiktok_video', 'starred recent', $5, 'story'),
+			('regular_recent', 'tiktok_followed', 'tiktok_video', 'regular recent', $6, '')
 	`, recent, old, recent, recent, starredRecent, recent); err != nil {
 		t.Fatalf("insert videos: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO moment_views (video_id, viewed_at)
-		VALUES ('starred_recent', ?)
+		VALUES ('starred_recent', $1)
 	`, nowMs); err != nil {
 		t.Fatalf("insert starred view: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO video_repost_sources (
 			video_id, reposter_channel_id, reposted_at_ms, first_seen_at_ms, updated_at_ms
-		) VALUES ('regular_repost', 'tiktok_reposter', ?, ?, ?)
+		) VALUES ('regular_repost', 'tiktok_reposter', $1, $2, $3)
 	`, recent, recent, recent); err != nil {
 		t.Fatalf("insert repost source: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestStoriesUseCutoffSeenStateAndOwnChannels(t *testing.T) {
 
 	if err := d.ExecRaw(`
 		INSERT INTO moment_views (video_id, viewed_at)
-		VALUES ('followed_recent', ?)
+		VALUES ('followed_recent', $1)
 	`, nowMs); err != nil {
 		t.Fatalf("insert view: %v", err)
 	}
@@ -117,14 +117,14 @@ func TestStoriesSkipLegacyInstagramTrayRows(t *testing.T) {
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO channel_follows (channel_id, followed_at)
-		VALUES ('instagram_cinema', ?)
+		VALUES ('instagram_cinema', $1)
 	`, nowMs); err != nil {
 		t.Fatalf("insert follow: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at, source_kind) VALUES
-			('instagram_story_TRAY123', 'instagram_cinema', 'instagram_reel', 'tray', 0, ?, 'story'),
-			('instagram_story_987654321', 'instagram_cinema', 'instagram_reel', 'frame', 0, ?, 'story')
+			('instagram_story_TRAY123', 'instagram_cinema', 'instagram_reel', 'tray', 0, $1, 'story'),
+			('instagram_story_987654321', 'instagram_cinema', 'instagram_reel', 'frame', 0, $2, 'story')
 	`, recent, recent); err != nil {
 		t.Fatalf("insert stories: %v", err)
 	}
@@ -182,30 +182,30 @@ func TestAndroidSyncDesiredSetsIncludeFollowedStoryMediaAndBookmarkedExpiredStor
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO channel_follows (channel_id, followed_at)
-		VALUES ('tiktok_sample_reposter', ?), ('tiktok_followed', ?)
+		VALUES ('tiktok_sample_reposter', $1), ('tiktok_followed', $2)
 	`, nowMs, nowMs); err != nil {
 		t.Fatalf("insert follow: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at, source_kind) VALUES
-			('recent_author_story', 'tiktok_author', 'tiktok_video', 'recent author story', ?, 'story'),
-			('expired_bookmarked_story', 'tiktok_author', 'tiktok_video', 'expired bookmarked story', ?, 'story'),
-			('expired_unprotected_story', 'tiktok_author', 'tiktok_video', 'expired unprotected story', ?, 'story'),
-			('sample_post', 'tiktok_author', 'tiktok_video', 'recent regular post', ?, ''),
-			('recent_followed_story', 'tiktok_followed', 'tiktok_video', 'recent followed story', ?, 'story')
+			('recent_author_story', 'tiktok_author', 'tiktok_video', 'recent author story', $1, 'story'),
+			('expired_bookmarked_story', 'tiktok_author', 'tiktok_video', 'expired bookmarked story', $2, 'story'),
+			('expired_unprotected_story', 'tiktok_author', 'tiktok_video', 'expired unprotected story', $3, 'story'),
+			('sample_post', 'tiktok_author', 'tiktok_video', 'recent regular post', $4, ''),
+			('recent_followed_story', 'tiktok_followed', 'tiktok_video', 'recent followed story', $5, 'story')
 	`, recent, expired, expired, recent, recent); err != nil {
 		t.Fatalf("insert videos: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO video_repost_sources (
 			video_id, reposter_channel_id, reposted_at_ms, first_seen_at_ms, updated_at_ms
-		) VALUES ('sample_post', 'tiktok_sample_reposter', ?, ?, ?)
+		) VALUES ('sample_post', 'tiktok_sample_reposter', $1, $2, $3)
 	`, recent, recent, recent); err != nil {
 		t.Fatalf("insert repost source: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO bookmarks (video_id, bookmarked_at)
-		VALUES ('expired_bookmarked_story', ?)
+		VALUES ('expired_bookmarked_story', $1)
 	`, nowMs); err != nil {
 		t.Fatalf("insert bookmark: %v", err)
 	}

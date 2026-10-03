@@ -45,7 +45,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 snapshot_generated_scope() {
-  find internal/components static/js static/css -path static/js/dist -prune -o -type f -print0 \
+  find internal/db/query internal/components static/js static/css -path static/js/dist -prune -o -type f -print0 \
     | sort -z \
     | xargs -0 sha256sum
 }
@@ -53,6 +53,9 @@ snapshot_generated_scope() {
 if [[ "$write" == false ]]; then
   snapshot_generated_scope > "$tmp/before"
 fi
+
+echo "[drift] generating sqlc queries..."
+go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 
 echo "[drift] generating templ components..."
 go run github.com/a-h/templ/cmd/templ@v0.3.1020 generate

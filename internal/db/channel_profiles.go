@@ -25,6 +25,7 @@ func (db *DB) UpsertChannelProfile(profile model.ChannelProfile) error {
 }
 
 func upsertChannelProfileTx(tx *sql.Tx, profile model.ChannelProfile) error {
+	profile.DisplayName = strings.ReplaceAll(profile.DisplayName, "\x00", "")
 	channelID := strings.TrimSpace(profile.ChannelID)
 	platform := strings.TrimSpace(profile.Platform)
 	if channelID == "" || platform == "" {
@@ -35,7 +36,7 @@ func upsertChannelProfileTx(tx *sql.Tx, profile model.ChannelProfile) error {
 			channel_id, platform, handle, display_name, bio, website,
 			followers, following, verified, verified_type, protected, account_region, account_details_json,
 			observed_at_ms, fetched_at, tombstone
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		ON CONFLICT(channel_id) DO UPDATE SET
 			platform = excluded.platform,
 			handle = COALESCE(excluded.handle, channel_profiles.handle),
@@ -49,8 +50,8 @@ func upsertChannelProfileTx(tx *sql.Tx, profile model.ChannelProfile) error {
 			protected = excluded.protected,
 			account_region = excluded.account_region,
 			account_details_json = excluded.account_details_json,
-			observed_at_ms = MAX(channel_profiles.observed_at_ms, excluded.observed_at_ms),
-			fetched_at = MAX(channel_profiles.fetched_at, excluded.fetched_at),
+			observed_at_ms = GREATEST(channel_profiles.observed_at_ms, excluded.observed_at_ms),
+			fetched_at = GREATEST(channel_profiles.fetched_at, excluded.fetched_at),
 			tombstone = excluded.tombstone
 	`,
 		channelID, platform, nilIfEmpty(profile.Handle), nilIfEmpty(profile.DisplayName),
@@ -81,7 +82,7 @@ func (db *DB) GetChannelProfile(channelID string) (*model.ChannelProfile, error)
 		  ON banner.asset_kind = 'banner' AND banner.owner_kind = 'channel'
 		 AND banner.owner_id = cp.channel_id AND banner.media_index = 0
 		LEFT JOIN media_objects banner_object ON banner_object.object_id = banner.desired_object_id
-		WHERE cp.channel_id = ?
+		WHERE cp.channel_id = $1
 	`, channelID))
 }
 
@@ -108,7 +109,7 @@ func (db *DB) GetYouTubeChannelProfileByHandle(handle string) (*model.ChannelPro
 		WHERE LOWER(cp.platform) = 'youtube'
 		  AND cp.tombstone = 0
 		  AND cp.channel_id LIKE 'youtube_UC%'
-		  AND LOWER(LTRIM(COALESCE(cp.handle, ''), '@')) = ?
+		  AND LOWER(LTRIM(COALESCE(cp.handle, ''), '@')) = $1
 		ORDER BY cp.fetched_at DESC
 		LIMIT 1
 	`, handle))
@@ -161,12 +162,12 @@ func (db *DB) GetTwitterChannelProfilesByHandles(handles []string) (map[string]m
 		return map[string]model.ChannelProfile{}, nil
 	}
 	args := stringsToAny(keys)
-	rows, err := db.conn.Query(`
+	rows, err := db.conn.Query(bind(`
 		SELECT channel_id, COALESCE(handle, ''), COALESCE(display_name, ''), COALESCE(account_region, ''), COALESCE(account_details_json, '')
 		FROM channel_profiles
 		WHERE platform = 'twitter' AND tombstone = 0
 		  AND LOWER(COALESCE(handle, '')) IN (`+placeholders(len(keys))+`)
-	`, args...)
+	`), args...)
 	if err != nil {
 		return nil, err
 	}

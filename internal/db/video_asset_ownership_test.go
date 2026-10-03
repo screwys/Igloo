@@ -479,7 +479,7 @@ func TestPendingVideoPreviewsDeriveFromCanonicalStreamRevision(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		if err := d.ExecRaw(`UPDATE videos SET downloaded_at = ? WHERE video_id = ?`, downloadedAt, videoID); err != nil {
+		if err := d.ExecRaw(`UPDATE videos SET downloaded_at = $1 WHERE video_id = $2`, downloadedAt, videoID); err != nil {
 			t.Fatal(err)
 		}
 		asset, err := d.GetAssetByOwnerIdentity("video_stream", ownerKind, videoID, 0)

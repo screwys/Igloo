@@ -297,7 +297,7 @@ func TestImportConfigReplaceSubscriptionsClearsStaleFollows(t *testing.T) {
 	if err := d.QueryRow(`SELECT COUNT(*) FROM channel_stars WHERE channel_id = 'youtube_sample_old'`).Scan(&oldStars); err != nil {
 		t.Fatalf("count old stars: %v", err)
 	}
-	var oldSettingsNull int
+	var oldSettingsNull bool
 	var oldSettingsAt int64
 	if err := d.QueryRow(`
 		SELECT max_videos IS NULL AND download_subtitles IS NULL
@@ -308,8 +308,8 @@ func TestImportConfigReplaceSubscriptionsClearsStaleFollows(t *testing.T) {
 	`).Scan(&oldSettingsNull, &oldSettingsAt); err != nil {
 		t.Fatalf("read old settings tombstone: %v", err)
 	}
-	if oldStars != 0 || oldSettingsNull != 1 {
-		t.Fatalf("old follow state remained: stars=%d settings_null=%d", oldStars, oldSettingsNull)
+	if oldStars != 0 || !oldSettingsNull {
+		t.Fatalf("old follow state remained: stars=%d settings_null=%t", oldStars, oldSettingsNull)
 	}
 	var followAction string
 	var followClockAt int64
@@ -360,7 +360,7 @@ func TestImportConfigIgnoresRetiredIntervalSettings(t *testing.T) {
 	}
 	for _, key := range []string{"youtube_check_interval", "shorts_check_interval"} {
 		var count int
-		if err := d.QueryRow(`SELECT COUNT(*) FROM settings WHERE key = ?`, key).Scan(&count); err != nil {
+		if err := d.QueryRow(`SELECT COUNT(*) FROM settings WHERE key = $1`, key).Scan(&count); err != nil {
 			t.Fatalf("count %s: %v", key, err)
 		}
 		if count != 0 {
@@ -554,10 +554,10 @@ func TestImportConfigRepairsExistingBookmarkedTikTokPublishDate(t *testing.T) {
 	const wantPublishedAt int64 = 1734000724000
 	videoID := strconv.FormatInt((wantPublishedAt/1000)<<32, 10)
 
-	if _, err := d.conn.Exec(`
+	if _, err := d.conn.Exec(bind(`
 			INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
 			VALUES (?, ?, 'tiktok_video', 'Old title', 0, 0)
-	`, videoID, "tiktok_sample"); err != nil {
+	`), videoID, "tiktok_sample"); err != nil {
 		t.Fatalf("seed video: %v", err)
 	}
 
@@ -579,7 +579,7 @@ func TestImportConfigRepairsExistingBookmarkedTikTokPublishDate(t *testing.T) {
 	if err := d.QueryRow(`
 			SELECT published_at
 			FROM videos
-			WHERE video_id = ?
+			WHERE video_id = $1
 		`, videoID).Scan(&publishedAt); err != nil {
 		t.Fatalf("read video: %v", err)
 	}

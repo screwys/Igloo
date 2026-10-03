@@ -136,8 +136,8 @@ func TestListAndroidSyncFeedEffectiveRecencyBoundsEachRequestedRoot(t *testing.T
 			SELECT depth + 1 FROM chain WHERE depth < 51
 		)
 		INSERT INTO feed_items (tweet_id, reply_to_status, published_at, fetched_at)
-		SELECT printf('sample_thread_%02d', depth),
-		       CASE WHEN depth = 0 THEN '' ELSE printf('sample_thread_%02d', depth - 1) END,
+		SELECT ('sample_thread_' || lpad((depth)::text, 2, '0')),
+		       CASE WHEN depth = 0 THEN '' ELSE ('sample_thread_' || lpad((depth - 1)::text, 2, '0')) END,
 		       CASE depth WHEN 50 THEN 500 WHEN 51 THEN 1000 ELSE 0 END,
 		       CASE depth WHEN 50 THEN 500 WHEN 51 THEN 1000 ELSE 0 END
 		FROM chain

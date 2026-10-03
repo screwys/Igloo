@@ -270,7 +270,7 @@ func TestBookmarkMutationCreatesVideoStubForFeedItem(t *testing.T) {
 		INSERT INTO feed_items (
 			tweet_id, source_channel_id, channel_id, body_text,
 			canonical_url, published_at, fetched_at
-		) VALUES (?, ?, ?, 'sample body', ?, ?, ?)`,
+		) VALUES ($1, $2, $3, 'sample body', $4, $5, $6)`,
 		tweetID,
 		"twitter_"+authorHandle,
 		"twitter_"+authorHandle,
@@ -293,7 +293,7 @@ func TestBookmarkMutationCreatesVideoStubForFeedItem(t *testing.T) {
 	if err := d.QueryRow(`
 		SELECT channel_id
 		FROM videos
-		WHERE video_id = ?
+		WHERE video_id = $1
 	`, tweetID).Scan(&channelID); err != nil {
 		t.Fatalf("read video stub: %v", err)
 	}

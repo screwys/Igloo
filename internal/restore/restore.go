@@ -5,14 +5,13 @@
 //  1. Import handler receives a backup archive upload and calls StageZip() to
 //     validate and stage it below the state root.
 //  2. Process exits; systemd restarts igloo.
-//  3. Startup calls ApplyPending() before opening the database. If the
-//     marker exists, the staged database and config files replace the live
-//     ones, and the staging directory is cleaned up.
+//  3. Startup applies config before starting PostgreSQL, then replaces the
+//     database before workers start. The marker stays until both succeed.
 package restore
 
 import (
 	"archive/zip"
-	"database/sql"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +25,7 @@ import (
 	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/storage"
+	"github.com/screwys/igloo/internal/toolenv"
 )
 
 const (
@@ -72,7 +72,10 @@ func StageZip(readerAt io.ReaderAt, size int64, layout storage.Layout) (stageErr
 	if !dbSeen {
 		return ErrMissingDatabase
 	}
-	stagedDB := filepath.Join(stage, config.DatabaseFilename)
+	stagedDB, err := stagedDatabasePath(stage)
+	if err != nil {
+		return err
+	}
 	if err := validateStagedDatabase(stagedDB); err != nil {
 		return fmt.Errorf("validate staged db: %w", err)
 	}
@@ -130,6 +133,9 @@ func extractZipBackup(readerAt io.ReaderAt, size int64, stage string) (bool, err
 			return false, err
 		}
 		if dbEntry {
+			if dbSeen {
+				return false, fmt.Errorf("backup archive has more than one database")
+			}
 			dbSeen = true
 		}
 	}
@@ -145,7 +151,7 @@ func backupArchiveEntry(name string) (clean string, dbEntry bool, ok bool, err e
 		return "", false, false, fmt.Errorf("unsafe backup path: %s", name)
 	}
 	slash := filepath.ToSlash(clean)
-	dbEntry = slash == config.DatabaseFilename
+	dbEntry = slash == config.DatabaseFilename || slash == config.DatabaseBackupFilename
 	if dbEntry || slash == runtimeName ||
 		strings.HasPrefix(slash+"/", configPrefix) ||
 		slash == strings.TrimSuffix(configPrefix, "/") {
@@ -161,7 +167,9 @@ func cleanupStaging(stage string) error {
 	return nil
 }
 
-func ApplyPending(cfg *config.Config) error {
+// ApplyPendingConfig runs before runtime configuration is loaded or PostgreSQL
+// is started. Database replacement happens through ApplyPendingDatabase.
+func ApplyPendingConfig(cfg *config.Config) error {
 	if !HasPending(cfg.Storage.StateRoot()) {
 		return nil
 	}
@@ -169,9 +177,9 @@ func ApplyPending(cfg *config.Config) error {
 		return fmt.Errorf("validate storage layout: %w", err)
 	}
 	stage := stagingDir(cfg.Storage.StateRoot())
-	stagedDB := filepath.Join(stage, config.DatabaseFilename)
-	if _, err := os.Stat(stagedDB); err != nil {
-		return fmt.Errorf("staged db missing: %w", err)
+	stagedDB, err := stagedDatabasePath(stage)
+	if err != nil {
+		return err
 	}
 	if err := validateStagedDatabase(stagedDB); err != nil {
 		return fmt.Errorf("validate staged db: %w", err)
@@ -195,35 +203,39 @@ func ApplyPending(cfg *config.Config) error {
 			return fmt.Errorf("restore config %s: %w", file.rel, err)
 		}
 	}
+	if len(configFiles) > 0 {
+		slog.Info("restore: config files restored", "count", len(configFiles), "dir", cfg.ConfDir)
+	}
+	return nil
+}
+
+// ApplyPendingDatabase runs after PostgreSQL opens and before background work.
+func ApplyPendingDatabase(ctx context.Context, cfg *config.Config, store *db.DB) error {
+	if !HasPending(cfg.Storage.StateRoot()) {
+		return nil
+	}
 	if err := cfg.Storage.Ensure(); err != nil {
 		return fmt.Errorf("revalidate storage layout: %w", err)
 	}
-	if err := storage.ValidateContainedPath(cfg.Storage.StateRoot(), cfg.Storage.DatabasePath()); err != nil {
-		return fmt.Errorf("validate database destination: %w", err)
-	}
-	preparedDB, err := prepareFileFromPath(stagedDB, cfg.Storage.DatabasePath(), 0o600)
+	stage := stagingDir(cfg.Storage.StateRoot())
+	stagedDB, err := stagedDatabasePath(stage)
 	if err != nil {
-		return fmt.Errorf("prepare restored database: %w", err)
+		return err
 	}
-	defer func() { _ = os.Remove(preparedDB) }()
-	if err := resetPreparedAndroidSyncIdentity(preparedDB); err != nil {
-		return fmt.Errorf("reset restored Android sync identity: %w", err)
+	if filepath.Base(stagedDB) == config.DatabaseBackupFilename {
+		err = store.RestorePostgresArchive(ctx, stagedDB)
+	} else {
+		err = store.RestoreLegacyArchive(ctx, stagedDB)
 	}
-	for _, suffix := range []string{"-wal", "-shm"} {
-		if err := validateRemovableFile(cfg.Storage.DatabasePath() + suffix); err != nil {
-			return fmt.Errorf("validate old database%s: %w", suffix, err)
-		}
-	}
-	if err := os.Rename(preparedDB, cfg.Storage.DatabasePath()); err != nil {
+	if err != nil {
 		return fmt.Errorf("restore database: %w", err)
 	}
-	for _, suffix := range []string{"-wal", "-shm"} {
-		if err := removeFile(cfg.Storage.DatabasePath() + suffix); err != nil {
-			return fmt.Errorf("remove old database%s: %w", suffix, err)
-		}
+	retainedPath, err := store.RetainLegacyDatabase(ctx)
+	if err != nil {
+		return fmt.Errorf("retain previous SQLite database: %w", err)
 	}
-	if err := storage.SyncDirectory(filepath.Dir(cfg.Storage.DatabasePath())); err != nil {
-		return fmt.Errorf("sync restored database: %w", err)
+	if retainedPath != "" {
+		slog.Info("restore: previous SQLite database retained", "path", retainedPath)
 	}
 	if err := os.Remove(markerPath(cfg.Storage.StateRoot())); err != nil {
 		return fmt.Errorf("clear restore marker: %w", err)
@@ -234,109 +246,46 @@ func ApplyPending(cfg *config.Config) error {
 	if err := cleanupStaging(stage); err != nil {
 		slog.Warn("restore: staging cleanup failed", "state_dir", stage, "err", err)
 	}
-	slog.Info("restore: database swapped", "path", cfg.Storage.DatabasePath())
-	if len(configFiles) > 0 {
-		slog.Info("restore: config files restored", "count", len(configFiles), "dir", cfg.ConfDir)
-	}
+	slog.Info("restore: database restored")
 	return nil
 }
 
-func resetPreparedAndroidSyncIdentity(path string) error {
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(delete)&_pragma=busy_timeout(30000)")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-	tx, err := conn.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.Exec(`DELETE FROM android_sync_heads`); err != nil {
-		return err
-	}
-	result, err := tx.Exec(`
-		UPDATE android_sync_clock
-		SET epoch = lower(hex(randomblob(16))), revision = 0
-		WHERE id = 1
-	`)
-	if err != nil {
-		return err
-	}
-	if changed, err := result.RowsAffected(); err != nil {
-		return err
-	} else if changed != 1 {
-		return fmt.Errorf("android sync clock row is missing")
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(path, os.O_RDONLY, 0)
-	if err != nil {
-		return err
-	}
-	return errors.Join(file.Sync(), file.Close())
-}
-
 func validateStagedDatabase(path string) error {
-	conn, err := sql.Open("sqlite", "file:"+path+"?mode=rw&_pragma=journal_mode(delete)&_pragma=foreign_keys(on)&_pragma=busy_timeout(30000)")
-	if err != nil {
-		return err
+	if filepath.Base(path) == config.DatabaseBackupFilename {
+		postgresBin, err := toolenv.PostgresBinDir()
+		if err != nil {
+			return err
+		}
+		return db.ValidatePostgresArchive(context.Background(), path, postgresBin)
 	}
-	defer func() { _ = conn.Close() }()
-	conn.SetMaxOpenConns(1)
-	if err := validateDatabaseIntegrity(conn); err != nil {
-		return err
-	}
-	if err := db.ApplySchemaMigrations(conn); err != nil {
-		return err
-	}
-	if err := db.ValidateCurrentSchema(conn); err != nil {
-		return err
-	}
-	if err := conn.Close(); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(path, os.O_RDONLY, 0)
-	if err != nil {
-		return err
-	}
-	return errors.Join(file.Sync(), file.Close())
+	_, cleanup, err := db.PrepareLegacyArchive(context.Background(), path)
+	cleanup()
+	return err
 }
 
-func validateDatabaseIntegrity(conn *sql.DB) error {
-	var quickCheck string
-	if err := conn.QueryRow(`PRAGMA quick_check`).Scan(&quickCheck); err != nil {
-		return err
+func stagedDatabasePath(stage string) (string, error) {
+	var found string
+	for _, name := range []string{config.DatabaseBackupFilename, config.DatabaseFilename} {
+		path := filepath.Join(stage, name)
+		info, err := os.Lstat(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		if !info.Mode().IsRegular() {
+			return "", fmt.Errorf("staged database is not a regular file")
+		}
+		if found != "" {
+			return "", fmt.Errorf("backup archive has more than one database")
+		}
+		found = path
 	}
-	if quickCheck != "ok" {
-		return fmt.Errorf("quick_check failed: %s", quickCheck)
+	if found == "" {
+		return "", ErrMissingDatabase
 	}
-	fkRows, err := conn.Query(`PRAGMA foreign_key_check`)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = fkRows.Close() }()
-	if fkRows.Next() {
-		return fmt.Errorf("foreign_key_check failed")
-	}
-	return fkRows.Err()
-}
-
-func prepareFileFromPath(sourcePath, targetPath string, mode os.FileMode) (string, error) {
-	source, err := os.Open(sourcePath)
-	if err != nil {
-		return "", err
-	}
-	preparedPath, prepareErr := prepareFile(targetPath, mode, func(dst io.Writer) error {
-		_, err := io.Copy(dst, source)
-		return err
-	})
-	if err := errors.Join(prepareErr, source.Close()); err != nil {
-		_ = os.Remove(preparedPath)
-		return "", err
-	}
-	return preparedPath, nil
+	return found, nil
 }
 
 func replaceFile(target string, mode os.FileMode, write func(io.Writer) error) error {
@@ -389,30 +338,6 @@ func prepareFile(target string, mode os.FileMode, write func(io.Writer) error) (
 		return remove(err)
 	}
 	return tmpPath, nil
-}
-
-func validateRemovableFile(path string) error {
-	info, err := os.Lstat(path)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("restore sidecar %q is not a regular file", path)
-	}
-	return nil
-}
-
-func removeFile(path string) error {
-	if err := validateRemovableFile(path); err != nil {
-		return err
-	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
 }
 
 type restoreConfigFile struct {

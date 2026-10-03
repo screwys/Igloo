@@ -593,21 +593,28 @@ func TestHandleConfigExportFullIncludesDatabaseStateWithoutMediaPayload(t *testi
 	if got := payload["bookmarks"].([]any)[0].(map[string]any)["custom_title"]; got != "Watch Later" {
 		t.Fatalf("first bookmark custom_title = %v, want Watch Later", got)
 	}
-	dbBytes, ok := entries[config.DatabaseFilename]
+	dbBytes, ok := entries[config.DatabaseBackupFilename]
 	if !ok {
-		t.Fatalf("full export missing %s; entries=%v", config.DatabaseFilename, mapKeys(entries))
+		t.Fatalf("full export missing %s; entries=%v", config.DatabaseBackupFilename, mapKeys(entries))
 	}
-	snapshotPath := filepath.Join(t.TempDir(), config.DatabaseFilename)
+	snapshotPath := filepath.Join(t.TempDir(), config.DatabaseBackupFilename)
 	if err := os.WriteFile(snapshotPath, dbBytes, 0o644); err != nil {
 		t.Fatalf("write db snapshot: %v", err)
 	}
-	snapshotDB, err := sql.Open("sqlite", "file:"+snapshotPath+"?mode=ro")
+	snapshotState := t.TempDir()
+	if err := os.WriteFile(filepath.Join(snapshotState, ".igloo-state-root"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	snapshotDB, err := db.OpenAtStateRoot(snapshotState)
 	if err != nil {
 		t.Fatalf("open db snapshot: %v", err)
 	}
 	defer func() {
 		_ = snapshotDB.Close()
 	}()
+	if err := snapshotDB.RestorePostgresArchive(context.Background(), snapshotPath); err != nil {
+		t.Fatalf("restore db snapshot: %v", err)
+	}
 	for _, table := range []string{"muted_channels", "watch_history", "moment_views"} {
 		var count int
 		if err := snapshotDB.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err != nil {
@@ -935,8 +942,8 @@ func TestHandleConfigExportFullSavesZipToBackupDirWhenConfigured(t *testing.T) {
 		t.Fatalf("read saved full export: %v", err)
 	}
 	entries := readZipEntries(t, data)
-	if _, ok := entries[config.DatabaseFilename]; !ok {
-		t.Fatalf("saved full export missing %s; entries=%v", config.DatabaseFilename, mapKeys(entries))
+	if _, ok := entries[config.DatabaseBackupFilename]; !ok {
+		t.Fatalf("saved full export missing %s; entries=%v", config.DatabaseBackupFilename, mapKeys(entries))
 	}
 	for name := range entries {
 		if strings.HasPrefix(name, "assets/") {

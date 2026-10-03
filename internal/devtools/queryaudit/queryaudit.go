@@ -13,8 +13,7 @@ import (
 	"time"
 
 	"github.com/screwys/igloo/internal/config"
-
-	_ "modernc.org/sqlite"
+	igloodb "github.com/screwys/igloo/internal/db"
 )
 
 type Options struct {
@@ -54,7 +53,7 @@ func parseOptions(args []string) (Options, error) {
 	opts := defaultOptions()
 	fs := flag.NewFlagSet("query-audit", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.StringVar(&opts.DBPath, "db", "", "database path; defaults to configured Igloo database")
+	fs.StringVar(&opts.DBPath, "db", "", "Igloo state directory; defaults to configured state directory")
 	fs.BoolVar(&opts.JSON, "json", false, "print JSON output")
 	fs.IntVar(&opts.Limit, "limit", opts.Limit, "maximum rows to read for each probe")
 	fs.StringVar(&opts.Search, "search", opts.Search, "search term used for search probes")
@@ -100,7 +99,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 			_, _ = fmt.Fprintf(stderr, "query audit: invalid configuration: %v\n", cfg.ConfigError)
 			return 1
 		}
-		dbPath = cfg.Storage.DatabasePath()
+		dbPath = cfg.Storage.StateRoot()
 	}
 	opts.DBPath = dbPath
 
@@ -125,20 +124,22 @@ func Run(args []string, stdout, stderr io.Writer) int {
 func ReadReport(dbPath string, opts Options) (Report, error) {
 	opts = normalizeOptions(opts)
 	dbPath = filepath.Clean(dbPath)
-	conn, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro&_pragma=busy_timeout(5000)", dbPath))
+	store, err := igloodb.OpenReadOnlyAtStateRoot(dbPath)
 	if err != nil {
 		return Report{}, fmt.Errorf("open readonly db: %w", err)
 	}
 	defer func() {
-		_ = conn.Close()
+		_ = store.Close()
 	}()
-	if err := conn.Ping(); err != nil {
-		return Report{}, fmt.Errorf("ping readonly db: %w", err)
-	}
 
 	report := Report{DBPath: dbPath, Limit: opts.Limit}
-	for _, spec := range selectedProbes(opts.Probe) {
-		report.Probes = append(report.Probes, runProbe(conn, opts, spec))
+	if err := store.WithRead(func(conn *sql.DB) error {
+		for _, spec := range selectedProbes(opts.Probe) {
+			report.Probes = append(report.Probes, runProbe(conn, opts, spec))
+		}
+		return nil
+	}); err != nil {
+		return Report{}, err
 	}
 	return report, nil
 }
@@ -189,7 +190,7 @@ func runProbe(conn *sql.DB, opts Options, spec probeSpec) ProbeReport {
 }
 
 func explainPlan(ctx context.Context, conn *sql.DB, sqlText string, args []any) ([]string, error) {
-	rows, err := conn.QueryContext(ctx, "EXPLAIN QUERY PLAN "+sqlText, args...)
+	rows, err := conn.QueryContext(ctx, "EXPLAIN "+sqlText, args...)
 	if err != nil {
 		return nil, fmt.Errorf("explain: %w", err)
 	}
@@ -199,9 +200,8 @@ func explainPlan(ctx context.Context, conn *sql.DB, sqlText string, args []any) 
 
 	var plan []string
 	for rows.Next() {
-		var id, parent, notUsed int
 		var detail string
-		if err := rows.Scan(&id, &parent, &notUsed, &detail); err != nil {
+		if err := rows.Scan(&detail); err != nil {
 			return nil, fmt.Errorf("scan explain: %w", err)
 		}
 		plan = append(plan, detail)
@@ -221,20 +221,8 @@ func readRows(ctx context.Context, conn *sql.DB, sqlText string, args []any) (in
 		_ = rows.Close()
 	}()
 
-	cols, err := rows.Columns()
-	if err != nil {
-		return 0, fmt.Errorf("columns: %w", err)
-	}
-	values := make([]any, len(cols))
-	scan := make([]any, len(cols))
-	for i := range values {
-		scan[i] = &values[i]
-	}
 	count := 0
 	for rows.Next() {
-		if err := rows.Scan(scan...); err != nil {
-			return count, fmt.Errorf("scan row: %w", err)
-		}
 		count++
 	}
 	if err := rows.Err(); err != nil {
@@ -304,7 +292,7 @@ func probeSpecs() []probeSpec {
 					    WHERE fs.tweet_id = fi.tweet_id
 					  )
 					ORDER BY s.rank_position ASC
-					LIMIT ?
+					LIMIT $1
 				`, []any{opts.Limit}
 			},
 		},
@@ -320,7 +308,7 @@ func probeSpecs() []probeSpec {
 					WHERE (v.channel_id LIKE 'tiktok_%' OR v.channel_id LIKE 'instagram_%')
 					  AND COALESCE(v.source_kind, '') != 'story'
 					ORDER BY v.published_at DESC, v.video_id DESC
-					LIMIT ?
+					LIMIT $1
 				`, []any{opts.Limit}
 			},
 		},
@@ -340,7 +328,7 @@ func probeSpecs() []probeSpec {
 					    OR v.channel_id LIKE 'instagram_%'
 					  )
 					  AND COALESCE(v.source_kind, '') != 'story'
-					  AND (? = 0 OR COALESCE(v.published_at, 0) >= ?)
+					  AND ($1::bigint = 0 OR COALESCE(v.published_at, 0) >= $2)
 
 					UNION
 					SELECT v.video_id
@@ -361,7 +349,7 @@ func probeSpecs() []probeSpec {
 					    OR v.channel_id LIKE 'tiktok_%'
 					    OR v.channel_id LIKE 'instagram_%'
 					  )
-					LIMIT ?
+					LIMIT $3
 				`, []any{cutoff, cutoff, opts.Limit}
 			},
 		},
@@ -375,15 +363,15 @@ func probeSpecs() []probeSpec {
 					FROM media_objects mo
 					WHERE (
 					    mo.job_state = 'queued'
-					    AND (mo.next_attempt_at_ms = 0 OR mo.next_attempt_at_ms <= ?)
+					    AND (mo.next_attempt_at_ms = 0 OR mo.next_attempt_at_ms <= $1)
 					  )
 					   OR (
 					    mo.job_state = 'downloading'
 					    AND mo.lease_until_ms > 0
-					    AND mo.lease_until_ms <= ?
+					    AND mo.lease_until_ms <= $2
 					  )
 					ORDER BY mo.attempts ASC, mo.updated_at_ms ASC, mo.id ASC
-					LIMIT ?
+					LIMIT $3
 				`, []any{opts.NowMs, opts.NowMs, opts.Limit}
 			},
 		},
@@ -393,16 +381,15 @@ func probeSpecs() []probeSpec {
 			lifecycle:   "archive/user_state",
 			build: func(opts Options) (string, []any) {
 				return `
-					SELECT f.channel_id_pk
-					FROM search_channels_fts f
-					JOIN channel_follows cf ON cf.channel_id = f.channel_id_pk
-					LEFT JOIN channels c ON c.channel_id = f.channel_id_pk
-					LEFT JOIN channel_stars cs ON cs.channel_id = f.channel_id_pk
-					LEFT JOIN channel_profiles cp ON cp.channel_id = f.channel_id_pk AND cp.tombstone = 0
-					WHERE search_channels_fts MATCH ?
-					ORDER BY rank
-					LIMIT ?
-				`, []any{compileSearchFTSQuery(opts.Search), opts.Limit}
+					SELECT c.channel_id
+					FROM channels c
+					JOIN channel_follows cf ON cf.channel_id = c.channel_id
+					LEFT JOIN channel_stars cs ON cs.channel_id = c.channel_id
+					LEFT JOIN channel_profiles cp ON cp.channel_id = c.channel_id AND cp.tombstone = 0
+					WHERE c.search_document @@ igloo_search_query($1)
+					ORDER BY ts_rank_cd(c.search_document, igloo_search_query($1)) DESC, c.id
+					LIMIT $2
+				`, []any{opts.Search, opts.Limit}
 			},
 		},
 		{
@@ -411,28 +398,14 @@ func probeSpecs() []probeSpec {
 			lifecycle:   "archive",
 			build: func(opts Options) (string, []any) {
 				return `
-					SELECT f.video_id_pk
-					FROM search_videos_fts f
-					LEFT JOIN videos v ON v.video_id = f.video_id_pk
+					SELECT v.video_id
+					FROM videos v
 					LEFT JOIN channels c ON c.channel_id = v.channel_id
-					WHERE search_videos_fts MATCH ?
-					ORDER BY rank
-					LIMIT ?
-				`, []any{compileSearchFTSQuery(opts.Search), opts.Limit}
+					WHERE v.search_document @@ igloo_search_query($1)
+					ORDER BY ts_rank_cd(v.search_document, igloo_search_query($1)) DESC, v.id
+					LIMIT $2
+				`, []any{opts.Search, opts.Limit}
 			},
 		},
 	}
-}
-
-func compileSearchFTSQuery(q string) string {
-	terms := strings.Fields(strings.TrimSpace(q))
-	if len(terms) == 0 {
-		return `""`
-	}
-	var parts []string
-	for _, term := range terms {
-		term = strings.ReplaceAll(term, `"`, `""`)
-		parts = append(parts, `"`+term+`"*`)
-	}
-	return strings.Join(parts, " AND ")
 }

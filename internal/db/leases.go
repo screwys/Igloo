@@ -61,7 +61,7 @@ func claimLeasedIDs(tx *sql.Tx, table, keyColumn string, candidateQuery string, 
 }
 
 func claimLeasedIDsWithStateColumn(tx *sql.Tx, table, keyColumn, stateColumn string, candidateQuery string, candidateArgs []any, opts LeaseOptions) ([]string, error) {
-	rows, err := tx.Query(candidateQuery, candidateArgs...)
+	rows, err := tx.Query(bind(candidateQuery), candidateArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -94,9 +94,7 @@ func claimLeasedIDsWithStateColumn(tx *sql.Tx, table, keyColumn, stateColumn str
 	`, table, stateColumn, keyColumn, leaseEligibleSQLFor(stateColumn, "next_attempt_at_ms", "lease_until_ms"))
 	claimed := candidates[:0]
 	for _, key := range candidates {
-		res, err := tx.Exec(
-			update,
-			opts.StatusTo, opts.Owner, opts.NowMs+opts.LeaseMs,
+		res, err := tx.Exec(bind(update), opts.StatusTo, opts.Owner, opts.NowMs+opts.LeaseMs,
 			key,
 			opts.NowMs, opts.StatusFrom, opts.NowMs, opts.StatusTo, opts.NowMs,
 		)

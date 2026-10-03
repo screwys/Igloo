@@ -56,6 +56,8 @@ CONFIG_DIR="${IGLOO_CONFIG_DIR:-$HOME_DIR/.config/igloo}"
 SYSTEMD_DIR="$HOME_DIR/.config/systemd/user"
 SERVER_PORT="${IGLOO_PORT:-5001}"
 KAGI_ENV_FILE="${KAGI_ENV_FILE:-$CONFIG_DIR/kagi.env}"
+DATABASE_URL="${IGLOO_DATABASE_URL:-}"
+POSTGRES_BIN="${IGLOO_POSTGRES_BIN:-}"
 
 # Add user tool directories to PATH for templ, Homebrew packages, and yt-dlp's
 # recommended JavaScript runtime. systemd user services do not inherit the
@@ -85,7 +87,23 @@ path_prepend_if_dir /opt/homebrew/sbin
 path_prepend_if_dir /opt/homebrew/bin
 path_prepend_if_dir "$HOME_DIR/go/bin"
 path_prepend_if_dir "$HOME_DIR/.local/bin"
+path_prepend_if_dir /usr/lib/postgresql/18/bin
+path_prepend_if_dir /usr/pgsql-18/bin
+path_prepend_if_dir /home/linuxbrew/.linuxbrew/opt/postgresql@18/bin
+path_prepend_if_dir /usr/local/opt/postgresql@18/bin
+path_prepend_if_dir /opt/homebrew/opt/postgresql@18/bin
+path_prepend_if_dir /opt/local/lib/postgresql18/bin
+path_prepend_if_dir /Applications/Postgres.app/Contents/Versions/18/bin
+if [ -n "$BREW_PREFIX" ]; then
+    path_prepend_if_dir "$BREW_PREFIX/opt/postgresql@18/bin"
+fi
+if [ -n "$POSTGRES_BIN" ]; then
+    path_prepend_if_dir "$POSTGRES_BIN"
+fi
 export PATH
+if [ -z "$POSTGRES_BIN" ] && command -v initdb >/dev/null 2>&1; then
+    POSTGRES_BIN="$(dirname "$(command -v initdb)")"
+fi
 
 SERVICE_PATH=""
 service_path_append() {
@@ -97,7 +115,18 @@ service_path_append() {
 service_path_append "$HOME_DIR/.local/bin"
 service_path_append "$HOME_DIR/go/bin"
 service_path_append "$HOME_DIR/.deno/bin"
+if [ -n "$POSTGRES_BIN" ]; then
+    service_path_append "$POSTGRES_BIN"
+fi
+service_path_append /usr/lib/postgresql/18/bin
+service_path_append /usr/pgsql-18/bin
+service_path_append /home/linuxbrew/.linuxbrew/opt/postgresql@18/bin
+service_path_append /usr/local/opt/postgresql@18/bin
+service_path_append /opt/homebrew/opt/postgresql@18/bin
+service_path_append /opt/local/lib/postgresql18/bin
+service_path_append /Applications/Postgres.app/Contents/Versions/18/bin
 if [ -n "$BREW_PREFIX" ]; then
+    service_path_append "$BREW_PREFIX/opt/postgresql@18/bin"
     service_path_append "$BREW_PREFIX/bin"
     service_path_append "$BREW_PREFIX/sbin"
 fi
@@ -120,6 +149,14 @@ for arg in "$@"; do
     esac
 done
 
+if [ "$CHECK_ONLY" = false ] && { [ -n "$POSTGRES_BIN" ] || command -v nix >/dev/null 2>&1; }; then
+    . "$REPO_DIR/scripts/dev/postgres-tools.sh"
+    IGLOO_POSTGRES_BIN="$POSTGRES_BIN"
+    igloo_prepare_postgres "$REPO_DIR"
+    POSTGRES_BIN="$IGLOO_POSTGRES_BIN"
+    service_path_append "$POSTGRES_BIN"
+fi
+
 # ── Dependency check ──────────────────────────────────────────────
 step "Checking dependencies"
 
@@ -137,7 +174,7 @@ check_required() {
             nginx)      ver=" $(nginx -v 2>&1 | sed 's/nginx version: //')" ;;
             podman)     ver=" $(podman --version 2>/dev/null | sed 's/podman version //')" ;;
             templ)      ver=" $(templ version 2>/dev/null || echo '?')" ;;
-            sqlite3)    ver=" $(sqlite3 --version 2>/dev/null | cut -d' ' -f1)" ;;
+            initdb|pg_ctl|postgres|psql|pg_dump|pg_restore) ver=" $("$1" --version 2>/dev/null)" ;;
         esac
         ok "$1$ver"
     else
@@ -166,7 +203,13 @@ check_required yt-dlp    "video downloader — brew install --HEAD yt-dlp or pip
 check_required gallery-dl "image downloader — brew install --HEAD gallery-dl or pip install --force-reinstall https://codeberg.org/mikf/gallery-dl/archive/master.tar.gz"
 check_required ffmpeg    "media processing — brew install ffmpeg or install your distro package"
 check_required nginx     "reverse proxy — install nginx with brew or your distro package manager"
-check_required sqlite3   "database CLI — brew install sqlite or install your distro package"
+if [ -z "$DATABASE_URL" ]; then
+    for postgres_tool in initdb pg_ctl postgres psql pg_dump pg_restore; do
+        check_required "$postgres_tool" "PostgreSQL 18 tools: install postgresql-18, postgresql18-server, or brew install postgresql@18; set IGLOO_POSTGRES_BIN for another location"
+    done
+else
+    info "using the configured PostgreSQL server"
+fi
 check_required ss        "socket statistics — install iproute/iproute2 with your distro package manager"
 check_required git       "version control"
 check_required deno      "JavaScript runtime for yt-dlp YouTube challenge solving — brew install deno or install your distro package"
@@ -343,7 +386,7 @@ if [ "$SKIP_BUILD" = false ]; then
     ok "bin/igloo-import"
 
     info "running tests..."
-    if go test ./...; then
+    if go test -timeout 30m ./...; then
         ok "go test ./..."
     elif [ "$ALLOW_TEST_FAILURES" = true ]; then
         warn "some tests failed; continuing because --allow-test-failures was passed"
@@ -378,6 +421,17 @@ prepare_service_file() {
 
 # igloo.service
 prepare_service_file igloo.service
+systemd_escape() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/%/%%/g'
+}
+DATABASE_ENV_LINE=""
+POSTGRES_ENV_LINE=""
+if [ -n "$DATABASE_URL" ]; then
+    DATABASE_ENV_LINE="Environment=\"IGLOO_DATABASE_URL=$(systemd_escape "$DATABASE_URL")\""
+fi
+if [ -n "$POSTGRES_BIN" ]; then
+    POSTGRES_ENV_LINE="Environment=\"IGLOO_POSTGRES_BIN=$(systemd_escape "$POSTGRES_BIN")\""
+fi
 STORAGE_MOUNTS="$DATA_DIR"
 MEDIA_ENV_LINE=""
 if [ -n "$MEDIA_DIR" ]; then
@@ -400,6 +454,8 @@ Environment=IGLOO_DATA_DIR=$DATA_DIR
 $MEDIA_ENV_LINE
 Environment=IGLOO_REPO_DIR=$REPO_DIR
 Environment=IGLOO_PORT=$SERVER_PORT
+$DATABASE_ENV_LINE
+$POSTGRES_ENV_LINE
 EnvironmentFile=-$KAGI_ENV_FILE
 Environment=PATH=$SERVICE_PATH
 
@@ -407,7 +463,7 @@ ExecStart=$REPO_DIR/bin/igloo
 
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=15
+TimeoutStopSec=60
 
 [Install]
 WantedBy=default.target
@@ -445,11 +501,26 @@ step "Enabling systemd services"
 systemctl --user daemon-reload
 ok "daemon-reload"
 
+SERVER_WAS_ACTIVE=false
+if systemctl --user is-active --quiet igloo.service; then
+    SERVER_WAS_ACTIVE=true
+fi
+systemctl --user stop igloo.service
+step "Migrating database"
+IGLOO_CONFIG_DIR="$CONFIG_DIR" IGLOO_DATA_DIR="$DATA_DIR" IGLOO_MEDIA_DIR="$MEDIA_DIR" \
+    IGLOO_DATABASE_URL="$DATABASE_URL" IGLOO_POSTGRES_BIN="$POSTGRES_BIN" \
+    "$REPO_DIR/bin/igloo" migrate-sqlite
+
 systemctl --user enable igloo.service
 ok "igloo.service enabled"
 
 systemctl --user enable igloo-nginx.service
 ok "igloo-nginx.service enabled"
+
+if [ "$SERVER_WAS_ACTIVE" = true ]; then
+    systemctl --user start igloo.service
+    ok "igloo.service restarted"
+fi
 
 # Lingering lets user services start at boot without login
 if ! loginctl show-user "$(whoami)" 2>/dev/null | grep -q "Linger=yes"; then

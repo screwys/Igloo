@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	dbquery "github.com/screwys/igloo/internal/db/query"
 	"github.com/screwys/igloo/internal/model"
 )
 
@@ -69,11 +71,11 @@ func claimMutationClockTx(tx *sql.Tx, kind, itemKey, action string, updatedAtMs 
 	}
 	var currentAction string
 	var currentUpdatedAtMs int64
-	err := tx.QueryRow(`
+	err := tx.QueryRow(bind(`
 		SELECT action, updated_at_ms
 		FROM mutation_clocks
 		WHERE kind = ? AND item_key = ?
-	`, kind, itemKey).Scan(&currentAction, &currentUpdatedAtMs)
+	`), kind, itemKey).Scan(&currentAction, &currentUpdatedAtMs)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
@@ -93,13 +95,13 @@ func claimMutationClockTx(tx *sql.Tx, kind, itemKey, action string, updatedAtMs 
 			}
 		}
 	}
-	if _, err = tx.Exec(`
+	if _, err = tx.Exec(bind(`
 		INSERT INTO mutation_clocks (kind, item_key, action, updated_at_ms)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT(kind, item_key) DO UPDATE SET
 		  action = excluded.action,
 		  updated_at_ms = excluded.updated_at_ms
-	`, kind, itemKey, action, updatedAtMs); err != nil {
+	`), kind, itemKey, action, updatedAtMs); err != nil {
 		return false, err
 	}
 	if err := enqueueFeedOrderInvalidationForMutationTx(tx, kind, itemKey); err != nil {
@@ -118,7 +120,7 @@ func advanceMutationClockTx(tx *sql.Tx, kind, itemKey, action string, updatedAtM
 	}
 	updatedAtMs = mutationTimestamp(updatedAtMs)
 	var resolved int64
-	err := tx.QueryRow(`
+	err := tx.QueryRow(bind(`
 		INSERT INTO mutation_clocks (kind, item_key, action, updated_at_ms)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT(kind, item_key) DO UPDATE SET
@@ -129,7 +131,7 @@ func advanceMutationClockTx(tx *sql.Tx, kind, itemKey, action string, updatedAtM
 		    ELSE excluded.updated_at_ms
 		  END
 		RETURNING updated_at_ms
-	`, kind, itemKey, action, updatedAtMs).Scan(&resolved)
+	`), kind, itemKey, action, updatedAtMs).Scan(&resolved)
 	if err != nil {
 		return 0, err
 	}
@@ -160,7 +162,7 @@ func advanceMutationClocksTx(tx *sql.Tx, kind, action, itemsQuery string, args .
 	queryArgs := make([]any, 0, len(args)+2)
 	queryArgs = append(queryArgs, kind, action)
 	queryArgs = append(queryArgs, args...)
-	if _, err := tx.Exec(query, queryArgs...); err != nil {
+	if _, err := tx.Exec(bind(query), queryArgs...); err != nil {
 		return err
 	}
 	return enqueueFeedOrderInvalidationsForMutationQueryTx(tx, kind, itemsQuery, args...)
@@ -211,17 +213,13 @@ func (db *DB) mutateLikeTx(tx *sql.Tx, m LikeMutation, result *MutationResult) e
 	}
 	switch m.Action {
 	case "set":
-		if _, err := tx.Exec(
-			`INSERT INTO feed_likes (tweet_id, liked_at) VALUES (?, ?)
-				 ON CONFLICT(tweet_id) DO UPDATE SET liked_at = excluded.liked_at`,
-			result.CanonicalID, m.UpdatedAtMs,
+		if _, err := tx.Exec(bind(`INSERT INTO feed_likes (tweet_id, liked_at) VALUES (?, ?)
+				 ON CONFLICT(tweet_id) DO UPDATE SET liked_at = excluded.liked_at`), result.CanonicalID, m.UpdatedAtMs,
 		); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(
-			`INSERT INTO feed_seen (tweet_id, seen_at) VALUES (?, ?)
-				 ON CONFLICT(tweet_id) DO UPDATE SET seen_at = MAX(feed_seen.seen_at, excluded.seen_at)`,
-			result.CanonicalID, m.UpdatedAtMs,
+		if _, err := tx.Exec(bind(`INSERT INTO feed_seen (tweet_id, seen_at) VALUES (?, ?)
+				 ON CONFLICT(tweet_id) DO UPDATE SET seen_at = GREATEST(feed_seen.seen_at, excluded.seen_at)`), result.CanonicalID, m.UpdatedAtMs,
 		); err != nil {
 			return err
 		}
@@ -229,10 +227,7 @@ func (db *DB) mutateLikeTx(tx *sql.Tx, m LikeMutation, result *MutationResult) e
 			return err
 		}
 	case "clear":
-		if _, err := tx.Exec(
-			`DELETE FROM feed_likes WHERE tweet_id = ?`,
-			result.CanonicalID,
-		); err != nil {
+		if _, err := tx.Exec(bind(`DELETE FROM feed_likes WHERE tweet_id = ?`), result.CanonicalID); err != nil {
 			return err
 		}
 		if err := refreshXContentUserStateRequirementTx(tx, []string{rawTweetID, result.CanonicalID}, m.UpdatedAtMs); err != nil {
@@ -295,10 +290,10 @@ func (db *DB) mutateBookmarkTx(tx *sql.Tx, m BookmarkMutation, result *MutationR
 		}
 		var categoryID int64
 		var customTitle, accountHandles, mediaIndices sql.NullString
-		err := tx.QueryRow(`
+		err := tx.QueryRow(bind(`
 				SELECT category_id, custom_title, account_handles, media_indices
 				FROM bookmarks WHERE video_id = ?
-			`, result.CanonicalID).Scan(&categoryID, &customTitle, &accountHandles, &mediaIndices)
+			`), result.CanonicalID).Scan(&categoryID, &customTitle, &accountHandles, &mediaIndices)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
@@ -323,7 +318,7 @@ func (db *DB) mutateBookmarkTx(tx *sql.Tx, m BookmarkMutation, result *MutationR
 			accountHandles != oldAccountHandles || mediaIndices != oldMediaIndices {
 			result.Affected = 1
 		}
-		_, err = tx.Exec(`
+		_, err = tx.Exec(bind(`
 				INSERT INTO bookmarks (video_id, category_id,
 				  custom_title, account_handles, media_indices, bookmarked_at)
 				VALUES (?, ?, ?, ?, ?, ?)
@@ -332,8 +327,7 @@ func (db *DB) mutateBookmarkTx(tx *sql.Tx, m BookmarkMutation, result *MutationR
 				  custom_title = excluded.custom_title,
 				  account_handles = excluded.account_handles,
 				  media_indices = excluded.media_indices,
-				  bookmarked_at = excluded.bookmarked_at`,
-			result.CanonicalID, categoryID, customTitle, accountHandles, mediaIndices, m.UpdatedAtMs,
+				  bookmarked_at = excluded.bookmarked_at`), result.CanonicalID, categoryID, customTitle, accountHandles, mediaIndices, m.UpdatedAtMs,
 		)
 		if err != nil {
 			return err
@@ -342,10 +336,7 @@ func (db *DB) mutateBookmarkTx(tx *sql.Tx, m BookmarkMutation, result *MutationR
 			return err
 		}
 	case "clear":
-		res, err := tx.Exec(
-			`DELETE FROM bookmarks WHERE video_id = ?`,
-			result.CanonicalID,
-		)
+		res, err := tx.Exec(bind(`DELETE FROM bookmarks WHERE video_id = ?`), result.CanonicalID)
 		if err != nil {
 			return err
 		}
@@ -391,10 +382,10 @@ func (db *DB) MutateFollow(channelID, action string, updatedAtMs int64) (Mutatio
 			if err := db.ensureChannelStubForFollowTx(tx, channelID, updatedAtMs); err != nil {
 				return err
 			}
-			res, err := tx.Exec(`
+			res, err := tx.Exec(bind(`
 				INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, ?)
 				ON CONFLICT(channel_id) DO UPDATE SET followed_at = excluded.followed_at
-			`, channelID, updatedAtMs)
+			`), channelID, updatedAtMs)
 			if err != nil {
 				return err
 			}
@@ -402,7 +393,7 @@ func (db *DB) MutateFollow(channelID, action string, updatedAtMs int64) (Mutatio
 				result.Affected = int(n)
 			}
 		case "clear":
-			res, err := tx.Exec(`DELETE FROM channel_follows WHERE channel_id = ?`, channelID)
+			res, err := tx.Exec(bind(`DELETE FROM channel_follows WHERE channel_id = ?`), channelID)
 			if err != nil {
 				return err
 			}
@@ -415,7 +406,7 @@ func (db *DB) MutateFollow(channelID, action string, updatedAtMs int64) (Mutatio
 				return starErr
 			}
 			if starApplied {
-				if _, err := tx.Exec(`DELETE FROM channel_stars WHERE channel_id = ?`, channelID); err != nil {
+				if _, err := tx.Exec(bind(`DELETE FROM channel_stars WHERE channel_id = ?`), channelID); err != nil {
 					return err
 				}
 			}
@@ -448,11 +439,11 @@ func (db *DB) ensureChannelStubForFollowTx(tx *sql.Tx, channelID string, updated
 	sourceID, name, urlValue, platform := channelDefaultsFromID(channelID)
 
 	var profileHandle, profileName, profilePlatform string
-	_ = tx.QueryRow(`
+	_ = tx.QueryRow(bind(`
 		SELECT COALESCE(handle, ''), COALESCE(display_name, ''), COALESCE(platform, '')
 		FROM channel_profiles
 		WHERE channel_id = ?
-	`, channelID).Scan(&profileHandle, &profileName, &profilePlatform)
+	`), channelID).Scan(&profileHandle, &profileName, &profilePlatform)
 
 	if sourceID == "" && profileHandle != "" {
 		sourceID = profileHandle
@@ -474,11 +465,11 @@ func (db *DB) ensureChannelStubForFollowTx(tx *sql.Tx, channelID string, updated
 		updatedAtMs = time.Now().UnixMilli()
 	}
 
-	if _, err := tx.Exec(`
-		INSERT OR IGNORE INTO channels
+	if _, err := tx.Exec(bind(`
+		INSERT INTO channels
 			(channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, channelID, nilIfEmpty(sourceID), name, nilIfEmpty(urlValue), nilIfEmpty(platform), updatedAtMs); err != nil {
+		VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
+`), channelID, nilIfEmpty(sourceID), name, nilIfEmpty(urlValue), nilIfEmpty(platform), updatedAtMs); err != nil {
 		return err
 	}
 	return observeChannelProfileTx(tx, model.Channel{
@@ -506,12 +497,12 @@ func mutateToggleTx(tx *sql.Tx, kind, table, keyColumn, itemKey, action string, 
 		if kind == "star" {
 			timestampColumn = "starred_at"
 		}
-		res, err = tx.Exec(fmt.Sprintf(`
+		res, err = tx.Exec(bind(fmt.Sprintf(`
 			INSERT INTO %s (%s, %s) VALUES (?, ?)
 			ON CONFLICT(%s) DO UPDATE SET %s = excluded.%s
-		`, table, keyColumn, timestampColumn, keyColumn, timestampColumn, timestampColumn), itemKey, updatedAtMs)
+		`, table, keyColumn, timestampColumn, keyColumn, timestampColumn, timestampColumn)), itemKey, updatedAtMs)
 	case "clear":
-		res, err = tx.Exec(fmt.Sprintf(`DELETE FROM %s WHERE %s = ?`, table, keyColumn), itemKey)
+		res, err = tx.Exec(bind(fmt.Sprintf(`DELETE FROM %s WHERE %s = ?`, table, keyColumn)), itemKey)
 	}
 	if err != nil {
 		return result, err
@@ -585,12 +576,17 @@ func (db *DB) ApplyChannelSettingMutation(channelID, field string, value any, up
 
 func mutateChannelSettingsTx(tx *sql.Tx, channelID string, fields map[string]any, updatedAtMs int64, strictTimestamp bool) (bool, error) {
 	columns := make([]string, 0, len(fields))
-	for field := range fields {
+	values := make(map[string]any, len(fields))
+	for field, value := range fields {
 		column, ok := channelSettingMutationColumn(field)
 		if !ok {
 			return false, invalidMutation(fmt.Sprintf("unknown channel_setting field: %s", field))
 		}
 		columns = append(columns, column)
+		if flag, ok := value.(bool); ok {
+			value = boolToInt(flag)
+		}
+		values[column] = value
 	}
 	if len(columns) == 0 {
 		return false, nil
@@ -598,19 +594,19 @@ func mutateChannelSettingsTx(tx *sql.Tx, channelID string, fields map[string]any
 	sort.Strings(columns)
 
 	var currentUpdatedAt int64
-	err := tx.QueryRow(`SELECT updated_at FROM channel_settings WHERE channel_id = ?`, channelID).Scan(&currentUpdatedAt)
+	err := tx.QueryRow(bind(`SELECT updated_at FROM channel_settings WHERE channel_id = ?`), channelID).Scan(&currentUpdatedAt)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
 	if err == nil && updatedAtMs <= currentUpdatedAt {
 		same := updatedAtMs == currentUpdatedAt
 		for _, column := range columns {
-			var matches int
-			query := fmt.Sprintf(`SELECT %s IS ? FROM channel_settings WHERE channel_id = ?`, column)
-			if queryErr := tx.QueryRow(query, fields[column], channelID).Scan(&matches); queryErr != nil {
+			var matches bool
+			query := fmt.Sprintf(`SELECT %s IS NOT DISTINCT FROM ? FROM channel_settings WHERE channel_id = ?`, column)
+			if queryErr := tx.QueryRow(bind(query), values[column], channelID).Scan(&matches); queryErr != nil {
 				return false, queryErr
 			}
-			same = same && matches != 0
+			same = same && matches
 		}
 		if same {
 			return false, nil
@@ -632,7 +628,7 @@ func mutateChannelSettingsTx(tx *sql.Tx, channelID string, fields map[string]any
 	for i, column := range columns {
 		placeholders[i] = "?"
 		updates[i] = column + " = excluded." + column
-		args = append(args, fields[column])
+		args = append(args, values[column])
 	}
 	args = append(args, updatedAtMs)
 	query := fmt.Sprintf(`
@@ -640,7 +636,7 @@ func mutateChannelSettingsTx(tx *sql.Tx, channelID string, fields map[string]any
 		VALUES (?, %s, ?)
 		ON CONFLICT(channel_id) DO UPDATE SET %s, updated_at = excluded.updated_at
 	`, strings.Join(columns, ", "), strings.Join(placeholders, ", "), strings.Join(updates, ", "))
-	if _, err = tx.Exec(query, args...); err != nil {
+	if _, err = tx.Exec(bind(query), args...); err != nil {
 		return false, err
 	}
 	if err := enqueueFeedOrderInvalidationTx(tx, "channel", channelID); err != nil {
@@ -694,10 +690,9 @@ func (db *DB) MutateSeen(tweetIDs []string, updatedAtMs int64) (MutationResult, 
 		if err != nil {
 			return err
 		}
-		stmt, err := tx.Prepare(
-			`INSERT INTO feed_seen (tweet_id, seen_at) VALUES (?, ?)
+		stmt, err := tx.Prepare(bind(`INSERT INTO feed_seen (tweet_id, seen_at) VALUES (?, ?)
 				 ON CONFLICT(tweet_id) DO UPDATE SET seen_at = excluded.seen_at
-				 WHERE excluded.seen_at > feed_seen.seen_at`,
+				 WHERE excluded.seen_at > feed_seen.seen_at`),
 		)
 		if err != nil {
 			return err
@@ -732,11 +727,9 @@ func (db *DB) MutateMomentView(videoID string, updatedAtMs int64) (MutationResul
 	result := MutationResult{CanonicalID: strings.TrimSpace(videoID)}
 	updatedAtMs = mutationTimestamp(updatedAtMs)
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		res, err := tx.Exec(
-			`INSERT INTO moment_views (video_id, viewed_at) VALUES (?, ?)
+		res, err := tx.Exec(bind(`INSERT INTO moment_views (video_id, viewed_at) VALUES (?, ?)
 				 ON CONFLICT(video_id) DO UPDATE SET viewed_at = excluded.viewed_at
-				 WHERE excluded.viewed_at > moment_views.viewed_at`,
-			result.CanonicalID, updatedAtMs,
+				 WHERE excluded.viewed_at > moment_views.viewed_at`), result.CanonicalID, updatedAtMs,
 		)
 		if err != nil {
 			return err
@@ -779,10 +772,7 @@ func (db *DB) mutateProgress(videoID string, position, duration float64, action 
 		var existingPosition float64
 		var existingTS int64
 		var existingDuration sql.NullFloat64
-		rowErr := tx.QueryRow(
-			`SELECT playback_position, duration, updated_at_ms FROM watch_history WHERE video_id = ?`,
-			videoID,
-		).Scan(&existingPosition, &existingDuration, &existingTS)
+		rowErr := tx.QueryRow(bind(`SELECT playback_position, duration, updated_at_ms FROM watch_history WHERE video_id = ?`), videoID).Scan(&existingPosition, &existingDuration, &existingTS)
 		if rowErr != nil && rowErr != sql.ErrNoRows {
 			return rowErr
 		}
@@ -822,17 +812,16 @@ func (db *DB) mutateProgress(videoID string, position, duration float64, action 
 		switch action {
 		case "set":
 			durationValue := sql.NullFloat64{Float64: duration, Valid: duration > 0}
-			_, err = tx.Exec(`
+			_, err = tx.Exec(bind(`
 					INSERT INTO watch_history (video_id, playback_position, duration, updated_at_ms)
 					VALUES (?, ?, ?, ?)
 				ON CONFLICT(video_id) DO UPDATE SET
 				  playback_position = excluded.playback_position,
 				  duration          = excluded.duration,
-				  updated_at_ms     = excluded.updated_at_ms`,
-				videoID, position, durationValue, updatedAtMs,
+				  updated_at_ms     = excluded.updated_at_ms`), videoID, position, durationValue, updatedAtMs,
 			)
 		case "clear":
-			_, err = tx.Exec(`DELETE FROM watch_history WHERE video_id = ?`, videoID)
+			_, err = tx.Exec(bind(`DELETE FROM watch_history WHERE video_id = ?`), videoID)
 		default:
 			return errInvalidAction
 		}
@@ -893,10 +882,10 @@ func (db *DB) MutateMomentsCursor(videoID string, positionMs, updatedAtMs int64,
 	err = db.WithWrite(func(tx *sql.Tx) error {
 		var existingVideoID string
 		var existingPositionMs, existingSortAtMs, existingOrderPosition, existingUpdatedAtMs int64
-		err := tx.QueryRow(`
+		err := tx.QueryRow(bind(`
 			SELECT video_id, position_ms, sort_at_ms, order_position, updated_at_ms
 			FROM moments_cursors WHERE scope = ?
-		`, scope).Scan(&existingVideoID, &existingPositionMs, &existingSortAtMs, &existingOrderPosition, &existingUpdatedAtMs)
+		`), scope).Scan(&existingVideoID, &existingPositionMs, &existingSortAtMs, &existingOrderPosition, &existingUpdatedAtMs)
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
@@ -911,7 +900,7 @@ func (db *DB) MutateMomentsCursor(videoID string, positionMs, updatedAtMs int64,
 				CurrentUpdatedAtMs: existingUpdatedAtMs,
 			}
 		}
-		if _, err := tx.Exec(`
+		if _, err := tx.Exec(bind(`
 			INSERT INTO moments_cursors (scope, video_id, position_ms, sort_at_ms, order_position, updated_at_ms)
 			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(scope) DO UPDATE SET
@@ -920,7 +909,7 @@ func (db *DB) MutateMomentsCursor(videoID string, positionMs, updatedAtMs int64,
 			  sort_at_ms = excluded.sort_at_ms,
 			  order_position = excluded.order_position,
 			  updated_at_ms = excluded.updated_at_ms
-		`, scope, result.CanonicalID, positionMs, sortAtMs, orderPosition, updatedAtMs); err != nil {
+		`), scope, result.CanonicalID, positionMs, sortAtMs, orderPosition, updatedAtMs); err != nil {
 			return err
 		}
 		result.Applied = true
@@ -945,11 +934,11 @@ func (db *DB) GetMomentsCursor(scope string) (MutationMomentsCursor, bool, error
 	if !ok {
 		return cursor, false, invalidMutation("invalid moments cursor scope")
 	}
-	err := db.conn.QueryRow(`
+	err := db.conn.QueryRow(bind(`
 		SELECT scope, video_id, position_ms, sort_at_ms, order_position, updated_at_ms
 		FROM moments_cursors
 		WHERE scope = ?
-	`, normalizedScope).Scan(
+	`), normalizedScope).Scan(
 		&cursor.Scope, &cursor.VideoID, &cursor.PositionMs,
 		&cursor.SortAtMs, &cursor.OrderPosition, &cursor.UpdatedAtMs,
 	)
@@ -974,35 +963,30 @@ func (db *DB) ApplyCreateCategoryMutation(name, provisionalID, requestID string,
 		return out, invalidMutation("request_id required")
 	}
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		err := tx.QueryRow(`
+		err := tx.QueryRow(bind(`
 			SELECT category_id, provisional_id
 			FROM category_create_receipts
 			WHERE request_id = ?
-		`, requestID).Scan(&out.CategoryID, &out.ProvisionalID)
+		`), requestID).Scan(&out.CategoryID, &out.ProvisionalID)
 		if err == nil {
 			return nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		res, err := tx.Exec(
-			`INSERT INTO bookmark_categories (name, created_at) VALUES (?, ?)`,
-			name, updatedAtMs,
-		)
-		if err != nil {
-			return err
-		}
-		categoryID, err := res.LastInsertId()
+		categoryID, err := dbquery.New(tx).CreateMutationBookmarkCategory(context.Background(), dbquery.CreateMutationBookmarkCategoryParams{
+			Name: name, CreatedAt: updatedAtMs,
+		})
 		if err != nil {
 			return err
 		}
 		out.CategoryID = categoryID
 		out.ProvisionalID = provisionalID
-		if _, err := tx.Exec(`
+		if _, err := tx.Exec(bind(`
 			INSERT INTO category_create_receipts
 				(request_id, category_id, provisional_id, created_at_ms)
 			VALUES (?, ?, ?, ?)
-		`, requestID, categoryID, provisionalID, updatedAtMs); err != nil {
+		`), requestID, categoryID, provisionalID, updatedAtMs); err != nil {
 			return err
 		}
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -58,8 +57,7 @@ func systemStatus() (string, error) {
 	sb.WriteString("\n")
 
 	// Disk space
-	dataDir := getDBPath()
-	dir := filepath.Dir(dataDir)
+	dir := getStateRoot()
 	sb.WriteString("disk (" + dir + "):\n")
 	out, err = exec.Command("df", "-h", dir).CombinedOutput()
 	if err != nil {
@@ -72,12 +70,18 @@ func systemStatus() (string, error) {
 	}
 	sb.WriteString("\n")
 
-	// DB file size
+	// Database size
 	sb.WriteString("database:\n")
-	if info, err := os.Stat(dataDir); err == nil {
-		sb.WriteString("  " + dataDir + ": " + formatDBSize(info.Size()) + "\n")
+	conn, err := getServerDB()
+	if err != nil {
+		fmt.Fprintf(&sb, "  unavailable: %v\n", err)
 	} else {
-		sb.WriteString("  " + dataDir + ": not found\n")
+		var bytes int64
+		if err := conn.QueryRow("SELECT pg_database_size(current_database())").Scan(&bytes); err != nil {
+			fmt.Fprintf(&sb, "  unavailable: %v\n", err)
+		} else {
+			fmt.Fprintf(&sb, "  %s\n", formatDBSize(bytes))
+		}
 	}
 
 	return sb.String(), nil
@@ -185,8 +189,13 @@ func pipelineStatus() (string, error) {
 		if oldest, err := pipelineOldestPending(conn, q); err == nil && oldest > 0 {
 			fmt.Fprintf(&sb, "  oldest pending: %s\n", formatMillis(oldest))
 		}
-		if activeLeases, expiredLeases, ok := pipelineLeaseCounts(conn, q, nowMs); ok {
-			fmt.Fprintf(&sb, "  leases: active=%d expired=%d\n", activeLeases, expiredLeases)
+		if q.leaseUntilCol != "" {
+			activeLeases, expiredLeases, err := pipelineLeaseCounts(conn, q, nowMs)
+			if err != nil {
+				fmt.Fprintf(&sb, "  leases unavailable: %v\n", err)
+			} else {
+				fmt.Fprintf(&sb, "  leases: active=%d expired=%d\n", activeLeases, expiredLeases)
+			}
 		}
 		if stuckCount, err := pipelineStuckCount(conn, q, stuckCutoffMs); err == nil && stuckCount > 0 {
 			fmt.Fprintf(&sb, "  stuck active >10m: %d\n", stuckCount)
@@ -228,7 +237,7 @@ func pipelineReadyCount(conn *sql.DB, q pipelineQueue, nowMs int64) (int, error)
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IN (%s)", q.table, q.statusCol, sqlStringList(q.pendingStates))
 	args := []any{}
 	if q.nextAttemptCol != "" {
-		query += fmt.Sprintf(" AND (%s = 0 OR %s <= ?)", q.nextAttemptCol, q.nextAttemptCol)
+		query += fmt.Sprintf(" AND (%s = 0 OR %s <= $1)", q.nextAttemptCol, q.nextAttemptCol)
 		args = append(args, nowMs)
 	}
 	var count int
@@ -253,27 +262,31 @@ func pipelineOldestPending(conn *sql.DB, q pipelineQueue) (int64, error) {
 	return oldest, err
 }
 
-func pipelineLeaseCounts(conn *sql.DB, q pipelineQueue, nowMs int64) (int, int, bool) {
+func pipelineLeaseCounts(conn *sql.DB, q pipelineQueue, nowMs int64) (int, int, error) {
 	if q.leaseUntilCol == "" || len(q.activeStates) == 0 {
-		return 0, 0, false
+		return 0, 0, nil
 	}
 	var active, expired int
-	_ = conn.QueryRow(fmt.Sprintf(
-		"SELECT COUNT(*) FROM %s WHERE %s IN (%s) AND %s > ?",
+	if err := conn.QueryRow(fmt.Sprintf(
+		"SELECT COUNT(*) FROM %s WHERE %s IN (%s) AND %s > $1",
 		q.table,
 		q.statusCol,
 		sqlStringList(q.activeStates),
 		q.leaseUntilCol,
-	), nowMs).Scan(&active)
-	_ = conn.QueryRow(fmt.Sprintf(
-		"SELECT COUNT(*) FROM %s WHERE %s IN (%s) AND (%s = 0 OR %s <= ?)",
+	), nowMs).Scan(&active); err != nil {
+		return 0, 0, err
+	}
+	if err := conn.QueryRow(fmt.Sprintf(
+		"SELECT COUNT(*) FROM %s WHERE %s IN (%s) AND (%s = 0 OR %s <= $1)",
 		q.table,
 		q.statusCol,
 		sqlStringList(q.activeStates),
 		q.leaseUntilCol,
 		q.leaseUntilCol,
-	), nowMs).Scan(&expired)
-	return active, expired, true
+	), nowMs).Scan(&expired); err != nil {
+		return 0, 0, err
+	}
+	return active, expired, nil
 }
 
 func pipelineStuckCount(conn *sql.DB, q pipelineQueue, cutoffMs int64) (int, error) {
@@ -289,7 +302,7 @@ func pipelineStuckCount(conn *sql.DB, q pipelineQueue, cutoffMs int64) (int, err
 	}
 	var count int
 	err := conn.QueryRow(fmt.Sprintf(
-		"SELECT COUNT(*) FROM %s WHERE %s IN (%s) AND %s > 0 AND %s < ?",
+		"SELECT COUNT(*) FROM %s WHERE %s IN (%s) AND %s > 0 AND %s < $1",
 		q.table,
 		q.statusCol,
 		sqlStringList(q.activeStates),

@@ -51,8 +51,8 @@ func printUsage(w io.Writer) {
 Commands:
   lifecycle-audit             Scan destructive SQL and table lifecycles
   persistence-audit           Group database size and rows by schema lifecycle
-  query-audit                 Time and explain SQLite hot-path reads
-  sqlite-repack               Report or create a compact SQLite database copy
+  query-audit                 Time and explain PostgreSQL hot-path reads
+  sqlite-repack               Report or compact a legacy SQLite archive
   storage-maintenance         Audit or apply storage dedupe and retention
 `)+"\n")
 }

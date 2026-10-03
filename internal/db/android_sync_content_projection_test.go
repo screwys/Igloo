@@ -74,7 +74,7 @@ func TestListAndroidSyncVideoProjectionsBatchesContentChildren(t *testing.T) {
 	); err != nil {
 		t.Fatalf("InsertVideoWithSourceKind: %v", err)
 	}
-	if err := d.ExecRaw(`UPDATE videos SET dearrow_title = 'Better title' WHERE video_id = ?`, videoID); err != nil {
+	if err := d.ExecRaw(`UPDATE videos SET dearrow_title = 'Better title' WHERE video_id = $1`, videoID); err != nil {
 		t.Fatalf("update DeArrow title: %v", err)
 	}
 	if inserted, err := d.AddComments(videoID, []CommentInput{

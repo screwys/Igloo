@@ -11,7 +11,7 @@ func TestSearchFTSTriggersKeepReadyIndexCurrent(t *testing.T) {
 
 	seedSearchChannel(t, d, "tiktok_sample_channel", "tiktok")
 	if err := d.ExecRaw(
-		`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`,
+		`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`,
 		"tiktok_sample_channel",
 	); err != nil {
 		t.Fatalf("insert follow: %v", err)
@@ -74,7 +74,7 @@ func TestSearchFTSTriggersKeepReadyIndexCurrent(t *testing.T) {
 // Test helpers.
 func seedSearchChannel(t *testing.T, d *DB, channelID, platform string) {
 	t.Helper()
-	_, _ = d.conn.Exec(`INSERT OR IGNORE INTO channels (channel_id, name, platform) VALUES (?, ?, ?)`,
+	_, _ = d.conn.Exec(bind(`INSERT INTO channels (channel_id, name, platform) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`),
 		channelID, "Test Channel", platform)
 }
 

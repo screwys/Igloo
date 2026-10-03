@@ -12,18 +12,18 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
-func TestVacuumIntoHonorsCanceledContext(t *testing.T) {
+func TestWithSnapshotExportHonorsCanceledContext(t *testing.T) {
 	d := openWritableTestDB(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	dst := filepath.Join(t.TempDir(), "snapshot.db")
+	dst := filepath.Join(t.TempDir(), "snapshot.pgdump")
 
-	err := d.VacuumInto(ctx, dst)
+	err := d.WithSnapshotExport(ctx, dst, nil)
 	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("VacuumInto error = %v, want context canceled", err)
+		t.Fatalf("WithSnapshotExport error = %v, want context canceled", err)
 	}
 	if _, err := os.Stat(dst); !os.IsNotExist(err) {
-		t.Fatalf("canceled VacuumInto created destination: %v", err)
+		t.Fatalf("canceled WithSnapshotExport created destination: %v", err)
 	}
 }
 
@@ -40,8 +40,8 @@ func markDBTestStateRoot(t *testing.T, stateRoot string) {
 func openTestDB(t *testing.T) *DB {
 	t.Helper()
 	t.Parallel()
-	path, stateRoot := openReadOnlyFixtureDB(t)
-	d, err := OpenReadOnly(path, stateRoot)
+	stateRoot := openReadOnlyFixtureDB(t)
+	d, err := OpenReadOnlyAtStateRoot(stateRoot)
 	if err != nil {
 		t.Fatalf("open read-only fixture: %v", err)
 	}
@@ -49,66 +49,46 @@ func openTestDB(t *testing.T) *DB {
 	return d
 }
 
-func openReadOnlyFixtureDB(t *testing.T) (string, string) {
+func openReadOnlyFixtureDB(t *testing.T) string {
 	t.Helper()
-	tmpFile, err := os.CreateTemp("", "igloo-readonly-test-*.db")
-	if err != nil {
-		t.Fatalf("create temp db: %v", err)
-	}
-	tmpPath := tmpFile.Name()
-	_ = tmpFile.Close()
-
 	stateRoot := t.TempDir()
 	markDBTestStateRoot(t, stateRoot)
-	d, err := OpenPath(tmpPath, stateRoot)
+	d, err := OpenAtStateRoot(stateRoot)
 	if err != nil {
-		_ = os.Remove(tmpPath)
 		t.Fatalf("open writable: %v", err)
 	}
 	seedReadOnlyFixtureDB(t, d)
-	if err := d.Close(); err != nil {
-		t.Fatalf("close fixture db: %v", err)
-	}
 	t.Cleanup(func() {
-		_ = os.Remove(tmpPath)
+		if err := d.Close(); err != nil {
+			t.Errorf("close fixture db: %v", err)
+		}
 	})
-	return tmpPath, stateRoot
+	return stateRoot
 }
 
-// openWritableTestDB creates a fresh temp DB with schema for write tests.
-// Does not copy production data — tests write their own fixtures.
+// openWritableTestDB opens a fresh database for synthetic fixtures.
 func openWritableTestDB(t *testing.T) *DB {
 	t.Helper()
 	t.Parallel()
-	tmpFile, err := os.CreateTemp("", "igloo-test-*.db")
-	if err != nil {
-		t.Fatalf("create temp db: %v", err)
-	}
-	tmpPath := tmpFile.Name()
-	_ = tmpFile.Close()
-
 	stateRoot := t.TempDir()
 	markDBTestStateRoot(t, stateRoot)
-	d, err := OpenPath(tmpPath, stateRoot)
+	d, err := OpenAtStateRoot(stateRoot)
 	if err != nil {
-		_ = os.Remove(tmpPath)
 		t.Fatalf("open writable: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = d.Close()
-		_ = os.Remove(tmpPath)
 	})
 	return d
 }
 
-// openFreshTestDB creates a brand-new database at the canonical state-root
-// location used by tests that need to inspect the database path directly.
+// openFreshTestDB opens a database in a new state root.
 func openFreshTestDB(t *testing.T) *DB {
 	t.Helper()
 	t.Parallel()
 	tmpDir := t.TempDir()
 	markDBTestStateRoot(t, tmpDir)
-	d, err := OpenPath(filepath.Join(tmpDir, "test.db"), tmpDir)
+	d, err := OpenAtStateRoot(tmpDir)
 	if err != nil {
 		t.Fatalf("Open fresh DB: %v", err)
 	}
@@ -119,8 +99,9 @@ func openFreshTestDB(t *testing.T) *DB {
 func seedTestChannel(t *testing.T, d *DB, channelID string) {
 	t.Helper()
 	if err := d.ExecRaw(`
-		INSERT OR IGNORE INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, ?, 'Fixture Channel', '', 'youtube', 1)
+		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
+		VALUES ($1, $2, 'Fixture Channel', '', 'youtube', 1)
+		ON CONFLICT DO NOTHING
 	`, channelID, channelID); err != nil {
 		t.Fatalf("seed channel %s: %v", channelID, err)
 	}
@@ -130,8 +111,9 @@ func seedTestFollowedChannel(t *testing.T, d *DB, channelID string) {
 	t.Helper()
 	seedTestChannel(t, d, channelID)
 	if err := d.ExecRaw(`
-		INSERT OR IGNORE INTO channel_follows (channel_id, followed_at)
-		VALUES (?, 1)
+		INSERT INTO channel_follows (channel_id, followed_at)
+		VALUES ($1, 1)
+		ON CONFLICT DO NOTHING
 	`, channelID); err != nil {
 		t.Fatalf("seed channel follow %s: %v", channelID, err)
 	}
@@ -141,8 +123,9 @@ func seedTestVideo(t *testing.T, d *DB, videoID, channelID string) {
 	t.Helper()
 	seedTestChannel(t, d, channelID)
 	if err := d.ExecRaw(`
-		INSERT OR IGNORE INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
-		VALUES (?, ?, 'youtube_video', 'Fixture Video', 120, 1)
+		INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
+		VALUES ($1, $2, 'youtube_video', 'Fixture Video', 120, 1)
+		ON CONFLICT DO NOTHING
 	`, videoID, channelID); err != nil {
 		t.Fatalf("seed video %s: %v", videoID, err)
 	}
@@ -168,9 +151,10 @@ func seedReadOnlyFixtureDB(t *testing.T, d *DB) {
 	seedTestFollowedChannel(t, d, channelID)
 	seedTestVideo(t, d, videoID, channelID)
 	if err := d.ExecRaw(`
-		INSERT OR IGNORE INTO video_comments (
+		INSERT INTO video_comments (
 			video_id, comment_id, author_name, author_id, text, like_count, published_at
-		) VALUES (?, 'fixture_comment', 'Fixture Commenter', 'fixture_author', 'Fixture comment text', 1, 1)
+		) VALUES ($1, 'fixture_comment', 'Fixture Commenter', 'fixture_author', 'Fixture comment text', 1, 1)
+		ON CONFLICT DO NOTHING
 	`, videoID); err != nil {
 		t.Fatalf("seed comment: %v", err)
 	}
@@ -188,8 +172,9 @@ func seedReadOnlyFixtureDB(t *testing.T, d *DB) {
 		t.Fatalf("seed feed item: %v", err)
 	}
 	if err := d.ExecRaw(`
-		INSERT OR IGNORE INTO feed_likes (tweet_id, liked_at)
-		VALUES (?, 1)
+		INSERT INTO feed_likes (tweet_id, liked_at)
+		VALUES ($1, 1)
+		ON CONFLICT DO NOTHING
 	`, tweetID); err != nil {
 		t.Fatalf("seed feed like: %v", err)
 	}
@@ -202,7 +187,7 @@ func TestOpen(t *testing.T) {
 	for _, table := range tables {
 		var name string
 		err := d.conn.QueryRow(
-			"SELECT name FROM sqlite_master WHERE type='table' AND name=?", table,
+			"SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name=$1", table,
 		).Scan(&name)
 		if err != nil {
 			t.Errorf("table %q not found: %v", table, err)
@@ -211,9 +196,9 @@ func TestOpen(t *testing.T) {
 }
 
 func TestOpenReadOnly(t *testing.T) {
-	path, dataDir := openReadOnlyFixtureDB(t)
+	dataDir := openReadOnlyFixtureDB(t)
 
-	d, err := OpenReadOnly(path, dataDir)
+	d, err := OpenReadOnlyAtStateRoot(dataDir)
 	if err != nil {
 		t.Fatalf("OpenReadOnly: %v", err)
 	}

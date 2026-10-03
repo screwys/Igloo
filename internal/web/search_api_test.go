@@ -12,19 +12,19 @@ func TestSearchSuggestIncludesChannelDisplayHandle(t *testing.T) {
 	const channelID = "youtube_UCopaque123"
 
 	if err := srv.db.ExecRaw(
-		`INSERT INTO channels (channel_id, source_id, name, platform) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO channels (channel_id, source_id, name, platform) VALUES ($1, $2, $3, $4)`,
 		channelID, "UCopaque123", "Sample Tube", "youtube",
 	); err != nil {
 		t.Fatalf("insert channel: %v", err)
 	}
 	if err := srv.db.ExecRaw(
-		`INSERT INTO channel_profiles (channel_id, platform, handle, display_name) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO channel_profiles (channel_id, platform, handle, display_name) VALUES ($1, $2, $3, $4)`,
 		channelID, "youtube", "sampletube", "Sample Tube",
 	); err != nil {
 		t.Fatalf("insert profile: %v", err)
 	}
 	if err := srv.db.ExecRaw(
-		`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`,
+		`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`,
 		channelID,
 	); err != nil {
 		t.Fatalf("insert follow: %v", err)
@@ -62,14 +62,14 @@ func TestSearchSuggestExcludesUnfollowedChannelsAcrossPlatforms(t *testing.T) {
 		unfollowedID := platform + "_sample_unfollowed"
 		for _, channelID := range []string{followedID, unfollowedID} {
 			if err := srv.db.ExecRaw(
-				`INSERT INTO channels (channel_id, source_id, name, platform) VALUES (?, ?, ?, ?)`,
+				`INSERT INTO channels (channel_id, source_id, name, platform) VALUES ($1, $2, $3, $4)`,
 				channelID, channelID, "Shared Search Name", platform,
 			); err != nil {
 				t.Fatalf("insert %s channel: %v", platform, err)
 			}
 		}
 		if err := srv.db.ExecRaw(
-			`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`,
+			`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`,
 			followedID,
 		); err != nil {
 			t.Fatalf("follow %s channel: %v", platform, err)

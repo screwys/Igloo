@@ -152,7 +152,7 @@ func (s *Server) startMutationBookmarkArchive(archivePathsAllowed bool, videoID 
 	err := s.db.QueryRow(`
 		SELECT category_id, COALESCE(custom_title, ''),
 		       COALESCE(account_handles, ''), COALESCE(media_indices, '')
-		FROM bookmarks WHERE video_id = ?
+		FROM bookmarks WHERE video_id = $1
 	`, videoID).Scan(&categoryID, &customTitle, &accountHandles, &mediaIndices)
 	if err != nil {
 		slog.Warn("bookmark mutation archive state read failed", "video", videoID, "err", err)

@@ -5,10 +5,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/screwys/igloo/internal/components"
+	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/feed"
 	"github.com/screwys/igloo/internal/model"
@@ -17,11 +17,12 @@ import (
 const webPageSize = 200
 
 func main() {
-	home, _ := os.UserHomeDir()
-	dbPath := filepath.Join(home, ".local/share/igloo/igloo.db")
-	dataDir := filepath.Join(home, ".local/share/igloo")
-
-	d, err := db.OpenReadOnly(dbPath, dataDir)
+	cfg := config.Load()
+	if cfg.ConfigError != nil {
+		fmt.Fprintln(os.Stderr, cfg.ConfigError)
+		os.Exit(1)
+	}
+	d, err := db.OpenReadOnlyLayout(cfg.Storage)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open db: %v\n", err)
 		os.Exit(1)

@@ -20,7 +20,7 @@ func (db *DB) UpsertFeedSource(source model.FeedSource) error {
 			INSERT INTO feed_sources (
 				source_id, platform, source_type, external_id, label, url, enabled,
 				last_checked, last_ok, last_error, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 			ON CONFLICT(source_id) DO UPDATE SET
 				platform = excluded.platform,
 				source_type = excluded.source_type,
@@ -42,16 +42,17 @@ func (db *DB) ListFeedSources(platform string) ([]model.FeedSource, error) {
 		where = "WHERE fs.platform = ?"
 		args = append(args, platform)
 	}
-	rows, err := db.conn.Query(`
+	rows, err := db.conn.Query(bind(`
 		SELECT fs.source_id, fs.platform, fs.source_type, fs.external_id, fs.label, fs.url,
 		       fs.enabled, fs.last_checked, fs.last_ok, fs.last_error, fs.created_at, fs.updated_at,
 		       COUNT(fis.tweet_id) AS item_count
 		FROM feed_sources fs
 		LEFT JOIN feed_item_sources fis ON fis.source_id = fs.source_id
 		`+where+`
-		GROUP BY fs.source_id
-		ORDER BY fs.updated_at DESC, fs.label COLLATE NOCASE
-	`, args...)
+		GROUP BY fs.source_id, fs.platform, fs.source_type, fs.external_id, fs.label, fs.url,
+		         fs.enabled, fs.last_checked, fs.last_ok, fs.last_error, fs.created_at, fs.updated_at
+		ORDER BY fs.updated_at DESC, LOWER(fs.label COLLATE "C")
+	`), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,10 +97,10 @@ func (db *DB) GetFeedSource(sourceID string) (model.FeedSource, error) {
 
 func (db *DB) DeleteFeedSource(sourceID string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`DELETE FROM feed_item_sources WHERE source_id = ?`, sourceID); err != nil {
+		if _, err := tx.Exec(`DELETE FROM feed_item_sources WHERE source_id = $1`, sourceID); err != nil {
 			return err
 		}
-		_, err := tx.Exec(`DELETE FROM feed_sources WHERE source_id = ?`, sourceID)
+		_, err := tx.Exec(`DELETE FROM feed_sources WHERE source_id = $1`, sourceID)
 		return err
 	})
 }
@@ -116,7 +117,7 @@ func (db *DB) RecordFeedItemSources(tweetID string, sourceIDs []string) error {
 			}
 			if _, err := tx.Exec(`
 				INSERT INTO feed_item_sources (tweet_id, source_id, first_seen_at, last_seen_at)
-				VALUES (?, ?, ?, ?)
+				VALUES ($1, $2, $3, $4)
 				ON CONFLICT(tweet_id, source_id) DO UPDATE SET last_seen_at = excluded.last_seen_at
 			`, tweetID, sourceID, now, now); err != nil {
 				return err
@@ -129,7 +130,7 @@ func (db *DB) RecordFeedItemSources(tweetID string, sourceIDs []string) error {
 func (db *DB) RecordFeedSourceSuccess(sourceID string) error {
 	now := time.Now().Unix()
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`UPDATE feed_sources SET last_checked = ?, last_ok = ?, last_error = '', updated_at = ? WHERE source_id = ?`, now, now, now, sourceID)
+		_, err := tx.Exec(`UPDATE feed_sources SET last_checked = $1, last_ok = $2, last_error = '', updated_at = $3 WHERE source_id = $4`, now, now, now, sourceID)
 		return err
 	})
 }
@@ -137,7 +138,7 @@ func (db *DB) RecordFeedSourceSuccess(sourceID string) error {
 func (db *DB) RecordFeedSourceFailure(sourceID, message string) error {
 	now := time.Now().Unix()
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`UPDATE feed_sources SET last_checked = ?, last_error = ?, updated_at = ? WHERE source_id = ?`, now, message, now, sourceID)
+		_, err := tx.Exec(`UPDATE feed_sources SET last_checked = $1, last_error = $2, updated_at = $3 WHERE source_id = $4`, now, message, now, sourceID)
 		return err
 	})
 }

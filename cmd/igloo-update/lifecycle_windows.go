@@ -7,12 +7,17 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/screwys/igloo/internal/config"
+	"github.com/screwys/igloo/internal/storage"
 	"github.com/screwys/igloo/internal/windowsupdate"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
@@ -46,6 +51,71 @@ func (platformLifecycle) WaitForProcess(ctx context.Context, processID int) erro
 		default:
 		}
 	}
+}
+
+func (platformLifecycle) MigrateSQLite(ctx context.Context, plan windowsupdate.ApplyPlan) (func() error, error) {
+	if plan.AppIncoming == "" {
+		return nil, nil
+	}
+	cfg := config.Load()
+	if cfg.ConfigError != nil {
+		return nil, cfg.ConfigError
+	}
+	legacyPath := cfg.Storage.DatabasePath()
+	if _, err := os.Stat(legacyPath); os.IsNotExist(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	before, err := os.ReadDir(cfg.Storage.StateRoot())
+	if err != nil {
+		return nil, err
+	}
+	existing := make(map[string]struct{}, len(before))
+	for _, entry := range before {
+		existing[entry.Name()] = struct{}{}
+	}
+	executable := filepath.Join(plan.InstallRoot, "app", "current", "igloo-user.exe")
+	command := exec.CommandContext(ctx, executable, "migrate-sqlite")
+	command.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	migrationErr := command.Run()
+	after, readErr := os.ReadDir(cfg.Storage.StateRoot())
+	backupPath := ""
+	for _, entry := range after {
+		if _, present := existing[entry.Name()]; !present && strings.HasPrefix(entry.Name(), "igloo.sqlite-backup-") && strings.HasSuffix(entry.Name(), ".db") {
+			backupPath = filepath.Join(cfg.Storage.StateRoot(), entry.Name())
+		}
+	}
+	rollback := func() error {
+		if _, err := os.Stat(legacyPath); err == nil {
+			return nil
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		if backupPath == "" {
+			return errors.New("retained SQLite backup is unavailable for rollback")
+		}
+		source, err := os.Open(backupPath)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = source.Close() }()
+		destination, err := os.CreateTemp(cfg.Storage.StateRoot(), ".igloo-update-sqlite-*.db")
+		if err != nil {
+			return err
+		}
+		temporaryPath := destination.Name()
+		defer func() { _ = os.Remove(temporaryPath) }()
+		_, copyErr := io.Copy(destination, source)
+		if err := errors.Join(copyErr, destination.Sync(), destination.Close()); err != nil {
+			return err
+		}
+		if err := os.Rename(temporaryPath, legacyPath); err != nil {
+			return err
+		}
+		return storage.SyncDirectory(cfg.Storage.StateRoot())
+	}
+	return rollback, errors.Join(migrationErr, readErr)
 }
 
 func (l *platformLifecycle) Start(ctx context.Context, plan windowsupdate.ApplyPlan) error {

@@ -10,7 +10,7 @@ func TestListSnapshotPageUsesRankCursor(t *testing.T) {
 	for _, id := range []string{"first", "second", "third"} {
 		if err := d.ExecRaw(`
 			INSERT INTO feed_items (tweet_id, channel_id, body_text, published_at, fetched_at)
-			VALUES (?, 'twitter_sample_author', 'body', 1, 1)
+			VALUES ($1, 'twitter_sample_author', 'body', 1, 1)
 		`, id); err != nil {
 			t.Fatal(err)
 		}
@@ -58,7 +58,7 @@ func TestListSnapshotPageExcludesSeenAndGhostRows(t *testing.T) {
 	} {
 		if err := d.ExecRaw(`
 			INSERT INTO feed_items (tweet_id, channel_id, body_text, is_ghost, published_at, fetched_at)
-			VALUES (?, 'twitter_sample_author', 'body', ?, 1, 1)
+			VALUES ($1, 'twitter_sample_author', 'body', $2, 1, 1)
 		`, row.id, row.isGhost); err != nil {
 			t.Fatal(err)
 		}

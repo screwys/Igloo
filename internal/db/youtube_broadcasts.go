@@ -24,7 +24,7 @@ const YouTubeBroadcastSchema = `CREATE TABLE IF NOT EXISTS youtube_broadcasts (
 // ReplaceYouTubeBroadcasts commits one successful channel snapshot atomically.
 func (db *DB) ReplaceYouTubeBroadcasts(channelID string, broadcasts []model.YouTubeBroadcast, observedAtMs int64) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`DELETE FROM youtube_broadcasts WHERE channel_id = ?`, channelID); err != nil {
+		if _, err := tx.Exec(`DELETE FROM youtube_broadcasts WHERE channel_id = $1`, channelID); err != nil {
 			return err
 		}
 		for _, broadcast := range broadcasts {
@@ -32,7 +32,7 @@ func (db *DB) ReplaceYouTubeBroadcasts(channelID string, broadcasts []model.YouT
 				INSERT INTO youtube_broadcasts (
 					channel_id, video_id, title, thumbnail_url, live_status, published_at_ms,
 					starts_at_ms, concurrent_view_count, observed_at_ms, source_rank
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 				ON CONFLICT (channel_id, video_id) DO NOTHING
 			`, channelID, broadcast.VideoID, broadcast.Title, broadcast.ThumbnailURL,
 				broadcast.LiveStatus, broadcast.PublishedAtMs, broadcast.StartsAtMs,
@@ -97,14 +97,14 @@ func (db *DB) ListYouTubeBroadcasts(opts YouTubeBroadcastQuery) ([]model.YouTube
 		         b.published_at_ms DESC, b.source_rank, b.channel_id, b.video_id
 		`
 	if opts.Order == "account" {
-		order = ` ORDER BY COALESCE((SELECT NULLIF(cp.display_name,'') FROM channel_profiles cp WHERE cp.channel_id = b.channel_id),(SELECT c.name FROM channels c WHERE c.channel_id = b.channel_id),b.channel_id) COLLATE NOCASE, COALESCE(NULLIF(b.starts_at_ms,0),b.published_at_ms) DESC,b.source_rank,b.video_id`
+		order = ` ORDER BY LOWER(COALESCE((SELECT NULLIF(cp.display_name,'') FROM channel_profiles cp WHERE cp.channel_id = b.channel_id),(SELECT c.name FROM channels c WHERE c.channel_id = b.channel_id),b.channel_id) COLLATE "C"), COALESCE(NULLIF(b.starts_at_ms,0),b.published_at_ms) DESC,b.source_rank,b.video_id`
 	}
 	if opts.Order == "newest" || opts.Order == "recent" {
 		order = ` ORDER BY COALESCE(NULLIF(b.starts_at_ms,0),b.published_at_ms) DESC,b.source_rank,b.channel_id,b.video_id`
 	}
 	query += order + ` LIMIT ?`
 	args = append(args, limit)
-	rows, err := db.reader().Query(query, args...)
+	rows, err := db.reader().Query(bind(query), args...)
 	if err != nil {
 		return nil, err
 	}

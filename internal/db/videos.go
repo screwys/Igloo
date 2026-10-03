@@ -93,7 +93,7 @@ func momentRepostTimeSQL(repostAlias, videoAlias string) string {
 
 // GetVideo returns a single video by ID with joined channel info.
 func (db *DB) GetVideo(videoID string) (*model.Video, error) {
-	row := db.conn.QueryRow(`
+	row := db.conn.QueryRow(bind(`
 		SELECT v.id, v.video_id, v.channel_id, v.owner_kind, v.title, COALESCE(v.description,''),
 		       COALESCE(v.duration,0), v.published_at, v.downloaded_at,
 		       CASE WHEN `+videoFullyWatchedSQL("v")+` THEN 1 ELSE 0 END,
@@ -111,7 +111,7 @@ func (db *DB) GetVideo(videoID string) (*model.Video, error) {
 		LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id
 		LEFT JOIN channel_stars cs ON cs.channel_id = c.channel_id
 		WHERE v.video_id = ?
-	`, videoID)
+	`), videoID)
 
 	var v model.Video
 	var publishedAt, downloadedAt sql.NullInt64
@@ -155,9 +155,9 @@ func (db *DB) resolveTweetVideoPresentation(v *model.Video) error {
 		LEFT JOIN channels c ON c.channel_id = fi.channel_id
 		LEFT JOIN channel_profiles cp ON cp.channel_id = fi.channel_id
 		LEFT JOIN channel_follows cf ON cf.channel_id = fi.channel_id
-		WHERE fi.tweet_id = ? OR fi.canonical_tweet_id = ?
+		WHERE fi.tweet_id = $1 OR fi.canonical_tweet_id = $2
 		ORDER BY CASE
-			WHEN fi.tweet_id = ? AND (
+			WHEN fi.tweet_id = $3 AND (
 				NULLIF(TRIM(COALESCE(fi.body_text, '')), '') IS NOT NULL
 				OR NULLIF(TRIM(COALESCE(fi.media_json, '')), '') IS NOT NULL
 				OR NULLIF(TRIM(COALESCE(fi.quote_tweet_id, '')), '') IS NOT NULL
@@ -230,7 +230,7 @@ func (db *DB) readyTweetMediaTypes(ownerID string) ([]string, error) {
 		            THEN 'video' ELSE 'image' END
 		FROM assets a
 		JOIN media_objects mo ON mo.object_id = a.object_id
-		WHERE a.owner_kind = 'tweet' AND a.owner_id = ?
+		WHERE a.owner_kind = 'tweet' AND a.owner_id = $1
 		  AND a.asset_kind IN ('post_media', 'video_stream')
 		  AND a.lifecycle_state = 'active'
 		  AND mo.published_revision > 0 AND mo.file_path != ''
@@ -269,7 +269,7 @@ func applyVideoMediaTypes(v *model.Video, mediaTypes []string) {
 // GetNextVideo returns the video with the closest earlier published_at,
 // used for "next in line" in the player sidebar.
 func (db *DB) GetNextVideo(videoID string) (*model.Video, error) {
-	row := db.conn.QueryRow(`
+	row := db.conn.QueryRow(bind(`
 		SELECT v.id, v.video_id, v.channel_id, v.owner_kind, v.title, COALESCE(v.description,''),
 		       COALESCE(v.duration,0), v.published_at, v.downloaded_at,
 		       CASE WHEN `+videoFullyWatchedSQL("v")+` THEN 1 ELSE 0 END,
@@ -291,7 +291,7 @@ func (db *DB) GetNextVideo(videoID string) (*model.Video, error) {
 		  AND v.owner_kind = 'youtube_video'
 		ORDER BY v.published_at DESC
 		LIMIT 1
-	`, videoID)
+	`), videoID)
 
 	var v model.Video
 	var publishedAt, downloadedAt sql.NullInt64
@@ -368,7 +368,7 @@ func (db *DB) GetVideos(opts GetVideosOpts) ([]model.Video, error) {
 		args = append(args, opts.Platform)
 	}
 	if opts.Search != "" {
-		where = append(where, "(v.title LIKE ? OR v.description LIKE ?)")
+		where = append(where, `(LOWER(v.title COLLATE "C") LIKE LOWER(? COLLATE "C") OR LOWER(v.description COLLATE "C") LIKE LOWER(? COLLATE "C"))`)
 		like := "%" + opts.Search + "%"
 		args = append(args, like, like)
 	}
@@ -493,7 +493,7 @@ func (db *DB) GetVideos(opts GetVideosOpts) ([]model.Video, error) {
 	`, withClause, videoFullyWatchedSQL("v"), metadataCol, repostCols, repostJoin, whereClause, orderClause)
 	args = append(args, limit, opts.Offset)
 
-	rows, err := db.conn.Query(query, args...)
+	rows, err := db.conn.Query(bind(query), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -594,7 +594,7 @@ func (db *DB) GetLatestVideosPerChannel(perChannel int, channelIDs ...string) (m
 	`, videoFullyWatchedSQL("v"), readyVideoMediaExistsSQL("v"), channelFilter)
 	args = append(args, perChannel)
 
-	rows, err := db.conn.Query(query, args...)
+	rows, err := db.conn.Query(bind(query), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -670,7 +670,7 @@ func (db *DB) GetLatestFeedMediaPerAuthor(perAuthor int, handles ...string) (map
 	`, handleFilter)
 	args = append(args, perAuthor)
 
-	rows, err := db.conn.Query(query, args...)
+	rows, err := db.conn.Query(bind(query), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -741,7 +741,7 @@ func (db *DB) GetVideoCount(opts GetVideosOpts) (int, error) {
 		args = append(args, opts.Platform)
 	}
 	if opts.Search != "" {
-		where = append(where, "(v.title LIKE ? OR v.description LIKE ?)")
+		where = append(where, `(LOWER(v.title COLLATE "C") LIKE LOWER(? COLLATE "C") OR LOWER(v.description COLLATE "C") LIKE LOWER(? COLLATE "C"))`)
 		like := "%" + opts.Search + "%"
 		args = append(args, like, like)
 	}
@@ -774,7 +774,7 @@ func (db *DB) GetVideoCount(opts GetVideosOpts) (int, error) {
 	`, repostJoin, whereClause)
 
 	var count int
-	err := db.conn.QueryRow(query, args...).Scan(&count)
+	err := db.conn.QueryRow(bind(query), args...).Scan(&count)
 	return count, err
 }
 
@@ -803,7 +803,7 @@ func (db *DB) GetShortsOrdinal(videoID, momentsMode string) (int, bool, error) {
 			CROSS JOIN target
 			WHERE stored.` + positionColumn + ` <= target.position`
 		var ordinal int
-		if err := db.reader().QueryRow(query, videoID).Scan(&ordinal); err != nil {
+		if err := db.reader().QueryRow(bind(query), videoID).Scan(&ordinal); err != nil {
 			return 0, false, err
 		}
 		return ordinal, ordinal > 0, nil
@@ -815,7 +815,7 @@ func (db *DB) GetShortsOrdinal(videoID, momentsMode string) (int, bool, error) {
 
 	var ordinal int
 	if !includeSourceWindows {
-		err := db.conn.QueryRow(`
+		err := db.conn.QueryRow(bind(`
 			WITH visible AS (
 				SELECT v.video_id, COALESCE(v.published_at, 0) AS effective_moment_at_ms
 				FROM videos v
@@ -837,7 +837,7 @@ func (db *DB) GetShortsOrdinal(videoID, momentsMode string) (int, bool, error) {
 			CROSS JOIN target t
 			WHERE v.effective_moment_at_ms < t.effective_moment_at_ms
 			   OR (v.effective_moment_at_ms = t.effective_moment_at_ms AND v.video_id <= t.video_id)
-		`, videoID).Scan(&ordinal)
+		`), videoID).Scan(&ordinal)
 		if err != nil {
 			return 0, false, err
 		}
@@ -845,7 +845,7 @@ func (db *DB) GetShortsOrdinal(videoID, momentsMode string) (int, bool, error) {
 	}
 	visibility = "(cf.channel_id IS NOT NULL OR mr.video_id IS NOT NULL) AND " + momentOwnerUnmutedSQL("v")
 
-	err := db.conn.QueryRow(`
+	err := db.conn.QueryRow(bind(`
 		WITH allowed_moment_reposts AS (
 			SELECT vrs.*,
 			       COUNT(*) OVER (PARTITION BY vrs.video_id) AS repost_count,
@@ -892,7 +892,7 @@ func (db *DB) GetShortsOrdinal(videoID, momentsMode string) (int, bool, error) {
 		CROSS JOIN target t
 		WHERE v.effective_moment_at_ms < t.effective_moment_at_ms
 		   OR (v.effective_moment_at_ms = t.effective_moment_at_ms AND v.video_id <= t.video_id)
-	`, videoID).Scan(&ordinal)
+	`), videoID).Scan(&ordinal)
 	if err != nil {
 		return 0, false, err
 	}
@@ -926,7 +926,7 @@ func (db *DB) GetShortsVisibleSortAt(videoID, momentsMode string) (int64, bool, 
 		WHERE video_id = ?
 		LIMIT 1`
 	var sortAt int64
-	err := db.conn.QueryRow(query, videoID).Scan(&sortAt)
+	err := db.conn.QueryRow(bind(query), videoID).Scan(&sortAt)
 	if err == nil {
 		return sortAt, true, nil
 	}
@@ -951,7 +951,7 @@ func (db *DB) ListShortsVideoIDs(momentsMode string) ([]string, error) {
 		FROM visible v
 		JOIN videos stored ON stored.video_id = v.video_id
 		ORDER BY stored.` + positionColumn + ` ASC, v.video_id ASC`
-	rows, err := db.conn.Query(query)
+	rows, err := db.conn.Query(bind(query))
 	if err != nil {
 		return nil, err
 	}
@@ -977,7 +977,7 @@ func (db *DB) GetShortsCursorSortAt(videoID, momentsMode string) (int64, bool, e
 		SELECT COALESCE(v.published_at, 0)
 		FROM videos v
 		LEFT JOIN channels c ON v.channel_id = c.channel_id
-		WHERE v.video_id = ?
+		WHERE v.video_id = $1
 		  AND COALESCE(c.platform, '') IN ('tiktok','instagram')
 		  AND COALESCE(v.source_kind, '') != 'story'
 		  AND COALESCE(v.is_temp,0) = 0
@@ -1017,7 +1017,7 @@ func (db *DB) GetNearestShortsOrdinal(sortAt int64, cursorVideoID, momentsMode s
 		GROUP BY c.video_id`
 	var targetVideoID string
 	var ordinal int
-	err := db.conn.QueryRow(query, sortAt, sortAt, cursorVideoID).Scan(&targetVideoID, &ordinal)
+	err := db.conn.QueryRow(bind(query), sortAt, sortAt, cursorVideoID).Scan(&targetVideoID, &ordinal)
 	if err == sql.ErrNoRows {
 		return "", 0, false, nil
 	}
@@ -1044,11 +1044,11 @@ func (db *DB) shortsVisibleCTEForUnpositioned(momentsMode, positionColumn string
 		withPrefix += `unpositioned_videos AS MATERIALIZED (
 			SELECT v.video_id, v.channel_id, v.owner_kind, v.source_kind, v.is_temp, v.published_at
 			FROM channels c
-			CROSS JOIN videos v INDEXED BY idx_videos_moments_` + momentsMode + `_unpositioned
+			JOIN videos v
 			  ON v.channel_id = c.channel_id
 			WHERE c.platform IN ('tiktok', 'instagram') AND v.` + positionColumn + ` = 0
 		), `
-		repostSource = "unpositioned_videos owner CROSS JOIN video_repost_sources vrs ON vrs.video_id = owner.video_id"
+		repostSource = "unpositioned_videos owner JOIN video_repost_sources vrs ON vrs.video_id = owner.video_id"
 	}
 	if !includeSourceWindows {
 		return withPrefix + `visible AS (
@@ -1110,9 +1110,9 @@ func (db *DB) GetComments(videoID string, limit int) ([]model.Comment, error) {
 		       COALESCE(author_name,''), COALESCE(author_id,''),
 		       COALESCE(text,''), COALESCE(like_count,0), published_at
 		FROM video_comments
-		WHERE video_id = ?
+		WHERE video_id = $1
 		ORDER BY like_count DESC, comment_id ASC
-		LIMIT ?
+		LIMIT $2
 	`, videoID, limit)
 	if err != nil {
 		return nil, err
@@ -1147,7 +1147,7 @@ func (db *DB) GetCommentText(videoID, commentID string) (string, error) {
 	err := db.conn.QueryRow(`
 		SELECT COALESCE(text, '')
 		FROM video_comments
-		WHERE video_id = ? AND comment_id = ?
+		WHERE video_id = $1 AND comment_id = $2
 	`, videoID, commentID).Scan(&text)
 	return text, err
 }
@@ -1156,7 +1156,7 @@ func (db *DB) GetCommentText(videoID, commentID string) (string, error) {
 func (db *DB) DeleteComments(videoID string) (int, error) {
 	var deleted int
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		res, err := tx.Exec("DELETE FROM video_comments WHERE video_id = ?", videoID)
+		res, err := tx.Exec("DELETE FROM video_comments WHERE video_id = $1", videoID)
 		if err != nil {
 			return err
 		}
@@ -1179,7 +1179,7 @@ func (db *DB) AddComments(videoID string, comments []CommentInput) (int, error) 
 			INSERT INTO video_comments (
 				video_id, comment_id, parent_id, author_name, author_id,
 				text, like_count, published_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT(video_id, comment_id) DO NOTHING
 		`)
 		if err != nil {
@@ -1245,7 +1245,7 @@ type CommentInput struct {
 func (db *DB) GetPlaybackPosition(videoID string) (float64, error) {
 	var pos float64
 	err := db.conn.QueryRow(
-		"SELECT COALESCE(playback_position,0) FROM watch_history WHERE video_id = ?",
+		"SELECT COALESCE(playback_position,0) FROM watch_history WHERE video_id = $1",
 		videoID,
 	).Scan(&pos)
 	if err == sql.ErrNoRows {
@@ -1266,7 +1266,7 @@ func (db *DB) GetPlaybackPositions(videoIDs []string) (map[string]float64, error
 		args = append(args, id)
 	}
 	rows, err := db.conn.Query(
-		"SELECT video_id, COALESCE(playback_position,0) FROM watch_history WHERE video_id IN ("+ph+")",
+		bind("SELECT video_id, COALESCE(playback_position,0) FROM watch_history WHERE video_id IN ("+ph+")"),
 		args...,
 	)
 	if err != nil {
@@ -1304,7 +1304,7 @@ func (db *DB) GetChannel(channelID string) (*model.Channel, error) {
 		FROM channels c
 		LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id
 		LEFT JOIN channel_stars   cs ON cs.channel_id = c.channel_id
-		WHERE c.channel_id = ?
+		WHERE c.channel_id = $1
 	`, channelID)
 
 	var ch model.Channel
@@ -1350,7 +1350,7 @@ func (db *DB) SetPinned(videoID string, pinned bool) error {
 		val = 1
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec("UPDATE videos SET is_pinned = ? WHERE video_id = ?", val, videoID)
+		_, err := tx.Exec("UPDATE videos SET is_pinned = $1 WHERE video_id = $2", val, videoID)
 		return err
 	})
 }
@@ -1361,14 +1361,14 @@ func (db *DB) TogglePinned(videoID string) (bool, error) {
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		var cur int
 		if err := tx.QueryRow(
-			"SELECT COALESCE(is_pinned, 0) FROM videos WHERE video_id = ?",
+			"SELECT COALESCE(is_pinned, 0) FROM videos WHERE video_id = $1",
 			videoID,
 		).Scan(&cur); err != nil {
 			return err
 		}
 		nextVal := 1 - cur
 		next = nextVal == 1
-		_, err := tx.Exec("UPDATE videos SET is_pinned = ? WHERE video_id = ?", nextVal, videoID)
+		_, err := tx.Exec("UPDATE videos SET is_pinned = $1 WHERE video_id = $2", nextVal, videoID)
 		return err
 	})
 	return next, err
@@ -1396,7 +1396,7 @@ type SponsorBlockSegment struct {
 // GetVideoStats returns unwatched count and canonical media size for videos
 // with ready assets.
 func (db *DB) GetVideoStats() (unwatched int, totalBytes int64, err error) {
-	err = db.conn.QueryRow(`
+	err = db.conn.QueryRow(bind(`
 		SELECT
 			COUNT(DISTINCT CASE WHEN NOT `+videoFullyWatchedSQL("v")+` THEN v.video_id END),
 			COALESCE(SUM(mo.size_bytes),0)
@@ -1408,7 +1408,7 @@ func (db *DB) GetVideoStats() (unwatched int, totalBytes int64, err error) {
 		WHERE a.asset_kind IN ('video_stream', 'post_media', 'post_audio')
 		  AND mo.published_revision > 0
 		  AND mo.file_path != ''
-	`).Scan(&unwatched, &totalBytes)
+	`)).Scan(&unwatched, &totalBytes)
 	return
 }
 
@@ -1450,7 +1450,7 @@ type SBCheckedRow struct {
 func (db *DB) GetSponsorBlockChecked(videoID string) (*SBCheckedRow, error) {
 	var row SBCheckedRow
 	err := db.conn.QueryRow(
-		"SELECT video_id, checked_at, COALESCE(video_age_at_check,'') FROM sponsorblock_checked WHERE video_id = ?",
+		"SELECT video_id, checked_at, COALESCE(video_age_at_check,'') FROM sponsorblock_checked WHERE video_id = $1",
 		videoID,
 	).Scan(&row.VideoID, &row.CheckedAtMs, &row.VideoAgeAtCheck)
 	if err == sql.ErrNoRows {
@@ -1467,9 +1467,9 @@ func (db *DB) MarkSponsorBlockChecked(videoID, ageLabel string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`
 			INSERT INTO sponsorblock_checked (video_id, checked_at, video_age_at_check)
-			VALUES (?, CAST(strftime('%s','now') AS INTEGER) * 1000, ?)
+			VALUES ($1, floor(extract(epoch FROM statement_timestamp()) * 1000)::bigint, $2)
 			ON CONFLICT(video_id) DO UPDATE SET
-				checked_at = CAST(strftime('%s','now') AS INTEGER) * 1000,
+				checked_at = excluded.checked_at,
 				video_age_at_check = excluded.video_age_at_check
 		`, videoID, ageLabel); err != nil {
 			return err
@@ -1481,12 +1481,12 @@ func (db *DB) MarkSponsorBlockChecked(videoID, ageLabel string) error {
 // SaveSponsorBlockSegments replaces all segments for a video.
 func (db *DB) SaveSponsorBlockSegments(videoID string, segments []SponsorBlockSegment) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := tx.Exec("DELETE FROM sponsorblock_segments WHERE video_id = ?", videoID); err != nil {
+		if _, err := tx.Exec("DELETE FROM sponsorblock_segments WHERE video_id = $1", videoID); err != nil {
 			return err
 		}
 		if len(segments) > 0 {
 			stmt, err := tx.Prepare(
-				"INSERT INTO sponsorblock_segments (video_id, start_time, end_time, category) VALUES (?, ?, ?, ?)",
+				"INSERT INTO sponsorblock_segments (video_id, start_time, end_time, category) VALUES ($1, $2, $3, $4)",
 			)
 			if err != nil {
 				return err
@@ -1507,7 +1507,7 @@ func (db *DB) SaveSponsorBlockSegments(videoID string, segments []SponsorBlockSe
 // GetSponsorBlockSegments returns cached SponsorBlock segments for a video.
 func (db *DB) GetSponsorBlockSegments(videoID string) ([]SponsorBlockSegment, error) {
 	rows, err := db.conn.Query(
-		"SELECT start_time, end_time, category FROM sponsorblock_segments WHERE video_id = ?",
+		"SELECT start_time, end_time, category FROM sponsorblock_segments WHERE video_id = $1",
 		videoID,
 	)
 	if err != nil {

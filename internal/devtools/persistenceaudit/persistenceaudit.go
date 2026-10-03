@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -15,8 +14,6 @@ import (
 	"github.com/screwys/igloo/internal/config"
 	igloodb "github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/persistencebudget"
-
-	_ "modernc.org/sqlite"
 )
 
 type options struct {
@@ -28,11 +25,10 @@ type options struct {
 type Report struct {
 	DBPath       string                      `json:"db_path"`
 	DBBytes      int64                       `json:"db_bytes"`
-	WALBytes     int64                       `json:"wal_bytes"`
-	PageSize     int64                       `json:"page_size"`
-	PageCount    int64                       `json:"page_count"`
-	UsedPages    int64                       `json:"used_pages"`
-	Freelist     int64                       `json:"freelist_count"`
+	WALBytes     int64                       `json:"wal_bytes,omitempty"`
+	WALAvailable bool                        `json:"wal_available"`
+	WALScope     string                      `json:"wal_scope"`
+	BlockSize    int64                       `json:"block_size"`
 	Groups       []LifecycleGroup            `json:"groups"`
 	Warnings     []persistencebudget.Warning `json:"warnings,omitempty"`
 	Unclassified []TableReport               `json:"unclassified,omitempty"`
@@ -57,7 +53,7 @@ func parseOptions(args []string) (options, error) {
 	opts := options{Top: 5}
 	fs := flag.NewFlagSet("persistence-audit", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.StringVar(&opts.DBPath, "db", "", "database path; defaults to configured Igloo database")
+	fs.StringVar(&opts.DBPath, "db", "", "Igloo state directory; defaults to configured state directory")
 	fs.BoolVar(&opts.JSON, "json", false, "print JSON output")
 	fs.IntVar(&opts.Top, "top", opts.Top, "number of top tables to print per lifecycle")
 	if err := fs.Parse(args); err != nil {
@@ -86,7 +82,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 			_, _ = fmt.Fprintf(stderr, "persistence audit: invalid configuration: %v\n", cfg.ConfigError)
 			return 1
 		}
-		dbPath = cfg.Storage.DatabasePath()
+		dbPath = cfg.Storage.StateRoot()
 	}
 
 	report, err := ReadReport(dbPath, opts.Top)
@@ -107,49 +103,35 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func ReadReport(dbPath string, top int) (Report, error) {
-	dbPath = filepath.Clean(dbPath)
-	conn, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro&_pragma=busy_timeout(5000)", dbPath))
+func ReadReport(stateRoot string, top int) (Report, error) {
+	stateRoot = filepath.Clean(stateRoot)
+	store, err := igloodb.OpenReadOnlyAtStateRoot(stateRoot)
 	if err != nil {
 		return Report{}, fmt.Errorf("open readonly db: %w", err)
 	}
-	defer func() {
-		_ = conn.Close()
-	}()
-	if err := conn.Ping(); err != nil {
-		return Report{}, fmt.Errorf("ping readonly db: %w", err)
-	}
-
-	report := Report{DBPath: dbPath}
-	if info, err := os.Stat(dbPath); err == nil {
-		report.DBBytes = info.Size()
-	}
-	if info, err := os.Stat(dbPath + "-wal"); err == nil {
-		report.WALBytes = info.Size()
-	}
-	if err := conn.QueryRow(`PRAGMA page_size`).Scan(&report.PageSize); err != nil {
-		return Report{}, fmt.Errorf("read page_size: %w", err)
-	}
-	if err := conn.QueryRow(`PRAGMA page_count`).Scan(&report.PageCount); err != nil {
-		return Report{}, fmt.Errorf("read page_count: %w", err)
-	}
-	if err := conn.QueryRow(`PRAGMA freelist_count`).Scan(&report.Freelist); err != nil {
-		return Report{}, fmt.Errorf("read freelist_count: %w", err)
-	}
-	report.UsedPages = report.PageCount - report.Freelist
-	if report.UsedPages < 0 {
-		report.UsedPages = 0
-	}
-
-	tables, err := userTables(conn)
+	defer func() { _ = store.Close() }()
+	storage, err := store.DatabaseStorage()
 	if err != nil {
 		return Report{}, err
 	}
-	bytesByTable, err := tableStorageBytes(conn)
-	if err != nil {
+	report := Report{DBPath: stateRoot, DBBytes: storage.DatabaseBytes, BlockSize: storage.BlockSize, WALScope: "cluster", WALAvailable: storage.ClusterWALBytes != nil}
+	if storage.ClusterWALBytes != nil {
+		report.WALBytes = *storage.ClusterWALBytes
+	}
+	if err := store.WithRead(func(conn *sql.DB) error {
+		tables, err := userTables(conn)
+		if err != nil {
+			return err
+		}
+		bytesByTable, err := tableStorageBytes(conn)
+		if err != nil {
+			return err
+		}
+		report.Groups, report.Unclassified, err = lifecycleGroups(conn, tables, bytesByTable, top)
+		return err
+	}); err != nil {
 		return Report{}, err
 	}
-	report.Groups, report.Unclassified = lifecycleGroups(conn, tables, bytesByTable, top)
 	report.Warnings = persistencebudget.Evaluate(budgetGroups(report.Groups))
 	return report, nil
 }
@@ -167,7 +149,7 @@ func budgetGroups(groups []LifecycleGroup) []persistencebudget.LifecycleGroup {
 	return out
 }
 
-func lifecycleGroups(conn *sql.DB, tables []string, bytesByTable map[string]int64, top int) ([]LifecycleGroup, []TableReport) {
+func lifecycleGroups(conn *sql.DB, tables []string, bytesByTable map[string]int64, top int) ([]LifecycleGroup, []TableReport, error) {
 	order := []string{
 		"archive",
 		"maintained_state",
@@ -185,10 +167,14 @@ func lifecycleGroups(conn *sql.DB, tables []string, bytesByTable map[string]int6
 		if !ok {
 			lifecycle = "unclassified"
 		}
+		count, err := tableRowCount(conn, table)
+		if err != nil {
+			return nil, nil, err
+		}
 		byLifecycle[lifecycle] = append(byLifecycle[lifecycle], TableReport{
 			Name:      table,
 			Lifecycle: lifecycle,
-			Rows:      tableRowCount(conn, table),
+			Rows:      count,
 			Bytes:     bytesByTable[table],
 		})
 	}
@@ -215,16 +201,15 @@ func lifecycleGroups(conn *sql.DB, tables []string, bytesByTable map[string]int6
 			unclassified = append(unclassified, reports...)
 		}
 	}
-	return groups, unclassified
+	return groups, unclassified, nil
 }
 
 func userTables(conn *sql.DB) ([]string, error) {
 	rows, err := conn.Query(`
-		SELECT name
-		FROM sqlite_master
-		WHERE type = 'table'
-		  AND name NOT LIKE 'sqlite_%'
-		ORDER BY name
+		SELECT tablename
+		FROM pg_catalog.pg_tables
+		WHERE schemaname = 'public'
+		ORDER BY tablename
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("query user tables: %w", err)
@@ -249,12 +234,10 @@ func userTables(conn *sql.DB) ([]string, error) {
 
 func tableStorageBytes(conn *sql.DB) (map[string]int64, error) {
 	rows, err := conn.Query(`
-		SELECT m.tbl_name, COALESCE(SUM(s.pgsize), 0) AS bytes
-		FROM sqlite_master m
-		LEFT JOIN dbstat s ON s.name = m.name
-		WHERE m.type IN ('table', 'index')
-		  AND m.tbl_name NOT LIKE 'sqlite_%'
-		GROUP BY m.tbl_name
+		SELECT c.relname, pg_total_relation_size(c.oid)
+		FROM pg_catalog.pg_class c
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("query table storage bytes: %w", err)
@@ -278,16 +261,16 @@ func tableStorageBytes(conn *sql.DB) (map[string]int64, error) {
 	return out, nil
 }
 
-func tableRowCount(conn *sql.DB, table string) int64 {
+func tableRowCount(conn *sql.DB, table string) (int64, error) {
 	var count int64
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s`, quoteSQLiteIdent(table))
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM public.%s`, quoteSQLIdentifier(table))
 	if err := conn.QueryRow(query).Scan(&count); err != nil {
-		return 0
+		return 0, fmt.Errorf("count table %s: %w", table, err)
 	}
-	return count
+	return count, nil
 }
 
-func quoteSQLiteIdent(name string) string {
+func quoteSQLIdentifier(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
@@ -319,9 +302,12 @@ func formatText(report Report) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "db: %s\n", report.DBPath)
 	fmt.Fprintf(&b, "db_size: %s\n", formatSize(report.DBBytes))
-	fmt.Fprintf(&b, "wal_size: %s\n", formatSize(report.WALBytes))
-	fmt.Fprintf(&b, "page_size: %s\n", formatSize(report.PageSize))
-	fmt.Fprintf(&b, "pages: total=%d used=%d freelist=%d\n", report.PageCount, report.UsedPages, report.Freelist)
+	if report.WALAvailable {
+		fmt.Fprintf(&b, "cluster_wal_size: %s\n", formatSize(report.WALBytes))
+	} else {
+		b.WriteString("cluster_wal_size: unavailable\n")
+	}
+	fmt.Fprintf(&b, "block_size: %s\n", formatSize(report.BlockSize))
 	b.WriteString("lifecycles:\n")
 	for _, group := range report.Groups {
 		fmt.Fprintf(&b, "  %-18s tables=%d rows=%d size=%s\n", group.Lifecycle+":", group.Tables, group.Rows, formatSize(group.Bytes))

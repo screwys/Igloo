@@ -53,10 +53,10 @@ func (db *DB) UpdateSettings(values map[string]string) error {
 		if _, updatesDearrowMode := values["dearrow_mode"]; updatesDearrowMode {
 			values["dearrow_mode"] = appsettings.NormalizeDearrowMode(values["dearrow_mode"])
 		}
-		stmt, err := tx.Prepare(`
+		stmt, err := tx.Prepare(bind(`
 			INSERT INTO settings (key, value) VALUES (?, ?)
 			ON CONFLICT(key) DO UPDATE SET value = excluded.value
-		`)
+		`))
 		if err != nil {
 			return err
 		}
@@ -65,7 +65,7 @@ func (db *DB) UpdateSettings(values map[string]string) error {
 		}()
 		for k, v := range values {
 			if retiredGlobalSettingKeys[k] {
-				if _, err := tx.Exec(`DELETE FROM settings WHERE key = ?`, k); err != nil {
+				if _, err := tx.Exec(bind(`DELETE FROM settings WHERE key = ?`), k); err != nil {
 					return err
 				}
 				continue
@@ -485,33 +485,33 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 		// Replace mode: clear existing data
 		if replace {
 			if !subscriptionsOnly {
-				if _, err := tx.Exec("DELETE FROM settings"); err != nil {
+				if _, err := tx.Exec(bind("DELETE FROM settings")); err != nil {
 					return err
 				}
 				if err := advanceMutationClocksTx(tx, "bookmark", "clear", `
-					SELECT video_id AS item_key, ? AS updated_at_ms FROM bookmarks
+					SELECT video_id AS item_key, ?::BIGINT AS updated_at_ms FROM bookmarks
 				`, ownerAtMs); err != nil {
 					return err
 				}
-				if _, err := tx.Exec("DELETE FROM bookmarks"); err != nil {
+				if _, err := tx.Exec(bind("DELETE FROM bookmarks")); err != nil {
 					return err
 				}
-				if _, err := tx.Exec("DELETE FROM bookmark_categories"); err != nil {
+				if _, err := tx.Exec(bind("DELETE FROM bookmark_categories")); err != nil {
 					return err
 				}
 			}
 			if cfg.Subscriptions != nil {
 				if err := advanceMutationClocksTx(tx, "follow", "clear", `
-					SELECT channel_id AS item_key, ? AS updated_at_ms FROM channel_follows
+					SELECT channel_id AS item_key, ?::BIGINT AS updated_at_ms FROM channel_follows
 				`, ownerAtMs); err != nil {
 					return err
 				}
 				if err := advanceMutationClocksTx(tx, "star", "clear", `
-					SELECT channel_id AS item_key, ? AS updated_at_ms FROM channel_stars
+					SELECT channel_id AS item_key, ?::BIGINT AS updated_at_ms FROM channel_stars
 				`, ownerAtMs); err != nil {
 					return err
 				}
-				if _, err := tx.Exec(`
+				if _, err := tx.Exec(bind(`
 					INSERT INTO channel_settings (
 						channel_id, max_videos, download_subtitles,
 						media_only, media_download_limit, include_reposts, include_member_only, updated_at
@@ -523,7 +523,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 					       END
 					FROM channel_follows cf
 					LEFT JOIN channel_settings cs ON cs.channel_id = cf.channel_id
-					WHERE 1
+					WHERE TRUE
 					ON CONFLICT(channel_id) DO UPDATE SET
 						max_videos = NULL,
 						download_subtitles = NULL,
@@ -532,13 +532,13 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 						include_reposts = NULL,
 						include_member_only = NULL,
 						updated_at = excluded.updated_at
-				`, ownerAtMs, ownerAtMs); err != nil {
+				`), ownerAtMs, ownerAtMs); err != nil {
 					return err
 				}
-				if _, err := tx.Exec("DELETE FROM channel_follows"); err != nil {
+				if _, err := tx.Exec(bind("DELETE FROM channel_follows")); err != nil {
 					return err
 				}
-				if _, err := tx.Exec("DELETE FROM channel_stars"); err != nil {
+				if _, err := tx.Exec(bind("DELETE FROM channel_stars")); err != nil {
 					return err
 				}
 			}
@@ -546,10 +546,10 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 
 		// Upsert settings
 		if len(cfg.Settings) > 0 {
-			stmt, err := tx.Prepare(`
+			stmt, err := tx.Prepare(bind(`
 				INSERT INTO settings (key, value) VALUES (?, ?)
 				ON CONFLICT(key) DO UPDATE SET value = excluded.value
-			`)
+			`))
 			if err != nil {
 				return err
 			}
@@ -573,10 +573,10 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 			if cat.ArchivePath != "" {
 				archivePath = cat.ArchivePath
 			}
-			result, err := tx.Exec(`
-				INSERT OR IGNORE INTO bookmark_categories (name, archive_path)
-				VALUES (?, ?)
-			`, cat.Name, archivePath)
+			result, err := tx.Exec(bind(`
+				INSERT INTO bookmark_categories (name, archive_path)
+				VALUES (?, ?) ON CONFLICT DO NOTHING
+`), cat.Name, archivePath)
 			if err != nil {
 				return err
 			}
@@ -586,9 +586,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 
 		// Re-fetch category name→id map
 		catMap := make(map[string]int64)
-		catRows, err := tx.Query(
-			"SELECT id, name FROM bookmark_categories",
-		)
+		catRows, err := tx.Query(bind("SELECT id, name FROM bookmark_categories"))
 		if err != nil {
 			return err
 		}
@@ -622,7 +620,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 			if bm.CustomTitle != "" {
 				customTitle = bm.CustomTitle
 			}
-			result, err := tx.Exec(`
+			result, err := tx.Exec(bind(`
 				INSERT INTO bookmarks
 					(video_id, category_id, custom_title, account_handles, media_indices, bookmarked_at)
 				VALUES (?, ?, ?, ?, ?, ?)
@@ -638,7 +636,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 						WHEN bookmarks.bookmarked_at <= 0 AND excluded.bookmarked_at > 0 THEN excluded.bookmarked_at
 						ELSE bookmarks.bookmarked_at
 					END
-			`, bm.VideoID, catID, customTitle, nilIfEmpty(bm.AccountHandles),
+			`), bm.VideoID, catID, customTitle, nilIfEmpty(bm.AccountHandles),
 				nilIfEmpty(bm.MediaIndices), bm.BookmarkedAt)
 			if err != nil {
 				return err
@@ -653,12 +651,11 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 		// Channels: INSERT OR IGNORE new, UPDATE settings for existing
 		for _, ch := range cfg.Subscriptions {
 			channelURL := buildChannelURL(ch)
-			_, err := tx.Exec(`
-				INSERT OR IGNORE INTO channels
+			_, err := tx.Exec(bind(`
+				INSERT INTO channels
 					(channel_id, name, url, platform, quality)
-				VALUES (?, ?, ?, ?, ?)
-			`,
-				ch.ChannelID, ch.Name, channelURL, ch.Platform,
+				VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
+`), ch.ChannelID, ch.Name, channelURL, ch.Platform,
 				nilIfEmpty(ch.Quality),
 			)
 			if err != nil {
@@ -670,11 +667,11 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 			if err != nil {
 				return err
 			}
-			if _, err := tx.Exec(`
+			if _, err := tx.Exec(bind(`
 				INSERT INTO channel_follows (channel_id, followed_at)
 				VALUES (?, ?)
 				ON CONFLICT(channel_id) DO UPDATE SET followed_at = excluded.followed_at
-			`, ch.ChannelID, followedAt); err != nil {
+			`), ch.ChannelID, followedAt); err != nil {
 				return err
 			}
 			if ch.IsStarred {
@@ -682,20 +679,20 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 				if err != nil {
 					return err
 				}
-				if _, err := tx.Exec(`
+				if _, err := tx.Exec(bind(`
 					INSERT INTO channel_stars (channel_id, starred_at)
 					VALUES (?, ?)
 					ON CONFLICT(channel_id) DO UPDATE SET starred_at = excluded.starred_at
-				`, ch.ChannelID, starredAt); err != nil {
+				`), ch.ChannelID, starredAt); err != nil {
 					return err
 				}
 			} else {
 				if _, err := advanceMutationClockTx(tx, "star", ch.ChannelID, "clear", ownerAtMs); err != nil {
 					return err
 				}
-				if _, err := tx.Exec(`
+				if _, err := tx.Exec(bind(`
 					DELETE FROM channel_stars WHERE channel_id = ?
-				`, ch.ChannelID); err != nil {
+				`), ch.ChannelID); err != nil {
 					return err
 				}
 			}
@@ -747,10 +744,10 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 			if likedAt <= 0 {
 				likedAt = time.Now().UnixMilli()
 			}
-			if _, err := tx.Exec(`
+			if _, err := tx.Exec(bind(`
 				INSERT INTO feed_likes (tweet_id, liked_at) VALUES (?, ?)
-				ON CONFLICT(tweet_id) DO UPDATE SET liked_at = MAX(feed_likes.liked_at, excluded.liked_at)
-			`, lp.TweetID, likedAt); err != nil {
+				ON CONFLICT(tweet_id) DO UPDATE SET liked_at = GREATEST(feed_likes.liked_at, excluded.liked_at)
+			`), lp.TweetID, likedAt); err != nil {
 				return err
 			}
 		}
@@ -763,12 +760,12 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 			if seenAt <= 0 {
 				seenAt = time.Now().UnixMilli()
 			}
-			if _, err := tx.Exec(`
+			if _, err := tx.Exec(bind(`
 				INSERT INTO feed_seen (tweet_id, seen_at)
 				VALUES (?, ?)
 				ON CONFLICT(tweet_id) DO UPDATE SET
-					seen_at = MAX(feed_seen.seen_at, excluded.seen_at)
-			`, seen.TweetID, seenAt); err != nil {
+					seen_at = GREATEST(feed_seen.seen_at, excluded.seen_at)
+			`), seen.TweetID, seenAt); err != nil {
 				return err
 			}
 		}
@@ -779,7 +776,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 				return err
 			}
 			publishedAt := exportVideoPublishedAt(bv)
-			if _, err := tx.Exec(`
+			if _, err := tx.Exec(bind(`
 				INSERT INTO videos
 					(video_id, channel_id, owner_kind, title, duration, published_at)
 				VALUES (?, ?, ?, ?, ?, ?)
@@ -791,7 +788,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 						THEN excluded.published_at
 						ELSE videos.published_at
 					END
-			`, bv.VideoID, bv.ChannelID, bv.OwnerKind, bv.Title, bv.Duration, publishedAt); err != nil {
+			`), bv.VideoID, bv.ChannelID, bv.OwnerKind, bv.Title, bv.Duration, publishedAt); err != nil {
 				return err
 			}
 
@@ -801,7 +798,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 					catID = id
 				}
 			}
-			if _, err := tx.Exec(`
+			if _, err := tx.Exec(bind(`
 				INSERT INTO bookmarks (video_id, category_id, bookmarked_at)
 				VALUES (?, ?, ?)
 				ON CONFLICT(video_id) DO UPDATE SET
@@ -813,7 +810,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 						WHEN bookmarks.bookmarked_at <= 0 AND excluded.bookmarked_at > 0 THEN excluded.bookmarked_at
 						ELSE bookmarks.bookmarked_at
 					END
-			`, bv.VideoID, catID, bv.BookmarkedAt); err != nil {
+			`), bv.VideoID, catID, bv.BookmarkedAt); err != nil {
 				return err
 			}
 		}
@@ -826,7 +823,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 			`, ownerAtMs); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(`
+			if _, err := tx.Exec(bind(`
 				UPDATE bookmarks
 				SET bookmarked_at = (
 				  SELECT updated_at_ms FROM mutation_clocks
@@ -837,7 +834,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 				  WHERE kind = 'bookmark' AND item_key = bookmarks.video_id
 				    AND action = 'set' AND updated_at_ms > bookmarks.bookmarked_at
 				)
-			`); err != nil {
+			`)); err != nil {
 				return err
 			}
 		}
@@ -849,7 +846,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 			`, ownerAtMs); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(`
+			if _, err := tx.Exec(bind(`
 				UPDATE feed_likes
 				SET liked_at = (
 				  SELECT updated_at_ms FROM mutation_clocks
@@ -860,7 +857,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 				  WHERE kind = 'like' AND item_key = feed_likes.tweet_id
 				    AND action = 'set' AND updated_at_ms > feed_likes.liked_at
 				)
-			`); err != nil {
+			`)); err != nil {
 				return err
 			}
 		}

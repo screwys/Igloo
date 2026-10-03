@@ -424,7 +424,7 @@ func TestReadyAssetPublicationIsIdempotent(t *testing.T) {
 	}
 
 	var count int
-	if err := d.QueryRow(`SELECT COUNT(*) FROM assets WHERE asset_id = ? AND asset_kind = ?`, asset.AssetID, asset.AssetKind).Scan(&count); err != nil {
+	if err := d.QueryRow(`SELECT COUNT(*) FROM assets WHERE asset_id = $1 AND asset_kind = $2`, asset.AssetID, asset.AssetKind).Scan(&count); err != nil {
 		t.Fatalf("count assets: %v", err)
 	}
 	if count != 1 {

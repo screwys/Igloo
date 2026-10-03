@@ -11,22 +11,22 @@ import (
 func fixtureChannel(t *testing.T, d *DB, handle string, includeReposts int) {
 	t.Helper()
 	channelID := "twitter_" + handle
-	if _, err := d.conn.Exec(`
+	if _, err := d.conn.Exec(bind(`
 		INSERT INTO channels (channel_id, name, platform)
 		VALUES (?, ?, 'twitter')
-	`, channelID, handle); err != nil {
+	`), channelID, handle); err != nil {
 		t.Fatalf("insert channel %s: %v", handle, err)
 	}
-	if _, err := d.conn.Exec(`
+	if _, err := d.conn.Exec(bind(`
 		INSERT INTO channel_follows (channel_id, followed_at)
 		VALUES (?, 0)
-	`, channelID); err != nil {
+	`), channelID); err != nil {
 		t.Fatalf("insert channel_follows %s: %v", handle, err)
 	}
-	if _, err := d.conn.Exec(`
+	if _, err := d.conn.Exec(bind(`
 		INSERT INTO channel_settings (channel_id, include_reposts, updated_at)
 		VALUES (?, ?, 0)
-	`, channelID, includeReposts); err != nil {
+	`), channelID, includeReposts); err != nil {
 		t.Fatalf("insert channel_settings %s: %v", handle, err)
 	}
 }
@@ -51,14 +51,14 @@ func fixtureFeedItem(
 		}
 		return "twitter_" + handle
 	}
-	_, err := d.conn.Exec(`
+	_, err := d.conn.Exec(bind(`
 		INSERT INTO feed_items (
 			tweet_id, source_channel_id, channel_id, is_retweet,
 			content_hash, canonical_tweet_id,
 			quote_tweet_id, quote_channel_id,
 			published_at, fetched_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000)
-	`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::bigint * 1000, FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::bigint * 1000)
+	`),
 		tweetID, channelID(sourceHandle), channelID(authorHandle), rt,
 		nilOrStr(contentHash), tweetID,
 		nilOrStr(quoteTweetID), channelID(quoteAuthorHandle),
@@ -71,10 +71,10 @@ func fixtureFeedItem(
 // fixtureRetweetSource inserts a retweet_sources row.
 func fixtureRetweetSource(t *testing.T, d *DB, contentHash, retweeterHandle, tweetID string) {
 	t.Helper()
-	_, err := d.conn.Exec(`
+	_, err := d.conn.Exec(bind(`
 		INSERT INTO retweet_sources (content_hash, retweeter_channel_id, tweet_id, published_at)
-		VALUES (?, ?, ?, CAST(strftime('%s','now') AS INTEGER) * 1000)
-	`, contentHash, "twitter_"+retweeterHandle, tweetID)
+		VALUES (?, ?, ?, FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))::bigint * 1000)
+	`), contentHash, "twitter_"+retweeterHandle, tweetID)
 	if err != nil {
 		t.Fatalf("insert retweet_source %s: %v", tweetID, err)
 	}

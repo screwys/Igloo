@@ -1,12 +1,15 @@
 package db
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/screwys/igloo/internal/db/query"
 )
 
 // #16 — auth session + refresh token storage.
@@ -50,13 +53,10 @@ func (db *DB) CreateAuthSession(username string) (string, error) {
 	sessionID := NewRandomID()
 	now := time.Now().UnixMilli()
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
-			INSERT INTO auth_sessions
-			  (session_id, username, created_at_ms, last_active_at_ms, revoked)
-			VALUES (?, ?, ?, ?, 0)`,
-			sessionID, username, now, now,
-		)
-		return err
+		return query.New(tx).CreateAuthSession(context.Background(), query.CreateAuthSessionParams{
+			SessionID: sql.NullString{String: sessionID, Valid: true}, Username: username,
+			CreatedAtMs: now, LastActiveAtMs: now,
+		})
 	})
 	if err != nil {
 		return "", err
@@ -66,21 +66,13 @@ func (db *DB) CreateAuthSession(username string) (string, error) {
 
 // GetAuthSession returns the session row, or sql.ErrNoRows if missing.
 func (db *DB) GetAuthSession(sessionID string) (*AuthSession, error) {
-	var s AuthSession
-	var reason sql.NullString
-	var revoked int
-	err := db.conn.QueryRow(`
-		SELECT session_id, username, created_at_ms, last_active_at_ms, revoked, revoke_reason
-		FROM auth_sessions WHERE session_id = ?`, sessionID,
-	).Scan(&s.SessionID, &s.Username, &s.CreatedAtMs, &s.LastActiveAtMs, &revoked, &reason)
+	row, err := query.New(db.conn).GetAuthSession(context.Background(), sql.NullString{String: sessionID, Valid: true})
 	if err != nil {
 		return nil, err
 	}
-	s.Revoked = revoked != 0
-	if reason.Valid {
-		s.RevokeReason = reason.String
-	}
-	return &s, nil
+	return &AuthSession{SessionID: row.SessionID.String, Username: row.Username,
+		CreatedAtMs: row.CreatedAtMs, LastActiveAtMs: row.LastActiveAtMs,
+		Revoked: row.Revoked != 0, RevokeReason: row.RevokeReason.String}, nil
 }
 
 // TouchAuthSession updates activity at most once per interval. Callers use the
@@ -88,23 +80,19 @@ func (db *DB) GetAuthSession(sessionID string) (*AuthSession, error) {
 func (db *DB) TouchAuthSession(sessionID string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		nowMs := time.Now().UnixMilli()
-		_, err := tx.Exec(
-			`UPDATE auth_sessions SET last_active_at_ms = ?
-			 WHERE session_id = ? AND last_active_at_ms <= ?`,
-			nowMs, sessionID, nowMs-AuthSessionActivityInterval.Milliseconds(),
-		)
-		return err
+		return query.New(tx).TouchAuthSession(context.Background(), query.TouchAuthSessionParams{
+			LastActiveAtMs: nowMs, SessionID: sql.NullString{String: sessionID, Valid: true},
+			LastActiveAtMs_2: nowMs - AuthSessionActivityInterval.Milliseconds(),
+		})
 	})
 }
 
 // RevokeAuthSession marks a session revoked. Idempotent.
 func (db *DB) RevokeAuthSession(sessionID, reason string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(
-			`UPDATE auth_sessions SET revoked = 1, revoke_reason = ? WHERE session_id = ?`,
-			reason, sessionID,
-		)
-		return err
+		return query.New(tx).RevokeAuthSession(context.Background(), query.RevokeAuthSessionParams{
+			RevokeReason: sql.NullString{String: reason, Valid: true}, SessionID: sql.NullString{String: sessionID, Valid: true},
+		})
 	})
 }
 
@@ -112,11 +100,9 @@ func (db *DB) RevokeAuthSession(sessionID, reason string) error {
 // Used by account-delete.
 func (db *DB) RevokeAuthSessionsForUser(username, reason string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(
-			`UPDATE auth_sessions SET revoked = 1, revoke_reason = ? WHERE username = ? AND revoked = 0`,
-			reason, username,
-		)
-		return err
+		return query.New(tx).RevokeAuthSessionsForUser(context.Background(), query.RevokeAuthSessionsForUserParams{
+			RevokeReason: sql.NullString{String: reason, Valid: true}, Username: username,
+		})
 	})
 }
 
@@ -127,13 +113,9 @@ func (db *DB) CreateRefreshToken(sessionID string, ttl time.Duration) (tokenID s
 	issuedAtMs = time.Now().UnixMilli()
 	expiresAtMs = issuedAtMs + ttl.Milliseconds()
 	err = db.WithWrite(func(tx *sql.Tx) error {
-		_, e := tx.Exec(`
-			INSERT INTO auth_refresh_tokens
-			  (token_id, session_id, issued_at_ms, expires_at_ms, consumed_at_ms)
-			VALUES (?, ?, ?, ?, NULL)`,
-			tokenID, sessionID, issuedAtMs, expiresAtMs,
-		)
-		return e
+		return query.New(tx).CreateRefreshToken(context.Background(), query.CreateRefreshTokenParams{
+			TokenID: sql.NullString{String: tokenID, Valid: true}, SessionID: sessionID, IssuedAtMs: issuedAtMs, ExpiresAtMs: expiresAtMs,
+		})
 	})
 	return
 }
@@ -148,50 +130,40 @@ func (db *DB) ConsumeRefreshToken(tokenID string) (sessionID string, err error) 
 	now := time.Now().UnixMilli()
 	var outcome error
 	txErr := db.WithWrite(func(tx *sql.Tx) error {
-		var sid string
-		var expiresAt int64
-		var consumedAt sql.NullInt64
-		var sessionRevoked int
-		qErr := tx.QueryRow(`
-			SELECT rt.session_id, rt.expires_at_ms, rt.consumed_at_ms, s.revoked
-			FROM auth_refresh_tokens rt
-			JOIN auth_sessions s ON s.session_id = rt.session_id
-			WHERE rt.token_id = ?`, tokenID,
-		).Scan(&sid, &expiresAt, &consumedAt, &sessionRevoked)
-		if qErr == sql.ErrNoRows {
+		q := query.New(tx)
+		row, qErr := q.GetRefreshTokenForUpdate(context.Background(), sql.NullString{String: tokenID, Valid: true})
+		if errors.Is(qErr, sql.ErrNoRows) {
 			outcome = ErrRefreshTokenUnknown
 			return nil
 		}
 		if qErr != nil {
 			return qErr
 		}
-		if sessionRevoked != 0 {
+		if row.Revoked != 0 {
 			outcome = ErrSessionRevoked
 			return nil
 		}
-		if consumedAt.Valid {
+		if row.ConsumedAtMs.Valid {
 			// Replay: revoke the whole session within this tx so the
 			// revoke commits alongside the outcome classification.
-			if _, e := tx.Exec(
-				`UPDATE auth_sessions SET revoked = 1, revoke_reason = ? WHERE session_id = ?`,
-				"refresh_replay", sid,
-			); e != nil {
+			if e := q.RevokeAuthSession(context.Background(), query.RevokeAuthSessionParams{
+				RevokeReason: sql.NullString{String: "refresh_replay", Valid: true}, SessionID: sql.NullString{String: row.SessionID, Valid: true},
+			}); e != nil {
 				return e
 			}
 			outcome = ErrRefreshTokenConsumed
 			return nil
 		}
-		if now > expiresAt {
+		if now > row.ExpiresAtMs {
 			outcome = ErrRefreshTokenExpired
 			return nil
 		}
-		if _, e := tx.Exec(
-			`UPDATE auth_refresh_tokens SET consumed_at_ms = ? WHERE token_id = ?`,
-			now, tokenID,
-		); e != nil {
+		if e := q.ConsumeRefreshToken(context.Background(), query.ConsumeRefreshTokenParams{
+			ConsumedAtMs: sql.NullInt64{Int64: now, Valid: true}, TokenID: sql.NullString{String: tokenID, Valid: true},
+		}); e != nil {
 			return e
 		}
-		sessionID = sid
+		sessionID = row.SessionID
 		return nil
 	})
 	if txErr != nil {

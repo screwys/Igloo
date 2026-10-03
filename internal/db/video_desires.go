@@ -89,7 +89,7 @@ func (db *DB) GetVideoDesireWindow(sourceChannelID, component string) ([]VideoDe
 		LEFT JOIN video_repost_sources provenance
 		  ON provenance.video_id = desired.video_id
 		 AND provenance.reposter_channel_id = desired.source_channel_id
-		WHERE desired.source_channel_id = ? AND desired.source_component = ?
+		WHERE desired.source_channel_id = $1 AND desired.source_component = $2
 		ORDER BY desired.source_position, desired.video_id
 	`, sourceChannelID, component)
 	if err != nil {
@@ -127,11 +127,11 @@ func (db *DB) FetchedVideoIDs(videoIDs []string) (map[string]struct{}, error) {
 	for videoID := range unique {
 		ids = append(ids, videoID)
 	}
-	rows, err := db.reader().Query(`
+	rows, err := db.reader().Query(bind(`
 		SELECT video_id
 		FROM video_fetch_history
 		WHERE video_id IN (`+placeholders(len(ids))+`)
-	`, stringsToAny(ids)...)
+	`), stringsToAny(ids)...)
 	if err != nil {
 		return nil, err
 	}
@@ -204,16 +204,16 @@ func (db *DB) ReconcileVideoDesireSource(snapshot VideoDesireSourceSnapshot) (in
 	nowMs := time.Now().UnixMilli()
 	added := 0
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		var followed int
-		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM channel_follows WHERE channel_id = ?)`, sourceChannelID).Scan(&followed); err != nil || followed == 0 {
+		var followed bool
+		if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM channel_follows WHERE channel_id = $1)`, sourceChannelID).Scan(&followed); err != nil || !followed {
 			return err
 		}
 		for _, ownerID := range ownerIDs {
-			var exists int
-			if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM channels WHERE channel_id = ?)`, ownerID).Scan(&exists); err != nil {
+			var exists bool
+			if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM channels WHERE channel_id = $1)`, ownerID).Scan(&exists); err != nil {
 				return err
 			}
-			if exists == 0 {
+			if !exists {
 				return fmt.Errorf("video desire owner channel does not exist: %s", ownerID)
 			}
 		}
@@ -227,11 +227,11 @@ func (db *DB) ReconcileVideoDesireSource(snapshot VideoDesireSourceSnapshot) (in
 				videoIDs = append(videoIDs, videoID)
 			}
 			args := stringsToAny(videoIDs)
-			rows, err := tx.Query(`
+			rows, err := tx.Query(bind(`
 				SELECT video_id, source_channel_id, source_component
 				FROM video_desires
 				WHERE video_id IN (`+placeholders(len(videoIDs))+`)
-			`, args...)
+			`), args...)
 			if err != nil {
 				return err
 			}
@@ -263,7 +263,7 @@ func (db *DB) ReconcileVideoDesireSource(snapshot VideoDesireSourceSnapshot) (in
 		for _, component := range snapshot.Components {
 			if _, err := tx.Exec(`
 				DELETE FROM video_desires
-				WHERE source_channel_id = ? AND source_component = ?
+				WHERE source_channel_id = $1 AND source_component = $2
 			`, sourceChannelID, component.Component); err != nil {
 				return err
 			}
@@ -280,7 +280,7 @@ func (db *DB) ReconcileVideoDesireSource(snapshot VideoDesireSourceSnapshot) (in
 				if _, err := tx.Exec(`
 					INSERT INTO video_desires (
 						source_channel_id, source_component, video_id, source_position, lane
-					) VALUES (?, ?, ?, ?, ?)
+					) VALUES ($1, $2, $3, $4, $5)
 				`, sourceChannelID, component.Component, item.VideoID, item.SourcePosition, item.Lane); err != nil {
 					return err
 				}
@@ -294,8 +294,8 @@ func (db *DB) ReconcileVideoDesireSource(snapshot VideoDesireSourceSnapshot) (in
 					}
 					if _, err := tx.Exec(`
 						DELETE FROM download_queue
-						WHERE video_id = ?
-						  AND (status != 'processing' OR lease_until_ms <= ?)
+						WHERE video_id = $1
+						  AND (status != 'processing' OR lease_until_ms <= $2)
 					`, item.VideoID, nowMs); err != nil {
 						return err
 					}
@@ -309,7 +309,7 @@ func (db *DB) ReconcileVideoDesireSource(snapshot VideoDesireSourceSnapshot) (in
 						SET status = 'pending', retry_count = 0, next_attempt_at_ms = 0,
 						    last_error_kind = '', last_error = '',
 						    lease_owner = '', lease_until_ms = 0
-						WHERE video_id = ? AND status = 'blocked'
+						WHERE video_id = $1 AND status = 'blocked'
 					`, item.VideoID); err != nil {
 						return err
 					}
@@ -317,7 +317,7 @@ func (db *DB) ReconcileVideoDesireSource(snapshot VideoDesireSourceSnapshot) (in
 				if _, err := tx.Exec(`
 					INSERT INTO download_queue (
 						video_id, owner_channel_id, title, published_at_ms, status, added_at_ms
-					) VALUES (?, ?, ?, ?, 'pending', ?)
+					) VALUES ($1, $2, $3, $4, 'pending', $5)
 					ON CONFLICT(video_id) DO UPDATE SET
 						owner_channel_id = excluded.owner_channel_id,
 						title = CASE WHEN excluded.title != '' THEN excluded.title ELSE download_queue.title END,
@@ -370,7 +370,7 @@ func (db *DB) EnforceVideoDesireLimits(sourceChannelID string, authoredLimit, re
 				componentPredicate = "desired.source_component IN ('reposts', 'tagged')"
 				deletePredicate = "source_component IN ('reposts', 'tagged')"
 			}
-			_, err := tx.Exec(`
+			_, err := tx.Exec(bind(`
 			WITH introduced AS (
 				SELECT video_id,
 				       MAX(COALESCE(NULLIF(reposted_at_ms, 0), 0)) AS freshness_at_ms
@@ -407,7 +407,7 @@ func (db *DB) EnforceVideoDesireLimits(sourceChannelID string, authoredLimit, re
 			WHERE source_channel_id = ?
 			  AND `+deletePredicate+`
 			  AND video_id NOT IN (SELECT video_id FROM kept)
-		`, sourceChannelID, sourceChannelID, budget.limit, sourceChannelID)
+		`), sourceChannelID, sourceChannelID, budget.limit, sourceChannelID)
 			if err != nil {
 				return err
 			}
@@ -429,11 +429,11 @@ func (db *DB) PruneVideoRepostSourcesForDesires(sourceChannelID string) error {
 func pruneVideoRepostSourcesForDesiresTx(tx *sql.Tx, sourceChannelID string) error {
 	_, err := tx.Exec(`
 		DELETE FROM video_repost_sources
-		WHERE reposter_channel_id = ?
+		WHERE reposter_channel_id = $1
 		  AND NOT EXISTS (
 			SELECT 1
 			FROM video_desires desired
-			WHERE desired.source_channel_id = ?
+			WHERE desired.source_channel_id = $2
 			  AND desired.video_id = video_repost_sources.video_id
 			  AND desired.source_component IN ('reposts', 'tagged')
 		  )
@@ -449,11 +449,11 @@ func reconcileVideoOwnerTx(tx *sql.Tx, item VideoDesire, sourceComponent string)
 	var existingOwner, sourceKind string
 	var isTemp bool
 	videoFound := false
-	err = tx.QueryRow(`
+	err = tx.QueryRow(bind(`
 		SELECT channel_id, `+readyVideoMediaExistsSQL("v")+`,
 		       COALESCE(is_temp, 0), COALESCE(source_kind, '')
 		FROM videos v WHERE video_id = ?
-	`, item.VideoID).Scan(&existingOwner, &ready, &isTemp, &sourceKind)
+	`), item.VideoID).Scan(&existingOwner, &ready, &isTemp, &sourceKind)
 	if err != nil && err != sql.ErrNoRows {
 		return false, "", "", err
 	}
@@ -465,16 +465,16 @@ func reconcileVideoOwnerTx(tx *sql.Tx, item VideoDesire, sourceComponent string)
 		}
 		res, err := tx.Exec(`
 			UPDATE videos
-			SET channel_id = ?, is_temp = 0,
+			SET channel_id = $1, is_temp = 0,
 			    source_kind = CASE
-			      WHEN ? THEN 'story'
+			      WHEN $2 THEN 'story'
 			      WHEN channel_id LIKE 'playlist_%' THEN 'playlist'
 			      WHEN COALESCE(source_kind, '') = 'story' THEN ''
 			      ELSE source_kind END
-			WHERE video_id = ?
-			  AND (channel_id != ? OR COALESCE(is_temp, 0) != 0
-			       OR (? AND COALESCE(source_kind, '') != 'story')
-			       OR (NOT ? AND COALESCE(source_kind, '') = 'story'))
+			WHERE video_id = $3
+			  AND (channel_id != $4 OR COALESCE(is_temp, 0) != 0
+			       OR ($5 AND COALESCE(source_kind, '') != 'story')
+			       OR (NOT $6 AND COALESCE(source_kind, '') = 'story'))
 		`, canonicalOwner, storyDesire, item.VideoID, canonicalOwner, storyDesire, storyDesire)
 		if err != nil {
 			return false, "", canonicalOwner, err
@@ -497,7 +497,7 @@ func reconcileVideoOwnerTx(tx *sql.Tx, item VideoDesire, sourceComponent string)
 
 	queueErr := tx.QueryRow(`
 		SELECT owner_channel_id, status
-		FROM download_queue WHERE video_id = ?
+		FROM download_queue WHERE video_id = $1
 	`, item.VideoID).Scan(&existingOwner, &queueStatus)
 	if queueErr == sql.ErrNoRows {
 		return false, "", canonicalOwner, nil
@@ -510,7 +510,7 @@ func reconcileVideoOwnerTx(tx *sql.Tx, item VideoDesire, sourceComponent string)
 	}
 	if existingOwner != canonicalOwner {
 		if _, err := tx.Exec(`
-			UPDATE download_queue SET owner_channel_id = ? WHERE video_id = ?
+			UPDATE download_queue SET owner_channel_id = $1 WHERE video_id = $2
 		`, canonicalOwner, item.VideoID); err != nil {
 			return false, "", "", err
 		}
@@ -519,7 +519,7 @@ func reconcileVideoOwnerTx(tx *sql.Tx, item VideoDesire, sourceComponent string)
 }
 
 func queryAssetFileKeysTx(tx *sql.Tx, query string, args ...any) ([]string, error) {
-	rows, err := tx.Query(query, args...)
+	rows, err := tx.Query(bind(query), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -539,12 +539,12 @@ func queryAssetFileKeysTx(tx *sql.Tx, query string, args ...any) ([]string, erro
 
 func isReadyVideoTx(tx *sql.Tx, videoID string) (bool, error) {
 	var ready bool
-	err := tx.QueryRow(`
+	err := tx.QueryRow(bind(`
 		SELECT EXISTS(
 			SELECT 1 FROM videos v
 			WHERE v.video_id = ? AND `+readyVideoMediaExistsSQL("v")+`
 		)
-	`, videoID).Scan(&ready)
+	`), videoID).Scan(&ready)
 	return ready, err
 }
 
@@ -603,13 +603,13 @@ func (db *DB) ClaimDownloadWork(owner string, lane DownloadLane, platform string
 			) ASC,
 			dq.published_at_ms DESC, dq.added_at_ms DESC, dq.video_id ASC
 			LIMIT 1`
-		ids, err := claimLeasedIDs(tx, "download_queue", "video_id", query, []any{
+		ids, err := claimLeasedIDs(tx, "download_queue", "video_id", bind(query), []any{
 			lane, nowMs, "pending", nowMs, "processing", nowMs, platform,
 		}, opts)
 		if err != nil || len(ids) == 0 {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE download_queue SET started_at_ms = ? WHERE video_id = ?`, nowMs, ids[0]); err != nil {
+		if _, err := tx.Exec(`UPDATE download_queue SET started_at_ms = $1 WHERE video_id = $2`, nowMs, ids[0]); err != nil {
 			return err
 		}
 		work, err = readDownloadWorkTx(tx, ids[0], lane)
@@ -621,7 +621,7 @@ func (db *DB) ClaimDownloadWork(owner string, lane DownloadLane, platform string
 
 func readDownloadWorkTx(tx *sql.Tx, videoID string, lane DownloadLane) (DownloadWork, error) {
 	work := DownloadWork{Lane: lane}
-	err := tx.QueryRow(`
+	err := tx.QueryRow(bind(`
 		WITH chosen AS (
 			SELECT desired.source_channel_id, desired.source_component
 			FROM video_desires desired
@@ -637,10 +637,10 @@ func readDownloadWorkTx(tx *sql.Tx, videoID string, lane DownloadLane) (Download
 		       `+videoDownloadPlatformSQL("dq", "owner_channel")+`,
 		       dq.published_at_ms, dq.retry_count, dq.lease_owner
 		FROM download_queue dq
-		JOIN chosen
+		CROSS JOIN chosen
 		LEFT JOIN channels owner_channel ON owner_channel.channel_id = dq.owner_channel_id
 		WHERE dq.video_id = ?
-	`, videoID, videoID).Scan(
+	`), videoID, videoID).Scan(
 		&work.VideoID, &work.SourceChannelID, &work.SourceComponent, &work.OwnerChannelID, &work.Title,
 		&work.Platform, &work.PublishedAtMs, &work.RetryCount, &work.LeaseOwner,
 	)
@@ -655,7 +655,7 @@ func (db *DB) RetryDownloadWork(videoID, owner, errorKind, message string, delay
 		var retries int
 		if err := tx.QueryRow(`
 			SELECT retry_count FROM download_queue
-			WHERE video_id = ? AND status = 'processing' AND lease_owner = ?
+			WHERE video_id = $1 AND status = 'processing' AND lease_owner = $2
 		`, strings.TrimSpace(videoID), strings.TrimSpace(owner)).Scan(&retries); err != nil {
 			if err == sql.ErrNoRows {
 				return fmt.Errorf("%w: download_queue %s owner %q", ErrQueueLeaseNotHeld, videoID, owner)
@@ -668,9 +668,9 @@ func (db *DB) RetryDownloadWork(videoID, owner, errorKind, message string, delay
 		res, err := tx.Exec(`
 			UPDATE download_queue
 			SET status = 'pending', retry_count = retry_count + 1,
-			    next_attempt_at_ms = ?, last_error_kind = ?, last_error = ?,
+			    next_attempt_at_ms = $1, last_error_kind = $2, last_error = $3,
 			    lease_owner = '', lease_until_ms = 0
-			WHERE video_id = ? AND status = 'processing' AND lease_owner = ?
+			WHERE video_id = $4 AND status = 'processing' AND lease_owner = $5
 		`, nowMs+delay.Milliseconds(), trimJobError(errorKind), trimJobError(message), videoID, owner)
 		if err != nil {
 			return err
@@ -684,7 +684,7 @@ func (db *DB) ReleaseDownloadWork(videoID, owner string) error {
 		res, err := tx.Exec(`
 			UPDATE download_queue
 			SET status = 'pending', lease_owner = '', lease_until_ms = 0
-			WHERE video_id = ? AND status = 'processing' AND lease_owner = ?
+			WHERE video_id = $1 AND status = 'processing' AND lease_owner = $2
 		`, strings.TrimSpace(videoID), strings.TrimSpace(owner))
 		if err != nil {
 			return err
@@ -698,9 +698,9 @@ func (db *DB) BlockDownloadWork(videoID, owner, reason string) error {
 		res, err := tx.Exec(`
 			UPDATE download_queue
 			SET status = 'blocked', next_attempt_at_ms = 0,
-			    last_error_kind = 'not_found', last_error = ?,
+			    last_error_kind = 'not_found', last_error = $1,
 			    lease_owner = '', lease_until_ms = 0
-			WHERE video_id = ? AND status = 'processing' AND lease_owner = ?
+			WHERE video_id = $2 AND status = 'processing' AND lease_owner = $3
 		`, trimJobError(reason), strings.TrimSpace(videoID), strings.TrimSpace(owner))
 		if err != nil {
 			return err
@@ -716,7 +716,7 @@ func (db *DB) WakeDownloadAuthRetriesForPlatform(platform string) (int, error) {
 	}
 	var affected int
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		res, err := tx.Exec(`
+		res, err := tx.Exec(bind(`
 			UPDATE download_queue AS dq
 			SET retry_count = 0, next_attempt_at_ms = 0,
 			    last_error_kind = '', last_error = ''
@@ -726,7 +726,7 @@ func (db *DB) WakeDownloadAuthRetriesForPlatform(platform string) (int, error) {
 				WHERE owner_channel.channel_id = dq.owner_channel_id
 				  AND `+videoDownloadPlatformSQL("dq", "owner_channel")+` = ?
 			  )
-		`, platform)
+		`), platform)
 		if err != nil {
 			return err
 		}
@@ -752,7 +752,7 @@ func (db *DB) CompleteDownloadWork(videoID, owner string) error {
 		}
 		res, err := tx.Exec(`
 			DELETE FROM download_queue
-			WHERE video_id = ? AND status = 'processing' AND lease_owner = ?
+			WHERE video_id = $1 AND status = 'processing' AND lease_owner = $2
 		`, videoID, strings.TrimSpace(owner))
 		if err != nil {
 			return err
@@ -765,9 +765,9 @@ func recordVideoFetchHistoryTx(tx *sql.Tx, videoID string, fallbackAtMs int64) e
 	videoID = strings.TrimSpace(videoID)
 	if _, err := tx.Exec(`
 		INSERT INTO video_fetch_history (video_id, fetched_at_ms)
-		SELECT video_id, COALESCE(NULLIF(downloaded_at, 0), ?)
+		SELECT video_id, COALESCE(NULLIF(downloaded_at, 0), $1)
 		FROM videos
-		WHERE video_id = ?
+		WHERE video_id = $2
 		ON CONFLICT(video_id) DO NOTHING
 	`, fallbackAtMs, videoID); err != nil {
 		return err
@@ -787,7 +787,7 @@ func collapseFetchedIntroducedSourcesTx(tx *sql.Tx, videoID string) error {
 		scope = " AND desired.video_id = ?"
 		args = append(args, videoID)
 	}
-	if _, err := tx.Exec(`
+	if _, err := tx.Exec(bind(`
 		WITH ranked AS (
 			SELECT desired.source_channel_id,
 			       desired.source_component,
@@ -819,7 +819,7 @@ func collapseFetchedIntroducedSourcesTx(tx *sql.Tx, videoID string) error {
 			  AND ranked.source_component = video_desires.source_component
 			  AND ranked.video_id = video_desires.video_id
 		)
-	`, args...); err != nil {
+	`), args...); err != nil {
 		return err
 	}
 
@@ -829,7 +829,7 @@ func collapseFetchedIntroducedSourcesTx(tx *sql.Tx, videoID string) error {
 		provenanceScope = " AND video_repost_sources.video_id = ?"
 		args = append(args, videoID)
 	}
-	_, err := tx.Exec(`
+	_, err := tx.Exec(bind(`
 		DELETE FROM video_repost_sources
 		WHERE EXISTS (
 			SELECT 1
@@ -844,7 +844,7 @@ func collapseFetchedIntroducedSourcesTx(tx *sql.Tx, videoID string) error {
 			  AND desired.source_channel_id = video_repost_sources.reposter_channel_id
 			  AND desired.source_component IN ('reposts', 'tagged')
 		  )
-	`, args...)
+	`), args...)
 	return err
 }
 
@@ -857,8 +857,8 @@ func (db *DB) RenewDownloadWorkLease(videoID, owner string, nowMs int64, lease t
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
 		res, err := tx.Exec(`
-			UPDATE download_queue SET lease_until_ms = ?
-			WHERE video_id = ? AND status = 'processing' AND lease_owner = ?
+			UPDATE download_queue SET lease_until_ms = $1
+			WHERE video_id = $2 AND status = 'processing' AND lease_owner = $3
 		`, nowMs+lease.Milliseconds(), strings.TrimSpace(videoID), strings.TrimSpace(owner))
 		if err != nil {
 			return err
@@ -899,7 +899,7 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 	var retiredKeys []string
 	collected := 0
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`DELETE FROM web_video_streams WHERE observed_at_ms < ?
+		if _, err := tx.Exec(`DELETE FROM web_video_streams WHERE observed_at_ms < $1
 			AND NOT EXISTS (SELECT 1 FROM watch_history history WHERE history.video_id = web_video_streams.video_id)`, tempCutoffMs); err != nil {
 			return err
 		}
@@ -939,7 +939,7 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 				    (SELECT NULLIF(queued.added_at_ms, 0)
 				     FROM download_queue queued WHERE queued.video_id = video_desires.video_id),
 				    0
-				  ) < ?
+				  ) < $1
 			`, storyCutoffMs); err != nil {
 				return err
 			}
@@ -949,7 +949,7 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 			FROM videos
 			WHERE COALESCE(is_pinned, 0) = 0
 			  AND COALESCE(is_temp, 0) = 1
-			  AND downloaded_at > 0 AND downloaded_at < ?
+			  AND downloaded_at > 0 AND downloaded_at < $1
 			  AND NOT EXISTS (SELECT 1 FROM discover_temp_downloads discover WHERE discover.video_id = videos.video_id)
 		`, tempCutoffMs)
 		if err != nil {
@@ -974,16 +974,16 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 		if _, err := tx.Exec(`
 			UPDATE videos
 			SET is_temp = CASE
-			      WHEN COALESCE(is_temp, 0) = 1 AND downloaded_at > 0 AND downloaded_at < ? THEN 0
+			      WHEN COALESCE(is_temp, 0) = 1 AND downloaded_at > 0 AND downloaded_at < $1 THEN 0
 			      ELSE is_temp END,
 			    source_kind = CASE
-			      WHEN ? > 0 AND COALESCE(source_kind, '') = 'story' AND published_at < ? THEN ''
+			      WHEN $2::bigint > 0 AND COALESCE(source_kind, '') = 'story' AND published_at < $3 THEN ''
 			      ELSE source_kind END
 			WHERE COALESCE(is_pinned, 0) = 0
 			  AND (
-			    (COALESCE(is_temp, 0) = 1 AND downloaded_at > 0 AND downloaded_at < ?
+			    (COALESCE(is_temp, 0) = 1 AND downloaded_at > 0 AND downloaded_at < $4
 			      AND NOT EXISTS (SELECT 1 FROM discover_temp_downloads discover WHERE discover.video_id = videos.video_id))
-			    OR (? > 0 AND COALESCE(source_kind, '') = 'story' AND published_at < ?)
+			    OR ($5::bigint > 0 AND COALESCE(source_kind, '') = 'story' AND published_at < $6)
 			  )
 		`, tempCutoffMs, storyCutoffMs, storyCutoffMs,
 			tempCutoffMs, storyCutoffMs, storyCutoffMs); err != nil {
@@ -994,7 +994,7 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 				return err
 			}
 		}
-		if _, err := tx.Exec(`
+		if _, err := tx.Exec(bind(`
 			DELETE FROM download_queue
 			WHERE (status != 'processing' OR lease_until_ms <= ?)
 			  AND (
@@ -1009,13 +1009,13 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 			      WHERE v.video_id = download_queue.video_id AND `+readyVideoMediaExistsSQL("v")+`
 			    )
 			  )
-		`, nowMs); err != nil {
+		`), nowMs); err != nil {
 			return err
 		}
-		rows, err := tx.Query(`
+		rows, err := tx.Query(bind(`
 			SELECT v.video_id, v.owner_kind
 			FROM videos v
-			WHERE `+collectibleVideoWhereSQL, nowMs)
+			WHERE `+collectibleVideoWhereSQL), nowMs)
 		if err != nil {
 			return err
 		}
@@ -1042,9 +1042,9 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 		for _, item := range collectible {
 			keys, err := queryAssetFileKeysTx(tx, `
 				SELECT DISTINCT current.file_path
-				FROM assets a INDEXED BY idx_assets_owner
+				FROM assets a
 				JOIN media_objects current ON current.object_id = a.object_id
-				WHERE a.owner_kind = ? AND a.owner_id = ?
+				WHERE a.owner_kind = $1 AND a.owner_id = $2
 				  AND current.published_revision > 0 AND current.file_path != ''
 			`, item.ownerKind, item.videoID)
 			if err != nil {
@@ -1053,13 +1053,13 @@ func (db *DB) MaintainVideoRetention(nowMs int64) (int, error) {
 			retiredKeys = append(retiredKeys, keys...)
 			if _, err := tx.Exec(`
 				DELETE FROM assets
-				WHERE owner_kind = ? AND owner_id = ?
+				WHERE owner_kind = $1 AND owner_id = $2
 			`, item.ownerKind, item.videoID); err != nil {
 				return err
 			}
 			res, err := tx.Exec(`
 				DELETE FROM videos
-				WHERE video_id = ? AND owner_kind = ?
+				WHERE video_id = $1 AND owner_kind = $2
 			`, item.videoID, item.ownerKind)
 			if err != nil {
 				return err

@@ -773,6 +773,7 @@ func (s *Server) populateServerDashboardStats(d *components.ServerDashboardData,
 	d.TableCount = toInt(dbStats["table_count"])
 	d.DBSizeMB = parseFloatFromAny(dbStats["db_size_mb"])
 	d.WALSizeMB = parseFloatFromAny(dbStats["wal_size_mb"])
+	d.WALSizeAvailable = dbStats["wal_size_mb"] != nil
 	d.ChannelsTotal = toInt(dbStats["channels_total"])
 	d.VideosTotal = toInt(dbStats["videos_total"])
 	d.VideosWatched = toInt(dbStats["videos_watched"])
@@ -864,23 +865,25 @@ func (s *Server) handleServerStatusJSON(w http.ResponseWriter, r *http.Request) 
 			"elapsed":    formatElapsed(upSeconds),
 			"started_ms": serverStartTime.UnixMilli(),
 		},
-		"memory_mb":      fmt.Sprintf("%.1f", memMB),
-		"memory_history": memHistCopy,
-		"health":         health,
-		"workers":        workerStatuses,
-		"db_stats":       dbStats,
-		"db_size_mb":     dbSizeMB,
-		"wal_size_mb":    walSizeMB,
-		"table_count":    tableCount,
-		"errors_24h":     len(s.workers.Activity().ByStatus("error")),
-		"errors_delta":   0,
-		"avatar_count":   avatarCount,
-		"activity":       reverseActivityEvents(s.workers.Activity().Last(100)),
-		"errors":         s.workers.Activity().ByStatus("error"),
-		"warnings":       s.workers.Activity().ByStatus("warning"),
-		"error_count":    len(s.workers.Activity().ByStatus("error")),
-		"warning_count":  len(s.workers.Activity().ByStatus("warning")),
-		"processes":      processes,
+		"memory_mb":          fmt.Sprintf("%.1f", memMB),
+		"memory_history":     memHistCopy,
+		"health":             health,
+		"workers":            workerStatuses,
+		"db_stats":           dbStats,
+		"db_size_mb":         dbSizeMB,
+		"wal_size_mb":        walSizeMB,
+		"wal_size_available": dbStats["wal_size_available"],
+		"wal_size_scope":     dbStats["wal_size_scope"],
+		"table_count":        tableCount,
+		"errors_24h":         len(s.workers.Activity().ByStatus("error")),
+		"errors_delta":       0,
+		"avatar_count":       avatarCount,
+		"activity":           reverseActivityEvents(s.workers.Activity().Last(100)),
+		"errors":             s.workers.Activity().ByStatus("error"),
+		"warnings":           s.workers.Activity().ByStatus("warning"),
+		"error_count":        len(s.workers.Activity().ByStatus("error")),
+		"warning_count":      len(s.workers.Activity().ByStatus("warning")),
+		"processes":          processes,
 	})
 }
 

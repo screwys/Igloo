@@ -17,11 +17,11 @@ import (
 // detect whether a parent already exists in DB before fetching from fxtwitter,
 // and by the thread API.
 func (db *DB) GetFeedItemByTweetID(tweetID string) (*model.FeedItem, error) {
-	f, err := scanFeedItem(db.conn.QueryRow(`
+	f, err := scanFeedItem(db.conn.QueryRow(bind(`
 		SELECT `+feedItemSelectSQL("feed_items")+`
 		FROM feed_items_resolved AS feed_items
 		WHERE tweet_id = ?
-	`, tweetID))
+	`), tweetID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -59,7 +59,7 @@ func (db *DB) ListThreadQuotes(tweetID string, limit int) ([]model.FeedItem, err
 		SELECT `+feedItemSelectSQL("feed_items")+`
 		FROM feed_items_resolved AS feed_items
 		WHERE quote_tweet_id = ? AND quote_tweet_id != '' AND tweet_id != ?
-		ORDER BY published_at DESC, tweet_id DESC
+		ORDER BY published_at DESC, tweet_id DESC NULLS LAST
 		LIMIT ?`, tweetID, tweetID, limit)
 	if err != nil {
 		return nil, err
@@ -74,8 +74,8 @@ func (db *DB) UpdateReplyToStatus(tweetID, parentTweetID string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(
 			`UPDATE feed_items
-			 SET reply_to_status = ?, is_reply = CASE WHEN ? = '' THEN 0 ELSE 1 END
-			 WHERE tweet_id = ?`,
+			 SET reply_to_status = $1, is_reply = CASE WHEN $2 = '' THEN 0 ELSE 1 END
+			 WHERE tweet_id = $3`,
 			parentTweetID, parentTweetID, tweetID,
 		)
 		return err
@@ -114,7 +114,7 @@ func (db *DB) GetThreadChains(tweetIDs []string) (map[string][]model.FeedItem, e
 	}
 	seedRows, err := db.reader().Query(`
 		SELECT seeds.key, COALESCE(item.canonical_url, '')
-		FROM json_each(?) seeds
+		FROM jsonb_each_text($1::jsonb) seeds
 		LEFT JOIN feed_items item
 		  ON item.tweet_id = CAST(seeds.value AS TEXT) AND seeds.value != ''
 	`, string(encoded))
@@ -144,7 +144,7 @@ func (db *DB) GetThreadChains(tweetIDs []string) (map[string][]model.FeedItem, e
 	chainRows, err := db.reader().Query(`
 		WITH RECURSIVE
 		seeds(seed_id, state_id) AS MATERIALIZED (
-			SELECT key, CAST(value AS TEXT) FROM json_each(?)
+			SELECT key, value FROM jsonb_each_text($1::jsonb)
 		),
 		chain(seed_id, tweet_id, depth) AS (
 			SELECT seeds.seed_id, COALESCE(item.tweet_id, seeds.seed_id), 0
@@ -203,11 +203,11 @@ func (db *DB) GetThreadChains(tweetIDs []string) (map[string][]model.FeedItem, e
 		}
 		quoteRows, err := db.reader().Query(`
 			SELECT `+feedItemSelectSQL("feed_items")+`
-			FROM json_each(?) missing
+			FROM jsonb_array_elements_text(?::jsonb) missing
 			JOIN feed_items_resolved AS feed_items ON feed_items.tweet_id = (
 				SELECT tweet_id FROM feed_items
 				WHERE quote_tweet_id = CAST(missing.value AS TEXT)
-				ORDER BY fetched_at DESC, tweet_id DESC
+				ORDER BY fetched_at DESC, tweet_id DESC NULLS LAST
 				LIMIT 1
 			)
 		`, string(encoded))
@@ -265,7 +265,7 @@ func (db *DB) GetThreadTree(tweetID string) ([]model.FeedItem, error) {
 
 	const q = `
 		WITH RECURSIVE subtree(tweet_id, parent_id, depth, published_at) AS (
-			SELECT ?, '', 0, 0
+			SELECT $1, '', 0, 0::BIGINT
 			UNION ALL
 			SELECT child.tweet_id, child.reply_to_status, subtree.depth + 1, COALESCE(child.published_at, 0)
 			FROM feed_items child
@@ -375,7 +375,7 @@ func (db *DB) GetThreadSummaries(tweetIDs []string) (map[string]ThreadSummary, e
 		WITH RECURSIVE
 		candidate_ids(seed_id) AS MATERIALIZED (
 			SELECT DISTINCT TRIM(CAST(value AS TEXT))
-			FROM json_each(?)
+			FROM jsonb_array_elements_text($1::jsonb)
 			WHERE TRIM(CAST(value AS TEXT)) != ''
 		),
 		up(seed_id, tweet_id, reply_to_status, depth) AS (
@@ -468,8 +468,8 @@ func (db *DB) ListIncompleteReplyChainsContext(ctx context.Context, tweetIDs []s
 	rows, err := db.reader().QueryContext(ctx, `
 		WITH RECURSIVE
 		candidate_ids(seed_id, priority) AS MATERIALIZED (
-			SELECT TRIM(CAST(value AS TEXT)), CAST(key AS INTEGER)
-			FROM json_each(?)
+			SELECT TRIM(value), ordinality - 1
+			FROM jsonb_array_elements_text($1::jsonb) WITH ORDINALITY
 			WHERE TRIM(CAST(value AS TEXT)) != ''
 		),
 		chain(seed_id, tweet_id, priority, depth, path) AS (
@@ -483,7 +483,7 @@ func (db *DB) ListIncompleteReplyChainsContext(ctx context.Context, tweetIDs []s
 			JOIN feed_items parent ON parent.tweet_id = current.reply_to_status
 			WHERE COALESCE(current.reply_to_status, '') != ''
 			  AND chain.depth < 50
-			  AND INSTR(chain.path, ',' || parent.tweet_id || ',') = 0
+			  AND strpos(chain.path, ',' || parent.tweet_id || ',') = 0
 		)
 		SELECT chain.seed_id, current.tweet_id,
 		       COALESCE(current.author_handle, ''),

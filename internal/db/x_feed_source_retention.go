@@ -43,7 +43,7 @@ func (db *DB) xFeedSourceRetentionItems(sourceID string) ([]xRetentionItem, erro
 		            THEN 1 ELSE 0 END
 		FROM feed_item_sources fis
 		LEFT JOIN feed_items fi ON fi.tweet_id = fis.tweet_id
-		WHERE fis.source_id = ?
+		WHERE fis.source_id = $1
 		ORDER BY COALESCE(NULLIF(fi.published_at, 0), fis.last_seen_at * 1000) DESC,
 		         fis.tweet_id DESC
 	`, sourceID)
@@ -72,12 +72,12 @@ func (db *DB) xFeedSourceRetainedTweetIDs(sourceID string, limit int) ([]string,
 		SELECT fis.tweet_id
 		FROM feed_item_sources fis
 		LEFT JOIN feed_items fi ON fi.tweet_id = fis.tweet_id
-		WHERE fis.source_id = ?
+		WHERE fis.source_id = $1
 		  AND NOT EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = fis.tweet_id)
 		  AND NOT EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = fis.tweet_id)
 		ORDER BY COALESCE(NULLIF(fi.published_at, 0), fis.last_seen_at * 1000) DESC,
 		         fis.tweet_id DESC
-		LIMIT ?
+		LIMIT $2
 	`, sourceID, limit)
 	if err != nil {
 		return nil, err
@@ -97,10 +97,10 @@ func (db *DB) xFeedSourceRetainedTweetIDs(sourceID string, limit int) ([]string,
 func (db *DB) deleteXFeedSourceAttribution(sourceID string, tweetIDs []string) error {
 	for _, chunk := range stringChunks(uniqueStrings(tweetIDs), 400) {
 		if err := db.WithWrite(func(tx *sql.Tx) error {
-			_, err := tx.Exec(`
+			_, err := tx.Exec(bind(`
 				DELETE FROM feed_item_sources
 				WHERE source_id = ? AND tweet_id IN (`+placeholders(len(chunk))+`)
-			`, append([]any{sourceID}, stringsToAny(chunk)...)...)
+			`), append([]any{sourceID}, stringsToAny(chunk)...)...)
 			return err
 		}); err != nil {
 			return err
@@ -134,11 +134,11 @@ func (db *DB) xAssetOwnerIDsForTweets(tweetIDs []string) ([]string, error) {
 		owners[tweetID] = struct{}{}
 	}
 	for _, chunk := range stringChunks(sortedKeys(owners), 400) {
-		rows, err := db.conn.Query(`
+		rows, err := db.conn.Query(bind(`
 			SELECT COALESCE(quote_tweet_id, '')
 			FROM feed_items
 			WHERE tweet_id IN (`+placeholders(len(chunk))+`)
-		`, stringsToAny(chunk)...)
+		`), stringsToAny(chunk)...)
 		if err != nil {
 			return nil, err
 		}
@@ -164,7 +164,7 @@ func (db *DB) xAssetOwnerIDsForTweets(tweetIDs []string) ([]string, error) {
 func (db *DB) xRestorableAssetOwnerIDs(ownerIDs []string) ([]string, error) {
 	var out []string
 	for _, chunk := range stringChunks(uniqueStrings(ownerIDs), 400) {
-		rows, err := db.conn.Query(`
+		rows, err := db.conn.Query(bind(`
 			SELECT DISTINCT a.owner_id
 			FROM assets a
 			JOIN media_objects desired ON desired.object_id = a.desired_object_id
@@ -172,7 +172,7 @@ func (db *DB) xRestorableAssetOwnerIDs(ownerIDs []string) ([]string, error) {
 			  AND a.asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 			  AND a.owner_id IN (`+placeholders(len(chunk))+`)
 			  AND (a.lifecycle_state = 'pruned' OR desired.job_state = 'pruned')
-		`, stringsToAny(chunk)...)
+		`), stringsToAny(chunk)...)
 		if err != nil {
 			return nil, err
 		}
@@ -205,7 +205,7 @@ func (db *DB) restorePrunedXMediaOwners(ownerIDs []string, lane DownloadLane, no
 	for _, chunk := range stringChunks(ownerIDs, 400) {
 		err := db.WithWrite(func(tx *sql.Tx) error {
 			var chunkRestored int
-			if err := tx.QueryRow(`
+			if err := tx.QueryRow(bind(`
 				SELECT COUNT(*)
 				FROM assets a
 				JOIN media_objects desired ON desired.object_id = a.desired_object_id
@@ -213,10 +213,10 @@ func (db *DB) restorePrunedXMediaOwners(ownerIDs []string, lane DownloadLane, no
 				  AND a.owner_id IN (`+placeholders(len(chunk))+`)
 				  AND a.asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 				  AND (a.lifecycle_state = 'pruned' OR desired.job_state = 'pruned')
-			`, stringsToAny(chunk)...).Scan(&chunkRestored); err != nil {
+			`), stringsToAny(chunk)...).Scan(&chunkRestored); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(`
+			if _, err := tx.Exec(bind(`
 				UPDATE assets
 				SET lifecycle_state = 'active', object_id = desired_object_id,
 				    revision = revision + 1, updated_at_ms = ?
@@ -224,11 +224,11 @@ func (db *DB) restorePrunedXMediaOwners(ownerIDs []string, lane DownloadLane, no
 				  AND owner_id IN (`+placeholders(len(chunk))+`)
 				  AND asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 				  AND lifecycle_state = 'pruned'
-			`, append([]any{nowMs}, stringsToAny(chunk)...)...); err != nil {
+			`), append([]any{nowMs}, stringsToAny(chunk)...)...); err != nil {
 				return err
 			}
 			restored += chunkRestored
-			_, err := tx.Exec(`
+			_, err := tx.Exec(bind(`
 				UPDATE media_objects AS mo
 				SET job_state = 'queued',
 				    download_lane = CASE WHEN EXISTS (
@@ -249,7 +249,7 @@ func (db *DB) restorePrunedXMediaOwners(ownerIDs []string, lane DownloadLane, no
 				      AND a.owner_id IN (`+placeholders(len(chunk))+`)
 				      AND a.asset_kind IN ('post_audio', 'post_media', 'post_thumbnail')
 				  )
-			`, append([]any{lane, nowMs}, stringsToAny(chunk)...)...)
+			`), append([]any{lane, nowMs}, stringsToAny(chunk)...)...)
 			return err
 		})
 		if err != nil {

@@ -39,12 +39,12 @@ func (db *DB) ClaimTranslationJobs(targetLang string, nowMs int64, limit int) ([
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		rows, err := tx.Query(`
 			SELECT tweet_id, field
-			FROM translation_jobs INDEXED BY idx_translation_jobs_ready
-			WHERE target_lang = ?
+			FROM translation_jobs
+			WHERE target_lang = $1
 			  AND status = 'queued'
-			  AND next_attempt_at <= ?
+			  AND next_attempt_at <= $2
 			ORDER BY priority DESC, updated_at ASC, tweet_id ASC, field ASC
-			LIMIT ?
+			LIMIT $3
 		`, targetLang, nowMs, limit)
 		if err != nil {
 			return err
@@ -74,8 +74,8 @@ func (db *DB) ClaimTranslationJobs(targetLang string, nowMs int64, limit int) ([
 		for _, row := range selected {
 			res, err := tx.Exec(`
 				UPDATE translation_jobs
-				SET status = 'running', updated_at = ?
-				WHERE tweet_id = ? AND field = ? AND target_lang = ? AND status = 'queued'
+				SET status = 'running', updated_at = $1
+				WHERE tweet_id = $2 AND field = $3 AND target_lang = $4 AND status = 'queued'
 			`, nowMs, row.tweetID, row.field, targetLang)
 			if err != nil {
 				return err
@@ -108,7 +108,7 @@ func readTranslationJobTx(tx *sql.Tx, tweetID, field, targetLang string) (*Trans
 			tj.attempts
 		FROM translation_jobs tj
 		JOIN feed_items f ON f.tweet_id = tj.tweet_id
-		WHERE tj.tweet_id = ? AND tj.field = ? AND tj.target_lang = ?
+		WHERE tj.tweet_id = $1 AND tj.field = $2 AND tj.target_lang = $3
 	`, tweetID, field, targetLang).Scan(&job.SourceText, &job.SourceLang, &job.BodyText, &job.QuoteBodyText, &job.Attempts)
 	if err != nil {
 		return nil, err
@@ -120,8 +120,8 @@ func (db *DB) CompleteTranslationJob(tweetID, field, targetLang string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			UPDATE translation_jobs
-			SET status = 'done', last_error_kind = '', last_error = '', updated_at = ?
-			WHERE tweet_id = ? AND field = ? AND target_lang = ?
+			SET status = 'done', last_error_kind = '', last_error = '', updated_at = $1
+			WHERE tweet_id = $2 AND field = $3 AND target_lang = $4
 		`, time.Now().UnixMilli(), tweetID, field, targetLang)
 		return err
 	})
@@ -131,8 +131,8 @@ func (db *DB) SkipTranslationJob(tweetID, field, targetLang, reason string) erro
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			UPDATE translation_jobs
-			SET status = 'skipped', last_error_kind = 'skipped', last_error = ?, updated_at = ?
-			WHERE tweet_id = ? AND field = ? AND target_lang = ?
+			SET status = 'skipped', last_error_kind = 'skipped', last_error = $1, updated_at = $2
+			WHERE tweet_id = $3 AND field = $4 AND target_lang = $5
 		`, trimJobError(reason), time.Now().UnixMilli(), tweetID, field, targetLang)
 		return err
 	})
@@ -149,11 +149,11 @@ func (db *DB) RetryTranslationJob(tweetID, field, targetLang, kind, message stri
 			UPDATE translation_jobs
 			SET status = 'queued',
 			    attempts = attempts + 1,
-			    next_attempt_at = ?,
-			    last_error_kind = ?,
-			    last_error = ?,
-			    updated_at = ?
-			WHERE tweet_id = ? AND field = ? AND target_lang = ?
+			    next_attempt_at = $1,
+			    last_error_kind = $2,
+			    last_error = $3,
+			    updated_at = $4
+			WHERE tweet_id = $5 AND field = $6 AND target_lang = $7
 		`, nextMs, trimJobError(kind), trimJobError(message), nowMs, tweetID, field, targetLang)
 		return err
 	})

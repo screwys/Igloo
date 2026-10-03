@@ -3,6 +3,8 @@ package restore
 import (
 	"archive/zip"
 	"bytes"
+	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -55,12 +57,16 @@ func restoreSplitTestConfig(t *testing.T, stateDir, mediaDir, confDir string) *c
 func restoreDatabaseBytes(t *testing.T, value string) []byte {
 	t.Helper()
 	dataDir := t.TempDir()
-	path := filepath.Join(dataDir, config.DatabaseFilename)
-	store, err := igloodb.OpenPath(path, dataDir)
+	path := filepath.Join(dataDir, config.DatabaseBackupFilename)
+	store, err := igloodb.OpenAtStateRoot(dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SetSetting("restore_probe", value); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.WithSnapshotExport(context.Background(), path, nil); err != nil {
 		_ = store.Close()
 		t.Fatal(err)
 	}
@@ -98,8 +104,8 @@ func TestStageZipRoundTripRepairsCurrentConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	archive := buildZipBytes(t, map[string][]byte{
-		config.DatabaseFilename: restoreDatabaseBytes(t, "zip-restored"),
-		"config/config.json":    []byte(`{"enabled_platforms":["youtube"]}`),
+		config.DatabaseBackupFilename: restoreDatabaseBytes(t, "zip-restored"),
+		"config/config.json":          []byte(`{"enabled_platforms":["youtube"]}`),
 	})
 	if err := StageZip(bytes.NewReader(archive), int64(len(archive)), cfg.Storage); err != nil {
 		t.Fatalf("StageZip: %v", err)
@@ -107,8 +113,19 @@ func TestStageZipRoundTripRepairsCurrentConfig(t *testing.T) {
 	if !HasPending(dataDir) {
 		t.Fatal("restore marker missing after staging")
 	}
-	if err := ApplyPending(cfg); err != nil {
-		t.Fatalf("ApplyPending: %v", err)
+	if err := ApplyPendingConfig(cfg); err != nil {
+		t.Fatalf("ApplyPendingConfig: %v", err)
+	}
+	phaseStore, err := igloodb.Open(cfg.Storage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyPendingDatabase(context.Background(), cfg, phaseStore); err != nil {
+		_ = phaseStore.Close()
+		t.Fatal(err)
+	}
+	if err := phaseStore.Close(); err != nil {
+		t.Fatal(err)
 	}
 	assertRestoreProbe(t, cfg, "zip-restored")
 	if got := string(mustReadRestoreFile(t, filepath.Join(confDir, "config.json"))); got != `{"enabled_platforms":["youtube"]}` {
@@ -118,8 +135,8 @@ func TestStageZipRoundTripRepairsCurrentConfig(t *testing.T) {
 
 func TestApplyPendingResetsAndroidSyncIdentityOnPreparedDatabase(t *testing.T) {
 	sourceDir := t.TempDir()
-	sourcePath := filepath.Join(sourceDir, config.DatabaseFilename)
-	source, err := igloodb.OpenPath(sourcePath, sourceDir)
+	sourcePath := filepath.Join(sourceDir, config.DatabaseBackupFilename)
+	source, err := igloodb.OpenAtStateRoot(sourceDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,6 +153,10 @@ func TestApplyPendingResetsAndroidSyncIdentityOnPreparedDatabase(t *testing.T) {
 	if sourceClock.Revision == 0 {
 		t.Fatal("source database did not produce a sync head")
 	}
+	if err := source.WithSnapshotExport(context.Background(), sourcePath, nil); err != nil {
+		_ = source.Close()
+		t.Fatal(err)
+	}
 	if err := source.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -144,12 +165,23 @@ func TestApplyPendingResetsAndroidSyncIdentityOnPreparedDatabase(t *testing.T) {
 	cfg := restoreTestConfig(t, dataDir, t.TempDir())
 	seedRestoreDatabase(t, cfg, "live")
 	archive := buildZipBytes(t, map[string][]byte{
-		config.DatabaseFilename: mustReadRestoreFile(t, sourcePath),
+		config.DatabaseBackupFilename: mustReadRestoreFile(t, sourcePath),
 	})
 	if err := StageZip(bytes.NewReader(archive), int64(len(archive)), cfg.Storage); err != nil {
 		t.Fatal(err)
 	}
-	if err := ApplyPending(cfg); err != nil {
+	if err := ApplyPendingConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+	phaseStore, err := igloodb.Open(cfg.Storage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyPendingDatabase(context.Background(), cfg, phaseStore); err != nil {
+		_ = phaseStore.Close()
+		t.Fatal(err)
+	}
+	if err := phaseStore.Close(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -206,6 +238,11 @@ func TestDatabaseRestorePreservesAssetRowsAndMediaFiles(t *testing.T) {
 	if err != nil || want == nil {
 		t.Fatalf("source asset = %+v, %v", want, err)
 	}
+	sourceSnapshot := filepath.Join(sourceLayout.StateRoot(), config.DatabaseBackupFilename)
+	if err := sourceDB.WithSnapshotExport(context.Background(), sourceSnapshot, nil); err != nil {
+		_ = sourceDB.Close()
+		t.Fatal(err)
+	}
 	if err := sourceDB.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -223,13 +260,24 @@ func TestDatabaseRestorePreservesAssetRowsAndMediaFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	archive := buildZipBytes(t, map[string][]byte{
-		config.DatabaseFilename: mustReadRestoreFile(t, sourceLayout.DatabasePath()),
+		config.DatabaseBackupFilename: mustReadRestoreFile(t, sourceSnapshot),
 	})
 	if err := StageZip(bytes.NewReader(archive), int64(len(archive)), cfg.Storage); err != nil {
 		t.Fatalf("StageZip: %v", err)
 	}
-	if err := ApplyPending(cfg); err != nil {
-		t.Fatalf("ApplyPending: %v", err)
+	if err := ApplyPendingConfig(cfg); err != nil {
+		t.Fatalf("ApplyPendingConfig: %v", err)
+	}
+	phaseStore, err := igloodb.Open(cfg.Storage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyPendingDatabase(context.Background(), cfg, phaseStore); err != nil {
+		_ = phaseStore.Close()
+		t.Fatal(err)
+	}
+	if err := phaseStore.Close(); err != nil {
+		t.Fatal(err)
 	}
 	restored, err := igloodb.Open(cfg.Storage)
 	if err != nil {
@@ -264,8 +312,8 @@ func TestStageRejectsInvalidRuntimeAndAuthFilesBeforeMarker(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			dataDir := t.TempDir()
 			archive := buildZipBytes(t, map[string][]byte{
-				config.DatabaseFilename: restoreDatabaseBytes(t, "invalid-config"),
-				test.path:               []byte(test.body),
+				config.DatabaseBackupFilename: restoreDatabaseBytes(t, "invalid-config"),
+				test.path:                     []byte(test.body),
 			})
 			err := StageZip(bytes.NewReader(archive), int64(len(archive)), restoreTestLayout(t, dataDir))
 			if err == nil || !strings.Contains(err.Error(), test.want) {
@@ -289,8 +337,8 @@ func TestApplyPendingRejectsTamperedConfigWithoutPublishing(t *testing.T) {
 		t.Fatal(err)
 	}
 	archive := buildZipBytes(t, map[string][]byte{
-		config.DatabaseFilename: restoreDatabaseBytes(t, "staged"),
-		"config/config.json":    []byte(`{"enabled_platforms":["youtube"]}`),
+		config.DatabaseBackupFilename: restoreDatabaseBytes(t, "staged"),
+		"config/config.json":          []byte(`{"enabled_platforms":["youtube"]}`),
 	})
 	if err := StageZip(bytes.NewReader(archive), int64(len(archive)), cfg.Storage); err != nil {
 		t.Fatal(err)
@@ -298,7 +346,7 @@ func TestApplyPendingRejectsTamperedConfigWithoutPublishing(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(stagingDir(dataDir), "config", "config.json"), []byte(`{"enabled_platforms":`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	err := ApplyPending(cfg)
+	err := ApplyPendingConfig(cfg)
 	if err == nil || !strings.Contains(err.Error(), "validate staged config") {
 		t.Fatalf("ApplyPending error = %v", err)
 	}
@@ -326,7 +374,7 @@ func TestRuntimePathsAreRewrittenWithoutTouchingMedia(t *testing.T) {
 		t.Fatal(err)
 	}
 	archive := buildZipBytes(t, map[string][]byte{
-		config.DatabaseFilename:          restoreDatabaseBytes(t, "staged"),
+		config.DatabaseBackupFilename:    restoreDatabaseBytes(t, "staged"),
 		runtimeName:                      []byte(`{"version":2,"data_dir":"/old/data","media_dir":"/old/media","config_dir":"/old/config","repo_dir":"/old/repo"}`),
 		"config/nginx.conf":              []byte("pid /old/data/nginx.pid;\nalias /old/media/;\nssl_certificate /old/config/server.crt;\nroot /old/repo/static;\n"),
 		"media/youtube/sample/video.mp4": []byte("archive-media"),
@@ -338,7 +386,7 @@ func TestRuntimePathsAreRewrittenWithoutTouchingMedia(t *testing.T) {
 	if err := os.Remove(mediaMarker); err != nil {
 		t.Fatal(err)
 	}
-	if err := ApplyPending(cfg); err == nil || !strings.Contains(err.Error(), "missing marker") {
+	if err := ApplyPendingConfig(cfg); err == nil || !strings.Contains(err.Error(), "missing marker") {
 		t.Fatalf("ApplyPending without media root = %v", err)
 	}
 	if !HasPending(stateDir) {
@@ -347,7 +395,18 @@ func TestRuntimePathsAreRewrittenWithoutTouchingMedia(t *testing.T) {
 	if err := os.WriteFile(mediaMarker, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := ApplyPending(cfg); err != nil {
+	if err := ApplyPendingConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+	phaseStore, err := igloodb.Open(cfg.Storage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyPendingDatabase(context.Background(), cfg, phaseStore); err != nil {
+		_ = phaseStore.Close()
+		t.Fatal(err)
+	}
+	if err := phaseStore.Close(); err != nil {
 		t.Fatal(err)
 	}
 	nginx := string(mustReadRestoreFile(t, filepath.Join(confDir, "nginx.conf")))
@@ -365,8 +424,8 @@ func TestStageZipRejectsUnsafeAndDuplicateEntries(t *testing.T) {
 	t.Run("traversal", func(t *testing.T) {
 		dataDir := t.TempDir()
 		archive := buildZipBytes(t, map[string][]byte{
-			config.DatabaseFilename: restoreDatabaseBytes(t, "staged"),
-			"config/../../escape":   []byte("escape"),
+			config.DatabaseBackupFilename: restoreDatabaseBytes(t, "staged"),
+			"config/../../escape":         []byte("escape"),
 		})
 		err := StageZip(bytes.NewReader(archive), int64(len(archive)), restoreTestLayout(t, dataDir))
 		if err == nil || !strings.Contains(err.Error(), "unsafe backup path") {
@@ -382,7 +441,7 @@ func TestStageZipRejectsUnsafeAndDuplicateEntries(t *testing.T) {
 		var buf bytes.Buffer
 		zw := zip.NewWriter(&buf)
 		for range 2 {
-			entry, err := zw.Create(config.DatabaseFilename)
+			entry, err := zw.Create(config.DatabaseBackupFilename)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -434,21 +493,40 @@ func TestApplyPendingRetriesAfterPartialFileReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	archive := buildZipBytes(t, map[string][]byte{
-		config.DatabaseFilename: restoreDatabaseBytes(t, "staged"),
-		"config/config.json":    []byte(`{"enabled_platforms":["youtube"]}`),
+		config.DatabaseBackupFilename: restoreDatabaseBytes(t, "staged"),
+		"config/config.json":          []byte(`{"enabled_platforms":["youtube"]}`),
 	})
 	if err := StageZip(bytes.NewReader(archive), int64(len(archive)), cfg.Storage); err != nil {
 		t.Fatal(err)
 	}
-	blockingSidecar := cfg.Storage.DatabasePath() + "-wal"
-	if err := os.Mkdir(blockingSidecar, 0o755); err != nil {
+	if err := ApplyPendingConfig(cfg); err != nil {
 		t.Fatal(err)
 	}
-	err := ApplyPending(cfg)
+	phaseStore, err := igloodb.Open(cfg.Storage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stagedArchive := filepath.Join(stagingDir(dataDir), config.DatabaseBackupFilename)
+	savedArchive := stagedArchive + ".saved"
+	if err := os.Rename(stagedArchive, savedArchive); err != nil {
+		_ = phaseStore.Close()
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(stagedArchive, 0o755); err != nil {
+		_ = phaseStore.Close()
+		t.Fatal(err)
+	}
+	err = ApplyPendingDatabase(context.Background(), cfg, phaseStore)
 	if err == nil || !strings.Contains(err.Error(), "not a regular file") {
 		t.Fatalf("ApplyPending error = %v", err)
 	}
-	if err := os.Remove(blockingSidecar); err != nil {
+	if err := phaseStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(stagedArchive); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(savedArchive, stagedArchive); err != nil {
 		t.Fatal(err)
 	}
 	assertRestoreProbe(t, cfg, "live")
@@ -458,7 +536,18 @@ func TestApplyPendingRetriesAfterPartialFileReplacement(t *testing.T) {
 	if !HasPending(dataDir) {
 		t.Fatal("failed restore did not remain pending")
 	}
-	if err := ApplyPending(cfg); err != nil {
+	if err := ApplyPendingConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+	phaseStore, err = igloodb.Open(cfg.Storage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyPendingDatabase(context.Background(), cfg, phaseStore); err != nil {
+		_ = phaseStore.Close()
+		t.Fatal(err)
+	}
+	if err := phaseStore.Close(); err != nil {
 		t.Fatal(err)
 	}
 	assertRestoreProbe(t, cfg, "staged")
@@ -477,8 +566,12 @@ func TestStageZipMissingDatabaseAndApplyWithoutMarker(t *testing.T) {
 	if _, err := os.Stat(stagingDir(dataDir)); !os.IsNotExist(err) {
 		t.Fatalf("missing database left staging: %v", err)
 	}
-	if err := ApplyPending(restoreTestConfig(t, dataDir, t.TempDir())); err != nil {
+	cfg := restoreTestConfig(t, dataDir, t.TempDir())
+	if err := ApplyPendingConfig(cfg); err != nil {
 		t.Fatalf("ApplyPending without marker: %v", err)
+	}
+	if err := ApplyPendingDatabase(context.Background(), cfg, nil); err != nil {
+		t.Fatalf("ApplyPendingDatabase without marker: %v", err)
 	}
 }
 
@@ -499,7 +592,7 @@ func seedRestoreDatabase(t *testing.T, cfg *config.Config, probe string) {
 
 func assertRestoreProbe(t *testing.T, cfg *config.Config, want string) {
 	t.Helper()
-	store, err := igloodb.OpenPath(cfg.Storage.DatabasePath(), cfg.Storage.StateRoot())
+	store, err := igloodb.OpenAtStateRoot(cfg.Storage.StateRoot())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -517,11 +610,15 @@ func incompatibleRestoreDatabaseBytes(t *testing.T) []byte {
 	t.Helper()
 	dataDir := t.TempDir()
 	path := filepath.Join(dataDir, config.DatabaseFilename)
-	store, err := igloodb.OpenPath(path, dataDir)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ExecRaw(`ALTER TABLE settings ADD COLUMN retired_value TEXT`); err != nil {
+	if err := igloodb.EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if _, err := store.Exec(`ALTER TABLE settings ADD COLUMN retired_value TEXT`); err != nil {
 		_ = store.Close()
 		t.Fatal(err)
 	}

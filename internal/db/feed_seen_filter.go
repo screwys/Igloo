@@ -12,7 +12,7 @@ func feedUnseenPredicate(alias string) string {
 			NULLIF(TRIM(COALESCE(%[1]s.content_hash, '')), '') IS NULL
 			OR NOT EXISTS (
 				SELECT 1
-				FROM feed_items seen_fi INDEXED BY idx_feed_items_content_hash
+				FROM feed_items seen_fi
 				JOIN feed_seen fs ON fs.tweet_id = seen_fi.tweet_id
 				WHERE seen_fi.content_hash = %[1]s.content_hash
 				  AND seen_fi.content_hash IS NOT NULL

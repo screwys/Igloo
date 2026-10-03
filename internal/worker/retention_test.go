@@ -38,11 +38,11 @@ func TestEnforceVideoRetentionForPlatformUsesEffectiveChannelLimits(t *testing.T
 
 func seedRetentionDesires(t *testing.T, database *db.DB, channelID, platform string) {
 	t.Helper()
-	if err := database.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, ?, 'Sample Source', '', ?, 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
-	`, channelID, channelID, platform, channelID); err != nil {
+	if err := database.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
+		VALUES ($1, $2, 'Sample Source', '', $3, 1)`, channelID, channelID, platform); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, channelID); err != nil {
 		t.Fatal(err)
 	}
 	items := make([]db.VideoDesire, 0, 3)
@@ -68,7 +68,7 @@ func assertRetentionDesireCount(t *testing.T, database *db.DB, channelID string,
 	t.Helper()
 	var got int
 	if err := database.QueryRow(`
-		SELECT COUNT(DISTINCT video_id) FROM video_desires WHERE source_channel_id = ?
+		SELECT COUNT(DISTINCT video_id) FROM video_desires WHERE source_channel_id = $1
 	`, channelID).Scan(&got); err != nil {
 		t.Fatal(err)
 	}

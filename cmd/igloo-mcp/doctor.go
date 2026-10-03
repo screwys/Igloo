@@ -25,8 +25,10 @@ func doctorStatus() (string, error) {
 	var sb strings.Builder
 	sb.WriteString("=== Igloo Doctor ===\n\n")
 	writeDoctorStorageLayout(&sb)
-	writeDoctorDBFiles(&sb)
-	writeDoctorSQLiteStorage(&sb, conn)
+	serverDBMu.Lock()
+	store := serverStore
+	serverDBMu.Unlock()
+	writeDoctorDatabaseStorage(&sb, store)
 	writeDoctorDBStat(&sb, conn)
 	writeDoctorPersistenceLifecycle(&sb, conn)
 	writeDoctorAndroidSync(&sb, conn)
@@ -40,7 +42,7 @@ func doctorStatus() (string, error) {
 }
 
 func writeDoctorStorageLayout(sb *strings.Builder) {
-	stateRoot := filepath.Dir(getDBPath())
+	stateRoot := getStateRoot()
 	configuredMediaRoot := strings.TrimSpace(os.Getenv("IGLOO_MEDIA_DIR"))
 	layout, err := storage.New(stateRoot, configuredMediaRoot)
 	sb.WriteString("Storage layout:\n")
@@ -61,54 +63,29 @@ func writeDoctorStorageLayout(sb *strings.Builder) {
 	sb.WriteString("  media_ready: true\n\n")
 }
 
-func writeDoctorDBFiles(sb *strings.Builder) {
-	dbPath := getDBPath()
-	fmt.Fprintf(sb, "Database files:\n")
-	for _, path := range []string{dbPath, dbPath + "-wal"} {
-		if info, err := os.Stat(path); err == nil {
-			fmt.Fprintf(sb, "  %-12s %s\n", filepath.Base(path)+":", formatSize(info.Size()))
-		} else {
-			fmt.Fprintf(sb, "  %-12s missing\n", filepath.Base(path)+":")
-		}
-	}
-	sb.WriteString("\n")
-}
-
-func writeDoctorSQLiteStorage(sb *strings.Builder, conn *sql.DB) {
-	sb.WriteString("SQLite storage:\n")
-	var pageSize, pageCount, freelistCount int64
-	if err := conn.QueryRow(`PRAGMA page_size`).Scan(&pageSize); err != nil {
+func writeDoctorDatabaseStorage(sb *strings.Builder, store *igloodb.DB) {
+	sb.WriteString("PostgreSQL storage:\n")
+	storage, err := store.DatabaseStorage()
+	if err != nil {
 		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
 		return
 	}
-	if err := conn.QueryRow(`PRAGMA page_count`).Scan(&pageCount); err != nil {
-		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
-		return
+	fmt.Fprintf(sb, "  database_size: %s\n", formatSize(storage.DatabaseBytes))
+	fmt.Fprintf(sb, "  block_size: %s\n", formatSize(storage.BlockSize))
+	if storage.ClusterWALBytes == nil {
+		sb.WriteString("  cluster_wal_size: unavailable\n\n")
+	} else {
+		fmt.Fprintf(sb, "  cluster_wal_size: %s\n\n", formatSize(*storage.ClusterWALBytes))
 	}
-	if err := conn.QueryRow(`PRAGMA freelist_count`).Scan(&freelistCount); err != nil {
-		fmt.Fprintf(sb, "  unavailable: %v\n\n", err)
-		return
-	}
-	usedPages := pageCount - freelistCount
-	if usedPages < 0 {
-		usedPages = 0
-	}
-	reclaimableBytes := freelistCount * pageSize
-	fmt.Fprintf(sb, "  page_size: %s\n", formatSize(pageSize))
-	fmt.Fprintf(sb, "  pages: total=%d used=%d freelist=%d\n", pageCount, usedPages, freelistCount)
-	fmt.Fprintf(sb, "  reclaimable freelist: %s", formatSize(reclaimableBytes))
-	if info, err := os.Stat(getDBPath()); err == nil && info.Size() > 0 {
-		fmt.Fprintf(sb, " (%.1f%% of database file)", float64(reclaimableBytes)*100/float64(info.Size()))
-	}
-	sb.WriteString("\n\n")
 }
 
 func writeDoctorDBStat(sb *strings.Builder, conn *sql.DB) {
-	sb.WriteString("Top dbstat tables/indexes:\n")
+	sb.WriteString("Top PostgreSQL tables/indexes:\n")
 	rows, err := conn.Query(`
-		SELECT name, SUM(pgsize) AS bytes
-		FROM dbstat
-		GROUP BY name
+		SELECT c.relname, pg_relation_size(c.oid) AS bytes
+		FROM pg_catalog.pg_class c
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = 'public' AND c.relkind IN ('r', 'i', 'p')
 		ORDER BY bytes DESC
 		LIMIT 10
 	`)
@@ -241,7 +218,10 @@ func doctorPersistenceLifecycles(conn *sql.DB) ([]doctorPersistenceLifecycle, er
 			byLifecycle[lifecycle] = group
 			order = append(order, lifecycle)
 		}
-		rowCount := doctorTableRowCount(conn, table)
+		rowCount, err := doctorTableRowCount(conn, table)
+		if err != nil {
+			return nil, err
+		}
 		bytes := bytesByTable[table]
 		group.tables = append(group.tables, doctorPersistenceTable{
 			name:  table,
@@ -263,11 +243,10 @@ func doctorPersistenceLifecycles(conn *sql.DB) ([]doctorPersistenceLifecycle, er
 
 func doctorUserTables(conn *sql.DB) ([]string, error) {
 	rows, err := conn.Query(`
-		SELECT name
-		FROM sqlite_master
-		WHERE type = 'table'
-		  AND name NOT LIKE 'sqlite_%'
-		ORDER BY name
+		SELECT tablename
+		FROM pg_catalog.pg_tables
+		WHERE schemaname = 'public'
+		ORDER BY tablename
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("query user tables: %w", err)
@@ -292,12 +271,10 @@ func doctorUserTables(conn *sql.DB) ([]string, error) {
 
 func doctorTableStorageBytes(conn *sql.DB) (map[string]int64, error) {
 	rows, err := conn.Query(`
-		SELECT m.tbl_name, COALESCE(SUM(s.pgsize), 0) AS bytes
-		FROM sqlite_master m
-		LEFT JOIN dbstat s ON s.name = m.name
-		WHERE m.type IN ('table', 'index')
-		  AND m.tbl_name NOT LIKE 'sqlite_%'
-		GROUP BY m.tbl_name
+		SELECT c.relname, pg_total_relation_size(c.oid)
+		FROM pg_catalog.pg_class c
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("query table storage bytes: %w", err)
@@ -321,17 +298,13 @@ func doctorTableStorageBytes(conn *sql.DB) (map[string]int64, error) {
 	return out, nil
 }
 
-func doctorTableRowCount(conn *sql.DB, table string) int64 {
+func doctorTableRowCount(conn *sql.DB, table string) (int64, error) {
 	var count int64
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s`, quoteSQLiteIdent(table))
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM public.%s`, quoteSQLIdentifier(table))
 	if err := conn.QueryRow(query).Scan(&count); err != nil {
-		return 0
+		return 0, fmt.Errorf("count table %s: %w", table, err)
 	}
-	return count
-}
-
-func quoteSQLiteIdent(name string) string {
-	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+	return count, nil
 }
 
 func writeDoctorAndroidSync(sb *strings.Builder, conn *sql.DB) {
@@ -349,14 +322,16 @@ func writeDoctorAndroidSync(sb *strings.Builder, conn *sql.DB) {
 	var total, ready, missing int64
 	if err := conn.QueryRow(`
 		SELECT COUNT(*),
-		       COALESCE(SUM(current.published_revision > 0 AND current.file_path != ''), 0),
-		       COALESCE(SUM(current.published_revision = 0 AND desired.job_state IN ('server_missing', 'permanent_missing')), 0)
+		       COUNT(*) FILTER (WHERE current.published_revision > 0 AND current.file_path != ''),
+		       COUNT(*) FILTER (WHERE current.published_revision = 0 AND desired.job_state IN ('server_missing', 'permanent_missing'))
 		FROM assets a
 		JOIN media_objects current ON current.object_id = a.object_id
 		JOIN media_objects desired ON desired.object_id = a.desired_object_id
 		WHERE a.lifecycle_state != 'pruned'
 	`).Scan(&total, &ready, &missing); err == nil {
 		fmt.Fprintf(sb, "  canonical assets: total=%d ready=%d missing=%d\n", total, ready, missing)
+	} else {
+		fmt.Fprintf(sb, "  canonical assets unavailable: %v\n", err)
 	}
 	var cursor sql.NullString
 	var reportedAt, verified, pending, deviceMissing sql.NullInt64
@@ -400,21 +375,27 @@ func writeDoctorQueues(sb *strings.Builder, conn *sql.DB) {
 func writeDoctorProfileReadiness(sb *strings.Builder, conn *sql.DB) {
 	sb.WriteString("Profile/media readiness:\n")
 	var profiles, tombstones int
-	_ = conn.QueryRow(`
+	if err := conn.QueryRow(`
 		SELECT COUNT(*),
 		       COALESCE(SUM(CASE WHEN COALESCE(tombstone, 0) != 0 THEN 1 ELSE 0 END), 0)
 		FROM channel_profiles
-	`).Scan(&profiles, &tombstones)
-	fmt.Fprintf(sb, "  channel_profiles: total=%d tombstones=%d\n", profiles, tombstones)
+	`).Scan(&profiles, &tombstones); err != nil {
+		fmt.Fprintf(sb, "  channel_profiles unavailable: %v\n", err)
+	} else {
+		fmt.Fprintf(sb, "  channel_profiles: total=%d tombstones=%d\n", profiles, tombstones)
+	}
 	var pendingJobs, leasedJobs, failedJobs int
-	_ = conn.QueryRow(`
+	if err := conn.QueryRow(`
 		SELECT
 		  COALESCE(SUM(CASE WHEN completed_revision < requested_revision THEN 1 ELSE 0 END), 0),
 		  COALESCE(SUM(CASE WHEN lease_owner != '' THEN 1 ELSE 0 END), 0),
 		  COALESCE(SUM(CASE WHEN attempts > 0 AND last_error != '' THEN 1 ELSE 0 END), 0)
 		FROM profile_jobs
-	`).Scan(&pendingJobs, &leasedJobs, &failedJobs)
-	fmt.Fprintf(sb, "  profile_jobs: pending=%d leased=%d failed=%d\n", pendingJobs, leasedJobs, failedJobs)
+	`).Scan(&pendingJobs, &leasedJobs, &failedJobs); err != nil {
+		fmt.Fprintf(sb, "  profile_jobs unavailable: %v\n", err)
+	} else {
+		fmt.Fprintf(sb, "  profile_jobs: pending=%d leased=%d failed=%d\n", pendingJobs, leasedJobs, failedJobs)
+	}
 
 	for _, kind := range []string{"avatar", "banner"} {
 		states, err := doctorAssetStatusCounts(conn, fmt.Sprintf("a.owner_kind = 'channel' AND a.asset_kind = '%s'", kind))
@@ -441,8 +422,12 @@ func writeDoctorAssetInventory(sb *strings.Builder, conn *sql.DB) {
 		}
 		fmt.Fprintf(sb, "  inventory states: %s\n", strings.Join(parts, ", "))
 	}
-	activeLeases, expiredLeases := doctorAssetLeaseCounts(conn, time.Now().UnixMilli())
-	fmt.Fprintf(sb, "  asset leases: active_downloading=%d expired_downloading=%d\n", activeLeases, expiredLeases)
+	activeLeases, expiredLeases, err := doctorAssetLeaseCounts(conn, time.Now().UnixMilli())
+	if err != nil {
+		fmt.Fprintf(sb, "  asset leases unavailable: %v\n", err)
+	} else {
+		fmt.Fprintf(sb, "  asset leases: active_downloading=%d expired_downloading=%d\n", activeLeases, expiredLeases)
+	}
 	for _, kind := range []string{
 		"post_media", "post_audio", "video_stream", "post_thumbnail",
 		"dearrow_thumbnail", "subtitle", "avatar", "banner",
@@ -461,15 +446,15 @@ func writeDoctorAssetInventory(sb *strings.Builder, conn *sql.DB) {
 	sb.WriteString("\n")
 }
 
-func doctorAssetLeaseCounts(conn *sql.DB, nowMs int64) (active int, expired int) {
-	_ = conn.QueryRow(`
+func doctorAssetLeaseCounts(conn *sql.DB, nowMs int64) (active int, expired int, err error) {
+	err = conn.QueryRow(`
 		SELECT
-			COALESCE(SUM(CASE WHEN COALESCE(lease_until_ms, 0) > ? THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN COALESCE(lease_until_ms, 0) > 0 AND lease_until_ms <= ? THEN 1 ELSE 0 END), 0)
+			COALESCE(SUM(CASE WHEN COALESCE(lease_until_ms, 0) > $1 THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN COALESCE(lease_until_ms, 0) > 0 AND lease_until_ms <= $2 THEN 1 ELSE 0 END), 0)
 		FROM media_objects
 		WHERE job_state = 'downloading'
 	`, nowMs, nowMs).Scan(&active, &expired)
-	return active, expired
+	return active, expired, err
 }
 
 func writeDoctorDownloaderFailures(sb *strings.Builder, conn *sql.DB) {

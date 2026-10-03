@@ -16,6 +16,9 @@ type fakeLifecycle struct {
 }
 
 func (f *fakeLifecycle) WaitForProcess(context.Context, int) error { return nil }
+func (f *fakeLifecycle) MigrateSQLite(ctx context.Context, _ ApplyPlan) (func() error, error) {
+	return nil, ctx.Err()
+}
 func (f *fakeLifecycle) Start(ctx context.Context, _ ApplyPlan) error {
 	f.starts++
 	return ctx.Err()

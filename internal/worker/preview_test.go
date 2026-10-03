@@ -334,7 +334,7 @@ func TestPreviewBackfillScansPastCoolingCandidates(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		if err := m.db.ExecRaw(`UPDATE videos SET downloaded_at = ? WHERE video_id = ?`, index, videoID); err != nil {
+		if err := m.db.ExecRaw(`UPDATE videos SET downloaded_at = $1 WHERE video_id = $2`, index, videoID); err != nil {
 			t.Fatal(err)
 		}
 	}

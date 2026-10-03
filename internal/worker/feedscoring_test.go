@@ -95,7 +95,7 @@ func TestRankSnapshotPublishesOnlyCompleteReplyChains(t *testing.T) {
 		t.Fatalf("reply readiness = %d attempts, %d blocked", stats.replyAttempts, stats.replyBlocked)
 	}
 	var snapshotIDs string
-	if err := d.QueryRow(`SELECT COALESCE(GROUP_CONCAT(tweet_id, ','), '') FROM feed_rank_snapshot`).Scan(&snapshotIDs); err != nil {
+	if err := d.QueryRow(`SELECT COALESCE(string_agg(tweet_id, ','), '') FROM feed_rank_snapshot`).Scan(&snapshotIDs); err != nil {
 		t.Fatal(err)
 	}
 	if snapshotIDs != "sample_complete" {

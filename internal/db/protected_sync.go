@@ -23,7 +23,7 @@ func (db *DB) ensureFeedItemStubFromLikeTx(tx *sql.Tx, tweetID string, fields ma
 		return nil
 	}
 	var exists int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id = ?`, tweetID).Scan(&exists); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id = $1`, tweetID).Scan(&exists); err != nil {
 		return err
 	}
 	if exists > 0 {
@@ -42,10 +42,11 @@ func (db *DB) ensureFeedItemStubFromLikeTx(tx *sql.Tx, tweetID string, fields ma
 	}
 	nowMs := time.Now().UnixMilli()
 	res, err := tx.Exec(`
-		INSERT OR IGNORE INTO feed_items (
+		INSERT INTO feed_items (
 			tweet_id, source_channel_id, channel_id,
 			body_text, media_json, canonical_url, published_at, fetched_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT DO NOTHING
 	`,
 		tweetID,
 		nilIfEmpty(sourceChannelID),
@@ -84,7 +85,7 @@ func (db *DB) ensureFeedItemStubFromBookmarkTx(tx *sql.Tx, videoID string) error
 		return nil
 	}
 	var exists int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id = ?`, videoID).Scan(&exists); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id = $1`, videoID).Scan(&exists); err != nil {
 		return err
 	}
 	if exists > 0 {
@@ -105,10 +106,10 @@ func (db *DB) ensureFeedItemStubFromBookmarkTx(tx *sql.Tx, videoID string) error
 			COALESCE(fi.quote_community_note, ''),
 			COALESCE(NULLIF(fi.quote_media_json, ''), ''),
 			COALESCE(fi.quote_published_at, fi.published_at, 0),
-			MAX(COALESCE(fi.fetched_at, 0), COALESCE(fi.quote_published_at, 0), COALESCE(fi.published_at, 0))
+			GREATEST(COALESCE(fi.fetched_at, 0), COALESCE(fi.quote_published_at, 0), COALESCE(fi.published_at, 0))
 		FROM feed_items_resolved fi
-		WHERE fi.quote_tweet_id = ?
-		ORDER BY COALESCE(fi.fetched_at, 0) DESC, fi.tweet_id DESC
+		WHERE fi.quote_tweet_id = $1
+		ORDER BY COALESCE(fi.fetched_at, 0) DESC, fi.tweet_id DESC NULLS LAST
 		LIMIT 1
 	`, videoID).Scan(&channelID, &authorHandle, &authorName, &avatarURL, &bodyText, &articleTitle, &pollJSON, &communityNote, &mediaJSON, &publishedAt, &observedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -125,10 +126,11 @@ func (db *DB) ensureFeedItemStubFromBookmarkTx(tx *sql.Tx, videoID string) error
 	}
 	nowMs := time.Now().UnixMilli()
 	res, err := tx.Exec(`
-		INSERT OR IGNORE INTO feed_items (
+		INSERT INTO feed_items (
 			tweet_id, channel_id,
 			body_text, article_title, poll_json, community_note, media_json, published_at, fetched_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT DO NOTHING
 	`,
 		videoID,
 		nilIfEmpty(channelID),
@@ -161,7 +163,7 @@ func (db *DB) ensureBookmarkTargetStubsTx(tx *sql.Tx, videoID string) error {
 		return nil
 	}
 	var feedRows int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id = ? OR quote_tweet_id = ?`, videoID, videoID).Scan(&feedRows); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id = $1 OR quote_tweet_id = $2`, videoID, videoID).Scan(&feedRows); err != nil {
 		return err
 	}
 	if feedRows > 0 {
@@ -170,16 +172,17 @@ func (db *DB) ensureBookmarkTargetStubsTx(tx *sql.Tx, videoID string) error {
 		}
 	}
 	_, err := tx.Exec(`
-		INSERT OR IGNORE INTO videos (video_id, channel_id, owner_kind, title, duration)
+		INSERT INTO videos (video_id, channel_id, owner_kind, title, duration)
 		SELECT
-			?,
+			$1,
 			COALESCE(NULLIF(direct.channel_id, ''), NULLIF(quoted.quote_channel_id, ''), ''),
 			'tweet',
-			'X post ' || ?,
+			'X post ' || $2,
 			0
 		FROM (SELECT 1) _
-		LEFT JOIN feed_items direct ON direct.tweet_id = ? AND COALESCE(direct.channel_id, '') != ''
-		LEFT JOIN feed_items quoted ON quoted.quote_tweet_id = ? AND COALESCE(quoted.quote_channel_id, '') != ''
+		LEFT JOIN feed_items direct ON direct.tweet_id = $3 AND COALESCE(direct.channel_id, '') != ''
+		LEFT JOIN feed_items quoted ON quoted.quote_tweet_id = $4 AND COALESCE(quoted.quote_channel_id, '') != ''
+		ON CONFLICT DO NOTHING
 	`, videoID, videoID, videoID, videoID)
 	if err != nil {
 		return err

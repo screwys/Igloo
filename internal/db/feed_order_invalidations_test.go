@@ -145,7 +145,7 @@ func TestFeedOrderInvalidationDrainCapsNormalOwnerLanes(t *testing.T) {
 			UNION ALL SELECT value + 1 FROM ids WHERE value < 64
 		)
 		INSERT INTO feed_order_invalidations (owner_kind, owner_id)
-		SELECT 'tweet', printf('sample_tweet_%03d', value) FROM ids
+		SELECT 'tweet', ('sample_tweet_' || lpad((value)::text, 3, '0')) FROM ids
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestFeedOrderInvalidationDrainCapsNormalOwnerLanes(t *testing.T) {
 			UNION ALL SELECT value + 1 FROM ids WHERE value < 4
 		)
 		INSERT INTO feed_order_invalidations (owner_kind, owner_id)
-		SELECT 'channel', printf('sample_channel_%03d', value) FROM ids
+		SELECT 'channel', ('sample_channel_' || lpad((value)::text, 3, '0')) FROM ids
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestFeedOrderInvalidationDrainCapsNormalOwnerLanes(t *testing.T) {
 	for kind, want := range map[string]int{"tweet": 1, "channel": 1} {
 		var remaining int
 		if err := d.QueryRow(`
-			SELECT COUNT(*) FROM feed_order_invalidations WHERE owner_kind = ?
+			SELECT COUNT(*) FROM feed_order_invalidations WHERE owner_kind = $1
 		`, kind).Scan(&remaining); err != nil {
 			t.Fatal(err)
 		}
@@ -190,12 +190,15 @@ func TestFeedOrderInvalidationOverflowResetsAndClearsAtomically(t *testing.T) {
 			UNION ALL SELECT value + 1 FROM ids WHERE value < 1024
 		)
 		INSERT INTO feed_order_invalidations (owner_kind, owner_id)
-		SELECT 'tweet', printf('sample_owner_%04d', value) FROM ids;
-		CREATE TRIGGER block_feed_order_queue_delete
-		BEFORE DELETE ON feed_order_invalidations
+		SELECT 'tweet', ('sample_owner_' || lpad((value)::text, 4, '0')) FROM ids;
+		CREATE FUNCTION block_feed_order_queue_delete_fn() RETURNS trigger LANGUAGE plpgsql AS $fixture$
 		BEGIN
-			SELECT RAISE(ABORT, 'blocked queue delete');
+RAISE EXCEPTION 'blocked queue delete';
+			RETURN NEW;
 		END;
+		$fixture$;
+		CREATE TRIGGER block_feed_order_queue_delete BEFORE DELETE ON feed_order_invalidations
+		FOR EACH ROW EXECUTE FUNCTION block_feed_order_queue_delete_fn();
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +209,7 @@ func TestFeedOrderInvalidationOverflowResetsAndClearsAtomically(t *testing.T) {
 	}
 	assertFeedOrderOverflowState(t, d, 303, 1025)
 
-	if err := d.ExecRaw(`DROP TRIGGER block_feed_order_queue_delete`); err != nil {
+	if err := d.ExecRaw(`DROP TRIGGER block_feed_order_queue_delete ON feed_order_invalidations`); err != nil {
 		t.Fatal(err)
 	}
 	processed, err = d.DrainFeedOrderInvalidations(context.Background(), 64, 4)

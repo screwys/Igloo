@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026.08.31.1",
+  "revision": "2026.10.03.1",
   "artifacts": {
     "yt-dlp": {
       "version": "2026.08.29.232711",
@@ -22,6 +22,13 @@
       "sha256": "15e5300b0ba3c3695a7621d90160a746ec9e710228cee639afa9d580f6e3cd11",
       "size": 42601047,
       "output": "deno.zip"
+    },
+    "postgresql": {
+      "version": "18.6-5",
+      "url": "https://get.enterprisedb.com/postgresql/postgresql-18.6-5-windows-x64-binaries.zip",
+      "sha256": "e2246ba91d22345bc3d017586c09ede52d9df180b1eeb480f050445f1cad84e2",
+      "size": 384620317,
+      "output": "postgresql.zip"
     },
     "ffmpeg": {
       "version": "9.0.1-11-ge47273f4d9",

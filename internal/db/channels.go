@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -28,7 +29,7 @@ func (db *DB) GetSubscribedChannels() ([]model.Channel, error) {
 	// Sort uses the rendered display name (display_name if set, else
 	// channels.name) via the same COALESCE so rows sort how they render —
 	// no more "sample_handle_ja" landing in the k-block while being shown as
-	// "Example Display Name". COLLATE NOCASE keeps Latin case-insensitive; unicode
+	// "Example Display Name". The sort ignores Latin case; unicode
 	// names fall back to codepoint order which is good enough for the
 	// sidebar (users scan visually, not alphabetically).
 	rows, err := db.conn.Query(`
@@ -45,7 +46,7 @@ func (db *DB) GetSubscribedChannels() ([]model.Channel, error) {
 		LEFT JOIN channel_stars cs2   ON cs2.channel_id = cf.channel_id
 		LEFT JOIN channel_settings cs ON cs.channel_id = cf.channel_id
 		LEFT JOIN channel_profiles cp ON cp.channel_id = cf.channel_id
-		ORDER BY COALESCE(NULLIF(cp.display_name,''), NULLIF(c.name,''), NULLIF(cp.handle,''), cf.channel_id) COLLATE NOCASE
+		ORDER BY LOWER(COALESCE(NULLIF(cp.display_name,''), NULLIF(c.name,''), NULLIF(cp.handle,''), cf.channel_id) COLLATE "C")
 	`)
 	if err != nil {
 		return nil, err
@@ -114,7 +115,7 @@ func (db *DB) NextSubscribedChannel(platform string) (*model.Channel, int, error
 		        WHEN cf.channel_id LIKE 'tiktok_%' THEN 'tiktok'
 		        WHEN cf.channel_id LIKE 'instagram_%' THEN 'instagram'
 		        WHEN cf.channel_id LIKE 'twitter_%' OR cf.channel_id LIKE 'x_%' THEN 'twitter'
-		        ELSE '' END) = ?
+		        ELSE '' END) = $1
 		ORDER BY CASE WHEN COALESCE(c.last_checked, 0) <= 0 THEN 0 ELSE 1 END,
 		         COALESCE(c.last_checked, 0), cf.channel_id
 		LIMIT 1
@@ -342,7 +343,7 @@ func (db *DB) ToggleChannelStar(channelID string) (bool, error) {
 		nowMs := time.Now().UnixMilli()
 		var exists int
 		err := tx.QueryRow(
-			"SELECT COUNT(*) FROM channel_stars WHERE channel_id = ?",
+			"SELECT COUNT(*) FROM channel_stars WHERE channel_id = $1",
 			channelID,
 		).Scan(&exists)
 		if err != nil {
@@ -370,7 +371,7 @@ func (db *DB) IsChannelStarred(channelID string) bool {
 	err := db.conn.QueryRow(`
 		SELECT 1
 		FROM channel_stars
-		WHERE channel_id = ?
+		WHERE channel_id = $1
 		LIMIT 1
 	`, channelID).Scan(&exists)
 	return err == nil && exists == 1
@@ -392,7 +393,7 @@ func (db *DB) UnfollowChannel(channelID string) error {
 func (db *DB) IsChannelFollowed(channelID string) bool {
 	var n int
 	_ = db.conn.QueryRow(
-		"SELECT COUNT(*) FROM channel_follows WHERE channel_id = ?",
+		"SELECT COUNT(*) FROM channel_follows WHERE channel_id = $1",
 		channelID,
 	).Scan(&n)
 	return n > 0
@@ -408,7 +409,7 @@ func (db *DB) GetChannelSettings(channelID string) (*ChannelSettings, error) {
 		       cs.include_member_only
 		FROM channels c
 		LEFT JOIN channel_settings cs ON cs.channel_id = c.channel_id
-		WHERE c.channel_id = ?
+		WHERE c.channel_id = $1
 	`, channelID)
 
 	var s ChannelSettings
@@ -527,7 +528,7 @@ func (db *DB) UpdateChannelSettings(channelID string, fields map[string]any) err
 				strings.Join(chClauses, ", "),
 			)
 			args := append(chArgs, channelID)
-			if _, err := tx.Exec(query, args...); err != nil {
+			if _, err := tx.Exec(bind(query), args...); err != nil {
 				return err
 			}
 		}
@@ -542,18 +543,23 @@ func (db *DB) UpdateChannelSettings(channelID string, fields map[string]any) err
 	})
 }
 
-// AddChannel inserts a new channel. Returns an error if channel_id already
+var ErrChannelExists = errors.New("channel already exists")
+
+// AddChannel inserts a new channel. Returns ErrChannelExists if channel_id already
 // exists. Per-channel settings (max_videos, download_subtitles, media_*,
 // include_reposts, include_member_only) are written to the channel_settings
 // side table via UpdateChannelSettings once the channel exists.
 func (db *DB) AddChannel(ch model.Channel) error {
 	nowMs := time.Now().UnixMilli()
 	return db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`
+		var id int64
+		if err := tx.QueryRow(`
 			INSERT INTO channels
 				(channel_id, source_id, name, url, platform,
 				 quality)
-			VALUES (?, ?, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT(channel_id) DO NOTHING
+			RETURNING id
 		`,
 			ch.ChannelID,
 			nilIfEmpty(ch.SourceID),
@@ -561,7 +567,10 @@ func (db *DB) AddChannel(ch model.Channel) error {
 			nilIfEmpty(ch.URL),
 			nilIfEmpty(ch.Platform),
 			nilIfEmpty(ch.Quality),
-		); err != nil {
+		).Scan(&id); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrChannelExists
+			}
 			return err
 		}
 		if ch.IsSubscribed {
@@ -571,7 +580,7 @@ func (db *DB) AddChannel(ch model.Channel) error {
 			}
 			if _, err := tx.Exec(`
 						INSERT INTO channel_follows (channel_id, followed_at)
-						VALUES (?, ?)
+						VALUES ($1, $2)
 						ON CONFLICT(channel_id) DO UPDATE SET followed_at = excluded.followed_at
 				`, ch.ChannelID, followedAt); err != nil {
 				return err
@@ -584,7 +593,7 @@ func (db *DB) AddChannel(ch model.Channel) error {
 			}
 			if _, err := tx.Exec(`
 						INSERT INTO channel_stars (channel_id, starred_at)
-						VALUES (?, ?)
+						VALUES ($1, $2)
 						ON CONFLICT(channel_id) DO UPDATE SET starred_at = excluded.starred_at
 				`, ch.ChannelID, starredAt); err != nil {
 				return err
@@ -628,7 +637,7 @@ func (db *DB) ObserveChannels(channels []model.Channel) error {
 			if _, err := tx.Exec(`
 				INSERT INTO channels
 					(channel_id, source_id, name, url, platform, quality)
-				VALUES (?, ?, ?, ?, ?, ?)
+				VALUES ($1, $2, $3, $4, $5, $6)
 				ON CONFLICT(channel_id) DO UPDATE SET
 					source_id = COALESCE(NULLIF(channels.source_id, ''), excluded.source_id),
 					name = CASE
@@ -667,7 +676,7 @@ func (db *DB) GetChannelByID(channelID string) (model.Channel, error) {
 		FROM channels c
 		LEFT JOIN channel_follows cf ON cf.channel_id = c.channel_id
 		LEFT JOIN channel_stars   cs ON cs.channel_id = c.channel_id
-		WHERE c.channel_id = ?
+		WHERE c.channel_id = $1
 	`, channelID).Scan(
 		&ch.ID, &ch.ChannelID, &ch.SourceID, &ch.Name,
 		&ch.URL, &ch.Platform,
@@ -769,7 +778,7 @@ func (db *DB) ResolveSubscribeURL(channelID string) string {
 		return ""
 	}
 	var url string
-	if err := db.conn.QueryRow(`SELECT COALESCE(url, '') FROM channels WHERE channel_id = ?`, channelID).Scan(&url); err == nil && url != "" {
+	if err := db.conn.QueryRow(`SELECT COALESCE(url, '') FROM channels WHERE channel_id = $1`, channelID).Scan(&url); err == nil && url != "" {
 		return url
 	}
 	idx := strings.IndexByte(channelID, '_')

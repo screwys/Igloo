@@ -32,7 +32,7 @@ func (db *DB) RecordDownloaderOperation(ctx context.Context, op model.Downloader
 				operation, platform, subject, tool, started_at_ms, ended_at_ms,
 				status, error_kind, error, cookie_label, elapsed_ms,
 				item_count, media_count, file_count, bytes, summary_json
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
 			op.Operation, op.Platform, op.Subject, op.Tool, op.StartedAtMs, op.EndedAtMs,
 			op.Status, op.ErrorKind, op.Error, op.CookieLabel, op.ElapsedMs,
 			op.ItemCount, op.MediaCount, op.FileCount, op.Bytes, op.SummaryJSON,
@@ -51,7 +51,7 @@ func (db *DB) ListDownloaderOperations(limit int) ([]model.DownloaderOperation, 
 			media_count, file_count, bytes, summary_json
 		FROM downloader_operations
 		ORDER BY started_at_ms DESC, id DESC
-		LIMIT ?`, limit)
+		LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (db *DB) DownloaderOperationCountsSince(startedAtMs int64) ([]map[string]an
 	rows, err := db.conn.Query(`
 		SELECT platform, operation, status, error_kind, COUNT(*)
 		FROM downloader_operations
-		WHERE started_at_ms >= ?
+		WHERE started_at_ms >= $1
 		GROUP BY platform, operation, status, error_kind
 		ORDER BY platform, operation, status, error_kind`, startedAtMs)
 	if err != nil {
@@ -114,7 +114,7 @@ func (db *DB) PruneDownloaderOperations(maxRows int, maxAge time.Duration) error
 	}
 	cutoff := time.Now().Add(-maxAge).UnixMilli()
 	return db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := tx.Exec(`DELETE FROM downloader_operations WHERE started_at_ms < ?`, cutoff); err != nil {
+		if _, err := tx.Exec(`DELETE FROM downloader_operations WHERE started_at_ms < $1`, cutoff); err != nil {
 			return err
 		}
 		_, err := tx.Exec(`
@@ -122,7 +122,7 @@ func (db *DB) PruneDownloaderOperations(maxRows int, maxAge time.Duration) error
 			WHERE id NOT IN (
 				SELECT id FROM downloader_operations
 				ORDER BY started_at_ms DESC, id DESC
-				LIMIT ?
+				LIMIT $1
 			)`, maxRows)
 		return err
 	})

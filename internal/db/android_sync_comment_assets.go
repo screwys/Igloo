@@ -38,7 +38,7 @@ func (db *DB) ListAndroidSyncCommentAuthorAssets(videoIDs []string, limitPerVide
 			FROM desired d
 			JOIN videos v ON v.video_id = d.video_id
 			`+androidSyncTopCommentsJoinSQL+`
-			WHERE v.channel_id LIKE 'youtube_%'
+			WHERE v.channel_id ILIKE 'youtube_%'
 		`, args...)
 		if err != nil {
 			return nil, err

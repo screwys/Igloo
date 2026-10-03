@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"path/filepath"
 	"testing"
@@ -9,17 +10,24 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
-func TestOpenMigratesAccountDetailsWithoutLosingProfile(t *testing.T) {
+func TestLegacyArchiveMigratesAccountDetailsWithoutLosingProfile(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	d, err := OpenPath(path, root)
+	legacy, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := d.UpsertChannelProfile(model.ChannelProfile{ChannelID: "twitter_sample", Platform: "twitter", DisplayName: "Sample", AccountRegion: "Japan"}); err != nil {
+	if err := EnsureSchema(legacy); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Close(); err != nil {
+	if err := ApplySchemaMigrations(legacy); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := legacy.Exec(`INSERT INTO channel_profiles (channel_id, platform, display_name, account_region)
+		VALUES ('twitter_sample', 'twitter', 'Sample', 'Japan')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.Close(); err != nil {
 		t.Fatal(err)
 	}
 	conn, err := sql.Open("sqlite", path)
@@ -36,21 +44,34 @@ func TestOpenMigratesAccountDetailsWithoutLosingProfile(t *testing.T) {
 	if err := conn.Close(); err != nil {
 		t.Fatal(err)
 	}
-	d, err = OpenPath(path, root)
+	normalized, cleanup, err := PrepareLegacyArchive(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	nativeRoot := t.TempDir()
+	markDBTestStateRoot(t, nativeRoot)
+	d, err := OpenAtStateRoot(nativeRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = d.Close() })
+	if err := d.RestoreLegacyArchive(context.Background(), normalized); err != nil {
+		t.Fatal(err)
+	}
 	profile, err := d.GetChannelProfile("twitter_sample")
 	if err != nil || profile == nil || profile.DisplayName != "Sample" || profile.AccountRegion != "Japan" || profile.AccountDetailsJSON != "" {
 		t.Fatalf("migrated profile = %+v, err=%v", profile, err)
 	}
-	head := requireAndroidSyncHead(t, d, "channel", profile.ChannelID)
+	clock, err := d.GetAndroidSyncClock()
+	if err != nil {
+		t.Fatal(err)
+	}
 	profile.AccountDetailsJSON = `{"source":"Web"}`
 	if err := d.UpsertChannelProfile(*profile); err != nil {
 		t.Fatal(err)
 	}
-	if next := requireAndroidSyncHead(t, d, "channel", profile.ChannelID); next.Revision <= head.Revision {
+	if next := requireAndroidSyncHead(t, d, "channel", profile.ChannelID); next.Revision <= clock.Revision {
 		t.Fatal("migrated account details update did not advance sync revision")
 	}
 }

@@ -13,16 +13,15 @@ import (
 func TestCandidateServerXMediaParentPlanUsesIdentityIndexes(t *testing.T) {
 	d := openFreshTestDB(t)
 	query, args := candidateServerXMediaParentsQuery([]string{"sample_owner"})
-	rows, err := d.conn.Query("EXPLAIN QUERY PLAN "+query, args...)
+	rows, err := d.conn.Query(bind("EXPLAIN "+query), args...)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = rows.Close() }()
 	var details []string
 	for rows.Next() {
-		var id, parent, unused int
 		var detail string
-		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+		if err := rows.Scan(&detail); err != nil {
 			t.Fatal(err)
 		}
 		details = append(details, detail)
@@ -31,10 +30,10 @@ func TestCandidateServerXMediaParentPlanUsesIdentityIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := strings.Join(details, "\n")
-	if strings.Contains(plan, "SCAN feed_items") {
+	if strings.Contains(plan, "Seq Scan on feed_items") {
 		t.Fatalf("candidate owner plan scans feed_items: %s", plan)
 	}
-	if !strings.Contains(plan, "sqlite_autoindex_feed_items_1") ||
+	if !strings.Contains(plan, "Index Cond: (tweet_id =") ||
 		!strings.Contains(plan, "idx_feed_items_quote") {
 		t.Fatalf("candidate owner plan = %s", plan)
 	}
@@ -310,7 +309,7 @@ func TestXMediaRetentionChangeRestoresPrunedObjectForNewOwner(t *testing.T) {
 	if err := d.QueryRow(`
 		SELECT lifecycle_state FROM assets
 		WHERE asset_kind = 'post_media' AND owner_kind = 'tweet'
-		  AND owner_id = ? AND media_index = 0
+		  AND owner_id = $1 AND media_index = 0
 	`, newShared.TweetID).Scan(&lifecycle); err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +349,7 @@ func TestXMediaRetentionChangeReconcilesOnlyNewAndBoundaryOwners(t *testing.T) {
 	var historicalRevision, historicalUpdated int64
 	if err := d.QueryRow(`
 		SELECT revision, updated_at_ms FROM assets
-		WHERE asset_id = ?
+		WHERE asset_id = $1
 	`, BuildAssetID("twitter", "tweet", "sample_historical_overflow", "post_media", 0)).Scan(&historicalRevision, &historicalUpdated); err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +378,7 @@ func TestXMediaRetentionChangeReconcilesOnlyNewAndBoundaryOwners(t *testing.T) {
 	var nextRevision, nextUpdated int64
 	if err := d.QueryRow(`
 		SELECT revision, updated_at_ms FROM assets
-		WHERE asset_id = ?
+		WHERE asset_id = $1
 	`, BuildAssetID("twitter", "tweet", "sample_historical_overflow", "post_media", 0)).Scan(&nextRevision, &nextUpdated); err != nil {
 		t.Fatal(err)
 	}
@@ -395,14 +394,14 @@ func seedXRetentionChannel(t *testing.T, d *DB, limit int) (string, string) {
 	channelID, sourceHandle := "twitter_sample_source", "sample_source"
 	if err := d.ExecRaw(`
 		INSERT INTO channels (channel_id, source_id, name, url, platform, created_at)
-		VALUES (?, ?, 'Sample Source', '', 'twitter', 1)
+		VALUES ($1, $2, 'Sample Source', '', 'twitter', 1)
 	`, channelID, sourceHandle); err != nil {
 		t.Fatalf("insert channel: %v", err)
 	}
-	if err := d.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)`, channelID); err != nil {
+	if err := d.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, channelID); err != nil {
 		t.Fatalf("insert follow: %v", err)
 	}
-	if err := d.ExecRaw(`INSERT INTO channel_settings (channel_id, media_download_limit, updated_at) VALUES (?, ?, 1)`, channelID, limit); err != nil {
+	if err := d.ExecRaw(`INSERT INTO channel_settings (channel_id, media_download_limit, updated_at) VALUES ($1, $2, 1)`, channelID, limit); err != nil {
 		t.Fatalf("insert settings: %v", err)
 	}
 	return channelID, sourceHandle

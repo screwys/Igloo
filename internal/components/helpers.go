@@ -1003,23 +1003,24 @@ func DlFilterMatch(e ActivityEntry, filter string) bool {
 // ServerDashboardData holds data for rendering the server dashboard panel.
 type ServerDashboardData struct {
 	// Stat cards
-	UptimeText     string // "2d 3h" or "4h 12m"
-	UptimeStarted  string // "since 2026-04-16 18:00:00"
-	Errors24h      int
-	ErrorsDelta    int
-	MemoryMB       float64
-	MemoryHistory  []float64
-	DBSizeMB       float64
-	WALSizeMB      float64
-	TableCount     int
-	StorageGB      float64
-	VideoStorageGB float64
-	AvgMBPerVideo  float64
-	VideosTotal    int
-	VideosWatched  int
-	SourcesOK      int
-	SourcesCool    int
-	SourcesFail    int
+	UptimeText       string // "2d 3h" or "4h 12m"
+	UptimeStarted    string // "since 2026-04-16 18:00:00"
+	Errors24h        int
+	ErrorsDelta      int
+	MemoryMB         float64
+	MemoryHistory    []float64
+	DBSizeMB         float64
+	WALSizeMB        float64
+	WALSizeAvailable bool
+	TableCount       int
+	StorageGB        float64
+	VideoStorageGB   float64
+	AvgMBPerVideo    float64
+	VideosTotal      int
+	VideosWatched    int
+	SourcesOK        int
+	SourcesCool      int
+	SourcesFail      int
 	// DB sections
 	ChannelsTotal        int
 	ChannelsByPlat       map[string]int

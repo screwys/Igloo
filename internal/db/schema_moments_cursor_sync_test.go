@@ -1,18 +1,28 @@
 package db
 
 import (
+	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 )
 
-func TestOpenRepairsExistingAndroidMomentsCursorHeadsOnce(t *testing.T) {
+func TestLegacyArchiveRepairsExistingAndroidMomentsCursorHeadsOnce(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "igloo.db")
-	store, err := OpenPath(path, root)
+	store, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.ExecRaw(`
+	if err := EnsureSchema(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := ApplySchemaMigrations(store); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if _, err := store.Exec(`
 		INSERT INTO moments_cursors (
 			scope, video_id, position_ms, sort_at_ms, updated_at_ms
 		) VALUES
@@ -43,9 +53,15 @@ func TestOpenRepairsExistingAndroidMomentsCursorHeadsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	var cleanup func()
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("OpenPath with missing cursor head: %v", err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	var repairedAllRevision, followingRevision, clockAfter int64
 	if err := store.QueryRow(`
@@ -90,9 +106,14 @@ func TestOpenRepairsExistingAndroidMomentsCursorHeadsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err = OpenPath(path, root)
+	path, cleanup, err = PrepareLegacyArchive(context.Background(), path)
 	if err != nil {
 		t.Fatalf("second OpenPath after cursor repair: %v", err)
+	}
+	defer cleanup()
+	store, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
 	var clockAfterReopen, followingAfterReopen int64

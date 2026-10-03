@@ -30,7 +30,7 @@ func (db *DB) ListMomentViews(since time.Time, limit int) ([]MomentView, error) 
 	q += ` ORDER BY viewed_at DESC LIMIT ?`
 	args = append(args, limit)
 
-	rows, err := db.conn.Query(q, args...)
+	rows, err := db.conn.Query(bind(q), args...)
 	if err != nil {
 		return nil, err
 	}

@@ -454,6 +454,7 @@
     <string name="logs_cache_health">Cache Health</string>
     <string name="logs_checked">Checked</string>
     <string name="logs_clipboard_label">Igloo logs</string>
+    <string name="logs_cluster_wal_tables_detail">Cluster WAL %1$s MB · %2$d tables</string>
     <string name="logs_comments">Comments</string>
     <string name="logs_copied">Logs copied</string>
     <string name="logs_delta_vs_yesterday">%1$s%2$d vs yesterday</string>

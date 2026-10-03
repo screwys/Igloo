@@ -37,7 +37,7 @@ func (db *DB) TempDownloadState(rawURL string) (TempDownloadState, bool, error) 
 			CASE WHEN lease_owner = '' THEN 'cancelled' ELSE 'cancelling' END
 			ELSE status END, last_error
 		FROM temp_download_queue
-		WHERE url = ?
+		WHERE url = $1
 	`, strings.TrimSpace(rawURL)).Scan(&state.RequestID, &state.Status, &state.Error)
 	if err == sql.ErrNoRows {
 		return TempDownloadState{}, false, nil
@@ -57,7 +57,7 @@ func (db *DB) CancelTempDownloadWork(rawURL, requestID string) (TempDownloadStat
 	var owner string
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		var status, errorKind string
-		err := tx.QueryRow(`SELECT request_id, status, last_error_kind, lease_owner FROM temp_download_queue WHERE url = ?`, rawURL).
+		err := tx.QueryRow(`SELECT request_id, status, last_error_kind, lease_owner FROM temp_download_queue WHERE url = $1`, rawURL).
 			Scan(&state.RequestID, &status, &errorKind, &owner)
 		if err == sql.ErrNoRows {
 			return nil
@@ -74,8 +74,8 @@ func (db *DB) CancelTempDownloadWork(rawURL, requestID string) (TempDownloadStat
 		if _, err := tx.Exec(`
 			UPDATE temp_download_queue
 			SET status = 'blocked', next_attempt_at_ms = 0, last_error_kind = 'cancelled',
-				last_error = '', save_intent_json = '', lease_owner = ?, lease_until_ms = 0
-			WHERE url = ?
+				last_error = '', save_intent_json = '', lease_owner = $1, lease_until_ms = 0
+			WHERE url = $2
 		`, owner, rawURL); err != nil {
 			return err
 		}
@@ -92,7 +92,7 @@ func (db *DB) FinishCancelledTempDownloadWork(rawURL, owner string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			UPDATE temp_download_queue SET lease_owner = '', lease_until_ms = 0
-			WHERE url = ? AND status = 'blocked' AND last_error_kind = 'cancelled' AND lease_owner = ?
+			WHERE url = $1 AND status = 'blocked' AND last_error_kind = 'cancelled' AND lease_owner = $2
 		`, rawURL, owner)
 		return err
 	})
@@ -100,7 +100,7 @@ func (db *DB) FinishCancelledTempDownloadWork(rawURL, owner string) error {
 
 func (db *DB) TempDownloadOrigin(rawURL string) (string, error) {
 	var origin string
-	err := db.reader().QueryRow(`SELECT origin FROM temp_download_queue WHERE url = ?`, strings.TrimSpace(rawURL)).Scan(&origin)
+	err := db.reader().QueryRow(`SELECT origin FROM temp_download_queue WHERE url = $1`, strings.TrimSpace(rawURL)).Scan(&origin)
 	if err == sql.ErrNoRows {
 		return "", nil
 	}
@@ -118,7 +118,7 @@ func (db *DB) MarkDiscoverTempVideo(videoID string, nowMs int64) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			INSERT INTO discover_temp_downloads (video_id, downloaded_at_ms)
-			VALUES (?, ?)
+			VALUES ($1, $2)
 			ON CONFLICT(video_id) DO UPDATE SET downloaded_at_ms = excluded.downloaded_at_ms
 		`, videoID, nowMs)
 		return err
@@ -146,7 +146,7 @@ func (db *DB) EnqueueTempDownload(rawURL, platform string) (bool, error) {
 func enqueueTempDownloadTx(tx *sql.Tx, rawURL, platform string, nowMs int64) (bool, error) {
 	res, err := tx.Exec(`
 				INSERT INTO temp_download_queue (url, request_id, platform, origin, added_at_ms)
-				VALUES (?, lower(hex(randomblob(16))), ?, 'interactive', ?)
+				VALUES ($1, replace(gen_random_uuid()::text, '-', ''), $2, 'interactive', $3)
 				ON CONFLICT(url) DO UPDATE SET
 					origin = 'interactive',
 				request_id = CASE WHEN temp_download_queue.status = 'blocked' THEN excluded.request_id ELSE temp_download_queue.request_id END,
@@ -190,15 +190,15 @@ func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, ta
 			}
 			seen[videoID] = struct{}{}
 			var ready bool
-			if err := tx.QueryRow(`
+			if err := tx.QueryRow(bind(`
 				SELECT EXISTS(SELECT 1 FROM videos v WHERE v.video_id = ? AND `+readyVideoMediaExistsSQL("v")+`)
-			`, videoID).Scan(&ready); err != nil {
+			`), videoID).Scan(&ready); err != nil {
 				return err
 			}
 			url := "https://www.youtube.com/watch?v=" + videoID
 			var queued bool
 			if err := tx.QueryRow(`
-				SELECT EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ? AND status IN ('pending', 'processing'))
+				SELECT EXISTS(SELECT 1 FROM temp_download_queue WHERE url = $1 AND status IN ('pending', 'processing'))
 			`, url).Scan(&queued); err != nil {
 				return err
 			}
@@ -221,10 +221,10 @@ func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, ta
 			seen[videoID] = struct{}{}
 			url := "https://www.youtube.com/watch?v=" + videoID
 			var occupied bool
-			if err := tx.QueryRow(`
+			if err := tx.QueryRow(bind(`
 				SELECT EXISTS(SELECT 1 FROM videos v WHERE v.video_id = ? AND `+readyVideoMediaExistsSQL("v")+`)
 				    OR EXISTS(SELECT 1 FROM temp_download_queue WHERE url = ?)
-			`, videoID, url).Scan(&occupied); err != nil {
+			`), videoID, url).Scan(&occupied); err != nil {
 				return err
 			}
 			if occupied {
@@ -232,7 +232,7 @@ func (db *DB) EnqueueDiscoverTempDownloads(candidates []model.DiscoveryVideo, ta
 			}
 			if _, err := tx.Exec(`
 				INSERT INTO temp_download_queue (url, request_id, platform, origin, added_at_ms)
-				VALUES (?, lower(hex(randomblob(16))), 'youtube', 'discover', ?)
+				VALUES ($1, replace(gen_random_uuid()::text, '-', ''), 'youtube', 'discover', $2)
 			`, url, nowMs); err != nil {
 				return err
 			}
@@ -273,12 +273,12 @@ func (db *DB) ClaimTempDownloadWork(owner string, nowMs int64, lease time.Durati
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		row := tx.QueryRow(`
 			UPDATE temp_download_queue
-			SET status = 'processing', lease_owner = ?, lease_until_ms = ?, started_at_ms = CASE WHEN started_at_ms = 0 THEN ? ELSE started_at_ms END,
-				request_id = CASE WHEN request_id = '' THEN lower(hex(randomblob(16))) ELSE request_id END
+			SET status = 'processing', lease_owner = $1, lease_until_ms = $2, started_at_ms = CASE WHEN started_at_ms = 0 THEN $3 ELSE started_at_ms END,
+				request_id = CASE WHEN request_id = '' THEN replace(gen_random_uuid()::text, '-', '') ELSE request_id END
 			WHERE url = (
 				SELECT url FROM temp_download_queue
-				WHERE (status = 'pending' AND next_attempt_at_ms <= ?)
-				   OR (status = 'processing' AND lease_until_ms <= ?)
+				WHERE (status = 'pending' AND next_attempt_at_ms <= $4)
+				   OR (status = 'processing' AND lease_until_ms <= $5)
 					ORDER BY CASE WHEN origin = 'interactive' THEN 0 ELSE 1 END, added_at_ms, url
 				LIMIT 1
 			)
@@ -326,7 +326,7 @@ func (db *DB) updateTempDownloadLease(rawURL, owner, query string, args ...any) 
 	owner = strings.TrimSpace(owner)
 	return db.WithWrite(func(tx *sql.Tx) error {
 		args = append(args, rawURL, owner)
-		res, err := tx.Exec(query, args...)
+		res, err := tx.Exec(bind(query), args...)
 		if err != nil {
 			return err
 		}

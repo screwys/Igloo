@@ -79,7 +79,7 @@ const assetProjectionSQL = `
 	END,
 	a.required_reason, desired.last_error_kind, desired.last_error, desired.attempts,
 	desired.next_attempt_at_ms, desired.lease_owner, desired.lease_until_ms,
-	a.created_at_ms, MAX(a.updated_at_ms, desired.updated_at_ms)`
+	a.created_at_ms, GREATEST(a.updated_at_ms, desired.updated_at_ms)`
 
 const assetJoinsSQL = `
 	FROM assets a
@@ -286,11 +286,11 @@ func upsertAssetTx(tx *sql.Tx, asset Asset) error {
 	asset = prepareAssetIdentity(asset)
 	if asset.State == AssetStateQueued && asset.RequiredReason != "bookmark" && asset.RequiredReason != "like" && asset.RequiredReason != "manual" {
 		var lifecycle string
-		err := tx.QueryRow(`
+		err := tx.QueryRow(bind(`
 			SELECT lifecycle_state
 			FROM assets
 			WHERE asset_kind = ? AND owner_kind = ? AND owner_id = ? AND media_index = ?
-		`, asset.AssetKind, asset.OwnerKind, asset.OwnerID, asset.MediaIndex).Scan(&lifecycle)
+		`), asset.AssetKind, asset.OwnerKind, asset.OwnerID, asset.MediaIndex).Scan(&lifecycle)
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
@@ -304,17 +304,17 @@ func upsertAssetTx(tx *sql.Tx, asset Asset) error {
 		publishedRevision = 1
 		var sourceURL, filePath, contentType string
 		var size, mtime int64
-		err := tx.QueryRow(`
+		err := tx.QueryRow(bind(`
 			SELECT published_source_url, file_path, content_type, size_bytes, file_mtime_ns
 			FROM media_objects WHERE object_key = ? AND published_revision > 0
-		`, asset.ObjectKey).Scan(&sourceURL, &filePath, &contentType, &size, &mtime)
+		`), asset.ObjectKey).Scan(&sourceURL, &filePath, &contentType, &size, &mtime)
 		publicationChanged = err == nil && (sourceURL != asset.SourceURL || filePath != asset.FilePath ||
 			contentType != asset.ContentType || size != asset.SizeBytes || mtime != asset.FileMtimeNs)
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
 	}
-	_, err := tx.Exec(`
+	_, err := tx.Exec(bind(`
 		INSERT INTO media_objects (
 			object_id, object_key, source_url, published_source_url, storage_class, download_lane,
 			desired_revision, published_revision,
@@ -369,7 +369,7 @@ func upsertAssetTx(tx *sql.Tx, asset Asset) error {
 		       OR media_objects.size_bytes != excluded.size_bytes
 		       OR media_objects.file_mtime_ns != excluded.file_mtime_ns
 		   ))
-	`, asset.ObjectID, asset.ObjectKey, asset.SourceURL, asset.SourceURL, asset.StorageClass, asset.DownloadLane,
+	`), asset.ObjectID, asset.ObjectKey, asset.SourceURL, asset.SourceURL, asset.StorageClass, asset.DownloadLane,
 		publishedRevision, asset.FilePath, asset.ContentType, asset.SizeBytes, asset.FileMtimeNs,
 		asset.State, asset.LastErrorKind, asset.LastError, asset.Attempts,
 		asset.NextAttemptAtMs, asset.LeaseOwner, asset.LeaseUntilMs, asset.CreatedAtMs, asset.UpdatedAtMs)
@@ -378,19 +378,19 @@ func upsertAssetTx(tx *sql.Tx, asset Asset) error {
 	}
 	var objectID string
 	var objectPublishedRevision int64
-	if err := tx.QueryRow(`
+	if err := tx.QueryRow(bind(`
 		SELECT object_id, published_revision FROM media_objects WHERE object_key = ?
-	`, asset.ObjectKey).Scan(&objectID, &objectPublishedRevision); err != nil {
+	`), asset.ObjectKey).Scan(&objectID, &objectPublishedRevision); err != nil {
 		return err
 	}
 	currentObjectID := objectID
 	if objectPublishedRevision == 0 {
-		_ = tx.QueryRow(`
+		_ = tx.QueryRow(bind(`
 			SELECT object_id FROM assets
 			WHERE asset_kind = ? AND owner_kind = ? AND owner_id = ? AND media_index = ?
-		`, asset.AssetKind, asset.OwnerKind, asset.OwnerID, asset.MediaIndex).Scan(&currentObjectID)
+		`), asset.AssetKind, asset.OwnerKind, asset.OwnerID, asset.MediaIndex).Scan(&currentObjectID)
 	}
-	_, err = tx.Exec(`
+	_, err = tx.Exec(bind(`
 		INSERT INTO assets (
 			asset_id, asset_kind, owner_kind, owner_id, media_index,
 			object_id, desired_object_id, lifecycle_state, is_auto, audio_language, required_reason,
@@ -411,12 +411,12 @@ func upsertAssetTx(tx *sql.Tx, asset Asset) error {
 		WHERE assets.asset_id != excluded.asset_id
 		   OR (? > 0 AND assets.object_id != excluded.object_id)
 		   OR assets.desired_object_id != excluded.desired_object_id
-		   OR assets.is_auto IS NOT excluded.is_auto
+		   OR assets.is_auto IS DISTINCT FROM excluded.is_auto
 		   OR assets.audio_language != excluded.audio_language
 		   OR (assets.required_reason NOT IN ('bookmark', 'like', 'manual') AND assets.required_reason != excluded.required_reason)
 		   OR ?
-	`, asset.AssetID, asset.AssetKind, asset.OwnerKind, asset.OwnerID, asset.MediaIndex,
-		currentObjectID, objectID, asset.IsAuto, asset.AudioLanguage, asset.RequiredReason,
+	`), asset.AssetID, asset.AssetKind, asset.OwnerKind, asset.OwnerID, asset.MediaIndex,
+		currentObjectID, objectID, nilBoolPtr(asset.IsAuto), asset.AudioLanguage, asset.RequiredReason,
 		asset.CreatedAtMs, asset.UpdatedAtMs, objectPublishedRevision, objectPublishedRevision, publicationChanged)
 	return err
 }
@@ -513,13 +513,13 @@ func (db *DB) MarkReadyAssetUnavailable(expected Asset, nowMs int64) (bool, erro
 	}
 	changed := false
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		result, err := tx.Exec(`
+		result, err := tx.Exec(bind(`
 			UPDATE media_objects
 			SET published_revision = 0, job_state = ?, updated_at_ms = ?
 			WHERE object_id = (SELECT object_id FROM assets WHERE asset_id = ? AND revision = ?)
 			  AND published_revision > 0
 			  AND file_path = ? AND size_bytes = ? AND file_mtime_ns = ?
-		`, AssetStateServerMissing, nowMs, expected.AssetID, expected.Revision,
+		`), AssetStateServerMissing, nowMs, expected.AssetID, expected.Revision,
 			expected.FilePath, expected.SizeBytes, expected.FileMtimeNs)
 		if err != nil {
 			return err
@@ -530,7 +530,7 @@ func (db *DB) MarkReadyAssetUnavailable(expected Asset, nowMs int64) (bool, erro
 		}
 		changed = rows > 0
 		if changed {
-			_, err = tx.Exec(`UPDATE assets SET revision = revision + 1, updated_at_ms = ? WHERE object_id = ?`, nowMs, expected.ObjectID)
+			_, err = tx.Exec(bind(`UPDATE assets SET revision = revision + 1, updated_at_ms = ? WHERE object_id = ?`), nowMs, expected.ObjectID)
 		}
 		return err
 	})
@@ -551,7 +551,7 @@ func (db *DB) CompleteAssetDownload(asset Asset, owner string, nowMs int64) erro
 		return err
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		res, err := tx.Exec(`
+		res, err := tx.Exec(bind(`
 			UPDATE media_objects
 			   SET published_revision=desired_revision,
 			       published_source_url=source_url,
@@ -560,7 +560,7 @@ func (db *DB) CompleteAssetDownload(asset Asset, owner string, nowMs int64) erro
 			       lease_owner='', lease_until_ms=0, updated_at_ms=?
 			 WHERE object_id=(SELECT desired_object_id FROM assets WHERE asset_id=? AND asset_kind=?)
 			   AND job_state=? AND lease_owner=?
-		`, strings.TrimSpace(asset.FilePath), strings.TrimSpace(asset.ContentType),
+		`), strings.TrimSpace(asset.FilePath), strings.TrimSpace(asset.ContentType),
 			asset.SizeBytes, asset.FileMtimeNs, AssetStateReady,
 			nowMs, asset.AssetID, asset.AssetKind, AssetStateDownloading, owner)
 		if err != nil {
@@ -569,11 +569,11 @@ func (db *DB) CompleteAssetDownload(asset Asset, owner string, nowMs int64) erro
 		if err := requireQueueLeaseUpdate(res, "media_objects", asset.AssetID+"/"+asset.AssetKind, owner); err != nil {
 			return err
 		}
-		_, err = tx.Exec(`
+		_, err = tx.Exec(bind(`
 			UPDATE assets
 			SET object_id = desired_object_id, revision = revision + 1, updated_at_ms = ?
 			WHERE desired_object_id = (SELECT desired_object_id FROM assets WHERE asset_id = ? AND asset_kind = ?)
-		`, nowMs, asset.AssetID, asset.AssetKind)
+		`), nowMs, asset.AssetID, asset.AssetKind)
 		return err
 	})
 }
@@ -583,12 +583,12 @@ func (db *DB) ReleaseAssetDownload(assetID, assetKind, owner string, nowMs int64
 		nowMs = time.Now().UnixMilli()
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		res, err := tx.Exec(`
+		res, err := tx.Exec(bind(`
 			UPDATE media_objects
 			SET job_state = ?, lease_owner = '', lease_until_ms = 0, updated_at_ms = ?
 			WHERE object_id = (SELECT desired_object_id FROM assets WHERE asset_id = ? AND asset_kind = ?)
 			  AND job_state = ? AND lease_owner = ?
-		`, AssetStateQueued, nowMs, strings.TrimSpace(assetID), strings.TrimSpace(assetKind), AssetStateDownloading, strings.TrimSpace(owner))
+		`), AssetStateQueued, nowMs, strings.TrimSpace(assetID), strings.TrimSpace(assetKind), AssetStateDownloading, strings.TrimSpace(owner))
 		if err != nil {
 			return err
 		}
@@ -605,13 +605,13 @@ func (db *DB) RetryAssetDownload(assetID, assetKind, owner, kind, message string
 		nextMs = nowMs
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		res, err := tx.Exec(`
+		res, err := tx.Exec(bind(`
 			UPDATE media_objects
 			SET job_state=?, attempts=attempts+1, next_attempt_at_ms=?,
 			    last_error_kind=?, last_error=?, lease_owner='', lease_until_ms=0, updated_at_ms=?
 			WHERE object_id=(SELECT desired_object_id FROM assets WHERE asset_id=? AND asset_kind=?)
 			  AND job_state=? AND lease_owner=?
-		`, AssetStateQueued, nextMs, trimJobError(kind), trimJobError(message), nowMs,
+		`), AssetStateQueued, nextMs, trimJobError(kind), trimJobError(message), nowMs,
 			strings.TrimSpace(assetID), strings.TrimSpace(assetKind), AssetStateDownloading, owner)
 		if err != nil {
 			return err
@@ -631,11 +631,11 @@ func (db *DB) RenewAssetDownloadLease(assetID, assetKind, owner string, nowMs in
 		lease = defaultQueueLease
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+		_, err := tx.Exec(bind(`
 			UPDATE media_objects SET lease_until_ms=?, updated_at_ms=?
 			WHERE object_id=(SELECT desired_object_id FROM assets WHERE asset_id=? AND asset_kind=?)
 			  AND job_state=? AND lease_owner=?
-		`, nowMs+lease.Milliseconds(), nowMs, strings.TrimSpace(assetID), strings.TrimSpace(assetKind), AssetStateDownloading, owner)
+		`), nowMs+lease.Milliseconds(), nowMs, strings.TrimSpace(assetID), strings.TrimSpace(assetKind), AssetStateDownloading, owner)
 		return err
 	})
 }
@@ -665,21 +665,21 @@ func (db *DB) removeAssetFileIfUnreferenced(key string) (bool, error) {
 	nowMs := time.Now().UnixMilli()
 	if err := db.WithWrite(func(tx *sql.Tx) error {
 		var active int
-		if err := tx.QueryRow(`
+		if err := tx.QueryRow(bind(`
 			SELECT COUNT(*) FROM assets a
 			JOIN media_objects live ON live.object_id = a.object_id
 			WHERE a.lifecycle_state = 'active' AND live.published_revision > 0 AND live.file_path = ?
-		`, key).Scan(&active); err != nil {
+		`), key).Scan(&active); err != nil {
 			return err
 		}
 		if active > 0 {
 			return nil
 		}
-		_, err := tx.Exec(`
+		_, err := tx.Exec(bind(`
 			UPDATE media_objects
 			SET published_revision = 0, job_state = 'pruned', updated_at_ms = ?
 			WHERE file_path = ? AND published_revision > 0
-		`, nowMs, key)
+		`), nowMs, key)
 		if err != nil {
 			return err
 		}
@@ -697,11 +697,11 @@ func (db *DB) removeAssetFileIfUnreferenced(key string) (bool, error) {
 			return false, nil
 		}
 		_ = db.WithWrite(func(tx *sql.Tx) error {
-			_, restoreErr := tx.Exec(`
+			_, restoreErr := tx.Exec(bind(`
 				UPDATE media_objects
 				SET published_revision = desired_revision, job_state = 'ready', updated_at_ms = ?
 				WHERE file_path = ? AND published_revision = 0 AND job_state = 'pruned'
-			`, time.Now().UnixMilli(), key)
+			`), time.Now().UnixMilli(), key)
 			return restoreErr
 		})
 		return false, err

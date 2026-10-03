@@ -43,7 +43,7 @@ func (db *DB) ListAndroidSyncFeedEffectiveRecency(tweetIDs []string) (map[string
 		args := stringsToAny(chunk)
 		for _, query := range []string{
 			`SELECT content_hash, COALESCE(MAX(published_at), 0)
-			 FROM feed_items INDEXED BY idx_feed_items_content_hash
+			 FROM feed_items
 			 WHERE content_hash IS NOT NULL AND content_hash != ''
 			   AND content_hash IN (` + placeholders(len(chunk)) + `)
 			 GROUP BY content_hash`,
@@ -70,7 +70,7 @@ func (db *DB) ListAndroidSyncFeedEffectiveRecency(tweetIDs []string) (map[string
 	for _, chunk := range stringChunks(uniqueStrings(nodeIDs), androidSyncProjectionChunkSize) {
 		rows, err := db.reader().Query(`
 			SELECT quote_tweet_id, COALESCE(MAX(published_at), 0)
-			FROM feed_items INDEXED BY idx_feed_items_quote
+			FROM feed_items
 			WHERE quote_tweet_id IS NOT NULL AND quote_tweet_id != ''
 			  AND quote_tweet_id IN (`+placeholders(len(chunk))+`)
 			GROUP BY quote_tweet_id
@@ -394,7 +394,7 @@ func (db *DB) ListAndroidSyncRetweetSourceHashesForFeedIDs(tweetIDs []string) ([
 		return nil, err
 	}
 	rows, err := db.reader().Query(`
-		WITH desired(tweet_id) AS (SELECT value FROM json_each(?))
+		WITH desired(tweet_id) AS (SELECT value FROM jsonb_array_elements_text($1::jsonb))
 		SELECT DISTINCT fi.content_hash
 		FROM desired d
 		JOIN feed_items fi ON fi.tweet_id = d.tweet_id
@@ -499,7 +499,7 @@ func (db *DB) GetAndroidSyncSetting(key string) (*struct {
 		Key   string  `json:"key"`
 		Value *string `json:"value"`
 	}{Key: key}
-	if err := db.reader().QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&value); err != nil {
+	if err := db.reader().QueryRow(`SELECT value FROM settings WHERE key = $1`, key).Scan(&value); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}

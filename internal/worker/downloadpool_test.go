@@ -382,7 +382,7 @@ func TestStartDownloadWorkLeaseRenewalExtendsOwnedJob(t *testing.T) {
 		"sample_video_lease", db.DownloadLaneCurrent, "download-current", now,
 	)
 	initialLease := time.Now().Add(10 * time.Millisecond).UnixMilli()
-	if err := d.ExecRaw(`UPDATE download_queue SET lease_until_ms=? WHERE video_id=?`, initialLease, job.VideoID); err != nil {
+	if err := d.ExecRaw(`UPDATE download_queue SET lease_until_ms=$1 WHERE video_id=$2`, initialLease, job.VideoID); err != nil {
 		t.Fatalf("shorten initial lease: %v", err)
 	}
 
@@ -405,7 +405,7 @@ func TestStartDownloadWorkLeaseRenewalExtendsOwnedJob(t *testing.T) {
 	deadline := time.After(250 * time.Millisecond)
 	for {
 		var leaseUntil int64
-		if err := d.QueryRow(`SELECT lease_until_ms FROM download_queue WHERE video_id=?`, job.VideoID).Scan(&leaseUntil); err != nil {
+		if err := d.QueryRow(`SELECT lease_until_ms FROM download_queue WHERE video_id=$1`, job.VideoID).Scan(&leaseUntil); err != nil {
 			t.Fatalf("query lease: %v", err)
 		}
 		if leaseUntil > initialLease {
@@ -461,7 +461,7 @@ func TestFailDownloadJobRetriesRecoverableFailures(t *testing.T) {
 			if err := d.QueryRow(`
 				SELECT status, retry_count, COALESCE(next_attempt_at_ms,0),
 				       COALESCE(last_error_kind,''), lease_owner, lease_until_ms
-				FROM download_queue WHERE video_id=?
+				FROM download_queue WHERE video_id=$1
 			`, videoID).Scan(&status, &retries, &nextAttempt, &kind, &owner, &leaseUntil); err != nil {
 				t.Fatalf("query download queue row: %v", err)
 			}
@@ -512,7 +512,7 @@ func TestFailDownloadJobRetriesGalleryDLUnavailableResult(t *testing.T) {
 	var nextAttempt, leaseUntil int64
 	if err := d.QueryRow(`
 		SELECT status, retry_count, next_attempt_at_ms, last_error_kind, lease_owner, lease_until_ms
-		FROM download_queue WHERE video_id = ?
+		FROM download_queue WHERE video_id = $1
 	`, job.VideoID).Scan(&status, &retries, &nextAttempt, &kind, &leaseOwner, &leaseUntil); err != nil {
 		t.Fatalf("query retried download work: %v", err)
 	}
@@ -541,7 +541,7 @@ func TestFailDownloadJobBlocksNotFoundWork(t *testing.T) {
 	var leaseUntil int64
 	if err := d.QueryRow(`
 		SELECT status, last_error_kind, last_error, lease_owner, lease_until_ms
-		FROM download_queue WHERE video_id=?
+		FROM download_queue WHERE video_id=$1
 	`, videoID).Scan(&status, &kind, &reason, &leaseOwner, &leaseUntil); err != nil {
 		t.Fatalf("query blocked download work: %v", err)
 	}

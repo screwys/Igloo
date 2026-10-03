@@ -15,21 +15,21 @@ func seedFeedItem(t *testing.T, d *DB, tweetID, author string, published int64) 
 
 func seedFeedItemFetched(t *testing.T, d *DB, tweetID, author string, published, fetched int64) {
 	t.Helper()
-	if _, err := d.conn.Exec(`
-		INSERT OR IGNORE INTO channel_follows (channel_id, followed_at)
-		VALUES (?, ?)
-	`, "twitter_"+author, fetched); err != nil {
+	if _, err := d.conn.Exec(bind(`
+		INSERT INTO channel_follows (channel_id, followed_at)
+		VALUES (?, ?) ON CONFLICT DO NOTHING
+	`), "twitter_"+author, fetched); err != nil {
 		t.Fatalf("seed follow %s: %v", author, err)
 	}
-	if _, err := d.conn.Exec(`
-		INSERT OR IGNORE INTO channel_profiles (channel_id, platform, handle, observed_at_ms)
-		VALUES (?, 'twitter', ?, ?)
-	`, "twitter_"+author, author, fetched); err != nil {
+	if _, err := d.conn.Exec(bind(`
+		INSERT INTO channel_profiles (channel_id, platform, handle, observed_at_ms)
+		VALUES (?, 'twitter', ?, ?) ON CONFLICT DO NOTHING
+	`), "twitter_"+author, author, fetched); err != nil {
 		t.Fatalf("seed profile %s: %v", author, err)
 	}
-	if _, err := d.conn.Exec(`INSERT INTO feed_items
+	if _, err := d.conn.Exec(bind(`INSERT INTO feed_items
 		(tweet_id, channel_id, body_text, published_at, fetched_at, algo_interest, algo_scored_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?)`),
 		tweetID, "twitter_"+author, "body", published, fetched, 1.0, 0); err != nil {
 		t.Fatalf("seed %s: %v", tweetID, err)
 	}

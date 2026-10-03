@@ -10,7 +10,7 @@ import (
 // Returns sql.ErrNoRows if not found.
 func (db *DB) GetTranslation(tweetID, field, targetLang string) (text string, sourceLang string, err error) {
 	err = db.conn.QueryRow(
-		"SELECT translated_text, source_lang FROM translations WHERE tweet_id=? AND field=? AND target_lang=?",
+		"SELECT translated_text, source_lang FROM translations WHERE tweet_id=$1 AND field=$2 AND target_lang=$3",
 		tweetID, field, targetLang,
 	).Scan(&text, &sourceLang)
 	if err == sql.ErrNoRows {
@@ -50,7 +50,7 @@ func (db *DB) GetTranslationsForTweetIDs(tweetIDs []string, targetLang string) (
 		args[i] = id
 	}
 	args[len(tweetIDs)] = targetLang
-	rows, err := db.conn.Query(query, args...)
+	rows, err := db.conn.Query(bind(query), args...)
 	if err != nil {
 		return result, err
 	}
@@ -96,7 +96,7 @@ const reusableBodyTranslationSQL = `
 		       NULLIF(TRIM(COALESCE(content_hash, '')), '') AS content_hash,
 		       NULLIF(TRIM(COALESCE(canonical_tweet_id, '')), '') AS canonical_tweet_id
 		FROM feed_items
-		WHERE tweet_id = ?
+		WHERE tweet_id = $1
 	),
 	candidates(tweet_id, priority) AS MATERIALIZED (
 		SELECT f.tweet_id, 0
@@ -113,7 +113,7 @@ const reusableBodyTranslationSQL = `
 		SELECT f.tweet_id,
 		       CASE WHEN f.canonical_tweet_id = f.tweet_id THEN 1 ELSE 2 END
 		FROM target t
-		CROSS JOIN feed_items f INDEXED BY idx_feed_items_canonical_tweet
+		CROSS JOIN feed_items f
 		WHERE t.body_text != ''
 		  AND t.canonical_tweet_id IS NOT NULL
 		  AND f.canonical_tweet_id IS NOT NULL
@@ -127,7 +127,7 @@ const reusableBodyTranslationSQL = `
 		SELECT f.tweet_id,
 		       CASE WHEN f.canonical_tweet_id = f.tweet_id THEN 1 ELSE 2 END
 		FROM target t
-		CROSS JOIN feed_items f INDEXED BY idx_feed_items_content_hash
+		CROSS JOIN feed_items f
 		WHERE t.body_text != ''
 		  AND t.content_hash IS NOT NULL
 		  AND f.content_hash IS NOT NULL
@@ -141,14 +141,14 @@ const reusableBodyTranslationSQL = `
 	CROSS JOIN translations tr
 	WHERE tr.tweet_id = c.tweet_id
 	  AND tr.field = 'body'
-	  AND tr.target_lang = ?
+	  AND tr.target_lang = $2
 	  AND TRIM(COALESCE(tr.translated_text, '')) != ''
 	ORDER BY c.priority, tr.translated_at DESC
 	LIMIT 1`
 
 func (db *DB) getReusableBodyTranslation(tweetID, targetLang string) (TranslationEntry, error) {
 	var entry TranslationEntry
-	err := db.conn.QueryRow(reusableBodyTranslationSQL, tweetID, targetLang).Scan(&entry.TranslatedText, &entry.SourceLang)
+	err := db.conn.QueryRow(bind(reusableBodyTranslationSQL), tweetID, targetLang).Scan(&entry.TranslatedText, &entry.SourceLang)
 	if err == sql.ErrNoRows {
 		return TranslationEntry{}, sql.ErrNoRows
 	}
@@ -161,7 +161,7 @@ const reusableQuoteTranslationSQL = `
 		       NULLIF(TRIM(COALESCE(quote_tweet_id, '')), '') AS quote_tweet_id,
 		       TRIM(COALESCE(quote_body_text, '')) AS quote_body_text
 		FROM feed_items
-		WHERE tweet_id = ?
+		WHERE tweet_id = $1
 	),
 	candidates(tweet_id, field, priority) AS MATERIALIZED (
 		SELECT quoted.tweet_id, 'body', 0
@@ -176,7 +176,7 @@ const reusableQuoteTranslationSQL = `
 
 		SELECT sibling.tweet_id, 'quote', 1
 		FROM wrapper w
-		CROSS JOIN feed_items sibling INDEXED BY idx_feed_items_quote
+		CROSS JOIN feed_items sibling
 		WHERE w.quote_tweet_id IS NOT NULL
 		  AND w.quote_body_text != ''
 		  AND sibling.quote_tweet_id IS NOT NULL
@@ -190,14 +190,14 @@ const reusableQuoteTranslationSQL = `
 	CROSS JOIN translations tr
 	WHERE tr.tweet_id = c.tweet_id
 	  AND tr.field = c.field
-	  AND tr.target_lang = ?
+	  AND tr.target_lang = $2
 	  AND TRIM(COALESCE(tr.translated_text, '')) != ''
 	ORDER BY c.priority, tr.translated_at DESC
 	LIMIT 1`
 
 func (db *DB) getReusableQuoteTranslation(tweetID, targetLang string) (TranslationEntry, error) {
 	var entry TranslationEntry
-	err := db.conn.QueryRow(reusableQuoteTranslationSQL, tweetID, targetLang).Scan(&entry.TranslatedText, &entry.SourceLang)
+	err := db.conn.QueryRow(bind(reusableQuoteTranslationSQL), tweetID, targetLang).Scan(&entry.TranslatedText, &entry.SourceLang)
 	if err == sql.ErrNoRows {
 		return TranslationEntry{}, sql.ErrNoRows
 	}
@@ -208,9 +208,13 @@ func (db *DB) getReusableQuoteTranslation(tweetID, targetLang string) (Translati
 func (db *DB) SetTranslation(tweetID, field, sourceLang, targetLang, text string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
-			INSERT OR REPLACE INTO translations
+			INSERT INTO translations
 				(tweet_id, field, source_lang, target_lang, translated_text, translated_at)
-			VALUES (?, ?, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (tweet_id, field, target_lang) DO UPDATE SET
+				source_lang = excluded.source_lang,
+				translated_text = excluded.translated_text,
+				translated_at = excluded.translated_at
 		`, tweetID, field, sourceLang, targetLang, text, time.Now().UnixMilli())
 		if err != nil {
 			return err

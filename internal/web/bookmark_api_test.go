@@ -206,7 +206,7 @@ func TestHandleBookmarkCategoryCreateIgnoresArchivePathForNonAdmin(t *testing.T)
 	}
 	var archivePath string
 	if err := srv.db.QueryRow(
-		`SELECT COALESCE(archive_path, '') FROM bookmark_categories WHERE name = ?`,
+		`SELECT COALESCE(archive_path, '') FROM bookmark_categories WHERE name = $1`,
 		"Cinema",
 	).Scan(&archivePath); err != nil {
 		t.Fatalf("select archive path: %v", err)
@@ -387,7 +387,7 @@ func TestHandleBookmarkCategoryCreateLeavesArchivePathEmptyByDefault(t *testing.
 
 	var archivePath string
 	if err := srv.db.QueryRow(
-		`SELECT COALESCE(archive_path, '') FROM bookmark_categories WHERE name = ?`,
+		`SELECT COALESCE(archive_path, '') FROM bookmark_categories WHERE name = $1`,
 		"Cinema",
 	).Scan(&archivePath); err != nil {
 		t.Fatalf("select archive path: %v", err)

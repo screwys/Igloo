@@ -178,8 +178,12 @@ func writeAndroidSyncInventory(sb *strings.Builder, conn *sql.DB) {
 	if !wrote {
 		sb.WriteString("  none\n")
 	}
-	activeLeases, expiredLeases := doctorAssetLeaseCounts(conn, time.Now().UnixMilli())
-	fmt.Fprintf(sb, "  leases: active_downloading=%d expired_downloading=%d\n\n", activeLeases, expiredLeases)
+	activeLeases, expiredLeases, err := doctorAssetLeaseCounts(conn, time.Now().UnixMilli())
+	if err != nil {
+		fmt.Fprintf(sb, "  leases unavailable: %v\n\n", err)
+	} else {
+		fmt.Fprintf(sb, "  leases: active_downloading=%d expired_downloading=%d\n\n", activeLeases, expiredLeases)
+	}
 }
 
 func writeAndroidSyncClientFailureSummary(sb *strings.Builder, minutes int) {
@@ -280,7 +284,7 @@ func writeTweetIdentityContext(sb *strings.Builder, conn *sql.DB, tweetID string
 		       author_display_name, quote_author_display_name,
 		       author_avatar_url, quote_author_avatar_url
 		FROM feed_items_resolved
-		WHERE tweet_id = ?
+		WHERE tweet_id = $1
 	`, tweetID).Scan(
 		&row.sourceHandle,
 		&row.authorHandle,
@@ -346,8 +350,10 @@ func writeIdentityCandidateStatus(sb *strings.Builder, conn *sql.DB, candidate i
 	fmt.Fprintf(sb, "Identity [%s]:\n", candidate.label)
 	fmt.Fprintf(sb, "  selector: platform=%s handle=%s channel_id=%s\n", candidate.platform, candidate.handle, candidate.channelID)
 
-	profile := loadProfileStatus(conn, candidate)
-	if profile.found {
+	profile, err := loadProfileStatus(conn, candidate)
+	if err != nil {
+		fmt.Fprintf(sb, "  profile unavailable: %v\n", err)
+	} else if profile.found {
 		fmt.Fprintf(sb, "  profile: channel_id=%s platform=%s handle=%s tombstone=%d fetched=%s\n",
 			profile.channelID,
 			profile.platform,
@@ -410,7 +416,7 @@ type profileAssetStatus struct {
 	updatedAt int64
 }
 
-func loadProfileStatus(conn *sql.DB, candidate identityCandidate) profileStatus {
+func loadProfileStatus(conn *sql.DB, candidate identityCandidate) (profileStatus, error) {
 	var profile profileStatus
 	err := conn.QueryRow(`
 		SELECT cp.channel_id, cp.platform, COALESCE(cp.handle, ''), COALESCE(cp.display_name, ''),
@@ -437,9 +443,9 @@ func loadProfileStatus(conn *sql.DB, candidate identityCandidate) profileStatus 
 		 AND banner.asset_kind = 'banner' AND banner.media_index = 0
 		LEFT JOIN media_objects banner_current ON banner_current.object_id = banner.object_id
 		LEFT JOIN media_objects banner_desired ON banner_desired.object_id = banner.desired_object_id
-		WHERE cp.channel_id = ?
-		   OR (cp.platform = ? AND LOWER(COALESCE(cp.handle, '')) = LOWER(?))
-		ORDER BY CASE WHEN cp.channel_id = ? THEN 0 ELSE 1 END
+		WHERE cp.channel_id = $1
+		   OR (cp.platform = $2 AND LOWER(COALESCE(cp.handle, '')) = LOWER($3))
+		ORDER BY CASE WHEN cp.channel_id = $4 THEN 0 ELSE 1 END
 		LIMIT 1
 	`, candidate.channelID, candidate.platform, candidate.handle, candidate.channelID).Scan(
 		&profile.channelID,
@@ -467,10 +473,14 @@ func loadProfileStatus(conn *sql.DB, candidate identityCandidate) profileStatus 
 		&profile.banner.errorKind,
 		&profile.banner.updatedAt,
 	)
-	if err == nil {
-		profile.found = true
+	if err == sql.ErrNoRows {
+		return profile, nil
 	}
-	return profile
+	if err != nil {
+		return profile, err
+	}
+	profile.found = true
+	return profile, nil
 }
 
 func writeProfileAssetStatus(sb *strings.Builder, kind string, asset profileAssetStatus) {
@@ -492,15 +502,18 @@ func writeIdentityFeedTimeline(sb *strings.Builder, conn *sql.DB, candidate iden
 	}
 	var count int
 	var maxFetched, maxPublished sql.NullInt64
-	_ = conn.QueryRow(`
+	if err := conn.QueryRow(`
 		SELECT COUNT(*), MAX(fetched_at), MAX(published_at)
 		FROM feed_items_resolved
-		WHERE LOWER(COALESCE(author_handle, '')) = LOWER(?)
-		   OR LOWER(COALESCE(source_handle, '')) = LOWER(?)
-		   OR LOWER(COALESCE(retweeted_by_handle, '')) = LOWER(?)
-		   OR LOWER(COALESCE(quote_author_handle, '')) = LOWER(?)
-		   OR LOWER(COALESCE(reply_to_handle, '')) = LOWER(?)
-	`, handle, handle, handle, handle, handle).Scan(&count, &maxFetched, &maxPublished)
+		WHERE LOWER(COALESCE(author_handle, '')) = LOWER($1)
+		   OR LOWER(COALESCE(source_handle, '')) = LOWER($1)
+		   OR LOWER(COALESCE(retweeted_by_handle, '')) = LOWER($1)
+		   OR LOWER(COALESCE(quote_author_handle, '')) = LOWER($1)
+		   OR LOWER(COALESCE(reply_to_handle, '')) = LOWER($1)
+	`, handle).Scan(&count, &maxFetched, &maxPublished); err != nil {
+		fmt.Fprintf(sb, "  feed presence unavailable: %v\n", err)
+		return
+	}
 	fmt.Fprintf(sb, "  feed presence: rows=%d latest_published=%s latest_fetched=%s\n", count, formatNullMillis(maxPublished), formatNullMillis(maxFetched))
 
 	if count == 0 {
@@ -509,22 +522,22 @@ func writeIdentityFeedTimeline(sb *strings.Builder, conn *sql.DB, candidate iden
 	rows, err := conn.Query(`
 		SELECT tweet_id, published_at, fetched_at,
 		       CASE
-		         WHEN LOWER(COALESCE(author_handle, '')) = LOWER(?) THEN 'author'
-		         WHEN LOWER(COALESCE(source_handle, '')) = LOWER(?) THEN 'source'
-		         WHEN LOWER(COALESCE(retweeted_by_handle, '')) = LOWER(?) THEN 'retweeter'
-		         WHEN LOWER(COALESCE(quote_author_handle, '')) = LOWER(?) THEN 'quote_author'
-		         WHEN LOWER(COALESCE(reply_to_handle, '')) = LOWER(?) THEN 'reply_parent'
+		         WHEN LOWER(COALESCE(author_handle, '')) = LOWER($1) THEN 'author'
+		         WHEN LOWER(COALESCE(source_handle, '')) = LOWER($1) THEN 'source'
+		         WHEN LOWER(COALESCE(retweeted_by_handle, '')) = LOWER($1) THEN 'retweeter'
+		         WHEN LOWER(COALESCE(quote_author_handle, '')) = LOWER($1) THEN 'quote_author'
+		         WHEN LOWER(COALESCE(reply_to_handle, '')) = LOWER($1) THEN 'reply_parent'
 		         ELSE 'unknown'
 		       END AS role
 		FROM feed_items_resolved
-		WHERE LOWER(COALESCE(author_handle, '')) = LOWER(?)
-		   OR LOWER(COALESCE(source_handle, '')) = LOWER(?)
-		   OR LOWER(COALESCE(retweeted_by_handle, '')) = LOWER(?)
-		   OR LOWER(COALESCE(quote_author_handle, '')) = LOWER(?)
-		   OR LOWER(COALESCE(reply_to_handle, '')) = LOWER(?)
+		WHERE LOWER(COALESCE(author_handle, '')) = LOWER($1)
+		   OR LOWER(COALESCE(source_handle, '')) = LOWER($1)
+		   OR LOWER(COALESCE(retweeted_by_handle, '')) = LOWER($1)
+		   OR LOWER(COALESCE(quote_author_handle, '')) = LOWER($1)
+		   OR LOWER(COALESCE(reply_to_handle, '')) = LOWER($1)
 		ORDER BY fetched_at DESC, published_at DESC
-		LIMIT ?
-	`, handle, handle, handle, handle, handle, handle, handle, handle, handle, handle, limit)
+		LIMIT $2
+	`, handle, limit)
 	if err != nil {
 		fmt.Fprintf(sb, "  recent feed rows unavailable: %v\n", err)
 		return

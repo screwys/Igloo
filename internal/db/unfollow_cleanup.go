@@ -11,11 +11,11 @@ func cleanupUnfollowedChannelContentTx(tx *sql.Tx, channelID string, nowMs int64
 	if channelID == "" {
 		return nil, nil
 	}
-	var stillFollowed int
-	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM channel_follows WHERE channel_id = ?)`, channelID).Scan(&stillFollowed); err != nil {
+	var stillFollowed bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM channel_follows WHERE channel_id = $1)`, channelID).Scan(&stillFollowed); err != nil {
 		return nil, err
 	}
-	if stillFollowed != 0 {
+	if stillFollowed {
 		return nil, nil
 	}
 
@@ -27,7 +27,7 @@ func cleanupUnfollowedChannelContentTx(tx *sql.Tx, channelID string, nowMs int64
 	}
 
 	var platform string
-	if err := tx.QueryRow(`SELECT COALESCE(platform, '') FROM channels WHERE channel_id = ?`, channelID).Scan(&platform); err != nil {
+	if err := tx.QueryRow(`SELECT COALESCE(platform, '') FROM channels WHERE channel_id = $1`, channelID).Scan(&platform); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -51,15 +51,15 @@ func stopUnfollowedProfileWorkTx(tx *sql.Tx, channelID string, nowMs int64) erro
 		    attempts = 0,
 		    next_attempt_at_ms = 0,
 		    last_error = '',
-		    updated_at_ms = ?
-		WHERE channel_id = ?
+		    updated_at_ms = $1
+		WHERE channel_id = $2
 		  AND requested_revision > completed_revision
 	`, nowMs, channelID)
 	return err
 }
 
 func collectUnreferencedXContentTx(tx *sql.Tx, channelID string) ([]string, error) {
-	rows, err := tx.Query(unreferencedXContentIDsQuery(), channelID, channelID, channelID)
+	rows, err := tx.Query(bind(unreferencedXContentIDsQuery()), channelID, channelID, channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func collectUnreferencedXContentTx(tx *sql.Tx, channelID string) ([]string, erro
 	if err := rows.Close(); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(`DELETE FROM retweet_sources WHERE retweeter_channel_id = ?`, channelID); err != nil {
+	if _, err := tx.Exec(`DELETE FROM retweet_sources WHERE retweeter_channel_id = $1`, channelID); err != nil {
 		return nil, err
 	}
 	if len(tweetIDs) == 0 {
@@ -114,7 +114,7 @@ func collectUnreferencedXContentTx(tx *sql.Tx, channelID string) ([]string, erro
 			`DELETE FROM translations WHERE tweet_id IN (` + placeholders(len(chunk)) + `)`,
 			`DELETE FROM feed_items WHERE tweet_id IN (` + placeholders(len(chunk)) + `)`,
 		} {
-			if _, err := tx.Exec(statement, args...); err != nil {
+			if _, err := tx.Exec(bind(statement), args...); err != nil {
 				return nil, err
 			}
 		}
@@ -124,55 +124,57 @@ func collectUnreferencedXContentTx(tx *sql.Tx, channelID string) ([]string, erro
 
 func unreferencedXContentIDsQuery() string {
 	return fmt.Sprintf(`
-		WITH RECURSIVE affected(tweet_id) AS (
+		WITH RECURSIVE seeds(tweet_id) AS (
 			SELECT fi.tweet_id
-			FROM feed_items fi INDEXED BY idx_feed_items_source_channel
+			FROM feed_items fi
 			WHERE fi.source_channel_id = ?
 			UNION
 			SELECT fi.tweet_id
-			FROM feed_items fi INDEXED BY idx_feed_items_channel
+			FROM feed_items fi
 			WHERE fi.channel_id = ?
 			UNION
 			SELECT fi.tweet_id
-			FROM feed_items fi INDEXED BY idx_feed_items_reposter_channel
+			FROM feed_items fi
 			WHERE fi.reposter_channel_id IS NOT NULL
 			  AND fi.reposter_channel_id != ''
 			  AND fi.reposter_channel_id = ?
+		), affected(tweet_id) AS (
+			SELECT tweet_id FROM seeds
 			UNION
-			SELECT fi.canonical_tweet_id
-			FROM feed_items fi JOIN affected a ON a.tweet_id = fi.tweet_id
-			WHERE fi.canonical_tweet_id IS NOT NULL AND fi.canonical_tweet_id != ''
-			UNION
-			SELECT fi.quote_tweet_id
-			FROM feed_items fi JOIN affected a ON a.tweet_id = fi.tweet_id
-			WHERE fi.quote_tweet_id IS NOT NULL AND fi.quote_tweet_id != ''
-			UNION
-			SELECT fi.reply_to_status
-			FROM feed_items fi JOIN affected a ON a.tweet_id = fi.tweet_id
-			WHERE fi.reply_to_status IS NOT NULL AND fi.reply_to_status != ''
-			UNION
-			SELECT fi.tweet_id
-			FROM feed_items fi INDEXED BY idx_feed_items_canonical_tweet
-			JOIN affected a ON fi.canonical_tweet_id = a.tweet_id
-			WHERE fi.canonical_tweet_id IS NOT NULL AND fi.canonical_tweet_id != ''
-			UNION
-			SELECT fi.tweet_id
-			FROM feed_items fi INDEXED BY idx_feed_items_quote
-			JOIN affected a ON fi.quote_tweet_id = a.tweet_id
-			WHERE fi.quote_tweet_id IS NOT NULL AND fi.quote_tweet_id != ''
-			UNION
-			SELECT fi.tweet_id
-			FROM feed_items fi INDEXED BY idx_feed_items_reply_parent
-			JOIN affected a ON fi.reply_to_status = a.tweet_id
-			WHERE fi.reply_to_status IS NOT NULL AND fi.reply_to_status != ''
-			UNION
-			SELECT peer.tweet_id
+			SELECT neighbor.tweet_id
 			FROM affected a
-			JOIN feed_items current ON current.tweet_id = a.tweet_id
-			JOIN feed_items peer INDEXED BY idx_feed_items_content_hash
-			  ON peer.content_hash = current.content_hash
-			WHERE current.content_hash IS NOT NULL AND current.content_hash != ''
-			  AND peer.content_hash IS NOT NULL AND peer.content_hash != ''
+			CROSS JOIN LATERAL (
+				SELECT fi.canonical_tweet_id AS tweet_id
+				FROM feed_items fi WHERE fi.tweet_id = a.tweet_id
+				  AND fi.canonical_tweet_id IS NOT NULL AND fi.canonical_tweet_id != ''
+				UNION
+				SELECT fi.quote_tweet_id
+				FROM feed_items fi WHERE fi.tweet_id = a.tweet_id
+				  AND fi.quote_tweet_id IS NOT NULL AND fi.quote_tweet_id != ''
+				UNION
+				SELECT fi.reply_to_status
+				FROM feed_items fi WHERE fi.tweet_id = a.tweet_id
+				  AND fi.reply_to_status IS NOT NULL AND fi.reply_to_status != ''
+				UNION
+				SELECT fi.tweet_id FROM feed_items fi
+				WHERE fi.canonical_tweet_id = a.tweet_id
+				  AND fi.canonical_tweet_id IS NOT NULL AND fi.canonical_tweet_id != ''
+				UNION
+				SELECT fi.tweet_id FROM feed_items fi
+				WHERE fi.quote_tweet_id = a.tweet_id
+				  AND fi.quote_tweet_id IS NOT NULL AND fi.quote_tweet_id != ''
+				UNION
+				SELECT fi.tweet_id FROM feed_items fi
+				WHERE fi.reply_to_status = a.tweet_id
+				  AND fi.reply_to_status IS NOT NULL AND fi.reply_to_status != ''
+				UNION
+				SELECT peer.tweet_id
+				FROM feed_items current
+				JOIN feed_items peer ON peer.content_hash = current.content_hash
+				WHERE current.tweet_id = a.tweet_id
+				  AND current.content_hash IS NOT NULL AND current.content_hash != ''
+				  AND peer.content_hash IS NOT NULL AND peer.content_hash != ''
+			) neighbor
 		), roots(tweet_id) AS (
 			SELECT fi.tweet_id
 			FROM feed_items fi JOIN affected a ON a.tweet_id = fi.tweet_id
@@ -186,17 +188,21 @@ func unreferencedXContentIDsQuery() string {
 		), retained(tweet_id) AS (
 			SELECT tweet_id FROM roots
 			UNION
-			SELECT fi.canonical_tweet_id
-			FROM feed_items fi JOIN retained r ON r.tweet_id = fi.tweet_id
-			WHERE fi.canonical_tweet_id IS NOT NULL AND fi.canonical_tweet_id != ''
-			UNION
-			SELECT fi.quote_tweet_id
-			FROM feed_items fi JOIN retained r ON r.tweet_id = fi.tweet_id
-			WHERE fi.quote_tweet_id IS NOT NULL AND fi.quote_tweet_id != ''
-			UNION
-			SELECT fi.reply_to_status
-			FROM feed_items fi JOIN retained r ON r.tweet_id = fi.tweet_id
-			WHERE fi.reply_to_status IS NOT NULL AND fi.reply_to_status != ''
+			SELECT dependency.tweet_id
+			FROM retained r
+			CROSS JOIN LATERAL (
+				SELECT fi.canonical_tweet_id AS tweet_id
+				FROM feed_items fi WHERE fi.tweet_id = r.tweet_id
+				  AND fi.canonical_tweet_id IS NOT NULL AND fi.canonical_tweet_id != ''
+				UNION
+				SELECT fi.quote_tweet_id
+				FROM feed_items fi WHERE fi.tweet_id = r.tweet_id
+				  AND fi.quote_tweet_id IS NOT NULL AND fi.quote_tweet_id != ''
+				UNION
+				SELECT fi.reply_to_status
+				FROM feed_items fi WHERE fi.tweet_id = r.tweet_id
+				  AND fi.reply_to_status IS NOT NULL AND fi.reply_to_status != ''
+			) dependency
 		)
 		SELECT a.tweet_id
 		FROM affected a
@@ -210,7 +216,7 @@ func collectUnreferencedVideoContentTx(tx *sql.Tx, channelID string, nowMs int64
 	rows, err := tx.Query(`
 		SELECT DISTINCT video_id
 		FROM video_desires
-		WHERE source_channel_id = ?
+		WHERE source_channel_id = $1
 		ORDER BY video_id
 	`, channelID)
 	if err != nil {
@@ -232,10 +238,10 @@ func collectUnreferencedVideoContentTx(tx *sql.Tx, channelID string, nowMs int64
 	if err := rows.Close(); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(`DELETE FROM video_desires WHERE source_channel_id = ?`, channelID); err != nil {
+	if _, err := tx.Exec(`DELETE FROM video_desires WHERE source_channel_id = $1`, channelID); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(`DELETE FROM video_repost_sources WHERE reposter_channel_id = ?`, channelID); err != nil {
+	if _, err := tx.Exec(`DELETE FROM video_repost_sources WHERE reposter_channel_id = $1`, channelID); err != nil {
 		return nil, err
 	}
 	if len(candidateIDs) == 0 {
@@ -245,13 +251,13 @@ func collectUnreferencedVideoContentTx(tx *sql.Tx, channelID string, nowMs int64
 	var collectibleIDs []string
 	for _, chunk := range stringChunks(candidateIDs, 300) {
 		args := append([]any{nowMs}, stringsToAny(chunk)...)
-		rows, err := tx.Query(`
+		rows, err := tx.Query(bind(`
 			SELECT v.video_id
 			FROM videos v
 			WHERE `+collectibleVideoWhereSQL+`
 			  AND v.video_id IN (`+placeholders(len(chunk))+`)
 			ORDER BY v.video_id
-		`, args...)
+		`), args...)
 		if err != nil {
 			return nil, err
 		}
@@ -275,27 +281,27 @@ func collectUnreferencedVideoContentTx(tx *sql.Tx, channelID string, nowMs int64
 	var retiredFileKeys []string
 	for _, videoID := range collectibleIDs {
 		var ownerKind string
-		if err := tx.QueryRow(`SELECT owner_kind FROM videos WHERE video_id = ?`, videoID).Scan(&ownerKind); err != nil {
+		if err := tx.QueryRow(`SELECT owner_kind FROM videos WHERE video_id = $1`, videoID).Scan(&ownerKind); err != nil {
 			return nil, err
 		}
 		keys, err := queryAssetFileKeysTx(tx, `
 			SELECT DISTINCT current.file_path
-			FROM assets a INDEXED BY idx_assets_owner
+			FROM assets a
 			JOIN media_objects current ON current.object_id = a.object_id
-			WHERE a.owner_kind = ? AND a.owner_id = ?
+			WHERE a.owner_kind = $1 AND a.owner_id = $2
 			  AND current.published_revision > 0 AND current.file_path != ''
 		`, ownerKind, videoID)
 		if err != nil {
 			return nil, err
 		}
 		retiredFileKeys = append(retiredFileKeys, keys...)
-		if _, err := tx.Exec(`DELETE FROM download_queue WHERE video_id = ?`, videoID); err != nil {
+		if _, err := tx.Exec(`DELETE FROM download_queue WHERE video_id = $1`, videoID); err != nil {
 			return nil, err
 		}
-		if _, err := tx.Exec(`DELETE FROM assets WHERE owner_kind = ? AND owner_id = ?`, ownerKind, videoID); err != nil {
+		if _, err := tx.Exec(`DELETE FROM assets WHERE owner_kind = $1 AND owner_id = $2`, ownerKind, videoID); err != nil {
 			return nil, err
 		}
-		if _, err := tx.Exec(`DELETE FROM videos WHERE video_id = ? AND owner_kind = ?`, videoID, ownerKind); err != nil {
+		if _, err := tx.Exec(`DELETE FROM videos WHERE video_id = $1 AND owner_kind = $2`, videoID, ownerKind); err != nil {
 			return nil, err
 		}
 	}

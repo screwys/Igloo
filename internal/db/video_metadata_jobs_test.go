@@ -104,7 +104,7 @@ func TestVideoMetadataJobStopsRefreshingOldVideos(t *testing.T) {
 		t.Fatal(err)
 	}
 	var status, age string
-	if err := d.QueryRow(`SELECT status, video_age_at_check FROM video_metadata_jobs WHERE video_id = ?`, job.VideoID).Scan(&status, &age); err != nil {
+	if err := d.QueryRow(`SELECT status, video_age_at_check FROM video_metadata_jobs WHERE video_id = $1`, job.VideoID).Scan(&status, &age); err != nil {
 		t.Fatal(err)
 	}
 	if status != "done" || age != "old" {

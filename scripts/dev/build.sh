@@ -37,6 +37,14 @@ export PATH
 
 cd "$(dirname "$0")/../.."
 
+. scripts/dev/postgres-tools.sh
+igloo_prepare_postgres "$PWD"
+
+# Generate the database query bindings.
+echo "[sqlc] generating..."
+go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+echo "[sqlc] ok"
+
 # ── Templ ──
 echo "[templ] generating..."
 templ generate

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"flag"
 	"os"
 	"path/filepath"
@@ -99,12 +100,17 @@ func TestFreshSchemaOmitsRetiredMediaTables(t *testing.T) {
 	}
 }
 
-func openSchemaSnapshotDB(t *testing.T) *DB {
+func openSchemaSnapshotDB(t *testing.T) *sql.DB {
 	t.Helper()
 	tmpDir := t.TempDir()
-	d, err := OpenPath(filepath.Join(tmpDir, "igloo.db"), filepath.Join(tmpDir, "data"))
+	d, err := sql.Open("sqlite", filepath.Join(tmpDir, "igloo.db"))
 	if err != nil {
 		t.Fatalf("open schema snapshot db: %v", err)
+	}
+	d.SetMaxOpenConns(1)
+	if err := EnsureSchema(d); err != nil {
+		_ = d.Close()
+		t.Fatalf("prepare SQLite archive schema: %v", err)
 	}
 	t.Cleanup(func() {
 		if err := d.Close(); err != nil {
@@ -114,9 +120,9 @@ func openSchemaSnapshotDB(t *testing.T) *DB {
 	return d
 }
 
-func freshSchemaTableNames(t *testing.T, d *DB) []string {
+func freshSchemaTableNames(t *testing.T, d *sql.DB) []string {
 	t.Helper()
-	rows, err := d.conn.Query(`
+	rows, err := d.Query(`
 		SELECT name
 		FROM sqlite_master
 		WHERE type = 'table'
@@ -144,10 +150,10 @@ func freshSchemaTableNames(t *testing.T, d *DB) []string {
 	return tables
 }
 
-func dumpSchemaSnapshot(t *testing.T, d *DB) string {
+func dumpSchemaSnapshot(t *testing.T, d *sql.DB) string {
 	t.Helper()
 
-	rows, err := d.conn.Query(`
+	rows, err := d.Query(`
 		SELECT type, name, tbl_name, sql
 		FROM sqlite_master
 		WHERE type IN ('table', 'index', 'trigger', 'view')

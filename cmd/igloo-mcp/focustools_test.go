@@ -36,11 +36,11 @@ func insertMCPTestAsset(t *testing.T, d *igloodb.DB, asset igloodb.Asset, state 
 	}
 	if err := d.ExecRaw(`
 		UPDATE media_objects
-		SET published_revision = CASE WHEN ? != 0 THEN desired_revision ELSE 0 END,
-		    published_source_url = CASE WHEN ? != 0 THEN source_url ELSE '' END,
-		    file_path = ?, content_type = ?, size_bytes = ?, file_mtime_ns = ?,
-		    job_state = ?, lease_owner = ?, lease_until_ms = ?, updated_at_ms = ?
-		WHERE object_id = (SELECT desired_object_id FROM assets WHERE asset_id = ?)
+		SET published_revision = CASE WHEN $1 != 0 THEN desired_revision ELSE 0 END,
+		    published_source_url = CASE WHEN $2 != 0 THEN source_url ELSE '' END,
+		    file_path = $3, content_type = $4, size_bytes = $5, file_mtime_ns = $6,
+		    job_state = $7, lease_owner = $8, lease_until_ms = $9, updated_at_ms = $10
+		WHERE object_id = (SELECT desired_object_id FROM assets WHERE asset_id = $11)
 	`, published, published, asset.FilePath, asset.ContentType, asset.SizeBytes, asset.FileMtimeNs,
 		state, leaseOwner, leaseUntilMs, nowMs, asset.AssetID); err != nil {
 		t.Fatalf("set test asset state: %v", err)
@@ -52,7 +52,7 @@ func TestAndroidSyncStatusReportsConvergenceEvidence(t *testing.T) {
 	t.Setenv("IGLOO_DATA_DIR", tmp)
 	resetTestServerDB(t)
 
-	d, err := igloodb.OpenPath(filepath.Join(tmp, "igloo.db"), tmp)
+	d, err := igloodb.OpenAtStateRoot(tmp)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestAndroidSyncStatusReportsConvergenceEvidence(t *testing.T) {
 		INSERT INTO android_sync_health_reports (
 			cursor, reported_at_ms, payload_json, verified_assets,
 			pending_assets, missing_assets, total_assets, verified_bytes
-		) VALUES ('sample_cursor', ?, '{}', 1, 0, 1, 2, 512)
+		) VALUES ('sample_cursor', $1, '{}', 1, 0, 1, 2, 512)
 	`, now); err != nil {
 		t.Fatalf("insert sync health: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestIdentityMediaStatusTracesTweetIdentities(t *testing.T) {
 	t.Setenv("IGLOO_DATA_DIR", tmp)
 	resetTestServerDB(t)
 
-	d, err := igloodb.OpenPath(filepath.Join(tmp, "igloo.db"), tmp)
+	d, err := igloodb.OpenAtStateRoot(tmp)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestIdentityMediaStatusTracesTweetIdentities(t *testing.T) {
 		) VALUES (
 			'sample_post', 'twitter_sample_source', 'twitter_sample_author',
 			'sample body', 'sample_quote_post', 'twitter_sample_quote',
-			'twitter_sample_reply', ?, ?
+			'twitter_sample_reply', $1, $2
 		)
 	`, now-1000, now); err != nil {
 		t.Fatalf("insert feed item: %v", err)
@@ -134,7 +134,7 @@ func TestIdentityMediaStatusTracesTweetIdentities(t *testing.T) {
 			channel_id, platform, handle, display_name, fetched_at
 		) VALUES (
 			'twitter_sample_author', 'twitter', 'sample_author', 'Sample Author',
-			?
+			$1
 		)
 	`, now); err != nil {
 		t.Fatalf("insert profile: %v", err)
@@ -143,7 +143,7 @@ func TestIdentityMediaStatusTracesTweetIdentities(t *testing.T) {
 		INSERT INTO profile_jobs (
 			channel_id, requested_revision, completed_revision, requested_at_ms,
 			attempts, next_attempt_at_ms, last_error, updated_at_ms
-		) VALUES ('twitter_sample_author', 2, 1, ?, 1, ?, 'sample retry', ?)
+		) VALUES ('twitter_sample_author', 2, 1, $1, 1, $2, 'sample retry', $3)
 	`, now-2000, now+1000, now); err != nil {
 		t.Fatalf("insert profile job: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestPipelineStatusIncludesCurrentQueuesAndRetryReadiness(t *testing.T) {
 	t.Setenv("IGLOO_DATA_DIR", tmp)
 	resetTestServerDB(t)
 
-	d, err := igloodb.OpenPath(filepath.Join(tmp, "igloo.db"), tmp)
+	d, err := igloodb.OpenAtStateRoot(tmp)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -189,9 +189,9 @@ func TestPipelineStatusIncludesCurrentQueuesAndRetryReadiness(t *testing.T) {
 			tweet_id, field, target_lang, source_hash, status, priority, attempts,
 			next_attempt_at, last_error_kind, last_error, created_at, updated_at
 		) VALUES
-			('sample_post', 'body', 'en', 'hash', 'queued', 0, 1, ?, '', '', ?, ?),
+			('sample_post', 'body', 'en', 'hash', 'queued', 0, 1, $1, '', '', $2, $3),
 			('sample_failed_post', 'body', 'en', 'hash', 'failed', 0, 2, 0,
-				'provider_unavailable', 'sample failure', ?, ?)
+				'provider_unavailable', 'sample failure', $4, $5)
 	`, now-1, now, now, now-5000, now-5000); err != nil {
 		t.Fatalf("insert translation jobs: %v", err)
 	}
@@ -206,10 +206,10 @@ func TestPipelineStatusIncludesCurrentQueuesAndRetryReadiness(t *testing.T) {
 			video_id, owner_channel_id, status, retry_count, next_attempt_at_ms,
 			last_error_kind, last_error, added_at_ms
 		) VALUES
-			('sample_download', 'youtube_sample_channel', 'pending', 1, ?,
-			 'temporary', 'sample retry failure', ?),
+			('sample_download', 'youtube_sample_channel', 'pending', 1, $1,
+			 'temporary', 'sample retry failure', $2),
 			('sample_blocked_download', 'youtube_sample_channel', 'blocked', 1, 0,
-			 'unsupported', 'sample terminal failure', ?)
+			 'unsupported', 'sample terminal failure', $3)
 	`, now-1, now-5000, now-4000); err != nil {
 		t.Fatalf("insert download queue: %v", err)
 	}

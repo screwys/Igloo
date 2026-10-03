@@ -71,7 +71,7 @@ func TestChannelRetentionChangesPruneDecreasesAndRefreshIncreases(t *testing.T) 
 	postChannelMaxVideos(t, srv, channelID, 1)
 	assertWebRetentionCount(t, srv, channelID, 1)
 
-	if err := srv.db.ExecRaw(`UPDATE channels SET last_checked = 123 WHERE channel_id = ?`, channelID); err != nil {
+	if err := srv.db.ExecRaw(`UPDATE channels SET last_checked = 123 WHERE channel_id = $1`, channelID); err != nil {
 		t.Fatal(err)
 	}
 	postChannelMaxVideos(t, srv, channelID, 3)
@@ -95,7 +95,7 @@ func TestChannelSettingMutationPrunesDecreasesAndRefreshesIncreases(t *testing.T
 	}
 	assertWebRetentionCount(t, srv, channelID, 1)
 
-	if err := srv.db.ExecRaw(`UPDATE channels SET last_checked = 456 WHERE channel_id = ?`, channelID); err != nil {
+	if err := srv.db.ExecRaw(`UPDATE channels SET last_checked = 456 WHERE channel_id = $1`, channelID); err != nil {
 		t.Fatal(err)
 	}
 	status, body = mutationRequest(t, srv, http.MethodPut, "/api/mutations/channel_setting", `{
@@ -110,11 +110,11 @@ func TestChannelSettingMutationPrunesDecreasesAndRefreshesIncreases(t *testing.T
 
 func seedWebRetentionSource(t *testing.T, srv *testServer, channelID, platform string, count int) {
 	t.Helper()
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, url, platform, last_checked, created_at)
-		VALUES (?, ?, 'Sample Source', '', ?, 10, 1);
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES (?, 1)
-	`, channelID, channelID, platform, channelID); err != nil {
+	if err := srv.db.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, url, platform, last_checked, created_at)
+		VALUES ($1, $2, 'Sample Source', '', $3, 10, 1)`, channelID, channelID, platform); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ($1, 1)`, channelID); err != nil {
 		t.Fatal(err)
 	}
 	items := make([]db.VideoDesire, 0, count)
@@ -151,12 +151,12 @@ func assertWebRetentionCount(t *testing.T, srv *testServer, channelID string, wa
 	t.Helper()
 	var desires, queued int
 	if err := srv.db.QueryRow(`
-		SELECT COUNT(DISTINCT video_id) FROM video_desires WHERE source_channel_id = ?
+		SELECT COUNT(DISTINCT video_id) FROM video_desires WHERE source_channel_id = $1
 	`, channelID).Scan(&desires); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.db.QueryRow(`
-		SELECT COUNT(*) FROM download_queue WHERE video_id LIKE ?
+		SELECT COUNT(*) FROM download_queue WHERE video_id LIKE $1
 	`, channelID+"_video_%").Scan(&queued); err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func assertWebRetentionCount(t *testing.T, srv *testServer, channelID string, wa
 func assertChannelRefreshQueued(t *testing.T, srv *testServer, channelID string) {
 	t.Helper()
 	var checked int64
-	if err := srv.db.QueryRow(`SELECT last_checked FROM channels WHERE channel_id = ?`, channelID).Scan(&checked); err != nil {
+	if err := srv.db.QueryRow(`SELECT last_checked FROM channels WHERE channel_id = $1`, channelID).Scan(&checked); err != nil {
 		t.Fatal(err)
 	}
 	if checked != 0 {

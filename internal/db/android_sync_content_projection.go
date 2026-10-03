@@ -55,7 +55,7 @@ func (db *DB) ListAndroidSyncFeedRankRows(tweetIDs []string, limit int) (int64, 
 		SELECT s.tweet_id, s.rank_position
 		FROM feed_rank_snapshot s
 		JOIN feed_items fi ON fi.tweet_id = s.tweet_id
-		WHERE s.tweet_id IN (SELECT value FROM json_each(?))
+		WHERE s.tweet_id IN (SELECT value FROM jsonb_array_elements_text(?::jsonb))
 		  AND `+feedPrimaryItemPredicate("fi")+`
 		  AND `+feedActiveOwnerPredicate("fi")+`
 		  AND `+feedUnseenPredicate("fi")+`

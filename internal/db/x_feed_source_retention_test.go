@@ -248,7 +248,7 @@ func TestRestoreXMediaForFeedWindowPromotesReadyDesiredObject(t *testing.T) {
 	}
 	current := readXRetentionAsset(t, d, "sample_restore_current")
 	if err := d.ExecRaw(`
-		UPDATE assets SET desired_object_id = ?
+		UPDATE assets SET desired_object_id = $1
 		WHERE owner_kind = 'tweet' AND owner_id = 'sample_target'
 	`, current.ObjectID); err != nil {
 		t.Fatal(err)

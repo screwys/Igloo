@@ -34,19 +34,26 @@ func main() {
 		fmt.Printf("Igloo %s (runtime %s, %s/%s)\n", info.Version, info.BundleRevision, info.OS, info.Arch)
 		return
 	}
+	if len(os.Args) == 2 && os.Args[1] == "migrate-sqlite" {
+		if err := migrateSQLite(); err != nil {
+			slog.Error("SQLite migration failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := runEntrypoint(); err != nil {
 		slog.Error("igloo stopped", "err", err)
 		os.Exit(1)
 	}
 }
 
-func runServer(externalStop <-chan struct{}, ready chan<- struct{}, serviceMode bool) error {
+func runServer(externalStop <-chan struct{}, ready chan<- struct{}, serviceMode bool) (serverErr error) {
 	toolenv.ApplyCommonToolPaths()
 	cfg := config.Load()
 	stateRoot := strings.TrimSpace(cfg.Storage.StateRoot())
 	hadPendingRestore := stateRoot != "" && restore.HasPending(stateRoot)
 	phaseStart := time.Now()
-	if err := restore.ApplyPending(cfg); err != nil {
+	if err := restore.ApplyPendingConfig(cfg); err != nil {
 		return fmt.Errorf("restore: apply failed: %w", err)
 	}
 	if err := initialConfigError(cfg, hadPendingRestore); err != nil {
@@ -62,6 +69,9 @@ func runServer(externalStop <-chan struct{}, ready chan<- struct{}, serviceMode 
 	}
 	if logFile := setupServerLogging(cfg); logFile != nil {
 		defer func() {
+			if serverErr != nil {
+				slog.Error("igloo stopped", "err", serverErr)
+			}
 			_ = logFile.Close()
 		}()
 	}
@@ -70,21 +80,29 @@ func runServer(externalStop <-chan struct{}, ready chan<- struct{}, serviceMode 
 	logStartupPhase("config_auth", time.Since(phaseStart))
 
 	phaseStart = time.Now()
-	database, err := db.OpenWithOptions(cfg.Storage, db.OpenOptions{
+	openDatabase := db.OpenWithOptions
+	if restore.HasPending(cfg.Storage.StateRoot()) {
+		openDatabase = db.OpenForRestore
+	}
+	database, err := openDatabase(cfg.Storage, db.OpenOptions{
+		DatabaseURL: cfg.DatabaseURL,
 		Phase: func(name string, elapsed time.Duration) {
 			logStartupPhase(name, elapsed)
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("open database %s: %w", cfg.Storage.DatabasePath(), err)
+		return fmt.Errorf("open PostgreSQL database: %w", err)
 	}
 	defer func() {
 		_ = database.Close()
 	}()
+	if err := restore.ApplyPendingDatabase(context.Background(), cfg, database); err != nil {
+		return fmt.Errorf("restore database: %w", err)
+	}
 	if err := database.ReconcileAllMomentsOrders(); err != nil {
 		return fmt.Errorf("reconcile Moments order: %w", err)
 	}
-	slog.Info("database opened", "path", cfg.Storage.DatabasePath())
+	slog.Info("database opened", "engine", "postgresql")
 	logStartupPhase("db_open", time.Since(phaseStart))
 
 	// Build static version cache

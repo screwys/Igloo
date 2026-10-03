@@ -41,7 +41,7 @@ func (db *DB) QueueYouTubeRecommendations(videoID string, nowMs int64) error {
 
 func queueYouTubeRecommendationsTx(tx *sql.Tx, videoID string, nowMs int64) error {
 	var ownerKind string
-	if err := tx.QueryRow(`SELECT owner_kind FROM videos WHERE video_id = ?`, videoID).Scan(&ownerKind); err != nil {
+	if err := tx.QueryRow(`SELECT owner_kind FROM videos WHERE video_id = $1`, videoID).Scan(&ownerKind); err != nil {
 		return err
 	}
 	if ownerKind != "youtube_video" {
@@ -50,19 +50,19 @@ func queueYouTubeRecommendationsTx(tx *sql.Tx, videoID string, nowMs int64) erro
 	_, err := tx.Exec(`
 		INSERT INTO youtube_recommendations (
 			anchor_video_id, status, requested_at_ms, updated_at_ms
-		) VALUES (?, 'pending', ?, ?)
+		) VALUES ($1, 'pending', $2, $3)
 		ON CONFLICT(anchor_video_id) DO UPDATE SET
 			status = CASE
 				WHEN youtube_recommendations.status = 'processing' THEN 'processing'
-				WHEN youtube_recommendations.expires_at_ms > ?
+				WHEN youtube_recommendations.expires_at_ms > $4
 				 AND EXISTS (
-				   SELECT 1 FROM json_each(youtube_recommendations.candidates_json) candidate
-				   WHERE json_extract(candidate.value, '$.source') = 'related'
+				   SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(youtube_recommendations.candidates_json::jsonb) = 'array' THEN youtube_recommendations.candidates_json::jsonb ELSE '[]'::jsonb END) candidate(value)
+				   WHERE candidate.value->>'source' = 'related'
 				 ) THEN youtube_recommendations.status
 				ELSE 'pending' END,
-			attempts = CASE WHEN youtube_recommendations.expires_at_ms > ? AND EXISTS (SELECT 1 FROM json_each(youtube_recommendations.candidates_json) c WHERE json_extract(c.value, '$.source') = 'related') THEN youtube_recommendations.attempts ELSE 0 END,
-			next_attempt_at_ms = CASE WHEN youtube_recommendations.expires_at_ms > ? AND EXISTS (SELECT 1 FROM json_each(youtube_recommendations.candidates_json) c WHERE json_extract(c.value, '$.source') = 'related') THEN youtube_recommendations.next_attempt_at_ms ELSE 0 END,
-			last_error = CASE WHEN youtube_recommendations.expires_at_ms > ? AND EXISTS (SELECT 1 FROM json_each(youtube_recommendations.candidates_json) c WHERE json_extract(c.value, '$.source') = 'related') THEN youtube_recommendations.last_error ELSE '' END,
+			attempts = CASE WHEN youtube_recommendations.expires_at_ms > $5 AND EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(youtube_recommendations.candidates_json::jsonb) = 'array' THEN youtube_recommendations.candidates_json::jsonb ELSE '[]'::jsonb END) c(value) WHERE c.value->>'source' = 'related') THEN youtube_recommendations.attempts ELSE 0 END,
+			next_attempt_at_ms = CASE WHEN youtube_recommendations.expires_at_ms > $6 AND EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(youtube_recommendations.candidates_json::jsonb) = 'array' THEN youtube_recommendations.candidates_json::jsonb ELSE '[]'::jsonb END) c(value) WHERE c.value->>'source' = 'related') THEN youtube_recommendations.next_attempt_at_ms ELSE 0 END,
+			last_error = CASE WHEN youtube_recommendations.expires_at_ms > $7 AND EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(youtube_recommendations.candidates_json::jsonb) = 'array' THEN youtube_recommendations.candidates_json::jsonb ELSE '[]'::jsonb END) c(value) WHERE c.value->>'source' = 'related') THEN youtube_recommendations.last_error ELSE '' END,
 			requested_at_ms = excluded.requested_at_ms,
 			updated_at_ms = excluded.updated_at_ms
 	`, videoID, nowMs, nowMs, nowMs, nowMs, nowMs, nowMs)
@@ -91,7 +91,7 @@ func (db *DB) QueueFollowedYouTubeChannelRecommendations(nowMs int64) (int, erro
 }
 
 func randomFollowedYouTubeAnchorIDsTx(tx *sql.Tx) ([]string, error) {
-	rows, err := tx.Query(`
+	rows, err := tx.Query(bind(`
 		WITH ranked AS (
 			SELECT v.video_id,
 			       ROW_NUMBER() OVER (
@@ -107,7 +107,7 @@ func randomFollowedYouTubeAnchorIDsTx(tx *sql.Tx) ([]string, error) {
 		SELECT video_id FROM ranked
 		WHERE channel_position = 1
 		ORDER BY video_id
-	`)
+	`))
 	if err != nil {
 		return nil, err
 	}
@@ -132,11 +132,11 @@ func (db *DB) ClaimYouTubeRecommendationJob(opts LeaseOptions) (YouTubeRecommend
 			FROM youtube_recommendations rec
 			JOIN videos v ON v.video_id = rec.anchor_video_id
 			WHERE v.owner_kind = 'youtube_video'
-			  AND rec.next_attempt_at_ms <= ?
-			  AND ((rec.status = ? AND (rec.lease_until_ms = 0 OR rec.lease_until_ms <= ?))
-			    OR (rec.status = ? AND rec.lease_until_ms <= ?))
+			  AND rec.next_attempt_at_ms <= $1
+			  AND ((rec.status = $2 AND (rec.lease_until_ms = 0 OR rec.lease_until_ms <= $3))
+			    OR (rec.status = $4 AND rec.lease_until_ms <= $5))
 			ORDER BY rec.requested_at_ms DESC, rec.anchor_video_id
-			LIMIT ?
+			LIMIT $6
 		`, []any{opts.NowMs, opts.StatusFrom, opts.NowMs, opts.StatusTo, opts.NowMs, 1}, opts)
 		if err != nil || len(ids) == 0 {
 			return err
@@ -150,7 +150,7 @@ func (db *DB) ClaimYouTubeRecommendationJob(opts LeaseOptions) (YouTubeRecommend
 			JOIN videos v ON v.video_id = rec.anchor_video_id
 			LEFT JOIN channels c ON c.channel_id = v.channel_id
 			LEFT JOIN channel_profiles cp ON cp.channel_id = v.channel_id
-			WHERE rec.anchor_video_id = ?
+			WHERE rec.anchor_video_id = $1
 		`, ids[0]).Scan(&job.AnchorVideoID, &job.AnchorTitle, &job.ChannelID, &job.ChannelName,
 			&job.ChannelHandle, &job.ChannelURL, &job.LeaseOwner, &job.LeaseUntilMs, &job.Attempts)
 	})
@@ -174,11 +174,11 @@ func (db *DB) CompleteYouTubeRecommendationJob(job YouTubeRecommendationJob, can
 	return db.WithWrite(func(tx *sql.Tx) error {
 		res, err := tx.Exec(`
 			UPDATE youtube_recommendations
-			SET candidates_json = ?, status = 'ready', fetched_at_ms = ?, expires_at_ms = ?,
+			SET candidates_json = $1, status = 'ready', fetched_at_ms = $2, expires_at_ms = $3,
 			    attempts = 0, next_attempt_at_ms = 0, last_error = '',
-			    lease_owner = '', lease_until_ms = 0, updated_at_ms = ?
-			WHERE anchor_video_id = ? AND status = 'processing'
-			  AND lease_owner = ? AND lease_until_ms = ?
+			    lease_owner = '', lease_until_ms = 0, updated_at_ms = $4
+			WHERE anchor_video_id = $5 AND status = 'processing'
+			  AND lease_owner = $6 AND lease_until_ms = $7
 		`, string(payload), nowMs, nowMs+YouTubeRecommendationTTL.Milliseconds(), nowMs,
 			job.AnchorVideoID, job.LeaseOwner, job.LeaseUntilMs)
 		if err != nil {
@@ -193,7 +193,7 @@ func (db *DB) GetYouTubeRecommendations(anchorVideoID string, limit int) ([]mode
 	var expiresAt int64
 	err := db.reader().QueryRow(`
 		SELECT candidates_json, status, expires_at_ms
-		FROM youtube_recommendations WHERE anchor_video_id = ?
+		FROM youtube_recommendations WHERE anchor_video_id = $1
 	`, strings.TrimSpace(anchorVideoID)).Scan(&payload, &status, &expiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil
@@ -239,7 +239,7 @@ func (db *DB) ListYouTubeDiscoverVideos(limit int) ([]model.DiscoveryVideo, erro
 	rows, err := db.reader().Query(`
 		SELECT candidates_json
 		FROM youtube_recommendations
-		WHERE status = 'ready' AND expires_at_ms > ? AND candidates_json != '[]'
+		WHERE status = 'ready' AND expires_at_ms > $1 AND candidates_json != '[]'
 		ORDER BY fetched_at_ms DESC, anchor_video_id
 	`, time.Now().UnixMilli())
 	if err != nil {
@@ -379,10 +379,10 @@ func (db *DB) projectDiscoveryMedia(candidates []model.DiscoveryVideo) error {
 			AssetOwnerRef{OwnerKind: "channel", OwnerID: candidate.ChannelID},
 		)
 	}
-	rows, err := db.reader().Query(`
+	rows, err := db.reader().Query(bind(`
 		SELECT v.video_id, v.published_at, v.dearrow_title, v.dearrow_title_casual,
 		       CASE WHEN `+readyVideoMediaExistsSQL("v")+` THEN 1 ELSE 0 END
-		FROM videos v WHERE v.video_id IN (`+placeholders(len(ids))+`)`, stringsToAny(ids)...)
+		FROM videos v WHERE v.video_id IN (`+placeholders(len(ids))+`)`), stringsToAny(ids)...)
 	if err != nil {
 		return err
 	}
@@ -492,7 +492,7 @@ func (db *DB) ReleaseYouTubeRecommendationJob(job YouTubeRecommendationJob, nowM
 func (db *DB) updateYouTubeRecommendationLease(job YouTubeRecommendationJob, query string, args ...any) error {
 	args = append(args, job.AnchorVideoID, job.LeaseOwner, job.LeaseUntilMs)
 	return db.WithWrite(func(tx *sql.Tx) error {
-		res, err := tx.Exec(query, args...)
+		res, err := tx.Exec(bind(query), args...)
 		if err != nil {
 			return err
 		}

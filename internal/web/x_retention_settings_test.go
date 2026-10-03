@@ -129,7 +129,7 @@ func TestChannelXMediaLimitMutationSharesRetentionEffects(t *testing.T) {
 	seedWebXRetentionChannel(t, srv, channelID, "sample_channel", 2)
 	if err := srv.db.ExecRaw(`
 		INSERT INTO channel_settings (channel_id, media_download_limit, updated_at)
-		VALUES (?, 2, 1)
+		VALUES ($1, 2, 1)
 	`, channelID); err != nil {
 		t.Fatal(err)
 	}

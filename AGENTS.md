@@ -2,7 +2,7 @@
 
 ## Project
 
-Igloo is a Go/SQLite server with web and Android clients. `android/` is the current Android app. Unqualified "mobile" means Android. Web behavior must work in Firefox and Chromium using standard APIs and CSS.
+Igloo is a Go/PostgreSQL server with web and Android clients. Android uses Room/SQLite. `android/` is the current Android app. Unqualified "mobile" means Android. Web behavior must work in Firefox and Chromium using standard APIs and CSS.
 
 Runtime defaults are `~/.local/share/igloo/` and `~/.config/igloo/` on the host, `/igloo/data` and `/igloo/config` in containers, and `/app/static` for bundled assets.
 
@@ -33,7 +33,7 @@ Keep Igloo's integration thin and compatible with upstream updates. Use upstream
 
 Start from the user's report and relevant source. Trust their observations and corrections, revisiting ruled-out explanations only with new evidence. Follow the reported failure through its responsible path. An unsuccessful reproduction or passing unrelated check leaves that investigation open.
 
-Use local rows, files, and logs for data questions, preferring read-only Igloo MCP tools when available. The database is `sqlite3 "file:$HOME/.local/share/igloo/igloo.db?mode=ro"`. Use stored identifiers and data before fetching public platform pages.
+Use local rows, files, and logs for data questions, preferring read-only Igloo MCP tools when available. The server uses PostgreSQL; maintenance tools attach through the state directory or `IGLOO_DATABASE_URL`. SQLite files are legacy archives. Use stored identifiers and data before fetching public platform pages.
 
 Use the browser for a specific unresolved runtime question that could change the fix. The local target is `https://localhost:8443`. Basic edits can be completed from the report and source. Check private material only for existence, masking values as `***` if a format check is necessary. Do not capture private data or screenshots.
 

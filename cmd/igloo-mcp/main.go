@@ -132,8 +132,8 @@ func main() {
 	// ── Server database tools ────────────────────────────────────────────
 
 	s.AddTool(mcp.NewTool("server_query",
-		mcp.WithDescription("Execute a read-only SQL query against the server SQLite database. Instant results. Use this instead of spawning sqlite3 CLI. Max 200 rows."),
-		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL query (SELECT, PRAGMA, EXPLAIN, or WITH only).")),
+		mcp.WithDescription("Execute a read-only SQL query against the server PostgreSQL database. Max 200 rows."),
+		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL query (SELECT, SHOW, EXPLAIN, or WITH only).")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		result, err := serverQuery(req.GetString("sql", ""))
 		if err != nil {
@@ -153,7 +153,7 @@ func main() {
 	})
 
 	s.AddTool(mcp.NewTool("db_schema",
-		mcp.WithDescription("Show the schema for a specific table (columns, types, indexes, sample data) or all tables. Use before writing SQL."),
+		mcp.WithDescription("Show the schema for a specific table (columns, types, constraints, indexes and row count) or all tables."),
 		mcp.WithString("table", mcp.Description("Table name. If empty, returns CREATE TABLE for all tables.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		result, err := dbSchema(req.GetString("table", ""))

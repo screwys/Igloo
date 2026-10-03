@@ -62,7 +62,7 @@ func newTestManagerWithDearrow(t *testing.T, res dearrow.Result, clientErr error
 func seedVideo(t *testing.T, m *Manager, videoID string) {
 	t.Helper()
 	_ = m.db.ExecRaw(
-		`INSERT INTO channels (channel_id, name, platform) VALUES (?, ?, ?)`,
+		`INSERT INTO channels (channel_id, name, platform) VALUES ($1, $2, $3)`,
 		"youtube_testchan", "test", "youtube",
 	)
 	if err := m.db.InsertVideo(
@@ -156,7 +156,7 @@ func TestTriggerDearrowFetch_NilFetcherIsNoOp(t *testing.T) {
 
 	// Seed video directly on the db — no Manager helper for nil-fetcher case.
 	_ = d.ExecRaw(
-		`INSERT INTO channels (channel_id, name, platform) VALUES (?, ?, ?)`,
+		`INSERT INTO channels (channel_id, name, platform) VALUES ($1, $2, $3)`,
 		"youtube_testchan", "test", "youtube",
 	)
 	_ = d.InsertVideo(

@@ -284,14 +284,14 @@ func storeReadyMediaAsset(t *testing.T, srv *testServer, platform, ownerKind, ow
 	if db.IsCanonicalVideoOwnerKind(ownerKind) && ownerKind != "tweet" {
 		channelID := platform + "_asset_fixture"
 		if err := srv.db.ExecRaw(`
-			INSERT OR IGNORE INTO channels (channel_id, name, platform)
-			VALUES (?, 'Asset Fixture', ?)
+			INSERT INTO channels (channel_id, name, platform)
+			VALUES ($1, 'Asset Fixture', $2) ON CONFLICT DO NOTHING
 		`, channelID, platform); err != nil {
 			t.Fatalf("seed canonical video channel: %v", err)
 		}
 		if err := srv.db.ExecRaw(`
-			INSERT OR IGNORE INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
-			VALUES (?, ?, ?, 'Asset Fixture', 0, 1)
+			INSERT INTO videos (video_id, channel_id, owner_kind, title, duration, published_at)
+			VALUES ($1, $2, $3, 'Asset Fixture', 0, 1) ON CONFLICT DO NOTHING
 		`, ownerID, channelID, ownerKind); err != nil {
 			t.Fatalf("seed canonical video owner: %v", err)
 		}
@@ -400,7 +400,7 @@ func TestHandleSlideRejectsPrivateCDNURLWhenLocalMissing(t *testing.T) {
 	quoteJSON := `[{"type":"video","url":"` + cdn.URL + `/clip.mp4"}]`
 	if err := srv.db.ExecRaw(`
 		INSERT INTO feed_items (tweet_id, quote_tweet_id, quote_media_json, published_at, fetched_at)
-		VALUES (?, ?, ?, 1, 1)
+		VALUES ($1, $2, $3, 1, 1)
 	`, parentID, quoteID, quoteJSON); err != nil {
 		t.Fatalf("insert feed_item: %v", err)
 	}
@@ -449,8 +449,8 @@ func TestHandleThumbnail_DearrowQueryDoesNotGuessAroundStaleReadyAsset(t *testin
 	if err := srv.db.ExecRaw(`
 		UPDATE media_objects
 		SET published_revision = desired_revision, published_source_url = source_url,
-		    file_path = ?, content_type = 'image/jpeg', size_bytes = 1, file_mtime_ns = 1, job_state = 'ready'
-		WHERE object_id = (SELECT desired_object_id FROM assets WHERE asset_id = ?)
+		    file_path = $1, content_type = 'image/jpeg', size_bytes = 1, file_mtime_ns = 1, job_state = 'ready'
+		WHERE object_id = (SELECT desired_object_id FROM assets WHERE asset_id = $2)
 	`, dearrowRelPath, assetID); err != nil {
 		t.Fatalf("publish missing canonical metadata: %v", err)
 	}

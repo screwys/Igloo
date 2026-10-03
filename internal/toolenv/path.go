@@ -1,9 +1,12 @@
-// Package toolenv configures paths for external downloader tools.
+// Package toolenv configures paths for external tools.
 package toolenv
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -24,10 +27,45 @@ func ApplyCommonToolPaths() string {
 			runtimeDir = configured
 		}
 		path = prependExistingPath(path, runtimeDir, dirExists)
+		path = prependExistingPath(path, filepath.Join(runtimeDir, "postgresql", "bin"), dirExists)
 		path = prependExistingPath(path, filepath.Join(filepath.Dir(executable), "tools"), dirExists)
 	}
+	path = prependExistingPath(path, strings.TrimSpace(os.Getenv("IGLOO_POSTGRES_BIN")), dirExists)
 	_ = os.Setenv("PATH", path)
 	return path
+}
+
+// PostgresBinDir finds one PostgreSQL installation for server and backup tools.
+func PostgresBinDir() (string, error) {
+	if configured := strings.TrimSpace(os.Getenv("IGLOO_POSTGRES_BIN")); configured != "" {
+		if !hasPostgresTools(configured) {
+			return "", fmt.Errorf("IGLOO_POSTGRES_BIN does not contain initdb, pg_ctl, postgres, psql, pg_dump, and pg_restore")
+		}
+		return filepath.Abs(configured)
+	}
+	ApplyCommonToolPaths()
+	initdb, err := exec.LookPath("initdb")
+	if err != nil {
+		return "", fmt.Errorf("PostgreSQL tools are unavailable; install PostgreSQL 18 or set IGLOO_POSTGRES_BIN: %w", err)
+	}
+	directory := filepath.Dir(initdb)
+	if !hasPostgresTools(directory) {
+		return "", fmt.Errorf("PostgreSQL installation in %s does not contain initdb, pg_ctl, postgres, psql, pg_dump, and pg_restore", directory)
+	}
+	return filepath.Abs(directory)
+}
+
+func hasPostgresTools(directory string) bool {
+	for _, name := range []string{"initdb", "pg_ctl", "postgres", "psql", "pg_dump", "pg_restore"} {
+		if runtime.GOOS == "windows" {
+			name += ".exe"
+		}
+		info, err := os.Stat(filepath.Join(directory, name))
+		if err != nil || !info.Mode().IsRegular() {
+			return false
+		}
+	}
+	return true
 }
 
 func prependExistingPath(path, candidate string, exists func(string) bool) string {
@@ -93,6 +131,7 @@ func commonToolDirs(home, brewPrefix string) []string {
 			filepath.Join(brewPrefix, "sbin"),
 		)
 	}
+	dirs = append(dirs, postgresToolDirs(brewPrefix)...)
 	dirs = append(dirs,
 		"/home/linuxbrew/.linuxbrew/bin",
 		"/home/linuxbrew/.linuxbrew/sbin",
@@ -103,6 +142,26 @@ func commonToolDirs(home, brewPrefix string) []string {
 		"/usr/bin",
 		"/bin",
 	)
+	return dirs
+}
+
+func postgresToolDirs(brewPrefix string) []string {
+	var dirs []string
+	if brewPrefix != "" {
+		dirs = append(dirs, filepath.Join(brewPrefix, "opt", "postgresql@18", "bin"))
+	}
+	dirs = append(dirs,
+		"/usr/lib/postgresql/18/bin",
+		"/usr/pgsql-18/bin",
+		"/home/linuxbrew/.linuxbrew/opt/postgresql@18/bin",
+		"/opt/homebrew/opt/postgresql@18/bin",
+		"/usr/local/opt/postgresql@18/bin",
+		"/opt/local/lib/postgresql18/bin",
+		"/Applications/Postgres.app/Contents/Versions/18/bin",
+	)
+	if programFiles := os.Getenv("ProgramFiles"); programFiles != "" {
+		dirs = append(dirs, filepath.Join(programFiles, "PostgreSQL", "18", "bin"))
+	}
 	return dirs
 }
 

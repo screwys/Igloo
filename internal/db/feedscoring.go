@@ -23,22 +23,22 @@ func (db *DB) GetUnscoredFeedItems(limit int) ([]ScoringItem, error) {
 	if limit <= 0 {
 		return nil, fmt.Errorf("unscored feed limit must be positive")
 	}
-	rows, err := db.conn.Query(`
+	rows, err := db.conn.Query(bind(`
 		WITH candidates(tweet_id) AS MATERIALIZED (
 			SELECT candidate.tweet_id
-			FROM feed_items candidate INDEXED BY idx_feed_items_unscored
+			FROM feed_items candidate
 			WHERE candidate.algo_scored_at = 0
 			  AND `+feedPrimaryItemPredicate("candidate")+`
 			  AND `+feedActiveOwnerPredicate("candidate")+`
-			ORDER BY candidate.rowid DESC
+			ORDER BY candidate.ingest_order DESC
 			LIMIT ?
 		)
 		SELECT resolved.tweet_id, COALESCE(resolved.source_handle,''), resolved.author_handle,
 		       COALESCE(resolved.body_text,''), COALESCE(resolved.media_json,''),
-		       COALESCE(resolved.is_retweet,0), COALESCE(resolved.published_at,'')
+		       COALESCE(resolved.is_retweet,0), COALESCE(resolved.published_at::TEXT,'')
 		FROM candidates
 		JOIN feed_items_resolved resolved ON resolved.tweet_id = candidates.tweet_id
-	`, limit)
+	`), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (db *DB) UpdateAlgoInterest(scores map[string]float64) error {
 	}
 	now := time.Now().UnixMilli()
 	return db.WithWrite(func(tx *sql.Tx) error {
-		stmt, err := tx.Prepare("UPDATE feed_items SET algo_interest = ?, algo_scored_at = ? WHERE tweet_id = ?")
+		stmt, err := tx.Prepare("UPDATE feed_items SET algo_interest = $1, algo_scored_at = $2 WHERE tweet_id = $3")
 		if err != nil {
 			return err
 		}
@@ -102,7 +102,7 @@ func invalidateAlgoScoreTx(ctx context.Context, tx *sql.Tx, tweetIDs ...string) 
 	for i, id := range tweetIDs {
 		args[i] = id
 	}
-	_, err := tx.ExecContext(ctx, "UPDATE feed_items SET algo_scored_at = 0 WHERE tweet_id IN ("+ph+")", args...)
+	_, err := tx.ExecContext(ctx, bind("UPDATE feed_items SET algo_scored_at = 0 WHERE tweet_id IN ("+ph+")"), args...)
 	return err
 }
 
@@ -134,29 +134,29 @@ func invalidateFeedWindowByChannelIDTx(ctx context.Context, tx *sql.Tx, channelI
 			UNION
 			SELECT tweet_id FROM (
 				SELECT tweet_id
-				FROM feed_items INDEXED BY idx_feed_items_author_fetched
+				FROM feed_items
 				WHERE channel_id = ?
 				  AND channel_id IS NOT NULL
 				  AND channel_id != ''
-				ORDER BY fetched_at DESC, published_at DESC, tweet_id DESC
+				ORDER BY fetched_at DESC, published_at DESC, tweet_id DESC NULLS LAST
 				LIMIT %d
 			)
 			UNION
 			SELECT tweet_id FROM (
 				SELECT tweet_id
-				FROM feed_items INDEXED BY idx_feed_items_source_channel
+				FROM feed_items
 				WHERE source_channel_id = ?
-				ORDER BY rowid DESC
+				ORDER BY ingest_order DESC
 				LIMIT %d
 			)
 			UNION
 			SELECT tweet_id FROM (
 				SELECT tweet_id
-				FROM feed_items INDEXED BY idx_feed_items_reposter_channel
+				FROM feed_items
 				WHERE reposter_channel_id = ?
 				  AND reposter_channel_id IS NOT NULL
 				  AND reposter_channel_id != ''
-				ORDER BY published_at DESC, tweet_id DESC
+				ORDER BY published_at DESC, tweet_id DESC NULLS LAST
 				LIMIT %d
 			)
 		)
@@ -164,7 +164,7 @@ func invalidateFeedWindowByChannelIDTx(ctx context.Context, tx *sql.Tx, channelI
 		SET algo_scored_at = 0
 		WHERE tweet_id IN (SELECT tweet_id FROM candidates)
 	`, feedWindowChannelCandidateLimit, feedWindowChannelCandidateLimit, feedWindowChannelCandidateLimit)
-	_, err := tx.ExecContext(ctx, query,
+	_, err := tx.ExecContext(ctx, bind(query),
 		channelID, channelID, channelID,
 		channelID, channelID, channelID,
 	)

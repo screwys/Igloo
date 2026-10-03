@@ -8,19 +8,19 @@ import (
 
 // IsVideoDownloaded returns true when the video has canonical ready media.
 func (db *DB) IsVideoDownloaded(videoID string) (bool, error) {
-	var exists int
-	err := db.conn.QueryRow(`
+	var exists bool
+	err := db.conn.QueryRow(bind(`
 		SELECT EXISTS(
 			SELECT 1 FROM videos v
 			WHERE v.video_id = ? AND `+readyVideoMediaExistsSQL("v")+`
 		)
-	`, videoID).Scan(&exists)
-	return exists == 1, err
+	`), videoID).Scan(&exists)
+	return exists, err
 }
 
 func (db *DB) ClearChannelChecked(channelID string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec("UPDATE channels SET last_checked=0 WHERE channel_id=?", channelID)
+		_, err := tx.Exec("UPDATE channels SET last_checked=0 WHERE channel_id=$1", channelID)
 		return err
 	})
 }
@@ -31,7 +31,7 @@ func (db *DB) ClearPlatformChecked(platform string) (int, error) {
 		res, err := tx.Exec(`
 			UPDATE channels
 			SET last_checked = 0
-			WHERE platform = ?
+			WHERE platform = $1
 			  AND channel_id IN (SELECT channel_id FROM channel_follows)
 		`, platform)
 		if err != nil {
@@ -47,7 +47,7 @@ func (db *DB) ClearPlatformChecked(platform string) (int, error) {
 func (db *DB) UpdateChannelChecked(channelID string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(
-			"UPDATE channels SET last_checked=CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE channel_id=?",
+			"UPDATE channels SET last_checked=floor(extract(epoch FROM statement_timestamp()) * 1000)::bigint WHERE channel_id=$1",
 			channelID,
 		)
 		return err
@@ -82,8 +82,8 @@ func (db *DB) queryTempVideosByPin(pinned bool) ([]model.Video, error) {
 		       COALESCE(wh.playback_position, 0)
 		FROM videos v
 		LEFT JOIN watch_history wh ON wh.video_id = v.video_id
-		WHERE v.is_temp = 1 AND COALESCE(v.is_pinned, 0) = ?
-		  AND (? = 1 OR NOT EXISTS (
+		WHERE v.is_temp = 1 AND COALESCE(v.is_pinned, 0) = $1
+		  AND ($2 = 1 OR NOT EXISTS (
 		    SELECT 1 FROM discover_temp_downloads discover WHERE discover.video_id = v.video_id
 		  ))
 		ORDER BY v.downloaded_at DESC
@@ -116,7 +116,7 @@ func (db *DB) GetCurrentlyWatchingVideos(limit int) ([]model.Video, error) {
 		WHERE wh.playback_position > 0
 		  AND (COALESCE(wh.duration, 0) = 0 OR wh.playback_position < wh.duration * 0.95)
 		ORDER BY wh.updated_at_ms DESC
-		LIMIT ?
+		LIMIT $1
 	`, limit)
 	if err != nil {
 		return nil, err

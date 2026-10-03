@@ -96,7 +96,7 @@ func TestObserveChannelsCreatesUnfollowedProfileWork(t *testing.T) {
 	var requested, completed int64
 	if err := d.QueryRow(`
 		SELECT requested_revision, completed_revision
-		FROM profile_jobs WHERE channel_id = ?
+		FROM profile_jobs WHERE channel_id = $1
 	`, channelID).Scan(&requested, &completed); err != nil {
 		t.Fatalf("profile job: %v", err)
 	}
@@ -267,7 +267,7 @@ func TestResolveSubscribeURL(t *testing.T) {
 	d := openWritableTestDB(t)
 
 	if _, err := d.conn.Exec(
-		`INSERT INTO channels (channel_id, name, url, platform) VALUES (?, ?, ?, ?)`,
+		bind(`INSERT INTO channels (channel_id, name, url, platform) VALUES (?, ?, ?, ?)`),
 		"twitter_alice", "Alice", "https://x.com/alice", "twitter",
 	); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -421,12 +421,15 @@ func TestUnfollowRollsBackWhenContentCleanupFails(t *testing.T) {
 		t.Fatalf("insert feed item: %v", err)
 	}
 	if err := d.ExecRaw(`
-		CREATE TRIGGER fail_drop_fail_delete
-		BEFORE DELETE ON feed_items
-		WHEN OLD.tweet_id = 'tw_drop_fail'
+		CREATE FUNCTION fail_drop_fail_delete_fn() RETURNS trigger LANGUAGE plpgsql AS $fixture$
 		BEGIN
-			SELECT RAISE(ABORT, 'stop purge');
+RAISE EXCEPTION 'stop purge';
+			RETURN NEW;
 		END;
+		$fixture$;
+		CREATE TRIGGER fail_drop_fail_delete BEFORE DELETE ON feed_items
+		FOR EACH ROW
+		WHEN (OLD.tweet_id = 'tw_drop_fail') EXECUTE FUNCTION fail_drop_fail_delete_fn();
 	`); err != nil {
 		t.Fatalf("create trigger: %v", err)
 	}
@@ -508,7 +511,7 @@ func TestChannelSettingsOverrideChain(t *testing.T) {
 	if s.IncludeReposts {
 		t.Fatalf("after clear + global=false, include_reposts = true, want false (should fall back to global)")
 	}
-	var allNull int
+	var allNull bool
 	var clearedAt int64
 	if err := d.QueryRow(`
 		SELECT max_videos IS NULL AND download_subtitles IS NULL
@@ -519,8 +522,8 @@ func TestChannelSettingsOverrideChain(t *testing.T) {
 	`).Scan(&allNull, &clearedAt); err != nil {
 		t.Fatal(err)
 	}
-	if allNull != 1 || clearedAt <= overrideUpdatedAt {
-		t.Fatalf("clear tombstone = null:%d at:%d, prior:%d", allNull, clearedAt, overrideUpdatedAt)
+	if !allNull || clearedAt <= overrideUpdatedAt {
+		t.Fatalf("clear tombstone = null:%t at:%d, prior:%d", allNull, clearedAt, overrideUpdatedAt)
 	}
 }
 

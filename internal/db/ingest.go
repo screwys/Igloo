@@ -24,7 +24,7 @@ func (db *DB) GetIngestState(handle string) (model.IngestState, error) {
 		       COALESCE(last_http_status,0), COALESCE(avg_latency_ms,0),
 		       updated_at
 		FROM ingest_state
-		WHERE handle = ?
+		WHERE handle = $1
 	`, handle).Scan(
 		&s.FailCount, &s.NextRetryAt, &s.LastSuccessAt,
 		&s.LastAttemptAt, &s.LastError, &s.LastHTTPStatus,
@@ -50,7 +50,7 @@ func (db *DB) RecordIngestSuccess(handle string, successAt float64, latencyMs fl
 			INSERT INTO ingest_state
 				(handle, fail_count, next_retry_at, last_success_at,
 				 last_attempt_at, avg_latency_ms, updated_at)
-			VALUES (?, 0, 0, ?, ?, ?, ?)
+			VALUES ($1, 0, 0, $2, $3, $4, $5)
 			ON CONFLICT(handle) DO UPDATE SET
 				fail_count      = 0,
 				next_retry_at   = 0,
@@ -84,7 +84,7 @@ func (db *DB) recordIngestFailureClassified(handle string, lastError string, htt
 		// Read current fail_count
 		var failCount int
 		err := tx.QueryRow(
-			"SELECT COALESCE(fail_count,0) FROM ingest_state WHERE handle=?", handle,
+			"SELECT COALESCE(fail_count,0) FROM ingest_state WHERE handle=$1", handle,
 		).Scan(&failCount)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
@@ -106,7 +106,7 @@ func (db *DB) recordIngestFailureClassified(handle string, lastError string, htt
 			INSERT INTO ingest_state
 				(handle, fail_count, next_retry_at, last_attempt_at,
 				 last_error, last_http_status, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
 			ON CONFLICT(handle) DO UPDATE SET
 				fail_count       = excluded.fail_count,
 				next_retry_at    = excluded.next_retry_at,
@@ -123,7 +123,7 @@ func (db *DB) recordIngestFailureClassified(handle string, lastError string, htt
 // ResetIngestHandle clears a single channel's ingest state so it is fetched immediately.
 func (db *DB) ResetIngestHandle(handle string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec("UPDATE ingest_state SET fail_count = 0, next_retry_at = 0, last_success_at = 0 WHERE handle = ?", handle)
+		_, err := tx.Exec("UPDATE ingest_state SET fail_count = 0, next_retry_at = 0, last_success_at = 0 WHERE handle = $1", handle)
 		return err
 	})
 }
@@ -145,7 +145,7 @@ func (db *DB) ResetExpiredIngestBackoff() error {
 		_, err := tx.Exec(`
 			UPDATE ingest_state
 			SET next_retry_at = 0
-			WHERE next_retry_at > 0 AND next_retry_at <= ?
+			WHERE next_retry_at > 0 AND next_retry_at <= $1
 		`, float64(time.Now().Unix()))
 		return err
 	})
@@ -192,7 +192,7 @@ func (db *DB) FilterReadyHandles(handles []string, intervalSec float64) (ready [
 	}
 
 	blocked := make(map[string]string) // handle → reason
-	rows, err := db.conn.Query(query, args...)
+	rows, err := db.conn.Query(bind(query), args...)
 	if err == nil {
 		defer func() {
 			_ = rows.Close()
@@ -226,8 +226,8 @@ func (db *DB) FilterReadyHandles(handles []string, intervalSec float64) (ready [
 	if len(ready) > 1 {
 		staleness := make(map[string]float64, len(ready))
 		staleRows, staleErr := db.conn.Query(
-			`SELECT handle, COALESCE(last_success_at, 0) FROM ingest_state
-			 WHERE handle IN (`+placeholders(len(ready))+`)`,
+			bind(`SELECT handle, COALESCE(last_success_at, 0) FROM ingest_state
+			 WHERE handle IN (`+placeholders(len(ready))+`)`),
 			stringsToAny(ready)...)
 		if staleErr == nil {
 			defer func() {
@@ -252,7 +252,7 @@ func (db *DB) FilterReadyHandles(handles []string, intervalSec float64) (ready [
 	return ready, notDue, cooling
 }
 
-// placeholders returns a comma-separated list of ? for SQLite IN clauses.
+// placeholders returns markers for an IN clause before bind numbers them.
 func placeholders(n int) string {
 	if n <= 0 {
 		return ""

@@ -2,7 +2,6 @@ package queryaudit
 
 import (
 	"bytes"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -72,14 +71,13 @@ func TestParseOptionsRejectsUnknownProbe(t *testing.T) {
 func createQueryAuditProductionFixture(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
-	dbPath := filepath.Join(tmp, "igloo.db")
-	d, err := igloodb.OpenPath(dbPath, tmp)
+	d, err := igloodb.OpenAtStateRoot(tmp)
 	if err != nil {
 		t.Fatalf("open production fixture db: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		_ = d.Close()
-	}()
+	})
 
 	stmts := []string{
 		`INSERT INTO channels (channel_id, source_id, name, platform)
@@ -94,5 +92,5 @@ func createQueryAuditProductionFixture(t *testing.T) string {
 			t.Fatalf("exec production fixture statement %q: %v", stmt, err)
 		}
 	}
-	return dbPath
+	return tmp
 }

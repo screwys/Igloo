@@ -23,7 +23,7 @@ func TestChannelStarCommitsBeforeQueuedFeedWindowInvalidation(t *testing.T) {
 	if err := srv.db.ExecRaw(`
 		INSERT INTO feed_items (
 			tweet_id, channel_id, source_channel_id, body_text, published_at, fetched_at, algo_scored_at
-		) VALUES ('sample_star_item', ?, ?, 'body', 1, 1, 789)
+		) VALUES ('sample_star_item', $1, $2, 'body', 1, 1, 789)
 	`, channelID, channelID); err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestChannelSubscribeRouteFollowsExistingTempChannel(t *testing.T) {
 	if err := srv.db.ExecRaw(`
 		INSERT INTO feed_items (
 			tweet_id, channel_id, source_channel_id, body_text, published_at, fetched_at, algo_scored_at
-		) VALUES ('sample_follow_item', ?, ?, 'body', 1, 1, 901)
+		) VALUES ('sample_follow_item', $1, $2, 'body', 1, 1, 901)
 	`, channelID, channelID); err != nil {
 		t.Fatal(err)
 	}

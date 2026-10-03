@@ -8,9 +8,18 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
-func TestUnfollowXContentPlanUsesIdentityAndThreadIndexes(t *testing.T) {
+func TestUnfollowXContentIndexesCoverIdentityAndThreadQueries(t *testing.T) {
 	d := openFreshTestDB(t)
-	rows, err := d.conn.Query("EXPLAIN QUERY PLAN "+unreferencedXContentIDsQuery(),
+	planTx, err := d.conn.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = planTx.Rollback() }()
+	// Empty fixtures check index availability, not the planner's cost estimates.
+	if _, err := planTx.Exec(`SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := planTx.Query(bind("EXPLAIN "+unreferencedXContentIDsQuery()),
 		"twitter_sample_profile", "twitter_sample_profile", "twitter_sample_profile")
 	if err != nil {
 		t.Fatal(err)
@@ -18,9 +27,8 @@ func TestUnfollowXContentPlanUsesIdentityAndThreadIndexes(t *testing.T) {
 	defer func() { _ = rows.Close() }()
 	var details []string
 	for rows.Next() {
-		var id, parent, unused int
 		var detail string
-		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+		if err := rows.Scan(&detail); err != nil {
 			t.Fatal(err)
 		}
 		details = append(details, detail)
@@ -29,14 +37,14 @@ func TestUnfollowXContentPlanUsesIdentityAndThreadIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := strings.Join(details, "\n")
-	for _, scan := range []string{"SCAN fi", "SCAN current", "SCAN peer"} {
+	for _, scan := range []string{"Seq Scan on feed_items fi", "Seq Scan on feed_items current", "Seq Scan on feed_items peer"} {
 		if strings.Contains(plan, scan) {
 			t.Fatalf("unfollow retention scans feed_items through %q: %s", scan, plan)
 		}
 	}
 	for _, index := range []string{
 		"idx_feed_items_source_channel",
-		"idx_feed_items_channel",
+		"Index Cond: (channel_id =",
 		"idx_feed_items_reposter_channel",
 		"idx_feed_items_canonical_tweet",
 		"idx_feed_items_quote",
@@ -110,13 +118,13 @@ func TestUnfollowCollectsOnlyUnreferencedXContent(t *testing.T) {
 	if got := testRowCount(t, d, `SELECT COUNT(*) FROM feed_items WHERE tweet_id IN ('sample_shared_target','sample_shared_reference','sample_bookmarked','sample_liked','sample_listed')`); got != 5 {
 		t.Fatalf("rooted posts remaining = %d, want 5", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM channel_profiles WHERE channel_id = ? AND bio = 'Stored bio'`, dropped); got != 1 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM channel_profiles WHERE channel_id = $1 AND bio = 'Stored bio'`, dropped); got != 1 {
 		t.Fatalf("stored profile metadata changed: %d", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM assets WHERE owner_kind = 'channel' AND owner_id = ?`, dropped); got != 2 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM assets WHERE owner_kind = 'channel' AND owner_id = $1`, dropped); got != 2 {
 		t.Fatalf("stored profile assets remaining = %d, want 2", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM profile_jobs WHERE channel_id = ? AND requested_revision > completed_revision`, dropped); got != 0 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM profile_jobs WHERE channel_id = $1 AND requested_revision > completed_revision`, dropped); got != 0 {
 		t.Fatalf("pending profile work remaining = %d", got)
 	}
 	if err := d.WithWrite(func(tx *sql.Tx) error {
@@ -126,7 +134,7 @@ func TestUnfollowCollectsOnlyUnreferencedXContent(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM profile_jobs WHERE channel_id = ? AND requested_revision > completed_revision`, dropped); got != 1 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM profile_jobs WHERE channel_id = $1 AND requested_revision > completed_revision`, dropped); got != 1 {
 		t.Fatalf("later identity observation pending work = %d, want 1", got)
 	}
 
@@ -157,13 +165,13 @@ func TestUnfollowCollectsOnlyUnreferencedVideoContent(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			if err := d.ExecRaw(`
-				INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at) VALUES
-					('sample_orphan_video', ?, ?, 'Orphan', 1),
-					('sample_shared_video', ?, ?, 'Shared', 2),
-					('sample_bookmarked_video', ?, ?, 'Bookmarked', 3);
-				INSERT INTO bookmarks (video_id, bookmarked_at) VALUES ('sample_bookmarked_video', 1)
-			`, first, ownerKind, first, ownerKind, first, ownerKind); err != nil {
+			if err := d.ExecRaw(`INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at) VALUES
+					('sample_orphan_video', $1, $2, 'Orphan', 1),
+					('sample_shared_video', $3, $4, 'Shared', 2),
+					('sample_bookmarked_video', $5, $6, 'Bookmarked', 3)`, first, ownerKind, first, ownerKind, first, ownerKind); err != nil {
+				t.Fatal(err)
+			}
+			if err := d.ExecRaw(`INSERT INTO bookmarks (video_id, bookmarked_at) VALUES ('sample_bookmarked_video', 1)`); err != nil {
 				t.Fatal(err)
 			}
 			for _, snapshot := range []VideoDesireSnapshot{
@@ -202,16 +210,16 @@ func TestUnfollowCollectsOnlyUnreferencedVideoContent(t *testing.T) {
 			if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id IN ('sample_shared_video','sample_bookmarked_video')`); got != 2 {
 				t.Fatalf("rooted videos remaining = %d, want 2", got)
 			}
-			if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = ?`, first); got != 0 {
+			if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = $1`, first); got != 0 {
 				t.Fatalf("unfollowed source desires remaining = %d", got)
 			}
-			if got := testRowCount(t, d, `SELECT COUNT(*) FROM channel_profiles WHERE channel_id = ? AND bio = 'Stored bio'`, first); got != 1 {
+			if got := testRowCount(t, d, `SELECT COUNT(*) FROM channel_profiles WHERE channel_id = $1 AND bio = 'Stored bio'`, first); got != 1 {
 				t.Fatalf("stored profile metadata changed: %d", got)
 			}
-			if got := testRowCount(t, d, `SELECT COUNT(*) FROM assets WHERE owner_kind = 'channel' AND owner_id = ?`, first); got != 2 {
+			if got := testRowCount(t, d, `SELECT COUNT(*) FROM assets WHERE owner_kind = 'channel' AND owner_id = $1`, first); got != 2 {
 				t.Fatalf("stored profile assets remaining = %d, want 2", got)
 			}
-			if got := testRowCount(t, d, `SELECT COUNT(*) FROM profile_jobs WHERE channel_id = ? AND requested_revision > completed_revision`, first); got != 0 {
+			if got := testRowCount(t, d, `SELECT COUNT(*) FROM profile_jobs WHERE channel_id = $1 AND requested_revision > completed_revision`, first); got != 0 {
 				t.Fatalf("pending profile work remaining = %d", got)
 			}
 
@@ -240,7 +248,7 @@ func TestVideoRetentionCollectsContentFromAlreadyUnfollowedVideoSources(t *testi
 			seedVideoDesireChannels(t, d, source)
 			if err := d.ExecRaw(`
 				INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
-				VALUES ('sample_stale_video', ?, ?, 'Stale', 1)
+				VALUES ('sample_stale_video', $1, $2, 'Stale', 1)
 			`, source, ownerKind); err != nil {
 				t.Fatal(err)
 			}
@@ -254,14 +262,14 @@ func TestVideoRetentionCollectsContentFromAlreadyUnfollowedVideoSources(t *testi
 			}); err != nil {
 				t.Fatal(err)
 			}
-			if err := d.ExecRaw(`DELETE FROM channel_follows WHERE channel_id = ?`, source); err != nil {
+			if err := d.ExecRaw(`DELETE FROM channel_follows WHERE channel_id = $1`, source); err != nil {
 				t.Fatal(err)
 			}
 
 			if _, err := d.MaintainVideoRetention(100); err != nil {
 				t.Fatal(err)
 			}
-			if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = ?`, source); got != 0 {
+			if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = $1`, source); got != 0 {
 				t.Fatalf("stale unfollowed desires remaining = %d", got)
 			}
 			if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = 'sample_stale_video'`); got != 0 {

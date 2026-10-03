@@ -61,6 +61,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 	_, _ = fmt.Fprintln(stdout, "pending=true")
 	_, _ = fmt.Fprintf(stdout, "data_dir=%s\n", cfg.Storage.StateRoot())
 	_, _ = fmt.Fprintf(stdout, "config_dir=%s\n", cfg.ConfDir)
-	_, _ = fmt.Fprintf(stdout, "database=%s\n", cfg.Storage.DatabasePath())
+	_, _ = fmt.Fprintln(stdout, "database=postgresql")
 	return 0
 }

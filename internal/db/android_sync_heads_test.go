@@ -99,7 +99,7 @@ func TestAndroidSyncRetweetChangesPageSameHashFeedHeads(t *testing.T) {
 			SELECT n + 1 FROM seq WHERE n < 600
 		)
 		INSERT INTO feed_items (tweet_id, content_hash, published_at, fetched_at)
-		SELECT printf('sample_peer_%03d', n), 'sample_hash', 1, 1 FROM seq;
+		SELECT ('sample_peer_' || lpad((n)::text, 3, '0')), 'sample_hash', 1, 1 FROM seq;
 		INSERT INTO retweet_sources (content_hash, retweeter_channel_id, tweet_id, published_at)
 		VALUES ('sample_hash', 'twitter_sample', 'sample_peer_001', 1)
 	`); err != nil {
@@ -147,7 +147,7 @@ func TestAndroidSyncHeadsTrackTemporaryVideoTransitions(t *testing.T) {
 		const videoID = "sample_temporary_upsert"
 		if err := d.ExecRaw(`
 			INSERT INTO videos (video_id, channel_id, owner_kind, title, is_temp)
-			VALUES (?, 'youtube_sample_channel', 'youtube_video', 'Sample video', 1)
+			VALUES ($1, 'youtube_sample_channel', 'youtube_video', 'Sample video', 1)
 		`, videoID); err != nil {
 			t.Fatal(err)
 		}
@@ -197,7 +197,7 @@ func TestAndroidSyncHeadsTrackTemporaryVideoTransitions(t *testing.T) {
 		seedVideoDesireChannels(t, d, source)
 		if err := d.ExecRaw(`
 			INSERT INTO videos (video_id, channel_id, owner_kind, title, is_temp)
-			VALUES (?, ?, 'youtube_video', 'Sample video', 1)
+			VALUES ($1, $2, 'youtube_video', 'Sample video', 1)
 		`, videoID, source); err != nil {
 			t.Fatal(err)
 		}
@@ -224,11 +224,11 @@ func TestAndroidSyncHeadsTrackTemporaryVideoTransitions(t *testing.T) {
 		const nowMs = int64(3 * 24 * 60 * 60 * 1000)
 		if err := d.ExecRaw(`
 			INSERT INTO videos (video_id, channel_id, owner_kind, title, is_temp, downloaded_at)
-			VALUES (?, 'youtube_sample_channel', 'youtube_video', 'Sample video', 1, ?)
+			VALUES ($1, 'youtube_sample_channel', 'youtube_video', 'Sample video', 1, $2)
 		`, videoID, nowMs-int64(2*24*60*60*1000)); err != nil {
 			t.Fatal(err)
 		}
-		if err := d.ExecRaw(`INSERT INTO bookmarks (video_id, bookmarked_at) VALUES (?, ?)`, videoID, nowMs); err != nil {
+		if err := d.ExecRaw(`INSERT INTO bookmarks (video_id, bookmarked_at) VALUES ($1, $2)`, videoID, nowMs); err != nil {
 			t.Fatal(err)
 		}
 		before := requireAndroidSyncHead(t, d, "video", videoID)
@@ -240,7 +240,7 @@ func TestAndroidSyncHeadsTrackTemporaryVideoTransitions(t *testing.T) {
 			t.Fatalf("retiring temporary state did not advance head: before=%+v after=%+v", before, after)
 		}
 		var isTemp bool
-		if err := d.QueryRow(`SELECT is_temp FROM videos WHERE video_id = ?`, videoID).Scan(&isTemp); err != nil {
+		if err := d.QueryRow(`SELECT is_temp FROM videos WHERE video_id = $1`, videoID).Scan(&isTemp); err != nil {
 			t.Fatal(err)
 		}
 		if isTemp {
@@ -328,7 +328,7 @@ func requireAndroidSyncHead(t *testing.T, d *DB, ownerKind, ownerID string) mode
 	err := d.QueryRow(`
 		SELECT owner_kind, owner_id, revision
 		FROM android_sync_heads
-		WHERE owner_kind = ? AND owner_id = ?
+		WHERE owner_kind = $1 AND owner_id = $2
 	`, ownerKind, ownerID).Scan(&head.OwnerKind, &head.OwnerID, &head.Revision)
 	if err != nil {
 		t.Fatalf("read Android sync head %s/%s: %v", ownerKind, ownerID, err)

@@ -23,10 +23,10 @@ const xProfileHistoryRetentionItemsQuery = `
 		                     AND quote.quote_tweet_id != ''
 		                     AND quote.quote_tweet_id = fi.tweet_id
 		                 )
-		              OR (? > 0 AND fi.published_at >= ?)
+		              OR ($1::bigint > 0 AND fi.published_at >= $2)
 		            THEN 1 ELSE 0 END
 		FROM feed_items fi
-		WHERE fi.source_channel_id = ?
+		WHERE fi.source_channel_id = $3
 		ORDER BY fi.published_at DESC, fi.tweet_id DESC
 	`
 
@@ -71,7 +71,7 @@ func (db *DB) PruneXProfileHistory(channelID string, limit int, nowMs int64) (XM
 }
 
 func (db *DB) xProfileHistoryRetentionItems(channelID string, androidCutoffMs int64) ([]xRetentionItem, error) {
-	rows, err := db.conn.Query(xProfileHistoryRetentionItemsQuery, androidCutoffMs, androidCutoffMs, channelID)
+	rows, err := db.conn.Query(bind(xProfileHistoryRetentionItemsQuery), androidCutoffMs, androidCutoffMs, channelID)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func (db *DB) deleteXProfileHistoryItems(tweetIDs []string) error {
 				`DELETE FROM retweet_sources WHERE tweet_id IN (` + placeholders(len(chunk)) + `)`,
 				`DELETE FROM feed_items WHERE tweet_id IN (` + placeholders(len(chunk)) + `)`,
 			} {
-				if _, err := tx.Exec(statement, args...); err != nil {
+				if _, err := tx.Exec(bind(statement), args...); err != nil {
 					return err
 				}
 			}

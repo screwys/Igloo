@@ -100,7 +100,7 @@ func (db *DB) storeCompletedVideo(video CompletedVideo, work *TempDownloadWork, 
 	err = db.WithWrite(func(tx *sql.Tx) error {
 		origin := ""
 		if work != nil {
-			if err := tx.QueryRow(`SELECT origin FROM temp_download_queue WHERE url = ? AND request_id = ? AND status = 'processing' AND lease_owner = ?`, work.URL, work.RequestID, work.LeaseOwner).Scan(&origin); err != nil {
+			if err := tx.QueryRow(bind(`SELECT origin FROM temp_download_queue WHERE url = ? AND request_id = ? AND status = 'processing' AND lease_owner = ?`), work.URL, work.RequestID, work.LeaseOwner).Scan(&origin); err != nil {
 				if err == sql.ErrNoRows {
 					return ErrTempDownloadInactive
 				}
@@ -132,11 +132,11 @@ func (db *DB) storeCompletedVideo(video CompletedVideo, work *TempDownloadWork, 
 		}
 		if complete {
 			if origin == "discover" {
-				if _, err := tx.Exec(`INSERT INTO discover_temp_downloads (video_id, downloaded_at_ms) VALUES (?, ?) ON CONFLICT(video_id) DO UPDATE SET downloaded_at_ms = excluded.downloaded_at_ms`, video.VideoID, time.Now().UnixMilli()); err != nil {
+				if _, err := tx.Exec(bind(`INSERT INTO discover_temp_downloads (video_id, downloaded_at_ms) VALUES (?, ?) ON CONFLICT(video_id) DO UPDATE SET downloaded_at_ms = excluded.downloaded_at_ms`), video.VideoID, time.Now().UnixMilli()); err != nil {
 					return err
 				}
 			}
-			_, err = tx.Exec(`DELETE FROM temp_download_queue WHERE url = ? AND request_id = ? AND lease_owner = ?`, work.URL, work.RequestID, work.LeaseOwner)
+			_, err = tx.Exec(bind(`DELETE FROM temp_download_queue WHERE url = ? AND request_id = ? AND lease_owner = ?`), work.URL, work.RequestID, work.LeaseOwner)
 		}
 		return err
 	})
@@ -313,7 +313,7 @@ func replaceVideoAssetsTx(
 		if old.FilePath != "" {
 			retired[old.FilePath] = struct{}{}
 		}
-		if _, err := tx.Exec(`DELETE FROM assets WHERE id = ?`, old.ID); err != nil {
+		if _, err := tx.Exec(bind(`DELETE FROM assets WHERE id = ?`), old.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -343,10 +343,10 @@ func primaryVideoStreamIdentity(assets []Asset) (videoStreamIdentity, bool) {
 }
 
 func readVideoAssetsTx(tx *sql.Tx, ownerKind, videoID string) ([]Asset, error) {
-	rows, err := tx.Query(`SELECT `+assetProjectionSQL+assetJoinsSQL+`
+	rows, err := tx.Query(bind(`SELECT `+assetProjectionSQL+assetJoinsSQL+`
 		WHERE a.owner_kind = ? AND a.owner_id = ?
 		ORDER BY a.id
-	`, ownerKind, videoID)
+	`), ownerKind, videoID)
 	if err != nil {
 		return nil, err
 	}
@@ -395,12 +395,12 @@ func upsertVideoMetadataTx(tx *sql.Tx, video CompletedVideo) error {
 	}
 	// is_temp is not in the schema-maintained payload-trigger columns. Update it
 	// first so an existing row's transition emits an explicit video head.
-	tempChange, err := tx.Exec(`
+	tempChange, err := tx.Exec(bind(`
 		UPDATE videos
 		SET is_temp = ?
 		WHERE video_id = ?
 		  AND COALESCE(is_temp, 0) != ?
-	`, video.IsTemp, video.VideoID, video.IsTemp)
+	`), boolToInt(video.IsTemp), video.VideoID, boolToInt(video.IsTemp))
 	if err != nil {
 		return err
 	}
@@ -408,12 +408,12 @@ func upsertVideoMetadataTx(tx *sql.Tx, video CompletedVideo) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(`
+	_, err = tx.Exec(bind(`
 		INSERT INTO videos
 			(video_id, channel_id, owner_kind, title, description, duration,
 			 published_at, metadata_json, media_kind, slide_count, source_kind,
 			 is_temp, downloaded_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(strftime('%s','now') AS INTEGER) * 1000)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT)
 		ON CONFLICT(video_id) DO UPDATE SET
 			channel_id = CASE WHEN excluded.channel_id != '' THEN excluded.channel_id ELSE videos.channel_id END,
 			owner_kind = excluded.owner_kind,
@@ -431,9 +431,9 @@ func upsertVideoMetadataTx(tx *sql.Tx, video CompletedVideo) error {
 			source_kind = CASE WHEN excluded.source_kind != '' THEN excluded.source_kind ELSE COALESCE(videos.source_kind, '') END,
 			is_temp = excluded.is_temp,
 			downloaded_at = excluded.downloaded_at
-	`, video.VideoID, video.ChannelID, video.OwnerKind, video.Title, video.Description, video.Duration,
+	`), video.VideoID, video.ChannelID, video.OwnerKind, video.Title, video.Description, video.Duration,
 		video.PublishedAtMs, video.MetadataJSON, video.MediaKind, video.SlideCount,
-		video.SourceKind, video.IsTemp)
+		video.SourceKind, boolToInt(video.IsTemp))
 	if err != nil {
 		return err
 	}
@@ -459,7 +459,7 @@ func upsertVideoMetadataTx(tx *sql.Tx, video CompletedVideo) error {
 
 func requireVideoOwnerKindTx(tx *sql.Tx, videoID, ownerKind string) error {
 	var existing string
-	err := tx.QueryRow(`SELECT owner_kind FROM videos WHERE video_id = ?`, videoID).Scan(&existing)
+	err := tx.QueryRow(bind(`SELECT owner_kind FROM videos WHERE video_id = ?`), videoID).Scan(&existing)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -488,7 +488,7 @@ func readyVideoMediaExistsSQL(videoAlias string) string {
 // GetReadyVideoPrimaryAsset returns the preferred playable asset using the
 // video's exact canonical owner identity.
 func (db *DB) GetReadyVideoPrimaryAsset(videoID string) (*Asset, error) {
-	row := db.conn.QueryRow(`SELECT `+assetProjectionSQL+`
+	row := db.conn.QueryRow(bind(`SELECT `+assetProjectionSQL+`
 		FROM videos v
 		JOIN assets a
 		  ON a.owner_kind = v.owner_kind
@@ -505,7 +505,7 @@ func (db *DB) GetReadyVideoPrimaryAsset(videoID string) (*Asset, error) {
 		           WHEN 'post_media' THEN 2
 		         END
 		LIMIT 1
-	`, videoID)
+	`), videoID)
 	asset, err := scanAsset(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -566,11 +566,11 @@ const pendingVideoPreviewFromSQL = `
 	  AND stream.published_revision > 0
 	  AND stream.file_path != ''
 	  AND stream_asset.revision > 0
-	  AND (LOWER(stream.file_path) LIKE '%.mp4'
-	    OR LOWER(stream.file_path) LIKE '%.webm'
-	    OR LOWER(stream.file_path) LIKE '%.mkv'
-	    OR LOWER(stream.file_path) LIKE '%.mov'
-	    OR LOWER(stream.file_path) LIKE '%.m4v')
+	  AND (LOWER(stream.file_path) ILIKE '%.mp4' COLLATE "C" ESCAPE ''
+	    OR LOWER(stream.file_path) ILIKE '%.webm' COLLATE "C" ESCAPE ''
+	    OR LOWER(stream.file_path) ILIKE '%.mkv' COLLATE "C" ESCAPE ''
+	    OR LOWER(stream.file_path) ILIKE '%.mov' COLLATE "C" ESCAPE ''
+	    OR LOWER(stream.file_path) ILIKE '%.m4v' COLLATE "C" ESCAPE '')
 	  AND (COALESCE(preview_track_asset.lifecycle_state, '') != 'active'
 	    OR COALESCE(preview_track.published_revision, 0) = 0
 	    OR COALESCE(preview_track.file_path, '') = ''
@@ -655,7 +655,7 @@ func (db *DB) storeVideoAssets(videoID string, kinds []string, assets []Asset, e
 		nowMs = time.Now().UnixMilli()
 	}
 	var ownerKind string
-	if err := db.conn.QueryRow(`SELECT owner_kind FROM videos WHERE video_id = ?`, videoID).Scan(&ownerKind); err != nil {
+	if err := db.conn.QueryRow(bind(`SELECT owner_kind FROM videos WHERE video_id = ?`), videoID).Scan(&ownerKind); err != nil {
 		return err
 	}
 	platform, ok := videoPlatformForOwnerKind(ownerKind)
@@ -701,7 +701,7 @@ func (db *DB) DeleteVideoAssetsTx(videoID string) ([]string, error) {
 	keys := map[string]struct{}{}
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		var ownerKind string
-		if err := tx.QueryRow(`SELECT owner_kind FROM videos WHERE video_id = ?`, videoID).Scan(&ownerKind); err != nil {
+		if err := tx.QueryRow(bind(`SELECT owner_kind FROM videos WHERE video_id = ?`), videoID).Scan(&ownerKind); err != nil {
 			if err == sql.ErrNoRows {
 				return fmt.Errorf("video not found: %s", videoID)
 			}
@@ -710,13 +710,13 @@ func (db *DB) DeleteVideoAssetsTx(videoID string) ([]string, error) {
 		if _, ok := videoPlatformForOwnerKind(ownerKind); !ok || ownerKind == "tweet" {
 			return fmt.Errorf("video not found: %s", videoID)
 		}
-		rows, err := tx.Query(`
+		rows, err := tx.Query(bind(`
 			SELECT DISTINCT current.file_path
 			FROM assets a
 			JOIN media_objects current ON current.object_id = a.object_id
 			WHERE a.owner_kind = ? AND a.owner_id = ?
 			  AND current.published_revision > 0 AND current.file_path != ''
-		`, ownerKind, videoID)
+		`), ownerKind, videoID)
 		if err != nil {
 			return err
 		}
@@ -735,13 +735,13 @@ func (db *DB) DeleteVideoAssetsTx(videoID string) ([]string, error) {
 		if err := rows.Close(); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`
+		if _, err := tx.Exec(bind(`
 			DELETE FROM assets
 			WHERE owner_kind = ? AND owner_id = ?
-		`, ownerKind, videoID); err != nil {
+		`), ownerKind, videoID); err != nil {
 			return err
 		}
-		_, err = tx.Exec(`DELETE FROM videos WHERE video_id = ?`, videoID)
+		_, err = tx.Exec(bind(`DELETE FROM videos WHERE video_id = ?`), videoID)
 		return err
 	})
 	return sortedSet(keys), err

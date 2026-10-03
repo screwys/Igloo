@@ -152,16 +152,43 @@ func (db *DB) GetSetting(key, fallback string) (string, error) {
 // GetStats returns aggregate database statistics for the sidebar.
 func (db *DB) GetStats() (model.DBStats, error) {
 	var s model.DBStats
-	_ = db.reader().QueryRow("SELECT COUNT(*) FROM channel_follows").Scan(&s.TotalChannels)
-	_ = db.reader().QueryRow("SELECT COUNT(*) FROM videos").Scan(&s.TotalVideos)
-	_ = db.reader().QueryRow("SELECT COUNT(*) FROM feed_items").Scan(&s.TotalFeedItems)
-
-	var pageCount, pageSize int64
-	_ = db.reader().QueryRow("PRAGMA page_count").Scan(&pageCount)
-	_ = db.reader().QueryRow("PRAGMA page_size").Scan(&pageSize)
-	s.DatabaseSizeMB = float64(pageCount*pageSize) / (1024 * 1024)
+	var databaseBytes int64
+	if err := db.reader().QueryRow(`
+		SELECT (SELECT COUNT(*) FROM channel_follows),
+		       (SELECT COUNT(*) FROM videos),
+		       (SELECT COUNT(*) FROM feed_items),
+		       pg_database_size(current_database())
+	`).Scan(&s.TotalChannels, &s.TotalVideos, &s.TotalFeedItems, &databaseBytes); err != nil {
+		return s, err
+	}
+	s.DatabaseSizeMB = float64(databaseBytes) / (1024 * 1024)
 
 	return s, nil
+}
+
+// DatabaseStorage keeps database bytes separate from shared cluster WAL bytes.
+type DatabaseStorage struct {
+	DatabaseBytes int64
+	BlockSize     int64
+	// ClusterWALBytes is nil when the WAL size is unavailable.
+	ClusterWALBytes *int64
+}
+
+// DatabaseStorage reports this database's size and optional cluster WAL size.
+// PostgreSQL controls access to its WAL directory independently of table reads.
+func (db *DB) DatabaseStorage() (DatabaseStorage, error) {
+	var out DatabaseStorage
+	if err := db.reader().QueryRow(`SELECT pg_database_size(current_database()), current_setting('block_size')::bigint`).Scan(&out.DatabaseBytes, &out.BlockSize); err != nil {
+		return out, err
+	}
+	var walBytes sql.NullInt64
+	if err := db.reader().QueryRow(`
+		SELECT CASE WHEN has_function_privilege('pg_catalog.pg_ls_waldir()', 'EXECUTE')
+		       THEN (SELECT COALESCE(SUM(size), 0) FROM pg_ls_waldir()) END
+	`).Scan(&walBytes); err == nil && walBytes.Valid {
+		out.ClusterWALBytes = &walBytes.Int64
+	}
+	return out, nil
 }
 
 // AuthUser represents a configured user from the auth_users setting.
@@ -188,7 +215,7 @@ func (db *DB) GetAuthUsers() ([]AuthUser, error) {
 // DeleteSetting removes a setting row.
 func (db *DB) DeleteSetting(key string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec("DELETE FROM settings WHERE key = ?", key)
+		_, err := tx.Exec(bind("DELETE FROM settings WHERE key = ?"), key)
 		return err
 	})
 }
@@ -196,10 +223,10 @@ func (db *DB) DeleteSetting(key string) error {
 // SetSetting sets a global setting value (upsert).
 func (db *DB) SetSetting(key, value string) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+		_, err := tx.Exec(bind(`
 			INSERT INTO settings (key, value) VALUES (?, ?)
 			ON CONFLICT(key) DO UPDATE SET value = excluded.value
-		`, key, value)
+		`), key, value)
 		return err
 	})
 }

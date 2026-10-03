@@ -13,8 +13,8 @@ func TestListAndroidSyncCommentAuthorAssetsUsesTopSyncedComments(t *testing.T) {
 	if err := d.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
 		VALUES
-			('sample_video_1', 'youtube_sample_channel', 'youtube_video', 'Video', ?),
-			('sample_video_other', 'tiktok_sample_channel', 'tiktok_video', 'Other', ?)
+			('sample_video_1', 'youtube_sample_channel', 'youtube_video', 'Video', $1),
+			('sample_video_other', 'tiktok_sample_channel', 'tiktok_video', 'Other', $2)
 	`, published, published); err != nil {
 		t.Fatalf("insert videos: %v", err)
 	}
@@ -22,10 +22,10 @@ func TestListAndroidSyncCommentAuthorAssetsUsesTopSyncedComments(t *testing.T) {
 		INSERT INTO video_comments (
 			video_id, comment_id, author_name, author_id, text, like_count, published_at
 		) VALUES
-			('sample_video_1', 'sample_comment_1', 'Commenter One', 'UCcommenterOne', 'hello', 50, ?),
-			('sample_video_1', 'sample_comment_2', 'Commenter Two', 'youtube_UCcommenterTwo', 'hello', 40, ?),
-			('sample_video_1', 'sample_comment_3', 'Commenter Three', 'UCcommenterThree', 'hello', 1, ?),
-			('sample_video_other', 'sample_comment_4', 'Other', 'UCother', 'hello', 100, ?)
+			('sample_video_1', 'sample_comment_1', 'Commenter One', 'UCcommenterOne', 'hello', 50, $1),
+			('sample_video_1', 'sample_comment_2', 'Commenter Two', 'youtube_UCcommenterTwo', 'hello', 40, $2),
+			('sample_video_1', 'sample_comment_3', 'Commenter Three', 'UCcommenterThree', 'hello', 1, $3),
+			('sample_video_other', 'sample_comment_4', 'Other', 'UCother', 'hello', 100, $4)
 	`, published, published, published, published); err != nil {
 		t.Fatalf("insert comments: %v", err)
 	}

@@ -16,6 +16,7 @@ import (
 )
 
 const DatabaseFilename = "igloo.db"
+const DatabaseBackupFilename = "igloo.pgdump"
 
 var SupportedPlatforms = []string{"youtube", "twitter", "tiktok", "instagram"}
 
@@ -23,6 +24,7 @@ var secretKeyRandomReader io.Reader = rand.Reader
 
 type Config struct {
 	Storage                  storage.Layout
+	DatabaseURL              string
 	ConfDir                  string
 	RepoDir                  string
 	StaticDir                string
@@ -58,6 +60,7 @@ func Load() *Config {
 
 	return &Config{
 		Storage:                  layout,
+		DatabaseURL:              strings.TrimSpace(os.Getenv("IGLOO_DATABASE_URL")),
 		ConfDir:                  configDir,
 		RepoDir:                  repoDir,
 		StaticDir:                filepath.Join(repoDir, "static"),

@@ -108,7 +108,7 @@ func seedContractFeedFixture(t *testing.T, srv *testServer) {
 		t.Fatalf("AddBookmark: %v", err)
 	}
 	if err := srv.db.ExecRaw(
-		`UPDATE bookmarks SET bookmarked_at = ? WHERE video_id = 'sample_tweet_main'`,
+		`UPDATE bookmarks SET bookmarked_at = $1 WHERE video_id = 'sample_tweet_main'`,
 		int64(1_700_000_000_500),
 	); err != nil {
 		t.Fatalf("fix bookmark time: %v", err)
@@ -174,14 +174,14 @@ func seedAndroidContractRows(t *testing.T, srv *testServer) {
 	t.Helper()
 	now := int64(1_700_000_001_000)
 	fetchedAt := time.UnixMilli(now)
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, url, platform)
+	if err := srv.db.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, url, platform)
 		VALUES
 			('twitter_sample_channel', 'sample_channel', 'Contract Channel', 'https://x.com/sample_channel', 'twitter'),
-			('tiktok_sample_channel', 'sample_channel', 'Contract TikTok Channel', 'https://www.tiktok.com/@sample_channel', 'tiktok');
-		INSERT INTO channel_follows (channel_id, followed_at)
-		VALUES ('twitter_sample_channel', ?), ('tiktok_sample_channel', ?)
-	`, now, now); err != nil {
+			('tiktok_sample_channel', 'sample_channel', 'Contract TikTok Channel', 'https://www.tiktok.com/@sample_channel', 'tiktok')`); err != nil {
+		t.Fatalf("insert channels: %v", err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at)
+		VALUES ('twitter_sample_channel', $1), ('tiktok_sample_channel', $2)`, now, now); err != nil {
 		t.Fatalf("insert channels: %v", err)
 	}
 	for _, profile := range []model.ChannelProfile{

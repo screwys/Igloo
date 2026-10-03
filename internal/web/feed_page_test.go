@@ -23,7 +23,7 @@ func TestHandlePageFeedPinsHTMXCursorToItsSnapshot(t *testing.T) {
 		id := fmt.Sprintf("t%02d", i)
 		if err := srv.db.ExecRaw(`INSERT INTO feed_items
 			(tweet_id, channel_id, body_text, published_at, algo_interest, algo_scored_at)
-			VALUES (?, ?, ?, ?, ?, ?)`,
+			VALUES ($1, $2, $3, $4, $5, $6)`,
 			id, "twitter_sample_author", "body "+id, now-int64(i), 1.0, 1); err != nil {
 			t.Fatal(err)
 		}
@@ -39,7 +39,7 @@ func TestHandlePageFeedPinsHTMXCursorToItsSnapshot(t *testing.T) {
 	}
 
 	for _, id := range []string{"t1", "t2"} {
-		if err := srv.db.ExecRaw(`INSERT INTO feed_seen (tweet_id, seen_at) VALUES (?, ?)`,
+		if err := srv.db.ExecRaw(`INSERT INTO feed_seen (tweet_id, seen_at) VALUES ($1, $2)`,
 			id, now); err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +84,7 @@ func TestHandlePageFeedCarriesSnapshotAtInNextCursor(t *testing.T) {
 		id := fmt.Sprintf("t%02d", i)
 		if err := srv.db.ExecRaw(`INSERT INTO feed_items
 			(tweet_id, channel_id, body_text, published_at, algo_interest, algo_scored_at)
-			VALUES (?, ?, ?, ?, ?, ?)`,
+			VALUES ($1, $2, $3, $4, $5, $6)`,
 			id, "twitter_sample_author", "body "+id, now-int64(i), 1.0, 1); err != nil {
 			t.Fatal(err)
 		}

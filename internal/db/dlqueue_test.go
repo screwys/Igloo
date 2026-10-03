@@ -226,7 +226,7 @@ func TestVideoDesireFreshnessIgnoresObservationTime(t *testing.T) {
 		"sample_canonical_new": 200,
 	} {
 		seedTestVideo(t, d, videoID, source)
-		if err := d.ExecRaw(`UPDATE videos SET published_at = ? WHERE video_id = ?`, publishedAt, videoID); err != nil {
+		if err := d.ExecRaw(`UPDATE videos SET published_at = $1 WHERE video_id = $2`, publishedAt, videoID); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -244,8 +244,8 @@ func TestVideoDesireFreshnessIgnoresObservationTime(t *testing.T) {
 		INSERT INTO video_repost_sources
 			(video_id, reposter_channel_id, reposted_at_ms, first_seen_at_ms, updated_at_ms)
 		VALUES
-			('sample_canonical_old', ?, 0, 1000, 1000),
-			('sample_canonical_new', ?, 0, 1, 1)
+			('sample_canonical_old', $1, 0, 1000, 1000),
+			('sample_canonical_new', $2, 0, 1, 1)
 	`, source, source); err != nil {
 		t.Fatal(err)
 	}
@@ -263,10 +263,10 @@ func TestVideoDesireFreshnessIgnoresObservationTime(t *testing.T) {
 	if err := d.EnforceVideoDesireLimits(source, 1, 0); err != nil {
 		t.Fatal(err)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = ? AND video_id = 'sample_canonical_new'`, source); got != 1 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = $1 AND video_id = 'sample_canonical_new'`, source); got != 1 {
 		t.Fatalf("newer canonical desire count = %d", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = ? AND video_id = 'sample_canonical_old'`, source); got != 0 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = $1 AND video_id = 'sample_canonical_old'`, source); got != 0 {
 		t.Fatalf("older canonical desire count = %d", got)
 	}
 }
@@ -312,7 +312,7 @@ func TestDownloadWorkLeaseRetryAndBlock(t *testing.T) {
 	var status, kind, message string
 	if err := d.QueryRow(`
 		SELECT status, last_error_kind, last_error
-		FROM download_queue WHERE video_id = ?
+		FROM download_queue WHERE video_id = $1
 	`, job.VideoID).Scan(&status, &kind, &message); err != nil {
 		t.Fatal(err)
 	}
@@ -359,10 +359,10 @@ func TestCompleteDownloadWorkRequiresReadyMediaAndOwnedLease(t *testing.T) {
 	if err := d.CompleteDownloadWork(video, expired.LeaseOwner); err != nil {
 		t.Fatal(err)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM download_queue WHERE video_id = ?`, video); got != 0 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM download_queue WHERE video_id = $1`, video); got != 0 {
 		t.Fatalf("completed rows = %d", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_fetch_history WHERE video_id = ?`, video); got != 1 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_fetch_history WHERE video_id = $1`, video); got != 1 {
 		t.Fatalf("fetch history rows = %d", got)
 	}
 }
@@ -385,7 +385,7 @@ func TestReadyVideoReconciliationRecordsFetchHistory(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_fetch_history WHERE video_id = ?`, video); got != 1 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_fetch_history WHERE video_id = $1`, video); got != 1 {
 		t.Fatalf("fetch history rows = %d", got)
 	}
 }
@@ -415,8 +415,8 @@ func TestDownloadCompletionKeepsOnlyFirstIntroducedSource(t *testing.T) {
 		INSERT INTO video_repost_sources (
 			video_id, reposter_channel_id, first_seen_at_ms, updated_at_ms
 		) VALUES
-			(?, ?, 100, 100),
-			(?, ?, 200, 200)
+			($1, $2, 100, 100),
+			($3, $4, 200, 200)
 	`, video, first, video, later); err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +436,7 @@ func TestDownloadCompletionKeepsOnlyFirstIntroducedSource(t *testing.T) {
 		if err := d.QueryRow(`
 			SELECT `+sourceColumn+`
 			FROM `+table+`
-			WHERE video_id = ?
+			WHERE video_id = $1
 		`, video).Scan(&got); err != nil {
 			t.Fatalf("read %s: %v", table, err)
 		}
@@ -467,13 +467,13 @@ func TestMaintainVideoRetentionOwnsQueueAndCanonicalCleanup(t *testing.T) {
 		query string
 		args  []any
 	}{
-		{`INSERT INTO bookmarks (video_id, bookmarked_at) VALUES ('sample_bookmarked', ?)`, []any{nowMs}},
-		{`INSERT INTO feed_likes (tweet_id, liked_at) VALUES ('sample_liked', ?)`, []any{nowMs}},
+		{`INSERT INTO bookmarks (video_id, bookmarked_at) VALUES ('sample_bookmarked', $1)`, []any{nowMs}},
+		{`INSERT INTO feed_likes (tweet_id, liked_at) VALUES ('sample_liked', $1)`, []any{nowMs}},
 		{`UPDATE videos SET is_pinned = 1 WHERE video_id = 'sample_pinned'`, nil},
 		{`UPDATE videos SET source_kind = 'manual' WHERE video_id = 'sample_custom_source'`, nil},
-		{`UPDATE videos SET is_temp = 1, downloaded_at = ? WHERE video_id = 'sample_expired_temp'`, []any{oldMs}},
-		{`UPDATE videos SET source_kind = 'story', published_at = ? WHERE video_id = 'sample_expired_story'`, []any{oldMs}},
-		{`UPDATE videos SET is_temp = 1, downloaded_at = ? WHERE video_id = 'sample_active_temp'`, []any{nowMs - int64(time.Hour/time.Millisecond)}},
+		{`UPDATE videos SET is_temp = 1, downloaded_at = $1 WHERE video_id = 'sample_expired_temp'`, []any{oldMs}},
+		{`UPDATE videos SET source_kind = 'story', published_at = $1 WHERE video_id = 'sample_expired_story'`, []any{oldMs}},
+		{`UPDATE videos SET is_temp = 1, downloaded_at = $1 WHERE video_id = 'sample_active_temp'`, []any{nowMs - int64(time.Hour/time.Millisecond)}},
 	} {
 		if err := d.ExecRaw(statement.query, statement.args...); err != nil {
 			t.Fatal(err)
@@ -539,7 +539,7 @@ func TestMaintainVideoRetentionOwnsQueueAndCanonicalCleanup(t *testing.T) {
 		t.Fatalf("collected = %d, want unrooted plus expired temp/story", collected)
 	}
 	for _, videoID := range []string{"sample_unrooted", "sample_expired_temp", "sample_expired_story"} {
-		if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = ?`, videoID); got != 0 {
+		if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = $1`, videoID); got != 0 {
 			t.Fatalf("collected video %s remained", videoID)
 		}
 	}
@@ -547,7 +547,7 @@ func TestMaintainVideoRetentionOwnsQueueAndCanonicalCleanup(t *testing.T) {
 		"sample_bookmarked", "sample_liked", "sample_pinned", "sample_custom_source",
 		"sample_active_temp", "sample_desired_ready", "sample_tweet_owned",
 	} {
-		if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = ?`, videoID); got != 1 {
+		if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = $1`, videoID); got != 1 {
 			t.Fatalf("protected video %s was removed", videoID)
 		}
 	}
@@ -576,11 +576,14 @@ func TestMaintainVideoRetentionDoesNotRewriteStableVideos(t *testing.T) {
 	}
 	if err := d.ExecRaw(`
 		CREATE TABLE video_update_audit (video_id TEXT NOT NULL);
-		CREATE TRIGGER test_video_update_audit
-		AFTER UPDATE ON videos
+		CREATE FUNCTION test_video_update_audit_fn() RETURNS trigger LANGUAGE plpgsql AS $fixture$
 		BEGIN
-			INSERT INTO video_update_audit(video_id) VALUES (new.video_id);
-		END
+INSERT INTO video_update_audit(video_id) VALUES (new.video_id);
+			RETURN NEW;
+		END;
+		$fixture$;
+		CREATE TRIGGER test_video_update_audit AFTER UPDATE ON videos
+		FOR EACH ROW EXECUTE FUNCTION test_video_update_audit_fn();
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -608,7 +611,7 @@ func TestMaintainVideoRetentionExpiresStoryDesiresAndPendingWork(t *testing.T) {
 	freshMs := nowMs - int64(time.Hour/time.Millisecond)
 	if err := d.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at, source_kind)
-		VALUES (?, ?, 'tiktok_video', 'Stored story', ?, 'story')
+		VALUES ($1, $2, 'tiktok_video', 'Stored story', $3, 'story')
 	`, freshStory, source, freshMs); err != nil {
 		t.Fatal(err)
 	}
@@ -623,7 +626,7 @@ func TestMaintainVideoRetentionExpiresStoryDesiresAndPendingWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	var sourceKind string
-	if err := d.QueryRow(`SELECT source_kind FROM videos WHERE video_id = ?`, freshStory).Scan(&sourceKind); err != nil {
+	if err := d.QueryRow(`SELECT source_kind FROM videos WHERE video_id = $1`, freshStory).Scan(&sourceKind); err != nil {
 		t.Fatal(err)
 	}
 	if sourceKind != "story" {
@@ -633,13 +636,13 @@ func TestMaintainVideoRetentionExpiresStoryDesiresAndPendingWork(t *testing.T) {
 	if _, err := d.MaintainVideoRetention(nowMs); err != nil {
 		t.Fatal(err)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = ?`, oldStory); got != 0 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = $1`, oldStory); got != 0 {
 		t.Fatalf("expired story desires = %d", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM download_queue WHERE video_id = ?`, oldStory); got != 0 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM download_queue WHERE video_id = $1`, oldStory); got != 0 {
 		t.Fatalf("expired story work = %d", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = ?`, freshStory); got != 1 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = $1`, freshStory); got != 1 {
 		t.Fatalf("fresh story desires = %d", got)
 	}
 }
@@ -672,16 +675,16 @@ func TestUnfollowStopsWorkAndCollectsUnownedYouTubeVideo(t *testing.T) {
 	if _, err := d.MaintainVideoRetention(time.Now().UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = ?`, video); got != 1 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = $1`, video); got != 1 {
 		t.Fatalf("shared desires after first unfollow = %d", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = ? AND channel_id = ?`, video, owner); got != 1 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = $1 AND channel_id = $2`, video, owner); got != 1 {
 		t.Fatalf("shared video lost canonical owner: %d", got)
 	}
 	if err := d.UnfollowChannel(second); err != nil {
 		t.Fatal(err)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = ?`, video); got != 0 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = $1`, video); got != 0 {
 		t.Fatal("unfollow retained unowned canonical video")
 	}
 	if delay, err := d.NextMediaWorkDelay(time.Now().UnixMilli(), []string{"youtube"}, false, DownloadLaneCurrent); err != nil || delay != 5*time.Minute {
@@ -693,13 +696,13 @@ func TestUnfollowStopsWorkAndCollectsUnownedYouTubeVideo(t *testing.T) {
 	if _, err := d.MaintainVideoRetention(time.Now().UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM download_queue WHERE video_id = ?`, video); got != 0 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM download_queue WHERE video_id = $1`, video); got != 0 {
 		t.Fatalf("maintenance retained inactive work: %d", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = ?`, video); got != 0 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE video_id = $1`, video); got != 0 {
 		t.Fatalf("maintenance restored unowned desires: %d", got)
 	}
-	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = ?`, video); got != 0 {
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = $1`, video); got != 0 {
 		t.Fatalf("maintenance restored unowned video: %d", got)
 	}
 	added, err := d.ReconcileVideoDesires(VideoDesireSnapshot{
@@ -707,7 +710,7 @@ func TestUnfollowStopsWorkAndCollectsUnownedYouTubeVideo(t *testing.T) {
 		Component:       "direct",
 		Items:           []VideoDesire{{VideoID: "sample_late", OwnerChannelID: owner, Lane: DownloadLaneCurrent}},
 	})
-	if err != nil || added != 0 || testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = ?`, first) != 0 {
+	if err != nil || added != 0 || testRowCount(t, d, `SELECT COUNT(*) FROM video_desires WHERE source_channel_id = $1`, first) != 0 {
 		t.Fatalf("unfollowed reconcile added=%d err=%v", added, err)
 	}
 }
@@ -831,14 +834,14 @@ func seedVideoDesireChannels(t *testing.T, d *DB, channelIDs ...string) {
 			platform = "tiktok"
 		}
 		if err := d.ExecRaw(`
-			INSERT OR IGNORE INTO channels (channel_id, name, platform, created_at)
-			VALUES (?, 'Sample Channel', ?, 1)
+			INSERT INTO channels (channel_id, name, platform, created_at)
+			VALUES ($1, 'Sample Channel', $2, 1) ON CONFLICT DO NOTHING
 		`, channelID, platform); err != nil {
 			t.Fatalf("seed channel %s: %v", channelID, err)
 		}
 		if err := d.ExecRaw(`
-			INSERT OR IGNORE INTO channel_follows (channel_id, followed_at)
-			VALUES (?, 1)
+			INSERT INTO channel_follows (channel_id, followed_at)
+			VALUES ($1, 1) ON CONFLICT DO NOTHING
 		`, channelID); err != nil {
 			t.Fatalf("seed follow %s: %v", channelID, err)
 		}

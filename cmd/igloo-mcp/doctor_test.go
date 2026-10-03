@@ -18,7 +18,7 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 	t.Setenv("IGLOO_DATA_DIR", tmp)
 	resetTestServerDB(t)
 
-	d, err := igloodb.OpenPath(filepath.Join(tmp, "igloo.db"), tmp)
+	d, err := igloodb.OpenAtStateRoot(tmp)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -45,13 +45,13 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 		INSERT INTO profile_jobs (
 			channel_id, requested_revision, completed_revision, requested_at_ms,
 			attempts, next_attempt_at_ms, last_error, updated_at_ms
-		) VALUES ('twitter_sample_profile', 2, 1, ?, 1, ?, 'sample failure', ?)
+		) VALUES ('twitter_sample_profile', 2, 1, $1, 1, $2, 'sample failure', $3)
 	`, now, now+1000, now); err != nil {
 		t.Fatalf("insert profile job: %v", err)
 	}
 	if err := d.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
-		VALUES ('sample_video', 'youtube_sample_channel', 'youtube_video', 'Doctor Video', ?)
+		VALUES ('sample_video', 'youtube_sample_channel', 'youtube_video', 'Doctor Video', $1)
 	`, now); err != nil {
 		t.Fatalf("insert video: %v", err)
 	}
@@ -64,9 +64,9 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 			last_error_kind, last_error, added_at_ms
 		) VALUES
 			('sample_video', 'youtube_sample_channel', 'pending', 1,
-			 'temporary', 'sample retry', ?),
+			 'temporary', 'sample retry', $1),
 			('sample_blocked_video', 'youtube_sample_channel', 'blocked', 1,
-			 'unsupported', 'sample terminal failure', ?)
+			 'unsupported', 'sample terminal failure', $2)
 	`, now, now); err != nil {
 		t.Fatalf("insert download queue: %v", err)
 	}
@@ -74,14 +74,14 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 		INSERT INTO downloader_operations (
 			operation, platform, subject, tool, started_at_ms, ended_at_ms,
 			status, error_kind, error
-		) VALUES ('download', 'youtube', 'sample_video', 'yt-dlp', ?, ?, 'failed', 'network', 'sample failure')
+		) VALUES ('download', 'youtube', 'sample_video', 'yt-dlp', $1, $2, 'failed', 'network', 'sample failure')
 	`, now, now); err != nil {
 		t.Fatalf("insert downloader op: %v", err)
 	}
 	if err := d.ExecRaw(`CREATE TABLE custom_lifecycle_probe (id INTEGER PRIMARY KEY, value TEXT)`); err != nil {
 		t.Fatalf("create custom lifecycle probe: %v", err)
 	}
-	if err := d.ExecRaw(`INSERT INTO custom_lifecycle_probe (value) VALUES ('sample')`); err != nil {
+	if err := d.ExecRaw(`INSERT INTO custom_lifecycle_probe (id, value) VALUES (1, 'sample')`); err != nil {
 		t.Fatalf("insert custom lifecycle probe: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(tmp, "logs"), 0o755); err != nil {
@@ -113,10 +113,9 @@ func TestDoctorStatusReportsLocalHealthAndMasksSecrets(t *testing.T) {
 		"=== Igloo Doctor ===",
 		"Storage layout:",
 		"media_ready: true",
-		"Database files:",
-		"SQLite storage:",
-		"page_size:",
-		"reclaimable freelist:",
+		"PostgreSQL storage:",
+		"database_size:",
+		"cluster_wal_size:",
 		"Persistence lifecycle:",
 		"archive:",
 		"maintained_state:",

@@ -32,7 +32,7 @@ func (db *DB) GetAnalyticsRollups(limit int) ([]AnalyticsRollup, error) {
 		SELECT day, event_type, screen, content_type, count, total_elapsed_ms
 		FROM analytics_rollups_daily
 		ORDER BY day DESC, event_type, screen
-		LIMIT ?
+		LIMIT $1
 	`, limit)
 	if err != nil {
 		return nil, err
@@ -52,15 +52,16 @@ func (db *DB) GetAnalyticsRollups(limit int) ([]AnalyticsRollup, error) {
 	return rollups, rows.Err()
 }
 
-// AddAnalyticsEvents inserts events (INSERT OR IGNORE) and returns the count inserted.
+// AddAnalyticsEvents inserts new events and returns the count inserted.
 func (db *DB) AddAnalyticsEvents(events []AnalyticsEvent) (int, error) {
 	added := 0
 	err := db.WithWrite(func(tx *sql.Tx) error {
 		for _, e := range events {
 			res, err := tx.Exec(`
-				INSERT OR IGNORE INTO analytics_events
+				INSERT INTO analytics_events
 				  (event_id, event_type, timestamp_ms, screen, content_type, elapsed_ms, extra_json)
-				VALUES (?, ?, ?, ?, ?, ?, ?)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
+				ON CONFLICT DO NOTHING
 			`, e.EventID, e.EventType, e.TimestampMs, e.Screen, e.ContentType, e.ElapsedMs, e.ExtraJSON)
 			if err != nil {
 				return err
@@ -83,7 +84,7 @@ func (db *DB) GetAnalyticsRecentEvents(limit int) ([]AnalyticsEvent, error) {
 		       COALESCE(content_type,''), COALESCE(elapsed_ms,0), COALESCE(extra_json,'')
 		FROM analytics_events
 		ORDER BY timestamp_ms DESC
-		LIMIT ?
+		LIMIT $1
 	`, limit)
 	if err != nil {
 		return nil, err

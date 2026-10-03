@@ -294,14 +294,16 @@ func TestAndroidSyncBootstrapKeepsEphemeralStateWithinSelectedContent(t *testing
 func TestAndroidSyncFullYoutubeMetadataIsOptInAndCursorBound(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	old := time.Now().Add(-365 * 24 * time.Hour).UnixMilli()
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, platform)
-		VALUES ('youtube_sample_channel', 'sample_channel', 'Sample Channel', 'youtube');
-		INSERT INTO channel_follows (channel_id, followed_at)
-		VALUES ('youtube_sample_channel', ?);
-		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
-		VALUES ('sample_old_video', 'youtube_sample_channel', 'youtube_video', 'Old Video', ?);
-	`, old, old); err != nil {
+	if err := srv.db.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform)
+		VALUES ('youtube_sample_channel', 'sample_channel', 'Sample Channel', 'youtube')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at)
+		VALUES ('youtube_sample_channel', $1)`, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
+		VALUES ('sample_old_video', 'youtube_sample_channel', 'youtube_video', 'Old Video', $1)`, old); err != nil {
 		t.Fatal(err)
 	}
 	streamPath := filepath.Join("media", "youtube", "sample_old_video.mp4")
@@ -381,12 +383,12 @@ func TestAndroidSyncFullYoutubeMetadataIsOptInAndCursorBound(t *testing.T) {
 func TestAndroidSyncMetadataOnlyYoutubeVideoKeepsStreamDescriptor(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	old := time.Now().Add(-365 * 24 * time.Hour).UnixMilli()
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, platform)
-		VALUES ('youtube_sample_channel', 'sample_channel', 'Sample Channel', 'youtube');
-		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
-		VALUES ('sample_old_video', 'youtube_sample_channel', 'youtube_video', 'Old Video', ?);
-	`, old); err != nil {
+	if err := srv.db.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform)
+		VALUES ('youtube_sample_channel', 'sample_channel', 'Sample Channel', 'youtube')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
+		VALUES ('sample_old_video', 'youtube_sample_channel', 'youtube_video', 'Old Video', $1)`, old); err != nil {
 		t.Fatal(err)
 	}
 	streamPath := filepath.Join("media", "youtube", "sample_old_video.mp4")
@@ -449,16 +451,20 @@ func TestAndroidSyncChannelProfileChangeDoesNotRematerializeChannelVideos(t *tes
 func TestAndroidSyncChangesKeepReadyYoutubeVideoWhenDesireIsRemoved(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	now := time.Now().UnixMilli()
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, platform)
-		VALUES ('youtube_sample_channel', 'sample_channel', 'Sample Channel', 'youtube');
-		INSERT INTO channel_follows (channel_id, followed_at)
-		VALUES ('youtube_sample_channel', ?);
-		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
-		VALUES ('sample_video', 'youtube_sample_channel', 'youtube_video', 'Sample Video', ?);
-		INSERT INTO video_desires (source_channel_id, source_component, video_id, source_position, lane)
-		VALUES ('youtube_sample_channel', 'uploads', 'sample_video', 1, 'current');
-	`, now, now); err != nil {
+	if err := srv.db.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform)
+		VALUES ('youtube_sample_channel', 'sample_channel', 'Sample Channel', 'youtube')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at)
+		VALUES ('youtube_sample_channel', $1)`, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
+		VALUES ('sample_video', 'youtube_sample_channel', 'youtube_video', 'Sample Video', $1)`, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO video_desires (source_channel_id, source_component, video_id, source_position, lane)
+		VALUES ('youtube_sample_channel', 'uploads', 'sample_video', 1, 'current')`); err != nil {
 		t.Fatal(err)
 	}
 	streamPath := filepath.Join("media", "youtube", "sample_video.mp4")
@@ -491,12 +497,12 @@ func TestAndroidSyncChangesKeepReadyYoutubeVideoWhenDesireIsRemoved(t *testing.T
 func TestAndroidSyncChangesAddVideoWhenPrimaryAssetBecomesReady(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	now := time.Now().UnixMilli()
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, platform)
-		VALUES ('youtube_sample_channel', 'sample_channel', 'Sample Channel', 'youtube');
-		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
-		VALUES ('sample_new_video', 'youtube_sample_channel', 'youtube_video', 'New Video', ?);
-	`, now); err != nil {
+	if err := srv.db.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform)
+		VALUES ('youtube_sample_channel', 'sample_channel', 'Sample Channel', 'youtube')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
+		VALUES ('sample_new_video', 'youtube_sample_channel', 'youtube_video', 'New Video', $1)`, now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -524,7 +530,7 @@ func TestAndroidSyncTemporaryVideoPayloadMarksItTemporary(t *testing.T) {
 	old := time.Now().Add(-365 * 24 * time.Hour).UnixMilli()
 	if err := srv.db.ExecRaw(`
 		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at, is_temp)
-		VALUES ('sample_temporary_video', 'youtube_sample_channel', 'youtube_video', 'Temporary Video', ?, 1);
+		VALUES ('sample_temporary_video', 'youtube_sample_channel', 'youtube_video', 'Temporary Video', $1, 1);
 	`, old); err != nil {
 		t.Fatal(err)
 	}
@@ -555,8 +561,8 @@ func TestAndroidSyncFeedHeadDoesNotExpandToSameHashPeers(t *testing.T) {
 		INSERT INTO feed_items (
 			tweet_id, channel_id, body_text, content_hash, published_at, fetched_at
 		)
-		SELECT printf('sample_peer_%03d', n), 'twitter_sample_author', 'Peer',
-		       'sample_hash', ?, ?
+		SELECT ('sample_peer_' || lpad((n)::text, 3, '0')), 'twitter_sample_author', 'Peer',
+		       'sample_hash', $1, $2
 		FROM seq
 	`, time.Now().UnixMilli(), time.Now().UnixMilli()); err != nil {
 		t.Fatal(err)
@@ -620,19 +626,19 @@ func TestAndroidSyncLargeThreadChangesAdvanceCursor(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			srv := newAndroidSyncTestServer(t)
 			now := time.Now().UnixMilli()
-			if err := srv.db.ExecRaw(`
-				INSERT INTO feed_items (tweet_id, body_text, published_at, fetched_at)
-				VALUES ('sample_root', 'Root', ?, ?);
-				WITH RECURSIVE seq(n) AS (
+			if err := srv.db.ExecRaw(`INSERT INTO feed_items (tweet_id, body_text, published_at, fetched_at)
+				VALUES ('sample_root', 'Root', $1, $2)`, now, now); err != nil {
+				t.Fatal(err)
+			}
+			if err := srv.db.ExecRaw(`WITH RECURSIVE seq(n) AS (
 					VALUES (1) UNION ALL SELECT n + 1 FROM seq WHERE n < 501
 				)
 				INSERT INTO feed_items (tweet_id, body_text, published_at, fetched_at,
 					is_ghost, reply_to_status, quote_tweet_id)
-				SELECT printf('sample_context_%03d', n), 'Context', ?, ?, 1,
+				SELECT ('sample_context_' || lpad((n)::text, 3, '0')), 'Context', $1, $2, 1,
 					CASE WHEN n % 2 = 0 THEN 'sample_root' ELSE '' END,
 					CASE WHEN n % 2 = 1 THEN 'sample_root' ELSE '' END
-				FROM seq
-			`, now, now, now, now); err != nil {
+				FROM seq`, now, now); err != nil {
 				t.Fatal(err)
 			}
 			page := requestAndroidSyncPage(t, srv, "/api/android/sync/bootstrap?"+query)
@@ -669,22 +675,26 @@ func TestAndroidSyncLargeThreadChangesAdvanceCursor(t *testing.T) {
 func TestAndroidSyncChangesApplyCanonicalSelectionInBothDirections(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	now := time.Now().UnixMilli()
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channel_settings (channel_id, include_reposts, updated_at)
-		VALUES ('twitter_sample_source', 0, ?);
-		INSERT INTO feed_items (
+	if err := srv.db.ExecRaw(`INSERT INTO channel_settings (channel_id, include_reposts, updated_at)
+		VALUES ('twitter_sample_source', 0, $1)`, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO feed_items (
 			tweet_id, source_channel_id, channel_id, is_retweet,
 			content_hash, published_at, fetched_at
 		) VALUES (
 			'sample_repost', 'twitter_sample_source', 'twitter_sample_author', 1,
-			'sample_hash', ?, ?
-		);
-		INSERT INTO retweet_sources (
+			'sample_hash', $1, $2
+		)`, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO retweet_sources (
 			content_hash, retweeter_channel_id, tweet_id, published_at
-		) VALUES ('sample_hash', 'twitter_sample_reposter', 'sample_repost', ?);
-		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
-		VALUES ('sample_video', 'youtube_sample_channel', 'youtube_video', 'Sample', ?);
-	`, now, now, now, now, now); err != nil {
+		) VALUES ('sample_hash', 'twitter_sample_reposter', 'sample_repost', $1)`, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
+		VALUES ('sample_video', 'youtube_sample_channel', 'youtube_video', 'Sample', $1)`, now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -714,7 +724,7 @@ func TestAndroidSyncChangesApplyCanonicalSelectionInBothDirections(t *testing.T)
 		t.Fatalf("empty retweet group was not tombstoned: %+v", androidSyncChangeKeys(page.Changes))
 	}
 
-	if err := srv.db.ExecRaw(`INSERT INTO feed_likes (tweet_id, liked_at) VALUES ('sample_repost', ?)`, now+1); err != nil {
+	if err := srv.db.ExecRaw(`INSERT INTO feed_likes (tweet_id, liked_at) VALUES ('sample_repost', $1)`, now+1); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.db.AddBookmark("sample_video", 0, "", "", ""); err != nil {
@@ -750,7 +760,7 @@ func TestAndroidSyncChangesRemoveDetachedFeedDependencies(t *testing.T) {
 	now := time.Now().UnixMilli()
 	old := time.Now().Add(-365 * 24 * time.Hour).UnixMilli()
 	if err := srv.db.ExecRaw(`
-		WITH timing(recent_ms, old_ms) AS (VALUES (?, ?))
+		WITH timing(recent_ms, old_ms) AS (VALUES ($1::bigint, $2::bigint))
 		INSERT INTO feed_items (
 			tweet_id, content_hash, quote_tweet_id, reply_to_status, published_at, fetched_at
 		)
@@ -829,26 +839,28 @@ func TestAndroidSyncChangesApplyCanonicalFeedRankCap(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	const rows = androidSyncFeedRankMaxRows + 1
 	now := time.Now().UnixMilli()
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES ('twitter_sample_source', 1);
-		WITH RECURSIVE seq(n) AS (
+	if err := srv.db.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ('twitter_sample_source', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`WITH RECURSIVE seq(n) AS (
 			VALUES (1)
 			UNION ALL
-			SELECT n + 1 FROM seq WHERE n < ?
+			SELECT n + 1 FROM seq WHERE n < $1
 		)
 		INSERT INTO feed_items (tweet_id, source_channel_id, channel_id, published_at, fetched_at)
-		SELECT printf('sample_rank_%04d', n), 'twitter_sample_source', 'twitter_sample_source', ?, ? FROM seq;
-		WITH RECURSIVE seq(n) AS (
+		SELECT ('sample_rank_' || lpad((n)::text, 4, '0')), 'twitter_sample_source', 'twitter_sample_source', $2, $3 FROM seq`, rows, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`WITH RECURSIVE seq(n) AS (
 			VALUES (1)
 			UNION ALL
-			SELECT n + 1 FROM seq WHERE n < ?
+			SELECT n + 1 FROM seq WHERE n < $1
 		)
 		INSERT INTO feed_rank_snapshot (
 			tweet_id, rank_position, base_score, decay_factor, freshness_bonus,
 			jitter, diversity_demoted_by, final_score, computed_at
 		)
-		SELECT printf('sample_rank_%04d', n), n, 0, 0, 0, 0, 0, 0, 1 FROM seq
-	`, rows, now, now, rows); err != nil {
+		SELECT ('sample_rank_' || lpad((n)::text, 4, '0')), n, 0, 0, 0, 0, 0, 0, 1 FROM seq`, rows); err != nil {
 		t.Fatal(err)
 	}
 	desired := emptyAndroidSyncDesiredSets()
@@ -881,17 +893,21 @@ func TestAndroidSyncChangesApplyCanonicalFeedRankCap(t *testing.T) {
 func TestAndroidSyncZeroRetentionBootstrapsOnlyProtectedContent(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	old := time.Now().Add(-365 * 24 * time.Hour).UnixMilli()
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channels (channel_id, source_id, name, platform)
-		VALUES ('youtube_sample', 'sample', 'Sample', 'youtube'), ('twitter_sample', 'sample', 'Sample', 'twitter');
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES ('youtube_sample', 1);
-		INSERT INTO feed_items (tweet_id, channel_id, content_hash, published_at, fetched_at) VALUES
-			('feed_protected', 'twitter_sample', 'hash_protected', ?, ?),
-			('feed_unprotected', 'twitter_sample', 'hash_unprotected', ?, ?);
-		INSERT INTO videos (video_id, channel_id, owner_kind, published_at) VALUES
-			('video_protected', 'youtube_sample', 'youtube_video', ?),
-			('video_unprotected', 'youtube_sample', 'youtube_video', ?);
-	`, old, old, old, old, old, old); err != nil {
+	if err := srv.db.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform)
+		VALUES ('youtube_sample', 'sample', 'Sample', 'youtube'), ('twitter_sample', 'sample', 'Sample', 'twitter')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ('youtube_sample', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO feed_items (tweet_id, channel_id, content_hash, published_at, fetched_at) VALUES
+			('feed_protected', 'twitter_sample', 'hash_protected', $1, $2),
+			('feed_unprotected', 'twitter_sample', 'hash_unprotected', $3, $4)`, old, old, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO videos (video_id, channel_id, owner_kind, published_at) VALUES
+			('video_protected', 'youtube_sample', 'youtube_video', $1),
+			('video_unprotected', 'youtube_sample', 'youtube_video', $2)`, old, old); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.db.AddBookmark("feed_protected", 0, "", "", ""); err != nil {
@@ -950,7 +966,7 @@ func TestAndroidSyncBootstrapFinalPageCanBeRetried(t *testing.T) {
 			SELECT n + 1 FROM seq WHERE n < 1001
 		)
 		INSERT INTO feed_likes (tweet_id, liked_at)
-		SELECT printf('sample_post_%04d', n), n FROM seq
+		SELECT ('sample_post_' || lpad((n)::text, 4, '0')), n FROM seq
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -991,12 +1007,15 @@ func TestAndroidSyncBootstrapFinalPageCanBeRetried(t *testing.T) {
 func TestAndroidSyncBootstrapPagesEachOwnerOnceWithinPageLimit(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	nowMs := time.Now().UnixMilli()
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channel_profiles (channel_id, platform, handle, display_name)
-		VALUES ('twitter_sample_shared', 'twitter', 'sample_shared', 'Sample Shared');
-		INSERT INTO channels (channel_id, source_id, name, platform)
-		VALUES ('twitter_sample_shared', 'sample_shared', 'Sample Shared', 'twitter');
-		WITH RECURSIVE seq(n) AS (
+	if err := srv.db.ExecRaw(`INSERT INTO channel_profiles (channel_id, platform, handle, display_name)
+		VALUES ('twitter_sample_shared', 'twitter', 'sample_shared', 'Sample Shared')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform)
+		VALUES ('twitter_sample_shared', 'sample_shared', 'Sample Shared', 'twitter')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`WITH RECURSIVE seq(n) AS (
 			VALUES (1)
 			UNION ALL
 			SELECT n + 1 FROM seq WHERE n < 1001
@@ -1005,26 +1024,31 @@ func TestAndroidSyncBootstrapPagesEachOwnerOnceWithinPageLimit(t *testing.T) {
 			tweet_id, source_channel_id, channel_id, body_text,
 			content_hash, published_at, fetched_at
 		)
-		SELECT printf('sample_shared_post_%04d', n),
+		SELECT ('sample_shared_post_' || lpad((n)::text, 4, '0')),
 		       'twitter_sample_shared', 'twitter_sample_shared', 'Sample body',
-		       'sample_shared_hash', ?, ?
-		FROM seq;
-		UPDATE feed_items
+		       'sample_shared_hash', $1, $2
+		FROM seq`, nowMs, nowMs); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`UPDATE feed_items
 		SET content_hash = 'sample_plain_hash'
-		WHERE tweet_id = 'sample_shared_post_1001';
-		WITH RECURSIVE seq(n) AS (
+		WHERE tweet_id = 'sample_shared_post_1001'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`WITH RECURSIVE seq(n) AS (
 			VALUES (1)
 			UNION ALL
 			SELECT n + 1 FROM seq WHERE n < 1001
 		)
 		INSERT INTO feed_likes (tweet_id, liked_at)
-		SELECT printf('sample_shared_post_%04d', n), ? + n FROM seq;
-		INSERT INTO retweet_sources (
+		SELECT ('sample_shared_post_' || lpad((n)::text, 4, '0')), $1::bigint + n FROM seq`, nowMs); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO retweet_sources (
 			content_hash, retweeter_channel_id, tweet_id, published_at
 		) VALUES (
-			'sample_shared_hash', 'twitter_sample_shared', 'sample_shared_post_0001', ?
-		)
-	`, nowMs, nowMs, nowMs, nowMs); err != nil {
+			'sample_shared_hash', 'twitter_sample_shared', 'sample_shared_post_0001', $1
+		)`, nowMs); err != nil {
 		t.Fatal(err)
 	}
 	assetPath := filepath.Join("media", "twitter", "sample-shared-avatar.jpg")
@@ -1089,24 +1113,26 @@ func TestAndroidSyncChangesSessionBoundsPagesWithoutRetainingWholeSelection(t *t
 	}
 	bootstrap := requestAndroidSyncPage(t, srv, "/api/android/sync/bootstrap?"+androidSyncTestFullYoutubeMetadataQuery)
 	nowMs := time.Now().UnixMilli()
-	if err := srv.db.ExecRaw(`
-		WITH RECURSIVE seq(n) AS (
+	if err := srv.db.ExecRaw(`WITH RECURSIVE seq(n) AS (
 			VALUES (1)
 			UNION ALL
 			SELECT n + 1 FROM seq WHERE n < 500
 		)
 		INSERT INTO feed_seen (tweet_id, seen_at)
-		SELECT printf('sample_seen_%04d', n), n FROM seq;
-		INSERT INTO feed_items (
+		SELECT ('sample_seen_' || lpad((n)::text, 4, '0')), n FROM seq`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO feed_items (
 			tweet_id, source_channel_id, channel_id, is_retweet,
 			content_hash, published_at, fetched_at
 		) VALUES (
 			'sample_session_feed', 'twitter_sample_source', 'twitter_sample_author', 1,
-			'sample_session_hash', ?, ?
-		);
-		INSERT INTO retweet_sources (content_hash, retweeter_channel_id, tweet_id, published_at)
-		VALUES ('sample_session_hash', 'twitter_sample_reposter', 'sample_session_feed', ?)
-	`, nowMs, nowMs, nowMs); err != nil {
+			'sample_session_hash', $1, $2
+		)`, nowMs, nowMs); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO retweet_sources (content_hash, retweeter_channel_id, tweet_id, published_at)
+		VALUES ('sample_session_hash', 'twitter_sample_reposter', 'sample_session_feed', $1)`, nowMs); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1125,10 +1151,10 @@ func TestAndroidSyncChangesSessionBoundsPagesWithoutRetainingWholeSelection(t *t
 	if selection != nil {
 		t.Fatal("changes session retained an unbounded desired selection")
 	}
-	if err := srv.db.ExecRaw(`
-		DELETE FROM retweet_sources WHERE content_hash = 'sample_session_hash';
-		INSERT INTO feed_seen (tweet_id, seen_at) VALUES ('sample_after_through', ?)
-	`, nowMs+1); err != nil {
+	if err := srv.db.ExecRaw(`DELETE FROM retweet_sources WHERE content_hash = 'sample_session_hash'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO feed_seen (tweet_id, seen_at) VALUES ('sample_after_through', $1)`, nowMs+1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1171,7 +1197,7 @@ func TestAndroidSyncV3CompletesFrozenChangesSnapshotBeforeNewerRevisions(t *test
 			SELECT n + 1 FROM seq WHERE n < 501
 		)
 		INSERT INTO feed_seen (tweet_id, seen_at)
-		SELECT printf('sample_v3_seen_%04d', n), n FROM seq
+		SELECT ('sample_v3_seen_' || lpad((n)::text, 4, '0')), n FROM seq
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -1223,14 +1249,14 @@ func TestAndroidSyncV3RequestResetsAnOlderOpaqueCursor(t *testing.T) {
 func TestAndroidSyncV3TransfersFeedRankingAsOneSnapshotDocument(t *testing.T) {
 	srv := newAndroidSyncTestServer(t)
 	now := time.Now().UnixMilli()
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channel_follows (channel_id, followed_at)
-		VALUES ('twitter_sample_rank_source', 1);
-		INSERT INTO feed_items (tweet_id, source_channel_id, channel_id, published_at, fetched_at)
+	if err := srv.db.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at)
+		VALUES ('twitter_sample_rank_source', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO feed_items (tweet_id, source_channel_id, channel_id, published_at, fetched_at)
 		VALUES
-			('sample_rank_first', 'twitter_sample_rank_source', 'twitter_sample_rank_source', ?, ?),
-			('sample_rank_second', 'twitter_sample_rank_source', 'twitter_sample_rank_source', ?, ?)
-	`, now, now, now, now); err != nil {
+			('sample_rank_first', 'twitter_sample_rank_source', 'twitter_sample_rank_source', $1, $2),
+			('sample_rank_second', 'twitter_sample_rank_source', 'twitter_sample_rank_source', $3, $4)`, now, now, now, now); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.db.ReplaceFeedRankSnapshot([]db.SnapshotRow{
@@ -1276,7 +1302,7 @@ func TestAndroidSyncChangesSessionResumesAfterCacheLoss(t *testing.T) {
 			SELECT n + 1 FROM seq WHERE n < 501
 		)
 		INSERT INTO feed_seen (tweet_id, seen_at)
-		SELECT printf('sample_resume_seen_%04d', n), n FROM seq
+		SELECT ('sample_resume_seen_' || lpad((n)::text, 4, '0')), n FROM seq
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -1419,7 +1445,7 @@ func TestAndroidSyncAssetFileWithdrawsUnavailableReadyDescriptor(t *testing.T) {
 			var headBefore int64
 			if err := srv.db.QueryRow(`
 				SELECT revision FROM android_sync_heads
-				WHERE owner_kind = 'asset' AND owner_id = ?
+				WHERE owner_kind = 'asset' AND owner_id = $1
 			`, asset.AssetID).Scan(&headBefore); err != nil {
 				t.Fatal(err)
 			}
@@ -1441,7 +1467,7 @@ func TestAndroidSyncAssetFileWithdrawsUnavailableReadyDescriptor(t *testing.T) {
 			var headAfter int64
 			if err := srv.db.QueryRow(`
 				SELECT revision FROM android_sync_heads
-				WHERE owner_kind = 'asset' AND owner_id = ?
+				WHERE owner_kind = 'asset' AND owner_id = $1
 			`, asset.AssetID).Scan(&headAfter); err != nil {
 				t.Fatal(err)
 			}
@@ -1575,24 +1601,32 @@ func assertFlatAndroidSyncPayloads(t *testing.T, changes []model.AndroidSyncChan
 func seedAndroidSyncContent(t *testing.T, srv *testServer) db.Asset {
 	t.Helper()
 	now := time.Now().UnixMilli()
-	if err := srv.db.ExecRaw(`
-		INSERT INTO channel_profiles (channel_id, platform, handle, display_name) VALUES
+	if err := srv.db.ExecRaw(`INSERT INTO channel_profiles (channel_id, platform, handle, display_name) VALUES
 			('twitter_sample_author', 'twitter', 'sample_author', 'Sample Author'),
 			('twitter_sample_reposter', 'twitter', 'sample_reposter', 'Sample Reposter'),
-			('youtube_sample_channel', 'youtube', 'sample_channel', 'Sample Channel');
-		INSERT INTO channels (channel_id, source_id, name, platform) VALUES
+			('youtube_sample_channel', 'youtube', 'sample_channel', 'Sample Channel')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO channels (channel_id, source_id, name, platform) VALUES
 			('twitter_sample_author', 'sample_author', 'Sample Author', 'twitter'),
 			('twitter_sample_reposter', 'sample_reposter', 'Sample Reposter', 'twitter'),
-			('youtube_sample_channel', 'sample_channel', 'Sample Channel', 'youtube');
-		INSERT INTO channel_follows (channel_id, followed_at) VALUES ('youtube_sample_channel', ?);
-		INSERT INTO feed_items (
+			('youtube_sample_channel', 'sample_channel', 'Sample Channel', 'youtube')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ('youtube_sample_channel', $1)`, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO feed_items (
 			tweet_id, source_channel_id, channel_id, body_text, content_hash, published_at, fetched_at
-		) VALUES ('sample_tweet', 'twitter_sample_author', 'twitter_sample_author', 'Sample body', 'sample_hash', ?, ?);
-		INSERT INTO retweet_sources (content_hash, retweeter_channel_id, tweet_id, published_at)
-		VALUES ('sample_hash', 'twitter_sample_reposter', 'sample_tweet', ?);
-		INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
-		VALUES ('sample_video', 'youtube_sample_channel', 'youtube_video', 'Sample Video', ?);
-	`, now, now, now, now, now); err != nil {
+		) VALUES ('sample_tweet', 'twitter_sample_author', 'twitter_sample_author', 'Sample body', 'sample_hash', $1, $2)`, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO retweet_sources (content_hash, retweeter_channel_id, tweet_id, published_at)
+		VALUES ('sample_hash', 'twitter_sample_reposter', 'sample_tweet', $1)`, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.db.ExecRaw(`INSERT INTO videos (video_id, channel_id, owner_kind, title, published_at)
+		VALUES ('sample_video', 'youtube_sample_channel', 'youtube_video', 'Sample Video', $1)`, now); err != nil {
 		t.Fatal(err)
 	}
 	streamPath := filepath.Join("media", "youtube", "sample_video.mp4")
@@ -1711,7 +1745,7 @@ func newAndroidSyncTestServer(t *testing.T) *testServer {
 	dbPath := tmp.Name()
 	_ = tmp.Close()
 	dataDir := t.TempDir()
-	database, err := db.OpenPath(dbPath, dataDir)
+	database, err := db.OpenAtStateRoot(dataDir)
 	if err != nil {
 		_ = os.Remove(dbPath)
 		t.Fatal(err)

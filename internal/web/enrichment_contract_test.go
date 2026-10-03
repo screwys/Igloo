@@ -147,14 +147,14 @@ func TestFeedXExcludesSeenContent(t *testing.T) {
 		if err := srv.db.ExecRaw(`INSERT INTO feed_items
 			(tweet_id, channel_id, source_channel_id, body_text, content_hash,
 			 canonical_tweet_id, published_at, fetched_at, algo_interest, algo_scored_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 			row.id, "twitter_sample_author", "twitter_sample_author", "body "+row.id, row.hash,
 			row.id, row.published, now, 20.0, 1); err != nil {
 			t.Fatalf("insert %s: %v", row.id, err)
 		}
 	}
 	if err := srv.db.ExecRaw(
-		`INSERT INTO feed_seen (tweet_id, seen_at) VALUES (?, ?)`,
+		`INSERT INTO feed_seen (tweet_id, seen_at) VALUES ($1, $2)`,
 		"seen_post", now,
 	); err != nil {
 		t.Fatalf("insert seen row: %v", err)

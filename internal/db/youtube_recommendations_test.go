@@ -175,7 +175,7 @@ func TestPreparedDiscoverGenerationKeepsOldPageUntilAtomicHandoff(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := d.ExecRaw(`INSERT INTO discover_generation (id, candidates_json, prepared_at_ms, expires_at_ms) VALUES (1, ?, 1, 1)`, string(payload)); err != nil {
+	if err := d.ExecRaw(`INSERT INTO discover_generation (id, candidates_json, prepared_at_ms, expires_at_ms) VALUES (1, $1, 1, 1)`, string(payload)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -266,7 +266,7 @@ func TestPreparedDiscoverReplacesNewlyFollowedCreatorFromReserve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := d.ExecRaw(`INSERT INTO discover_generation (id, candidates_json) VALUES (1, ?)`, string(payload)); err != nil {
+	if err := d.ExecRaw(`INSERT INTO discover_generation (id, candidates_json) VALUES (1, $1)`, string(payload)); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.ExecRaw(`INSERT INTO channel_follows (channel_id, followed_at) VALUES ('youtube_UCfollowed_candidate', 1)`); err != nil {

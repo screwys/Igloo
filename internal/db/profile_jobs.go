@@ -17,19 +17,19 @@ const (
 
 const profileJobClaimCandidatesSQL = `
 	SELECT channel_id
-	FROM profile_jobs INDEXED BY idx_profile_jobs_claim
+	FROM profile_jobs
 	WHERE requested_revision > completed_revision
-	  AND next_attempt_at_ms <= ?
-	  AND (lease_owner = '' OR lease_until_ms <= ?)
+	  AND next_attempt_at_ms <= $1
+	  AND (lease_owner = '' OR lease_until_ms <= $2)
 	ORDER BY requested_at_ms DESC, channel_id
-	LIMIT ?`
+	LIMIT $3`
 
 const profileJobNextDelaySQL = `
 	SELECT MIN(CASE
 		WHEN lease_owner != '' THEN lease_until_ms
 		WHEN next_attempt_at_ms > 0 THEN next_attempt_at_ms
-		ELSE ? END)
-	FROM profile_jobs INDEXED BY idx_profile_jobs_claim
+		ELSE $1 END)
+	FROM profile_jobs
 	WHERE requested_revision > completed_revision`
 
 type profileObservation struct {
@@ -130,7 +130,7 @@ func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 		INSERT INTO channel_profiles (
 			channel_id, platform, handle, display_name, bio, website,
 			followers, following, verified, observed_at_ms, tombstone
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0)
 		ON CONFLICT(channel_id) DO UPDATE SET
 			platform = excluded.platform,
 			handle = CASE
@@ -144,25 +144,25 @@ func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 				 AND excluded.observed_at_ms >= channel_profiles.observed_at_ms THEN excluded.display_name
 				ELSE channel_profiles.display_name
 			END,
-			observed_at_ms = MAX(channel_profiles.observed_at_ms, excluded.observed_at_ms),
+			observed_at_ms = GREATEST(channel_profiles.observed_at_ms, excluded.observed_at_ms),
 			tombstone = CASE
 				WHEN excluded.observed_at_ms >= channel_profiles.fetched_at THEN 0
 				ELSE channel_profiles.tombstone
 			END
-		WHERE channel_profiles.platform IS NOT excluded.platform
-		   OR channel_profiles.handle IS NOT CASE
+		WHERE channel_profiles.platform IS DISTINCT FROM excluded.platform
+		   OR channel_profiles.handle IS DISTINCT FROM CASE
 			  WHEN COALESCE(channel_profiles.handle, '') = '' THEN excluded.handle
 			  ELSE channel_profiles.handle
 		   END
-		   OR channel_profiles.display_name IS NOT CASE
+		   OR channel_profiles.display_name IS DISTINCT FROM CASE
 			  WHEN COALESCE(excluded.display_name, '') = '' THEN channel_profiles.display_name
 			  WHEN COALESCE(channel_profiles.display_name, '') = '' THEN excluded.display_name
 			  WHEN channel_profiles.fetched_at = 0
 			   AND excluded.observed_at_ms >= channel_profiles.observed_at_ms THEN excluded.display_name
 			  ELSE channel_profiles.display_name
 		   END
-		   OR channel_profiles.observed_at_ms IS NOT MAX(channel_profiles.observed_at_ms, excluded.observed_at_ms)
-		   OR channel_profiles.tombstone IS NOT CASE
+		   OR channel_profiles.observed_at_ms IS DISTINCT FROM GREATEST(channel_profiles.observed_at_ms, excluded.observed_at_ms)
+		   OR channel_profiles.tombstone IS DISTINCT FROM CASE
 			  WHEN excluded.observed_at_ms >= channel_profiles.fetched_at THEN 0
 			  ELSE channel_profiles.tombstone
 		   END
@@ -191,7 +191,7 @@ func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 			INSERT INTO profile_jobs (
 				channel_id, requested_revision, completed_revision,
 				requested_at_ms, updated_at_ms
-			) VALUES (?, 1, 0, ?, ?)
+			) VALUES ($1, 1, 0, $2, $3)
 		`, observation.channelID, observation.observedAt, observation.observedAt)
 		return err
 	}
@@ -202,12 +202,12 @@ func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 	_, err = tx.Exec(`
 		UPDATE profile_jobs
 		SET requested_revision = requested_revision + 1,
-			requested_at_ms = ?,
+			requested_at_ms = $1,
 			attempts = 0,
 			next_attempt_at_ms = 0,
 			last_error = '',
-			updated_at_ms = ?
-		WHERE channel_id = ?
+			updated_at_ms = $2
+		WHERE channel_id = $3
 	`, observation.observedAt, observation.observedAt, observation.channelID)
 	return err
 }
@@ -215,19 +215,19 @@ func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 func mergeInstagramObservedMetadataTx(tx *sql.Tx, observation profileObservation) error {
 	_, err := tx.Exec(`
 		UPDATE channel_profiles
-		SET display_name = CASE WHEN ? != '' THEN ? ELSE display_name END,
-		    bio = CASE WHEN ? != '' THEN ? ELSE bio END,
-		    website = CASE WHEN ? != '' THEN ? ELSE website END,
-		    followers = CASE WHEN ? > 0 THEN ? ELSE followers END,
-		    following = CASE WHEN ? > 0 THEN ? ELSE following END,
-		    verified = CASE WHEN ? != 0 THEN 1 ELSE verified END
-		WHERE channel_id = ?
-		  AND ((? != '' AND COALESCE(display_name, '') != ?)
-		    OR (? != '' AND COALESCE(bio, '') != ?)
-		    OR (? != '' AND COALESCE(website, '') != ?)
-		    OR (? > 0 AND followers != ?)
-		    OR (? > 0 AND following != ?)
-		    OR (? != 0 AND verified = 0))
+		SET display_name = CASE WHEN $1 != '' THEN $2 ELSE display_name END,
+		    bio = CASE WHEN $3 != '' THEN $4 ELSE bio END,
+		    website = CASE WHEN $5 != '' THEN $6 ELSE website END,
+		    followers = CASE WHEN $7::bigint > 0 THEN $8 ELSE followers END,
+		    following = CASE WHEN $9::bigint > 0 THEN $10 ELSE following END,
+		    verified = CASE WHEN $11 != 0 THEN 1 ELSE verified END
+		WHERE channel_id = $12
+		  AND (($13 != '' AND COALESCE(display_name, '') != $14)
+		    OR ($15 != '' AND COALESCE(bio, '') != $16)
+		    OR ($17 != '' AND COALESCE(website, '') != $18)
+		    OR ($19::bigint > 0 AND followers != $20)
+		    OR ($21::bigint > 0 AND following != $22)
+		    OR ($23 != 0 AND verified = 0))
 	`,
 		observation.displayName, observation.displayName,
 		observation.bio, observation.bio,
@@ -261,7 +261,7 @@ func normalizeProfileObservation(observation profileObservation) (profileObserva
 	default:
 		return observation, false
 	}
-	observation.displayName = strings.TrimSpace(observation.displayName)
+	observation.displayName = strings.TrimSpace(strings.ReplaceAll(observation.displayName, "\x00", ""))
 	observation.bio = strings.TrimSpace(observation.bio)
 	observation.website = strings.TrimSpace(observation.website)
 	observation.avatarURL = strings.TrimSpace(model.CleanFeedAvatarURL(observation.avatarURL))
@@ -299,7 +299,7 @@ func readProfileObservationStateTx(tx *sql.Tx, channelID string) (profileObserva
 	err := tx.QueryRow(`
 		SELECT COALESCE(cp.handle, ''), COALESCE(cp.display_name, ''),
 		       COALESCE(mo.source_url, ''),
-		       MAX(COALESCE(cp.observed_at_ms, 0), COALESCE(cp.fetched_at, 0)),
+		       GREATEST(COALESCE(cp.observed_at_ms, 0), COALESCE(cp.fetched_at, 0)),
 		       COALESCE(cp.fetched_at, 0), COALESCE(cp.tombstone, 0),
 		       CASE WHEN pj.requested_revision = pj.completed_revision AND pj.last_error != ''
 		            THEN pj.updated_at_ms ELSE 0 END,
@@ -313,7 +313,7 @@ func readProfileObservationStateTx(tx *sql.Tx, channelID string) (profileObserva
 		 AND a.owner_id = cp.channel_id
 		 AND a.media_index = 0
 		LEFT JOIN media_objects mo ON mo.object_id = a.desired_object_id
-		WHERE cp.channel_id = ?
+		WHERE cp.channel_id = $1
 	`, channelID).Scan(
 		&state.handle, &state.displayName, &state.avatarURL,
 		&state.identityAt, &state.fetchedAt, &tombstone, &state.failedAt,
@@ -337,7 +337,7 @@ func (db *DB) GetProfileJob(channelID string) (*model.ProfileJob, error) {
 		       requested_at_ms, lease_owner, lease_until_ms, attempts,
 		       next_attempt_at_ms, last_error, updated_at_ms
 		FROM profile_jobs
-		WHERE channel_id = ?
+		WHERE channel_id = $1
 	`, strings.TrimSpace(channelID)))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -365,9 +365,9 @@ func (db *DB) RequestProfileJob(channelID string, nowMs int64) error {
 				channel_id, requested_revision, completed_revision,
 				requested_at_ms, updated_at_ms
 			)
-			SELECT channel_id, 1, 0, ?, ?
+			SELECT channel_id, 1, 0, $1, $2
 			FROM channel_profiles
-			WHERE channel_id = ?
+			WHERE channel_id = $3
 			ON CONFLICT(channel_id) DO UPDATE SET
 				requested_revision = profile_jobs.requested_revision + 1,
 				requested_at_ms = excluded.requested_at_ms,
@@ -408,7 +408,7 @@ func (db *DB) ClaimProfileJobs(opts LeaseOptions) ([]model.ProfileJob, error) {
 
 	var claimed []model.ProfileJob
 	err := db.WithWrite(func(tx *sql.Tx) error {
-		rows, err := tx.Query(profileJobClaimCandidatesSQL, opts.NowMs, opts.NowMs, opts.Limit)
+		rows, err := tx.Query(bind(profileJobClaimCandidatesSQL), opts.NowMs, opts.NowMs, opts.Limit)
 		if err != nil {
 			return err
 		}
@@ -431,11 +431,11 @@ func (db *DB) ClaimProfileJobs(opts LeaseOptions) ([]model.ProfileJob, error) {
 		for _, id := range ids {
 			res, err := tx.Exec(`
 				UPDATE profile_jobs
-				SET lease_owner = ?, lease_until_ms = ?, updated_at_ms = ?
-				WHERE channel_id = ?
+				SET lease_owner = $1, lease_until_ms = $2, updated_at_ms = $3
+				WHERE channel_id = $4
 				  AND requested_revision > completed_revision
-				  AND next_attempt_at_ms <= ?
-				  AND (lease_owner = '' OR lease_until_ms <= ?)
+				  AND next_attempt_at_ms <= $5
+				  AND (lease_owner = '' OR lease_until_ms <= $6)
 			`, opts.Owner, opts.NowMs+opts.LeaseMs, opts.NowMs, id, opts.NowMs, opts.NowMs)
 			if err != nil {
 				return err
@@ -451,7 +451,7 @@ func (db *DB) ClaimProfileJobs(opts LeaseOptions) ([]model.ProfileJob, error) {
 				SELECT channel_id, requested_revision, completed_revision,
 				       requested_at_ms, lease_owner, lease_until_ms, attempts,
 				       next_attempt_at_ms, last_error, updated_at_ms
-				FROM profile_jobs WHERE channel_id = ?
+				FROM profile_jobs WHERE channel_id = $1
 			`, id))
 			if err != nil {
 				return err
@@ -474,16 +474,16 @@ func (db *DB) ReleaseProfileJob(job model.ProfileJob, nowMs int64) error {
 		res, err := tx.Exec(`
 			UPDATE profile_jobs
 			SET attempts = CASE
-					WHEN requested_revision = ? THEN attempts
+					WHEN requested_revision = $1 THEN attempts
 					ELSE 0
 				END,
 				next_attempt_at_ms = 0,
 				last_error = CASE
-					WHEN requested_revision = ? THEN last_error
+					WHEN requested_revision = $2 THEN last_error
 					ELSE ''
 				END,
-				lease_owner = '', lease_until_ms = 0, updated_at_ms = ?
-			WHERE channel_id = ? AND lease_owner = ? AND lease_until_ms = ?
+				lease_owner = '', lease_until_ms = 0, updated_at_ms = $3
+			WHERE channel_id = $4 AND lease_owner = $5 AND lease_until_ms = $6
 		`, job.RequestedRevision, job.RequestedRevision, nowMs,
 			job.ChannelID, job.LeaseOwner, profileJobLeaseUntilMs(job))
 		if err != nil {
@@ -531,7 +531,7 @@ func (db *DB) CompleteProfileJob(job model.ProfileJob, profile model.ChannelProf
 		err := tx.QueryRow(`
 			SELECT requested_revision, lease_owner, lease_until_ms
 			FROM profile_jobs
-			WHERE channel_id = ?
+			WHERE channel_id = $1
 		`, job.ChannelID).Scan(&requested, &owner, &leaseUntilMs)
 		if err != nil {
 			return err
@@ -542,8 +542,8 @@ func (db *DB) CompleteProfileJob(job model.ProfileJob, profile model.ChannelProf
 		if requested != job.RequestedRevision {
 			_, err := tx.Exec(`
 				UPDATE profile_jobs
-				SET lease_owner = '', lease_until_ms = 0, updated_at_ms = ?
-				WHERE channel_id = ? AND lease_owner = ? AND lease_until_ms = ?
+				SET lease_owner = '', lease_until_ms = 0, updated_at_ms = $1
+				WHERE channel_id = $2 AND lease_owner = $3 AND lease_until_ms = $4
 			`, nowMs, job.ChannelID, job.LeaseOwner, leaseUntilMs)
 			return err
 		}
@@ -573,8 +573,8 @@ func (db *DB) CompleteProfileJob(job model.ProfileJob, profile model.ChannelProf
 			if sourceURL == "" {
 				if _, err := tx.Exec(`
 					DELETE FROM assets
-					WHERE asset_kind = ? AND owner_kind = 'channel'
-					  AND owner_id = ? AND media_index = 0
+					WHERE asset_kind = $1 AND owner_kind = 'channel'
+					  AND owner_id = $2 AND media_index = 0
 				`, kind, profile.ChannelID); err != nil {
 					return err
 				}
@@ -592,14 +592,14 @@ func (db *DB) CompleteProfileJob(job model.ProfileJob, profile model.ChannelProf
 		}
 		res, err := tx.Exec(`
 			UPDATE profile_jobs
-			SET completed_revision = ?,
+			SET completed_revision = $1,
 				lease_owner = '', lease_until_ms = 0,
 				attempts = 0, next_attempt_at_ms = 0, last_error = '',
-				updated_at_ms = ?
-			WHERE channel_id = ?
-			  AND requested_revision = ?
-			  AND lease_owner = ?
-			  AND lease_until_ms = ?
+				updated_at_ms = $2
+			WHERE channel_id = $3
+			  AND requested_revision = $4
+			  AND lease_owner = $5
+			  AND lease_until_ms = $6
 		`, job.RequestedRevision, nowMs, job.ChannelID, job.RequestedRevision,
 			job.LeaseOwner, leaseUntilMs)
 		if err != nil {
@@ -679,8 +679,8 @@ func reusableProfileAssetTx(tx *sql.Tx, channelID, kind, sourceURL string) (bool
 		FROM assets a
 		JOIN media_objects current ON current.object_id = a.object_id
 		JOIN media_objects desired ON desired.object_id = a.desired_object_id
-		WHERE a.asset_kind = ? AND a.owner_kind = 'channel'
-		  AND a.owner_id = ? AND a.media_index = 0
+		WHERE a.asset_kind = $1 AND a.owner_kind = 'channel'
+		  AND a.owner_id = $2 AND a.media_index = 0
 	`, kind, channelID).Scan(&storedSource, &filePath, &contentType, &sizeBytes, &fileMtimeNs, &state)
 	if err == sql.ErrNoRows {
 		return false, nil
@@ -707,19 +707,19 @@ func (db *DB) RetryProfileJob(job model.ProfileJob, message string, delay time.D
 		res, err := tx.Exec(`
 			UPDATE profile_jobs
 			SET attempts = CASE
-					WHEN requested_revision = ? THEN attempts + 1
+					WHEN requested_revision = $1 THEN attempts + 1
 					ELSE 0
 				END,
 				next_attempt_at_ms = CASE
-					WHEN requested_revision = ? THEN ?
+					WHEN requested_revision = $2 THEN $3::BIGINT
 					ELSE 0
 				END,
 				last_error = CASE
-					WHEN requested_revision = ? THEN ?
+					WHEN requested_revision = $4 THEN $5
 					ELSE ''
 				END,
-				lease_owner = '', lease_until_ms = 0, updated_at_ms = ?
-			WHERE channel_id = ? AND lease_owner = ? AND lease_until_ms = ?
+				lease_owner = '', lease_until_ms = 0, updated_at_ms = $6
+			WHERE channel_id = $7 AND lease_owner = $8 AND lease_until_ms = $9
 		`, job.RequestedRevision,
 			job.RequestedRevision, nowMs+delay.Milliseconds(),
 			job.RequestedRevision, strings.TrimSpace(message),
@@ -738,11 +738,11 @@ func (db *DB) FailProfileJob(job model.ProfileJob, message string, nowMs int64) 
 	return db.WithWrite(func(tx *sql.Tx) error {
 		res, err := tx.Exec(`
 			UPDATE profile_jobs
-			SET completed_revision = CASE WHEN requested_revision = ? THEN requested_revision ELSE completed_revision END,
-			    attempts = CASE WHEN requested_revision = ? THEN attempts + 1 ELSE 0 END,
-			    next_attempt_at_ms = 0, last_error = ?,
-			    lease_owner = '', lease_until_ms = 0, updated_at_ms = ?
-			WHERE channel_id = ? AND lease_owner = ? AND lease_until_ms = ?
+			SET completed_revision = CASE WHEN requested_revision = $1 THEN requested_revision ELSE completed_revision END,
+			    attempts = CASE WHEN requested_revision = $2 THEN attempts + 1 ELSE 0 END,
+			    next_attempt_at_ms = 0, last_error = $3,
+			    lease_owner = '', lease_until_ms = 0, updated_at_ms = $4
+			WHERE channel_id = $5 AND lease_owner = $6 AND lease_until_ms = $7
 		`, job.RequestedRevision, job.RequestedRevision, strings.TrimSpace(message), nowMs,
 			job.ChannelID, job.LeaseOwner, profileJobLeaseUntilMs(job))
 		if err != nil {
@@ -757,7 +757,7 @@ func (db *DB) NextProfileJobDelay(nowMs int64) (time.Duration, error) {
 		nowMs = time.Now().UnixMilli()
 	}
 	var due sql.NullInt64
-	err := db.reader().QueryRow(profileJobNextDelaySQL, nowMs).Scan(&due)
+	err := db.reader().QueryRow(bind(profileJobNextDelaySQL), nowMs).Scan(&due)
 	if err != nil {
 		return 0, err
 	}

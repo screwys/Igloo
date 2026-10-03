@@ -38,7 +38,7 @@ func (db *DB) QueueVideoMetadataJob(videoID string, nowMs int64) error {
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
 		var ownerKind string
-		if err := tx.QueryRow(`SELECT owner_kind FROM videos WHERE video_id = ?`, videoID).Scan(&ownerKind); err != nil {
+		if err := tx.QueryRow(`SELECT owner_kind FROM videos WHERE video_id = $1`, videoID).Scan(&ownerKind); err != nil {
 			return err
 		}
 		if ownerKind != "youtube_video" {
@@ -47,7 +47,7 @@ func (db *DB) QueueVideoMetadataJob(videoID string, nowMs int64) error {
 		_, err := tx.Exec(`
 			INSERT INTO video_metadata_jobs (
 				video_id, status, next_attempt_at_ms, requested_at_ms, updated_at_ms
-			) VALUES (?, 'pending', 0, ?, ?)
+			) VALUES ($1, 'pending', 0, $2, $3)
 			ON CONFLICT(video_id) DO UPDATE SET
 				status = CASE WHEN video_metadata_jobs.status = 'processing' THEN 'processing' ELSE 'pending' END,
 				attempts = CASE WHEN video_metadata_jobs.status = 'processing' THEN video_metadata_jobs.attempts ELSE 0 END,
@@ -69,13 +69,13 @@ func (db *DB) ClaimVideoMetadataJob(opts LeaseOptions) (VideoMetadataJob, bool, 
 			FROM video_metadata_jobs vmj
 			JOIN videos v ON v.video_id = vmj.video_id
 			WHERE v.owner_kind = 'youtube_video'
-			  AND vmj.next_attempt_at_ms <= ?
+			  AND vmj.next_attempt_at_ms <= $1
 			  AND (
-				(vmj.status = ? AND (vmj.lease_until_ms = 0 OR vmj.lease_until_ms <= ?))
-				OR (vmj.status = ? AND vmj.lease_until_ms <= ?)
+				(vmj.status = $2 AND (vmj.lease_until_ms = 0 OR vmj.lease_until_ms <= $3))
+				OR (vmj.status = $4 AND vmj.lease_until_ms <= $5)
 			  )
 			ORDER BY vmj.requested_at_ms DESC, vmj.video_id
-			LIMIT ?
+			LIMIT $6
 		`, []any{opts.NowMs, opts.StatusFrom, opts.NowMs, opts.StatusTo, opts.NowMs, 1}, opts)
 		if err != nil || len(ids) == 0 {
 			return err
@@ -85,7 +85,7 @@ func (db *DB) ClaimVideoMetadataJob(opts LeaseOptions) (VideoMetadataJob, bool, 
 			       vmj.lease_until_ms, vmj.attempts
 			FROM video_metadata_jobs vmj
 			JOIN videos v ON v.video_id = vmj.video_id
-			WHERE vmj.video_id = ?
+			WHERE vmj.video_id = $1
 		`, ids[0]).Scan(
 			&job.VideoID, &job.PublishedAtMs, &job.LeaseOwner,
 			&job.LeaseUntilMs, &job.Attempts,
@@ -115,7 +115,7 @@ func (db *DB) CompleteVideoMetadataJob(job VideoMetadataJob, result VideoMetadat
 
 	return db.WithWrite(func(tx *sql.Tx) error {
 		var metadataJSON string
-		if err := tx.QueryRow(`SELECT COALESCE(metadata_json, '') FROM videos WHERE video_id = ?`, job.VideoID).Scan(&metadataJSON); err != nil {
+		if err := tx.QueryRow(`SELECT COALESCE(metadata_json, '') FROM videos WHERE video_id = $1`, job.VideoID).Scan(&metadataJSON); err != nil {
 			return err
 		}
 		metadata := map[string]any{}
@@ -140,7 +140,7 @@ func (db *DB) CompleteVideoMetadataJob(job VideoMetadataJob, result VideoMetadat
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE videos SET metadata_json = ? WHERE video_id = ?`, string(encoded), job.VideoID); err != nil {
+		if _, err := tx.Exec(`UPDATE videos SET metadata_json = $1 WHERE video_id = $2`, string(encoded), job.VideoID); err != nil {
 			return err
 		}
 		commentsAreAuthoritative := len(result.Comments) > 0 || (result.CommentCount != nil && *result.CommentCount == 0)
@@ -151,11 +151,11 @@ func (db *DB) CompleteVideoMetadataJob(job VideoMetadataJob, result VideoMetadat
 		}
 		res, err := tx.Exec(`
 			UPDATE video_metadata_jobs
-			SET status = ?, checked_at_ms = ?, video_age_at_check = ?,
-			    attempts = 0, next_attempt_at_ms = ?, last_error = '',
-			    lease_owner = '', lease_until_ms = 0, updated_at_ms = ?
-			WHERE video_id = ? AND status = 'processing'
-			  AND lease_owner = ? AND lease_until_ms = ?
+			SET status = $1, checked_at_ms = $2, video_age_at_check = $3,
+			    attempts = 0, next_attempt_at_ms = $4, last_error = '',
+			    lease_owner = '', lease_until_ms = 0, updated_at_ms = $5
+			WHERE video_id = $6 AND status = 'processing'
+			  AND lease_owner = $7 AND lease_until_ms = $8
 		`, nextStatus, nowMs, ageLabel, nextAttemptMs, nowMs,
 			job.VideoID, job.LeaseOwner, job.LeaseUntilMs)
 		if err != nil {
@@ -166,7 +166,7 @@ func (db *DB) CompleteVideoMetadataJob(job VideoMetadataJob, result VideoMetadat
 }
 
 func replaceVideoCommentsTx(tx *sql.Tx, videoID string, comments []CommentInput, nowMs int64) error {
-	if _, err := tx.Exec(`DELETE FROM video_comments WHERE video_id = ?`, videoID); err != nil {
+	if _, err := tx.Exec(`DELETE FROM video_comments WHERE video_id = $1`, videoID); err != nil {
 		return err
 	}
 	if len(comments) == 0 {
@@ -176,7 +176,7 @@ func replaceVideoCommentsTx(tx *sql.Tx, videoID string, comments []CommentInput,
 		INSERT INTO video_comments (
 			video_id, comment_id, parent_id, author_name, author_id,
 			text, like_count, published_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`)
 	if err != nil {
 		return err
@@ -234,7 +234,7 @@ func (db *DB) ReleaseVideoMetadataJob(job VideoMetadataJob, nowMs int64) error {
 func (db *DB) updateVideoMetadataJobLease(job VideoMetadataJob, query string, args ...any) error {
 	args = append(args, job.VideoID, job.LeaseOwner, job.LeaseUntilMs)
 	return db.WithWrite(func(tx *sql.Tx) error {
-		res, err := tx.Exec(query, args...)
+		res, err := tx.Exec(bind(query), args...)
 		if err != nil {
 			return err
 		}
