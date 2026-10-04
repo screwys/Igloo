@@ -31,7 +31,15 @@ igloo_prepare_postgres() {
         echo "Install PostgreSQL 18 or set IGLOO_POSTGRES_BIN." >&2
         return 1
       fi
-      nix build "$igloo_postgres_root#postgresql" --out-link "$igloo_postgres_bundle" || return
+      (
+        igloo_postgres_flake="$(mktemp -d "${TMPDIR:-/tmp}/igloo-postgresql.XXXXXX")" || exit
+        trap 'rm -rf "$igloo_postgres_flake"' EXIT
+        cp "$igloo_postgres_root/flake.nix" "$igloo_postgres_flake/" || exit
+        if [ -f "$igloo_postgres_root/flake.lock" ]; then
+          cp "$igloo_postgres_root/flake.lock" "$igloo_postgres_flake/" || exit
+        fi
+        nix build "path:$igloo_postgres_flake#postgresql" --out-link "$igloo_postgres_bundle"
+      ) || return
       ;;
     "$igloo_postgres_bundle/bin")
       ;;
