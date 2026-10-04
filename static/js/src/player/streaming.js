@@ -177,7 +177,7 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
       if (quality) quality.disabled = true
       if (qualityMenu) qualityMenu.classList.add('hidden')
       if (quality) quality.setAttribute('aria-expanded', 'false')
-      const fresh = await apiFetch('/api/youtube/' + encodeURIComponent(root.dataset.videoId) + '/stream', { method: 'POST', body: JSON.stringify({ prefer_indexed: preferIndexed }) })
+      const fresh = await apiFetch('/api/youtube/' + encodeURIComponent(root.dataset.videoId) + '/stream', { method: 'POST', body: JSON.stringify({ prefer_indexed: preferIndexed, force_fresh: true }) })
       if (!fresh || !fresh.success) throw new Error('stream renewal failed')
       if (fresh.media_url) {
         nativePlayback = true

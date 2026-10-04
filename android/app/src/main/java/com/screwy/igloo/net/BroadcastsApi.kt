@@ -56,10 +56,10 @@ class BroadcastsApi(private val client: HttpClient, private val baseUrlProvider:
     suspend fun broadcasts(baseUrl: String = baseUrlProvider()): BroadcastResponse =
         client.get(baseUrl + "/api/videos/broadcasts").body()
 
-    suspend fun stream(videoId: String, baseUrl: String = baseUrlProvider()): BroadcastStreamResponse =
+    suspend fun stream(videoId: String, baseUrl: String = baseUrlProvider(), forceFresh: Boolean = false): BroadcastStreamResponse =
         client.post(baseUrl + "/api/youtube/${URLEncoder.encode(videoId, StandardCharsets.UTF_8.toString())}/stream") {
             contentType(ContentType.Application.Json)
-            setBody(BroadcastStreamRequest())
+            setBody(BroadcastStreamRequest(force_fresh = forceFresh))
             timeout { requestTimeoutMillis = 130_000 }
         }.body()
 
@@ -83,7 +83,7 @@ data class BroadcastResponse(
 )
 
 @Serializable
-private data class BroadcastStreamRequest(val prefer_indexed: Boolean = false)
+private data class BroadcastStreamRequest(val prefer_indexed: Boolean = false, val force_fresh: Boolean = false)
 
 @Serializable
 data class BroadcastStreamResponse(

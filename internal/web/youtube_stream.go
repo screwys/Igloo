@@ -51,6 +51,7 @@ type youtubeStreamSession struct {
 	resourceIDs    map[string]string
 	nextResourceID uint64
 	lastUsed       time.Time
+	preparedAt     time.Time
 	liveDirectory  string
 	liveCancel     context.CancelFunc
 }
@@ -68,6 +69,7 @@ func (s *Server) handleYouTubeStreamStart(w http.ResponseWriter, r *http.Request
 	}
 	var body struct {
 		PreferIndexed bool `json:"prefer_indexed"`
+		ForceFresh    bool `json:"force_fresh"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil && !errors.Is(err, io.EOF) {
 		if requestBodyTooLarge(err) {
@@ -87,6 +89,12 @@ func (s *Server) handleYouTubeStreamStart(w http.ResponseWriter, r *http.Request
 			writeJSON(w, 200, map[string]any{"success": true, "video_id": videoID, "player_url": "/player/" + url.PathEscape(videoID),
 				"media_url": "/api/videos/" + url.PathEscape(videoID) + "/stream", "media_type": file.asset.ContentType,
 				"indexed": false, "text_tracks": []components.StreamTextTrack{}})
+			return
+		}
+	}
+	if !body.ForceFresh && s.cfg.PlatformEnabled("youtube") {
+		if session := s.recentYouTubeStream(videoID, body.PreferIndexed); session != nil {
+			writeYouTubeStreamResponse(w, session)
 			return
 		}
 	}
@@ -115,10 +123,38 @@ func (s *Server) handleYouTubeStreamStart(w http.ResponseWriter, r *http.Request
 		return
 	}
 	s.storeYouTubeStream(session)
-	writeJSON(w, 200, map[string]any{"success": true, "video_id": info.ID,
-		"player_url":   "/player/" + url.PathEscape(info.ID) + "?stream=" + session.id,
+	writeYouTubeStreamResponse(w, session)
+}
+
+func writeYouTubeStreamResponse(w http.ResponseWriter, session *youtubeStreamSession) {
+	writeJSON(w, 200, map[string]any{"success": true, "video_id": session.videoID,
+		"player_url":   "/player/" + url.PathEscape(session.videoID) + "?stream=" + session.id,
 		"manifest_url": "/api/youtube/streams/" + session.id + "/manifest", "manifest_type": session.manifestType, "session_id": session.id,
 		"indexed": session.indexed, "text_tracks": session.textTracks})
+}
+
+func (s *Server) recentYouTubeStream(videoID string, preferIndexed bool) *youtubeStreamSession {
+	s.youtubeStreamsMu.Lock()
+	defer s.youtubeStreamsMu.Unlock()
+	var recent *youtubeStreamSession
+	for _, session := range s.youtubeStreams {
+		if session.videoID != videoID || session.preferIndexed != preferIndexed ||
+			len(session.manifest) == 0 && session.rootResource == "" {
+			continue
+		}
+		if time.Since(session.preparedAt) > 5*time.Minute {
+			continue
+		}
+		if recent == nil || session.preparedAt.After(recent.preparedAt) {
+			recent = session
+		}
+	}
+	if recent != nil {
+		recent.mu.Lock()
+		recent.lastUsed = time.Now()
+		recent.mu.Unlock()
+	}
+	return recent
 }
 
 func (s *Server) handleYouTubeCaptionTracks(w http.ResponseWriter, r *http.Request) {
@@ -153,6 +189,7 @@ func (s *Server) handleYouTubeCaptionTracks(w http.ResponseWriter, r *http.Reque
 
 func (s *Server) storeYouTubeStream(session *youtubeStreamSession) {
 	s.youtubeStreamsMu.Lock()
+	session.preparedAt = time.Now()
 	if s.youtubeStreams == nil {
 		s.youtubeStreams = make(map[string]*youtubeStreamSession)
 	}

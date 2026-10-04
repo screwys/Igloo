@@ -140,7 +140,7 @@ internal fun BroadcastPlayer(playback: BroadcastPlayback, onClose: () -> Unit) {
         }
         scope.launch {
             try {
-                val response = api.stream(playback.videoId)
+                val response = api.stream(playback.videoId, forceFresh = true)
                 val path = response.manifest_url ?: response.media_url ?: error("Missing stream URL")
                 source = playback.copy(url = api.absoluteUrl(path), mimeType = when (response.manifest_type) {
                     "hls" -> "application/x-mpegURL"
