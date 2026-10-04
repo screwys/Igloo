@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/model"
 )
@@ -69,5 +70,58 @@ func (m *Manager) checkYouTubeBroadcasts(ctx context.Context, channel model.Chan
 		}
 		window.Complete = true
 		return window, nil
+	}
+}
+
+func (m *Manager) nextYouTubeBroadcastCheck(attempts map[string]time.Time) (*model.Channel, time.Time, error) {
+	if !m.db.BoolSetting("youtube_broadcasts_enabled") {
+		return nil, time.Time{}, nil
+	}
+	broadcasts, err := m.db.ListYouTubeBroadcasts(db.YouTubeBroadcastQuery{States: []string{"is_upcoming"}, Limit: -1})
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	var channelID string
+	var readyAt time.Time
+	for _, broadcast := range broadcasts {
+		if broadcast.StartsAtMs <= 0 {
+			continue
+		}
+		due := time.UnixMilli(broadcast.StartsAtMs)
+		observed := time.UnixMilli(broadcast.ObservedAtMs)
+		if !observed.Before(due) {
+			due = observed.Add(2 * time.Minute)
+		}
+		if retry := attempts[broadcast.ChannelID].Add(2 * time.Minute); retry.After(due) {
+			due = retry
+		}
+		if channelID == "" || due.Before(readyAt) {
+			channelID, readyAt = broadcast.ChannelID, due
+		}
+	}
+	if channelID == "" {
+		return nil, time.Time{}, nil
+	}
+	channel, err := m.db.GetChannelByID(channelID)
+	return &channel, readyAt, err
+}
+
+func (m *Manager) processYouTubeBroadcastCheck(ctx context.Context, channel model.Channel) {
+	if !m.db.IsChannelFollowed(channel.ChannelID) || m.downloader == nil || m.downloader.YtDlp == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, discoveryChannelCheckTimeout)
+	defer cancel()
+	includeMemberOnly := m.db.BoolSetting("youtube_include_member_only")
+	if settings, err := m.db.GetChannelSettings(channel.ChannelID); err == nil && settings != nil {
+		includeMemberOnly = settings.IncludeMemberOnly
+	}
+	_, err := m.checkYouTubeBroadcasts(ctx, channel, m.getChannelMaxVideos(channel), includeMemberOnly)
+	m.ReportExternalResult(err)
+	m.recordDownloadPlatformBackoff("youtube", download.ClassifyFailure(err, nil, 0), err)
+	if err != nil {
+		log.Printf("[youtube-live] scheduled check failed for %s: %v", channel.Name, err)
+	} else {
+		log.Printf("[youtube-live] checked scheduled broadcasts for %s", channel.Name)
 	}
 }

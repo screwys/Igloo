@@ -83,7 +83,7 @@ func (y *YtDlpWrapper) ChannelInfo(ctx context.Context, url string, opts Opts) (
 	}
 	if isYouTubeURL(url) || isYouTubeURL(res.URL) {
 		res.ID = CanonicalizeYouTubeChannelID(res.ID, res.URL, url)
-		if res.URL == "" && strings.HasPrefix(res.ID, "youtube_UC") {
+		if strings.HasPrefix(res.ID, "youtube_UC") {
 			res.URL = "https://www.youtube.com/channel/" + strings.TrimPrefix(res.ID, "youtube_")
 		}
 	}

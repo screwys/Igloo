@@ -4927,6 +4927,25 @@ html.mini-player-moving * {
     width: 18ch;
 }
 
+.dashboard-media-controller media-live-button {
+    height: var(--player-control-size);
+    padding-inline: 0.25rem;
+    --media-control-background: transparent;
+    --media-control-hover-background: transparent;
+    --media-control-height: var(--player-control-size);
+    --media-font-size: 0.75rem;
+}
+
+.dashboard-media-controller media-live-button[hidden],
+.dashboard-media-controller media-time-range[hidden] {
+    display: none;
+}
+
+.youtube-media-controller.live-media-controller:not(.dashboard-media-controller-mini) media-time-display {
+    flex-basis: 7ch;
+    width: 7ch;
+}
+
 .youtube-media-controller:not(.dashboard-media-controller-mini) .dashboard-volume-control media-mute-button {
     --media-tooltip-display: none;
 }

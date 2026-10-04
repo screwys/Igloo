@@ -28,8 +28,9 @@ const (
 )
 
 type discoveryPlatformState struct {
-	active    bool
-	lastStart time.Time
+	active        bool
+	lastStart     time.Time
+	lastBroadcast bool
 }
 
 type discoveryResult struct {
@@ -42,6 +43,7 @@ func (m *Manager) runScheduler(ctx context.Context) {
 		states[platform] = &discoveryPlatformState{}
 	}
 	completed := make(chan discoveryResult, len(states))
+	broadcastAttempts := make(map[string]time.Time)
 	var workers sync.WaitGroup
 	defer workers.Wait()
 
@@ -92,6 +94,21 @@ func (m *Manager) runScheduler(ctx context.Context) {
 				continue
 			}
 			readyAt := discoveryReadyAt(*channel, count, m.platformFetchDelay(platform), state.lastStart)
+			broadcastOnly := false
+			if platform == "youtube" {
+				broadcastChannel, broadcastReady, err := m.nextYouTubeBroadcastCheck(broadcastAttempts)
+				if err != nil {
+					log.Printf("[scheduler] next YouTube broadcast: %v", err)
+				} else if broadcastChannel != nil {
+					if spaced := state.lastStart.Add(m.platformFetchDelay(platform)); spaced.After(broadcastReady) {
+						broadcastReady = spaced
+					}
+					// Due broadcasts go next, while leaving normal discovery a turn between retries.
+					if broadcastReady.Before(readyAt) || !broadcastReady.After(now) && !state.lastBroadcast {
+						channel, readyAt, broadcastOnly = broadcastChannel, broadcastReady, true
+					}
+				}
+			}
 			if readyAt.After(now) {
 				if readyAt.Before(nextWake) {
 					nextWake = readyAt
@@ -101,16 +118,24 @@ func (m *Manager) runScheduler(ctx context.Context) {
 
 			state.active = true
 			state.lastStart = now
+			state.lastBroadcast = broadcastOnly
 			started = true
+			if broadcastOnly {
+				broadcastAttempts[channel.ChannelID] = now
+			}
 			workers.Add(1)
-			go func(platform string, channel model.Channel) {
+			go func(platform string, channel model.Channel, broadcastOnly bool) {
 				defer workers.Done()
-				m.processDiscoveryChannel(ctx, platform, channel)
+				if broadcastOnly {
+					m.processYouTubeBroadcastCheck(ctx, channel)
+				} else {
+					m.processDiscoveryChannel(ctx, platform, channel)
+				}
 				select {
 				case completed <- discoveryResult{platform: platform}:
 				case <-ctx.Done():
 				}
-			}(platform, *channel)
+			}(platform, *channel, broadcastOnly)
 		}
 		if started {
 			continue

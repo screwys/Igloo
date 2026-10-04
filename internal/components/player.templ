@@ -39,7 +39,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 		>
 			<section class="player-main">
 				<div class="player-wrapper" style="background:#000; border-radius:12px; overflow:hidden;">
-					<media-controller id="main-media-controller" class={ "dashboard-media-controller", templ.KV("youtube-media-controller", video.Platform == "youtube") }>
+					<media-controller id="main-media-controller" class={ "dashboard-media-controller", templ.KV("youtube-media-controller", video.Platform == "youtube") } noautoseektolive>
 						<video
 							id="mpa-player"
 							slot="media"
@@ -55,13 +55,14 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 						</video>
 						<media-loading-indicator noautohide></media-loading-indicator>
 						<media-control-bar class="vjs-control-bar dashboard-media-control-bar">
+							<media-play-button></media-play-button>
 							if p.StreamManifestURL != "" && video.Metadata != nil && video.Metadata.LiveStatus == "is_live" {
 								<button id="player-stream-refresh-btn" class="mc-custom-btn" type="button" title={ L(p, "action_refresh", "Refresh") } aria-label={ L(p, "action_refresh", "Refresh") }>@MaterialIcon("Refresh", "")</button>
 							}
-							<media-play-button></media-play-button>
 							@playerSeekBackButton(p)
 							@playerSeekForwardButton(p)
 							<span class="mc-separator mc-separator-seek" aria-hidden="true"></span>
+							<media-live-button id="player-live-btn" hidden></media-live-button>
 							if video.Platform == "youtube" {
 								<media-time-display class={ templ.KV("mc-time-long", video.Duration >= 3600) } showduration></media-time-display>
 							}

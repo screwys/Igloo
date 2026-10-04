@@ -9,6 +9,9 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
   const download = document.getElementById('player-stream-download-btn')
 	const refresh = document.getElementById('player-stream-refresh-btn')
   const controller = root.querySelector('media-controller')
+  const liveButton = root.querySelector('media-live-button')
+  const timeRange = root.querySelector('media-time-range')
+  const timeDisplay = root.querySelector('media-time-display')
   let loaded = false
   let wantsPlay = autoplay
   let started = false
@@ -54,6 +57,36 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
     player = new shaka.Player()
     await player.attach(video)
     configureXSpaceAudio(player, root.dataset.originalUrl)
+
+    function syncLiveControls() {
+      if (!loaded || nativePlayback) return
+      const live = player.isLive()
+      const range = player.seekRange()
+      if (video.streamType !== (live ? 'live' : 'on-demand')) {
+        video.streamType = live ? 'live' : 'on-demand'
+        video.dispatchEvent(new Event('streamtypechange'))
+      }
+      controller?.classList.toggle('live-media-controller', live)
+      if (liveButton) liveButton.hidden = !live
+      if (timeDisplay) {
+        timeDisplay.toggleAttribute('remaining', live)
+        timeDisplay.toggleAttribute('notoggle', live)
+        timeDisplay.toggleAttribute('showduration', !live)
+      }
+      if (timeRange) {
+        timeRange.hidden = live && range.end <= range.start
+        // Media Chrome's preview uses duration; a live window has a finite end but infinite duration.
+        if (live) {
+          timeRange.setAttribute('mediaduration', String(range.end))
+          if (!video.paused && controller?.hasAttribute('mediatimeislive')) {
+            timeRange.setAttribute('mediacurrenttime', String(range.end))
+          }
+        }
+      }
+    }
+    video.addEventListener('timeupdate', syncLiveControls)
+    video.addEventListener('progress', syncLiveControls)
+    video.addEventListener('durationchange', syncLiveControls)
 
     function configure() {
       if (nativePlayback) return
@@ -165,6 +198,16 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
         video.defaultPlaybackRate = rate
         video.playbackRate = rate
         loaded = true
+        video.streamType = 'on-demand'
+        video.dispatchEvent(new Event('streamtypechange'))
+        controller?.classList.remove('live-media-controller')
+        if (liveButton) liveButton.hidden = true
+        if (timeRange) timeRange.hidden = false
+        if (timeDisplay) {
+          timeDisplay.removeAttribute('remaining')
+          timeDisplay.removeAttribute('notoggle')
+          timeDisplay.setAttribute('showduration', '')
+        }
         if (wantsPlay) playVideo(video, () => wantsPlay).catch(function () { wantsPlay = false })
         const response = await apiFetch('/api/videos/' + encodeURIComponent(root.dataset.videoId) + '/subtitles').catch(function () { return { tracks: [] } })
         root.dispatchEvent(new CustomEvent('captiontrackschanged', { detail: {
@@ -196,6 +239,7 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
       video.defaultPlaybackRate = rate
       video.playbackRate = rate
       loaded = true
+      syncLiveControls()
       renderQualities()
       if (wantsPlay) playVideo(video, () => wantsPlay).catch(function () { wantsPlay = false })
       loadCaptions(fresh.text_tracks || [])
@@ -235,6 +279,7 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
     const manifestType = root.dataset.streamManifestType === 'hls' ? 'application/x-mpegurl' : 'application/dash+xml'
     await player.load(root.dataset.streamManifest, resumePosition || null, manifestType)
     loaded = true
+    syncLiveControls()
     renderQualities()
     if (wantsPlay) playVideo(video, () => wantsPlay).catch(function () { wantsPlay = false })
     loadCaptions(JSON.parse(root.dataset.streamTextTracks || '[]') || [])

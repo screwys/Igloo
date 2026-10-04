@@ -165,7 +165,10 @@ if (root && video) {
   }
 
   function seekTo(seconds) {
-    const target = Math.max(0, Number(seconds) || 0)
+    let target = Math.max(0, Number(seconds) || 0)
+    if (video.streamType === 'live' && video.seekable.length) {
+      target = Math.max(video.seekable.start(0), Math.min(video.seekable.end(video.seekable.length - 1), target))
+    }
     try {
       video.currentTime = target
       video.play().catch(function () {})

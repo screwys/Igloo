@@ -550,6 +550,7 @@ var ErrChannelExists = errors.New("channel already exists")
 // include_reposts, include_member_only) are written to the channel_settings
 // side table via UpdateChannelSettings once the channel exists.
 func (db *DB) AddChannel(ch model.Channel) error {
+	normalizeYouTubeChannelURL(&ch)
 	nowMs := time.Now().UnixMilli()
 	return db.WithWrite(func(tx *sql.Tx) error {
 		var id int64
@@ -623,6 +624,7 @@ func (db *DB) ObserveChannels(channels []model.Channel) error {
 		seen := make(map[string]struct{}, len(channels))
 		for _, channel := range channels {
 			applyChannelIDDefaults(&channel)
+			normalizeYouTubeChannelURL(&channel)
 			channel.ChannelID = strings.TrimSpace(channel.ChannelID)
 			channel.Platform = detectPlatform(channel.Platform, channel.URL)
 			_, _, _, derivedPlatform := channelDefaultsFromID(channel.ChannelID)
@@ -643,7 +645,8 @@ func (db *DB) ObserveChannels(channels []model.Channel) error {
 					name = CASE
 						WHEN COALESCE(channels.name, '') = '' OR channels.name = channels.channel_id
 						THEN excluded.name ELSE channels.name END,
-					url = COALESCE(NULLIF(channels.url, ''), excluded.url),
+					url = CASE WHEN channels.channel_id LIKE 'youtube_UC%' THEN excluded.url
+					      ELSE COALESCE(NULLIF(channels.url, ''), excluded.url) END,
 					platform = COALESCE(NULLIF(channels.platform, ''), excluded.platform)
 			`, channel.ChannelID, nilIfEmpty(channel.SourceID), channel.Name,
 				nilIfEmpty(channel.URL), channel.Platform, nilIfEmpty(channel.Quality)); err != nil {
@@ -658,6 +661,12 @@ func (db *DB) ObserveChannels(channels []model.Channel) error {
 		}
 		return nil
 	})
+}
+
+func normalizeYouTubeChannelURL(channel *model.Channel) {
+	if strings.HasPrefix(channel.ChannelID, "youtube_UC") {
+		channel.URL = "https://www.youtube.com/channel/" + strings.TrimPrefix(channel.ChannelID, "youtube_")
+	}
 }
 
 // GetChannelByID returns a single channel by its channel_id.
