@@ -201,7 +201,7 @@ templ VideoCard(p PageProps, v model.Video) {
 			}
 			@VideoMediaTypeBadge(p, v)
 			if v.LiveStatus == "was_live" {
-				<span class="broadcast-status">{ L(p, "home_replay", "Replay") }</span>
+				<span class="broadcast-status">{ L(p, "broadcast_replay", "Replay") }</span>
 			}
 		</div>
 		<div class="video-info">

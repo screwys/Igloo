@@ -30,7 +30,7 @@ templ VideosPage(p PageProps, videos []model.Video, pager model.Pager, search st
 }
 
 templ LiveVideoCard(p PageProps, broadcast model.YouTubeBroadcast, channel model.Channel) {
-	<a class="video-card" href={ templ.SafeURL(homeBroadcastHref(p, broadcast)) }>
+	<a class="video-card" href={ templ.SafeURL(broadcastHref(p, broadcast)) }>
 		<div class="video-thumbnail">
 			if broadcast.ThumbnailURL != "" {
 				<img src={ broadcast.ThumbnailURL } alt="" loading="lazy"/>

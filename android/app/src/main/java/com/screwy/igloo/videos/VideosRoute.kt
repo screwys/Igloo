@@ -20,8 +20,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.screwy.igloo.R
-import com.screwy.igloo.home.HomeViewModel
-import com.screwy.igloo.home.HomeLivePlayer
+import com.screwy.igloo.videos.BroadcastsViewModel
+import com.screwy.igloo.videos.BroadcastPlayer
 import com.screwy.igloo.ui.theme.iglooColors
 import com.screwy.igloo.sync.OfflineVideoActions
 import com.screwy.igloo.ui.UiEffect
@@ -44,7 +44,7 @@ import org.koin.compose.koinInject
 @Composable
 fun VideosRoute(
     navController: NavController,
-    broadcastsVm: HomeViewModel,
+    broadcastsVm: BroadcastsViewModel,
     modifier: Modifier = Modifier,
 ) {
     val vm: VideosViewModel = koinViewModel()
@@ -54,7 +54,7 @@ fun VideosRoute(
     val canLoadMore by vm.canLoadMore.collectAsStateWithLifecycle()
     val isLoadingMore by vm.isLoadingMore.collectAsStateWithLifecycle()
     val broadcasts by broadcastsVm.broadcasts.collectAsStateWithLifecycle()
-    val live = broadcasts.filter { it.broadcast?.liveStatus == "is_live" }
+    val live = broadcasts.filter { it.broadcast.liveStatus == "is_live" }
     val playback by broadcastsVm.activePlayback.collectAsStateWithLifecycle()
     val preparing by broadcastsVm.isPreparingPlayback.collectAsStateWithLifecycle()
     val offlineVideoActions: OfflineVideoActions = koinInject()
@@ -105,7 +105,7 @@ fun VideosRoute(
     if (preparing) Dialog(onDismissRequest = broadcastsVm::closePlayback) {
         CircularProgressIndicator(color = MaterialTheme.iglooColors.primary)
     }
-    playback?.let { HomeLivePlayer(it, broadcastsVm::closePlayback) }
+    playback?.let { BroadcastPlayer(it, broadcastsVm::closePlayback) }
 
     DeleteDownloadedVideoDialog(
         videoId = deleteVideoId,

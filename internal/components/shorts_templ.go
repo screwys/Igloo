@@ -390,9 +390,9 @@ func StoryChannelList(p PageProps, stories []model.StoryChannel) templ.Component
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var21 string
-					templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%s · %s", L(p, "home_live", "Live"), FmtNum(int(story.LiveViewerCount))))
+					templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%s · %s", L(p, "broadcast_live", "Live"), FmtNum(int(story.LiveViewerCount))))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 81, Col: 127}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/shorts.templ`, Line: 81, Col: 132}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 					if templ_7745c5c3_Err != nil {

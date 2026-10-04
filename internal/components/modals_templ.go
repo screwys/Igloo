@@ -75,7 +75,6 @@ func bookmarkCategoryNewRowColumns(canEditArchivePath bool) string {
 
 func startingPageChoices(p PageProps) []struct{ Key, Label string } {
 	return []struct{ Key, Label string }{
-		{"home", L(p, "nav_home", "Home")},
 		{"feed", L(p, "nav_feed", "Feed")},
 		{"videos", L(p, "nav_videos", "Videos")},
 		{"shorts", L(p, "nav_moments", "Moments")},
@@ -87,8 +86,6 @@ func startingPageChoices(p PageProps) []struct{ Key, Label string } {
 
 func sidebarRouteLabel(p PageProps, key string) string {
 	switch key {
-	case "home":
-		return L(p, "nav_home", "Home")
 	case "discover":
 		return L(p, "nav_discover", "Discover")
 	case "videos":
@@ -138,7 +135,7 @@ func ChannelSettingsPopover(p PageProps) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_channel_settings", "Channel settings"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 99, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 97, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -159,7 +156,7 @@ func ChannelSettingsPopover(p PageProps) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading_ellipsis", "Loading..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 103, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 101, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
@@ -202,7 +199,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/channels/" + channelID + "/settings")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 111, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 109, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
@@ -220,7 +217,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_video_quality", "Video Quality"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 118, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 116, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -243,7 +240,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_quality_global_default", "Global (default)"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 120, Col: 115}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 118, Col: 115}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -266,7 +263,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_quality_best_available", "Best Available"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 121, Col: 121}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 119, Col: 121}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -329,7 +326,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_max_videos_to_download", "Max Videos to Download"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 130, Col: 104}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 128, Col: 104}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 			if templ_7745c5c3_Err != nil {
@@ -342,7 +339,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(intOrEmpty(cs.MaxVideos))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 131, Col: 132}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 129, Col: 132}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
@@ -372,7 +369,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_youtube_include_member_only", "Include member-only content"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 143, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 141, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -396,7 +393,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_download_english_subtitles", "Download English Subtitles"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 153, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 151, Col: 81}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 			if templ_7745c5c3_Err != nil {
@@ -426,7 +423,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_media_only_feed", "Media-only feed"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 165, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 163, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -439,7 +436,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_media_download_limit", "Media Download Limit"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 169, Col: 103}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 167, Col: 103}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -452,7 +449,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(intOrEmpty(cs.MediaDownloadLimit))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 170, Col: 154}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 168, Col: 154}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 			if templ_7745c5c3_Err != nil {
@@ -470,7 +467,7 @@ func ChannelSettingsForm(p PageProps, channelID string, platform string, cs Chan
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_save", "Save"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 175, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 173, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
@@ -544,7 +541,7 @@ func MutedAccountsList(p PageProps, accounts []model.MutedAccount) templ.Compone
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_no_muted_accounts", "No muted accounts"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 188, Col: 117}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 186, Col: 117}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -567,7 +564,7 @@ func MutedAccountsList(p PageProps, accounts []model.MutedAccount) templ.Compone
 				var templ_7745c5c3_Var20 string
 				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs("@" + account.Handle)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 194, Col: 134}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 192, Col: 134}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 				if templ_7745c5c3_Err != nil {
@@ -603,7 +600,7 @@ func MutedAccountsList(p PageProps, accounts []model.MutedAccount) templ.Compone
 					var templ_7745c5c3_Var23 string
 					templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 196, Col: 115}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 194, Col: 115}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 					if templ_7745c5c3_Err != nil {
@@ -621,7 +618,7 @@ func MutedAccountsList(p PageProps, accounts []model.MutedAccount) templ.Compone
 				var templ_7745c5c3_Var24 string
 				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/feed/mute/" + account.Handle)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 203, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 201, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 				if templ_7745c5c3_Err != nil {
@@ -634,7 +631,7 @@ func MutedAccountsList(p PageProps, accounts []model.MutedAccount) templ.Compone
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_unmute_account", "Unmute account"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 206, Col: 56}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 204, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
@@ -691,7 +688,7 @@ func AddSubModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_add_channel", "Add Channel"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 219, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 217, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
@@ -712,7 +709,7 @@ func AddSubModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "channel_add_input", "Paste a link"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 229, Col: 145}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 227, Col: 145}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 		if templ_7745c5c3_Err != nil {
@@ -725,7 +722,7 @@ func AddSubModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "channel_add_input", "Paste a link"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 229, Col: 203}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 227, Col: 203}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 		if templ_7745c5c3_Err != nil {
@@ -738,7 +735,7 @@ func AddSubModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_add_channel", "Add Channel"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 232, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 230, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 		if templ_7745c5c3_Err != nil {
@@ -751,7 +748,7 @@ func AddSubModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_adding_ellipsis", "Adding..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 233, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 231, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 		if templ_7745c5c3_Err != nil {
@@ -794,7 +791,7 @@ func PrefsModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_title", "Preferences"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 248, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 246, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {
@@ -815,7 +812,7 @@ func PrefsModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading_preferences", "Loading preferences..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 256, Col: 180}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 254, Col: 180}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 		if templ_7745c5c3_Err != nil {
@@ -859,7 +856,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var36 string
 		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_title", "Preferences"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 265, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 263, Col: 118}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 		if templ_7745c5c3_Err != nil {
@@ -880,7 +877,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefsPersistedUILanguage(p, prefs))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 268, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 266, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 		if templ_7745c5c3_Err != nil {
@@ -902,7 +899,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_tab_general", "General"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 274, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 272, Col: 118}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 		if templ_7745c5c3_Err != nil {
@@ -915,7 +912,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_appearance", "Appearance"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 275, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 273, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 		if templ_7745c5c3_Err != nil {
@@ -928,7 +925,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_tab_playback", "Playback"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 276, Col: 114}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 274, Col: 114}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 		if templ_7745c5c3_Err != nil {
@@ -941,7 +938,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_tab_platform_settings", "Platform Settings"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 277, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 275, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 		if templ_7745c5c3_Err != nil {
@@ -954,7 +951,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_tab_sponsorblock", "SponsorBlock"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 278, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 276, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
@@ -967,7 +964,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_tab_account", "Account"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 279, Col: 111}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 277, Col: 111}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {
@@ -980,7 +977,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var45 string
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_tab_shortcuts", "Shortcuts"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 280, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 278, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 		if templ_7745c5c3_Err != nil {
@@ -993,7 +990,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_tab_general", "General"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 282, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 280, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 		if templ_7745c5c3_Err != nil {
@@ -1006,7 +1003,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_tab_feed", "Feed"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 283, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 281, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
@@ -1019,7 +1016,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "nav_videos", "Videos"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 284, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 282, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
@@ -1037,7 +1034,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_tab_users", "Users"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 287, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 285, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 			if templ_7745c5c3_Err != nil {
@@ -1098,7 +1095,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var50 string
 			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_export", "Export"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 307, Col: 137}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 305, Col: 137}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 			if templ_7745c5c3_Err != nil {
@@ -1111,7 +1108,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var51 string
 			templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_export_subscriptions", "Export Subscriptions"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 308, Col: 179}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 306, Col: 179}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 			if templ_7745c5c3_Err != nil {
@@ -1124,7 +1121,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var52 string
 			templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_full_export", "Full Export"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 309, Col: 152}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 307, Col: 152}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 			if templ_7745c5c3_Err != nil {
@@ -1137,7 +1134,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var53 string
 			templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_import", "Import"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 310, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 308, Col: 116}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 			if templ_7745c5c3_Err != nil {
@@ -1155,7 +1152,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var54 string
 		templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_save_preferences_to_apply", "Save your preferences to apply"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 314, Col: 216}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 312, Col: 216}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 		if templ_7745c5c3_Err != nil {
@@ -1168,7 +1165,7 @@ func PrefsBody(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_save_preferences", "Save Preferences"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 315, Col: 146}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 313, Col: 146}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 		if templ_7745c5c3_Err != nil {
@@ -1219,7 +1216,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var57 string
 			templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.ResolveAttributeValue("browser-youtube-mode-" + choice.Value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 331, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 329, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
 			if templ_7745c5c3_Err != nil {
@@ -1232,7 +1229,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var58 string
 			templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(choice.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 331, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 329, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 			if templ_7745c5c3_Err != nil {
@@ -1245,7 +1242,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var59 string
 			templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue("browser-youtube-mode-" + choice.Value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 332, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 330, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 			if templ_7745c5c3_Err != nil {
@@ -1258,7 +1255,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var60 string
 			templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(choice.Value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 332, Col: 126}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 330, Col: 126}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 			if templ_7745c5c3_Err != nil {
@@ -1271,7 +1268,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var61 string
 			templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_youtube_stream", "Stream"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 333, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 331, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 			if templ_7745c5c3_Err != nil {
@@ -1284,7 +1281,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var62 string
 			templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_youtube_download_first", "Download first"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 334, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 332, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 			if templ_7745c5c3_Err != nil {
@@ -1302,7 +1299,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var63 string
 		templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_stream_quality_cap", "Stream quality limit"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 339, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 337, Col: 96}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 		if templ_7745c5c3_Err != nil {
@@ -1320,7 +1317,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var64 string
 			templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(height)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 342, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 340, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 			if templ_7745c5c3_Err != nil {
@@ -1343,7 +1340,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var65 string
 			templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinStringErrs(height + "p")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 342, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 340, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 			if templ_7745c5c3_Err != nil {
@@ -1361,7 +1358,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var66 string
 		templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_stream_best", "Best"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 344, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 342, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
 		if templ_7745c5c3_Err != nil {
@@ -1374,7 +1371,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var67 string
 		templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_buffer_youtube", "Stream buffering"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 351, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 349, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 		if templ_7745c5c3_Err != nil {
@@ -1387,7 +1384,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_buffer_quick", "Quick"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 353, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 351, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 		if templ_7745c5c3_Err != nil {
@@ -1400,7 +1397,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var69 string
 		templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_buffer_balanced", "Balanced"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 354, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 352, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 		if templ_7745c5c3_Err != nil {
@@ -1413,7 +1410,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var70 string
 		templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_buffer_smooth", "Smooth"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 355, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 353, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
 		if templ_7745c5c3_Err != nil {
@@ -1426,7 +1423,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var71 string
 		templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_buffer_custom", "Custom"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 356, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 354, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 		if templ_7745c5c3_Err != nil {
@@ -1448,7 +1445,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var72 string
 			templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.ResolveAttributeValue("browser-buffer-youtube-" + setting.Value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 366, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 364, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var72)
 			if templ_7745c5c3_Err != nil {
@@ -1461,7 +1458,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var73 string
 			templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(setting.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 366, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 364, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 			if templ_7745c5c3_Err != nil {
@@ -1474,7 +1471,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var74 string
 			templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.ResolveAttributeValue("browser-buffer-youtube-" + setting.Value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 367, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 365, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var74)
 			if templ_7745c5c3_Err != nil {
@@ -1487,7 +1484,7 @@ func prefsBrowserPlaybackTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var75 string
 			templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.ResolveAttributeValue(setting.Value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 367, Col: 124}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 365, Col: 124}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var75)
 			if templ_7745c5c3_Err != nil {
@@ -1536,7 +1533,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var77 string
 		templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "label_theme", "Theme"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 383, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 381, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
 		if templ_7745c5c3_Err != nil {
@@ -1554,7 +1551,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var78 string
 			templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.ResolveAttributeValue(theme.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 387, Col: 23}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 385, Col: 23}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var78)
 			if templ_7745c5c3_Err != nil {
@@ -1577,7 +1574,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var79 string
 			templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.ResolveAttributeValue(theme.DefaultAccent)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 389, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 387, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var79)
 			if templ_7745c5c3_Err != nil {
@@ -1590,7 +1587,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var80 string
 			templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(theme.Catppuccin))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 390, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 388, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var80)
 			if templ_7745c5c3_Err != nil {
@@ -1603,7 +1600,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var81 string
 			templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(theme.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 391, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 389, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 			if templ_7745c5c3_Err != nil {
@@ -1621,7 +1618,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var82 string
 		templ_7745c5c3_Var82, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(webThemeCatppuccinStyle(themeSettings.ThemeID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 395, Col: 134}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 393, Col: 134}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 		if templ_7745c5c3_Err != nil {
@@ -1634,7 +1631,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var83 string
 		templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_theme_catppuccin_accents", "Catppuccin accents"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 396, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 394, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 		if templ_7745c5c3_Err != nil {
@@ -1652,7 +1649,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var84 string
 			templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.ResolveAttributeValue(accent.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 402, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 400, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var84)
 			if templ_7745c5c3_Err != nil {
@@ -1665,7 +1662,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var85 string
 			templ_7745c5c3_Var85, templ_7745c5c3_Err = templ.ResolveAttributeValue(accent.Hex)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 403, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 401, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var85)
 			if templ_7745c5c3_Err != nil {
@@ -1678,7 +1675,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var86 string
 			templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.ResolveAttributeValue(accent.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 404, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 402, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var86)
 			if templ_7745c5c3_Err != nil {
@@ -1691,7 +1688,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var87 string
 			templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.ResolveAttributeValue(accent.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 405, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 403, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var87)
 			if templ_7745c5c3_Err != nil {
@@ -1704,7 +1701,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var88 string
 			templ_7745c5c3_Var88, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("--swatch:" + accent.Hex + ";")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 406, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 404, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var88))
 			if templ_7745c5c3_Err != nil {
@@ -1717,7 +1714,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var89 string
 			templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinStringErrs(accent.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 409, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 407, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var89))
 			if templ_7745c5c3_Err != nil {
@@ -1735,7 +1732,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var90 string
 		templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_theme_accent", "Accent"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 415, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 413, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var90))
 		if templ_7745c5c3_Err != nil {
@@ -1748,7 +1745,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var91 string
 		templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.ResolveAttributeValue(themeSettings.AccentHex)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 417, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 415, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var91)
 		if templ_7745c5c3_Err != nil {
@@ -1761,7 +1758,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var92 string
 		templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.ResolveAttributeValue(themeSettings.AccentHex)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 418, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 416, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var92)
 		if templ_7745c5c3_Err != nil {
@@ -1774,7 +1771,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var93 string
 		templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_theme_custom_css", "Custom CSS"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 423, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 421, Col: 96}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
 		if templ_7745c5c3_Err != nil {
@@ -1787,7 +1784,7 @@ func prefsAppearanceTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var94 string
 		templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.JoinStringErrs(themeSettings.CustomCSS)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 424, Col: 172}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 422, Col: 172}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var94))
 		if templ_7745c5c3_Err != nil {
@@ -1830,7 +1827,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var96 string
 		templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_defaults", "Defaults"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 435, Col: 129}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 433, Col: 129}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var96))
 		if templ_7745c5c3_Err != nil {
@@ -1843,7 +1840,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var97 string
 		templ_7745c5c3_Var97, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_ui_language", "Interface Language"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 437, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 435, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var97))
 		if templ_7745c5c3_Err != nil {
@@ -1878,7 +1875,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var99 string
 			templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.ResolveAttributeValue(lang.Code)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 440, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 438, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var99)
 			if templ_7745c5c3_Err != nil {
@@ -1901,7 +1898,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var100 string
 			templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.JoinStringErrs(lang.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 440, Col: 108}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 438, Col: 108}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var100))
 			if templ_7745c5c3_Err != nil {
@@ -1919,7 +1916,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var101 string
 		templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_ui_language_help", "Translations are loaded from the local Weblate catalog."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 443, Col: 197}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 441, Col: 197}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var101))
 		if templ_7745c5c3_Err != nil {
@@ -1932,7 +1929,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var102 string
 		templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_starting_page", "Starting Page"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 446, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 444, Col: 96}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var102))
 		if templ_7745c5c3_Err != nil {
@@ -1950,7 +1947,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var103 string
 			templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.ResolveAttributeValue(page.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 449, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 447, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var103)
 			if templ_7745c5c3_Err != nil {
@@ -1973,7 +1970,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var104 string
 			templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.JoinStringErrs(page.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 449, Col: 109}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 447, Col: 109}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var104))
 			if templ_7745c5c3_Err != nil {
@@ -1991,7 +1988,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var105 string
 		templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_sidebar_route_order", "Sidebar Order"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 454, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 452, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var105))
 		if templ_7745c5c3_Err != nil {
@@ -2004,7 +2001,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var106 string
 		templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.ResolveAttributeValue(strings.Join(sidebarRouteOrder(prefs.Str("sidebar_route_order", "")), ","))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 455, Col: 135}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 453, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var106)
 		if templ_7745c5c3_Err != nil {
@@ -2017,7 +2014,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var107 string
 		templ_7745c5c3_Var107, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("sidebar_hidden_routes", ""))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 456, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 454, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var107)
 		if templ_7745c5c3_Err != nil {
@@ -2035,7 +2032,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var108 string
 			templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.ResolveAttributeValue(route)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 459, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 457, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var108)
 			if templ_7745c5c3_Err != nil {
@@ -2048,7 +2045,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var109 string
 			templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.ResolveAttributeValue(sidebarRouteLabel(p, route))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 459, Col: 127}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 457, Col: 127}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var109)
 			if templ_7745c5c3_Err != nil {
@@ -2069,7 +2066,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var110 string
 			templ_7745c5c3_Var110, templ_7745c5c3_Err = templ.JoinStringErrs(sidebarRouteLabel(p, route))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 461, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 459, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var110))
 			if templ_7745c5c3_Err != nil {
@@ -2092,7 +2089,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var111 string
 			templ_7745c5c3_Var111, templ_7745c5c3_Err = templ.ResolveAttributeValue(sidebarRouteLabel(p, route))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 463, Col: 158}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 461, Col: 158}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var111)
 			if templ_7745c5c3_Err != nil {
@@ -2122,7 +2119,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var112 string
 		templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_min_quality_default", "Minimum Quality"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 472, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 470, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var112))
 		if templ_7745c5c3_Err != nil {
@@ -2145,7 +2142,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var113 string
 		templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_min_quality_none", "None (download any)"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 474, Col: 171}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 472, Col: 171}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var113))
 		if templ_7745c5c3_Err != nil {
@@ -2213,7 +2210,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var114 string
 			templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_updates", "Updates"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 483, Col: 135}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 481, Col: 135}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var114))
 			if templ_7745c5c3_Err != nil {
@@ -2236,7 +2233,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var115 string
 			templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_update_enabled", "Automatically update Igloo"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 487, Col: 214}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 485, Col: 214}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var115)
 			if templ_7745c5c3_Err != nil {
@@ -2261,7 +2258,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var116 string
 			templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_update_enabled", "Automatically update Igloo"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 490, Col: 84}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 488, Col: 84}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var116))
 			if templ_7745c5c3_Err != nil {
@@ -2274,7 +2271,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var117 string
 			templ_7745c5c3_Var117, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_windows_update_interval", "Check interval"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 492, Col: 121}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 490, Col: 121}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var117))
 			if templ_7745c5c3_Err != nil {
@@ -2292,7 +2289,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 				var templ_7745c5c3_Var118 string
 				templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.ResolveAttributeValue(hours)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 495, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 493, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var118)
 				if templ_7745c5c3_Err != nil {
@@ -2315,7 +2312,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 				var templ_7745c5c3_Var119 string
 				templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.JoinStringErrs(hours + "h")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 495, Col: 119}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 493, Col: 119}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var119))
 				if templ_7745c5c3_Err != nil {
@@ -2343,7 +2340,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var120 string
 			templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_windows_runtime_update_enabled", "Automatic dependency updates"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 502, Col: 248}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 500, Col: 248}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var120)
 			if templ_7745c5c3_Err != nil {
@@ -2368,7 +2365,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var121 string
 			templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_windows_runtime_update_enabled", "Automatic dependency updates"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 505, Col: 102}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 503, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var121))
 			if templ_7745c5c3_Err != nil {
@@ -2381,7 +2378,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var122 string
 			templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_windows_update_channel", "Update channel"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 507, Col: 119}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 505, Col: 119}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var122))
 			if templ_7745c5c3_Err != nil {
@@ -2404,7 +2401,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var123 string
 			templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_windows_update_stable", "Stable"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 509, Col: 155}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 507, Col: 155}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var123))
 			if templ_7745c5c3_Err != nil {
@@ -2427,7 +2424,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var124 string
 			templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_windows_update_nightly", "Nightly"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 510, Col: 159}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 508, Col: 159}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var124))
 			if templ_7745c5c3_Err != nil {
@@ -2453,7 +2450,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var125 string
 		templ_7745c5c3_Var125, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_bookmarks", "Bookmarks"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 519, Col: 132}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 517, Col: 132}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var125))
 		if templ_7745c5c3_Err != nil {
@@ -2482,7 +2479,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var126 string
 			templ_7745c5c3_Var126, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_archive_bookmarks", "Save bookmarks to folder"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 528, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 526, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var126))
 			if templ_7745c5c3_Err != nil {
@@ -2500,7 +2497,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var127 string
 		templ_7745c5c3_Var127, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_bookmark_per_category", "Per-Category Settings"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 533, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 531, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var127))
 		if templ_7745c5c3_Err != nil {
@@ -2513,7 +2510,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var128 string
 		templ_7745c5c3_Var128, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading_categories", "Loading categories..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 539, Col: 148}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 537, Col: 148}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var128))
 		if templ_7745c5c3_Err != nil {
@@ -2526,7 +2523,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var129 string
 		templ_7745c5c3_Var129, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_embeds", "Embeds"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 542, Col: 132}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 540, Col: 132}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var129))
 		if templ_7745c5c3_Err != nil {
@@ -2550,7 +2547,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var130 string
 		templ_7745c5c3_Var130, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_share_embed_friendly_links", "Use embed-friendly sites for sharing links"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 550, Col: 98}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 548, Col: 98}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var130))
 		if templ_7745c5c3_Err != nil {
@@ -2583,7 +2580,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var131 string
 		templ_7745c5c3_Var131, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_backups", "Backups"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 559, Col: 134}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 557, Col: 134}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var131))
 		if templ_7745c5c3_Err != nil {
@@ -2607,7 +2604,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var132 string
 		templ_7745c5c3_Var132, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_backup_enabled", "Enable automatic backups"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 567, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 565, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var132))
 		if templ_7745c5c3_Err != nil {
@@ -2620,7 +2617,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var133 string
 		templ_7745c5c3_Var133, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_backup_folder", "Backup Folder"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 571, Col: 94}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 569, Col: 94}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var133))
 		if templ_7745c5c3_Err != nil {
@@ -2633,7 +2630,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var134 string
 		templ_7745c5c3_Var134, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_backup_dir_placeholder", "/path/to/igloo-backups"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 572, Col: 167}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 570, Col: 167}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var134)
 		if templ_7745c5c3_Err != nil {
@@ -2646,7 +2643,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var135 string
 		templ_7745c5c3_Var135, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("backup_dir", ""))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 572, Col: 205}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 570, Col: 205}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var135)
 		if templ_7745c5c3_Err != nil {
@@ -2669,7 +2666,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var136 string
 		templ_7745c5c3_Var136, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_backup_keep_count", "Backups to keep"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 575, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 573, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var136))
 		if templ_7745c5c3_Err != nil {
@@ -2682,7 +2679,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var137 string
 		templ_7745c5c3_Var137, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("backup_keep_count", "5"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 576, Col: 163}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 574, Col: 163}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var137)
 		if templ_7745c5c3_Err != nil {
@@ -2705,7 +2702,7 @@ func prefsGeneralTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var138 string
 		templ_7745c5c3_Var138, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_backup_help", "Please use a dedicated folder. Daily backups include the database and non-secret config. Keep count is limited to 1-5."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 577, Col: 256}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 575, Col: 256}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var138))
 		if templ_7745c5c3_Err != nil {
@@ -2748,7 +2745,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var140 string
 		templ_7745c5c3_Var140, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "platform_youtube", "YouTube"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 589, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 587, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var140))
 		if templ_7745c5c3_Err != nil {
@@ -2771,7 +2768,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var141 string
 		templ_7745c5c3_Var141, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_youtube_check_replays", "Also check replays"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 590, Col: 227}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 588, Col: 227}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var141))
 		if templ_7745c5c3_Err != nil {
@@ -2794,7 +2791,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var142 string
 		templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_fetch_broadcasts", "Fetch broadcasts"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 594, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 592, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
 		if templ_7745c5c3_Err != nil {
@@ -2807,7 +2804,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var143 string
 		templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_fetch_delay_seconds", "Fetch Delay (seconds)"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 598, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 596, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var143))
 		if templ_7745c5c3_Err != nil {
@@ -2820,7 +2817,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var144 string
 		templ_7745c5c3_Var144, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("youtube_fetch_delay", "120"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 599, Col: 172}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 597, Col: 172}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var144)
 		if templ_7745c5c3_Err != nil {
@@ -2833,7 +2830,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var145 string
 		templ_7745c5c3_Var145, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_youtube_max_videos", "Default YouTube Max Videos"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 602, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 600, Col: 120}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var145))
 		if templ_7745c5c3_Err != nil {
@@ -2846,7 +2843,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var146 string
 		templ_7745c5c3_Var146, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("youtube_max_videos", "12"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 603, Col: 169}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 601, Col: 169}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var146)
 		if templ_7745c5c3_Err != nil {
@@ -2870,7 +2867,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var147 string
 		templ_7745c5c3_Var147, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_youtube_include_member_only", "Include member-only content"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 612, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 610, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var147))
 		if templ_7745c5c3_Err != nil {
@@ -2894,7 +2891,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var148 string
 		templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_download_english_subtitles", "Download English Subtitles"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 622, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 620, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var148))
 		if templ_7745c5c3_Err != nil {
@@ -2907,7 +2904,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var149 string
 		templ_7745c5c3_Var149, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_youtube_playback_speed", "Default YouTube Playback Speed"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 626, Col: 131}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 624, Col: 131}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var149))
 		if templ_7745c5c3_Err != nil {
@@ -2925,7 +2922,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var150 string
 			templ_7745c5c3_Var150, templ_7745c5c3_Err = templ.ResolveAttributeValue(spd)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 629, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 627, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var150)
 			if templ_7745c5c3_Err != nil {
@@ -2948,7 +2945,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var151 string
 			templ_7745c5c3_Var151, templ_7745c5c3_Err = templ.JoinStringErrs(spd + "x")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 629, Col: 110}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 627, Col: 110}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var151))
 			if templ_7745c5c3_Err != nil {
@@ -2978,7 +2975,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var152 string
 		templ_7745c5c3_Var152, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_x_feed", "X Feed"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 635, Col: 131}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 633, Col: 131}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var152))
 		if templ_7745c5c3_Err != nil {
@@ -3010,7 +3007,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var153 string
 		templ_7745c5c3_Var153, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_media_only_default", "Media-only by default"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 644, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 642, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var153))
 		if templ_7745c5c3_Err != nil {
@@ -3023,7 +3020,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var154 string
 		templ_7745c5c3_Var154, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_media_download_limit", "Media Download Limit"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 648, Col: 110}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 646, Col: 110}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var154))
 		if templ_7745c5c3_Err != nil {
@@ -3036,7 +3033,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var155 string
 		templ_7745c5c3_Var155, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("media_download_limit_default", "20"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 649, Col: 183}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 647, Col: 183}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var155)
 		if templ_7745c5c3_Err != nil {
@@ -3049,7 +3046,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var156 string
 		templ_7745c5c3_Var156, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_profile_history_limit", "Number of posts to keep in the database"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 652, Col: 142}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 650, Col: 142}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var156))
 		if templ_7745c5c3_Err != nil {
@@ -3062,7 +3059,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var157 string
 		templ_7745c5c3_Var157, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("x_profile_history_limit", "1000"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 653, Col: 187}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 651, Col: 187}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var157)
 		if templ_7745c5c3_Err != nil {
@@ -3075,7 +3072,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var158 string
 		templ_7745c5c3_Var158, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_profile_history_limit_hint", "Doesn't affect the media purge limit, except video thumbnails."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 654, Col: 143}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 652, Col: 143}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var158))
 		if templ_7745c5c3_Err != nil {
@@ -3088,7 +3085,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var159 string
 		templ_7745c5c3_Var159, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_fetch_delay_seconds", "Fetch Delay (seconds)"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 657, Col: 115}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 655, Col: 115}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var159))
 		if templ_7745c5c3_Err != nil {
@@ -3101,7 +3098,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var160 string
 		templ_7745c5c3_Var160, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("x_feed_fetch_delay", "10"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 658, Col: 168}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 656, Col: 168}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var160)
 		if templ_7745c5c3_Err != nil {
@@ -3124,7 +3121,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var161 string
 		templ_7745c5c3_Var161, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_account_region", "Show X account details"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 663, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 661, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var161))
 		if templ_7745c5c3_Err != nil {
@@ -3137,7 +3134,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var162 string
 		templ_7745c5c3_Var162, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_account_region_hint", "Show a compact country and account-source badge with a local details panel."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 665, Col: 149}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 663, Col: 149}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var162))
 		if templ_7745c5c3_Err != nil {
@@ -3160,7 +3157,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var163 string
 		templ_7745c5c3_Var163, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_community_notes", "Show Community Notes"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 670, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 668, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var163))
 		if templ_7745c5c3_Err != nil {
@@ -3173,7 +3170,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var164 string
 		templ_7745c5c3_Var164, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_community_notes_hint", "Show captured Community Notes and their source links beside posts."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 672, Col: 141}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 670, Col: 141}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var164))
 		if templ_7745c5c3_Err != nil {
@@ -3186,7 +3183,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var165 string
 		templ_7745c5c3_Var165, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_thread_fetch_mode", "Fetch thread context during account checks"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 675, Col: 137}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 673, Col: 137}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var165))
 		if templ_7745c5c3_Err != nil {
@@ -3209,7 +3206,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var166 string
 		templ_7745c5c3_Var166, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_thread_fetch_never", "Never"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 677, Col: 145}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 675, Col: 145}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var166))
 		if templ_7745c5c3_Err != nil {
@@ -3232,7 +3229,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var167 string
 		templ_7745c5c3_Var167, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_thread_fetch_starred", "Starred only"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 678, Col: 158}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 676, Col: 158}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var167))
 		if templ_7745c5c3_Err != nil {
@@ -3255,7 +3252,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var168 string
 		templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_thread_fetch_always", "Always"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 679, Col: 149}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 677, Col: 149}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var168))
 		if templ_7745c5c3_Err != nil {
@@ -3268,7 +3265,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var169 string
 		templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_thread_fetch_mode_hint", "Fetch one page of replies and quote-posts for new posts during account checks. Opening a thread always fetches its context."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 681, Col: 200}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 679, Col: 200}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var169))
 		if templ_7745c5c3_Err != nil {
@@ -3281,7 +3278,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var170 string
 		templ_7745c5c3_Var170, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_thread_auto_post_limit", "Posts to expand per account check"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 684, Col: 138}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 682, Col: 138}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var170))
 		if templ_7745c5c3_Err != nil {
@@ -3294,7 +3291,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var171 string
 		templ_7745c5c3_Var171, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("x_thread_auto_post_limit", "3"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 685, Col: 184}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 683, Col: 184}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var171)
 		if templ_7745c5c3_Err != nil {
@@ -3307,7 +3304,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var172 string
 		templ_7745c5c3_Var172, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_x_thread_auto_post_limit_hint", "Limit automatic fetching to this many new posts per account, with a 30-second time budget."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 686, Col: 172}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 684, Col: 172}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var172))
 		if templ_7745c5c3_Err != nil {
@@ -3320,7 +3317,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var173 string
 		templ_7745c5c3_Var173, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_ranking", "Ranking"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 688, Col: 133}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 686, Col: 133}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var173))
 		if templ_7745c5c3_Err != nil {
@@ -3344,7 +3341,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var174 string
 		templ_7745c5c3_Var174, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_algorithmic_feed_enabled", "Enable algorithmic feed"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 696, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 694, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var174))
 		if templ_7745c5c3_Err != nil {
@@ -3357,7 +3354,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var175 string
 		templ_7745c5c3_Var175, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_algorithmic_feed_help", "Ranks posts by interest and affinity. When off, posts are shown chronologically."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 698, Col: 227}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 696, Col: 227}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var175))
 		if templ_7745c5c3_Err != nil {
@@ -3370,7 +3367,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var176 string
 		templ_7745c5c3_Var176, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_muted_accounts", "Muted Accounts"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 700, Col: 147}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 698, Col: 147}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var176))
 		if templ_7745c5c3_Err != nil {
@@ -3383,7 +3380,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var177 string
 		templ_7745c5c3_Var177, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_muted_accounts_help", "Muted accounts are hidden from the feed. Mute from the post menu on retweets."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 701, Col: 204}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 699, Col: 204}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var177))
 		if templ_7745c5c3_Err != nil {
@@ -3396,7 +3393,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var178 string
 		templ_7745c5c3_Var178, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_translation", "Translation"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 709, Col: 135}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 707, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var178))
 		if templ_7745c5c3_Err != nil {
@@ -3409,7 +3406,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var179 string
 		templ_7745c5c3_Var179, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_auto_translate", "Auto Translate"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 711, Col: 104}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 709, Col: 104}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var179))
 		if templ_7745c5c3_Err != nil {
@@ -3422,7 +3419,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var180 string
 		templ_7745c5c3_Var180, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_translate_manual_hint", "Translate a post only when you request it."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 713, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 711, Col: 118}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var180)
 		if templ_7745c5c3_Err != nil {
@@ -3445,7 +3442,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var181 string
 		templ_7745c5c3_Var181, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translate_manual_label", "Manual"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 713, Col: 236}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 711, Col: 236}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var181))
 		if templ_7745c5c3_Err != nil {
@@ -3458,7 +3455,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var182 string
 		templ_7745c5c3_Var182, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_translate_lazy_hint", "Translate posts shortly before they enter view, using the lookahead setting."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 714, Col: 151}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 712, Col: 151}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var182)
 		if templ_7745c5c3_Err != nil {
@@ -3481,7 +3478,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var183 string
 		templ_7745c5c3_Var183, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translate_lazy_label", "Lazy"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 714, Col: 266}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 712, Col: 266}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var183))
 		if templ_7745c5c3_Err != nil {
@@ -3494,7 +3491,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var184 string
 		templ_7745c5c3_Var184, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_translate_auto_hint", "Translate the feed continuously in the background, even when you are not viewing it."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 715, Col: 165}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 713, Col: 165}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var184)
 		if templ_7745c5c3_Err != nil {
@@ -3517,7 +3514,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var185 string
 		templ_7745c5c3_Var185, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translate_auto_label", "Auto"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 715, Col: 286}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 713, Col: 286}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var185))
 		if templ_7745c5c3_Err != nil {
@@ -3530,7 +3527,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var186 string
 		templ_7745c5c3_Var186, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(translateLookaheadStyle(prefs.Str("translate_auto_mode", "lazy")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 718, Col: 133}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 716, Col: 133}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var186))
 		if templ_7745c5c3_Err != nil {
@@ -3543,7 +3540,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var187 string
 		templ_7745c5c3_Var187, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translate_lookahead", "Lazy Lookahead (posts)"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 719, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 717, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var187))
 		if templ_7745c5c3_Err != nil {
@@ -3556,7 +3553,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var188 string
 		templ_7745c5c3_Var188, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("translate_auto_lookahead", "20"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 720, Col: 181}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 718, Col: 181}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var188)
 		if templ_7745c5c3_Err != nil {
@@ -3569,7 +3566,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var189 string
 		templ_7745c5c3_Var189, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_target_language", "Target Language"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 723, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 721, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var189))
 		if templ_7745c5c3_Err != nil {
@@ -3587,7 +3584,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var190 string
 			templ_7745c5c3_Var190, templ_7745c5c3_Err = templ.ResolveAttributeValue(code)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 726, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 724, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var190)
 			if templ_7745c5c3_Err != nil {
@@ -3610,7 +3607,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var191 string
 			templ_7745c5c3_Var191, templ_7745c5c3_Err = templ.JoinStringErrs(code)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 726, Col: 99}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 724, Col: 99}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var191))
 			if templ_7745c5c3_Err != nil {
@@ -3628,7 +3625,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var192 string
 		templ_7745c5c3_Var192, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_target_language_help", "Defaults to English. Options are drawn from your \"Don't auto-translate\" list below."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 729, Col: 231}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 727, Col: 231}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var192))
 		if templ_7745c5c3_Err != nil {
@@ -3641,7 +3638,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var193 string
 		templ_7745c5c3_Var193, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_dont_auto_translate", "Don't auto-translate"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 732, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 730, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var193))
 		if templ_7745c5c3_Err != nil {
@@ -3654,7 +3651,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var194 string
 		templ_7745c5c3_Var194, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_skip_language_placeholder", "Type a language or code, e.g. Turkish or tr"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 735, Col: 159}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 733, Col: 159}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var194)
 		if templ_7745c5c3_Err != nil {
@@ -3667,7 +3664,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var195 string
 		templ_7745c5c3_Var195, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_add", "Add"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 738, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 736, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var195))
 		if templ_7745c5c3_Err != nil {
@@ -3685,7 +3682,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var196 string
 			templ_7745c5c3_Var196, templ_7745c5c3_Err = templ.ResolveAttributeValue(code)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 742, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 740, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var196)
 			if templ_7745c5c3_Err != nil {
@@ -3698,7 +3695,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var197 string
 			templ_7745c5c3_Var197, templ_7745c5c3_Err = templ.JoinStringErrs(code)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 743, Col: 14}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 741, Col: 14}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var197))
 			if templ_7745c5c3_Err != nil {
@@ -3711,7 +3708,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var198 string
 			templ_7745c5c3_Var198, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_remove", "Remove"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 744, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 742, Col: 100}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var198)
 			if templ_7745c5c3_Err != nil {
@@ -3737,7 +3734,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var199 string
 		templ_7745c5c3_Var199, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("translate_skip_langs", ""))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 748, Col: 124}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 746, Col: 124}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var199)
 		if templ_7745c5c3_Err != nil {
@@ -3750,7 +3747,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var200 string
 		templ_7745c5c3_Var200, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_dont_auto_translate_help", "Posts in these languages won't be auto-translated. Empty list translates everything except your target language."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 749, Col: 261}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 747, Col: 261}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var200))
 		if templ_7745c5c3_Err != nil {
@@ -3763,7 +3760,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var201 string
 		templ_7745c5c3_Var201, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translation_backend", "Translation Backend"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 752, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 750, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var201))
 		if templ_7745c5c3_Err != nil {
@@ -3786,7 +3783,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var202 string
 		templ_7745c5c3_Var202, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_disabled", "Disabled"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 754, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 752, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var202))
 		if templ_7745c5c3_Err != nil {
@@ -3809,7 +3806,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var203 string
 		templ_7745c5c3_Var203, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translation_backend_google_cloud", "Google Cloud Translation"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 755, Col: 174}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 753, Col: 174}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var203))
 		if templ_7745c5c3_Err != nil {
@@ -3832,7 +3829,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var204 string
 		templ_7745c5c3_Var204, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translation_backend_deepl_api", "DeepL API"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 756, Col: 154}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 754, Col: 154}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var204))
 		if templ_7745c5c3_Err != nil {
@@ -3855,7 +3852,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var205 string
 		templ_7745c5c3_Var205, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translation_backend_kagi_cli", "Kagi CLI"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 757, Col: 158}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 755, Col: 158}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var205))
 		if templ_7745c5c3_Err != nil {
@@ -3878,7 +3875,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var206 string
 		templ_7745c5c3_Var206, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translation_backend_openai_compat", "OpenAI-compatible"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 758, Col: 182}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 756, Col: 182}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var206))
 		if templ_7745c5c3_Err != nil {
@@ -3891,7 +3888,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var207 string
 		templ_7745c5c3_Var207, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("display:block; margin-top:0.35rem; color:var(--text-secondary); font-size:0.75rem; " + translateAPIKeyHintStyle(prefs.Str("translate_backend", "none")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 760, Col: 201}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 758, Col: 201}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var207))
 		if templ_7745c5c3_Err != nil {
@@ -3904,7 +3901,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var208 string
 		templ_7745c5c3_Var208, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translation_api_key_help_prefix", "Get a"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 761, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 759, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var208))
 		if templ_7745c5c3_Err != nil {
@@ -3917,7 +3914,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var209 string
 		templ_7745c5c3_Var209, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translation_google_api_key", "Google API key"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 761, Col: 223}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 759, Col: 223}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var209))
 		if templ_7745c5c3_Err != nil {
@@ -3930,7 +3927,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var210 string
 		templ_7745c5c3_Var210, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translation_api_key_help_or", "or"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 761, Col: 282}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 759, Col: 282}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var210))
 		if templ_7745c5c3_Err != nil {
@@ -3943,7 +3940,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var211 string
 		templ_7745c5c3_Var211, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translation_deepl_api_key", "DeepL API key"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 761, Col: 455}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 759, Col: 455}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var211))
 		if templ_7745c5c3_Err != nil {
@@ -3956,7 +3953,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var212 string
 		templ_7745c5c3_Var212, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(translateAPIConfigStyle(prefs.Str("translate_backend", "none")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 764, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 762, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var212))
 		if templ_7745c5c3_Err != nil {
@@ -3969,7 +3966,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var213 string
 		templ_7745c5c3_Var213, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_endpoint_override", "Endpoint Override"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 766, Col: 110}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 764, Col: 110}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var213))
 		if templ_7745c5c3_Err != nil {
@@ -3982,7 +3979,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var214 string
 		templ_7745c5c3_Var214, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_endpoint_override_placeholder", "optional; defaults by provider"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 767, Col: 197}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 765, Col: 197}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var214)
 		if templ_7745c5c3_Err != nil {
@@ -3995,7 +3992,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var215 string
 		templ_7745c5c3_Var215, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("translate_api_site", ""))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 767, Col: 243}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 765, Col: 243}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var215)
 		if templ_7745c5c3_Err != nil {
@@ -4008,7 +4005,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var216 string
 		templ_7745c5c3_Var216, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_endpoint_override_help", "Leave blank for Google Basic or DeepL defaults. OpenAI-compatible defaults to local Ollama at http://127.0.0.1:11434."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 768, Col: 266}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 766, Col: 266}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var216))
 		if templ_7745c5c3_Err != nil {
@@ -4021,7 +4018,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var217 string
 		templ_7745c5c3_Var217, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(translateModelConfigStyle(prefs.Str("translate_backend", "none")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 770, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 768, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var217))
 		if templ_7745c5c3_Err != nil {
@@ -4034,7 +4031,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var218 string
 		templ_7745c5c3_Var218, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_translation_model", "Model"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 771, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 769, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var218))
 		if templ_7745c5c3_Err != nil {
@@ -4047,7 +4044,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var219 string
 		templ_7745c5c3_Var219, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_translation_model_placeholder", "qwen2.5:7b"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 772, Col: 172}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 770, Col: 172}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var219)
 		if templ_7745c5c3_Err != nil {
@@ -4060,7 +4057,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var220 string
 		templ_7745c5c3_Var220, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("translate_model", ""))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 772, Col: 215}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 770, Col: 215}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var220)
 		if templ_7745c5c3_Err != nil {
@@ -4073,7 +4070,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var221 string
 		templ_7745c5c3_Var221, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_api_key", "API Key"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 775, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 773, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var221))
 		if templ_7745c5c3_Err != nil {
@@ -4086,7 +4083,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var222 string
 		templ_7745c5c3_Var222, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_api_key_placeholder", "Enter API key"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 776, Col: 173}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 774, Col: 173}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var222)
 		if templ_7745c5c3_Err != nil {
@@ -4099,7 +4096,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var223 string
 		templ_7745c5c3_Var223, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("translate_api_key", ""))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 776, Col: 218}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 774, Col: 218}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var223)
 		if templ_7745c5c3_Err != nil {
@@ -4112,7 +4109,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var224 string
 		templ_7745c5c3_Var224, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "platform_instagram", "Instagram"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 779, Col: 129}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 777, Col: 129}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var224))
 		if templ_7745c5c3_Err != nil {
@@ -4125,7 +4122,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var225 string
 		templ_7745c5c3_Var225, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_fetch_delay_seconds", "Fetch Delay (seconds)"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 781, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 779, Col: 118}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var225))
 		if templ_7745c5c3_Err != nil {
@@ -4138,7 +4135,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var226 string
 		templ_7745c5c3_Var226, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("instagram_fetch_delay", "60"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 782, Col: 177}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 780, Col: 177}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var226)
 		if templ_7745c5c3_Err != nil {
@@ -4151,7 +4148,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var227 string
 		templ_7745c5c3_Var227, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_max_videos", "Max Videos"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 785, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 783, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var227))
 		if templ_7745c5c3_Err != nil {
@@ -4164,7 +4161,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var228 string
 		templ_7745c5c3_Var228, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("instagram_max_videos", "20"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 786, Col: 174}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 784, Col: 174}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var228)
 		if templ_7745c5c3_Err != nil {
@@ -4177,7 +4174,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var229 string
 		templ_7745c5c3_Var229, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_repost_storage", "Repost storage"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 789, Col: 112}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 787, Col: 112}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var229))
 		if templ_7745c5c3_Err != nil {
@@ -4190,7 +4187,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var230 string
 		templ_7745c5c3_Var230, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("instagram_repost_max_videos", "15"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 790, Col: 195}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 788, Col: 195}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var230)
 		if templ_7745c5c3_Err != nil {
@@ -4214,7 +4211,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var231 string
 		templ_7745c5c3_Var231, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_moments_include_instagram_tagged", "Include Instagram reposts in Moments"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 799, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 797, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var231))
 		if templ_7745c5c3_Err != nil {
@@ -4237,7 +4234,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var232 string
 		templ_7745c5c3_Var232, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_instagram_profile_details", "Fetch detailed profiles"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 805, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 803, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var232))
 		if templ_7745c5c3_Err != nil {
@@ -4250,7 +4247,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var233 string
 		templ_7745c5c3_Var233, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_instagram_profile_details_hint", "Retrieve bios, websites, and follower counts while checking accounts. Instagram may rate limit this lookup."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 807, Col: 190}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 805, Col: 190}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var233))
 		if templ_7745c5c3_Err != nil {
@@ -4263,7 +4260,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var234 string
 		templ_7745c5c3_Var234, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_tiktok", "TikTok"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 809, Col: 131}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 807, Col: 131}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var234))
 		if templ_7745c5c3_Err != nil {
@@ -4276,7 +4273,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var235 string
 		templ_7745c5c3_Var235, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_fetch_delay_seconds", "Fetch Delay (seconds)"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 811, Col: 115}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 809, Col: 115}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var235))
 		if templ_7745c5c3_Err != nil {
@@ -4289,7 +4286,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var236 string
 		templ_7745c5c3_Var236, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("tiktok_fetch_delay", "60"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 812, Col: 168}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 810, Col: 168}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var236)
 		if templ_7745c5c3_Err != nil {
@@ -4302,7 +4299,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var237 string
 		templ_7745c5c3_Var237, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_max_videos", "Max Videos"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 815, Col: 94}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 813, Col: 94}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var237))
 		if templ_7745c5c3_Err != nil {
@@ -4315,7 +4312,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var238 string
 		templ_7745c5c3_Var238, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("shorts_max_videos", "20"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 816, Col: 165}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 814, Col: 165}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var238)
 		if templ_7745c5c3_Err != nil {
@@ -4328,7 +4325,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var239 string
 		templ_7745c5c3_Var239, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_repost_storage", "Repost storage"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 819, Col: 109}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 817, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var239))
 		if templ_7745c5c3_Err != nil {
@@ -4341,7 +4338,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var240 string
 		templ_7745c5c3_Var240, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("tiktok_repost_max_videos", "15"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 820, Col: 186}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 818, Col: 186}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var240)
 		if templ_7745c5c3_Err != nil {
@@ -4354,7 +4351,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var241 string
 		templ_7745c5c3_Var241, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_moments_default_tab", "Moments default tab"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 823, Col: 114}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 821, Col: 114}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var241))
 		if templ_7745c5c3_Err != nil {
@@ -4377,7 +4374,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var242 string
 		templ_7745c5c3_Var242, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_moments_default_tab_all", "All"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 825, Col: 138}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 823, Col: 138}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var242))
 		if templ_7745c5c3_Err != nil {
@@ -4400,7 +4397,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var243 string
 		templ_7745c5c3_Var243, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_moments_default_tab_following", "Following"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 826, Col: 162}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 824, Col: 162}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var243))
 		if templ_7745c5c3_Err != nil {
@@ -4423,7 +4420,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var244 string
 		templ_7745c5c3_Var244, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shorts_tab_stories", "Stories"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 827, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 825, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var244))
 		if templ_7745c5c3_Err != nil {
@@ -4436,7 +4433,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var245 string
 		templ_7745c5c3_Var245, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_stories_window_hours", "Stories window (hours)"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 831, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 829, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var245))
 		if templ_7745c5c3_Err != nil {
@@ -4449,7 +4446,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var246 string
 		templ_7745c5c3_Var246, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("stories_window_hours", "48"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 832, Col: 174}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 830, Col: 174}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var246)
 		if templ_7745c5c3_Err != nil {
@@ -4473,7 +4470,7 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var247 string
 		templ_7745c5c3_Var247, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_moments_include_tiktok_reposts", "Include TikTok reposts in Moments"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 841, Col: 92}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 839, Col: 92}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var247))
 		if templ_7745c5c3_Err != nil {
@@ -4520,7 +4517,7 @@ func WindowsUpdatePanel(p PageProps, status windowsupdate.Status) templ.Componen
 			var templ_7745c5c3_Var249 string
 			templ_7745c5c3_Var249, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_windows_update_unavailable", "Update status is available in packaged Windows builds."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 858, Col: 140}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 856, Col: 140}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var249))
 			if templ_7745c5c3_Err != nil {
@@ -4538,7 +4535,7 @@ func WindowsUpdatePanel(p PageProps, status windowsupdate.Status) templ.Componen
 			var templ_7745c5c3_Var250 string
 			templ_7745c5c3_Var250, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_windows_update_installed", "Installed") + ": " + status.CurrentApp)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 861, Col: 93}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 859, Col: 93}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var250))
 			if templ_7745c5c3_Err != nil {
@@ -4551,7 +4548,7 @@ func WindowsUpdatePanel(p PageProps, status windowsupdate.Status) templ.Componen
 			var templ_7745c5c3_Var251 string
 			templ_7745c5c3_Var251, templ_7745c5c3_Err = templ.JoinStringErrs("runtime " + status.CurrentRuntime)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 862, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 860, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var251))
 			if templ_7745c5c3_Err != nil {
@@ -4569,7 +4566,7 @@ func WindowsUpdatePanel(p PageProps, status windowsupdate.Status) templ.Componen
 				var templ_7745c5c3_Var252 string
 				templ_7745c5c3_Var252, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_windows_update_available", "Update available") + ": " + status.AvailableApp + " / runtime " + status.AvailableRuntime)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 865, Col: 184}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 863, Col: 184}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var252))
 				if templ_7745c5c3_Err != nil {
@@ -4592,7 +4589,7 @@ func WindowsUpdatePanel(p PageProps, status windowsupdate.Status) templ.Componen
 				var templ_7745c5c3_Var253 string
 				templ_7745c5c3_Var253, templ_7745c5c3_Err = templ.JoinStringErrs(status.LastError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 868, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 866, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var253))
 				if templ_7745c5c3_Err != nil {
@@ -4615,7 +4612,7 @@ func WindowsUpdatePanel(p PageProps, status windowsupdate.Status) templ.Componen
 				var templ_7745c5c3_Var254 string
 				templ_7745c5c3_Var254, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_up_to_date", "You're up to date!"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 871, Col: 89}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 869, Col: 89}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var254))
 				if templ_7745c5c3_Err != nil {
@@ -4643,7 +4640,7 @@ func WindowsUpdatePanel(p PageProps, status windowsupdate.Status) templ.Componen
 			var templ_7745c5c3_Var255 string
 			templ_7745c5c3_Var255, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_check_for_updates", "Check now"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 879, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 877, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var255))
 			if templ_7745c5c3_Err != nil {
@@ -4671,7 +4668,7 @@ func WindowsUpdatePanel(p PageProps, status windowsupdate.Status) templ.Componen
 				var templ_7745c5c3_Var256 string
 				templ_7745c5c3_Var256, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_update_and_restart", "Update & restart"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 886, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 884, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var256))
 				if templ_7745c5c3_Err != nil {
@@ -4690,7 +4687,7 @@ func WindowsUpdatePanel(p PageProps, status windowsupdate.Status) templ.Componen
 				var templ_7745c5c3_Var257 string
 				templ_7745c5c3_Var257, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_checking_for_updates", "Checking…"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 889, Col: 92}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 887, Col: 92}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var257))
 				if templ_7745c5c3_Err != nil {
@@ -4709,7 +4706,7 @@ func WindowsUpdatePanel(p PageProps, status windowsupdate.Status) templ.Componen
 				var templ_7745c5c3_Var258 string
 				templ_7745c5c3_Var258, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_applying_update", "Applying update…"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 892, Col: 94}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 890, Col: 94}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var258))
 				if templ_7745c5c3_Err != nil {
@@ -4762,7 +4759,7 @@ func embedHostSetting(p PageProps, prefs PrefsData, platform, labelKey, fallback
 		var templ_7745c5c3_Var260 string
 		templ_7745c5c3_Var260, templ_7745c5c3_Err = templ.ResolveAttributeValue(inputID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 902, Col: 22}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 900, Col: 22}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var260)
 		if templ_7745c5c3_Err != nil {
@@ -4775,7 +4772,7 @@ func embedHostSetting(p PageProps, prefs PrefsData, platform, labelKey, fallback
 		var templ_7745c5c3_Var261 string
 		templ_7745c5c3_Var261, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, labelKey, fallback))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 902, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 900, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var261))
 		if templ_7745c5c3_Err != nil {
@@ -4788,7 +4785,7 @@ func embedHostSetting(p PageProps, prefs PrefsData, platform, labelKey, fallback
 		var templ_7745c5c3_Var262 string
 		templ_7745c5c3_Var262, templ_7745c5c3_Err = templ.ResolveAttributeValue(inputID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 906, Col: 16}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 904, Col: 16}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var262)
 		if templ_7745c5c3_Err != nil {
@@ -4801,7 +4798,7 @@ func embedHostSetting(p PageProps, prefs PrefsData, platform, labelKey, fallback
 		var templ_7745c5c3_Var263 string
 		templ_7745c5c3_Var263, templ_7745c5c3_Err = templ.ResolveAttributeValue("share_embed_host_" + platform)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 907, Col: 41}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 905, Col: 41}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var263)
 		if templ_7745c5c3_Err != nil {
@@ -4814,7 +4811,7 @@ func embedHostSetting(p PageProps, prefs PrefsData, platform, labelKey, fallback
 		var templ_7745c5c3_Var264 string
 		templ_7745c5c3_Var264, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("share_embed_host_"+platform, defaultHost))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 909, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 907, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var264)
 		if templ_7745c5c3_Err != nil {
@@ -4827,7 +4824,7 @@ func embedHostSetting(p PageProps, prefs PrefsData, platform, labelKey, fallback
 		var templ_7745c5c3_Var265 string
 		templ_7745c5c3_Var265, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_embed_original_site", "Original site"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 910, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 908, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var265)
 		if templ_7745c5c3_Err != nil {
@@ -4850,7 +4847,7 @@ func embedHostSetting(p PageProps, prefs PrefsData, platform, labelKey, fallback
 		var templ_7745c5c3_Var266 string
 		templ_7745c5c3_Var266, templ_7745c5c3_Err = templ.ResolveAttributeValue(platform)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 919, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 917, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var266)
 		if templ_7745c5c3_Err != nil {
@@ -4863,7 +4860,7 @@ func embedHostSetting(p PageProps, prefs PrefsData, platform, labelKey, fallback
 		var templ_7745c5c3_Var267 string
 		templ_7745c5c3_Var267, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_save", "Save"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 920, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 918, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var267)
 		if templ_7745c5c3_Err != nil {
@@ -4876,7 +4873,7 @@ func embedHostSetting(p PageProps, prefs PrefsData, platform, labelKey, fallback
 		var templ_7745c5c3_Var268 string
 		templ_7745c5c3_Var268, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_save", "Save"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 921, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 919, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var268)
 		if templ_7745c5c3_Err != nil {
@@ -4937,7 +4934,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var270 string
 		templ_7745c5c3_Var270, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_sponsorblock_help_prefix", "Community-powered helpers from"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 936, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 934, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var270))
 		if templ_7745c5c3_Err != nil {
@@ -4950,7 +4947,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var271 string
 		templ_7745c5c3_Var271, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_sponsorblock_help_middle", "and"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 936, Col: 254}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 934, Col: 254}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var271))
 		if templ_7745c5c3_Err != nil {
@@ -4963,7 +4960,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var272 string
 		templ_7745c5c3_Var272, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_youtube_only", "YouTube only."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 936, Col: 422}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 934, Col: 422}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var272))
 		if templ_7745c5c3_Err != nil {
@@ -4976,7 +4973,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var273 string
 		templ_7745c5c3_Var273, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_segment_skipping", "Segment skipping"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 938, Col: 139}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 936, Col: 139}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var273))
 		if templ_7745c5c3_Err != nil {
@@ -4994,7 +4991,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var274 string
 			templ_7745c5c3_Var274, templ_7745c5c3_Err = templ.ResolveAttributeValue("global-setting-sb-" + cat.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 943, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 941, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var274)
 			if templ_7745c5c3_Err != nil {
@@ -5007,7 +5004,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var275 string
 			templ_7745c5c3_Var275, templ_7745c5c3_Err = templ.JoinStringErrs(cat.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 943, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 941, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var275))
 			if templ_7745c5c3_Err != nil {
@@ -5034,7 +5031,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var276 string
 			templ_7745c5c3_Var276, templ_7745c5c3_Err = templ.ResolveAttributeValue("global-setting-sb-" + cat.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 951, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 949, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var276)
 			if templ_7745c5c3_Err != nil {
@@ -5047,7 +5044,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var277 string
 			templ_7745c5c3_Var277, templ_7745c5c3_Err = templ.JoinStringErrs(cat.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 951, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 949, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var277))
 			if templ_7745c5c3_Err != nil {
@@ -5069,7 +5066,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var278 string
 		templ_7745c5c3_Var278, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_dearrow_title", "DeArrow: non-clickbait titles & thumbnails"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 959, Col: 163}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 957, Col: 163}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var278))
 		if templ_7745c5c3_Err != nil {
@@ -5082,7 +5079,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var279 string
 		templ_7745c5c3_Var279, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_dearrow_help_prefix", "Replace YouTube titles and thumbnails with community-voted alternatives from"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 961, Col: 123}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 959, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var279))
 		if templ_7745c5c3_Err != nil {
@@ -5095,7 +5092,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var280 string
 		templ_7745c5c3_Var280, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_youtube_only", "YouTube only."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 961, Col: 291}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 959, Col: 291}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var280))
 		if templ_7745c5c3_Err != nil {
@@ -5131,7 +5128,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var283 string
 			templ_7745c5c3_Var283, templ_7745c5c3_Err = templ.ResolveAttributeValue(mode.Val)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 967, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 965, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var283)
 			if templ_7745c5c3_Err != nil {
@@ -5154,7 +5151,7 @@ func prefsSponsorBlockTab(p PageProps, prefs PrefsData) templ.Component {
 			var templ_7745c5c3_Var284 string
 			templ_7745c5c3_Var284, templ_7745c5c3_Err = templ.JoinStringErrs(mode.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 968, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 966, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var284))
 			if templ_7745c5c3_Err != nil {
@@ -5202,7 +5199,7 @@ func sbSelect(p PageProps, category string, current string) templ.Component {
 		var templ_7745c5c3_Var286 string
 		templ_7745c5c3_Var286, templ_7745c5c3_Err = templ.ResolveAttributeValue("global-setting-sb-" + category)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 978, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 976, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var286)
 		if templ_7745c5c3_Err != nil {
@@ -5215,7 +5212,7 @@ func sbSelect(p PageProps, category string, current string) templ.Component {
 		var templ_7745c5c3_Var287 string
 		templ_7745c5c3_Var287, templ_7745c5c3_Err = templ.ResolveAttributeValue("sb_" + category)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 978, Col: 92}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 976, Col: 92}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var287)
 		if templ_7745c5c3_Err != nil {
@@ -5238,7 +5235,7 @@ func sbSelect(p PageProps, category string, current string) templ.Component {
 		var templ_7745c5c3_Var288 string
 		templ_7745c5c3_Var288, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_sb_do_not_skip", "Do not skip"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 979, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 977, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var288))
 		if templ_7745c5c3_Err != nil {
@@ -5261,7 +5258,7 @@ func sbSelect(p PageProps, category string, current string) templ.Component {
 		var templ_7745c5c3_Var289 string
 		templ_7745c5c3_Var289, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_sb_silent_skip", "Silent skip"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 980, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 978, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var289))
 		if templ_7745c5c3_Err != nil {
@@ -5284,7 +5281,7 @@ func sbSelect(p PageProps, category string, current string) templ.Component {
 		var templ_7745c5c3_Var290 string
 		templ_7745c5c3_Var290, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_sb_ask_to_skip", "Ask to skip"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 981, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 979, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var290))
 		if templ_7745c5c3_Err != nil {
@@ -5328,7 +5325,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var292 string
 		templ_7745c5c3_Var292, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_account_credentials", "Credentials"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 991, Col: 135}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 989, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var292))
 		if templ_7745c5c3_Err != nil {
@@ -5346,7 +5343,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var293 string
 			templ_7745c5c3_Var293, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "field_username", "Username"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 999, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 997, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var293))
 			if templ_7745c5c3_Err != nil {
@@ -5359,7 +5356,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var294 string
 			templ_7745c5c3_Var294, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Username)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1000, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 998, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var294)
 			if templ_7745c5c3_Err != nil {
@@ -5377,7 +5374,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var295 string
 		templ_7745c5c3_Var295, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "field_current_password", "Current Password"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1004, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1002, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var295))
 		if templ_7745c5c3_Err != nil {
@@ -5390,7 +5387,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var296 string
 		templ_7745c5c3_Var296, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "placeholder_current_password_required_for_changes", "Required to make changes"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1005, Col: 166}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1003, Col: 166}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var296)
 		if templ_7745c5c3_Err != nil {
@@ -5403,7 +5400,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var297 string
 		templ_7745c5c3_Var297, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "field_new_password", "New Password"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1008, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1006, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var297))
 		if templ_7745c5c3_Err != nil {
@@ -5416,7 +5413,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var298 string
 		templ_7745c5c3_Var298, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "placeholder_new_password_leave_empty_keep_current", "Leave empty to keep current"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1009, Col: 165}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1007, Col: 165}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var298)
 		if templ_7745c5c3_Err != nil {
@@ -5429,7 +5426,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var299 string
 		templ_7745c5c3_Var299, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "field_confirm_new_password", "Confirm New Password"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1012, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1010, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var299))
 		if templ_7745c5c3_Err != nil {
@@ -5442,7 +5439,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var300 string
 		templ_7745c5c3_Var300, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "placeholder_confirm_new_password", "Confirm new password"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1013, Col: 149}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1011, Col: 149}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var300)
 		if templ_7745c5c3_Err != nil {
@@ -5455,7 +5452,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var301 string
 		templ_7745c5c3_Var301, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_update_credentials", "Update Credentials"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1021, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1019, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var301))
 		if templ_7745c5c3_Err != nil {
@@ -5473,7 +5470,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var302 string
 			templ_7745c5c3_Var302, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_cookie_files", "Cookie Files"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1026, Col: 130}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1024, Col: 130}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var302))
 			if templ_7745c5c3_Err != nil {
@@ -5486,7 +5483,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var303 string
 			templ_7745c5c3_Var303, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_cookie_files_help", "Upload Netscape-format cookie files for platforms that require authentication."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1028, Col: 124}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1026, Col: 124}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var303))
 			if templ_7745c5c3_Err != nil {
@@ -5499,7 +5496,7 @@ func prefsAccountTab(p PageProps) templ.Component {
 			var templ_7745c5c3_Var304 string
 			templ_7745c5c3_Var304, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading_ellipsis", "Loading..."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1035, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1033, Col: 116}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var304))
 			if templ_7745c5c3_Err != nil {
@@ -5548,7 +5545,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var306 string
 			templ_7745c5c3_Var306, templ_7745c5c3_Err = templ.JoinStringErrs(row.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1048, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1046, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var306))
 			if templ_7745c5c3_Err != nil {
@@ -5567,7 +5564,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 					var templ_7745c5c3_Var307 string
 					templ_7745c5c3_Var307, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "cookie_status_files_active", "%d files active"), row.FileCount))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1051, Col: 124}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1049, Col: 124}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var307))
 					if templ_7745c5c3_Err != nil {
@@ -5585,7 +5582,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 					var templ_7745c5c3_Var308 string
 					templ_7745c5c3_Var308, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "cookie_status_file_active", "File active"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1053, Col: 91}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1051, Col: 91}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var308))
 					if templ_7745c5c3_Err != nil {
@@ -5604,7 +5601,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 				var templ_7745c5c3_Var309 string
 				templ_7745c5c3_Var309, templ_7745c5c3_Err = templ.JoinStringErrs(row.Browser)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1056, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1054, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var309))
 				if templ_7745c5c3_Err != nil {
@@ -5623,7 +5620,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 					var templ_7745c5c3_Var310 string
 					templ_7745c5c3_Var310, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "cookie_status_files_disabled", "%d files (disabled)"), row.FileCount))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1059, Col: 132}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1057, Col: 132}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var310))
 					if templ_7745c5c3_Err != nil {
@@ -5641,7 +5638,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 					var templ_7745c5c3_Var311 string
 					templ_7745c5c3_Var311, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "cookie_status_file_disabled", "File (disabled)"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1061, Col: 99}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1059, Col: 99}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var311))
 					if templ_7745c5c3_Err != nil {
@@ -5660,7 +5657,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 				var templ_7745c5c3_Var312 string
 				templ_7745c5c3_Var312, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_not_set", "Not set"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1064, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1062, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var312))
 				if templ_7745c5c3_Err != nil {
@@ -5678,7 +5675,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var313 string
 			templ_7745c5c3_Var313, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/cookies/" + row.Platform)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1069, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1067, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var313)
 			if templ_7745c5c3_Err != nil {
@@ -5691,7 +5688,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var314 string
 			templ_7745c5c3_Var314, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_upload_file", "Upload File"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1079, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1077, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var314))
 			if templ_7745c5c3_Err != nil {
@@ -5709,7 +5706,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 				var templ_7745c5c3_Var315 string
 				templ_7745c5c3_Var315, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/cookies/" + row.Platform + "/toggle")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1084, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1082, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var315)
 				if templ_7745c5c3_Err != nil {
@@ -5723,7 +5720,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 					var templ_7745c5c3_Var316 string
 					templ_7745c5c3_Var316, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_disable", "Disable"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1089, Col: 43}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1087, Col: 43}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var316))
 					if templ_7745c5c3_Err != nil {
@@ -5733,7 +5730,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 					var templ_7745c5c3_Var317 string
 					templ_7745c5c3_Var317, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_enable", "Enable"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1091, Col: 41}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1089, Col: 41}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var317))
 					if templ_7745c5c3_Err != nil {
@@ -5752,7 +5749,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var318 string
 			templ_7745c5c3_Var318, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/cookies/" + row.Platform + "/browser")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1096, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1094, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var318)
 			if templ_7745c5c3_Err != nil {
@@ -5765,7 +5762,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var319 string
 			templ_7745c5c3_Var319, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "cookie_browser_source", "Browser Cookies"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1101, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1099, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var319)
 			if templ_7745c5c3_Err != nil {
@@ -5778,7 +5775,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var320 string
 			templ_7745c5c3_Var320, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/cookies/" + row.Platform + "/browser")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1102, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1100, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var320)
 			if templ_7745c5c3_Err != nil {
@@ -5791,7 +5788,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var321 string
 			templ_7745c5c3_Var321, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_mode_off", "Off"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1107, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1105, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var321))
 			if templ_7745c5c3_Err != nil {
@@ -5814,7 +5811,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var322 string
 			templ_7745c5c3_Var322, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "cookie_browser_firefox", "Firefox"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1108, Col: 113}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1106, Col: 113}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var322))
 			if templ_7745c5c3_Err != nil {
@@ -5837,7 +5834,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var323 string
 			templ_7745c5c3_Var323, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "cookie_browser_chrome", "Chrome"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1109, Col: 109}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1107, Col: 109}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var323))
 			if templ_7745c5c3_Err != nil {
@@ -5860,7 +5857,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var324 string
 			templ_7745c5c3_Var324, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "cookie_browser_chromium", "Chromium"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1110, Col: 117}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1108, Col: 117}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var324))
 			if templ_7745c5c3_Err != nil {
@@ -5883,7 +5880,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var325 string
 			templ_7745c5c3_Var325, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "cookie_browser_brave", "Brave"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1111, Col: 105}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1109, Col: 105}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var325))
 			if templ_7745c5c3_Err != nil {
@@ -5906,7 +5903,7 @@ func CookieRowsPanel(p PageProps, rows []CookieRowData) templ.Component {
 			var templ_7745c5c3_Var326 string
 			templ_7745c5c3_Var326, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "cookie_browser_edge", "Edge"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1112, Col: 101}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1110, Col: 101}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var326))
 			if templ_7745c5c3_Err != nil {
@@ -5956,7 +5953,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 			var templ_7745c5c3_Var328 string
 			templ_7745c5c3_Var328, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "bookmark_no_categories_yet", "No categories yet."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1130, Col: 136}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1128, Col: 136}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var328))
 			if templ_7745c5c3_Err != nil {
@@ -5975,7 +5972,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 			var templ_7745c5c3_Var329 string
 			templ_7745c5c3_Var329, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(templ.SafeCSS(bookmarkCategoryGridColumns(canEditArchivePath)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1133, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1131, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var329))
 			if templ_7745c5c3_Err != nil {
@@ -5988,7 +5985,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 			var templ_7745c5c3_Var330 string
 			templ_7745c5c3_Var330, templ_7745c5c3_Err = templ.ResolveAttributeValue(int64Str(cat.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1134, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1132, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var330)
 			if templ_7745c5c3_Err != nil {
@@ -6001,7 +5998,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 			var templ_7745c5c3_Var331 string
 			templ_7745c5c3_Var331, templ_7745c5c3_Err = templ.ResolveAttributeValue(cat.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1135, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1133, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var331)
 			if templ_7745c5c3_Err != nil {
@@ -6019,7 +6016,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 				var templ_7745c5c3_Var332 string
 				templ_7745c5c3_Var332, templ_7745c5c3_Err = templ.ResolveAttributeValue(cat.ArchivePath)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1137, Col: 81}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1135, Col: 81}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var332)
 				if templ_7745c5c3_Err != nil {
@@ -6032,7 +6029,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 				var templ_7745c5c3_Var333 string
 				templ_7745c5c3_Var333, templ_7745c5c3_Err = templ.ResolveAttributeValue(LF(p, "bookmark_archive_path_for_category_placeholder", "/path/for/%1$s/", cat.Slug))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1137, Col: 182}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1135, Col: 182}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var333)
 				if templ_7745c5c3_Err != nil {
@@ -6050,7 +6047,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 			var templ_7745c5c3_Var334 string
 			templ_7745c5c3_Var334, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/bookmark-categories/" + int64Str(cat.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1140, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1138, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var334)
 			if templ_7745c5c3_Err != nil {
@@ -6063,7 +6060,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 			var templ_7745c5c3_Var335 string
 			templ_7745c5c3_Var335, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf(L(p, "bookmark_confirm_delete_category_move_default", "Delete category %q? Bookmarks in it will be moved to the default category."), cat.Name))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1143, Col: 172}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1141, Col: 172}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var335)
 			if templ_7745c5c3_Err != nil {
@@ -6089,7 +6086,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 		var templ_7745c5c3_Var336 string
 		templ_7745c5c3_Var336, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(templ.SafeCSS(bookmarkCategoryNewRowColumns(canEditArchivePath)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1147, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1145, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var336))
 		if templ_7745c5c3_Err != nil {
@@ -6102,7 +6099,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 		var templ_7745c5c3_Var337 string
 		templ_7745c5c3_Var337, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "bookmark_new_category_name_placeholder", "New category name"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1149, Col: 139}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1147, Col: 139}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var337)
 		if templ_7745c5c3_Err != nil {
@@ -6120,7 +6117,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 			var templ_7745c5c3_Var338 string
 			templ_7745c5c3_Var338, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "bookmark_archive_path_optional_placeholder", "/archive/path/ (optional)"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1151, Col: 160}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1149, Col: 160}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var338)
 			if templ_7745c5c3_Err != nil {
@@ -6138,7 +6135,7 @@ func BookmarkCategoryPathsPanel(p PageProps, cats []BookmarkCategoryDisplay) tem
 		var templ_7745c5c3_Var339 string
 		templ_7745c5c3_Var339, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "bookmark_save_category_settings", "Save Category Settings"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1155, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1153, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var339))
 		if templ_7745c5c3_Err != nil {
@@ -6181,7 +6178,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var341 string
 		templ_7745c5c3_Var341, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_section_navigation", "Navigation"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1165, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1163, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var341))
 		if templ_7745c5c3_Err != nil {
@@ -6194,7 +6191,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var342 string
 		templ_7745c5c3_Var342, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_navigation_hint", "Numbers match sidebar position. Pages vary by account."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1166, Col: 122}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1164, Col: 122}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var342))
 		if templ_7745c5c3_Err != nil {
@@ -6207,7 +6204,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var343 string
 		templ_7745c5c3_Var343, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_toggle_sidebar", "Toggle sidebar"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1171, Col: 122}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1169, Col: 122}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var343))
 		if templ_7745c5c3_Err != nil {
@@ -6220,7 +6217,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var344 string
 		templ_7745c5c3_Var344, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_add_channel", "Add Channel"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1172, Col: 150}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1170, Col: 150}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var344))
 		if templ_7745c5c3_Err != nil {
@@ -6233,7 +6230,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var345 string
 		templ_7745c5c3_Var345, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "download_url_placeholder", "Paste URL to download..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1173, Col: 173}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1171, Col: 173}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var345))
 		if templ_7745c5c3_Err != nil {
@@ -6246,7 +6243,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var346 string
 		templ_7745c5c3_Var346, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_screen_title", "Settings"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1174, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1172, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var346))
 		if templ_7745c5c3_Err != nil {
@@ -6259,7 +6256,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var347 string
 		templ_7745c5c3_Var347, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_open_search_overlay", "Open search overlay"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1175, Col: 176}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1173, Col: 176}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var347))
 		if templ_7745c5c3_Err != nil {
@@ -6272,7 +6269,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var348 string
 		templ_7745c5c3_Var348, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_open_logs_modal", "Open logs modal"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1176, Col: 162}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1174, Col: 162}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var348))
 		if templ_7745c5c3_Err != nil {
@@ -6285,7 +6282,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var349 string
 		templ_7745c5c3_Var349, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_key_escape", "Esc"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1177, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1175, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var349))
 		if templ_7745c5c3_Err != nil {
@@ -6298,7 +6295,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var350 string
 		templ_7745c5c3_Var350, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_close_any_modal_overlay", "Close any modal or overlay"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1177, Col: 206}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1175, Col: 206}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var350))
 		if templ_7745c5c3_Err != nil {
@@ -6311,7 +6308,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var351 string
 		templ_7745c5c3_Var351, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_switch_logs_modal_tabs", "Switch tabs in logs modal"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1178, Col: 188}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1176, Col: 188}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var351))
 		if templ_7745c5c3_Err != nil {
@@ -6324,7 +6321,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var352 string
 		templ_7745c5c3_Var352, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "nav_feed", "Feed"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1185, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1183, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var352))
 		if templ_7745c5c3_Err != nil {
@@ -6337,7 +6334,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var353 string
 		templ_7745c5c3_Var353, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_feed_like_focused_post", "Like / heart focused post"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1187, Col: 140}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1185, Col: 140}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var353))
 		if templ_7745c5c3_Err != nil {
@@ -6350,7 +6347,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var354 string
 		templ_7745c5c3_Var354, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_open_bookmark_menu", "Open bookmark menu"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1188, Col: 133}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1186, Col: 133}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var354))
 		if templ_7745c5c3_Err != nil {
@@ -6363,7 +6360,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var355 string
 		templ_7745c5c3_Var355, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_copy_share_link", "Copy share link"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1189, Col: 124}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1187, Col: 124}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var355))
 		if templ_7745c5c3_Err != nil {
@@ -6376,7 +6373,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var356 string
 		templ_7745c5c3_Var356, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_translate_post", "Translate post"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1190, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1188, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var356))
 		if templ_7745c5c3_Err != nil {
@@ -6389,7 +6386,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var357 string
 		templ_7745c5c3_Var357, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_open_close_media_overlay", "Open / close media overlay"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1191, Col: 144}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1189, Col: 144}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var357))
 		if templ_7745c5c3_Err != nil {
@@ -6402,7 +6399,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var358 string
 		templ_7745c5c3_Var358, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_mute", "Mute"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1192, Col: 98}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1190, Col: 98}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var358))
 		if templ_7745c5c3_Err != nil {
@@ -6415,7 +6412,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var359 string
 		templ_7745c5c3_Var359, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_navigate_media_overlay", "Navigate media overlay"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1193, Col: 141}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1191, Col: 141}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var359))
 		if templ_7745c5c3_Err != nil {
@@ -6428,7 +6425,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var360 string
 		templ_7745c5c3_Var360, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_key_tab", "Tab"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1194, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1192, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var360))
 		if templ_7745c5c3_Err != nil {
@@ -6441,7 +6438,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var361 string
 		templ_7745c5c3_Var361, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_cycle_bookmark_category", "Cycle bookmark category"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1194, Col: 155}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1192, Col: 155}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var361))
 		if templ_7745c5c3_Err != nil {
@@ -6454,7 +6451,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var362 string
 		templ_7745c5c3_Var362, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_toggle_account_in_bookmark_menu", "Toggle account in bookmark menu"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1195, Col: 155}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1193, Col: 155}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var362))
 		if templ_7745c5c3_Err != nil {
@@ -6467,7 +6464,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var363 string
 		templ_7745c5c3_Var363, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_key_escape", "Esc"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1196, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1194, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var363))
 		if templ_7745c5c3_Err != nil {
@@ -6480,7 +6477,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var364 string
 		templ_7745c5c3_Var364, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_close_media_overlay", "Close media overlay"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1196, Col: 150}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1194, Col: 150}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var364))
 		if templ_7745c5c3_Err != nil {
@@ -6493,7 +6490,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var365 string
 		templ_7745c5c3_Var365, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "nav_moments", "Moments"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1200, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1198, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var365))
 		if templ_7745c5c3_Err != nil {
@@ -6506,7 +6503,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var366 string
 		templ_7745c5c3_Var366, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_next_previous_video", "Next / previous video"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1202, Col: 137}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1200, Col: 137}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var366))
 		if templ_7745c5c3_Err != nil {
@@ -6519,7 +6516,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var367 string
 		templ_7745c5c3_Var367, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_scrub_three_seconds", "Scrub ±3 seconds"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1203, Col: 133}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1201, Col: 133}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var367))
 		if templ_7745c5c3_Err != nil {
@@ -6532,7 +6529,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var368 string
 		templ_7745c5c3_Var368, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_toggle_auto_play_next", "Toggle auto-play next"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1204, Col: 141}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1202, Col: 141}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var368))
 		if templ_7745c5c3_Err != nil {
@@ -6545,7 +6542,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var369 string
 		templ_7745c5c3_Var369, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_open_bookmark_menu", "Open bookmark menu"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1205, Col: 135}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1203, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var369))
 		if templ_7745c5c3_Err != nil {
@@ -6558,7 +6555,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var370 string
 		templ_7745c5c3_Var370, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_share_video", "Share video"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1206, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1204, Col: 118}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var370))
 		if templ_7745c5c3_Err != nil {
@@ -6571,7 +6568,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var371 string
 		templ_7745c5c3_Var371, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "player_subtitles", "Subtitles"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1207, Col: 115}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1205, Col: 115}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var371))
 		if templ_7745c5c3_Err != nil {
@@ -6584,7 +6581,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var372 string
 		templ_7745c5c3_Var372, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_show_grid_view", "Show grid view"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1208, Col: 123}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1206, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var372))
 		if templ_7745c5c3_Err != nil {
@@ -6597,7 +6594,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var373 string
 		templ_7745c5c3_Var373, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_key_tab", "Tab"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1209, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1207, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var373))
 		if templ_7745c5c3_Err != nil {
@@ -6610,7 +6607,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var374 string
 		templ_7745c5c3_Var374, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_cycle_bookmark_category", "Cycle bookmark category"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1209, Col: 155}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1207, Col: 155}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var374))
 		if templ_7745c5c3_Err != nil {
@@ -6623,7 +6620,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var375 string
 		templ_7745c5c3_Var375, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_key_escape", "Esc"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1210, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1208, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var375))
 		if templ_7745c5c3_Err != nil {
@@ -6636,7 +6633,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var376 string
 		templ_7745c5c3_Var376, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_close_overlay", "Close overlay"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1210, Col: 138}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1208, Col: 138}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var376))
 		if templ_7745c5c3_Err != nil {
@@ -6649,7 +6646,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var377 string
 		templ_7745c5c3_Var377, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_section_video_player", "Video Player"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1219, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1217, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var377))
 		if templ_7745c5c3_Err != nil {
@@ -6662,7 +6659,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var378 string
 		templ_7745c5c3_Var378, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_toggle_fullscreen", "Toggle fullscreen"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1221, Col: 132}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1219, Col: 132}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var378))
 		if templ_7745c5c3_Err != nil {
@@ -6675,7 +6672,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var379 string
 		templ_7745c5c3_Var379, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "player_cinema_view", "Cinema view"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1222, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1220, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var379))
 		if templ_7745c5c3_Err != nil {
@@ -6688,7 +6685,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var380 string
 		templ_7745c5c3_Var380, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "player_subtitles", "Subtitles"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1223, Col: 115}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1221, Col: 115}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var380))
 		if templ_7745c5c3_Err != nil {
@@ -6701,7 +6698,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var381 string
 		templ_7745c5c3_Var381, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_bookmark_video", "Bookmark video"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1224, Col: 127}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1222, Col: 127}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var381))
 		if templ_7745c5c3_Err != nil {
@@ -6714,7 +6711,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var382 string
 		templ_7745c5c3_Var382, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_copy_share_link", "Copy share link"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1225, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1223, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var382))
 		if templ_7745c5c3_Err != nil {
@@ -6727,7 +6724,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var383 string
 		templ_7745c5c3_Var383, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_toggle_auto_play_next", "Toggle auto-play next"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1226, Col: 141}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1224, Col: 141}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var383))
 		if templ_7745c5c3_Err != nil {
@@ -6740,7 +6737,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var384 string
 		templ_7745c5c3_Var384, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_key_escape", "Esc"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1227, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1225, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var384))
 		if templ_7745c5c3_Err != nil {
@@ -6753,7 +6750,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var385 string
 		templ_7745c5c3_Var385, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_close_menus", "Close menus"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1227, Col: 134}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1225, Col: 134}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var385))
 		if templ_7745c5c3_Err != nil {
@@ -6766,7 +6763,7 @@ func prefsShortcutsTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var386 string
 		templ_7745c5c3_Var386, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "shortcuts_reset_all_to_defaults", "Reset All to Defaults"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1233, Col: 149}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1231, Col: 149}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var386))
 		if templ_7745c5c3_Err != nil {
@@ -6809,7 +6806,7 @@ func prefsUsersTab(p PageProps) templ.Component {
 		var templ_7745c5c3_Var388 string
 		templ_7745c5c3_Var388, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading_ellipsis", "Loading..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1246, Col: 113}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1244, Col: 113}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var388))
 		if templ_7745c5c3_Err != nil {
@@ -6852,7 +6849,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 		var templ_7745c5c3_Var390 string
 		templ_7745c5c3_Var390, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "users_management_title", "User Management"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1254, Col: 124}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1252, Col: 124}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var390))
 		if templ_7745c5c3_Err != nil {
@@ -6865,7 +6862,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 		var templ_7745c5c3_Var391 string
 		templ_7745c5c3_Var391, templ_7745c5c3_Err = templ.JoinStringErrs("+ " + L(p, "action_add_user", "Add User"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1259, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1257, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var391))
 		if templ_7745c5c3_Err != nil {
@@ -6883,7 +6880,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 			var templ_7745c5c3_Var392 string
 			templ_7745c5c3_Var392, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "users_none", "No users"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1262, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1260, Col: 97}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var392))
 			if templ_7745c5c3_Err != nil {
@@ -6901,7 +6898,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 			var templ_7745c5c3_Var393 string
 			templ_7745c5c3_Var393, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "field_user", "User"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1266, Col: 117}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1264, Col: 117}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var393))
 			if templ_7745c5c3_Err != nil {
@@ -6914,7 +6911,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 			var templ_7745c5c3_Var394 string
 			templ_7745c5c3_Var394, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "field_role", "Role"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1267, Col: 117}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1265, Col: 117}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var394))
 			if templ_7745c5c3_Err != nil {
@@ -6927,7 +6924,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 			var templ_7745c5c3_Var395 string
 			templ_7745c5c3_Var395, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "field_platforms", "Platforms"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1268, Col: 127}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1266, Col: 127}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var395))
 			if templ_7745c5c3_Err != nil {
@@ -6945,7 +6942,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 				var templ_7745c5c3_Var396 string
 				templ_7745c5c3_Var396, templ_7745c5c3_Err = templ.JoinStringErrs(u.Username)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1273, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1271, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var396))
 				if templ_7745c5c3_Err != nil {
@@ -6958,7 +6955,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 				var templ_7745c5c3_Var397 string
 				templ_7745c5c3_Var397, templ_7745c5c3_Err = templ.JoinStringErrs(u.Role)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1274, Col: 38}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1272, Col: 38}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var397))
 				if templ_7745c5c3_Err != nil {
@@ -6976,7 +6973,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 					var templ_7745c5c3_Var398 string
 					templ_7745c5c3_Var398, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "label_all", "All"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1277, Col: 157}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1275, Col: 157}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var398))
 					if templ_7745c5c3_Err != nil {
@@ -6995,7 +6992,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 						var templ_7745c5c3_Var399 string
 						templ_7745c5c3_Var399, templ_7745c5c3_Err = templ.JoinStringErrs(platformLabel(p))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1280, Col: 140}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1278, Col: 140}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var399))
 						if templ_7745c5c3_Err != nil {
@@ -7019,7 +7016,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 					var templ_7745c5c3_Var400 string
 					templ_7745c5c3_Var400, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/users?form=edit&user=" + u.Username)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1287, Col: 58}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1285, Col: 58}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var400)
 					if templ_7745c5c3_Err != nil {
@@ -7032,7 +7029,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 					var templ_7745c5c3_Var401 string
 					templ_7745c5c3_Var401, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_edit", "Edit"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1290, Col: 38}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1288, Col: 38}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var401))
 					if templ_7745c5c3_Err != nil {
@@ -7045,7 +7042,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 					var templ_7745c5c3_Var402 string
 					templ_7745c5c3_Var402, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/users/" + u.Username)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1292, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1290, Col: 46}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var402)
 					if templ_7745c5c3_Err != nil {
@@ -7058,7 +7055,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 					var templ_7745c5c3_Var403 string
 					templ_7745c5c3_Var403, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf(L(p, "users_confirm_delete_user", "Delete user %q? All their data will be removed."), u.Username))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1295, Col: 131}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1293, Col: 131}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var403)
 					if templ_7745c5c3_Err != nil {
@@ -7071,7 +7068,7 @@ func UsersPanel(p PageProps, users []UserDisplay) templ.Component {
 					var templ_7745c5c3_Var404 string
 					templ_7745c5c3_Var404, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_delete", "Delete"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1296, Col: 42}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1294, Col: 42}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var404))
 					if templ_7745c5c3_Err != nil {
@@ -7134,7 +7131,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var406 string
 			templ_7745c5c3_Var406, templ_7745c5c3_Err = templ.ResolveAttributeValue(editUser.Username)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1315, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1313, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var406)
 			if templ_7745c5c3_Err != nil {
@@ -7147,7 +7144,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var407 string
 			templ_7745c5c3_Var407, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "users_edit_prefix", "Edit: %s"), editUser.Username))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1316, Col: 155}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1314, Col: 155}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var407))
 			if templ_7745c5c3_Err != nil {
@@ -7165,7 +7162,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var408 string
 			templ_7745c5c3_Var408, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_add_user", "Add User"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1319, Col: 121}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1317, Col: 121}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var408))
 			if templ_7745c5c3_Err != nil {
@@ -7183,7 +7180,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 		var templ_7745c5c3_Var409 string
 		templ_7745c5c3_Var409, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "field_username", "Username"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1322, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1320, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var409))
 		if templ_7745c5c3_Err != nil {
@@ -7201,7 +7198,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var410 string
 			templ_7745c5c3_Var410, templ_7745c5c3_Err = templ.ResolveAttributeValue(editUser.Username)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1324, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1322, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var410)
 			if templ_7745c5c3_Err != nil {
@@ -7219,7 +7216,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var411 string
 			templ_7745c5c3_Var411, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "placeholder_min_3_characters", "min 3 characters"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1326, Col: 124}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1324, Col: 124}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var411)
 			if templ_7745c5c3_Err != nil {
@@ -7238,7 +7235,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var412 string
 			templ_7745c5c3_Var412, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "field_new_password_leave_empty_keep", "New Password (leave empty to keep)"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1332, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1330, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var412))
 			if templ_7745c5c3_Err != nil {
@@ -7248,7 +7245,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var413 string
 			templ_7745c5c3_Var413, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "field_password", "Password"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1334, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1332, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var413))
 			if templ_7745c5c3_Err != nil {
@@ -7267,7 +7264,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var414 string
 			templ_7745c5c3_Var414, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "placeholder_new_password_leave_empty_keep_current", "Leave empty to keep current"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1339, Col: 108}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1337, Col: 108}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var414)
 			if templ_7745c5c3_Err != nil {
@@ -7285,7 +7282,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var415 string
 			templ_7745c5c3_Var415, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "placeholder_min_6_characters", "min 6 characters"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1341, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1339, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var415)
 			if templ_7745c5c3_Err != nil {
@@ -7303,7 +7300,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 		var templ_7745c5c3_Var416 string
 		templ_7745c5c3_Var416, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "field_platform_access", "Platform Access"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1346, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1344, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var416))
 		if templ_7745c5c3_Err != nil {
@@ -7326,7 +7323,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 				var templ_7745c5c3_Var417 string
 				templ_7745c5c3_Var417, templ_7745c5c3_Err = templ.ResolveAttributeValue(plat.Value)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1351, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1349, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var417)
 				if templ_7745c5c3_Err != nil {
@@ -7344,7 +7341,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 				var templ_7745c5c3_Var418 string
 				templ_7745c5c3_Var418, templ_7745c5c3_Err = templ.ResolveAttributeValue(plat.Value)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1353, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1351, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var418)
 				if templ_7745c5c3_Err != nil {
@@ -7358,7 +7355,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var419 string
 			templ_7745c5c3_Var419, templ_7745c5c3_Err = templ.JoinStringErrs(plat.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1355, Col: 18}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1353, Col: 18}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var419))
 			if templ_7745c5c3_Err != nil {
@@ -7381,7 +7378,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var420 string
 			templ_7745c5c3_Var420, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "users_copy_my_subscriptions", "Copy My Subscriptions"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1362, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1360, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var420))
 			if templ_7745c5c3_Err != nil {
@@ -7399,7 +7396,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 				var templ_7745c5c3_Var421 string
 				templ_7745c5c3_Var421, templ_7745c5c3_Err = templ.ResolveAttributeValue(plat.Value)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1366, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1364, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var421)
 				if templ_7745c5c3_Err != nil {
@@ -7412,7 +7409,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 				var templ_7745c5c3_Var422 string
 				templ_7745c5c3_Var422, templ_7745c5c3_Err = templ.JoinStringErrs(plat.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1366, Col: 82}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1364, Col: 82}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var422))
 				if templ_7745c5c3_Err != nil {
@@ -7436,7 +7433,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var423 string
 			templ_7745c5c3_Var423, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_save_changes", "Save Changes"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1375, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1373, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var423))
 			if templ_7745c5c3_Err != nil {
@@ -7446,7 +7443,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 			var templ_7745c5c3_Var424 string
 			templ_7745c5c3_Var424, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_create_user", "Create User"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1377, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1375, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var424))
 			if templ_7745c5c3_Err != nil {
@@ -7460,7 +7457,7 @@ func UserForm(p PageProps, mode string, editUser *UserDisplay, platforms []Platf
 		var templ_7745c5c3_Var425 string
 		templ_7745c5c3_Var425, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_cancel", "Cancel"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1380, Col: 147}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1378, Col: 147}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var425))
 		if templ_7745c5c3_Err != nil {
@@ -7503,7 +7500,7 @@ func ImportConfigModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var427 string
 		templ_7745c5c3_Var427, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "import_config_title", "Import Config"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1392, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1390, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var427))
 		if templ_7745c5c3_Err != nil {
@@ -7524,7 +7521,7 @@ func ImportConfigModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var428 string
 		templ_7745c5c3_Var428, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "import_config_mode_prompt", "How should existing data be handled?"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1405, Col: 108}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1403, Col: 108}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var428))
 		if templ_7745c5c3_Err != nil {
@@ -7537,7 +7534,7 @@ func ImportConfigModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var429 string
 		templ_7745c5c3_Var429, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_merge", "Merge"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1410, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1408, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var429))
 		if templ_7745c5c3_Err != nil {
@@ -7550,7 +7547,7 @@ func ImportConfigModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var430 string
 		templ_7745c5c3_Var430, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "import_config_merge_description", "Add new items, keep existing data"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1411, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1409, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var430))
 		if templ_7745c5c3_Err != nil {
@@ -7563,7 +7560,7 @@ func ImportConfigModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var431 string
 		templ_7745c5c3_Var431, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_replace", "Replace"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1416, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1414, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var431))
 		if templ_7745c5c3_Err != nil {
@@ -7576,7 +7573,7 @@ func ImportConfigModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var432 string
 		templ_7745c5c3_Var432, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "import_config_replace_description", "Clear existing data, then restore from file"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1417, Col: 142}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1415, Col: 142}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var432))
 		if templ_7745c5c3_Err != nil {
@@ -7627,7 +7624,7 @@ func LogsModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var434 string
 		templ_7745c5c3_Var434, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_tab_server", "Server"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1442, Col: 109}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1440, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var434))
 		if templ_7745c5c3_Err != nil {
@@ -7640,7 +7637,7 @@ func LogsModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var435 string
 		templ_7745c5c3_Var435, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_tab_android", "Android"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1443, Col: 105}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1441, Col: 105}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var435))
 		if templ_7745c5c3_Err != nil {
@@ -7653,7 +7650,7 @@ func LogsModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var436 string
 		templ_7745c5c3_Var436, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_tab_downloads", "Downloads"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1444, Col: 111}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1442, Col: 111}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var436))
 		if templ_7745c5c3_Err != nil {
@@ -7666,7 +7663,7 @@ func LogsModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var437 string
 		templ_7745c5c3_Var437, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_tab_feed", "Feed"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1445, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1443, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var437))
 		if templ_7745c5c3_Err != nil {
@@ -7808,7 +7805,7 @@ func serverDashboardLiveStatCardsLoading(p PageProps) templ.Component {
 			var templ_7745c5c3_Var440 string
 			templ_7745c5c3_Var440, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1504, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1502, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var440))
 			if templ_7745c5c3_Err != nil {
@@ -7852,7 +7849,7 @@ func serverDashboardStaticStatCardsLoading(p PageProps) templ.Component {
 			var templ_7745c5c3_Var442 string
 			templ_7745c5c3_Var442, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1513, Col: 32}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1511, Col: 32}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var442))
 			if templ_7745c5c3_Err != nil {
@@ -7895,7 +7892,7 @@ func serverDashboardDatabaseLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var444 string
 		templ_7745c5c3_Var444, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_database", "Database"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1521, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1519, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var444))
 		if templ_7745c5c3_Err != nil {
@@ -7908,7 +7905,7 @@ func serverDashboardDatabaseLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var445 string
 		templ_7745c5c3_Var445, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading", "Loading..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1522, Col: 100}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1520, Col: 100}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var445))
 		if templ_7745c5c3_Err != nil {
@@ -7950,7 +7947,7 @@ func serverDashboardActivityLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var447 string
 		templ_7745c5c3_Var447, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_activity", "Activity"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1527, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1525, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var447))
 		if templ_7745c5c3_Err != nil {
@@ -7963,7 +7960,7 @@ func serverDashboardActivityLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var448 string
 		templ_7745c5c3_Var448, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading", "Loading..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1528, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1526, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var448))
 		if templ_7745c5c3_Err != nil {
@@ -8005,7 +8002,7 @@ func serverDashboardWorkersLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var450 string
 		templ_7745c5c3_Var450, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_workers_errors", "Workers & Errors"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1532, Col: 109}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1530, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var450))
 		if templ_7745c5c3_Err != nil {
@@ -8018,7 +8015,7 @@ func serverDashboardWorkersLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var451 string
 		templ_7745c5c3_Var451, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading", "Loading..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1533, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1531, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var451))
 		if templ_7745c5c3_Err != nil {
@@ -8060,7 +8057,7 @@ func serverDashboardLiveStatCards(p PageProps, d ServerDashboardData) templ.Comp
 		var templ_7745c5c3_Var453 string
 		templ_7745c5c3_Var453, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_uptime", "Uptime"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1538, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1536, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var453))
 		if templ_7745c5c3_Err != nil {
@@ -8073,7 +8070,7 @@ func serverDashboardLiveStatCards(p PageProps, d ServerDashboardData) templ.Comp
 		var templ_7745c5c3_Var454 string
 		templ_7745c5c3_Var454, templ_7745c5c3_Err = templ.JoinStringErrs(d.UptimeText)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1539, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1537, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var454))
 		if templ_7745c5c3_Err != nil {
@@ -8086,7 +8083,7 @@ func serverDashboardLiveStatCards(p PageProps, d ServerDashboardData) templ.Comp
 		var templ_7745c5c3_Var455 string
 		templ_7745c5c3_Var455, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_since_timestamp", "since %s"), d.UptimeStarted))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1540, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1538, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var455))
 		if templ_7745c5c3_Err != nil {
@@ -8099,7 +8096,7 @@ func serverDashboardLiveStatCards(p PageProps, d ServerDashboardData) templ.Comp
 		var templ_7745c5c3_Var456 string
 		templ_7745c5c3_Var456, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_errors_24h", "Errors (24h)"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1543, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1541, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var456))
 		if templ_7745c5c3_Err != nil {
@@ -8112,7 +8109,7 @@ func serverDashboardLiveStatCards(p PageProps, d ServerDashboardData) templ.Comp
 		var templ_7745c5c3_Var457 string
 		templ_7745c5c3_Var457, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.Errors24h))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1544, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1542, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var457))
 		if templ_7745c5c3_Err != nil {
@@ -8125,7 +8122,7 @@ func serverDashboardLiveStatCards(p PageProps, d ServerDashboardData) templ.Comp
 		var templ_7745c5c3_Var458 string
 		templ_7745c5c3_Var458, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_delta_vs_yesterday", "%s%d vs yesterday"), ErrorsDeltaArrow(d.ErrorsDelta), Abs(d.ErrorsDelta)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1545, Col: 145}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1543, Col: 145}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var458))
 		if templ_7745c5c3_Err != nil {
@@ -8138,7 +8135,7 @@ func serverDashboardLiveStatCards(p PageProps, d ServerDashboardData) templ.Comp
 		var templ_7745c5c3_Var459 string
 		templ_7745c5c3_Var459, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_memory", "Memory"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1548, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1546, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var459))
 		if templ_7745c5c3_Err != nil {
@@ -8151,7 +8148,7 @@ func serverDashboardLiveStatCards(p PageProps, d ServerDashboardData) templ.Comp
 		var templ_7745c5c3_Var460 string
 		templ_7745c5c3_Var460, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.1f", d.MemoryMB))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1549, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1547, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var460))
 		if templ_7745c5c3_Err != nil {
@@ -8169,7 +8166,7 @@ func serverDashboardLiveStatCards(p PageProps, d ServerDashboardData) templ.Comp
 			var templ_7745c5c3_Var461 string
 			templ_7745c5c3_Var461, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("height:%dpx;background:%s", bar.HeightPx, bar.Color))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1552, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1550, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var461))
 			if templ_7745c5c3_Err != nil {
@@ -8216,7 +8213,7 @@ func serverDashboardStaticStatCards(p PageProps, d ServerDashboardData) templ.Co
 		var templ_7745c5c3_Var463 string
 		templ_7745c5c3_Var463, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_database", "Database"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1560, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1558, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var463))
 		if templ_7745c5c3_Err != nil {
@@ -8229,7 +8226,7 @@ func serverDashboardStaticStatCards(p PageProps, d ServerDashboardData) templ.Co
 		var templ_7745c5c3_Var464 string
 		templ_7745c5c3_Var464, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.1f", d.DBSizeMB))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1561, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1559, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var464))
 		if templ_7745c5c3_Err != nil {
@@ -8243,7 +8240,7 @@ func serverDashboardStaticStatCards(p PageProps, d ServerDashboardData) templ.Co
 			var templ_7745c5c3_Var465 string
 			templ_7745c5c3_Var465, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_cluster_wal_tables_detail", "Cluster WAL %s MB \u00b7 %d tables"), fmt.Sprintf("%.1f", d.WALSizeMB), d.TableCount))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1564, Col: 143}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1562, Col: 143}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var465))
 			if templ_7745c5c3_Err != nil {
@@ -8253,7 +8250,7 @@ func serverDashboardStaticStatCards(p PageProps, d ServerDashboardData) templ.Co
 			var templ_7745c5c3_Var466 string
 			templ_7745c5c3_Var466, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_cluster_wal_tables_detail", "Cluster WAL %s MB \u00b7 %d tables"), "-", d.TableCount))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1566, Col: 114}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1564, Col: 114}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var466))
 			if templ_7745c5c3_Err != nil {
@@ -8267,7 +8264,7 @@ func serverDashboardStaticStatCards(p PageProps, d ServerDashboardData) templ.Co
 		var templ_7745c5c3_Var467 string
 		templ_7745c5c3_Var467, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_storage", "Storage"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1571, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1569, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var467))
 		if templ_7745c5c3_Err != nil {
@@ -8280,7 +8277,7 @@ func serverDashboardStaticStatCards(p PageProps, d ServerDashboardData) templ.Co
 		var templ_7745c5c3_Var468 string
 		templ_7745c5c3_Var468, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%.1f", d.StorageGB))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1572, Col: 58}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1570, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var468))
 		if templ_7745c5c3_Err != nil {
@@ -8293,7 +8290,7 @@ func serverDashboardStaticStatCards(p PageProps, d ServerDashboardData) templ.Co
 		var templ_7745c5c3_Var469 string
 		templ_7745c5c3_Var469, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_video_rows_size_gb", "video rows %s GB"), fmt.Sprintf("%.1f", d.VideoStorageGB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1573, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1571, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var469))
 		if templ_7745c5c3_Err != nil {
@@ -8306,7 +8303,7 @@ func serverDashboardStaticStatCards(p PageProps, d ServerDashboardData) templ.Co
 		var templ_7745c5c3_Var470 string
 		templ_7745c5c3_Var470, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "nav_videos", "Videos"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1576, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1574, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var470))
 		if templ_7745c5c3_Err != nil {
@@ -8329,7 +8326,7 @@ func serverDashboardStaticStatCards(p PageProps, d ServerDashboardData) templ.Co
 		var templ_7745c5c3_Var471 string
 		templ_7745c5c3_Var471, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_sources", "Sources"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1584, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1582, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var471))
 		if templ_7745c5c3_Err != nil {
@@ -8477,7 +8474,7 @@ func serverDashboardDatabase(p PageProps, d ServerDashboardData) templ.Component
 		var templ_7745c5c3_Var475 string
 		templ_7745c5c3_Var475, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_database", "Database"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1628, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1626, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var475))
 		if templ_7745c5c3_Err != nil {
@@ -8490,7 +8487,7 @@ func serverDashboardDatabase(p PageProps, d ServerDashboardData) templ.Component
 		var templ_7745c5c3_Var476 string
 		templ_7745c5c3_Var476, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_content", "Content"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1631, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1629, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var476))
 		if templ_7745c5c3_Err != nil {
@@ -8551,7 +8548,7 @@ func serverDashboardDatabase(p PageProps, d ServerDashboardData) templ.Component
 		var templ_7745c5c3_Var477 string
 		templ_7745c5c3_Var477, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_media_pipeline", "Media Pipeline"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1645, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1643, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var477))
 		if templ_7745c5c3_Err != nil {
@@ -8580,7 +8577,7 @@ func serverDashboardDatabase(p PageProps, d ServerDashboardData) templ.Component
 		var templ_7745c5c3_Var478 string
 		templ_7745c5c3_Var478, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_source_health", "Source Health"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1651, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1649, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var478))
 		if templ_7745c5c3_Err != nil {
@@ -8613,7 +8610,7 @@ func serverDashboardDatabase(p PageProps, d ServerDashboardData) templ.Component
 		var templ_7745c5c3_Var479 string
 		templ_7745c5c3_Var479, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_preview_queue", "Preview Queue"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1658, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1656, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var479))
 		if templ_7745c5c3_Err != nil {
@@ -8642,7 +8639,7 @@ func serverDashboardDatabase(p PageProps, d ServerDashboardData) templ.Component
 		var templ_7745c5c3_Var480 string
 		templ_7745c5c3_Var480, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_download_queue", "Download Queue"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1664, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1662, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var480))
 		if templ_7745c5c3_Err != nil {
@@ -8663,7 +8660,7 @@ func serverDashboardDatabase(p PageProps, d ServerDashboardData) templ.Component
 		var templ_7745c5c3_Var481 string
 		templ_7745c5c3_Var481, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_status_failed", "Failed"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1666, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1664, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var481))
 		if templ_7745c5c3_Err != nil {
@@ -8676,7 +8673,7 @@ func serverDashboardDatabase(p PageProps, d ServerDashboardData) templ.Component
 		var templ_7745c5c3_Var482 string
 		templ_7745c5c3_Var482, templ_7745c5c3_Err = templ.JoinStringErrs(FmtNum(d.DownloadQueueFailed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1666, Col: 150}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1664, Col: 150}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var482))
 		if templ_7745c5c3_Err != nil {
@@ -8689,7 +8686,7 @@ func serverDashboardDatabase(p PageProps, d ServerDashboardData) templ.Component
 		var templ_7745c5c3_Var483 string
 		templ_7745c5c3_Var483, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_sponsorblock", "SponsorBlock"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1669, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1667, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var483))
 		if templ_7745c5c3_Err != nil {
@@ -8799,7 +8796,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 		var templ_7745c5c3_Var486 string
 		templ_7745c5c3_Var486, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_activity", "Activity"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1692, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1690, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var486))
 		if templ_7745c5c3_Err != nil {
@@ -8835,7 +8832,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 			var templ_7745c5c3_Var489 string
 			templ_7745c5c3_Var489, templ_7745c5c3_Err = templ.ResolveAttributeValue(f.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1697, Col: 40}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1695, Col: 40}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var489)
 			if templ_7745c5c3_Err != nil {
@@ -8848,7 +8845,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 			var templ_7745c5c3_Var490 string
 			templ_7745c5c3_Var490, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/server/status?fmt=html&part=live&log_filter=" + f.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1699, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1697, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var490)
 			if templ_7745c5c3_Err != nil {
@@ -8861,7 +8858,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 			var templ_7745c5c3_Var491 string
 			templ_7745c5c3_Var491, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%s (%d)", f.Label, ServerLogFilterCount(d.Activity, f.Key)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1702, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1700, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var491))
 			if templ_7745c5c3_Err != nil {
@@ -8879,7 +8876,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 		var templ_7745c5c3_Var492 string
 		templ_7745c5c3_Var492, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_copy", "Copy"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1705, Col: 351}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1703, Col: 351}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var492))
 		if templ_7745c5c3_Err != nil {
@@ -8897,7 +8894,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 			var templ_7745c5c3_Var493 string
 			templ_7745c5c3_Var493, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_no_events", "No events."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1709, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1707, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var493))
 			if templ_7745c5c3_Err != nil {
@@ -8917,7 +8914,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 				var templ_7745c5c3_Var494 string
 				templ_7745c5c3_Var494, templ_7745c5c3_Err = templ.JoinStringErrs(e.Time)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1714, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1712, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var494))
 				if templ_7745c5c3_Err != nil {
@@ -8930,7 +8927,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 				var templ_7745c5c3_Var495 string
 				templ_7745c5c3_Var495, templ_7745c5c3_Err = templ.JoinStringErrs(" ")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1715, Col: 10}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1713, Col: 10}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var495))
 				if templ_7745c5c3_Err != nil {
@@ -8965,7 +8962,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 				var templ_7745c5c3_Var498 string
 				templ_7745c5c3_Var498, templ_7745c5c3_Err = templ.JoinStringErrs(serverLevelText(e.Status))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1716, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1714, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var498))
 				if templ_7745c5c3_Err != nil {
@@ -8978,7 +8975,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 				var templ_7745c5c3_Var499 string
 				templ_7745c5c3_Var499, templ_7745c5c3_Err = templ.JoinStringErrs(" ")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1717, Col: 10}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1715, Col: 10}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var499))
 				if templ_7745c5c3_Err != nil {
@@ -8991,7 +8988,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 				var templ_7745c5c3_Var500 string
 				templ_7745c5c3_Var500, templ_7745c5c3_Err = templ.JoinStringErrs("[" + e.Source + "]")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1718, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1716, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var500))
 				if templ_7745c5c3_Err != nil {
@@ -9004,7 +9001,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 				var templ_7745c5c3_Var501 string
 				templ_7745c5c3_Var501, templ_7745c5c3_Err = templ.JoinStringErrs(" ")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1719, Col: 10}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1717, Col: 10}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var501))
 				if templ_7745c5c3_Err != nil {
@@ -9017,7 +9014,7 @@ func serverDashboardActivity(p PageProps, d ServerDashboardData) templ.Component
 				var templ_7745c5c3_Var502 string
 				templ_7745c5c3_Var502, templ_7745c5c3_Err = templ.JoinStringErrs(e.Message)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1720, Col: 38}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1718, Col: 38}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var502))
 				if templ_7745c5c3_Err != nil {
@@ -9065,7 +9062,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 		var templ_7745c5c3_Var504 string
 		templ_7745c5c3_Var504, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_workers_errors", "Workers & Errors"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1728, Col: 109}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1726, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var504))
 		if templ_7745c5c3_Err != nil {
@@ -9078,7 +9075,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 		var templ_7745c5c3_Var505 string
 		templ_7745c5c3_Var505, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_processes", "Processes"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1731, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1729, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var505))
 		if templ_7745c5c3_Err != nil {
@@ -9096,7 +9093,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 			var templ_7745c5c3_Var506 string
 			templ_7745c5c3_Var506, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_no_processes", "No processes"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1733, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1731, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var506))
 			if templ_7745c5c3_Err != nil {
@@ -9115,7 +9112,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 			var templ_7745c5c3_Var507 string
 			templ_7745c5c3_Var507, templ_7745c5c3_Err = templ.ResolveAttributeValue(proc.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1738, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1736, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var507)
 			if templ_7745c5c3_Err != nil {
@@ -9128,7 +9125,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 			var templ_7745c5c3_Var508 string
 			templ_7745c5c3_Var508, templ_7745c5c3_Err = templ.JoinStringErrs(WorkerDisplayName(proc.Name))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1738, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1736, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var508))
 			if templ_7745c5c3_Err != nil {
@@ -9163,7 +9160,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 			var templ_7745c5c3_Var511 string
 			templ_7745c5c3_Var511, templ_7745c5c3_Err = templ.JoinStringErrs(proc.Status)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1739, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1737, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var511))
 			if templ_7745c5c3_Err != nil {
@@ -9181,7 +9178,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 				var templ_7745c5c3_Var512 string
 				templ_7745c5c3_Var512, templ_7745c5c3_Err = templ.JoinStringErrs(proc.Summary)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1742, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1740, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var512))
 				if templ_7745c5c3_Err != nil {
@@ -9201,7 +9198,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 					var templ_7745c5c3_Var513 string
 					templ_7745c5c3_Var513, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_detail", "Detail"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1747, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1745, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var513))
 					if templ_7745c5c3_Err != nil {
@@ -9214,7 +9211,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 					var templ_7745c5c3_Var514 string
 					templ_7745c5c3_Var514, templ_7745c5c3_Err = templ.JoinStringErrs(proc.Detail)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1748, Col: 49}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1746, Col: 49}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var514))
 					if templ_7745c5c3_Err != nil {
@@ -9232,7 +9229,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 					var templ_7745c5c3_Var515 string
 					templ_7745c5c3_Var515, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_detail", "Detail"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1751, Col: 73}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1749, Col: 73}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var515))
 					if templ_7745c5c3_Err != nil {
@@ -9245,7 +9242,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 					var templ_7745c5c3_Var516 string
 					templ_7745c5c3_Var516, templ_7745c5c3_Err = templ.JoinStringErrs(proc.Detail)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1751, Col: 101}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1749, Col: 101}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var516))
 					if templ_7745c5c3_Err != nil {
@@ -9265,7 +9262,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 				var templ_7745c5c3_Var517 string
 				templ_7745c5c3_Var517, templ_7745c5c3_Err = templ.JoinStringErrs(proc.Error)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1755, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1753, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var517))
 				if templ_7745c5c3_Err != nil {
@@ -9288,7 +9285,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 		var templ_7745c5c3_Var518 string
 		templ_7745c5c3_Var518, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_filter_errors", "Errors"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1761, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1759, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var518))
 		if templ_7745c5c3_Err != nil {
@@ -9306,7 +9303,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 			var templ_7745c5c3_Var519 string
 			templ_7745c5c3_Var519, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_no_errors_session", "No errors this session"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1763, Col: 108}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1761, Col: 108}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var519))
 			if templ_7745c5c3_Err != nil {
@@ -9325,7 +9322,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 			var templ_7745c5c3_Var520 string
 			templ_7745c5c3_Var520, templ_7745c5c3_Err = templ.JoinStringErrs(e.Time)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1767, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1765, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var520))
 			if templ_7745c5c3_Err != nil {
@@ -9338,7 +9335,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 			var templ_7745c5c3_Var521 string
 			templ_7745c5c3_Var521, templ_7745c5c3_Err = templ.JoinStringErrs(e.Message)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1769, Col: 17}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1767, Col: 17}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var521))
 			if templ_7745c5c3_Err != nil {
@@ -9352,7 +9349,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 				var templ_7745c5c3_Var522 string
 				templ_7745c5c3_Var522, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(" \u00d7%d", e.Count))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1771, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1769, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var522))
 				if templ_7745c5c3_Err != nil {
@@ -9371,7 +9368,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 		var templ_7745c5c3_Var523 string
 		templ_7745c5c3_Var523, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_filter_warnings", "Warnings"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1778, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1776, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var523))
 		if templ_7745c5c3_Err != nil {
@@ -9389,7 +9386,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 			var templ_7745c5c3_Var524 string
 			templ_7745c5c3_Var524, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_no_warnings", "No warnings"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1780, Col: 91}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1778, Col: 91}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var524))
 			if templ_7745c5c3_Err != nil {
@@ -9409,7 +9406,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 				var templ_7745c5c3_Var525 string
 				templ_7745c5c3_Var525, templ_7745c5c3_Err = templ.JoinStringErrs(w.Time)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1785, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1783, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var525))
 				if templ_7745c5c3_Err != nil {
@@ -9422,7 +9419,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 				var templ_7745c5c3_Var526 string
 				templ_7745c5c3_Var526, templ_7745c5c3_Err = templ.JoinStringErrs(w.Message)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1786, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1784, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var526))
 				if templ_7745c5c3_Err != nil {
@@ -9442,7 +9439,7 @@ func serverDashboardWorkers(p PageProps, d ServerDashboardData) templ.Component 
 			var templ_7745c5c3_Var527 string
 			templ_7745c5c3_Var527, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_more_count", "+%d more"), len(d.Warnings)-10))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1791, Col: 128}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1789, Col: 128}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var527))
 			if templ_7745c5c3_Err != nil {
@@ -9489,7 +9486,7 @@ func serverRawLogLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var529 string
 		templ_7745c5c3_Var529, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_server_log", "Server Log"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1799, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1797, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var529))
 		if templ_7745c5c3_Err != nil {
@@ -9502,7 +9499,7 @@ func serverRawLogLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var530 string
 		templ_7745c5c3_Var530, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading", "Loading..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1801, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1799, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var530))
 		if templ_7745c5c3_Err != nil {
@@ -9545,7 +9542,7 @@ func ServerRawLog(p PageProps, d ServerRawLogData) templ.Component {
 		var templ_7745c5c3_Var532 string
 		templ_7745c5c3_Var532, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_server_log", "Server Log"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1807, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1805, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var532))
 		if templ_7745c5c3_Err != nil {
@@ -9586,7 +9583,7 @@ func ServerRawLog(p PageProps, d ServerRawLogData) templ.Component {
 			var templ_7745c5c3_Var535 string
 			templ_7745c5c3_Var535, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/logs/server/read?type=server&lines=80&filter_noise=1&fmt=html&raw_filter=" + f.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1818, Col: 102}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1816, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var535)
 			if templ_7745c5c3_Err != nil {
@@ -9599,7 +9596,7 @@ func ServerRawLog(p PageProps, d ServerRawLogData) templ.Component {
 			var templ_7745c5c3_Var536 string
 			templ_7745c5c3_Var536, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%s (%d)", f.Label, ServerRawLogFilterCount(d.Lines, f.Key)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1821, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1819, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var536))
 			if templ_7745c5c3_Err != nil {
@@ -9617,7 +9614,7 @@ func ServerRawLog(p PageProps, d ServerRawLogData) templ.Component {
 		var templ_7745c5c3_Var537 string
 		templ_7745c5c3_Var537, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/logs/server/read?type=server&lines=80&filter_noise=1&fmt=html&raw_filter=" + d.Filter)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1825, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1823, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var537)
 		if templ_7745c5c3_Err != nil {
@@ -9630,7 +9627,7 @@ func ServerRawLog(p PageProps, d ServerRawLogData) templ.Component {
 		var templ_7745c5c3_Var538 string
 		templ_7745c5c3_Var538, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_refresh", "Refresh"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1828, Col: 39}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1826, Col: 39}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var538))
 		if templ_7745c5c3_Err != nil {
@@ -9643,7 +9640,7 @@ func ServerRawLog(p PageProps, d ServerRawLogData) templ.Component {
 		var templ_7745c5c3_Var539 string
 		templ_7745c5c3_Var539, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_copy", "Copy"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1829, Col: 376}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1827, Col: 376}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var539))
 		if templ_7745c5c3_Err != nil {
@@ -9662,7 +9659,7 @@ func ServerRawLog(p PageProps, d ServerRawLogData) templ.Component {
 				var templ_7745c5c3_Var540 string
 				templ_7745c5c3_Var540, templ_7745c5c3_Err = templ.JoinStringErrs(line.Text)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1834, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1832, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var540))
 				if templ_7745c5c3_Err != nil {
@@ -9717,7 +9714,7 @@ func miniRing(segments []RingSegment, centerText string) templ.Component {
 				var templ_7745c5c3_Var542 string
 				templ_7745c5c3_Var542, templ_7745c5c3_Err = templ.ResolveAttributeValue(seg.Color)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1847, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1845, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var542)
 				if templ_7745c5c3_Err != nil {
@@ -9730,7 +9727,7 @@ func miniRing(segments []RingSegment, centerText string) templ.Component {
 				var templ_7745c5c3_Var543 string
 				templ_7745c5c3_Var543, templ_7745c5c3_Err = templ.ResolveAttributeValue(seg.DashArray)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1847, Col: 100}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1845, Col: 100}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var543)
 				if templ_7745c5c3_Err != nil {
@@ -9743,7 +9740,7 @@ func miniRing(segments []RingSegment, centerText string) templ.Component {
 				var templ_7745c5c3_Var544 string
 				templ_7745c5c3_Var544, templ_7745c5c3_Err = templ.ResolveAttributeValue(seg.DashOffset)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1847, Col: 137}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1845, Col: 137}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var544)
 				if templ_7745c5c3_Err != nil {
@@ -9761,7 +9758,7 @@ func miniRing(segments []RingSegment, centerText string) templ.Component {
 				var templ_7745c5c3_Var545 string
 				templ_7745c5c3_Var545, templ_7745c5c3_Err = templ.ResolveAttributeValue(seg.Color)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1849, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1847, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var545)
 				if templ_7745c5c3_Err != nil {
@@ -9774,7 +9771,7 @@ func miniRing(segments []RingSegment, centerText string) templ.Component {
 				var templ_7745c5c3_Var546 string
 				templ_7745c5c3_Var546, templ_7745c5c3_Err = templ.ResolveAttributeValue(seg.DashArray)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1849, Col: 100}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1847, Col: 100}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var546)
 				if templ_7745c5c3_Err != nil {
@@ -9793,7 +9790,7 @@ func miniRing(segments []RingSegment, centerText string) templ.Component {
 		var templ_7745c5c3_Var547 string
 		templ_7745c5c3_Var547, templ_7745c5c3_Err = templ.JoinStringErrs(centerText)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1853, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1851, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var547))
 		if templ_7745c5c3_Err != nil {
@@ -9811,7 +9808,7 @@ func miniRing(segments []RingSegment, centerText string) templ.Component {
 			var templ_7745c5c3_Var548 string
 			templ_7745c5c3_Var548, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("color:" + seg.Color)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1858, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1856, Col: 48}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var548))
 			if templ_7745c5c3_Err != nil {
@@ -9824,7 +9821,7 @@ func miniRing(segments []RingSegment, centerText string) templ.Component {
 			var templ_7745c5c3_Var549 string
 			templ_7745c5c3_Var549, templ_7745c5c3_Err = templ.JoinStringErrs(FmtNum(seg.Count))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1858, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1856, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var549))
 			if templ_7745c5c3_Err != nil {
@@ -9837,7 +9834,7 @@ func miniRing(segments []RingSegment, centerText string) templ.Component {
 			var templ_7745c5c3_Var550 string
 			templ_7745c5c3_Var550, templ_7745c5c3_Err = templ.JoinStringErrs(" ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1859, Col: 9}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1857, Col: 9}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var550))
 			if templ_7745c5c3_Err != nil {
@@ -9850,7 +9847,7 @@ func miniRing(segments []RingSegment, centerText string) templ.Component {
 			var templ_7745c5c3_Var551 string
 			templ_7745c5c3_Var551, templ_7745c5c3_Err = templ.JoinStringErrs(seg.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1860, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1858, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var551))
 			if templ_7745c5c3_Err != nil {
@@ -9898,7 +9895,7 @@ func dbRow(label, value string) templ.Component {
 		var templ_7745c5c3_Var553 string
 		templ_7745c5c3_Var553, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1868, Col: 44}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1866, Col: 44}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var553))
 		if templ_7745c5c3_Err != nil {
@@ -9911,7 +9908,7 @@ func dbRow(label, value string) templ.Component {
 		var templ_7745c5c3_Var554 string
 		templ_7745c5c3_Var554, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1868, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1866, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var554))
 		if templ_7745c5c3_Err != nil {
@@ -9954,7 +9951,7 @@ func dbRowSub(label, value string) templ.Component {
 		var templ_7745c5c3_Var556 string
 		templ_7745c5c3_Var556, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1873, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1871, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var556))
 		if templ_7745c5c3_Err != nil {
@@ -9967,7 +9964,7 @@ func dbRowSub(label, value string) templ.Component {
 		var templ_7745c5c3_Var557 string
 		templ_7745c5c3_Var557, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1873, Col: 87}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1871, Col: 87}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var557))
 		if templ_7745c5c3_Err != nil {
@@ -10032,7 +10029,7 @@ func dbRowDot(dotClass, label, valueClass, value string) templ.Component {
 		var templ_7745c5c3_Var561 string
 		templ_7745c5c3_Var561, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1879, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1877, Col: 66}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var561))
 		if templ_7745c5c3_Err != nil {
@@ -10072,7 +10069,7 @@ func dbRowDot(dotClass, label, valueClass, value string) templ.Component {
 			var templ_7745c5c3_Var564 string
 			templ_7745c5c3_Var564, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1881, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1879, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var564))
 			if templ_7745c5c3_Err != nil {
@@ -10090,7 +10087,7 @@ func dbRowDot(dotClass, label, valueClass, value string) templ.Component {
 			var templ_7745c5c3_Var565 string
 			templ_7745c5c3_Var565, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1883, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1881, Col: 26}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var565))
 			if templ_7745c5c3_Err != nil {
@@ -10138,7 +10135,7 @@ func logsDownloadsPanel(p PageProps) templ.Component {
 		var templ_7745c5c3_Var567 string
 		templ_7745c5c3_Var567, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading", "Loading..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1896, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1894, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var567))
 		if templ_7745c5c3_Err != nil {
@@ -10181,7 +10178,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 		var templ_7745c5c3_Var569 string
 		templ_7745c5c3_Var569, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_queue", "Queue"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1906, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1904, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var569))
 		if templ_7745c5c3_Err != nil {
@@ -10194,7 +10191,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 		var templ_7745c5c3_Var570 string
 		templ_7745c5c3_Var570, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.QueueActive))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1908, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1906, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var570))
 		if templ_7745c5c3_Err != nil {
@@ -10207,7 +10204,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 		var templ_7745c5c3_Var571 string
 		templ_7745c5c3_Var571, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.QueueTotal))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1909, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1907, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var571))
 		if templ_7745c5c3_Err != nil {
@@ -10225,7 +10222,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var572 string
 			templ_7745c5c3_Var572, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_status_downloading_count", "%d downloading"), d.QueueActive))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1913, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1911, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var572))
 			if templ_7745c5c3_Err != nil {
@@ -10240,7 +10237,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var573 string
 			templ_7745c5c3_Var573, templ_7745c5c3_Err = templ.JoinStringErrs(" \u00b7 ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1916, Col: 17}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1914, Col: 17}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var573))
 			if templ_7745c5c3_Err != nil {
@@ -10255,7 +10252,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var574 string
 			templ_7745c5c3_Var574, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_status_queued_count", "%d queued"), d.QueueQueued))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1919, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1917, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var574))
 			if templ_7745c5c3_Err != nil {
@@ -10279,7 +10276,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 		var templ_7745c5c3_Var575 string
 		templ_7745c5c3_Var575, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_session", "Session"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1927, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1925, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var575))
 		if templ_7745c5c3_Err != nil {
@@ -10292,7 +10289,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 		var templ_7745c5c3_Var576 string
 		templ_7745c5c3_Var576, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.SessionDone+d.SessionFail))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1928, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1926, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var576))
 		if templ_7745c5c3_Err != nil {
@@ -10310,7 +10307,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var577 string
 			templ_7745c5c3_Var577, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_status_ok_count", "%d ok"), d.SessionDone))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1931, Col: 88}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1929, Col: 88}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var577))
 			if templ_7745c5c3_Err != nil {
@@ -10325,7 +10322,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var578 string
 			templ_7745c5c3_Var578, templ_7745c5c3_Err = templ.JoinStringErrs(" \u00b7 ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1934, Col: 17}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1932, Col: 17}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var578))
 			if templ_7745c5c3_Err != nil {
@@ -10344,7 +10341,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var579 string
 			templ_7745c5c3_Var579, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_status_fail_count", "%d fail"), d.SessionFail))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1937, Col: 92}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1935, Col: 92}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var579))
 			if templ_7745c5c3_Err != nil {
@@ -10368,7 +10365,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 		var templ_7745c5c3_Var580 string
 		templ_7745c5c3_Var580, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_last_download", "Last Download"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1945, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1943, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var580))
 		if templ_7745c5c3_Err != nil {
@@ -10382,7 +10379,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var581 string
 			templ_7745c5c3_Var581, templ_7745c5c3_Err = templ.JoinStringErrs(d.LastElapsed)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1948, Col: 20}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1946, Col: 20}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var581))
 			if templ_7745c5c3_Err != nil {
@@ -10402,7 +10399,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var582 string
 			templ_7745c5c3_Var582, templ_7745c5c3_Err = templ.JoinStringErrs("@" + d.LastChannel + " \u00b7 " + d.LastPlatform)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1955, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1953, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var582))
 			if templ_7745c5c3_Err != nil {
@@ -10416,7 +10413,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 		var templ_7745c5c3_Var583 string
 		templ_7745c5c3_Var583, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_activity", "Activity"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1965, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1963, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var583))
 		if templ_7745c5c3_Err != nil {
@@ -10429,7 +10426,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 		var templ_7745c5c3_Var584 string
 		templ_7745c5c3_Var584, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_copy", "Copy"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1966, Col: 368}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1964, Col: 368}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var584))
 		if templ_7745c5c3_Err != nil {
@@ -10447,7 +10444,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var585 string
 			templ_7745c5c3_Var585, templ_7745c5c3_Err = templ.JoinStringErrs(FormatHMS(e.Timestamp, d.TzOffsetSec))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1971, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1969, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var585))
 			if templ_7745c5c3_Err != nil {
@@ -10460,7 +10457,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var586 string
 			templ_7745c5c3_Var586, templ_7745c5c3_Err = templ.JoinStringErrs(" ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1972, Col: 11}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1970, Col: 11}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var586))
 			if templ_7745c5c3_Err != nil {
@@ -10495,7 +10492,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var589 string
 			templ_7745c5c3_Var589, templ_7745c5c3_Err = templ.JoinStringErrs(e.Message)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1973, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1971, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var589))
 			if templ_7745c5c3_Err != nil {
@@ -10513,7 +10510,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 		var templ_7745c5c3_Var590 string
 		templ_7745c5c3_Var590, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_recent_downloads", "Recent Downloads"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1981, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1979, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var590))
 		if templ_7745c5c3_Err != nil {
@@ -10549,7 +10546,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var593 string
 			templ_7745c5c3_Var593, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/downloads/status?fmt=html&filter=" + f.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1987, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1985, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var593)
 			if templ_7745c5c3_Err != nil {
@@ -10562,7 +10559,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var594 string
 			templ_7745c5c3_Var594, templ_7745c5c3_Err = templ.JoinStringErrs(f.Label + " (" + fmt.Sprintf("%d", dlFilterCount(d.Recent, f.Key)) + ")")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1990, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1988, Col: 81}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var594))
 			if templ_7745c5c3_Err != nil {
@@ -10585,7 +10582,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var595 string
 			templ_7745c5c3_Var595, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_table_channel", "Channel"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1999, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1997, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var595))
 			if templ_7745c5c3_Err != nil {
@@ -10598,7 +10595,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var596 string
 			templ_7745c5c3_Var596, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_table_title", "Title"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2000, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1998, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var596))
 			if templ_7745c5c3_Err != nil {
@@ -10611,7 +10608,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var597 string
 			templ_7745c5c3_Var597, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_table_status", "Status"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2001, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 1999, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var597))
 			if templ_7745c5c3_Err != nil {
@@ -10624,7 +10621,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var598 string
 			templ_7745c5c3_Var598, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_table_platform", "Platform"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2002, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2000, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var598))
 			if templ_7745c5c3_Err != nil {
@@ -10637,7 +10634,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var599 string
 			templ_7745c5c3_Var599, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_table_time", "Time"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2003, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2001, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var599))
 			if templ_7745c5c3_Err != nil {
@@ -10656,7 +10653,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 					var templ_7745c5c3_Var600 string
 					templ_7745c5c3_Var600, templ_7745c5c3_Err = templ.JoinStringErrs("@" + e.ChannelID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2010, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2008, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var600))
 					if templ_7745c5c3_Err != nil {
@@ -10669,7 +10666,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 					var templ_7745c5c3_Var601 string
 					templ_7745c5c3_Var601, templ_7745c5c3_Err = templ.JoinStringErrs(DlTitleFromMessage(e.Message))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2011, Col: 68}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2009, Col: 68}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var601))
 					if templ_7745c5c3_Err != nil {
@@ -10704,7 +10701,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 					var templ_7745c5c3_Var604 string
 					templ_7745c5c3_Var604, templ_7745c5c3_Err = templ.JoinStringErrs(DlStatusLabel(e.Status))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2012, Col: 100}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2010, Col: 100}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var604))
 					if templ_7745c5c3_Err != nil {
@@ -10717,7 +10714,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 					var templ_7745c5c3_Var605 string
 					templ_7745c5c3_Var605, templ_7745c5c3_Err = templ.JoinStringErrs(e.Platform)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2013, Col: 52}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2011, Col: 52}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var605))
 					if templ_7745c5c3_Err != nil {
@@ -10730,7 +10727,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 					var templ_7745c5c3_Var606 string
 					templ_7745c5c3_Var606, templ_7745c5c3_Err = templ.JoinStringErrs(FormatHM(e.Timestamp, d.TzOffsetSec))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2014, Col: 74}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2012, Col: 74}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var606))
 					if templ_7745c5c3_Err != nil {
@@ -10754,7 +10751,7 @@ func DownloadsDashboard(p PageProps, d DownloadsStatusData) templ.Component {
 			var templ_7745c5c3_Var607 string
 			templ_7745c5c3_Var607, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_no_download_activity", "No download activity yet."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2021, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2019, Col: 100}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var607))
 			if templ_7745c5c3_Err != nil {
@@ -10802,7 +10799,7 @@ func logsAndroidPanel(p PageProps) templ.Component {
 		var templ_7745c5c3_Var609 string
 		templ_7745c5c3_Var609, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading", "Loading..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2036, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2034, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var609))
 		if templ_7745c5c3_Err != nil {
@@ -10845,7 +10842,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 		var templ_7745c5c3_Var611 string
 		templ_7745c5c3_Var611, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_last_sync", "Last Sync"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2046, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2044, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var611))
 		if templ_7745c5c3_Err != nil {
@@ -10859,7 +10856,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 			var templ_7745c5c3_Var612 string
 			templ_7745c5c3_Var612, templ_7745c5c3_Err = templ.JoinStringErrs(d.SyncAgo)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2049, Col: 16}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2047, Col: 16}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var612))
 			if templ_7745c5c3_Err != nil {
@@ -10869,7 +10866,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 			var templ_7745c5c3_Var613 string
 			templ_7745c5c3_Var613, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_no_sync_report", "No report"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2051, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2049, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var613))
 			if templ_7745c5c3_Err != nil {
@@ -10883,7 +10880,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 		var templ_7745c5c3_Var614 string
 		templ_7745c5c3_Var614, templ_7745c5c3_Err = templ.JoinStringErrs(d.SyncCompletedHMS)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2055, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2053, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var614))
 		if templ_7745c5c3_Err != nil {
@@ -10897,7 +10894,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 			var templ_7745c5c3_Var615 string
 			templ_7745c5c3_Var615, templ_7745c5c3_Err = templ.JoinStringErrs(" · ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2057, Col: 13}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2055, Col: 13}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var615))
 			if templ_7745c5c3_Err != nil {
@@ -10911,7 +10908,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 		var templ_7745c5c3_Var616 string
 		templ_7745c5c3_Var616, templ_7745c5c3_Err = templ.JoinStringErrs(d.SyncStatus)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2059, Col: 18}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2057, Col: 18}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var616))
 		if templ_7745c5c3_Err != nil {
@@ -10924,7 +10921,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 		var templ_7745c5c3_Var617 string
 		templ_7745c5c3_Var617, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_android_device_assets", "Device assets"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2063, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2061, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var617))
 		if templ_7745c5c3_Err != nil {
@@ -10938,7 +10935,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 			var templ_7745c5c3_Var618 string
 			templ_7745c5c3_Var618, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d%%", d.DevicePercent))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2066, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2064, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var618))
 			if templ_7745c5c3_Err != nil {
@@ -10959,7 +10956,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var619 string
 				templ_7745c5c3_Var619, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_android_device_assets_bytes_detail", "%d/%d verified · %s"), d.DeviceVerified, d.DeviceTotal, d.DeviceBytes))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2074, Col: 140}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2072, Col: 140}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var619))
 				if templ_7745c5c3_Err != nil {
@@ -10969,7 +10966,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var620 string
 				templ_7745c5c3_Var620, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_android_device_assets_detail", "%d/%d verified · %d pending"), d.DeviceVerified, d.DeviceTotal, d.DevicePending))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2076, Col: 144}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2074, Col: 144}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var620))
 				if templ_7745c5c3_Err != nil {
@@ -10980,7 +10977,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 			var templ_7745c5c3_Var621 string
 			templ_7745c5c3_Var621, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_no_health_report", "no health report"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2079, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2077, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var621))
 			if templ_7745c5c3_Err != nil {
@@ -10994,7 +10991,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 		var templ_7745c5c3_Var622 string
 		templ_7745c5c3_Var622, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_filter_errors", "Errors"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2084, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2082, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var622))
 		if templ_7745c5c3_Err != nil {
@@ -11029,7 +11026,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 		var templ_7745c5c3_Var625 string
 		templ_7745c5c3_Var625, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.ErrorCount))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2085, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2083, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var625))
 		if templ_7745c5c3_Err != nil {
@@ -11042,7 +11039,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 		var templ_7745c5c3_Var626 string
 		templ_7745c5c3_Var626, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_warnings_count", "%d warnings"), d.WarningCount))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2086, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2084, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var626))
 		if templ_7745c5c3_Err != nil {
@@ -11055,7 +11052,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 		var templ_7745c5c3_Var627 string
 		templ_7745c5c3_Var627, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_android_asset_health", "Asset Health"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2093, Col: 113}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2091, Col: 113}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var627))
 		if templ_7745c5c3_Err != nil {
@@ -11078,7 +11075,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var628 string
 				templ_7745c5c3_Var628, templ_7745c5c3_Err = templ.JoinStringErrs(c.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2099, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2097, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var628))
 				if templ_7745c5c3_Err != nil {
@@ -11091,7 +11088,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var629 string
 				templ_7745c5c3_Var629, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d%%", c.Percent))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2100, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2098, Col: 67}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var629))
 				if templ_7745c5c3_Err != nil {
@@ -11126,7 +11123,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var632 string
 				templ_7745c5c3_Var632, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("width:%d%%", c.Percent))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2101, Col: 125}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2099, Col: 125}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var632))
 				if templ_7745c5c3_Err != nil {
@@ -11139,7 +11136,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var633 string
 				templ_7745c5c3_Var633, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d/%d", c.Cached, c.Total))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2102, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2100, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var633))
 				if templ_7745c5c3_Err != nil {
@@ -11168,7 +11165,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var634 string
 				templ_7745c5c3_Var634, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_sync", "Sync"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2110, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2108, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var634))
 				if templ_7745c5c3_Err != nil {
@@ -11181,7 +11178,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var635 string
 				templ_7745c5c3_Var635, templ_7745c5c3_Err = templ.JoinStringErrs(d.SyncStatus)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2110, Col: 106}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2108, Col: 106}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var635))
 				if templ_7745c5c3_Err != nil {
@@ -11200,7 +11197,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var636 string
 				templ_7745c5c3_Var636, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_section_retention", "Retention"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2113, Col: 87}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2111, Col: 87}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var636))
 				if templ_7745c5c3_Err != nil {
@@ -11213,7 +11210,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var637 string
 				templ_7745c5c3_Var637, templ_7745c5c3_Err = templ.JoinStringErrs(d.RetentionText)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2113, Col: 119}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2111, Col: 119}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var637))
 				if templ_7745c5c3_Err != nil {
@@ -11259,7 +11256,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 			var templ_7745c5c3_Var640 string
 			templ_7745c5c3_Var640, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/logs/android/status?fmt=html&filter=" + f.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2127, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2125, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var640)
 			if templ_7745c5c3_Err != nil {
@@ -11272,7 +11269,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 			var templ_7745c5c3_Var641 string
 			templ_7745c5c3_Var641, templ_7745c5c3_Err = templ.JoinStringErrs(f.Label + " (" + fmt.Sprintf("%d", AndroidLogFilterCount(d.Activity, f.Key)) + ")")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2130, Col: 91}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2128, Col: 91}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var641))
 			if templ_7745c5c3_Err != nil {
@@ -11290,7 +11287,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 		var templ_7745c5c3_Var642 string
 		templ_7745c5c3_Var642, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_copy", "Copy"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2134, Col: 354}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2132, Col: 354}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var642))
 		if templ_7745c5c3_Err != nil {
@@ -11308,7 +11305,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 			var templ_7745c5c3_Var643 string
 			templ_7745c5c3_Var643, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_no_sync_activity", "No sync activity yet."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2139, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2137, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var643))
 			if templ_7745c5c3_Err != nil {
@@ -11346,7 +11343,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var646 string
 				templ_7745c5c3_Var646, templ_7745c5c3_Err = templ.JoinStringErrs(e.Timestamp)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2144, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2142, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var646))
 				if templ_7745c5c3_Err != nil {
@@ -11359,7 +11356,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var647 string
 				templ_7745c5c3_Var647, templ_7745c5c3_Err = templ.JoinStringErrs(" [" + e.Tag + "] " + e.Message)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2145, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2143, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var647))
 				if templ_7745c5c3_Err != nil {
@@ -11378,7 +11375,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 		var templ_7745c5c3_Var648 string
 		templ_7745c5c3_Var648, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_errors_warnings", "Errors & Warnings"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2153, Col: 113}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2151, Col: 113}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var648))
 		if templ_7745c5c3_Err != nil {
@@ -11396,7 +11393,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 			var templ_7745c5c3_Var649 string
 			templ_7745c5c3_Var649, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_no_errors_session_period", "No errors this session."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2157, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2155, Col: 100}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var649))
 			if templ_7745c5c3_Err != nil {
@@ -11415,7 +11412,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 			var templ_7745c5c3_Var650 string
 			templ_7745c5c3_Var650, templ_7745c5c3_Err = templ.JoinStringErrs(e.Tag)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2162, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2160, Col: 86}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var650))
 			if templ_7745c5c3_Err != nil {
@@ -11433,7 +11430,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var651 string
 				templ_7745c5c3_Var651, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("\u00d7%d", e.Count))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2164, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2162, Col: 74}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var651))
 				if templ_7745c5c3_Err != nil {
@@ -11451,7 +11448,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 			var templ_7745c5c3_Var652 string
 			templ_7745c5c3_Var652, templ_7745c5c3_Err = templ.JoinStringErrs(e.Message)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2167, Col: 140}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2165, Col: 140}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var652))
 			if templ_7745c5c3_Err != nil {
@@ -11465,7 +11462,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var653 string
 				templ_7745c5c3_Var653, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_last_seen_first_seen", "last seen %s \u00b7 first seen %s"), e.Timestamp, e.FirstSeen))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2170, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2168, Col: 120}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var653))
 				if templ_7745c5c3_Err != nil {
@@ -11475,7 +11472,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var654 string
 				templ_7745c5c3_Var654, templ_7745c5c3_Err = templ.JoinStringErrs(e.Timestamp)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2172, Col: 22}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2170, Col: 22}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var654))
 				if templ_7745c5c3_Err != nil {
@@ -11505,7 +11502,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 					var templ_7745c5c3_Var655 string
 					templ_7745c5c3_Var655, templ_7745c5c3_Err = templ.JoinStringErrs(w.Tag)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2182, Col: 60}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2180, Col: 60}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var655))
 					if templ_7745c5c3_Err != nil {
@@ -11518,7 +11515,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 					var templ_7745c5c3_Var656 string
 					templ_7745c5c3_Var656, templ_7745c5c3_Err = templ.JoinStringErrs(" ")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2182, Col: 75}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2180, Col: 75}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var656))
 					if templ_7745c5c3_Err != nil {
@@ -11531,7 +11528,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 					var templ_7745c5c3_Var657 string
 					templ_7745c5c3_Var657, templ_7745c5c3_Err = templ.JoinStringErrs(w.Message)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2182, Col: 119}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2180, Col: 119}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var657))
 					if templ_7745c5c3_Err != nil {
@@ -11551,7 +11548,7 @@ func AndroidDashboard(p PageProps, d AndroidDashboardData) templ.Component {
 				var templ_7745c5c3_Var658 string
 				templ_7745c5c3_Var658, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_more_count", "+%d more"), len(d.Warnings)-10))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2186, Col: 109}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2184, Col: 109}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var658))
 				if templ_7745c5c3_Err != nil {
@@ -11659,7 +11656,7 @@ func feedDashboardStatsLoading(p PageProps) templ.Component {
 			var templ_7745c5c3_Var661 string
 			templ_7745c5c3_Var661, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2215, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2213, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var661))
 			if templ_7745c5c3_Err != nil {
@@ -11706,7 +11703,7 @@ func feedDashboardActivityLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var663 string
 		templ_7745c5c3_Var663, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_activity", "Activity"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2229, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2227, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var663))
 		if templ_7745c5c3_Err != nil {
@@ -11719,7 +11716,7 @@ func feedDashboardActivityLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var664 string
 		templ_7745c5c3_Var664, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading", "Loading..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2230, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2228, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var664))
 		if templ_7745c5c3_Err != nil {
@@ -11761,7 +11758,7 @@ func feedDashboardSourcesLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var666 string
 		templ_7745c5c3_Var666, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_sources", "Sources"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2242, Col: 100}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2240, Col: 100}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var666))
 		if templ_7745c5c3_Err != nil {
@@ -11774,7 +11771,7 @@ func feedDashboardSourcesLoading(p PageProps) templ.Component {
 		var templ_7745c5c3_Var667 string
 		templ_7745c5c3_Var667, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_loading", "Loading..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2243, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2241, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var667))
 		if templ_7745c5c3_Err != nil {
@@ -11911,7 +11908,7 @@ func FeedDashboardSources(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var671 string
 		templ_7745c5c3_Var671, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/feed/status?fmt=html&part=sources&filter=" + d.Filter)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2276, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2274, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var671)
 		if templ_7745c5c3_Err != nil {
@@ -11962,7 +11959,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var673 string
 			templ_7745c5c3_Var673, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_x_ingest_status", "X ingest: %s"), d.XIngestStatus))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2286, Col: 110}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2284, Col: 110}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var673))
 			if templ_7745c5c3_Err != nil {
@@ -11980,7 +11977,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var674 string
 		templ_7745c5c3_Var674, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_ingest_label", "Ingest"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2291, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2289, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var674))
 		if templ_7745c5c3_Err != nil {
@@ -11993,7 +11990,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var675 string
 		templ_7745c5c3_Var675, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", d.IngestAtMs))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2291, Col: 135}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2289, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var675)
 		if templ_7745c5c3_Err != nil {
@@ -12006,7 +12003,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var676 string
 		templ_7745c5c3_Var676, templ_7745c5c3_Err = templ.JoinStringErrs(d.IngestMeta)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2291, Col: 152}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2289, Col: 152}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var676))
 		if templ_7745c5c3_Err != nil {
@@ -12019,7 +12016,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var677 string
 		templ_7745c5c3_Var677, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.IngestDone))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2293, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2291, Col: 37}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var677))
 		if templ_7745c5c3_Err != nil {
@@ -12032,7 +12029,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var678 string
 		templ_7745c5c3_Var678, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.IngestTotal))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2294, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2292, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var678))
 		if templ_7745c5c3_Err != nil {
@@ -12050,7 +12047,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var679 string
 			templ_7745c5c3_Var679, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_status_failed_count", "%d failed"), d.IngestFailures))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2298, Col: 115}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2296, Col: 115}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var679))
 			if templ_7745c5c3_Err != nil {
@@ -12065,7 +12062,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var680 string
 			templ_7745c5c3_Var680, templ_7745c5c3_Err = templ.JoinStringErrs(" \u00b7 ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2301, Col: 17}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2299, Col: 17}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var680))
 			if templ_7745c5c3_Err != nil {
@@ -12084,7 +12081,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var681 string
 			templ_7745c5c3_Var681, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_status_cooling_count", "%d cooling"), d.IngestCooling))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2304, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2302, Col: 116}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var681))
 			if templ_7745c5c3_Err != nil {
@@ -12100,7 +12097,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 				var templ_7745c5c3_Var682 string
 				templ_7745c5c3_Var682, templ_7745c5c3_Err = templ.JoinStringErrs(" \u00b7 ")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2308, Col: 18}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2306, Col: 18}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var682))
 				if templ_7745c5c3_Err != nil {
@@ -12114,7 +12111,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var683 string
 			templ_7745c5c3_Var683, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_status_waiting_count", "%d waiting"), d.IngestNotDue))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2310, Col: 115}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2308, Col: 115}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var683))
 			if templ_7745c5c3_Err != nil {
@@ -12130,7 +12127,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 				var templ_7745c5c3_Var684 string
 				templ_7745c5c3_Var684, templ_7745c5c3_Err = templ.JoinStringErrs(" \u00b7 ")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2314, Col: 18}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2312, Col: 18}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var684))
 				if templ_7745c5c3_Err != nil {
@@ -12144,7 +12141,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var685 string
 			templ_7745c5c3_Var685, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_status_paused", "paused"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2316, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2314, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var685))
 			if templ_7745c5c3_Err != nil {
@@ -12163,7 +12160,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var686 string
 			templ_7745c5c3_Var686, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_status_disabled", "disabled"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2319, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2317, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var686))
 			if templ_7745c5c3_Err != nil {
@@ -12178,7 +12175,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var687 string
 			templ_7745c5c3_Var687, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_status_idle", "idle"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2322, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2320, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var687))
 			if templ_7745c5c3_Err != nil {
@@ -12192,7 +12189,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var688 string
 		templ_7745c5c3_Var688, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_parsed", "Parsed"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2327, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2325, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var688))
 		if templ_7745c5c3_Err != nil {
@@ -12205,7 +12202,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var689 string
 		templ_7745c5c3_Var689, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.ParsedTotal))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2328, Col: 59}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2326, Col: 59}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var689))
 		if templ_7745c5c3_Err != nil {
@@ -12218,7 +12215,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var690 string
 		templ_7745c5c3_Var690, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_parsed_detail", "%d with media \u00b7 %d text"), d.ParsedMedia, d.ParsedText))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2329, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2327, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var690))
 		if templ_7745c5c3_Err != nil {
@@ -12231,7 +12228,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var691 string
 		templ_7745c5c3_Var691, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_filter_media", "Media"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2332, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2330, Col: 61}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var691))
 		if templ_7745c5c3_Err != nil {
@@ -12244,7 +12241,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var692 string
 		templ_7745c5c3_Var692, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.MediaReady))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2334, Col: 37}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2332, Col: 37}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var692))
 		if templ_7745c5c3_Err != nil {
@@ -12257,7 +12254,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 		var templ_7745c5c3_Var693 string
 		templ_7745c5c3_Var693, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", d.MediaTotal))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2335, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2333, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var693))
 		if templ_7745c5c3_Err != nil {
@@ -12275,7 +12272,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var694 string
 			templ_7745c5c3_Var694, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_status_downloading_count", "%d downloading"), d.MediaPending))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2339, Col: 122}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2337, Col: 122}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var694))
 			if templ_7745c5c3_Err != nil {
@@ -12290,7 +12287,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var695 string
 			templ_7745c5c3_Var695, templ_7745c5c3_Err = templ.JoinStringErrs(" \u00b7 ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2342, Col: 17}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2340, Col: 17}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var695))
 			if templ_7745c5c3_Err != nil {
@@ -12309,7 +12306,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var696 string
 			templ_7745c5c3_Var696, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf(L(p, "logs_status_failed_count", "%d failed"), d.MediaFailed))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2345, Col: 112}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2343, Col: 112}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var696))
 			if templ_7745c5c3_Err != nil {
@@ -12324,7 +12321,7 @@ func feedDashboardStats(p PageProps, d FeedDashboardData) templ.Component {
 			var templ_7745c5c3_Var697 string
 			templ_7745c5c3_Var697, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_status_all_done", "all done"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2348, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2346, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var697))
 			if templ_7745c5c3_Err != nil {
@@ -12367,7 +12364,7 @@ func feedDashboardActivityCard(p PageProps, d FeedDashboardData) templ.Component
 		var templ_7745c5c3_Var699 string
 		templ_7745c5c3_Var699, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_activity", "Activity"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2358, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2356, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var699))
 		if templ_7745c5c3_Err != nil {
@@ -12400,7 +12397,7 @@ func feedDashboardActivityCard(p PageProps, d FeedDashboardData) templ.Component
 			var templ_7745c5c3_Var700 string
 			templ_7745c5c3_Var700, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_resume", "Resume"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2370, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2368, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var700))
 			if templ_7745c5c3_Err != nil {
@@ -12410,7 +12407,7 @@ func feedDashboardActivityCard(p PageProps, d FeedDashboardData) templ.Component
 			var templ_7745c5c3_Var701 string
 			templ_7745c5c3_Var701, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_pause", "Pause"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2372, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2370, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var701))
 			if templ_7745c5c3_Err != nil {
@@ -12434,7 +12431,7 @@ func feedDashboardActivityCard(p PageProps, d FeedDashboardData) templ.Component
 		var templ_7745c5c3_Var702 string
 		templ_7745c5c3_Var702, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_force_cycle", "Force Cycle"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2380, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2378, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var702))
 		if templ_7745c5c3_Err != nil {
@@ -12457,7 +12454,7 @@ func feedDashboardActivityCard(p PageProps, d FeedDashboardData) templ.Component
 		var templ_7745c5c3_Var703 string
 		templ_7745c5c3_Var703, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_retry_failed", "Retry Failed"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2386, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2384, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var703))
 		if templ_7745c5c3_Err != nil {
@@ -12470,7 +12467,7 @@ func feedDashboardActivityCard(p PageProps, d FeedDashboardData) templ.Component
 		var templ_7745c5c3_Var704 string
 		templ_7745c5c3_Var704, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_copy", "Copy"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2387, Col: 368}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2385, Col: 368}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var704))
 		if templ_7745c5c3_Err != nil {
@@ -12488,7 +12485,7 @@ func feedDashboardActivityCard(p PageProps, d FeedDashboardData) templ.Component
 			var templ_7745c5c3_Var705 string
 			templ_7745c5c3_Var705, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_no_feed_activity", "No activity yet — waiting for first feed cycle"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2391, Col: 120}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2389, Col: 120}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var705))
 			if templ_7745c5c3_Err != nil {
@@ -12507,7 +12504,7 @@ func feedDashboardActivityCard(p PageProps, d FeedDashboardData) templ.Component
 			var templ_7745c5c3_Var706 string
 			templ_7745c5c3_Var706, templ_7745c5c3_Err = templ.JoinStringErrs(FormatHMS(e.Timestamp, d.TzOffsetSec))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2395, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2393, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var706))
 			if templ_7745c5c3_Err != nil {
@@ -12520,7 +12517,7 @@ func feedDashboardActivityCard(p PageProps, d FeedDashboardData) templ.Component
 			var templ_7745c5c3_Var707 string
 			templ_7745c5c3_Var707, templ_7745c5c3_Err = templ.JoinStringErrs(" ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2396, Col: 11}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2394, Col: 11}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var707))
 			if templ_7745c5c3_Err != nil {
@@ -12555,7 +12552,7 @@ func feedDashboardActivityCard(p PageProps, d FeedDashboardData) templ.Component
 			var templ_7745c5c3_Var710 string
 			templ_7745c5c3_Var710, templ_7745c5c3_Err = templ.JoinStringErrs(e.Message)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2397, Col: 54}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2395, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var710))
 			if templ_7745c5c3_Err != nil {
@@ -12602,7 +12599,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 		var templ_7745c5c3_Var712 string
 		templ_7745c5c3_Var712, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_stat_sources", "Sources"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2407, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2405, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var712))
 		if templ_7745c5c3_Err != nil {
@@ -12615,7 +12612,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 		var templ_7745c5c3_Var713 string
 		templ_7745c5c3_Var713, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_filter", "Filter..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2408, Col: 124}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2406, Col: 124}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var713)
 		if templ_7745c5c3_Err != nil {
@@ -12651,7 +12648,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 			var templ_7745c5c3_Var716 string
 			templ_7745c5c3_Var716, templ_7745c5c3_Err = templ.ResolveAttributeValue(f.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2415, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2413, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var716)
 			if templ_7745c5c3_Err != nil {
@@ -12664,7 +12661,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 			var templ_7745c5c3_Var717 string
 			templ_7745c5c3_Var717, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/feed/status?fmt=html&part=sources&filter=" + f.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2416, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2414, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var717)
 			if templ_7745c5c3_Err != nil {
@@ -12677,7 +12674,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 			var templ_7745c5c3_Var718 string
 			templ_7745c5c3_Var718, templ_7745c5c3_Err = templ.JoinStringErrs(f.Label + " (" + fmt.Sprintf("%d", FeedSourceFilterCount(d.Sources, f.Key)) + ")")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2419, Col: 92}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2417, Col: 92}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var718))
 			if templ_7745c5c3_Err != nil {
@@ -12695,7 +12692,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 		var templ_7745c5c3_Var719 string
 		templ_7745c5c3_Var719, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/feed/status?fmt=html&part=sources&filter=" + d.Filter)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2423, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2421, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var719)
 		if templ_7745c5c3_Err != nil {
@@ -12708,7 +12705,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 		var templ_7745c5c3_Var720 string
 		templ_7745c5c3_Var720, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_refresh", "Refresh"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2426, Col: 41}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2424, Col: 41}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var720))
 		if templ_7745c5c3_Err != nil {
@@ -12721,7 +12718,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 		var templ_7745c5c3_Var721 string
 		templ_7745c5c3_Var721, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/feed/failing-sources?filter=" + d.Filter)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2428, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2426, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var721)
 		if templ_7745c5c3_Err != nil {
@@ -12734,7 +12731,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 		var templ_7745c5c3_Var722 string
 		templ_7745c5c3_Var722, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "confirm_remove_failing_feed_sources", "Unfollow all failing feed sources?"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2431, Col: 100}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2429, Col: 100}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var722)
 		if templ_7745c5c3_Err != nil {
@@ -12757,7 +12754,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 		var templ_7745c5c3_Var723 string
 		templ_7745c5c3_Var723, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_remove_failing", "Remove failing"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2434, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2432, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var723))
 		if templ_7745c5c3_Err != nil {
@@ -12775,7 +12772,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 			var templ_7745c5c3_Var724 string
 			templ_7745c5c3_Var724, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_table_handle", "Handle"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2442, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2440, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var724))
 			if templ_7745c5c3_Err != nil {
@@ -12788,7 +12785,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 			var templ_7745c5c3_Var725 string
 			templ_7745c5c3_Var725, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_table_status", "Status"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2443, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2441, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var725))
 			if templ_7745c5c3_Err != nil {
@@ -12801,7 +12798,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 			var templ_7745c5c3_Var726 string
 			templ_7745c5c3_Var726, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_table_last_ok", "Last OK"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2444, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2442, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var726))
 			if templ_7745c5c3_Err != nil {
@@ -12814,7 +12811,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 			var templ_7745c5c3_Var727 string
 			templ_7745c5c3_Var727, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_table_items", "Items"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2445, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2443, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var727))
 			if templ_7745c5c3_Err != nil {
@@ -12827,7 +12824,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 			var templ_7745c5c3_Var728 string
 			templ_7745c5c3_Var728, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_table_action", "Action"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2446, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2444, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var728))
 			if templ_7745c5c3_Err != nil {
@@ -12864,7 +12861,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 					var templ_7745c5c3_Var731 templ.SafeURL
 					templ_7745c5c3_Var731, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("https://x.com/" + s.Handle))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2454, Col: 66}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2452, Col: 66}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var731))
 					if templ_7745c5c3_Err != nil {
@@ -12877,7 +12874,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 					var templ_7745c5c3_Var732 string
 					templ_7745c5c3_Var732, templ_7745c5c3_Err = templ.JoinStringErrs("@" + s.Handle)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2454, Col: 152}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2452, Col: 152}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var732))
 					if templ_7745c5c3_Err != nil {
@@ -12912,7 +12909,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 					var templ_7745c5c3_Var735 string
 					templ_7745c5c3_Var735, templ_7745c5c3_Err = templ.JoinStringErrs(s.Status)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2457, Col: 21}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2455, Col: 21}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var735))
 					if templ_7745c5c3_Err != nil {
@@ -12926,7 +12923,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 						var templ_7745c5c3_Var736 string
 						templ_7745c5c3_Var736, templ_7745c5c3_Err = templ.JoinStringErrs(" ")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2459, Col: 17}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2457, Col: 17}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var736))
 						if templ_7745c5c3_Err != nil {
@@ -12939,7 +12936,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 						var templ_7745c5c3_Var737 string
 						templ_7745c5c3_Var737, templ_7745c5c3_Err = templ.JoinStringErrs(FeedSourceShortError(s))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2460, Col: 69}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2458, Col: 69}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var737))
 						if templ_7745c5c3_Err != nil {
@@ -12979,7 +12976,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 					var templ_7745c5c3_Var740 string
 					templ_7745c5c3_Var740, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", s.LastSuccessAt*1000))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2463, Col: 111}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2461, Col: 111}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var740)
 					if templ_7745c5c3_Err != nil {
@@ -12992,7 +12989,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 					var templ_7745c5c3_Var741 string
 					templ_7745c5c3_Var741, templ_7745c5c3_Err = templ.JoinStringErrs(TimeAgoText(p, s.LastSuccessAt))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2463, Col: 147}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2461, Col: 147}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var741))
 					if templ_7745c5c3_Err != nil {
@@ -13005,7 +13002,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 					var templ_7745c5c3_Var742 string
 					templ_7745c5c3_Var742, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", s.ItemCount))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2464, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2462, Col: 46}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var742))
 					if templ_7745c5c3_Err != nil {
@@ -13023,7 +13020,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 						var templ_7745c5c3_Var743 string
 						templ_7745c5c3_Var743, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/x/probe?handle=" + s.Handle)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2468, Col: 55}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2466, Col: 55}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var743)
 						if templ_7745c5c3_Err != nil {
@@ -13036,7 +13033,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 						var templ_7745c5c3_Var744 string
 						templ_7745c5c3_Var744, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_probe", "Probe"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2472, Col: 44}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2470, Col: 44}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var744))
 						if templ_7745c5c3_Err != nil {
@@ -13049,7 +13046,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 						var templ_7745c5c3_Var745 string
 						templ_7745c5c3_Var745, templ_7745c5c3_Err = templ.JoinStringErrs(" ")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2473, Col: 17}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2471, Col: 17}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var745))
 						if templ_7745c5c3_Err != nil {
@@ -13062,7 +13059,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 						var templ_7745c5c3_Var746 string
 						templ_7745c5c3_Var746, templ_7745c5c3_Err = templ.ResolveAttributeValue("/api/unsubscribe/twitter_" + s.Handle)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2475, Col: 63}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2473, Col: 63}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var746)
 						if templ_7745c5c3_Err != nil {
@@ -13075,7 +13072,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 						var templ_7745c5c3_Var747 string
 						templ_7745c5c3_Var747, templ_7745c5c3_Err = templ.ResolveAttributeValue(LF(p, "confirm_unfollow_channel_body", "Unfollow %1$s?", "@"+s.Handle))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2478, Col: 98}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2476, Col: 98}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var747)
 						if templ_7745c5c3_Err != nil {
@@ -13088,7 +13085,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 						var templ_7745c5c3_Var748 string
 						templ_7745c5c3_Var748, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_unfollow", "Unfollow"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2481, Col: 50}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2479, Col: 50}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var748))
 						if templ_7745c5c3_Err != nil {
@@ -13117,7 +13114,7 @@ func feedDashboardSourcesCard(p PageProps, d FeedDashboardData) templ.Component 
 			var templ_7745c5c3_Var749 string
 			templ_7745c5c3_Var749, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_no_x_sources", "No X sources configured."))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2490, Col: 91}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2488, Col: 91}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var749))
 			if templ_7745c5c3_Err != nil {
@@ -13173,7 +13170,7 @@ func ConfirmModal(p PageProps) templ.Component {
 		var templ_7745c5c3_Var751 string
 		templ_7745c5c3_Var751, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "action_confirm", "Confirm"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2502, Col: 88}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2500, Col: 88}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var751))
 		if templ_7745c5c3_Err != nil {
@@ -13224,7 +13221,7 @@ func SearchOverlay(p PageProps) templ.Component {
 		var templ_7745c5c3_Var753 string
 		templ_7745c5c3_Var753, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "search_overlay_placeholder", "Search channels, videos..."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2515, Col: 156}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2513, Col: 156}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var753)
 		if templ_7745c5c3_Err != nil {
@@ -13237,7 +13234,7 @@ func SearchOverlay(p PageProps) templ.Component {
 		var templ_7745c5c3_Var754 string
 		templ_7745c5c3_Var754, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_clear", "Clear"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2516, Col: 125}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2514, Col: 125}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var754)
 		if templ_7745c5c3_Err != nil {
@@ -13298,7 +13295,7 @@ func miniPlayerVideosSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var756 string
 		templ_7745c5c3_Var756, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_enable_mini_player", "Enable mini player"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2531, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2529, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var756))
 		if templ_7745c5c3_Err != nil {
@@ -13311,7 +13308,7 @@ func miniPlayerVideosSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var757 string
 		templ_7745c5c3_Var757, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_mini_player_videos_help", "Automatically move a playing YouTube video into the mini player when you browse away."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2533, Col: 158}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2531, Col: 158}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var757))
 		if templ_7745c5c3_Err != nil {
@@ -13353,7 +13350,7 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var759 string
 		templ_7745c5c3_Var759, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_reset_hours", "Discover page reset interval (hours)"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2539, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2537, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var759))
 		if templ_7745c5c3_Err != nil {
@@ -13366,7 +13363,7 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var760 string
 		templ_7745c5c3_Var760, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("discover_reset_hours", "24"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2540, Col: 171}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2538, Col: 171}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var760)
 		if templ_7745c5c3_Err != nil {
@@ -13379,7 +13376,7 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var761 string
 		templ_7745c5c3_Var761, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_reset_help", "Prepare a new Discover page after this interval. The current page remains available until its replacement is ready."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2541, Col: 184}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2539, Col: 184}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var761))
 		if templ_7745c5c3_Err != nil {
@@ -13392,7 +13389,7 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var762 string
 		templ_7745c5c3_Var762, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_prefetch_count", "Discover videos to pre-download"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2544, Col: 131}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2542, Col: 131}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var762))
 		if templ_7745c5c3_Err != nil {
@@ -13405,7 +13402,7 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var763 string
 		templ_7745c5c3_Var763, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("discover_prefetch_count", "10"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2545, Col: 179}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2543, Col: 179}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var763)
 		if templ_7745c5c3_Err != nil {
@@ -13418,7 +13415,7 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var764 string
 		templ_7745c5c3_Var764, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_prefetch_help", "Keep this many recommendations ready as low-priority temporary downloads. Set to 0 to disable."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2546, Col: 166}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2544, Col: 166}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var764))
 		if templ_7745c5c3_Err != nil {
@@ -13431,7 +13428,7 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var765 string
 		templ_7745c5c3_Var765, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_max_duration", "Maximum Discover video length (minutes)"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2549, Col: 135}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2547, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var765))
 		if templ_7745c5c3_Err != nil {
@@ -13444,7 +13441,7 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var766 string
 		templ_7745c5c3_Var766, templ_7745c5c3_Err = templ.ResolveAttributeValue(prefs.Str("discover_max_duration_minutes", "120"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2550, Col: 192}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2548, Col: 192}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var766)
 		if templ_7745c5c3_Err != nil {
@@ -13457,7 +13454,7 @@ func discoverPrefetchSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var767 string
 		templ_7745c5c3_Var767, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_discover_max_duration_help", "Longer videos are hidden from Discover and excluded from pre-download selection. Set to 0 for no limit."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2551, Col: 179}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2549, Col: 179}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var767))
 		if templ_7745c5c3_Err != nil {
@@ -13510,7 +13507,7 @@ func miniPlayerFeedSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var769 string
 		templ_7745c5c3_Var769, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_enable_mini_player", "Enable mini player"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2563, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2561, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var769))
 		if templ_7745c5c3_Err != nil {
@@ -13523,7 +13520,7 @@ func miniPlayerFeedSetting(p PageProps, prefs PrefsData) templ.Component {
 		var templ_7745c5c3_Var770 string
 		templ_7745c5c3_Var770, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "settings_mini_player_feed_help", "Automatically move a playing Feed video into the mini player when you browse away."))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2565, Col: 153}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2563, Col: 153}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var770))
 		if templ_7745c5c3_Err != nil {
@@ -13571,7 +13568,7 @@ func AddSubSelectors(p PageProps) templ.Component {
 		var templ_7745c5c3_Var772 string
 		templ_7745c5c3_Var772, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "channel_add_mode", "Input type"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2579, Col: 114}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2577, Col: 114}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var772)
 		if templ_7745c5c3_Err != nil {
@@ -13584,7 +13581,7 @@ func AddSubSelectors(p PageProps) templ.Component {
 		var templ_7745c5c3_Var773 string
 		templ_7745c5c3_Var773, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "channel_add_url", "URL"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2580, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2578, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var773))
 		if templ_7745c5c3_Err != nil {
@@ -13597,7 +13594,7 @@ func AddSubSelectors(p PageProps) templ.Component {
 		var templ_7745c5c3_Var774 string
 		templ_7745c5c3_Var774, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "channel_add_handle", "Handle"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2581, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2579, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var774))
 		if templ_7745c5c3_Err != nil {
@@ -13610,7 +13607,7 @@ func AddSubSelectors(p PageProps) templ.Component {
 		var templ_7745c5c3_Var775 string
 		templ_7745c5c3_Var775, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "channel_add_platform", "Platform"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2583, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2581, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var775)
 		if templ_7745c5c3_Err != nil {
@@ -13628,7 +13625,7 @@ func AddSubSelectors(p PageProps) templ.Component {
 			var templ_7745c5c3_Var776 string
 			templ_7745c5c3_Var776, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, platform.Key, platform.Label))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2585, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2583, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var776)
 			if templ_7745c5c3_Err != nil {
@@ -13641,7 +13638,7 @@ func AddSubSelectors(p PageProps) templ.Component {
 			var templ_7745c5c3_Var777 string
 			templ_7745c5c3_Var777, templ_7745c5c3_Err = templ.ResolveAttributeValue(platform.Value)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2586, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2584, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var777)
 			if templ_7745c5c3_Err != nil {
@@ -13664,7 +13661,7 @@ func AddSubSelectors(p PageProps) templ.Component {
 			var templ_7745c5c3_Var778 string
 			templ_7745c5c3_Var778, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, platform.Key, platform.Label))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2586, Col: 154}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2584, Col: 154}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var778)
 			if templ_7745c5c3_Err != nil {
@@ -13677,7 +13674,7 @@ func AddSubSelectors(p PageProps) templ.Component {
 			var templ_7745c5c3_Var779 string
 			templ_7745c5c3_Var779, templ_7745c5c3_Err = templ.ResolveAttributeValue(platform.Logo)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2587, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 2585, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var779)
 			if templ_7745c5c3_Err != nil {

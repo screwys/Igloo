@@ -22,7 +22,6 @@ import com.screwy.igloo.data.dao.FeedLikeDao
 import com.screwy.igloo.data.dao.FeedRankDao
 import com.screwy.igloo.data.dao.FeedReadDao
 import com.screwy.igloo.data.dao.FeedSeenDao
-import com.screwy.igloo.data.dao.HomeReadDao
 import com.screwy.igloo.data.dao.MomentReadDao
 import com.screwy.igloo.data.dao.MomentViewDao
 import com.screwy.igloo.data.dao.MomentsCursorDao
@@ -169,7 +168,6 @@ abstract class IglooDatabase : RoomDatabase() {
     abstract fun offlineVideoDownloadDao(): OfflineVideoDownloadDao
 
     // Composite read DAOs
-    abstract fun homeReadDao(): HomeReadDao
 
     abstract fun feedReadDao(): FeedReadDao
 

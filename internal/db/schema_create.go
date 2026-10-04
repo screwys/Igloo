@@ -5,7 +5,7 @@ func schemaCreateStatements() []string {
 		schemaMigrationStatements(),
 		schemaArchiveStatements(),
 		{webVideoStreamsTableStatement},
-		{HomeLayoutsSchema, YouTubeBroadcastSchema},
+		{YouTubeBroadcastSchema},
 		schemaUserStateStatements(),
 		schemaDiagnosticStatements(),
 		schemaMaintainedStateStatements(),

@@ -168,7 +168,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 								</div>
 							}
 							if video.Metadata != nil && video.Metadata.LiveStatus == "was_live" {
-								<span class="badge">{ L(p, "home_replay", "Replay") }</span>
+								<span class="badge">{ L(p, "broadcast_replay", "Replay") }</span>
 							}
 							if video.PublishedAt != nil {
 								<span class="badge" id="player-video-date" data-video-date={ publishedAtStr(video.PublishedAt) } data-timestamp={ publishedAtStr(video.PublishedAt) }>{ RelativeTimeText(p, video.PublishedAt) }</span>

@@ -120,7 +120,6 @@ class AppDrawerTest {
         )
         assertEquals(
             listOf(
-                IglooDestination.Home,
                 IglooDestination.Feed,
                 IglooDestination.Videos,
                 IglooDestination.Moments,

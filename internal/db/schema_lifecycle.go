@@ -73,7 +73,6 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 	"search_videos_fts_idx":       schemaLifecycleDerivedCache,
 	"schema_migrations":           schemaLifecycleMaintainedState,
 	"settings":                    schemaLifecycleUserState,
-	"home_layouts":                schemaLifecycleUserState,
 	"youtube_broadcasts":          schemaLifecycleDerivedCache,
 	"sponsorblock_checked":        schemaLifecycleArchive,
 	"sponsorblock_segments":       schemaLifecycleArchive,

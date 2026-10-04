@@ -359,7 +359,7 @@ func TestPrefsBodyRendersPersistedSidebarRouteOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	html := buf.String()
-	if !strings.Contains(html, `name="sidebar_route_order" value="home,feed,discover,videos,liked,channels,bookmarks,shorts"`) {
+	if !strings.Contains(html, `name="sidebar_route_order" value="feed,discover,videos,liked,channels,bookmarks,shorts"`) {
 		t.Fatalf("preferences should preserve the configured sidebar route order:\n%s", html)
 	}
 	if !strings.Contains(html, `data-sidebar-route="feed" tabindex="0"`) {

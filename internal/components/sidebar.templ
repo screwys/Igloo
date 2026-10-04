@@ -18,12 +18,6 @@ templ Sidebar(p PageProps) {
 		</div>
 		<nav class="nav">
 			for _, route := range sidebarRouteOrder(p.Prefs.Str("sidebar_route_order", "")) {
-				if route == "home" {
-					<a href="/home" class={ "nav-item", templ.KV("active", p.ActiveNav == "home") } data-sidebar-nav-route="home" hidden?={ p.Prefs.SidebarRouteHidden("home") } title={ L(p, "nav_home", "Home") } aria-label={ L(p, "nav_home", "Home") }>
-						@MaterialIcon("Home", "nav-icon")
-						<span>{ L(p, "nav_home", "Home") }</span>
-					</a>
-				}
 				if route == "discover" && p.PlatformsContain("youtube") {
 					@SidebarDiscoverNavItem(p)
 				}
@@ -32,7 +26,7 @@ templ Sidebar(p PageProps) {
 					@MaterialIcon("VideoLibrary", "nav-icon")
 					<span data-i18n="nav_videos">{ L(p, "nav_videos", "Videos") }</span>
 					if p.HasLiveBroadcasts {
-						<span class="nav-live-indicator" title={ L(p, "home_live", "Live") }><span class="nav-live-label">LIVE</span></span>
+						<span class="nav-live-indicator" title={ L(p, "broadcast_live", "Live") }><span class="nav-live-label">LIVE</span></span>
 					}
 				</a>
 				}

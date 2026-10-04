@@ -286,9 +286,6 @@ CREATE TABLE feed_share_token_affinity ( token TEXT PRIMARY KEY, score REAL DEFA
 -- table: feed_sources on feed_sources
 CREATE TABLE feed_sources ( source_id TEXT PRIMARY KEY, platform TEXT NOT NULL, source_type TEXT NOT NULL, external_id TEXT NOT NULL, label TEXT NOT NULL, url TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, last_checked INTEGER, last_ok INTEGER, last_error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0 );
 
--- table: home_layouts on home_layouts
-CREATE TABLE home_layouts ( username TEXT PRIMARY KEY, layout_json TEXT NOT NULL, updated_at_ms INTEGER NOT NULL ) WITHOUT ROWID;
-
 -- table: ingest_state on ingest_state
 CREATE TABLE ingest_state ( handle TEXT PRIMARY KEY, fail_count INTEGER DEFAULT 0, next_retry_at REAL, last_success_at REAL, last_attempt_at REAL, last_error TEXT, last_http_status INTEGER, avg_latency_ms REAL, updated_at INTEGER NOT NULL DEFAULT 0 );
 

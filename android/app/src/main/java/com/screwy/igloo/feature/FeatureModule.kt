@@ -6,7 +6,7 @@ import com.screwy.igloo.channel.ChannelViewModel
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.videos.DownloadedVideosViewModel
 import com.screwy.igloo.feed.FeedViewModel
-import com.screwy.igloo.home.HomeViewModel
+import com.screwy.igloo.videos.BroadcastsViewModel
 import com.screwy.igloo.liked.LikedViewModel
 import com.screwy.igloo.logs.LogsViewModel
 import com.screwy.igloo.media.MediaRouteViewModel
@@ -31,7 +31,7 @@ import org.koin.dsl.module
  * Koin wiring for feature-route ViewModels.
  */
 val iglooFeatureModule = module {
-    viewModel { HomeViewModel(db = get(), prefs = get(), auth = get(), api = get(), reachability = get(), uiEffects = get()) }
+    viewModel { BroadcastsViewModel(db = get(), prefs = get(), auth = get(), api = get(), reachability = get(), uiEffects = get()) }
     viewModel {
         FeedViewModel(
             db = get<IglooDatabase>(),

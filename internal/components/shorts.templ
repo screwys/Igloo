@@ -78,7 +78,7 @@ templ StoryChannelList(p PageProps, stories []model.StoryChannel) {
 						}
 					</span>
 					if story.LiveRoomID != "" {
-						<span class="story-channel-meta">{ fmt.Sprintf("%s · %s", L(p, "home_live", "Live"), FmtNum(int(story.LiveViewerCount))) }</span>
+						<span class="story-channel-meta">{ fmt.Sprintf("%s · %s", L(p, "broadcast_live", "Live"), FmtNum(int(story.LiveViewerCount))) }</span>
 					} else {
 						<span class="story-channel-meta" data-timestamp={ fmt.Sprintf("%d", story.LatestAtMs) }>{ storyChannelMeta(p, story) }</span>
 					}

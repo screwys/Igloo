@@ -697,7 +697,8 @@ func (s *Server) handlePageVideos(w http.ResponseWriter, r *http.Request) {
 	if p.BroadcastsEnabled && page == 1 {
 		live, err = s.db.ListYouTubeBroadcasts(db.YouTubeBroadcastQuery{States: []string{"is_live"}, Limit: -1, Order: "live"})
 		if err != nil {
-			s.homeError(w, err)
+			slog.Error("load broadcasts", "err", err)
+			http.Error(w, "Could not load broadcasts", http.StatusInternalServerError)
 			return
 		}
 		for _, channel := range s.enrichedChannels() {

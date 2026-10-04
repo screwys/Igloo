@@ -39,9 +39,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.screwy.igloo.R
-import com.screwy.igloo.home.HomeCard
-import com.screwy.igloo.home.HomeCardView
-import com.screwy.igloo.home.HomeWidget
+import com.screwy.igloo.videos.BroadcastCard
+import com.screwy.igloo.videos.BroadcastCardView
 import com.screwy.igloo.data.Dearrow
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.isYoutubeChannelId
@@ -72,8 +71,8 @@ fun VideoGrid(
     canLoadMore: Boolean = false,
     onLoadMore: (() -> Unit)? = null,
     headerContent: (@Composable () -> Unit)? = null,
-    liveBroadcasts: List<HomeCard> = emptyList(),
-    onBroadcastClick: (HomeCard) -> Unit = {},
+    liveBroadcasts: List<BroadcastCard> = emptyList(),
+    onBroadcastClick: (BroadcastCard) -> Unit = {},
     showScrollFabs: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
@@ -151,7 +150,7 @@ fun VideoGrid(
                 contentType = { "live_cell" },
             ) { index ->
                 val card = liveBroadcasts[index]
-                HomeCardView(card, HomeWidget("live", "live"), modifier = Modifier.padding(8.dp),
+                BroadcastCardView(card, modifier = Modifier.padding(8.dp),
                     onOpen = { onBroadcastClick(card) }, onChannel = { onChannelClick(card.channelId) })
             }
             items(
@@ -403,7 +402,7 @@ private fun VideoThumbnail(
                     .clip(RoundedCornerShape(3.dp)).background(Color.Black.copy(alpha = 0.65f))
                     .padding(horizontal = 4.dp, vertical = 1.dp),
             ) {
-                Text(stringResource(R.string.home_replay), style = MaterialTheme.typography.labelSmall, color = Color.White)
+                Text(stringResource(R.string.broadcast_replay), style = MaterialTheme.typography.labelSmall, color = Color.White)
             }
         }
 

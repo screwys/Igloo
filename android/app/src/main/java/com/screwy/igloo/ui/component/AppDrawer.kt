@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -360,7 +359,6 @@ private fun LazyListScope.platformSection(
 }
 
 private val WideDrawerPrimaryDestinations = listOf(
-    IglooDestination.Home,
     IglooDestination.Feed,
     IglooDestination.Videos,
     IglooDestination.Moments,
@@ -380,7 +378,6 @@ private data class PrimaryDrawerItem(
 )
 
 private fun primaryDrawerItem(destination: IglooDestination): PrimaryDrawerItem = when (destination) {
-    IglooDestination.Home -> PrimaryDrawerItem(R.string.nav_home, Icons.Default.Home)
     IglooDestination.Feed -> PrimaryDrawerItem(R.string.nav_feed, Icons.Default.DynamicFeed)
     IglooDestination.Videos -> PrimaryDrawerItem(R.string.nav_videos, Icons.Default.VideoLibrary)
     IglooDestination.Moments -> PrimaryDrawerItem(R.string.nav_moments, Icons.Default.PlayCircle)
@@ -396,7 +393,6 @@ internal fun drawerPrimaryDestinations(widePrimaryNavigation: Boolean): List<Igl
 internal fun drawerDestinationSelected(currentRoute: String?, destination: IglooDestination): Boolean {
     val route = currentRoute?.trim().orEmpty()
     return when (destination) {
-        IglooDestination.Home -> route == RouteRegistry.Home.route
         IglooDestination.Feed -> route == RouteRegistry.Feed.route
         IglooDestination.Videos -> route == RouteRegistry.Videos.route
         IglooDestination.Moments -> route == RouteRegistry.Moments.route ||

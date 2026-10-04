@@ -26,8 +26,7 @@ import com.screwy.igloo.bookmarks.BookmarksRoute
 import com.screwy.igloo.channel.ChannelRoute
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.feed.FeedRoute
-import com.screwy.igloo.home.HomeRoute
-import com.screwy.igloo.home.HomeViewModel
+import com.screwy.igloo.videos.BroadcastsViewModel
 import com.screwy.igloo.liked.LikedRoute
 import com.screwy.igloo.logs.LogFilter
 import com.screwy.igloo.logs.LogsRoute
@@ -117,14 +116,10 @@ fun AppNavHost() {
     ) {
         directDestination(RouteRegistry.Login) { LoginRoute(navController) }
 
-        scaffoldDestination(navController, RouteRegistry.Home) {
-            val homeVm: HomeViewModel = koinViewModel(viewModelStoreOwner = navController.getBackStackEntry(navController.graph.id))
-            HomeRoute(navController, homeVm)
-        }
         scaffoldDestination(navController, RouteRegistry.Feed) { FeedRoute(navController) }
         scaffoldDestination(navController, RouteRegistry.Videos) {
-            val homeVm: HomeViewModel = koinViewModel(viewModelStoreOwner = navController.getBackStackEntry(navController.graph.id))
-            VideosRoute(navController, homeVm)
+            val broadcastsVm: BroadcastsViewModel = koinViewModel(viewModelStoreOwner = navController.getBackStackEntry(navController.graph.id))
+            VideosRoute(navController, broadcastsVm)
         }
 
         navigation(route = RouteRegistry.MomentsGraphRoute, startDestination = RouteRegistry.Moments.route) {

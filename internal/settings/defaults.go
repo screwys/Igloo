@@ -233,7 +233,7 @@ var Defaults = map[string]any{
 	"backup_keep_count":                5,
 	"sponsorblock_categories":          SponsorBlockCategoriesDefault,
 	"starting_page":                    "videos",
-	"sidebar_route_order":              "home,discover,videos,feed,shorts,channels,bookmarks,liked",
+	"sidebar_route_order":              "discover,videos,feed,shorts,channels,bookmarks,liked",
 	"sidebar_hidden_routes":            "",
 	"dearrow_mode":                     "off",
 	"algorithmic_feed_enabled":         false,
@@ -244,7 +244,6 @@ var Defaults = map[string]any{
 // routes registered in server.go. Values here are the keys stored in the
 // `starting_page` setting; handleIndex prepends "/" when redirecting.
 var WebStartingPages = map[string]bool{
-	"home":      true,
 	"feed":      true,
 	"videos":    true,
 	"shorts":    true,

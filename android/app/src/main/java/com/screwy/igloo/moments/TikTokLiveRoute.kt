@@ -129,7 +129,7 @@ fun TikTokLiveRoute(channelId: String, navController: NavController) {
         )
     }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        if (failed) Text(stringResource(R.string.home_playback_failed))
+        if (failed) Text(stringResource(R.string.broadcast_playback_failed))
         else if (item == null) CircularProgressIndicator()
         else MomentsPlayer(
             items = listOf(item),

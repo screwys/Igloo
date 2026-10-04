@@ -6,7 +6,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.navigation.NavController
 
 enum class IglooNavigationSource {
-    Home,
     Feed,
     Bookmarks,
     Liked,
@@ -23,7 +22,6 @@ enum class IglooNavigationSource {
 }
 
 enum class IglooDestination {
-    Home,
     Feed,
     Videos,
     Moments,
@@ -218,7 +216,6 @@ object IglooNavigation {
 
     private fun routeForDestination(destination: IglooDestination): String =
         when (destination) {
-            IglooDestination.Home -> RouteRegistry.Home.route
             IglooDestination.Feed -> RouteRegistry.Feed.route
             IglooDestination.Videos -> RouteRegistry.Videos.route
             IglooDestination.Moments -> RouteRegistry.Moments.route
