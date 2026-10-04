@@ -3649,9 +3649,9 @@ func prefsFeedTab(p PageProps, prefs PrefsData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var194 string
-		templ_7745c5c3_Var194, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_skip_language_placeholder", "Type a language or code, e.g. Turkish or tr"))
+		templ_7745c5c3_Var194, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "settings_skip_language_placeholder", "Type a language or code"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 733, Col: 159}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/modals.templ`, Line: 733, Col: 139}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var194)
 		if templ_7745c5c3_Err != nil {

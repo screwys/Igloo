@@ -730,7 +730,7 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 					<label style="margin-bottom:0.5rem; display:block;">{ L(p, "settings_dont_auto_translate", "Don't auto-translate") }</label>
 					<div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; position:relative;">
 						<div style="flex:1; position:relative;">
-							<input type="text" class="input skip-lang-input" placeholder={ L(p, "settings_skip_language_placeholder", "Type a language or code, e.g. Turkish or tr") } autocomplete="off" style="width:100%;"/>
+							<input type="text" class="input skip-lang-input" placeholder={ L(p, "settings_skip_language_placeholder", "Type a language or code") } autocomplete="off" style="width:100%;"/>
 							<ul class="skip-lang-suggestions hidden" style="position:absolute; top:100%; left:0; right:0; margin:0.25rem 0 0; padding:0.25rem 0; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:6px; max-height:220px; overflow-y:auto; list-style:none; z-index:5; box-shadow:0 6px 16px rgba(0,0,0,0.25);"></ul>
 						</div>
 						<button type="button" class="btn btn-secondary btn-sm skip-lang-add">{ L(p, "action_add", "Add") }</button>
