@@ -28,7 +28,7 @@ Prove new yt-dlp and gallery-dl flags, arguments, endpoints, and output formats 
 
 - Reuse established controls and layouts, adapting them to each client's available space. Keep controls readable, visually consistent, and easy to use.
 - Use Igloo's existing icon buttons and icon set (Material) for actions. Reuse their size and styling, with tooltip and accessibility labels, instead of adding large text buttons.
-- Before adding a control, inspect and reuse its closest existing template, CSS, and JavaScript. Use Igloo's dropdowns instead of native selects. Check the rendered icon and menu interaction; builds alone are insufficient.
+- Before adding a control, inspect and reuse its closest existing template, CSS, JavaScript, and action handler. Use Igloo's dropdowns instead of native selects. For a routine menu item using established controls and icons, source inspection and relevant existing checks are sufficient. Check rendering or interaction in the browser only when a specific unresolved runtime question could change the implementation.
 - Use short functional labels and one clear control for each action. Add a short helper line only when the user would otherwise be stuck.
 - Judge interface changes by how they affect the user's activity and existing workflow. Prefer fewer coherent interactions over extra modes, decorations, and explanations.
 - Confirm destructive actions with an Igloo modal on web or Compose `AlertDialog` on Android.
@@ -39,7 +39,7 @@ Start from the user's report and relevant source. Trust their observations and c
 
 Use local rows, files, and logs for data questions, preferring read-only Igloo MCP tools when available. The server uses PostgreSQL; maintenance tools attach through the state directory or `IGLOO_DATABASE_URL`. SQLite files are legacy archives. Use stored identifiers and data before fetching public platform pages.
 
-Use the browser for a specific unresolved runtime question that could change the fix. The local target is `https://localhost:8443`. Basic edits can be completed from the report and source. Check private material only for existence, masking values as `***` if a format check is necessary. Do not capture private data or screenshots.
+Use the browser for a specific unresolved runtime question that could change the fix. State that question before opening a browser. The local target is `https://localhost:8443`. Reuse the existing session and target. Do not create temporary browser fixtures, servers, or new ports for routine UI changes. Do not change ports or open more sessions to retry an approval. Basic edits can be completed from the report and source. Check private material only for existence, masking values as `***` if a format check is necessary. Do not capture private data or screenshots.
 
 Never launch fullscreen. Keep UI verification in the background and do not take over the user's desktop.
 
@@ -48,6 +48,7 @@ Never launch fullscreen. Keep UI verification in the background and do not take 
 Use `just` from the repository root for routine builds, checks, generators, and releases. Bare `just` lists recipes and side effects. Raw commands are appropriate for read-only evidence, installer bootstrap, exact CI reproduction, partial-release recovery, or a narrow proof with no recipe.
 
 - Write tests only when requested. Run relevant existing checks. Use focused recipes during development, `just test` for the proportional gate, and `just test-full` when the full suite is needed. Inspect skips and ignored errors.
+- Keep verification proportional to the behavior changed. Reuse completed check results. Repeat a check only after a relevant change or failure. Do not build temporary test harnesses for routine controls whose behavior can be traced through existing code and checks.
 - Rely on `.githooks/pre-push` for push checks without repeating them manually. Treat new or high-signal production `errcheck` findings as blockers and explain existing findings left unresolved.
 - Ordinary push checks select affected Go packages and callers and reuse Go and Gradle caches. Use `IGLOO_PRE_PUSH_FULL=1 git push` for an explicit full cold check.
 - Regenerate templ and bundled assets with `just check-drift`. Update localization with `just i18n-sync` and verify it with `just i18n-check`.
