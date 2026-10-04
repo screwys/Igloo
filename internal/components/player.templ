@@ -79,6 +79,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 								</div>
 							}
 							<div class="dashboard-right-controls">
+								<button id="player-chat-toolbar-btn" class="mc-custom-btn hidden" type="button" title={ L(p, "player_live_chat", "Live chat") } aria-label={ L(p, "player_live_chat", "Live chat") } aria-expanded="true" aria-controls="player-chat">@MaterialIcon("ChatBubble", "")</button>
 							if p.StreamManifestURL != "" {
 								<div id="player-quality-menu-wrap" class="mc-speed-menu-wrap">
 									<button id="player-quality-menu-btn" class="mc-custom-btn" type="button" aria-label={ L(p, "player_quality", "Quality") } title={ L(p, "player_quality", "Quality") } aria-haspopup="menu" aria-controls="player-quality-menu" aria-expanded="false" disabled>

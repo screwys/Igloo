@@ -72,7 +72,6 @@ type PageProps struct {
 	MiniPlayerFeedEnabled   bool
 	DownloadsStopped        bool
 	BroadcastsEnabled       bool
-	HasLiveBroadcasts       bool
 	XLives                  []model.XBroadcast
 	RuntimeOS               string
 	StaticV                 func(string) string

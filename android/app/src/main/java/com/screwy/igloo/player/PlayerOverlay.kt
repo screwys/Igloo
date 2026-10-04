@@ -23,6 +23,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.ClosedCaptionDisabled
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
@@ -85,6 +88,9 @@ fun PlayerOverlay(
     previewTrackJsonPath: String? = null,
     modifier: Modifier = Modifier,
     onPlayInBackground: (() -> Unit)? = null,
+    onToggleChat: (() -> Unit)? = null,
+    chatVisible: Boolean = false,
+    onRefresh: (() -> Unit)? = null,
 ) {
     val backLabel = stringResource(R.string.action_back)
     val previousVideoLabel = stringResource(R.string.player_previous_video)
@@ -106,6 +112,9 @@ fun PlayerOverlay(
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var positionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
+    var live by remember { mutableStateOf(false) }
+    var liveOffsetMs by remember { mutableLongStateOf(0L) }
+    var seekable by remember { mutableStateOf(true) }
     var speed by remember { mutableFloatStateOf(player.playbackParameters.speed) }
     var speedMenuOpen by remember { mutableStateOf(false) }
     var volumeMenuOpen by remember { mutableStateOf(false) }
@@ -124,6 +133,9 @@ fun PlayerOverlay(
             isPlaying = player.isPlaying
             positionMs = player.currentPosition.coerceAtLeast(0L)
             durationMs = player.duration.coerceAtLeast(0L)
+            live = player.isCurrentMediaItemLive
+            seekable = player.isCurrentMediaItemSeekable
+            liveOffsetMs = player.currentLiveOffset.takeIf { it >= 0L } ?: (durationMs - positionMs).coerceAtLeast(0L)
             speed = player.playbackParameters.speed
             volumeFraction = readVolumeFraction(audioManager)
             delay(250L)
@@ -220,8 +232,8 @@ fun PlayerOverlay(
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                ScrubberWithSegments(
-                    positionMs = positionMs,
+                if (!live || seekable) ScrubberWithSegments(
+                    positionMs = if (live && isPlaying && liveOffsetMs <= 10_000 && !isScrubbing) durationMs else positionMs,
                     durationMs = durationMs,
                     segments = segments,
                     previewSpritePath = previewSpritePath,
@@ -251,17 +263,27 @@ fun PlayerOverlay(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = formatDuration(shownPositionMs),
+                        text = if (live) "-" + formatDuration(liveOffsetMs) else formatDuration(shownPositionMs),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(
+                    if (live) IconButton(onClick = { player.seekToDefaultPosition(); player.play(); keepVisible() }) {
+                        Icon(Icons.Default.LiveTv, stringResource(R.string.broadcast_live),
+                            tint = if (liveOffsetMs <= 10_000) MaterialTheme.colorScheme.primary else Color.White)
+                    } else Text(
                         text = "/ ${formatDuration(durationMs)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.7f),
                     )
                     Spacer(modifier = Modifier.weight(1f))
+                    if (onRefresh != null) IconButton(onClick = { onRefresh(); keepVisible() }) {
+                        Icon(Icons.Default.Refresh, stringResource(R.string.action_refresh), tint = Color.White)
+                    }
+                    if (onToggleChat != null) IconButton(onClick = { onToggleChat(); keepVisible() }) {
+                        Icon(Icons.AutoMirrored.Filled.Chat, stringResource(R.string.player_live_chat),
+                            tint = if (chatVisible) MaterialTheme.colorScheme.primary else Color.White)
+                    }
                     if (onToggleSubtitles != null) IconButton(
                         onClick = {
                             onToggleSubtitles()

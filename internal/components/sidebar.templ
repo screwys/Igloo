@@ -25,9 +25,6 @@ templ Sidebar(p PageProps) {
 				<a href="/videos" class={ "nav-item", templ.KV("active", p.ActiveNav == "videos") } data-sidebar-nav-route="videos" hidden?={ p.Prefs.SidebarRouteHidden("videos") } title={ L(p, "nav_videos", "Videos") } aria-label={ L(p, "nav_videos", "Videos") }>
 					@MaterialIcon("VideoLibrary", "nav-icon")
 					<span data-i18n="nav_videos">{ L(p, "nav_videos", "Videos") }</span>
-					if p.HasLiveBroadcasts {
-						<span class="nav-live-indicator" title={ L(p, "broadcast_live", "Live") }><span class="nav-live-label">LIVE</span></span>
-					}
 				</a>
 				}
 				if route == "feed" && p.PlatformsContain("twitter") {

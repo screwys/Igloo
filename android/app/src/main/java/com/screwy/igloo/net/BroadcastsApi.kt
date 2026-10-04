@@ -6,14 +6,53 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.prepareGet
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.client.plugins.HttpTimeoutConfig
+import io.ktor.utils.io.readLine
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.Serializable
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 class BroadcastsApi(private val client: HttpClient, private val baseUrlProvider: () -> String) {
+    fun chat(videoId: String): Flow<BroadcastChatEvent> = flow {
+        val id = URLEncoder.encode(videoId, StandardCharsets.UTF_8.toString())
+        client.prepareGet(baseUrlProvider() + "/api/youtube/$id/chat") {
+            timeout { requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS; socketTimeoutMillis = 60_000 }
+        }.execute { response ->
+            check(response.status.isSuccess()) { "Live chat request failed" }
+            val channel = response.bodyAsChannel()
+            var event = ""
+            val data = StringBuilder()
+            while (true) {
+                val line = channel.readLine() ?: break
+                when {
+                    line.startsWith("event:") -> event = line.substringAfter(":").trim()
+                    line.startsWith("data:") -> {
+                        if (data.isNotEmpty()) data.append('\n')
+                        data.append(line.substringAfter(":").trimStart())
+                    }
+                    line.isEmpty() -> {
+                        when (event) {
+                            "start" -> emit(BroadcastChatEvent.Start(iglooJson.decodeFromString(data.toString())))
+                            "chat" -> emit(BroadcastChatEvent.Record(iglooJson.decodeFromString(data.toString())))
+                            "end" -> { emit(BroadcastChatEvent.Ended); return@execute }
+                            "failed", "unavailable" -> { emit(BroadcastChatEvent.Unavailable); return@execute }
+                        }
+                        event = ""
+                        data.clear()
+                    }
+                }
+            }
+        }
+    }
     suspend fun broadcasts(baseUrl: String = baseUrlProvider()): BroadcastResponse =
         client.get(baseUrl + "/api/videos/broadcasts").body()
 
@@ -26,6 +65,13 @@ class BroadcastsApi(private val client: HttpClient, private val baseUrlProvider:
 
     fun absoluteUrl(path: String, baseUrl: String = baseUrlProvider()): String =
         if (path.startsWith("/")) baseUrl + path else path
+}
+
+sealed interface BroadcastChatEvent {
+    data class Start(val data: JsonObject) : BroadcastChatEvent
+    data class Record(val data: JsonObject) : BroadcastChatEvent
+    data object Ended : BroadcastChatEvent
+    data object Unavailable : BroadcastChatEvent
 }
 
 @Serializable

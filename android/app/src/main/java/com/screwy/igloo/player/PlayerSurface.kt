@@ -61,7 +61,7 @@ internal fun PlayerSurface(
     onNextVideo: (() -> Unit)?,
     segments: List<SponsorBlockSegmentEntity>,
     showSubtitles: Boolean,
-    onToggleSubtitles: () -> Unit,
+    onToggleSubtitles: (() -> Unit)?,
     onToggleFullscreen: () -> Unit,
     onEnterPictureInPicture: (() -> Unit)?,
     controlsVisible: Boolean,
@@ -78,6 +78,9 @@ internal fun PlayerSurface(
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
     onPlayInBackground: (() -> Unit)? = null,
+    onToggleChat: (() -> Unit)? = null,
+    chatVisible: Boolean = false,
+    onRefresh: (() -> Unit)? = null,
 ) {
     val fullscreen = mode == PlayerSurfaceMode.Fullscreen
     val subtitleBottomPadding = playerSubtitleBottomPaddingDp(fullscreen, controlsVisible).dp
@@ -153,6 +156,9 @@ internal fun PlayerSurface(
             onToggleFullscreen = onToggleFullscreen,
             onEnterPictureInPicture = onEnterPictureInPicture,
             onPlayInBackground = onPlayInBackground,
+            onToggleChat = onToggleChat,
+            chatVisible = chatVisible,
+            onRefresh = onRefresh,
             controlsVisible = controlsVisible,
             onControlsVisibleChange = onControlsVisibleChange,
             previewSpritePath = previewSpritePath,

@@ -244,11 +244,6 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 		activeNav = activeNavForPath(r.URL.Path)
 	}
 	langs := s.supportedLanguageChoices(lang)
-	hasLive := false
-	if s.boolSetting("youtube_broadcasts_enabled") {
-		broadcasts, err := s.db.ListYouTubeBroadcasts(db.YouTubeBroadcastQuery{States: []string{"is_live"}, Limit: 1})
-		hasLive = err == nil && len(broadcasts) > 0
-	}
 	return components.PageProps{
 		CSRFToken:               s.mustEnsureCSRF(sess, w, r),
 		UserRole:                sessionStr(sess, "user_role", "user"),
@@ -276,7 +271,6 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 		MiniPlayerFeedEnabled:   s.boolSetting("mini_player_feed_enabled"),
 		DownloadsStopped:        s.workers.IsStopRequested(),
 		BroadcastsEnabled:       s.boolSetting("youtube_broadcasts_enabled"),
-		HasLiveBroadcasts:       hasLive,
 		RuntimeOS:               buildinfo.Current().OS,
 		StaticV:                 s.staticV,
 		Prefs: components.PrefsData{Settings: map[string]any{

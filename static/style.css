@@ -1430,35 +1430,6 @@ html.sidebar-resizing .sidebar-resize-handle {
     color: var(--on-accent);
 }
 
-.nav-live-indicator {
-    margin-left: auto;
-    background: var(--status-error);
-    color: #fff;
-    padding: 2px 5px;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: 600;
-}
-
-.nav-item[data-sidebar-nav-route="videos"] {
-    position: relative;
-}
-
-html.sidebar-collapsed .nav-item > .nav-live-indicator {
-    display: block;
-    position: absolute;
-    top: 6px;
-    right: 8px;
-    width: 7px;
-    height: 7px;
-    padding: 0;
-    border-radius: 50%;
-}
-
-html.sidebar-collapsed .nav-live-label {
-    display: none;
-}
-
 .shorts-grid {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }

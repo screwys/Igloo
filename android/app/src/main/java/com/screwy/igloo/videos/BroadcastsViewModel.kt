@@ -124,7 +124,7 @@ class BroadcastsViewModel(
                     return@launch
                 }
                 val path = response.manifest_url ?: response.media_url ?: error("Missing stream URL")
-                playback.value = BroadcastPlayback(card.title, api.absoluteUrl(path, baseUrl), when (response.manifest_type) {
+                playback.value = BroadcastPlayback(card.id, card.title, api.absoluteUrl(path, baseUrl), when (response.manifest_type) {
                     "hls" -> "application/x-mpegURL"
                     "dash" -> "application/dash+xml"
                     else -> response.media_type

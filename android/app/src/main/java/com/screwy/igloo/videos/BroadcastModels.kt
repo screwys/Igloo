@@ -33,4 +33,4 @@ data class BroadcastCard(
     val key: String get() = "live:$id"
 }
 
-data class BroadcastPlayback(val title: String, val url: String, val mimeType: String?)
+data class BroadcastPlayback(val videoId: String, val title: String, val url: String, val mimeType: String?)

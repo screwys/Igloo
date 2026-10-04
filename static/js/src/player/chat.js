@@ -200,6 +200,7 @@ export function initLiveChat(video, root, options = {}) {
   const status = panel.querySelector('#player-chat-status')
   const latest = panel.querySelector('#player-chat-latest')
   const toggle = panel.querySelector('#player-chat-toggle')
+  const toolbarToggle = document.getElementById('player-chat-toolbar-btn')
   const refresh = panel.querySelector('#player-chat-refresh')
   const body = panel.querySelector('#player-chat-body')
   const lifecycle = new AbortController()
@@ -357,16 +358,23 @@ export function initLiveChat(video, root, options = {}) {
     status.textContent = t('status_loading_ellipsis', 'Loading...')
     connect()
   }, listenerOptions)
-  toggle.addEventListener('click', () => {
+  function toggleChat() {
     body.hidden = !body.hidden
+    panel.hidden = body.hidden
     root.classList.toggle('chat-closed', body.hidden)
     toggle.setAttribute('aria-expanded', String(!body.hidden))
+    if (toolbarToggle) toolbarToggle.setAttribute('aria-expanded', String(!body.hidden))
     toggle.title = body.hidden ? t('action_show', 'Show') : t('action_hide', 'Hide')
     toggle.setAttribute('aria-label', toggle.title)
     setSvgContent(toggle, materialIconMarkup(body.hidden ? 'KeyboardArrowDown' : 'KeyboardArrowUp'))
     if (body.hidden) close()
     else { connect(); schedule() }
-  }, listenerOptions)
+  }
+  toggle.addEventListener('click', toggleChat, listenerOptions)
+  if (toolbarToggle) {
+    toolbarToggle.classList.remove('hidden')
+    toolbarToggle.addEventListener('click', toggleChat, listenerOptions)
+  }
   video.addEventListener('timeupdate', schedule, listenerOptions)
   video.addEventListener('seeked', () => { follow = true; schedule() }, listenerOptions)
   video.addEventListener('seeking', schedule, listenerOptions)

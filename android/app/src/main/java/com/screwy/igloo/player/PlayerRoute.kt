@@ -145,6 +145,8 @@ private fun PlayerContent(
 
     val vm: PlayerViewModel = koinViewModel(parameters = { parametersOf(videoId) })
     val video by vm.video.collectAsStateWithLifecycle()
+    val hasChat = video?.liveStatus in setOf("is_live", "post_live", "was_live")
+    var chatVisible by remember(videoId) { mutableStateOf(true) }
     val channel by vm.channel.collectAsStateWithLifecycle()
     val comments by vm.comments.collectAsStateWithLifecycle()
     val segments by vm.segments.collectAsStateWithLifecycle()
@@ -176,7 +178,7 @@ private fun PlayerContent(
     val outboxWriter: OutboxWriter = koinInject()
     val player = service.player
     val playbackCoordinator = remember { PlaybackCoordinator() }
-    val activity = ctx.findActivity()
+    val activity = ctx.findPlayerActivity()
     val componentActivity = activity as? ComponentActivity
     val pictureInPictureSupported =
         remember(componentActivity) {
@@ -618,39 +620,52 @@ private fun PlayerContent(
         }
     } else null
     if (isFullscreen || pictureInPicturePresentation) {
-        PlayerSurface(
-            mode = PlayerSurfaceMode.Fullscreen,
-            player = player,
-            posterUri = displayPosterUri,
-            streamUri = streamUri,
-            title = playerTitle,
-            onBack = { exitFullscreen() },
-            onPreviousVideo = onPreviousVideo,
-            onNextVideo = onNextVideo,
-            segments = sponsorBlockPlayback.visibleSegments,
-            showSubtitles = showSubtitles,
-            onToggleSubtitles = { showSubtitles = !showSubtitles },
-            onToggleFullscreen = { exitFullscreen() },
-            onEnterPictureInPicture = miniPlayerAction,
-            onPlayInBackground = backgroundAction,
-            controlsVisible = playerControlsVisible && !pictureInPicturePresentation,
-            onControlsVisibleChange = {
-                if (!pictureInPicturePresentation) playerControlsVisible = it
+        PlayerChatLayout(
+            showChat = hasChat && chatVisible && !pictureInPicturePresentation,
+            sideBySide = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE,
+            modifier = modifier.fillMaxSize(),
+            player = { surfaceModifier ->
+                PlayerSurface(
+                    mode = PlayerSurfaceMode.Fullscreen,
+                    player = player,
+                    posterUri = displayPosterUri,
+                    streamUri = streamUri,
+                    title = playerTitle,
+                    onBack = { exitFullscreen() },
+                    onPreviousVideo = onPreviousVideo,
+                    onNextVideo = onNextVideo,
+                    segments = sponsorBlockPlayback.visibleSegments,
+                    showSubtitles = showSubtitles,
+                    onToggleSubtitles = { showSubtitles = !showSubtitles },
+                    onToggleFullscreen = { exitFullscreen() },
+                    onEnterPictureInPicture = miniPlayerAction,
+                    onPlayInBackground = backgroundAction,
+                    onToggleChat = if (hasChat) ({ chatVisible = !chatVisible }) else null,
+                    chatVisible = chatVisible,
+                    controlsVisible = playerControlsVisible && !pictureInPicturePresentation,
+                    onControlsVisibleChange = {
+                        if (!pictureInPicturePresentation) playerControlsVisible = it
+                    },
+                    previewSpritePath = previewSpritePath,
+                    previewTrackJsonPath = previewTrackJsonPath,
+                    subtitlePath = subtitlePath,
+                    currentPositionMs = { player.currentPosition },
+                    sponsorBlockSkipSegment = sponsorBlockPlayback.skipSegment,
+                    sponsorBlockAutoSkipMessage = sponsorBlockPlayback.autoSkipMessage,
+                    onSkipSponsorBlock = sponsorBlockPlayback.onSkip,
+                    levelFeedback = levelFeedback,
+                    onBrightnessChange = { level -> showLevelFeedback(brightnessLabel, level) },
+                    onVolumeChange = { level -> showLevelFeedback(volumeLabel, level) },
+                    modifier =
+                        surfaceModifier.onGloballyPositioned {
+                            updatePictureInPictureSourceRect(it.boundsInWindow())
+                        },
+                )
             },
-            previewSpritePath = previewSpritePath,
-            previewTrackJsonPath = previewTrackJsonPath,
-            subtitlePath = subtitlePath,
-            currentPositionMs = { player.currentPosition },
-            sponsorBlockSkipSegment = sponsorBlockPlayback.skipSegment,
-            sponsorBlockAutoSkipMessage = sponsorBlockPlayback.autoSkipMessage,
-            onSkipSponsorBlock = sponsorBlockPlayback.onSkip,
-            levelFeedback = levelFeedback,
-            onBrightnessChange = { level -> showLevelFeedback(brightnessLabel, level) },
-            onVolumeChange = { level -> showLevelFeedback(volumeLabel, level) },
-            modifier =
-                modifier.fillMaxSize().onGloballyPositioned {
-                    updatePictureInPictureSourceRect(it.boundsInWindow())
-                },
+            chat = { chatModifier ->
+                YouTubeChat(videoId, player, live = video?.liveStatus == "is_live",
+                    onClose = { chatVisible = false }, modifier = chatModifier)
+            },
         )
     } else {
         LazyColumn(
@@ -677,6 +692,8 @@ private fun PlayerContent(
                     onToggleFullscreen = { enterFullscreen() },
                     onEnterPictureInPicture = miniPlayerAction,
                     onPlayInBackground = backgroundAction,
+                    onToggleChat = if (hasChat) ({ chatVisible = !chatVisible }) else null,
+                    chatVisible = chatVisible,
                     controlsVisible = playerControlsVisible,
                     onControlsVisibleChange = { playerControlsVisible = it },
                     previewSpritePath = previewSpritePath,
@@ -696,6 +713,10 @@ private fun PlayerContent(
                 )
             }
 
+            if (hasChat && chatVisible) item(key = "live_chat") {
+                YouTubeChat(videoId, player, live = video?.liveStatus == "is_live",
+                    onClose = { chatVisible = false }, modifier = Modifier.fillMaxWidth().height(360.dp))
+            }
             item {
                 VideoMetaBlock(
                     video = video,
@@ -876,7 +897,7 @@ private fun buildPictureInPictureParams(
         }
         .build()
 
-private fun hidePlayerSystemBars(activity: Activity?) {
+internal fun hidePlayerSystemBars(activity: Activity?) {
     val window = activity?.window ?: return
     WindowCompat.getInsetsController(window, window.decorView).apply {
         systemBarsBehavior =
@@ -885,16 +906,16 @@ private fun hidePlayerSystemBars(activity: Activity?) {
     }
 }
 
-private fun showPlayerSystemBars(activity: Activity?) {
+internal fun showPlayerSystemBars(activity: Activity?) {
     val window = activity?.window ?: return
     WindowCompat.getInsetsController(window, window.decorView)
         .show(WindowInsetsCompat.Type.systemBars())
 }
 
-private tailrec fun Context.findActivity(): Activity? =
+internal tailrec fun Context.findPlayerActivity(): Activity? =
     when (this) {
         is Activity -> this
-        is android.content.ContextWrapper -> baseContext.findActivity()
+        is android.content.ContextWrapper -> baseContext.findPlayerActivity()
         else -> null
     }
 

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 sealed class MediaUri {
     data class Local(val file: File) : MediaUri()
@@ -65,6 +66,8 @@ interface MediaResolvers {
     suspend fun videoStream(videoId: String, ownerKind: OwnerKind): MediaUri
 
     fun videoStreamFlow(videoId: String, ownerKind: OwnerKind): Flow<MediaUri>
+
+    fun replayChatFlow(videoId: String): Flow<MediaUri>
 }
 
 class MediaResolversImpl(
@@ -118,6 +121,11 @@ class MediaResolversImpl(
                 allowRemote ->
                 selectVideo(rows, allowRemote)
             }
+            .distinctUntilChanged()
+
+    override fun replayChatFlow(videoId: String): Flow<MediaUri> =
+        currentRowsFlow(OwnerKind.YouTubeVideo.assetOwnerKind(), videoId)
+            .map { selectAsset(it, "live_chat", allowRemote = false) }
             .distinctUntilChanged()
 
     private suspend fun currentRows(
