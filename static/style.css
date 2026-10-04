@@ -4566,6 +4566,16 @@ html.mini-player-moving * {
     min-width: 0;
 }
 
+@media (min-width: 1025px) {
+    .player-layout.cinema-view:not(.cinema-hides-player-sidebar) .player-main {
+        padding-right: 0;
+    }
+
+    .player-layout.cinema-view .player-sidebar {
+        padding-left: 0;
+    }
+}
+
 .player-wrapper {
     width: 100%;
     max-width: 100%;

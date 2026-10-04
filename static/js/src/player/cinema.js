@@ -1,6 +1,4 @@
 export const CINEMA_MIN_PLAYER_WIDTH = 720
-export const CINEMA_HIDE_LEFT_SIDEBAR_WIDTH = 800
-export const CINEMA_COMPACT_LEFT_SIDEBAR_WIDTH = 1000
 export const PLAYER_SIDEBAR_WIDTH = 320
 export const PLAYER_MAIN_HORIZONTAL_PADDING = 40
 
@@ -9,28 +7,22 @@ export function shouldAutoEnableCinema(layoutWidth, sidebarIsStacked, sidebarWid
   return layoutWidth - sidebarWidth - PLAYER_MAIN_HORIZONTAL_PADDING < CINEMA_MIN_PLAYER_WIDTH
 }
 
-export function cinemaSidebarDefaultMode(layoutWidth) {
-  if (layoutWidth >= CINEMA_COMPACT_LEFT_SIDEBAR_WIDTH) return null
-  if (layoutWidth >= CINEMA_HIDE_LEFT_SIDEBAR_WIDTH) return 'compact'
-  return 'hidden'
-}
-
 export function initCinemaView({ root, button, onCinemaRequested }) {
   const sidebar = root && root.querySelector('.player-sidebar')
   if (!root || !button || !sidebar) return
 
   const stackedSidebar = window.matchMedia('(max-width: 1024px)')
   const hasChat = root.classList.contains('has-live-chat')
+  const navigationSidebar = root.ownerDocument?.querySelector('#app-sidebar')
+  let navigationWidthBeforeCinema = null
   let manualChoice = null
   let suspendedForFullscreen = false
 
-  function sidebarDefaultMode() {
-    if (hasChat) return null
-    return cinemaSidebarDefaultMode(root.getBoundingClientRect().width)
-  }
-
-  function setCinemaView(enabled, defaultSidebarMode, forceSidebarMode, notifySidebar) {
+  function setCinemaView(enabled, notifySidebar) {
     const changed = root.classList.contains('cinema-view') !== enabled
+    if (enabled && navigationWidthBeforeCinema === null && navigationSidebar) {
+      navigationWidthBeforeCinema = navigationSidebar.getBoundingClientRect().width
+    }
     const hidesPlayerSidebar = enabled && !stackedSidebar.matches && !hasChat
     root.classList.toggle('cinema-view', enabled)
     root.classList.toggle('cinema-hides-player-sidebar', hidesPlayerSidebar)
@@ -39,17 +31,19 @@ export function initCinemaView({ root, button, onCinemaRequested }) {
         bubbles: true,
         detail: {
           enabled,
-          defaultSidebarMode: enabled ? defaultSidebarMode : null,
-          forceSidebarMode: enabled && !!forceSidebarMode,
         },
       }))
     }
     sidebar.setAttribute('aria-hidden', hidesPlayerSidebar ? 'true' : 'false')
     button.setAttribute('aria-pressed', enabled ? 'true' : 'false')
+    if (!enabled && notifySidebar !== false) navigationWidthBeforeCinema = null
   }
 
   function recommendedCinemaView() {
-    return shouldAutoEnableCinema(root.getBoundingClientRect().width, stackedSidebar.matches,
+    // Judge automatic cinema against the space available before compacting navigation.
+    const extraWidth = navigationWidthBeforeCinema !== null && navigationSidebar
+      ? navigationWidthBeforeCinema - navigationSidebar.getBoundingClientRect().width : 0
+    return shouldAutoEnableCinema(root.getBoundingClientRect().width - extraWidth, stackedSidebar.matches,
       hasChat ? sidebar.getBoundingClientRect().width : PLAYER_SIDEBAR_WIDTH)
   }
 
@@ -58,8 +52,6 @@ export function initCinemaView({ root, button, onCinemaRequested }) {
     const recommendation = recommendedCinemaView()
     setCinemaView(
       manualChoice === null ? recommendation : manualChoice,
-      manualChoice === null && recommendation ? sidebarDefaultMode() : null,
-      false,
     )
   }
 
@@ -68,8 +60,7 @@ export function initCinemaView({ root, button, onCinemaRequested }) {
     const enabled = !wasEnabled
     if (typeof onCinemaRequested === 'function' && onCinemaRequested(enabled)) return
     manualChoice = enabled
-    const defaultSidebarMode = enabled && !stackedSidebar.matches ? sidebarDefaultMode() : null
-    setCinemaView(enabled, defaultSidebarMode, defaultSidebarMode !== null)
+    setCinemaView(enabled)
   })
 
   if (typeof window.ResizeObserver === 'function') {
@@ -86,12 +77,12 @@ export function initCinemaView({ root, button, onCinemaRequested }) {
     suspendForFullscreen() {
       const wasEnabled = root.classList.contains('cinema-view')
       suspendedForFullscreen = true
-      setCinemaView(false, null, false, false)
+      setCinemaView(false, false)
       return wasEnabled
     },
     restoreAfterFullscreen(enabled) {
       suspendedForFullscreen = false
-      setCinemaView(enabled, null, false, false)
+      setCinemaView(enabled)
     },
   }
 }

@@ -164,3 +164,9 @@
 .main:has(> #player-root.has-live-chat:not(.chat-closed)) {
     --player-sidebar-width: calc((100% + 4 * var(--player-layout-gutter) + 3px) / 4);
 }
+
+@media (min-width: 1025px) {
+    .main:has(> #player-root.has-live-chat.cinema-view:not(.chat-closed)) {
+        --player-sidebar-width: calc((100% + 2 * var(--player-layout-gutter) + 3px) / 4);
+    }
+}

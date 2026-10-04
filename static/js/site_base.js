@@ -813,8 +813,7 @@
   let currentSidebarWidth = 0;
   let fullSidebarWidth = 0;
   let resizingPointerId = null;
-  let cinemaSidebarDefaultMode = null;
-  let cinemaSidebarDefaultForced = false;
+  let sidebarBeforeCinema = null;
 
   function sidebarMaxWidth() {
     return Math.max(SIDEBAR_FULL_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - 320));
@@ -875,42 +874,30 @@
     doc.documentElement.classList.toggle('sidebar-hidden', hidden);
   }
 
-  function hasStoredSidebarWidth() {
-    try {
-      var stored = window.localStorage.getItem(sidebarStorageKey);
-      return stored !== null && Number.isFinite(Number(stored));
-    } catch (_) {
-      return false;
-    }
-  }
-
   doc.addEventListener('igloo:cinema-sidebar-change', function (event) {
     if (!event.detail || !desktopSidebar.matches) return;
     if (!event.detail.enabled) {
-      if (cinemaSidebarDefaultMode && (cinemaSidebarDefaultForced || !hasStoredSidebarWidth())) {
-        setSidebarHidden(false);
-        setSidebarWidth(fullSidebarWidth, false, false);
+      if (sidebarBeforeCinema) {
+        setSidebarHidden(sidebarBeforeCinema.hidden);
+        setSidebarWidth(sidebarBeforeCinema.width, false, false);
       }
-      cinemaSidebarDefaultMode = null;
-      cinemaSidebarDefaultForced = false;
+      sidebarBeforeCinema = null;
       syncSidebarControls();
       return;
     }
-    if (!event.detail.defaultSidebarMode || (!event.detail.forceSidebarMode && hasStoredSidebarWidth())) return;
-    cinemaSidebarDefaultMode = event.detail.defaultSidebarMode;
-    cinemaSidebarDefaultForced = !!event.detail.forceSidebarMode;
-    setSidebarHidden(cinemaSidebarDefaultMode === 'hidden');
-    if (cinemaSidebarDefaultMode === 'compact') {
-      setSidebarWidth(SIDEBAR_COMPACT_WIDTH, false, false);
-    }
+    if (!sidebarBeforeCinema) sidebarBeforeCinema = {
+      width: currentSidebarWidth,
+      hidden: doc.documentElement.classList.contains('sidebar-hidden'),
+    };
+    setSidebarHidden(false);
+    setSidebarWidth(SIDEBAR_COMPACT_WIDTH, false, false);
     syncSidebarControls();
   });
 
   if (sidebarToggle) {
     sidebarToggle.addEventListener('click', function () {
       if (desktopSidebar.matches && doc.documentElement.classList.contains('sidebar-hidden')) {
-        cinemaSidebarDefaultMode = null;
-        cinemaSidebarDefaultForced = false;
+        sidebarBeforeCinema = null;
         setSidebarHidden(false);
         syncSidebarControls();
         return;
@@ -928,8 +915,7 @@
     sidebarResizeHandle.addEventListener('pointerdown', function (event) {
       if (!desktopSidebar.matches || event.button !== 0) return;
       event.preventDefault();
-      cinemaSidebarDefaultMode = null;
-      cinemaSidebarDefaultForced = false;
+      sidebarBeforeCinema = null;
       resizingPointerId = event.pointerId;
       sidebarResizeHandle.setPointerCapture(event.pointerId);
       doc.documentElement.classList.add('sidebar-resizing');
@@ -967,8 +953,7 @@
           : currentSidebarWidth + 16;
       } else return;
       event.preventDefault();
-      cinemaSidebarDefaultMode = null;
-      cinemaSidebarDefaultForced = false;
+      sidebarBeforeCinema = null;
       setSidebarWidth(nextWidth, true);
     });
   }
@@ -1007,8 +992,7 @@
     var activeEl = doc.activeElement;
     if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT' || activeEl.isContentEditable)) return;
     event.preventDefault();
-    cinemaSidebarDefaultMode = null;
-    cinemaSidebarDefaultForced = false;
+    sidebarBeforeCinema = null;
     setSidebarWidth(
       currentSidebarWidth === SIDEBAR_COMPACT_WIDTH ? fullSidebarWidth : SIDEBAR_COMPACT_WIDTH,
       true,

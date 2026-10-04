@@ -3,12 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  CINEMA_COMPACT_LEFT_SIDEBAR_WIDTH,
-  CINEMA_HIDE_LEFT_SIDEBAR_WIDTH,
   CINEMA_MIN_PLAYER_WIDTH,
   PLAYER_MAIN_HORIZONTAL_PADDING,
   PLAYER_SIDEBAR_WIDTH,
-  cinemaSidebarDefaultMode,
   initCinemaView,
   shouldAutoEnableCinema,
 } from "../../static/js/src/player/cinema.js";
@@ -29,12 +26,6 @@ test("cinema view recommends itself below a 720px video column", () => {
   assert.equal(shouldAutoEnableCinema(layoutAtVideoWidth(720), false), false);
 });
 
-test("cinema leaves the left sidebar full, compacts it, then hides it by available width", () => {
-  assert.equal(cinemaSidebarDefaultMode(CINEMA_COMPACT_LEFT_SIDEBAR_WIDTH), null);
-  assert.equal(cinemaSidebarDefaultMode(CINEMA_COMPACT_LEFT_SIDEBAR_WIDTH - 1), "compact");
-  assert.equal(cinemaSidebarDefaultMode(CINEMA_HIDE_LEFT_SIDEBAR_WIDTH - 1), "hidden");
-});
-
 test("cinema keeps a stacked next-in-line rail visible", () => {
   const rootClasses = new Set();
   const buttonClasses = new Set();
@@ -45,7 +36,7 @@ test("cinema keeps a stacked next-in-line rail visible", () => {
       contains: (name) => rootClasses.has(name),
       toggle(name, enabled) { if (enabled) rootClasses.add(name); else rootClasses.delete(name); },
     },
-    getBoundingClientRect() { return { width: CINEMA_HIDE_LEFT_SIDEBAR_WIDTH - 1 }; },
+    getBoundingClientRect() { return { width: 799 }; },
     querySelector() { return { setAttribute(name, value) { attributes.set(name, value); } }; },
   };
   const button = {
@@ -68,7 +59,7 @@ test("cinema keeps a stacked next-in-line rail visible", () => {
   delete globalThis.window;
 });
 
-test("manual cinema can hide the left sidebar at a tight desktop width", () => {
+test("manual cinema requests sidebar changes at a tight desktop width", () => {
   const rootClasses = new Set();
   const buttonListeners = new Map();
   const cinemaEvents = [];
@@ -95,10 +86,9 @@ test("manual cinema can hide the left sidebar at a tight desktop width", () => {
   globalThis.window = { matchMedia: () => mediaQuery, ResizeObserver: class { constructor() {} observe() {} } };
 
   initCinemaView({ root, button });
-  layoutWidth = CINEMA_HIDE_LEFT_SIDEBAR_WIDTH - 1;
+  layoutWidth = 799;
   buttonListeners.get("click")();
-  assert.equal(cinemaEvents.at(-1).detail.defaultSidebarMode, "hidden");
-  assert.equal(cinemaEvents.at(-1).detail.forceSidebarMode, true);
+  assert.equal(cinemaEvents.at(-1).detail.enabled, true);
 
   if (originalCustomEvent === undefined) delete globalThis.CustomEvent;
   else globalThis.CustomEvent = originalCustomEvent;
@@ -192,11 +182,10 @@ test("cinema hides only the right player sidebar", () => {
   );
   assert.match(
     readFileSync(new URL("../../static/js/src/player/cinema.js", import.meta.url), "utf8"),
-    /defaultSidebarMode:\s*enabled \? defaultSidebarMode : null/,
+    /igloo:cinema-sidebar-change/,
   );
-  assert.match(siteBase, /defaultSidebarMode[\s\S]*?setSidebarWidth\(SIDEBAR_COMPACT_WIDTH, false, false\)/);
-  assert.match(siteBase, /setSidebarHidden\(cinemaSidebarDefaultMode === 'hidden'\)/);
-  assert.match(siteBase, /forceSidebarMode[\s\S]*?cinemaSidebarDefaultForced/);
+  assert.match(siteBase, /sidebarBeforeCinema[\s\S]*?setSidebarWidth\(SIDEBAR_COMPACT_WIDTH, false, false\)/);
+  assert.match(siteBase, /setSidebarWidth\(sidebarBeforeCinema.width, false, false\)/);
   assert.doesNotMatch(
     readFileSync(new URL("../../static/js/src/player/cinema.js", import.meta.url), "utf8"),
     /button\.classList\.toggle\('active'/,
@@ -235,18 +224,17 @@ test("the player header search fills the available right sidebar width", () => {
 test("the player reserves a top lane for floating navigation controls", () => {
   assert.match(
     css,
-    /\.player-main\s*\{[\s\S]*?padding:\s*3\.75rem\s+1\.5rem\s+1\.5rem;/,
+    /\.player-main\s*\{[\s\S]*?padding:\s*3\.75rem\s+var\(--player-layout-gutter\)\s+1\.5rem;/,
   );
 });
 
-test("cinema view uses a plain rectangle icon", () => {
-  assert.match(playerTemplate, /class="player-cinema-rectangle-icon"/);
-  assert.match(playerTemplate, /<rect x="3" y="7" width="18" height="10" rx="1"><\/rect>/);
+test("cinema view uses the Material fit-screen icon", () => {
+  assert.match(playerTemplate, /@MaterialIcon\("FitScreen", "player-cinema-rectangle-icon"\)/);
   assert.doesNotMatch(playerTemplate, /m8 10-2 2 2 2M16 10l2 2-2 2/);
 });
 
 test("fullscreen uses a corner-bracket icon", () => {
-  assert.match(playerTemplate, /class="player-fullscreen-corners-icon"/);
+  assert.match(playerTemplate, /@MaterialIcon\("Fullscreen", "player-fullscreen-corners-icon"\)/);
   assert.doesNotMatch(playerTemplate, />&#x2922;<\/button>/);
 });
 
@@ -281,8 +269,8 @@ test("cinema's visual spacing belongs to its button, not its icon", () => {
   );
 });
 
-test("cinema view has a configurable default C shortcut", () => {
-  assert.match(siteBase, /'player\.cinema':\s*'c'/);
+test("cinema view has a configurable default T shortcut", () => {
+  assert.match(siteBase, /'player\.cinema':\s*'t'/);
   assert.match(
     playerIndex,
     /sc\.match\('player\.cinema', event\.key\) && cinemaBtn[\s\S]*?cinemaBtn\.click\(\)/,
