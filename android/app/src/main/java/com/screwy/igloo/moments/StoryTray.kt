@@ -2,9 +2,15 @@ package com.screwy.igloo.moments
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,12 +26,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import com.screwy.igloo.R
 import com.screwy.igloo.data.entity.StoryChannelItem
@@ -36,6 +51,7 @@ import com.screwy.igloo.ui.component.StoryRingState
 import com.screwy.igloo.ui.component.storyRingBorder
 import com.screwy.igloo.ui.component.storyRingState
 import com.screwy.igloo.ui.theme.iglooColors
+import kotlin.math.roundToInt
 
 internal data class StoryTrayItem(
     val channelId: String,
@@ -89,6 +105,18 @@ internal fun StoryTray(
     modifier: Modifier = Modifier,
 ) {
     BackHandler(enabled = visible, onBack = onDismiss)
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    val dismissDistance = with(LocalDensity.current) { 48.dp.toPx() }
+    val dismissVelocity = with(LocalDensity.current) { 1000.dp.toPx() }
+    val offset by animateFloatAsState(
+        targetValue = dragOffset,
+        animationSpec = if (dragging) snap() else spring(),
+        label = "storyTrayOffset",
+    )
+    LaunchedEffect(visible) {
+        if (visible) dragOffset = 0f
+    }
     AnimatedVisibility(
         visible = visible,
         enter = slideInHorizontally(initialOffsetX = { it }),
@@ -99,7 +127,24 @@ internal fun StoryTray(
         Surface(
             modifier = Modifier
                 .fillMaxHeight()
-                .widthIn(min = 280.dp, max = 360.dp),
+                .widthIn(min = 240.dp, max = 320.dp)
+                .offset { IntOffset(offset.roundToInt(), 0) }
+                .draggable(
+                    state = rememberDraggableState { delta ->
+                        dragOffset = (dragOffset + delta).coerceAtLeast(0f)
+                    },
+                    orientation = Orientation.Horizontal,
+                    enabled = visible,
+                    onDragStarted = { dragging = true },
+                    onDragStopped = { velocity ->
+                        dragging = false
+                        if (dragOffset >= dismissDistance || velocity >= dismissVelocity) {
+                            onDismiss()
+                        } else {
+                            dragOffset = 0f
+                        }
+                    },
+                ),
             color = colors.surface.copy(alpha = 0.96f),
             tonalElevation = 8.dp,
             shadowElevation = 12.dp,
