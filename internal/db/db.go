@@ -242,6 +242,8 @@ func OpenExisting(layout storage.Layout) (*DB, error) {
 
 // Close closes the database connection.
 func (db *DB) Close() error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	err := db.conn.Close()
 	if db.postgres != nil {
 		if stopErr := db.postgres.stop(); err == nil {
