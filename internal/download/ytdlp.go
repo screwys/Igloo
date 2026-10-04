@@ -72,7 +72,7 @@ func (y *YtDlpWrapper) ChannelInfo(ctx context.Context, url string, opts Opts) (
 	if res.URL == "" && info.UploaderURL != nil {
 		res.URL = *info.UploaderURL
 	}
-	if res.URL == "" && info.WebpageURL != nil {
+	if res.URL == "" && info.WebpageURL != nil && !isYouTubeURL(url) {
 		res.URL = *info.WebpageURL
 	}
 	for _, log := range result.OutputLogs {
@@ -83,7 +83,7 @@ func (y *YtDlpWrapper) ChannelInfo(ctx context.Context, url string, opts Opts) (
 	}
 	if isYouTubeURL(url) || isYouTubeURL(res.URL) {
 		res.ID = CanonicalizeYouTubeChannelID(res.ID, res.URL, url)
-		if strings.HasPrefix(res.ID, "youtube_UC") {
+		if res.URL == "" && strings.HasPrefix(res.ID, "youtube_UC") {
 			res.URL = "https://www.youtube.com/channel/" + strings.TrimPrefix(res.ID, "youtube_")
 		}
 	}
