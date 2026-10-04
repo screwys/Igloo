@@ -39,7 +39,7 @@ Start from the user's report and relevant source. Trust their observations and c
 
 Use local rows, files, and logs for data questions, preferring read-only Igloo MCP tools when available. The server uses PostgreSQL; maintenance tools attach through the state directory or `IGLOO_DATABASE_URL`. SQLite files are legacy archives. Use stored identifiers and data before fetching public platform pages.
 
-Use the browser for a specific unresolved runtime question that could change the fix. State that question before opening a browser. The local target is `https://localhost:8443`. Reuse the existing session and target. Do not create temporary browser fixtures, servers, or new ports for routine UI changes. Do not change ports or open more sessions to retry an approval. Basic edits can be completed from the report and source. Check private material only for existence, masking values as `***` if a format check is necessary. Do not capture private data or screenshots.
+Use the browser for a specific unresolved runtime question that could change the fix. State that question before opening a browser. Use `https://localhost:8443` for all local browser checks, including playback investigations. Reuse the existing session and target. Do not create temporary browser fixtures, servers, or new ports. Do not change ports or open more sessions to retry an approval. Basic edits can be completed from the report and source. Check private material only for existence, masking values as `***` if a format check is necessary. Do not capture private data or screenshots.
 
 Never launch fullscreen. Keep UI verification in the background and do not take over the user's desktop.
 
