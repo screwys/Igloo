@@ -5145,8 +5145,8 @@ html.mini-player-moving * {
     display: block;
 }
 
-#player-cinema-btn[aria-pressed="false"] svg.player-cinema-wide-icon,
-#player-cinema-btn[aria-pressed="true"] svg.player-cinema-normal-icon {
+#player-cinema-btn[aria-pressed="false"] svg.player-cinema-contract-icon,
+#player-cinema-btn[aria-pressed="true"] svg.player-cinema-expand-icon {
     display: none;
 }
 

@@ -27,7 +27,8 @@ Prove new yt-dlp and gallery-dl flags, arguments, endpoints, and output formats 
 ## Design
 
 - Reuse established controls and layouts, adapting them to each client's available space. Keep controls readable, visually consistent, and easy to use.
-- Use Igloo's existing icon buttons and icon set (Material) for actions. Reuse their size and styling, with tooltip and accessibility labels, instead of adding large text buttons.
+- Use Igloo's existing icon buttons, size, styling, tooltips, and accessibility labels for actions. Choose real icons from the official Material catalog. Search several keywords for the action, object, and state, then inspect the actual icons. Use the original vectors; create or redraw icons only when the user asks for custom icons.
+- For icon alternatives, show different visual ideas with their real catalog names. Do not fill a comparison with small variations of the same shape. Match the icons to what the control changes: expanding and shrinking a view needs expand/contract shapes, not outline/filled copies that only show selection. Avoid symbols for a different action already offered by the interface.
 - Before adding a control, inspect and reuse its closest existing template, CSS, JavaScript, and action handler. Use Igloo's dropdowns instead of native selects. For a routine menu item using established controls and icons, source inspection and relevant existing checks are sufficient. Check rendering or interaction in the browser only when a specific unresolved runtime question could change the implementation.
 - Use short functional labels and one clear control for each action. Add a short helper line only when the user would otherwise be stuck.
 - Judge interface changes by how they affect the user's activity and existing workflow. Prefer fewer coherent interactions over extra modes, decorations, and explanations.

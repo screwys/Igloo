@@ -814,11 +814,11 @@ func PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreFr
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = MaterialIcon("WidthNormal", "player-cinema-normal-icon").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = MaterialIcon("CinemaExpand", "player-cinema-expand-icon").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = MaterialIcon("WidthWide", "player-cinema-wide-icon").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = MaterialIcon("CinemaContract", "player-cinema-contract-icon").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
