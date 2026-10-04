@@ -427,8 +427,9 @@ function shortShareUrl(entryData) {
     shareUrl = window.location.origin + '/shorts?video=' + encodeURIComponent(entryData.id)
     if (platform === 'tiktok') {
       var handle = String(entryData.channelName || entryData.channelId || '').trim()
+      if (/^tiktok_live_/.test(entryData.id)) handle = String(entryData.liveChannelId || entryData.channelId || '').replace(/^tiktok_/, '').trim()
       var cleanHandle = handle ? (handle.startsWith('@') ? handle : ('@' + handle)) : '@user'
-      shareUrl = 'https://www.tiktok.com/' + cleanHandle + '/video/' + encodeURIComponent(entryData.id)
+      shareUrl = 'https://www.tiktok.com/' + cleanHandle + (/^tiktok_live_/.test(entryData.id) ? '/live' : '/video/' + encodeURIComponent(entryData.id))
     } else if (platform === 'instagram') {
       var isPost = /^instagram_post_/.test(String(entryData.id || ''))
       var shortcode = String(entryData.id || '').replace(/^instagram_(post|reel)_/, '')

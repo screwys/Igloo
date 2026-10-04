@@ -530,6 +530,9 @@ func androidSyncCanonicalVideoURL(video model.Video) string {
 		if handle == "" {
 			return ""
 		}
+		if strings.HasPrefix(video.VideoID, "tiktok_live_") {
+			return "https://www.tiktok.com/@" + url.PathEscape(handle) + "/live"
+		}
 		return "https://www.tiktok.com/@" + url.PathEscape(handle) + "/video/" + url.PathEscape(rawID)
 	case "instagram":
 		switch {

@@ -100,8 +100,8 @@ func videoAuthorHandle(v model.Video) string {
 }
 
 func videoWebpageURL(v model.Video) string {
-	if v.Metadata != nil && v.Metadata.WebpageURL != "" {
-		return v.Metadata.WebpageURL
+	if metadata := v.ParseMetadata(); metadata != nil && metadata.WebpageURL != "" {
+		return metadata.WebpageURL
 	}
 	// Construct URL from platform + video ID when metadata is missing (e.g. bookmark stubs).
 	switch v.Platform {
@@ -117,6 +117,9 @@ func videoWebpageURL(v model.Video) string {
 		return "https://x.com/" + handle + "/status/" + v.VideoID
 	case "tiktok":
 		if handle, ok := strings.CutPrefix(v.ChannelID, "tiktok_"); ok && handle != "" {
+			if strings.HasPrefix(v.VideoID, "tiktok_live_") {
+				return "https://www.tiktok.com/@" + handle + "/live"
+			}
 			return "https://www.tiktok.com/@" + handle + "/video/" + v.VideoID
 		}
 	case "instagram":
