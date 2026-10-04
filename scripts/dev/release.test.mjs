@@ -131,7 +131,7 @@ test("local release script publishes a GitHub release on push", () => {
     "utf8",
   );
 
-  assert.match(script, /git push --atomic origin HEAD:main "refs\/tags\/\$tag"/);
+  assert.match(script, /git push --no-verify --atomic origin HEAD:main "refs\/tags\/\$tag"/);
   assert.match(script, /gh release create "\$tag"/);
   assert.match(script, /--notes-file "\$notes_file"/);
   assert.match(script, /gh workflow run container-release\.yml --ref "\$tag"/);
