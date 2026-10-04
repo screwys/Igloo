@@ -76,6 +76,7 @@ wait_for_server() {
     sleep 1
   done
 
+  compose logs --no-color --tail 80 >&2
   curl -fsS "${curl_local[@]}" "$base_url/api/health/live" >/dev/null
 }
 

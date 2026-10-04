@@ -265,8 +265,10 @@
               mkdir -p "$out/share/igloo"
               cp -R static locales "$out/share/igloo/"
               wrapProgram "$out/bin/igloo" --prefix PATH : "${lib.getBin pkgs.postgresql_18}/bin" \
+                --set-default IGLOO_POSTGRES_BIN "${lib.getBin pkgs.postgresql_18}/bin" \
                 --set-default IGLOO_PYTHON "${tiktokPython}/bin/python3"
-              wrapProgram "$out/bin/igloo-adduser" --prefix PATH : "${lib.getBin pkgs.postgresql_18}/bin"
+              wrapProgram "$out/bin/igloo-adduser" --prefix PATH : "${lib.getBin pkgs.postgresql_18}/bin" \
+                --set-default IGLOO_POSTGRES_BIN "${lib.getBin pkgs.postgresql_18}/bin"
             '';
 
             doCheck = false;
@@ -310,6 +312,7 @@
             contents = [
               runtimeEnv
               containerEntrypoint
+              pkgs.dockerTools.binSh
               (pkgs.dockerTools.fakeNss.override {
                 extraPasswdLines = [
                   "igloo:x:10001:10001:Igloo:/tmp:/bin/sh"
