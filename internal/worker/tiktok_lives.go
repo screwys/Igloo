@@ -14,10 +14,10 @@ import (
 func (m *Manager) runTikTokLivesLoop(ctx context.Context) {
 	for ctx.Err() == nil {
 		if m.cfg.PlatformEnabled("tiktok") && m.externalWorkAllowed(time.Now()) {
-			handles, err := m.db.FollowedTikTokHandles()
+			rooms, err := m.db.FollowedTikTokLiveSources()
 			failed := 0
-			if err == nil && len(handles) > 0 {
-				err = download.FetchTikTokLives(ctx, handles, func(handle string, info *download.TikTokLiveInfo, fetchErr error) error {
+			if err == nil && len(rooms) > 0 {
+				err = download.FetchTikTokLives(ctx, rooms, func(handle string, info *download.TikTokLiveInfo, fetchErr error) error {
 					if fetchErr == nil {
 						channelID := model.TikTokChannelIDFromHandle(handle)
 						if !m.db.IsChannelFollowed(channelID) {
@@ -79,7 +79,15 @@ func (m *Manager) ResolveTikTokLive(ctx context.Context, channelID string) (*mod
 	if !m.cfg.PlatformEnabled("tiktok") {
 		return nil, nil, fmt.Errorf("TikTok is not enabled")
 	}
-	info, err := download.FetchTikTokLive(ctx, tiktokHandleForChannel(*channel))
+	cached, err := m.db.GetTikTokLive(channelID)
+	if err != nil {
+		return nil, nil, err
+	}
+	roomID := ""
+	if cached != nil {
+		roomID = cached.RoomID
+	}
+	info, err := download.FetchTikTokLive(ctx, tiktokHandleForChannel(*channel), roomID)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -46,9 +46,9 @@ func tiktokLiveCommand(ctx context.Context, mode string, args ...string) *exec.C
 	return cmd
 }
 
-func FetchTikTokLive(ctx context.Context, handle string) (*TikTokLiveInfo, error) {
+func FetchTikTokLive(ctx context.Context, handle, roomID string) (*TikTokLiveInfo, error) {
 	handle = model.NormalizeTikTokHandle(handle)
-	result := (CommandRunner{}).RunBuilt(ctx, tiktokLiveCommand(ctx, "resolve", handle))
+	result := (CommandRunner{}).RunBuilt(ctx, tiktokLiveCommand(ctx, "resolve", handle, roomID))
 	if result.Err != nil {
 		return nil, fmt.Errorf("TikTok live: %w: %s", result.Err, strings.TrimSpace(RedactText(string(result.Stderr))))
 	}
@@ -56,7 +56,7 @@ func FetchTikTokLive(ctx context.Context, handle string) (*TikTokLiveInfo, error
 }
 
 func DownloadTikTokLive(ctx context.Context, handle, expectedVideoID string, opts Opts) (CompletedDownload, error) {
-	info, err := FetchTikTokLive(ctx, handle)
+	info, err := FetchTikTokLive(ctx, handle, strings.TrimPrefix(expectedVideoID, "tiktok_live_"))
 	if err != nil {
 		return CompletedDownload{}, err
 	}
@@ -124,10 +124,10 @@ func decodeTikTokLiveInfo(data []byte) (*TikTokLiveInfo, error) {
 	return info, nil
 }
 
-func FetchTikTokLives(ctx context.Context, handles []string, emit func(string, *TikTokLiveInfo, error) error) error {
-	normalized := make([]string, len(handles))
-	for i, handle := range handles {
-		normalized[i] = model.NormalizeTikTokHandle(handle)
+func FetchTikTokLives(ctx context.Context, rooms map[string]string, emit func(string, *TikTokLiveInfo, error) error) error {
+	normalized := make(map[string]string, len(rooms))
+	for handle, roomID := range rooms {
+		normalized[model.NormalizeTikTokHandle(handle)] = roomID
 	}
 	data, err := json.Marshal(normalized)
 	if err != nil {

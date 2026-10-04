@@ -50,13 +50,17 @@ def playback_formats(room):
     return formats
 
 
-async def resolve(handle):
+async def resolve(handle, room_id=""):
     client = TikTokLiveClient(unique_id=handle)
     client.logger.disabled = True
     try:
-        if not await client.is_live():
+        if room_id:
+            live = await client.web.fetch_is_live(room_id=int(room_id))
+        else:
+            live = await client.is_live()
+        if not live:
             return None
-        room = await client.web.fetch_room_info(unique_id=handle)
+        room = await client.web.fetch_room_info(room_id=int(room_id)) if room_id else await client.web.fetch_room_info(unique_id=handle)
         room_id = str(room["id_str"])
         owner = room["owner"]
         cover_urls = room.get("cover", {}).get("url_list", [])
@@ -87,18 +91,18 @@ async def resolve(handle):
         await client.web.close()
 
 
-async def batch(handles):
+async def batch(rooms):
     semaphore = asyncio.Semaphore(6)
 
-    async def fetch(handle):
+    async def fetch(handle, room_id):
         async with semaphore:
             try:
-                info = await resolve(handle)
+                info = await resolve(handle, room_id)
                 write_json({"handle": handle, "info": info})
             except Exception as error:
                 write_json({"handle": handle, "error": error_message(error)})
 
-    await asyncio.gather(*(fetch(handle) for handle in handles))
+    await asyncio.gather(*(fetch(handle, room_id) for handle, room_id in rooms.items()))
 
 
 async def chat(handle):
@@ -140,7 +144,7 @@ async def main():
     elif mode == "chat":
         await chat(sys.argv[2])
     else:
-        write_json(await resolve(sys.argv[2]))
+        write_json(await resolve(sys.argv[2], sys.argv[3]))
 
 
 try:

@@ -229,7 +229,20 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 
 	var info map[string]any
 	if handle := download.TikTokLiveHandle(rawURL); handle != "" {
-		live, err := download.FetchTikTokLive(ctx, handle)
+		roomID := ""
+		if work != nil {
+			roomID = strings.TrimPrefix(work.ExpectedVideoID, "tiktok_live_")
+		}
+		if roomID == "" {
+			cached, err := m.db.GetTikTokLive(model.TikTokChannelIDFromHandle(handle))
+			if err != nil {
+				return TempDownloadResult{Message: "Could not read the live stream", Cause: err}
+			}
+			if cached != nil {
+				roomID = cached.RoomID
+			}
+		}
+		live, err := download.FetchTikTokLive(ctx, handle, roomID)
 		if err != nil {
 			return TempDownloadResult{Message: "Could not load the live stream", Cause: err}
 		}
@@ -352,7 +365,9 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 		Subtitles:          true,
 		SubtitleDir:        subtitleDir,
 	}
-	if work != nil {
+	if strings.HasPrefix(videoID, "tiktok_live_") {
+		opts.ExpectedVideoID = videoID
+	} else if work != nil {
 		opts.ExpectedVideoID = work.ExpectedVideoID
 	}
 

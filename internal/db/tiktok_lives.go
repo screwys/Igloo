@@ -25,24 +25,25 @@ func (db *DB) ObserveTikTokLive(channelID string, live *model.TikTokLive) error 
 	})
 }
 
-func (db *DB) FollowedTikTokHandles() ([]string, error) {
-	rows, err := db.reader().Query(`SELECT COALESCE(NULLIF(cp.handle,''),NULLIF(c.source_id,''),substr(c.channel_id,8))
+func (db *DB) FollowedTikTokLiveSources() (map[string]string, error) {
+	rows, err := db.reader().Query(`SELECT COALESCE(NULLIF(cp.handle,''),NULLIF(c.source_id,''),substr(c.channel_id,8)), COALESCE(l.room_id,'')
 		FROM channels c JOIN channel_follows cf ON cf.channel_id=c.channel_id
-		LEFT JOIN channel_profiles cp ON cp.channel_id=c.channel_id WHERE c.platform='tiktok'
+		LEFT JOIN channel_profiles cp ON cp.channel_id=c.channel_id
+		LEFT JOIN tiktok_lives l ON l.channel_id=c.channel_id WHERE c.platform='tiktok'
 		ORDER BY c.channel_id`)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var handles []string
+	rooms := make(map[string]string)
 	for rows.Next() {
-		var handle string
-		if err := rows.Scan(&handle); err != nil {
+		var handle, roomID string
+		if err := rows.Scan(&handle, &roomID); err != nil {
 			return nil, err
 		}
-		handles = append(handles, handle)
+		rooms[handle] = roomID
 	}
-	return handles, rows.Err()
+	return rooms, rows.Err()
 }
 
 const tiktokLiveProjection = `SELECT l.channel_id,l.room_id,

@@ -247,7 +247,7 @@ function initTikTokLive(entry) {
         if (refs.liveWantsPlay) return video.play()
       } catch (error) {
         if (run !== current || error.name === 'AbortError') return
-        var code = error.payload && error.payload.code
+        var code = error.payload && error.payload.error_code
         status.textContent = code === 'live_ended' ? t('shorts_live_ended', 'Live stream ended') : t('shorts_live_playback_failed', 'Live stream could not play')
         showToast(status.textContent)
         refs.stopLive()
