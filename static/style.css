@@ -4562,7 +4562,7 @@ html.mini-player-moving * {
 
 .player-main {
     /* Keep the video below the fixed navigation controls on narrow desktop layouts. */
-    padding: 3.75rem 0 1.5rem var(--player-layout-gutter);
+    padding: 3.75rem var(--player-layout-gutter) 1.5rem;
     min-width: 0;
 }
 
@@ -5834,8 +5834,7 @@ html.mini-player-moving * {
 .player-sidebar {
     background: linear-gradient(180deg, rgba(var(--surface-soft-rgb), 0.9), rgba(var(--bg-tertiary-rgb), 0.94));
     border-left: 1px solid rgba(255, 255, 255, 0.14);
-    margin-inline: var(--player-layout-gutter);
-    padding: 3.5rem 0 1.5rem;
+    padding: 3.5rem var(--player-layout-gutter) 1.5rem;
     overflow-y: auto;
     min-width: 0;
     opacity: 1;

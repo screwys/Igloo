@@ -162,5 +162,5 @@
     }
 }
 .main:has(> #player-root.has-live-chat:not(.chat-closed)) {
-    --player-sidebar-width: calc((100% + 5 * var(--player-layout-gutter) + 3px) / 4);
+    --player-sidebar-width: calc((100% + 4 * var(--player-layout-gutter) + 3px) / 4);
 }
