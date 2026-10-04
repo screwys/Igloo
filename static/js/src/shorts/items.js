@@ -38,7 +38,7 @@ export function closeMomentActions() {
   momentActionsTrigger = null
   if (momentActionsKeyHandler) document.removeEventListener('keydown', momentActionsKeyHandler)
   momentActionsKeyHandler = null
-  if (momentActionsOutsideHandler) document.removeEventListener('pointerdown', momentActionsOutsideHandler, true)
+  if (momentActionsOutsideHandler) document.removeEventListener('click', momentActionsOutsideHandler, true)
   momentActionsOutsideHandler = null
 }
 
@@ -696,10 +696,12 @@ function openMomentActions(entry, trigger, position) {
   momentActionsOutsideHandler = function (event) {
     if (sheet.contains(event.target)) return
     if (trigger && trigger.contains(event.target)) return
+    event.preventDefault()
+    event.stopPropagation()
     closeMomentActions()
   }
   document.addEventListener('keydown', momentActionsKeyHandler)
-  document.addEventListener('pointerdown', momentActionsOutsideHandler, true)
+  document.addEventListener('click', momentActionsOutsideHandler, true)
   wrapper.classList.add('moment-actions-open')
   if (position) {
     overlay.classList.add('moment-actions-at-pointer')

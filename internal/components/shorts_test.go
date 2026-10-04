@@ -123,7 +123,7 @@ func TestShortsPlayerMoreMenuUsesMomentMutationOwners(t *testing.T) {
 		"if (!data.channelFollowed && authorID)",
 		"wrapper.appendChild(overlay)",
 		"wrapper.classList.add('moment-actions-open')",
-		"document.addEventListener('pointerdown', momentActionsOutsideHandler, true)",
+		"document.addEventListener('click', momentActionsOutsideHandler, true)",
 		"if (sheet.contains(event.target)) return",
 		"shareShort(data)",
 		"else if (data.channelFollowed && authorID)",
