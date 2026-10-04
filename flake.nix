@@ -148,6 +148,70 @@
             };
           };
 
+          pythonWheel =
+            pname: version: hash: dependencies:
+            pythonPackages.buildPythonPackage {
+              inherit pname version dependencies;
+              format = "wheel";
+              src = pythonPackages.fetchPypi {
+                inherit pname version hash;
+                format = "wheel";
+                dist = "py3";
+                python = "py3";
+              };
+              doCheck = false;
+            };
+
+          livePyee = pythonPackages.pyee.overridePythonAttrs (_: {
+            version = "13.0.1";
+            src = pythonPackages.fetchPypi {
+              pname = "pyee";
+              version = "13.0.1";
+              hash = "sha256-C5MffBRTVmftTH4NUxcWNocV6GC5iHcPx+uFeNH2f8g=";
+            };
+            doCheck = false;
+          });
+
+          liveBetterproto =
+            pythonWheel "betterproto2" "0.9.1" "sha256-3gVEtLK2taBc4MG/rDbSMvdFCHsCkH50jzFGa+z8Pb0="
+              [
+                pythonPackages.python-dateutil
+                pythonPackages.typing-extensions
+                pythonPackages.pydantic
+              ];
+          liveProto =
+            pythonWheel "tiktokliveproto" "0.2.2" "sha256-070+uuOx7MR9ljzT//w0AwdtEpfxCOWZZCedj1ycCQ4="
+              [ liveBetterproto ];
+          liveEuler =
+            pythonWheel "eulerapisdk" "0.1.0" "sha256-FGAoMWqTizQ6dBMarrGUZ7X0e/Gb1cccAoZNRbEcjO8="
+              [
+                pythonPackages.attrs
+                pythonPackages.httpx
+                pythonPackages.python-dateutil
+              ];
+          liveWebsockets =
+            pythonWheel "websockets_proxy" "0.1.3" "sha256-B8oLVhEH5OIHwApchvkoHAW+Kj40qnIdAXQ3YNxf0Gc="
+              [
+                pythonPackages.python-socks
+                pythonPackages.websockets
+              ];
+          tiktokLive =
+            pythonWheel "tiktoklive" "7.0.1" "sha256-20N4nP0quv9jlRfz6V8dN/dbO5EE121wkQKvsRVCCrw="
+              [
+                pythonPackages.httpx
+                livePyee
+                pythonPackages.ffmpy
+                liveWebsockets
+                liveBetterproto
+                pythonPackages.async-timeout
+                pythonPackages.mashumaro
+                pythonPackages.protobuf3-to-dict
+                pythonPackages.protobuf
+                liveProto
+                liveEuler
+              ];
+          tiktokPython = pkgs.python3.withPackages (_: [ tiktokLive ]);
+
           sourceRoots = [
             "cmd"
             "internal"
@@ -200,7 +264,8 @@
               mv "$out/bin/adduser" "$out/bin/igloo-adduser"
               mkdir -p "$out/share/igloo"
               cp -R static locales "$out/share/igloo/"
-              wrapProgram "$out/bin/igloo" --prefix PATH : "${lib.getBin pkgs.postgresql_18}/bin"
+              wrapProgram "$out/bin/igloo" --prefix PATH : "${lib.getBin pkgs.postgresql_18}/bin" \
+                --set-default IGLOO_PYTHON "${tiktokPython}/bin/python3"
               wrapProgram "$out/bin/igloo-adduser" --prefix PATH : "${lib.getBin pkgs.postgresql_18}/bin"
             '';
 
@@ -223,6 +288,7 @@
               (lib.getBin pkgs.ffmpeg-headless)
               galleryDl
               ytDlp
+              tiktokPython
               (lib.getBin pkgs.postgresql_18)
             ];
             pathsToLink = [
@@ -249,7 +315,10 @@
                   "igloo:x:10001:10001:Igloo:/tmp:/bin/sh"
                   "postgres:x:999:999:PostgreSQL:/var/empty:/bin/sh"
                 ];
-                extraGroupLines = [ "igloo:x:10001:" "postgres:x:999:" ];
+                extraGroupLines = [
+                  "igloo:x:10001:"
+                  "postgres:x:999:"
+                ];
               })
             ];
 
@@ -282,6 +351,7 @@
                 "IGLOO_REPO_DIR=/app"
                 "IGLOO_PORT=5001"
                 "IGLOO_ENABLED_PLATFORMS=all"
+                "IGLOO_PYTHON=${tiktokPython}/bin/python3"
               ];
               ExposedPorts = {
                 "5001/tcp" = { };
@@ -300,6 +370,7 @@
           postgresql = lib.getBin pkgs.postgresql_18;
           gallery-dl = galleryDl;
           yt-dlp = ytDlp;
+          python-runtime = tiktokPython;
         }
       );
 
@@ -336,8 +407,10 @@
               (pkgs.lib.getBin pkgs.ffmpeg-headless)
               self.packages.${system}.gallery-dl
               self.packages.${system}.yt-dlp
+              self.packages.${system}.python-runtime
               (pkgs.lib.getBin pkgs.postgresql_18)
             ];
+            IGLOO_PYTHON = "${self.packages.${system}.python-runtime}/bin/python3";
           };
         }
       );

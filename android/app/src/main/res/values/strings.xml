@@ -437,6 +437,7 @@
     <string name="language_english">English</string>
     <string name="language_system">System default</string>
     <string name="list_sep_and">and</string>
+    <string name="live_chat_unavailable">Live chat unavailable</string>
     <string name="login_discovery_none">No Igloo servers found.</string>
     <string name="login_error_invalid_credentials">Invalid username or password</string>
     <string name="login_error_no_users">No users are configured. Open setup to create the first admin.</string>
@@ -954,6 +955,8 @@
     <string name="shorts_autoplay_next">Auto-play next short</string>
     <string name="shorts_autoplay_next_state">Auto-play next short: %1$s</string>
     <string name="shorts_link_copied">Short link copied</string>
+    <string name="shorts_live_ended">Live stream ended</string>
+    <string name="shorts_live_playback_failed">Live stream could not play</string>
     <string name="shorts_media_unavailable_skipping">Short media unavailable, skipping</string>
     <string name="shorts_tab_all">All</string>
     <string name="shorts_tab_following">Following</string>

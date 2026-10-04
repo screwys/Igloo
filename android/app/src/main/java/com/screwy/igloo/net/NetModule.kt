@@ -1,6 +1,7 @@
 package com.screwy.igloo.net
 
 import com.screwy.igloo.data.PreferencesRepo
+import com.screwy.igloo.moments.TikTokLives
 import androidx.lifecycle.eventFlow
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CoroutineScope
@@ -57,6 +58,8 @@ val iglooNetModule = module {
     single { AndroidSyncApi(client = get(), baseUrlProvider = get<ServerBaseUrlProvider>()::baseUrl) }
     single { OutboxApi(client = get(), baseUrlProvider = get<ServerBaseUrlProvider>()::baseUrl) }
     single { HomeApi(client = get(), baseUrlProvider = get<ServerBaseUrlProvider>()::baseUrl) }
+    single { MomentsApi(client = get(), baseUrlProvider = get<ServerBaseUrlProvider>()::baseUrl) }
+    single { TikTokLives(api = get(), reachability = get(), foreground = get(), scope = get(named("applicationScope"))) }
     // ─── Reachability ───────────────────────────────────────────────────────
     single {
         Reachability(

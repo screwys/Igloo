@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -56,6 +57,7 @@ func (db *DB) StreamVideoNeedsCapture(videoID string) (bool, error) {
 }
 
 type TempDownloadSaveIntent struct {
+	ExpectedVideoID string            `json:"expected_video_id,omitempty"`
 	Bookmark        *BookmarkMutation `json:"bookmark,omitempty"`
 	Like            *LikeMutation     `json:"like,omitempty"`
 	ArchiveBookmark bool              `json:"archive_bookmark,omitempty"`
@@ -68,9 +70,16 @@ type TempDownloadBookmarkArchive struct {
 }
 
 func (db *DB) QueueStreamSave(videoID string, incoming TempDownloadSaveIntent) error {
-	rawURL := "https://www.youtube.com/watch?v=" + videoID
+	rawURL, err := db.StreamVideoSourceURL(videoID)
+	if err != nil {
+		return err
+	}
+	video, err := db.GetVideo(videoID)
+	if err != nil {
+		return err
+	}
 	return db.WithWrite(func(tx *sql.Tx) error {
-		if _, err := enqueueTempDownloadTx(tx, rawURL, "youtube", time.Now().UnixMilli()); err != nil {
+		if _, err := enqueueTempDownloadTx(tx, rawURL, video.Platform, time.Now().UnixMilli()); err != nil {
 			return err
 		}
 		var raw string
@@ -83,6 +92,7 @@ func (db *DB) QueueStreamSave(videoID string, incoming TempDownloadSaveIntent) e
 				return err
 			}
 		}
+		intent.ExpectedVideoID = videoID
 		if incoming.Bookmark != nil {
 			incoming.Bookmark.UpdatedAtMs = mutationTimestamp(incoming.Bookmark.UpdatedAtMs)
 			if previous := intent.Bookmark; previous == nil || incoming.Bookmark.UpdatedAtMs >= previous.UpdatedAtMs {
@@ -117,6 +127,23 @@ func (db *DB) QueueStreamSave(videoID string, incoming TempDownloadSaveIntent) e
 		_, err = tx.Exec(bind(`UPDATE temp_download_queue SET save_intent_json = ? WHERE url = ?`), string(encoded), rawURL)
 		return err
 	})
+}
+
+func (db *DB) StreamVideoSourceURL(videoID string) (string, error) {
+	video, err := db.GetVideo(videoID)
+	if err != nil {
+		return "", err
+	}
+	if video == nil {
+		return "", sql.ErrNoRows
+	}
+	if video.Platform == "youtube" {
+		return "https://www.youtube.com/watch?v=" + videoID, nil
+	}
+	if meta := video.ParseMetadata(); meta != nil && meta.WebpageURL != "" {
+		return meta.WebpageURL, nil
+	}
+	return "", fmt.Errorf("stream source is unavailable")
 }
 
 func (db *DB) applyTempDownloadSaveIntentTx(tx *sql.Tx, rawURL, videoID string) (*TempDownloadBookmarkArchive, error) {

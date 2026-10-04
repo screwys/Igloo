@@ -34,6 +34,7 @@ import com.screwy.igloo.logs.LogsRoute
 import com.screwy.igloo.media.MediaRoute
 import com.screwy.igloo.moments.MomentsRoute
 import com.screwy.igloo.moments.ShortsRoute
+import com.screwy.igloo.moments.TikTokLiveRoute
 import com.screwy.igloo.player.PlayerRoute
 import com.screwy.igloo.settings.AccountRoute
 import com.screwy.igloo.settings.FeedRoute as FeedSettingsRoute
@@ -159,6 +160,10 @@ fun AppNavHost() {
                 initialSelectionExplicit = explicitInitialSelection,
                 navController = navController,
             )
+        }
+
+        scaffoldDestination(navController, RouteRegistry.TikTokLive) { entry ->
+            TikTokLiveRoute(entry.arguments!!.getString("channel_id")!!, navController)
         }
 
         directDestination(RouteRegistry.Media) { entry ->

@@ -230,6 +230,7 @@ func (db *DB) RestoreLegacyArchive(ctx context.Context, path string) error {
 	for i, table := range tables {
 		quoted[i] = quoteArchiveIdentifier(table)
 	}
+	quoted = append(quoted, quoteArchiveIdentifier("tiktok_lives"))
 	if _, err := tx.ExecContext(ctx, "TRUNCATE "+strings.Join(quoted, ",")+" RESTART IDENTITY"); err != nil {
 		return fmt.Errorf("clear restored tables: %w", err)
 	}

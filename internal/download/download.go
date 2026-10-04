@@ -39,6 +39,7 @@ type Opts struct {
 	Format             string      // yt-dlp -f format string (overrides default FormatSort when set).
 	Subtitles          bool        // Download English subtitles as VTT.
 	SubtitleDir        string      // State-root directory for subtitle outputs.
+	ExpectedVideoID    string      // Capture must match this observed content identity.
 }
 
 // Downloader is the unified entry point that routes to the correct backend.
@@ -332,6 +333,9 @@ func directMediaHTTPOptions(rawURL, mediaType string) HTTPDownloadOptions {
 // downloadTikTok handles TikTok URLs with slideshow detection.
 // gallery-dl downloads photo posts; yt-dlp selects and merges video streams.
 func (d *Downloader) downloadTikTok(ctx context.Context, rawURL string, opts Opts) (CompletedDownload, error) {
+	if handle := TikTokLiveHandle(rawURL); handle != "" {
+		return DownloadTikTokLive(ctx, handle, opts.ExpectedVideoID, opts)
+	}
 	gdlResult, gdlErr := d.GalleryDL.DownloadCompleted(ctx, rawURL, opts.OutputDir, opts.ID, opts.Cookies, opts.CookiesFromBrowser)
 	if gdlErr == nil && len(gdlResult.MediaPaths) > 0 {
 		return gdlResult, nil

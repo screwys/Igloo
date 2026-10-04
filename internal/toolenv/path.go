@@ -27,6 +27,8 @@ func ApplyCommonToolPaths() string {
 			runtimeDir = configured
 		}
 		path = prependExistingPath(path, runtimeDir, dirExists)
+		path = prependExistingPath(path, filepath.Join(runtimeDir, "python"), dirExists)
+		path = prependExistingPath(path, filepath.Join(runtimeDir, "python", "bin"), dirExists)
 		path = prependExistingPath(path, filepath.Join(runtimeDir, "postgresql", "bin"), dirExists)
 		path = prependExistingPath(path, filepath.Join(filepath.Dir(executable), "tools"), dirExists)
 	}
@@ -73,15 +75,13 @@ func prependExistingPath(path, candidate string, exists func(string) bool) strin
 		return path
 	}
 	clean := filepath.Clean(candidate)
+	parts := []string{clean}
 	for _, part := range filepath.SplitList(path) {
-		if filepath.Clean(part) == clean {
-			return path
+		if filepath.Clean(part) != clean {
+			parts = append(parts, part)
 		}
 	}
-	if path == "" {
-		return clean
-	}
-	return clean + string(os.PathListSeparator) + path
+	return strings.Join(parts, string(os.PathListSeparator))
 }
 
 func AugmentPATH(path, home, brewPrefix string, exists func(string) bool) string {

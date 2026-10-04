@@ -91,7 +91,7 @@ func TestShortsPlayerMoreMenuUsesMomentMutationOwners(t *testing.T) {
 	}
 	src := string(srcBytes)
 	for _, check := range []string{
-		"function openMomentActions(entry, trigger)",
+		"function openMomentActions(entry, trigger, position)",
 		`data-short-top-action="more"`,
 		`data-short-top-action="fullscreen"`,
 		`className = 'shorts-media-stage'`,
@@ -104,9 +104,9 @@ func TestShortsPlayerMoreMenuUsesMomentMutationOwners(t *testing.T) {
 		"function toggleMomentMiniPlayer(entry)",
 		"kind: 'moments'",
 		`data-short-action="mini-player"`,
-		`class="action-btn shorts-external-btn"`,
-		`target="_blank" rel="noopener noreferrer"`,
-		"entryData.originalUrl",
+		"actions.push({ key: 'open', icon: 'open', label: t('action_open_externally', 'Open externally') })",
+		"window.open(data.originalUrl, '_blank', 'noopener,noreferrer')",
+		"if (action === 'open' && data.originalUrl)",
 		"menuIconSvg(action.icon)",
 		"speed: 'Speed'",
 		"follow: 'Person'",
@@ -138,7 +138,7 @@ func TestShortsPlayerMoreMenuUsesMomentMutationOwners(t *testing.T) {
 			t.Errorf("Moment menu action wiring missing %q", check)
 		}
 	}
-	for _, removed := range []string{"function bindMomentLongPress", "wrapper.addEventListener('contextmenu'"} {
+	for _, removed := range []string{"function bindMomentLongPress", "shorts-external-btn"} {
 		if strings.Contains(src, removed) {
 			t.Errorf("Moment menu should replace the old long-press trigger %q", removed)
 		}
@@ -350,7 +350,7 @@ func TestShortsStoryModeAutoAdvancesWithoutChangingMomentAutoplay(t *testing.T) 
 		"function autoAdvanceEnabled()",
 		"return !!(_state && (_state.storyMode || _state.autoPlayNext))",
 		"slideshowAudio.loop = !autoAdvanceEnabled()",
-		"video.loop = !autoAdvanceEnabled()",
+		"video.loop = !isLive && !autoAdvanceEnabled()",
 		"if (autoAdvanceEnabled()) _fns.goNext()",
 	} {
 		if !strings.Contains(itemsSrc, check) {
@@ -799,7 +799,7 @@ func TestShortsVideoPlaybackStartsImmediatelyWithPosterUntilFirstFrame(t *testin
 		"function revealShortVideoIfReady(entry, video)",
 		"function playShortVideo(entry, video)",
 		"function playShortVideoFromStart(entry)",
-		"try {\n    video.currentTime = 0",
+		"try {\n    if (entry.refs.playLive) { playShortVideo(entry, video); return }\n    video.currentTime = 0",
 		"playShortVideo(entry, video)",
 	} {
 		if !strings.Contains(overlaySrc, check) {

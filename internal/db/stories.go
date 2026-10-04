@@ -119,7 +119,37 @@ func (db *DB) ListStoryChannels(nowMs int64, limit int) ([]model.StoryChannel, b
 		hasUnseen = hasUnseen || row.State == model.StoryStateNew
 		out = append(out, row)
 	}
-	return out, hasUnseen, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	lives, err := db.ListTikTokLives()
+	if err != nil {
+		return nil, false, err
+	}
+	byChannel := make(map[string]model.StoryChannel, len(out))
+	for _, story := range out {
+		byChannel[story.ChannelID] = story
+	}
+	merged := make([]model.StoryChannel, 0, len(out)+len(lives))
+	for _, live := range lives {
+		story, ok := byChannel[live.ChannelID]
+		if !ok {
+			story = model.StoryChannel{ChannelID: live.ChannelID, Platform: "tiktok", DisplayName: live.DisplayName, Handle: live.Handle, AvatarURL: live.AvatarURL}
+		}
+		story.LiveRoomID = live.RoomID
+		story.LiveTitle = live.Title
+		story.LiveViewerCount = live.ViewerCount
+		story.State = model.StoryStateNew
+		story.FirstVideoID = "tiktok_live_" + live.RoomID
+		merged = append(merged, story)
+		delete(byChannel, live.ChannelID)
+	}
+	for _, story := range out {
+		if _, ok := byChannel[story.ChannelID]; ok {
+			merged = append(merged, story)
+		}
+	}
+	return merged, hasUnseen || len(lives) > 0, nil
 }
 
 func (db *DB) GetStoryStatusForChannelIDs(channelIDs []string, nowMs int64) (map[string]model.StoryStatus, error) {
@@ -225,6 +255,41 @@ func (db *DB) AttachStoryStatusToVideos(videos []model.Video, nowMs int64) error
 			videos[i].StoryFirstVideoID = status.FirstUnseenVideoID
 		} else {
 			videos[i].StoryFirstVideoID = status.FirstVideoID
+		}
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := db.reader().Query(`SELECT channel_id,room_id,viewer_count FROM tiktok_lives WHERE channel_id IN (`+placeholders(len(ids))+`)`, args...)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	rooms := make(map[string]struct {
+		id      string
+		viewers int64
+	})
+	for rows.Next() {
+		var id, room string
+		var viewers int64
+		if err := rows.Scan(&id, &room, &viewers); err != nil {
+			return err
+		}
+		rooms[id] = struct {
+			id      string
+			viewers int64
+		}{room, viewers}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for i := range videos {
+		if live, ok := rooms[videos[i].ChannelID]; ok {
+			videos[i].LiveRoomID = live.id
+			videos[i].LiveViewerCount = live.viewers
+			videos[i].StoryFirstVideoID = "tiktok_live_" + live.id
+			videos[i].StoryState = model.StoryStateNew
 		}
 	}
 	return nil

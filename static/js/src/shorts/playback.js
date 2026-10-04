@@ -11,6 +11,8 @@ export function initPlayback(stateRef, goNextFn) {
 export function disposeShortItem(entry) {
   if (!entry) return
   var refs = entry.refs
+  if (refs.disposeLive) refs.disposeLive()
+  if (refs.disposeActions) refs.disposeActions()
   if (refs.disposeVideoControls) refs.disposeVideoControls()
   var slideshow = refs.slideshow
   if (slideshow) {
@@ -37,7 +39,7 @@ function autoAdvanceEnabled() {
 export function syncRenderedShortVideoLoop() {
   var loop = !autoAdvanceEnabled()
   document.querySelectorAll('#shorts-container video, #mini-player-media-host video').forEach(function (video) {
-    video.loop = loop
+    video.loop = video.dataset && video.dataset.liveStream === '1' ? false : loop
   })
 }
 
@@ -81,6 +83,7 @@ export function pauseAllShorts(exceptId) {
     var video = entry && entry.refs && entry.refs.video
     if (!video) return
     if (exceptId && entry.data.id === exceptId) return
+    if (entry.refs.stopLive) entry.refs.stopLive()
     try { video.pause() } catch (_) { }
   })
 }
@@ -234,6 +237,11 @@ export function startSlideshowPlayback(entry) {
 export function toggleShortPlayback(entry) {
   if (!entry || !entry.refs) return
   var video = entry.refs.video
+  if (entry.refs.playLive) {
+    if (entry.refs.liveLoading ? entry.refs.liveWantsPlay : !video.paused) entry.refs.pauseLive()
+    else entry.refs.playLive().catch(function () {})
+    return
+  }
   if (video) {
     if (video.paused) {
       var p = video.play()

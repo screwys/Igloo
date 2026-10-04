@@ -158,6 +158,7 @@ fun ChannelRoute(
                         source = IglooNavigationSource.Channel,
                     )
                 },
+                onLiveClick = { navController.navigate(com.screwy.igloo.ui.nav.RouteRegistry.tiktokLiveRoute(it)) },
                 onMentionClick = vm::resolveMentionAndNavigate,
                 onOpenUrl = uriHandler::openUri,
                 overflowControls = overflowControls,

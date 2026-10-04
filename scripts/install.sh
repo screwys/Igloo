@@ -58,6 +58,8 @@ SERVER_PORT="${IGLOO_PORT:-5001}"
 KAGI_ENV_FILE="${KAGI_ENV_FILE:-$CONFIG_DIR/kagi.env}"
 DATABASE_URL="${IGLOO_DATABASE_URL:-}"
 POSTGRES_BIN="${IGLOO_POSTGRES_BIN:-}"
+TIKTOK_PYTHON="${IGLOO_PYTHON:-python3}"
+TIKTOK_RUNTIME_DIR="${IGLOO_RUNTIME_DIR:-$REPO_DIR/bin/runtime/current}"
 
 # Add user tool directories to PATH for templ, Homebrew packages, and yt-dlp's
 # recommended JavaScript runtime. systemd user services do not inherit the
@@ -100,6 +102,7 @@ fi
 if [ -n "$POSTGRES_BIN" ]; then
     path_prepend_if_dir "$POSTGRES_BIN"
 fi
+path_prepend_if_dir "$TIKTOK_RUNTIME_DIR/python/bin"
 export PATH
 if [ -z "$POSTGRES_BIN" ] && command -v initdb >/dev/null 2>&1; then
     POSTGRES_BIN="$(dirname "$(command -v initdb)")"
@@ -113,6 +116,7 @@ service_path_append() {
     esac
 }
 service_path_append "$HOME_DIR/.local/bin"
+service_path_append "$TIKTOK_RUNTIME_DIR/python/bin"
 service_path_append "$HOME_DIR/go/bin"
 service_path_append "$HOME_DIR/.deno/bin"
 if [ -n "$POSTGRES_BIN" ]; then
@@ -201,6 +205,13 @@ fi
 check_required templ     "templ code generator — go install $TEMPL_CMD@$TEMPL_VERSION"
 check_required yt-dlp    "video downloader — brew install --HEAD yt-dlp or pip install --force-reinstall https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz"
 check_required gallery-dl "image downloader — brew install --HEAD gallery-dl or pip install --force-reinstall https://codeberg.org/mikf/gallery-dl/archive/master.tar.gz"
+if command -v "$TIKTOK_PYTHON" >/dev/null 2>&1 && "$TIKTOK_PYTHON" -c 'import TikTokLive' >/dev/null 2>&1; then
+    TIKTOK_PYTHON="$(command -v "$TIKTOK_PYTHON")"
+    ok "Python TikTokLive"
+else
+    fail "TikTokLive: install requirements-runtime.txt into a Python virtual environment and set IGLOO_PYTHON to its Python executable"
+    MISSING="$MISSING TikTokLive"
+fi
 check_required ffmpeg    "media processing — brew install ffmpeg or install your distro package"
 check_required nginx     "reverse proxy — install nginx with brew or your distro package manager"
 if [ -z "$DATABASE_URL" ]; then
@@ -426,6 +437,7 @@ systemd_escape() {
 }
 DATABASE_ENV_LINE=""
 POSTGRES_ENV_LINE=""
+TIKTOK_PYTHON_ENV_LINE="Environment=\"IGLOO_PYTHON=$(systemd_escape "$TIKTOK_PYTHON")\""
 if [ -n "$DATABASE_URL" ]; then
     DATABASE_ENV_LINE="Environment=\"IGLOO_DATABASE_URL=$(systemd_escape "$DATABASE_URL")\""
 fi
@@ -456,6 +468,7 @@ Environment=IGLOO_REPO_DIR=$REPO_DIR
 Environment=IGLOO_PORT=$SERVER_PORT
 $DATABASE_ENV_LINE
 $POSTGRES_ENV_LINE
+$TIKTOK_PYTHON_ENV_LINE
 EnvironmentFile=-$KAGI_ENV_FILE
 Environment=PATH=$SERVICE_PATH
 

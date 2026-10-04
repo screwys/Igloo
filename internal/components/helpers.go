@@ -240,6 +240,9 @@ func storyRingClass(base, state string) string {
 }
 
 func storyChannelFirstVideoID(ch model.StoryChannel) string {
+	if ch.LiveRoomID != "" {
+		return "tiktok_live_" + ch.LiveRoomID
+	}
 	if ch.FirstUnseenVideoID != "" {
 		return ch.FirstUnseenVideoID
 	}

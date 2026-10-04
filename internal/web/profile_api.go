@@ -67,6 +67,13 @@ func (s *Server) profileForPresentation(p *model.ChannelProfile) *model.ChannelP
 	if s.resolveBannerPath(cp.ChannelID) == "" {
 		cp.BannerURL = ""
 	}
+	if cp.Platform == "tiktok" {
+		if live, err := s.db.GetTikTokLive(cp.ChannelID); err == nil && live != nil {
+			cp.LiveRoomID = live.RoomID
+			cp.StoryState = model.StoryStateNew
+			cp.StoryFirstVideoID = "tiktok_live_" + live.RoomID
+		}
+	}
 	return &cp
 }
 

@@ -30,6 +30,8 @@ import com.screwy.igloo.R
 import com.screwy.igloo.data.entity.StoryChannelItem
 import com.screwy.igloo.data.stripPlatformPrefix
 import com.screwy.igloo.ui.component.Avatar
+import com.screwy.igloo.ui.component.LiveAvatar
+import com.screwy.igloo.net.TikTokLive
 import com.screwy.igloo.ui.component.StoryRingState
 import com.screwy.igloo.ui.component.storyRingBorder
 import com.screwy.igloo.ui.component.storyRingState
@@ -42,6 +44,17 @@ internal data class StoryTrayItem(
     val count: Int,
     val startVideoId: String,
     val ringState: StoryRingState,
+    val live: Boolean = false,
+)
+
+internal fun TikTokLive.toStoryTrayItem(): StoryTrayItem = StoryTrayItem(
+    channelId = channel_id,
+    displayName = display_name.ifBlank { handle },
+    handle = "@${handle.removePrefix("@")}",
+    count = 0,
+    startVideoId = room_id,
+    ringState = StoryRingState.None,
+    live = true,
 )
 
 internal fun StoryChannelItem.toStoryTrayItem(): StoryTrayItem {
@@ -72,6 +85,7 @@ internal fun StoryTray(
     rows: List<StoryTrayItem>,
     onDismiss: () -> Unit,
     onStoryClick: (channelId: String, firstVideoId: String) -> Unit,
+    onLiveClick: (channelId: String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     BackHandler(enabled = visible, onBack = onDismiss)
@@ -107,8 +121,8 @@ internal fun StoryTray(
                     }
                 } else {
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(rows, key = { it.channelId }) { row ->
-                            StoryTrayRow(row = row, onStoryClick = onStoryClick)
+                        items(rows, key = { "${it.live}:${it.channelId}" }) { row ->
+                            StoryTrayRow(row = row, onStoryClick = onStoryClick, onLiveClick = onLiveClick)
                         }
                     }
                 }
@@ -121,21 +135,23 @@ internal fun StoryTray(
 private fun StoryTrayRow(
     row: StoryTrayItem,
     onStoryClick: (channelId: String, firstVideoId: String) -> Unit,
+    onLiveClick: (channelId: String) -> Unit,
 ) {
     val colors = MaterialTheme.iglooColors
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = row.startVideoId.isNotBlank()) {
-                onStoryClick(row.channelId, row.startVideoId)
+                if (row.live) onLiveClick(row.channelId) else onStoryClick(row.channelId, row.startVideoId)
             }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(
+        LiveAvatar(
             channelId = row.channelId,
             size = 46.dp,
-            modifier = Modifier.storyRingBorder(row.ringState, colors),
+            live = row.live,
+            avatarModifier = Modifier.storyRingBorder(row.ringState, colors),
             showPendingBadge = false,
         )
         Column(
@@ -161,7 +177,9 @@ private fun StoryTrayRow(
             }
         }
         Text(
-            text = if (row.count == 1) {
+            text = if (row.live) {
+                "LIVE"
+            } else if (row.count == 1) {
                 stringResource(R.string.stories_count_one)
             } else {
                 stringResource(R.string.stories_count_many, row.count)

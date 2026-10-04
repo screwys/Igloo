@@ -102,6 +102,9 @@ func SchemaTableLifecycle(table string) (string, bool) {
 	if table == "goose_db_version" {
 		return string(schemaLifecycleMaintainedState), true
 	}
+	if table == "tiktok_lives" {
+		return string(schemaLifecycleDerivedCache), true
+	}
 	lifecycle, ok := schemaTableLifecycles[table]
 	if !ok {
 		return "", false

@@ -45,25 +45,36 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.screwy.igloo.R
 import com.screwy.igloo.data.dao.BookmarkDao
+import com.screwy.igloo.data.dao.AndroidSyncDao
+import com.screwy.igloo.data.IglooDatabase
+import com.screwy.igloo.outbox.pendingFeedActionOverrides
 import com.screwy.igloo.data.stripPlatformPrefix
 import com.screwy.igloo.log.Logger
 import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.media.MediaUri
+import com.screwy.igloo.media.assetOwnerKind
+import com.screwy.igloo.net.MomentsApi
+import com.screwy.igloo.net.Reachability
+import com.screwy.igloo.player.SubtitleOverlay
+import com.screwy.igloo.moments.TikTokLiveChat
 import com.screwy.igloo.player.rememberIglooPlayer
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlin.math.max
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 import org.koin.compose.koinInject
 
 private fun prepareMomentVideo(
@@ -104,7 +115,8 @@ private fun prepareMomentVideo(
         return loadedKey
     }
 
-    val mediaItem = momentPlayerMediaItem(item.videoId, streamUri) ?: return null
+    val sourceItem = momentPlayerMediaItem(item.videoId, streamUri) ?: return null
+    val mediaItem = if (item.isLive) sourceItem.buildUpon().setMimeType(MimeTypes.APPLICATION_M3U8).build() else sourceItem
 
     logger.debugMoment("moments_player_prepare_page") {
         momentVideoDebugFields(
@@ -162,6 +174,7 @@ internal fun MomentPage(
     onAutoAdvance: () -> Unit,
     onChannelClick: (channelId: String) -> Unit,
     onStoryClick: (channelId: String, firstVideoId: String) -> Unit,
+    onLiveClick: (channelId: String) -> Unit,
     onMentionClick: (handle: String) -> Unit,
     onBookmarkToggle: (MomentItem) -> Unit,
     onRequestBookmarkSheet: (MomentItem) -> Unit,
@@ -172,6 +185,10 @@ internal fun MomentPage(
     onSwipeLeftToChannel: (channelId: String) -> Unit,
     onSwipeRightFromEdge: () -> Unit,
     chromeVisible: Boolean = true,
+    subtitlesVisible: Boolean = false,
+    commentsVisible: Boolean = true,
+    onCommentsVisibleChanged: (Boolean) -> Unit = {},
+    liveFullscreen: Boolean = false,
     logger: Logger,
     sharedVideoPlayer: ExoPlayer? = null,
     sharedPlayerView: PlayerView? = null,
@@ -201,7 +218,12 @@ internal fun MomentPage(
     val thumbnailUri by thumbnailFlow.collectAsState(initial = MediaUri.Missing)
     val bookmarkFlow = remember(bookmarkDao, item.videoId) { bookmarkDao.getByIdFlow(item.videoId) }
     val bookmarkRow by bookmarkFlow.collectAsState(initial = null)
-    val isBookmarked = bookmarkRow != null
+    val pendingBookmarkOverride = if (item.isLive) {
+        val db: IglooDatabase = koinInject()
+        val actions by db.outboxDao().pendingFeedActionRowsFlow().collectAsState(initial = emptyList())
+        remember(actions, item.videoId) { pendingFeedActionOverrides(actions).bookmarksByTweetId[item.videoId] }
+    } else null
+    val isBookmarked = pendingBookmarkOverride ?: (bookmarkRow != null)
     val bookmarkItem =
         if (isBookmarked == item.isBookmarked) item else item.copy(isBookmarked = isBookmarked)
     val pageModifier =
@@ -248,7 +270,7 @@ internal fun MomentPage(
                     onTap = if (storyMode) ({ manualSlideAdvanceTick++ }) else null,
                     onLongPress =
                         if (!storyMode) {
-                            { onRequestMomentActions(item) }
+                            { onRequestMomentActions(bookmarkItem) }
                         } else {
                             null
                         },
@@ -258,6 +280,8 @@ internal fun MomentPage(
             MomentMediaMode.Video -> {
                 MomentVideoLayer(
                     playbackSpeed = playbackSpeed,
+                    subtitlesVisible = subtitlesVisible,
+                    fitVideo = item.isLive && (liveFullscreen || LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE),
                     pageIndex = pageIndex,
                     item = item,
                     thumbnailUri = thumbnailUri,
@@ -269,7 +293,7 @@ internal fun MomentPage(
                     autoSwipe = autoSwipe,
                     onAutoAdvance = onAutoAdvance,
                     onLongPress =
-                        { onRequestMomentActions(item) },
+                        { onRequestMomentActions(bookmarkItem) },
                     logger = logger,
                     storyMode = storyMode,
                     sharedVideoPlayer = sharedVideoPlayer,
@@ -284,7 +308,7 @@ internal fun MomentPage(
                 mediaMode == MomentMediaMode.Image
         ) {
             MomentRepostLongPressLayer(
-                onLongPress = { onRequestMomentActions(item) },
+                onLongPress = { onRequestMomentActions(bookmarkItem) },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -339,6 +363,7 @@ internal fun MomentPage(
                     item = item,
                     onChannelClick = onChannelClick,
                     onStoryClick = onStoryClick,
+                    onLiveClick = onLiveClick,
                     onFollowChannel = onFollowChannel,
                     onRequestUnfollowChannel = onRequestUnfollowChannel,
                     colors = colors,
@@ -381,7 +406,7 @@ internal fun MomentPage(
             if (!storyMode) {
                 MomentDrawerGestureHandle(
                     onOpenDrawer = onSwipeRightFromEdge,
-                    onLongPress = { onRequestMomentActions(item) },
+                    onLongPress = { onRequestMomentActions(bookmarkItem) },
                 )
             }
 
@@ -403,6 +428,14 @@ internal fun MomentPage(
                 onExpandedChange = { expanded = it },
                 modifier =
                     Modifier.align(Alignment.BottomStart).padding(bottom = captionBottomPadding),
+            )
+        }
+        if (item.isLive && isActive && commentsVisible) {
+            TikTokLiveChat(
+                channelId = item.channelId,
+                fullscreen = liveFullscreen,
+                onClose = { onCommentsVisibleChanged(false) },
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }
@@ -447,6 +480,8 @@ private fun MomentRepostLongPressLayer(onLongPress: () -> Unit, modifier: Modifi
 @Composable
 private fun BoxScope.MomentVideoLayer(
     playbackSpeed: Float,
+    subtitlesVisible: Boolean,
+    fitVideo: Boolean,
     pageIndex: Int,
     item: MomentItem,
     thumbnailUri: MediaUri,
@@ -466,9 +501,30 @@ private fun BoxScope.MomentVideoLayer(
 ) {
     val resolvers: MediaResolvers = koinInject()
     val ownerKind = item.ownerKind
+    val syncDao: AndroidSyncDao = koinInject()
+    val api: MomentsApi = koinInject()
+    val reachability: Reachability = koinInject()
+    val serverState by reachability.state.collectAsState()
+    val assetFlow = remember(syncDao, item.mediaOwnerId, ownerKind) {
+        syncDao.assetsForOwnerFlow(ownerKind.assetOwnerKind(), item.mediaOwnerId)
+    }
+    val assets by assetFlow.collectAsState(initial = emptyList())
+    val subtitlePath = assets.firstOrNull { it.assetKind == "subtitle" && !it.localPath.isNullOrBlank() }?.localPath
+    var subtitleContent by remember(item.videoId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(item.videoId, isActive, subtitlesVisible, subtitlePath, serverState) {
+        if (!isActive || !subtitlesVisible || subtitlePath != null || serverState is Reachability.State.Offline) return@LaunchedEffect
+        try {
+            subtitleContent = api.subtitles(item.mediaOwnerId)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            subtitleContent = null
+        }
+    }
     val streamFlow =
         remember(resolvers, item.mediaOwnerId, ownerKind) {
-            resolvers.videoStreamFlow(item.mediaOwnerId, ownerKind)
+            if (item.liveStreamUrl.isNotBlank()) kotlinx.coroutines.flow.flowOf(MediaUri.Remote(item.liveStreamUrl))
+            else resolvers.videoStreamFlow(item.mediaOwnerId, ownerKind)
         }
     val candidateStreamUri by streamFlow.collectAsState(initial = MediaUri.Missing)
     var playbackStreamUri by remember(item.videoId) { mutableStateOf(candidateStreamUri) }
@@ -580,6 +636,7 @@ private fun BoxScope.MomentVideoLayer(
                 object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
                         if (state != Player.STATE_ENDED) return
+                        if (item.isLive) return
                         if (player.currentMediaItem?.mediaId != item.videoId) return
                         if (!isActive) return
                         if (autoSwipe) {
@@ -636,6 +693,7 @@ private fun BoxScope.MomentVideoLayer(
                 pageIndex = pageIndex,
                 onStateChange = { surfaceState = it },
                 sharedPlayerView = sharedPlayerView,
+                fitVideo = fitVideo,
                 modifier = Modifier.fillMaxSize().zIndex(momentVideoSurfaceZIndex()),
             )
         }
@@ -667,8 +725,18 @@ private fun BoxScope.MomentVideoLayer(
             )
         }
         MomentBottomScrim(modifier = Modifier.align(Alignment.BottomCenter))
+        if (isActive) {
+            SubtitleOverlay(
+                subtitlePath = subtitlePath,
+                subtitleContent = subtitleContent,
+                currentPositionMs = { player.currentPosition },
+                visible = subtitlesVisible,
+                bottomPadding = 232.dp,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
         if (
-            shouldShowMomentsVideoProgressBar(
+            !item.isLive && shouldShowMomentsVideoProgressBar(
                 isActive = isActive,
                 shouldPrepare = shouldPrepare,
                 streamUri = playbackStreamUri,

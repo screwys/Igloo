@@ -1,7 +1,28 @@
 {
   "schema": 1,
-  "revision": "2026.10.03.1",
+  "revision": "2026.10.04.1",
   "artifacts": {
+    "python": {
+      "version": "3.13.16",
+      "url": "https://www.python.org/ftp/python/3.13.16/python-3.13.16-embed-amd64.zip",
+      "sha256": "97dae5274cc54867065e8d5a3226e48c35017ed332a0fdb0e27d5b5821961297",
+      "size": 11439094,
+      "output": "python.zip"
+    },
+    "tiktok-live": {
+      "version": "7.0.1",
+      "url": "https://files.pythonhosted.org/packages/fa/a4/86bb7beea5ee3ae1106ed9ac604fe9fa648ec17007ebcc4b4b1c56555baf/tiktoklive-7.0.1-py3-none-any.whl",
+      "sha256": "db43789cfd2abaff639517f3e95f1d37f75b3b9104d76d709102afb115420abc",
+      "size": 88506,
+      "output": "tiktoklive-7.0.1-py3-none-any.whl"
+    },
+    "protobuf3-to-dict": {
+      "version": "0.1.5",
+      "url": "https://files.pythonhosted.org/packages/6b/55/522bb43539fed463275ee803d79851faaebe86d17e7e3dbc89870d0322b9/protobuf3-to-dict-0.1.5.tar.gz",
+      "sha256": "1e42c25b5afb5868e3a9b1962811077e492c17557f9c66f0fe40d821375d2b5a",
+      "size": 3508,
+      "output": "protobuf3-to-dict-0.1.5.tar.gz"
+    },
     "yt-dlp": {
       "version": "2026.08.29.232711",
       "url": "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.08.29.232711/yt-dlp.exe",

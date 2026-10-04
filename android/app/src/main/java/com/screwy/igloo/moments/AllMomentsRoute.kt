@@ -31,6 +31,10 @@ import com.screwy.igloo.ui.component.CenteredTabs
 import com.screwy.igloo.ui.component.MomentsGrid
 import com.screwy.igloo.ui.component.MomentThumbnailItem
 import com.screwy.igloo.ui.component.storyRingBorder
+import com.screwy.igloo.ui.component.LiveAvatar
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.koin.compose.koinInject
+import androidx.compose.runtime.getValue
 import com.screwy.igloo.ui.theme.iglooColors
 
 /**
@@ -49,7 +53,10 @@ fun AllMomentsRoute(
     onTabSelected: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onLiveClick: (channelId: String) -> Unit = {},
 ) {
+    val liveDirectory: TikTokLives = koinInject()
+    val lives by liveDirectory.current.collectAsStateWithLifecycle()
     Column(modifier = modifier.fillMaxSize()) {
         AllMomentsHeader(
             activeTab = activeTab,
@@ -58,8 +65,9 @@ fun AllMomentsRoute(
         )
         if (activeTab == "stories") {
             StoryChannelList(
-                rows = storyChannels,
+                rows = lives.map { it.toStoryTrayItem() } + storyChannels.map { it.toStoryTrayItem() },
                 onStoryClick = onStoryClick,
+                onLiveClick = onLiveClick,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -116,8 +124,9 @@ private fun AllMomentsHeader(
 
 @Composable
 private fun StoryChannelList(
-    rows: List<MomentsViewModel.StoryChannelUiItem>,
+    rows: List<StoryTrayItem>,
     onStoryClick: (channelId: String, firstVideoId: String) -> Unit,
+    onLiveClick: (channelId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.iglooColors
@@ -132,32 +141,34 @@ private fun StoryChannelList(
         return
     }
     LazyColumn(modifier = modifier.padding(vertical = 8.dp)) {
-        items(rows, key = { it.channelId }) { row ->
-            StoryChannelRow(row = row, onStoryClick = onStoryClick)
+        items(rows, key = { "${it.live}:${it.channelId}" }) { row ->
+            StoryChannelRow(row = row, onStoryClick = onStoryClick, onLiveClick = onLiveClick)
         }
     }
 }
 
 @Composable
 private fun StoryChannelRow(
-    row: MomentsViewModel.StoryChannelUiItem,
+    row: StoryTrayItem,
     onStoryClick: (channelId: String, firstVideoId: String) -> Unit,
+    onLiveClick: (channelId: String) -> Unit,
 ) {
     val colors = MaterialTheme.iglooColors
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = row.startVideoId.isNotBlank()) {
-                onStoryClick(row.channelId, row.startVideoId)
+                if (row.live) onLiveClick(row.channelId) else onStoryClick(row.channelId, row.startVideoId)
             }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Avatar(
+        LiveAvatar(
             channelId = row.channelId,
             size = 48.dp,
-            modifier = Modifier.storyRingBorder(row.ringState, colors),
+            live = row.live,
+            avatarModifier = Modifier.storyRingBorder(row.ringState, colors),
             showPendingBadge = false,
         )
         Column(modifier = Modifier.weight(1f)) {
@@ -179,7 +190,9 @@ private fun StoryChannelRow(
             }
         }
         Text(
-            text = if (row.count == 1) {
+            text = if (row.live) {
+                "LIVE"
+            } else if (row.count == 1) {
                 stringResource(R.string.stories_count_one)
             } else {
                 stringResource(R.string.stories_count_many, row.count)

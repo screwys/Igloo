@@ -233,6 +233,7 @@ func (m *Manager) StartAll() {
 	m.launch("video_metadata", m.runVideoMetadataLoop)
 	m.launch("youtube_recommendations", m.runYouTubeRecommendationLoop)
 	m.launch("scheduler", m.runScheduler)
+	m.launch("tiktok_lives", m.runTikTokLivesLoop)
 	m.launch("feed_order_invalidation", m.runFeedOrderInvalidationLoop)
 	m.launch("feed_scoring", m.runFeedScoringWorker)
 	m.launchDelayed("downloader_operation_prune", 5*time.Minute, m.runDownloaderOperationPruner)

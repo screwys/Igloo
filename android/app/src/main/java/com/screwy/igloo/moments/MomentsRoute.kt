@@ -25,6 +25,7 @@ import com.screwy.igloo.ui.component.MomentsPlayer
 import com.screwy.igloo.ui.component.sharePlainText
 import com.screwy.igloo.ui.nav.IglooNavigationSource
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
+import com.screwy.igloo.ui.nav.RouteRegistry
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -52,11 +53,14 @@ fun MomentsRoute(
     val pendingMomentActions by vm.pendingMomentActions.collectAsStateWithLifecycle()
     val categories by vm.bookmarkCategories.collectAsStateWithLifecycle()
     val storyChannels by vm.storyChannels.collectAsStateWithLifecycle()
+    val liveDirectory: TikTokLives = koinInject()
+    val lives by liveDirectory.current.collectAsStateWithLifecycle()
     val prefs: PreferencesRepo = koinInject()
     val useEmbedFriendlyShareLinks by prefs.shareEmbedFriendlyLinks()
         .collectAsStateWithLifecycle(initialValue = PreferencesRepo.Defaults.SHARE_EMBED_FRIENDLY_LINKS)
     var showStoryTray by remember { mutableStateOf(false) }
     var playbackSpeed by rememberSaveable { mutableStateOf(1f) }
+    var subtitlesVisible by rememberSaveable { mutableStateOf(false) }
     var showAllMomentsGrid by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -71,6 +75,7 @@ fun MomentsRoute(
         if (showAllMomentsGrid) {
             UiStateSwitch(state = gridRouteState.uiState, modifier = Modifier.fillMaxSize()) {
                 AllMomentsRoute(
+                    onLiveClick = { navController.navigate(RouteRegistry.tiktokLiveRoute(it)) },
                     items = gridRouteState.items,
                     initialIndex = gridRouteState.startIndex,
                     onMomentClick = { videoId ->
@@ -98,6 +103,8 @@ fun MomentsRoute(
             UiStateSwitch(state = playerRouteState.uiState, modifier = Modifier.fillMaxSize()) {
                 MomentsPlayer(
                     playbackSpeed = playbackSpeed,
+                    subtitlesVisible = subtitlesVisible,
+                    onToggleSubtitles = { subtitlesVisible = !subtitlesVisible },
                     items = playerRouteState.items,
                     startIndex = playerRouteState.selection.index,
                     startVideoId = sessionVideoId ?: playerRouteState.selection.videoId,
@@ -118,6 +125,7 @@ fun MomentsRoute(
                             source = IglooNavigationSource.Moments,
                         )
                     },
+                    onLiveClick = { navController.navigate(RouteRegistry.tiktokLiveRoute(it)) },
                     onBookmarkToggle = vm::toggleBookmark,
                     onRequestBookmarkSheet = vm::requestBookmarkSheet,
                     onFollowChannel = vm::followChannel,
@@ -147,7 +155,11 @@ fun MomentsRoute(
             }
             StoryTray(
                 visible = showStoryTray,
-                rows = storyChannels.map { it.toStoryTrayItem() },
+                rows = lives.map { it.toStoryTrayItem() } + storyChannels.map { it.toStoryTrayItem() },
+                onLiveClick = {
+                    showStoryTray = false
+                    navController.navigate(RouteRegistry.tiktokLiveRoute(it))
+                },
                 onDismiss = { showStoryTray = false },
                 onStoryClick = { _, firstVideoId ->
                     showStoryTray = false
@@ -177,6 +189,8 @@ fun MomentsRoute(
         MomentActionSheet(
             item = item,
             playbackSpeed = playbackSpeed,
+            subtitlesVisible = subtitlesVisible,
+            onToggleSubtitles = { subtitlesVisible = !subtitlesVisible },
             onPlaybackSpeedChanged = { playbackSpeed = it },
             onDismissRequest = vm::dismissMomentActions,
             onRepostsEnabledChanged = vm::setRepostsEnabled,

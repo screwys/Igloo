@@ -12,12 +12,13 @@ import (
 
 // TempDownloadWork is an interactive download claimed by the durable worker.
 type TempDownloadWork struct {
-	URL        string
-	RequestID  string
-	Platform   string
-	Origin     string
-	RetryCount int
-	LeaseOwner string
+	URL             string
+	RequestID       string
+	Platform        string
+	Origin          string
+	RetryCount      int
+	LeaseOwner      string
+	ExpectedVideoID string
 }
 
 // TempDownloadState is the persisted state shown by the temporary watch page.
@@ -282,9 +283,10 @@ func (db *DB) ClaimTempDownloadWork(owner string, nowMs int64, lease time.Durati
 					ORDER BY CASE WHEN origin = 'interactive' THEN 0 ELSE 1 END, added_at_ms, url
 				LIMIT 1
 			)
-				RETURNING url, request_id, platform, origin, retry_count, lease_owner
+				RETURNING url, request_id, platform, origin, retry_count, lease_owner,
+				COALESCE(COALESCE(NULLIF(save_intent_json,''),'{}')::jsonb->>'expected_video_id','')
 			`, owner, nowMs+lease.Milliseconds(), nowMs, nowMs, nowMs)
-		if err := row.Scan(&work.URL, &work.RequestID, &work.Platform, &work.Origin, &work.RetryCount, &work.LeaseOwner); err != nil {
+		if err := row.Scan(&work.URL, &work.RequestID, &work.Platform, &work.Origin, &work.RetryCount, &work.LeaseOwner, &work.ExpectedVideoID); err != nil {
 			if err == sql.ErrNoRows {
 				return nil
 			}

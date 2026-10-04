@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +33,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -88,12 +96,15 @@ data class MomentItem(
     val orderPosition: Long = 0L,
     val storyRingState: StoryRingState = StoryRingState.None,
     val storyFirstVideoId: String = "",
+    val liveStreamUrl: String = "",
     /**
      * Epoch millis for the "14h ago" muted timestamp above the description in the collapsed
      * overlay. `0L` → hide the timestamp (unknown publish time).
      */
     val publishedAt: Long = 0L,
-)
+) {
+    val isLive: Boolean get() = liveStreamUrl.isNotBlank()
+}
 
 /** Returns `true` iff a horizontal drag should be treated as a left-swipe to-channel. */
 internal fun isLeftSwipe(deltaX: Float, thresholdPx: Float): Boolean = deltaX < -thresholdPx
@@ -239,9 +250,15 @@ fun MomentsPlayer(
     exitOnEnd: Boolean = false,
     storyCrossProfileAdvance: Boolean = false,
     onStoryClick: (channelId: String, firstVideoId: String) -> Unit = { _, _ -> },
+    onLiveClick: (channelId: String) -> Unit = {},
     activeTab: String? = null,
     onTabSelected: ((String) -> Unit)? = null,
     chromeVisible: Boolean = true,
+    subtitlesVisible: Boolean = false,
+    onToggleSubtitles: () -> Unit = {},
+    commentsVisible: Boolean = true,
+    onCommentsVisibleChanged: (Boolean) -> Unit = {},
+    liveFullscreen: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
@@ -462,7 +479,17 @@ fun MomentsPlayer(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
+    val playerFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { playerFocus.requestFocus() }
+    Box(modifier = modifier.fillMaxSize().background(Color.Black)
+        .focusRequester(playerFocus)
+        .onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown && event.key == Key.C) {
+                onToggleSubtitles()
+                true
+            } else false
+        }
+        .focusable()) {
         val pageContent: @Composable (Int) -> Unit = { page ->
             val item = pagerItems[page]
             MomentPage(
@@ -484,7 +511,7 @@ fun MomentsPlayer(
                         onAutoSwipeChanged(next)
                     }
                 },
-                showAutoSwipeControl = !forceAutoSwipe,
+                showAutoSwipeControl = !forceAutoSwipe && !item.isLive,
                 isActive =
                     lifecycleStarted &&
                         shouldPlayMomentPage(item.videoId == currentVideoId, pagerState.isScrollInProgress),
@@ -494,6 +521,7 @@ fun MomentsPlayer(
                 onAutoAdvance = { advanceTick++ },
                 onChannelClick = onChannelClick,
                 onStoryClick = onStoryClick,
+                onLiveClick = onLiveClick,
                 onMentionClick = onMentionClick,
                 onBookmarkToggle = onBookmarkToggle,
                 onRequestBookmarkSheet = onRequestBookmarkSheet,
@@ -504,6 +532,10 @@ fun MomentsPlayer(
                 onSwipeLeftToChannel = onSwipeLeftToChannel,
                 onSwipeRightFromEdge = drawerController::open,
                 chromeVisible = effectiveChromeVisible,
+                subtitlesVisible = subtitlesVisible,
+                commentsVisible = commentsVisible,
+                onCommentsVisibleChanged = onCommentsVisibleChanged,
+                liveFullscreen = liveFullscreen,
                 logger = logger,
             )
         }

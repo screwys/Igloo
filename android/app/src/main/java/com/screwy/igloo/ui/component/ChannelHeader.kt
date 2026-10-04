@@ -143,6 +143,7 @@ internal fun ComposeChannelHeader(
     onRefresh: () -> Unit,
     onOpenInPlatform: () -> Unit,
     onStoryClick: (channelId: String, firstVideoId: String) -> Unit = { _, _ -> },
+    onLiveClick: (channelId: String) -> Unit = {},
     onMentionClick: (handle: String) -> Unit,
     onOpenUrl: (url: String) -> Unit,
     overflowControls: ChannelProfileOverflowControls = ChannelProfileOverflowControls(),
@@ -151,6 +152,9 @@ internal fun ComposeChannelHeader(
     modifier: Modifier = Modifier,
 ) {
     val colors: IglooColors = MaterialTheme.iglooColors
+    val liveDirectory: com.screwy.igloo.moments.TikTokLives = koinInject()
+    val lives by liveDirectory.current.collectAsState(initial = emptyList())
+    val isLive = lives.any { it.channel_id == header.channelId }
     val mediaResolvers: MediaResolvers = koinInject()
 	val resolvedBannerUri by mediaResolvers.bannerForChannelFlow(header.channelId)
 		.collectAsState(initial = MediaUri.Missing)
@@ -205,9 +209,10 @@ internal fun ComposeChannelHeader(
                             .align(Alignment.TopCenter),
                     )
                 }
-                Avatar(
+                LiveAvatar(
                     channelId = header.channelId,
                     size = avatarSize,
+                    live = isLive,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(start = 16.dp)
@@ -215,10 +220,10 @@ internal fun ComposeChannelHeader(
                         .storyRingBorder(header.storyRingState, colors)
                         .border(
                             width = 4.dp,
-                            color = colors.surface,
+                            color = if (isLive) colors.error else colors.surface,
                             shape = CircleShape,
                         ),
-                    onClick = storyTarget?.let { firstVideoId ->
+                    onClick = if (isLive) ({ onLiveClick(header.channelId) }) else storyTarget?.let { firstVideoId ->
                         { onStoryClick(header.channelId, firstVideoId) }
                     },
                 )
@@ -268,12 +273,13 @@ internal fun ComposeChannelHeader(
                     verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Avatar(
+                    LiveAvatar(
                         channelId = header.channelId,
                         size = avatarSize,
+                        live = isLive,
                         modifier = Modifier
                             .storyRingBorder(header.storyRingState, colors),
-                        onClick = storyTarget?.let { firstVideoId ->
+                        onClick = if (isLive) ({ onLiveClick(header.channelId) }) else storyTarget?.let { firstVideoId ->
                             { onStoryClick(header.channelId, firstVideoId) }
                         },
                     )

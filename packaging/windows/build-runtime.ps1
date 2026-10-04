@@ -50,9 +50,30 @@ $galleryDL = Get-LockedArtifact "gallery-dl"
 $denoArchive = Get-LockedArtifact "deno"
 $ffmpegArchive = Get-LockedArtifact "ffmpeg"
 $postgresArchive = Get-LockedArtifact "postgresql"
+$pythonArchive = Get-LockedArtifact "python"
+$tiktokLiveWheel = Get-LockedArtifact "tiktok-live"
+$protobufSource = Get-LockedArtifact "protobuf3-to-dict"
 
 Copy-Item $ytDlp (Join-Path $output "yt-dlp.exe")
 Copy-Item $galleryDL (Join-Path $output "gallery-dl.exe")
+
+$pythonOutput = Join-Path $output "python"
+Expand-Archive -Path $pythonArchive -DestinationPath $pythonOutput
+$pythonVersion = ($lock.artifacts.python.version.Split('.')[0..1] -join '.')
+$pythonABI = "cp" + $pythonVersion.Replace('.', '')
+$pythonPth = "python" + $pythonVersion.Replace('.', '')
+@("$pythonPth.zip", ".", "Lib/site-packages", "import site") |
+    Set-Content -Encoding ascii (Join-Path $pythonOutput "$pythonPth._pth")
+$pythonWheels = Join-Path $downloads "python-wheels"
+New-Item -ItemType Directory -Force $pythonWheels | Out-Null
+& python -m pip wheel --no-deps --wheel-dir $pythonWheels $protobufSource
+& python -m pip download --dest $pythonWheels --find-links $pythonWheels `
+    --platform win_amd64 --python-version $pythonVersion --implementation cp --abi $pythonABI `
+    --only-binary=:all: $tiktokLiveWheel
+& python -m pip install --target (Join-Path $pythonOutput "Lib/site-packages") `
+    --no-index --find-links $pythonWheels --platform win_amd64 --python-version $pythonVersion `
+    --implementation cp --abi $pythonABI --only-binary=:all: $tiktokLiveWheel
+& (Join-Path $pythonOutput "python.exe") -c "from TikTokLive import TikTokLiveClient; from TikTokLive.events import CommentEvent"
 
 $denoExtract = Join-Path $downloads "deno"
 Expand-Archive -Path $denoArchive -DestinationPath $denoExtract
@@ -89,12 +110,15 @@ terms remain with their respective projects:
 
 - yt-dlp: https://github.com/yt-dlp/yt-dlp
 - gallery-dl: https://github.com/mikf/gallery-dl
+- Python: https://www.python.org/
+- TikTokLive: https://github.com/isaackogan/TikTokLive
 - FFmpeg Windows builds: https://github.com/BtbN/FFmpeg-Builds
 - Deno: https://github.com/denoland/deno
 - PostgreSQL: https://www.postgresql.org/ and https://www.enterprisedb.com/download-postgresql-binaries
 - Microsoft Visual C++ runtime: https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files
 
-Exact versions and artifact hashes are recorded in windows-runtime.lock.json.
+Program versions and artifact hashes are recorded in windows-runtime.lock.json.
+Python package versions and licenses are included with the bundled packages.
 "@ | Set-Content -Encoding utf8 (Join-Path $output "THIRD-PARTY-NOTICES.txt")
 
 Remove-Item -Recurse -Force $downloads

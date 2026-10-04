@@ -51,6 +51,8 @@ type youtubeStreamSession struct {
 	resourceIDs    map[string]string
 	nextResourceID uint64
 	lastUsed       time.Time
+	liveDirectory  string
+	liveCancel     context.CancelFunc
 }
 
 func (s *Server) registerYouTubeStreamRoutes(mux *http.ServeMux) {

@@ -2505,7 +2505,8 @@ select.input:focus {
 .moment-actions-overlay.visible { opacity: 1; pointer-events: none; }
 .moment-actions-sheet {
     width: min(calc(100% - 1rem), 390px);
-    overflow: hidden;
+    max-height: calc(100dvh - 5rem);
+    overflow-y: auto;
     border: 1px solid var(--border-color);
     border-radius: 14px;
     background: rgba(var(--bg-secondary-rgb), 0.97);
@@ -2600,6 +2601,24 @@ select.input:focus {
     line-height: 1.5;
 }
 .moment-actions-sheet-item:hover { background: rgba(var(--accent-primary-rgb), 0.12); }
+.moment-actions-check {
+    margin-left: auto;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+}
+.moment-actions-check svg { width: 20px; height: 20px; }
+.moment-actions-at-pointer {
+    position: fixed;
+    padding: 0;
+}
+.moment-actions-at-pointer .moment-actions-sheet {
+    position: absolute;
+    width: min(390px, calc(100vw - 16px));
+    max-height: calc(100dvh - 16px);
+    transform: none;
+    transform-origin: top left;
+}
 .moment-actions-sheet-item.danger {
     color: var(--status-error);
     border-top: 1px solid var(--border-color);
@@ -7765,6 +7784,86 @@ body.shorts-open:has(.shorts-story-tray.open) .shorts-story-tray-controls {
     height: 100vh;
     background: #000;
 }
+
+.shorts-live-badge {
+    position: absolute;
+    left: 50%;
+    bottom: -6px;
+    transform: translateX(-50%);
+    z-index: 2;
+    padding: 1px 5px;
+    border: 2px solid var(--bg-primary);
+    border-radius: 4px;
+    color: white;
+    background: var(--accent-primary);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.2;
+    pointer-events: none;
+}
+.shorts-rail-avatar-link.story-ring-live::after,
+.profile-card .profile-card-avatar-wrap:has(> .shorts-live-badge)::after,
+.story-channel-row[data-live-room-id] .story-channel-avatar::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border: 3px solid var(--accent-primary);
+    border-radius: 50%;
+    box-shadow: none;
+    pointer-events: none;
+}
+.shorts-rail-avatar-link .shorts-live-badge { top: -6px; bottom: auto; }
+.shorts-live-chat {
+    position: absolute;
+    left: 0.5rem;
+    bottom: max(1rem, calc(var(--shorts-live-info-height, 8rem) - 2rem));
+    width: min(75%, 26rem);
+    max-height: 35%;
+    display: flex;
+    flex-direction: column;
+    z-index: 12;
+    color: white;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.25), transparent);
+}
+.shorts-live-chat[hidden] { display: none; }
+.shorts-live-chat .player-chat-header { display: none; }
+.shorts-live-chat .player-chat-messages {
+    height: auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.shorts-live-chat .chat-author { color: rgba(255, 255, 255, 0.75); }
+.shorts-live-chat .player-chat-status { color: rgba(255, 255, 255, 0.8); }
+.shorts-media-stage.is-fullscreen .shorts-live-chat,
+.shorts-media-stage:fullscreen .shorts-live-chat {
+    left: auto;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(32vw, 24rem);
+    max-height: none;
+    background: rgba(var(--bg-secondary-rgb), 0.94);
+    border-left: 1px solid var(--border-color);
+    text-shadow: none;
+}
+.shorts-media-stage.is-fullscreen .shorts-live-chat .player-chat-header,
+.shorts-media-stage:fullscreen .shorts-live-chat .player-chat-header { display: flex; }
+.shorts-live-chat .player-chat-header h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 0.9rem;
+}
+.shorts-media-stage.is-fullscreen .shorts-live-chat .player-chat-messages,
+.shorts-media-stage:fullscreen .shorts-live-chat .player-chat-messages { flex: 1; }
+.shorts-media-stage.is-fullscreen.live-chat-open video,
+.shorts-media-stage:fullscreen.live-chat-open video {
+    width: calc(100% - min(32vw, 24rem));
+    margin-right: min(32vw, 24rem);
+}
+.shorts-live-wrapper .shorts-media-stage.is-fullscreen video,
+.shorts-live-wrapper .shorts-media-stage:fullscreen video { object-fit: contain; }
 
 .shorts-video-wrapper .video-js {
     display: block;

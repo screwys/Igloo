@@ -228,6 +228,21 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 	}
 
 	var info map[string]any
+	if handle := download.TikTokLiveHandle(rawURL); handle != "" {
+		live, err := download.FetchTikTokLive(ctx, handle)
+		if err != nil {
+			return TempDownloadResult{Message: "Could not load the live stream", Cause: err}
+		}
+		if live == nil {
+			return TempDownloadResult{Message: "Live stream ended", Cause: &download.HTTPStatusError{StatusCode: 410}}
+		}
+		videoID := "tiktok_live_" + live.RoomID
+		if work != nil && work.ExpectedVideoID != "" && work.ExpectedVideoID != videoID {
+			return TempDownloadResult{Message: "Live stream ended", Cause: &download.HTTPStatusError{StatusCode: 410}}
+		}
+		info = map[string]any{"id": videoID, "channel_id": live.ChannelID, "channel": live.Playback.Channel,
+			"channel_url": live.Playback.ChannelURL, "title": live.Title, "webpage_url": rawURL}
+	}
 	if origin == "discover" && platform == "youtube" {
 		parsed, err := url.Parse(rawURL)
 		if err == nil {
@@ -336,6 +351,9 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 		CookieAlternates:   cookieSets,
 		Subtitles:          true,
 		SubtitleDir:        subtitleDir,
+	}
+	if work != nil {
+		opts.ExpectedVideoID = work.ExpectedVideoID
 	}
 
 	completed, dlErr := m.downloader.DownloadCompleted(ctx, lane, rawURL, "video", opts)
@@ -462,7 +480,7 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 				log.Printf("[youtube-recommendations] queue temp video %s: %v", videoID, err)
 			}
 		}
-	} else {
+	} else if download.TikTokLiveHandle(rawURL) == "" {
 		// TikTok does not use the YouTube metadata owner.
 		commentsCtx, commentsCancel := context.WithTimeout(ctx, 2*time.Minute)
 		comments, commentsErr := m.downloader.YtDlp.FetchComments(commentsCtx, rawURL, download.DefaultCommentFetchLimit, opts)

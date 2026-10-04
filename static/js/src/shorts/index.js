@@ -23,7 +23,9 @@ import {
   iconSvg,
   parseCardData,
   makeShortItem,
-  dockMomentMiniPlayer
+  dockMomentMiniPlayer,
+  closeMomentActions,
+  toggleMomentSubtitles
 } from './items.js'
 import {
   readMomentsCursor,
@@ -87,6 +89,7 @@ if (layout) {
       muted: localStorage.getItem('shortsMuted') === 'true',
       volume: storedShortsVolume,
       playbackRate: storedShortsPlaybackRate,
+      subtitlesEnabled: localStorage.getItem('shortsSubtitles') === 'true',
       observer: null,
       wheelLocked: false,
       wheelLockTimer: 0,
@@ -1566,14 +1569,21 @@ if (layout) {
     function onLayoutKeydown(event) {
       if (!state.overlayOpen) return
       if (event.key === 'Escape') {
+        if (doc.querySelector('.moment-actions-open')) { event.preventDefault(); closeMomentActions(); return }
         if (state.bookmarkMenu) { event.preventDefault(); closeBookmarkMenu(); return }
         if (state.storyMode) { event.preventDefault(); showGrid(); return }
         if (state.storyTray && state.storyTray.classList.contains('open')) { event.preventDefault(); closeStoryTray(); return }
         return
       }
       var tag = event.target && event.target.tagName ? String(event.target.tagName).toLowerCase() : ''
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || event.target && event.target.isContentEditable) return
       var entry = state.currentIndex >= 0 && state.items[state.currentIndex] ? state.items[state.currentIndex] : null
+      var sc = window.cfShortcuts
+      if ((sc ? sc.match('shorts.subtitles', event.key) : event.key.toLowerCase() === 'c') && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault()
+        toggleMomentSubtitles(entry)
+        return
+      }
       if (event.key === ' ' || event.key === 'Spacebar') {
         event.preventDefault()
         if (entry) toggleShortPlayback(entry)
@@ -1612,7 +1622,6 @@ if (layout) {
         if (video) video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + (event.key === 'ArrowRight' ? 3 : -3)))
         return
       }
-      var sc = window.cfShortcuts
       if (sc && sc.match('shorts.mute', event.key)) {
         event.preventDefault()
         state.muted = !state.muted
@@ -1662,6 +1671,8 @@ if (layout) {
     function onWheel(event) {
       if (!state.overlayOpen) return
       if (event.target && event.target.closest && event.target.closest('.bookmark-sheet-overlay')) return
+      if (event.target && event.target.closest && event.target.closest('.moment-actions-sheet')) return
+      if (event.target && event.target.closest && event.target.closest('.shorts-live-chat')) return
       if (event.target && event.target.closest && event.target.closest('.shorts-story-tray')) return
       event.preventDefault()
       function keepWheelLocked() {
@@ -1690,6 +1701,8 @@ if (layout) {
 
     function onTouchStart(event) {
       if (!state.overlayOpen) return
+      if (event.target && event.target.closest && event.target.closest('.moment-actions-sheet')) return
+      if (event.target && event.target.closest && event.target.closest('.shorts-live-chat')) return
       if (!event.changedTouches || !event.changedTouches.length) return
       state.touchStartX = Number(event.changedTouches[0].screenX || 0)
       state.touchStartY = Number(event.changedTouches[0].screenY || 0)
@@ -1698,11 +1711,15 @@ if (layout) {
     function onTouchMove(event) {
       if (!state.overlayOpen) return
       if (event.target && event.target.closest && event.target.closest('.bookmark-sheet-overlay')) return
+      if (event.target && event.target.closest && event.target.closest('.moment-actions-sheet')) return
+      if (event.target && event.target.closest && event.target.closest('.shorts-live-chat')) return
       if (event.cancelable) event.preventDefault()
     }
 
     function onTouchEnd(event) {
       if (!state.overlayOpen) return
+      if (event.target && event.target.closest && event.target.closest('.moment-actions-sheet')) return
+      if (event.target && event.target.closest && event.target.closest('.shorts-live-chat')) return
       if (!event.changedTouches || !event.changedTouches.length) return
       var endX = Number(event.changedTouches[0].screenX || 0)
       var endY = Number(event.changedTouches[0].screenY || 0)

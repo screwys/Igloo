@@ -22,7 +22,7 @@ internal fun ApplyRouteOrientation(route: String?, layout: IglooAdaptiveLayout) 
 
 internal fun routeRequestedOrientation(route: String?, wideLayout: Boolean): Int? =
     when {
-        route == RouteRegistry.Player.route -> null
+        route == RouteRegistry.Player.route || route == RouteRegistry.TikTokLive.route -> null
         wideLayout -> ActivityInfo.SCREEN_ORIENTATION_FULL_USER
         else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }

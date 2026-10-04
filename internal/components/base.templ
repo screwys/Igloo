@@ -30,6 +30,9 @@ templ Base(p PageProps) {
 		<link rel="stylesheet" href={ p.StaticV("theme.css") }/>
 		<link rel="stylesheet" href={ p.StaticV("style.css") }/>
 		<link rel="stylesheet" href={ p.StaticV("css/profile-card.css") }/>
+		if p.ESBundle == "js/dist/shorts.js" {
+			<link rel="stylesheet" href={ p.StaticV("css/chat.css") }/>
+		}
 		<link id="igloo-theme-css" rel="stylesheet" href="/api/theme.css"/>
 		for _, style := range p.PageStyles {
 			<link rel="stylesheet" href={ p.StaticV(style) }/>
@@ -75,6 +78,9 @@ templ Base(p PageProps) {
 			<script src={ p.StaticV(script) }></script>
 		}
 		if p.ESBundle != "" {
+			if p.ESBundle == "js/dist/shorts.js" {
+				<script src={ p.StaticV("vendor/shaka-player/shaka-player.compiled.js") }></script>
+			}
 			<script defer src={ p.StaticV(p.ESBundle) }></script>
 		}
 	</body>

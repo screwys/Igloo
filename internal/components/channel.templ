@@ -144,7 +144,7 @@ templ VideoCard(p PageProps, v model.Video) {
 		data-channel-href={ "/channels/" + v.ChannelID }
 		data-avatar-url={ videoAvatarURL(v) }
 		data-thumb-url={ videoThumbURL(v) }
-		if v.MediaKind != "slideshow" {
+		if v.MediaKind != "slideshow" && v.LiveStatus != "is_live" {
 			data-stream-url={ videoMediaURL("stream", v) }
 		}
 		data-slide-url-suffix={ videoSlideURLSuffix(v) }
@@ -175,6 +175,12 @@ templ VideoCard(p PageProps, v model.Video) {
 		}
 		data-shorts-eligible={ boolDataAttr(v.IsShortForm) }
 		data-original-url={ videoWebpageURL(v) }
+		if v.LiveRoomID != "" {
+			data-live-channel-id={ v.ChannelID }
+			data-live-room-id={ v.LiveRoomID }
+			data-live-viewer-count={ strconv.FormatInt(v.LiveViewerCount, 10) }
+		}
+		data-live-status={ v.LiveStatus }
 		if len(taggedAccounts) > 0 {
 			data-tagged-accounts={ toJSONAttr(taggedAccounts) }
 		}

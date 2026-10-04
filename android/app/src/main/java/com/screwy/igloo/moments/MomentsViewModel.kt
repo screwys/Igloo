@@ -2,12 +2,15 @@ package com.screwy.igloo.moments
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.screwy.igloo.R
 import com.screwy.igloo.channel.ChannelRouteResolver
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.data.entity.MomentItem as DbMomentItem
 import com.screwy.igloo.data.entity.MomentsCursorEntity
+import com.screwy.igloo.data.entity.BookmarkEntity
 import com.screwy.igloo.data.entity.StoryChannelItem
 import com.screwy.igloo.data.entity.durationMs
 import com.screwy.igloo.data.stripPlatformPrefix
@@ -493,6 +496,22 @@ class MomentsViewModel(
                     item = item,
                     currentBookmark = db.bookmarkDao().getById(item.videoId)?.toBookmarkState(),
                 )
+        }
+    }
+
+    suspend fun captureLiveBookmark(videoId: String, bookmarked: Boolean, categoryId: Long?) {
+        db.useWriterConnection { connection ->
+            connection.immediateTransaction {
+                if (db.outboxDao().pendingRow(OutboxKind.CODE_BOOKMARK, videoId, null) == null) {
+                    val bookmarks = db.bookmarkDao()
+                    if (bookmarked) {
+                        val existing = bookmarks.getById(videoId)
+                        bookmarks.upsert((existing ?: BookmarkEntity(videoId)).copy(categoryId = categoryId ?: 0))
+                    } else {
+                        bookmarks.delete(videoId)
+                    }
+                }
+            }
         }
     }
 

@@ -2,7 +2,7 @@
 (function () {
   var defaults = {
     'feed.like': 'l', 'feed.bookmark': 'b', 'feed.share': 's', 'feed.translate': 't', 'feed.media': 'f', 'feed.mute': 'm',
-    'shorts.mute': 'm', 'shorts.autoplay': 'a', 'shorts.bookmark': 'b', 'shorts.share': 's', 'shorts.grid': 'c',
+    'shorts.mute': 'm', 'shorts.autoplay': 'a', 'shorts.bookmark': 'b', 'shorts.share': 's', 'shorts.grid': 'v', 'shorts.subtitles': 'c',
     'player.fullscreen': 'f', 'player.cinema': 't', 'player.subtitles': 'c', 'player.bookmark': 'b', 'player.share': 's', 'player.autoplay': 'a',
     'global.sidebar': 'z',
     'global.addChannel': 'n',
@@ -19,6 +19,9 @@
   var current = {};
   var id;
   for (id in defaults) current[id] = serverConfig[id] || defaults[id];
+  if (current['shorts.grid'] === 'c' && current['shorts.subtitles'] === 'c') {
+    current['shorts.grid'] = defaults['shorts.grid'];
+  }
 
   var displayMap = {
     'ArrowDown': '\u2193', 'ArrowUp': '\u2191', 'ArrowLeft': '\u2190', 'ArrowRight': '\u2192',

@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -70,6 +71,7 @@ import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import com.screwy.igloo.R
 import com.screwy.igloo.media.MediaUri
+import com.screwy.igloo.moments.TikTokLives
 import com.screwy.igloo.ui.theme.IglooColors
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.delay
@@ -263,23 +265,30 @@ internal fun MomentRailAvatar(
     item: MomentItem,
     onChannelClick: (channelId: String) -> Unit,
     onStoryClick: (channelId: String, firstVideoId: String) -> Unit,
+    onLiveClick: (channelId: String) -> Unit,
     onFollowChannel: (channelId: String) -> Unit,
     onRequestUnfollowChannel: (MomentItem) -> Unit,
     colors: IglooColors,
     modifier: Modifier = Modifier,
 ) {
     val accent = colors.primary
+    val liveDirectory: TikTokLives = org.koin.compose.koinInject()
+    val lives by liveDirectory.current.collectAsState()
+    val isLive = item.isLive || lives.any { it.channel_id == item.channelId }
     val storyTarget =
         item.storyFirstVideoId.takeIf {
             it.isNotBlank() && item.storyRingState != StoryRingState.None
         }
     Box(modifier = modifier.size(50.dp), contentAlignment = Alignment.Center) {
-        Avatar(
+        LiveAvatar(
             channelId = item.channelId,
             size = 44.dp,
-            modifier = Modifier.storyRingBorder(item.storyRingState, colors),
+            live = isLive,
+            avatarModifier = Modifier.storyRingBorder(item.storyRingState, colors),
             onClick = {
-                if (storyTarget != null) {
+                if (isLive && !item.isLive) {
+                    onLiveClick(item.channelId)
+                } else if (storyTarget != null) {
                     onStoryClick(item.channelId, storyTarget)
                 } else {
                     onChannelClick(item.channelId)
@@ -288,7 +297,7 @@ internal fun MomentRailAvatar(
             showPendingBadge = false,
         )
         val badgeModifier =
-            Modifier.align(Alignment.BottomCenter)
+            Modifier.align(if (isLive) Alignment.BottomEnd else Alignment.BottomCenter)
                 .size(18.dp)
                 .clip(CircleShape)
                 .background(if (item.isAuthorFollowed) Color.White else accent)
@@ -473,6 +482,7 @@ internal fun VideoSurface(
     pageIndex: Int,
     onStateChange: (MomentVideoSurfaceState) -> Unit,
     sharedPlayerView: PlayerView? = null,
+    fitVideo: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -560,7 +570,7 @@ internal fun VideoSurface(
             view.alpha = momentVideoSurfaceAlpha(surfaceState)
             if (view.player !== player) view.player = player
             view.setBackgroundColor(android.graphics.Color.BLACK)
-            view.resizeMode =
+            view.resizeMode = if (fitVideo) AspectRatioFrameLayout.RESIZE_MODE_FIT else
                 momentsVideoResizeMode(
                     width = surfaceState.videoWidth,
                     height = surfaceState.videoHeight,

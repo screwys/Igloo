@@ -29,7 +29,7 @@ export function initItems(stateRef, fns) {
   }
 }
 
-function closeMomentActions() {
+export function closeMomentActions() {
   if (momentActionsSheet && momentActionsSheet.parentNode) momentActionsSheet.remove()
   momentActionsSheet = null
   if (momentActionsWrapper) momentActionsWrapper.classList.remove('moment-actions-open')
@@ -40,6 +40,241 @@ function closeMomentActions() {
   momentActionsKeyHandler = null
   if (momentActionsOutsideHandler) document.removeEventListener('pointerdown', momentActionsOutsideHandler, true)
   momentActionsOutsideHandler = null
+}
+
+function setMomentSubtitles(entry) {
+  var refs = entry && entry.refs
+  var video = refs && refs.video
+  if (!video) return
+  var enabled = !!_state.subtitlesEnabled
+  if (refs.subtitleTrack) {
+    refs.subtitleTrack.track.mode = enabled ? 'showing' : 'disabled'
+    return
+  }
+  if (!enabled || refs.subtitlesLoading || refs.subtitlesLoaded) return
+  refs.subtitlesLoading = true
+  apiFetch('/api/videos/' + encodeURIComponent(entry.data.id) + '/subtitles').then(function (response) {
+    var tracks = response.tracks || []
+    var language = String(document.documentElement.lang || navigator.language || 'en').split('-')[0]
+    var selected = tracks.find(function (track) { return track.srclang === language }) || tracks.find(function (track) { return track.is_default }) || tracks[0]
+    if (!selected) return
+    refs.subtitlesLoaded = true
+    var track = document.createElement('track')
+    track.kind = 'subtitles'
+    track.label = selected.label || selected.srclang
+    track.srclang = selected.srclang
+    track.src = '/api/media/subtitle/' + encodeURIComponent(entry.data.id) + '?track=' + encodeURIComponent(selected.track_id)
+    track.addEventListener('error', function () { showToast(t('stream_subtitles_failed', 'Subtitles could not load.')) })
+    video.appendChild(track)
+    refs.subtitleTrack = track
+    track.track.mode = _state.subtitlesEnabled ? 'showing' : 'disabled'
+  }).catch(function () {
+    showToast(t('stream_subtitles_failed', 'Subtitles could not load.'))
+  }).finally(function () { refs.subtitlesLoading = false })
+}
+
+export function toggleMomentSubtitles(entry) {
+  if (!entry || !entry.refs || !entry.refs.video || entry.data.liveStatus === 'is_live') return
+  _state.subtitlesEnabled = !_state.subtitlesEnabled
+  localStorage.setItem('shortsSubtitles', String(_state.subtitlesEnabled))
+  _state.items.forEach(function (item) {
+    if (item && item.refs.subtitleTrack) item.refs.subtitleTrack.track.mode = 'disabled'
+  })
+  setMomentSubtitles(entry)
+  document.querySelectorAll('[data-moment-action="subtitles"]').forEach(function (button) {
+    button.setAttribute('aria-checked', String(_state.subtitlesEnabled))
+    safeSetMarkup(button.querySelector('.moment-actions-check'), _state.subtitlesEnabled ? iconSvg('check') : '')
+  })
+}
+
+function initTikTokLive(entry) {
+  var refs = entry.refs
+  var video = refs.video
+  var chat = document.createElement('section')
+  chat.className = 'shorts-live-chat'
+  chat.setAttribute('aria-label', t('player_live_chat', 'Live chat'))
+  safeSetMarkup(chat, '<header class="player-chat-header"><h3>' + escapeHtml(t('player_live_chat', 'Live chat')) + '</h3><button class="player-btn" type="button" title="' + escapeHtml(t('action_close', 'Close')) + '" aria-label="' + escapeHtml(t('action_close', 'Close')) + '">' + materialIconMarkup('Close') + '</button></header><div class="player-chat-messages" role="log" aria-live="off" tabindex="0" aria-label="' + escapeHtml(t('player_live_chat', 'Live chat')) + '"></div><p class="player-chat-status"></p>')
+  refs.mediaStage.appendChild(chat)
+  refs.liveChat = chat
+  refs.commentsEnabled = localStorage.getItem('shortsLiveComments') !== 'false'
+  var messages = chat.querySelector('.player-chat-messages')
+  var status = chat.querySelector('.player-chat-status')
+  var source = null
+  var run = null
+  var cleanup = Promise.resolve()
+  var base = '/api/tiktok/lives/' + encodeURIComponent(entry.data.liveChannelId)
+
+  function closeChat() {
+    if (source) source.close()
+    source = null
+  }
+  function connectChat() {
+    if (source || !refs.commentsEnabled || !refs.liveWantsPlay || !run || !run.loaded) return
+    status.textContent = ''
+    source = new EventSource(base + '/chat')
+    source.addEventListener('chat', function (event) {
+      var message
+      try { message = JSON.parse(event.data) } catch (_) {
+        finishChat(t('player_chat_failed', 'Chat could not load'))
+        return
+      }
+      var atBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 48
+      var row = document.createElement('div')
+      row.className = 'chat-message'
+      var content = document.createElement('span')
+      content.className = 'chat-message-content'
+      var author = document.createElement('span')
+      author.className = 'chat-author'
+      author.textContent = message.author || t('player_comment_author_unknown', 'User')
+      content.appendChild(author)
+      content.appendChild(document.createTextNode(' ' + String(message.text || '')))
+      row.appendChild(content)
+      messages.appendChild(row)
+      while (messages.childElementCount > 200) messages.firstElementChild.remove()
+      if (atBottom) messages.scrollTop = messages.scrollHeight
+    })
+    source.addEventListener('end', function () { finishChat(t('player_chat_ended', 'Chat ended')) })
+    source.addEventListener('failed', function () { finishChat(t('player_chat_failed', 'Chat could not load')) })
+    source.addEventListener('unavailable', function () { finishChat(t('player_chat_unavailable', 'Chat unavailable')) })
+    source.onerror = function () { finishChat(t('player_chat_failed', 'Chat could not load')) }
+  }
+  function finishChat(label) {
+    closeChat()
+    status.textContent = label
+  }
+  function syncComments() {
+    chat.hidden = !refs.commentsEnabled
+    refs.mediaStage.classList.toggle('live-chat-open', refs.commentsEnabled)
+    if (refs.commentsEnabled) connectChat()
+    else closeChat()
+  }
+  refs.toggleComments = function () {
+    refs.commentsEnabled = !refs.commentsEnabled
+    localStorage.setItem('shortsLiveComments', String(refs.commentsEnabled))
+    syncComments()
+  }
+  chat.querySelector('button').addEventListener('click', function (event) {
+    event.stopPropagation()
+    refs.toggleComments()
+  })
+  function releaseSession(id) {
+    if (id) apiFetch('/api/streams/' + encodeURIComponent(id), { method: 'DELETE', keepalive: true }).catch(function () {})
+  }
+  refs.stopLive = function () {
+    refs.liveWantsPlay = false
+    refs.liveLoading = false
+    closeChat()
+    var previous = run
+    run = null
+    if (!previous) return
+    previous.abort.abort()
+    releaseSession(previous.sessionId)
+    if (previous.player) cleanup = previous.player.destroy().catch(function () {})
+    video.pause()
+  }
+  refs.pauseLive = function () {
+    refs.liveWantsPlay = false
+    closeChat()
+    video.pause()
+  }
+  refs.playLive = function () {
+    refs.liveWantsPlay = true
+    refs.commentsEnabled = localStorage.getItem('shortsLiveComments') !== 'false'
+    syncComments()
+    if (run) return run.loaded ? video.play() : run.promise
+    var current = { abort: new AbortController(), player: null, sessionId: '', loaded: false, promise: null }
+    run = current
+    refs.liveLoading = true
+    current.promise = (async function () {
+      try {
+        await cleanup
+        if (run !== current) return
+        var result = await apiFetch(base + '/stream', { method: 'POST', body: '{}', signal: current.abort.signal })
+        current.sessionId = result.session_id
+        if (run !== current) { releaseSession(current.sessionId); return }
+        var previousId = entry.data.id
+        var index = _state.items.indexOf(entry)
+        var card = _state.cards[index]
+        entry.data.id = result.video_id
+        entry.data.liveRoomId = result.live.room_id
+        entry.data.liveViewerCount = result.live.viewer_count
+        entry.data.title = result.live.title
+        entry.data.channelName = result.live.display_name
+        entry.data.bookmarked = result.bookmarked
+        entry.data.bookmarkCategoryId = result.bookmarked ? String(result.bookmark_category_id || '') : null
+        _state.byId.delete(previousId)
+        _state.byId.set(entry.data.id, entry)
+        _state.cardIndexById.delete(previousId)
+        _state.cardIndexById.set(entry.data.id, index)
+        entry.el.setAttribute('data-video-id', entry.data.id)
+        refs.wrapper.id = 'shorts-wrapper-' + entry.data.id
+        video.dataset.videoId = entry.data.id
+        refs.author.textContent = entry.data.channelName
+        refs.title.textContent = entry.data.title
+        if (card) {
+          card.setAttribute('data-video-id', entry.data.id)
+          card.setAttribute('data-live-room-id', entry.data.liveRoomId)
+          card.setAttribute('data-live-viewer-count', String(entry.data.liveViewerCount))
+          card.setAttribute('data-video-title', entry.data.title)
+          card.setAttribute('data-channel-name', entry.data.channelName)
+          card.setAttribute('data-bookmarked', entry.data.bookmarked ? '1' : '0')
+          card.setAttribute('data-bookmark-category-id', entry.data.bookmarkCategoryId || '')
+          card.setAttribute('href', '/player/' + encodeURIComponent(entry.data.id))
+        }
+        refs.liveRegistered = true
+        if (refs.onLiveRegistered) {
+          var registered = refs.onLiveRegistered
+          refs.onLiveRegistered = null
+          registered()
+        }
+        _fns.updateCurrentActionButtons()
+        var shaka = window.shaka
+        if (!shaka) throw new Error('stream player unavailable')
+        shaka.polyfill.installAll()
+        current.player = new shaka.Player()
+        await current.player.attach(video)
+        if (run !== current) return
+        current.player.addEventListener('error', function () {
+          if (run !== current) return
+          status.textContent = t('shorts_live_playback_failed', 'Live stream could not play')
+          showToast(status.textContent)
+          refs.stopLive()
+        })
+        await current.player.load(result.manifest_url, null, result.manifest_type === 'hls' ? 'application/x-mpegurl' : 'application/dash+xml')
+        if (run !== current) return
+        current.loaded = true
+        refs.liveLoading = false
+        if (refs.liveWantsPlay) return video.play()
+      } catch (error) {
+        if (run !== current || error.name === 'AbortError') return
+        var code = error.payload && error.payload.code
+        status.textContent = code === 'live_ended' ? t('shorts_live_ended', 'Live stream ended') : t('shorts_live_playback_failed', 'Live stream could not play')
+        showToast(status.textContent)
+        refs.stopLive()
+      }
+    })()
+    return current.promise
+  }
+  video.addEventListener('playing', function () { refs.liveWantsPlay = true; connectChat() })
+  video.addEventListener('pause', function () {
+    if (run && run.loaded) refs.liveWantsPlay = false
+    closeChat()
+  })
+  video.addEventListener('ended', function () {
+    refs.stopLive()
+    finishChat(t('shorts_live_ended', 'Live stream ended'))
+  })
+  window.addEventListener('pagehide', refs.stopLive)
+  refs.disposeLive = function () {
+    refs.stopLive()
+    refs.liveInfoObserver.disconnect()
+    window.removeEventListener('pagehide', refs.stopLive)
+  }
+  refs.liveInfoObserver = new ResizeObserver(function () {
+    refs.mediaStage.style.setProperty('--shorts-live-info-height', refs.info.offsetHeight + 'px')
+  })
+  refs.liveInfoObserver.observe(refs.info)
+  syncComments()
 }
 
 function syncMomentFullscreenButtons() {
@@ -283,6 +518,21 @@ function applyMomentAction(entry, action) {
     return
   }
 
+  if (action === 'subtitles') {
+    toggleMomentSubtitles(entry)
+    return
+  }
+
+  if (action === 'comments' && entry.refs.toggleComments) {
+    entry.refs.toggleComments()
+    return
+  }
+
+  if (action === 'open' && data.originalUrl) {
+    window.open(data.originalUrl, '_blank', 'noopener,noreferrer')
+    return
+  }
+
   if (action === 'mini_player') {
     toggleMomentMiniPlayer(entry)
     return
@@ -340,7 +590,7 @@ function applyMomentAction(entry, action) {
   }
 }
 
-function openMomentActions(entry, trigger) {
+function openMomentActions(entry, trigger, position) {
   var data = entry && entry.data
   var wrapper = entry && entry.refs && entry.refs.wrapper
   if (!data || !wrapper) return false
@@ -395,7 +645,16 @@ function openMomentActions(entry, trigger) {
   if (entry.refs && (entry.refs.video || entry.refs.slideshow)) {
     actions.push({ key: 'mini_player', icon: 'mini', label: t('mini_player_title', 'Mini player') })
   }
+  if (entry.refs && entry.refs.toggleComments) {
+    actions.push({ key: 'comments', icon: 'comments', label: t('player_comments_heading', 'Comments'), checked: entry.refs.commentsEnabled })
+  }
+  if (entry.refs && entry.refs.video && data.liveStatus !== 'is_live') {
+    actions.push({ key: 'subtitles', icon: 'subtitles', label: t('player_subtitles', 'Subtitles'), checked: !!_state.subtitlesEnabled })
+  }
   actions.push({ key: 'share', icon: 'share', label: t('action_share', 'Share') })
+  if (data.originalUrl) {
+    actions.push({ key: 'open', icon: 'open', label: t('action_open_externally', 'Open externally') })
+  }
   if (isRepost) {
     actions.push({ key: 'visit_reposter', icon: 'profile', label: tf('action_visit_profile_of_account', 'Visit profile of %1$s', reposterLabel) })
   }
@@ -414,8 +673,17 @@ function openMomentActions(entry, trigger) {
     var button = document.createElement('button')
     button.type = 'button'
     button.className = 'moment-actions-sheet-item' + (action.danger ? ' danger' : '')
-    button.setAttribute('role', 'menuitem')
+    button.setAttribute('data-moment-action', action.key)
+    button.setAttribute('role', typeof action.checked === 'boolean' ? 'menuitemcheckbox' : 'menuitem')
+    if (typeof action.checked === 'boolean') button.setAttribute('aria-checked', String(action.checked))
     safeSetMarkup(button, '<span class="moment-actions-item-icon">' + menuIconSvg(action.icon) + '</span><span>' + escapeHtml(action.label) + '</span>')
+    if (typeof action.checked === 'boolean') {
+      var check = document.createElement('span')
+      check.className = 'moment-actions-check'
+      check.setAttribute('aria-hidden', 'true')
+      if (action.checked) safeSetMarkup(check, iconSvg('check'))
+      button.appendChild(check)
+    }
     button.addEventListener('click', function () {
       closeMomentActions()
       applyMomentAction(entry, action.key)
@@ -433,7 +701,17 @@ function openMomentActions(entry, trigger) {
   document.addEventListener('keydown', momentActionsKeyHandler)
   document.addEventListener('pointerdown', momentActionsOutsideHandler, true)
   wrapper.classList.add('moment-actions-open')
-  wrapper.appendChild(overlay)
+  if (position) {
+    overlay.classList.add('moment-actions-at-pointer')
+    var fullscreen = document.fullscreenElement || document.webkitFullscreenElement
+    ;(fullscreen || document.body).appendChild(overlay)
+    var margin = 8
+    var rect = sheet.getBoundingClientRect()
+    sheet.style.left = Math.max(margin, Math.min(position.x, window.innerWidth - rect.width - margin)) + 'px'
+    sheet.style.top = Math.max(margin, Math.min(position.y, window.innerHeight - rect.height - margin)) + 'px'
+  } else {
+    wrapper.appendChild(overlay)
+  }
   momentActionsSheet = overlay
   momentActionsWrapper = wrapper
   momentActionsTrigger = trigger || null
@@ -445,7 +723,8 @@ function openMomentActions(entry, trigger) {
 function menuIconSvg(kind) {
   var names = {
     speed: 'Speed', mini: 'PictureInPictureAlt', share: 'Share', profile: 'Person',
-    repost: 'Repeat', 'mute-account': 'VolumeOff', follow: 'Person', unfollow: 'PersonRemove'
+    repost: 'Repeat', 'mute-account': 'VolumeOff', follow: 'Person', unfollow: 'PersonRemove',
+    open: 'OpenInNew', subtitles: 'ClosedCaption', comments: 'ChatBubble'
   }
   return names[kind] ? materialIconMarkup(names[kind]) : ''
 }
@@ -485,6 +764,10 @@ export function parseCardData(card) {
     streamUrl: String(card.getAttribute('data-stream-url') || ''),
     slideUrlSuffix: String(card.getAttribute('data-slide-url-suffix') || ''),
     audioUrl: String(card.getAttribute('data-audio-url') || ''),
+    liveChannelId: String(card.getAttribute('data-live-channel-id') || ''),
+    liveRoomId: String(card.getAttribute('data-live-room-id') || ''),
+    liveViewerCount: Math.max(0, parseInt(card.getAttribute('data-live-viewer-count') || '0', 10) || 0),
+    liveStatus: String(card.getAttribute('data-live-status') || ''),
     href: String(card.getAttribute('href') || '/shorts?video=' + encodeURIComponent(id)),
     bookmarked: String(card.getAttribute('data-bookmarked') || '') === '1',
     bookmarkCategoryId: String(card.getAttribute('data-bookmark-category-id') || '').trim() || null,
@@ -702,6 +985,8 @@ export function makeShortItem(entryData, existingEl) {
   mediaStage.className = 'shorts-media-stage'
   wrapper.appendChild(mediaStage)
   var mediaKind = String(entryData.mediaKind || '').trim().toLowerCase()
+  var isLive = entryData.liveStatus === 'is_live'
+  if (isLive) wrapper.classList.add('shorts-live-wrapper')
   var hasSlides = mediaKind === 'slideshow' || mediaKind === 'image' || (Number(entryData.mediaSlideCount || 0) > 0)
   var slideCount = Math.max(0, parseInt(entryData.mediaSlideCount || 0, 10) || 0) || (mediaKind === 'image' ? 1 : 0)
   var poster = null
@@ -757,7 +1042,7 @@ export function makeShortItem(entryData, existingEl) {
       mediaStage.appendChild(slideshowAudio)
       slideshow.audio = slideshowAudio
     }
-  } else if (!hasSlides && entryData.streamUrl) {
+  } else if (!hasSlides && (entryData.streamUrl || isLive)) {
     if (entryData.thumbUrl) {
       poster = doc.createElement('img')
       poster.className = 'shorts-video-poster-frame'
@@ -776,7 +1061,8 @@ export function makeShortItem(entryData, existingEl) {
     video.setAttribute('playsinline', '')
     video.dataset.videoId = entryData.id
     if (entryData.thumbUrl) video.poster = entryData.thumbUrl
-    video.src = entryData.streamUrl
+    if (isLive) video.dataset.liveStream = '1'
+    else video.src = entryData.streamUrl
     mediaStage.appendChild(video)
   } else if (entryData.thumbUrl) {
     poster = doc.createElement('img')
@@ -841,27 +1127,23 @@ export function makeShortItem(entryData, existingEl) {
     followBadge = '<button class="shorts-rail-follow-badge' + (entryData.channelFollowed ? ' is-following' : '') + '" type="button" data-short-follow="1" data-channel-id="' + escapeHtml(entryData.channelId) + '" data-following="' + (entryData.channelFollowed ? '1' : '0') + '" title="' + escapeHtml(entryData.channelFollowed ? t('action_following', 'Following') : t('action_follow', 'Follow')) + '" aria-label="' + escapeHtml(entryData.channelFollowed ? t('action_following', 'Following') : t('action_follow', 'Follow')) + '">' + iconSvg(entryData.channelFollowed ? 'check' : 'add') + '</button>'
   }
   var storyState = normalizeStoryState(entryData.storyState)
-  var storyAttrs = (!_state.storyMode && storyState !== 'none' && entryData.channelId)
-    ? (' data-story-channel-id="' + escapeHtml(entryData.channelId) + '" data-story-first-video-id="' + escapeHtml(entryData.storyFirstVideoId || '') + '" data-story-state="' + escapeHtml(storyState) + '"')
+  var storyAttrs = (!_state.storyMode && (storyState !== 'none' || entryData.liveRoomId) && entryData.channelId)
+    ? (' data-story-channel-id="' + escapeHtml(entryData.channelId) + '" data-story-first-video-id="' + escapeHtml(entryData.liveRoomId ? 'tiktok_live_' + entryData.liveRoomId : entryData.storyFirstVideoId || '') + '" data-story-state="' + escapeHtml(storyState) + '"')
     : ''
-  var avatarLinkClass = 'shorts-rail-avatar-link story-ring-' + storyState
-  var externalLabel = t('action_open_externally', 'Open externally')
-  var externalAction = entryData.originalUrl
-    ? '<a class="action-btn shorts-external-btn" href="' + escapeHtml(entryData.originalUrl) + '" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(externalLabel) + '" aria-label="' + escapeHtml(externalLabel) + '">' + iconSvg('open') + '</a>'
-    : ''
+  var avatarLinkClass = 'shorts-rail-avatar-link story-ring-' + (entryData.liveRoomId ? 'live' : storyState)
   var actionsHtml = '' +
     '<div class="shorts-rail-avatar-wrap">' +
     '<a class="' + avatarLinkClass + '" href="' + escapeHtml(channelHref) + '"' +
     (entryData.channelId ? (' data-channel-id="' + escapeHtml(entryData.channelId) + '"') : '') + storyAttrs + '>' +
     '<span class="shorts-rail-avatar" aria-hidden="true">' + avatarMarkup + '</span>' +
+    (entryData.liveRoomId ? '<span class="shorts-live-badge">LIVE</span>' : '') +
     '</a>' +
     followBadge +
     '</div>' +
     '<button class="action-btn shorts-autoplay-btn" type="button" data-short-action="autoplay" title="' + escapeHtml(t('shorts_autoplay_next', 'Auto-play next short')) + '">' + iconSvg('autoplay', false) + '</button>' +
     '<button class="action-btn bookmark-btn shorts-bookmark-btn" type="button" data-short-action="bookmark" title="' + escapeHtml(t('action_bookmark', 'Bookmark')) + '">' + iconSvg('bookmark', !!entryData.bookmarked) + '</button>' +
     '<button class="action-btn shorts-share-btn" type="button" data-short-action="share" title="' + escapeHtml(t('action_share', 'Share')) + '">' + iconSvg('share', false) + '</button>' +
-    ((video || slideshow) ? '<button class="action-btn shorts-mini-player-btn" type="button" data-short-action="mini-player" title="' + escapeHtml(t('mini_player_title', 'Mini player')) + '" aria-label="' + escapeHtml(t('mini_player_title', 'Mini player')) + '">' + menuIconSvg('mini') + '</button>' : '') +
-    externalAction
+    ((video || slideshow) ? '<button class="action-btn shorts-mini-player-btn" type="button" data-short-action="mini-player" title="' + escapeHtml(t('mini_player_title', 'Mini player')) + '" aria-label="' + escapeHtml(t('mini_player_title', 'Mini player')) + '">' + menuIconSvg('mini') + '</button>' : '')
   safeSetMarkup(actions, actionsHtml)
 
   var info = doc.createElement('div')
@@ -968,7 +1250,7 @@ export function makeShortItem(entryData, existingEl) {
   var progressBar = doc.createElement('div')
   progressBar.className = 'val-progress-bar'
   progressContainer.appendChild(progressBar)
-  if (slideshow && slideshow.count > 0) {
+  if (isLive || slideshow && slideshow.count > 0) {
     progressContainer.style.display = 'none'
   }
   wrapper.appendChild(progressContainer)
@@ -1002,6 +1284,14 @@ export function makeShortItem(entryData, existingEl) {
     descToggle: descToggle
   }
   var entryObj = { el: item, data: entryData, refs: refs }
+  if (isLive) initTikTokLive(entryObj)
+  refs.disposeActions = function () { if (momentActionsWrapper === wrapper) closeMomentActions() }
+  wrapper.addEventListener('contextmenu', function (event) {
+    if (event.target.closest('a, input, .moment-actions-overlay')) return
+    event.preventDefault()
+    event.stopPropagation()
+    openMomentActions(entryObj, refs.moreBtn, { x: event.clientX, y: event.clientY })
+  })
 
   if (video) {
     function revealVideoFrame() {
@@ -1013,12 +1303,13 @@ export function makeShortItem(entryData, existingEl) {
     video.addEventListener('loadeddata', revealVideoFrame)
     video.addEventListener('canplay', revealVideoFrame)
     video.addEventListener('playing', revealVideoFrame)
+    video.addEventListener('playing', function () { if (!isLive) setMomentSubtitles(entryObj) })
     video.addEventListener('timeupdate', function () {
       handleVideoTimeUpdate({ refs: refs })
     })
     makeDraggableSeekbar(progressContainer, progressBar, video)
     attachSeekTooltip(progressContainer, video)
-    video.loop = !autoAdvanceEnabled()
+    video.loop = !isLive && !autoAdvanceEnabled()
     video.muted = _state.muted
     video.volume = _state.volume
     video.playbackRate = _state.playbackRate
@@ -1072,6 +1363,7 @@ export function makeShortItem(entryData, existingEl) {
       },
     })
     video.addEventListener('ended', function () {
+      if (isLive) return
       if (autoAdvanceEnabled()) _fns.goNext()
       else {
         try {
@@ -1088,6 +1380,7 @@ export function makeShortItem(entryData, existingEl) {
     })
     video.addEventListener('error', function () {
       revealVideoFrame()
+      if (isLive) return
       wrapper.classList.add('shorts-video-error')
       var cur = _fns && typeof _fns.currentData === 'function' ? _fns.currentData() : null
       if (cur && entryData.id === cur.id) {
@@ -1226,7 +1519,7 @@ export function makeShortItem(entryData, existingEl) {
   refs.volumeSlider.addEventListener('pointercancel', function () { refs.volumeSlider.blur() })
 
   wrapper.addEventListener('click', function (e) {
-    var clickOnControl = e.target && e.target.closest && e.target.closest('.shorts-actions, .shorts-player-controls, .shorts-header-overlay, .shorts-story-chrome, .val-progress-container, .shorts-slide-controls, .moment-actions-overlay')
+    var clickOnControl = e.target && e.target.closest && e.target.closest('.shorts-actions, .shorts-player-controls, .shorts-header-overlay, .shorts-story-chrome, .val-progress-container, .shorts-slide-controls, .moment-actions-overlay, .shorts-live-chat')
     if (clickOnControl) return
     if (navigateStoryFromClick(entryObj, e)) return
     toggleShortPlayback(entryObj)

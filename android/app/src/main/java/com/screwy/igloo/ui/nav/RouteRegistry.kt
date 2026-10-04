@@ -68,6 +68,7 @@ object RouteRegistry {
         chrome = momentsPolicy(),
         deepLinks = listOf("igloo://shorts/{playlist_type}/{playlist_id}/{video_id}"),
     )
+    val TikTokLive = IglooRouteSpec(route = "tiktok-live/{channel_id}", chrome = momentsPolicy())
 
     val Media = IglooRouteSpec(
         route = "media/{owner_kind}/{owner_id}/{index}",
@@ -129,6 +130,7 @@ object RouteRegistry {
         Downloaded,
         Channel,
         Shorts,
+        TikTokLive,
         Media,
         Player,
         Thread,
@@ -158,6 +160,8 @@ object RouteRegistry {
 
     fun shortsRoute(playlistType: String, playlistId: String, videoId: String): String =
         "shorts/${encodePathSegment(playlistType)}/${encodePathSegment(playlistId)}/${encodePathSegment(videoId)}"
+
+    fun tiktokLiveRoute(channelId: String): String = "tiktok-live/${encodePathSegment(channelId)}"
 
     fun mediaRoute(ownerKind: String, ownerId: String, index: Int): String =
         "media/${encodePathSegment(ownerKind)}/${encodePathSegment(ownerId)}/${index.coerceAtLeast(0)}"

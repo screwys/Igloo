@@ -37,14 +37,15 @@ fun SubtitleOverlay(
     modifier: Modifier = Modifier,
     visible: Boolean = true,
     bottomPadding: Dp = 12.dp,
+    subtitleContent: String? = null,
 ) {
-    if (!visible || subtitlePath == null) return
+    if (!visible || (subtitlePath == null && subtitleContent == null)) return
     val cues by
-        produceState(emptyList<SubtitleCue>(), subtitlePath) {
+        produceState(emptyList<SubtitleCue>(), subtitlePath, subtitleContent) {
             value = emptyList()
             value =
                 withContext(Dispatchers.IO) {
-                    runCatching { File(subtitlePath).readText() }
+                    runCatching { subtitleContent ?: File(requireNotNull(subtitlePath)).readText() }
                         .map { parseVtt(it) }
                         .getOrDefault(emptyList())
                 }

@@ -65,6 +65,9 @@ templ ProfileCardTop(props PageProps, p *model.ChannelProfile, size string, isFo
 		>
 			<img class="profile-card-avatar" src={ "/api/media/avatar/" + p.ChannelID } alt="" onload="window.MpaSiteBase&&window.MpaSiteBase.avatarLoad(this)" onerror="if(window.MpaSiteBase&&window.MpaSiteBase.avatarError(this))return; this.style.display='none'"/>
 			<span class="profile-card-avatar-fallback" style="display:none;">{ strings.ToUpper(FirstChar(profileLabel(p))) }</span>
+			if p.LiveRoomID != "" {
+				<span class="shorts-live-badge">LIVE</span>
+			}
 		</div>
 		if size == "hero" {
 			<div class="profile-card-identity">

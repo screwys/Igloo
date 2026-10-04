@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -9,10 +10,12 @@ import (
 
 	"github.com/screwys/igloo/internal/components"
 	"github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/model"
 )
 
 // registerShortsAPIRoutes registers shorts watch-history API routes.
 func (s *Server) registerShortsAPIRoutes(mux *http.ServeMux) {
+	s.registerTikTokLiveRoutes(mux)
 	mux.HandleFunc("POST /api/shorts/watched/{videoID}", s.handleShortsWatched)
 	mux.HandleFunc("GET /api/shorts/watched", s.handleShortsWatchedList)
 	mux.HandleFunc("GET /api/shorts/cards", s.handleShortsCards)
@@ -77,13 +80,18 @@ func (s *Server) handleStoryCards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nowMs := time.Now().UnixMilli()
+	live, liveErr := s.db.GetTikTokLive(channelID)
+	if liveErr != nil {
+		http.Error(w, "Could not load live stream", 500)
+		return
+	}
 	statuses, err := s.db.GetStoryStatusForChannelIDs([]string{channelID}, nowMs)
 	if err != nil {
 		slog.Error("GetStoryStatusForChannelIDs", "channel", channelID, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	if statuses[channelID].Count <= 0 {
+	if statuses[channelID].Count <= 0 && live == nil {
 		p := s.pageProps(w, r)
 		p.ActiveNav = "shorts"
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -95,6 +103,13 @@ func (s *Server) handleStoryCards(w http.ResponseWriter, r *http.Request) {
 		slog.Error("GetStoryVideos", "channel", channelID, "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
+	}
+	if live != nil {
+		metadata := fmt.Sprintf(`{"live_status":"is_live","webpage_url":%q}`, "https://www.tiktok.com/@"+live.Handle+"/live")
+		video := model.Video{VideoID: "tiktok_live_" + live.RoomID, ChannelID: channelID, OwnerKind: "tiktok_video", ChannelName: live.DisplayName,
+			Title: live.Title, Platform: "tiktok", MediaKind: "video", SourceKind: "live", LiveStatus: "is_live", LiveRoomID: live.RoomID,
+			LiveViewerCount: live.ViewerCount, AvatarURL: live.AvatarURL, IsShortForm: true, IsSubscribed: s.db.IsChannelFollowed(channelID), MetadataJSON: metadata}
+		videos = append([]model.Video{video}, videos...)
 	}
 	p := s.pageProps(w, r)
 	p.ActiveNav = "shorts"

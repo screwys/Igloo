@@ -80,6 +80,7 @@ type ChannelProfile struct {
 	StoryCount         int
 	StoryUnseenCount   int
 	StoryFirstVideoID  string
+	LiveRoomID         string
 }
 
 // ProfileJob is the durable fetch request for one channel identity. A request

@@ -41,6 +41,8 @@ Use local rows, files, and logs for data questions, preferring read-only Igloo M
 
 Use the browser for a specific unresolved runtime question that could change the fix. The local target is `https://localhost:8443`. Basic edits can be completed from the report and source. Check private material only for existence, masking values as `***` if a format check is necessary. Do not capture private data or screenshots.
 
+Never launch fullscreen. Keep UI verification in the background and do not take over the user's desktop.
+
 ## Commands and verification
 
 Use `just` from the repository root for routine builds, checks, generators, and releases. Bare `just` lists recipes and side effects. Raw commands are appropriate for read-only evidence, installer bootstrap, exact CI reproduction, partial-release recovery, or a narrow proof with no recipe.

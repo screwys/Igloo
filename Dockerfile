@@ -47,10 +47,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/igloo-py \
     && /opt/igloo-py/bin/pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" \
-    && /opt/igloo-py/bin/pip install --no-cache-dir /tmp/yt-dlp.tar.gz /tmp/gallery-dl.tar.gz curl-cffi \
+    && /opt/igloo-py/bin/pip install --no-cache-dir /tmp/yt-dlp.tar.gz /tmp/gallery-dl.tar.gz curl-cffi "TikTokLive>=7,<8" \
     && rm /tmp/yt-dlp.tar.gz /tmp/gallery-dl.tar.gz
 
 ENV PATH="/usr/lib/postgresql/18/bin:/opt/igloo-py/bin:${PATH}" \
+    IGLOO_PYTHON=/opt/igloo-py/bin/python3 \
     HOME=/tmp \
     IGLOO_DATA_DIR=/igloo/data \
     IGLOO_CONFIG_DIR=/igloo/config \

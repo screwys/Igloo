@@ -60,10 +60,16 @@ templ StoryChannelList(p PageProps, stories []model.StoryChannel) {
 					data-story-channel-id={ story.ChannelID }
 					data-story-first-video-id={ storyChannelFirstVideoID(story) }
 					data-story-state={ storyStateAttr(story.State) }
+					if story.LiveRoomID != "" {
+						data-live-room-id={ story.LiveRoomID }
+					}
 					role="listitem"
 				>
 					<span class={ storyRingClass("story-channel-avatar", story.State) }>
 						<img src={ story.AvatarURL } alt="" loading="lazy" onerror="this.style.display='none'"/>
+						if story.LiveRoomID != "" {
+							<span class="shorts-live-badge">LIVE</span>
+						}
 					</span>
 					<span class="story-channel-copy">
 						<span class="story-channel-name">{ story.DisplayName }</span>
@@ -71,7 +77,11 @@ templ StoryChannelList(p PageProps, stories []model.StoryChannel) {
 							<span class="story-channel-handle">{ "@" + story.Handle }</span>
 						}
 					</span>
-					<span class="story-channel-meta" data-timestamp={ fmt.Sprintf("%d", story.LatestAtMs) }>{ storyChannelMeta(p, story) }</span>
+					if story.LiveRoomID != "" {
+						<span class="story-channel-meta">{ fmt.Sprintf("%s · %s", L(p, "home_live", "Live"), FmtNum(int(story.LiveViewerCount))) }</span>
+					} else {
+						<span class="story-channel-meta" data-timestamp={ fmt.Sprintf("%d", story.LatestAtMs) }>{ storyChannelMeta(p, story) }</span>
+					}
 				</button>
 			}
 		</div>

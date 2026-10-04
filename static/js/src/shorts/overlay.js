@@ -259,7 +259,13 @@ function playShortVideo(entry, video) {
   recordShortsDebugEvent(entry, 'play:attempt')
   revealShortVideoIfReady(entry, video)
   try {
-    var promise = video.play()
+    var promise = entry.refs.playLive ? entry.refs.playLive() : video.play()
+    if (entry.refs.playLive && promise) {
+      promise.then(function () {
+        var active = currentData()
+        if (active && active.id === entry.data.id) updateUrlForCurrent()
+      }).catch(function () {})
+    }
     _state.activePlayPromise = promise || null
     if (promise && typeof promise.catch === 'function') {
       promise.catch(function (err) { handleAutoplayRejected(video, err) })
@@ -273,6 +279,7 @@ function playShortVideoFromStart(entry) {
   var video = entry && entry.refs && entry.refs.video
   if (!video) return
   try {
+    if (entry.refs.playLive) { playShortVideo(entry, video); return }
     video.currentTime = 0
   } catch (_) {}
   playShortVideo(entry, video)
@@ -281,6 +288,7 @@ function playShortVideoFromStart(entry) {
 function warmShortVideo(entry, active) {
   var video = entry && entry.refs && entry.refs.video
   if (!video) return
+  if (entry.refs.playLive) return
   try {
     if (!active) {
       video.preload = 'none'
@@ -559,6 +567,10 @@ export function updateCurrentActionButtons() {
 function persistShortPosition(index, entry) {
   if (!entry || !_state || _state.currentIndex !== index) return
   if (_state.items[index] !== entry) return
+  if (entry.data.liveStatus === 'is_live' && !entry.refs.liveRegistered) {
+    entry.refs.onLiveRegistered = function () { persistShortPosition(index, entry) }
+    return
+  }
   if (typeof _fns.markShortViewed === 'function') _fns.markShortViewed(entry.data.id)
   _fns.setLastViewedShortId(entry.data.id)
   _fns.setLastViewedShortResume(entry.data.id, index, entry.data.page, entry.data.sortAtMs)
@@ -567,6 +579,10 @@ function persistShortPosition(index, entry) {
 function recordShortView(index, entry) {
   if (!entry || !_state || _state.currentIndex !== index) return
   if (_state.items[index] !== entry) return
+  if (entry.data.liveStatus === 'is_live' && !entry.refs.liveRegistered) {
+    entry.refs.onLiveRegistered = function () { recordShortView(index, entry) }
+    return
+  }
   if (typeof _fns.markShortViewed === 'function') _fns.markShortViewed(entry.data.id)
 }
 

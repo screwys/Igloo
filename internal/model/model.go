@@ -158,6 +158,8 @@ type Video struct {
 	MediaTypes         []string // image|video per slide for mixed local media
 	SourceKind         string   // ""|story
 	LiveStatus         string   `json:"-"`
+	LiveRoomID         string   `json:"-"`
+	LiveViewerCount    int64    `json:"-"`
 	PlaybackPosition   float64
 	EagerLoad          bool // skip loading="lazy" for above-the-fold images
 	NextInLine         bool `json:"-"` // badge next-in-line indicator for player sidebar
@@ -259,6 +261,20 @@ type StoryChannel struct {
 	FirstVideoID       string
 	FirstUnseenVideoID string
 	State              string
+	LiveRoomID         string
+	LiveTitle          string
+	LiveViewerCount    int64
+}
+
+type TikTokLive struct {
+	ChannelID    string `json:"channel_id"`
+	RoomID       string `json:"room_id"`
+	Handle       string `json:"handle"`
+	DisplayName  string `json:"display_name"`
+	Title        string `json:"title"`
+	AvatarURL    string `json:"avatar_url"`
+	ViewerCount  int64  `json:"viewer_count"`
+	ObservedAtMs int64  `json:"observed_at_ms"`
 }
 
 // VideoMetadata holds parsed yt-dlp metadata fields.

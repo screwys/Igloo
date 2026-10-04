@@ -19,14 +19,19 @@ func (s *Server) queueStreamSave(w http.ResponseWriter, r *http.Request, videoID
 	if !requireAdmin(w, r) {
 		return true
 	}
+	sourceURL, err := s.db.StreamVideoSourceURL(videoID)
+	if err != nil {
+		writeJSONError(w, 500, "stream_save", "Could not read the stream source")
+		return true
+	}
 	if err := s.db.QueueStreamSave(videoID, intent); err != nil {
 		writeJSONError(w, 500, "stream_save", "Could not queue the video for saving")
 		return true
 	}
 	s.workers.KickTempDownloads()
 	fields["success"], fields["pending"] = true, true
-	fields["save_status_url"] = "/api/temp-download-status?url=" + url.QueryEscape("https://www.youtube.com/watch?v="+videoID)
-	fields["save_result_url"] = "/api/youtube/" + url.PathEscape(videoID) + "/saved-state"
+	fields["save_status_url"] = "/api/temp-download-status?url=" + url.QueryEscape(sourceURL)
+	fields["save_result_url"] = "/api/videos/" + url.PathEscape(videoID) + "/saved-state"
 	writeJSON(w, http.StatusAccepted, fields)
 	return true
 }

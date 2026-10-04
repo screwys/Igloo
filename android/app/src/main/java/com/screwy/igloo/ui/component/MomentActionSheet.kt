@@ -23,6 +23,10 @@ import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
@@ -43,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
@@ -139,9 +144,15 @@ internal fun MomentActionSheet(
     onUnfollowChannel: (channelId: String) -> Unit,
     onShare: (MomentItem) -> Unit,
     onVisitChannel: (channelId: String) -> Unit,
+    subtitlesVisible: Boolean = false,
+    onToggleSubtitles: () -> Unit = {},
+    commentsVisible: Boolean = true,
+    onToggleComments: () -> Unit = {},
+    onToggleFullscreen: (() -> Unit)? = null,
 ) {
     val actions = momentActionAvailability(item)
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val miniPlayerActivity = remember(context) { context.findMomentComponentActivity() }
     val miniPlayerAvailable =
         remember(miniPlayerActivity, item.mediaKind, item.slideCount) {
@@ -191,7 +202,18 @@ internal fun MomentActionSheet(
         // Do not let this context menu claim player-sized vertical space. With the partial sheet
         // state above, it wraps to compact rows on phones as well.
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-            if (momentMediaMode(item.mediaKind, item.slideCount) == MomentMediaMode.Video) {
+            if (item.isLive) {
+                MomentActionRow(
+                    icon = Icons.AutoMirrored.Filled.Chat,
+                    label = stringResource(R.string.player_comments_heading),
+                    selected = commentsVisible,
+                    onClick = {
+                        onToggleComments()
+                        onDismissRequest()
+                    },
+                )
+            }
+            if (momentMediaMode(item.mediaKind, item.slideCount) == MomentMediaMode.Video && !item.isLive) {
                 Box {
                     MomentActionRow(
                         icon = Icons.Default.Speed,
@@ -251,6 +273,26 @@ internal fun MomentActionSheet(
                     },
                 )
             }
+            if (onToggleFullscreen != null) {
+                MomentActionRow(
+                    icon = Icons.Default.Fullscreen,
+                    label = stringResource(R.string.action_toggle_fullscreen),
+                    onClick = {
+                        onToggleFullscreen()
+                        onDismissRequest()
+                    },
+                )
+            }
+            if (momentMediaMode(item.mediaKind, item.slideCount) == MomentMediaMode.Video && !item.isLive) {
+                MomentActionRow(
+                    icon = Icons.Default.ClosedCaption,
+                    label = stringResource(if (subtitlesVisible) R.string.player_hide_subtitles else R.string.player_show_subtitles),
+                    onClick = {
+                        onToggleSubtitles()
+                        onDismissRequest()
+                    },
+                )
+            }
             MomentActionRow(
                 icon = ImageVector.vectorResource(R.drawable.ic_feed_share_24),
                 label = stringResource(R.string.action_share),
@@ -259,6 +301,16 @@ internal fun MomentActionSheet(
                     onShare(item)
                 },
             )
+            if (item.canonicalUrl.isNotBlank()) {
+                MomentActionRow(
+                    icon = Icons.AutoMirrored.Filled.OpenInNew,
+                    label = stringResource(R.string.action_open_externally),
+                    onClick = {
+                        onDismissRequest()
+                        uriHandler.openUri(item.canonicalUrl)
+                    },
+                )
+            }
             if (actions.canVisitReposter) {
                 MomentActionRow(
                     icon = Icons.Default.Person,
@@ -350,7 +402,7 @@ internal fun MomentUnfollowConfirmation(
 }
 
 @Composable
-private fun MomentActionRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun MomentActionRow(icon: ImageVector, label: String, selected: Boolean? = null, onClick: () -> Unit) {
     Row(
         modifier =
             Modifier
@@ -368,8 +420,9 @@ private fun MomentActionRow(icon: ImageVector, label: String, onClick: () -> Uni
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(start = 16.dp),
+            modifier = Modifier.weight(1f).padding(start = 16.dp),
         )
+        if (selected == true) Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(20.dp))
     }
 }
 
