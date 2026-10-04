@@ -210,7 +210,7 @@
                 liveProto
                 liveEuler
               ];
-          tiktokPython = pkgs.python3.withPackages (_: [ tiktokLive ]);
+          tiktokPython = pkgs.python3.withPackages (_: [ tiktokLive pythonPackages.requests ]);
 
           sourceRoots = [
             "cmd"

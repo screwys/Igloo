@@ -8,9 +8,13 @@ import {
   syncFeedActionIcons,
   formatRelative,
   materialIconMarkup,
+  apiFetch,
+  setPlaybackRangeProvider,
   t,
 } from '../utils.js'
 import { bindFeedVideoControls, createFeedVideoControls, handleFeedVideoShortcut } from './video-controls.js'
+import { createLiveChatPanel, initBroadcastChat } from '../player/chat.js'
+import { configureXSpaceAudio } from '../player/x-space-audio.js'
 
 // ── Helpers ──
 
@@ -58,6 +62,22 @@ function updateRetweetMenuLabels(scope) {
 
 let overlayEl = null
 let keyHandler = null
+
+function releaseLiveSession(sessionId) {
+  if (sessionId) apiFetch('/api/streams/' + encodeURIComponent(sessionId), { method: 'DELETE', keepalive: true }).catch(function () {})
+}
+
+function stopLivePlayback(overlay) {
+  if (!overlay || !overlay.hasAttribute('data-feed-live')) return
+  if (overlay._liveAbort) overlay._liveAbort.abort()
+  if (overlay._overlayVideo) overlay._overlayVideo.pause()
+  const player = overlay._livePlayer
+  overlay._livePlayer = null
+  releaseLiveSession(overlay._liveSessionId)
+  overlay._liveSessionId = ''
+  if (player) overlay._liveCleanup = player.destroy().catch(function () {})
+  return overlay._liveCleanup || Promise.resolve()
+}
 
 function setFeedMediaOverlayOpen(open) {
   if (!document.body) return
@@ -309,6 +329,13 @@ function getMediaSources(card, clickedEl) {
 
 export function closeMediaOverlay() {
   if (overlayEl) {
+    if (overlayEl.hasAttribute('data-feed-live')) {
+      window.removeEventListener('pagehide', closeMediaOverlay)
+      window.removeEventListener('popstate', closeMediaOverlay)
+      if (overlayEl._liveChatCleanup) overlayEl._liveChatCleanup()
+      if (overlayEl._videoControlsCleanup) overlayEl._videoControlsCleanup()
+    }
+    stopLivePlayback(overlayEl)
     restoreInlineVideoPlayback(overlayEl, true)
     if (overlayEl.parentNode) overlayEl.remove()
   }
@@ -323,15 +350,18 @@ export function closeMediaOverlay() {
 // ── Open overlay ──
 
 export function openMediaOverlay(root, triggerEl) {
-  if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) return
-  const media = getMediaSources(root, triggerEl)
+  const liveURL = root && root.getAttribute('data-feed-live-url') || ''
+  if (!liveURL && window.matchMedia && window.matchMedia('(max-width: 768px)').matches) return
+  const media = liveURL ? {
+    kind: 'video', streamUrl: liveURL, posterUrl: root.getAttribute('data-feed-live-thumbnail') || '', playbackKind: 'live',
+  } : getMediaSources(root, triggerEl)
   if (!media) return
   closeMediaOverlay()
   const article = itemRootFromNode(root) || root
   const tweetId = String(article.getAttribute('data-tweet-id') || '').trim()
   const link = safeExternalHttpURL(article.getAttribute('data-feed-link'))
-  const channelId = String(article.getAttribute('data-channel-id') || '').trim()
-  const channelName = String(article.getAttribute('data-channel-name') || '').trim()
+  let channelId = String(article.getAttribute('data-channel-id') || '').trim()
+  let channelName = String(article.getAttribute('data-channel-name') || '').trim()
   const channelPlatform = String(article.getAttribute('data-channel-platform') || 'twitter').trim() || 'twitter'
 
   const triggerQuoteCard = triggerEl && triggerEl.closest ? triggerEl.closest('.feed-quote-card') : null
@@ -343,6 +373,7 @@ export function openMediaOverlay(root, triggerEl) {
   let currentIndex = Math.max(0, Number(media.startIndex || 0))
   const overlay = document.createElement('div')
   overlay.className = 'feed-media-overlay'
+  if (liveURL) overlay.setAttribute('data-feed-live', '')
   if (tweetId) overlay.setAttribute('data-feed-overlay-tweet-id', tweetId)
   // Quote overlay attribute is toggled per slide by renderSidebar.
   // Static overlay shell template — no user input
@@ -364,6 +395,10 @@ export function openMediaOverlay(root, triggerEl) {
     '</div>'
   document.body.appendChild(overlay)
   overlayEl = overlay
+  if (liveURL) {
+    window.addEventListener('pagehide', closeMediaOverlay)
+    window.addEventListener('popstate', closeMediaOverlay)
+  }
   setFeedMediaOverlayOpen(true)
 
   const top = overlay.querySelector('.feed-media-overlay-top')
@@ -372,8 +407,15 @@ export function openMediaOverlay(root, triggerEl) {
   const prev = overlay.querySelector('.feed-media-overlay-nav.prev')
   const next = overlay.querySelector('.feed-media-overlay-nav.next')
   const bottom = overlay.querySelector('.feed-media-overlay-bottom')
+  let liveChatPanel = liveURL ? createLiveChatPanel() : null
+  if (liveChatPanel) {
+    const right = overlay.querySelector('.feed-media-overlay-right')
+    right.classList.add('player-sidebar')
+    right.replaceChildren(liveChatPanel)
+  }
 
   function renderSidebar(sourceKind) {
+    if (liveURL) return
     const isQuote = sourceKind === 'quote' && !!quoteCardEl
     const sourceCard = isQuote ? quoteCardEl : article
 
@@ -407,12 +449,12 @@ export function openMediaOverlay(root, triggerEl) {
           || String(article.getAttribute('data-feed-author') || '').trim()
           || channelName
           || t('feed_x_post', 'X post')
-        authorHandleRaw = textContentTrim(article.querySelector('.feed-author-handle')).replace(/^@+/, '')
+        authorHandleRaw = textContentTrim(article.querySelector('.feed-author-handle')).replace(/^@+/, '') || (liveURL ? article.getAttribute('data-author-handle') || '' : '')
         var dateEl = article.querySelector('.feed-date-inline')
         dateRaw = String((dateEl && dateEl.getAttribute('data-feed-date-raw')) || article.getAttribute('data-feed-date') || '').trim()
         dateText = textContentTrim(dateEl).replace(/^·\s*/, '') || formatRelative(dateRaw) || dateRaw
         bodySourceEl = article.querySelector('.feed-body-text')
-        titleText = textContentTrim(article.querySelector('.feed-text'))
+        titleText = textContentTrim(article.querySelector('.feed-text')) || (liveURL ? article.getAttribute('data-feed-live-title') || '' : '')
         summaryText = textContentTrim(article.querySelector('.feed-summary'))
         repostText = textContentTrim(article.querySelector('.feed-repost-line'))
       }
@@ -531,6 +573,13 @@ export function openMediaOverlay(root, triggerEl) {
       }
       top.appendChild(headline)
 
+      if (liveURL && article.hasAttribute('data-feed-live-status')) {
+        const liveStatus = document.createElement('span')
+        liveStatus.className = 'feed-overlay-sub'
+        liveStatus.textContent = article.getAttribute('data-feed-live-status') === 'is_live' ? t('broadcast_live', 'Live') : t('broadcast_replay', 'Replay')
+        top.appendChild(liveStatus)
+      }
+
       if (bodySourceEl && textContentTrim(bodySourceEl)) {
         const bodyEl = document.createElement('p')
         bodyEl.className = 'feed-overlay-text'
@@ -565,41 +614,43 @@ export function openMediaOverlay(root, triggerEl) {
       const actionsWrap = document.createElement('div')
       actionsWrap.className = 'feed-overlay-actions'
 
-      const shareBtn = document.createElement('button')
-      shareBtn.className = 'feed-action-btn'
-      shareBtn.type = 'button'
-      shareBtn.setAttribute('data-feed-overlay-action', 'share')
-      shareBtn.title = t('action_share', 'Share')
-      shareBtn.setAttribute('aria-label', shareBtn.title)
-      // Static SVG — no user input
-      shareBtn.innerHTML = getFeedActionIconSvg('share') // eslint-disable-line no-unsanitized/property
-      actionsWrap.appendChild(shareBtn)
+      if (!liveURL) {
+        const shareBtn = document.createElement('button')
+        shareBtn.className = 'feed-action-btn'
+        shareBtn.type = 'button'
+        shareBtn.setAttribute('data-feed-overlay-action', 'share')
+        shareBtn.title = t('action_share', 'Share')
+        shareBtn.setAttribute('aria-label', shareBtn.title)
+        // Static SVG with no user input.
+        shareBtn.innerHTML = getFeedActionIconSvg('share') // eslint-disable-line no-unsanitized/property
+        actionsWrap.appendChild(shareBtn)
 
-      var liked = isQuote
-        ? String(sourceCard.getAttribute('data-quote-liked') || '0') === '1'
-        : stateBool(article, 'liked')
-      var heartBtn = document.createElement('button')
-      heartBtn.className = 'feed-action-btn' + (liked ? ' active' : '')
-      heartBtn.type = 'button'
-      heartBtn.setAttribute('data-feed-overlay-action', 'heart')
-      heartBtn.title = liked ? t('action_unlike', 'Unlike') : t('action_like', 'Like')
-      heartBtn.setAttribute('aria-label', heartBtn.title)
-      // Static SVG — no user input
-      heartBtn.innerHTML = getFeedActionIconSvg('heart', liked) // eslint-disable-line no-unsanitized/property
-      actionsWrap.appendChild(heartBtn)
+        var liked = isQuote
+          ? String(sourceCard.getAttribute('data-quote-liked') || '0') === '1'
+          : stateBool(article, 'liked')
+        var heartBtn = document.createElement('button')
+        heartBtn.className = 'feed-action-btn' + (liked ? ' active' : '')
+        heartBtn.type = 'button'
+        heartBtn.setAttribute('data-feed-overlay-action', 'heart')
+        heartBtn.title = liked ? t('action_unlike', 'Unlike') : t('action_like', 'Like')
+        heartBtn.setAttribute('aria-label', heartBtn.title)
+        // Static SVG with no user input.
+        heartBtn.innerHTML = getFeedActionIconSvg('heart', liked) // eslint-disable-line no-unsanitized/property
+        actionsWrap.appendChild(heartBtn)
 
-      var bookmarked = isQuote
-        ? String(sourceCard.getAttribute('data-quote-bookmarked') || '0') === '1'
-        : stateBool(article, 'bookmarked')
-      var bmBtn = document.createElement('button')
-      bmBtn.className = 'feed-action-btn' + (bookmarked ? ' active' : '')
-      bmBtn.type = 'button'
-      bmBtn.setAttribute('data-feed-overlay-action', 'bookmark')
-      bmBtn.title = bookmarked ? t('action_unbookmark', 'Unbookmark') : t('action_bookmark', 'Bookmark')
-      bmBtn.setAttribute('aria-label', bmBtn.title)
-      // Static SVG — no user input
-      bmBtn.innerHTML = getFeedActionIconSvg('bookmark', bookmarked) // eslint-disable-line no-unsanitized/property
-      actionsWrap.appendChild(bmBtn)
+        var bookmarked = isQuote
+          ? String(sourceCard.getAttribute('data-quote-bookmarked') || '0') === '1'
+          : stateBool(article, 'bookmarked')
+        var bmBtn = document.createElement('button')
+        bmBtn.className = 'feed-action-btn' + (bookmarked ? ' active' : '')
+        bmBtn.type = 'button'
+        bmBtn.setAttribute('data-feed-overlay-action', 'bookmark')
+        bmBtn.title = bookmarked ? t('action_unbookmark', 'Unbookmark') : t('action_bookmark', 'Bookmark')
+        bmBtn.setAttribute('aria-label', bmBtn.title)
+        // Static SVG with no user input.
+        bmBtn.innerHTML = getFeedActionIconSvg('bookmark', bookmarked) // eslint-disable-line no-unsanitized/property
+        actionsWrap.appendChild(bmBtn)
+      }
 
       var overlayLink = isQuote ? (quoteLink || link) : link
       var threadTweetId = isQuote ? quoteTweetId : tweetId
@@ -634,18 +685,23 @@ export function openMediaOverlay(root, triggerEl) {
     var videoWrap = document.createElement('div')
     videoWrap.className = 'feed-overlay-video-wrap'
 
-    var v = takeOverInlineVideoPlayback(overlay, activeStreamUrl)
+    if (liveURL) {
+      document.querySelectorAll('video[data-feed-inline-video]').forEach(function (video) { video.pause() })
+    }
+    var v = liveURL ? null : takeOverInlineVideoPlayback(overlay, activeStreamUrl)
     if (!v) {
       v = document.createElement('video')
       v.className = 'feed-overlay-video'
       v.autoplay = true
       v.playsInline = true
-      v.loop = true
+      v.loop = !liveURL
       if (activePosterUrl) v.poster = activePosterUrl
-      var source = document.createElement('source')
-      source.src = activeStreamUrl
-      source.type = 'video/mp4'
-      v.appendChild(source)
+      if (!liveURL) {
+        var source = document.createElement('source')
+        source.src = activeStreamUrl
+        source.type = 'video/mp4'
+        v.appendChild(source)
+      }
       v.muted = false
     }
 
@@ -658,15 +714,124 @@ export function openMediaOverlay(root, triggerEl) {
     }
     v.addEventListener('click', togglePlayback)
     overlay._overlayVideo = v
+    if (liveURL) {
+      v.dataset.liveStream = '1'
+      setPlaybackRangeProvider(v, function () {
+        return overlay._livePlayer ? overlay._livePlayer.seekRange() : null
+      })
+    }
     overlay._overlayPlaybackKind = activePlaybackKind || 'video'
     overlay._videoClickHandler = togglePlayback
 
     videoWrap.appendChild(v)
-    videoWrap.appendChild(createFeedVideoControls())
+    videoWrap.appendChild(createFeedVideoControls(liveURL ? { refresh: true, mini: false, cinema: false } : undefined))
     overlay._videoControlsCleanup = bindFeedVideoControls(videoWrap, v, {
       onCinema: closeMediaOverlay,
+      onRefresh: async function () {
+        const box = videoWrap.getBoundingClientRect()
+        videoWrap.style.aspectRatio = box.width + '/' + box.height
+        v.style.height = '100%'
+        v.defaultPlaybackRate = v.playbackRate
+        const attempt = overlay._liveAbort
+        const stopped = stopLivePlayback(overlay)
+        if (overlay._liveChatCleanup) overlay._liveChatCleanup()
+        overlay._liveChatCleanup = null
+        await stopped
+        if (overlayEl === overlay && overlay._liveAbort === attempt) startLivePlayback(v, videoWrap)
+      },
     })
+    if (liveURL) startLivePlayback(v, videoWrap)
     return videoWrap
+  }
+
+  async function startLivePlayback(video, videoWrap) {
+    video.defaultPlaybackRate = video.playbackRate
+    let status = videoWrap.querySelector('.feed-live-status')
+    if (!status) {
+      status = document.createElement('span')
+      status.className = 'feed-live-status'
+      status.setAttribute('role', 'status')
+      videoWrap.appendChild(status)
+    }
+    status.textContent = t('status_loading', 'Loading...')
+    status.hidden = false
+    const abort = new AbortController()
+    overlay._liveAbort = abort
+    function fail(error) {
+      if (overlayEl !== overlay || abort.signal.aborted) return
+      console.debug('[Feed] live playback failed', String(error && (error.detail || error).code))
+      const code = error && error.payload && error.payload.error_code
+      status.textContent = code === 'live_ended' ? t('shorts_live_ended', 'Live stream ended') : error && error.payload && error.payload.error_message || t('shorts_live_playback_failed', 'Live stream could not play')
+      status.hidden = false
+      stopLivePlayback(overlay)
+    }
+    try {
+      const result = await apiFetch('/api/x/stream', { method: 'POST', body: JSON.stringify({ url: liveURL }), signal: abort.signal })
+      if (overlayEl !== overlay || abort.signal.aborted) { releaseLiveSession(result.session_id); return }
+      overlay._liveSessionId = result.session_id
+      if (result.live) {
+        video.dataset.liveStream = result.live.live_status === 'is_live' ? '1' : '0'
+        channelId = result.live.channel_id || ''
+        channelName = result.live.display_name || result.live.handle || t('platform_x', 'X')
+        article.setAttribute('data-channel-id', channelId)
+        article.setAttribute('data-channel-name', channelName)
+        article.setAttribute('data-author-handle', result.live.handle || '')
+        article.setAttribute('data-avatar-url', result.live.avatar_url || '')
+        article.setAttribute('data-feed-live-title', result.live.title || '')
+        article.setAttribute('data-feed-live-status', result.live.live_status || '')
+        const author = article.querySelector('.feed-author')
+        if (author) author.textContent = result.live.display_name || result.live.handle || t('platform_x', 'X')
+        const body = article.querySelector('.feed-body-text')
+        if (body) body.textContent = result.live.title || ''
+        const handle = article.querySelector('.feed-author-handle')
+        if (handle) handle.textContent = result.live.handle ? '@' + result.live.handle : ''
+        if (result.live.broadcast_id) {
+          overlay._liveChatCleanup = initBroadcastChat(video, liveChatPanel, '/api/x/lives/' + encodeURIComponent(result.live.broadcast_id) + '/chat')
+        }
+      }
+      const shaka = window.shaka
+      if (!shaka) throw new Error('stream player unavailable')
+      shaka.polyfill.installAll()
+      const player = new shaka.Player()
+      overlay._livePlayer = player
+      let startedAtLiveEdge = false
+      function startAtLiveEdge() {
+        if (startedAtLiveEdge || video.readyState < 2 || !player.isLive()) return
+        const range = player.seekRange()
+        if (range.end <= range.start) return
+        let buffered = false
+        for (let i = 0; i < video.buffered.length; i++) {
+          if (range.end >= video.buffered.start(i) && range.end < video.buffered.end(i)) buffered = true
+        }
+        if (!buffered) return
+        startedAtLiveEdge = true
+        video.removeEventListener('loadeddata', startAtLiveEdge)
+        video.removeEventListener('timeupdate', startAtLiveEdge)
+        player.goToLive()
+      }
+      video.addEventListener('loadeddata', startAtLiveEdge, { signal: abort.signal })
+      video.addEventListener('timeupdate', startAtLiveEdge, { signal: abort.signal })
+      player.addEventListener('manifestupdated', function () {
+        if (overlay._livePlayer === player) {
+          startAtLiveEdge()
+          video.dispatchEvent(new Event('progress'))
+        }
+      })
+      player.addEventListener('error', function (event) {
+        if (event.detail.severity === shaka.util.Error.Severity.CRITICAL) fail(event.detail)
+      })
+      await player.attach(video)
+      configureXSpaceAudio(player, liveURL)
+      if (overlayEl !== overlay || abort.signal.aborted) return
+      await player.load(result.manifest_url, null, result.manifest_type === 'hls' ? 'application/x-mpegurl' : 'application/dash+xml')
+      if (overlayEl !== overlay || abort.signal.aborted) return
+      startAtLiveEdge()
+      video.playbackRate = video.defaultPlaybackRate
+      status.hidden = true
+      video.play().catch(function () {})
+    } catch (error) {
+      if (error.name !== 'AbortError') fail(error)
+    }
   }
 
   function render() {

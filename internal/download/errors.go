@@ -244,6 +244,8 @@ func containsAuthSignal(s string) bool {
 		"not logged in",
 		"authentication",
 		"authorizationerror",
+		"authorization: denied by access control",
+		"this account is temporarily locked",
 		"authrequired",
 		"unauthorized",
 		"use --cookies",

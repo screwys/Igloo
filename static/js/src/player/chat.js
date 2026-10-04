@@ -135,22 +135,82 @@ function messageRow(entry) {
   return row
 }
 
-export function initLiveChat(video, root) {
-  const panel = document.getElementById('player-chat')
+export function createLiveChatPanel() {
+  const panel = document.createElement('section')
+  panel.id = 'player-chat'
+  panel.className = 'player-chat'
+  panel.setAttribute('aria-labelledby', 'player-chat-heading')
+  const header = document.createElement('header')
+  header.className = 'player-chat-header'
+  const heading = document.createElement('h3')
+  heading.id = 'player-chat-heading'
+  heading.textContent = t('player_live_chat', 'Live chat')
+  header.appendChild(heading)
+  function button(id, label, icon, hidden) {
+    const node = document.createElement('button')
+    node.id = id
+    node.className = 'player-btn' + (hidden ? ' hidden' : '')
+    node.type = 'button'
+    node.title = label
+    node.setAttribute('aria-label', label)
+    setSvgContent(node, materialIconMarkup(icon))
+    return node
+  }
+  header.appendChild(button('player-chat-refresh', t('action_refresh', 'Refresh'), 'Refresh', true))
+  const toggle = button('player-chat-toggle', t('action_hide', 'Hide'), 'KeyboardArrowUp')
+  toggle.setAttribute('aria-expanded', 'true')
+  toggle.setAttribute('aria-controls', 'player-chat-body')
+  header.appendChild(toggle)
+  const body = document.createElement('div')
+  body.id = 'player-chat-body'
+  const list = document.createElement('div')
+  list.id = 'player-chat-messages'
+  list.className = 'player-chat-messages'
+  list.tabIndex = 0
+  list.setAttribute('role', 'log')
+  list.setAttribute('aria-live', 'off')
+  list.setAttribute('aria-label', heading.textContent)
+  const status = document.createElement('p')
+  status.id = 'player-chat-status'
+  status.className = 'player-chat-status'
+  status.textContent = t('status_loading_ellipsis', 'Loading...')
+  body.append(list, status, button('player-chat-latest', t('player_chat_latest', 'Latest messages'), 'KeyboardArrowDown', true))
+  panel.append(header, body)
+  return panel
+}
+
+export function initBroadcastChat(video, panel, sourceURL) {
+  return initLiveChat(video, panel, {
+    panel, sourceURL, immediate: true,
+    parseEvents: record => [{
+      type: 'add', live: true, time: record.timestamp_ms,
+      message: {
+        id: record.id, authorId: record.author_id, author: record.author,
+        avatar: '', badges: [], body: [{ text: record.text }], header: [], amount: '',
+        paid: false, member: false, owner: false, moderator: false, color: '', timestamp: record.timestamp_ms,
+      },
+    }],
+  })
+}
+
+export function initLiveChat(video, root, options = {}) {
+  const panel = options.panel || document.getElementById('player-chat')
   if (!panel) return
-  const list = document.getElementById('player-chat-messages')
-  const status = document.getElementById('player-chat-status')
-  const latest = document.getElementById('player-chat-latest')
-  const toggle = document.getElementById('player-chat-toggle')
-  const refresh = document.getElementById('player-chat-refresh')
-  const body = document.getElementById('player-chat-body')
+  const list = panel.querySelector('#player-chat-messages')
+  const status = panel.querySelector('#player-chat-status')
+  const latest = panel.querySelector('#player-chat-latest')
+  const toggle = panel.querySelector('#player-chat-toggle')
+  const refresh = panel.querySelector('#player-chat-refresh')
+  const body = panel.querySelector('#player-chat-body')
+  const lifecycle = new AbortController()
+  const listenerOptions = { signal: lifecycle.signal }
   let events = []
   const messages = new Map()
   const messageOrder = []
   let cursor = 0
   let previousTime = -Infinity
   let captureStartedAt = 0
-  const live = panel.dataset.live === '1'
+  const live = options.immediate || panel.dataset.live === '1'
   let liveEpochOffset = null
   let streamPosition = null
   let follow = true
@@ -163,6 +223,7 @@ export function initLiveChat(video, root) {
   let hasEarlier = false
 
   function position() {
+    if (options.immediate) return Infinity
     const mediaTime = video.currentTime * 1000
     if (!live) return mediaTime
     const time = streamPosition && streamPosition()
@@ -242,10 +303,12 @@ export function initLiveChat(video, root) {
       cursor = 0
       previousTime = -Infinity
     }
-    source = new EventSource('/api/youtube/' + encodeURIComponent(root.dataset.videoId) + '/chat')
+    source = new EventSource(options.sourceURL || '/api/youtube/' + encodeURIComponent(root.dataset.videoId) + '/chat')
     source.addEventListener('start', event => { captureStartedAt = JSON.parse(event.data).started_at_ms })
+    if (options.immediate) source.addEventListener('ready', () => { status.textContent = '' })
     source.addEventListener('chat', event => {
-      const incoming = chatEvents(JSON.parse(event.data), captureStartedAt, live)
+      const parseEvents = options.parseEvents || chatEvents
+      const incoming = parseEvents(JSON.parse(event.data), captureStartedAt, live)
       if (!incoming.length) return
       if (events.length && incoming[0].time < events[events.length - 1].time) {
         events.push(...incoming)
@@ -280,8 +343,8 @@ export function initLiveChat(video, root) {
       visibleCount += 100
       render(true)
     }
-  }, { passive: true })
-  latest.addEventListener('click', () => { follow = true; visibleCount = 100; render() })
+  }, { passive: true, signal: lifecycle.signal })
+  latest.addEventListener('click', () => { follow = true; visibleCount = 100; render() }, listenerOptions)
   refresh.addEventListener('click', () => {
     ended = false
     events = []
@@ -293,7 +356,7 @@ export function initLiveChat(video, root) {
     renderPending = true
     status.textContent = t('status_loading_ellipsis', 'Loading...')
     connect()
-  })
+  }, listenerOptions)
   toggle.addEventListener('click', () => {
     body.hidden = !body.hidden
     root.classList.toggle('chat-closed', body.hidden)
@@ -303,17 +366,23 @@ export function initLiveChat(video, root) {
     setSvgContent(toggle, materialIconMarkup(body.hidden ? 'KeyboardArrowDown' : 'KeyboardArrowUp'))
     if (body.hidden) close()
     else { connect(); schedule() }
-  })
-  video.addEventListener('timeupdate', schedule)
-  video.addEventListener('seeked', () => { follow = true; schedule() })
-  video.addEventListener('seeking', schedule)
+  }, listenerOptions)
+  video.addEventListener('timeupdate', schedule, listenerOptions)
+  video.addEventListener('seeked', () => { follow = true; schedule() }, listenerOptions)
+  video.addEventListener('seeking', schedule, listenerOptions)
   video.addEventListener('playing', () => {
     if (liveEpochOffset === null) liveEpochOffset = Date.now() - video.currentTime * 1000
     schedule()
-  })
-  root.addEventListener('streamclockready', event => { streamPosition = event.detail.position; schedule() })
+  }, listenerOptions)
+  root.addEventListener('streamclockready', event => { streamPosition = event.detail.position; schedule() }, listenerOptions)
   if (!video.paused && liveEpochOffset === null) liveEpochOffset = Date.now() - video.currentTime * 1000
-  window.addEventListener('pagehide', () => { close(); if (animation !== null) cancelAnimationFrame(animation); animation = null })
-  window.addEventListener('pageshow', () => { if (!body.hidden) connect() })
+  window.addEventListener('pagehide', () => { close(); if (animation !== null) cancelAnimationFrame(animation); animation = null }, listenerOptions)
+  window.addEventListener('pageshow', () => { if (!body.hidden) connect() }, listenerOptions)
   connect()
+  return function () {
+    close()
+    lifecycle.abort()
+    if (animation !== null) cancelAnimationFrame(animation)
+    animation = null
+  }
 }

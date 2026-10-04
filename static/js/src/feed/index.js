@@ -1231,6 +1231,13 @@ function handleInlineVideoClick(mediaTrigger, event) {
 document.addEventListener('click', function (event) {
   if (event.target.closest && event.target.closest('[data-feed-video-control], [data-feed-progress]')) return
 
+  var liveTrigger = event.target && event.target.closest ? event.target.closest('[data-feed-live-url]') : null
+  if (liveTrigger) {
+    event.preventDefault()
+    openMediaOverlay(liveTrigger, liveTrigger)
+    return
+  }
+
   var mediaTrigger = event.target && event.target.closest ? event.target.closest('[data-feed-media]') : null
   if (!mediaTrigger) return
   if (event.target.closest && event.target.closest('.feed-media-overlay')) return
@@ -1677,3 +1684,12 @@ initRetweetersDialog()
 restoreFeedThreadReturn()
 initThreadBackLink()
 initThreadAutoFetch(document.querySelector('[data-thread-route]'))
+
+var initialLiveURL = new URLSearchParams(window.location.search).get('live')
+if (initialLiveURL) {
+  var liveRoot = document.createElement('div')
+  liveRoot.setAttribute('data-feed-live-url', initialLiveURL)
+  liveRoot.setAttribute('data-feed-link', initialLiveURL)
+  liveRoot.setAttribute('data-channel-name', t('platform_x', 'X'))
+  openMediaOverlay(liveRoot, liveRoot)
+}

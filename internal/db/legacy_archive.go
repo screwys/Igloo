@@ -230,7 +230,9 @@ func (db *DB) RestoreLegacyArchive(ctx context.Context, path string) error {
 	for i, table := range tables {
 		quoted[i] = quoteArchiveIdentifier(table)
 	}
-	quoted = append(quoted, quoteArchiveIdentifier("tiktok_lives"))
+	for _, table := range []string{"tiktok_lives", "x_space_presence", "x_broadcast_sources", "x_broadcasts"} {
+		quoted = append(quoted, quoteArchiveIdentifier(table))
+	}
 	if _, err := tx.ExecContext(ctx, "TRUNCATE "+strings.Join(quoted, ",")+" RESTART IDENTITY"); err != nil {
 		return fmt.Errorf("clear restored tables: %w", err)
 	}
@@ -247,6 +249,9 @@ func (db *DB) RestoreLegacyArchive(ctx context.Context, path string) error {
 		if err := copyLegacyArchiveTable(ctx, source, target, table); err != nil {
 			return fmt.Errorf("restore SQLite table %s: %w", table, err)
 		}
+	}
+	if _, err := tx.ExecContext(ctx, seedSavedXBroadcastSourcesSQL); err != nil {
+		return fmt.Errorf("prepare restored X broadcast links: %w", err)
 	}
 	for _, table := range tables {
 		if _, err := tx.ExecContext(ctx, "ALTER TABLE "+quoteArchiveIdentifier(table)+" ENABLE TRIGGER USER"); err != nil {

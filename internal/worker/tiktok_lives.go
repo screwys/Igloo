@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/screwys/igloo/internal/download"
@@ -16,6 +17,7 @@ func (m *Manager) runTikTokLivesLoop(ctx context.Context) {
 		if m.cfg.PlatformEnabled("tiktok") && m.externalWorkAllowed(time.Now()) {
 			rooms, err := m.db.FollowedTikTokLiveSources()
 			failed := 0
+			failures := make(map[string]int)
 			if err == nil && len(rooms) > 0 {
 				err = download.FetchTikTokLives(ctx, rooms, func(handle string, info *download.TikTokLiveInfo, fetchErr error) error {
 					if fetchErr == nil {
@@ -25,16 +27,17 @@ func (m *Manager) runTikTokLivesLoop(ctx context.Context) {
 						}
 						var live *model.TikTokLive
 						if info != nil {
-							live = &model.TikTokLive{ChannelID: channelID, RoomID: info.RoomID, Handle: handle, Title: info.Title, ViewerCount: info.ViewerCount, ObservedAtMs: time.Now().UnixMilli()}
+							live = &model.TikTokLive{ChannelID: channelID, RoomID: info.RoomID, Handle: handle, Title: info.Title, ThumbnailURL: info.Playback.Thumbnail, ViewerCount: info.ViewerCount, ObservedAtMs: time.Now().UnixMilli()}
 						}
 						return m.db.ObserveTikTokLive(channelID, live)
 					}
 					failed++
+					failures[strings.TrimPrefix(fetchErr.Error(), "TikTok live: ")]++
 					return nil
 				})
 			}
 			if failed > 0 && ctx.Err() == nil {
-				log.Printf("[tiktok-live] %d channel checks failed", failed)
+				log.Printf("[tiktok-live] %d channel checks failed: %v", failed, failures)
 			}
 			if err != nil && ctx.Err() == nil {
 				log.Printf("[tiktok-live] refresh: %v", err)
@@ -98,7 +101,7 @@ func (m *Manager) ResolveTikTokLive(ctx context.Context, channelID string) (*mod
 		return nil, nil, nil
 	}
 	live := &model.TikTokLive{ChannelID: channelID, RoomID: info.RoomID, Handle: info.Handle, DisplayName: channel.DisplayName, Title: info.Title,
-		AvatarURL: "/api/media/avatar/" + channelID, ViewerCount: info.ViewerCount, ObservedAtMs: time.Now().UnixMilli()}
+		AvatarURL: "/api/media/avatar/" + channelID, ThumbnailURL: info.Playback.Thumbnail, ViewerCount: info.ViewerCount, ObservedAtMs: time.Now().UnixMilli()}
 	if live.DisplayName == "" {
 		live.DisplayName = channel.Name
 	}

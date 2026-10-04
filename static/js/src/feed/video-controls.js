@@ -1,4 +1,4 @@
-import { attachSeekTooltip, makeDraggableSeekbar, materialIconMarkup, setSvgContent, t, tf } from '../utils.js'
+import { attachSeekTooltip, makeDraggableSeekbar, playbackRange, updatePlaybackProgress, materialIconMarkup, setSvgContent, t, tf } from '../utils.js'
 import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
 import { bindVolumeWheel, readStoredVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
 import { bindVideoFeedback } from '../video-feedback.js'
@@ -17,6 +17,7 @@ function setVideoVolume(video, value, volumeKey) {
 }
 
 const videoControlIcons = {
+  refresh: materialIconMarkup('Refresh'),
   play: materialIconMarkup('PlayArrow'),
   pause: materialIconMarkup('Pause'),
   muted: materialIconMarkup('VolumeOff'),
@@ -120,6 +121,11 @@ export function createFeedVideoControls(options) {
   controls.className = 'feed-video-controls'
   controls.setAttribute('data-feed-video-controls', '')
 
+  if (opts.refresh) {
+    const refresh = makeControlButton('data-feed-video-refresh', t('action_refresh', 'Refresh'), 'refresh')
+    refresh.title = t('action_refresh', 'Refresh')
+    controls.appendChild(refresh)
+  }
   controls.appendChild(makeControlButton('data-feed-video-play', t('action_play', 'Play'), 'play'))
 
   const progress = document.createElement('div')
@@ -209,9 +215,8 @@ export function handleFeedVideoShortcut(event, video, options) {
   const seekEnabled = !options || options.seek !== false
   if (seekEnabled && (key === 'ArrowLeft' || key === 'ArrowRight')) {
     const delta = key === 'ArrowRight' ? 5 : -5
-    const duration = Number(video.duration)
-    const upper = Number.isFinite(duration) && duration > 0 ? duration : Infinity
-    video.currentTime = Math.max(0, Math.min(upper, Number(video.currentTime || 0) + delta))
+    const range = playbackRange(video)
+    if (range) video.currentTime = Math.max(range.start, Math.min(range.end, Number(video.currentTime || 0) + delta))
     return true
   }
   if (key === 'ArrowUp' || key === 'ArrowDown') {
@@ -256,6 +261,7 @@ export function bindFeedVideoControls(wrap, video, options) {
   video.volume = readStoredVolume(window.localStorage, volumeKey, video.volume)
 
   const play = controls.querySelector('[data-feed-video-play]')
+  const refresh = controls.querySelector('[data-feed-video-refresh]')
   const mute = controls.querySelector('[data-feed-video-mute]')
   const volume = controls.querySelector('[data-feed-video-volume]')
   const volumeControl = controls.querySelector('[data-feed-video-volume-control]')
@@ -270,6 +276,14 @@ export function bindFeedVideoControls(wrap, video, options) {
   const speedOptions = speedMenu ? Array.from(speedMenu.querySelectorAll('[data-rate]')) : []
   const progress = controls.querySelector('[data-feed-progress]')
   const fill = controls.querySelector('[data-feed-progress-fill]')
+
+  if (refresh) {
+    refresh.addEventListener('click', function (event) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (opts.onRefresh) opts.onRefresh()
+    })
+  }
 
   function setVolumeOpen(open) {
     if (!volumeControl) return
@@ -329,11 +343,7 @@ export function bindFeedVideoControls(wrap, video, options) {
   }
 
   function syncProgress() {
-    if (!fill) return
-    const duration = Number(video.duration || 0)
-    const current = Number(video.currentTime || 0)
-    const percent = duration > 0 ? Math.max(0, Math.min(100, (current / duration) * 100)) : 0
-    fill.style.width = percent + '%'
+    updatePlaybackProgress(progress, fill, video)
   }
 
   function closeSpeedMenu() {
@@ -530,6 +540,9 @@ export function bindFeedVideoControls(wrap, video, options) {
   video.addEventListener('volumechange', syncMute)
   video.addEventListener('ratechange', syncSpeed)
   video.addEventListener('timeupdate', syncProgress)
+  video.addEventListener('durationchange', syncProgress)
+  video.addEventListener('progress', syncProgress)
+  video.addEventListener('emptied', syncProgress)
 
   makeDraggableSeekbar(progress, fill, video)
   attachSeekTooltip(progress, video)
@@ -538,6 +551,7 @@ export function bindFeedVideoControls(wrap, video, options) {
   syncSpeed()
   syncFullscreen()
   syncAutoplay()
+  syncProgress()
   return function () {
     if (unbindVolumeWheel) unbindVolumeWheel()
     if (feedback && typeof feedback.destroy === 'function') feedback.destroy()
@@ -546,6 +560,9 @@ export function bindFeedVideoControls(wrap, video, options) {
     video.removeEventListener('volumechange', syncMute)
     video.removeEventListener('ratechange', syncSpeed)
     video.removeEventListener('timeupdate', syncProgress)
+    video.removeEventListener('durationchange', syncProgress)
+    video.removeEventListener('progress', syncProgress)
+    video.removeEventListener('emptied', syncProgress)
     video.removeEventListener('dblclick', exitFullscreenOnDoubleClick)
     const ownerDocument = wrap.ownerDocument || document
     ownerDocument.removeEventListener('fullscreenchange', syncFullscreen)

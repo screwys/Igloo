@@ -10,12 +10,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/screwys/igloo/internal/model"
-	"github.com/screwys/igloo/internal/toolenv"
 )
 
 //go:embed tiktok_live.py
@@ -32,18 +30,8 @@ type TikTokLiveInfo struct {
 }
 
 func tiktokLiveCommand(ctx context.Context, mode string, args ...string) *exec.Cmd {
-	toolenv.ApplyCommonToolPaths()
-	python := strings.TrimSpace(os.Getenv("IGLOO_PYTHON"))
-	if python == "" {
-		python = "python3"
-		if runtime.GOOS == "windows" {
-			python = "python"
-		}
-	}
 	argv := append([]string{"-u", "-c", tiktokLiveAdapter, mode}, args...)
-	cmd := exec.CommandContext(ctx, python, argv...)
-	configureCommandCancellation(cmd)
-	return cmd
+	return pythonCommand(ctx, argv...)
 }
 
 func FetchTikTokLive(ctx context.Context, handle, roomID string) (*TikTokLiveInfo, error) {

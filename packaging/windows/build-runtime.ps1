@@ -52,6 +52,7 @@ $ffmpegArchive = Get-LockedArtifact "ffmpeg"
 $postgresArchive = Get-LockedArtifact "postgresql"
 $pythonArchive = Get-LockedArtifact "python"
 $tiktokLiveWheel = Get-LockedArtifact "tiktok-live"
+$requestsWheel = Get-LockedArtifact "requests"
 $protobufSource = Get-LockedArtifact "protobuf3-to-dict"
 
 Copy-Item $ytDlp (Join-Path $output "yt-dlp.exe")
@@ -69,11 +70,11 @@ New-Item -ItemType Directory -Force $pythonWheels | Out-Null
 & python -m pip wheel --no-deps --wheel-dir $pythonWheels $protobufSource
 & python -m pip download --dest $pythonWheels --find-links $pythonWheels `
     --platform win_amd64 --python-version $pythonVersion --implementation cp --abi $pythonABI `
-    --only-binary=:all: $tiktokLiveWheel
+    --only-binary=:all: $tiktokLiveWheel $requestsWheel
 & python -m pip install --target (Join-Path $pythonOutput "Lib/site-packages") `
     --no-index --find-links $pythonWheels --platform win_amd64 --python-version $pythonVersion `
-    --implementation cp --abi $pythonABI --only-binary=:all: $tiktokLiveWheel
-& (Join-Path $pythonOutput "python.exe") -c "from TikTokLive import TikTokLiveClient; from TikTokLive.events import CommentEvent"
+    --implementation cp --abi $pythonABI --only-binary=:all: $tiktokLiveWheel $requestsWheel
+& (Join-Path $pythonOutput "python.exe") -c "from TikTokLive import TikTokLiveClient; from TikTokLive.events import CommentEvent; import requests"
 
 $denoExtract = Join-Path $downloads "deno"
 Expand-Archive -Path $denoArchive -DestinationPath $denoExtract

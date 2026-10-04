@@ -409,7 +409,11 @@ func xmlString(value string) string {
 
 func (session *youtubeStreamSession) prepareUpstreamManifest() error {
 	for _, format := range session.info.Formats {
-		if format.ManifestURL == "" {
+		manifestURL := format.ManifestURL
+		if manifestURL == "" && strings.HasPrefix(format.Protocol, "m3u8") {
+			manifestURL = format.URL
+		}
+		if manifestURL == "" {
 			continue
 		}
 		kind := "dash"
@@ -418,7 +422,7 @@ func (session *youtubeStreamSession) prepareUpstreamManifest() error {
 		}
 		session.manifestType = kind
 		session.indexed = false
-		resourceURL := session.addResource(format.ManifestURL, playbackHeaders(session.info.Headers, format.Headers), format.DownloaderOptions)
+		resourceURL := session.addResource(manifestURL, playbackHeaders(session.info.Headers, format.Headers), format.DownloaderOptions)
 		session.rootResource = strings.TrimSuffix(path.Base(strings.TrimSuffix(resourceURL, "/")), "/")
 		session.textTracks = session.captionTracks()
 		return nil
@@ -436,8 +440,14 @@ func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *htt
 	if chunkSize <= 0 {
 		chunkSize = youtubeStreamChunkSize
 	}
-	initialRange := firstStreamRange(r.Header.Get("Range"), chunkSize)
-	if r.Method == http.MethodHead {
+	initialRange := r.Header.Get("Range")
+	if session.manifestType == "hls" && initialRange == "bytes=0-" {
+		initialRange = ""
+	}
+	if session.manifestType != "hls" || initialRange != "" {
+		initialRange = firstStreamRange(initialRange, chunkSize)
+	}
+	if r.Method == http.MethodHead && session.manifestType != "hls" {
 		initialRange = "bytes=0-0"
 	}
 	response, err := session.requestResource(r.Context(), resource, target, initialRange)
@@ -454,12 +464,12 @@ func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *htt
 		return
 	}
 	contentType := response.Header.Get("Content-Type")
-	isHLS := strings.Contains(contentType, "mpegurl") || strings.HasSuffix(target.Path, ".m3u8") || strings.Contains(target.Path, "/manifest/hls")
+	isHLS := strings.Contains(strings.ToLower(contentType), "mpegurl") || strings.HasSuffix(target.Path, ".m3u8") || strings.Contains(target.Path, "/manifest/hls")
 	isDASH := strings.Contains(contentType, "dash+xml") || strings.HasSuffix(target.Path, ".mpd") || strings.Contains(target.Path, "/manifest/dash")
 	w.Header().Set("Cache-Control", "private, no-store")
 	if isHLS || isDASH {
 		var data bytes.Buffer
-		if response.StatusCode == http.StatusPartialContent {
+		if response.StatusCode == http.StatusPartialContent && !strings.HasSuffix(response.Header.Get("Content-Range"), "/*") {
 			_, _, size, err := streamContentRange(response)
 			if err != nil || size > 8<<20 {
 				http.Error(w, "Could not read the media manifest", http.StatusBadGateway)
@@ -521,12 +531,13 @@ func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *htt
 			io.Closer
 		}{reader, response.Body}
 	}
-	if response.StatusCode == http.StatusOK {
-		for _, key := range []string{"Content-Type", "Content-Length", "Accept-Ranges"} {
+	if response.StatusCode == http.StatusOK || session.manifestType == "hls" && strings.HasSuffix(response.Header.Get("Content-Range"), "/*") {
+		for _, key := range []string{"Content-Type", "Content-Length", "Accept-Ranges", "Content-Range"} {
 			if value := response.Header.Get(key); value != "" {
 				w.Header().Set(key, value)
 			}
 		}
+		w.WriteHeader(response.StatusCode)
 		if r.Method == http.MethodHead {
 			return
 		}
@@ -698,7 +709,11 @@ func (session *youtubeStreamSession) requestResource(ctx context.Context, resour
 		request.Header.Set(key, value)
 	}
 	request.Header.Set("Accept-Encoding", "identity")
-	request.Header.Set("Range", selected)
+	if selected != "" {
+		request.Header.Set("Range", selected)
+	} else {
+		request.Header.Del("Range")
+	}
 	return session.client.Do(request)
 }
 

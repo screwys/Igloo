@@ -42,13 +42,14 @@ jobs:
           postgres_version="$(jq -r '.artifacts.postgresql.version' packaging/windows/windows-runtime.lock.json)"
           python_version="$(jq -r '.artifacts.python.version' packaging/windows/windows-runtime.lock.json)"
           tiktok_version="$(jq -r '.artifacts["tiktok-live"].version' packaging/windows/windows-runtime.lock.json)"
+          requests_version="$(jq -r '.artifacts.requests.version' packaging/windows/windows-runtime.lock.json)"
           test -n "$yt_version" && test -n "$yt_url" && test -n "$gallery_version" && test -n "$gallery_url"
 
           current_dir="$(mktemp -d)"
           changed=true
           if gh release download windows-runtime --pattern windows-runtime-sources.json --dir "$current_dir" 2>/dev/null; then
-            if jq -e --arg yt "$yt_version" --arg gallery "$gallery_version" --arg deno "$deno_version" --arg ffmpeg "$ffmpeg_version" --arg postgres "$postgres_version" --arg python "$python_version" --arg tiktok "$tiktok_version" \
-              '.yt_dlp == $yt and .gallery_dl == $gallery and .deno == $deno and .ffmpeg == $ffmpeg and .postgresql == $postgres and .python == $python and .tiktok_live == $tiktok' \
+            if jq -e --arg yt "$yt_version" --arg gallery "$gallery_version" --arg deno "$deno_version" --arg ffmpeg "$ffmpeg_version" --arg postgres "$postgres_version" --arg python "$python_version" --arg tiktok "$tiktok_version" --arg requests "$requests_version" \
+              '.yt_dlp == $yt and .gallery_dl == $gallery and .deno == $deno and .ffmpeg == $ffmpeg and .postgresql == $postgres and .python == $python and .tiktok_live == $tiktok and .requests == $requests' \
               "$current_dir/windows-runtime-sources.json" >/dev/null; then
               changed=false
             fi
@@ -114,6 +115,7 @@ jobs:
             postgresql = $lock.artifacts.postgresql.version
             python = $lock.artifacts.python.version
             tiktok_live = $lock.artifacts.'tiktok-live'.version
+            requests = $lock.artifacts.requests.version
           } | ConvertTo-Json | Set-Content -Encoding utf8NoBOM "release-artifacts/windows-runtime-sources.json"
           "version=$($lock.revision)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 

@@ -1230,6 +1230,14 @@ func (s *Server) handlePageFeed(w http.ResponseWriter, r *http.Request) {
 	p.ActiveNav = "feed"
 	p.ESBundle = "js/dist/feed.js"
 	p.Sidebar = s.mustBuildSidebar(r)
+	if s.platformEnabled("twitter") {
+		p.PageScripts = append(p.PageScripts, "vendor/shaka-player/shaka-player.compiled.js")
+		lives, liveErr := s.db.ListXBroadcasts()
+		p.XLives = lives
+		if liveErr != nil {
+			slog.Error("ListXBroadcasts", "err", liveErr)
+		}
+	}
 
 	feedHeadAnchor := ""
 	if headID, err := s.db.GetLatestFetchedFeedItemID(); err == nil {

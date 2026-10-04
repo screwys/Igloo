@@ -154,6 +154,7 @@ func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, sta
 	s.registerPreviewAPIRoutes(mux)
 	s.registerDownloadAPIRoutes(mux)
 	s.registerYouTubeStreamRoutes(mux)
+	s.registerXLiveRoutes(mux)
 	mux.HandleFunc("GET /api/youtube/{videoID}/saved-state", s.handleYouTubeSavedState)
 	s.registerDownloaderReportRoutes(mux)
 	s.registerTweetMediaAPIRoutes(mux)

@@ -1465,6 +1465,9 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 			}
 		}
 		for _, item := range normalizedItems {
+			if err := seedXBroadcastSourcesTx(tx, item); err != nil {
+				return err
+			}
 			changed, err := declareXContentAssetsTx(tx, item, nowMs)
 			if err != nil {
 				return err

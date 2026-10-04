@@ -1,0 +1,45 @@
+package components
+
+import "github.com/screwys/igloo/internal/model"
+
+templ FeedLiveRows(p PageProps, lives []model.XBroadcast) {
+	<aside id="feed-lives" class="feed-lives" hidden?={ len(lives) == 0 } hx-get="/api/x/lives?fmt=html" hx-trigger="every 30s [!document.hidden]" hx-swap="outerHTML">
+		<h2>{ L(p, "broadcast_live", "Live") }</h2>
+		<div class="shorts-story-tray-body">
+			<div class="stories-list">
+				for _, live := range lives {
+					<button type="button" class="story-channel-row" data-feed-live-url={ live.URL } data-feed-link={ live.URL } data-channel-id={ live.ChannelID } data-channel-name={ live.DisplayName } data-channel-platform="twitter" data-avatar-url={ live.AvatarURL } data-feed-live-title={ live.Title } data-feed-live-thumbnail={ live.ThumbnailURL } title={ live.Title }>
+						<span class="story-channel-avatar">
+							if live.AvatarURL != "" {
+								<img src={ live.AvatarURL } alt="" loading="lazy" onerror="this.style.display='none'"/>
+							} else {
+								<span class="story-channel-avatar-fallback">{ FirstChar(live.DisplayName) }</span>
+							}
+							<span class="shorts-live-badge">LIVE</span>
+						</span>
+						<span class="story-channel-copy">
+							<span class="story-channel-name feed-author">{ live.DisplayName }</span>
+							if live.Handle != "" || live.ViewerCount > 0 {
+								<span class="story-channel-handle feed-live-meta">
+									if live.Handle != "" {
+										<span class="feed-author-handle">{ "@" + live.Handle }</span>
+									}
+									if live.ViewerCount > 0 {
+										if live.Handle != "" {
+											<span aria-hidden="true">·</span>
+										}
+										<span class="feed-live-viewers" title={ L(p, "broadcast_viewers", "Viewers") } aria-label={ L(p, "broadcast_viewers", "Viewers") + " " + FmtNum(int(live.ViewerCount)) }>
+											@MaterialIcon("People", "")
+											{ FmtNum(int(live.ViewerCount)) }
+										</span>
+									}
+								</span>
+							}
+						</span>
+						<span class="feed-body-text" hidden>{ live.Title }</span>
+					</button>
+				}
+			</div>
+		</div>
+	</aside>
+}

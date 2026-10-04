@@ -1,6 +1,6 @@
 // Shorts page ES module entry point.
 
-import { apiFetch, cssEscape, escapeHtml, showToast, t, tf } from '../utils.js'
+import { apiFetch, cssEscape, escapeHtml, showToast, playbackRange, t, tf } from '../utils.js'
 import { initPlayback, disposeShortItem, toggleShortPlayback, stepSlideshow, syncRenderedShortVideoLoop } from './playback.js'
 import {
   initOverlay,
@@ -1619,7 +1619,8 @@ if (layout) {
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault()
         var video = entry && entry.refs && entry.refs.video
-        if (video) video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + (event.key === 'ArrowRight' ? 3 : -3)))
+        var range = playbackRange(video)
+        if (range) video.currentTime = Math.max(range.start, Math.min(range.end, video.currentTime + (event.key === 'ArrowRight' ? 3 : -3)))
         return
       }
       if (sc && sc.match('shorts.mute', event.key)) {

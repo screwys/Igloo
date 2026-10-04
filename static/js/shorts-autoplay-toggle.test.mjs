@@ -5,13 +5,17 @@ import vm from 'node:vm'
 
 async function loadPlayback(videos) {
   const src = await readFile(new URL('./src/shorts/playback.js', import.meta.url), 'utf8')
-  const runnable = src
+  const utilsSource = await readFile(new URL('./src/utils.js', import.meta.url), 'utf8')
+  const runnable = 'const { updatePlaybackProgress } = (() => {\n' +
+    utilsSource.replace(/\bexport\s+/g, '') + '\nreturn { updatePlaybackProgress };\n})();\n' + src
+    .replace(/^import .*$/gm, '')
     .replace(/\bexport\s+/g, '') +
     '\nObject.assign(globalThis, { initPlayback, syncRenderedShortVideoLoop });'
 
   const selectors = []
   const context = vm.createContext({
     document: {
+      querySelector() { return null },
       querySelectorAll(selector) {
         selectors.push(selector)
         return (selector === '#shorts-container video' || selector === '#shorts-container video, #mini-player-media-host video') ? videos : []

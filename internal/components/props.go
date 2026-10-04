@@ -73,6 +73,7 @@ type PageProps struct {
 	DownloadsStopped        bool
 	BroadcastsEnabled       bool
 	HasLiveBroadcasts       bool
+	XLives                  []model.XBroadcast
 	RuntimeOS               string
 	StaticV                 func(string) string
 	PageScripts             []string // JS files to include after base scripts.

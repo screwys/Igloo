@@ -8,6 +8,7 @@ import (
 
 // FeedPage renders the full feed page (used for /feed and individual Twitter channel pages).
 templ FeedPage(p PageProps, items []model.FeedItem, hasMore bool, nextPageURL string, showControls bool, serverReranked bool, xChannel *XChannelInfo, feedHeadAnchor string) {
+	{{ p.PageStyles = append(p.PageStyles, "css/chat.css") }}
 	@Base(p) {
 		<div id="feed-route-content" data-feed-route-content>
 			if showControls {
@@ -20,7 +21,12 @@ templ FeedPage(p PageProps, items []model.FeedItem, hasMore bool, nextPageURL st
 			if xChannel != nil {
 				@XProfileContent(p, items, nextPageURL, showControls, serverReranked, xChannel)
 			} else {
-				@FeedList(p, items, nextPageURL, showControls, serverReranked)
+				<div class="feed-layout">
+					@FeedList(p, items, nextPageURL, showControls, serverReranked)
+					if showControls && p.PlatformsContain("twitter") {
+						@FeedLiveRows(p, p.XLives)
+					}
+				</div>
 			}
 		</div>
 		@RetweetersDialog(p)

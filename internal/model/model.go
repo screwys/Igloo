@@ -272,6 +272,7 @@ type TikTokLive struct {
 	Handle       string `json:"handle"`
 	DisplayName  string `json:"display_name"`
 	Title        string `json:"title"`
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
 	AvatarURL    string `json:"avatar_url"`
 	ViewerCount  int64  `json:"viewer_count"`
 	ObservedAtMs int64  `json:"observed_at_ms"`

@@ -1,0 +1,5 @@
+{
+	"imports": {
+		"./upstream/types.js": "./upstream/types.ts"
+	}
+}

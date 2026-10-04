@@ -4,3 +4,4 @@ yt-dlp @ https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz
 gallery-dl @ https://codeberg.org/mikf/gallery-dl/archive/master.tar.gz
 curl-cffi
 TikTokLive>=7,<8
+requests

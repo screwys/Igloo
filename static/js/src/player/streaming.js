@@ -1,11 +1,13 @@
 import { apiFetch, showToast, t } from '../utils.js'
 import { playVideo } from './playback.js'
+import { configureXSpaceAudio } from './x-space-audio.js'
 
 export async function initStreaming(video, root, autoplay, resumePosition) {
   const quality = document.getElementById('player-quality-menu-btn')
   const qualityMenu = document.getElementById('player-quality-menu')
   const qualityWrap = document.getElementById('player-quality-menu-wrap')
   const download = document.getElementById('player-stream-download-btn')
+	const refresh = document.getElementById('player-stream-refresh-btn')
   const controller = root.querySelector('media-controller')
   let loaded = false
   let wantsPlay = autoplay
@@ -51,6 +53,7 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
     if (!shaka.Player.isBrowserSupported()) throw new Error('streaming unsupported')
     player = new shaka.Player()
     await player.attach(video)
+    configureXSpaceAudio(player, root.dataset.originalUrl)
 
     function configure() {
       if (nativePlayback) return
@@ -197,6 +200,14 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
       if (wantsPlay) playVideo(video, () => wantsPlay).catch(function () { wantsPlay = false })
       loadCaptions(fresh.text_tracks || [])
     }
+	if (refresh) refresh.addEventListener('click', async function () {
+		if (refreshing) return
+		refresh.disabled = true
+		refreshed = false
+		refreshing = renewSource()
+		try { await refreshing } catch (error) { fail(error) }
+		finally { refreshing = null; refresh.disabled = false }
+	})
     function sourceExpired(error) {
       const data = error && error.data || []
       const httpStatus = Number(data[1])

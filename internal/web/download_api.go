@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/screwys/igloo/internal/components"
 	"github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/model"
 	"github.com/screwys/igloo/internal/subscribe"
 )
 
@@ -77,6 +79,16 @@ func (s *Server) handleQuickDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if broadcastURL := model.NormalizeXBroadcastURL(rawURL); broadcastURL != "" {
+		watchURL := "/feed?live=" + url.QueryEscape(broadcastURL)
+		if isHTMX {
+			w.Header().Set("HX-Redirect", watchURL)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"success": true, "player_url": watchURL})
+		return
+	}
 	_, err := s.workers.EnqueueTempDownload(rawURL)
 	if err != nil {
 		msg := fmt.Sprintf("Queue download: %v", err)

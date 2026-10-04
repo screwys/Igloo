@@ -16,6 +16,13 @@
       "size": 88506,
       "output": "tiktoklive-7.0.1-py3-none-any.whl"
     },
+    "requests": {
+      "version": "2.34.2",
+      "url": "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl",
+      "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+      "size": 73075,
+      "output": "requests-2.34.2-py3-none-any.whl"
+    },
     "protobuf3-to-dict": {
       "version": "0.1.5",
       "url": "https://files.pythonhosted.org/packages/6b/55/522bb43539fed463275ee803d79851faaebe86d17e7e3dbc89870d0322b9/protobuf3-to-dict-0.1.5.tar.gz",

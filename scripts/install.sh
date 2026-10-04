@@ -205,11 +205,11 @@ fi
 check_required templ     "templ code generator — go install $TEMPL_CMD@$TEMPL_VERSION"
 check_required yt-dlp    "video downloader — brew install --HEAD yt-dlp or pip install --force-reinstall https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz"
 check_required gallery-dl "image downloader — brew install --HEAD gallery-dl or pip install --force-reinstall https://codeberg.org/mikf/gallery-dl/archive/master.tar.gz"
-if command -v "$TIKTOK_PYTHON" >/dev/null 2>&1 && "$TIKTOK_PYTHON" -c 'import TikTokLive' >/dev/null 2>&1; then
+if command -v "$TIKTOK_PYTHON" >/dev/null 2>&1 && "$TIKTOK_PYTHON" -c 'import TikTokLive, requests' >/dev/null 2>&1; then
     TIKTOK_PYTHON="$(command -v "$TIKTOK_PYTHON")"
-    ok "Python TikTokLive"
+    ok "Python live helpers"
 else
-    fail "TikTokLive: install requirements-runtime.txt into a Python virtual environment and set IGLOO_PYTHON to its Python executable"
+    fail "Python live helpers: install requirements-runtime.txt into a Python virtual environment and set IGLOO_PYTHON to its Python executable"
     MISSING="$MISSING TikTokLive"
 fi
 check_required ffmpeg    "media processing — brew install ffmpeg or install your distro package"

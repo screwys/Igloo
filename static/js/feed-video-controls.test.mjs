@@ -164,7 +164,10 @@ async function loadVideoControls() {
   const visibilitySource = await readFile(new URL('./src/video-controls-visibility.js', import.meta.url), 'utf8')
   const volumeSource = await readFile(new URL('./src/volume.js', import.meta.url), 'utf8')
   const feedbackSource = await readFile(new URL('./src/video-feedback.js', import.meta.url), 'utf8')
-  const runnable = "const attachSeekTooltip = () => {}; const makeDraggableSeekbar = () => {}; const materialIconMarkup = (name) => '<svg>' + name + '</svg>'; const setSvgContent = (element, html) => { element.innerHTML = html }; const t = (_key, fallback) => fallback; const tf = (_key, fallback) => fallback;\n" +
+  const utilsSource = await readFile(new URL('./src/utils.js', import.meta.url), 'utf8')
+  const runnable = 'const { playbackRange, updatePlaybackProgress } = (() => {\n' +
+    utilsSource.replace(/\bexport\s+/g, '') + '\nreturn { playbackRange, updatePlaybackProgress };\n})();\n' +
+    "const attachSeekTooltip = () => {}; const makeDraggableSeekbar = () => {}; const materialIconMarkup = (name) => '<svg>' + name + '</svg>'; const setSvgContent = (element, html) => { element.innerHTML = html }; const t = (_key, fallback) => fallback; const tf = (_key, fallback) => fallback;\n" +
     volumeSource.replace(/\bexport\s+/g, '') + '\n' +
     visibilitySource.replace(/\bexport\s+/g, '') + '\n' +
     feedbackSource.replace(/^import .*$/gm, '').replace(/\bexport\s+/g, '') + '\n' +

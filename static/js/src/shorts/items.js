@@ -1,6 +1,6 @@
 // Shorts items — DOM builder, action button handlers, card parsing.
 
-import { apiFetch, askConfirm, cssEscape, escapeHtml, showToast, copyText, makeDraggableSeekbar, attachSeekTooltip, formatRelative, parseAppDate, materialIconMarkup, t, tf, toFxTwitterUrl } from '../utils.js'
+import { apiFetch, askConfirm, cssEscape, escapeHtml, showToast, copyText, makeDraggableSeekbar, attachSeekTooltip, playbackRange, setPlaybackRangeProvider, formatRelative, parseAppDate, materialIconMarkup, t, tf, toFxTwitterUrl } from '../utils.js'
 import { openBookmarkMenu } from '../bookmark-menu.js'
 import { maybeMarkAspect, handleVideoTimeUpdate, toggleShortPlayback, goToSlideshowSlide, stepSlideshow, syncRenderedShortVideoLoop } from './playback.js'
 import { attachShortVideoDebug } from './debug.js'
@@ -101,6 +101,7 @@ function initTikTokLive(entry) {
   var status = chat.querySelector('.player-chat-status')
   var source = null
   var run = null
+  setPlaybackRangeProvider(video, function () { return run && run.player ? run.player.seekRange() : null })
   var cleanup = Promise.resolve()
   var base = '/api/tiktok/lives/' + encodeURIComponent(entry.data.liveChannelId)
 
@@ -234,6 +235,10 @@ function initTikTokLive(entry) {
         current.player = new shaka.Player()
         await current.player.attach(video)
         if (run !== current) return
+        current.player.addEventListener('manifestupdated', function () {
+          if (run !== current) return
+          video.dispatchEvent(new Event('progress'))
+        })
         current.player.addEventListener('error', function () {
           if (run !== current) return
           status.textContent = t('shorts_live_playback_failed', 'Live stream could not play')
@@ -549,6 +554,11 @@ function applyMomentAction(entry, action) {
     entry.refs.toggleComments()
     return
   }
+	if (action === 'refresh' && entry.refs.stopLive && entry.refs.playLive) {
+		entry.refs.stopLive()
+		entry.refs.playLive().catch(function () { showToast(t('shorts_live_playback_failed', 'Live stream could not play')) })
+		return
+	}
 
   if (action === 'open' && data.originalUrl) {
     window.open(data.originalUrl, '_blank', 'noopener,noreferrer')
@@ -661,6 +671,9 @@ function openMomentActions(entry, trigger, position) {
   var authorLabel = momentAccountHandleLabel(authorID)
   var isRepost = !!data.repostIntroduced && !!reposterID
   var actions = []
+	if (entry.refs && entry.refs.stopLive && entry.refs.playLive) {
+		actions.push({ key: 'refresh', icon: 'refresh', label: t('action_refresh', 'Refresh') })
+	}
   if (isRepost) {
     actions.push({ key: 'disable_reposts', icon: 'repost', label: tf('action_turn_off_reposts_for_account', 'Turn off reposts for %1$s', reposterLabel) })
   }
@@ -751,7 +764,7 @@ function menuIconSvg(kind) {
   var names = {
     speed: 'Speed', mini: 'PictureInPictureAlt', share: 'Share', profile: 'Person',
     repost: 'Repeat', 'mute-account': 'VolumeOff', follow: 'Person', unfollow: 'PersonRemove',
-    open: 'OpenInNew', download: 'Download', subtitles: 'ClosedCaption', comments: 'ChatBubble'
+    open: 'OpenInNew', download: 'Download', subtitles: 'ClosedCaption', comments: 'ChatBubble', refresh: 'Refresh'
   }
   return names[kind] ? materialIconMarkup(names[kind]) : ''
 }
@@ -1150,7 +1163,7 @@ export function makeShortItem(entryData, existingEl) {
     ? ('<img class="channel-avatar-img" src="' + escapeHtml(entryData.avatarUrl) + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-avatar-fallback="' + channelInitial + '">')
     : ('<span class="shorts-channel-avatar-fallback">' + channelInitial + '</span>')
   var followBadge = ''
-  if (entryData.channelId) {
+  if (entryData.channelId && (!entryData.liveRoomId || !entryData.channelFollowed)) {
     followBadge = '<button class="shorts-rail-follow-badge' + (entryData.channelFollowed ? ' is-following' : '') + '" type="button" data-short-follow="1" data-channel-id="' + escapeHtml(entryData.channelId) + '" data-following="' + (entryData.channelFollowed ? '1' : '0') + '" title="' + escapeHtml(entryData.channelFollowed ? t('action_following', 'Following') : t('action_follow', 'Follow')) + '" aria-label="' + escapeHtml(entryData.channelFollowed ? t('action_following', 'Following') : t('action_follow', 'Follow')) + '">' + iconSvg(entryData.channelFollowed ? 'check' : 'add') + '</button>'
   }
   var storyState = normalizeStoryState(entryData.storyState)
@@ -1334,6 +1347,9 @@ export function makeShortItem(entryData, existingEl) {
     video.addEventListener('timeupdate', function () {
       handleVideoTimeUpdate({ refs: refs })
     })
+    video.addEventListener('durationchange', function () { handleVideoTimeUpdate(entryObj) })
+    video.addEventListener('progress', function () { handleVideoTimeUpdate(entryObj) })
+    video.addEventListener('emptied', function () { handleVideoTimeUpdate(entryObj) })
     makeDraggableSeekbar(progressContainer, progressBar, video)
     attachSeekTooltip(progressContainer, video)
     video.loop = !isLive && !autoAdvanceEnabled()
@@ -1460,13 +1476,13 @@ export function makeShortItem(entryData, existingEl) {
     if (!video) return
     e.preventDefault()
     e.stopPropagation()
-    var dur = Number(video.duration || 0)
-    if (!(dur > 0)) return
+    var range = playbackRange(video)
+    if (!range) return
     var rect = progressContainer.getBoundingClientRect()
     if (!(rect.width > 0)) return
     var x = Math.max(0, Math.min(rect.width, e.clientX - rect.left))
     var pct = x / rect.width
-    video.currentTime = pct * dur
+    video.currentTime = range.start + pct * (range.end - range.start)
   })
 
   actions.addEventListener('click', function (e) {

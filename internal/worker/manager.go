@@ -50,6 +50,7 @@ type Manager struct {
 	youtubeRecommendationKick chan struct{} // buffered(1): durable YouTube recommendation wake-up
 	xStatusEnrich             chan xfeed.StatusEnrichmentRequest
 	ingestKick                chan struct{} // buffered(1): trigger immediate ingest
+	xPresenceNextCheck        time.Time
 	feedScoringKick           chan struct{} // buffered(1): rate-limited feed refresh
 	feedScoringPriorityKick   chan struct{} // buffered(1): committed action-state refresh
 	feedOrderKick             chan struct{} // buffered(1): coalescing feed-order invalidation
@@ -234,6 +235,7 @@ func (m *Manager) StartAll() {
 	m.launch("youtube_recommendations", m.runYouTubeRecommendationLoop)
 	m.launch("scheduler", m.runScheduler)
 	m.launch("tiktok_lives", m.runTikTokLivesLoop)
+	m.launch("x_lives", m.runXBroadcastsLoop)
 	m.launch("feed_order_invalidation", m.runFeedOrderInvalidationLoop)
 	m.launch("feed_scoring", m.runFeedScoringWorker)
 	m.launchDelayed("downloader_operation_prune", 5*time.Minute, m.runDownloaderOperationPruner)

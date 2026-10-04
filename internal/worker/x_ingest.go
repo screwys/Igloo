@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/screwys/igloo/internal/db"
+	"github.com/screwys/igloo/internal/download"
 	"github.com/screwys/igloo/internal/model"
 	"github.com/screwys/igloo/internal/settings"
 	"github.com/screwys/igloo/internal/xfeed"
@@ -20,6 +21,7 @@ const (
 	xIngestWorkerName     = "x_ingest"
 	xIngestActivitySource = "x_ingest"
 	xIngestCycleInterval  = 10 * time.Minute
+	xIngestPollInterval   = 30 * time.Second
 )
 
 type xFeedFetcher interface {
@@ -33,7 +35,7 @@ func (m *Manager) runXIngestLoop(ctx context.Context) {
 	log.Printf("[x_ingest] starting ingest loop")
 
 	m.runXIngestIfEnabled(ctx)
-	runXIngestSchedule(ctx, m.ingestKick, xIngestCycleInterval, func() {
+	runXIngestSchedule(ctx, m.ingestKick, xIngestPollInterval, func() {
 		if !m.IsIngestPaused() {
 			m.runXIngestIfEnabled(ctx)
 		}
@@ -194,10 +196,6 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 		fetchDelay, cycleInterval.Round(time.Minute), len(fetchList)+len(readyFeedSources), notDue, cooling,
 		len(twitterChannels)+len(enabledFeedSources))
 
-	if len(fetchList) == 0 && len(readyFeedSources) == 0 {
-		return
-	}
-
 	// Set live progress counters for the dashboard.
 	atomic.StoreInt32(&m.ingestCycleTotal, int32(len(twitterChannels)+len(enabledFeedSources)))
 	atomic.StoreInt32(&m.ingestCycleDone, int32(notDue))
@@ -233,8 +231,124 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 		fetchesStarted++
 		return true
 	}
+	checkedBroadcasts := make(map[string]bool)
+	var liveAccounts []model.XLiveAccount
+	var presenceCookies []download.CookieSet
+	presenceIndex := 0
+	presenceRefresh := xIngestPollInterval
+	presenceFailed := false
+	fetchPresence := func() bool {
+		if presenceFailed || time.Now().Before(m.xPresenceNextCheck) {
+			return false
+		}
+		if presenceIndex == 0 {
+			var err error
+			liveAccounts, err = m.db.FollowedXLiveAccounts()
+			if err != nil {
+				log.Printf("[x_ingest] live accounts: %v", err)
+				presenceFailed = true
+				return false
+			}
+			if len(liveAccounts) == 0 {
+				m.xPresenceNextCheck = time.Now().Add(xIngestCycleInterval)
+				return false
+			}
+			if presenceCookies == nil {
+				presenceCookies = m.cookieSetsFor("twitter")
+			}
+			presenceRefresh = xIngestPollInterval
+		}
+		end := min(presenceIndex+100, len(liveAccounts))
+		accounts := liveAccounts[presenceIndex:end]
+		ids := make([]string, len(accounts))
+		for i, account := range accounts {
+			ids[i] = account.UserID
+		}
+		if !waitForFetch() {
+			return false
+		}
+		m.EmitFeed(xIngestActivitySource, fmt.Sprintf("Checking X live status (%d accounts)", len(accounts)), "info")
+		checkCtx, cancel := context.WithTimeout(ctx, time.Minute)
+		result, err := download.FetchXSpacePresence(checkCtx, ids, presenceCookies)
+		cancel()
+		if ctx.Err() != nil {
+			return false
+		}
+		if m.ReportExternalResult(err) {
+			networkPaused = true
+		}
+		if err != nil {
+			presenceFailed = true
+			m.xPresenceNextCheck = time.Now().Add(xIngestCycleInterval)
+			var failure *download.XSpacePresenceError
+			if errors.As(err, &failure) && failure.RetryAtMs > time.Now().UnixMilli() {
+				m.xPresenceNextCheck = time.UnixMilli(failure.RetryAtMs)
+			}
+			log.Printf("[x_ingest] live presence: %v", err)
+			cycleFailures["x_live"] = err.Error()
+			return false
+		}
+		if err := m.db.ReplaceXSpacePresence(accounts, result.Spaces, time.Now().UnixMilli()); err != nil {
+			log.Printf("[x_ingest] store live presence: %v", err)
+			presenceFailed = true
+			return false
+		}
+		for _, room := range result.Spaces {
+			delete(checkedBroadcasts, "https://x.com/i/spaces/"+room.SpaceID)
+		}
+		if result.CookieIndex > 0 && result.CookieIndex < len(presenceCookies) {
+			presenceCookies[0], presenceCookies[result.CookieIndex] = presenceCookies[result.CookieIndex], presenceCookies[0]
+		}
+		if result.RefreshSeconds > 0 {
+			presenceRefresh = max(presenceRefresh, time.Duration(result.RefreshSeconds)*time.Second)
+		}
+		presenceIndex = end
+		if presenceIndex == len(liveAccounts) {
+			presenceIndex = 0
+			m.xPresenceNextCheck = time.Now().Add(presenceRefresh)
+		}
+		return true
+	}
+	fetchBroadcast := func() bool {
+		sources, err := m.db.XBroadcastSources(false)
+		if err != nil {
+			log.Printf("[x_ingest] list unresolved broadcasts: %v", err)
+			return false
+		}
+		rawURL := ""
+		for _, source := range sources {
+			if !checkedBroadcasts[source] {
+				rawURL = source
+				break
+			}
+		}
+		if rawURL == "" || !waitForFetch() {
+			return false
+		}
+		checkedBroadcasts[rawURL] = true
+		checkCtx, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+		_, _, err = m.ResolveXPlayback(checkCtx, rawURL)
+		if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+			return false
+		}
+		if m.ReportExternalResult(err) {
+			networkPaused = true
+			return false
+		}
+		if err != nil {
+			log.Printf("[x_ingest] broadcast check: %v", err)
+			cycleFailures[rawURL] = err.Error()
+			if err := m.db.RecordXBroadcastCheck(rawURL, time.Now().UnixMilli()); err != nil {
+				log.Printf("[x_ingest] record broadcast check: %v", err)
+			}
+		}
+		return true
+	}
 
 	for _, ch := range fetchList {
+		fetchPresence()
+		fetchBroadcast()
 		if !waitForFetch() {
 			if m.IsIngestPaused() {
 				log.Printf("[x_ingest] ingest cycle aborted (paused)")
@@ -309,6 +423,8 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 	}
 
 	for _, source := range readyFeedSources {
+		fetchPresence()
+		fetchBroadcast()
 		if !waitForFetch() {
 			break
 		}
@@ -322,6 +438,13 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 				break
 			}
 			cycleFailures[source.SourceID] = err.Error()
+		}
+	}
+	for {
+		presenceFetched := fetchPresence()
+		broadcastFetched := fetchBroadcast()
+		if !broadcastFetched && (!presenceFetched || presenceIndex == 0) {
+			break
 		}
 	}
 

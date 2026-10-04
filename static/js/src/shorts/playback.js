@@ -1,5 +1,7 @@
 // Shorts playback — video and slideshow playback, progress bar, mute, autoplay.
 
+import { updatePlaybackProgress } from '../utils.js'
+
 var _state = null
 var _goNext = null
 
@@ -286,8 +288,5 @@ export function handleVideoTimeUpdate(entry) {
   var video = entry && entry.refs && entry.refs.video
   var bar = entry && entry.refs && entry.refs.progressBar
   if (!video || !bar) return
-  var dur = Number(video.duration || 0)
-  var cur = Number(video.currentTime || 0)
-  var pct = dur > 0 ? Math.max(0, Math.min(100, (cur / dur) * 100)) : 0
-  bar.style.width = pct + '%'
+  updatePlaybackProgress(bar.parentElement, bar, video)
 }

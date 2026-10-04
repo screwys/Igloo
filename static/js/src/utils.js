@@ -261,7 +261,47 @@ export function showFeedShareSuccess(btn) {
   feedShareResetTimers.set(btn, resetTimer)
 }
 
-// makeDraggableSeekbar — click + hold-and-drag seeking for a progress bar.
+const playbackRangeProviders = new WeakMap()
+
+export function setPlaybackRangeProvider(video, provider) {
+  if (provider) playbackRangeProviders.set(video, provider)
+  else playbackRangeProviders.delete(video)
+}
+
+function livePlayback(video) {
+  return video.dataset && video.dataset.liveStream === '1' || video.duration === Infinity
+}
+
+export function playbackRange(video) {
+  if (!video) return null
+  if (!livePlayback(video)) {
+    const duration = Number(video.duration)
+    return Number.isFinite(duration) && duration > 0 ? { start: 0, end: duration } : null
+  }
+  const provider = playbackRangeProviders.get(video)
+  let range
+  if (provider) range = provider()
+  else if (video.seekable && video.seekable.length) {
+    const index = video.seekable.length - 1
+    range = { start: video.seekable.start(index), end: video.seekable.end(index) }
+  }
+  return range && Number.isFinite(range.start) && Number.isFinite(range.end) && range.end > range.start ? range : null
+}
+
+export function updatePlaybackProgress(progress, fill, video) {
+  const range = playbackRange(video)
+  const current = range ? Math.max(range.start, Math.min(range.end, Number(video.currentTime || 0))) : 0
+  const percent = range ? (current - range.start) / (range.end - range.start) * 100 : livePlayback(video) && video.readyState >= 1 ? 100 : 0
+  if (fill) fill.style.width = percent + '%'
+  if (progress) {
+    progress.setAttribute('aria-disabled', String(!range))
+    progress.setAttribute('aria-valuemin', String(range ? range.start : 0))
+    progress.setAttribute('aria-valuemax', String(range ? range.end : 0))
+    progress.setAttribute('aria-valuenow', String(current))
+  }
+}
+
+// makeDraggableSeekbar provides click and drag seeking for a progress bar.
 // bar: the progress container element, fill: the fill element, video: the HTMLVideoElement.
 export function makeDraggableSeekbar(bar, fill, video) {
   if (!bar || !video) return
@@ -269,14 +309,14 @@ export function makeDraggableSeekbar(bar, fill, video) {
   var wasPlaying = false
 
   function seek(clientX) {
-    var dur = Number(video.duration || 0)
-    if (!(dur > 0)) return
+    var range = playbackRange(video)
+    if (!range) return
     var rect = bar.getBoundingClientRect()
     if (!(rect.width > 0)) return
     var x = Math.max(0, Math.min(rect.width, clientX - rect.left))
     var pct = x / rect.width
-    video.currentTime = pct * dur
-    if (fill) fill.style.width = (pct * 100) + '%'
+    video.currentTime = range.start + pct * (range.end - range.start)
+    updatePlaybackProgress(bar, fill, video)
   }
 
   function onMove(e) {
@@ -308,6 +348,7 @@ export function makeDraggableSeekbar(bar, fill, video) {
   function onDown(e) {
     e.preventDefault()
     e.stopPropagation()
+    if (!playbackRange(video)) return
     dragging = true
     wasPlaying = !video.paused
     video.pause()
@@ -435,13 +476,14 @@ export function attachSeekTooltip(progress, video) {
   progress.appendChild(tip)
 
   function update(clientX) {
-    var dur = Number(video.duration || 0)
-    if (!(dur > 0)) { tip.style.display = 'none'; return }
+    var range = playbackRange(video)
+    if (!range) { tip.style.display = 'none'; return }
     var rect = progress.getBoundingClientRect()
     if (!(rect.width > 0)) return
     var x = Math.max(0, Math.min(rect.width, clientX - rect.left))
     var pct = x / rect.width
-    tip.textContent = formatVideoTime(pct * dur)
+    var target = range.start + pct * (range.end - range.start)
+    tip.textContent = livePlayback(video) ? '-' + formatVideoTime(range.end - target) : formatVideoTime(target)
     tip.style.left = x + 'px'
     tip.style.display = 'block'
   }

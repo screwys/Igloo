@@ -16,11 +16,12 @@ func (db *DB) ObserveTikTokLive(channelID string, live *model.TikTokLive) error 
 	}
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`INSERT INTO tiktok_lives
-		(channel_id, room_id, title, viewer_count, observed_at_ms)
-		VALUES ($1,$2,$3,$4,$5)
+		(channel_id, room_id, title, viewer_count, observed_at_ms, thumbnail_url)
+		VALUES ($1,$2,$3,$4,$5,$6)
 		ON CONFLICT(channel_id) DO UPDATE SET room_id=excluded.room_id,
-		title=excluded.title, viewer_count=excluded.viewer_count, observed_at_ms=excluded.observed_at_ms`,
-			channelID, live.RoomID, live.Title, live.ViewerCount, live.ObservedAtMs)
+		title=excluded.title, viewer_count=excluded.viewer_count, observed_at_ms=excluded.observed_at_ms,
+		thumbnail_url=excluded.thumbnail_url`,
+			channelID, live.RoomID, live.Title, live.ViewerCount, live.ObservedAtMs, live.ThumbnailURL)
 		return err
 	})
 }
@@ -49,13 +50,13 @@ func (db *DB) FollowedTikTokLiveSources() (map[string]string, error) {
 const tiktokLiveProjection = `SELECT l.channel_id,l.room_id,
 	COALESCE(NULLIF(cp.handle,''),NULLIF(c.source_id,''),substr(c.channel_id,8)),
 	COALESCE(NULLIF(cp.display_name,''),NULLIF(c.name,''),c.channel_id),
-	l.title,l.viewer_count,l.observed_at_ms
+	l.title,l.viewer_count,l.observed_at_ms,l.thumbnail_url
 	FROM tiktok_lives l JOIN channels c ON c.channel_id=l.channel_id
 	LEFT JOIN channel_profiles cp ON cp.channel_id=c.channel_id `
 
 func scanTikTokLive(rows interface{ Scan(...any) error }) (model.TikTokLive, error) {
 	var live model.TikTokLive
-	err := rows.Scan(&live.ChannelID, &live.RoomID, &live.Handle, &live.DisplayName, &live.Title, &live.ViewerCount, &live.ObservedAtMs)
+	err := rows.Scan(&live.ChannelID, &live.RoomID, &live.Handle, &live.DisplayName, &live.Title, &live.ViewerCount, &live.ObservedAtMs, &live.ThumbnailURL)
 	live.AvatarURL = "/api/media/avatar/" + live.ChannelID
 	return live, err
 }

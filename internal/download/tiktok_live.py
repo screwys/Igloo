@@ -6,6 +6,7 @@ import time
 from urllib.parse import urlsplit
 
 from TikTokLive import TikTokLiveClient
+from TikTokLive.client.errors import UserNotFoundError
 from TikTokLive.events import CommentEvent
 
 
@@ -57,7 +58,10 @@ async def resolve(handle, room_id=""):
         if room_id:
             live = await client.web.fetch_is_live(room_id=int(room_id))
         else:
-            live = await client.is_live()
+            try:
+                live = await client.is_live()
+            except UserNotFoundError:
+                return None
         if not live:
             return None
         room = await client.web.fetch_room_info(room_id=int(room_id)) if room_id else await client.web.fetch_room_info(unique_id=handle)
