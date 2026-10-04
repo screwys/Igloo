@@ -133,6 +133,11 @@ internal fun BroadcastPlayer(playback: BroadcastPlayback, onClose: () -> Unit) {
     val api: BroadcastsApi = koinInject()
     val scope = rememberCoroutineScope()
     fun refresh() {
+        if (!error) {
+            player.seekToDefaultPosition()
+            player.play()
+            return
+        }
         scope.launch {
             try {
                 val response = api.stream(playback.videoId)

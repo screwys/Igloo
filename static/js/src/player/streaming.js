@@ -99,6 +99,7 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
     }
     configure()
     video.addEventListener('playing', function () {
+      refreshed = false
       if (!started) { started = true; configure() }
     })
     window.addEventListener('iglooplaybackpreferenceschange', configure)
@@ -244,14 +245,12 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
       if (wantsPlay) playVideo(video, () => wantsPlay).catch(function () { wantsPlay = false })
       loadCaptions(fresh.text_tracks || [])
     }
-	if (refresh) refresh.addEventListener('click', async function () {
-		if (refreshing) return
-		refresh.disabled = true
-		refreshed = false
-		refreshing = renewSource()
-		try { await refreshing } catch (error) { fail(error) }
-		finally { refreshing = null; refresh.disabled = false }
-	})
+    if (refresh) refresh.addEventListener('click', function () {
+      if (!loaded || nativePlayback || refreshing) return
+      video.currentTime = player.seekRange().end
+      wantsPlay = true
+      playVideo(video, () => wantsPlay).catch(function () { wantsPlay = false })
+    })
     function sourceExpired(error) {
       const data = error && error.data || []
       const httpStatus = Number(data[1])
