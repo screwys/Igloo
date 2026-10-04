@@ -21,6 +21,7 @@ import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.ui.UiStateSwitch
 import com.screwy.igloo.ui.component.BookmarkSheet
 import com.screwy.igloo.ui.component.MomentActionSheet
+import com.screwy.igloo.ui.component.rememberMomentDownload
 import com.screwy.igloo.ui.component.MomentsPlayer
 import com.screwy.igloo.ui.component.sharePlainText
 import com.screwy.igloo.ui.nav.IglooNavigationSource
@@ -69,6 +70,7 @@ fun ShortsRoute(
     var subtitlesVisible by rememberSaveable { mutableStateOf(false) }
     val navigator = rememberIglooNavigator(navController)
     val context = LocalContext.current
+    val downloadMoment = rememberMomentDownload()
     val activeMomentsTab = when (spec.type) {
         ShortsPlaylistType.Moments -> "following"
         ShortsPlaylistType.AllMoments -> "all"
@@ -188,6 +190,7 @@ fun ShortsRoute(
     }
     pendingMomentActions?.let { item ->
         MomentActionSheet(
+            onDownload = downloadMoment,
             item = item,
             playbackSpeed = playbackSpeed,
             subtitlesVisible = subtitlesVisible,

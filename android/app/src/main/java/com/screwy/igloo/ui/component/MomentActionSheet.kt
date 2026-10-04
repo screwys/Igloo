@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.Repeat
@@ -144,6 +145,7 @@ internal fun MomentActionSheet(
     onUnfollowChannel: (channelId: String) -> Unit,
     onShare: (MomentItem) -> Unit,
     onVisitChannel: (channelId: String) -> Unit,
+    onDownload: (MomentItem) -> Unit = {},
     subtitlesVisible: Boolean = false,
     onToggleSubtitles: () -> Unit = {},
     commentsVisible: Boolean = true,
@@ -301,6 +303,16 @@ internal fun MomentActionSheet(
                     onShare(item)
                 },
             )
+            if (!item.isLive) {
+                MomentActionRow(
+                    icon = Icons.Default.Download,
+                    label = stringResource(R.string.action_download),
+                    onClick = {
+                        onDownload(item)
+                        onDismissRequest()
+                    },
+                )
+            }
             if (item.canonicalUrl.isNotBlank()) {
                 MomentActionRow(
                     icon = Icons.AutoMirrored.Filled.OpenInNew,

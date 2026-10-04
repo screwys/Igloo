@@ -1,10 +1,11 @@
 package web
 
 import (
-	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/screwys/igloo/internal/db"
@@ -159,7 +160,25 @@ func (s *Server) handleDownloadVideo(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	file := s.canonicalAsset(owner, "video_stream", 0)
+	var file *canonicalAssetFile
+	suffix := ""
+	if rawIndex := r.URL.Query().Get("slide"); rawIndex != "" {
+		index, err := strconv.Atoi(rawIndex)
+		if err != nil || index < 0 {
+			http.Error(w, "Invalid slide", http.StatusBadRequest)
+			return
+		}
+		file = s.canonicalAsset(owner, "post_media", index)
+		suffix = "_" + strconv.Itoa(index+1)
+	} else if r.URL.Query().Get("audio") == "1" {
+		file = s.canonicalAsset(owner, "post_audio", 0)
+		suffix = "_audio"
+	} else {
+		file = s.canonicalStreamAsset(owner)
+		if file == nil {
+			file = s.canonicalAsset(owner, "post_media", 0)
+		}
+	}
 	if file == nil {
 		http.NotFound(w, r)
 		return
@@ -168,8 +187,8 @@ func (s *Server) handleDownloadVideo(w http.ResponseWriter, r *http.Request) {
 	if video, err := s.db.GetVideo(videoID); err == nil && video != nil && strings.TrimSpace(video.Title) != "" {
 		title = video.Title
 	}
-	filename := sanitizeFilename(title) + filepath.Ext(file.path)
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	filename := sanitizeFilename(title) + suffix + filepath.Ext(file.path)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
 	if s.serveDataFileViaXAccel(w, r, file.path, file.asset.ContentType, "") {
 		return
 	}

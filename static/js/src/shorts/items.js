@@ -519,6 +519,27 @@ function applyMomentAction(entry, action) {
     return
   }
 
+  if (action === 'download') {
+    var url = '/api/download/video/' + encodeURIComponent(data.id)
+    var slideCount = Number(data.mediaSlideCount || 0) || (data.mediaKind === 'image' ? 1 : 0)
+    var urls = []
+    if (slideCount > 0) {
+      for (var index = 0; index < slideCount; index++) urls.push(url + '?slide=' + index)
+      if (data.audioUrl) urls.push(url + '?audio=1')
+    } else {
+      urls.push(url)
+    }
+    urls.forEach(function (downloadUrl) {
+      var link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = ''
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    })
+    return
+  }
+
   if (action === 'subtitles') {
     toggleMomentSubtitles(entry)
     return
@@ -653,6 +674,9 @@ function openMomentActions(entry, trigger, position) {
     actions.push({ key: 'subtitles', icon: 'subtitles', label: t('player_subtitles', 'Subtitles'), checked: !!_state.subtitlesEnabled })
   }
   actions.push({ key: 'share', icon: 'share', label: t('action_share', 'Share') })
+  if (data.liveStatus !== 'is_live') {
+    actions.push({ key: 'download', icon: 'download', label: t('action_download', 'Download') })
+  }
   if (data.originalUrl) {
     actions.push({ key: 'open', icon: 'open', label: t('action_open_externally', 'Open externally') })
   }
@@ -727,7 +751,7 @@ function menuIconSvg(kind) {
   var names = {
     speed: 'Speed', mini: 'PictureInPictureAlt', share: 'Share', profile: 'Person',
     repost: 'Repeat', 'mute-account': 'VolumeOff', follow: 'Person', unfollow: 'PersonRemove',
-    open: 'OpenInNew', subtitles: 'ClosedCaption', comments: 'ChatBubble'
+    open: 'OpenInNew', download: 'Download', subtitles: 'ClosedCaption', comments: 'ChatBubble'
   }
   return names[kind] ? materialIconMarkup(names[kind]) : ''
 }
