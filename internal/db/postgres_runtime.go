@@ -57,7 +57,27 @@ func startPostgres(ctx context.Context, layout storage.Layout) (*postgresRuntime
 	run := func(name string, args ...string) error {
 		cmd := exec.CommandContext(ctx, filepath.Join(bin, postgresExecutable(name)), args...)
 		identity(cmd)
-		out, err := cmd.CombinedOutput()
+		var out []byte
+		var err error
+		if runtime.GOOS == "windows" && name == "pg_ctl" && args[len(args)-1] == "start" {
+			// The Windows command shell keeps inherited output handles until PostgreSQL stops.
+			// Write directly to a file so waiting for pg_ctl does not wait for that shell.
+			outputPath := filepath.Join(r.cluster, "pg_ctl.log")
+			output, openErr := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+			if openErr != nil {
+				return openErr
+			}
+			cmd.Stdout, cmd.Stderr = output, output
+			err = cmd.Run()
+			closeErr := output.Close()
+			if err != nil {
+				out, _ = os.ReadFile(outputPath)
+			} else {
+				err = closeErr
+			}
+		} else {
+			out, err = cmd.CombinedOutput()
+		}
 		if err != nil {
 			return fmt.Errorf("postgres %s: %w: %s", name, err, strings.TrimSpace(string(out)))
 		}

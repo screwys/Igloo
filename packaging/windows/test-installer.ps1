@@ -166,7 +166,7 @@ try {
     Write-Host 'Installer install, reconfigure, service, and retention checks passed.'
 } catch {
     Write-Host $_
-    Get-Content "$root\setup.log", "$root\uninstall.log", "$env:TEMP\igloo-installer-lifecycle.log", "$data\logs\server\server.log" -Tail 100 -ErrorAction SilentlyContinue
+    Get-Content "$root\setup.log", "$root\uninstall.log", "$env:TEMP\igloo-installer-lifecycle.log", "$data\logs\server\server.log", "$data\postgresql\pg_ctl.log", "$data\postgresql\server.log" -Tail 100 -ErrorAction SilentlyContinue
     throw
 } finally {
     if (Test-Path "$app\unins000.exe") {
