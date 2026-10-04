@@ -127,7 +127,7 @@ func TestSettingsToAPIFormatDefaultsAutomaticMiniPlayerOnlyForVideos(t *testing.
 }
 
 func TestDiscoverPrefetchSettingDefaultsAndClamps(t *testing.T) {
-	if got := settingsToAPIFormat(nil)["discover_prefetch_count"]; got != 10 {
+	if got := settingsToAPIFormat(nil)["discover_prefetch_count"]; got != 0 {
 		t.Fatalf("discover_prefetch_count default = %#v", got)
 	}
 	body := map[string]string{"discover_prefetch_count": "999"}
