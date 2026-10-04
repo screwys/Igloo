@@ -34,7 +34,7 @@ function Run-Setup([string] $Tasks) {
 }
 
 function Run-Uninstall([int] $Mode) {
-    $process = Start-Process "$app\unins000.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /UNINSTALLMODE=$Mode" -Wait -PassThru
+    $process = Start-Process "$app\unins000.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=`"$root\uninstall.log`" /UNINSTALLMODE=$Mode" -Wait -PassThru
     Assert ($process.ExitCode -eq 0) "Uninstall failed: $($process.ExitCode)"
     Assert (-not (Test-Path "$app\app\current\igloo.exe")) 'Uninstall left the server executable.'
     Assert (-not (Get-Service Igloo -ErrorAction SilentlyContinue)) 'Uninstall left the service.'
@@ -165,10 +165,16 @@ try {
     foreach ($folder in @($data, $media, $config)) { Assert (-not (Test-Path $folder)) 'Remove-everything retained a storage root.' }
     Write-Host 'Installer install, reconfigure, service, and retention checks passed.'
 } catch {
-    Get-Content "$root\setup.log", "$env:TEMP\igloo-installer-lifecycle.log" -ErrorAction SilentlyContinue
+    Write-Host $_
+    Get-Content "$root\setup.log", "$root\uninstall.log", "$env:TEMP\igloo-installer-lifecycle.log", "$data\logs\server\server.log" -Tail 100 -ErrorAction SilentlyContinue
     throw
 } finally {
-    if (Test-Path "$app\unins000.exe") { Run-Uninstall 2 }
+    if (Test-Path "$app\unins000.exe") {
+        try { Run-Uninstall 2 } catch {
+            Write-Warning $_
+            Get-Content "$root\uninstall.log", "$env:TEMP\igloo-installer-lifecycle.log" -Tail 100 -ErrorAction SilentlyContinue
+        }
+    }
     Remove-Item $settingsKey, 'HKCU:\Software\Igloo' -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item $root, $privateRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
