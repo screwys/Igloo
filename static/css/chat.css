@@ -122,6 +122,47 @@
     white-space: nowrap;
 }
 
+.player-layout:fullscreen.fullscreen-immersive.has-live-chat:not(.chat-closed) {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+}
+
+.player-layout:-webkit-full-screen.fullscreen-immersive.has-live-chat:not(.chat-closed) {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+}
+
+.player-layout.fullscreen-immersive.has-live-chat:not(.chat-closed) .player-sidebar {
+    display: block;
+    align-self: stretch;
+    height: 100dvh;
+    padding: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.player-layout.fullscreen-immersive.has-live-chat .player-sidebar > :not(.player-chat) {
+    display: none;
+}
+
+.player-layout.fullscreen-immersive.has-live-chat:not(.chat-closed) .player-chat {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin-bottom: 0;
+}
+
+.player-layout.fullscreen-immersive.has-live-chat:not(.chat-closed) #player-chat-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.player-layout.fullscreen-immersive.has-live-chat:not(.chat-closed) .player-chat-messages {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+}
+
 @media (min-width: 1025px) {
     .main:has(> #player-root.has-live-chat.cinema-view:not(.chat-closed)) > .floating-header {
         right: calc(var(--player-sidebar-width) + 1.5rem);

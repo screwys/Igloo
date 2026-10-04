@@ -599,7 +599,7 @@ if (root && video) {
     doc.addEventListener('webkitfullscreenchange', onFullscreenChange)
 
     function handleFullscreenWheel(e) {
-      if (e.target.closest && e.target.closest('.dashboard-volume-control')) return
+      if (e.target.closest && e.target.closest('.dashboard-volume-control, .player-chat')) return
       if (!isPlayerLayoutFullscreen() || playerFullscreenTarget() !== playerLayout) return
       var deltaY = normalizeWheelDeltaY(e)
       if (Math.abs(deltaY) < 0.01) return

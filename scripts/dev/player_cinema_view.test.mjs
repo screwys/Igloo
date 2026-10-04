@@ -228,8 +228,9 @@ test("the player reserves a top lane for floating navigation controls", () => {
   );
 });
 
-test("cinema view uses the Material fit-screen icon", () => {
-  assert.match(playerTemplate, /@MaterialIcon\("FitScreen", "player-cinema-rectangle-icon"\)/);
+test("cinema view uses matching Material width icons", () => {
+  assert.match(playerTemplate, /@MaterialIcon\("WidthNormal", "player-cinema-normal-icon"\)/);
+  assert.match(playerTemplate, /@MaterialIcon\("WidthWide", "player-cinema-wide-icon"\)/);
   assert.doesNotMatch(playerTemplate, /m8 10-2 2 2 2M16 10l2 2-2 2/);
 });
 

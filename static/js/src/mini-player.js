@@ -417,9 +417,26 @@ function initMiniPlayer() {
     return true
   }
 
+  async function exitSurfaceFullscreen(sourceDocument) {
+    for (const owner of new Set([sourceDocument, doc])) {
+      if (!owner.fullscreenElement && !owner.webkitFullscreenElement) continue
+      const exit = owner.exitFullscreen || owner.webkitExitFullscreen
+      try {
+        await exit.call(owner)
+      } catch (_) {
+        return false
+      }
+    }
+    return true
+  }
+
   function dockSurface(value) {
     const next = normalizeSurface(value)
     if (!next) return false
+    if (next.sourceDocument.fullscreenElement || next.sourceDocument.webkitFullscreenElement ||
+        doc.fullscreenElement || doc.webkitFullscreenElement) {
+      return exitSurfaceFullscreen(next.sourceDocument).then(exited => exited && dockSurface(value))
+    }
     if (activeSurface && activeSurface.element === next.element) return true
     if (activeSurface) restoreActiveSurface({ pause: true })
     pendingFeedThreadReturn = null
@@ -836,15 +853,16 @@ function initMiniPlayer() {
     if (!surface || surface.button.dataset.miniPlayerBound === '1') return
     surface.button.dataset.miniPlayerBound = '1'
     surface.video.addEventListener('playing', function () { handleYouTubePlayback(surface.video) })
-    surface.button.addEventListener('click', function (event) {
+    surface.button.addEventListener('click', async function (event) {
       event.preventDefault()
       event.stopPropagation()
-      if (activeSurface && activeSurface.element === surface.element) returnToSurface()
-      else dockSurface(surface)
+      if (activeSurface && activeSurface.element === surface.element) {
+        if (await exitSurfaceFullscreen(ownerDocument)) returnToSurface()
+      } else dockSurface(surface)
     })
   }
 
-  doc.addEventListener('click', function (event) {
+  doc.addEventListener('click', async function (event) {
     if (browseActive) return
     const anchor = linkForClick(event, doc)
     if (!anchor || !isEligibleURL(anchor.href)) return
@@ -870,7 +888,7 @@ function initMiniPlayer() {
     const candidate = playingSurface(doc)
     if (!candidate || !shouldAutomaticallyMini(candidate.kind, preferences())) return
     event.preventDefault()
-    if (dockSurface(candidate)) navigateBrowse(anchor.href)
+    if (await dockSurface(candidate)) navigateBrowse(anchor.href)
   })
 
   if (returnButton) returnButton.addEventListener('click', returnToSurface)

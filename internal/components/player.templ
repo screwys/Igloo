@@ -129,7 +129,8 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							aria-label={ L(p, "player_cinema_view", "Cinema view") }
 							aria-pressed="false"
 						>
-			@MaterialIcon("FitScreen", "player-cinema-rectangle-icon")
+							@MaterialIcon("WidthNormal", "player-cinema-normal-icon")
+							@MaterialIcon("WidthWide", "player-cinema-wide-icon")
 						</button>
 						<button
 							id="player-fullscreen-btn"
