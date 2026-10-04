@@ -34,6 +34,8 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
 - Both web and app are made to be themeable, you can select from the ready themes, or bring your own custom CSS. 
 - 
 <img src="static/screenshots/themes.webp" alt="Theme controls" width="100%">
+
+- **Lives**: Watch Youtube, X and Tiktok lives of followed accounts with live-chats, including being able to download Youtube Replays automatically. 
     
 - **Feed**: one timeline across followed accounts, with opt-in offline algorithm
   based on interactions and recency. It can show reply chains, lets you be able
@@ -73,8 +75,7 @@ Once you import a few subscriptions, you can expand your subscriptions list thro
   
   <img src="static/screenshots/video_player.webp" alt="Video Player" width="100%">
  
-- **YouTube search**: search and queue downloads from the web UI. Search results
-  open Igloo's temp watch page, download the video locally, and then play it.
+- **YouTube search and recommendations**: You can do a Youtube search from Igloo, and see Youtube recommendations in a video, and start watching them without downloading or after downloading. 
 
 <img src="static/screenshots/search.webp" alt="YouTube search" width="100%">
 
