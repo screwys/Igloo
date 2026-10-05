@@ -477,6 +477,17 @@ func (y *YtDlpWrapper) FetchInfo(ctx context.Context, url string, opts ...Opts) 
 	}
 	var m map[string]any
 	_ = json.Unmarshal(data, &m)
+	for _, output := range result.OutputLogs {
+		var title struct {
+			ID        string `json:"id"`
+			FullTitle string `json:"fulltitle"`
+		}
+		if output.JSON != nil && json.Unmarshal(*output.JSON, &title) == nil && title.ID == infos[0].ID && title.FullTitle != "" {
+			m["fulltitle"] = title.FullTitle
+			m["title"] = title.FullTitle
+			break
+		}
+	}
 	y.recordYtDlpOperationWithCounts(ctx, "youtube.info", url, start, nil, opt, 1, 0, 0)
 	return m, nil
 }

@@ -12,6 +12,7 @@ import (
 type PlaybackInfo struct {
 	ID                  string                        `json:"id"`
 	Title               string                        `json:"title"`
+	FullTitle           string                        `json:"fulltitle"`
 	Description         string                        `json:"description"`
 	Duration            float64                       `json:"duration"`
 	ChannelID           string                        `json:"channel_id"`
@@ -102,6 +103,10 @@ func (y *YtDlpWrapper) fetchPlayback(ctx context.Context, rawURL string, opts Op
 		}
 		if err := json.Unmarshal(result.Stdout, &info.Metadata); err != nil {
 			return nil, err
+		}
+		if info.FullTitle != "" {
+			info.Title = info.FullTitle
+			info.Metadata["title"] = info.FullTitle
 		}
 		if info.ID == "" || !allowNoFormats && len(info.Formats) == 0 {
 			lastErr = fmt.Errorf("no playable formats returned")

@@ -861,7 +861,7 @@ func videoDescriptionFromMetadata(metadata map[string]any) string {
 }
 
 func videoTitleFromMetadata(metadata map[string]any, fallback string) string {
-	if title := metadataString(metadata, "title"); title != "" {
+	if title := metadataString(metadata, "fulltitle", "title"); title != "" {
 		return title
 	}
 	fallback = strings.TrimSpace(fallback)
