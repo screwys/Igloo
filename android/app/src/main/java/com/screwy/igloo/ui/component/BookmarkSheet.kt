@@ -963,11 +963,11 @@ internal fun filterLabelSuggestions(
         .filter {
             val label = it.trim()
             label.isNotEmpty() &&
-                label.lowercase() != normalized &&
                 label.lowercase().contains(normalized)
         }
         .sortedWith(
-            compareBy<String> { !it.lowercase().startsWith(normalized) }
+            compareBy<String> { it.trim().lowercase() != normalized }
+                .thenBy { !it.lowercase().startsWith(normalized) }
                 .thenBy { it.lowercase() },
         )
         .take(6)

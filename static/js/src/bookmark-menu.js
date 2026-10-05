@@ -592,12 +592,14 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
       suggestBox.textContent = ''
       if (!q) { suggestBox.style.display = 'none'; return }
       var filtered = bookmarkLabels.filter(function (l) {
-        return l.toLowerCase().indexOf(q) !== -1 && l.toLowerCase() !== q
+        return l.toLowerCase().indexOf(q) !== -1
       })
       filtered.sort(function (a, b) {
-        var aStarts = a.toLowerCase().startsWith(q) ? 0 : 1
-        var bStarts = b.toLowerCase().startsWith(q) ? 0 : 1
-        return aStarts - bStarts
+        var aLower = a.toLowerCase()
+        var bLower = b.toLowerCase()
+        var aRank = aLower === q ? 0 : aLower.startsWith(q) ? 1 : 2
+        var bRank = bLower === q ? 0 : bLower.startsWith(q) ? 1 : 2
+        return aRank - bRank
       })
       filtered = filtered.slice(0, 6)
       if (!filtered.length) { suggestBox.style.display = 'none'; return }
