@@ -13,6 +13,8 @@
   var actions = document.getElementById('temp-dl-actions');
   var cancel = document.getElementById('temp-dl-cancel-btn');
   var stream = document.getElementById('temp-dl-stream-btn');
+  var download = document.getElementById('temp-dl-download-btn');
+  var streamController = null;
   var requestID = '';
   var switching = false;
   var finished = false;
@@ -27,18 +29,26 @@
     status.classList.toggle('is-error', !!isError);
   }
   function stop() { clearTimeout(pollTimer); spinner.classList.add('stopped'); }
+  function action(button, label, icon) {
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    var glyph = document.querySelector('#material-icon-palette [data-material-icon="' + icon + '"]');
+    button.replaceChildren(glyph.cloneNode(true));
+  }
   function failed(error, failureTitle) {
     stop();
     title.textContent = failureTitle || cfg.dataset.titleFailed;
     var message = error.message || cfg.dataset.statusFailed;
     show(message === title.textContent ? '' : message, true);
     actions.classList.remove('hidden');
+    download.hidden = false;
     switching = false;
     stream.disabled = false;
     cancel.disabled = false;
   }
-  async function request(url, body, fallback) {
+  async function request(url, body, fallback, signal) {
     var options = body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(body) } : {};
+    if (signal) options.signal = signal;
     var response = await fetch(url, options);
     var raw = await response.text();
     var data;
@@ -54,23 +64,33 @@
     spinner.classList.remove('stopped');
     title.textContent = t('stream_preparing_title', 'Preparing stream...');
     show('');
-    actions.classList.add('hidden');
+    actions.classList.remove('hidden');
+    download.hidden = false;
+    stream.disabled = true;
+    cancel.dataset.cancelled = '1';
+    cancel.disabled = false;
+    action(cancel, cfg.dataset.actionBackToVideos, 'ArrowBack');
+    var controller = new AbortController();
+    streamController = controller;
     try {
       var results = await Promise.all([
         request('/api/youtube/' + encodeURIComponent(videoID) + '/stream', {
           prefer_indexed: !!window.MediaSource && !window.MediaSource.isTypeSupported('audio/mp4; codecs="mp4a.40.2"'),
-        }, t('stream_start_failed', 'Could not start streaming.')),
+        }, t('stream_start_failed', 'Could not start streaming.'), controller.signal),
         cancellation,
       ]);
       var data = results[0];
       if (!data.player_url) throw new Error(t('stream_start_failed', 'Could not start streaming.'));
       location.assign(data.player_url);
     } catch (error) {
+      if (error.name === 'AbortError') return;
       if (cancellation) finished = false;
       failed(error, t('stream_failed_title', 'Stream failed'));
-      stream.textContent = t('action_retry', 'Retry');
+      action(stream, t('action_retry', 'Retry'), 'Refresh');
       cancel.dataset.cancelled = '1';
-      cancel.textContent = cfg.dataset.actionBackToVideos;
+      action(cancel, cfg.dataset.actionBackToVideos, 'ArrowBack');
+    } finally {
+      if (streamController === controller) streamController = null;
     }
   }
   async function pollDownload() {
@@ -92,7 +112,8 @@
     show('');
     cancel.disabled = false;
     cancel.dataset.cancelled = '1';
-    cancel.textContent = cfg.dataset.actionBackToVideos;
+    action(cancel, cfg.dataset.actionBackToVideos, 'ArrowBack');
+    download.hidden = false;
     stream.disabled = false;
   }
   async function cancelDownload(andStream) {
@@ -127,8 +148,15 @@
     else cancelDownload(true);
   });
   cancel.addEventListener('click', function () {
-    if (cancel.dataset.cancelled === '1') location.assign('/videos');
+    if (cancel.dataset.cancelled === '1') {
+      if (streamController) streamController.abort();
+      location.assign('/videos');
+    }
     else cancelDownload(false);
+  });
+  download.addEventListener('click', function () {
+    if (streamController) streamController.abort();
+    location.assign('/temp/watch?v=' + encodeURIComponent(videoID) + '&mode=download');
   });
   if (mode === 'stream') { beginStream(); return; }
   downloadRequest = request('/api/quick-download', { url: youtubeURL }).then(function (data) {

@@ -77,20 +77,23 @@ func (m *Manager) nextYouTubeBroadcastCheck(attempts map[string]time.Time) (*mod
 	if !m.db.BoolSetting("youtube_broadcasts_enabled") {
 		return nil, time.Time{}, nil
 	}
-	broadcasts, err := m.db.ListYouTubeBroadcasts(db.YouTubeBroadcastQuery{States: []string{"is_upcoming"}, Limit: -1})
+	broadcasts, err := m.db.ListYouTubeBroadcasts(db.YouTubeBroadcastQuery{States: []string{"is_upcoming", "is_live"}, Limit: -1})
 	if err != nil {
 		return nil, time.Time{}, err
 	}
 	var channelID string
 	var readyAt time.Time
 	for _, broadcast := range broadcasts {
-		if broadcast.StartsAtMs <= 0 {
-			continue
-		}
-		due := time.UnixMilli(broadcast.StartsAtMs)
 		observed := time.UnixMilli(broadcast.ObservedAtMs)
-		if !observed.Before(due) {
-			due = observed.Add(2 * time.Minute)
+		due := observed.Add(2 * time.Minute)
+		if broadcast.LiveStatus == "is_upcoming" {
+			if broadcast.StartsAtMs <= 0 {
+				continue
+			}
+			start := time.UnixMilli(broadcast.StartsAtMs)
+			if observed.Before(start) {
+				due = start
+			}
 		}
 		if retry := attempts[broadcast.ChannelID].Add(2 * time.Minute); retry.After(due) {
 			due = retry

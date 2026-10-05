@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"slices"
+	"time"
 
 	"github.com/screwys/igloo/internal/model"
 )
@@ -20,6 +21,21 @@ const YouTubeBroadcastSchema = `CREATE TABLE IF NOT EXISTS youtube_broadcasts (
 	source_rank INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (channel_id, video_id)
 )`
+
+func syncYouTubeBroadcastStatusTx(tx *sql.Tx, videoID string) error {
+	_, err := tx.Exec(`
+		UPDATE youtube_broadcasts b
+		SET live_status = v.status, observed_at_ms = $2
+		FROM (
+			SELECT video_id, channel_id, NULLIF(CASE WHEN metadata_json IS JSON OBJECT
+				THEN metadata_json::jsonb->>'live_status' END, '') AS status
+			FROM videos WHERE video_id = $1 AND owner_kind = 'youtube_video'
+		) v
+		WHERE b.video_id = v.video_id AND b.channel_id = v.channel_id
+		  AND v.status IS NOT NULL AND b.live_status IS DISTINCT FROM v.status
+	`, videoID, time.Now().UnixMilli())
+	return err
+}
 
 // ReplaceYouTubeBroadcasts commits one successful channel snapshot atomically.
 func (db *DB) ReplaceYouTubeBroadcasts(channelID string, broadcasts []model.YouTubeBroadcast, observedAtMs int64) error {

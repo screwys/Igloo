@@ -147,6 +147,9 @@ func (db *DB) CompleteVideoMetadataJob(job VideoMetadataJob, result VideoMetadat
 		if _, err := tx.Exec(`UPDATE videos SET metadata_json = $1 WHERE video_id = $2`, string(encoded), job.VideoID); err != nil {
 			return err
 		}
+		if err := syncYouTubeBroadcastStatusTx(tx, job.VideoID); err != nil {
+			return err
+		}
 		commentsAreAuthoritative := len(result.Comments) > 0 || (result.CommentCount != nil && *result.CommentCount == 0)
 		if commentsAreAuthoritative {
 			if err := replaceVideoCommentsTx(tx, job.VideoID, result.Comments, nowMs); err != nil {

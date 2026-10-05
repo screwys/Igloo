@@ -438,6 +438,11 @@ func upsertVideoMetadataTx(tx *sql.Tx, video CompletedVideo) error {
 		return err
 	}
 	platform, _ := videoPlatformForOwnerKind(video.OwnerKind)
+	if platform == "youtube" {
+		if err := syncYouTubeBroadcastStatusTx(tx, video.VideoID); err != nil {
+			return err
+		}
+	}
 	if platform == "instagram" || platform == "tiktok" {
 		observedAt := time.Now().UnixMilli()
 		for _, text := range []string{video.Title, video.Description} {

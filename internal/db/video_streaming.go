@@ -41,6 +41,11 @@ func (db *DB) ObserveStreamVideo(video CompletedVideo) error {
 		if err != nil {
 			return err
 		}
+		if video.OwnerKind == "youtube_video" {
+			if err := syncYouTubeBroadcastStatusTx(tx, video.VideoID); err != nil {
+				return err
+			}
+		}
 		_, err = tx.Exec(bind(`INSERT INTO web_video_streams (video_id, observed_at_ms) VALUES (?, ?)
 			ON CONFLICT(video_id) DO UPDATE SET observed_at_ms = excluded.observed_at_ms`), video.VideoID, time.Now().UnixMilli())
 		return err

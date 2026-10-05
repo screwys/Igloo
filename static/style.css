@@ -6397,21 +6397,23 @@ html.mini-player-moving * {
 }
 
 .temp-dl-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    justify-content: center;
     gap: 0.75rem;
     width: 100%;
     max-width: 22rem;
     margin-top: 0.5rem;
 }
 
-.temp-dl-actions .btn {
-    min-width: 0;
-    min-height: 44px;
+.temp-dl-actions .player-btn {
     margin: 0;
 }
 
-.temp-dl-actions .btn:hover {
+.temp-dl-actions .player-btn[hidden] {
+    display: none;
+}
+
+.temp-dl-actions .player-btn:hover {
     color: var(--text-secondary);
 }
 

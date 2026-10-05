@@ -107,7 +107,7 @@ func (s *Server) handleYouTubeStreamStart(w http.ResponseWriter, r *http.Request
 			return
 		}
 		if download.ClassifyFailure(err, nil, 0).Kind == download.ErrorKindAuth {
-			writeJSONError(w, 502, "youtube_auth_required", "YouTube requires sign-in. Add YouTube cookies in Preferences.")
+			writeJSONError(w, 502, "youtube_auth_required", "YouTube authentication failed.")
 			return
 		}
 		writeJSONError(w, 502, "stream_extraction", "Could not find a playable YouTube stream")
@@ -134,10 +134,17 @@ func writeYouTubeStreamResponse(w http.ResponseWriter, session *youtubeStreamSes
 }
 
 func (s *Server) recentYouTubeStream(videoID string, preferIndexed bool) *youtubeStreamSession {
+	status, err := s.db.YouTubeBroadcastLiveStatus(videoID)
+	if err != nil {
+		return nil
+	}
 	s.youtubeStreamsMu.Lock()
 	defer s.youtubeStreamsMu.Unlock()
 	var recent *youtubeStreamSession
 	for _, session := range s.youtubeStreams {
+		if status != "" && status != session.info.LiveStatus {
+			continue
+		}
 		if session.videoID != videoID || session.preferIndexed != preferIndexed ||
 			len(session.manifest) == 0 && session.rootResource == "" {
 			continue

@@ -33,8 +33,9 @@ templ TempDownloadPage(p PageProps, videoID string, youtubeURL string, videoTitl
 				</div>
 				<p id="temp-dl-status" class="hidden" role="status"></p>
 				<div id="temp-dl-actions" class="temp-dl-actions">
-					<button type="button" id="temp-dl-stream-btn" class="btn btn-secondary">{ L(p, "action_stream_instead", "Stream instead") }</button>
-					<button type="button" id="temp-dl-cancel-btn" class="btn btn-secondary">{ L(p, "action_cancel", "Cancel") }</button>
+					<button type="button" id="temp-dl-download-btn" class="player-btn" title={ L(p, "action_download", "Download") } aria-label={ L(p, "action_download", "Download") } hidden>@MaterialIcon("Download", "")</button>
+					<button type="button" id="temp-dl-stream-btn" class="player-btn" title={ L(p, "action_stream_instead", "Stream instead") } aria-label={ L(p, "action_stream_instead", "Stream instead") }>@MaterialIcon("PlayArrow", "")</button>
+					<button type="button" id="temp-dl-cancel-btn" class="player-btn" title={ L(p, "action_cancel", "Cancel") } aria-label={ L(p, "action_cancel", "Cancel") }>@MaterialIcon("Close", "")</button>
 				</div>
 			</div>
 		</div>
