@@ -660,6 +660,10 @@ function initMiniPlayer() {
       }
       if (!activeSurface) {
         const candidate = playingSurface(frameDocument)
+        if (candidate && candidate.kind === 'videos' && isPlayerURL(target.href, frameWindow.location.href)) {
+          leaveMiniPlayerForPlayer(target.href)
+          return
+        }
         if (candidate && shouldAutomaticallyMini(candidate.kind, preferences())) dockSurface(candidate)
       }
       navigateBrowse(target.href)
@@ -887,6 +891,7 @@ function initMiniPlayer() {
 
     const candidate = playingSurface(doc)
     if (!candidate || !shouldAutomaticallyMini(candidate.kind, preferences())) return
+    if (candidate.kind === 'videos' && isPlayerURL(anchor.href, window.location.href)) return
     event.preventDefault()
     if (await dockSurface(candidate)) navigateBrowse(anchor.href)
   })
