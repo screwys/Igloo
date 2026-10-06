@@ -440,6 +440,9 @@ func (db *DB) projectDiscoveryMedia(candidates []model.DiscoveryVideo) error {
 		}
 	}
 	for i := range candidates {
+		if readyAvatars[candidates[i].ChannelID] {
+			candidates[i].AvatarURL = "/api/media/avatar/" + candidates[i].ChannelID
+		}
 		video, found := ready[candidates[i].VideoID]
 		candidates[i].Ready = found && video.ready
 		if !found {
@@ -455,9 +458,6 @@ func (db *DB) projectDiscoveryMedia(candidates []model.DiscoveryVideo) error {
 		}
 		if readyThumbnails[candidates[i].VideoID] {
 			candidates[i].ThumbnailURL = "/api/media/thumbnail/" + candidates[i].VideoID
-		}
-		if readyAvatars[candidates[i].ChannelID] {
-			candidates[i].AvatarURL = "/api/media/avatar/" + candidates[i].ChannelID
 		}
 	}
 	return nil

@@ -58,7 +58,6 @@ func (m *Manager) ResolveYouTubePlayback(ctx context.Context, videoID string) (*
 		}
 		m.KickMediaWork()
 	}
-	m.KickProfileJobs()
 	if err := m.QueueVideoMetadataRefresh(info.ID); err != nil {
 		return nil, err
 	}

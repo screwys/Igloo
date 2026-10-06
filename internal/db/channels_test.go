@@ -58,7 +58,7 @@ func TestGetSubscribedChannelsIncludesFollowWithoutChannelRow(t *testing.T) {
 	t.Fatalf("twitter_follow_only missing from subscribed channels")
 }
 
-func TestObserveChannelsCreatesUnfollowedProfileWork(t *testing.T) {
+func TestObserveChannelsRecordsYouTubeIdentityWithoutProfileWork(t *testing.T) {
 	d := openWritableTestDB(t)
 	const channelID = "youtube_UCsample_discovery"
 	if err := d.ObserveChannels([]model.Channel{
@@ -93,15 +93,9 @@ func TestObserveChannelsCreatesUnfollowedProfileWork(t *testing.T) {
 	if profile == nil || profile.Handle != "@sample_discovery" || profile.DisplayName != "Sample Discovery" {
 		t.Fatalf("unexpected discovered profile: %+v", profile)
 	}
-	var requested, completed int64
-	if err := d.QueryRow(`
-		SELECT requested_revision, completed_revision
-		FROM profile_jobs WHERE channel_id = $1
-	`, channelID).Scan(&requested, &completed); err != nil {
-		t.Fatalf("profile job: %v", err)
-	}
-	if requested <= completed {
-		t.Fatalf("profile job requested=%d completed=%d", requested, completed)
+	job, err := d.GetProfileJob(channelID)
+	if err != nil || job != nil {
+		t.Fatalf("observation requested a profile fetch: %+v err=%v", job, err)
 	}
 }
 

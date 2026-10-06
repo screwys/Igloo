@@ -480,7 +480,7 @@ func (db *DB) ensureChannelStubForFollowTx(tx *sql.Tx, channelID string, updated
 		Platform:    platform,
 		Handle:      profileHandle,
 		DisplayName: profileName,
-	}, updatedAtMs)
+	}, updatedAtMs, false)
 }
 
 func mutateToggleTx(tx *sql.Tx, kind, table, keyColumn, itemKey, action string, updatedAtMs int64) (MutationResult, error) {

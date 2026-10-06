@@ -43,6 +43,7 @@ type profileObservation struct {
 	following       int
 	verified        bool
 	profileMetadata bool
+	identityOnly    bool
 	avatarURL       string
 	observedAt      int64
 }
@@ -61,7 +62,7 @@ type profileObservationState struct {
 	hasJob      bool
 }
 
-func observeChannelProfileTx(tx *sql.Tx, channel model.Channel, observedAt int64) error {
+func observeChannelProfileTx(tx *sql.Tx, channel model.Channel, observedAt int64, identityOnly bool) error {
 	applyChannelIDDefaults(&channel)
 	channel.Platform = detectPlatform(channel.Platform, channel.URL)
 	handle := strings.TrimSpace(channel.Handle)
@@ -80,11 +81,12 @@ func observeChannelProfileTx(tx *sql.Tx, channel model.Channel, observedAt int64
 		}
 	}
 	return observeProfileTx(tx, profileObservation{
-		channelID:   channel.ChannelID,
-		platform:    channel.Platform,
-		handle:      handle,
-		displayName: strings.TrimSpace(channel.DisplayName),
-		observedAt:  observedAt,
+		channelID:    channel.ChannelID,
+		platform:     channel.Platform,
+		handle:       handle,
+		displayName:  strings.TrimSpace(channel.DisplayName),
+		observedAt:   observedAt,
+		identityOnly: identityOnly,
 	})
 }
 
@@ -186,6 +188,9 @@ func observeProfileTx(tx *sql.Tx, observation profileObservation) error {
 		}
 	}
 
+	if observation.identityOnly {
+		return nil
+	}
 	if !state.hasJob {
 		_, err := tx.Exec(`
 			INSERT INTO profile_jobs (

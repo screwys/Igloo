@@ -604,7 +604,7 @@ func (db *DB) AddChannel(ch model.Channel) error {
 		if strings.TrimSpace(identity.DisplayName) == "" {
 			identity.DisplayName = ch.Name
 		}
-		if err := observeChannelProfileTx(tx, identity, nowMs); err != nil {
+		if err := observeChannelProfileTx(tx, identity, nowMs, false); err != nil {
 			return err
 		}
 		return nil
@@ -613,8 +613,8 @@ func (db *DB) AddChannel(ch model.Channel) error {
 
 // ObserveChannels commits lightweight channel identity discovered outside the
 // followed-source pipeline, such as YouTube search or recommendation results.
-// Observation never follows a channel; it makes the existing profile job the
-// owner of completing identity and media before hover-card presentation.
+// Observation never follows a channel. YouTube observations record only the
+// supplied identity and leave full profile fetching to following or refresh.
 func (db *DB) ObserveChannels(channels []model.Channel) error {
 	if len(channels) == 0 {
 		return nil
@@ -655,7 +655,7 @@ func (db *DB) ObserveChannels(channels []model.Channel) error {
 			if strings.TrimSpace(channel.DisplayName) == "" {
 				channel.DisplayName = channel.Name
 			}
-			if err := observeChannelProfileTx(tx, channel, nowMs); err != nil {
+			if err := observeChannelProfileTx(tx, channel, nowMs, channel.Platform == "youtube"); err != nil {
 				return err
 			}
 		}

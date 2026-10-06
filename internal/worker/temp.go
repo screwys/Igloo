@@ -482,8 +482,7 @@ func (m *Manager) downloadTemp(ctx context.Context, rawURL string, saveChannel b
 		}
 	}
 
-	// Channel creation owns the durable profile job. Wake its consumer without
-	// creating a synchronous render-time identity path.
+	// Wake profile work requested by following or platform ingestion.
 	m.KickProfileJobs()
 
 	if platform == "youtube" {

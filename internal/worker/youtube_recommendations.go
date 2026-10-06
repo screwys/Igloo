@@ -187,7 +187,6 @@ func (m *Manager) processYouTubeRecommendationJob(ctx context.Context, fetcher y
 		m.retryYouTubeRecommendationJob(job, err)
 		return true
 	}
-	m.KickProfileJobs()
 	log.Printf("[youtube-recommendations] refreshed %s: candidates=%d", job.AnchorVideoID, len(candidates))
 	return true
 }

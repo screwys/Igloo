@@ -717,7 +717,7 @@ func (db *DB) ImportConfig(cfg ConfigExport, replace bool) (ImportResult, error)
 				Name:      ch.Name,
 				URL:       channelURL,
 				Platform:  ch.Platform,
-			}, followedAt); err != nil {
+			}, followedAt, false); err != nil {
 				return err
 			}
 

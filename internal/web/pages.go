@@ -1589,8 +1589,12 @@ func (s *Server) handlePageYouTubeSearch(w http.ResponseWriter, r *http.Request)
 			slog.Warn("YouTube search failed", "q", q, "err", err)
 		} else if err := s.db.ObserveChannels(youtubeSearchChannels(results)); err != nil {
 			slog.Warn("Observe YouTube search channels", "q", q, "err", err)
-		} else if s.workers != nil {
-			s.workers.KickProfileJobs()
+		}
+		for _, result := range results {
+			channelID, _ := result["ChannelID"].(string)
+			if s.resolveAvatarPath(channelID) != "" {
+				result["AvatarURL"] = "/api/media/avatar/" + channelID
+			}
 		}
 	}
 
