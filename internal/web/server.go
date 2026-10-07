@@ -15,7 +15,6 @@ import (
 	"github.com/screwys/igloo/internal/config"
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/i18n"
-	"github.com/screwys/igloo/internal/model"
 	"github.com/screwys/igloo/internal/settings"
 	"github.com/screwys/igloo/internal/storage"
 	"github.com/screwys/igloo/internal/worker"
@@ -50,12 +49,6 @@ type Server struct {
 	authLimiter *authAttemptLimiter
 
 	authSessionTouches sync.Map
-
-	// Channel preview cache — populated in background on first page load
-	channelPreviewMu   sync.Mutex
-	channelPreviewVids map[string][]model.Video
-	channelPreviewFeed map[string][]model.FeedItem
-	channelPreviewAt   time.Time
 
 	dashboardInventoryMu         sync.RWMutex
 	dashboardInventory           *serverDashboardInventory

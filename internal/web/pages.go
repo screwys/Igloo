@@ -73,9 +73,8 @@ func (s *Server) handlePageChannels(w http.ResponseWriter, r *http.Request) {
 		batchChannels = channels[offset:end]
 	}
 
-	// Use cached preview data if available, otherwise fetch filtered for this batch
 	const previewLimit = 8
-	videosPerChannel, feedPerAuthor := s.getChannelPreviews(previewLimit, batchChannels, offset == 0)
+	videosPerChannel, feedPerAuthor := s.getChannelPreviews(previewLimit, batchChannels)
 
 	sections := make([]components.ChannelWithVideos, 0, len(batchChannels))
 	for _, ch := range batchChannels {
@@ -128,29 +127,11 @@ func (s *Server) handlePageChannels(w http.ResponseWriter, r *http.Request) {
 	_ = components.ChannelsPage(p, sections, q, hasMore, end).Render(r.Context(), w)
 }
 
-const channelPreviewTTL = 2 * time.Minute
-
 // getChannelPreviews returns video/feed preview maps for the given batch.
-// On the first page (isFirstPage=true), it fetches only the batch's channels
-// and triggers a background prefetch of all channels. Subsequent batches use
-// the cache if available, falling back to a filtered query.
-func (s *Server) getChannelPreviews(limit int, batch []model.Channel, isFirstPage bool) (map[string][]model.Video, map[string][]model.FeedItem) {
-	// Check cache
-	s.channelPreviewMu.Lock()
-	cached := s.channelPreviewVids != nil && time.Since(s.channelPreviewAt) < channelPreviewTTL
+func (s *Server) getChannelPreviews(limit int, batch []model.Channel) (map[string][]model.Video, map[string][]model.FeedItem) {
 	var vids map[string][]model.Video
 	var feed map[string][]model.FeedItem
-	if cached {
-		vids = s.channelPreviewVids
-		feed = s.channelPreviewFeed
-	}
-	s.channelPreviewMu.Unlock()
 
-	if cached {
-		return vids, feed
-	}
-
-	// Fetch filtered for this batch
 	var videoIDs, feedHandles []string
 	for _, ch := range batch {
 		if ch.Platform == "twitter" {
@@ -163,20 +144,11 @@ func (s *Server) getChannelPreviews(limit int, batch []model.Channel, isFirstPag
 			videoIDs = append(videoIDs, ch.ChannelID)
 		}
 	}
-	vids, _ = s.db.GetLatestVideosPerChannel(limit, videoIDs...)
-	feed, _ = s.db.GetLatestFeedMediaPerAuthor(limit, feedHandles...)
-
-	// On first page, prefetch all channels in background for scroll requests
-	if isFirstPage {
-		go func() {
-			allVids, _ := s.db.GetLatestVideosPerChannel(limit)
-			allFeed, _ := s.db.GetLatestFeedMediaPerAuthor(limit)
-			s.channelPreviewMu.Lock()
-			s.channelPreviewVids = allVids
-			s.channelPreviewFeed = allFeed
-			s.channelPreviewAt = time.Now()
-			s.channelPreviewMu.Unlock()
-		}()
+	if len(videoIDs) > 0 {
+		vids, _ = s.db.GetLatestVideosPerChannel(limit, videoIDs...)
+	}
+	if len(feedHandles) > 0 {
+		feed, _ = s.db.GetLatestFeedMediaPerAuthor(limit, feedHandles...)
 	}
 
 	return vids, feed

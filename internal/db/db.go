@@ -12,6 +12,7 @@ import (
 	"github.com/screwys/igloo/internal/storage"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
 	dbquery "github.com/screwys/igloo/internal/db/query"
@@ -30,6 +31,7 @@ type EnsureSchemaOptions struct {
 }
 
 const databaseMaxOpenConnections = 8
+const databaseStatementCacheCapacity = 64
 
 type DB struct {
 	conn        *sql.DB
@@ -147,7 +149,7 @@ func openPostgres(layout storage.Layout, opts OpenOptions, replacingDatabase boo
 	if err != nil {
 		return nil, err
 	}
-	config, err := pgx.ParseConfig(dsn)
+	config, err := parseDatabaseConfig(dsn)
 	if err != nil {
 		if managed != nil {
 			_ = managed.stop()
@@ -205,7 +207,7 @@ func OpenReadOnlyLayout(layout storage.Layout) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open db readonly: %w", err)
 	}
-	config, err := pgx.ParseConfig(dsn)
+	config, err := parseDatabaseConfig(dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +228,7 @@ func OpenExisting(layout storage.Layout) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	config, err := pgx.ParseConfig(dsn)
+	config, err := parseDatabaseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("parse database connection")
 	}
@@ -238,6 +240,23 @@ func OpenExisting(layout storage.Layout) (*DB, error) {
 		return nil, err
 	}
 	return &DB{conn: conn, storage: layout, databaseURL: dsn}, nil
+}
+
+func parseDatabaseConfig(dsn string) (*pgx.ConnConfig, error) {
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+	parameters, err := pgconn.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+	// Batch sizes create distinct plans in every connection. Keep fewer plans
+	// unless the connection URL explicitly sets the cache size.
+	if _, configured := parameters.RuntimeParams["statement_cache_capacity"]; !configured {
+		config.StatementCacheCapacity = databaseStatementCacheCapacity
+	}
+	return config, nil
 }
 
 // Close closes the database connection.

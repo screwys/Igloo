@@ -101,16 +101,11 @@ func (db *DB) ListFeedItemsPage(limit int, cursor *model.FeedCursor, excludeSeen
 func (db *DB) GetFeedItemsForTweetIDs(tweetIDs []string) (map[string]model.FeedItem, error) {
 	result := make(map[string]model.FeedItem, len(tweetIDs))
 	for _, chunk := range stringChunks(tweetIDs, 400) {
-		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
-		args := make([]any, 0, len(chunk))
-		for _, id := range chunk {
-			args = append(args, id)
-		}
 		rows, err := db.reader().Query(`
 		SELECT `+feedItemSelectSQL("feed_items")+`
 		FROM feed_items_resolved AS feed_items
-		WHERE tweet_id IN (`+placeholders+`)
-	`, args...)
+		WHERE tweet_id = ANY(?::text[])
+	`, chunk)
 		if err != nil {
 			return nil, err
 		}
