@@ -329,15 +329,6 @@ func TestPrefsBodyGeneralTabRendersEmbedsAndBackups(t *testing.T) {
 			t.Fatalf("preferences body missing editable embed host %q:\n%s", want, html)
 		}
 	}
-	if got := strings.Count(html, `data-embed-host-save=`); got != 4 {
-		t.Fatalf("preferences should render one independent embed-host save button per platform, got %d:\n%s", got, html)
-	}
-	if strings.Contains(html, `class="embed-host-save" data-embed-host-save="youtube"`) && strings.Contains(html, `>Save</button>`) {
-		t.Fatalf("embed-host save actions should use compact checkmarks instead of text buttons:\n%s", html)
-	}
-	if !strings.Contains(html, `class="embed-host-save" data-embed-host-save="youtube" aria-label="Save"`) {
-		t.Fatalf("embed-host checkmark should retain an accessible Save label:\n%s", html)
-	}
 	for _, want := range []string{
 		`name="backup_enabled"`,
 		`name="backup_dir"`,
@@ -942,9 +933,6 @@ func TestPrefsUILanguagePreviewAndSaveDoesNotReloadPage(t *testing.T) {
 	}
 	for _, want := range []string{
 		`data-i18n-scope="prefs"`,
-		`id="prefs-unsaved-reminder"`,
-		`data-i18n="status_save_preferences_to_apply"`,
-		`data-i18n="action_save_preferences"`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("preferences form missing %q:\n%s", want, html)

@@ -346,18 +346,9 @@ func (db *DB) ListPreDiversityRankedCandidatesContext(
 	where = append(where, feedActiveOwnerPredicate("fi"))
 
 	muted, _ := db.GetMutedChannelIDs()
-	if len(muted) > 0 {
-		ph := strings.Repeat("?,", len(muted))
-		ph = ph[:len(ph)-1]
-		where = append(where, "fi.channel_id NOT IN ("+ph+")")
-		for _, channelID := range muted {
-			whereArgs = append(whereArgs, channelID)
-		}
-		where = append(where, "COALESCE(fi.source_channel_id,'') NOT IN ("+ph+")")
-		for _, channelID := range muted {
-			whereArgs = append(whereArgs, channelID)
-		}
-	}
+	muteClauses, muteArgs := buildMuteClauses("fi", muted)
+	where = append(where, muteClauses...)
+	whereArgs = append(whereArgs, muteArgs...)
 
 	where = append(where, feedUnseenPredicate("fi"))
 
@@ -530,18 +521,8 @@ func (db *DB) CountVisibleFeedRankSnapshotContext(ctx context.Context) (int, err
 		feedActiveOwnerPredicate("fi"),
 		feedUnseenPredicate("fi"),
 	}
-	args := make([]any, 0, len(muted)*2)
-	if len(muted) > 0 {
-		ph := strings.TrimSuffix(strings.Repeat("?,", len(muted)), ",")
-		where = append(where, "fi.channel_id NOT IN ("+ph+")")
-		for _, channelID := range muted {
-			args = append(args, channelID)
-		}
-		where = append(where, "COALESCE(fi.source_channel_id,'') NOT IN ("+ph+")")
-		for _, channelID := range muted {
-			args = append(args, channelID)
-		}
-	}
+	muteClauses, args := buildMuteClauses("fi", muted)
+	where = append(where, muteClauses...)
 	var count int
 	err := db.reader().QueryRowContext(ctx, `
 		SELECT COUNT(*)
@@ -727,6 +708,14 @@ func (db *DB) ListSnapshotPage(snapshotAt int64, afterPos int, limit int) ([]Sna
 	if afterPos < 0 {
 		afterPos = 0
 	}
+	muted, _ := db.GetMutedChannelIDs()
+	muteClauses, muteArgs := buildMuteClauses("fi", muted)
+	muteSQL := ""
+	if len(muteClauses) > 0 {
+		muteSQL = " AND " + strings.Join(muteClauses, " AND ")
+	}
+	args := append([]any{snapshotAt, afterPos}, muteArgs...)
+	args = append(args, limit)
 
 	rows, err := db.reader().Query(`
 		SELECT s.rank_position, s.final_score, s.base_score,
@@ -738,10 +727,10 @@ func (db *DB) ListSnapshotPage(snapshotAt int64, afterPos int, limit int) ([]Sna
 		  AND s.rank_position > ?
 		  AND `+feedPrimaryItemPredicate("fi")+`
 		  AND `+feedActiveOwnerPredicate("fi")+`
-		  AND `+feedUnseenPredicate("fi")+`
+		  AND `+feedUnseenPredicate("fi")+muteSQL+`
 		ORDER BY s.rank_position ASC
 		LIMIT ?
-	`, snapshotAt, afterPos, limit)
+	`, args...)
 	if err != nil {
 		return nil, err
 	}

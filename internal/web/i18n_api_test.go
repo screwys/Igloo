@@ -71,8 +71,7 @@ func TestSettingsFormPreviewLanguageUsesCatalogWithoutChangingPersistedSelection
 	srv := newTestServer(t)
 	srv.i18n = i18n.NewCatalog()
 	_ = srv.i18n.LoadTOMLFile(testTOMLFile(t, "tr", map[string]string{
-		"action_save_preferences": "Tercihleri kaydet",
-		"settings_tab_general":    "Genel",
+		"settings_tab_general": "Genel",
 	}))
 	if err := srv.db.SetSetting("ui_language", "en"); err != nil {
 		t.Fatalf("SetSetting: %v", err)
@@ -89,7 +88,6 @@ func TestSettingsFormPreviewLanguageUsesCatalogWithoutChangingPersistedSelection
 	body := rec.Body.String()
 	for _, want := range []string{
 		">Genel<",
-		">Tercihleri kaydet<",
 		`data-persisted-ui-language="en"`,
 		`value="tr" selected`,
 	} {

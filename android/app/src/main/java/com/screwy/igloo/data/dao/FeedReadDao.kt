@@ -151,6 +151,9 @@ interface FeedReadDao {
             AND NOT EXISTS (
                 SELECT 1 FROM muted_channels mc WHERE mc.channel_id = fi.reposter_channel_id
             )
+            AND NOT EXISTS (
+                SELECT 1 FROM muted_channels mc WHERE mc.channel_id = fi.quote_channel_id
+            )
             AND COALESCE(fi.is_ghost, 0) = 0
             AND (
         """ + MAIN_FEED_REPOST_VISIBILITY + """
@@ -175,6 +178,7 @@ interface FeedReadDao {
         WHERE
             NOT EXISTS (SELECT 1 FROM muted_channels mc WHERE mc.channel_id = fi.channel_id)
             AND NOT EXISTS (SELECT 1 FROM muted_channels mc WHERE mc.channel_id = fi.reposter_channel_id)
+            AND NOT EXISTS (SELECT 1 FROM muted_channels mc WHERE mc.channel_id = fi.quote_channel_id)
             AND COALESCE(fi.is_ghost, 0) = 0
             AND (
         """ + MAIN_FEED_REPOST_VISIBILITY + """

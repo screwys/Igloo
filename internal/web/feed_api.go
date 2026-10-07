@@ -24,6 +24,7 @@ func (s *Server) registerFeedAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/feed/mute/{handle}", s.handleFeedMute)
 	mux.HandleFunc("DELETE /api/feed/mute/{handle}", s.handleFeedUnmute)
 	mux.HandleFunc("GET /api/feed/muted", s.handleFeedMutedList)
+	mux.HandleFunc("DELETE /api/feed/muted/{channelID}", s.handleFeedUnmute)
 	mux.HandleFunc("POST /api/feed/ingest/pause", s.handleFeedIngestPause)
 	mux.HandleFunc("POST /api/feed/ingest/trigger", s.handleFeedIngestTrigger)
 	mux.HandleFunc("POST /api/feed/media/retry", s.handleFeedMediaRetry)
@@ -231,7 +232,10 @@ func (s *Server) handleFeedUnmute(w http.ResponseWriter, r *http.Request) {
 	}
 	handle := r.PathValue("handle")
 
-	channelID := model.TwitterChannelIDFromHandle(handle)
+	channelID := r.PathValue("channelID")
+	if channelID == "" {
+		channelID = model.TwitterChannelIDFromHandle(handle)
+	}
 	result, err := s.db.MutateMute(channelID, "clear", 0)
 	if err != nil {
 		slog.Error("UnmuteAccount", "handle", handle, "err", err)

@@ -279,8 +279,10 @@
     const normalized = normalizeHex(value) || value;
     const picker = form.querySelector('[data-web-theme-accent-picker]');
     const input = form.querySelector('[name=web_theme_accent]');
+    const changed = input && input.value !== normalized;
     if (input) input.value = normalized;
     if (picker && normalizeHex(normalized)) picker.value = normalized;
+    if (changed) input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   function init(root) {

@@ -278,35 +278,20 @@
     return parts.join('&');
   }
 
-  function setPrefsReminder(form, visible) {
-    form = form || doc.getElementById('prefs-form');
-    var reminder = doc.getElementById('prefs-unsaved-reminder');
-    if (!reminder) return;
-    reminder.classList.toggle('hidden', !visible);
-    reminder.setAttribute('aria-hidden', visible ? 'false' : 'true');
-  }
-
-  function updatePrefsDirtyState(form) {
-    form = form || doc.getElementById('prefs-form');
-    if (!form) return;
-    if (!form.dataset.initialState) form.dataset.initialState = serializePrefsForm(form);
-    setPrefsReminder(form, serializePrefsForm(form) !== form.dataset.initialState);
-  }
-
-  function resetPrefsDirtyState(form) {
-    form = form || doc.getElementById('prefs-form');
-    if (!form) return;
-    form.dataset.initialState = serializePrefsForm(form);
-    setPrefsReminder(form, false);
-  }
-
-  function initPrefsDirtyState(root) {
-    var form = root && root.id === 'prefs-form' ? root : (root || doc).querySelector && (root || doc).querySelector('#prefs-form');
-    if (form) resetPrefsDirtyState(form);
+  var prefsSaveTimer;
+  function schedulePrefsSave(field, delay) {
+    if (!field || !field.name || !field.closest) return;
+    var form = field.closest('#prefs-form');
+    if (!form || field.closest('#admin-cred-form, #cookie-rows-container, [data-prefs-panel="users"]')) return;
+    clearTimeout(prefsSaveTimer);
+    prefsSaveTimer = setTimeout(function () {
+      if (form.isConnected) form.requestSubmit();
+    }, delay);
   }
 
   function handlePrefsAfterRequest(event, savedFallback, failedFallback) {
     if (event.detail && event.detail.elt && event.detail.elt !== this) return;
+    if (event.detail && event.detail.xhr && event.detail.xhr.prefsState !== serializePrefsForm(this)) return;
     if (!event.detail || !event.detail.successful) {
       if (window.IglooWebTheme && window.IglooWebTheme.revertPreview) window.IglooWebTheme.revertPreview();
       showPrefsStatus('error', translate('status_preferences_save_failed', failedFallback || 'Failed to save preferences'));
@@ -352,32 +337,10 @@
     if (form && lang) form.dataset.persistedUiLanguage = nextLang;
     if (window.IglooWebTheme && window.IglooWebTheme.commitAfterSave) window.IglooWebTheme.commitAfterSave();
 
-    function done() {
-      resetPrefsDirtyState(form);
-      var text = translate('status_preferences_saved', savedFallback || 'Preferences saved');
-      showPrefsStatus('success', text);
-      clearPrefsStatusLater(text);
-    }
-
-    function refreshForm() {
-      if (changed && window.htmx) {
-        var req = window.htmx.ajax('GET', '/api/settings/form', { target: '#prefs-body', swap: 'innerHTML' });
-        if (req && req.then) {
-          req.then(done, done);
-          return;
-        }
-      }
-      done();
-    }
-
-    if (changed && nextLang) {
-      var apply = applyLanguage(nextLang);
-      if (apply && apply.then) {
-        apply.then(refreshForm, refreshForm);
-        return;
-      }
-    }
-    refreshForm();
+    if (changed && nextLang) applyLanguage(nextLang);
+    var text = translate('status_preferences_saved', savedFallback || 'Preferences saved');
+    showPrefsStatus('success', text);
+    clearPrefsStatusLater(text);
   }
 
   i18n.t = t;
@@ -392,19 +355,19 @@
     var elt = event.detail && event.detail.elt;
     var root = elt && elt.parentElement ? elt.parentElement : doc;
     applyI18nAttributes(root);
-    initPrefsDirtyState(root);
+  });
+
+  body.addEventListener('htmx:beforeRequest', function (event) {
+    var form = event.detail && event.detail.elt;
+    if (form && form.id === 'prefs-form') event.detail.xhr.prefsState = serializePrefsForm(form);
   });
 
   doc.addEventListener('input', function (event) {
-    if (event.target && event.target.closest && event.target.closest('#prefs-form')) {
-      updatePrefsDirtyState(event.target.closest('#prefs-form'));
-    }
+    schedulePrefsSave(event.target, 400);
   });
 
   doc.addEventListener('change', function (event) {
-    if (event.target && event.target.closest && event.target.closest('#prefs-form')) {
-      updatePrefsDirtyState(event.target.closest('#prefs-form'));
-    }
+    schedulePrefsSave(event.target, 0);
   });
 
   function q(sel, root) {
@@ -430,22 +393,6 @@
     syncSidebarRouteOrder(container);
     var input = container.parentElement && container.parentElement.querySelector('[data-sidebar-route-order-input]');
     if (input) input.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-
-  function updatePrefsInitialField(form, input) {
-    if (!form || !input || !input.name) return;
-    var prefix = input.name + '=';
-    var replacement = prefix + encodeURIComponent(input.value || '');
-    var parts = String(form.dataset.initialState || '').split('&').filter(Boolean);
-    var found = false;
-    parts = parts.map(function (part) {
-      if (part.indexOf(prefix) !== 0) return part;
-      found = true;
-      return replacement;
-    });
-    if (!found) parts.push(replacement);
-    form.dataset.initialState = parts.join('&');
-    updatePrefsDirtyState(form);
   }
 
   function applySidebarRouteOrder(form) {
@@ -585,43 +532,6 @@
     else container.insertBefore(sibling, row);
     notifySidebarRouteOrderChanged(container);
     row.focus();
-  });
-
-  doc.addEventListener('click', function (event) {
-    var button = event.target && event.target.closest && event.target.closest('[data-embed-host-save]');
-    if (!button) return;
-    var row = button.closest('.embed-host-row');
-    var input = row && row.querySelector('[name^=share_embed_host_]');
-    var status = row && row.querySelector('[data-embed-host-status]');
-    var form = button.closest('#prefs-form');
-    if (!input || !form) return;
-    var platform = button.getAttribute('data-embed-host-save');
-    var key = 'share_embed_host_' + platform;
-    var payload = {};
-    payload[key] = input.value.trim();
-    button.disabled = true;
-    button.classList.remove('saved');
-    if (status) {
-      status.textContent = '';
-      status.classList.remove('error');
-    }
-    apiJson('/api/settings', { method: 'POST', body: JSON.stringify(payload) }).then(function () {
-      input.value = payload[key];
-      window.IglooPreferences = Object.assign({}, window.IglooPreferences || {});
-      window.IglooPreferences.shareEmbedHosts = Object.assign({}, window.IglooPreferences.shareEmbedHosts || {});
-      window.IglooPreferences.shareEmbedHosts[platform] = payload[key];
-      updatePrefsInitialField(form, input);
-      button.classList.add('saved');
-      if (status) status.textContent = translate('status_saved', 'Saved');
-      setTimeout(function () { button.classList.remove('saved'); }, 1200);
-    }).catch(function () {
-      if (status) {
-        status.textContent = translate('status_save_failed', 'Save failed');
-        status.classList.add('error');
-      }
-    }).finally(function () {
-      button.disabled = input.disabled;
-    });
   });
 
   doc.addEventListener('htmx:afterSettle', function (event) {
@@ -1038,6 +948,7 @@
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden', 'false');
     doc.body.style.overflow = 'hidden';
+    if (modal.id === 'prefs-modal' && window.htmx) window.htmx.trigger(body, 'prefs-open');
   }
 
   function closeModal(modal) {
@@ -1336,7 +1247,7 @@
         // Update label — use first text node content (before the desc span)
         if (label) label.textContent = opt.childNodes[0].textContent.trim();
         // Update hidden input
-        if (hidden) { hidden.value = val; hidden.dispatchEvent(new Event('change')); }
+        if (hidden) { hidden.value = val; hidden.dispatchEvent(new Event('change', { bubbles: true })); }
         // Close
         wrap.classList.remove('open');
         dropdown.classList.add('hidden');
@@ -1846,7 +1757,10 @@
         if (c) codes.push(c);
       });
       var hidden = widget.querySelector('.skip-lang-hidden');
-      if (hidden) hidden.value = codes.join(',');
+      if (hidden) {
+        hidden.value = codes.join(',');
+        hidden.dispatchEvent(new Event('change', { bubbles: true }));
+      }
       syncTargetDropdown(codes);
     }
 

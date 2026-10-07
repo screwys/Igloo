@@ -32,18 +32,9 @@ func (db *DB) GetFeedSnapshotHealth() (FeedSnapshotHealth, error) {
 	}
 	args := []any{snapshotAt}
 	muted, _ := db.GetMutedChannelIDs()
-	if len(muted) > 0 {
-		ph := strings.Repeat("?,", len(muted))
-		ph = ph[:len(ph)-1]
-		where = append(where, "fi.channel_id NOT IN ("+ph+")")
-		for _, channelID := range muted {
-			args = append(args, channelID)
-		}
-		where = append(where, "COALESCE(fi.source_channel_id,'') NOT IN ("+ph+")")
-		for _, channelID := range muted {
-			args = append(args, channelID)
-		}
-	}
+	muteClauses, muteArgs := buildMuteClauses("fi", muted)
+	where = append(where, muteClauses...)
+	args = append(args, muteArgs...)
 	where = append(where, feedUnseenPredicate("fi"))
 
 	query := fmt.Sprintf(`

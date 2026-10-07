@@ -321,9 +321,6 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isHTMX {
-		if previousYouTubeBroadcasts != s.db.BoolSetting("youtube_broadcasts_enabled") {
-			w.Header().Set("HX-Refresh", "true")
-		}
 		w.WriteHeader(200)
 	} else {
 		writeJSON(w, 200, map[string]any{"success": true})

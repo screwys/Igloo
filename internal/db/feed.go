@@ -43,18 +43,9 @@ func (db *DB) ListFeedItemsPage(limit int, cursor *model.FeedCursor, excludeSeen
 	where = append(where, feedActiveOwnerPredicate("feed_items"))
 
 	muted, _ := db.GetMutedChannelIDs()
-	if len(muted) > 0 {
-		placeholders := strings.Repeat("?,", len(muted))
-		placeholders = placeholders[:len(placeholders)-1]
-		where = append(where, "channel_id NOT IN ("+placeholders+")")
-		for _, channelID := range muted {
-			args = append(args, channelID)
-		}
-		where = append(where, "COALESCE(source_channel_id,'') NOT IN ("+placeholders+")")
-		for _, channelID := range muted {
-			args = append(args, channelID)
-		}
-	}
+	muteClauses, muteArgs := buildMuteClauses("feed_items", muted)
+	where = append(where, muteClauses...)
+	args = append(args, muteArgs...)
 
 	if cursor != nil && cursor.BeforePublishedAtMs > 0 && cursor.BeforeTweetID != "" {
 		where = append(where, "(published_at < ? OR (published_at = ? AND tweet_id < ?))")
@@ -1799,7 +1790,7 @@ func (db *DB) GetNewPosterAvatars(knownHeadTweetID string, limit int) ([]model.N
 	}
 
 	muted, _ := db.GetMutedChannelIDs()
-	muteClauses, muteArgs := buildMuteClauses(muted)
+	muteClauses, muteArgs := buildMuteClauses("fi", muted)
 	muteSQL := ""
 	for _, c := range muteClauses {
 		muteSQL += " AND " + c
@@ -1888,22 +1879,21 @@ func (db *DB) GetNewPosterAvatars(knownHeadTweetID string, limit int) ([]model.N
 }
 
 // buildMuteClauses returns SQL fragments that filter persisted channel identities.
-func buildMuteClauses(muted []string) ([]string, []any) {
+func buildMuteClauses(alias string, muted []string) ([]string, []any) {
 	if len(muted) == 0 {
 		return nil, nil
 	}
-	placeholders := strings.Repeat("?,", len(muted))
-	placeholders = placeholders[:len(placeholders)-1]
-	args := make([]any, 0, len(muted)*2)
-	for _, channelID := range muted {
-		args = append(args, channelID)
-	}
-	for _, channelID := range muted {
-		args = append(args, channelID)
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(muted)), ",")
+	args := make([]any, 0, len(muted)*3)
+	for range 3 {
+		for _, channelID := range muted {
+			args = append(args, channelID)
+		}
 	}
 	return []string{
-		"fi.channel_id NOT IN (" + placeholders + ")",
-		"COALESCE(fi.source_channel_id,'') NOT IN (" + placeholders + ")",
+		alias + ".channel_id NOT IN (" + placeholders + ")",
+		"COALESCE(" + alias + ".source_channel_id,'') NOT IN (" + placeholders + ")",
+		"COALESCE(" + alias + ".quote_channel_id,'') NOT IN (" + placeholders + ")",
 	}, args
 }
 
@@ -1927,18 +1917,9 @@ func (db *DB) ListFeedItemsFiltered(limit int, cursor *model.FeedCursor, sourceH
 	where = append(where, feedActiveOwnerPredicate("feed_items"))
 
 	muted, _ := db.GetMutedChannelIDs()
-	if len(muted) > 0 {
-		placeholders := strings.Repeat("?,", len(muted))
-		placeholders = placeholders[:len(placeholders)-1]
-		where = append(where, "channel_id NOT IN ("+placeholders+")")
-		for _, h := range muted {
-			args = append(args, h)
-		}
-		where = append(where, "COALESCE(source_channel_id,'') NOT IN ("+placeholders+")")
-		for _, h := range muted {
-			args = append(args, h)
-		}
-	}
+	muteClauses, muteArgs := buildMuteClauses("feed_items", muted)
+	where = append(where, muteClauses...)
+	args = append(args, muteArgs...)
 
 	if sourceHandle != "" {
 		sourceChannelID := model.TwitterChannelIDFromHandle(sourceHandle)
