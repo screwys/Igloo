@@ -51,12 +51,13 @@ function translateLabelForButton(button) {
 }
 
 function translateContainersForAction(card, actionBtn) {
-  var containers = card.querySelectorAll('[data-translate-field][data-lang]')
+  var scope = actionBtn && actionBtn.closest('.feed-quote-card') || card
+  var containers = scope.querySelectorAll('[data-translate-field][data-lang]')
   var field = actionBtn ? String(actionBtn.getAttribute('data-translate-target-field') || '').trim() : ''
   if (!field) return Array.prototype.slice.call(containers)
   var out = []
   containers.forEach(function (container) {
-    if (container.getAttribute('data-translate-field') === field) out.push(container)
+    if (container.getAttribute('data-translate-field') === field && (container.closest('.feed-quote-card') || card) === scope) out.push(container)
   })
   return out
 }
@@ -79,7 +80,8 @@ function hasSkippedLanguageScript(container) {
 }
 
 function translateBlock(card, container) {
-  var tweetId = card.getAttribute('data-tweet-id')
+  var quoteCard = container.closest('.feed-quote-card')
+  var tweetId = quoteCard ? quoteCard.getAttribute('data-translate-tweet-id') : card.getAttribute('data-tweet-id')
   var field = container.getAttribute('data-translate-field')
   var targetLang = container.getAttribute('data-target-lang') || translateTarget
   var key = tweetId + ':' + field
@@ -101,7 +103,7 @@ function translateBlock(card, container) {
     setHtmlContent(textEl, jsLinkify(resp.translated_text))
     container.setAttribute('data-translated', '1')
     var srcLang = (resp.source_lang || '').trim()
-    var tBtn = translateButtonFor(card, field)
+    var tBtn = translateButtonFor(quoteCard || card, field)
     var label = translateLabelForButton(tBtn)
     if (label) label.textContent = srcLang
     if (tBtn) tBtn.classList.add('active')

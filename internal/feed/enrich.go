@@ -17,7 +17,7 @@ func EnrichFeedItems(database *db.DB, items []model.FeedItem) []model.FeedItem {
 	stateAccount, _ := database.BuildStateAccountScores()
 	items = enrichFeedItems(database, items, true, stateAccount)
 	items = attachThreadChains(database, items, stateAccount)
-	return items
+	return attachQuoteChains(database, items, stateAccount)
 }
 
 // EnrichFeedItemsPreserveRows attaches the same per-row state as EnrichFeedItems
@@ -29,7 +29,72 @@ func EnrichFeedItemsPreserveRows(database *db.DB, items []model.FeedItem) []mode
 		return items
 	}
 	stateAccount, _ := database.BuildStateAccountScores()
-	return enrichFeedItems(database, items, false, stateAccount)
+	items = enrichFeedItems(database, items, false, stateAccount)
+	return attachQuoteChains(database, items, stateAccount)
+}
+
+func attachQuoteChains(database *db.DB, items []model.FeedItem, stateAccount map[string]float64) []model.FeedItem {
+	rows := make(map[string]model.FeedItem)
+	var pending []string
+	requested := make(map[string]bool)
+	collect := func(item model.FeedItem) {
+		rows[item.TweetID] = item
+		if id := item.QuoteTweetID; id != "" && !requested[id] {
+			requested[id] = true
+			pending = append(pending, id)
+		}
+	}
+	for _, item := range items {
+		collect(item)
+		for _, ancestor := range item.ThreadChain {
+			collect(ancestor)
+		}
+	}
+	var quotes []model.FeedItem
+	for len(pending) > 0 {
+		var missing []string
+		for _, id := range pending {
+			if _, ok := rows[id]; !ok {
+				missing = append(missing, id)
+			}
+		}
+		pending = nil
+		fetched, err := database.GetFeedItemsForTweetIDs(missing)
+		if err != nil {
+			break
+		}
+		for _, item := range fetched {
+			collect(item)
+			if item.QuoteTweetID != "" {
+				quotes = append(quotes, item)
+			}
+		}
+	}
+	for _, quote := range enrichFeedItems(database, quotes, false, stateAccount) {
+		rows[quote.TweetID] = quote
+	}
+	attach := func(item *model.FeedItem) {
+		item.QuoteChain = nil
+		seen := map[string]bool{item.TweetID: true}
+		for id := item.QuoteTweetID; id != "" && !seen[id]; {
+			seen[id] = true
+			quote, ok := rows[id]
+			if !ok || quote.QuoteTweetID == "" || seen[quote.QuoteTweetID] {
+				break
+			}
+			quote.QuoteChain = nil
+			quote.ThreadChain = nil
+			item.QuoteChain = append(item.QuoteChain, quote)
+			id = quote.QuoteTweetID
+		}
+	}
+	for i := range items {
+		attach(&items[i])
+		for j := range items[i].ThreadChain {
+			attach(&items[i].ThreadChain[j])
+		}
+	}
+	return items
 }
 
 // ThreadContextRow is the server-owned Android mirror row for one ancestor in a

@@ -550,6 +550,9 @@ type FeedItem struct {
 	ChannelIsStarred     bool
 	FollowTargetFollowed bool // whether the follow-button target is already followed (not inherited)
 	QuoteChannelFollowed bool
+	// QuoteChain contains stored quoting rows for the nested quote cards,
+	// ordered from the immediate quoted post inward.
+	QuoteChain []FeedItem `json:"-"`
 	// ThreadChain is conversation-chain presentation data, ordered root → parent.
 	// The leaf (this FeedItem itself) is NOT included. Populated by
 	// feed.EnrichFeedItems for replies.
