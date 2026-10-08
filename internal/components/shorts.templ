@@ -40,9 +40,11 @@ templ ShortsPage(p PageProps, videos []model.Video, storyChannels []model.StoryC
 			data-hydrate-batch-size={ strconv.Itoa(shortsHydrateBatchSize(hydrateBatchSize)) }
 			tabindex="-1"
 		>
-			<div id="shorts-container" class="shorts-container"></div>
-			<div id="shorts-uptodate-overlay" class="shorts-uptodate-overlay hidden">
-				<div class="uptodate-content"><span>{ L(p, "status_up_to_date", "You're up to date!") }</span></div>
+			<div class="shorts-stage">
+				<div id="shorts-container" class="shorts-container"></div>
+				<div id="shorts-uptodate-overlay" class="shorts-uptodate-overlay hidden" role="status" aria-live="polite">
+					<div class="uptodate-content"><span>{ L(p, "status_up_to_date", "You're up to date!") }</span></div>
+				</div>
 			</div>
 		</div>
 	}

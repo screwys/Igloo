@@ -11,6 +11,10 @@ var _fns = null
 var _deckTransitionTimer = 0
 var DECK_WINDOW = 10
 var DECK_TRANSITION_MS = 340
+var _endDistance = 0
+var _endTimer = 0
+var _endRequest = null
+var _endPulling = false
 
 // initOverlay sets up module-level refs.
 //   dom: { shortsContainer, gridShell, layout, upToDateOverlay, sourceContainer,
@@ -48,6 +52,7 @@ function isSkeletonCard(card) {
 export function cancelShortsNavigationIntent() {
   if (!_state) return
   clearDeckTransition()
+  resetMomentsEnd()
 }
 
 function deckState() {
@@ -79,7 +84,9 @@ function setDeckItemPosition(entry, index, centerIndex, animate) {
   if (!entry || !entry.el) return
   var offset = (index - centerIndex) * 100
   entry.el.style.transition = animate ? ('transform ' + DECK_TRANSITION_MS + 'ms cubic-bezier(0.22, 0.61, 0.36, 1)') : 'none'
-  entry.el.style.transform = 'translate3d(0, ' + offset + '%, 0)'
+  entry.el.style.transform = _endDistance > 0 && index === centerIndex
+    ? 'translate3d(0, calc(' + offset + '% - ' + _endDistance + 'px), 0)'
+    : 'translate3d(0, ' + offset + '%, 0)'
   entry.el.style.visibility = Math.abs(index - centerIndex) <= 2 ? '' : 'hidden'
 }
 
@@ -340,6 +347,7 @@ export function setOverlayVisible(visible) {
   _dom.doc.body.classList.toggle('shorts-open', _state.overlayOpen)
   if (!_state.overlayOpen) {
     clearDeckTransition()
+    resetMomentsEnd()
     pauseAllShorts()
     releaseWarmShortVideos()
     _fns.closeBookmarkMenu()
@@ -365,13 +373,76 @@ export function updateUrlForCurrent() {
   return
 }
 
-export function showUpToDateOverlay() {
+function setEndFeedback(key, fallback) {
   if (!_dom.upToDateOverlay) return
+  var label = _dom.upToDateOverlay.querySelector('span')
+  var text = t(key, fallback)
+  if (label.textContent !== text) label.textContent = text
   _dom.upToDateOverlay.classList.remove('hidden')
-  clearTimeout(showUpToDateOverlay._t)
-  showUpToDateOverlay._t = setTimeout(function () {
-    _dom.upToDateOverlay.classList.add('hidden')
-  }, 1200)
+}
+
+function setEndDistance(distance, animate) {
+  clearTimeout(_endTimer)
+  _endDistance = distance
+  positionDeckItems(_state.currentIndex, animate)
+  if (!_dom.upToDateOverlay) return
+  _dom.upToDateOverlay.style.transition = animate ? 'height ' + DECK_TRANSITION_MS + 'ms ease-out' : 'none'
+  _dom.upToDateOverlay.style.height = distance + 'px'
+  if (distance === 0) {
+    _endTimer = setTimeout(function () {
+      _dom.upToDateOverlay.classList.add('hidden')
+    }, animate ? DECK_TRANSITION_MS : 0)
+  }
+}
+
+function resetMomentsEnd() {
+  clearTimeout(_endTimer)
+  _endTimer = 0
+  _endRequest = null
+  _endPulling = false
+  _endDistance = 0
+  if (!_dom.upToDateOverlay) return
+  _dom.upToDateOverlay.style.height = '0px'
+  _dom.upToDateOverlay.classList.add('hidden')
+}
+
+function returnFromMomentsEnd() {
+  clearTimeout(_endTimer)
+  if (_endPulling) return
+  _endTimer = setTimeout(function () { setEndDistance(0, true) }, 800)
+}
+
+export function canPullMomentsEnd() {
+  return !_state.storyMode && !deckIsTransitioning() && _state.currentIndex >= 0 && _state.currentIndex + 1 >= _state.cards.length
+}
+
+export function pullMomentsEnd(distance, wheel) {
+  if (!canPullMomentsEnd()) return false
+  clearTimeout(_endTimer)
+  _endPulling = true
+  var limit = _dom.shortsContainer.offsetHeight * 0.5
+  var pull = Math.max(0, distance)
+  setEndDistance(limit * pull / (limit + pull), false)
+  if (!wheel) setEndFeedback('status_loading', 'Loading...')
+  return true
+}
+
+export function releaseMomentsEndPull() {
+  _endPulling = false
+  if (!_endDistance) return
+  setEndDistance(Math.min(80, _endDistance), true)
+  if (!_endRequest) returnFromMomentsEnd()
+}
+
+export function cancelMomentsEndPull() {
+  clearTimeout(_endTimer)
+  _endRequest = null
+  _endPulling = false
+  if (!_endDistance) {
+    if (_dom.upToDateOverlay) _dom.upToDateOverlay.classList.add('hidden')
+    return
+  }
+  setEndDistance(0, true)
 }
 
 function scrollStoryToIndex(index, behavior) {
@@ -455,6 +526,10 @@ function startDeckTransition(index) {
 export function scrollToIndex(index, behavior, options) {
   if (!Number.isFinite(index)) return false
   if (index < 0 || index >= _state.cards.length) return false
+  if (_endDistance || _endRequest) {
+    resetMomentsEnd()
+    positionDeckItems(_state.currentIndex, false)
+  }
   if (_state.storyMode) return scrollStoryToIndex(index, behavior)
   if (deckIsTransitioning()) return true
   if (isSkeletonCard(_state.cards[index])) {
@@ -493,6 +568,8 @@ export function requestMoreIfNeeded() {
 }
 
 export function goNext(options) {
+  if (deckIsTransitioning()) return
+  _endPulling = false
   if (options && options.explicit && _fns && typeof _fns.beginOpenRequest === 'function') _fns.beginOpenRequest()
   if (scrollToIndex(_state.currentIndex + 1, _state.storyMode ? 'instant' : 'smooth', { navigate: true })) return
   if (_state.storyMode) {
@@ -501,16 +578,34 @@ export function goNext(options) {
     return
   }
   requestMoreIfNeeded()
-  if (_fns && typeof _fns.refreshMomentsSession === 'function') {
-    var requestSeq = Number(_state.openRequestSeq || 0)
-    _fns.refreshMomentsSession().then(function (added) {
-      if (!_state.overlayOpen || Number(_state.openRequestSeq || 0) !== requestSeq) return
-      if (added > 0 && _state.currentIndex + 1 < _state.cards.length) { goNext(); return }
-      showUpToDateOverlay()
-    }).catch(showUpToDateOverlay)
+  clearTimeout(_endTimer)
+  setEndDistance(Math.min(80, _dom.shortsContainer.offsetHeight * 0.25), true)
+  if (_endRequest) {
+    _endRequest.sequence = Number(_state.openRequestSeq || 0)
     return
   }
-  showUpToDateOverlay()
+  setEndFeedback('status_loading', 'Loading...')
+  if (_fns && typeof _fns.refreshMomentsSession === 'function') {
+    var request = { sequence: Number(_state.openRequestSeq || 0) }
+    _endRequest = request
+    _fns.refreshMomentsSession().then(function () {
+      if (_endRequest !== request) return
+      _endRequest = null
+      if (!_state.overlayOpen || Number(_state.openRequestSeq || 0) !== request.sequence) { cancelMomentsEndPull(); return }
+      if (_state.currentIndex + 1 < _state.cards.length) { goNext(); return }
+      setEndFeedback('status_up_to_date', "You're up to date!")
+      returnFromMomentsEnd()
+    }).catch(function () {
+      if (_endRequest !== request) return
+      _endRequest = null
+      if (!_state.overlayOpen || Number(_state.openRequestSeq || 0) !== request.sequence) { cancelMomentsEndPull(); return }
+      setEndFeedback('error_refresh_failed', 'Refresh failed')
+      returnFromMomentsEnd()
+    })
+    return
+  }
+  setEndFeedback('status_up_to_date', "You're up to date!")
+  returnFromMomentsEnd()
 }
 
 export function goPrev(options) {
@@ -810,6 +905,7 @@ export function appendNewItemsFromGrid() {
     }
   })
   if (_state.currentIndex >= 0) {
+    if (_endDistance && _state.currentIndex + 1 < _state.cards.length) setEndDistance(0, true)
     if (_state.storyMode) extendShortsWindow()
     else {
       ensureDeckRange(_state.currentIndex, { skipPosition: deckIsTransitioning() })

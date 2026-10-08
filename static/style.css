@@ -7265,6 +7265,14 @@ body.shorts-open:has(.shorts-story-tray.open) .shorts-layout {
 
 
 
+.shorts-stage {
+    position: relative;
+    width: 100%;
+    max-width: var(--shorts-player-footprint, 816px);
+    height: 100%;
+    overflow: hidden;
+}
+
 .shorts-container {
     width: 100%;
     max-width: var(--shorts-player-footprint, 816px);
@@ -9332,51 +9340,36 @@ body.shorts-mode .sidebar {
     }
 }
 
-/* Shorts Up-to-date Notification Overlay */
+/* Moments end feedback stays within the media column. */
 .shorts-uptodate-overlay {
-    position: fixed;
-    top: 0;
+    position: absolute;
     left: 0;
-    right: 0;
+    right: calc(var(--shorts-action-rail-width, 52px) + var(--shorts-action-rail-gap, 0.9rem));
     bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
+    height: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9000;
-    opacity: 1;
-    transition: opacity 0.3s ease;
+    overflow: hidden;
     pointer-events: none;
 }
 
 .shorts-uptodate-overlay.hidden {
-    opacity: 0;
-    pointer-events: none;
+    visibility: hidden;
 }
 
 .uptodate-content {
-    background: rgba(0, 0, 0, 0.9);
-    padding: 2rem 3rem;
+    padding: 0.5rem 0.85rem;
     border-radius: var(--border-radius);
+    background: rgba(255, 255, 255, 0.1);
     text-align: center;
-    animation: slideUp 0.3s ease;
+    color: #fff;
+    font-size: 0.9rem;
 }
 
-.uptodate-content span {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-@keyframes slideUp {
-    from {
-        transform: translateY(20px);
-        opacity: 0;
-    }
-
-    to {
-        transform: translateY(0);
-        opacity: 1;
+@media (prefers-reduced-motion: reduce) {
+    .shorts-uptodate-overlay {
+        transition: none !important;
     }
 }
 

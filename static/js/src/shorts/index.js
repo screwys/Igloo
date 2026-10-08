@@ -16,7 +16,11 @@ import {
   ensureStoryContainerScrollBehavior,
   updateCurrentActionButtons,
   requestMoreIfNeeded,
-  cancelShortsNavigationIntent
+  cancelShortsNavigationIntent,
+  canPullMomentsEnd,
+  pullMomentsEnd,
+  releaseMomentsEndPull,
+  cancelMomentsEndPull
 } from './overlay.js'
 import {
   initItems,
@@ -93,6 +97,8 @@ if (layout) {
       observer: null,
       wheelLocked: false,
       wheelLockTimer: 0,
+      endWheelPull: 0,
+      endWheelVideoId: '',
       touchStartX: 0,
       touchStartY: 0,
       bookmarkCategories: [],
@@ -1682,13 +1688,33 @@ if (layout) {
         state.wheelLockTimer = setTimeout(function () {
           state.wheelLocked = false
           state.wheelLockTimer = 0
+          if (state.endWheelPull > 0) releaseMomentsEndPull()
+          state.endWheelPull = 0
         }, 280)
+      }
+      var primaryDelta = Number(event.deltaY || 0)
+      if (canPullMomentsEnd() && Math.abs(primaryDelta) >= Math.abs(Number(event.deltaX || 0))) {
+        var endVideoId = state.cards[state.currentIndex].getAttribute('data-video-id')
+        if (endVideoId !== state.endWheelVideoId) {
+          state.endWheelVideoId = endVideoId
+          state.endWheelPull = 0
+        }
+        var delta = primaryDelta
+        if (event.deltaMode === 1) delta *= 16
+        else if (event.deltaMode === 2) delta *= shortsContainer.offsetHeight
+        if (delta > 0 || state.endWheelPull > 0) {
+          if (state.endWheelPull === 0) goNext({ explicit: true })
+          state.endWheelPull = Math.max(0, state.endWheelPull + delta)
+          if (state.endWheelPull > 0) pullMomentsEnd(state.endWheelPull, true)
+          else cancelMomentsEndPull()
+          keepWheelLocked()
+          return
+        }
       }
       if (state.wheelLocked) {
         keepWheelLocked()
         return
       }
-      var primaryDelta = Number(event.deltaY || 0)
       if (state.storyMode && Math.abs(Number(event.deltaX || 0)) > Math.abs(primaryDelta)) {
         primaryDelta = Number(event.deltaX || 0)
       }
@@ -1707,6 +1733,7 @@ if (layout) {
       if (!event.changedTouches || !event.changedTouches.length) return
       state.touchStartX = Number(event.changedTouches[0].screenX || 0)
       state.touchStartY = Number(event.changedTouches[0].screenY || 0)
+      state.endPullActive = false
     }
 
     function onTouchMove(event) {
@@ -1715,6 +1742,12 @@ if (layout) {
       if (event.target && event.target.closest && event.target.closest('.moment-actions-sheet')) return
       if (event.target && event.target.closest && event.target.closest('.shorts-live-chat')) return
       if (event.cancelable) event.preventDefault()
+      if (state.storyMode || !event.changedTouches || event.changedTouches.length !== 1) return
+      var diffY = state.touchStartY - Number(event.changedTouches[0].screenY || 0)
+      var diffX = state.touchStartX - Number(event.changedTouches[0].screenX || 0)
+      if (state.endPullActive || (diffY > 0 && Math.abs(diffY) > Math.abs(diffX))) {
+        state.endPullActive = pullMomentsEnd(diffY)
+      }
     }
 
     function onTouchEnd(event) {
@@ -1732,6 +1765,15 @@ if (layout) {
         return
       }
       var diff = diffY
+      if (state.endPullActive) {
+        state.endPullActive = false
+        if (diff >= 65) goNext({ explicit: true })
+        else {
+          cancelMomentsEndPull()
+          if (diff <= -65) goPrev({ explicit: true })
+        }
+        return
+      }
       if (Math.abs(diff) < 65) return
       if (diff > 0) goNext({ explicit: true }); else goPrev({ explicit: true })
     }
@@ -1860,6 +1902,10 @@ if (layout) {
       layout.addEventListener('touchstart', onTouchStart, { passive: true })
       layout.addEventListener('touchmove', onTouchMove, { passive: false })
       layout.addEventListener('touchend', onTouchEnd, { passive: true })
+      layout.addEventListener('touchcancel', function () {
+        state.endPullActive = false
+        cancelMomentsEndPull()
+      }, { passive: true })
       shortsContainer.addEventListener('scroll', function () {
         if (!state.overlayOpen) return
         requestMoreIfNeeded()

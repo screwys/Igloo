@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
-import com.screwy.igloo.R
 import com.screwy.igloo.channel.ChannelRouteResolver
 import com.screwy.igloo.data.IglooDatabase
 import com.screwy.igloo.data.PreferencesRepo
@@ -624,10 +623,6 @@ class MomentsViewModel(
             delay(1_000L)
             _isRefreshing.value = false
         }
-    }
-
-    fun notifyUpToDate() {
-        viewModelScope.launch { uiEffects.emit(UiEffect.ToastRes(R.string.status_up_to_date)) }
     }
 
     fun resolveMentionAndNavigate(handle: String) {

@@ -143,7 +143,6 @@ fun MomentsRoute(
                         navigator.openChannel(cid, IglooNavigationSource.Moments)
                     },
                     onOpenAllMomentsGrid = { showAllMomentsGrid = true },
-                    onEndReached = vm::notifyUpToDate,
                     activeTab = playerRouteState.scope,
                     onTabSelected = { tab ->
                         if (tab == "stories") {

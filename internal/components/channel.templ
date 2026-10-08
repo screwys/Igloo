@@ -40,9 +40,11 @@ templ ChannelPage(p PageProps, channel model.Channel, profile *model.ChannelProf
 		@ChannelVideoSection(p, videos, channel, pager, search, usesShorts, section)
 		if usesShorts {
 			<div id="shorts-layout" class="shorts-layout hidden" data-auto-open="0" data-persist-history="0" data-source-container-selector="#video-grid" data-source-card-selector="a.video-card" data-infinite-container-selector="#video-grid" tabindex="-1">
-				<div id="shorts-container" class="shorts-container"></div>
-				<div id="shorts-uptodate-overlay" class="shorts-uptodate-overlay hidden">
-					<div class="uptodate-content"><span>{ L(p, "status_up_to_date", "You're up to date!") }</span></div>
+				<div class="shorts-stage">
+					<div id="shorts-container" class="shorts-container"></div>
+					<div id="shorts-uptodate-overlay" class="shorts-uptodate-overlay hidden" role="status" aria-live="polite">
+						<div class="uptodate-content"><span>{ L(p, "status_up_to_date", "You're up to date!") }</span></div>
+					</div>
 				</div>
 			</div>
 		}
