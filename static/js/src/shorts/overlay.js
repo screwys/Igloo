@@ -430,7 +430,6 @@ export function pullMomentsEnd(distance, wheel) {
 export function releaseMomentsEndPull() {
   _endPulling = false
   if (!_endDistance) return
-  setEndDistance(Math.min(80, _endDistance), true)
   if (!_endRequest) returnFromMomentsEnd()
 }
 
@@ -579,7 +578,7 @@ export function goNext(options) {
   }
   requestMoreIfNeeded()
   clearTimeout(_endTimer)
-  setEndDistance(Math.min(80, _dom.shortsContainer.offsetHeight * 0.25), true)
+  if (!_endDistance) setEndDistance(Math.min(80, _dom.shortsContainer.offsetHeight * 0.25), true)
   if (_endRequest) {
     _endRequest.sequence = Number(_state.openRequestSeq || 0)
     return
