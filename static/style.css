@@ -9533,15 +9533,20 @@ body.shorts-mode .sidebar {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
-    max-width: 1240px;
+    max-width: 1480px;
     margin: 0 auto;
 }
 
 .feed-layout:has(> .feed-lives) {
-    grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-columns: 280px minmax(0, 1fr) 280px;
+}
+
+.feed-layout:has(> .feed-lives) > .feed-list {
+    grid-column: 2;
 }
 
 .feed-lives {
+    grid-column: 3;
     position: sticky;
     top: calc(var(--header-height) + 1rem);
     min-width: 0;
