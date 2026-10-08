@@ -7,6 +7,9 @@ FROM channels c JOIN channel_follows cf ON cf.channel_id=c.channel_id
 LEFT JOIN channel_stars cs ON cs.channel_id=c.channel_id
 LEFT JOIN channel_profiles cp ON cp.channel_id=c.channel_id AND cp.tombstone=0
 WHERE c.search_document @@ igloo_search_query(sqlc.arg(search)::TEXT)
+   OR strpos(lower(c.name), lower(sqlc.arg(search)::TEXT)) > 0
+   OR strpos(lower(cp.display_name), lower(sqlc.arg(search)::TEXT)) > 0
+   OR strpos(lower(cp.handle), lower(sqlc.arg(search)::TEXT)) > 0
 ORDER BY ts_rank(c.search_document,igloo_search_query(sqlc.arg(search)::TEXT)) DESC, c.channel_id
 LIMIT sqlc.arg(page_limit)::BIGINT;
 
