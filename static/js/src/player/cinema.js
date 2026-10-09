@@ -13,42 +13,23 @@ export function initCinemaView({ root, button, onCinemaRequested }) {
 
   const stackedSidebar = window.matchMedia('(max-width: 1024px)')
   const hasChat = root.classList.contains('has-live-chat')
-  const navigationSidebar = root.ownerDocument?.querySelector('#app-sidebar')
-  let navigationWidthBeforeCinema = null
   let manualChoice = null
-  let suspendedForFullscreen = false
 
-  function setCinemaView(enabled, notifySidebar) {
-    const changed = root.classList.contains('cinema-view') !== enabled
-    if (enabled && navigationWidthBeforeCinema === null && navigationSidebar) {
-      navigationWidthBeforeCinema = navigationSidebar.getBoundingClientRect().width
-    }
+  function setCinemaView(enabled) {
     const hidesPlayerSidebar = enabled && !stackedSidebar.matches && !hasChat
     root.classList.toggle('cinema-view', enabled)
     root.classList.toggle('cinema-hides-player-sidebar', hidesPlayerSidebar)
-    if (changed && notifySidebar !== false && typeof CustomEvent === 'function' && typeof root.dispatchEvent === 'function') {
-      root.dispatchEvent(new CustomEvent('igloo:cinema-sidebar-change', {
-        bubbles: true,
-        detail: {
-          enabled,
-        },
-      }))
-    }
     sidebar.setAttribute('aria-hidden', hidesPlayerSidebar ? 'true' : 'false')
     button.setAttribute('aria-pressed', enabled ? 'true' : 'false')
-    if (!enabled && notifySidebar !== false) navigationWidthBeforeCinema = null
   }
 
   function recommendedCinemaView() {
-    // Judge automatic cinema against the space available before compacting navigation.
-    const extraWidth = navigationWidthBeforeCinema !== null && navigationSidebar
-      ? navigationWidthBeforeCinema - navigationSidebar.getBoundingClientRect().width : 0
-    return shouldAutoEnableCinema(root.getBoundingClientRect().width - extraWidth, stackedSidebar.matches,
+    return shouldAutoEnableCinema(root.getBoundingClientRect().width, stackedSidebar.matches,
       hasChat ? sidebar.getBoundingClientRect().width : PLAYER_SIDEBAR_WIDTH)
   }
 
   function syncCinemaView() {
-    if (suspendedForFullscreen) return
+    if (root.hasAttribute('data-fullscreen-active')) return
     const recommendation = recommendedCinemaView()
     setCinemaView(
       manualChoice === null ? recommendation : manualChoice,
@@ -58,8 +39,8 @@ export function initCinemaView({ root, button, onCinemaRequested }) {
   button.addEventListener('click', function () {
     const wasEnabled = root.classList.contains('cinema-view')
     const enabled = !wasEnabled
-    if (typeof onCinemaRequested === 'function' && onCinemaRequested(enabled)) return
     manualChoice = enabled
+    if (typeof onCinemaRequested === 'function' && onCinemaRequested(enabled)) return
     setCinemaView(enabled)
   })
 
@@ -76,12 +57,11 @@ export function initCinemaView({ root, button, onCinemaRequested }) {
   return {
     suspendForFullscreen() {
       const wasEnabled = root.classList.contains('cinema-view')
-      suspendedForFullscreen = true
-      setCinemaView(false, false)
+      // Keep the page layout ready for fullscreen exit.
+      sidebar.setAttribute('aria-hidden', 'false')
       return wasEnabled
     },
     restoreAfterFullscreen(enabled) {
-      suspendedForFullscreen = false
       setCinemaView(enabled)
     },
   }

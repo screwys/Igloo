@@ -2,6 +2,7 @@ import { attachSeekTooltip, makeDraggableSeekbar, playbackRange, updatePlaybackP
 import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
 import { bindVolumeWheel, readStoredVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
 import { bindVideoFeedback } from '../video-feedback.js'
+import { bindFullscreenTransition } from '../fullscreen.js'
 
 const FEED_VOLUME_KEY = 'feedVolume'
 
@@ -177,6 +178,7 @@ export function exitFeedVideoFullscreen(video) {
   if (!active || !(active === video || (active.contains && active.contains(video)))) return false
   const exit = ownerDocument.exitFullscreen || ownerDocument.webkitExitFullscreen
   if (!exit) return false
+  if (active._fullscreenTransition) return active._fullscreenTransition.exit()
   try {
     const result = exit.call(ownerDocument)
     if (result && typeof result.catch === 'function') result.catch(function () {})
@@ -190,8 +192,10 @@ export function toggleFeedVideoFullscreen(video, surface) {
   if (!(video instanceof HTMLVideoElement)) return false
   const ownerDocument = video.ownerDocument || document
   if (fullscreenElement(ownerDocument)) return exitFeedVideoFullscreen(video)
-  const target = surface || video.parentElement
+  const parent = video.parentElement
+  const target = surface || (parent && parent.hasAttribute('data-fullscreen-content') ? parent.parentElement : parent)
   if (!target) return false
+  if (target._fullscreenTransition) return target._fullscreenTransition.toggle()
   const request = target.requestFullscreen || target.webkitRequestFullscreen
   if (!request) return false
   try {
@@ -270,6 +274,9 @@ export function bindFeedVideoControls(wrap, video, options) {
   const mini = controls.querySelector('[data-feed-video-mini]')
   const cinema = controls.querySelector('[data-feed-video-cinema]')
   const fullscreen = controls.querySelector('[data-feed-video-fullscreen]')
+  const fullscreenContent = wrap.querySelector('[data-fullscreen-content]')
+  const fullscreenTransition = fullscreenContent && !opts.onFullscreen
+    ? bindFullscreenTransition(wrap, fullscreenContent) : null
   const speed = controls.querySelector('[data-feed-video-speed]')
   const speedButton = controls.querySelector('[data-feed-video-speed-button]')
   const speedMenu = controls.querySelector('[data-feed-video-speed-menu]')
@@ -526,6 +533,7 @@ export function bindFeedVideoControls(wrap, video, options) {
     const ownerDocument = wrap.ownerDocument || document
     ownerDocument.addEventListener('fullscreenchange', syncFullscreen)
     ownerDocument.addEventListener('webkitfullscreenchange', syncFullscreen)
+    wrap.addEventListener('igloo:fullscreen-change', syncFullscreen)
   }
 
   function exitFullscreenOnDoubleClick(event) {
@@ -553,6 +561,7 @@ export function bindFeedVideoControls(wrap, video, options) {
   syncAutoplay()
   syncProgress()
   return function () {
+    if (fullscreenTransition) fullscreenTransition.destroy()
     if (unbindVolumeWheel) unbindVolumeWheel()
     if (feedback && typeof feedback.destroy === 'function') feedback.destroy()
     video.removeEventListener('play', syncPlay)
@@ -567,5 +576,6 @@ export function bindFeedVideoControls(wrap, video, options) {
     const ownerDocument = wrap.ownerDocument || document
     ownerDocument.removeEventListener('fullscreenchange', syncFullscreen)
     ownerDocument.removeEventListener('webkitfullscreenchange', syncFullscreen)
+    wrap.removeEventListener('igloo:fullscreen-change', syncFullscreen)
   }
 }

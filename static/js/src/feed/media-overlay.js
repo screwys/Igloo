@@ -692,6 +692,9 @@ export function openMediaOverlay(root, triggerEl) {
   function renderVideo(activeStreamUrl, activePosterUrl, activePlaybackKind) {
     var videoWrap = document.createElement('div')
     videoWrap.className = 'feed-overlay-video-wrap'
+    var fullscreenContent = document.createElement('div')
+    fullscreenContent.setAttribute('data-fullscreen-content', '')
+    videoWrap.appendChild(fullscreenContent)
 
     if (liveURL) {
       document.querySelectorAll('video[data-feed-inline-video]').forEach(function (video) { video.pause() })
@@ -731,8 +734,8 @@ export function openMediaOverlay(root, triggerEl) {
     overlay._overlayPlaybackKind = activePlaybackKind || 'video'
     overlay._videoClickHandler = togglePlayback
 
-    videoWrap.appendChild(v)
-    videoWrap.appendChild(createFeedVideoControls(liveURL ? { refresh: true, mini: false, cinema: false } : undefined))
+    fullscreenContent.appendChild(v)
+    fullscreenContent.appendChild(createFeedVideoControls(liveURL ? { refresh: true, mini: false, cinema: false } : undefined))
     overlay._videoControlsCleanup = bindFeedVideoControls(videoWrap, v, {
       onCinema: closeMediaOverlay,
       onRefresh: async function () {
@@ -759,7 +762,7 @@ export function openMediaOverlay(root, triggerEl) {
       status = document.createElement('span')
       status.className = 'feed-live-status'
       status.setAttribute('role', 'status')
-      videoWrap.appendChild(status)
+      videoWrap.querySelector('[data-fullscreen-content]').appendChild(status)
     }
     status.textContent = t('status_loading', 'Loading...')
     status.hidden = false

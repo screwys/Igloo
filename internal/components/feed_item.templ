@@ -551,6 +551,7 @@ templ feedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 				tabindex="0"
 				aria-label={ L(p, "action_open_media", "Open media") }
 			>
+				<div data-fullscreen-content>
 				if posterURL != "" {
 					<video class="feed-media-video" muted playsinline loop preload="none" data-feed-inline-video poster={ posterURL }>
 						<source src={ streamURL }/>
@@ -561,6 +562,7 @@ templ feedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 					</video>
 				}
 				@feedVideoControls(p)
+				</div>
 			</div>
 		}
 	} else if mediaCount == 1 && feedMediaURLAt(item.MediaSlideURLs, 0) != "" {
@@ -813,10 +815,12 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMed
 			tabindex="0"
 			aria-label={ L(p, "action_open_media", "Open media") }
 		>
+			<div data-fullscreen-content>
 			<video class="feed-media-video" muted playsinline loop preload="none" data-feed-inline-video poster={ item.QuoteMediaPreviewURL }>
 				<source src={ item.QuoteMediaStreamURL } type="video/mp4"/>
 			</video>
 			@feedVideoControls(p)
+			</div>
 		</div>
 	} else if qMediaCount == 1 && feedMediaURLAt(item.QuoteMediaSlideURLs, 0) != "" {
 		{{ mediaURL := feedMediaURLAt(item.QuoteMediaSlideURLs, 0) }}

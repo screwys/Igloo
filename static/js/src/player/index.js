@@ -4,6 +4,7 @@ import { initSponsorBlock } from './sponsorblock.js'
 import { initPreviewHover } from './preview.js'
 import { initProgress } from './progress.js'
 import { initCinemaView } from './cinema.js'
+import { bindFullscreenTransition } from '../fullscreen.js'
 import { bindVideoControlsVisibility } from '../video-controls-visibility.js'
 import { bindVolumeWheel, readStoredVolume, writeStoredVolume } from '../volume.js'
 import { bindVideoFeedback } from '../video-feedback.js'
@@ -507,16 +508,19 @@ if (root && video) {
   var cinemaView
   var cinemaBeforeFullscreen = false
   var cinemaOnFullscreenExit = null
+  var fullscreenTransition = bindFullscreenTransition(playerLayout, playerWrapper, { prepareEnter: suspendFullscreenLayout, prepareExit: prepareFullscreenExit, finishExit: finishFullscreenExit })
 
   function setFullscreenMode(mode) {
     var immersive = mode === 'immersive'
+    if (!immersive) fullscreenTransition.cancel()
     playerLayout.classList.toggle('fullscreen-immersive', immersive)
     playerLayout.classList.toggle('fullscreen-browse', !immersive)
   }
 
   function isPlayerLayoutFullscreen() {
-    var fsEl = doc.fullscreenElement || doc.webkitFullscreenElement
-    return fsEl === playerFullscreenTarget()
+    var target = playerFullscreenTarget()
+    var owner = target.ownerDocument
+    return (owner.fullscreenElement || owner.webkitFullscreenElement) === target
   }
 
   function playerFullscreenTarget() {
@@ -527,26 +531,38 @@ if (root && video) {
     return playerLayout
   }
 
+  function suspendFullscreenLayout() {
+    if (cinemaView) cinemaBeforeFullscreen = cinemaView.suspendForFullscreen()
+  }
+
+  function prepareFullscreenExit() {
+    if (cinemaView) {
+      cinemaView.restoreAfterFullscreen(
+        cinemaOnFullscreenExit === null ? cinemaBeforeFullscreen : cinemaOnFullscreenExit,
+      )
+    }
+  }
+
+  function finishFullscreenExit() {
+    cinemaBeforeFullscreen = false
+    cinemaOnFullscreenExit = null
+  }
+
   function toggleFullscreen() {
-    var isFs = doc.fullscreenElement || doc.webkitFullscreenElement
-    if (!isFs) {
-      var target = playerFullscreenTarget()
-      if (target === playerLayout) {
-        playerLayout.classList.add('fullscreen-immersive')
-        playerLayout.classList.remove('fullscreen-browse')
-        playerLayout.scrollTop = 0
-        window.scrollTo(0, 0)
+    var target = playerFullscreenTarget()
+    var owner = target.ownerDocument
+    var active = owner.fullscreenElement || owner.webkitFullscreenElement
+    if (active && active !== target) {
+      if (active._fullscreenTransition) {
+        active._fullscreenTransition.exit()
+        return
       }
-      var fsReq = target.requestFullscreen || target.webkitRequestFullscreen
-      if (fsReq) {
-        fsReq.call(target).catch(function () {
-          if (target === playerLayout) playerLayout.classList.remove('fullscreen-immersive')
-        })
-      }
+      var exit = owner.exitFullscreen || owner.webkitExitFullscreen
+      if (exit) exit.call(owner).catch(function () {})
       return
     }
-    var fsExit = doc.exitFullscreen || doc.webkitExitFullscreen
-    if (fsExit) fsExit.call(doc).catch(function () {})
+    if (target === playerLayout) fullscreenTransition.toggle()
+    else bindFullscreenTransition(target, target.querySelector('media-controller')).toggle()
   }
 
   function normalizeWheelDeltaY(e) {
@@ -575,7 +591,6 @@ if (root && video) {
         if (target === playerLayout) {
           setFullscreenMode('immersive')
           playerLayout.scrollTop = 0
-          if (cinemaView) cinemaBeforeFullscreen = cinemaView.suspendForFullscreen()
         }
         if (speedMenu && speedMenu.parentNode !== target) target.appendChild(speedMenu)
         if (qualityMenu && qualityMenu.parentNode !== target) target.appendChild(qualityMenu)
@@ -586,17 +601,11 @@ if (root && video) {
         if (speedMenu && speedMenu.parentNode !== doc.body) doc.body.appendChild(speedMenu)
         if (qualityMenu && qualityMenu.parentNode !== doc.body) doc.body.appendChild(qualityMenu)
         if (captionsMenu && captionsMenu.parentNode !== doc.body) doc.body.appendChild(captionsMenu)
-        if (cinemaView) {
-          cinemaView.restoreAfterFullscreen(
-            cinemaOnFullscreenExit === null ? cinemaBeforeFullscreen : cinemaOnFullscreenExit,
-          )
-        }
-        cinemaBeforeFullscreen = false
-        cinemaOnFullscreenExit = null
       }
     }
     doc.addEventListener('fullscreenchange', onFullscreenChange)
     doc.addEventListener('webkitfullscreenchange', onFullscreenChange)
+    playerWrapper.addEventListener('igloo:fullscreen-change', onFullscreenChange)
 
     function handleFullscreenWheel(e) {
       if (e.target.closest && e.target.closest('.dashboard-volume-control, .player-chat')) return

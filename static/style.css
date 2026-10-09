@@ -1087,6 +1087,11 @@ html.sidebar-resizing .sidebar-resize-handle {
         transition: margin-left var(--transition-normal);
     }
 
+    html:has(#player-root[data-fullscreen-active]) .sidebar,
+    html:has(#player-root[data-fullscreen-active]) .main {
+        transition: none;
+    }
+
     html.sidebar-resizing,
     html.sidebar-resizing * {
         cursor: col-resize !important;
@@ -4476,7 +4481,15 @@ html.mini-player-moving * {
     transition: grid-template-columns var(--transition-normal);
 }
 
-.player-layout.cinema-view.cinema-hides-player-sidebar:not(.fullscreen-browse):not(.fullscreen-immersive) {
+.player-layout[data-fullscreen-active] {
+    transition: none;
+}
+
+.player-layout[data-fullscreen-active] .player-sidebar {
+    transition: none;
+}
+
+.player-layout.cinema-view.cinema-hides-player-sidebar:not(:fullscreen) {
     grid-template-columns: minmax(0, 1fr) minmax(0, 0px);
 }
 
@@ -5795,7 +5808,7 @@ html.mini-player-moving * {
     transition: opacity var(--transition-fast), padding-inline var(--transition-normal), border-color var(--transition-normal);
 }
 
-.player-layout.cinema-view.cinema-hides-player-sidebar:not(.fullscreen-browse):not(.fullscreen-immersive) .player-sidebar {
+.player-layout.cinema-view.cinema-hides-player-sidebar:not(:fullscreen) .player-sidebar {
     visibility: hidden;
     pointer-events: none;
     opacity: 0;
@@ -5805,6 +5818,7 @@ html.mini-player-moving * {
 }
 
 .player-layout:fullscreen {
+    transition: none;
     width: 100vw;
     height: 100vh;
     max-width: none;
@@ -5816,6 +5830,7 @@ html.mini-player-moving * {
 }
 
 .player-layout:-webkit-full-screen {
+    transition: none;
     width: 100vw;
     height: 100vh;
     max-width: none;
@@ -5860,12 +5875,10 @@ html.mini-player-moving * {
 
 .player-layout:fullscreen .player-wrapper {
     border-radius: 0;
-    transition: width 220ms ease, max-width 220ms ease, margin 220ms ease, box-shadow 220ms ease;
 }
 
 .player-layout:-webkit-full-screen .player-wrapper {
     border-radius: 0;
-    transition: width 220ms ease, max-width 220ms ease, margin 220ms ease, box-shadow 220ms ease;
 }
 
 .player-layout:fullscreen .player-wrapper media-controller {
@@ -5884,7 +5897,7 @@ html.mini-player-moving * {
     max-height: calc(100vh - 2rem) !important;
 }
 
-.player-layout.fullscreen-browse {
+.player-layout:fullscreen.fullscreen-browse {
     --fullscreen-browse-sidebar-gap: 1.25rem;
     --fullscreen-browse-sidebar-padding: 1.5rem;
     --fullscreen-browse-sidebar-card-width: calc(320px - var(--fullscreen-browse-sidebar-padding) - var(--fullscreen-browse-sidebar-padding));
@@ -5898,7 +5911,7 @@ html.mini-player-moving * {
     justify-content: start;
 }
 
-.player-layout.fullscreen-browse .player-main {
+.player-layout:fullscreen.fullscreen-browse .player-main {
     overflow: visible;
     padding: 1rem;
     display: grid;
@@ -5906,7 +5919,7 @@ html.mini-player-moving * {
     justify-items: stretch;
 }
 
-.player-layout.fullscreen-browse .player-wrapper {
+.player-layout:fullscreen.fullscreen-browse .player-wrapper {
     position: sticky;
     top: 0;
     z-index: 15;
@@ -5919,29 +5932,29 @@ html.mini-player-moving * {
     margin-inline: 0;
 }
 
-.player-layout.fullscreen-browse .player-controls-custom,
-.player-layout.fullscreen-browse .video-info,
-.player-layout.fullscreen-browse .player-comments {
+.player-layout:fullscreen.fullscreen-browse .player-controls-custom,
+.player-layout:fullscreen.fullscreen-browse .video-info,
+.player-layout:fullscreen.fullscreen-browse .player-comments {
     width: 100%;
     max-width: none;
     justify-self: stretch;
 }
 
-.player-layout.fullscreen-browse .player-controls-custom {
+.player-layout:fullscreen.fullscreen-browse .player-controls-custom {
     width: 100%;
     justify-self: stretch;
 }
 
-.player-layout.fullscreen-browse .player-wrapper .video-js {
+.player-layout:fullscreen.fullscreen-browse .player-wrapper .video-js {
     background: #000;
 }
 
-.player-layout.fullscreen-browse .player-wrapper media-controller {
+.player-layout:fullscreen.fullscreen-browse .player-wrapper media-controller {
     position: relative;
     z-index: 1;
 }
 
-.player-layout.fullscreen-browse .player-sidebar {
+.player-layout:fullscreen.fullscreen-browse .player-sidebar {
     display: grid;
     grid-template-columns: repeat(2, var(--fullscreen-browse-sidebar-card-width));
     gap: var(--fullscreen-browse-sidebar-gap);
@@ -5958,42 +5971,42 @@ html.mini-player-moving * {
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
-.player-layout.fullscreen-browse #player-discovery-rail,
-.player-layout.fullscreen-browse .more-videos-list {
+.player-layout:fullscreen.fullscreen-browse #player-discovery-rail,
+.player-layout:fullscreen.fullscreen-browse .more-videos-list {
     display: contents;
 }
 
-.player-layout.fullscreen-browse .player-sidebar h3 {
+.player-layout:fullscreen.fullscreen-browse .player-sidebar h3 {
     display: none;
 }
 
-.player-layout.fullscreen-browse .player-sidebar .video-card {
+.player-layout:fullscreen.fullscreen-browse .player-sidebar .video-card {
     min-width: 0;
 }
 
-.player-layout.fullscreen-browse .discover-rail-loading {
+.player-layout:fullscreen.fullscreen-browse .discover-rail-loading {
     grid-column: 1 / -1;
 }
 
-.player-layout.fullscreen-browse .player-next-badge {
+.player-layout:fullscreen.fullscreen-browse .player-next-badge {
     display: block;
 }
 
-.player-layout:fullscreen.fullscreen-immersive {
+.player-layout:fullscreen:not(.fullscreen-browse) {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
     background: #000;
     overflow: hidden;
 }
 
-.player-layout:-webkit-full-screen.fullscreen-immersive {
+.player-layout:-webkit-full-screen:not(.fullscreen-browse) {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
     background: #000;
     overflow: hidden;
 }
 
-.player-layout:fullscreen.fullscreen-immersive .player-main {
+.player-layout:fullscreen:not(.fullscreen-browse) .player-main {
     padding: 0;
     overflow: hidden;
     display: flex;
@@ -6005,7 +6018,7 @@ html.mini-player-moving * {
     height: 100%;
 }
 
-.player-layout:-webkit-full-screen.fullscreen-immersive .player-main {
+.player-layout:-webkit-full-screen:not(.fullscreen-browse) .player-main {
     padding: 0;
     overflow: hidden;
     display: flex;
@@ -6017,21 +6030,21 @@ html.mini-player-moving * {
 }
 
 /* Hide everything inside player-main except the video wrapper */
-.player-layout:fullscreen.fullscreen-immersive:not(.has-live-chat:not(.chat-closed)) .player-sidebar,
-.player-layout:fullscreen.fullscreen-immersive .player-controls-custom,
-.player-layout:fullscreen.fullscreen-immersive #player-description-card,
-.player-layout:fullscreen.fullscreen-immersive #player-comments-section {
+.player-layout:fullscreen:not(.fullscreen-browse):not(.has-live-chat:not(.chat-closed)) .player-sidebar,
+.player-layout:fullscreen:not(.fullscreen-browse) .player-controls-custom,
+.player-layout:fullscreen:not(.fullscreen-browse) #player-description-card,
+.player-layout:fullscreen:not(.fullscreen-browse) #player-comments-section {
     display: none !important;
 }
 
-.player-layout:-webkit-full-screen.fullscreen-immersive:not(.has-live-chat:not(.chat-closed)) .player-sidebar,
-.player-layout:-webkit-full-screen.fullscreen-immersive .player-controls-custom,
-.player-layout:-webkit-full-screen.fullscreen-immersive #player-description-card,
-.player-layout:-webkit-full-screen.fullscreen-immersive #player-comments-section {
+.player-layout:-webkit-full-screen:not(.fullscreen-browse):not(.has-live-chat:not(.chat-closed)) .player-sidebar,
+.player-layout:-webkit-full-screen:not(.fullscreen-browse) .player-controls-custom,
+.player-layout:-webkit-full-screen:not(.fullscreen-browse) #player-description-card,
+.player-layout:-webkit-full-screen:not(.fullscreen-browse) #player-comments-section {
     display: none !important;
 }
 
-.player-layout:fullscreen.fullscreen-immersive .player-wrapper {
+.player-layout:fullscreen:not(.fullscreen-browse) .player-wrapper {
     width: 100%;
     height: 100%;
     flex: 1 1 auto;
@@ -6043,7 +6056,7 @@ html.mini-player-moving * {
     justify-content: center;
 }
 
-.player-layout:-webkit-full-screen.fullscreen-immersive .player-wrapper {
+.player-layout:-webkit-full-screen:not(.fullscreen-browse) .player-wrapper {
     width: 100%;
     height: 100%;
     flex: 1 1 auto;
@@ -6054,52 +6067,63 @@ html.mini-player-moving * {
     justify-content: center;
 }
 
-.player-layout:fullscreen.fullscreen-immersive .player-wrapper media-controller {
+.player-layout:fullscreen:not(.fullscreen-browse) .player-wrapper media-controller {
     width: 100%;
     height: 100%;
     max-height: 100vh;
     aspect-ratio: auto;
 }
 
-.player-layout:-webkit-full-screen.fullscreen-immersive .player-wrapper media-controller {
+.player-layout:-webkit-full-screen:not(.fullscreen-browse) .player-wrapper media-controller {
     width: 100%;
     height: 100%;
     max-height: 100vh;
     aspect-ratio: auto;
 }
 
-.player-layout:fullscreen.fullscreen-immersive .player-wrapper .video-js {
+.player-layout:fullscreen:not(.fullscreen-browse) .player-wrapper .video-js {
     width: 100%;
     height: 100%;
     max-height: 100vh;
 }
 
-.player-layout:-webkit-full-screen.fullscreen-immersive .player-wrapper .video-js {
+.player-layout:-webkit-full-screen:not(.fullscreen-browse) .player-wrapper .video-js {
     width: 100%;
     height: 100%;
     max-height: 100vh;
 }
 
-.player-layout:fullscreen.fullscreen-immersive .player-wrapper .video-js.vjs-fluid {
+.player-layout:fullscreen:not(.fullscreen-browse) .player-wrapper .video-js.vjs-fluid {
     padding-top: 0 !important;
 }
 
-.player-layout:-webkit-full-screen.fullscreen-immersive .player-wrapper .video-js.vjs-fluid {
+.player-layout:-webkit-full-screen:not(.fullscreen-browse) .player-wrapper .video-js.vjs-fluid {
     padding-top: 0 !important;
 }
 
-.player-layout:fullscreen.fullscreen-immersive .player-wrapper video {
+.player-layout:fullscreen:not(.fullscreen-browse) .player-wrapper video {
     width: 100%;
     height: 100% !important;
     max-height: 100vh !important;
     object-fit: contain;
 }
 
-.player-layout:-webkit-full-screen.fullscreen-immersive .player-wrapper video {
+.player-layout:-webkit-full-screen:not(.fullscreen-browse) .player-wrapper video {
     width: 100%;
     height: 100% !important;
     max-height: 100vh !important;
     object-fit: contain;
+}
+
+[data-fullscreen-content] {
+    display: contents;
+}
+
+:fullscreen > [data-fullscreen-content] {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: 100%;
 }
 
 .player-sidebar h3 {
@@ -11635,7 +11659,7 @@ body.shorts-mode .sidebar {
     object-fit: contain;
 }
 
-:fullscreen > .feed-video-controls {
+:fullscreen .feed-video-controls {
     border-radius: 0;
 }
 .feed-overlay-repost {

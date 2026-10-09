@@ -16,6 +16,7 @@ export function disposeShortItem(entry) {
   if (refs.disposeLive) refs.disposeLive()
   if (refs.disposeActions) refs.disposeActions()
   if (refs.disposeVideoControls) refs.disposeVideoControls()
+  if (refs.disposeFullscreen) refs.disposeFullscreen()
   var slideshow = refs.slideshow
   if (slideshow) {
     clearTimeout(slideshow.timer)

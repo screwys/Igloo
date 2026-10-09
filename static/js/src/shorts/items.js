@@ -6,6 +6,7 @@ import { maybeMarkAspect, handleVideoTimeUpdate, toggleShortPlayback, goToSlides
 import { attachShortVideoDebug } from './debug.js'
 import { bindVolumeWheel, normalizeVolume, volumeIconLevel, writeStoredVolume } from '../volume.js'
 import { createFeedVideoControls, bindFeedVideoControls } from '../feed/video-controls.js'
+import { bindFullscreenTransition } from '../fullscreen.js'
 
 var _state = null
 var _fns = null
@@ -94,7 +95,7 @@ function initTikTokLive(entry) {
   chat.className = 'shorts-live-chat'
   chat.setAttribute('aria-label', t('player_live_chat', 'Live chat'))
   safeSetMarkup(chat, '<header class="player-chat-header"><h3>' + escapeHtml(t('player_live_chat', 'Live chat')) + '</h3><button class="player-btn" type="button" title="' + escapeHtml(t('action_close', 'Close')) + '" aria-label="' + escapeHtml(t('action_close', 'Close')) + '">' + materialIconMarkup('Close') + '</button></header><div class="player-chat-messages" role="log" aria-live="off" tabindex="0" aria-label="' + escapeHtml(t('player_live_chat', 'Live chat')) + '"></div><p class="player-chat-status"></p>')
-  refs.mediaStage.appendChild(chat)
+  refs.mediaSurface.appendChild(chat)
   refs.liveChat = chat
   refs.commentsEnabled = localStorage.getItem('shortsLiveComments') !== 'false'
   var messages = chat.querySelector('.player-chat-messages')
@@ -282,14 +283,14 @@ function initTikTokLive(entry) {
   syncComments()
 }
 
-function syncMomentFullscreenButtons() {
-  var active = document.fullscreenElement || document.webkitFullscreenElement || null
-  document.querySelectorAll('.shorts-media-stage.is-fullscreen').forEach(function (stage) {
-    if (stage !== active) stage.classList.remove('is-fullscreen')
+function syncMomentFullscreenButtons(event) {
+  var owner = event && event.target && event.target.ownerDocument || document
+  var active = owner.fullscreenElement || owner.webkitFullscreenElement || null
+  document.querySelectorAll('.shorts-media-stage').forEach(function (target) {
+    if (target === active) target.classList.add('is-fullscreen')
+    else target.classList.remove('is-fullscreen')
   })
-  if (active && active.classList && active.classList.contains('shorts-media-stage')) {
-    active.classList.add('is-fullscreen')
-  }
+  if (active && active.classList.contains('shorts-media-stage')) active.classList.add('is-fullscreen')
   document.querySelectorAll('[data-short-top-action="fullscreen"]').forEach(function (button) {
     var wrapper = button.closest('.shorts-video-wrapper')
     var isActive = !!active && !!wrapper && (active === wrapper || wrapper.contains(active))
@@ -302,25 +303,9 @@ function syncMomentFullscreenButtons() {
 
 function toggleMomentFullscreen(entry) {
   if (!entry || !entry.refs) return
-  var active = document.fullscreenElement || document.webkitFullscreenElement || null
   var target = entry.refs.mediaStage
   if (!target) return
-  var request = null
-  try {
-    if (active) {
-      request = document.exitFullscreen ? document.exitFullscreen() : (document.webkitExitFullscreen ? document.webkitExitFullscreen() : null)
-    } else {
-      var enter = target.requestFullscreen || target.webkitRequestFullscreen
-      if (!enter) return
-      target.classList.add('is-fullscreen')
-      request = enter.call(target)
-    }
-  } catch (_) {
-    target.classList.remove('is-fullscreen')
-  }
-  if (request && typeof request.catch === 'function') {
-    request.catch(function () { target.classList.remove('is-fullscreen') })
-  }
+  target._fullscreenTransition.toggle()
 }
 
 function applyShortMediaPreferences() {
@@ -1024,6 +1009,11 @@ export function makeShortItem(entryData, existingEl) {
   var mediaStage = doc.createElement('div')
   mediaStage.className = 'shorts-media-stage'
   wrapper.appendChild(mediaStage)
+  var mediaSurface = doc.createElement('div')
+  mediaSurface.setAttribute('data-fullscreen-content', '')
+  mediaStage.appendChild(mediaSurface)
+  var fullscreenTransition = bindFullscreenTransition(mediaStage, mediaSurface)
+  mediaStage.addEventListener('igloo:fullscreen-change', syncMomentFullscreenButtons)
   var mediaKind = String(entryData.mediaKind || '').trim().toLowerCase()
   var isLive = entryData.liveStatus === 'is_live'
   if (isLive) wrapper.classList.add('shorts-live-wrapper')
@@ -1062,7 +1052,7 @@ export function makeShortItem(entryData, existingEl) {
       slides.push(slide)
     }
     slideshow = { container: slideWrap, slides: slides, images: slides, dots: dots, count: slideCount, index: 0, timer: 0, counter: null, audio: null, playing: false }
-    mediaStage.appendChild(slideWrap)
+    mediaSurface.appendChild(slideWrap)
     var slideshowAudioSrc = entryData.audioUrl
     if (!slideshowAudioSrc && entryData.platform === 'tiktok' && mediaKind === 'slideshow') {
       slideshowAudioSrc = '/api/media/audio/' + encId
@@ -1079,7 +1069,7 @@ export function makeShortItem(entryData, existingEl) {
       slideshowAudio.addEventListener('error', function () {
         if (slideshowAudio) slideshowAudio.removeAttribute('src')
       })
-      mediaStage.appendChild(slideshowAudio)
+      mediaSurface.appendChild(slideshowAudio)
       slideshow.audio = slideshowAudio
     }
   } else if (!hasSlides && (entryData.streamUrl || isLive)) {
@@ -1091,7 +1081,7 @@ export function makeShortItem(entryData, existingEl) {
       poster.loading = 'eager'
       poster.src = entryData.thumbUrl
       wrapper.classList.add('is-awaiting-first-frame')
-      mediaStage.appendChild(poster)
+      mediaSurface.appendChild(poster)
     }
     video = doc.createElement('video')
     video.className = 'native-short-video'
@@ -1103,7 +1093,7 @@ export function makeShortItem(entryData, existingEl) {
     if (entryData.thumbUrl) video.poster = entryData.thumbUrl
     if (isLive) video.dataset.liveStream = '1'
     else video.src = entryData.streamUrl
-    mediaStage.appendChild(video)
+    mediaSurface.appendChild(video)
   } else if (entryData.thumbUrl) {
     poster = doc.createElement('img')
     poster.className = 'shorts-video-poster-frame'
@@ -1111,7 +1101,7 @@ export function makeShortItem(entryData, existingEl) {
     poster.decoding = 'async'
     poster.loading = 'eager'
     poster.src = entryData.thumbUrl
-    mediaStage.appendChild(poster)
+    mediaSurface.appendChild(poster)
   }
 
   var header = doc.createElement('div')
@@ -1304,6 +1294,11 @@ export function makeShortItem(entryData, existingEl) {
     poster: poster,
     wrapper: wrapper,
     mediaStage: mediaStage,
+    mediaSurface: mediaSurface,
+    disposeFullscreen: function () {
+      mediaStage.removeEventListener('igloo:fullscreen-change', syncMomentFullscreenButtons)
+      fullscreenTransition.destroy()
+    },
     actions: actions,
     info: info,
     author: author,
@@ -1359,7 +1354,7 @@ export function makeShortItem(entryData, existingEl) {
 
     var miniControls = createFeedVideoControls({ cinema: false, autoplay: true })
     miniControls.classList.add('shorts-mini-controls')
-    mediaStage.appendChild(miniControls)
+    mediaSurface.appendChild(miniControls)
     refs.miniControls = miniControls
     refs.disposeVideoControls = bindFeedVideoControls(mediaStage, video, {
       cinema: false,

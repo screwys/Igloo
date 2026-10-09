@@ -122,15 +122,15 @@
     white-space: nowrap;
 }
 
-.player-layout:fullscreen.fullscreen-immersive.has-live-chat:not(.chat-closed) {
+.player-layout:fullscreen:not(.fullscreen-browse).has-live-chat:not(.chat-closed) {
     grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
 }
 
-.player-layout:-webkit-full-screen.fullscreen-immersive.has-live-chat:not(.chat-closed) {
+.player-layout:-webkit-full-screen:not(.fullscreen-browse).has-live-chat:not(.chat-closed) {
     grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
 }
 
-.player-layout.fullscreen-immersive.has-live-chat:not(.chat-closed) .player-sidebar {
+.player-layout:fullscreen:not(.fullscreen-browse).has-live-chat:not(.chat-closed) .player-sidebar {
     display: block;
     align-self: stretch;
     height: 100dvh;
@@ -139,25 +139,25 @@
     box-sizing: border-box;
 }
 
-.player-layout.fullscreen-immersive.has-live-chat .player-sidebar > :not(.player-chat) {
+.player-layout:fullscreen:not(.fullscreen-browse).has-live-chat .player-sidebar > :not(.player-chat) {
     display: none;
 }
 
-.player-layout.fullscreen-immersive.has-live-chat:not(.chat-closed) .player-chat {
+.player-layout:fullscreen:not(.fullscreen-browse).has-live-chat:not(.chat-closed) .player-chat {
     display: flex;
     flex-direction: column;
     height: 100%;
     margin-bottom: 0;
 }
 
-.player-layout.fullscreen-immersive.has-live-chat:not(.chat-closed) #player-chat-body {
+.player-layout:fullscreen:not(.fullscreen-browse).has-live-chat:not(.chat-closed) #player-chat-body {
     display: flex;
     flex-direction: column;
     flex: 1;
     min-height: 0;
 }
 
-.player-layout.fullscreen-immersive.has-live-chat:not(.chat-closed) .player-chat-messages {
+.player-layout:fullscreen:not(.fullscreen-browse).has-live-chat:not(.chat-closed) .player-chat-messages {
     flex: 1;
     height: auto;
     min-height: 0;
@@ -169,7 +169,7 @@
         width: auto;
     }
 
-    .player-layout.has-live-chat.cinema-view:not(.chat-closed) .player-sidebar {
+    :where(:not(:fullscreen)).player-layout.has-live-chat.cinema-view:not(.chat-closed) .player-sidebar {
         position: sticky;
         top: 0;
         height: 100dvh;
@@ -178,25 +178,25 @@
         padding-block: 0;
     }
 
-    .player-layout.has-live-chat.cinema-view:not(.chat-closed) .player-chat {
+    :where(:not(:fullscreen)).player-layout.has-live-chat.cinema-view:not(.chat-closed) .player-chat {
         display: flex;
         flex-direction: column;
         height: 100%;
         margin-bottom: 0;
     }
 
-    .player-layout.has-live-chat.cinema-view:not(.chat-closed) #player-chat-body {
+    :where(:not(:fullscreen)).player-layout.has-live-chat.cinema-view:not(.chat-closed) #player-chat-body {
         display: flex;
         flex-direction: column;
         flex: 1;
         min-height: 0;
     }
 
-    .player-layout.has-live-chat.cinema-view #player-chat-body[hidden] {
+    :where(:not(:fullscreen)).player-layout.has-live-chat.cinema-view #player-chat-body[hidden] {
         display: none;
     }
 
-    .player-layout.has-live-chat.cinema-view:not(.chat-closed) .player-chat-messages {
+    :where(:not(:fullscreen)).player-layout.has-live-chat.cinema-view:not(.chat-closed) .player-chat-messages {
         flex: 1;
         height: auto;
         min-height: 0;

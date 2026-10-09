@@ -726,7 +726,6 @@
   let currentSidebarWidth = 0;
   let fullSidebarWidth = 0;
   let resizingPointerId = null;
-  let sidebarBeforeCinema = null;
 
   function sidebarMaxWidth() {
     return Math.max(SIDEBAR_FULL_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, window.innerWidth - 320));
@@ -787,30 +786,9 @@
     doc.documentElement.classList.toggle('sidebar-hidden', hidden);
   }
 
-  doc.addEventListener('igloo:cinema-sidebar-change', function (event) {
-    if (!event.detail || !desktopSidebar.matches) return;
-    if (!event.detail.enabled) {
-      if (sidebarBeforeCinema) {
-        setSidebarHidden(sidebarBeforeCinema.hidden);
-        setSidebarWidth(sidebarBeforeCinema.width, false, false);
-      }
-      sidebarBeforeCinema = null;
-      syncSidebarControls();
-      return;
-    }
-    if (!sidebarBeforeCinema) sidebarBeforeCinema = {
-      width: currentSidebarWidth,
-      hidden: doc.documentElement.classList.contains('sidebar-hidden'),
-    };
-    setSidebarHidden(false);
-    setSidebarWidth(SIDEBAR_COMPACT_WIDTH, false, false);
-    syncSidebarControls();
-  });
-
   if (sidebarToggle) {
     sidebarToggle.addEventListener('click', function () {
       if (desktopSidebar.matches && doc.documentElement.classList.contains('sidebar-hidden')) {
-        sidebarBeforeCinema = null;
         setSidebarHidden(false);
         syncSidebarControls();
         return;
@@ -828,7 +806,6 @@
     sidebarResizeHandle.addEventListener('pointerdown', function (event) {
       if (!desktopSidebar.matches || event.button !== 0) return;
       event.preventDefault();
-      sidebarBeforeCinema = null;
       resizingPointerId = event.pointerId;
       sidebarResizeHandle.setPointerCapture(event.pointerId);
       doc.documentElement.classList.add('sidebar-resizing');
@@ -866,7 +843,6 @@
           : currentSidebarWidth + 16;
       } else return;
       event.preventDefault();
-      sidebarBeforeCinema = null;
       setSidebarWidth(nextWidth, true);
     });
   }
@@ -905,7 +881,6 @@
     var activeEl = doc.activeElement;
     if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT' || activeEl.isContentEditable)) return;
     event.preventDefault();
-    sidebarBeforeCinema = null;
     setSidebarWidth(
       currentSidebarWidth === SIDEBAR_COMPACT_WIDTH ? fullSidebarWidth : SIDEBAR_COMPACT_WIDTH,
       true,
@@ -925,6 +900,7 @@
   });
   function syncResponsiveSidebarWidth() {
     if (!desktopSidebar.matches) return;
+    if (q('#player-root[data-fullscreen-active]')) return;
     var width = fullSidebarWidth;
     try {
       var stored = window.localStorage.getItem(sidebarStorageKey);
@@ -934,6 +910,7 @@
   }
   narrowDesktopSidebar.addEventListener('change', syncResponsiveSidebarWidth);
   window.addEventListener('resize', function () {
+    if (q('#player-root[data-fullscreen-active]')) return;
     if (!desktopSidebar.matches || currentSidebarWidth <= sidebarMaxWidth()) return;
     setSidebarWidth(sidebarMaxWidth(), true, false);
   });
