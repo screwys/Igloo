@@ -4864,7 +4864,7 @@ html.mini-player-moving * {
     --media-tooltip-display: none;
 }
 
-.youtube-media-controller:not(.dashboard-media-controller-mini) #player-speed-menu-btn {
+.youtube-media-controller:not(.dashboard-media-controller-mini) #player-settings-menu-btn {
     min-width: var(--player-control-size);
     padding-inline: 0;
 }
@@ -4878,13 +4878,13 @@ html.mini-player-moving * {
 
 .youtube-media-controller:not(.dashboard-media-controller-mini) .mc-custom-btn.active,
 .youtube-media-controller:not(.dashboard-media-controller-mini) #player-cc-btn.active,
-.youtube-media-controller:not(.dashboard-media-controller-mini) .mc-speed-btn[aria-expanded="true"] {
+.youtube-media-controller:not(.dashboard-media-controller-mini) #player-settings-menu-btn[aria-expanded="true"] {
     color: var(--accent-secondary);
     background: transparent;
     box-shadow: none;
 }
 
-#player-quality-menu-btn[aria-expanded="true"] {
+#player-settings-menu-btn[aria-expanded="true"] {
     color: var(--accent-secondary);
 }
 
@@ -5137,16 +5137,6 @@ html.mini-player-moving * {
     letter-spacing: 0.03em;
 }
 
-.dashboard-media-controller:not(.dashboard-media-controller-mini) .mc-speed-btn {
-    min-width: 50px;
-    padding-inline: 0.45rem;
-}
-
-.dashboard-media-controller:not(.dashboard-media-controller-mini) .mc-speed-btn[aria-expanded="true"] {
-    background: rgba(var(--accent-primary-rgb), 0.22);
-    color: var(--accent-secondary);
-}
-
 .dashboard-media-controller:not(.dashboard-media-controller-mini) .mc-speed-menu {
     position: absolute;
     right: 0;
@@ -5299,11 +5289,6 @@ html.mini-player-moving * {
         display: none;
     }
 
-    .dashboard-media-controller:not(.dashboard-media-controller-mini) .mc-speed-btn {
-        min-width: var(--player-control-size);
-        padding-inline: 0;
-    }
-
     #main-media-controller.youtube-media-controller:not(.dashboard-media-controller-mini) #player-more-controls-btn {
         display: inline-flex;
     }
@@ -5315,8 +5300,7 @@ html.mini-player-moving * {
     .youtube-media-controller:not(.dashboard-media-controller-mini):not([data-player-more-controls-open]) #player-autoplay-next-btn,
     .youtube-media-controller:not(.dashboard-media-controller-mini):not([data-player-more-controls-open]) #player-cc-btn,
     .youtube-media-controller:not(.dashboard-media-controller-mini):not([data-player-more-controls-open]) #player-captions-menu-wrap,
-    .youtube-media-controller:not(.dashboard-media-controller-mini):not([data-player-more-controls-open]) #player-speed-menu-wrap,
-    .youtube-media-controller:not(.dashboard-media-controller-mini):not([data-player-more-controls-open]) #player-quality-menu-wrap,
+    .youtube-media-controller:not(.dashboard-media-controller-mini):not([data-player-more-controls-open]) #player-settings-menu-wrap,
     .youtube-media-controller:not(.dashboard-media-controller-mini):not([data-player-more-controls-open]) #player-mini-btn,
     .youtube-media-controller:not(.dashboard-media-controller-mini):not([data-player-more-controls-open]) #player-cinema-btn,
     .youtube-media-controller:not(.dashboard-media-controller-mini):not([data-player-more-controls-open]) #player-fullscreen-btn {
@@ -5684,6 +5668,87 @@ html.mini-player-moving * {
 .player-control-menu .mc-speed-option[aria-checked="true"] {
     background: rgba(var(--accent-primary-rgb), 0.2);
     color: var(--accent-secondary);
+}
+
+#player-settings-menu {
+    width: min(360px, calc(100vw - 16px));
+}
+.player-control-menu .player-setting-row {
+    display: grid;
+    grid-template-columns: 20px auto minmax(0, 1fr) 20px;
+    align-items: center;
+    gap: 0.65rem;
+    min-height: 40px;
+}
+.player-control-menu .player-setting-row[hidden] {
+    display: none;
+}
+.player-setting-row .material-icon,
+.player-settings-back .material-icon {
+    width: 20px;
+    height: 20px;
+}
+.player-setting-value {
+    color: var(--text-secondary);
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.player-control-menu .player-settings-back {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding-block: 0.6rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid var(--border-color);
+    border-radius: 0;
+}
+.player-control-menu .mc-speed-option:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.player-speed-current {
+    display: block;
+    padding-block: 0.65rem;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.player-speed-slider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.3rem 0.5rem;
+}
+.player-speed-slider input {
+    width: 100%;
+    min-width: 0;
+    accent-color: var(--accent-secondary);
+}
+.player-control-menu .player-speed-adjust {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(var(--accent-primary-rgb), 0.14);
+}
+.player-speed-adjust .material-icon {
+    width: 20px;
+    height: 20px;
+}
+.player-speed-presets {
+    display: flex;
+    gap: 0.3rem;
+    padding-top: 0.7rem;
+}
+.player-speed-presets .mc-speed-option {
+    text-align: center;
 }
 
 /* ── Player comments ── */

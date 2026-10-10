@@ -45,6 +45,7 @@ type PlaybackFormat struct {
 	Width              int               `json:"width"`
 	Height             int               `json:"height"`
 	FPS                float64           `json:"fps"`
+	DynamicRange       string            `json:"dynamic_range"`
 	Bitrate            float64           `json:"tbr"`
 	SampleRate         int               `json:"asr"`
 	Channels           int               `json:"audio_channels"`

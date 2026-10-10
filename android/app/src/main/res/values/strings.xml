@@ -520,6 +520,8 @@
     <string name="platform_tiktok">TikTok</string>
     <string name="platform_x">X</string>
     <string name="platform_youtube">YouTube</string>
+    <string name="player_audio">Audio</string>
+    <string name="player_audio_original">original</string>
     <string name="player_autoplay_next">Auto-play next</string>
     <string name="player_autoplay_next_state">Auto-play next: %1$s</string>
     <string name="player_back_10_seconds">Back 10 seconds</string>
@@ -555,7 +557,9 @@
     <string name="player_seek_video">Seek video</string>
     <string name="player_show_subtitles">Show subtitles</string>
     <string name="player_speed">Speed</string>
+    <string name="player_speed_faster">Faster</string>
     <string name="player_speed_set_to">Speed %1$s</string>
+    <string name="player_speed_slower">Slower</string>
     <string name="player_subscribe_failed">Failed to subscribe</string>
     <string name="player_subscribed_to_channel">Subscribed to channel</string>
     <string name="player_subtitles">Subtitles</string>

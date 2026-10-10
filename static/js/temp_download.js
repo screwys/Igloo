@@ -43,6 +43,7 @@
     actions.classList.remove('hidden');
     download.hidden = false;
     switching = false;
+    stream.hidden = false;
     stream.disabled = false;
     cancel.disabled = false;
   }
@@ -66,6 +67,7 @@
     show('');
     actions.classList.remove('hidden');
     download.hidden = false;
+    stream.hidden = true;
     stream.disabled = true;
     cancel.dataset.cancelled = '1';
     cancel.disabled = false;

@@ -18,6 +18,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 			data-stream-manifest-type={ p.StreamManifestType }
 			data-stream-session-id={ p.StreamSessionID }
 			data-stream-indexed={ boolDataAttr(p.StreamIndexed) }
+			data-stream-audio-language={ p.StreamAudioLanguage }
 			data-stream-text-tracks={ toJSONAttr(p.StreamTextTracks) }
 			data-next-url={ nextVideoURL(nextVideo) }
 			data-bookmarked={ boolDataAttr(video.BookmarkCategoryID != nil) }
@@ -80,14 +81,6 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							}
 							<div class="dashboard-right-controls">
 								<button id="player-chat-toolbar-btn" class="mc-custom-btn hidden" type="button" title={ L(p, "player_live_chat", "Live chat") } aria-label={ L(p, "player_live_chat", "Live chat") } aria-expanded="true" aria-controls="player-chat">@MaterialIcon("ChatBubble", "")</button>
-							if p.StreamManifestURL != "" {
-								<div id="player-quality-menu-wrap" class="mc-speed-menu-wrap">
-									<button id="player-quality-menu-btn" class="mc-custom-btn" type="button" aria-label={ L(p, "player_quality", "Quality") } title={ L(p, "player_quality", "Quality") } aria-haspopup="menu" aria-controls="player-quality-menu" aria-expanded="false" disabled>
-										@MaterialIcon("Settings", "")
-									</button>
-									<div id="player-quality-menu" class="mc-speed-menu hidden" role="menu" aria-label={ L(p, "player_quality", "Quality") }></div>
-								</div>
-							}
 							if video.Platform == "youtube" {
 								<button id="player-more-controls-btn" class="mc-custom-btn player-more-controls-btn" type="button" title={ L(p, "action_more", "More") } aria-label={ L(p, "action_more", "More") } aria-expanded="false">
 									@MaterialIcon("MoreHoriz", "")
@@ -101,15 +94,31 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 								type="button"
 								title={ L(p, "player_subtitles", "Subtitles") }
 								aria-label={ L(p, "player_subtitles", "Subtitles") }
-								aria-haspopup="menu" aria-expanded="false" aria-controls="player-captions-menu"
+								aria-pressed="false"
 								>@MaterialIcon("ClosedCaption", "")</button>
-							<div id="player-captions-menu" class="mc-speed-menu hidden" role="menu" aria-label={ L(p, "player_subtitles", "Subtitles") }></div>
 							</div>
-							<div id="player-speed-menu-wrap" class="mc-speed-menu-wrap">
-								<button id="player-speed-menu-btn" class="mc-custom-btn mc-label-btn mc-speed-btn" type="button" title={ L(p, "player_playback_speed", "Playback speed") } aria-label={ L(p, "player_playback_speed", "Playback speed") } aria-haspopup="menu" aria-expanded="false">
-									@MaterialIcon("Speed", "")
+							<div id="player-settings-menu-wrap" class="mc-speed-menu-wrap">
+								<button id="player-settings-menu-btn" class="mc-custom-btn" type="button" title={ L(p, "settings_screen_title", "Settings") } aria-label={ L(p, "settings_screen_title", "Settings") } aria-haspopup="menu" aria-controls="player-settings-menu" aria-expanded="false">
+									@MaterialIcon("Settings", "")
 								</button>
-								<div id="player-speed-menu" class="mc-speed-menu hidden" role="menu" aria-label={ L(p, "player_playback_speed_menu", "Playback speed menu") }></div>
+								<div id="player-settings-menu" class="mc-speed-menu hidden" role="menu" aria-label={ L(p, "settings_screen_title", "Settings") }>
+									<div data-settings-panel="main">
+										@playerSettingRow("speed", "Speed", L(p, "player_playback_speed", "Playback speed"), "1x", false)
+										if p.StreamManifestURL != "" {
+											@playerSettingRow("audio", "VolumeUp", L(p, "player_audio", "Audio"), "", true)
+										}
+										@playerSettingRow("captions", "ClosedCaption", L(p, "player_subtitles", "Subtitles"), L(p, "option_off", "Off"), true)
+										if p.StreamManifestURL != "" {
+											@playerSettingRow("quality", "Tune", L(p, "player_quality", "Quality"), L(p, "player_quality_auto", "Auto"), false)
+										}
+									</div>
+									@playerSettingPanel(p, "speed", L(p, "player_playback_speed", "Playback speed"))
+									@playerSettingPanel(p, "captions", L(p, "player_subtitles", "Subtitles"))
+									if p.StreamManifestURL != "" {
+										@playerSettingPanel(p, "audio", L(p, "player_audio", "Audio"))
+										@playerSettingPanel(p, "quality", L(p, "player_quality", "Quality"))
+									}
+								</div>
 							</div>
 							if video.Platform == "youtube" {
 								<div class="dashboard-volume-control">
@@ -538,4 +547,38 @@ templ playerMiniButton(p PageProps) {
 	>
 		@MaterialIcon("PictureInPictureAlt", "player-mini-icon")
 	</button>
+}
+
+
+templ playerSettingRow(name string, icon string, label string, value string, hidden bool) {
+	<button id={ "player-" + name + "-setting" } class="mc-speed-option player-setting-row" type="button" role="menuitem" data-settings-page={ name } aria-haspopup="menu" aria-controls={ "player-" + name + "-menu" } hidden?={ hidden } disabled?={ name == "quality" || name == "audio" }>
+		@MaterialIcon(icon, "")
+		<span>{ label }</span>
+		<span id={ "player-" + name + "-value" } class="player-setting-value">{ value }</span>
+		@MaterialIcon("KeyboardArrowRight", "")
+	</button>
+}
+
+templ playerSettingPanel(p PageProps, name string, label string) {
+	<div data-settings-panel={ name } class="hidden">
+		<button class="mc-speed-option player-settings-back" type="button" role="menuitem" data-settings-back={ name } aria-label={ L(p, "action_back", "Back") }>
+			@MaterialIcon("ArrowBack", "")
+			<span>{ label }</span>
+		</button>
+		<div id={ "player-" + name + "-menu" }>
+			if name == "speed" {
+				<output id="player-speed-current" class="player-speed-current" for="player-speed-range">1x</output>
+				<div class="player-speed-slider">
+					<button class="mc-speed-option player-speed-adjust" type="button" data-rate-step="-0.05" title={ L(p, "player_speed_slower", "Slower") } aria-label={ L(p, "player_speed_slower", "Slower") }>@MaterialIcon("Remove", "")</button>
+					<input id="player-speed-range" type="range" min="0.25" max="3" step="0.05" value="1" aria-label={ label }/>
+					<button class="mc-speed-option player-speed-adjust" type="button" data-rate-step="0.05" title={ L(p, "player_speed_faster", "Faster") } aria-label={ L(p, "player_speed_faster", "Faster") }>@MaterialIcon("Add", "")</button>
+				</div>
+				<div class="player-speed-presets">
+					for _, rate := range []string{"1", "1.25", "1.5", "2", "3"} {
+						<button class="mc-speed-option" type="button" role="menuitemradio" data-rate={ rate } aria-checked="false">{ rate + "x" }</button>
+					}
+				</div>
+			}
+		</div>
+	</div>
 }

@@ -130,7 +130,24 @@ func writeYouTubeStreamResponse(w http.ResponseWriter, session *youtubeStreamSes
 	writeJSON(w, 200, map[string]any{"success": true, "video_id": session.videoID,
 		"player_url":   "/player/" + url.PathEscape(session.videoID) + "?stream=" + session.id,
 		"manifest_url": "/api/youtube/streams/" + session.id + "/manifest", "manifest_type": session.manifestType, "session_id": session.id,
-		"indexed": session.indexed, "text_tracks": session.textTracks})
+		"indexed": session.indexed, "audio_language": session.audioLanguage(), "text_tracks": session.textTracks})
+}
+
+func (session *youtubeStreamSession) audioLanguage() string {
+	var preferred *download.PlaybackFormat
+	for i := range session.info.Formats {
+		format := &session.info.Formats[i]
+		if format.Language == "" || format.AudioCodec == "" || format.AudioCodec == "none" {
+			continue
+		}
+		if preferred == nil || format.LanguagePreference > preferred.LanguagePreference {
+			preferred = format
+		}
+	}
+	if preferred == nil {
+		return ""
+	}
+	return preferred.Language
 }
 
 func (s *Server) recentYouTubeStream(videoID string, preferIndexed bool) *youtubeStreamSession {
@@ -232,7 +249,11 @@ func (s *Server) handleYouTubeStreamManifest(w http.ResponseWriter, r *http.Requ
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
 	if len(session.manifest) > 0 {
-		w.Header().Set("Content-Type", "application/dash+xml")
+		contentType := "application/dash+xml"
+		if session.manifestType == "hls" {
+			contentType = "application/vnd.apple.mpegurl"
+		}
+		w.Header().Set("Content-Type", contentType)
 		_, _ = w.Write(session.manifest)
 		return
 	}
@@ -357,6 +378,7 @@ func (session *youtubeStreamSession) prepare(ctx context.Context) error {
 	wg.Wait()
 	var body strings.Builder
 	videoCount, audioCount := 0, 0
+	audioLanguage := session.audioLanguage()
 	for _, result := range results {
 		if result.err != nil {
 			continue
@@ -389,7 +411,7 @@ func (session *youtubeStreamSession) prepare(ctx context.Context) error {
 		}
 		mediaURL := session.addResource(format.URL, format.Headers, format.DownloaderOptions)
 		fmt.Fprintf(&body, `><BaseURL>%s</BaseURL><SegmentBase indexRange="%d-%d"><Initialization range="%d-%d"/></SegmentBase></Representation>`, xmlString(mediaURL), result.index.IndexStart, result.index.IndexEnd, result.index.InitializationStart, result.index.InitializationEnd)
-		if format.LanguagePreference > 0 {
+		if kind == "audio" && audioLanguage != "" && format.Language == audioLanguage {
 			body.WriteString(`<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>`)
 		}
 		body.WriteString(`</AdaptationSet>`)
@@ -469,9 +491,64 @@ func (session *youtubeStreamSession) prepareUpstreamManifest() error {
 		resourceURL := session.addResource(manifestURL, playbackHeaders(session.info.Headers, format.Headers), format.DownloaderOptions)
 		session.rootResource = strings.TrimSuffix(path.Base(strings.TrimSuffix(resourceURL, "/")), "/")
 		session.textTracks = session.captionTracks()
+		if kind == "hls" {
+			session.prepareMuxedHLS(manifestURL)
+		}
 		return nil
 	}
 	return errors.New("no indexed video or segment manifest available")
+}
+
+func (session *youtubeStreamSession) prepareMuxedHLS(manifestURL string) {
+	var formats []download.PlaybackFormat
+	for _, format := range session.info.Formats {
+		if format.ManifestURL != manifestURL || !strings.HasPrefix(format.Protocol, "m3u8") {
+			continue
+		}
+		if format.Language == "" || format.VideoCodec == "" || format.VideoCodec == "none" || format.AudioCodec == "" || format.AudioCodec == "none" {
+			return
+		}
+		formats = append(formats, format)
+	}
+	if len(formats) == 0 {
+		return
+	}
+	// yt-dlp supplies the languages that muxed upstream manifests can omit.
+	var body strings.Builder
+	body.WriteString("#EXTM3U\n#EXT-X-VERSION:6\n")
+	groups := make(map[string]string)
+	var children []string
+	audioLanguage := session.audioLanguage()
+	for _, format := range formats {
+		group, exists := groups[format.Language]
+		if !exists {
+			group = fmt.Sprintf("igloo-audio-%d", len(groups))
+			groups[format.Language] = group
+			isDefault := "NO"
+			if format.Language == audioLanguage {
+				isDefault = "YES"
+			}
+			fmt.Fprintf(&body, "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=%q,NAME=%q,LANGUAGE=%q,DEFAULT=%s,AUTOSELECT=YES\n", group, format.Language, format.Language, isDefault)
+		}
+		fmt.Fprintf(&body, "#EXT-X-STREAM-INF:BANDWIDTH=%d,CODECS=%q,AUDIO=%q", max(int(format.Bitrate*1000), 1), format.VideoCodec+","+format.AudioCodec, group)
+		if format.Width > 0 && format.Height > 0 {
+			fmt.Fprintf(&body, ",RESOLUTION=%dx%d", format.Width, format.Height)
+		}
+		if format.FPS > 0 {
+			fmt.Fprintf(&body, ",FRAME-RATE=%s", strconv.FormatFloat(format.FPS, 'f', -1, 64))
+		}
+		switch format.DynamicRange {
+		case "SDR", "HLG":
+			fmt.Fprintf(&body, ",VIDEO-RANGE=%s", format.DynamicRange)
+		case "HDR10", "HDR10+", "HDR12", "DV":
+			body.WriteString(",VIDEO-RANGE=PQ")
+		}
+		mediaURL := session.addResource(format.URL, playbackHeaders(session.info.Headers, format.Headers), format.DownloaderOptions)
+		fmt.Fprintf(&body, "\n%s\n", mediaURL)
+		children = append(children, path.Base(strings.TrimSuffix(mediaURL, "/")))
+	}
+	session.manifest = []byte(body.String())
+	session.replaceManifestChildren(session.rootResource, children)
 }
 
 func (session *youtubeStreamSession) serveResource(w http.ResponseWriter, r *http.Request, resourceID, suffix string) {

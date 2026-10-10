@@ -1053,6 +1053,7 @@ func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {
 		p.StreamManifestType = session.manifestType
 		p.StreamSessionID = session.id
 		p.StreamIndexed = session.indexed
+		p.StreamAudioLanguage = session.audioLanguage()
 		p.StreamTextTracks = session.textTracks
 		if video.Metadata == nil {
 			video.Metadata = &model.VideoMetadata{}

@@ -3,9 +3,12 @@ import { playVideo } from './playback.js'
 import { configureXSpaceAudio } from './x-space-audio.js'
 
 export async function initStreaming(video, root, autoplay, resumePosition) {
-  const quality = document.getElementById('player-quality-menu-btn')
+  const quality = document.getElementById('player-quality-setting')
   const qualityMenu = document.getElementById('player-quality-menu')
-  const qualityWrap = document.getElementById('player-quality-menu-wrap')
+  const qualityValue = document.getElementById('player-quality-value')
+  const audio = document.getElementById('player-audio-setting')
+  const audioMenu = document.getElementById('player-audio-menu')
+  const audioValue = document.getElementById('player-audio-value')
   const download = document.getElementById('player-stream-download-btn')
 	const refresh = document.getElementById('player-stream-refresh-btn')
   const controller = root.querySelector('media-controller')
@@ -16,6 +19,8 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
   let wantsPlay = autoplay
   let started = false
   let manualTrack = null
+  let audioPreference = null
+  let audioTracks = []
   let player
   let refreshed = false
   let refreshing = null
@@ -93,6 +98,7 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
       const preferences = window.IglooPlayback.read()
       const buffer = preferences.buffers.youtube
       player.configure({
+        preferredAudio: [audioPreference || { language: root.dataset.streamAudioLanguage || '' }],
         abr: { enabled: manualTrack === null, restrictions: { maxHeight: preferences.cap || Infinity } },
         streaming: { bufferingGoal: buffer.ahead, rebufferingGoal: started ? buffer.refill : buffer.startup },
       })
@@ -106,14 +112,23 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
     function renderQualities() {
       if (!quality || !qualityMenu) return
       const current = manualTrack === null ? 'auto' : String(manualTrack)
-      const tracks = player.getVariantTracks().slice().sort(function (a, b) { return (b.height - a.height) || (b.bandwidth - a.bandwidth) })
+      const variants = player.getVariantTracks()
+      const active = variants.find(function (track) { return track.active })
+      const choices = new Map()
+      variants.forEach(function (track) {
+        if (active && (track.language !== active.language || track.audioCodec !== active.audioCodec || track.channelsCount !== active.channelsCount || track.label !== active.label)) return
+        const key = JSON.stringify([track.width, track.height, track.frameRate, track.videoCodec, track.hdr, track.videoLayout])
+        const previous = choices.get(key)
+        if (!previous || track.id === manualTrack || manualTrack === null && track.active || !previous.active && previous.id !== manualTrack && track.bandwidth > previous.bandwidth) choices.set(key, track)
+      })
+      const tracks = Array.from(choices.values()).sort(function (a, b) { return (b.height - a.height) || (b.bandwidth - a.bandwidth) })
       const options = [{ value: 'auto', label: t('player_quality_auto', 'Auto') }]
       tracks.forEach(function (track) {
         const resolution = track.height ? track.height + 'p' : t('player_quality_audio', 'Audio')
         const rate = track.frameRate > 30 ? ' ' + Math.round(track.frameRate) + 'fps' : ''
         const codec = track.videoCodec ? ' ' + track.videoCodec.split('.')[0] : ''
-        const language = track.language && track.language !== 'und' ? ' ' + track.language : ''
-        options.push({ value: String(track.id), label: resolution + rate + codec + language })
+        const hdr = track.hdr && track.hdr !== 'SDR' ? ' ' + track.hdr : ''
+        options.push({ value: String(track.id), label: resolution + rate + codec + hdr })
       })
       const focused = qualityMenu.contains(document.activeElement) ? document.activeElement.dataset.quality : null
       qualityMenu.replaceChildren()
@@ -129,17 +144,14 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
         if (focused === option.value) button.focus()
       })
       const selected = options.find(function (option) { return option.value === current }) || options[0]
-      quality.title = t('player_quality', 'Quality') + ' (' + selected.label + ')'
-      quality.setAttribute('aria-label', quality.title)
+      if (qualityValue) qualityValue.textContent = selected.label
       quality.disabled = !loaded
     }
     if (qualityMenu) qualityMenu.addEventListener('click', function (event) {
       const option = event.target.closest('[data-quality]')
       if (!option) return
       manualTrack = option.dataset.quality === 'auto' ? null : Number(option.dataset.quality)
-      qualityMenu.classList.add('hidden')
-      quality.setAttribute('aria-expanded', 'false')
-      quality.focus()
+      root.dispatchEvent(new Event('playersettingsclose'))
       configure()
       if (manualTrack !== null) {
         const track = player.getVariantTracks().find(function (candidate) { return candidate.id === manualTrack })
@@ -148,6 +160,59 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
       renderQualities()
     })
     player.addEventListener('trackschanged', renderQualities)
+    function renderAudio() {
+      if (!audio || !audioMenu) return
+      const choices = new Map()
+      player.getVariantTracks().forEach(function (variant) {
+        const track = { active: variant.active, language: variant.language, label: variant.label,
+          roles: variant.audioRoles || [], codecs: variant.audioCodec, channelsCount: variant.channelsCount,
+          spatialAudio: variant.spatialAudio }
+        const key = JSON.stringify([track.language, track.label, track.roles])
+        if (!choices.has(key) || track.active) choices.set(key, track)
+      })
+      const original = shaka.util.LanguageUtils.normalize(root.dataset.streamAudioLanguage || '')
+      audioTracks = Array.from(choices.values()).sort(function (a, b) {
+        if ((a.language === original) !== (b.language === original)) return a.language === original ? -1 : 1
+        return a.language.localeCompare(b.language)
+      })
+      const focused = audioMenu.contains(document.activeElement) ? document.activeElement.dataset.audio : null
+      audioMenu.replaceChildren()
+      audioTracks.forEach(function (track, index) {
+        let label = track.label === track.language ? null : track.label
+        if (!label) {
+          try { label = new Intl.DisplayNames([document.documentElement.lang || 'en'], { type: 'language' }).of(track.language) } catch (_) { label = track.language }
+        }
+        if (track.language === original && !/original/i.test(label)) label += ' (' + t('player_audio_original', 'original') + ')'
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = 'mc-speed-option'
+        button.dataset.audio = String(index)
+        button.setAttribute('role', 'menuitemradio')
+        button.setAttribute('aria-checked', String(track.active))
+        button.textContent = label
+        audioMenu.appendChild(button)
+        if (track.active && audioValue) audioValue.textContent = label
+        if (focused === String(index)) button.focus()
+      })
+      audio.hidden = audioTracks.length < 2
+      audio.disabled = !loaded
+    }
+    if (audioMenu) audioMenu.addEventListener('click', function (event) {
+      const option = event.target.closest('[data-audio]')
+      if (!option) return
+      const track = audioTracks[Number(option.dataset.audio)]
+      if (!track) return
+      audioPreference = { language: track.language, label: track.label || '', role: track.roles[0] || '' }
+      player.selectAudioTrack(track, window.IglooPlayback.buffer('youtube').refill)
+      if (manualTrack !== null) manualTrack = player.getVariantTracks().find(function (candidate) { return candidate.active })?.id ?? null
+      configure()
+      renderAudio()
+      renderQualities()
+      root.dispatchEvent(new Event('playersettingsclose'))
+    })
+    player.addEventListener('trackschanged', renderAudio)
+    player.addEventListener('variantchanged', function () { renderAudio(); renderQualities() })
+    player.addEventListener('adaptation', function () { renderAudio(); renderQualities() })
     function loadCaptions(tracks) {
       root.dispatchEvent(new CustomEvent('streamclockready', { detail: { position: function () {
         if (!loaded || nativePlayback || !player.isLive()) return null
@@ -175,8 +240,7 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
       const selectedQuality = player.getVariantTracks().find(function (track) { return track.id === manualTrack })
       loaded = false
       if (quality) quality.disabled = true
-      if (qualityMenu) qualityMenu.classList.add('hidden')
-      if (quality) quality.setAttribute('aria-expanded', 'false')
+      root.dispatchEvent(new Event('playersettingsclose'))
       const fresh = await apiFetch('/api/youtube/' + encodeURIComponent(root.dataset.videoId) + '/stream', { method: 'POST', body: JSON.stringify({ prefer_indexed: preferIndexed, force_fresh: true }) })
       if (!fresh || !fresh.success) throw new Error('stream renewal failed')
       if (fresh.media_url) {
@@ -184,7 +248,8 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
         await player.unload()
         root.dataset.streamManifest = ''
         root.dataset.streamSessionId = ''
-        if (qualityWrap) qualityWrap.classList.add('hidden')
+        if (quality) quality.hidden = true
+        if (audio) audio.hidden = true
         if (download) download.classList.add('hidden')
         await new Promise(function (resolve, reject) {
           function metadata() { video.removeEventListener('error', error); resolve() }
@@ -224,6 +289,8 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
       root.dataset.streamManifest = fresh.manifest_url
       root.dataset.streamManifestType = fresh.manifest_type
       root.dataset.streamSessionId = fresh.session_id
+      root.dataset.streamAudioLanguage = fresh.audio_language || ''
+      configure()
       await player.load(fresh.manifest_url, position, fresh.manifest_type === 'hls' ? 'application/x-mpegurl' : 'application/dash+xml')
       if (selectedQuality) {
         const track = player.getVariantTracks().find(function (candidate) {
@@ -242,6 +309,7 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
       loaded = true
       syncLiveControls()
       renderQualities()
+      renderAudio()
       if (wantsPlay) playVideo(video, () => wantsPlay).catch(function () { wantsPlay = false })
       loadCaptions(fresh.text_tracks || [])
     }
@@ -280,6 +348,7 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
     loaded = true
     syncLiveControls()
     renderQualities()
+    renderAudio()
     if (wantsPlay) playVideo(video, () => wantsPlay).catch(function () { wantsPlay = false })
     loadCaptions(JSON.parse(root.dataset.streamTextTracks || '[]') || [])
   } catch (error) { await handleFailure(error) }

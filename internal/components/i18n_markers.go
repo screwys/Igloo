@@ -113,6 +113,7 @@ var _ = []string{
 	N("player_autoplay_next_state", "Auto-play next: %1$s"),
 	N("player_playback_speed_value", "Playback speed (%1$s)"),
 	N("player_subtitles", "Subtitles"),
+	N("player_audio_original", "original"),
 	N("player_subtitles_off", "Subtitles (Off)"),
 	N("player_subtitles_on", "Subtitles (On)"),
 	N("platform_instagram", "Instagram"),

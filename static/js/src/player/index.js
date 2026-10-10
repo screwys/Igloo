@@ -28,15 +28,10 @@ if (root && video) {
   const autoplayNextBtn = doc.getElementById('player-autoplay-next-btn')
   const seekBack10Btn = doc.getElementById('player-seek-back-10-btn')
   const seekForward10Btn = doc.getElementById('player-seek-forward-10-btn')
-  const speedMenuWrap = doc.getElementById('player-speed-menu-wrap')
-  const speedMenuBtn = doc.getElementById('player-speed-menu-btn')
+  const settingsMenuWrap = doc.getElementById('player-settings-menu-wrap')
+  const settingsMenuBtn = doc.getElementById('player-settings-menu-btn')
+  const settingsMenu = doc.getElementById('player-settings-menu')
   const speedMenu = doc.getElementById('player-speed-menu')
-  const qualityMenuWrap = doc.getElementById('player-quality-menu-wrap')
-  const qualityMenuBtn = doc.getElementById('player-quality-menu-btn')
-  const qualityMenu = doc.getElementById('player-quality-menu')
-  const captionsMenuWrap = doc.getElementById('player-captions-menu-wrap')
-  const captionsMenuBtn = doc.getElementById('player-cc-btn')
-  const captionsMenu = doc.getElementById('player-captions-menu')
   const fullscreenBtn = doc.getElementById('player-fullscreen-btn')
   const cinemaBtn = doc.getElementById('player-cinema-btn')
   const moreControlsBtn = doc.getElementById('player-more-controls-btn')
@@ -80,7 +75,6 @@ if (root && video) {
   const YOUTUBE_LEGACY_RATE_KEY = 'youtube_playback_rate'
   const YOUTUBE_VOLUME_KEY = 'youtubeVolume'
   const YOUTUBE_MUTED_KEY = 'youtubeMuted'
-  const PLAYER_SETTINGS_ICON = materialIconMarkup('Speed')
   let autoplayNext = false
 
   // --- Helpers ---
@@ -209,10 +203,8 @@ if (root && video) {
     if (btn) btn.setAttribute('aria-expanded', 'true')
   }
 
-  function closeAllPlayerMenus(except) {
-    if (speedMenu && speedMenu !== except) closePopupMenu(speedMenu, speedMenuBtn)
-    if (qualityMenu && qualityMenu !== except) closePopupMenu(qualityMenu, qualityMenuBtn)
-    if (captionsMenu && captionsMenu !== except) closePopupMenu(captionsMenu, captionsMenuBtn)
+  function closeAllPlayerMenus() {
+    closePopupMenu(settingsMenu, settingsMenuBtn)
   }
 
   function setupPlayerControlsVisibility() {
@@ -221,7 +213,7 @@ if (root && video) {
     return bindVideoControlsVisibility({
       stateElement: controller,
       surface: playerWrapper,
-      popupElements: [speedMenu, qualityMenu, captionsMenu],
+      popupElements: [settingsMenu],
       readyAttribute: 'data-player-controls-ready',
       visibleAttribute: 'data-player-controls-visible',
       inactiveAttribute: 'userinactive',
@@ -378,25 +370,22 @@ if (root && video) {
 
   function renderSpeedMenu() {
     if (!speedMenu) return
-    const rates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
     const current = Number(video.playbackRate || 1)
-    speedMenu.textContent = ''
-    rates.forEach(function (rate) {
-      const active = Math.abs(current - rate) < 0.001
-      const btn = doc.createElement('button')
-      btn.type = 'button'
-      btn.className = 'mc-speed-option' + (active ? ' is-active' : '')
-      btn.setAttribute('role', 'menuitemradio')
-      btn.setAttribute('aria-checked', active ? 'true' : 'false')
-      btn.setAttribute('data-rate', String(rate))
-      btn.textContent = formatRateLabel(rate)
-      speedMenu.appendChild(btn)
+    speedMenu.querySelectorAll('[data-rate]').forEach(function (button) {
+      button.setAttribute('aria-checked', String(Math.abs(current - Number(button.dataset.rate)) < 0.001))
     })
-    if (speedMenuBtn) {
-      setSvgContent(speedMenuBtn, PLAYER_SETTINGS_ICON)
-      speedMenuBtn.title = tf('player_playback_speed_value', 'Playback speed (%1$s)', formatRateLabel(current))
-      speedMenuBtn.setAttribute('aria-label', speedMenuBtn.title)
+    const slider = doc.getElementById('player-speed-range')
+    if (slider) {
+      slider.value = String(current)
+      slider.setAttribute('aria-valuetext', formatRateLabel(current))
     }
+    const output = doc.getElementById('player-speed-current')
+    if (output) output.value = formatRateLabel(current)
+    speedMenu.querySelectorAll('[data-rate-step]').forEach(function (button) {
+      button.disabled = Number(button.dataset.rateStep) < 0 ? current <= 0.25 : current >= 3
+    })
+    const value = doc.getElementById('player-speed-value')
+    if (value) value.textContent = formatRateLabel(current)
   }
 
   function setupControlMenu(menu, button) {
@@ -404,19 +393,50 @@ if (root && video) {
     // Keep menus outside the controller's clipped area.
     doc.body.appendChild(menu)
     menu.classList.add('player-control-menu')
+    function menuOptions() {
+      return Array.from(menu.querySelectorAll('[role="menuitem"], [role="menuitemradio"]')).filter(function (option) {
+        return !option.disabled && !option.hidden && !option.closest('.hidden')
+      })
+    }
+    function showPanel(name, focus) {
+      menu.querySelectorAll('[data-settings-panel]').forEach(function (panel) {
+        panel.classList.toggle('hidden', panel.dataset.settingsPanel !== name)
+      })
+      menu.scrollTop = 0
+      repositionMenu()
+      if (focus) {
+        const target = menu.querySelector('[data-settings-panel="' + name + '"] input') || menuOptions().find(function (option) { return option.getAttribute('aria-checked') === 'true' }) || menuOptions()[0]
+        if (target) target.focus()
+      }
+    }
+    menu.addEventListener('click', function (event) {
+      const page = event.target.closest('[data-settings-page]')
+      const back = event.target.closest('[data-settings-back]')
+      if (page) showPanel(page.dataset.settingsPage, true)
+      else if (back) {
+        showPanel('main', false)
+        menu.querySelector('[data-settings-page="' + back.dataset.settingsBack + '"]').focus()
+      }
+    })
+    root.addEventListener('playersettingsclose', function () {
+      closePopupMenu(menu, button)
+      button.focus()
+    })
     function repositionMenu() {
       var rect = button.getBoundingClientRect()
-      menu.style.bottom = (window.innerHeight - rect.top + 6) + 'px'
-      menu.style.right = Math.max(8, window.innerWidth - rect.right) + 'px'
+      const viewportWidth = doc.documentElement.getBoundingClientRect().width
+      menu.style.maxWidth = (viewportWidth - 16) + 'px'
+      menu.style.bottom = Math.max(8, Math.min(window.innerHeight - rect.top + 6, window.innerHeight - menu.offsetHeight - 8)) + 'px'
+      menu.style.right = Math.max(8, Math.min(viewportWidth - rect.right, viewportWidth - menu.offsetWidth - 8)) + 'px'
     }
     button.addEventListener('click', function (event) {
       event.preventDefault()
       event.stopImmediatePropagation()
-      closeAllPlayerMenus(menu)
       var isHidden = menu.classList.contains('hidden')
       if (isHidden) {
-        repositionMenu()
+        showPanel('main', false)
         openPopupMenu(menu, button)
+        repositionMenu()
       } else {
         closePopupMenu(menu, button)
       }
@@ -425,15 +445,31 @@ if (root && video) {
       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
       event.preventDefault()
       event.stopPropagation()
-      closeAllPlayerMenus(menu)
-      repositionMenu()
+      showPanel('main', false)
       openPopupMenu(menu, button)
-      const options = menu.querySelectorAll('[role="menuitemradio"]')
-      const selected = menu.querySelector('[aria-checked="true"]')
+      repositionMenu()
+      const options = menuOptions()
+      const selected = options.find(function (option) { return option.getAttribute('aria-checked') === 'true' })
       const target = selected || options[event.key === 'ArrowUp' ? options.length - 1 : 0]
       if (target) target.focus()
     })
     menu.addEventListener('keydown', function (event) {
+      if (event.target.matches('input[type="range"]') && event.key !== 'Escape') return
+      if (event.key === 'ArrowLeft') {
+        const panel = doc.activeElement.closest('[data-settings-panel]')
+        if (panel && panel.dataset.settingsPanel !== 'main') {
+          event.preventDefault()
+          event.stopPropagation()
+          panel.querySelector('[data-settings-back]').click()
+          return
+        }
+      }
+      if (event.key === 'ArrowRight' && doc.activeElement.matches('[data-settings-page]')) {
+        event.preventDefault()
+        event.stopPropagation()
+        doc.activeElement.click()
+        return
+      }
       if (event.key === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
@@ -444,7 +480,7 @@ if (root && video) {
       if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
       event.preventDefault()
       event.stopPropagation()
-      const options = Array.from(menu.querySelectorAll('[role="menuitemradio"]'))
+      const options = menuOptions()
       let index = options.indexOf(doc.activeElement)
       if (event.key === 'Home') index = 0
       else if (event.key === 'End') index = options.length - 1
@@ -459,26 +495,27 @@ if (root && video) {
     }, true)
   }
 
-  function setupSpeedMenu() {
-    if (!speedMenuWrap || !speedMenuBtn || !speedMenu) return
+  function setupSettingsMenu() {
+    if (!settingsMenuWrap || !settingsMenuBtn || !settingsMenu || !speedMenu) return
     applyPreferredPlaybackRate()
     renderSpeedMenu()
-    setupControlMenu(speedMenu, speedMenuBtn)
-    setupControlMenu(qualityMenu, qualityMenuBtn)
-    setupControlMenu(captionsMenu, captionsMenuBtn)
-    speedMenu.addEventListener('click', function (event) {
-      const btn = event.target && event.target.closest ? event.target.closest('[data-rate]') : null
-      if (!btn) return
-      event.preventDefault()
-      const rate = Number(btn.getAttribute('data-rate') || 1)
-      if (!Number.isFinite(rate) || rate <= 0) return
-      try { video.playbackRate = rate } catch (_) {}
-      try { video.defaultPlaybackRate = rate } catch (_) {}
-      persistPlaybackRate(rate)
+    setupControlMenu(settingsMenu, settingsMenuBtn)
+    function setRate(rate) {
+      const next = parsePlaybackRateValue(Math.round(rate * 100) / 100)
+      if (!next) return
+      video.playbackRate = next
+      video.defaultPlaybackRate = next
+      persistPlaybackRate(next)
       renderSpeedMenu()
-      closePopupMenu(speedMenu, speedMenuBtn)
-      speedMenuBtn.focus()
-      showToast(tf('player_speed_set_to', 'Speed %1$s', formatRateLabel(rate)))
+    }
+    doc.getElementById('player-speed-range').addEventListener('input', function (event) {
+      setRate(Number(event.target.value))
+    })
+    speedMenu.addEventListener('click', function (event) {
+      const preset = event.target.closest('[data-rate]')
+      const step = event.target.closest('[data-rate-step]')
+      if (preset) setRate(Number(preset.dataset.rate))
+      else if (step) setRate(video.playbackRate + Number(step.dataset.rateStep))
     })
     video.addEventListener('ratechange', function () {
       const current = parsePlaybackRateValue(video.playbackRate)
@@ -592,15 +629,11 @@ if (root && video) {
           setFullscreenMode('immersive')
           playerLayout.scrollTop = 0
         }
-        if (speedMenu && speedMenu.parentNode !== target) target.appendChild(speedMenu)
-        if (qualityMenu && qualityMenu.parentNode !== target) target.appendChild(qualityMenu)
-        if (captionsMenu && captionsMenu.parentNode !== target) target.appendChild(captionsMenu)
+        if (settingsMenu && settingsMenu.parentNode !== target) target.appendChild(settingsMenu)
       } else if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
         playerLayout.classList.remove('fullscreen-immersive', 'fullscreen-browse')
         playerLayout.scrollTop = 0
-        if (speedMenu && speedMenu.parentNode !== doc.body) doc.body.appendChild(speedMenu)
-        if (qualityMenu && qualityMenu.parentNode !== doc.body) doc.body.appendChild(qualityMenu)
-        if (captionsMenu && captionsMenu.parentNode !== doc.body) doc.body.appendChild(captionsMenu)
+        if (settingsMenu && settingsMenu.parentNode !== doc.body) doc.body.appendChild(settingsMenu)
       }
     }
     doc.addEventListener('fullscreenchange', onFullscreenChange)
@@ -966,7 +999,7 @@ if (root && video) {
         video.muted = nextVolume === 0
       })
     }
-    setupSpeedMenu()
+    setupSettingsMenu()
     setupResponsiveMoreControls()
     setupPlayerControlsVisibility()
     setupChannelInlineActions()
@@ -995,19 +1028,12 @@ if (root && video) {
     // Dismiss menus before the player handles the same click.
     doc.addEventListener('click', function (event) {
       var path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target]
-      var inSpeed = speedMenuWrap && (path.indexOf(speedMenuWrap) >= 0 || (speedMenu && path.indexOf(speedMenu) >= 0))
-      var inQuality = qualityMenuWrap && (path.indexOf(qualityMenuWrap) >= 0 || (qualityMenu && path.indexOf(qualityMenu) >= 0))
-      var inCaptions = captionsMenuWrap && (path.indexOf(captionsMenuWrap) >= 0 || (captionsMenu && path.indexOf(captionsMenu) >= 0))
-      var dismissing = (!inSpeed && speedMenu && !speedMenu.classList.contains('hidden')) ||
-        (!inQuality && qualityMenu && !qualityMenu.classList.contains('hidden')) ||
-        (!inCaptions && captionsMenu && !captionsMenu.classList.contains('hidden'))
-      if (dismissing && !inSpeed && !inQuality && !inCaptions) {
+      const inside = path.includes(settingsMenuWrap) || path.includes(settingsMenu)
+      if (!inside && settingsMenu && !settingsMenu.classList.contains('hidden')) {
         event.preventDefault()
         event.stopImmediatePropagation()
+        closeAllPlayerMenus()
       }
-      if (!inSpeed) closePopupMenu(speedMenu, speedMenuBtn)
-      if (!inQuality) closePopupMenu(qualityMenu, qualityMenuBtn)
-      if (!inCaptions) closePopupMenu(captionsMenu, captionsMenuBtn)
     }, true)
 
     // Keyboard shortcuts — capture phase so we fire BEFORE media-chrome
@@ -1015,8 +1041,8 @@ if (root && video) {
       var activeEl = doc.activeElement
       var sc = window.cfShortcuts
       if (activeEl && activeEl.closest('.player-control-menu')) return
-      if (activeEl && (activeEl === speedMenuBtn || activeEl === qualityMenuBtn || activeEl === captionsMenuBtn) && ['ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter', ' ', 'Escape'].includes(event.key)) return
-      if (event.key === 'Escape') { closeAllPlayerMenus(null); return }
+      if (activeEl && activeEl === settingsMenuBtn && ['ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter', ' ', 'Escape'].includes(event.key)) return
+      if (event.key === 'Escape') { closeAllPlayerMenus(); return }
       if (event.ctrlKey || event.metaKey || event.altKey) return
       var miniPlayer = window.IglooMiniPlayer
       if (miniPlayer && miniPlayer.isMini && miniPlayer.isMini()) {
@@ -1034,7 +1060,7 @@ if (root && video) {
         event.preventDefault()
         event.stopImmediatePropagation()
         if (!event.repeat) {
-          closeAllPlayerMenus(null)
+          closeAllPlayerMenus()
           const targetVideo = miniPlayer && miniPlayer.isMini && miniPlayer.isMini()
             ? doc.querySelector('#mini-player-media-host video')
             : video

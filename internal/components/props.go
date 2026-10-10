@@ -82,6 +82,7 @@ type PageProps struct {
 	StreamManifestType      string
 	StreamSessionID         string
 	StreamIndexed           bool
+	StreamAudioLanguage     string
 	StreamTextTracks        []StreamTextTrack
 	Prefs                   PrefsData
 }

@@ -6,6 +6,8 @@ export function initSubtitles(video, root) {
   const button = doc.getElementById('player-cc-btn')
   const menu = doc.getElementById('player-captions-menu')
   const wrap = doc.getElementById('player-captions-menu-wrap')
+  const setting = doc.getElementById('player-captions-setting')
+  const value = doc.getElementById('player-captions-value')
   const playerWrapper = root.querySelector('.player-wrapper')
   const controller = root.querySelector('media-controller')
   if (!button || !menu || !wrap || !playerWrapper) return
@@ -196,9 +198,13 @@ export function initSubtitles(video, root) {
       if (focused === track.id) option.focus()
     })
     button.classList.toggle('active', !!selected)
-    button.title = t('player_subtitles', 'Subtitles') + ' (' + (selected ? selected.label : t('option_off', 'Off')) + ')'
+    button.setAttribute('aria-pressed', String(!!selected))
+    button.title = selected ? t('player_hide_subtitles', 'Hide subtitles') : t('player_show_subtitles', 'Show subtitles')
     button.setAttribute('aria-label', button.title)
-    wrap.classList.toggle('hidden', tracks.length === 0 && (catalogueLoaded || root.dataset.channelPlatform !== 'youtube'))
+    if (value) value.textContent = selected ? selected.label : t('option_off', 'Off')
+    const unavailable = tracks.length === 0 && (catalogueLoaded || root.dataset.channelPlatform !== 'youtube')
+    wrap.classList.toggle('hidden', unavailable)
+    if (setting) setting.hidden = unavailable
   }
 
   async function selectTrack(track) {
@@ -232,7 +238,13 @@ export function initSubtitles(video, root) {
   }
 
   function updateTracks(incoming) {
-    tracks = incoming
+    tracks = incoming.slice().sort(function (a, b) {
+      const englishA = /^en(?:-|$)/i.test(a.language)
+      const englishB = /^en(?:-|$)/i.test(b.language)
+      if (englishA !== englishB) return englishA ? -1 : 1
+      if (a.automatic !== b.automatic) return a.automatic ? 1 : -1
+      return a.language.localeCompare(b.language) || a.label.localeCompare(b.label)
+    })
     if (selectStreamTrack || !root.dataset.streamManifest) {
       const next = preference.enabled ? preferredTrack() : null
       if ((next && (!selected || next.url !== selected.url)) || (!next && selected)) selectTrack(next)
@@ -244,9 +256,7 @@ export function initSubtitles(video, root) {
     const option = event.target.closest('[data-caption]')
     if (!option) return
     event.preventDefault()
-    menu.classList.add('hidden')
-    button.setAttribute('aria-expanded', 'false')
-    button.focus()
+    root.dispatchEvent(new Event('playersettingsclose'))
     const track = tracks.find(function (track) { return track.id === option.dataset.caption }) || null
     preference.enabled = !!track
     if (track) {
@@ -282,7 +292,7 @@ export function initSubtitles(video, root) {
       button.removeAttribute('aria-busy')
     }
   }
-  button.addEventListener('click', loadCatalogue)
+  if (setting) setting.addEventListener('click', loadCatalogue)
 
   if (root.dataset.streamManifest) {
     updateTracks(sourceTracks(JSON.parse(root.dataset.streamTextTracks || '[]')))
@@ -311,4 +321,5 @@ export function initSubtitles(video, root) {
     if (preference.enabled && (selectStreamTrack || !root.dataset.streamManifest)) selectTrack(preferredTrack())
   }
   video.addEventListener('togglesubtitles', toggleSubtitles)
+  button.addEventListener('click', toggleSubtitles)
 }
