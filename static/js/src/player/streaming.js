@@ -220,18 +220,8 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
         return date && date.getTime()
       } } }))
       player.selectTextTrack(null)
-      let requestedCaption = null
       root.dispatchEvent(new CustomEvent('captiontrackschanged', { detail: {
         tracks: tracks,
-        selectTrack: async function (caption) {
-          requestedCaption = caption
-          if (!caption) { player.selectTextTrack(null); return }
-          let track = player.getTextTracks().find(function (candidate) {
-            return candidate.language === caption.language && candidate.label === caption.label
-          })
-          if (!track) track = await player.addTextTrackAsync(caption.url, caption.language, 'subtitles', 'text/vtt', undefined, caption.label)
-          if (requestedCaption === caption) player.selectTextTrack(track)
-        },
       } }))
     }
     async function renewSource() {

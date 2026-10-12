@@ -19,7 +19,6 @@ export function initSubtitles(video, root) {
   } catch (_) {}
   let tracks = []
   let selected = null
-  let selectStreamTrack = null
   let catalogueLoaded = !!root.dataset.streamManifest
   let loadingCatalogue = false
   let subtitleOverlay = null
@@ -213,10 +212,6 @@ export function initSubtitles(video, root) {
     renderMenu()
     renderSubtitleOverlay()
     try {
-      if (selectStreamTrack) {
-        await selectStreamTrack(track)
-        return
-      }
       if (!track) return
       const response = await fetch(track.url, { credentials: 'same-origin' })
       if (!response.ok) throw new Error('caption download failed')
@@ -245,10 +240,8 @@ export function initSubtitles(video, root) {
       if (a.automatic !== b.automatic) return a.automatic ? 1 : -1
       return a.language.localeCompare(b.language) || a.label.localeCompare(b.label)
     })
-    if (selectStreamTrack || !root.dataset.streamManifest) {
-      const next = preference.enabled ? preferredTrack() : null
-      if ((next && (!selected || next.url !== selected.url)) || (!next && selected)) selectTrack(next)
-    }
+    const next = preference.enabled ? preferredTrack() : null
+    if ((next && (!selected || next.url !== selected.url)) || (!next && selected)) selectTrack(next)
     renderMenu()
   }
 
@@ -268,8 +261,9 @@ export function initSubtitles(video, root) {
   })
   root.addEventListener('captiontrackschanged', function (event) {
     catalogueLoaded = !event.detail.refresh
-    selectStreamTrack = event.detail.selectTrack || null
     selected = null
+    subtitleCues = []
+    renderSubtitleOverlay()
     updateTracks(sourceTracks(event.detail.tracks))
   })
   async function loadCatalogue() {
@@ -318,7 +312,7 @@ export function initSubtitles(video, root) {
     savePreference()
     if (!preference.enabled) { selectTrack(null); return }
     if (!tracks.length) await loadCatalogue()
-    if (preference.enabled && (selectStreamTrack || !root.dataset.streamManifest)) selectTrack(preferredTrack())
+    if (preference.enabled) selectTrack(preferredTrack())
   }
   video.addEventListener('togglesubtitles', toggleSubtitles)
   button.addEventListener('click', toggleSubtitles)
