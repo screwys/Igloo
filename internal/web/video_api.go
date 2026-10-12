@@ -28,6 +28,7 @@ func (s *Server) registerVideoAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/videos/{videoID}/progress", s.handleVideoProgressGet)
 	mux.HandleFunc("POST /api/videos/{videoID}/progress", s.handleVideoProgressPost)
 	mux.HandleFunc("GET /api/videos/{videoID}/comments", s.handleVideoComments)
+	mux.HandleFunc("GET /api/videos/{videoID}/channel-avatar", s.handlePlayerChannelAvatar)
 	mux.HandleFunc("POST /api/videos/{videoID}/comments/refresh", s.handleVideoCommentsRefresh)
 	mux.HandleFunc("GET /api/videos/{videoID}/segments", s.handleVideoSegments)
 	mux.HandleFunc("GET /api/videos/{videoID}/subtitles", s.handleVideoSubtitlesList)
@@ -471,8 +472,39 @@ func (s *Server) handleVideoProgressPost(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (s *Server) handlePlayerChannelAvatar(w http.ResponseWriter, r *http.Request) {
+	video, err := s.db.GetVideo(r.PathValue("videoID"))
+	if err != nil || video == nil {
+		http.NotFound(w, r)
+		return
+	}
+	pending := false
+	if s.resolveAvatarPath(video.ChannelID) == "" {
+		job, err := s.db.GetProfileJob(video.ChannelID)
+		if err != nil {
+			http.Error(w, "profile lookup failed", http.StatusInternalServerError)
+			return
+		}
+		pending = job != nil && job.RequestedRevision > job.CompletedRevision
+	} else {
+		video.AvatarURL = "/api/media/avatar/" + video.ChannelID
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = components.PlayerChannelAvatar(*video, pending).Render(r.Context(), w)
+}
+
 func (s *Server) handleVideoComments(w http.ResponseWriter, r *http.Request) {
 	videoID := r.PathValue("videoID")
+	pending := false
+	if r.URL.Query().Get("fmt") == "player" {
+		var err error
+		pending, err = s.db.VideoMetadataRefreshPending(videoID)
+		if err != nil {
+			http.Error(w, "metadata lookup failed", http.StatusInternalServerError)
+			return
+		}
+	}
 
 	limit := 100
 	if r.URL.Query().Get("all") != "" {
@@ -486,8 +518,9 @@ func (s *Server) handleVideoComments(w http.ResponseWriter, r *http.Request) {
 	comments, err := s.db.GetComments(videoID, limit)
 	if err != nil {
 		slog.Error("GetComments", "video", videoID, "err", err)
-		if r.URL.Query().Get("fmt") == "html" {
+		if r.URL.Query().Get("fmt") == "html" || r.URL.Query().Get("fmt") == "player" {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusInternalServerError)
 			_ = components.PlayerComments(s.pageProps(w, r), nil, "").Render(r.Context(), w)
 			return
 		}
@@ -499,12 +532,17 @@ func (s *Server) handleVideoComments(w http.ResponseWriter, r *http.Request) {
 	}
 	s.projectCommentAuthorAvatars(comments)
 
-	if r.URL.Query().Get("fmt") == "html" {
+	if r.URL.Query().Get("fmt") == "html" || r.URL.Query().Get("fmt") == "player" {
 		creatorAuthorID := ""
 		if video, _ := s.db.GetVideo(videoID); video != nil {
 			creatorAuthorID = components.CommentCreatorAuthorID(video.ChannelID)
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		if r.URL.Query().Get("fmt") == "player" {
+			_ = components.PlayerCommentsList(s.pageProps(w, r), videoID, comments, creatorAuthorID, pending).Render(r.Context(), w)
+			return
+		}
 		_ = components.PlayerComments(s.pageProps(w, r), comments, creatorAuthorID).Render(r.Context(), w)
 		return
 	}

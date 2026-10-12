@@ -30,6 +30,16 @@ type VideoMetadataRefreshResult struct {
 	CommentCount *int64
 }
 
+func (db *DB) VideoMetadataRefreshPending(videoID string) (bool, error) {
+	var pending bool
+	err := db.reader().QueryRow(`SELECT EXISTS (
+		SELECT 1 FROM video_metadata_jobs
+		WHERE video_id = $1 AND status IN ('pending', 'processing')
+		  AND checked_at_ms < requested_at_ms
+	)`, videoID).Scan(&pending)
+	return pending, err
+}
+
 func (db *DB) QueueVideoMetadataJob(videoID string, nowMs int64) error {
 	if videoID == "" {
 		return fmt.Errorf("video id is empty")

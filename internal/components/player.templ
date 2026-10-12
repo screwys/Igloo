@@ -167,10 +167,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							data-title-toggle-label={ L(p, "player_toggle_title", "Toggle video title") }
 						>{ p.Prefs.VideoTitle(video) }</h2>
 						<div class="channel-name">
-							<span class="player-channel-avatar-wrap" data-profile-channel-id={ video.ChannelID } aria-hidden="true">
-								<img class="player-channel-avatar" src={ videoAvatarURL(video) } alt="" onload="window.MpaSiteBase&&window.MpaSiteBase.avatarLoad(this)" onerror="if(window.MpaSiteBase&&window.MpaSiteBase.avatarError(this))return; this.style.display='none'; this.nextElementSibling.style.display='inline-flex';"/>
-								<span class="player-channel-avatar-fallback" style="display:none;">{ channelInitial(video) }</span>
-							</span>
+							@PlayerChannelAvatar(video, p.StreamManifestURL != "" && video.AvatarURL == "")
 							<a class="channel-link" href={ templ.SafeURL("/channels/" + video.ChannelID) }>{ videoChannelName(video) }</a>
 							if video.ChannelID != "" {
 								<div class="player-channel-inline-actions" data-channel-inline-actions>
@@ -253,15 +250,7 @@ templ PlayerPage(p PageProps, video model.Video, comments []model.Comment, moreF
 							hx-disabled-elt="this"
 							>@MaterialIcon("Refresh", "")</button>
 					</div>
-					<div
-						id="player-comments-list"
-						style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.75rem;"
-						hx-get={ "/api/videos/" + video.VideoID + "/comments?fmt=html&all=1" }
-						hx-trigger="load"
-						hx-swap="innerHTML"
-					>
-						<div class="video-card" style="display:block; padding:0.75rem;">{ L(p, "status_loading_comments", "Loading comments...") }</div>
-					</div>
+					@PlayerCommentsList(p, video.VideoID, comments, CommentCreatorAuthorID(video.ChannelID), true)
 					<noscript>
 						if len(comments) > 0 {
 							<div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.75rem;">
@@ -375,6 +364,26 @@ templ PlayerStarButton(p PageProps, channelID string, isStarred bool) {
 			@MaterialIcon("StarBorder", "")
 		}
 	</button>
+}
+
+templ PlayerChannelAvatar(video model.Video, pending bool) {
+	<span
+		class="player-channel-avatar-wrap"
+		data-profile-channel-id={ video.ChannelID }
+		aria-hidden="true"
+		if pending {
+			hx-get={ "/api/videos/" + video.VideoID + "/channel-avatar" }
+			hx-trigger="load delay:2s"
+			hx-swap="outerHTML"
+		}
+	>
+		if video.AvatarURL != "" {
+			<img class="player-channel-avatar" src={ video.AvatarURL } alt="" onload="window.MpaSiteBase&&window.MpaSiteBase.avatarLoad(this)" onerror="if(window.MpaSiteBase&&window.MpaSiteBase.avatarError(this))return; this.style.display='none'; this.nextElementSibling.style.display='inline-flex';"/>
+			<span class="player-channel-avatar-fallback" style="display:none;">{ channelInitial(video) }</span>
+		} else {
+			<span class="player-channel-avatar-fallback">{ channelInitial(video) }</span>
+		}
+	</span>
 }
 
 func playerStarBtnClass(isStarred bool) string {

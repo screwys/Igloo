@@ -6,6 +6,24 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
+templ PlayerCommentsList(p PageProps, videoID string, comments []model.Comment, creatorAuthorID string, pending bool) {
+	<div
+		id="player-comments-list"
+		style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.75rem;"
+		hx-get={ "/api/videos/" + videoID + "/comments?fmt=player&all=1" }
+		if pending {
+			hx-trigger="load delay:2s"
+		}
+		hx-swap="outerHTML"
+	>
+		if pending && len(comments) == 0 {
+			<div class="video-card" style="display:block; padding:0.75rem;">{ L(p, "status_loading_comments", "Loading comments...") }</div>
+		} else {
+			@PlayerComments(p, comments, creatorAuthorID)
+		}
+	</div>
+}
+
 // PlayerComments renders the full comments list, including empty-state message.
 // The caller owns the outer container (hx-target).
 templ PlayerComments(p PageProps, comments []model.Comment, creatorAuthorID string) {

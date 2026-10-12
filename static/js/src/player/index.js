@@ -38,8 +38,7 @@ if (root && video) {
   const volumeRange = doc.getElementById('player-volume-range')
   const volumeControl = root.querySelector('.dashboard-volume-control')
   const deleteBtn = doc.getElementById('player-delete-btn')
-  const channelUnsubBtn = doc.getElementById('player-channel-unsub-btn')
-  const channelSubBtn = doc.getElementById('player-channel-sub-btn')
+  const channelFollowBtn = doc.getElementById('player-channel-unsub-btn') || doc.getElementById('player-channel-sub-btn')
 
   const descCard = doc.getElementById('player-description-card')
   const descText = doc.getElementById('player-description-text')
@@ -793,76 +792,63 @@ if (root && video) {
     })
 
     // Star button is HTMX-driven via PlayerStarButton templ component.
-    if (channelSubBtn && channelId) {
-      channelSubBtn.addEventListener('click', function () {
-        if (channelSubBtn.disabled) return
-        channelSubBtn.disabled = true
-        animateFeedActionButton(channelSubBtn, false)
+    if (!channelFollowBtn || !channelId) return
+    channelFollowBtn.addEventListener('click', function () {
+      if (channelFollowBtn.disabled) return
+      if (channelFollowBtn.id === 'player-channel-sub-btn') {
+        channelFollowBtn.disabled = true
+        animateFeedActionButton(channelFollowBtn, false)
         apiFetch('/api/channels/' + encodeURIComponent(channelId) + '/subscribe', { method: 'POST' })
           .then(function () {
             showToast(t('player_subscribed_to_channel', 'Subscribed to channel'))
-            var svg = channelSubBtn.querySelector('svg')
-            if (svg) {
-              while (svg.firstChild) svg.removeChild(svg.firstChild)
-              var ns = 'http://www.w3.org/2000/svg'
-              var l1 = doc.createElementNS(ns, 'line')
-              l1.setAttribute('x1', '18'); l1.setAttribute('y1', '6')
-              l1.setAttribute('x2', '6'); l1.setAttribute('y2', '18')
-              var l2 = doc.createElementNS(ns, 'line')
-              l2.setAttribute('x1', '6'); l2.setAttribute('y1', '6')
-              l2.setAttribute('x2', '18'); l2.setAttribute('y2', '18')
-              svg.appendChild(l1)
-              svg.appendChild(l2)
-            }
-            channelSubBtn.title = t('action_unsubscribe_channel', 'Unsubscribe channel')
-            channelSubBtn.setAttribute('aria-label', channelSubBtn.title)
+            setSvgContent(channelFollowBtn, materialIconMarkup('PersonRemove'))
+            channelFollowBtn.id = 'player-channel-unsub-btn'
+            channelFollowBtn.title = t('action_unsubscribe_channel', 'Unsubscribe channel')
+            channelFollowBtn.setAttribute('aria-label', channelFollowBtn.title)
+            doc.body.dispatchEvent(new CustomEvent('followChanged', { detail: { channelId } }))
           })
           .catch(function () {
             showToast(t('player_subscribe_failed', 'Failed to subscribe'))
           })
           .finally(function () {
-            channelSubBtn.disabled = false
+            channelFollowBtn.disabled = false
           })
-      })
-    }
+        return
+      }
 
-    if (channelUnsubBtn && channelId) {
-      channelUnsubBtn.addEventListener('click', function () {
-        if (channelUnsubBtn.disabled) return
-        var channelLink = root.querySelector('.channel-link')
-        var displayName = (channelLink && channelLink.textContent || '').trim() || channelId
-        var doUnsub = function () {
-          channelUnsubBtn.disabled = true
-          animateFeedActionButton(channelUnsubBtn, true)
-          channelUnsubBtn.style.visibility = 'hidden'
-          apiFetch('/api/mutations/follow', {
-            method: 'POST',
-            body: JSON.stringify({ channel_id: channelId, action: 'clear', updated_at_ms: Date.now() })
-          })
-            .then(function (payload) {
-              showToast((payload && payload.message) || t('player_channel_unsubscribed', 'Channel unsubscribed'))
-              window.location.assign(channelPlatform === 'youtube' ? '/videos' : '/channels')
-            })
-            .catch(function (err) {
-              channelUnsubBtn.style.visibility = ''
-              const msg = (err && err.payload && err.payload.error) ? err.payload.error : t('player_unsubscribe_failed', 'Failed to unsubscribe')
-              showToast(msg)
-            })
-            .finally(function () {
-              channelUnsubBtn.disabled = false
-            })
-        }
-        askConfirm({
-          title: t('action_unsubscribe', 'Unsubscribe'),
-          body: tf('confirm_unfollow_channel_body', 'Unfollow %1$s?', displayName),
-          confirmLabel: t('action_unfollow', 'Unfollow'),
-          cancelLabel: t('action_cancel', 'Cancel'),
-          danger: true,
-        }).then(function (confirmed) {
-          if (confirmed) doUnsub()
+      var channelLink = root.querySelector('.channel-link')
+      var displayName = (channelLink && channelLink.textContent || '').trim() || channelId
+      var doUnsub = function () {
+        channelFollowBtn.disabled = true
+        animateFeedActionButton(channelFollowBtn, true)
+        channelFollowBtn.style.visibility = 'hidden'
+        apiFetch('/api/mutations/follow', {
+          method: 'POST',
+          body: JSON.stringify({ channel_id: channelId, action: 'clear', updated_at_ms: Date.now() })
         })
+          .then(function (payload) {
+            showToast((payload && payload.message) || t('player_channel_unsubscribed', 'Channel unsubscribed'))
+            window.location.assign(channelPlatform === 'youtube' ? '/videos' : '/channels')
+          })
+          .catch(function (err) {
+            channelFollowBtn.style.visibility = ''
+            const msg = (err && err.payload && err.payload.error) ? err.payload.error : t('player_unsubscribe_failed', 'Failed to unsubscribe')
+            showToast(msg)
+          })
+          .finally(function () {
+            channelFollowBtn.disabled = false
+          })
+      }
+      askConfirm({
+        title: t('action_unsubscribe', 'Unsubscribe'),
+        body: tf('confirm_unfollow_channel_body', 'Unfollow %1$s?', displayName),
+        confirmLabel: t('action_unfollow', 'Unfollow'),
+        cancelLabel: t('action_cancel', 'Cancel'),
+        danger: true,
+      }).then(function (confirmed) {
+        if (confirmed) doUnsub()
       })
-    }
+    })
   }
 
   // --- UI: date hover, description, seek links, video stats ---
@@ -918,7 +904,7 @@ if (root && video) {
   }
 
   function setupCommentTranslation() {
-    const list = doc.getElementById('player-comments-list')
+    const list = doc.getElementById('player-comments-section')
     if (!list) return
     const targetLang = ((doc.querySelector('meta[name="translate-target"]') || {}).content || 'en').trim() || 'en'
 

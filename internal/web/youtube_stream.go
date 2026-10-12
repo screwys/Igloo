@@ -33,6 +33,8 @@ type youtubeStreamResource struct {
 	template  bool
 	templates []string
 	children  []string
+	retainFor time.Duration
+	removedAt time.Time
 }
 
 type youtubeStreamSession struct {
@@ -244,7 +246,7 @@ func (s *Server) youtubeStream(id string) *youtubeStreamSession {
 func (s *Server) handleYouTubeStreamManifest(w http.ResponseWriter, r *http.Request) {
 	session := s.youtubeStream(r.PathValue("sessionID"))
 	if session == nil {
-		http.NotFound(w, r)
+		http.Error(w, "Stream session expired", http.StatusGone)
 		return
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
@@ -263,7 +265,7 @@ func (s *Server) handleYouTubeStreamManifest(w http.ResponseWriter, r *http.Requ
 func (s *Server) handleYouTubeStreamMedia(w http.ResponseWriter, r *http.Request) {
 	session := s.youtubeStream(r.PathValue("sessionID"))
 	if session == nil {
-		http.NotFound(w, r)
+		http.Error(w, "Stream session expired", http.StatusGone)
 		return
 	}
 	session.serveResource(w, r, r.PathValue("resourceID"), r.PathValue("rest"))
@@ -307,8 +309,11 @@ func (session *youtubeStreamSession) registerResource(resource youtubeStreamReso
 		session.nextResourceID++
 		session.resourceIDs[key] = id
 		session.resources[id] = resource
-	} else if old := session.resources[id]; resource.chunkSize < old.chunkSize {
-		old.chunkSize = resource.chunkSize
+	} else {
+		old := session.resources[id]
+		old.chunkSize = min(old.chunkSize, resource.chunkSize)
+		old.retainFor = max(old.retainFor, resource.retainFor)
+		old.removedAt = time.Time{}
 		session.resources[id] = old
 	}
 	return id
@@ -881,17 +886,35 @@ func (session *youtubeStreamSession) copyResourceRange(writer io.Writer, ctx con
 }
 
 func (session *youtubeStreamSession) rewriteHLS(data []byte, base *url.URL, headers map[string]string, chunkSize int64) ([]byte, []string, error) {
+	lines := strings.Split(string(data), "\n")
+	var playlistDuration, longestSegment time.Duration
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "#EXTINF:") {
+			continue
+		}
+		value, _, _ := strings.Cut(strings.TrimPrefix(line, "#EXTINF:"), ",")
+		seconds, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return nil, nil, err
+		}
+		duration := time.Duration(seconds * float64(time.Second))
+		playlistDuration += duration
+		longestSegment = max(longestSegment, duration)
+	}
 	var children []string
 	add := func(raw string) (string, error) {
 		reference, err := url.Parse(raw)
 		if err != nil {
 			return "", err
 		}
-		id := session.registerResource(youtubeStreamResource{url: base.ResolveReference(reference).String(), headers: headers, chunkSize: chunkSize})
+		id := session.registerResource(youtubeStreamResource{
+			url: base.ResolveReference(reference).String(), headers: headers, chunkSize: chunkSize,
+			retainFor: playlistDuration + longestSegment,
+		})
 		children = append(children, id)
 		return session.resourcePath(id), nil
 	}
-	lines := strings.Split(string(data), "\n")
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
@@ -1024,6 +1047,9 @@ func (session *youtubeStreamSession) replaceManifestChildren(id string, children
 	if id != "" {
 		resource := session.resources[id]
 		resource.children = children
+		for _, child := range children {
+			resource.retainFor = max(resource.retainFor, session.resources[child].retainFor)
+		}
 		session.resources[id] = resource
 	}
 	if session.rootResource == "" {
@@ -1044,8 +1070,19 @@ func (session *youtubeStreamSession) replaceManifestChildren(id string, children
 	for _, track := range session.textTracks {
 		visit(path.Base(strings.TrimSuffix(track.URL, "/")))
 	}
+	now := time.Now()
 	for id, resource := range session.resources {
-		if !live[id] {
+		if live[id] {
+			resource.removedAt = time.Time{}
+			session.resources[id] = resource
+			continue
+		}
+		// HLS keeps removed segments available for a playlist window plus a segment.
+		if resource.removedAt.IsZero() {
+			resource.removedAt = now
+			session.resources[id] = resource
+		}
+		if now.Sub(resource.removedAt) >= resource.retainFor {
 			delete(session.resources, id)
 			delete(session.resourceIDs, streamResourceKey(resource))
 		}

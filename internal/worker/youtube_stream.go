@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/screwys/igloo/internal/db"
 	"github.com/screwys/igloo/internal/download"
@@ -47,6 +48,24 @@ func (m *Manager) ResolveYouTubePlayback(ctx context.Context, videoID string) (*
 		PublishedAtMs: extractPublishedAt(info.Metadata), MetadataJSON: string(metadata),
 	}); err != nil {
 		return nil, err
+	}
+	if channelID != "" {
+		profile, err := m.db.GetChannelProfile(channelID)
+		if err != nil {
+			return nil, err
+		}
+		if profile == nil || profile.FetchedAt == nil {
+			job, err := m.db.GetProfileJob(channelID)
+			if err != nil {
+				return nil, err
+			}
+			if job == nil || job.RequestedRevision == job.CompletedRevision {
+				if err := m.db.RequestProfileJob(channelID, time.Now().UnixMilli()); err != nil {
+					return nil, err
+				}
+			}
+			m.KickProfileJobs()
+		}
 	}
 	if info.Thumbnail != "" {
 		if err := m.db.DeclareAsset(db.Asset{

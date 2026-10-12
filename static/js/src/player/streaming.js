@@ -225,14 +225,14 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
       } }))
     }
     async function renewSource() {
+      const fresh = await apiFetch('/api/youtube/' + encodeURIComponent(root.dataset.videoId) + '/stream', { method: 'POST', body: JSON.stringify({ prefer_indexed: preferIndexed, force_fresh: true }) })
+      if (!fresh || !fresh.success || !fresh.media_url && !fresh.manifest_url) throw new Error('stream renewal failed')
       const position = loaded ? video.currentTime : resumePosition || 0
       let rate = video.playbackRate
       const selectedQuality = player.getVariantTracks().find(function (track) { return track.id === manualTrack })
       loaded = false
       if (quality) quality.disabled = true
       root.dispatchEvent(new Event('playersettingsclose'))
-      const fresh = await apiFetch('/api/youtube/' + encodeURIComponent(root.dataset.videoId) + '/stream', { method: 'POST', body: JSON.stringify({ prefer_indexed: preferIndexed, force_fresh: true }) })
-      if (!fresh || !fresh.success) throw new Error('stream renewal failed')
       if (fresh.media_url) {
         nativePlayback = true
         await player.unload()
@@ -275,7 +275,6 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
         } }))
         return
       }
-      if (!fresh.manifest_url) throw new Error('stream renewal failed')
       root.dataset.streamManifest = fresh.manifest_url
       root.dataset.streamManifestType = fresh.manifest_type
       root.dataset.streamSessionId = fresh.session_id
@@ -312,7 +311,7 @@ export async function initStreaming(video, root, autoplay, resumePosition) {
     function sourceExpired(error) {
       const data = error && error.data || []
       const httpStatus = Number(data[1])
-      return error && error.code === shaka.util.Error.Code.BAD_HTTP_STATUS && ([403, 410].includes(httpStatus) || httpStatus === 404 && String(data[0]).includes('/api/youtube/streams/'))
+      return error && error.code === shaka.util.Error.Code.BAD_HTTP_STATUS && [403, 410].includes(httpStatus)
     }
     handleFailure = async function (error) {
       if (nativePlayback) return
