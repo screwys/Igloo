@@ -988,6 +988,8 @@ func (s *Server) handlePagePlayer(w http.ResponseWriter, r *http.Request) {
 	hasLocalAvatar := s.resolveAvatarPath(video.ChannelID) != ""
 	if hasLocalAvatar {
 		video.AvatarURL = "/api/media/avatar/" + video.ChannelID
+	} else {
+		video.AvatarURL = ""
 	}
 
 	bookmarked, catID, _ := s.db.IsBookmarked(videoID)
