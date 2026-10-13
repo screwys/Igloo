@@ -9627,7 +9627,7 @@ body.shorts-mode .sidebar {
 }
 
 .feed-layout:has(> .feed-lives) {
-    grid-template-columns: 280px minmax(0, 1fr) 280px;
+    grid-template-columns: 280px minmax(0, 1fr) clamp(320px, 25vw, 400px);
 }
 
 .feed-layout:has(> .feed-lives) > .feed-list {
@@ -9656,7 +9656,7 @@ body.shorts-mode .sidebar {
     font-size: 1rem;
 }
 
-.feed-lives .story-channel-copy {
+.feed-live-row .story-channel-copy {
     min-width: 0;
 }
 
@@ -9664,29 +9664,29 @@ body.shorts-mode .sidebar {
     grid-template-columns: 50px minmax(0, 1fr);
 }
 
-.feed-lives .shorts-live-badge {
+.feed-live-row .shorts-live-badge {
     text-transform: uppercase;
 }
 
-.feed-lives .feed-live-meta,
-.feed-lives .feed-live-viewers {
+.feed-live-row .feed-live-meta,
+.feed-live-row .feed-live-viewers {
     display: flex;
     align-items: center;
     gap: 0.3rem;
 }
 
-.feed-lives .feed-live-meta .feed-author-handle {
+.feed-live-row .feed-live-meta .feed-author-handle {
     min-width: 0;
     font-size: inherit;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.feed-lives .feed-live-viewers {
+.feed-live-row .feed-live-viewers {
     flex-shrink: 0;
 }
 
-.feed-lives .feed-live-viewers .material-icon {
+.feed-live-row .feed-live-viewers .material-icon {
     width: 14px;
     height: 14px;
 }
@@ -9695,11 +9695,16 @@ body.shorts-mode .sidebar {
     border: 3px solid var(--accent-primary);
 }
 
+.feed-live-active,
+.feed-live-row {
+    min-width: 0;
+}
+
 .feed-live-active:empty {
     display: none;
 }
 
-.feed-lives .story-channel-copy {
+.feed-live-row .story-channel-copy {
     appearance: none;
     border: 0;
     padding: 0;
@@ -9722,13 +9727,18 @@ body.shorts-mode .sidebar {
 }
 
 .feed-space-active > .story-channel-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    display: flex;
     gap: 0.5rem;
+}
+
+.feed-space-active .story-channel-copy {
+    flex: 1;
+    min-width: 5rem;
 }
 
 .feed-space-active .feed-space-avatars {
     position: relative;
+    flex: 0 0 auto;
     padding: 3px;
 }
 
@@ -9760,7 +9770,7 @@ body.shorts-mode .sidebar {
 
 .feed-space-speakers {
     display: flex;
-    flex: 1;
+    flex: 0 0 auto;
     min-width: 0;
     align-items: center;
     overflow: visible;
@@ -9951,7 +9961,7 @@ body.shorts-mode .sidebar {
 
     .feed-lives .feed-live-row,
     .feed-lives .feed-live-active {
-        flex: 0 0 260px;
+        flex: 0 0 min(320px, calc(100vw - 2rem));
     }
 
     .feed-lives .story-channel-row {

@@ -145,13 +145,17 @@ export function playSpace(root) {
       return person.dataset.role !== 'host' && person.dataset.identity !== root.dataset.channelId
     })
     participantElements.forEach(function (person) { person.hidden = !compact.includes(person) })
-    const width = speakers.clientWidth
-    if (!width) return
     if (!compact.length) { overflow.hidden = true; return }
+    const headerStyle = getComputedStyle(header)
+    const avatarStyle = getComputedStyle(avatars)
+    const width = header.clientWidth - parseFloat(headerStyle.paddingLeft) - parseFloat(headerStyle.paddingRight)
+      - parseFloat(headerStyle.columnGap) - parseFloat(getComputedStyle(trigger).minWidth)
+      - avatars.firstElementChild.getBoundingClientRect().width
+      - parseFloat(avatarStyle.paddingLeft) - parseFloat(avatarStyle.paddingRight)
     const style = getComputedStyle(compact[0])
     const size = parseFloat(style.width)
     const gap = parseFloat(style.marginLeft)
-    const capacity = Math.floor(width / (size + gap))
+    const capacity = Math.floor(Math.max(0, width) / (size + gap))
     const shown = compact.length <= capacity ? compact.length : Math.max(0, capacity - 1)
     compact.forEach(function (person, index) { person.hidden = index >= shown })
     const remaining = compact.length - shown
@@ -161,7 +165,7 @@ export function playSpace(root) {
     overflow.hidden = !remaining
   }
   const resizeObserver = new ResizeObserver(layoutParticipants)
-  resizeObserver.observe(speakers)
+  resizeObserver.observe(header)
 
   const session = {
     row, url, video, element: stage, sourceDocument: document,
