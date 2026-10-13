@@ -2,6 +2,7 @@ package components
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/screwys/igloo/internal/model"
@@ -542,6 +543,7 @@ templ feedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 				class="feed-media-wrap"
 				data-feed-media
 				data-feed-media-kind="video"
+				data-feed-media-owner-id={ item.TweetID }
 				data-feed-video-kind={ feedMediaPlaybackKind(item.Media[0]) }
 				data-feed-media-stream={ streamURL }
 				if mediaURL != "" {
@@ -571,6 +573,7 @@ templ feedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 			class="feed-media-wrap"
 			data-feed-media
 			data-feed-media-kind="image"
+			data-feed-media-owner-id={ item.TweetID }
 			data-feed-media-url={ mediaURL }
 			role="button"
 			tabindex="0"
@@ -589,7 +592,7 @@ templ feedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 		@feedMediaGrid(p, readyMediaCount, feedMediaRowStyle(item.Media, item.MediaSlideURLs)) {
 				for i, m := range item.Media {
 					if feedMediaURLAt(item.MediaSlideURLs, i) != "" {
-						@feedMediaTile(p, i, m, mediaCount, item.MediaStreamURL, item.MediaPreviewURL, feedMediaURLAt(item.MediaSlideURLs, i), deferMedia)
+						@feedMediaTile(p, item.TweetID, i, m, mediaCount, item.MediaStreamURL, item.MediaPreviewURL, feedMediaURLAt(item.MediaSlideURLs, i), deferMedia)
 					}
 				}
 		}
@@ -608,7 +611,7 @@ templ feedMediaGrid(p PageProps, count int, rowStyle string) {
 	</div>
 }
 
-templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, streamURL string, previewURL string, slideURL string, deferMedia bool) {
+templ feedMediaTile(p PageProps, ownerID string, index int, m model.MediaRef, mediaCount int, streamURL string, previewURL string, slideURL string, deferMedia bool) {
 	{{ ariaLabel := fmt.Sprintf(L(p, "feed_open_media_index", "Open media %d"), index+1) }}
 	if feedMediaRefIsVideo(m) {
 		{{ tileStreamURL := streamURL }}
@@ -623,6 +626,8 @@ templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, st
 			class="feed-media-tile"
 			data-feed-media
 			data-feed-media-kind="video"
+			data-feed-media-owner-id={ ownerID }
+			data-feed-media-index={ strconv.Itoa(index) }
 			data-feed-video-kind={ feedMediaPlaybackKind(m) }
 			data-feed-media-url={ slideURL }
 			if tileStreamURL != "" {
@@ -662,6 +667,8 @@ templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, st
 			type="button"
 			data-feed-media
 			data-feed-media-kind="image"
+			data-feed-media-owner-id={ ownerID }
+			data-feed-media-index={ strconv.Itoa(index) }
 			data-feed-media-url={ slideURL }
 			aria-label={ ariaLabel }
 		>
@@ -803,6 +810,7 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMed
 			data-feed-media-kind="video"
 			data-feed-video-kind={ feedMediaPlaybackKind(item.QuoteMedia[0]) }
 			data-feed-media-stream={ item.QuoteMediaStreamURL }
+			data-feed-media-owner-id={ item.QuoteTweetID }
 			role="button"
 			tabindex="0"
 			aria-label={ L(p, "action_open_media", "Open media") }
@@ -820,6 +828,7 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMed
 			class="feed-media-wrap"
 			data-feed-media
 			data-feed-media-kind="image"
+			data-feed-media-owner-id={ item.QuoteTweetID }
 			data-feed-media-url={ mediaURL }
 			role="button"
 			tabindex="0"
@@ -838,7 +847,7 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMed
 		@feedMediaGrid(p, readyMediaCount, feedMediaRowStyle(item.QuoteMedia, item.QuoteMediaSlideURLs)) {
 				for i, qm := range item.QuoteMedia {
 					if feedMediaURLAt(item.QuoteMediaSlideURLs, i) != "" {
-						@feedQuoteMediaTile(p, i, qm, qMediaCount, item.QuoteMediaStreamURL, item.QuoteMediaPreviewURL, feedMediaURLAt(item.QuoteMediaSlideURLs, i), deferMedia)
+						@feedQuoteMediaTile(p, item.QuoteTweetID, i, qm, qMediaCount, item.QuoteMediaStreamURL, item.QuoteMediaPreviewURL, feedMediaURLAt(item.QuoteMediaSlideURLs, i), deferMedia)
 					}
 				}
 		}
@@ -847,7 +856,7 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMed
 	}
 }
 
-templ feedQuoteMediaTile(p PageProps, index int, qm model.MediaRef, qMediaCount int, streamURL string, previewURL string, slideURL string, deferMedia bool) {
+templ feedQuoteMediaTile(p PageProps, ownerID string, index int, qm model.MediaRef, qMediaCount int, streamURL string, previewURL string, slideURL string, deferMedia bool) {
 	{{ ariaLabel := fmt.Sprintf(L(p, "feed_open_media_index", "Open media %d"), index+1) }}
 	if feedMediaRefIsVideo(qm) {
 		{{ tileStreamURL := streamURL }}
@@ -862,6 +871,8 @@ templ feedQuoteMediaTile(p PageProps, index int, qm model.MediaRef, qMediaCount 
 			class="feed-media-tile"
 			data-feed-media
 			data-feed-media-kind="video"
+			data-feed-media-owner-id={ ownerID }
+			data-feed-media-index={ strconv.Itoa(index) }
 			data-feed-video-kind={ feedMediaPlaybackKind(qm) }
 			data-feed-media-url={ slideURL }
 			if tileStreamURL != "" {
@@ -901,6 +912,8 @@ templ feedQuoteMediaTile(p PageProps, index int, qm model.MediaRef, qMediaCount 
 			type="button"
 			data-feed-media
 			data-feed-media-kind="image"
+			data-feed-media-owner-id={ ownerID }
+			data-feed-media-index={ strconv.Itoa(index) }
 			data-feed-media-url={ slideURL }
 			aria-label={ ariaLabel }
 		>

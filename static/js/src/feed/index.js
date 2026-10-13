@@ -11,6 +11,7 @@ import { handleTranslateAction, getTranslateObserver, queueBackgroundTranslation
 import { initRetweetersDialog, applyRepostMuteFilter } from './retweeters.js'
 import { initFeedSeenTracking } from './seen.js'
 import { initMediaRows } from './media-row.js'
+import { retryFeedMedia } from './media-retry.js'
 
 function observeTranslateCards(scope, translateObserver) {
   queueBackgroundTranslations(scope)
@@ -204,21 +205,27 @@ function initThreadAutoFetch(route) {
   function isCurrent() {
     return document.contains(route) && href === window.location.pathname + window.location.search
   }
+  function loadPartial() {
+    if (!isCurrent()) return null
+    var back = route.querySelector('[data-thread-back-link]')
+    return fetch(partialThreadURL(href, back && back.getAttribute('href')), {
+      credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' }
+    }).then(function (response) {
+      if (!response.ok) throw new Error('thread partial failed')
+      return response.text()
+    })
+  }
   if (status) {
     status.hidden = false
     status.setAttribute('data-thread-fetch-state', 'loading')
     status.textContent = t('feed_thread_fetching', 'Fetching replies and quote-posts…')
   }
+  var captureError = null
   return apiFetch('/api/thread/' + encodeURIComponent(tweetID) + '/refresh', { method: 'POST' })
-    .then(function () {
-      if (!isCurrent()) return null
-      var back = route.querySelector('[data-thread-back-link]')
-      return fetch(partialThreadURL(href, back && back.getAttribute('href')), {
-        credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' }
-      }).then(function (response) {
-        if (!response.ok) throw new Error('thread partial failed')
-        return response.text()
-      })
+    .then(loadPartial, function (error) {
+      if (!error.payload || !error.payload.fetched) throw error
+      captureError = error
+      return loadPartial()
     })
     .then(function (html) {
       if (html === null || !isCurrent()) return
@@ -233,6 +240,7 @@ function initThreadAutoFetch(route) {
       _focusedFeedCard = null
       initFeedCards(list)
       if (window.htmx) window.htmx.process(list)
+      if (captureError) throw captureError
       if (status) status.hidden = true
     })
     .catch(function () {
@@ -1250,6 +1258,7 @@ document.addEventListener('click', function (event) {
     openMediaOverlay(mediaTrigger, mediaTrigger)
     return
   }
+  retryFeedMedia(mediaTrigger)
   var mediaKind = String(mediaTrigger.getAttribute('data-feed-media-kind') || '').trim().toLowerCase()
   if (mediaKind === 'video') {
     var isInGrid = mediaTrigger.closest && mediaTrigger.closest('.feed-media-wrap-grid')
@@ -1269,6 +1278,7 @@ document.addEventListener('keydown', function (event) {
   if (event.key !== 'Enter' && event.key !== ' ') return
   event.preventDefault()
   clearPendingInlineVideoClick(mediaTrigger)
+  retryFeedMedia(mediaTrigger)
   openMediaOverlay(mediaTrigger, mediaTrigger)
 })
 

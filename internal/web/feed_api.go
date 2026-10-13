@@ -28,6 +28,7 @@ func (s *Server) registerFeedAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/feed/ingest/pause", s.handleFeedIngestPause)
 	mux.HandleFunc("POST /api/feed/ingest/trigger", s.handleFeedIngestTrigger)
 	mux.HandleFunc("POST /api/feed/media/retry", s.handleFeedMediaRetry)
+	mux.HandleFunc("GET /api/feed/media/{tweetID}", s.handleFeedMediaStatus)
 	mux.HandleFunc("POST /api/feed/interaction", s.handleFeedInteraction)
 	mux.HandleFunc("GET /api/feed/x", s.handleFeedX)
 	mux.HandleFunc("GET /api/feed/liked", s.handleFeedLikedList)
@@ -328,6 +329,26 @@ func (s *Server) handleFeedMediaRetry(w http.ResponseWriter, r *http.Request) {
 	}
 	s.workers.KickMediaWork()
 	writeJSON(w, 200, map[string]any{"success": true})
+}
+
+func (s *Server) handleFeedMediaStatus(w http.ResponseWriter, r *http.Request) {
+	tweetID := r.PathValue("tweetID")
+	if !xfeed.ValidTweetID(tweetID) {
+		writeJSONError(w, http.StatusBadRequest, "invalid_tweet_id", "A valid tweet ID is required")
+		return
+	}
+	availability, err := s.db.GetTweetMediaAssetAvailability([]string{tweetID})
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "media_query_failed", err.Error())
+		return
+	}
+	slides := make(map[int]string)
+	for _, file := range s.canonicalAssets(db.AssetOwnerRef{OwnerKind: "tweet", OwnerID: tweetID}, "post_media") {
+		slides[file.asset.MediaIndex] = fmt.Sprintf("/api/media/slide/%s/%d?owner_kind=tweet", tweetID, file.asset.MediaIndex)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true, "pending": availability[tweetID].Pending, "slide_urls": slides,
+	})
 }
 
 func (s *Server) handleFeedInteraction(w http.ResponseWriter, r *http.Request) {

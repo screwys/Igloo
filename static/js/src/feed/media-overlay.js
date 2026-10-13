@@ -14,6 +14,7 @@ import {
 import { bindFeedVideoControls, createFeedVideoControls, handleFeedVideoShortcut } from './video-controls.js'
 import { createLiveChatPanel, initBroadcastChat } from '../player/chat.js'
 import { createXLivePlayback } from '../player/x-live.js'
+import { retryFeedMedia } from './media-retry.js'
 
 // ── Helpers ──
 
@@ -158,7 +159,7 @@ function extractSlidesFromRoot(rootEl) {
         if (img) tUrl = String(img.getAttribute('src') || '').trim()
       }
       var tPlaybackKind = String(tile.getAttribute('data-feed-video-kind') || 'video').trim().toLowerCase()
-      slides.push({ kind: tKind, playbackKind: tPlaybackKind, url: tUrl, streamUrl: tStream, posterUrl: tPoster })
+      slides.push({ kind: tKind, playbackKind: tPlaybackKind, url: tUrl, streamUrl: tStream, posterUrl: tPoster, element: tile })
     })
     return { slides: slides, singleVideo: null }
   }
@@ -183,7 +184,7 @@ function extractSlidesFromRoot(rootEl) {
       if (vidEl) posterUrl = String(vidEl.getAttribute('poster') || '').trim()
     }
     return {
-      slides: [{ kind: 'video', playbackKind: playbackKind, url: '', streamUrl: streamUrl, posterUrl: posterUrl }],
+      slides: [{ kind: 'video', playbackKind: playbackKind, url: '', streamUrl: streamUrl, posterUrl: posterUrl, element: wrap }],
       singleVideo: { streamUrl: streamUrl, posterUrl: posterUrl, playbackKind: playbackKind },
     }
   }
@@ -195,7 +196,7 @@ function extractSlidesFromRoot(rootEl) {
   }
   if (!imgUrl) return { slides: [], singleVideo: null }
   return {
-    slides: [{ kind: 'image', url: imgUrl, streamUrl: '', posterUrl: '' }],
+    slides: [{ kind: 'image', url: imgUrl, streamUrl: '', posterUrl: '', element: wrap }],
     singleVideo: null,
   }
 }
@@ -823,6 +824,11 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
       img.loading = 'eager'
       img.src = urls[currentIndex] || urls[0] || ''
       host.appendChild(img)
+      if (activeSlide && activeSlide.element) {
+        retryFeedMedia(activeSlide.element).then(function (url) {
+          if (url && img.isConnected) img.src = url
+        })
+      }
     }
     const total = media.kind === 'video' ? 1 : (media.kind === 'mixed' && media.slides ? media.slides.length : Math.max(1, (media.urls || []).length))
     if (counter) counter.textContent = total > 1 ? (String(currentIndex + 1) + ' / ' + String(total)) : ''

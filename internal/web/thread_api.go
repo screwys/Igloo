@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/screwys/igloo/internal/feed"
 	"github.com/screwys/igloo/internal/fxtwitter"
@@ -24,16 +25,46 @@ func (s *Server) handleRefreshThread(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusServiceUnavailable, "worker_unavailable", "Thread fetching is unavailable")
 		return
 	}
+	if err := s.retryThreadMedia(tweetID); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "thread_media_retry_failed", err.Error())
+		return
+	}
 	fetched, err := s.workers.RefreshThread(r.Context(), tweetID)
+	mediaErr := s.retryThreadMedia(tweetID)
+	if err == nil {
+		err = mediaErr
+	}
 	if err != nil {
 		status := http.StatusBadGateway
 		if errors.Is(err, fxtwitter.ErrNotFound) {
 			status = http.StatusNotFound
 		}
-		writeJSONError(w, status, "thread_fetch_failed", err.Error())
+		writeJSONEnvelope(w, status, map[string]any{
+			"ok": false, "error_code": "thread_fetch_failed", "error_message": err.Error(), "fetched": fetched,
+		})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "fetched": fetched})
+}
+
+func (s *Server) retryThreadMedia(tweetID string) error {
+	items, err := s.db.GetThreadTree(tweetID)
+	if err != nil {
+		return err
+	}
+	quotes, err := s.db.ListThreadQuotes(tweetID, 20)
+	if err != nil {
+		return err
+	}
+	ownerIDs := []string{tweetID}
+	for _, item := range append(items, quotes...) {
+		ownerIDs = append(ownerIDs, item.TweetID, item.QuoteTweetID)
+	}
+	if _, err := s.db.RequeueXContentAssets(ownerIDs, true, "manual", time.Now().UnixMilli()); err != nil {
+		return err
+	}
+	s.workers.KickMediaWork()
+	return nil
 }
 
 // handleGetThread returns the root tweet and all stored replies for a tweet.

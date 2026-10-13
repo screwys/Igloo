@@ -68,17 +68,19 @@ type Tweet struct {
 
 // Client wraps HTTP + base URL for easy testing.
 type Client struct {
-	BaseURL string
-	HTTP    *http.Client
-	Timeout time.Duration
+	BaseURL       string
+	HTTP          *http.Client
+	Timeout       time.Duration
+	ThreadTimeout time.Duration
 }
 
-// NewClient returns a Client with the production base URL and a 10 s timeout.
+// NewClient gives conversation and quote requests longer than profile lookups.
 func NewClient() *Client {
 	return &Client{
-		BaseURL: DefaultBaseURL,
-		HTTP:    http.DefaultClient,
-		Timeout: 10 * time.Second,
+		BaseURL:       DefaultBaseURL,
+		HTTP:          http.DefaultClient,
+		Timeout:       10 * time.Second,
+		ThreadTimeout: 30 * time.Second,
 	}
 }
 

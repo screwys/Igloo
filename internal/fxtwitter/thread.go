@@ -67,7 +67,11 @@ func threadTweets(raw []*rawTweet) []*Tweet {
 }
 
 func (c *Client) fetchThreadJSON(ctx context.Context, path string, target any) error {
-	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
+	timeout := c.ThreadTimeout
+	if timeout <= 0 {
+		timeout = c.Timeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
 	if err != nil {

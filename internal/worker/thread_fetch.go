@@ -26,7 +26,7 @@ func (m *Manager) RefreshThread(ctx context.Context, tweetID string) (int, error
 	if err != nil {
 		return 0, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, threadFetchBudget)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	fx := fxtwitter.NewClient()
 	if m.replyResolver != nil && m.replyResolver.fx != nil {
