@@ -33,8 +33,8 @@ android {
         // versionCode continues past the legacy v1 install (which was 2) for a monotonic
         // history. Android uses a fresh per-machine debug keystore (AGP default), so installing
         // over v1 needs an explicit uninstall once — the signatures don't match on purpose.
-        versionCode = 51
-        versionName = "4.0.0"
+        versionCode = 52
+        versionName = "4.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
