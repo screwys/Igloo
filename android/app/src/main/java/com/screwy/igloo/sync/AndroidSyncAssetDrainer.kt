@@ -136,19 +136,14 @@ internal class AndroidSyncAssetDrainer(
         return AssetSyncResult(nextAttemptAtMs)
     }
 
-    fun deleteFilesForAssets(
+    suspend fun deleteFilesForAssets(
         assets: List<AndroidSyncAssetEntity>,
-        retainedPaths: List<String>,
     ): AssetFileDeleteStats {
         if (assets.isEmpty()) return AssetFileDeleteStats()
         val root = syncRoot.absoluteFile
         if (!root.exists()) return AssetFileDeleteStats()
         val rootPath = normalizedAbsolutePath(root)
         val rootPrefix = rootPath + File.separator
-        val retained =
-            retainedPaths.mapNotNullTo(hashSetOf()) { path ->
-                runCatching { normalizedAbsolutePath(File(path)) }.getOrNull()
-            }
         val candidates = linkedSetOf<File>()
         assets.forEach { asset ->
             asset.localPath?.takeIf(String::isNotBlank)?.let { candidates += File(it) }
@@ -156,17 +151,22 @@ internal class AndroidSyncAssetDrainer(
             candidates += finalFile
             candidates += File(finalFile.parentFile, finalFile.name + ".part")
         }
+        val existing = candidates.mapNotNull { file ->
+            val path = runCatching { normalizedAbsolutePath(file) }.getOrNull()
+                ?: return@mapNotNull null
+            if (!(path == rootPath || path.startsWith(rootPrefix)) || !file.isFile) null
+            else file to path
+        }
+        if (existing.isEmpty()) return AssetFileDeleteStats()
+        val retained =
+            dao.verifiedLocalPaths().mapNotNullTo(hashSetOf()) { path ->
+                runCatching { normalizedAbsolutePath(File(path)) }.getOrNull()
+            }
 
         var files = 0
         var bytes = 0L
-        candidates.forEach { file ->
-            val path = runCatching { normalizedAbsolutePath(file) }.getOrNull() ?: return@forEach
-            if (
-                !(path == rootPath || path.startsWith(rootPrefix)) ||
-                    path in retained ||
-                    !file.isFile
-            )
-                return@forEach
+        existing.forEach { (file, path) ->
+            if (path in retained) return@forEach
             val size = file.length()
             if (file.delete()) {
                 files++

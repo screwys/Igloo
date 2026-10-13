@@ -44,11 +44,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.DrawerState
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -64,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,6 +90,7 @@ import com.screwy.igloo.ui.nav.IglooNavigationSource
 import com.screwy.igloo.ui.nav.RouteRegistry
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
 import com.screwy.igloo.ui.theme.iglooColors
+import kotlinx.coroutines.flow.emptyFlow
 import org.koin.compose.koinInject
 
 /**
@@ -97,16 +103,28 @@ import org.koin.compose.koinInject
 @Composable
 fun AppDrawer(
     navController: NavController,
+    drawerState: DrawerState,
     onCloseDrawer: () -> Unit,
     onLogoutClick: () -> Unit,
 ) {
-    ModalDrawerSheet(modifier = Modifier.widthIn(max = 320.dp)) {
+    var drawerWidth by remember { mutableIntStateOf(0) }
+    val isVisible by remember(drawerState) {
+        derivedStateOf {
+            drawerState.currentValue == DrawerValue.Open ||
+                drawerState.targetValue == DrawerValue.Open ||
+                drawerState.currentOffset > -drawerWidth
+        }
+    }
+    ModalDrawerSheet(
+        modifier = Modifier.widthIn(max = 320.dp).onSizeChanged { drawerWidth = it.width },
+    ) {
         AppDrawerContent(
             navController = navController,
             onCloseDrawer = onCloseDrawer,
             onLogoutClick = onLogoutClick,
             dense = false,
             widePrimaryNavigation = false,
+            observeChannels = isVisible,
         )
     }
 }
@@ -132,6 +150,7 @@ fun PermanentAppSidebar(
             onLogoutClick = onLogoutClick,
             dense = true,
             widePrimaryNavigation = true,
+            observeChannels = true,
         )
     }
 }
@@ -144,11 +163,15 @@ private fun AppDrawerContent(
     onLogoutClick: () -> Unit,
     dense: Boolean,
     widePrimaryNavigation: Boolean,
+    observeChannels: Boolean,
 ) {
     val authRepo: AuthRepo = koinInject()
     val channelReadDao: ChannelReadDao = koinInject()
     val username by authRepo.usernameFlow.collectAsStateWithLifecycle()
-    val channels by channelReadDao.allFlow().collectAsStateWithLifecycle(initialValue = emptyList())
+    val channelsFlow = remember(channelReadDao, observeChannels) {
+        if (observeChannels) channelReadDao.allFlow() else emptyFlow()
+    }
+    val channels by channelsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val colors = MaterialTheme.iglooColors
     val navigator = rememberIglooNavigator(navController, beforeNavigate = onCloseDrawer)
     val backStackEntry by navController.currentBackStackEntryAsState()

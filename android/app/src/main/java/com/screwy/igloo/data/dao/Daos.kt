@@ -1,6 +1,8 @@
 package com.screwy.igloo.data.dao
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
@@ -48,8 +50,10 @@ import kotlinx.coroutines.flow.map
 
 @Dao
 interface FeedItemDao {
-    @Upsert suspend fun upsertCaptured(rows: List<StoredFeedItem>)
-    @Upsert suspend fun upsertCaptured(row: StoredFeedItem)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCaptured(rows: List<StoredFeedItem>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCaptured(row: StoredFeedItem)
 
 
     @Query("SELECT payload_json FROM feed_items WHERE tweet_id = :tweetId")

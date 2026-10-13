@@ -356,6 +356,7 @@ fun MainScaffold(
             drawerContent = {
                 AppDrawer(
                     navController = navController,
+                    drawerState = drawerState,
                     onCloseDrawer = { coroutineScope.launch { drawerState.close() } },
                     onLogoutClick = {
                         coroutineScope.launch {

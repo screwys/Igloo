@@ -927,7 +927,7 @@ class AndroidSyncMirror(
 
     private suspend fun deleteFiles(rows: List<AndroidSyncAssetEntity>) {
         if (rows.isEmpty()) return
-        assetDrainer.deleteFilesForAssets(rows, dao.verifiedLocalPaths())
+        assetDrainer.deleteFilesForAssets(rows)
     }
 
     private suspend fun requireChangesState(): AndroidSyncStateEntity =

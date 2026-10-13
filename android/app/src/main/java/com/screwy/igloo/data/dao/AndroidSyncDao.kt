@@ -1,6 +1,8 @@
 package com.screwy.igloo.data.dao
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import com.screwy.igloo.data.entity.AndroidSyncAssetEntity
@@ -73,7 +75,8 @@ interface AndroidSyncDao {
 
     @Upsert suspend fun upsertHead(row: AndroidSyncHeadEntity)
 
-    @Upsert suspend fun upsertHeads(rows: List<AndroidSyncHeadEntity>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertHeads(rows: List<AndroidSyncHeadEntity>)
 
     @Query("UPDATE android_sync_heads SET bootstrap_seen = 0")
     suspend fun markHeadsUnseen()
@@ -186,7 +189,8 @@ interface AndroidSyncDao {
 
     @Upsert suspend fun upsertAsset(row: AndroidSyncAssetEntity)
 
-    @Upsert suspend fun upsertAssets(rows: List<AndroidSyncAssetEntity>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAssets(rows: List<AndroidSyncAssetEntity>)
 
     @Query("SELECT * FROM android_sync_assets WHERE asset_id = :assetId")
     suspend fun asset(assetId: String): AndroidSyncAssetEntity?
