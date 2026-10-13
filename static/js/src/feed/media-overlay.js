@@ -154,7 +154,7 @@ function extractSlidesFromRoot(rootEl) {
   var gridCandidates = rootEl.querySelectorAll('.feed-media-wrap-grid')
   for (var gi = 0; gi < gridCandidates.length; gi++) {
     var gc = gridCandidates[gi]
-    if (rootIsQuote && gc.closest('.feed-quote-card') === rootEl) { grid = gc; break }
+    if (rootIsQuote) { grid = gc; break }
     if (!gc.closest('.feed-quote-card')) { grid = gc; break }
   }
 
@@ -176,12 +176,12 @@ function extractSlidesFromRoot(rootEl) {
     return { slides: slides, singleVideo: null }
   }
 
-  // No grid — look for a single .feed-media-wrap at this scope (not inside a nested quote card).
+  // No grid. Look for a single .feed-media-wrap at this scope.
   var wraps = rootEl.querySelectorAll('.feed-media-wrap')
   var wrap = null
   for (var wi = 0; wi < wraps.length; wi++) {
     var w = wraps[wi]
-    if (rootIsQuote && w.closest('.feed-quote-card') === rootEl) { wrap = w; break }
+    if (rootIsQuote) { wrap = w; break }
     if (!w.closest('.feed-quote-card')) { wrap = w; break }
   }
   if (!wrap) return { slides: [], singleVideo: null }
@@ -264,19 +264,12 @@ function getMediaSources(card, clickedEl) {
     }
   }
   const trigger = clickedEl && clickedEl.closest ? clickedEl.closest('[data-feed-media]') : null
-  const triggerQuote = trigger && trigger.closest ? trigger.closest('.feed-quote-card') : null
+  const triggerInQuote = !!(trigger && trigger.closest && trigger.closest('.feed-quote-card'))
+  const quoteCardEl = root.querySelector('.feed-quote-card')
   const parentExtract = extractSlidesFromRoot(root)
+  const quoteExtract = quoteCardEl ? extractSlidesFromRoot(quoteCardEl) : { slides: [], singleVideo: null }
   const parentSlides = parentExtract.slides.map(function (s) { return Object.assign({}, s, { source: 'parent' }) })
-  const quoteSlides = []
-  const quoteVideos = {}
-  root.querySelectorAll('.feed-quote-card').forEach(function (quoteCard) {
-    const quoteId = quoteCard.getAttribute('data-quote-tweet-id') || ''
-    const extracted = extractSlidesFromRoot(quoteCard)
-    quoteVideos[quoteId] = extracted.singleVideo
-    extracted.slides.forEach(function (slide) {
-      quoteSlides.push(Object.assign({}, slide, { source: 'quote', quoteTweetId: quoteId }))
-    })
-  })
+  const quoteSlides = quoteExtract.slides.map(function (s) { return Object.assign({}, s, { source: 'quote' }) })
   const slides = parentSlides.concat(quoteSlides)
 
   if (slides.length === 0) return null
@@ -287,7 +280,7 @@ function getMediaSources(card, clickedEl) {
   if (slides.length === 1) {
     var only = slides[0]
     var onlyFromParent = parentSlides.length === 1
-    var onlySingleVideo = onlyFromParent ? parentExtract.singleVideo : quoteVideos[only.quoteTweetId]
+    var onlySingleVideo = onlyFromParent ? parentExtract.singleVideo : quoteExtract.singleVideo
     if (only.kind === 'video' && onlySingleVideo) {
       return {
         kind: 'video',
@@ -306,11 +299,10 @@ function getMediaSources(card, clickedEl) {
   if (trigger) {
     var triggerUrl = String(trigger.getAttribute('data-feed-media-url') || '').trim()
     var triggerStream = String(trigger.getAttribute('data-feed-media-stream') || '').trim()
-    var rangeFrom = triggerQuote ? parentSlides.length : 0
-    var rangeTo = triggerQuote ? slides.length : parentSlides.length
+    var rangeFrom = triggerInQuote ? parentSlides.length : 0
+    var rangeTo = triggerInQuote ? slides.length : parentSlides.length
     for (var si = rangeFrom; si < rangeTo; si++) {
       var s = slides[si]
-      if (triggerQuote && s.quoteTweetId !== triggerQuote.getAttribute('data-quote-tweet-id')) continue
       if (triggerUrl && s.url === triggerUrl) { startIndex = si; break }
       if (triggerStream && s.streamUrl === triggerStream) { startIndex = si; break }
     }
@@ -370,7 +362,9 @@ export function openMediaOverlay(root, triggerEl) {
   let channelName = String(article.getAttribute('data-channel-name') || '').trim()
   const channelPlatform = String(article.getAttribute('data-channel-platform') || 'twitter').trim() || 'twitter'
 
-  const quoteCards = Array.from(article.querySelectorAll('.feed-quote-card'))
+  const quoteCardEl = article.querySelector('.feed-quote-card')
+  const quoteTweetId = quoteCardEl ? String(quoteCardEl.getAttribute('data-quote-tweet-id') || '').trim() : ''
+  const quoteLink = quoteCardEl ? safeExternalHttpURL(quoteCardEl.getAttribute('data-quote-link')) : ''
 
   let currentIndex = Math.max(0, Number(media.startIndex || 0))
   const overlay = document.createElement('div')
@@ -418,14 +412,8 @@ export function openMediaOverlay(root, triggerEl) {
 
   function renderSidebar(sourceKind) {
     if (liveURL) return
-    const currentSlide = media.slides && media.slides[currentIndex]
-    const quoteCardEl = currentSlide && quoteCards.find(function (card) {
-      return card.getAttribute('data-quote-tweet-id') === currentSlide.quoteTweetId
-    })
     const isQuote = sourceKind === 'quote' && !!quoteCardEl
     const sourceCard = isQuote ? quoteCardEl : article
-    const quoteTweetId = quoteCardEl ? String(quoteCardEl.getAttribute('data-quote-tweet-id') || '').trim() : ''
-    const quoteLink = quoteCardEl ? safeExternalHttpURL(quoteCardEl.getAttribute('data-quote-link')) : ''
 
     // ── Ownership attribute — downstream handlers in feed/index.js read this.
     if (isQuote && quoteTweetId) {

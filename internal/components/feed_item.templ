@@ -678,10 +678,6 @@ templ feedMediaTile(p PageProps, index int, m model.MediaRef, mediaCount int, st
 }
 
 templ feedQuoteCard(p PageProps, item model.FeedItem, deferMedia bool) {
-	@feedQuoteChainCard(p, item, item.QuoteChain, deferMedia)
-}
-
-templ feedQuoteChainCard(p PageProps, item model.FeedItem, chain []model.FeedItem, deferMedia bool) {
 	{{ qLabel := feedQuoteLabel(item) }}
 	{{ qMediaCount := len(item.QuoteMedia) }}
 	{{ quoteExternalURL := safeExternalHTTPURL(item.QuoteCanonicalURL) }}
@@ -689,7 +685,6 @@ templ feedQuoteChainCard(p PageProps, item model.FeedItem, chain []model.FeedIte
 	<div
 		class={ "feed-quote-card", templ.KV("unavailable", isUnavailable) }
 		data-quote-tweet-id={ item.QuoteTweetID }
-		data-translate-tweet-id={ item.TweetID }
 		if item.QuoteChannelID != "" {
 			data-quote-author-channel-id={ item.QuoteChannelID }
 		}
@@ -796,9 +791,6 @@ templ feedQuoteChainCard(p PageProps, item model.FeedItem, chain []model.FeedIte
 		}
 		@feedQuoteMedia(p, item, qMediaCount, deferMedia)
 		@feedContext(p, item.QuotePollJSON, item.QuoteCommunityNote)
-		if len(chain) > 0 {
-			@feedQuoteChainCard(p, chain[0], chain[1:], deferMedia)
-		}
 	</div>
 }
 
