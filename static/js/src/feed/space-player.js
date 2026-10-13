@@ -209,10 +209,8 @@ export function playSpace(root) {
   }
   video._spaceSurface = session.miniSurface
   function expand() {
-    const manager = miniPlayer()
-    if (manager && manager.ownsSurface(row)) manager.returnToVideo()
-    content.insertBefore(speakers, rosterStatus)
     openMediaOverlay(root, root, session)
+    content.insertBefore(speakers, rosterStatus)
     trigger.setAttribute('aria-expanded', 'true')
     layoutParticipants()
   }

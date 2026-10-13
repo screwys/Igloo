@@ -66,9 +66,9 @@ function stopLivePlayback(overlay) {
   if (overlay && overlay._livePlayback) return overlay._livePlayback.stop()
 }
 
-function setFeedMediaOverlayOpen(open) {
-  if (!document.body) return
-  document.body.classList.toggle('feed-media-overlay-open', !!open)
+function setFeedMediaOverlayOpen(open, ownerDocument = document) {
+  if (!ownerDocument.body) return
+  ownerDocument.body.classList.toggle('feed-media-overlay-open', !!open)
 }
 
 function takeOverInlineVideoPlayback(overlay, activeStreamUrl) {
@@ -313,6 +313,7 @@ function getMediaSources(card, clickedEl) {
 // ── Close overlay ──
 
 export function closeMediaOverlay() {
+  const ownerDocument = overlayEl ? overlayEl.ownerDocument : document
   if (overlayEl) {
     if (overlayEl._spaceSurface) overlayEl._spaceSurface.restore()
     if (overlayEl.hasAttribute('data-feed-live')) {
@@ -326,9 +327,9 @@ export function closeMediaOverlay() {
     if (overlayEl.parentNode) overlayEl.remove()
   }
   overlayEl = null
-  setFeedMediaOverlayOpen(false)
+  setFeedMediaOverlayOpen(false, ownerDocument)
   if (keyHandler) {
-    document.removeEventListener('keydown', keyHandler)
+    ownerDocument.removeEventListener('keydown', keyHandler)
     keyHandler = null
   }
 }
@@ -337,13 +338,14 @@ export function closeMediaOverlay() {
 
 function openSpaceOverlay(surface) {
   closeMediaOverlay()
-  const overlay = document.createElement('div')
+  const ownerDocument = surface.row.ownerDocument
+  const overlay = ownerDocument.createElement('div')
   overlay.className = 'feed-media-overlay feed-space-overlay'
-  const shell = document.createElement('div')
+  const shell = ownerDocument.createElement('div')
   shell.className = 'feed-media-overlay-shell'
-  const main = document.createElement('div')
+  const main = ownerDocument.createElement('div')
   main.className = 'feed-media-overlay-main'
-  const close = document.createElement('button')
+  const close = ownerDocument.createElement('button')
   close.className = 'feed-media-overlay-close'
   close.type = 'button'
   close.title = t('space_collapse', 'Collapse')
@@ -357,8 +359,8 @@ function openSpaceOverlay(surface) {
   overlay._overlayVideo = surface.video
   overlay._overlayPlaybackKind = 'live'
   overlayEl = overlay
-  document.body.appendChild(overlay)
-  setFeedMediaOverlayOpen(true)
+  ownerDocument.body.appendChild(overlay)
+  setFeedMediaOverlayOpen(true, ownerDocument)
   close.addEventListener('click', closeMediaOverlay)
   overlay.addEventListener('click', function (event) {
     if (event.target === overlay) closeMediaOverlay()
@@ -367,13 +369,13 @@ function openSpaceOverlay(surface) {
     const target = event.target || {}
     if (/^(input|textarea|select)$/i.test(target.tagName || '') || target.isContentEditable) return
     if (event.key === 'Escape') {
-      if (!document.fullscreenElement && !document.webkitFullscreenElement) closeMediaOverlay()
+      if (!ownerDocument.fullscreenElement && !ownerDocument.webkitFullscreenElement) closeMediaOverlay()
     } else if (handleFeedVideoShortcut(event, surface.video)) {
       event.preventDefault()
       event.stopImmediatePropagation()
     }
   }
-  document.addEventListener('keydown', keyHandler)
+  ownerDocument.addEventListener('keydown', keyHandler)
 }
 
 export function openMediaOverlay(root, triggerEl, spaceSurface) {
