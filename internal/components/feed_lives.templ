@@ -7,9 +7,13 @@ templ FeedLiveRows(p PageProps, lives []model.XBroadcast) {
 		<h2>{ L(p, "broadcast_live", "Live") }</h2>
 		<div class="shorts-story-tray-body">
 			<div class="stories-list">
+				<div id="feed-live-active" class="feed-live-active" hx-preserve="true"></div>
 				for _, live := range lives {
-					<button type="button" class="story-channel-row" data-feed-live-url={ live.URL } data-feed-link={ live.URL } data-channel-id={ live.ChannelID } data-channel-name={ live.DisplayName } data-channel-platform="twitter" data-avatar-url={ live.AvatarURL } data-feed-live-title={ live.Title } data-feed-live-thumbnail={ live.ThumbnailURL } title={ live.Title }>
-						<span class="story-channel-avatar">
+					<div class="feed-live-row" data-feed-live-url={ live.URL } data-feed-link={ live.URL } data-channel-id={ live.ChannelID } data-channel-name={ live.DisplayName } data-channel-platform="twitter" data-author-handle={ live.Handle } data-avatar-url={ live.AvatarURL } data-feed-live-title={ live.Title } data-feed-live-thumbnail={ live.ThumbnailURL } title={ live.Title }>
+						<div class="story-channel-row">
+							<span class="feed-space-avatars">
+								<a class="feed-space-host feed-inline-link" href={ "/channels/" + live.ChannelID } aria-label={ live.DisplayName }>
+								<span class="story-channel-avatar">
 							if live.AvatarURL != "" {
 								<img src={ live.AvatarURL } alt="" loading="lazy" onerror="this.style.display='none'"/>
 							} else {
@@ -17,7 +21,9 @@ templ FeedLiveRows(p PageProps, lives []model.XBroadcast) {
 							}
 							<span class="shorts-live-badge">LIVE</span>
 						</span>
-						<span class="story-channel-copy">
+								</a>
+							</span>
+							<button class="story-channel-copy" type="button" aria-haspopup="dialog">
 							<span class="story-channel-name feed-author">{ live.DisplayName }</span>
 							if live.Handle != "" || live.ViewerCount > 0 {
 								<span class="story-channel-handle feed-live-meta">
@@ -35,9 +41,10 @@ templ FeedLiveRows(p PageProps, lives []model.XBroadcast) {
 									}
 								</span>
 							}
-						</span>
-						<span class="feed-body-text" hidden>{ live.Title }</span>
-					</button>
+							</button>
+							<span class="feed-body-text" hidden>{ live.Title }</span>
+						</div>
+					</div>
 				}
 			</div>
 		</div>

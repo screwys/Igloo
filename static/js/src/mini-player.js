@@ -96,6 +96,7 @@ export function findFeedThreadVideo(ownerDocument, tweetID, streamURL) {
 }
 
 export function shouldAutomaticallyMini(kind, preferences) {
+  if (kind === 'space') return true
   const prefs = preferences || {}
   if (kind === 'feed') return prefs.miniPlayerFeedEnabled === true
   return prefs.miniPlayerVideosEnabled === true
@@ -240,6 +241,8 @@ function initMiniPlayer() {
   }
 
   function playingSurface(ownerDocument) {
+    const spaceVideo = ownerDocument.querySelector('.feed-space-player video')
+    if (spaceVideo && spaceVideo._spaceSurface) return spaceVideo._spaceSurface
     const youtube = youtubeSurface(ownerDocument)
     if (youtube && canAutomaticallyDockVideo(youtube.video)) return youtube
 
@@ -260,13 +263,14 @@ function initMiniPlayer() {
   function normalizeSurface(value) {
     if (!value || !value.element || (!value.video && value.kind !== 'moments')) return null
     const sourceDocument = value.sourceDocument || value.element.ownerDocument
-    const kind = value.kind === 'feed' ? 'feed' : value.kind === 'moments' ? 'moments' : 'videos'
+    const kind = value.kind === 'feed' ? 'feed' : value.kind === 'moments' ? 'moments' : value.kind === 'space' ? 'space' : 'videos'
     const feedReturn = kind === 'feed' ? feedReturnDetails(value.element, value.video) : {}
     const feedTitle = kind === 'feed' ? feedAccountName(value.element) : ''
     return {
       element: value.element,
       video: value.video,
       onPause: typeof value.onPause === 'function' ? value.onPause : null,
+      onDock: typeof value.onDock === 'function' ? value.onDock : null,
       button: value.button || null,
       title: String(value.title || feedTitle || sourceDocument.title || 'Mini player').trim(),
       kind: kind,
@@ -439,6 +443,7 @@ function initMiniPlayer() {
     }
     if (activeSurface && activeSurface.element === next.element) return true
     if (activeSurface) restoreActiveSurface({ pause: true })
+    if (next.onDock) next.onDock()
     pendingFeedThreadReturn = null
 
     const wasMoments = activeSurface && activeSurface.kind === 'moments' && next.kind === 'moments'
@@ -959,6 +964,9 @@ function initMiniPlayer() {
       if (surface) dockSurface(surface)
     },
     enterSurface: function (surface) { return dockSurface(surface) },
+    closeSurface: function (element) {
+      if (activeSurface && activeSurface.element === element) restoreActiveSurface({ pause: true })
+    },
     youtubePlaybackStarted: handleYouTubePlayback,
     toggleSurface: function (surface) {
       if (activeSurface && surface && activeSurface.element === surface.element) returnToSurface()

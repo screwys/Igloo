@@ -3,6 +3,14 @@ package components
 // Strings used as arguments to other templ components can be opaque to the
 // i18n extractor, so keep them discoverable here.
 var _ = []string{
+	N("space_more_speakers", "%1$d more speakers"),
+	N("space_collapse", "Collapse"),
+	N("space_leave", "Leave"),
+	N("space_host", "Host"),
+	N("space_co_host", "Co-host"),
+	N("space_speaker", "Speaker"),
+	N("space_cookies_required", "X cookies required for speakers"),
+	N("space_speakers_unavailable", "Speakers unavailable"),
 	N("videos_tab_lives", "Lives"),
 	N("player_chat_ended", "Chat ended"),
 	N("player_chat_unavailable", "Chat unavailable"),

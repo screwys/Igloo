@@ -11,3 +11,11 @@ type XSpacePresence struct {
 	Title       string `json:"title"`
 	ViewerCount int64  `json:"viewer_count"`
 }
+
+type XSpaceParticipant struct {
+	ChannelID   string `json:"channel_id"`
+	Handle      string `json:"handle"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+	Role        string `json:"role"`
+}

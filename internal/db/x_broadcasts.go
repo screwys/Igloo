@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/screwys/igloo/internal/model"
 )
@@ -138,6 +139,35 @@ func (db *DB) RecordXBroadcastCheck(rawURL string, checkedAtMs int64) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`UPDATE x_broadcast_sources SET checked_at_ms=$2 WHERE url=$1`, rawURL, checkedAtMs)
 		return err
+	})
+}
+
+func (db *DB) ObserveXSpaceParticipants(participants []model.XSpaceParticipant) error {
+	channels := make([]model.Channel, 0, len(participants))
+	for _, participant := range participants {
+		if participant.ChannelID == "" {
+			continue
+		}
+		channels = append(channels, model.Channel{
+			ChannelID: participant.ChannelID, SourceID: participant.Handle, Handle: participant.Handle,
+			Name: participant.Handle, DisplayName: participant.DisplayName, Platform: "twitter",
+			URL: "https://x.com/" + participant.Handle,
+		})
+	}
+	if err := db.ObserveChannels(channels); err != nil {
+		return err
+	}
+	return db.WithWrite(func(tx *sql.Tx) error {
+		observedAt := time.Now().UnixMilli()
+		for _, participant := range participants {
+			if err := observeProfileTx(tx, profileObservation{
+				channelID: participant.ChannelID, platform: "twitter", handle: participant.Handle,
+				displayName: participant.DisplayName, avatarURL: participant.AvatarURL, observedAt: observedAt,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

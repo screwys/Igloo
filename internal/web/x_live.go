@@ -19,6 +19,31 @@ func (s *Server) registerXLiveRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/x/lives", s.handleXLives)
 	mux.HandleFunc("POST /api/x/stream", s.handleXLiveStream)
 	mux.HandleFunc("GET /api/x/lives/{broadcastID}/chat", s.handleXLiveChat)
+	mux.HandleFunc("GET /api/x/spaces/{spaceID}/participants", s.handleXSpaceParticipants)
+}
+
+func (s *Server) handleXSpaceParticipants(w http.ResponseWriter, r *http.Request) {
+	if !s.platformEnabled("twitter") {
+		http.NotFound(w, r)
+		return
+	}
+	spaceID := r.PathValue("spaceID")
+	if model.NormalizeXBroadcastURL("https://x.com/i/spaces/"+url.PathEscape(spaceID)) == "" {
+		writeJSONError(w, http.StatusBadRequest, "invalid_space", "X Space required")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
+	defer cancel()
+	participants, err := s.workers.XSpaceParticipants(ctx, spaceID)
+	if err != nil {
+		if download.ClassifyFailure(err, nil, 0).Kind == download.ErrorKindAuth {
+			writeJSONError(w, http.StatusBadGateway, "x_auth_required", "X cookies required for speakers")
+			return
+		}
+		writeJSONError(w, http.StatusBadGateway, "space_participants", "Speakers unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"participants": participants})
 }
 
 func (s *Server) handleXLives(w http.ResponseWriter, r *http.Request) {

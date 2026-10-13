@@ -46,6 +46,36 @@ func (err *XSpacePresenceError) Error() string {
 }
 
 func FetchXSpacePresence(ctx context.Context, userIDs []string, cookies []CookieSet) (*XSpacePresenceResult, error) {
+	data, err := fetchXSpaceData(ctx, map[string]any{"user_ids": userIDs}, cookies)
+	if err != nil {
+		return nil, err
+	}
+	var presence XSpacePresenceResult
+	if err := json.Unmarshal(data, &presence); err != nil {
+		return nil, fmt.Errorf("x live discovery response: %w", err)
+	}
+	return &presence, nil
+}
+
+func FetchXSpaceParticipants(ctx context.Context, spaceID string, cookies []CookieSet) ([]model.XSpaceParticipant, error) {
+	data, err := fetchXSpaceData(ctx, map[string]any{"space_id": spaceID}, cookies)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Participants []model.XSpaceParticipant `json:"participants"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	for index := range result.Participants {
+		participant := &result.Participants[index]
+		participant.ChannelID = model.TwitterChannelIDFromHandle(participant.Handle)
+	}
+	return result.Participants, nil
+}
+
+func fetchXSpaceData(ctx context.Context, request map[string]any, cookies []CookieSet) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "igloo-x-presence-")
 	if err != nil {
 		return nil, err
@@ -84,7 +114,8 @@ func FetchXSpacePresence(ctx context.Context, userIDs []string, cookies []Cookie
 			}
 		}
 	}
-	data, err := json.Marshal(map[string]any{"user_ids": userIDs, "cookies": files})
+	request["cookies"] = files
+	data, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
@@ -101,9 +132,5 @@ func FetchXSpacePresence(ctx context.Context, userIDs []string, cookies []Cookie
 		}
 		return nil, fmt.Errorf("x live discovery: %w: %s", result.Err, RedactText(string(result.Stderr)))
 	}
-	var presence XSpacePresenceResult
-	if err := json.Unmarshal(result.Stdout, &presence); err != nil {
-		return nil, fmt.Errorf("x live discovery response: %w", err)
-	}
-	return &presence, nil
+	return result.Stdout, nil
 }

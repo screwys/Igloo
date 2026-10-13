@@ -2,6 +2,7 @@
 // Wires all feed modules together and handles event delegation.
 
 import { openMediaOverlay } from './media-overlay.js'
+import { playSpace } from './space-player.js'
 import { initInlineMedia } from './inline-media.js'
 import { exitFeedVideoFullscreen, handleFeedVideoShortcut, toggleFeedVideoMute } from './video-controls.js'
 import { initTextClamps } from './text-clamp.js'
@@ -1233,8 +1234,10 @@ document.addEventListener('click', function (event) {
 
   var liveTrigger = event.target && event.target.closest ? event.target.closest('[data-feed-live-url]') : null
   if (liveTrigger) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     event.preventDefault()
-    openMediaOverlay(liveTrigger, liveTrigger)
+    if (/\/i\/spaces\//.test(liveTrigger.dataset.feedLiveUrl)) playSpace(liveTrigger)
+    else openMediaOverlay(liveTrigger, liveTrigger)
     return
   }
 
@@ -1691,5 +1694,10 @@ if (initialLiveURL) {
   liveRoot.setAttribute('data-feed-live-url', initialLiveURL)
   liveRoot.setAttribute('data-feed-link', initialLiveURL)
   liveRoot.setAttribute('data-channel-name', t('platform_x', 'X'))
-  openMediaOverlay(liveRoot, liveRoot)
+  if (/\/i\/spaces\//.test(initialLiveURL)) {
+    const existing = Array.from(document.querySelectorAll('[data-feed-live-url]')).find(function (row) {
+      return row.dataset.feedLiveUrl === initialLiveURL
+    })
+    playSpace(existing || liveRoot)
+  } else openMediaOverlay(liveRoot, liveRoot)
 }

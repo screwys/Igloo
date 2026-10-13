@@ -3,7 +3,7 @@ import logging
 import sys
 import time
 
-from upstream.api import FleetsAPI, HTTPClient
+from upstream.api import FleetsAPI, GraphQLAPI, HTTPClient
 from upstream.cookies import load_cookies
 
 logging.disable(logging.CRITICAL)
@@ -11,7 +11,8 @@ logging.disable(logging.CRITICAL)
 
 def main():
     request = json.load(sys.stdin)
-    ids = request["user_ids"]
+    ids = request.get("user_ids", [])
+    space_id = request.get("space_id", "")
     attempts = request["cookies"]
     last_error = {"error": "Login required: X live discovery needs X cookies", "status": 401}
     for index, source in enumerate(attempts):
@@ -32,6 +33,28 @@ def main():
 
         client.session.hooks["response"].append(observe)
         try:
+            if space_id:
+                api = GraphQLAPI(client, "graphql", load_cookies(source))
+                request_started = True
+                result = api.audio_space_by_id(space_id)
+                room = result["data"]["audioSpace"]
+                creator_user = room["metadata"]["creator_results"]["result"]
+                creator = (creator_user.get("core", {}).get("screen_name") or
+                           creator_user.get("legacy", {}).get("screen_name", "")).lower()
+                participants = []
+                seen = set()
+                for group, role in (("admins", "co_host"), ("speakers", "speaker")):
+                    for person in room["participants"].get(group, []):
+                        handle = person.get("twitter_screen_name", "").lower()
+                        if handle and handle in seen:
+                            continue
+                        seen.add(handle)
+                        participants.append({"handle": handle,
+                                             "display_name": person.get("display_name", ""),
+                                             "avatar_url": person.get("avatar_url", ""),
+                                             "role": "host" if handle and handle == creator else role})
+                print(json.dumps({"participants": participants, "cookie_index": index}))
+                return
             api = FleetsAPI(client, "fleets", load_cookies(source))
             request_started = True
             result = api.avatar_content(*ids)

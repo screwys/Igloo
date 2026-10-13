@@ -54,6 +54,25 @@ func (m *Manager) refreshXBroadcasts(ctx context.Context) {
 	}
 }
 
+func (m *Manager) XSpaceParticipants(ctx context.Context, spaceID string) ([]model.XSpaceParticipant, error) {
+	participants, err := download.FetchXSpaceParticipants(ctx, spaceID, m.cookieSetsFor("twitter"))
+	if err != nil {
+		return nil, err
+	}
+	if err := m.db.ObserveXSpaceParticipants(participants); err != nil {
+		return nil, err
+	}
+	m.KickProfileJobs()
+	for index := range participants {
+		participant := &participants[index]
+		participant.AvatarURL = ""
+		if participant.ChannelID != "" {
+			participant.AvatarURL = "/api/media/avatar/" + participant.ChannelID
+		}
+	}
+	return participants, nil
+}
+
 func (m *Manager) ResolveXPlayback(ctx context.Context, rawURL string) (*model.XBroadcast, *download.PlaybackInfo, error) {
 	if m == nil || m.downloader == nil {
 		return nil, nil, fmt.Errorf("x playback worker unavailable")
