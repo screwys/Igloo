@@ -565,12 +565,14 @@ type FeedItem struct {
 	MediaKind            string // video|image|slideshow
 	MediaSlideCount      int
 	MediaStatus          string // ready|pending|failed|pruned|cdn
+	MediaPending         bool   `json:"-"`
 	MediaStreamURL       string
 	MediaPreviewURL      string
 	MediaSlideURLs       []string
 	QuoteMediaStreamURL  string
 	QuoteMediaPreviewURL string
 	QuoteMediaSlideURLs  []string
+	QuoteMediaPending    bool `json:"-"`
 	QuoteCanonicalURL    string
 	// Translation
 	BodyTranslation  string

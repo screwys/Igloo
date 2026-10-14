@@ -4,7 +4,9 @@ import "github.com/screwys/igloo/internal/model"
 
 templ ThreadPage(p PageProps, items []model.FeedItem, quotes []model.FeedItem, returnHref string) {
 	@Base(p) {
-		@threadRoute(p, items, quotes, returnHref, "feed-list")
+		<div id="feed-route-content" data-feed-route-content>
+			@threadRoute(p, items, quotes, returnHref, "feed-list")
+		</div>
 		@RetweetersDialog(p)
 	}
 }

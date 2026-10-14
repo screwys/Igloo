@@ -1659,6 +1659,10 @@ document.body.addEventListener('htmx:sendError', rollbackHTMXLikeState)
 document.body.addEventListener('htmx:afterSwap', function (e) {
   var elt = e.detail && e.detail.elt
   if (!elt) return
+  if (elt.hasAttribute('data-media-owner')) {
+    initInlineMedia(elt)
+    initMediaRows(elt)
+  }
   if (elt.getAttribute('data-feed-action') === 'heart') {
     var card = elt.closest('[data-feed-item]')
     if (!card) return

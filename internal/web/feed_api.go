@@ -337,6 +337,23 @@ func (s *Server) handleFeedMediaStatus(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid_tweet_id", "A valid tweet ID is required")
 		return
 	}
+	if r.URL.Query().Get("fmt") == "html" {
+		items, err := s.db.GetThreadChain(tweetID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "media_query_failed", err.Error())
+			return
+		}
+		if len(items) == 0 {
+			http.NotFound(w, r)
+			return
+		}
+		item := feed.EnrichFeedItemsPreserveRows(s.db, items[len(items)-1:])[0]
+		p := s.pageProps(w, r)
+		p.ArticleReader = true
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_ = components.FeedMedia(p, item, false).Render(r.Context(), w)
+		return
+	}
 	availability, err := s.db.GetTweetMediaAssetAvailability([]string{tweetID})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "media_query_failed", err.Error())

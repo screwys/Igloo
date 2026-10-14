@@ -41,7 +41,7 @@ func TestFeedMediaStripLayout(t *testing.T) {
 			item := model.FeedItem{Media: tt.media, MediaSlideURLs: urls, QuoteMedia: tt.media, QuoteMediaSlideURLs: urls}
 			for _, quoted := range []bool{false, true} {
 				var out bytes.Buffer
-				component := feedMedia(PageProps{}, item, false)
+				component := FeedMedia(PageProps{}, item, false)
 				if quoted {
 					component = feedQuoteMedia(PageProps{}, item, len(tt.media), false)
 				}

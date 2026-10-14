@@ -155,6 +155,8 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool, 
 	for i := range items {
 		item := &items[i]
 		enrichMediaStatus(item, mediaAssets)
+		item.MediaPending = mediaAssets[item.TweetID].Pending
+		item.QuoteMediaPending = mediaAssets[item.QuoteTweetID].Pending
 		annotateChannelFlags(item, channelMap)
 
 		item.IsSeen = seen[item.TweetID]
