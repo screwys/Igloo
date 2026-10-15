@@ -361,7 +361,7 @@ func (s *Server) handleFeedMediaStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	slides := make(map[int]string)
 	for _, file := range s.canonicalAssets(db.AssetOwnerRef{OwnerKind: "tweet", OwnerID: tweetID}, "post_media") {
-		slides[file.asset.MediaIndex] = fmt.Sprintf("/api/media/slide/%s/%d?owner_kind=tweet", tweetID, file.asset.MediaIndex)
+		slides[file.asset.MediaIndex] = fmt.Sprintf("/api/media/slide/%s/%d?owner_kind=tweet&revision=%d", tweetID, file.asset.MediaIndex, file.asset.Revision)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true, "pending": availability[tweetID].Pending, "slide_urls": slides,

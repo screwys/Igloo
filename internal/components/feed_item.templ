@@ -598,7 +598,7 @@ templ FeedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 					}
 			}
 		}
-		if p.ArticleReader && readyMediaCount < mediaCount && !(mediaCount == 1 && feedMediaRefIsVideo(item.Media[0]) && item.MediaStreamURL != "") {
+		if readyMediaCount < mediaCount && !(mediaCount == 1 && feedMediaRefIsVideo(item.Media[0]) && item.MediaStreamURL != "") {
 			@feedPendingMedia(p, item.TweetID, item.MediaPending)
 		}
 	</div>
@@ -874,7 +874,7 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMed
 		} else if item.QuoteBodyText == "" {
 			<div class="feed-quote-unavailable">{ L(p, "feed_quoted_post", "Quoted post") }</div>
 		}
-		if p.ArticleReader && readyMediaCount < qMediaCount && !(qMediaCount == 1 && feedMediaRefIsVideo(item.QuoteMedia[0]) && item.QuoteMediaStreamURL != "") {
+		if readyMediaCount < qMediaCount && !(qMediaCount == 1 && feedMediaRefIsVideo(item.QuoteMedia[0]) && item.QuoteMediaStreamURL != "") {
 			@feedPendingMedia(p, item.QuoteTweetID, item.QuoteMediaPending)
 		}
 	</div>

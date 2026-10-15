@@ -3158,7 +3158,7 @@ func FeedMedia(p PageProps, item model.FeedItem, deferMedia bool) templ.Componen
 				return templ_7745c5c3_Err
 			}
 		}
-		if p.ArticleReader && readyMediaCount < mediaCount && !(mediaCount == 1 && feedMediaRefIsVideo(item.Media[0]) && item.MediaStreamURL != "") {
+		if readyMediaCount < mediaCount && !(mediaCount == 1 && feedMediaRefIsVideo(item.Media[0]) && item.MediaStreamURL != "") {
 			templ_7745c5c3_Err = feedPendingMedia(p, item.TweetID, item.MediaPending).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -4543,7 +4543,7 @@ func feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMedi
 				return templ_7745c5c3_Err
 			}
 		}
-		if p.ArticleReader && readyMediaCount < qMediaCount && !(qMediaCount == 1 && feedMediaRefIsVideo(item.QuoteMedia[0]) && item.QuoteMediaStreamURL != "") {
+		if readyMediaCount < qMediaCount && !(qMediaCount == 1 && feedMediaRefIsVideo(item.QuoteMedia[0]) && item.QuoteMediaStreamURL != "") {
 			templ_7745c5c3_Err = feedPendingMedia(p, item.QuoteTweetID, item.QuoteMediaPending).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
