@@ -1,7 +1,20 @@
-name: Windows Release
+name: Windows
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/windows-release.yml
+      - android/app/build.gradle.kts
+      - cmd/**
+      - go.mod
+      - go.sum
+      - internal/**
+      - locales/**
+      - packaging/windows/**
+      - static/**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,7 +27,6 @@ permissions:
 
 jobs:
   windows:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -107,6 +119,7 @@ jobs:
           & "$env:RUNNER_TEMP/igloo-runtime/ffprobe.exe" -version
 
       - name: Create and sign update manifest
+        if: github.event_name != 'push'
         shell: pwsh
         env:
           WINDOWS_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.WINDOWS_UPDATE_PUBLIC_KEY_BASE64 }}
@@ -136,17 +149,21 @@ jobs:
             -OutputDirectory "release-artifacts"
 
       - name: Run Windows-focused tests
+        if: github.event_name == 'push'
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           $env:IGLOO_POSTGRES_BIN = "$env:RUNNER_TEMP/igloo-runtime/postgresql/bin"
-          go test -timeout 30m ./internal/buildinfo ./internal/config ./internal/toolenv ./internal/windowsupdate ./internal/windowsuninstall ./cmd/igloo ./cmd/igloo-update ./cmd/igloo-sign-update ./cmd/igloo-uninstall
+          go test -timeout 30m ./internal/buildinfo ./internal/config ./internal/storage ./internal/toolenv ./internal/windowsupdate ./internal/windowsuninstall ./cmd/igloo ./cmd/igloo-update ./cmd/igloo-sign-update ./cmd/igloo-uninstall
+          go test -timeout 30m ./internal/db -run '^TestLegacyArchive'
 
       - name: Verify installer lifecycle
+        if: github.event_name == 'push'
         shell: pwsh
         run: powershell.exe -NoProfile -File packaging/windows/test-installer.ps1 -Installer release-artifacts/IglooSetup-x64.exe
 
       - name: Generate artifact attestations
+        if: github.event_name != 'push'
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
         with:
           subject-path: release-artifacts/*
