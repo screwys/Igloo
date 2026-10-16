@@ -17,7 +17,11 @@ func markRoot(t *testing.T, root, marker string) {
 }
 
 func TestDefaultLayoutMapsOnlyMediaNamespace(t *testing.T) {
-	stateRoot := filepath.Join(t.TempDir(), "state")
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateRoot := filepath.Join(base, "state")
 	markRoot(t, stateRoot, stateRootMarker)
 	layout, err := New(stateRoot, "")
 	if err != nil {
@@ -104,7 +108,10 @@ func TestStateRootMustBeMarkedAndRemainMounted(t *testing.T) {
 }
 
 func TestExternalMediaRootIsIndependentAndMarked(t *testing.T) {
-	base := t.TempDir()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	stateRoot := filepath.Join(base, "state")
 	mediaRoot := filepath.Join(base, "external")
 	markRoot(t, stateRoot, stateRootMarker)
