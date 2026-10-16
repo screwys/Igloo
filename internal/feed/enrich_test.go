@@ -107,7 +107,7 @@ func TestEnrichMediaStatusQuoteOnly(t *testing.T) {
 	}
 }
 
-func TestEnrichFeedItemsProjectsOnlyReadyCanonicalMediaURLs(t *testing.T) {
+func TestEnrichFeedItemsProjectsImageURLsBeforeCaching(t *testing.T) {
 	d, stateRoot := openWritableFeedTestDBAt(t)
 	const tweetID = "sample_sparse_media"
 	key := filepath.Join("media", "twitter", "sample", "second.jpg")
@@ -135,13 +135,13 @@ func TestEnrichFeedItemsProjectsOnlyReadyCanonicalMediaURLs(t *testing.T) {
 			},
 		},
 	})
-	want := []string{"", "/api/media/slide/" + tweetID + "/1?owner_kind=tweet"}
+	want := []string{"/api/media/slide/" + tweetID + "/0?owner_kind=tweet", "/api/media/slide/" + tweetID + "/1?owner_kind=tweet"}
 	if !reflect.DeepEqual(got[0].MediaSlideURLs, want) {
 		t.Fatalf("MediaSlideURLs = %#v, want %#v", got[0].MediaSlideURLs, want)
 	}
 }
 
-func TestEnrichFeedItemsUsesCDNImagesForPrunedPostAndQuoteAssets(t *testing.T) {
+func TestEnrichFeedItemsUsesLocalImageURLsForPrunedPostAndQuoteAssets(t *testing.T) {
 	d := openWritableFeedTestDB(t)
 	for _, ownerID := range []string{"sample_pruned_post", "sample_pruned_quote"} {
 		if err := d.DeclareAsset(db.Asset{
@@ -162,10 +162,10 @@ func TestEnrichFeedItemsUsesCDNImagesForPrunedPostAndQuoteAssets(t *testing.T) {
 		Media:        []model.MediaRef{{Type: "photo", URL: "https://cdn.example/post.jpg"}},
 		QuoteMedia:   []model.MediaRef{{Type: "photo", URL: "https://cdn.example/quote.jpg"}},
 	}})[0]
-	if want := []string{"https://cdn.example/post.jpg"}; !reflect.DeepEqual(got.MediaSlideURLs, want) {
+	if want := []string{"/api/media/slide/sample_pruned_post/0?owner_kind=tweet"}; !reflect.DeepEqual(got.MediaSlideURLs, want) {
 		t.Fatalf("post MediaSlideURLs = %#v, want %#v", got.MediaSlideURLs, want)
 	}
-	if want := []string{"https://cdn.example/quote.jpg"}; !reflect.DeepEqual(got.QuoteMediaSlideURLs, want) {
+	if want := []string{"/api/media/slide/sample_pruned_quote/0?owner_kind=tweet"}; !reflect.DeepEqual(got.QuoteMediaSlideURLs, want) {
 		t.Fatalf("quote QuoteMediaSlideURLs = %#v, want %#v", got.QuoteMediaSlideURLs, want)
 	}
 }

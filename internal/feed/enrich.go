@@ -205,8 +205,8 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool, 
 			}
 		}
 
-		item.MediaSlideURLs = indexedMediaURLs(item.TweetID, item.Media, mediaURLs, mediaAssets[item.TweetID].Pruned)
-		item.QuoteMediaSlideURLs = indexedMediaURLs(item.QuoteTweetID, item.QuoteMedia, mediaURLs, mediaAssets[item.QuoteTweetID].Pruned)
+		item.MediaSlideURLs = indexedMediaURLs(item.TweetID, item.Media, mediaURLs)
+		item.QuoteMediaSlideURLs = indexedMediaURLs(item.QuoteTweetID, item.QuoteMedia, mediaURLs)
 
 		// Retweet grouping
 		if item.ContentHash != "" {
@@ -295,7 +295,7 @@ func readyTweetMediaURLs(database *db.DB, ownerIDs []string) map[string]map[int]
 	return out
 }
 
-func indexedMediaURLs(ownerID string, refs []model.MediaRef, urls map[string]map[int]string, pruned bool) []string {
+func indexedMediaURLs(ownerID string, refs []model.MediaRef, urls map[string]map[int]string) []string {
 	if ownerID == "" || len(refs) == 0 {
 		return nil
 	}
@@ -305,12 +305,9 @@ func indexedMediaURLs(ownerID string, refs []model.MediaRef, urls map[string]map
 			out[index] = url
 		}
 	}
-	if !pruned {
-		return out
-	}
 	for index, ref := range refs {
 		if out[index] == "" && !isVideoMedia(ref) {
-			out[index] = ref.URL
+			out[index] = fmt.Sprintf("/api/media/slide/%s/%d?owner_kind=tweet", ownerID, index)
 		}
 	}
 	return out

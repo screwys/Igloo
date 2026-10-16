@@ -11,7 +11,6 @@ import { handleTranslateAction, getTranslateObserver, queueBackgroundTranslation
 import { initRetweetersDialog, applyRepostMuteFilter } from './retweeters.js'
 import { initFeedSeenTracking } from './seen.js'
 import { initMediaRows } from './media-row.js'
-import { initFeedMedia, retryFeedMedia } from './media-retry.js'
 
 function observeTranslateCards(scope, translateObserver) {
   queueBackgroundTranslations(scope)
@@ -967,7 +966,6 @@ function initFeedCards(scope) {
   if (!container) return
   initTextClamps(container)
   initDates(container)
-  initFeedMedia(container)
   initInlineMedia(container)
   initMediaRows(container)
   container.querySelectorAll('[data-feed-item]').forEach(function (item) {
@@ -1259,7 +1257,6 @@ document.addEventListener('click', function (event) {
     openMediaOverlay(mediaTrigger, mediaTrigger)
     return
   }
-  retryFeedMedia(mediaTrigger)
   var mediaKind = String(mediaTrigger.getAttribute('data-feed-media-kind') || '').trim().toLowerCase()
   if (mediaKind === 'video') {
     var isInGrid = mediaTrigger.closest && mediaTrigger.closest('.feed-media-wrap-grid')
@@ -1279,7 +1276,6 @@ document.addEventListener('keydown', function (event) {
   if (event.key !== 'Enter' && event.key !== ' ') return
   event.preventDefault()
   clearPendingInlineVideoClick(mediaTrigger)
-  retryFeedMedia(mediaTrigger)
   openMediaOverlay(mediaTrigger, mediaTrigger)
 })
 
@@ -1519,7 +1515,6 @@ function initNewFeedCards() {
   if (!newItems.length) return
   initTextClamps(feedList)
   initDates(feedList)
-  initFeedMedia(feedList)
   initInlineMedia(feedList)
   initMediaRows(feedList)
   newItems.forEach(function (item) {
@@ -1662,7 +1657,6 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
   var elt = e.detail && e.detail.elt
   if (!elt) return
   if (elt.hasAttribute('data-media-owner')) {
-    initFeedMedia(elt)
     initInlineMedia(elt)
     initMediaRows(elt)
   }

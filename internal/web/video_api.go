@@ -932,11 +932,39 @@ func (s *Server) handleSlide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	file := s.canonicalAsset(owner, "post_media", index)
-	if file == nil {
+	if file != nil {
+		s.serveSlideFile(w, r, *file)
+		return
+	}
+	asset, err := s.db.GetAssetByOwnerIdentity("post_media", owner.OwnerKind, owner.OwnerID, index)
+	if err != nil {
+		http.Error(w, "image query failed", http.StatusInternalServerError)
+		return
+	}
+	if asset == nil || owner.OwnerKind != "tweet" || !strings.HasPrefix(asset.ContentType, "image/") || asset.SourceURL == "" {
 		http.NotFound(w, r)
 		return
 	}
-	s.serveSlideFile(w, r, *file)
+	if s.workers == nil {
+		http.Error(w, "image loading unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	// Viewing an uncached photo does not make it part of the retained archive.
+	dir, err := os.MkdirTemp("", "igloo-image-*")
+	if err != nil {
+		http.Error(w, "image storage unavailable", http.StatusInternalServerError)
+		return
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	paths, err := s.workers.Downloader().Download(r.Context(), download.MediaLaneBulkForeground, asset.SourceURL, "photo", download.Opts{
+		OutputDir: dir, ID: "image",
+	})
+	if err != nil {
+		slog.Warn("load uncached image", "owner_id", owner.OwnerID, "index", index, "err", err)
+		http.Error(w, "image unavailable", http.StatusBadGateway)
+		return
+	}
+	s.serveSlideFile(w, r, canonicalAssetFile{asset: *asset, path: paths[0]})
 }
 
 func (s *Server) serveSlideFile(w http.ResponseWriter, r *http.Request, file canonicalAssetFile) {
