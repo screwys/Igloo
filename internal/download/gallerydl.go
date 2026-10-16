@@ -491,10 +491,13 @@ func (g *GalleryDLWrapper) DownloadCompleted(ctx context.Context, rawURL, destDi
 		return WithOperationContext(err, "gallery-dl", CookieLabel(cookiesFile, browser))
 	}
 
+	formatSort := `["` + strings.ReplaceAll(videoFormatSort, ",", `","`) + `"]`
 	args := []string{
 		"--no-mtime",
 		"--write-info-json",
 		"-D", tmpDir,
+		"-o", "extractor.ytdl.raw-options.format_sort=" + formatSort,
+		"-o", "downloader.ytdl.raw-options.format_sort=" + formatSort,
 	}
 	if IsInstagramURL(rawURL) {
 		args = append(args, "-o", "extractor.instagram.sleep-extractor=6-12")

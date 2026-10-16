@@ -27,6 +27,7 @@ const (
 const (
 	maxHTTPVideoDownloadBytes       int64 = 4 << 30
 	defaultHTTPVideoDownloadTimeout       = 2 * time.Hour
+	videoFormatSort                       = "vcodec:h264,acodec:aac,res,ext:mp4:m4a"
 )
 
 // Opts configures a Download call.
@@ -36,7 +37,7 @@ type Opts struct {
 	Cookies            string      // Path to cookies file (for yt-dlp).
 	CookiesFromBrowser string      // Browser name for --cookies-from-browser (e.g. "firefox").
 	CookieAlternates   []CookieSet // Ordered credential fallbacks.
-	Format             string      // yt-dlp -f format string (overrides default FormatSort when set).
+	Format             string      // yt-dlp -f format selection and quality constraints.
 	Subtitles          bool        // Download English subtitles as VTT.
 	SubtitleDir        string      // State-root directory for subtitle outputs.
 	ExpectedVideoID    string      // Capture must match this observed content identity.

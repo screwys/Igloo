@@ -572,10 +572,8 @@ func (y *YtDlpWrapper) DownloadCompleted(ctx context.Context, url string, opts O
 
 	if opts.Format != "" {
 		cmd = cmd.Format(opts.Format)
-	} else {
-		cmd = cmd.FormatSort("res,ext:mp4:m4a")
 	}
-	cmd = cmd.MergeOutputFormat("mp4")
+	cmd = cmd.FormatSort(videoFormatSort).MergeOutputFormat("mp4")
 
 	// Subtitles are fetched in a separate yt-dlp pass below — bundling them
 	// into the main download lets a transient subtitle error (e.g. YouTube
