@@ -164,7 +164,7 @@ func (db *DB) RetainLegacyDatabase(ctx context.Context) (string, error) {
 }
 
 func legacyArchiveDSN(path string, readOnly bool) string {
-	uri := &url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+	uri := &url.URL{Scheme: "file", Path: filepath.ToSlash(path), OmitHost: true}
 	query := url.Values{"_pragma": {"foreign_keys(on)", "busy_timeout(30000)"}}
 	if readOnly {
 		query.Set("mode", "ro")
@@ -406,9 +406,9 @@ func copyLegacyArchiveTable(ctx context.Context, source *sql.DB, target *sql.Con
 			for i, value := range values {
 				switch value := value.(type) {
 				case string:
-					values[i] = strings.ReplaceAll(value, "\x00", "")
+					values[i] = strings.ToValidUTF8(strings.ReplaceAll(value, "\x00", ""), "\uFFFD")
 				case []byte:
-					values[i] = strings.ReplaceAll(string(value), "\x00", "")
+					values[i] = strings.ToValidUTF8(strings.ReplaceAll(string(value), "\x00", ""), "\uFFFD")
 				}
 			}
 			return values, nil

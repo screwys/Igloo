@@ -78,7 +78,10 @@ func (platformLifecycle) MigrateSQLite(ctx context.Context, plan windowsupdate.A
 	executable := filepath.Join(plan.InstallRoot, "app", "current", "igloo-user.exe")
 	command := exec.CommandContext(ctx, executable, "migrate-sqlite")
 	command.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	migrationErr := command.Run()
+	output, migrationErr := command.CombinedOutput()
+	if migrationErr != nil {
+		migrationErr = fmt.Errorf("run SQLite migration: %w: %s", migrationErr, strings.TrimSpace(string(output)))
+	}
 	after, readErr := os.ReadDir(cfg.Storage.StateRoot())
 	backupPath := ""
 	for _, entry := range after {

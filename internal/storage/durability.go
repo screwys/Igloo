@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 func EnsureDirectory(dir string, mode os.FileMode) error {
@@ -48,6 +49,10 @@ func SyncDirectory(dir string) error {
 	file, err := os.Open(dir)
 	if err != nil {
 		return err
+	}
+	if runtime.GOOS == "windows" {
+		// Windows does not support syncing directory handles.
+		return file.Close()
 	}
 	return errors.Join(file.Sync(), file.Close())
 }
