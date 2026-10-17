@@ -187,8 +187,7 @@ func feedMediaRowStyle(media []model.MediaRef, urls []string) string {
 	if len(media) < 2 {
 		return ""
 	}
-	var style strings.Builder
-	style.WriteString("grid-template-columns:")
+	ratios := make([]float64, 0, len(media))
 	totalRatio, maxRatio, count := 0.0, 0.0, 0
 	for i, m := range media {
 		if feedMediaURLAt(urls, i) == "" {
@@ -201,13 +200,19 @@ func feedMediaRowStyle(media []model.MediaRef, urls []string) string {
 		if m.Width > 0 && m.Height > 0 {
 			ratio = float64(m.Width) / float64(m.Height)
 		}
-		fmt.Fprintf(&style, " minmax(0, %.6ffr)", ratio)
+		ratios = append(ratios, ratio)
 		totalRatio += ratio
 		maxRatio = max(maxRatio, ratio)
 		count++
 	}
 	if count == 0 {
 		return ""
+	}
+	var style strings.Builder
+	style.WriteString("grid-template-columns:")
+	// Grid weights below a total of 1 leave part of the row unused.
+	for _, ratio := range ratios {
+		fmt.Fprintf(&style, " minmax(0, %.6ffr)", ratio/min(totalRatio, 1))
 	}
 	fmt.Fprintf(&style, "; --feed-row-ratio: %.6f; --feed-row-max-ratio: %.6f; --feed-row-gaps: %dpx;", totalRatio, maxRatio, (count-1)*2)
 	return style.String()

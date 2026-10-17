@@ -756,7 +756,6 @@ func (db *DB) GetFeedThreadItemsByAuthorPage(handle string, limit int, offset in
 			SELECT tweet_id
 			FROM feed_items
 			WHERE (channel_id = ? OR source_channel_id = ? OR quote_channel_id = ?)
-			  AND `+feedPrimaryItemPredicate("feed_items")+`
 		),
 		chain(seed_id, tweet_id, reply_to_status, depth) AS (
 			SELECT m.tweet_id, f.tweet_id, COALESCE(f.reply_to_status, ''), 0
@@ -823,7 +822,6 @@ func (db *DB) GetFeedMediaItemsByAuthorPage(handle string, limit int, offset int
 		WHERE channel_id = ?
 		  AND COALESCE(is_retweet, 0) = 0
 		  AND COALESCE(media_json, '') NOT IN ('', '[]')
-		  AND `+feedPrimaryItemPredicate("feed_items")+`
 		ORDER BY published_at DESC, tweet_id DESC
 		LIMIT ? OFFSET ?
 	`, channelID, limit, offset)
