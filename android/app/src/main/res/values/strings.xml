@@ -90,6 +90,7 @@
     <string name="action_resume">Resume</string>
     <string name="action_resume_downloads">Resume downloads</string>
     <string name="action_retry_failed">Retry Failed</string>
+    <string name="action_revoke">Revoke</string>
     <string name="action_save">Save</string>
     <string name="action_save_changes">Save Changes</string>
     <string name="action_save_preferences">Save Preferences</string>
@@ -638,6 +639,7 @@
     <string name="settings_clear_muted_title">Clear muted accounts?</string>
     <string name="settings_cookie_files">Cookie Files</string>
     <string name="settings_cookie_files_help">Upload Netscape-format cookie files for platforms that require authentication.</string>
+    <string name="settings_current_session">Current session</string>
     <string name="settings_dearrow_casual">Casual</string>
     <string name="settings_dearrow_community">Community</string>
     <string name="settings_dearrow_description">Community-voted titles and thumbnails for YouTube videos. Off, Community, or Casual.</string>
@@ -693,6 +695,7 @@
     <string name="settings_muted_accounts_help">Muted accounts are hidden from the feed. Mute from the post menu on retweets.</string>
     <string name="settings_no_cached_media">No cached media yet.</string>
     <string name="settings_no_muted_accounts">No muted accounts</string>
+    <string name="settings_no_sessions">No active sessions</string>
     <string name="settings_outbox">Outbox</string>
     <string name="settings_playback">Playback</string>
     <string name="settings_quality_best_available">Best Available</string>
@@ -702,6 +705,7 @@
     <string name="settings_retention_days">%1$d days</string>
     <string name="settings_retention_help">Keep items newer than N days; older items are pruned and not re-downloaded. Bookmarked and liked content is never pruned.</string>
     <string name="settings_retention_one_day">1 day</string>
+    <string name="settings_revoke_session_confirm">Revoke this session?</string>
     <string name="settings_sb_ask_to_skip">Ask to skip</string>
     <string name="settings_sb_do_not_skip">Do not skip</string>
     <string name="settings_sb_filler">Filler</string>
@@ -734,6 +738,9 @@
     <string name="settings_section_windows_updates">Windows Updates</string>
     <string name="settings_section_x_feed">X Feed</string>
     <string name="settings_segment_skipping">Segment skipping</string>
+    <string name="settings_session_active">Last active</string>
+    <string name="settings_session_started">Signed in</string>
+    <string name="settings_sessions">Sessions</string>
     <string name="settings_share_embed_friendly_links">Use embed-friendly sites for sharing links</string>
     <string name="settings_sidebar_route_order">Sidebar Order</string>
     <string name="settings_sidebar_route_order_help">Choose the order of routes in the sidebar.</string>

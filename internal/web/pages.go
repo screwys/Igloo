@@ -201,7 +201,7 @@ func feedItemToVideo(item model.FeedItem, ch model.Channel) model.Video {
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	sess, _ := s.store.Get(r, "session")
-	if username, ok := sess.Values["auth_user"].(string); ok && username != "" {
+	if s.browserSessionActive(sess) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
@@ -263,7 +263,7 @@ func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	}
 	sess, _ := s.store.Get(r, "session")
 	if s.usersConfigured() {
-		if username, ok := sess.Values["auth_user"].(string); ok && username != "" {
+		if s.browserSessionActive(sess) {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
@@ -527,8 +527,18 @@ func (s *Server) usersConfigured() bool {
 }
 
 func (s *Server) loginSuccess(w http.ResponseWriter, r *http.Request, username, role string, platforms []string) {
+	sessionID, err := s.db.CreateAuthSession(username)
+	if err == nil {
+		err = s.db.SetAuthSessionClient(sessionID, authClientName(r), time.Now().Add(time.Duration(sessionCookieMaxAge)*time.Second).UnixMilli())
+	}
+	if err != nil {
+		http.Error(w, "could not create session", http.StatusInternalServerError)
+		return
+	}
+
 	sess, _ := s.store.Get(r, "session")
 	sess.Values["auth_user"] = username
+	sess.Values["auth_session_id"] = sessionID
 	sess.Values["user_role"] = role
 	sess.Values["user_platforms"] = s.effectivePlatforms(platforms)
 	sess.Options.MaxAge = 86400 * 30
@@ -560,6 +570,13 @@ func safeLoginNext(raw string) string {
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	sess, _ := s.store.Get(r, "session")
+	if sessionID, ok := sess.Values["auth_session_id"].(string); ok {
+		if err := s.db.RevokeAuthSession(sessionID, "user_logout"); err != nil {
+			http.Error(w, "could not revoke session", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	sess.Values["auth_user"] = ""
 	sess.Options.MaxAge = -1
 	_ = sess.Save(r, w)

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Igloo Site Sync
 // @namespace    local.igloo.site.sync
-// @version      8.0.39
+// @version      8.0.40
 // @author       screwys
 // @description  Follow X, TikTok, Instagram, and YouTube channels in Igloo; includes the full X media workflow.
 // @homepageURL  https://github.com/screwys/Igloo
@@ -36,11 +36,11 @@
 
 (function () {
   "use strict";
-  const SCRIPT_VERSION = "8.0.39";
+  const SCRIPT_VERSION = "8.0.40";
 
   const SETTINGS = {
     apiBase: "xsync_api_base",
-    authToken: "xsync_auth_token", // access token (7d)
+    authToken: "xsync_auth_token", // access token (30d)
     authRefresh: "xsync_auth_refresh", // refresh token (90d, rotated on use)
     authUser: "xsync_auth_user",
     syncToDashboard: "xsync_sync_to_dashboard",
@@ -257,7 +257,7 @@
     }
     const hadPalette = !!_iglooThemePalette;
     if (_iglooThemeFetch) return _iglooThemeFetch;
-    _iglooThemeFetch = apiRequest("GET", "/api/theme.json", null, true)
+    _iglooThemeFetch = apiRequest("GET", "/api/theme.json", null, true, false)
       .then((resp) => {
         if (!resp.ok || !setIglooThemeSnapshot(resp.json)) return hadPalette;
         return true;
@@ -1219,20 +1219,45 @@
     return { ok: false, response: r };
   }
 
-  async function apiRequest(method, path, body, withAuth = true) {
-    const resp = await _rawApiRequest(method, path, body, withAuth);
-    if (withAuth && shouldRefreshAuthResponse(resp)) {
-      if (!_refreshingToken) {
-        _refreshingToken = _refreshToken().then((result) => {
-          _refreshingToken = null;
-          return result;
-        });
+  let rejectedAuth = null;
+
+  async function apiRequest(method, path, body, withAuth = true, notifyAuth = true) {
+    const access = getToken();
+    const refresh = getRefresh();
+    if (withAuth && rejectedAuth) {
+      if (rejectedAuth.access === access && rejectedAuth.refresh === refresh) {
+        if (notifyAuth) notify(rejectedAuth.notice);
+        return rejectedAuth.response;
       }
-      const refreshResult = await _refreshingToken;
-      if (refreshResult.ok) return _rawApiRequest(method, path, body, withAuth);
-      notify(authFailureNotice(resp, refreshResult.response));
-    } else if (withAuth && resp.status === 401) {
-      notify(authFailureNotice(resp, null));
+      rejectedAuth = null;
+    }
+    let resp = await _rawApiRequest(method, path, body, withAuth);
+    let refreshResp = null;
+    if (withAuth && shouldRefreshAuthResponse(resp)) {
+      // Another tab may have refreshed while this request was in flight.
+      if (getToken() !== access) {
+        resp = await _rawApiRequest(method, path, body, withAuth);
+      } else {
+        if (!_refreshingToken) {
+          _refreshingToken = _refreshToken().finally(() => {
+            _refreshingToken = null;
+          });
+        }
+        const result = await _refreshingToken;
+        refreshResp = result.response;
+        if (result.ok) resp = await _rawApiRequest(method, path, body, withAuth);
+      }
+    }
+    if (withAuth && (resp.status === 401 || isHTMLAuthRedirect(resp))) {
+      // Keep transient refresh failures retryable, but stop background requests
+      // after a rejected login until the saved credentials change.
+      const notice = authFailureNotice(resp, refreshResp);
+      if (!refreshResp || refreshResp.status === 401) {
+        rejectedAuth = {
+          access: getToken(), refresh: getRefresh(), notice, response: resp,
+        };
+      }
+      if (notifyAuth) notify(notice);
     }
     return resp;
   }
@@ -1256,6 +1281,7 @@
       "/api/channels?platform=twitter",
       null,
       true,
+      false,
     );
     if (!resp.ok) {
       refreshButtonStates();
@@ -1308,6 +1334,7 @@
             "/api/subscribe",
             { url: item.url || `https://x.com/${item.key}` },
             true,
+            false,
           );
           if (r.ok || r.status === 409) {
             const handle = item.key.toLowerCase();
@@ -1537,6 +1564,7 @@
       "/api/bookmark-categories",
       null,
       true,
+      false,
     );
     // Server-side-changes #10: list now wrapped as {categories:[...]}. Fall
     // back to the bare array for older deployments.
@@ -1552,7 +1580,7 @@
   }
 
   async function fetchDlLabels() {
-    const resp = await apiRequest("GET", "/api/bookmark-labels", null, true);
+    const resp = await apiRequest("GET", "/api/bookmark-labels", null, true, false);
     if (!resp.ok || !resp.json) return;
     if (Array.isArray(resp.json.labels)) dlLabels = resp.json.labels;
     else if (Array.isArray(resp.json)) dlLabels = resp.json;
@@ -1609,6 +1637,7 @@
         "/api/bookmark-aliases?include_handles=1",
         null,
         true,
+        false,
       );
       if (resp.ok && resp.json) {
         _handleAliasCache = {};
@@ -3674,7 +3703,7 @@
       const resp = await _rawApiRequest(
         "POST",
         "/api/auth/login",
-        { username, password },
+        { username, password, client_name: "Igloo Site Sync" },
         false,
       );
       if (!resp.ok || !storeAuthTokens(resp.json)) {
@@ -3711,6 +3740,7 @@
 
     GM_registerMenuCommand("Test connection", async () => {
       const resp = await apiRequest("GET", "/api/stats", null, true);
+      if (resp.status === 401 || isHTMLAuthRedirect(resp)) return;
       notify(
         resp.ok
           ? "Server connection OK"
@@ -4003,6 +4033,7 @@
         "/api/subscribe",
         { url: entry.url, platform },
         true,
+        false,
       );
       if (resp.ok || resp.status === 409) {
         const channelID =
@@ -4029,6 +4060,7 @@
       `/api/channels?platform=${encodeURIComponent(platform)}`,
       null,
       true,
+      false,
     );
     if (!resp.ok) {
       refreshCrossSiteButtons();

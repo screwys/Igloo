@@ -536,6 +536,7 @@ func newLoginSubmitTestServer(t *testing.T) *Server {
 	auth.InitCache(authPath)
 
 	return &Server{
+		db:    newTestServer(t).db,
 		cfg:   &config.Config{SecretKey: "test-secret", AuthUsersPath: authPath},
 		store: sessions.NewCookieStore([]byte("test-secret")),
 	}

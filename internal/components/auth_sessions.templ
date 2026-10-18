@@ -1,0 +1,38 @@
+package components
+
+import (
+	"fmt"
+	"github.com/screwys/igloo/internal/db"
+)
+
+// AuthSessions renders the signed-in user's connected clients.
+templ AuthSessions(p PageProps, sessions []db.ConnectedSession, currentID string) {
+	if len(sessions) == 0 {
+		<div class="form-hint">{ L(p, "settings_no_sessions", "No active sessions") }</div>
+	}
+	for _, session := range sessions {
+		<div style="padding:0.75rem 0; border-bottom:1px solid var(--border-color);">
+			<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.5rem;">
+				<span style="flex:1; overflow-wrap:anywhere;">{ session.ClientName }</span>
+				if session.SessionID == currentID {
+					<span class="form-hint">{ L(p, "settings_current_session", "Current session") }</span>
+				}
+				<button
+					type="button"
+					class="btn btn-secondary btn-sm"
+					style="color:var(--danger);"
+					hx-delete={ "/api/auth/sessions/" + session.SessionID }
+					hx-target="#auth-sessions"
+					hx-swap="innerHTML"
+					hx-confirm={ L(p, "settings_revoke_session_confirm", "Revoke this session?") }
+				>{ L(p, "action_revoke", "Revoke") }</button>
+			</div>
+			<div class="form-hint">
+				{ L(p, "settings_session_started", "Signed in") + " " }
+				<span data-timestamp={ fmt.Sprintf("%d", session.CreatedAtMs) }>{ TimeAgoText(p, session.CreatedAtMs / 1000) }</span>
+				{ " · " + L(p, "settings_session_active", "Last active") + " " }
+				<span data-timestamp={ fmt.Sprintf("%d", session.LastActiveAtMs) }>{ TimeAgoText(p, session.LastActiveAtMs / 1000) }</span>
+			</div>
+		</div>
+	}
+}

@@ -1015,6 +1015,10 @@ templ prefsAccountTab(p PageProps) {
 					</div>
 				</div>
 			}
+			<div class="account-col">
+				<h4 style="margin:0 0 1rem; color:var(--accent-primary); font-size:0.9rem;">{ L(p, "settings_sessions", "Sessions") }</h4>
+				<div id="auth-sessions" hx-get="/api/auth/sessions" hx-trigger="intersect once, prefs-open from:body" hx-swap="innerHTML"></div>
+			</div>
 		</div>
 	</div>
 }

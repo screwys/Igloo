@@ -12,13 +12,6 @@ import (
 	"github.com/screwys/igloo/internal/db/query"
 )
 
-// #16 — auth session + refresh token storage.
-// One auth_sessions row per login. Zero-or-more auth_refresh_tokens rows
-// (only the most recently issued one is unconsumed at any time). Replay
-// detection: a second consume of an already-consumed refresh token ID
-// marks the whole session revoked, killing every paired access token
-// on the next probe.
-
 var ErrSessionRevoked = errors.New("session revoked")
 var ErrRefreshTokenExpired = errors.New("refresh token expired")
 var ErrRefreshTokenConsumed = errors.New("refresh token already consumed")
@@ -120,16 +113,23 @@ func (db *DB) CreateRefreshToken(sessionID string, ttl time.Duration) (tokenID s
 	return
 }
 
-// ConsumeRefreshToken atomically checks-and-marks a refresh token as used.
-// Returns (session_id, nil) on successful first-use.
-// Returns ErrRefreshTokenUnknown if the token ID has no row.
-// Returns ErrRefreshTokenExpired when expires_at_ms has passed.
-// Returns ErrRefreshTokenConsumed (AND revokes the session) on replay.
-// Returns ErrSessionRevoked if the session was already revoked.
-func (db *DB) ConsumeRefreshToken(tokenID string) (sessionID string, err error) {
+// RefreshToken contains the values needed to sign a token pair.
+type RefreshToken struct {
+	SessionID   string
+	TokenID     string
+	IssuedAtMs  int64
+	ExpiresAtMs int64
+}
+
+// RefreshTokenOverlap allows tabs and retried requests to receive the same pair.
+const RefreshTokenOverlap = time.Minute
+
+// RotateRefreshToken consumes and replaces a token in one transaction. Recent
+// duplicates receive the current pair; older replays revoke the session.
+func (db *DB) RotateRefreshToken(tokenID string, ttl time.Duration) (token RefreshToken, err error) {
 	now := time.Now().UnixMilli()
 	var outcome error
-	txErr := db.WithWrite(func(tx *sql.Tx) error {
+	err = db.WithWrite(func(tx *sql.Tx) error {
 		q := query.New(tx)
 		row, qErr := q.GetRefreshTokenForUpdate(context.Background(), sql.NullString{String: tokenID, Valid: true})
 		if errors.Is(qErr, sql.ErrNoRows) {
@@ -143,9 +143,19 @@ func (db *DB) ConsumeRefreshToken(tokenID string) (sessionID string, err error) 
 			outcome = ErrSessionRevoked
 			return nil
 		}
+		if now > row.ExpiresAtMs {
+			outcome = ErrRefreshTokenExpired
+			return nil
+		}
 		if row.ConsumedAtMs.Valid {
-			// Replay: revoke the whole session within this tx so the
-			// revoke commits alongside the outcome classification.
+			if now-row.ConsumedAtMs.Int64 <= RefreshTokenOverlap.Milliseconds() {
+				current, e := q.GetCurrentRefreshToken(context.Background(), row.SessionID)
+				if e != nil {
+					return e
+				}
+				token = RefreshToken{row.SessionID, current.TokenID.String, current.IssuedAtMs, current.ExpiresAtMs}
+				return nil
+			}
 			if e := q.RevokeAuthSession(context.Background(), query.RevokeAuthSessionParams{
 				RevokeReason: sql.NullString{String: "refresh_replay", Valid: true}, SessionID: sql.NullString{String: row.SessionID, Valid: true},
 			}); e != nil {
@@ -154,20 +164,63 @@ func (db *DB) ConsumeRefreshToken(tokenID string) (sessionID string, err error) 
 			outcome = ErrRefreshTokenConsumed
 			return nil
 		}
-		if now > row.ExpiresAtMs {
-			outcome = ErrRefreshTokenExpired
-			return nil
-		}
 		if e := q.ConsumeRefreshToken(context.Background(), query.ConsumeRefreshTokenParams{
 			ConsumedAtMs: sql.NullInt64{Int64: now, Valid: true}, TokenID: sql.NullString{String: tokenID, Valid: true},
 		}); e != nil {
 			return e
 		}
-		sessionID = row.SessionID
-		return nil
+		token = RefreshToken{row.SessionID, NewRandomID(), now, now + ttl.Milliseconds()}
+		return q.CreateRefreshToken(context.Background(), query.CreateRefreshTokenParams{
+			TokenID: sql.NullString{String: token.TokenID, Valid: true}, SessionID: token.SessionID,
+			IssuedAtMs: token.IssuedAtMs, ExpiresAtMs: token.ExpiresAtMs,
+		})
 	})
-	if txErr != nil {
-		return "", txErr
+	if err != nil {
+		return RefreshToken{}, err
 	}
-	return sessionID, outcome
+	return token, outcome
+}
+
+func (db *DB) SetAuthSessionClient(sessionID, clientName string, expiresAtMs int64) error {
+	return db.WithWrite(func(tx *sql.Tx) error {
+		return query.New(tx).SetAuthSessionClient(context.Background(), query.SetAuthSessionClientParams{
+			ClientName: clientName, ExpiresAtMs: expiresAtMs, SessionID: sql.NullString{String: sessionID, Valid: true},
+		})
+	})
+}
+
+type ConnectedSession struct {
+	SessionID      string `json:"session_id"`
+	ClientName     string `json:"client_name"`
+	CreatedAtMs    int64  `json:"created_at_ms"`
+	LastActiveAtMs int64  `json:"last_active_at_ms"`
+	ExpiresAtMs    int64  `json:"expires_at_ms"`
+}
+
+func (db *DB) ListAuthSessions(username string) ([]ConnectedSession, error) {
+	rows, err := query.New(db.conn).ListAuthSessions(context.Background(), username)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]ConnectedSession, 0, len(rows))
+	now := time.Now().UnixMilli()
+	for _, row := range rows {
+		if row.ExpiresAtMs <= now {
+			continue
+		}
+		result = append(result, ConnectedSession{row.SessionID.String, row.ClientName, row.CreatedAtMs, row.LastActiveAtMs, row.ExpiresAtMs})
+	}
+	return result, nil
+}
+
+func (db *DB) RevokeOwnedAuthSession(sessionID, username string) (bool, error) {
+	var count int64
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		var err error
+		count, err = query.New(tx).RevokeOwnedAuthSession(context.Background(), query.RevokeOwnedAuthSessionParams{
+			SessionID: sql.NullString{String: sessionID, Valid: true}, Username: username,
+		})
+		return err
+	})
+	return count > 0, err
 }

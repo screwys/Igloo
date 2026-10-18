@@ -7,8 +7,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/screwys/igloo/internal/auth"
+	"github.com/screwys/igloo/internal/db"
 )
 
 func contextWithUser(r *http.Request, username, role string) context.Context {
@@ -69,7 +71,10 @@ func TestRefreshReplayRevokesSession(t *testing.T) {
 		t.Fatalf("first refresh expected 200, got %d — %s", rec1.Code, rec1.Body.String())
 	}
 
-	// Second consume of the SAME refresh token: replay.
+	// Reuse outside the overlap window is a replay.
+	if err := srv.db.ExecRaw("UPDATE auth_refresh_tokens SET consumed_at_ms=$1 WHERE token_id=$2", time.Now().Add(-db.RefreshTokenOverlap-time.Second).UnixMilli(), tokenID); err != nil {
+		t.Fatal(err)
+	}
 	rec2 := httptest.NewRecorder()
 	srv.handleAuthRefresh(rec2, httptest.NewRequest("POST", "/api/auth/refresh", strings.NewReader(payload)))
 	if rec2.Code != 401 {

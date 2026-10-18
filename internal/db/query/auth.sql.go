@@ -73,9 +73,18 @@ SELECT session_id, username, created_at_ms, last_active_at_ms, revoked, revoke_r
 FROM auth_sessions WHERE session_id=$1
 `
 
-func (q *Queries) GetAuthSession(ctx context.Context, sessionID sql.NullString) (AuthSession, error) {
+type GetAuthSessionRow struct {
+	SessionID      sql.NullString
+	Username       string
+	CreatedAtMs    int64
+	LastActiveAtMs int64
+	Revoked        int64
+	RevokeReason   sql.NullString
+}
+
+func (q *Queries) GetAuthSession(ctx context.Context, sessionID sql.NullString) (GetAuthSessionRow, error) {
 	row := q.db.QueryRowContext(ctx, getAuthSession, sessionID)
-	var i AuthSession
+	var i GetAuthSessionRow
 	err := row.Scan(
 		&i.SessionID,
 		&i.Username,
@@ -84,6 +93,24 @@ func (q *Queries) GetAuthSession(ctx context.Context, sessionID sql.NullString) 
 		&i.Revoked,
 		&i.RevokeReason,
 	)
+	return i, err
+}
+
+const getCurrentRefreshToken = `-- name: GetCurrentRefreshToken :one
+SELECT token_id, issued_at_ms, expires_at_ms FROM auth_refresh_tokens
+WHERE session_id=$1 AND consumed_at_ms IS NULL ORDER BY issued_at_ms DESC LIMIT 1
+`
+
+type GetCurrentRefreshTokenRow struct {
+	TokenID     sql.NullString
+	IssuedAtMs  int64
+	ExpiresAtMs int64
+}
+
+func (q *Queries) GetCurrentRefreshToken(ctx context.Context, sessionID string) (GetCurrentRefreshTokenRow, error) {
+	row := q.db.QueryRowContext(ctx, getCurrentRefreshToken, sessionID)
+	var i GetCurrentRefreshTokenRow
+	err := row.Scan(&i.TokenID, &i.IssuedAtMs, &i.ExpiresAtMs)
 	return i, err
 }
 
@@ -112,6 +139,53 @@ func (q *Queries) GetRefreshTokenForUpdate(ctx context.Context, tokenID sql.Null
 	return i, err
 }
 
+const listAuthSessions = `-- name: ListAuthSessions :many
+SELECT s.session_id, s.client_name, s.created_at_ms, s.last_active_at_ms,
+       CASE WHEN s.expires_at_ms > 0 THEN s.expires_at_ms
+            ELSE COALESCE((SELECT MAX(rt.expires_at_ms) FROM auth_refresh_tokens rt WHERE rt.session_id=s.session_id), 0)
+       END::bigint AS expires_at_ms
+FROM auth_sessions s
+WHERE s.username=$1 AND s.revoked=0
+ORDER BY s.last_active_at_ms DESC, s.created_at_ms DESC
+`
+
+type ListAuthSessionsRow struct {
+	SessionID      sql.NullString
+	ClientName     string
+	CreatedAtMs    int64
+	LastActiveAtMs int64
+	ExpiresAtMs    int64
+}
+
+func (q *Queries) ListAuthSessions(ctx context.Context, username string) ([]ListAuthSessionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAuthSessions, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAuthSessionsRow
+	for rows.Next() {
+		var i ListAuthSessionsRow
+		if err := rows.Scan(
+			&i.SessionID,
+			&i.ClientName,
+			&i.CreatedAtMs,
+			&i.LastActiveAtMs,
+			&i.ExpiresAtMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revokeAuthSession = `-- name: RevokeAuthSession :exec
 UPDATE auth_sessions SET revoked=1, revoke_reason=$1 WHERE session_id=$2
 `
@@ -137,6 +211,38 @@ type RevokeAuthSessionsForUserParams struct {
 
 func (q *Queries) RevokeAuthSessionsForUser(ctx context.Context, arg RevokeAuthSessionsForUserParams) error {
 	_, err := q.db.ExecContext(ctx, revokeAuthSessionsForUser, arg.RevokeReason, arg.Username)
+	return err
+}
+
+const revokeOwnedAuthSession = `-- name: RevokeOwnedAuthSession :execrows
+UPDATE auth_sessions SET revoked=1, revoke_reason='user_revoked' WHERE session_id=$1 AND username=$2
+`
+
+type RevokeOwnedAuthSessionParams struct {
+	SessionID sql.NullString
+	Username  string
+}
+
+func (q *Queries) RevokeOwnedAuthSession(ctx context.Context, arg RevokeOwnedAuthSessionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, revokeOwnedAuthSession, arg.SessionID, arg.Username)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setAuthSessionClient = `-- name: SetAuthSessionClient :exec
+UPDATE auth_sessions SET client_name=$1, expires_at_ms=$2 WHERE session_id=$3
+`
+
+type SetAuthSessionClientParams struct {
+	ClientName  string
+	ExpiresAtMs int64
+	SessionID   sql.NullString
+}
+
+func (q *Queries) SetAuthSessionClient(ctx context.Context, arg SetAuthSessionClientParams) error {
+	_, err := q.db.ExecContext(ctx, setAuthSessionClient, arg.ClientName, arg.ExpiresAtMs, arg.SessionID)
 	return err
 }
 

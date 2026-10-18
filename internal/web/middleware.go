@@ -3,7 +3,9 @@ package web
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -28,6 +30,7 @@ type userInfo struct {
 	Username  string
 	Role      string
 	Platforms []string
+	SessionID string
 }
 
 func requestLogger(next http.Handler) http.Handler {
@@ -115,6 +118,7 @@ func (s *Server) enforceAuth(next http.Handler) http.Handler {
 					s.touchAuthSessionActivity(sess)
 					ctx := context.WithValue(r.Context(), userContextKey, &userInfo{
 						Username:  claims.Username,
+						SessionID: claims.SessionID,
 						Role:      claims.Role,
 						Platforms: s.effectivePlatforms(claims.Platforms),
 					})
@@ -138,6 +142,39 @@ func (s *Server) enforceAuth(next http.Handler) http.Handler {
 			return
 		}
 
+		sessionID, _ := sess.Values["auth_session_id"].(string)
+		if sessionID == "" {
+			// Register existing browser cookies without asking users to log in again.
+			var err error
+			sessionID, err = s.db.CreateAuthSession(username)
+			if err == nil {
+				err = s.db.SetAuthSessionClient(sessionID, authClientName(r), time.Now().Add(time.Duration(sessionCookieMaxAge)*time.Second).UnixMilli())
+			}
+			if err != nil {
+				http.Error(w, "could not create session", http.StatusInternalServerError)
+				return
+			}
+			sess.Values["auth_session_id"] = sessionID
+			if err := sess.Save(r, w); err != nil {
+				http.Error(w, "could not save session", http.StatusInternalServerError)
+				return
+			}
+		}
+		tracked, err := s.db.GetAuthSession(sessionID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "could not read session", http.StatusInternalServerError)
+			return
+		}
+		if tracked == nil || tracked.Revoked || tracked.Username != username {
+			if apiPath(path) {
+				writeJSONError(w, 401, "session_revoked", "Session revoked")
+				return
+			}
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		s.touchAuthSessionActivity(tracked)
+
 		role, _ := sess.Values["user_role"].(string)
 		if role == "" {
 			role = "user"
@@ -145,6 +182,7 @@ func (s *Server) enforceAuth(next http.Handler) http.Handler {
 		platforms, _ := sess.Values["user_platforms"].([]string)
 		ctx := context.WithValue(r.Context(), userContextKey, &userInfo{
 			Username:  username,
+			SessionID: sessionID,
 			Role:      role,
 			Platforms: s.effectivePlatforms(platforms),
 		})
@@ -264,4 +302,17 @@ func userFromContext(ctx context.Context) *userInfo {
 		return u
 	}
 	return nil
+}
+
+func (s *Server) browserSessionActive(sess *sessions.Session) bool {
+	username, _ := sess.Values["auth_user"].(string)
+	if username == "" {
+		return false
+	}
+	sessionID, _ := sess.Values["auth_session_id"].(string)
+	if sessionID == "" {
+		return true
+	}
+	tracked, err := s.db.GetAuthSession(sessionID)
+	return err == nil && !tracked.Revoked && tracked.Username == username
 }

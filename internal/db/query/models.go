@@ -3,16 +3,3 @@
 //   sqlc v1.31.1
 
 package query
-
-import (
-	"database/sql"
-)
-
-type AuthSession struct {
-	SessionID      sql.NullString
-	Username       string
-	CreatedAtMs    int64
-	LastActiveAtMs int64
-	Revoked        int64
-	RevokeReason   sql.NullString
-}

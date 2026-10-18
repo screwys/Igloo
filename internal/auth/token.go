@@ -11,11 +11,11 @@ import (
 )
 
 // #16 — paired access + refresh tokens with session tracking.
-// Access TTL: 7 days. Refresh TTL: 90 days. Single-use refresh with
-// server-side replay detection (see internal/db/auth_sessions.go).
+// Access TTL: 30 days. Refresh TTL: 90 days. Refresh rotation allows
+// overlapping requests before replay detection revokes the session.
 
 const (
-	AccessTokenTTL  = 7 * 24 * time.Hour
+	AccessTokenTTL  = 30 * 24 * time.Hour
 	RefreshTokenTTL = 90 * 24 * time.Hour
 )
 
@@ -41,7 +41,7 @@ type TokenClaims struct {
 	ExpiresAtMs int64    `json:"expires_at_ms"`
 }
 
-// SignAccessToken produces a 7-day access token tied to a session.
+// SignAccessToken produces a 30-day access token tied to a session.
 func SignAccessToken(secret, username, role string, platforms []string, sessionID string, issuedAtMs int64) string {
 	claims := TokenClaims{
 		Username:    username,
