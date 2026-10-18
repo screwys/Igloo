@@ -1485,24 +1485,16 @@ document.addEventListener('click', function (e) {
 
 // ── HTMX event handlers ──
 
-// Pre-load sentinel: observe it 2500px before it enters the viewport so the
-// next page request is in-flight well before the user reaches the bottom.
-// Use a custom event instead of HTMX's built-in "revealed" trigger so the
-// observer cannot race with HTMX's own visibility handler and issue a duplicate
-// request for the same sentinel.
-function observeSentinelEarly() {
-  var sentinel = feedList && feedList.querySelector('.feed-scroll-sentinel')
-  if (!sentinel || sentinel._earlyObserved) return
-  sentinel._earlyObserved = true
-  var observer = new IntersectionObserver(function (entries) {
-    entries.forEach(function (entry) {
-      if (entry.isIntersecting) {
-        observer.disconnect()
-        htmx.trigger(entry.target, 'feed-preload')
-      }
-    })
-  }, { rootMargin: '0px 0px 2500px 0px' })
-  observer.observe(sentinel)
+// Measure inside the feed's window. The mini-player's browsing frame clips
+// an IntersectionObserver's preload margin to the visible frame.
+function preloadFeedPage() {
+  var sentinel = feedList && feedList.lastElementChild
+  if (!sentinel || !sentinel.classList.contains('feed-scroll-sentinel') || sentinel._preloadRequested) return
+  if (sentinel.classList.contains(htmx.config.addedClass)) return
+  if (!sentinel.getClientRects().length) return
+  if (sentinel.getBoundingClientRect().top > window.innerHeight + 2500) return
+  sentinel._preloadRequested = true
+  htmx.trigger(sentinel, 'feed-preload')
 }
 
 // After infinite scroll sentinel swap, initialize only newly added cards.
@@ -1533,9 +1525,12 @@ if (feedList) {
     if (trigger && trigger.classList && trigger.classList.contains('feed-scroll-sentinel')) {
       initNewFeedCards()
       removeEmptyStateIfNeeded()
-      observeSentinelEarly()
+      preloadFeedPage()
     }
   })
+  window.addEventListener('scroll', preloadFeedPage, { passive: true })
+  window.addEventListener('resize', preloadFeedPage)
+  new ResizeObserver(preloadFeedPage).observe(feedList)
 }
 
 // Custom confirm dialog for HTMX mute buttons
@@ -1693,7 +1688,7 @@ feedSeenTracking = initFeedSeenTracking(feedList, function (tweetIds) {
   })
 })
 removeEmptyStateIfNeeded()
-observeSentinelEarly()
+preloadFeedPage()
 initRetweetersDialog()
 restoreFeedThreadReturn()
 initThreadBackLink()
