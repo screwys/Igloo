@@ -205,8 +205,8 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool, 
 			}
 		}
 
-		item.MediaSlideURLs = indexedMediaURLs(item.TweetID, item.Media, mediaURLs)
-		item.QuoteMediaSlideURLs = indexedMediaURLs(item.QuoteTweetID, item.QuoteMedia, mediaURLs)
+		item.MediaSlideURLs = indexedMediaURLs(item.TweetID, item.Media, mediaURLs, item.MediaPending)
+		item.QuoteMediaSlideURLs = indexedMediaURLs(item.QuoteTweetID, item.QuoteMedia, mediaURLs, item.QuoteMediaPending)
 
 		// Retweet grouping
 		if item.ContentHash != "" {
@@ -295,7 +295,7 @@ func readyTweetMediaURLs(database *db.DB, ownerIDs []string) map[string]map[int]
 	return out
 }
 
-func indexedMediaURLs(ownerID string, refs []model.MediaRef, urls map[string]map[int]string) []string {
+func indexedMediaURLs(ownerID string, refs []model.MediaRef, urls map[string]map[int]string, pending bool) []string {
 	if ownerID == "" || len(refs) == 0 {
 		return nil
 	}
@@ -304,6 +304,10 @@ func indexedMediaURLs(ownerID string, refs []model.MediaRef, urls map[string]map
 		if index >= 0 && index < len(refs) {
 			out[index] = url
 		}
+	}
+	if pending {
+		// The queued download supplies these bytes through the media fragment.
+		return out
 	}
 	for index, ref := range refs {
 		if out[index] == "" && !isVideoMedia(ref) {

@@ -530,7 +530,14 @@ templ feedArticleText(p PageProps, title string, body string, translation string
 templ FeedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 	{{ mediaCount := len(item.Media) }}
 	{{ readyMediaCount := feedReadyMediaCount(item.MediaSlideURLs) }}
-	<div data-media-owner={ item.TweetID }>
+	<div
+		data-media-owner={ item.TweetID }
+		if item.MediaPending && readyMediaCount < mediaCount {
+			hx-get={ "/api/feed/media/" + item.TweetID }
+			hx-trigger="every 2s"
+			hx-swap="outerHTML"
+		}
+	>
 		if mediaCount == 1 && feedMediaRefIsVideo(item.Media[0]) {
 			{{ streamURL := item.MediaStreamURL }}
 			{{ mediaURL := feedMediaURLAt(item.MediaSlideURLs, 0) }}
@@ -541,6 +548,7 @@ templ FeedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 			if streamURL != "" {
 				<div
 					class="feed-media-wrap"
+					style={ feedSingleMediaStyle(item.Media[0]) }
 					data-feed-media
 					data-feed-media-kind="video"
 					data-feed-video-kind={ feedMediaPlaybackKind(item.Media[0]) }
@@ -565,11 +573,14 @@ templ FeedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 					@feedVideoControls(p)
 					</div>
 				</div>
+			} else {
+				@feedPendingMedia(p, item.Media[0])
 			}
 		} else if mediaCount == 1 && feedMediaURLAt(item.MediaSlideURLs, 0) != "" {
 			{{ mediaURL := feedMediaURLAt(item.MediaSlideURLs, 0) }}
 			<div
 				class="feed-media-wrap"
+				style={ feedSingleMediaStyle(item.Media[0]) }
 				data-feed-media
 				data-feed-media-kind="image"
 				data-feed-media-url={ mediaURL }
@@ -586,31 +597,30 @@ templ FeedMedia(p PageProps, item model.FeedItem, deferMedia bool) {
 					alt={ L(p, "feed_post_media", "Post media") }
 				/>
 			</div>
-		} else if readyMediaCount > 0 {
-			@feedMediaGrid(p, readyMediaCount, feedMediaRowStyle(item.Media, item.MediaSlideURLs)) {
+		} else if mediaCount > 1 {
+			@feedMediaGrid(p, mediaCount, feedMediaRowStyle(item.Media)) {
 					for i, m := range item.Media {
 						if feedMediaURLAt(item.MediaSlideURLs, i) != "" {
 							@feedMediaTile(p, i, m, mediaCount, item.MediaStreamURL, item.MediaPreviewURL, feedMediaURLAt(item.MediaSlideURLs, i), deferMedia)
+						} else {
+							@feedPendingMediaTile(p)
 						}
 					}
 			}
-		}
-		if readyMediaCount < mediaCount && !(mediaCount == 1 && feedMediaRefIsVideo(item.Media[0]) && item.MediaStreamURL != "") {
-			@feedPendingMedia(p, item.TweetID, item.MediaPending)
+		} else if mediaCount == 1 {
+			@feedPendingMedia(p, item.Media[0])
 		}
 	</div>
 }
 
-templ feedPendingMedia(p PageProps, ownerID string, pending bool) {
-	<div
-		class="feed-media-wrap"
-		if pending {
-			hx-get={ "/api/feed/media/" + ownerID }
-			hx-trigger="load delay:2s"
-			hx-target="closest [data-media-owner]"
-			hx-swap="outerHTML"
-		}
-	>
+templ feedPendingMedia(p PageProps, media model.MediaRef) {
+	<div class="feed-media-wrap" style={ feedSingleMediaStyle(media) }>
+		<img class="feed-media-image" alt={ L(p, "feed_post_media", "Post media") }/>
+	</div>
+}
+
+templ feedPendingMediaTile(p PageProps) {
+	<div class="feed-media-tile">
 		<img class="feed-media-image" alt={ L(p, "feed_post_media", "Post media") }/>
 	</div>
 }
@@ -815,10 +825,18 @@ templ feedQuoteCard(p PageProps, item model.FeedItem, deferMedia bool) {
 
 templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMedia bool) {
 	{{ readyMediaCount := feedReadyMediaCount(item.QuoteMediaSlideURLs) }}
-	<div data-media-owner={ item.QuoteTweetID }>
+	<div
+		data-media-owner={ item.QuoteTweetID }
+		if item.QuoteMediaPending && readyMediaCount < qMediaCount {
+			hx-get={ "/api/feed/media/" + item.QuoteTweetID }
+			hx-trigger="every 2s"
+			hx-swap="outerHTML"
+		}
+	>
 		if qMediaCount == 1 && feedMediaRefIsVideo(item.QuoteMedia[0]) && item.QuoteMediaStreamURL != "" {
 			<div
 				class="feed-media-wrap"
+				style={ feedSingleMediaStyle(item.QuoteMedia[0]) }
 				data-feed-media
 				data-feed-media-kind="video"
 				data-feed-video-kind={ feedMediaPlaybackKind(item.QuoteMedia[0]) }
@@ -838,6 +856,7 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMed
 			{{ mediaURL := feedMediaURLAt(item.QuoteMediaSlideURLs, 0) }}
 			<div
 				class="feed-media-wrap"
+				style={ feedSingleMediaStyle(item.QuoteMedia[0]) }
 				data-feed-media
 				data-feed-media-kind="image"
 				data-feed-media-url={ mediaURL }
@@ -854,19 +873,20 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMed
 					alt={ L(p, "feed_quoted_post_media", "Quoted post media") }
 				/>
 			</div>
-		} else if qMediaCount > 1 && readyMediaCount > 0 {
-			@feedMediaGrid(p, readyMediaCount, feedMediaRowStyle(item.QuoteMedia, item.QuoteMediaSlideURLs)) {
+		} else if qMediaCount > 1 {
+			@feedMediaGrid(p, qMediaCount, feedMediaRowStyle(item.QuoteMedia)) {
 					for i, qm := range item.QuoteMedia {
 						if feedMediaURLAt(item.QuoteMediaSlideURLs, i) != "" {
 							@feedQuoteMediaTile(p, i, qm, qMediaCount, item.QuoteMediaStreamURL, item.QuoteMediaPreviewURL, feedMediaURLAt(item.QuoteMediaSlideURLs, i), deferMedia)
+						} else {
+							@feedPendingMediaTile(p)
 						}
 					}
 			}
+		} else if qMediaCount == 1 {
+			@feedPendingMedia(p, item.QuoteMedia[0])
 		} else if item.QuoteBodyText == "" {
 			<div class="feed-quote-unavailable">{ L(p, "feed_quoted_post", "Quoted post") }</div>
-		}
-		if readyMediaCount < qMediaCount && !(qMediaCount == 1 && feedMediaRefIsVideo(item.QuoteMedia[0]) && item.QuoteMediaStreamURL != "") {
-			@feedPendingMedia(p, item.QuoteTweetID, item.QuoteMediaPending)
 		}
 	</div>
 }

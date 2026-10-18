@@ -347,6 +347,10 @@ func (s *Server) handleFeedMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item := feed.EnrichFeedItemsPreserveRows(s.db, items[len(items)-1:])[0]
+	if item.MediaPending {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	p := s.pageProps(w, r)
 	p.ArticleReader = true
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

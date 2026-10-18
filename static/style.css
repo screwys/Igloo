@@ -10733,14 +10733,14 @@ body.shorts-mode .sidebar {
     cursor: pointer;
 }
 
-/* Single-image case: wrapper shrinks to image width so the seekbar and any
-   overlay UI stays glued to the actual media — never centered with empty
-   margins on either side. */
+/* Reserve the captured media size before its bytes arrive. Controls stay
+   attached to the media width. */
 .feed-media-wrap:not(.feed-media-wrap-grid) {
     background: transparent;
     border: none;
     display: block;
-    width: fit-content;
+    width: var(--feed-media-width, fit-content);
+    aspect-ratio: var(--feed-media-ratio, auto);
     max-width: 100%;
     min-width: 0;
     margin: 0.15rem 0 0.3rem;
@@ -10756,12 +10756,12 @@ body.shorts-mode .sidebar {
     background: var(--bg-tertiary);
 }
 
-/* Single-image/video: natural aspect, capped on both axes. The image's
-   intrinsic aspect ratio decides whether width or height hits the cap. */
+/* Keep the same size while loading and after the media arrives. */
 .feed-media-wrap:not(.feed-media-wrap-grid) .feed-media-image,
 .feed-media-wrap:not(.feed-media-wrap-grid) .feed-media-video {
-    width: auto;
+    width: var(--feed-media-width, auto);
     height: auto;
+    aspect-ratio: var(--feed-media-ratio, auto);
     max-width: 100%;
     max-height: 560px;
     background: transparent;

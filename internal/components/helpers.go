@@ -182,17 +182,22 @@ func feedMediaRefIsVideo(ref model.MediaRef) bool {
 	}
 }
 
+func feedSingleMediaStyle(media model.MediaRef) string {
+	if media.Width <= 0 || media.Height <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("--feed-media-width: min(%dpx, calc(560px * %d / %d)); --feed-media-ratio: %d / %d;",
+		media.Width, media.Width, media.Height, media.Width, media.Height)
+}
+
 // Adding media extends the row; it must not shrink the other items to fit.
-func feedMediaRowStyle(media []model.MediaRef, urls []string) string {
+func feedMediaRowStyle(media []model.MediaRef) string {
 	if len(media) < 2 {
 		return ""
 	}
 	ratios := make([]float64, 0, len(media))
 	totalRatio, maxRatio, count := 0.0, 0.0, 0
-	for i, m := range media {
-		if feedMediaURLAt(urls, i) == "" {
-			continue
-		}
+	for _, m := range media {
 		ratio := 1.0
 		if feedMediaRefIsVideo(m) {
 			ratio = 16.0 / 9.0
