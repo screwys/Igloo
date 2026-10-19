@@ -91,7 +91,7 @@ func TestShortsPlayerMoreMenuUsesMomentMutationOwners(t *testing.T) {
 	}
 	src := string(srcBytes)
 	for _, check := range []string{
-		"function openMomentActions(entry, trigger, position)",
+		"function openMomentActions(entry, trigger)",
 		`data-short-top-action="more"`,
 		`data-short-top-action="fullscreen"`,
 		`className = 'shorts-media-stage'`,
