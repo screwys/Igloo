@@ -607,7 +607,7 @@ function applyMomentAction(entry, action) {
   }
 }
 
-function openMomentActions(entry, trigger, position) {
+function openMomentActions(entry, trigger) {
   var data = entry && entry.data
   var wrapper = entry && entry.refs && entry.refs.wrapper
   if (!data || !wrapper) return false
@@ -726,17 +726,7 @@ function openMomentActions(entry, trigger, position) {
   document.addEventListener('keydown', momentActionsKeyHandler)
   document.addEventListener('click', momentActionsOutsideHandler, true)
   wrapper.classList.add('moment-actions-open')
-  if (position) {
-    overlay.classList.add('moment-actions-at-pointer')
-    var fullscreen = document.fullscreenElement || document.webkitFullscreenElement
-    ;(fullscreen || document.body).appendChild(overlay)
-    var margin = 8
-    var rect = sheet.getBoundingClientRect()
-    sheet.style.left = Math.max(margin, Math.min(position.x, window.innerWidth - rect.width - margin)) + 'px'
-    sheet.style.top = Math.max(margin, Math.min(position.y, window.innerHeight - rect.height - margin)) + 'px'
-  } else {
-    wrapper.appendChild(overlay)
-  }
+  wrapper.appendChild(overlay)
   momentActionsSheet = overlay
   momentActionsWrapper = wrapper
   momentActionsTrigger = trigger || null
@@ -1321,12 +1311,6 @@ export function makeShortItem(entryData, existingEl) {
   var entryObj = { el: item, data: entryData, refs: refs }
   if (isLive) initTikTokLive(entryObj)
   refs.disposeActions = function () { if (momentActionsWrapper === wrapper) closeMomentActions() }
-  wrapper.addEventListener('contextmenu', function (event) {
-    if (event.target.closest('a, input, .moment-actions-overlay')) return
-    event.preventDefault()
-    event.stopPropagation()
-    openMomentActions(entryObj, refs.moreBtn, { x: event.clientX, y: event.clientY })
-  })
 
   if (video) {
     function revealVideoFrame() {

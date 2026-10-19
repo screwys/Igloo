@@ -2585,17 +2585,6 @@ select.input:focus {
     flex: 0 0 20px;
 }
 .moment-actions-check svg { width: 20px; height: 20px; }
-.moment-actions-at-pointer {
-    position: fixed;
-    padding: 0;
-}
-.moment-actions-at-pointer .moment-actions-sheet {
-    position: absolute;
-    width: min(390px, calc(100vw - 16px));
-    max-height: calc(100dvh - 16px);
-    transform: none;
-    transform-origin: top left;
-}
 .moment-actions-sheet-item.danger {
     color: var(--status-error);
     border-top: 1px solid var(--border-color);
