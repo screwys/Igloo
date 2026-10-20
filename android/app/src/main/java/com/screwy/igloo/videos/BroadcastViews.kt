@@ -118,7 +118,8 @@ internal fun BroadcastPlayer(playback: BroadcastPlayback, onClose: () -> Unit) {
     var chatVisible by remember(playback.videoId) { mutableStateOf(true) }
     var source by remember(playback) { mutableStateOf(playback) }
     val configuration = LocalConfiguration.current
-    LaunchedEffect(activity, fullscreen) {
+    val previousOrientation = remember(activity) { activity?.requestedOrientation }
+    LaunchedEffect(activity, fullscreen, configuration) {
         activity?.requestedOrientation = playerRequestedOrientation(
             fullscreen, configuration.smallestScreenWidthDp >= 600)
         if (fullscreen) hidePlayerSystemBars(activity)
@@ -126,7 +127,7 @@ internal fun BroadcastPlayer(playback: BroadcastPlayback, onClose: () -> Unit) {
     }
     DisposableEffect(activity) {
         onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            activity?.requestedOrientation = previousOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             showPlayerSystemBars(activity)
         }
     }

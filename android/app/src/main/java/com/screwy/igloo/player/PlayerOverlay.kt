@@ -34,9 +34,8 @@ import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -100,7 +99,6 @@ fun PlayerOverlay(
     val showSubtitlesLabel = stringResource(R.string.player_show_subtitles)
     val hideSubtitlesLabel = stringResource(R.string.player_hide_subtitles)
     val volumeLabel = stringResource(R.string.player_volume)
-    val playbackSpeedLabel = stringResource(R.string.player_playback_speed)
     val enterFullscreenLabel = stringResource(R.string.action_enter_fullscreen)
     val exitFullscreenLabel = stringResource(R.string.action_exit_fullscreen)
     val miniPlayerLabel = stringResource(R.string.mini_player_title)
@@ -115,8 +113,7 @@ fun PlayerOverlay(
     var live by remember { mutableStateOf(false) }
     var liveOffsetMs by remember { mutableLongStateOf(0L) }
     var seekable by remember { mutableStateOf(true) }
-    var speed by remember { mutableFloatStateOf(player.playbackParameters.speed) }
-    var speedMenuOpen by remember { mutableStateOf(false) }
+    var settingsMenuOpen by remember { mutableStateOf(false) }
     var volumeMenuOpen by remember { mutableStateOf(false) }
     var volumeFraction by remember { mutableFloatStateOf(readVolumeFraction(audioManager)) }
     var interactionTick by remember { mutableLongStateOf(0L) }
@@ -136,14 +133,13 @@ fun PlayerOverlay(
             live = player.isCurrentMediaItemLive
             seekable = player.isCurrentMediaItemSeekable
             liveOffsetMs = player.currentLiveOffset.takeIf { it >= 0L } ?: (durationMs - positionMs).coerceAtLeast(0L)
-            speed = player.playbackParameters.speed
             volumeFraction = readVolumeFraction(audioManager)
             delay(250L)
         }
     }
 
-    LaunchedEffect(controlsVisible, interactionTick, isScrubbing) {
-        if (controlsVisible && !isScrubbing) {
+    LaunchedEffect(controlsVisible, interactionTick, isScrubbing, settingsMenuOpen, volumeMenuOpen) {
+        if (controlsVisible && !isScrubbing && !settingsMenuOpen && !volumeMenuOpen) {
             delay(3_000L)
             if (!isScrubbing) onControlsVisibleChange(false)
         }
@@ -343,34 +339,20 @@ fun PlayerOverlay(
                         }
                     }
                     Box {
-                        IconButton(
-                            onClick = {
-                                speedMenuOpen = true
-                                keepVisible()
-                            },
-                        ) {
+                        IconButton(onClick = { settingsMenuOpen = true; keepVisible() }) {
                             Icon(
-                                imageVector = Icons.Default.Speed,
-                                contentDescription = playbackSpeedLabel,
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = stringResource(R.string.settings_screen_title),
                                 tint = Color.White,
                             )
                         }
-                        DropdownMenu(
-                            expanded = speedMenuOpen,
-                            onDismissRequest = { speedMenuOpen = false },
-                        ) {
-                            SPEED_CHOICES.forEach { choice ->
-                                DropdownMenuItem(
-                                    text = { Text("${choice}×") },
-                                    onClick = {
-                                        player.setPlaybackSpeed(choice)
-                                        speed = choice
-                                        speedMenuOpen = false
-                                        keepVisible()
-                                    },
-                                )
-                            }
-                        }
+                        PlayerSettingsMenu(
+                            player = player,
+                            expanded = settingsMenuOpen,
+                            onDismiss = { settingsMenuOpen = false; keepVisible() },
+                            showSubtitles = showSubtitles,
+                            onToggleSubtitles = onToggleSubtitles,
+                        )
                     }
                     if (onPlayInBackground != null) {
                         IconButton(onClick = onPlayInBackground) {
@@ -404,7 +386,6 @@ fun PlayerOverlay(
                         )
                     }
                 }
-                @Suppress("UNUSED_EXPRESSION") speed
             }
         }
     }

@@ -117,7 +117,7 @@ fun AppNavHost() {
         directDestination(RouteRegistry.Login) { LoginRoute(navController) }
 
         scaffoldDestination(navController, RouteRegistry.Feed) { FeedRoute(navController) }
-        scaffoldDestination(navController, RouteRegistry.Videos) {
+        directDestination(RouteRegistry.Videos) {
             val broadcastsVm: BroadcastsViewModel = koinViewModel(viewModelStoreOwner = navController.getBackStackEntry(navController.graph.id))
             VideosRoute(navController, broadcastsVm)
         }

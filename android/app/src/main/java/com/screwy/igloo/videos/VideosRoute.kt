@@ -31,6 +31,7 @@ import com.screwy.igloo.ui.component.DeleteDownloadedVideoDialog
 import com.screwy.igloo.ui.component.VideoBinaryAction
 import com.screwy.igloo.ui.component.VideoGrid
 import com.screwy.igloo.ui.nav.IglooNavigationSource
+import com.screwy.igloo.ui.nav.MainScaffold
 import com.screwy.igloo.ui.nav.rememberIglooNavigator
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -47,6 +48,27 @@ fun VideosRoute(
     broadcastsVm: BroadcastsViewModel,
     modifier: Modifier = Modifier,
 ) {
+    val playback by broadcastsVm.activePlayback.collectAsStateWithLifecycle()
+    val preparing by broadcastsVm.isPreparingPlayback.collectAsStateWithLifecycle()
+    DisposableEffect(broadcastsVm) { onDispose { broadcastsVm.closePlayback() } }
+
+    // Keep live playback outside the shell that changes branches on rotation.
+    MainScaffold(navController) {
+        VideosContent(navController, broadcastsVm, modifier)
+    }
+    if (preparing) Dialog(onDismissRequest = broadcastsVm::closePlayback) {
+        CircularProgressIndicator(color = MaterialTheme.iglooColors.primary)
+    }
+    playback?.let { BroadcastPlayer(it, broadcastsVm::closePlayback) }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VideosContent(
+    navController: NavController,
+    broadcastsVm: BroadcastsViewModel,
+    modifier: Modifier,
+) {
     val vm: VideosViewModel = koinViewModel()
     val items by vm.items.collectAsStateWithLifecycle()
     val uiState by vm.uiState.collectAsStateWithLifecycle()
@@ -55,15 +77,12 @@ fun VideosRoute(
     val isLoadingMore by vm.isLoadingMore.collectAsStateWithLifecycle()
     val broadcasts by broadcastsVm.broadcasts.collectAsStateWithLifecycle()
     val live = broadcasts.filter { it.broadcast.liveStatus == "is_live" }
-    val playback by broadcastsVm.activePlayback.collectAsStateWithLifecycle()
-    val preparing by broadcastsVm.isPreparingPlayback.collectAsStateWithLifecycle()
     val offlineVideoActions: OfflineVideoActions = koinInject()
     val uiEffects: UiEffects = koinInject()
     val navigator = rememberIglooNavigator(navController)
     val scope = rememberCoroutineScope()
     var deleteVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { broadcastsVm.refresh() }
-    DisposableEffect(broadcastsVm) { onDispose { broadcastsVm.closePlayback() } }
 
     Box(modifier.fillMaxSize()) {
         UiStateSwitch(state = if (live.isNotEmpty()) com.screwy.igloo.ui.UiState.Data(Unit) else uiState) {
@@ -101,11 +120,6 @@ fun VideosRoute(
             }
         }
     }
-
-    if (preparing) Dialog(onDismissRequest = broadcastsVm::closePlayback) {
-        CircularProgressIndicator(color = MaterialTheme.iglooColors.primary)
-    }
-    playback?.let { BroadcastPlayer(it, broadcastsVm::closePlayback) }
 
     DeleteDownloadedVideoDialog(
         videoId = deleteVideoId,
