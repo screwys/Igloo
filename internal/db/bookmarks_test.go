@@ -148,8 +148,16 @@ func TestBookmarkLabelFiltersAndCounts(t *testing.T) {
 		}
 	}
 
+	if err := d.ExecRaw(`UPDATE bookmarks SET account_handles = 'other, @Artist' WHERE video_id = 'cinema_two'`); err != nil {
+		t.Fatalf("set bookmark accounts: %v", err)
+	}
+
 	exactOpts := GetBookmarksOpts{
-		CategoryID:      999,
+		CategoryID:      2,
+		Account:         "@artist",
+		Query:           "cinema Artist",
+		SavedFromMs:     20,
+		SavedBeforeMs:   30,
 		LabelFilterMode: BookmarkLabelFilterExact,
 		Label:           "cinema",
 		Limit:           10,
@@ -158,33 +166,35 @@ func TestBookmarkLabelFiltersAndCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetBookmarkCount exact label: %v", err)
 	}
-	if count != 2 {
-		t.Fatalf("exact label count = %d, want 2", count)
+	if count != 1 {
+		t.Fatalf("exact label count = %d, want 1", count)
 	}
 	bookmarks, err := d.GetBookmarks(exactOpts)
 	if err != nil {
 		t.Fatalf("GetBookmarks exact label: %v", err)
 	}
-	if got := bookmarkVideoIDs(bookmarks); strings.Join(got, ",") != "cinema_two,cinema_one" {
+	if got := bookmarkVideoIDs(bookmarks); strings.Join(got, ",") != "cinema_two" {
 		t.Fatalf("exact label videos = %v", got)
 	}
 
 	noLabelOpts := GetBookmarksOpts{
-		LabelFilterMode: BookmarkLabelFilterNoLabel,
-		Limit:           10,
+		OldestFirst:   true,
+		SavedFromMs:   40,
+		SavedBeforeMs: 60, LabelFilterMode: BookmarkLabelFilterNoLabel,
+		Limit: 10,
 	}
 	count, err = d.GetBookmarkCount(noLabelOpts)
 	if err != nil {
 		t.Fatalf("GetBookmarkCount no label: %v", err)
 	}
-	if count != 3 {
-		t.Fatalf("no-label count = %d, want 3", count)
+	if count != 2 {
+		t.Fatalf("no-label count = %d, want 2", count)
 	}
 	bookmarks, err = d.GetBookmarks(noLabelOpts)
 	if err != nil {
 		t.Fatalf("GetBookmarks no label: %v", err)
 	}
-	if got := bookmarkVideoIDs(bookmarks); strings.Join(got, ",") != "no_label_space,no_label_empty,no_label_null" {
+	if got := bookmarkVideoIDs(bookmarks); strings.Join(got, ",") != "no_label_null,no_label_empty" {
 		t.Fatalf("no-label videos = %v", got)
 	}
 

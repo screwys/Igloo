@@ -10,6 +10,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
 
 class BookmarksRouteTest {
 
@@ -211,48 +213,52 @@ class BookmarksRouteTest {
     }
 
     @Test
-    fun bookmark_filters_are_single_active_modes() {
+    fun bookmark_filters_match_saved_values() {
+        val day = LocalDate.of(2026, 10, 19)
+        val savedAt = day.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val rows =
             listOf(
                 videoBookmark(videoId = "cat_one", categoryId = 1L, customTitle = "cinema"),
-                videoBookmark(videoId = "cat_two", categoryId = 2L, customTitle = "cinema"),
+                videoBookmark(videoId = "cat_two", categoryId = 2L, customTitle = "cinema", bookmarkedAt = savedAt).let {
+                    it.copy(bookmark = it.bookmark.copy(accountHandles = "other, @Artist"))
+                },
                 videoBookmark(videoId = "unlabelled", categoryId = 1L, customTitle = " "),
             )
 
         assertEquals(
-            listOf("cat_one", "cat_two", "unlabelled"),
-            filterBookmarkItems(rows, BookmarkFilter.All).map { it.bookmark.videoId },
+            listOf("unlabelled", "cat_two", "cat_one"),
+            filterBookmarkItems(rows, BookmarkFilter(oldestFirst = true)).map { it.bookmark.videoId },
         )
         assertEquals(
             listOf("cat_one", "unlabelled"),
-            filterBookmarkItems(rows, BookmarkFilter.Category(1L)).map { it.bookmark.videoId },
+            filterBookmarkItems(rows, BookmarkFilter(categoryId = 1L, account = "demo_channel")).map { it.bookmark.videoId },
         )
         assertEquals(
-            listOf("cat_one", "cat_two"),
-            filterBookmarkItems(rows, BookmarkFilter.Label("cinema")).map { it.bookmark.videoId },
+            listOf("cat_two"),
+            filterBookmarkItems(rows, BookmarkFilter(categoryId = 2L, account = "@artist", label = "cinema", query = "video Artist", savedFromDay = day.toEpochDay(), savedThroughDay = day.toEpochDay())).map { it.bookmark.videoId },
         )
         assertEquals(
             listOf("unlabelled"),
-            filterBookmarkItems(rows, BookmarkFilter.NoLabel).map { it.bookmark.videoId },
+            filterBookmarkItems(rows, BookmarkFilter(noLabel = true)).map { it.bookmark.videoId },
         )
     }
 
     @Test
     fun bookmark_playlist_ids_round_trip_selected_filters() {
-        val labelId = bookmarkPlaylistId(BookmarkFilter.Label(" art/studies "))
+        val labelId = bookmarkPlaylistId(BookmarkFilter(label = " art/studies "))
 
         assertEquals(
-            BookmarkFilter.All,
-            bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter.All)),
+            BookmarkFilter(),
+            bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter())),
         )
         assertEquals(
-            BookmarkFilter.Category(34L),
-            bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter.Category(34L))),
+            BookmarkFilter(categoryId = 34L, account = "artist", label = "cinema", query = "sketch", savedFromDay = 20000L, savedThroughDay = 20010L, oldestFirst = true),
+            bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter(categoryId = 34L, account = "artist", label = "cinema", query = "sketch", savedFromDay = 20000L, savedThroughDay = 20010L, oldestFirst = true))),
         )
-        assertEquals(BookmarkFilter.Label("art/studies"), bookmarkFilterFromPlaylistId(labelId))
+        assertEquals(BookmarkFilter(label = "art/studies"), bookmarkFilterFromPlaylistId(labelId))
         assertEquals(
-            BookmarkFilter.NoLabel,
-            bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter.NoLabel)),
+            BookmarkFilter(noLabel = true),
+            bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter(noLabel = true))),
         )
         assertFalse(labelId.contains("/"))
     }
@@ -268,11 +274,11 @@ class BookmarksRouteTest {
 
         assertEquals(
             listOf("art_first", "art_second"),
-            bookmarkMomentPlaylistItems(rows, BookmarkFilter.Category(7L)).map { it.videoId },
+            bookmarkMomentPlaylistItems(rows, BookmarkFilter(categoryId = 7L)).map { it.videoId },
         )
         assertEquals(
             listOf("art_first", "art_second"),
-            bookmarkMomentPlaylistItems(rows, BookmarkFilter.Label("art")).map { it.videoId },
+            bookmarkMomentPlaylistItems(rows, BookmarkFilter(label = "art")).map { it.videoId },
         )
     }
 
@@ -287,23 +293,7 @@ class BookmarksRouteTest {
         assertEquals(null, bookmarkOwnerKind(unresolved))
         assertTrue(visibleBookmarkItems(listOf(unresolved)).isEmpty())
         assertTrue(
-            bookmarkMomentPlaylistItems(listOf(unresolved), BookmarkFilter.All).isEmpty()
-        )
-    }
-
-    @Test
-    fun label_search_matches_displayed_no_label_row() {
-        val rows =
-            listOf(
-                BookmarkLabelCount(label = null, count = 3),
-                BookmarkLabelCount(label = "cinema", count = 2),
-                BookmarkLabelCount(label = "japan", count = 1),
-            )
-
-        assertEquals(listOf("cinema"), filterBookmarkLabelCounts(rows, "cine").map { it.label })
-        assertEquals(
-            listOf(null),
-            filterBookmarkLabelCounts(rows, "no", "No label").map { it.label },
+            bookmarkMomentPlaylistItems(listOf(unresolved), BookmarkFilter()).isEmpty()
         )
     }
 
@@ -318,6 +308,7 @@ class BookmarksRouteTest {
         isFollowed: Boolean = false,
         categoryId: Long = 1L,
         customTitle: String? = null,
+        bookmarkedAt: Long = 10L,
     ): BookmarkItem =
         BookmarkItem(
             bookmark =
@@ -325,7 +316,7 @@ class BookmarksRouteTest {
                     videoId = videoId,
                     categoryId = categoryId,
                     customTitle = customTitle,
-                    bookmarkedAt = 10L,
+                    bookmarkedAt = bookmarkedAt,
                 ),
             feedItem = null,
             video =

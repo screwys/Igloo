@@ -22,8 +22,8 @@ class ShortsPlaylistSpecTest {
             ShortsPlaylistSpec.decode("bookmarks", null),
         )
         assertEquals(
-            ShortsPlaylistSpec(type = ShortsPlaylistType.Bookmarks, playlistId = bookmarkPlaylistId(BookmarkFilter.Category(34L))),
-            ShortsPlaylistSpec.decode("bookmarks", bookmarkPlaylistId(BookmarkFilter.Category(34L))),
+            ShortsPlaylistSpec(type = ShortsPlaylistType.Bookmarks, playlistId = bookmarkPlaylistId(BookmarkFilter(categoryId = 34L))),
+            ShortsPlaylistSpec.decode("bookmarks", bookmarkPlaylistId(BookmarkFilter(categoryId = 34L))),
         )
         assertEquals(
             ShortsPlaylistSpec(type = ShortsPlaylistType.StoryTray, playlistId = ShortsPlaylistSpec.RootPlaylistId),
@@ -47,8 +47,8 @@ class ShortsPlaylistSpecTest {
         assertEquals("all_moments", ShortsPlaylistSpec.allMoments().routePlaylistType)
         assertEquals(ShortsPlaylistSpec.RootPlaylistId, ShortsPlaylistSpec.bookmarks().routePlaylistId)
         assertEquals(
-            bookmarkPlaylistId(BookmarkFilter.Label("art")),
-            ShortsPlaylistSpec.bookmarks(bookmarkPlaylistId(BookmarkFilter.Label("art"))).routePlaylistId,
+            bookmarkPlaylistId(BookmarkFilter(label = "art")),
+            ShortsPlaylistSpec.bookmarks(bookmarkPlaylistId(BookmarkFilter(label = "art"))).routePlaylistId,
         )
         assertEquals("channel", ShortsPlaylistSpec.channel("instagram_a")?.routePlaylistType)
         assertEquals("instagram_a", ShortsPlaylistSpec.channel("instagram_a")?.routePlaylistId)

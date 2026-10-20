@@ -11,6 +11,9 @@ import com.screwy.igloo.ui.component.MomentItem
 import com.screwy.igloo.ui.component.mediaTypeFor
 import com.screwy.igloo.ui.component.normalizeHandle
 import java.util.Base64
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 
 /**
  * Bookmark media type — videos resolve directly off `videos.media_kind` /
@@ -46,29 +49,28 @@ internal fun visibleBookmarkItems(items: List<BookmarkItem>): List<BookmarkItem>
 private fun hasBookmarkContent(item: BookmarkItem): Boolean =
 	item.feedItem != null || item.video != null
 
-internal fun bookmarkPlaylistId(filter: BookmarkFilter): String = when (filter) {
-    BookmarkFilter.All -> BookmarkPlaylistAllId
-    is BookmarkFilter.Category -> "$BookmarkPlaylistCategoryPrefix${filter.categoryId}"
-    is BookmarkFilter.Label -> normalizeBookmarkLabel(filter.label)
-        ?.let { label -> "$BookmarkPlaylistLabelPrefix${encodeBookmarkPlaylistLabel(label)}" }
-        ?: BookmarkPlaylistNoLabelId
-    BookmarkFilter.NoLabel -> BookmarkPlaylistNoLabelId
-}
+internal fun bookmarkPlaylistId(filter: BookmarkFilter): String =
+    if (!filter.active) BookmarkPlaylistAllId
+    else BookmarkPlaylistFiltersPrefix + encodeBookmarkPlaylistLabel(
+        Json.encodeToString(filter.copy(label = normalizeBookmarkLabel(filter.label)))
+    )
 
 internal fun bookmarkFilterFromPlaylistId(playlistId: String?): BookmarkFilter {
-    val id = playlistId?.trim()?.takeIf { it.isNotEmpty() } ?: return BookmarkFilter.All
-    if (id == BookmarkPlaylistAllId) return BookmarkFilter.All
-    if (id == BookmarkPlaylistNoLabelId) return BookmarkFilter.NoLabel
+    val id = playlistId?.trim().orEmpty()
+    if (id.startsWith(BookmarkPlaylistFiltersPrefix)) {
+        return runCatching {
+            Json.decodeFromString<BookmarkFilter>(requireNotNull(decodeBookmarkPlaylistLabel(id.removePrefix(BookmarkPlaylistFiltersPrefix))))
+        }.getOrDefault(BookmarkFilter())
+    }
+    // Existing navigation entries can still hold the old single-filter IDs.
+    if (id == BookmarkPlaylistNoLabelId) return BookmarkFilter(noLabel = true)
     if (id.startsWith(BookmarkPlaylistCategoryPrefix)) {
-        val categoryId = id.removePrefix(BookmarkPlaylistCategoryPrefix).toLongOrNull()
-        return categoryId?.let(BookmarkFilter::Category) ?: BookmarkFilter.All
+        return BookmarkFilter(categoryId = id.removePrefix(BookmarkPlaylistCategoryPrefix).toLongOrNull())
     }
     if (id.startsWith(BookmarkPlaylistLabelPrefix)) {
-        val label = decodeBookmarkPlaylistLabel(id.removePrefix(BookmarkPlaylistLabelPrefix))
-            ?.let(::normalizeBookmarkLabel)
-        return label?.let(BookmarkFilter::Label) ?: BookmarkFilter.All
+        return BookmarkFilter(label = decodeBookmarkPlaylistLabel(id.removePrefix(BookmarkPlaylistLabelPrefix))?.let(::normalizeBookmarkLabel))
     }
-    return BookmarkFilter.All
+    return BookmarkFilter()
 }
 
 internal fun toBookmarkMomentItem(item: BookmarkItem): MomentItem {
@@ -238,6 +240,7 @@ private fun preferredBookmarkDisplayName(
 private fun FeedItemEntity.hasMomentStyleMedia(): Boolean =
     !mediaJson.isNullOrBlank() || !quoteMediaJson.isNullOrBlank()
 
+private const val BookmarkPlaylistFiltersPrefix = "filters_"
 private const val BookmarkPlaylistAllId = "_"
 private const val BookmarkPlaylistNoLabelId = "no_label"
 private const val BookmarkPlaylistCategoryPrefix = "category_"

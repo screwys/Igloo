@@ -1,10 +1,8 @@
 package com.screwy.igloo.bookmarks
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,11 +11,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -27,7 +31,21 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -76,6 +94,8 @@ import com.screwy.igloo.ui.theme.iglooColors
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 /**
  * Bookmarks tab: vertical thumbnail grid with a category-chip filter row on top.
@@ -93,6 +113,7 @@ fun BookmarksRoute(
     val categories by vm.categories.collectAsStateWithLifecycle()
     val bookmarkCategories by vm.bookmarkCategories.collectAsStateWithLifecycle()
     val counts by vm.counts.collectAsStateWithLifecycle()
+    val accounts by vm.accounts.collectAsStateWithLifecycle()
     val labelCounts by vm.labelCounts.collectAsStateWithLifecycle()
     val selectedFilter by vm.selectedFilter.collectAsStateWithLifecycle()
     val uiState by vm.uiState.collectAsStateWithLifecycle()
@@ -105,7 +126,7 @@ fun BookmarksRoute(
     } else {
         GridCells.Fixed(3)
     }
-    var labelPopupOpen by remember { mutableStateOf(false) }
+    var filtersOpen by rememberSaveable { mutableStateOf(false) }
 
     val scrollFabsEnabled = items.isNotEmpty() && pendingBookmark == null
     val scrollArrows by remember(items.size, scrollFabsEnabled) {
@@ -136,9 +157,9 @@ fun BookmarksRoute(
                         categories = categories,
                         counts = counts,
                         selected = selectedFilter,
-                        onSelectAll = vm::selectAll,
-                        onSelectCategory = { vm.selectCategory(it) },
-                        onOpenLabels = { labelPopupOpen = true },
+                        onSelectAll = { vm.selectAll(); scope.launch { gridState.scrollToItem(0) } },
+                        onSelectCategory = { vm.selectCategory(it); scope.launch { gridState.scrollToItem(0) } },
+                        onOpenFilters = { filtersOpen = true },
                     )
                 }
                 gridItems(
@@ -183,19 +204,18 @@ fun BookmarksRoute(
                 )
             }
 
-            if (labelPopupOpen) {
-                BookmarkLabelPopup(
+            if (filtersOpen) {
+                BookmarkFilterPopup(
+                    categories = categories,
+                    accounts = accounts,
                     labels = labelCounts,
-                    onSelect = { filter ->
-                        when (filter) {
-                            BookmarkFilter.All -> vm.selectAll()
-                            is BookmarkFilter.Category -> vm.selectCategory(filter.categoryId)
-                            is BookmarkFilter.Label -> vm.selectLabel(filter.label)
-                            BookmarkFilter.NoLabel -> vm.selectNoLabel()
-                        }
-                        labelPopupOpen = false
+                    selected = selectedFilter,
+                    onApply = {
+                        vm.selectFilter(it)
+                        filtersOpen = false
+                        scope.launch { gridState.scrollToItem(0) }
                     },
-                    onDismiss = { labelPopupOpen = false },
+                    onDismiss = { filtersOpen = false },
                 )
             }
 
@@ -222,22 +242,17 @@ private fun CategoryChipRow(
     selected: BookmarkFilter,
     onSelectAll: () -> Unit,
     onSelectCategory: (Long) -> Unit,
-    onOpenLabels: () -> Unit,
+    onOpenFilters: () -> Unit,
 ) {
     val totalCount = counts.values.sum()
     val allLabel = stringResource(R.string.moments_label_all)
-    val labelChipLabel = when (selected) {
-        is BookmarkFilter.Label -> selected.label
-        BookmarkFilter.NoLabel -> stringResource(R.string.bookmark_filter_no_label)
-        else -> stringResource(R.string.bookmark_filter_labels)
-    }
-    val labelSelected = selected is BookmarkFilter.Label || selected == BookmarkFilter.NoLabel
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
         contentPadding = PaddingValues(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         item(key = "__all__") {
             CategoryChip(
@@ -246,7 +261,7 @@ private fun CategoryChipRow(
                 } else {
                     allLabel
                 },
-                selected = selected == BookmarkFilter.All,
+                selected = !selected.active,
                 onClick = onSelectAll,
             )
         }
@@ -257,23 +272,28 @@ private fun CategoryChipRow(
             val count = counts[cat.categoryId] ?: 0
             CategoryChip(
                 label = if (count > 0) "${cat.name} ($count)" else cat.name,
-                selected = selected == BookmarkFilter.Category(cat.categoryId),
+                selected = selected.categoryId == cat.categoryId,
                 onClick = { onSelectCategory(cat.categoryId) },
             )
         }
-        item(key = "__labels__") {
-            CategoryChip(
-                label = labelChipLabel,
-                selected = labelSelected,
-                onClick = onOpenLabels,
-                trailingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                },
-            )
+        item(key = "__filters__") {
+            val colors = MaterialTheme.iglooColors
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(if (selected.active) colors.primary.copy(alpha = 0.18f) else Color.Transparent)
+                    .border(1.dp, if (selected.active) colors.primary else colors.onSurfaceFaint, RoundedCornerShape(18.dp))
+                    .clickable(onClick = onOpenFilters)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.FilterAlt,
+                    contentDescription = stringResource(R.string.bookmark_filters),
+                    tint = if (selected.active) MaterialTheme.iglooColors.primary else MaterialTheme.iglooColors.onSurface,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
     }
 }
@@ -283,7 +303,6 @@ private fun CategoryChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
-    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     val colors = MaterialTheme.iglooColors
     val bg = if (selected) colors.primary.copy(alpha = 0.18f) else Color.Transparent
@@ -309,131 +328,221 @@ private fun CategoryChip(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            trailingIcon?.invoke()
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BookmarkLabelPopup(
+private fun BookmarkFilterPopup(
+    categories: List<com.screwy.igloo.data.entity.BookmarkCategoryEntity>,
+    accounts: List<String>,
     labels: List<BookmarkLabelCount>,
-    onSelect: (BookmarkFilter) -> Unit,
+    selected: BookmarkFilter,
+    onApply: (BookmarkFilter) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val colors = MaterialTheme.iglooColors
-    var query by remember { mutableStateOf("") }
+    var categoryId by rememberSaveable { mutableStateOf(selected.categoryId) }
+    var account by rememberSaveable { mutableStateOf(selected.account) }
+    var label by rememberSaveable { mutableStateOf(selected.label) }
+    var noLabel by rememberSaveable { mutableStateOf(selected.noLabel) }
+    var query by rememberSaveable { mutableStateOf(selected.query) }
+    var savedFromDay by rememberSaveable { mutableStateOf(selected.savedFromDay) }
+    var savedThroughDay by rememberSaveable { mutableStateOf(selected.savedThroughDay) }
+    var oldestFirst by rememberSaveable { mutableStateOf(selected.oldestFirst) }
+    var pickingDate by rememberSaveable { mutableStateOf<String?>(null) }
     val noLabelText = stringResource(R.string.bookmark_filter_no_label)
-    val filteredLabels = remember(labels, query, noLabelText) {
-        filterBookmarkLabelCounts(labels, query, noLabelText)
-    }
-    val backdropInteraction = remember { MutableInteractionSource() }
-    val panelInteraction = remember { MutableInteractionSource() }
-
-    BackHandler(onBack = onDismiss)
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.overlayDim.copy(alpha = 0.28f))
-            .clickable(
-                interactionSource = backdropInteraction,
-                indication = null,
-                onClick = onDismiss,
-            )
-            .padding(horizontal = 16.dp, vertical = 72.dp),
-    ) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            color = colors.surface,
+            modifier = Modifier.padding(16.dp).widthIn(max = 720.dp).fillMaxWidth().height(720.dp),
+            color = MaterialTheme.iglooColors.surface,
             shape = RoundedCornerShape(16.dp),
-            tonalElevation = 8.dp,
-            shadowElevation = 12.dp,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .widthIn(max = 420.dp)
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = panelInteraction,
-                    indication = null,
-                    onClick = {},
-                ),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text(stringResource(R.string.bookmark_filter_search_labels)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 360.dp),
+            Column(Modifier.imePadding()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    items(
-                        items = filteredLabels,
-                        key = { it.label ?: "__no_label__" },
-                    ) { row ->
-                        BookmarkLabelRow(
-                            row = row,
-                            onClick = {
-                                val label = row.label
-                                if (label == null) {
-                                    onSelect(BookmarkFilter.NoLabel)
-                                } else {
-                                    onSelect(BookmarkFilter.Label(label))
-                                }
-                            },
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close))
+                    }
+                    Text(stringResource(R.string.bookmark_advanced_search), style = MaterialTheme.typography.titleLarge)
+                }
+                Column(
+                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        label = { Text(stringResource(R.string.bookmark_search_text)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    BookmarkFilterField(
+                        title = stringResource(R.string.bookmark_filter_category),
+                        selectedValue = categoryId?.toString().orEmpty(),
+                        options = categories.map { it.categoryId.toString() to it.name },
+                        onSelect = { categoryId = it.toLongOrNull() },
+                    )
+                    BookmarkFilterField(
+                        title = stringResource(R.string.bookmark_account),
+                        selectedValue = account,
+                        options = accounts.map { it to it },
+                        onSelect = { account = it },
+                    )
+                    BookmarkFilterField(
+                        title = stringResource(R.string.bookmark_label),
+                        selectedValue = if (noLabel) "empty" else label?.let { "label:$it" }.orEmpty(),
+                        options = labels.map { row ->
+                            if (row.label == null) "empty" to noLabelText else "label:${row.label}" to row.label
+                        },
+                        onSelect = {
+                            noLabel = it == "empty"
+                            label = if (it.startsWith("label:")) it.removePrefix("label:") else null
+                        },
+                    )
+                    BookmarkFilterField(
+                        title = stringResource(R.string.bookmark_sort),
+                        selectedValue = if (oldestFirst) "oldest" else "",
+                        options = listOf("" to stringResource(R.string.bookmark_sort_newest), "oldest" to stringResource(R.string.bookmark_sort_oldest)),
+                        onSelect = { oldestFirst = it == "oldest" },
+                        searchable = false,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        BookmarkDateField(
+                            title = stringResource(R.string.bookmark_saved_from),
+                            day = savedFromDay,
+                            onClick = { pickingDate = "from" },
+                            modifier = Modifier.weight(1f),
+                        )
+                        BookmarkDateField(
+                            title = stringResource(R.string.bookmark_saved_through),
+                            day = savedThroughDay,
+                            onClick = { pickingDate = "through" },
+                            modifier = Modifier.weight(1f),
                         )
                     }
-                    if (filteredLabels.isEmpty()) {
-                        item(key = "__empty__") {
-                            Text(
-                                text = stringResource(R.string.bookmark_filter_no_labels_found),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = colors.onSurfaceMuted,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
-                            )
-                        }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                ) {
+                    OutlinedButton(modifier = Modifier.width(112.dp).height(44.dp), onClick = {
+                        categoryId = null; account = ""; label = null; noLabel = false
+                        query = ""; savedFromDay = null; savedThroughDay = null; oldestFirst = false
+                    }) {
+                        Text(stringResource(R.string.bookmark_filter_reset))
+                    }
+                    Button(modifier = Modifier.width(112.dp).height(44.dp), onClick = { onApply(BookmarkFilter(categoryId, account, label, noLabel, query.trim(), savedFromDay, savedThroughDay, oldestFirst)) }) {
+                        Text(stringResource(R.string.bookmark_filter_apply))
                     }
                 }
             }
         }
     }
+    pickingDate?.let { field ->
+        val day = if (field == "from") savedFromDay else savedThroughDay
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = day?.let { LocalDate.ofEpochDay(it).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() },
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    val candidate = utcTimeMillis / 86_400_000L
+                    return if (field == "from") savedThroughDay == null || candidate <= savedThroughDay!!
+                    else savedFromDay == null || candidate >= savedFromDay!!
+                }
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { pickingDate = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    val picked = pickerState.selectedDateMillis?.let { it / 86_400_000L }
+                    if (field == "from") savedFromDay = picked else savedThroughDay = picked
+                    pickingDate = null
+                }) { Text(stringResource(R.string.bookmark_filter_apply)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    if (field == "from") savedFromDay = null else savedThroughDay = null
+                    pickingDate = null
+                }) { Text(stringResource(R.string.action_clear)) }
+            },
+        ) { DatePicker(state = pickerState) }
+    }
 }
 
 @Composable
-private fun BookmarkLabelRow(
-    row: BookmarkLabelCount,
-    onClick: () -> Unit,
+private fun BookmarkDateField(title: String, day: Long?, onClick: () -> Unit, modifier: Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = MaterialTheme.typography.labelMedium)
+        OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+            Text(day?.let { LocalDate.ofEpochDay(it).toString() } ?: stringResource(R.string.moments_label_all))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BookmarkFilterField(
+    title: String,
+    selectedValue: String,
+    options: List<Pair<String, String>>,
+    onSelect: (String) -> Unit,
+    searchable: Boolean = true,
 ) {
-    val colors = MaterialTheme.iglooColors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    val selectedName = options.firstOrNull { it.first == selectedValue }?.second.orEmpty()
+    var query by remember(selectedName) { mutableStateOf(selectedName) }
+    var expanded by remember { mutableStateOf(false) }
+    var searching by remember { mutableStateOf(false) }
+    val matches = if (searching) options.filter { it.second.contains(query.trim(), ignoreCase = true) } else options
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = {
+            expanded = it
+            searching = false
+            if (!it) query = selectedName
+        },
     ) {
-        Text(
-            text = row.label ?: stringResource(R.string.bookmark_filter_no_label),
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+        OutlinedTextField(
+            value = query,
+            onValueChange = {
+                query = it
+                searching = true
+                expanded = true
+                if (it.isEmpty()) onSelect("")
+            },
+            label = { Text(title) },
+            readOnly = !searchable,
+            placeholder = { Text(stringResource(R.string.moments_label_all)) },
+            singleLine = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(if (searchable) ExposedDropdownMenuAnchorType.PrimaryEditable else ExposedDropdownMenuAnchorType.PrimaryNotEditable),
         )
-        Text(
-            text = row.count.toString(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.onSurfaceMuted,
-            fontWeight = FontWeight.Medium,
-        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false; query = selectedName },
+        ) {
+            if (searchable) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.moments_label_all)) },
+                    onClick = { onSelect(""); query = ""; expanded = false },
+                )
+            }
+            matches.forEach { (value, name) ->
+                DropdownMenuItem(
+                    text = { Text(name) },
+                    onClick = { onSelect(value); query = name; expanded = false },
+                )
+            }
+            if (matches.isEmpty()) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bookmark_filter_no_matches)) },
+                    onClick = {},
+                    enabled = false,
+                )
+            }
+        }
     }
 }
 

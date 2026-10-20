@@ -172,6 +172,7 @@ func main() {
 
 	cats, _ := d.GetBookmarkCategories()
 	labelCounts, _ := d.GetBookmarkLabelCounts()
+	accounts, _ := d.GetBookmarkedHandles()
 	t = time.Now()
 	var bookmarksHTML bytes.Buffer
 	_ = components.BookmarksPage(
@@ -179,8 +180,8 @@ func main() {
 		bmarksPage,
 		cats,
 		labelCounts,
-		0,
-		components.BookmarkLabelSelection{},
+		accounts,
+		components.BookmarkSelection{},
 		model.Pager{Page: 1, PerPage: webPageSize, Total: bCount},
 	).Render(context.Background(), &bookmarksHTML)
 	fmt.Printf("  Render BookmarksPage:        %6dms  (%d KB)\n", time.Since(t).Milliseconds(), bookmarksHTML.Len()/1024)

@@ -211,7 +211,7 @@ class ShortsRouteViewModelTest {
         db.bookmarkDao().upsert(BookmarkEntity("art_old", categoryId = 34L, customTitle = "art", bookmarkedAt = 100L))
 
         val vm = viewModels.track(ShortsRouteViewModel(
-            playlistSpec = ShortsPlaylistSpec.bookmarks(bookmarkPlaylistId(BookmarkFilter.Category(34L))),
+            playlistSpec = ShortsPlaylistSpec.bookmarks(bookmarkPlaylistId(BookmarkFilter(categoryId = 34L))),
             startVideoId = "art_new",
             db = db,
             outboxWriter = writer,

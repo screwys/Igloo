@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -88,13 +87,18 @@ const (
 // GetBookmarksOpts holds filter options for bookmark queries.
 type GetBookmarksOpts struct {
 	CategoryID      int64
+	Account         string
+	Query           string
+	SavedFromMs     int64
+	SavedBeforeMs   int64
+	OldestFirst     bool
 	LabelFilterMode BookmarkLabelFilterMode
 	Label           string
 	Limit           int
 	Offset          int
 }
 
-// GetBookmarks returns bookmarked videos with full metadata, newest first.
+// GetBookmarks returns bookmarked videos with full metadata in the requested order.
 func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 	if opts.Limit <= 0 {
 		opts.Limit = 10000
@@ -110,12 +114,16 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 		whereClause = "WHERE " + strings.Join(where, " AND ")
 	}
 
+	order := "DESC"
+	if opts.OldestFirst {
+		order = "ASC"
+	}
 	query := fmt.Sprintf(`
 		WITH bookmark_page AS (
 			SELECT b.video_id, b.category_id, b.bookmarked_at
 			FROM bookmarks b
 			%s
-			ORDER BY b.bookmarked_at DESC
+			ORDER BY b.bookmarked_at %s, b.video_id %s
 			LIMIT ? OFFSET ?
 		),
 		feed_candidates AS (
@@ -226,8 +234,8 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 		LEFT JOIN channels c ON c.channel_id = COALESCE(NULLIF(fi.channel_id, ''), v.channel_id)
 		LEFT JOIN channel_profiles cp ON cp.channel_id = COALESCE(NULLIF(fi.channel_id, ''), v.channel_id)
 		LEFT JOIN channel_follows cf ON cf.channel_id = COALESCE(NULLIF(fi.channel_id, ''), v.channel_id)
-		ORDER BY bp.bookmarked_at DESC
-	`, whereClause, videoFullyWatchedSQL("v"), "v.owner_kind", "v.owner_kind")
+		ORDER BY bp.bookmarked_at %s, bp.video_id %s
+	`, whereClause, order, order, videoFullyWatchedSQL("v"), "v.owner_kind", "v.owner_kind", order, order)
 	args = append(args, opts.Limit, opts.Offset)
 
 	rows, err := db.conn.Query(bind(query), args...)
@@ -300,10 +308,10 @@ func (db *DB) GetBookmarkCount(opts GetBookmarksOpts) (int, error) {
 	var where []string
 	var args []any
 
-	where, args = appendBookmarkFilterWhere(where, args, opts, "")
+	where, args = appendBookmarkFilterWhere(where, args, opts, "b.")
 
 	var count int
-	query := "SELECT COUNT(*) FROM bookmarks"
+	query := "SELECT COUNT(*) FROM bookmarks b"
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
@@ -312,22 +320,40 @@ func (db *DB) GetBookmarkCount(opts GetBookmarksOpts) (int, error) {
 }
 
 func appendBookmarkFilterWhere(where []string, args []any, opts GetBookmarksOpts, prefix string) ([]string, []any) {
+	if opts.SavedFromMs != 0 {
+		where = append(where, prefix+"bookmarked_at >= ?")
+		args = append(args, opts.SavedFromMs)
+	}
+	if opts.SavedBeforeMs != 0 {
+		where = append(where, prefix+"bookmarked_at < ?")
+		args = append(args, opts.SavedBeforeMs)
+	}
+	for _, word := range strings.Fields(opts.Query) {
+		where = append(where, "("+
+			"POSITION(LOWER(?) IN LOWER(CONCAT_WS(' ', "+prefix+"custom_title, "+prefix+"account_handles))) > 0 OR "+
+			"EXISTS (SELECT 1 FROM videos search_video WHERE search_video.video_id = "+prefix+"video_id AND POSITION(LOWER(?) IN LOWER(CONCAT_WS(' ', search_video.title, search_video.description))) > 0) OR "+
+			"EXISTS (SELECT 1 FROM feed_items search_feed WHERE (search_feed.tweet_id = "+prefix+"video_id OR search_feed.canonical_tweet_id = "+prefix+"video_id) AND POSITION(LOWER(?) IN LOWER(CONCAT_WS(' ', search_feed.body_text, search_feed.quote_body_text))) > 0))")
+		args = append(args, word, word, word)
+	}
+	if opts.CategoryID > 0 {
+		where = append(where, prefix+"category_id = ?")
+		args = append(args, opts.CategoryID)
+	}
+	if account := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(opts.Account)), "@"); account != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM ("+bookmarkAccountHandlesSQL(prefix)+") account WHERE LOWER(LTRIM(TRIM(handle), '@')) = ?)")
+		args = append(args, account)
+	}
 	switch opts.LabelFilterMode {
 	case BookmarkLabelFilterExact:
 		label := strings.TrimSpace(opts.Label)
 		if label == "" {
 			where = append(where, "NULLIF(TRIM(COALESCE("+prefix+"custom_title, '')), '') IS NULL")
-			return where, args
+		} else {
+			where = append(where, "TRIM(COALESCE("+prefix+"custom_title, '')) = ?")
+			args = append(args, label)
 		}
-		where = append(where, "TRIM(COALESCE("+prefix+"custom_title, '')) = ?")
-		args = append(args, label)
 	case BookmarkLabelFilterNoLabel:
 		where = append(where, "NULLIF(TRIM(COALESCE("+prefix+"custom_title, '')), '') IS NULL")
-	default:
-		if opts.CategoryID > 0 {
-			where = append(where, prefix+"category_id = ?")
-			args = append(args, opts.CategoryID)
-		}
 	}
 	return where, args
 }
@@ -452,40 +478,53 @@ func (db *DB) UpdateBookmarkCategory(categoryID int64, name, archivePath string)
 	})
 }
 
-// GetBookmarkedHandles returns all unique account handles from bookmarks for a user.
+// bookmarkAccountHandlesSQL includes saved account selections and the content author.
+// Web saves JSON arrays; Android also sends comma-separated handles.
+func bookmarkAccountHandlesSQL(prefix string) string {
+	return `SELECT handle FROM jsonb_array_elements_text(
+		CASE WHEN LEFT(LTRIM(COALESCE(` + prefix + `account_handles, '')), 1) = '['
+			THEN ` + prefix + `account_handles::jsonb
+			ELSE to_jsonb(string_to_array(COALESCE(` + prefix + `account_handles, ''), ','))
+		END
+	) saved(handle)
+	UNION ALL
+	SELECT COALESCE(NULLIF(TRIM(cp.handle), ''), NULLIF(TRIM(c.source_id), ''), NULLIF(TRIM(author.channel_id), ''))
+	FROM (
+		SELECT v.channel_id FROM videos v WHERE v.video_id = ` + prefix + `video_id
+		UNION
+		SELECT fi.channel_id FROM feed_items fi
+		WHERE fi.tweet_id = ` + prefix + `video_id
+		UNION
+		SELECT fi.channel_id FROM feed_items fi
+		WHERE fi.canonical_tweet_id = ` + prefix + `video_id
+		  AND fi.canonical_tweet_id IS NOT NULL AND fi.canonical_tweet_id != ''
+	) author
+	LEFT JOIN channels c ON c.channel_id = author.channel_id
+	LEFT JOIN channel_profiles cp ON cp.channel_id = author.channel_id`
+}
+
+// GetBookmarkedHandles returns account selections and authors across bookmark platforms.
 func (db *DB) GetBookmarkedHandles() ([]string, error) {
-	rows, err := db.conn.Query(bind("SELECT account_handles FROM bookmarks WHERE account_handles IS NOT NULL AND account_handles != ''"))
+	rows, err := db.conn.Query(`
+		SELECT DISTINCT LOWER(LTRIM(TRIM(account.handle), '@')) AS handle
+		FROM bookmarks b
+		CROSS JOIN LATERAL (` + bookmarkAccountHandlesSQL("b.") + `) account
+		WHERE NULLIF(LTRIM(TRIM(account.handle), '@'), '') IS NOT NULL
+		ORDER BY handle
+	`)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	seen := map[string]bool{}
+	defer func() { _ = rows.Close() }()
+	var handles []string
 	for rows.Next() {
-		var raw string
-		if err := rows.Scan(&raw); err != nil {
-			continue
+		var handle string
+		if err := rows.Scan(&handle); err != nil {
+			return nil, err
 		}
-		var handles []string
-		if err := json.Unmarshal([]byte(raw), &handles); err != nil {
-			continue
-		}
-		for _, h := range handles {
-			h = strings.TrimSpace(strings.ToLower(h))
-			if h != "" {
-				seen[h] = true
-			}
-		}
+		handles = append(handles, handle)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	result := make([]string, 0, len(seen))
-	for h := range seen {
-		result = append(result, h)
-	}
-	return result, nil
+	return handles, rows.Err()
 }
 
 // GetBookmarkLabels returns distinct custom_title values for autocomplete.

@@ -10,10 +10,12 @@ import (
 	"net/http"
 	"net/url"
 	"os/exec"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/gorilla/sessions"
 	"github.com/screwys/igloo/internal/auth"
@@ -1445,12 +1447,16 @@ func (s *Server) handlePageBookmarks(w http.ResponseWriter, r *http.Request) {
 		page = 1
 	}
 	categoryID, _ := strconv.ParseInt(r.URL.Query().Get("category_id"), 10, 64)
-	selectedLabel := components.BookmarkLabelSelection{
-		Label:     strings.TrimSpace(r.URL.Query().Get("label")),
-		IsNoLabel: r.URL.Query().Get("label_empty") == "1",
-	}
-	if selectedLabel.Active() {
-		categoryID = 0
+	selectedFilter := components.BookmarkSelection{
+		Query:        strings.TrimSpace(r.URL.Query().Get("q")),
+		SavedFrom:    r.URL.Query().Get("saved_from"),
+		SavedThrough: r.URL.Query().Get("saved_through"),
+		TimeZone:     r.URL.Query().Get("tz"),
+		OldestFirst:  r.URL.Query().Get("sort") == "oldest",
+		CategoryID:   categoryID,
+		Account:      strings.TrimPrefix(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("account"))), "@"),
+		Label:        strings.TrimSpace(r.URL.Query().Get("label")),
+		IsNoLabel:    r.URL.Query().Get("label_empty") == "1",
 	}
 	perPage := bookmarksPageSize
 
@@ -1462,21 +1468,63 @@ func (s *Server) handlePageBookmarks(w http.ResponseWriter, r *http.Request) {
 
 	opts := db.GetBookmarksOpts{
 		CategoryID: categoryID,
+		Account:    selectedFilter.Account,
 		Limit:      perPage,
 	}
-	if selectedLabel.IsNoLabel {
-		opts.LabelFilterMode = db.BookmarkLabelFilterNoLabel
-	} else if selectedLabel.Label != "" {
-		opts.LabelFilterMode = db.BookmarkLabelFilterExact
-		opts.Label = selectedLabel.Label
+	opts.Query = selectedFilter.Query
+	opts.OldestFirst = selectedFilter.OldestFirst
+	if selectedFilter.SavedFrom != "" || selectedFilter.SavedThrough != "" {
+		location := time.Local
+		if selectedFilter.TimeZone != "" {
+			var err error
+			location, err = time.LoadLocation(selectedFilter.TimeZone)
+			if err != nil {
+				http.Error(w, "Invalid time zone", http.StatusBadRequest)
+				return
+			}
+		}
+		selectedFilter.TimeZone = location.String()
+		if selectedFilter.SavedFrom != "" {
+			date, err := time.ParseInLocation(time.DateOnly, selectedFilter.SavedFrom, location)
+			if err != nil {
+				http.Error(w, "Invalid start date", http.StatusBadRequest)
+				return
+			}
+			opts.SavedFromMs = date.UnixMilli()
+		}
+		if selectedFilter.SavedThrough != "" {
+			date, err := time.ParseInLocation(time.DateOnly, selectedFilter.SavedThrough, location)
+			if err != nil {
+				http.Error(w, "Invalid end date", http.StatusBadRequest)
+				return
+			}
+			opts.SavedBeforeMs = date.AddDate(0, 0, 1).UnixMilli()
+		}
+		if selectedFilter.SavedFrom != "" && selectedFilter.SavedThrough != "" && selectedFilter.SavedFrom > selectedFilter.SavedThrough {
+			http.Error(w, "End date must not precede start date", http.StatusBadRequest)
+			return
+		}
 	}
-	count, _ := s.db.GetBookmarkCount(opts)
+	if selectedFilter.IsNoLabel {
+		opts.LabelFilterMode = db.BookmarkLabelFilterNoLabel
+	} else if selectedFilter.Label != "" {
+		opts.LabelFilterMode = db.BookmarkLabelFilterExact
+		opts.Label = selectedFilter.Label
+	}
+	count, err := s.db.GetBookmarkCount(opts)
+	if err != nil {
+		slog.Error("GetBookmarkCount", "err", err)
+		http.Error(w, "Could not load bookmarks", http.StatusInternalServerError)
+		return
+	}
 	pager := model.Pager{Page: page, PerPage: perPage, Total: count}
 	opts.Offset = pager.Offset()
 
 	bookmarks, err := s.db.GetBookmarks(opts)
 	if err != nil {
 		slog.Error("GetBookmarks", "err", err)
+		http.Error(w, "Could not load bookmarks", http.StatusInternalServerError)
+		return
 	}
 
 	// First page: mark initial visible bookmarks as eager-load
@@ -1493,19 +1541,24 @@ func (s *Server) handlePageBookmarks(w http.ResponseWriter, r *http.Request) {
 	p.PageTitle = "Bookmarks"
 	p.ActiveNav = "bookmarks"
 	p.PageBadge = fmt.Sprintf("%d bookmarks", count)
-	p.PageScripts = []string{"js/infinite_page.js", "js/bookmark_label_filter.js"}
+	p.PageScripts = []string{"js/infinite_page.js", "js/bookmark_filters.js"}
 	p.ESBundle = "js/dist/shorts.js"
 	p.Sidebar = s.mustBuildSidebar(r)
 
 	// HTMX request — return bookmark cards for infinite scroll
 	if r.Header.Get("HX-Request") != "" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = components.BookmarksPartial(p, bookmarks, pager, categoryID, selectedLabel).Render(r.Context(), w)
+		_ = components.BookmarksPartial(p, bookmarks, pager, selectedFilter).Render(r.Context(), w)
 		return
 	}
 
+	accounts, err := s.db.GetBookmarkedHandles()
+	if err != nil {
+		slog.Error("GetBookmarkedHandles", "err", err)
+	}
+	slices.Sort(accounts)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = components.BookmarksPage(p, bookmarks, categories, labelCounts, categoryID, selectedLabel, pager).Render(r.Context(), w)
+	_ = components.BookmarksPage(p, bookmarks, categories, labelCounts, accounts, selectedFilter, pager).Render(r.Context(), w)
 }
 
 func (s *Server) handlePageSearch(w http.ResponseWriter, r *http.Request) {

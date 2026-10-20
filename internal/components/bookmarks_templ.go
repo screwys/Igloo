@@ -17,28 +17,30 @@ import (
 	"strings"
 )
 
-// BookmarkLabelSelection holds the active bookmarks label filter.
-type BookmarkLabelSelection struct {
-	Label     string
-	IsNoLabel bool
+// BookmarkSelection holds the filters applied to the bookmark grid.
+type BookmarkSelection struct {
+	CategoryID   int64
+	Account      string
+	Label        string
+	IsNoLabel    bool
+	Query        string
+	SavedFrom    string
+	SavedThrough string
+	TimeZone     string
+	OldestFirst  bool
 }
 
-func (s BookmarkLabelSelection) Active() bool {
-	return s.IsNoLabel || strings.TrimSpace(s.Label) != ""
+func (s BookmarkSelection) Active() bool {
+	return s.CategoryID != 0 || s.Account != "" || s.IsNoLabel || s.Label != "" || s.Query != "" || s.SavedFrom != "" || s.SavedThrough != "" || s.OldestFirst
 }
 
-func (s BookmarkLabelSelection) Display(p PageProps) string {
-	if s.IsNoLabel {
-		return L(p, "bookmark_filter_no_label", "No label")
-	}
-	if label := strings.TrimSpace(s.Label); label != "" {
-		return label
-	}
-	return L(p, "bookmark_filter_labels", "Labels")
+type bookmarkFilterOption struct {
+	Value string
+	Name  string
 }
 
-// BookmarksPage renders the full bookmarks page with category filter pills and shorts overlay.
-func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.BookmarkCategoryRow, labelCounts []db.BookmarkLabelCountRow, selectedCategoryID int64, selectedLabel BookmarkLabelSelection, pager model.Pager) templ.Component {
+// BookmarksPage renders bookmark filters, cards, and the shorts overlay.
+func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.BookmarkCategoryRow, labelCounts []db.BookmarkLabelCountRow, accounts []string, selected BookmarkSelection, pager model.Pager) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -75,7 +77,7 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var3 = []any{"bookmark-filter-pill", templ.KV("active", selectedCategoryID == 0 && !selectedLabel.Active())}
+			var templ_7745c5c3_Var3 = []any{"bookmark-filter-pill", templ.KV("active", !selected.Active())}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var3...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -100,7 +102,7 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_filter_all", "All"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 36, Col: 161}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 38, Col: 129}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -111,7 +113,7 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 				return templ_7745c5c3_Err
 			}
 			for _, cat := range categories {
-				var templ_7745c5c3_Var6 = []any{"bookmark-filter-pill", templ.KV("active", !selectedLabel.Active() && selectedCategoryID == cat.ID)}
+				var templ_7745c5c3_Var6 = []any{"bookmark-filter-pill", templ.KV("active", selected.CategoryID == cat.ID)}
 				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var6...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -134,9 +136,9 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var8 templ.SafeURL
-				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fmt.Sprintf("/bookmarks?category_id=%d", cat.ID)))
+				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(bookmarkCategoryURL(selected, cat.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 40, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 42, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -149,7 +151,7 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(cat.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 41, Col: 15}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 43, Col: 15}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -160,7 +162,7 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = bookmarkLabelFilter(p, labelCounts, selectedLabel).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = bookmarkFilters(p, categories, labelCounts, accounts, selected).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -183,7 +185,7 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "bookmarks_empty", "No bookmarks"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 52, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 54, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {
@@ -199,7 +201,7 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 				return templ_7745c5c3_Err
 			}
 			if pager.HasNext() {
-				templ_7745c5c3_Err = VideoGridInfiniteScrollTrigger(bookmarksNextURL(pager, selectedCategoryID, selectedLabel)).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = VideoGridInfiniteScrollTrigger(bookmarksNextURL(pager, selected)).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -211,7 +213,7 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(bookmarksInitialPage(pager)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 64, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 66, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 			if templ_7745c5c3_Err != nil {
@@ -224,7 +226,7 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(bookmarksPageSize(pager)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 65, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 67, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 			if templ_7745c5c3_Err != nil {
@@ -237,7 +239,7 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "status_up_to_date", "You're up to date!"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 71, Col: 90}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 73, Col: 90}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -257,7 +259,7 @@ func BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookmar
 	})
 }
 
-func bookmarkLabelFilter(p PageProps, labelCounts []db.BookmarkLabelCountRow, selectedLabel BookmarkLabelSelection) templ.Component {
+func bookmarkFilters(p PageProps, categories []db.BookmarkCategoryRow, labels []db.BookmarkLabelCountRow, accounts []string, selected BookmarkSelection) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -278,16 +280,12 @@ func bookmarkLabelFilter(p PageProps, labelCounts []db.BookmarkLabelCountRow, se
 			templ_7745c5c3_Var14 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<div class=\"bookmark-label-filter\" data-bookmark-label-filter>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var15 = []any{"bookmark-filter-pill", "bookmark-label-filter-toggle", templ.KV("active", selectedLabel.Active())}
+		var templ_7745c5c3_Var15 = []any{"bookmark-filter-pill", "bookmark-filter-toggle", templ.KV("active", selected.Active())}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var15...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<button class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<button class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -300,160 +298,199 @@ func bookmarkLabelFilter(p PageProps, labelCounts []db.BookmarkLabelCountRow, se
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" type=\"button\" aria-haspopup=\"dialog\" aria-expanded=\"false\" data-bookmark-label-toggle><span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" type=\"button\" aria-haspopup=\"dialog\" aria-controls=\"bookmark-filters\" title=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var17 string
-		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(selectedLabel.Display(p))
+		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "bookmark_filters", "Filter"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 87, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 81, Col: 219}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</span>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = MaterialIcon("ArrowDropDown", "").Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</button><div class=\"bookmark-label-panel hidden\" role=\"dialog\" aria-label=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" aria-label=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var18 string
-		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "bookmark_filter_labels", "Labels"))
+		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "bookmark_filters", "Filter"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 90, Col: 110}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 81, Col: 269}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" data-bookmark-label-panel><input class=\"bookmark-label-search-input\" type=\"search\" placeholder=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" data-bookmark-filters-open>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = MaterialIcon("FilterAlt", "").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "</button><div id=\"bookmark-filters\" class=\"modal hidden\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"bookmark-filters-title\" aria-hidden=\"true\"><div class=\"modal-backdrop\"></div><div class=\"modal-content bookmark-filters-content\"><div class=\"modal-header\"><h3 id=\"bookmark-filters-title\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var19 string
-		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "bookmark_filter_search_labels", "Search labels"))
+		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "bookmark_advanced_search", "Advanced search"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 94, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 88, Col: 89}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" autocomplete=\"off\" role=\"combobox\" aria-autocomplete=\"list\" aria-controls=\"bookmark-label-results\" aria-expanded=\"false\" aria-activedescendant=\"\" data-bookmark-label-search><div id=\"bookmark-label-results\" class=\"bookmark-label-result-list\" role=\"listbox\" data-bookmark-label-list>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for index, row := range labelCounts {
-			var templ_7745c5c3_Var20 = []any{"bookmark-label-result-row", templ.KV("active", bookmarkLabelRowSelected(row, selectedLabel))}
-			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var20...)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<a id=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var21 string
-			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("bookmark-label-result-%d", index))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 106, Col: 57}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\" class=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var22 string
-			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var20).String())
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 1, Col: 0}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" href=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var23 templ.SafeURL
-			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(bookmarkLabelURL(row)))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 108, Col: 49}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" role=\"option\" aria-selected=\"false\" data-bookmark-label-row data-label=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var24 string
-			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(bookmarkLabelDisplay(p, row))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 112, Col: 47}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\"><span class=\"bookmark-label-result-name\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var25 string
-			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(bookmarkLabelDisplay(p, row))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 114, Col: 77}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</span> <span class=\"bookmark-label-result-count\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var26 string
-			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(row.BookmarkCount))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 115, Col: 81}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</span></a>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</h3><button class=\"modal-close\" type=\"button\" aria-label=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<div class=\"bookmark-label-empty hidden\" data-bookmark-label-empty>")
+		var templ_7745c5c3_Var20 string
+		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "action_close", "Close"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 89, Col: 88}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = MaterialIcon("Close", "").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</button></div><form action=\"/bookmarks\" method=\"get\" data-bookmark-filters-form><div class=\"modal-body\"><div class=\"bookmark-filter-field bookmark-search-text\"><label for=\"bookmark-search-query\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var21 string
+		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "bookmark_search_text", "Search text"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 94, Col: 86}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</label> <input id=\"bookmark-search-query\" class=\"bookmark-filter-input\" type=\"search\" name=\"q\" data-bookmark-search-value value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var22 string
+		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(selected.Query)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 95, Col: 142}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\"></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = bookmarkFilterField(p, "category_id", L(p, "bookmark_filter_category", "Category"), strconv.FormatInt(selected.CategoryID, 10), bookmarkCategoryOptions(categories)).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = bookmarkFilterField(p, "account", L(p, "bookmark_account", "Account"), selected.Account, bookmarkAccountOptions(accounts)).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = bookmarkFilterField(p, "label_choice", L(p, "bookmark_label", "Label"), bookmarkLabelValue(selected), bookmarkLabelOptions(p, labels)).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = bookmarkFilterField(p, "sort", L(p, "bookmark_sort", "Sort"), bookmarkSortValue(selected), []bookmarkFilterOption{{"", L(p, "bookmark_sort_newest", "Newest saved")}, {"oldest", L(p, "bookmark_sort_oldest", "Oldest saved")}}).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<div class=\"bookmark-filter-field\"><label for=\"bookmark-saved-from\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var23 string
+		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "bookmark_saved_from", "Saved from"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 102, Col: 82}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</label> <input id=\"bookmark-saved-from\" class=\"bookmark-filter-input\" type=\"date\" name=\"saved_from\" data-bookmark-search-value value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var24 string
+		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(selected.SavedFrom)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 103, Col: 151}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\"></div><div class=\"bookmark-filter-field\"><label for=\"bookmark-saved-through\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var25 string
+		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "bookmark_saved_through", "Saved through"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 106, Col: 91}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</label> <input id=\"bookmark-saved-through\" class=\"bookmark-filter-input\" type=\"date\" name=\"saved_through\" data-bookmark-search-value value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var26 string
+		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(selected.SavedThrough)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 107, Col: 160}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\"></div></div><div class=\"modal-footer\"><button class=\"btn btn-secondary\" type=\"button\" data-bookmark-filters-reset>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var27 string
-		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "bookmark_filter_no_labels_found", "No labels found"))
+		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "bookmark_filter_reset", "Reset"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 118, Col: 131}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 111, Col: 121}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</div></div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</button> <button class=\"btn btn-primary\" type=\"submit\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var28 string
+		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "bookmark_filter_apply", "Apply"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 112, Col: 91}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</button></div></form></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -461,8 +498,7 @@ func bookmarkLabelFilter(p PageProps, labelCounts []db.BookmarkLabelCountRow, se
 	})
 }
 
-// BookmarksPartial renders just the bookmark cards and next trigger for HTMX infinite scroll responses.
-func BookmarksPartial(p PageProps, bookmarks []model.Video, pager model.Pager, selectedCategoryID int64, selectedLabel BookmarkLabelSelection) templ.Component {
+func bookmarkFilterField(p PageProps, name string, title string, selected string, options []bookmarkFilterOption) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -478,9 +514,327 @@ func BookmarksPartial(p PageProps, bookmarks []model.Video, pager model.Pager, s
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var28 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var28 == nil {
-			templ_7745c5c3_Var28 = templ.NopComponent
+		templ_7745c5c3_Var29 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var29 == nil {
+			templ_7745c5c3_Var29 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<div class=\"bookmark-filter-field\" data-bookmark-filter-field><label for=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var30 string
+		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue("bookmark-filter-" + name)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 121, Col: 40}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var31 string
+		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(title)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 121, Col: 50}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</label> <input type=\"hidden\" name=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var32 string
+		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(name)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 122, Col: 34}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var33 string
+		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(selected)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 122, Col: 53}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\"> <input id=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var34 string
+		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue("bookmark-filter-" + name)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 123, Col: 39}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" class=\"bookmark-filter-input\" type=\"search\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var35 string
+		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(bookmarkFilterDisplay(selected, options))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 123, Col: 134}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" placeholder=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var36 string
+		templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(L(p, "logs_filter_all", "All"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 123, Col: 181}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" autocomplete=\"off\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if name == "sort" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, " readonly")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, " role=\"combobox\" aria-autocomplete=\"list\" aria-controls=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var37 string
+		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue("bookmark-filter-options-" + name)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 123, Col: 322}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "\" aria-expanded=\"false\" data-bookmark-filter-search><div id=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var38 string
+		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue("bookmark-filter-options-" + name)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 124, Col: 45}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\" class=\"bookmark-filter-options hidden\" popover=\"manual\" role=\"listbox\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if name != "sort" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<button type=\"button\" class=\"bookmark-filter-option\" role=\"option\" tabindex=\"-1\" aria-selected=\"false\" data-value=\"\" data-name=\"\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var39 string
+			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "logs_filter_all", "All"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 126, Col: 166}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</button> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		for index, option := range options {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<button id=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var40 string
+			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("bookmark-filter-%s-%d", name, index))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 129, Col: 66}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\" type=\"button\" class=\"bookmark-filter-option\" role=\"option\" tabindex=\"-1\" aria-selected=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var41 string
+			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(option.Value == selected))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 129, Col: 202}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\" data-value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var42 string
+			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(option.Value)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 129, Col: 230}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "\" data-name=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var43 string
+			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(option.Name)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 129, Col: 256}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var44 string
+			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(option.Name)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 129, Col: 272}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</button>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "<div class=\"bookmark-filter-empty hidden\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var45 string
+		templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(L(p, "bookmark_filter_no_matches", "No matches"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/components/bookmarks.templ`, Line: 131, Col: 95}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</div></div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+func bookmarkSortValue(selected BookmarkSelection) string {
+	if selected.OldestFirst {
+		return "oldest"
+	}
+	return ""
+}
+
+func bookmarkCategoryOptions(categories []db.BookmarkCategoryRow) []bookmarkFilterOption {
+	options := make([]bookmarkFilterOption, 0, len(categories))
+	for _, category := range categories {
+		options = append(options, bookmarkFilterOption{strconv.FormatInt(category.ID, 10), category.Name})
+	}
+	return options
+}
+
+func bookmarkAccountOptions(accounts []string) []bookmarkFilterOption {
+	options := make([]bookmarkFilterOption, 0, len(accounts))
+	for _, account := range accounts {
+		options = append(options, bookmarkFilterOption{account, account})
+	}
+	return options
+}
+
+func bookmarkLabelOptions(p PageProps, labels []db.BookmarkLabelCountRow) []bookmarkFilterOption {
+	options := make([]bookmarkFilterOption, 0, len(labels))
+	for _, label := range labels {
+		if label.IsNoLabel {
+			options = append(options, bookmarkFilterOption{"empty", L(p, "bookmark_filter_no_label", "No label")})
+		} else {
+			options = append(options, bookmarkFilterOption{"label:" + label.Label, label.Label})
+		}
+	}
+	return options
+}
+
+func bookmarkLabelValue(selected BookmarkSelection) string {
+	if selected.IsNoLabel {
+		return "empty"
+	}
+	if selected.Label != "" {
+		return "label:" + selected.Label
+	}
+	return ""
+}
+
+func bookmarkFilterDisplay(value string, options []bookmarkFilterOption) string {
+	for _, option := range options {
+		if option.Value == value {
+			return option.Name
+		}
+	}
+	return ""
+}
+
+// BookmarksPartial renders just the bookmark cards and next trigger for HTMX infinite scroll responses.
+func BookmarksPartial(p PageProps, bookmarks []model.Video, pager model.Pager, selected BookmarkSelection) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var46 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var46 == nil {
+			templ_7745c5c3_Var46 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		for _, v := range bookmarks {
@@ -490,7 +844,7 @@ func BookmarksPartial(p PageProps, bookmarks []model.Video, pager model.Pager, s
 			}
 		}
 		if pager.HasNext() {
-			templ_7745c5c3_Err = VideoGridInfiniteScrollTrigger(bookmarksNextURL(pager, selectedCategoryID, selectedLabel)).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = VideoGridInfiniteScrollTrigger(bookmarksNextURL(pager, selected)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -499,40 +853,46 @@ func BookmarksPartial(p PageProps, bookmarks []model.Video, pager model.Pager, s
 	})
 }
 
-func bookmarksNextURL(pager model.Pager, categoryID int64, selectedLabel BookmarkLabelSelection) string {
-	values := url.Values{}
+func bookmarksNextURL(pager model.Pager, selected BookmarkSelection) string {
+	values := bookmarkFilterValues(selected)
 	values.Set("page", strconv.Itoa(pager.Page+1))
-	if selectedLabel.IsNoLabel {
-		values.Set("label_empty", "1")
-	} else if label := strings.TrimSpace(selectedLabel.Label); label != "" {
-		values.Set("label", label)
-	} else if categoryID > 0 {
-		values.Set("category_id", strconv.FormatInt(categoryID, 10))
-	}
 	return "/bookmarks?" + values.Encode()
 }
 
-func bookmarkLabelURL(row db.BookmarkLabelCountRow) string {
-	if row.IsNoLabel {
-		return "/bookmarks?label_empty=1"
-	}
+func bookmarkCategoryURL(selected BookmarkSelection, categoryID int64) string {
+	selected.CategoryID = categoryID
+	return "/bookmarks?" + bookmarkFilterValues(selected).Encode()
+}
+
+func bookmarkFilterValues(selected BookmarkSelection) url.Values {
 	values := url.Values{}
-	values.Set("label", strings.TrimSpace(row.Label))
-	return "/bookmarks?" + values.Encode()
-}
-
-func bookmarkLabelDisplay(p PageProps, row db.BookmarkLabelCountRow) string {
-	if row.IsNoLabel {
-		return L(p, "bookmark_filter_no_label", "No label")
+	if selected.Query != "" {
+		values.Set("q", selected.Query)
 	}
-	return row.Label
-}
-
-func bookmarkLabelRowSelected(row db.BookmarkLabelCountRow, selected BookmarkLabelSelection) bool {
-	if row.IsNoLabel || selected.IsNoLabel {
-		return row.IsNoLabel && selected.IsNoLabel
+	if selected.OldestFirst {
+		values.Set("sort", "oldest")
 	}
-	return strings.EqualFold(strings.TrimSpace(row.Label), strings.TrimSpace(selected.Label))
+	if selected.SavedFrom != "" {
+		values.Set("saved_from", selected.SavedFrom)
+	}
+	if selected.SavedThrough != "" {
+		values.Set("saved_through", selected.SavedThrough)
+	}
+	if selected.SavedFrom != "" || selected.SavedThrough != "" {
+		values.Set("tz", selected.TimeZone)
+	}
+	if selected.CategoryID > 0 {
+		values.Set("category_id", strconv.FormatInt(selected.CategoryID, 10))
+	}
+	if selected.Account != "" {
+		values.Set("account", selected.Account)
+	}
+	if selected.IsNoLabel {
+		values.Set("label_empty", "1")
+	} else if label := strings.TrimSpace(selected.Label); label != "" {
+		values.Set("label", label)
+	}
+	return values
 }
 
 func bookmarksInitialPage(pager model.Pager) int {
@@ -548,8 +908,5 @@ func bookmarksPageSize(pager model.Pager) int {
 	}
 	return 200
 }
-
-// Unused import guards.
-var _ = strconv.Itoa
 
 var _ = templruntime.GeneratedTemplate

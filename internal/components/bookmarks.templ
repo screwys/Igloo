@@ -9,38 +9,40 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
-// BookmarkLabelSelection holds the active bookmarks label filter.
-type BookmarkLabelSelection struct {
-	Label     string
+// BookmarkSelection holds the filters applied to the bookmark grid.
+type BookmarkSelection struct {
+	CategoryID int64
+	Account string
+	Label string
 	IsNoLabel bool
+	Query string
+	SavedFrom string
+	SavedThrough string
+	TimeZone string
+	OldestFirst bool
 }
 
-func (s BookmarkLabelSelection) Active() bool {
-	return s.IsNoLabel || strings.TrimSpace(s.Label) != ""
+func (s BookmarkSelection) Active() bool {
+	return s.CategoryID != 0 || s.Account != "" || s.IsNoLabel || s.Label != "" || s.Query != "" || s.SavedFrom != "" || s.SavedThrough != "" || s.OldestFirst
 }
 
-func (s BookmarkLabelSelection) Display(p PageProps) string {
-	if s.IsNoLabel {
-		return L(p, "bookmark_filter_no_label", "No label")
-	}
-	if label := strings.TrimSpace(s.Label); label != "" {
-		return label
-	}
-	return L(p, "bookmark_filter_labels", "Labels")
+type bookmarkFilterOption struct {
+	Value string
+	Name string
 }
 
-// BookmarksPage renders the full bookmarks page with category filter pills and shorts overlay.
-templ BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.BookmarkCategoryRow, labelCounts []db.BookmarkLabelCountRow, selectedCategoryID int64, selectedLabel BookmarkLabelSelection, pager model.Pager) {
+// BookmarksPage renders bookmark filters, cards, and the shorts overlay.
+templ BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.BookmarkCategoryRow, labelCounts []db.BookmarkLabelCountRow, accounts []string, selected BookmarkSelection, pager model.Pager) {
 	@Base(p) {
 		<div class="bookmarks-filter-bar">
-			<a class={ "bookmark-filter-pill", templ.KV("active", selectedCategoryID == 0 && !selectedLabel.Active()) } href="/bookmarks">{ L(p, "logs_filter_all", "All") }</a>
+			<a class={ "bookmark-filter-pill", templ.KV("active", !selected.Active()) } href="/bookmarks">{ L(p, "logs_filter_all", "All") }</a>
 			for _, cat := range categories {
 				<a
-					class={ "bookmark-filter-pill", templ.KV("active", !selectedLabel.Active() && selectedCategoryID == cat.ID) }
-					href={ templ.SafeURL(fmt.Sprintf("/bookmarks?category_id=%d", cat.ID)) }
+					class={ "bookmark-filter-pill", templ.KV("active", selected.CategoryID == cat.ID) }
+					href={ templ.SafeURL(bookmarkCategoryURL(selected, cat.ID)) }
 				>{ cat.Name }</a>
 			}
-			@bookmarkLabelFilter(p, labelCounts, selectedLabel)
+			@bookmarkFilters(p, categories, labelCounts, accounts, selected)
 		</div>
 		<div id="shorts-grid-shell">
 			<div id="video-grid" class="video-grid shorts-grid bookmarks-grid">
@@ -53,7 +55,7 @@ templ BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookma
 				}
 			</div>
 			if pager.HasNext() {
-				@VideoGridInfiniteScrollTrigger(bookmarksNextURL(pager, selectedCategoryID, selectedLabel))
+				@VideoGridInfiniteScrollTrigger(bookmarksNextURL(pager, selected))
 			}
 		</div>
 		<div
@@ -75,96 +77,144 @@ templ BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookma
 	}
 }
 
-templ bookmarkLabelFilter(p PageProps, labelCounts []db.BookmarkLabelCountRow, selectedLabel BookmarkLabelSelection) {
-	<div class="bookmark-label-filter" data-bookmark-label-filter>
-		<button
-			class={ "bookmark-filter-pill", "bookmark-label-filter-toggle", templ.KV("active", selectedLabel.Active()) }
-			type="button"
-			aria-haspopup="dialog"
-			aria-expanded="false"
-			data-bookmark-label-toggle
-		>
-			<span>{ selectedLabel.Display(p) }</span>
-			@MaterialIcon("ArrowDropDown", "")
-		</button>
-		<div class="bookmark-label-panel hidden" role="dialog" aria-label={ L(p, "bookmark_filter_labels", "Labels") } data-bookmark-label-panel>
-			<input
-				class="bookmark-label-search-input"
-				type="search"
-				placeholder={ L(p, "bookmark_filter_search_labels", "Search labels") }
-				autocomplete="off"
-				role="combobox"
-				aria-autocomplete="list"
-				aria-controls="bookmark-label-results"
-				aria-expanded="false"
-				aria-activedescendant=""
-				data-bookmark-label-search
-			/>
-			<div id="bookmark-label-results" class="bookmark-label-result-list" role="listbox" data-bookmark-label-list>
-				for index, row := range labelCounts {
-					<a
-						id={ fmt.Sprintf("bookmark-label-result-%d", index) }
-						class={ "bookmark-label-result-row", templ.KV("active", bookmarkLabelRowSelected(row, selectedLabel)) }
-						href={ templ.SafeURL(bookmarkLabelURL(row)) }
-						role="option"
-						aria-selected="false"
-						data-bookmark-label-row
-						data-label={ bookmarkLabelDisplay(p, row) }
-					>
-						<span class="bookmark-label-result-name">{ bookmarkLabelDisplay(p, row) }</span>
-						<span class="bookmark-label-result-count">{ strconv.Itoa(row.BookmarkCount) }</span>
-					</a>
-				}
-				<div class="bookmark-label-empty hidden" data-bookmark-label-empty>{ L(p, "bookmark_filter_no_labels_found", "No labels found") }</div>
+templ bookmarkFilters(p PageProps, categories []db.BookmarkCategoryRow, labels []db.BookmarkLabelCountRow, accounts []string, selected BookmarkSelection) {
+	<button class={ "bookmark-filter-pill", "bookmark-filter-toggle", templ.KV("active", selected.Active()) } type="button" aria-haspopup="dialog" aria-controls="bookmark-filters" title={ L(p, "bookmark_filters", "Filter") } aria-label={ L(p, "bookmark_filters", "Filter") } data-bookmark-filters-open>
+		@MaterialIcon("FilterAlt", "")
+	</button>
+	<div id="bookmark-filters" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="bookmark-filters-title" aria-hidden="true">
+		<div class="modal-backdrop"></div>
+		<div class="modal-content bookmark-filters-content">
+			<div class="modal-header">
+				<h3 id="bookmark-filters-title">{ L(p, "bookmark_advanced_search", "Advanced search") }</h3>
+				<button class="modal-close" type="button" aria-label={ L(p, "action_close", "Close") }>@MaterialIcon("Close", "")</button>
 			</div>
+			<form action="/bookmarks" method="get" data-bookmark-filters-form>
+				<div class="modal-body">
+					<div class="bookmark-filter-field bookmark-search-text">
+						<label for="bookmark-search-query">{ L(p, "bookmark_search_text", "Search text") }</label>
+						<input id="bookmark-search-query" class="bookmark-filter-input" type="search" name="q" data-bookmark-search-value value={ selected.Query }/>
+					</div>
+					@bookmarkFilterField(p, "category_id", L(p, "bookmark_filter_category", "Category"), strconv.FormatInt(selected.CategoryID, 10), bookmarkCategoryOptions(categories))
+					@bookmarkFilterField(p, "account", L(p, "bookmark_account", "Account"), selected.Account, bookmarkAccountOptions(accounts))
+					@bookmarkFilterField(p, "label_choice", L(p, "bookmark_label", "Label"), bookmarkLabelValue(selected), bookmarkLabelOptions(p, labels))
+					@bookmarkFilterField(p, "sort", L(p, "bookmark_sort", "Sort"), bookmarkSortValue(selected), []bookmarkFilterOption{{"", L(p, "bookmark_sort_newest", "Newest saved")}, {"oldest", L(p, "bookmark_sort_oldest", "Oldest saved")}})
+					<div class="bookmark-filter-field">
+						<label for="bookmark-saved-from">{ L(p, "bookmark_saved_from", "Saved from") }</label>
+						<input id="bookmark-saved-from" class="bookmark-filter-input" type="date" name="saved_from" data-bookmark-search-value value={ selected.SavedFrom }/>
+					</div>
+					<div class="bookmark-filter-field">
+						<label for="bookmark-saved-through">{ L(p, "bookmark_saved_through", "Saved through") }</label>
+						<input id="bookmark-saved-through" class="bookmark-filter-input" type="date" name="saved_through" data-bookmark-search-value value={ selected.SavedThrough }/>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button class="btn btn-secondary" type="button" data-bookmark-filters-reset>{ L(p, "bookmark_filter_reset", "Reset") }</button>
+					<button class="btn btn-primary" type="submit">{ L(p, "bookmark_filter_apply", "Apply") }</button>
+				</div>
+			</form>
 		</div>
 	</div>
 }
 
+templ bookmarkFilterField(p PageProps, name string, title string, selected string, options []bookmarkFilterOption) {
+	<div class="bookmark-filter-field" data-bookmark-filter-field>
+		<label for={ "bookmark-filter-" + name }>{ title }</label>
+		<input type="hidden" name={ name } value={ selected }/>
+		<input id={ "bookmark-filter-" + name } class="bookmark-filter-input" type="search" value={ bookmarkFilterDisplay(selected, options) } placeholder={ L(p, "logs_filter_all", "All") } autocomplete="off" readonly?={ name == "sort" } role="combobox" aria-autocomplete="list" aria-controls={ "bookmark-filter-options-" + name } aria-expanded="false" data-bookmark-filter-search/>
+		<div id={ "bookmark-filter-options-" + name } class="bookmark-filter-options hidden" popover="manual" role="listbox">
+			if name != "sort" {
+				<button type="button" class="bookmark-filter-option" role="option" tabindex="-1" aria-selected="false" data-value="" data-name="">{ L(p, "logs_filter_all", "All") }</button>
+			}
+			for index, option := range options {
+				<button id={ fmt.Sprintf("bookmark-filter-%s-%d", name, index) } type="button" class="bookmark-filter-option" role="option" tabindex="-1" aria-selected={ strconv.FormatBool(option.Value == selected) } data-value={ option.Value } data-name={ option.Name }>{ option.Name }</button>
+			}
+			<div class="bookmark-filter-empty hidden">{ L(p, "bookmark_filter_no_matches", "No matches") }</div>
+		</div>
+	</div>
+}
+
+func bookmarkSortValue(selected BookmarkSelection) string {
+	if selected.OldestFirst { return "oldest" }
+	return ""
+}
+
+func bookmarkCategoryOptions(categories []db.BookmarkCategoryRow) []bookmarkFilterOption {
+	options := make([]bookmarkFilterOption, 0, len(categories))
+	for _, category := range categories {
+		options = append(options, bookmarkFilterOption{strconv.FormatInt(category.ID, 10), category.Name})
+	}
+	return options
+}
+
+func bookmarkAccountOptions(accounts []string) []bookmarkFilterOption {
+	options := make([]bookmarkFilterOption, 0, len(accounts))
+	for _, account := range accounts {
+		options = append(options, bookmarkFilterOption{account, account})
+	}
+	return options
+}
+
+func bookmarkLabelOptions(p PageProps, labels []db.BookmarkLabelCountRow) []bookmarkFilterOption {
+	options := make([]bookmarkFilterOption, 0, len(labels))
+	for _, label := range labels {
+		if label.IsNoLabel {
+			options = append(options, bookmarkFilterOption{"empty", L(p, "bookmark_filter_no_label", "No label")})
+		} else {
+			options = append(options, bookmarkFilterOption{"label:" + label.Label, label.Label})
+		}
+	}
+	return options
+}
+
+func bookmarkLabelValue(selected BookmarkSelection) string {
+	if selected.IsNoLabel { return "empty" }
+	if selected.Label != "" { return "label:" + selected.Label }
+	return ""
+}
+
+func bookmarkFilterDisplay(value string, options []bookmarkFilterOption) string {
+	for _, option := range options {
+		if option.Value == value { return option.Name }
+	}
+	return ""
+}
+
 // BookmarksPartial renders just the bookmark cards and next trigger for HTMX infinite scroll responses.
-templ BookmarksPartial(p PageProps, bookmarks []model.Video, pager model.Pager, selectedCategoryID int64, selectedLabel BookmarkLabelSelection) {
+templ BookmarksPartial(p PageProps, bookmarks []model.Video, pager model.Pager, selected BookmarkSelection) {
 	for _, v := range bookmarks {
 		@VideoCard(p, v)
 	}
 	if pager.HasNext() {
-		@VideoGridInfiniteScrollTrigger(bookmarksNextURL(pager, selectedCategoryID, selectedLabel))
+		@VideoGridInfiniteScrollTrigger(bookmarksNextURL(pager, selected))
 	}
 }
 
-func bookmarksNextURL(pager model.Pager, categoryID int64, selectedLabel BookmarkLabelSelection) string {
-	values := url.Values{}
+func bookmarksNextURL(pager model.Pager, selected BookmarkSelection) string {
+	values := bookmarkFilterValues(selected)
 	values.Set("page", strconv.Itoa(pager.Page+1))
-	if selectedLabel.IsNoLabel {
-		values.Set("label_empty", "1")
-	} else if label := strings.TrimSpace(selectedLabel.Label); label != "" {
-		values.Set("label", label)
-	} else if categoryID > 0 {
-		values.Set("category_id", strconv.FormatInt(categoryID, 10))
-	}
 	return "/bookmarks?" + values.Encode()
 }
 
-func bookmarkLabelURL(row db.BookmarkLabelCountRow) string {
-	if row.IsNoLabel {
-		return "/bookmarks?label_empty=1"
-	}
+func bookmarkCategoryURL(selected BookmarkSelection, categoryID int64) string {
+	selected.CategoryID = categoryID
+	return "/bookmarks?" + bookmarkFilterValues(selected).Encode()
+}
+
+func bookmarkFilterValues(selected BookmarkSelection) url.Values {
 	values := url.Values{}
-	values.Set("label", strings.TrimSpace(row.Label))
-	return "/bookmarks?" + values.Encode()
-}
-
-func bookmarkLabelDisplay(p PageProps, row db.BookmarkLabelCountRow) string {
-	if row.IsNoLabel {
-		return L(p, "bookmark_filter_no_label", "No label")
+	if selected.Query != "" { values.Set("q", selected.Query) }
+	if selected.OldestFirst { values.Set("sort", "oldest") }
+	if selected.SavedFrom != "" { values.Set("saved_from", selected.SavedFrom) }
+	if selected.SavedThrough != "" { values.Set("saved_through", selected.SavedThrough) }
+	if selected.SavedFrom != "" || selected.SavedThrough != "" { values.Set("tz", selected.TimeZone) }
+	if selected.CategoryID > 0 { values.Set("category_id", strconv.FormatInt(selected.CategoryID, 10)) }
+	if selected.Account != "" { values.Set("account", selected.Account) }
+	if selected.IsNoLabel {
+		values.Set("label_empty", "1")
+	} else if label := strings.TrimSpace(selected.Label); label != "" {
+		values.Set("label", label)
 	}
-	return row.Label
-}
-
-func bookmarkLabelRowSelected(row db.BookmarkLabelCountRow, selected BookmarkLabelSelection) bool {
-	if row.IsNoLabel || selected.IsNoLabel {
-		return row.IsNoLabel && selected.IsNoLabel
-	}
-	return strings.EqualFold(strings.TrimSpace(row.Label), strings.TrimSpace(selected.Label))
+	return values
 }
 
 func bookmarksInitialPage(pager model.Pager) int {
@@ -180,6 +230,3 @@ func bookmarksPageSize(pager model.Pager) int {
 	}
 	return 200
 }
-
-// Unused import guards.
-var _ = strconv.Itoa

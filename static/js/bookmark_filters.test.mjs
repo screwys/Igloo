@@ -5,6 +5,8 @@ import vm from 'node:vm'
 
 class FakeClassList {
   constructor() { this.names = new Set() }
+  add(name) { this.names.add(name) }
+  remove(name) { this.names.delete(name) }
   contains(name) { return this.names.has(name) }
   toggle(name, enabled) {
     if (enabled) this.names.add(name)
@@ -15,6 +17,9 @@ class FakeClassList {
 class FakeElement {
   constructor() {
     this.attributes = new Map()
+    this.dataset = {}
+    this.style = {}
+    this.hidden = false
     this.classList = new FakeClassList()
     this.listeners = new Map()
     this.value = ''
@@ -25,41 +30,57 @@ class FakeElement {
   dispatch(type, event = {}) { this.listeners.get(type)(event) }
   getAttribute(name) { return this.attributes.get(name) || null }
   setAttribute(name, value) { this.attributes.set(name, String(value)) }
-  click() { this.clicks += 1 }
+  removeAttribute(name) { this.attributes.delete(name) }
+  click() { this.clicks += 1; this.listeners.get('click')?.() }
+  select() {}
+  showPopover() {}
+  hidePopover() {}
+  getBoundingClientRect() { return {left:0,top:100,bottom:140,width:200,height:100} }
   scrollIntoView() { this.scrolls += 1 }
   focus() {}
 }
 
 async function loadFilter(labels) {
-  const source = await readFile(new URL('./bookmark_label_filter.js', import.meta.url), 'utf8')
+  const source = await readFile(new URL('./bookmark_filters.js', import.meta.url), 'utf8')
   const root = new FakeElement()
+  const modal = new FakeElement()
+  const form = new FakeElement()
   const panel = new FakeElement()
+  const value = new FakeElement()
   panel.classList.names.add('hidden')
   const toggle = new FakeElement()
   const input = new FakeElement()
   const empty = new FakeElement()
+  const reset = new FakeElement()
   const rows = labels.map((label, index) => {
     const row = new FakeElement()
-    row.id = `bookmark-label-result-${index}`
-    row.setAttribute('data-label', label)
+    row.id = `bookmark-filter-result-${index}`
+    row.dataset = { name: label, value: label }
     return row
   })
+  panel.querySelectorAll = () => rows
+  panel.querySelector = () => empty
   root.querySelector = (selector) => ({
-    '[data-bookmark-label-panel]': panel,
-    '[data-bookmark-label-toggle]': toggle,
-    '[data-bookmark-label-search]': input,
-    '[data-bookmark-label-empty]': empty,
+    '[role="listbox"]': panel,
+    'input[type="hidden"]': value,
+    '[data-bookmark-filter-search]': input,
   })[selector] || null
-  root.querySelectorAll = (selector) => selector === '[data-bookmark-label-row]' ? rows : []
   root.contains = () => true
-
+  form.querySelectorAll = (selector) => selector === '[data-bookmark-filter-field]' ? [root] : []
+  form.querySelector = () => reset
+  modal.querySelector = () => form
   const document = {
     readyState: 'complete',
-    querySelectorAll(selector) { return selector === '[data-bookmark-label-filter]' ? [root] : [] },
+    getElementById() { return modal },
+    querySelector() { return toggle },
     addEventListener() {},
   }
-  vm.runInContext(source, vm.createContext({ document, setTimeout: (fn) => fn() }), { filename: 'bookmark_label_filter.js' })
-  return { input, rows }
+  vm.runInContext(source, vm.createContext({
+    document,
+    window: {innerHeight:720,addEventListener() {}},
+    MutationObserver: class { observe() {} },
+  }), { filename: 'bookmark_filters.js' })
+  return { input, rows, value }
 }
 
 function keyEvent(key) {
@@ -67,7 +88,7 @@ function keyEvent(key) {
 }
 
 test('filtered bookmark labels can be selected with arrow keys and Enter', async () => {
-  const { input, rows } = await loadFilter(['Algebra', 'Alpine', 'Beta'])
+  const { input, rows, value } = await loadFilter(['Algebra', 'Alpine', 'Beta'])
 
   input.value = 'al'
   input.dispatch('input')
@@ -75,12 +96,12 @@ test('filtered bookmark labels can be selected with arrow keys and Enter', async
   input.dispatch('keydown', keyEvent('ArrowUp'))
 
   assert.equal(rows[1].classList.contains('keyboard-active'), true)
-  assert.equal(rows[1].getAttribute('aria-selected'), 'true')
-  assert.equal(input.getAttribute('aria-activedescendant'), 'bookmark-label-result-1')
+  assert.equal(input.getAttribute('aria-activedescendant'), 'bookmark-filter-result-1')
   assert.equal(rows[1].scrolls, 1)
 
   const enter = keyEvent('Enter')
   input.dispatch('keydown', enter)
   assert.equal(enter.prevented, true)
-  assert.equal(rows[1].clicks, 1)
+  assert.equal(value.value, 'Alpine')
+  assert.equal(input.value, 'Alpine')
 })

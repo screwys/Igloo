@@ -70,7 +70,7 @@ interface BookmarkReadDao {
 
             fi.payload_json AS tw_payload_json,
             cp.handle AS feed_author_handle,
-            COALESCE(NULLIF(cp.display_name, ''), fc.name) AS feed_author_display_name,
+            COALESCE(NULLIF(cp.display_name, ''), fc.name, vc.name) AS feed_author_display_name,
             sp.handle                      AS feed_source_handle,
             qp.handle                      AS feed_quote_author_handle,
 
@@ -125,7 +125,7 @@ interface BookmarkReadDao {
         LEFT JOIN videos     v  ON b.video_id = v.video_id
         LEFT JOIN channels   fc ON fc.channel_id = fi.channel_id
         LEFT JOIN channels   vc ON vc.channel_id = v.channel_id
-		LEFT JOIN channel_profiles cp ON cp.channel_id = fi.channel_id
+		LEFT JOIN channel_profiles cp ON cp.channel_id = COALESCE(NULLIF(fi.channel_id, ''), v.channel_id)
 		LEFT JOIN channel_profiles sp ON sp.channel_id = fi.source_channel_id
 		LEFT JOIN channel_profiles qp ON qp.channel_id = fi.quote_channel_id
 		LEFT JOIN channel_follows cf ON cf.channel_id = COALESCE(

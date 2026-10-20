@@ -10,7 +10,7 @@ import (
 	"github.com/screwys/igloo/internal/model"
 )
 
-func TestBookmarksPageRendersLabelFilterLinks(t *testing.T) {
+func TestBookmarksPageRendersFilters(t *testing.T) {
 	p := newTestPageProps()
 	categories := []db.BookmarkCategoryRow{{ID: 7, Name: "Archive"}}
 	labels := []db.BookmarkLabelCountRow{
@@ -23,8 +23,8 @@ func TestBookmarksPageRendersLabelFilterLinks(t *testing.T) {
 		nil,
 		categories,
 		labels,
-		0,
-		BookmarkLabelSelection{Label: "cinema"},
+		[]string{"artist"},
+		BookmarkSelection{Label: "cinema"},
 		model.Pager{Page: 1, PerPage: 200, Total: 15},
 	).Render(context.Background(), &buf)
 	if err != nil {
@@ -33,32 +33,30 @@ func TestBookmarksPageRendersLabelFilterLinks(t *testing.T) {
 	html := buf.String()
 	for _, want := range []string{
 		`href="/bookmarks"`,
-		`href="/bookmarks?category_id=7"`,
-		`data-bookmark-label-toggle`,
-		`href="/bookmarks?label_empty=1"`,
-		`href="/bookmarks?label=cinema"`,
-		`<span>cinema</span>`,
-		`<span class="bookmark-label-result-count">57</span>`,
+		`href="/bookmarks?category_id=7&amp;label=cinema"`,
+		`data-bookmark-filters-open`,
+		`data-value="empty"`,
+		`data-value="label:cinema"`,
+		`name="category_id"`,
+		`name="account"`,
+		`data-name="artist"`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("BookmarksPage missing %s in:\n%s", want, html)
 		}
-	}
-	if strings.Contains(html, `category_id=7&amp;label`) || strings.Contains(html, `label=cinema&amp;category_id`) {
-		t.Fatalf("category and label filters should not be combined: %s", html)
 	}
 }
 
 func TestBookmarksNextURLPreservesActiveFilter(t *testing.T) {
 	pager := model.Pager{Page: 1, PerPage: 2, Total: 5}
 
-	if got := bookmarksNextURL(pager, 7, BookmarkLabelSelection{}); got != "/bookmarks?category_id=7&page=2" {
+	if got := bookmarksNextURL(pager, BookmarkSelection{CategoryID: 7}); got != "/bookmarks?category_id=7&page=2" {
 		t.Fatalf("category next URL = %q", got)
 	}
-	if got := bookmarksNextURL(pager, 7, BookmarkLabelSelection{Label: "cinema"}); got != "/bookmarks?label=cinema&page=2" {
+	if got := bookmarksNextURL(pager, BookmarkSelection{CategoryID: 7, Label: "cinema", Account: "artist", Query: "sketch", OldestFirst: true, SavedFrom: "2026-10-01", SavedThrough: "2026-10-20", TimeZone: "UTC"}); got != "/bookmarks?account=artist&category_id=7&label=cinema&page=2&q=sketch&saved_from=2026-10-01&saved_through=2026-10-20&sort=oldest&tz=UTC" {
 		t.Fatalf("label next URL = %q", got)
 	}
-	if got := bookmarksNextURL(pager, 7, BookmarkLabelSelection{IsNoLabel: true}); got != "/bookmarks?label_empty=1&page=2" {
+	if got := bookmarksNextURL(pager, BookmarkSelection{CategoryID: 7, IsNoLabel: true}); got != "/bookmarks?category_id=7&label_empty=1&page=2" {
 		t.Fatalf("no-label next URL = %q", got)
 	}
 }
