@@ -69,7 +69,9 @@ func schemaUserStateStatements() []string {
 
 		`CREATE TABLE IF NOT EXISTS feed_seen (
 			tweet_id TEXT PRIMARY KEY,
-			seen_at INTEGER NOT NULL DEFAULT 0
+			seen_at INTEGER NOT NULL DEFAULT 0,
+			channel_id TEXT,
+			source_channel_id TEXT
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS moment_views (

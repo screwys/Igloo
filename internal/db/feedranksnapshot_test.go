@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 )
@@ -201,45 +200,6 @@ func TestListRecentSnapshotRelatedAnchorsUsesDisplayedRepresentative(t *testing.
 	if anchor.TweetID != "sample_reply" || anchor.ThreadRootID != "sample_quote" ||
 		anchor.RelatedContentKey != "tweet:sample_original" || anchor.PublishedAtMs != now-2 {
 		t.Fatalf("anchor = %+v", anchor)
-	}
-}
-
-func TestFeedSeenRankingProjectionUsesCoveringIndex(t *testing.T) {
-	d := openFreshTestDB(t)
-	planTx, err := d.conn.Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = planTx.Rollback() }()
-	// Empty fixtures check index availability, not the planner's cost estimates.
-	if _, err := planTx.Exec(`SET LOCAL enable_seqscan = off`); err != nil {
-		t.Fatal(err)
-	}
-	rows, err := planTx.Query(`EXPLAIN
-		SELECT fs.tweet_id, fs.seen_at,
-		       fi.quote_tweet_id, fi.canonical_tweet_id,
-		       fi.channel_id, fi.source_channel_id, fi.is_ghost
-		FROM feed_seen fs
-		JOIN feed_items fi
-		  ON fi.tweet_id = fs.tweet_id`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = rows.Close() }()
-	var details []string
-	for rows.Next() {
-		var detail string
-		if err := rows.Scan(&detail); err != nil {
-			t.Fatal(err)
-		}
-		details = append(details, detail)
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
-	}
-	plan := strings.Join(details, "\n")
-	if !strings.Contains(plan, "idx_feed_items_seen_cover") {
-		t.Fatalf("seen feed plan = %s", plan)
 	}
 }
 

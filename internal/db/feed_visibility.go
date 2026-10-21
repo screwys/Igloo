@@ -3,13 +3,13 @@ package db
 import "fmt"
 
 func feedPrimaryItemPredicate(alias string) string {
-	return fmt.Sprintf("COALESCE(%s.is_ghost, 0) = 0", alias)
+	return fmt.Sprintf("(%[1]s.is_ghost = 0 OR %[1]s.is_ghost IS NULL)", alias)
 }
 
 func feedActiveOwnerPredicate(alias string) string {
 	return fmt.Sprintf(`(
 		(
-			COALESCE(%[1]s.is_retweet, 0) = 0
+			(%[1]s.is_retweet = 0 OR %[1]s.is_retweet IS NULL)
 			AND EXISTS (
 				SELECT 1
 				FROM channel_follows cf
@@ -18,7 +18,7 @@ func feedActiveOwnerPredicate(alias string) string {
 			)
 		)
 		OR (
-			COALESCE(%[1]s.is_retweet, 0) = 1
+			%[1]s.is_retweet IS NOT DISTINCT FROM 1
 			AND EXISTS (
 				SELECT 1
 				FROM channel_follows cf
@@ -27,8 +27,8 @@ func feedActiveOwnerPredicate(alias string) string {
 			)
 		)
 		OR (
-			COALESCE(%[1]s.is_retweet, 0) = 1
-			AND COALESCE(%[1]s.content_hash, '') != ''
+			%[1]s.is_retweet IS NOT DISTINCT FROM 1
+			AND %[1]s.content_hash IS NOT NULL AND %[1]s.content_hash != ''
 			AND EXISTS (
 				SELECT 1
 				FROM retweet_sources rs

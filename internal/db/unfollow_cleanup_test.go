@@ -10,12 +10,13 @@ import (
 
 func TestUnfollowXContentIndexesCoverIdentityAndThreadQueries(t *testing.T) {
 	d := openFreshTestDB(t)
+	seedFeedPlanRows(t, d)
 	planTx, err := d.conn.Begin()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = planTx.Rollback() }()
-	// Empty fixtures check index availability, not the planner's cost estimates.
+	// Check that the identity and thread indexes can serve the query.
 	if _, err := planTx.Exec(`SET LOCAL enable_seqscan = off`); err != nil {
 		t.Fatal(err)
 	}

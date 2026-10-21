@@ -24,6 +24,7 @@ func extractRepresentativeFrame(ctx context.Context, videoPath, outPath string) 
 	}
 
 	var lastErr error
+	var fallback []byte
 	for _, timestamp := range timestamps {
 		args := []string{"-y", "-nostdin", "-hide_banner", "-loglevel", "error"}
 		if timestamp > 0 {
@@ -51,8 +52,21 @@ func extractRepresentativeFrame(ctx context.Context, videoPath, outPath string) 
 		if visible {
 			return nil
 		}
-		lastErr = fmt.Errorf("frame at %.3fs is blank", timestamp)
+		if fallback == nil {
+			fallback, err = os.ReadFile(outPath)
+			if err != nil {
+				lastErr = err
+				_ = os.Remove(outPath)
+				continue
+			}
+		}
 		_ = os.Remove(outPath)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(fallback) > 0 {
+		return os.WriteFile(outPath, fallback, 0o600)
 	}
 	if lastErr == nil {
 		lastErr = fmt.Errorf("no frame candidates")

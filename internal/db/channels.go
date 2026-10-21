@@ -24,15 +24,19 @@ type ChannelSettings struct {
 	IncludeMemberOnly  bool   `json:"include_member_only"`
 }
 
-// GetSubscribedChannels returns every followed channel.
-func (db *DB) GetSubscribedChannels() ([]model.Channel, error) {
+// GetSubscribedChannels returns followed channels, optionally limited to given IDs.
+func (db *DB) GetSubscribedChannels(channelIDs ...string) ([]model.Channel, error) {
+	where := ""
+	if len(channelIDs) > 0 {
+		where = "WHERE cf.channel_id IN (" + placeholders(len(channelIDs)) + ")"
+	}
 	// Sort uses the rendered display name (display_name if set, else
 	// channels.name) via the same COALESCE so rows sort how they render —
 	// no more "sample_handle_ja" landing in the k-block while being shown as
 	// "Example Display Name". The sort ignores Latin case; unicode
 	// names fall back to codepoint order which is good enough for the
 	// sidebar (users scan visually, not alphabetically).
-	rows, err := db.conn.Query(`
+	rows, err := db.conn.Query(bind(`
 		SELECT COALESCE(c.id, 0), cf.channel_id, COALESCE(c.source_id,''), COALESCE(c.name,''),
 		       COALESCE(c.url,''), COALESCE(c.platform,''),
 		       CASE WHEN cs2.channel_id IS NOT NULL THEN 1 ELSE 0 END AS is_starred,
@@ -46,8 +50,9 @@ func (db *DB) GetSubscribedChannels() ([]model.Channel, error) {
 		LEFT JOIN channel_stars cs2   ON cs2.channel_id = cf.channel_id
 		LEFT JOIN channel_settings cs ON cs.channel_id = cf.channel_id
 		LEFT JOIN channel_profiles cp ON cp.channel_id = cf.channel_id
+		`+where+`
 		ORDER BY LOWER(COALESCE(NULLIF(cp.display_name,''), NULLIF(c.name,''), NULLIF(cp.handle,''), cf.channel_id) COLLATE "C")
-	`)
+	`), stringsToAny(channelIDs)...)
 	if err != nil {
 		return nil, err
 	}

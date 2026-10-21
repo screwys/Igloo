@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"net/http/httptest"
@@ -106,6 +107,9 @@ func seedContractFeedFixture(t *testing.T, srv *testServer) {
 	}
 	if err := srv.db.AddBookmark("sample_tweet_main", 0, "Contract Bookmark", "", ""); err != nil {
 		t.Fatalf("AddBookmark: %v", err)
+	}
+	if _, err := srv.db.RefreshStateAccountScores(context.Background(), time.Now().UnixMilli()); err != nil {
+		t.Fatalf("RefreshStateAccountScores: %v", err)
 	}
 	if err := srv.db.ExecRaw(
 		`UPDATE bookmarks SET bookmarked_at = $1 WHERE video_id = 'sample_tweet_main'`,

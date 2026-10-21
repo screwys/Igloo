@@ -7,6 +7,7 @@ import (
 	"log"
 	"path/filepath"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -238,7 +239,6 @@ func (m *Manager) StartAll() {
 	m.launch("x_lives", m.runXBroadcastsLoop)
 	m.launch("feed_order_invalidation", m.runFeedOrderInvalidationLoop)
 	m.launch("feed_scoring", m.runFeedScoringWorker)
-	m.launchDelayed("downloader_operation_prune", 5*time.Minute, m.runDownloaderOperationPruner)
 	m.launchDelayed("backup", 5*time.Minute, m.runBackupWorker)
 }
 
@@ -249,25 +249,14 @@ func (m *Manager) Shutdown() {
 	m.wg.Wait()
 }
 
-func (m *Manager) runDownloaderOperationPruner(ctx context.Context) {
-	if m == nil || m.db == nil {
-		return
+func (m *Manager) nextPeriodicRun(lastRunKey string, interval time.Duration) time.Time {
+	value, err := m.db.GetSetting(lastRunKey, "0")
+	if err != nil {
+		log.Printf("[worker] read %s: %v", lastRunKey, err)
+		return time.Now().Add(time.Minute)
 	}
-	if err := m.db.PruneDownloaderOperations(db.DownloaderOperationMaxRows, db.DownloaderOperationMaxAge); err != nil {
-		log.Printf("[worker] PruneDownloaderOperations: %v", err)
-	}
-	ticker := time.NewTicker(6 * time.Hour)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := m.db.PruneDownloaderOperations(db.DownloaderOperationMaxRows, db.DownloaderOperationMaxAge); err != nil {
-				log.Printf("[worker] PruneDownloaderOperations: %v", err)
-			}
-		}
-	}
+	lastRunMs, _ := strconv.ParseInt(value, 10, 64)
+	return time.UnixMilli(lastRunMs).Add(interval)
 }
 
 func (m *Manager) ShutdownTimeout(timeout time.Duration) bool {

@@ -917,6 +917,7 @@ func (s *Server) handleAudio(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSlide(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	videoID := r.PathValue("videoID")
 	indexStr := r.PathValue("index")
 
@@ -931,17 +932,27 @@ func (s *Server) handleSlide(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	file := s.canonicalAsset(owner, "post_media", index)
-	if file != nil {
-		s.serveSlideFile(w, r, *file)
-		return
-	}
 	asset, err := s.db.GetAssetByOwnerIdentity("post_media", owner.OwnerKind, owner.OwnerID, index)
 	if err != nil {
 		http.Error(w, "image query failed", http.StatusInternalServerError)
 		return
 	}
-	if asset == nil || owner.OwnerKind != "tweet" || !strings.HasPrefix(asset.ContentType, "image/") || asset.SourceURL == "" {
+	if asset == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if file := s.canonicalAssetFile(*asset); file != nil {
+		info, err := os.Stat(file.path)
+		if err == nil && info.Mode().IsRegular() {
+			s.serveSlideFile(w, r, *file)
+			return
+		}
+		if err != nil && !os.IsNotExist(err) {
+			http.Error(w, "image storage unavailable", http.StatusServiceUnavailable)
+			return
+		}
+	}
+	if owner.OwnerKind != "tweet" || !strings.HasPrefix(asset.ContentType, "image/") || asset.SourceURL == "" {
 		http.NotFound(w, r)
 		return
 	}
@@ -956,7 +967,7 @@ func (s *Server) handleSlide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
-	paths, err := s.workers.Downloader().Download(r.Context(), download.MediaLaneBulkForeground, asset.SourceURL, "photo", download.Opts{
+	paths, err := s.workers.Downloader().Download(r.Context(), download.MediaLaneState, asset.SourceURL, "photo", download.Opts{
 		OutputDir: dir, ID: "image",
 	})
 	if err != nil {

@@ -49,6 +49,7 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 	"feed_seen":                   schemaLifecycleUserState,
 	"feed_share_account_affinity": schemaLifecycleDerivedCache,
 	"feed_share_token_affinity":   schemaLifecycleDerivedCache,
+	"feed_state_account_scores":   schemaLifecycleDerivedCache,
 	"feed_sources":                schemaLifecycleArchive,
 	"ingest_state":                schemaLifecycleQueue,
 	"moment_views":                schemaLifecycleUserState,

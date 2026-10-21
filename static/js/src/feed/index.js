@@ -11,6 +11,7 @@ import { handleTranslateAction, getTranslateObserver, queueBackgroundTranslation
 import { initRetweetersDialog, applyRepostMuteFilter } from './retweeters.js'
 import { initFeedSeenTracking } from './seen.js'
 import { initMediaRows } from './media-row.js'
+import { initFeedImages, disposeFeedImages } from './images.js'
 
 function observeTranslateCards(scope, translateObserver) {
   queueBackgroundTranslations(scope)
@@ -147,6 +148,7 @@ function removeActiveThreadRoute() {
     activeThreadAbort = null
   }
   if (activeThreadRoute) {
+    disposeFeedImages(activeThreadRoute)
     activeThreadRoute.remove()
     activeThreadRoute = null
   }
@@ -233,6 +235,7 @@ function initThreadAutoFetch(route) {
       var list = route.querySelector('[data-thread-page]')
       if (!nextList || !list) throw new Error('thread partial invalid')
       // Keep the route and its once-per-opening request identity in place.
+      disposeFeedImages(list)
       list.replaceChildren.apply(list, Array.from(nextList.childNodes))
       _feedFocusDirty = true
       _focusedFeedEntry = null
@@ -879,7 +882,10 @@ function handleFeedMenuAction(btn) {
         document.querySelectorAll('[data-feed-item]').forEach(function (card) {
           var a = (card.getAttribute('data-author-handle') || '').toLowerCase()
           var qa = (card.getAttribute('data-quote-author-handle') || '').toLowerCase()
-          if (a === lower || qa === lower) card.remove()
+          if (a === lower || qa === lower) {
+            disposeFeedImages(card)
+            card.remove()
+          }
         })
         showToast(tf('toast_muted_account', 'Muted @%1$s', muteHandle))
       })
@@ -967,6 +973,7 @@ function initFeedCards(scope) {
   initTextClamps(container)
   initDates(container)
   initInlineMedia(container)
+  initFeedImages(container)
   initMediaRows(container)
   container.querySelectorAll('[data-feed-item]').forEach(function (item) {
     syncFeedButtons(item)
@@ -1508,6 +1515,7 @@ function initNewFeedCards() {
   initTextClamps(feedList)
   initDates(feedList)
   initInlineMedia(feedList)
+  initFeedImages(feedList)
   initMediaRows(feedList)
   newItems.forEach(function (item) {
     syncFeedButtons(item)
@@ -1558,7 +1566,10 @@ document.body.addEventListener('accountMuted', function (e) {
   document.querySelectorAll('[data-feed-item]').forEach(function (card) {
     var author = (card.getAttribute('data-author-handle') || '').toLowerCase()
     var quoteAuthor = (card.getAttribute('data-quote-author-handle') || '').toLowerCase()
-    if (author === lower || quoteAuthor === lower) card.remove()
+    if (author === lower || quoteAuthor === lower) {
+      disposeFeedImages(card)
+      card.remove()
+    }
   })
   showToast(tf('toast_muted_account', 'Muted @%1$s', handle))
 })
@@ -1653,6 +1664,7 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
   if (!elt) return
   if (elt.hasAttribute('data-media-owner')) {
     initInlineMedia(elt)
+    initFeedImages(elt)
     initMediaRows(elt)
   }
   if (elt.getAttribute('data-feed-action') === 'heart') {
@@ -1669,6 +1681,10 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
       animateFeedActionButton(elt, true)
     }
   }
+})
+
+document.body.addEventListener('htmx:beforeCleanupElement', function (e) {
+  if (e.detail?.elt) disposeFeedImages(e.detail.elt)
 })
 
 // ── Hide old pagination when HTMX sentinel exists ──

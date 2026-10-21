@@ -17,6 +17,15 @@ const contentAssetWorkerOwnerSQL = `(
 	OR (a.owner_kind = 'youtube_video' AND a.asset_kind = 'live_chat')
 )`
 
+const contentAssetDependencyReadySQL = `(
+	desired.object_key NOT LIKE ?
+	OR EXISTS (
+	  SELECT 1 FROM media_objects source
+	  WHERE source.object_id = substr(desired.object_key, ?)
+	    AND source.published_revision > 0 AND source.file_path != ''
+	)
+)`
+
 const AssetStatePruned = "pruned"
 
 func declareXContentAssetsTx(tx *sql.Tx, item model.FeedItem, nowMs int64) (bool, error) {
@@ -169,14 +178,7 @@ func contentAssetClaimQuery(opts LeaseOptions, includeTweets bool, lane Download
 		WHERE desired.download_lane = ?
 		  AND desired.job_state IN ('queued', 'downloading')
 		  AND (desired.source_url != '' OR desired.object_key LIKE 'derived:video-thumbnail:%')
-		  AND (
-		    desired.object_key NOT LIKE ?
-		    OR EXISTS (
-		      SELECT 1 FROM media_objects source
-		      WHERE source.object_id = substr(desired.object_key, ?)
-		        AND source.published_revision > 0 AND source.file_path != ''
-		    )
-		  )
+		  AND ` + contentAssetDependencyReadySQL + `
 		  AND desired.next_attempt_at_ms <= ?
 		  AND (
 		    (desired.job_state = 'queued' AND (desired.lease_until_ms = 0 OR desired.lease_until_ms <= ?))

@@ -19,6 +19,11 @@ func schemaDerivedCacheStatements() []string {
 			event_count      INTEGER DEFAULT 0
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS feed_state_account_scores (
+			handle TEXT PRIMARY KEY,
+			score REAL NOT NULL
+		)`,
+
 		`CREATE TABLE IF NOT EXISTS feed_share_token_affinity (
 			token            TEXT PRIMARY KEY,
 			score            REAL DEFAULT 0,

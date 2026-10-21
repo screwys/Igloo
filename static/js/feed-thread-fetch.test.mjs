@@ -35,6 +35,7 @@ function harness() {
     partialThreadURL(href) { return href + '?fmt=partial' },
     parseThreadRouteHTML() { return { querySelector() { return { childNodes: ['stored', 'new reply'] } } } },
     initFeedCards() {},
+    disposeFeedImages() {},
     t(key, fallback) { return fallback },
   })
   vm.runInContext(source.slice(start, end), context)

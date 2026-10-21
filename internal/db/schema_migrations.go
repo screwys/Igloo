@@ -24,6 +24,40 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		name: "20261021_update_feed_ranking",
+		apply: func(tx *sql.Tx) error {
+			for _, column := range []string{"channel_id", "source_channel_id"} {
+				exists, err := schemaColumnExists(tx, "feed_seen", column)
+				if err != nil {
+					return err
+				}
+				if !exists {
+					if _, err := tx.Exec("ALTER TABLE feed_seen ADD COLUMN " + column + " TEXT"); err != nil {
+						return err
+					}
+				}
+			}
+			for _, statement := range []string{
+				"CREATE TABLE IF NOT EXISTS feed_state_account_scores (handle TEXT PRIMARY KEY, score REAL NOT NULL)",
+				"DROP INDEX IF EXISTS idx_feed_items_seen_cover",
+				`CREATE INDEX IF NOT EXISTS idx_feed_items_related_content ON feed_items ((CASE
+					WHEN NULLIF(TRIM(COALESCE(quote_tweet_id, '')), '') IS NOT NULL
+						THEN 'tweet:' || LOWER(TRIM(quote_tweet_id))
+					WHEN NULLIF(TRIM(COALESCE(canonical_tweet_id, '')), '') IS NOT NULL
+						THEN 'tweet:' || LOWER(TRIM(canonical_tweet_id))
+					ELSE 'tweet:' || LOWER(TRIM(tweet_id))
+				END))`,
+				"CREATE INDEX IF NOT EXISTS idx_feed_seen_channel_at ON feed_seen(channel_id, seen_at DESC) WHERE channel_id IS NOT NULL AND channel_id != ''",
+				"CREATE INDEX IF NOT EXISTS idx_feed_seen_source_channel_at ON feed_seen(source_channel_id, seen_at DESC) WHERE source_channel_id IS NOT NULL AND source_channel_id != ''",
+			} {
+				if _, err := tx.Exec(statement); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	},
+	{
 		name: "20261004_remove_home_layouts",
 		apply: func(tx *sql.Tx) error {
 			_, err := tx.Exec(`DROP TABLE IF EXISTS home_layouts`)

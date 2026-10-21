@@ -120,10 +120,14 @@ var settingsInternalKeys = map[string]bool{
 	"shorts_cursor_video_id": true, "shorts_cursor_updated_at_ms": true,
 	"deleted_channels": true, "x_media_staging_dir": true, "android_last_known_server_url": true,
 	"cookies_enabled_twitter": true, "cookies_enabled_youtube": true, "cookies_enabled_tiktok": true,
-	"include_reposts_default":  true,
-	"youtube_check_interval":   true,
-	"shorts_check_interval":    true,
-	"instagram_check_interval": true,
+	"include_reposts_default":                   true,
+	"youtube_check_interval":                    true,
+	"shorts_check_interval":                     true,
+	"instagram_check_interval":                  true,
+	"feed_state_account_scores_refreshed_at_ms": true,
+	"feed_rank_snapshot_reranked_at_ms":         true,
+	"downloader_operations_pruned_at_ms":        true,
+	"video_retention_maintained_at_ms":          true,
 }
 
 // settingsToAPIFormat transforms raw DB settings into the format the JS frontend expects.

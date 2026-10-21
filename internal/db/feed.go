@@ -27,7 +27,23 @@ func feedItemSelectSQL(alias string) string {
 		COALESCE(%[1]s.content_hash,''), COALESCE(%[1]s.canonical_tweet_id,''),
 		COALESCE(%[1]s.source_channel_id,''), COALESCE(%[1]s.channel_id,''),
 		COALESCE(%[1]s.quote_channel_id,''), COALESCE(%[1]s.reply_channel_id,''),
-		COALESCE(%[1]s.reposter_channel_id,'')`, alias)
+		COALESCE(%[1]s.reposter_channel_id,''), COALESCE(%[1]s.algo_interest,0)`, alias)
+}
+
+func (db *DB) listFeedItems(pageSQL, orderBy string, args ...any) ([]model.FeedItem, error) {
+	query := `WITH page AS MATERIALIZED (` + pageSQL + `)
+		SELECT ` + feedItemSelectSQL("fi") + `
+		FROM page
+		JOIN feed_items_resolved fi ON fi.tweet_id = page.tweet_id`
+	if orderBy != "" {
+		query += " ORDER BY " + orderBy
+	}
+	rows, err := db.reader().Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	return scanFeedItems(rows)
 }
 
 // ListFeedItemsPage returns feed items with cursor-based keyset pagination.
@@ -64,44 +80,25 @@ func (db *DB) ListFeedItemsPage(limit int, cursor *model.FeedCursor, excludeSeen
 	// table name as the "alias" — qualified column references still work.
 	where = append(where, retweetFilterClause("feed_items"))
 
-	whereClause := ""
-	if len(where) > 0 {
-		whereClause = "WHERE " + strings.Join(where, " AND ")
-	}
+	whereClause := "WHERE " + strings.Join(where, " AND ")
 
-	query := `
-		SELECT ` + feedItemSelectSQL("feed_items") + `
-		FROM feed_items_resolved AS feed_items
-		` + whereClause + `
+	args = append(args, limit)
+	return db.listFeedItems(`
+		SELECT tweet_id, published_at
+		FROM feed_items
+		`+whereClause+`
 		ORDER BY published_at DESC, tweet_id DESC
 		LIMIT ?
-	`
-	args = append(args, limit)
-
-	rows, err := db.reader().Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	return scanFeedItems(rows)
+	`, "page.published_at DESC, page.tweet_id DESC", args...)
 }
 
 // GetFeedItemsForTweetIDs fetches full feed items by tweet IDs.
 func (db *DB) GetFeedItemsForTweetIDs(tweetIDs []string) (map[string]model.FeedItem, error) {
 	result := make(map[string]model.FeedItem, len(tweetIDs))
 	for _, chunk := range stringChunks(tweetIDs, 400) {
-		rows, err := db.reader().Query(`
-		SELECT `+feedItemSelectSQL("feed_items")+`
-		FROM feed_items_resolved AS feed_items
-		WHERE tweet_id = ANY(?::text[])
-	`, chunk)
-		if err != nil {
-			return nil, err
-		}
-		items, err := scanFeedItems(rows)
-		_ = rows.Close()
+		items, err := db.listFeedItems(`
+			SELECT tweet_id FROM feed_items WHERE tweet_id = ANY(?::text[])
+		`, "", chunk)
 		if err != nil {
 			return nil, err
 		}
@@ -502,17 +499,23 @@ func (db *DB) GetFeedLikedPage(limit int, cursor *model.FeedCursor) ([]model.Fee
 	}
 
 	rows, err := db.reader().Query(`
+		WITH page AS MATERIALIZED (
+			SELECT fl.tweet_id, fl.liked_at
+			FROM feed_likes fl
+			JOIN feed_items fi ON fi.tweet_id = fl.tweet_id
+			`+whereClause+`
+			ORDER BY fl.liked_at DESC, fl.tweet_id DESC
+			LIMIT ?
+		)
 		SELECT fl.tweet_id, fl.liked_at,
 		       COALESCE(fi.source_handle,''), COALESCE(fi.author_handle,''),
 		       COALESCE(fi.author_display_name,''), COALESCE(fi.canonical_url,''),
 		       COALESCE(fi.canonical_url,''), COALESCE(fi.body_text,''),
 		       fi.published_at, '', COALESCE(fi.author_avatar_url,''),
 		       COALESCE(fi.media_json,''), 'twitter', ''
-		FROM feed_likes fl
+		FROM page fl
 		JOIN feed_items_resolved fi ON fi.tweet_id = fl.tweet_id
-		`+whereClause+`
 		ORDER BY fl.liked_at DESC, fl.tweet_id DESC
-		LIMIT ?
 	`, append(args, limit)...)
 	if err != nil {
 		return nil, err
@@ -719,20 +722,13 @@ func (db *DB) GetFeedItemsByAuthorPage(handle string, limit int, offset int) ([]
 	if offset < 0 {
 		offset = 0
 	}
-	rows, err := db.reader().Query(`
-		SELECT `+feedItemSelectSQL("feed_items")+`
-		FROM feed_items_resolved AS feed_items
+	return db.listFeedItems(`
+		SELECT tweet_id, published_at
+		FROM feed_items
 		WHERE channel_id = ? OR source_channel_id = ? OR quote_channel_id = ?
 		ORDER BY published_at DESC
 		LIMIT ? OFFSET ?
-	`, channelID, channelID, channelID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	return scanFeedItems(rows)
+	`, "page.published_at DESC", channelID, channelID, channelID, limit, offset)
 }
 
 // GetFeedThreadItemsByAuthorPage returns one representative row per conversation
@@ -750,7 +746,7 @@ func (db *DB) GetFeedThreadItemsByAuthorPage(handle string, limit int, offset in
 	if offset < 0 {
 		offset = 0
 	}
-	rows, err := db.reader().Query(`
+	return db.listFeedItems(`
 		WITH RECURSIVE
 		matched(tweet_id) AS (
 			SELECT tweet_id
@@ -787,20 +783,13 @@ func (db *DB) GetFeedThreadItemsByAuthorPage(handle string, limit int, offset in
 			JOIN matched m ON m.tweet_id = f.tweet_id
 			LEFT JOIN roots r ON r.seed_id = f.tweet_id
 		)
-		SELECT `+feedItemSelectSQL("f")+`
+		SELECT f.tweet_id, f.published_at
 		FROM ranked
-		JOIN feed_items_resolved f ON f.tweet_id = ranked.tweet_id
+		JOIN feed_items f ON f.tweet_id = ranked.tweet_id
 		WHERE ranked.rn = 1
 		ORDER BY f.published_at DESC, f.tweet_id DESC
 		LIMIT ? OFFSET ?
-	`, channelID, channelID, channelID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	return scanFeedItems(rows)
+	`, "page.published_at DESC, page.tweet_id DESC", channelID, channelID, channelID, limit, offset)
 }
 
 // GetFeedMediaItemsByAuthorPage returns posts whose author published their own
@@ -816,20 +805,15 @@ func (db *DB) GetFeedMediaItemsByAuthorPage(handle string, limit int, offset int
 	if offset < 0 {
 		offset = 0
 	}
-	rows, err := db.reader().Query(`
-		SELECT `+feedItemSelectSQL("feed_items")+`
-		FROM feed_items_resolved AS feed_items
+	return db.listFeedItems(`
+		SELECT tweet_id, published_at
+		FROM feed_items
 		WHERE channel_id = ?
 		  AND COALESCE(is_retweet, 0) = 0
 		  AND COALESCE(media_json, '') NOT IN ('', '[]')
 		ORDER BY published_at DESC, tweet_id DESC
 		LIMIT ? OFFSET ?
-	`, channelID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	return scanFeedItems(rows)
+	`, "page.published_at DESC, page.tweet_id DESC", channelID, limit, offset)
 }
 
 // scanFeedItems scans rows into FeedItem structs.
@@ -867,7 +851,7 @@ func scanFeedItem(row feedItemScanner) (model.FeedItem, error) {
 		&pubAt, &fetchedAt,
 		&f.ContentHash, &f.CanonicalTweetID,
 		&f.SourceChannelID, &f.ChannelID, &f.QuoteChannelID,
-		&f.ReplyChannelID, &f.ReposterChannelID,
+		&f.ReplyChannelID, &f.ReposterChannelID, &f.AlgoInterestScore,
 	)
 	if err != nil {
 		return model.FeedItem{}, err
@@ -1688,21 +1672,14 @@ func shouldRewritePlaceholderXStatusURL(raw string) bool {
 
 // GetLatestFeedItem returns the most recently published feed item, or nil if none.
 func (db *DB) GetLatestFeedItem() (*model.FeedItem, error) {
-	rows, err := db.reader().Query(`
-		SELECT ` + feedItemSelectSQL("feed_items") + `
-		FROM feed_items_resolved AS feed_items
-		WHERE ` + feedPrimaryItemPredicate("feed_items") + `
-		  AND ` + feedActiveOwnerPredicate("feed_items") + `
+	items, err := db.listFeedItems(`
+		SELECT tweet_id
+		FROM feed_items
+		WHERE `+feedPrimaryItemPredicate("feed_items")+`
+		  AND `+feedActiveOwnerPredicate("feed_items")+`
 		ORDER BY published_at DESC, tweet_id DESC
 		LIMIT 1
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	items, err := scanFeedItems(rows)
+	`, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1714,23 +1691,16 @@ func (db *DB) GetLatestFeedItem() (*model.FeedItem, error) {
 
 // GetLatestFetchedFeedItem returns the most recently fetched feed item, or nil if none.
 func (db *DB) GetLatestFetchedFeedItem() (*model.FeedItem, error) {
-	rows, err := db.reader().Query(`
-		SELECT ` + feedItemSelectSQL("feed_items") + `
-		FROM feed_items_resolved AS feed_items
-		WHERE ` + feedPrimaryItemPredicate("feed_items") + `
-		  AND ` + feedActiveOwnerPredicate("feed_items") + `
+	items, err := db.listFeedItems(`
+		SELECT tweet_id
+		FROM feed_items
+		WHERE `+feedPrimaryItemPredicate("feed_items")+`
+		  AND `+feedActiveOwnerPredicate("feed_items")+`
 		  AND (canonical_tweet_id IS NULL OR canonical_tweet_id = '' OR canonical_tweet_id = tweet_id)
-		  AND ` + retweetFilterClause("feed_items") + `
+		  AND `+retweetFilterClause("feed_items")+`
 		ORDER BY fetched_at DESC, tweet_id DESC
 		LIMIT 1
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	items, err := scanFeedItems(rows)
+	`, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1939,28 +1909,16 @@ func (db *DB) ListFeedItemsFiltered(limit int, cursor *model.FeedCursor, sourceH
 
 	where = append(where, "(canonical_tweet_id IS NULL OR canonical_tweet_id = '' OR canonical_tweet_id = tweet_id)")
 
-	whereClause := ""
-	if len(where) > 0 {
-		whereClause = "WHERE " + strings.Join(where, " AND ")
-	}
+	whereClause := "WHERE " + strings.Join(where, " AND ")
 
-	query := `
-		SELECT ` + feedItemSelectSQL("feed_items") + `
-		FROM feed_items_resolved AS feed_items
-		` + whereClause + `
+	args = append(args, limit)
+	return db.listFeedItems(`
+		SELECT tweet_id, published_at
+		FROM feed_items
+		`+whereClause+`
 		ORDER BY published_at DESC, tweet_id DESC
 		LIMIT ?
-	`
-	args = append(args, limit)
-
-	rows, err := db.reader().Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	return scanFeedItems(rows)
+	`, "page.published_at DESC, page.tweet_id DESC", args...)
 }
 
 // ListFeedItemsBySourceID returns feed items tagged through feed_item_sources.
@@ -1974,22 +1932,15 @@ func (db *DB) ListFeedItemsBySourceID(sourceID string, limit int) ([]model.FeedI
 		limit = 40
 	}
 
-	rows, err := db.reader().Query(`
-		SELECT `+feedItemSelectSQL("f")+`
+	return db.listFeedItems(`
+		SELECT f.tweet_id, f.published_at
 		FROM feed_item_sources fis
-		JOIN feed_items_resolved f ON f.tweet_id = fis.tweet_id
+		JOIN feed_items f ON f.tweet_id = fis.tweet_id
 		WHERE fis.source_id = ?
 		  AND `+feedPrimaryItemPredicate("f")+`
 		ORDER BY f.published_at DESC, f.tweet_id DESC
 		LIMIT ?
-	`, sourceID, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	return scanFeedItems(rows)
+	`, "page.published_at DESC, page.tweet_id DESC", sourceID, limit)
 }
 
 // GetBookmarkedFeedItems returns feed items that are bookmarked, with cursor pagination.
@@ -2010,24 +1961,15 @@ func (db *DB) GetBookmarkedFeedItems(limit int, cursor *model.FeedCursor) ([]mod
 
 	whereClause := "WHERE " + strings.Join(where, " AND ")
 
-	query := `
-		SELECT ` + feedItemSelectSQL("f") + `
-		FROM feed_items_resolved f
+	args = append(args, limit)
+	return db.listFeedItems(`
+		SELECT f.tweet_id, b.bookmarked_at
+		FROM feed_items f
 		INNER JOIN bookmarks b ON b.video_id = f.tweet_id
-		` + whereClause + `
+		`+whereClause+`
 		ORDER BY b.bookmarked_at DESC, f.tweet_id DESC
 		LIMIT ?
-	`
-	args = append(args, limit)
-
-	rows, err := db.reader().Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-	return scanFeedItems(rows)
+	`, "page.bookmarked_at DESC, page.tweet_id DESC", args...)
 }
 
 // CountBookmarkedFeedItems returns the count of bookmarked feed items.

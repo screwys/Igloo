@@ -95,7 +95,8 @@ func (s *Server) requestMediaAssetOwner(r *http.Request, id string) (db.AssetOwn
 
 func (s *Server) canonicalAssetFile(asset db.Asset) *canonicalAssetFile {
 	contentType := strings.TrimSpace(asset.ContentType)
-	if asset.State != db.AssetStateReady || strings.TrimSpace(asset.FilePath) == "" ||
+	// Published bytes can remain shared after this owner's retention expires.
+	if strings.TrimSpace(asset.FilePath) == "" ||
 		contentType == "" || contentType == "application/octet-stream" {
 		return nil
 	}

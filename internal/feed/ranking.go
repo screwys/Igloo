@@ -3,7 +3,6 @@ package feed
 import (
 	"math"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/screwys/igloo/internal/db"
@@ -13,14 +12,9 @@ import (
 const (
 	recencyHalfLifeHours = 2.0
 	seenDemotion         = 0.01
-	starBoost            = 25.0
-	followedBoost        = 5.0
-	mediaBonus           = 3.0
-	retweetPenalty       = -4.0
 	replyPenalty         = 4.0
 	freshBonusPeak       = 18.0
 	freshBonusWindowH    = 6.0
-	maxItemBoost         = 40.0
 
 	// Affinity scoring (matching Python's feed_ranking.py)
 	affinityAccountHalfLifeMs  = 30 * 24 * 3600 * 1000 // 30 days
@@ -64,7 +58,10 @@ func SortFeedItemsChronological(items []model.FeedItem) []model.FeedItem {
 func RankFeedItems(items []model.FeedItem) []model.FeedItem {
 	for i := range items {
 		if items[i].AlgoInterestScore == 0 {
-			items[i].AlgoInterestScore = baseInterestScore(&items[i])
+			items[i].AlgoInterestScore = ComputeAlgoInterest(db.ScoringItem{
+				IsStarred: items[i].ChannelIsStarred, IsFollowed: items[i].ChannelIsFollowed,
+				HasMedia: len(items[i].Media) > 0 || items[i].MediaJSON != "", IsRetweet: items[i].IsRetweet,
+			}, ScoringContext{})
 		}
 	}
 
@@ -121,31 +118,6 @@ func deduplicateRetweets(items []model.FeedItem) []model.FeedItem {
 	return result
 }
 
-func baseInterestScore(item *model.FeedItem) float64 {
-	score := 0.0
-
-	if item.ChannelIsStarred {
-		score += starBoost
-	} else if item.ChannelIsFollowed {
-		score += followedBoost
-	}
-
-	if len(item.Media) > 0 || item.MediaJSON != "" {
-		score += mediaBonus
-	}
-	if item.IsRetweet {
-		score += retweetPenalty
-	}
-
-	if score > maxItemBoost {
-		score = maxItemBoost
-	}
-	if score < 0 {
-		score = 0
-	}
-	return score
-}
-
 func effectiveScore(item *model.FeedItem) float64 {
 	var pubMs int64
 	if item.PublishedAt != nil {
@@ -196,100 +168,24 @@ func affinityDecayAt(score float64, lastEventMs int64, halfLifeMs int64, nowMs i
 	return score * math.Pow(0.5, ageMs/float64(halfLifeMs))
 }
 
-// PersonalizeItems computes full algo_interest_score using affinity data.
-// Called after basic enrichment (liked/seen/bookmarked/channel flags already set).
-func PersonalizeItems(database *db.DB, items []model.FeedItem, stateAccount map[string]float64) {
-	if len(items) == 0 {
-		return
-	}
-
-	// Collect handles and tokens needed
-	handlesNeeded := make(map[string]bool)
-	tokensNeeded := make(map[string]bool)
-	for _, item := range items {
-		for _, h := range []string{item.SourceHandle, item.AuthorHandle} {
-			if h != "" {
-				handlesNeeded[strings.ToLower(h)] = true
-			}
-		}
-		for _, tok := range ExtractInterestTokens(item.BodyText) {
-			tokensNeeded[tok] = true
-		}
-	}
-
-	handleList := mapKeys(handlesNeeded)
-	tokenList := mapKeys(tokensNeeded)
-
-	// Fetch affinity scores
-	accountRows, _ := database.GetAccountAffinityScores(handleList)
-	tokenRows, _ := database.GetTokenAffinityScores(tokenList)
-
-	nowMs := time.Now().UnixMilli()
-
+// PersonalizeItems scores requested rows using the daily account cache and
+// their current share, token and channel state.
+func PersonalizeItems(database *db.DB, items []model.FeedItem) {
+	inputs := make([]db.ScoringItem, len(items))
 	for i := range items {
 		item := &items[i]
-		authorHandle := strings.ToLower(item.AuthorHandle)
-		sourceHandle := strings.ToLower(item.SourceHandle)
-
-		// Star boost
-		starBoost := 0.0
-		if item.ChannelIsStarred {
-			starBoost = 25.0
+		inputs[i] = db.ScoringItem{
+			AuthorHandle: item.AuthorHandle,
+			SourceHandle: item.SourceHandle,
+			BodyText:     item.BodyText,
+			HasMedia:     len(item.Media) > 0 || item.MediaJSON != "",
+			IsRetweet:    item.IsRetweet,
+			IsStarred:    item.ChannelIsStarred,
+			IsFollowed:   item.ChannelIsFollowed,
 		}
-
-		// Account affinity: state + decay
-		authorScore := 0.0
-		if authorHandle != "" {
-			authorScore += stateAccount[authorHandle]
-			if row, ok := accountRows[authorHandle]; ok {
-				authorScore += affinityDecayAt(row.Score, row.LastEventMs, affinityAccountHalfLifeMs, nowMs)
-			}
-		}
-		sourceScore := 0.0
-		if sourceHandle != "" && sourceHandle != authorHandle {
-			sourceScore += stateAccount[sourceHandle]
-			if row, ok := accountRows[sourceHandle]; ok {
-				sourceScore += affinityDecayAt(row.Score, row.LastEventMs, affinityAccountHalfLifeMs, nowMs)
-			}
-		}
-		accountBoost := math.Min(affinityMaxAccountBoost,
-			affinityAccountAuthorCoeff*math.Log1p(math.Max(0, authorScore))+
-				affinityAccountSourceCoeff*math.Log1p(math.Max(0, sourceScore)))
-
-		// Token affinity
-		tokenMatchSum := 0.0
-		for _, tok := range ExtractInterestTokens(item.BodyText) {
-			eff := 0.0
-			if row, ok := tokenRows[tok]; ok {
-				eff += affinityDecayAt(row.Score, row.LastEventMs, affinityTokenHalfLifeMs, nowMs)
-			}
-			if eff <= 0 {
-				continue
-			}
-			tokenMatchSum += math.Min(1.0, 0.5*math.Log1p(eff))
-			if tokenMatchSum >= affinityMaxTokenBoost {
-				tokenMatchSum = affinityMaxTokenBoost
-				break
-			}
-		}
-
-		// Combine
-		baseInterest := math.Min(affinityMaxItemBoost, math.Max(0, accountBoost+tokenMatchSum))
-		mediaBonus := 0.0
-		if len(item.Media) > 0 || item.MediaJSON != "" {
-			mediaBonus = affinityMediaBoost
-		}
-		rtPenalty := 0.0
-		if item.IsRetweet {
-			rtPenalty = affinityRetweetPenalty
-		}
-		followedBoost := 0.0
-		if !item.ChannelIsStarred && item.ChannelIsFollowed {
-			followedBoost = 5.0
-		}
-
-		total := math.Max(0, baseInterest+starBoost+followedBoost+mediaBonus+rtPenalty)
-		item.AlgoInterestScore = total
+	}
+	for i, score := range ScoreItems(database, inputs) {
+		items[i].AlgoInterestScore = score
 	}
 }
 

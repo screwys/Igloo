@@ -7,6 +7,7 @@ import (
 
 func TestXProfileHistoryRetentionPlanUsesThreadIndexes(t *testing.T) {
 	d := openFreshTestDB(t)
+	seedFeedPlanRows(t, d)
 	rows, err := d.conn.Query(bind("EXPLAIN "+xProfileHistoryRetentionItemsQuery), 0, 0, "twitter_sample_profile")
 	if err != nil {
 		t.Fatal(err)

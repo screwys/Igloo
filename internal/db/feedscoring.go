@@ -15,7 +15,10 @@ type ScoringItem struct {
 	AuthorHandle string
 	BodyText     string
 	MediaJSON    string
+	HasMedia     bool
 	IsRetweet    bool
+	IsStarred    bool
+	IsFollowed   bool
 	PublishedAt  string
 }
 
@@ -32,12 +35,27 @@ func (db *DB) GetUnscoredFeedItems(limit int) ([]ScoringItem, error) {
 			  AND `+feedActiveOwnerPredicate("candidate")+`
 			ORDER BY candidate.ingest_order DESC
 			LIMIT ?
+		), items AS MATERIALIZED (
+			SELECT resolved.tweet_id, resolved.source_handle, resolved.author_handle,
+			       COALESCE(resolved.body_text,'') AS body_text, COALESCE(resolved.media_json,'') AS media_json,
+			       COALESCE(resolved.is_retweet,0) AS is_retweet, COALESCE(resolved.published_at::TEXT,'') AS published_at
+			FROM candidates JOIN feed_items_resolved resolved ON resolved.tweet_id = candidates.tweet_id
+		), flags AS MATERIALIZED (
+			SELECT SUBSTRING(LOWER(follows.channel_id) FROM POSITION('_' IN follows.channel_id) + 1) AS handle,
+			       BOOL_OR(stars.channel_id IS NOT NULL) AS starred
+			FROM channel_follows follows
+			LEFT JOIN channel_stars stars ON stars.channel_id = follows.channel_id
+			WHERE SUBSTRING(LOWER(follows.channel_id) FROM POSITION('_' IN follows.channel_id) + 1) IN (
+				SELECT LOWER(author_handle) FROM items UNION SELECT LOWER(source_handle) FROM items
+			)
+			GROUP BY handle
 		)
-		SELECT resolved.tweet_id, COALESCE(resolved.source_handle,''), resolved.author_handle,
-		       COALESCE(resolved.body_text,''), COALESCE(resolved.media_json,''),
-		       COALESCE(resolved.is_retweet,0), COALESCE(resolved.published_at::TEXT,'')
-		FROM candidates
-		JOIN feed_items_resolved resolved ON resolved.tweet_id = candidates.tweet_id
+		SELECT items.*,
+		       COALESCE(author.starred, false) OR COALESCE(source.starred, false),
+		       author.handle IS NOT NULL OR source.handle IS NOT NULL
+		FROM items
+		LEFT JOIN flags author ON author.handle = LOWER(items.author_handle)
+		LEFT JOIN flags source ON source.handle = LOWER(items.source_handle)
 	`), limit)
 	if err != nil {
 		return nil, err
@@ -50,7 +68,7 @@ func (db *DB) GetUnscoredFeedItems(limit int) ([]ScoringItem, error) {
 	for rows.Next() {
 		var si ScoringItem
 		if err := rows.Scan(&si.TweetID, &si.SourceHandle, &si.AuthorHandle,
-			&si.BodyText, &si.MediaJSON, &si.IsRetweet, &si.PublishedAt); err != nil {
+			&si.BodyText, &si.MediaJSON, &si.IsRetweet, &si.PublishedAt, &si.IsStarred, &si.IsFollowed); err != nil {
 			return nil, err
 		}
 		items = append(items, si)

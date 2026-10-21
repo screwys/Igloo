@@ -85,6 +85,9 @@ CREATE INDEX idx_feed_items_quote ON feed_items(quote_tweet_id) WHERE quote_twee
 -- index: idx_feed_items_quote_channel on feed_items
 CREATE INDEX idx_feed_items_quote_channel ON feed_items(quote_channel_id, published_at DESC) WHERE quote_channel_id IS NOT NULL AND quote_channel_id != '';
 
+-- index: idx_feed_items_related_content on feed_items
+CREATE INDEX idx_feed_items_related_content ON feed_items ((CASE WHEN NULLIF(TRIM(COALESCE(quote_tweet_id, '')), '') IS NOT NULL THEN 'tweet:' || LOWER(TRIM(quote_tweet_id)) WHEN NULLIF(TRIM(COALESCE(canonical_tweet_id, '')), '') IS NOT NULL THEN 'tweet:' || LOWER(TRIM(canonical_tweet_id)) ELSE 'tweet:' || LOWER(TRIM(tweet_id)) END));
+
 -- index: idx_feed_items_reply_channel on feed_items
 CREATE INDEX idx_feed_items_reply_channel ON feed_items(reply_channel_id, published_at DESC) WHERE reply_channel_id IS NOT NULL AND reply_channel_id != '';
 
@@ -93,9 +96,6 @@ CREATE INDEX idx_feed_items_reply_parent ON feed_items(reply_to_status, publishe
 
 -- index: idx_feed_items_reposter_channel on feed_items
 CREATE INDEX idx_feed_items_reposter_channel ON feed_items(reposter_channel_id, published_at DESC) WHERE reposter_channel_id IS NOT NULL AND reposter_channel_id != '';
-
--- index: idx_feed_items_seen_cover on feed_items
-CREATE INDEX idx_feed_items_seen_cover ON feed_items(tweet_id, quote_tweet_id, canonical_tweet_id, channel_id, source_channel_id, is_ghost);
 
 -- index: idx_feed_items_source_channel on feed_items
 CREATE INDEX idx_feed_items_source_channel ON feed_items(source_channel_id);
@@ -117,6 +117,12 @@ CREATE INDEX idx_feed_rank_snapshot_score ON feed_rank_snapshot(final_score DESC
 
 -- index: idx_feed_seen_at on feed_seen
 CREATE INDEX idx_feed_seen_at ON feed_seen(seen_at, tweet_id);
+
+-- index: idx_feed_seen_channel_at on feed_seen
+CREATE INDEX idx_feed_seen_channel_at ON feed_seen(channel_id, seen_at DESC) WHERE channel_id IS NOT NULL AND channel_id != '';
+
+-- index: idx_feed_seen_source_channel_at on feed_seen
+CREATE INDEX idx_feed_seen_source_channel_at ON feed_seen(source_channel_id, seen_at DESC) WHERE source_channel_id IS NOT NULL AND source_channel_id != '';
 
 -- index: idx_feed_sources_platform on feed_sources
 CREATE INDEX idx_feed_sources_platform ON feed_sources(platform, enabled);
@@ -275,7 +281,7 @@ CREATE TABLE feed_rank_snapshot ( tweet_id TEXT PRIMARY KEY, rank_position INTEG
 CREATE TABLE feed_rank_snapshot_history ( computed_at INTEGER NOT NULL, tweet_id TEXT NOT NULL, rank_position INTEGER NOT NULL, base_score REAL NOT NULL, decay_factor REAL NOT NULL, freshness_bonus REAL NOT NULL, jitter REAL NOT NULL, diversity_demoted_by REAL NOT NULL DEFAULT 0, final_score REAL NOT NULL, PRIMARY KEY (computed_at, tweet_id), UNIQUE (computed_at, rank_position) );
 
 -- table: feed_seen on feed_seen
-CREATE TABLE feed_seen ( tweet_id TEXT PRIMARY KEY, seen_at INTEGER NOT NULL DEFAULT 0 );
+CREATE TABLE feed_seen ( tweet_id TEXT PRIMARY KEY, seen_at INTEGER NOT NULL DEFAULT 0, channel_id TEXT, source_channel_id TEXT );
 
 -- table: feed_share_account_affinity on feed_share_account_affinity
 CREATE TABLE feed_share_account_affinity ( handle TEXT PRIMARY KEY, score REAL DEFAULT 0, last_event_at_ms INTEGER, event_count INTEGER DEFAULT 0 );
@@ -285,6 +291,9 @@ CREATE TABLE feed_share_token_affinity ( token TEXT PRIMARY KEY, score REAL DEFA
 
 -- table: feed_sources on feed_sources
 CREATE TABLE feed_sources ( source_id TEXT PRIMARY KEY, platform TEXT NOT NULL, source_type TEXT NOT NULL, external_id TEXT NOT NULL, label TEXT NOT NULL, url TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, last_checked INTEGER, last_ok INTEGER, last_error TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0 );
+
+-- table: feed_state_account_scores on feed_state_account_scores
+CREATE TABLE feed_state_account_scores ( handle TEXT PRIMARY KEY, score REAL NOT NULL );
 
 -- table: ingest_state on ingest_state
 CREATE TABLE ingest_state ( handle TEXT PRIMARY KEY, fail_count INTEGER DEFAULT 0, next_retry_at REAL, last_success_at REAL, last_attempt_at REAL, last_error TEXT, last_http_status INTEGER, avg_latency_ms REAL, updated_at INTEGER NOT NULL DEFAULT 0 );

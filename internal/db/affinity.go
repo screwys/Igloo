@@ -1,6 +1,14 @@
 package db
 
-import "database/sql"
+import (
+	"context"
+	"database/sql"
+	"strconv"
+	"time"
+)
+
+const StateAccountScoresRefreshedAtSetting = "feed_state_account_scores_refreshed_at_ms"
+const StateAccountScoresRefreshInterval = 24 * time.Hour
 
 // AffinityRow holds a single affinity score with timing info.
 type AffinityRow struct {
@@ -119,57 +127,90 @@ func (db *DB) PruneShareTokenAffinity(keepTop int) error {
 	})
 }
 
-// BuildStateAccountScores builds retroactive account interest scores from current likes + bookmarks.
-func (db *DB) BuildStateAccountScores() (map[string]float64, error) {
-	accountScores := make(map[string]float64)
-
-	rows, err := db.conn.Query(`
-		SELECT LOWER(COALESCE(fi.author_handle, fi.source_handle)), COUNT(*)
-		FROM feed_likes fl
-		JOIN feed_items_resolved fi ON fi.tweet_id = fl.tweet_id
-		WHERE COALESCE(fi.author_handle, fi.source_handle) IS NOT NULL
-		  AND COALESCE(fi.author_handle, fi.source_handle) <> ''
-		GROUP BY LOWER(COALESCE(fi.author_handle, fi.source_handle))
-	`)
-	if err == nil {
-		defer func() {
-			_ = rows.Close()
-		}()
-		for rows.Next() {
-			var handle string
-			var count float64
-			_ = rows.Scan(&handle, &count)
-			accountScores[handle] += count
-		}
-		if err := rows.Err(); err != nil {
+// GetStateAccountScores reads the daily saved-state scores for a scoring batch.
+func (db *DB) GetStateAccountScores(handles []string) (map[string]float64, error) {
+	if len(handles) == 0 {
+		return nil, nil
+	}
+	rows, err := db.conn.Query(bind(`
+		SELECT handle, score
+		FROM feed_state_account_scores
+		WHERE handle IN (`+placeholders(len(handles))+`)
+	`), stringsToAny(handles)...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	accountScores := make(map[string]float64, len(handles))
+	for rows.Next() {
+		var handle string
+		var score float64
+		if err := rows.Scan(&handle, &score); err != nil {
 			return nil, err
 		}
+		accountScores[handle] = score
 	}
+	return accountScores, rows.Err()
+}
 
-	bRows, err := db.conn.Query(`
-		SELECT LOWER(COALESCE(fi.source_handle, fi.author_handle)), COUNT(*)
-		FROM bookmarks b
-		JOIN feed_items_resolved fi ON b.video_id = fi.tweet_id
-		WHERE COALESCE(fi.source_handle, fi.author_handle) IS NOT NULL
-		  AND COALESCE(fi.source_handle, fi.author_handle) <> ''
-		GROUP BY LOWER(COALESCE(fi.source_handle, fi.author_handle))
-	`)
-	if err == nil {
-		defer func() {
-			_ = bRows.Close()
-		}()
-		for bRows.Next() {
-			var handle string
-			var count float64
-			_ = bRows.Scan(&handle, &count)
-			accountScores[handle] += count * 2
+// RefreshStateAccountScores replaces the daily saved-state scores only when due.
+// The score rows and completion time commit together, so restarts reuse them.
+func (db *DB) RefreshStateAccountScores(ctx context.Context, nowMs int64) (bool, error) {
+	refreshed := false
+	err := db.WithWrite(func(tx *sql.Tx) error {
+		var raw string
+		if err := tx.QueryRowContext(ctx, `
+			SELECT COALESCE((SELECT value FROM settings WHERE key = $1), '0')
+		`, StateAccountScoresRefreshedAtSetting).Scan(&raw); err != nil {
+			return err
 		}
-		if err := bRows.Err(); err != nil {
-			return nil, err
+		lastRefresh, _ := strconv.ParseInt(raw, 10, 64)
+		if lastRefresh > 0 && nowMs-lastRefresh < StateAccountScoresRefreshInterval.Milliseconds() {
+			return nil
 		}
-	}
-
-	return accountScores, nil
+		if _, err := tx.ExecContext(ctx, "DELETE FROM feed_state_account_scores"); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			WITH saved AS MATERIALIZED (
+				SELECT fi.channel_id, 1 AS weight
+				FROM feed_likes likes
+				JOIN feed_items fi ON fi.tweet_id = likes.tweet_id
+				UNION ALL
+				SELECT fi.source_channel_id, 2 AS weight
+				FROM bookmarks
+				JOIN feed_items fi ON fi.tweet_id = bookmarks.video_id
+			), accounts AS MATERIALIZED (
+				SELECT channel_id, SUM(weight) AS score
+				FROM saved
+				GROUP BY channel_id
+			)
+			INSERT INTO feed_state_account_scores (handle, score)
+			SELECT LOWER(profile.handle), SUM(accounts.score)::DOUBLE PRECISION
+			FROM accounts
+			JOIN channel_profiles profile ON profile.channel_id = accounts.channel_id
+			WHERE profile.tombstone = 0 AND COALESCE(profile.handle, '') <> ''
+			GROUP BY LOWER(profile.handle)
+		`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE feed_items fi SET algo_scored_at = 0
+			FROM feed_rank_snapshot snapshot
+			WHERE snapshot.tweet_id = fi.tweet_id AND fi.algo_scored_at <> 0
+		`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO settings (key, value) VALUES ($1, $2)
+			ON CONFLICT(key) DO UPDATE SET value = excluded.value
+		`, StateAccountScoresRefreshedAtSetting, strconv.FormatInt(nowMs, 10)); err != nil {
+			return err
+		}
+		refreshed = true
+		return nil
+	})
+	return refreshed && err == nil, err
 }
 
 // FindSiblingTweetIDsForLikes finds sibling tweet IDs (same content hash)

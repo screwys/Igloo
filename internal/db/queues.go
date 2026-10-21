@@ -20,38 +20,43 @@ func (db *DB) NextMediaWorkDelay(nowMs int64, downloadPlatforms []string, includ
 	downloadPlatforms = normalizePlatforms(downloadPlatforms)
 	query := `
 		WITH next_queued_content AS (
-			SELECT CASE WHEN mo.next_attempt_at_ms > 0 THEN mo.next_attempt_at_ms ELSE ? END AS due_ms
-			FROM media_objects mo
-			WHERE mo.job_state IN ('queued', 'downloading')
-			  AND mo.job_state = 'queued'
-			  AND mo.download_lane = ?
-			  AND (mo.source_url != '' OR mo.object_key ILIKE 'derived:video-thumbnail:%' COLLATE "C" ESCAPE '')
+			SELECT CASE WHEN desired.next_attempt_at_ms > 0 THEN desired.next_attempt_at_ms ELSE ? END AS due_ms
+			FROM media_objects desired
+			WHERE desired.job_state IN ('queued', 'downloading')
+			  AND desired.job_state = 'queued'
+			  AND desired.download_lane = ?
+			  AND (desired.source_url != '' OR desired.object_key ILIKE 'derived:video-thumbnail:%' COLLATE "C" ESCAPE '')
+			  AND ` + contentAssetDependencyReadySQL + `
 			  AND EXISTS (
 			    SELECT 1 FROM assets a
-			    WHERE a.desired_object_id = mo.object_id AND a.lifecycle_state = 'active'
+			    WHERE a.desired_object_id = desired.object_id AND a.lifecycle_state = 'active'
 			      AND ` + contentAssetWorkerOwnerSQL + `
 			  )
-			ORDER BY mo.next_attempt_at_ms, mo.attempts, mo.updated_at_ms DESC, mo.id DESC
+			ORDER BY desired.next_attempt_at_ms, desired.attempts, desired.updated_at_ms DESC, desired.id DESC
 			LIMIT 1
 		), next_leased_content AS (
-			SELECT mo.lease_until_ms AS due_ms
-			FROM media_objects mo
-			WHERE mo.job_state = 'downloading'
-			  AND mo.download_lane = ?
-			  AND (mo.source_url != '' OR mo.object_key ILIKE 'derived:video-thumbnail:%' COLLATE "C" ESCAPE '')
+			SELECT desired.lease_until_ms AS due_ms
+			FROM media_objects desired
+			WHERE desired.job_state = 'downloading'
+			  AND desired.download_lane = ?
+			  AND (desired.source_url != '' OR desired.object_key ILIKE 'derived:video-thumbnail:%' COLLATE "C" ESCAPE '')
+			  AND ` + contentAssetDependencyReadySQL + `
 			  AND EXISTS (
 			    SELECT 1 FROM assets a
-			    WHERE a.desired_object_id = mo.object_id AND a.lifecycle_state = 'active'
+			    WHERE a.desired_object_id = desired.object_id AND a.lifecycle_state = 'active'
 			      AND ` + contentAssetWorkerOwnerSQL + `
 			  )
-			ORDER BY mo.lease_until_ms
+			ORDER BY desired.lease_until_ms
 			LIMIT 1
 		)
 		SELECT MIN(due_ms) FROM (
 			SELECT due_ms FROM next_queued_content
 			UNION ALL
 			SELECT due_ms FROM next_leased_content`
-	args := []any{nowMs, lane, includeTweets, lane, includeTweets}
+	args := []any{
+		nowMs, lane, videoThumbnailObjectKeyPrefix + "%", len(videoThumbnailObjectKeyPrefix) + 1, includeTweets,
+		lane, videoThumbnailObjectKeyPrefix + "%", len(videoThumbnailObjectKeyPrefix) + 1, includeTweets,
+	}
 	if len(downloadPlatforms) > 0 {
 		query += `
 			UNION ALL

@@ -96,6 +96,21 @@ func openFreshTestDB(t *testing.T) *DB {
 	return d
 }
 
+func seedFeedPlanRows(t *testing.T, d *DB) {
+	t.Helper()
+	if err := d.ExecRaw(`
+		INSERT INTO feed_items (tweet_id, channel_id, source_channel_id, reposter_channel_id,
+			canonical_tweet_id, quote_tweet_id, reply_to_status, content_hash)
+		SELECT 'plan_item_' || n, 'plan_author_' || (n % 20), 'plan_source_' || (n % 20),
+			'plan_reposter_' || (n % 20), 'plan_original_' || n, 'plan_quote_' || n,
+			'plan_parent_' || n, 'plan_hash_' || n
+		FROM generate_series(1, 1000) n;
+		ANALYZE feed_items;
+	`); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func seedTestChannel(t *testing.T, d *DB, channelID string) {
 	t.Helper()
 	if err := d.ExecRaw(`

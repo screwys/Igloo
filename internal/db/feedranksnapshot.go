@@ -49,10 +49,15 @@ func (db *DB) feedAbsenceBoostConfig() (capHours, seenMaxBoost, neverSeenBoost f
 	return capHours, seenMaxBoost, neverSeenBoost
 }
 
+func feedAccountPrioritySQL(account string) string {
+	return fmt.Sprintf(`(EXISTS (SELECT 1 FROM channel_follows WHERE channel_id = %[1]s)
+		OR EXISTS (SELECT 1 FROM channel_stars WHERE channel_id = %[1]s))`, account)
+}
+
 func feedPrioritySourceSQL(alias string) string {
 	return fmt.Sprintf(`NULLIF(%[1]s.source_channel_id, '') IS NOT NULL
 				 AND %[1]s.source_channel_id != COALESCE(%[1]s.channel_id, '')
-				 AND (cf_source.channel_id IS NOT NULL OR cs_source.channel_id IS NOT NULL)`, alias)
+				 AND %[2]s`, alias, feedAccountPrioritySQL(alias+".source_channel_id"))
 }
 
 func feedRankingAccountIDSQL(alias string) string {
@@ -65,68 +70,21 @@ func feedRankingAccountIDSQL(alias string) string {
 func feedRankingAccountIsPrioritySQL(alias string) string {
 	return fmt.Sprintf(`CASE
 				WHEN %[1]s THEN 1
-				WHEN cf_author.channel_id IS NOT NULL OR cs_author.channel_id IS NOT NULL THEN 1
+				WHEN %[2]s THEN 1
 				ELSE 0
-			END`, feedPrioritySourceSQL(alias))
+			END`, feedPrioritySourceSQL(alias), feedAccountPrioritySQL(alias+".channel_id"))
 }
 
 func feedAbsenceBoostSelect(alias string) string {
 	return fmt.Sprintf(`CASE
-				WHEN NULLIF(%[2]s, '') IS NOT NULL
-				 AND %[3]s = 1
+				WHEN NULLIF(%[1]s.ranking_account_id, '') IS NOT NULL
+				 AND %[1]s.ranking_account_is_priority = 1
 				THEN CASE
 					WHEN lps.last_seen_at IS NULL THEN ?
 					ELSE ? * LEAST(?, GREATEST(0, ((floor(extract(epoch FROM statement_timestamp()))::BIGINT * 1000) - lps.last_seen_at) / 3600000.0)) / ?
 				END
 				ELSE 0
-		END`, alias, feedRankingAccountIDSQL(alias), feedRankingAccountIsPrioritySQL(alias))
-}
-
-func feedRankingFromSQL(relatedSeenExpr, absenceExpr, candidateJoin string) string {
-	return fmt.Sprintf(`
-				FROM (
-				    SELECT fi.*,
-				           (floor(extract(epoch FROM statement_timestamp()))::BIGINT * 1000 - fi.published_at) / 3600000.0 AS age_h,
-				           %s AS related_seen_count,
-				           %s AS absence_boost
-				    FROM feed_items fi
-				    %s
-				    LEFT JOIN (
-				        SELECT %s AS related_key,
-				               COUNT(*) AS related_seen_count
-				        FROM seen_feed seen_fi
-				        GROUP BY %s
-				    ) rsc ON rsc.related_key = %s
-			    LEFT JOIN channel_follows cf_author
-			      ON cf_author.channel_id = fi.channel_id
-			    LEFT JOIN channel_stars cs_author
-			      ON cs_author.channel_id = fi.channel_id
-			    LEFT JOIN channel_follows cf_source
-			      ON cf_source.channel_id = fi.source_channel_id
-			    LEFT JOIN channel_stars cs_source
-			      ON cs_source.channel_id = fi.source_channel_id
-				    LEFT JOIN (
-				        SELECT channel_id, MAX(seen_at) AS last_seen_at
-				        FROM (
-			            SELECT parent.channel_id, parent.seen_at
-			            FROM seen_feed parent
-			            WHERE NULLIF(parent.channel_id, '') IS NOT NULL
-				              AND COALESCE(parent.is_ghost, 0) = 0
-				            UNION ALL
-			            SELECT parent.source_channel_id, parent.seen_at
-			            FROM seen_feed parent
-			            WHERE NULLIF(parent.source_channel_id, '') IS NOT NULL
-				              AND COALESCE(parent.is_ghost, 0) = 0
-				        ) seen_channels
-				        GROUP BY channel_id
-				    ) lps ON lps.channel_id = %s
-			) fi
-				`, relatedSeenExpr, absenceExpr, candidateJoin,
-		feedRelatedContentKeySQL("seen_fi"),
-		feedRelatedContentKeySQL("seen_fi"),
-		feedRelatedContentKeySQL("fi"),
-		feedRankingAccountIDSQL("fi"),
-	)
+		END`, alias)
 }
 
 func feedRelatedContentKeySQL(alias string) string {
@@ -137,11 +95,6 @@ func feedRelatedContentKeySQL(alias string) string {
 			THEN 'tweet:' || LOWER(TRIM(%[1]s.canonical_tweet_id))
 		ELSE 'tweet:' || LOWER(TRIM(%[1]s.tweet_id))
 	END`, alias)
-}
-
-func feedRelatedSeenCountSelect(alias string) string {
-	_ = alias
-	return `COALESCE(rsc.related_seen_count, 0)`
 }
 
 func feedRelatedContentPenaltySQL(alias string) string {
@@ -366,21 +319,13 @@ func (db *DB) ListPreDiversityRankedCandidatesContext(
 	// which breaks the SQL → Go scan. Items without a published_at can't meaningfully
 	// rank against time-decayed items anyway, so exclude them.
 	where = append(where, "fi.published_at > 0")
-	where = append(where, fmt.Sprintf("(%s > 0 OR fi.published_at > (floor(extract(epoch FROM statement_timestamp()))::BIGINT - %.1f*3600) * 1000)", feedRankingBaseScoreSQL("fi"), feedFreshnessBonusWindowHours))
-
 	whereClause := "WHERE " + strings.Join(where, " AND ")
 
 	capHours, seenMaxBoost, neverSeenBoost := db.feedAbsenceBoostConfig()
 	absenceExpr := feedAbsenceBoostSelect("fi")
-	relatedSeenExpr := feedRelatedSeenCountSelect("fi")
-	fromSQL := feedRankingFromSQL(
-		relatedSeenExpr,
-		absenceExpr,
-		"JOIN candidate_ids candidate ON candidate.tweet_id = fi.tweet_id",
-	)
 	args := []any{string(dirtyJSON), refillLimit, refillLimit}
-	args = append(args, feedRankingArgs(capHours, seenMaxBoost, neverSeenBoost)...)
 	args = append(args, whereArgs...)
+	args = append(args, feedRankingArgs(capHours, seenMaxBoost, neverSeenBoost)...)
 	decaySQL := feedDecaySQL()
 	freshnessSQL := feedFreshnessSQL()
 	refillWhere := strings.Join([]string{
@@ -391,15 +336,7 @@ func (db *DB) ListPreDiversityRankedCandidatesContext(
 	}, " AND ")
 
 	query := fmt.Sprintf(`
-			WITH seen_feed AS MATERIALIZED (
-				SELECT fs.tweet_id, fs.seen_at,
-				       fi.quote_tweet_id, fi.canonical_tweet_id,
-				       fi.channel_id, fi.source_channel_id, fi.is_ghost
-				FROM feed_seen fs
-				JOIN feed_items fi
-				  ON fi.tweet_id = fs.tweet_id
-			),
-			dirty_ids(tweet_id) AS MATERIALIZED (
+			WITH dirty_ids(tweet_id) AS MATERIALIZED (
 				SELECT CAST(value AS TEXT)
 				FROM jsonb_array_elements_text(?::jsonb)
 				WHERE TRIM(CAST(value AS TEXT)) != ''
@@ -423,12 +360,49 @@ func (db *DB) ListPreDiversityRankedCandidatesContext(
 				UNION SELECT tweet_id FROM dirty_ids
 				UNION SELECT tweet_id FROM recent_refill
 				UNION SELECT tweet_id FROM interest_refill
+			),
+			candidates AS MATERIALIZED (
+				SELECT fi.tweet_id, fi.channel_id, fi.source_channel_id,
+				       fi.quote_tweet_id, fi.content_hash, fi.is_retweet, fi.is_reply,
+				       fi.canonical_url, fi.published_at, fi.algo_interest,
+				       %s AS related_content_key,
+				       %s AS ranking_account_id,
+				       %s AS ranking_account_is_priority
+				FROM candidate_ids candidate
+				JOIN feed_items fi ON fi.tweet_id = candidate.tweet_id
+				%s
+			),
+			related_seen AS MATERIALIZED (
+				SELECT keys.related_content_key,
+				       (SELECT COUNT(*)
+				        FROM feed_items seen_fi
+				        WHERE %s = keys.related_content_key
+				          AND EXISTS (SELECT 1 FROM feed_seen fs
+				                      WHERE fs.tweet_id = seen_fi.tweet_id OFFSET 0)) AS related_seen_count
+				FROM (SELECT DISTINCT related_content_key FROM candidates) keys
+			),
+			account_seen AS MATERIALIZED (
+				SELECT accounts.channel_id,
+				       GREATEST(
+				           (SELECT seen_at FROM feed_seen
+				            WHERE channel_id = accounts.channel_id AND channel_id != ''
+				            ORDER BY seen_at DESC LIMIT 1),
+				           (SELECT seen_at FROM feed_seen
+				            WHERE source_channel_id = accounts.channel_id AND source_channel_id != ''
+				            ORDER BY seen_at DESC LIMIT 1)
+				       ) AS last_seen_at
+				FROM (
+					SELECT DISTINCT ranking_account_id AS channel_id
+					FROM candidates
+					WHERE ranking_account_is_priority = 1
+					  AND NULLIF(ranking_account_id, '') IS NOT NULL
+				) accounts
 			)
 			SELECT ranked.* FROM (
 			SELECT fi.tweet_id,
 				       COALESCE(fi.channel_id,''),
 				       COALESCE(fi.source_channel_id,''),
-				       %s AS related_content_key,
+				       fi.related_content_key,
 				       COALESCE(fi.content_hash, '') AS content_hash,
 				       COALESCE(fi.is_retweet, 0) AS is_retweet,
 				       COALESCE(fi.is_reply, 0) AS is_reply,
@@ -439,16 +413,26 @@ func (db *DB) ListPreDiversityRankedCandidatesContext(
 				       %s AS decay,
 				       %s AS freshness,
 				       %s AS reply_penalty
-				%s
-			%s
+			FROM (
+				SELECT fi.*,
+				       (floor(extract(epoch FROM statement_timestamp()))::BIGINT * 1000 - fi.published_at) / 3600000.0 AS age_h,
+				       COALESCE(rsc.related_seen_count, 0) AS related_seen_count,
+				       %s AS absence_boost
+				FROM candidates fi
+				LEFT JOIN related_seen rsc ON rsc.related_content_key = fi.related_content_key
+				LEFT JOIN account_seen lps ON lps.channel_id = fi.ranking_account_id
+			) fi
+			WHERE (%s > 0 OR fi.published_at > (floor(extract(epoch FROM statement_timestamp()))::BIGINT - %.1f*3600) * 1000)
 			) ranked
 			ORDER BY CASE WHEN ranked.base IS NULL THEN NULL
 			         ELSE GREATEST(0, ranked.base * ranked.decay + ranked.freshness - ranked.reply_penalty) END DESC NULLS LAST,
 			         ranked.tweet_id DESC NULLS LAST
 			LIMIT %d
 			`, refillWhere, refillWhere,
-		feedRelatedContentKeySQL("fi"), feedRankingBaseScoreSQL("fi"), decaySQL, freshnessSQL,
-		feedReplyPenaltySQL("fi"), fromSQL, whereClause, feedSnapshotMaxItems)
+		feedRelatedContentKeySQL("fi"), feedRankingAccountIDSQL("fi"), feedRankingAccountIsPrioritySQL("fi"), whereClause,
+		feedRelatedContentKeySQL("seen_fi"),
+		feedRankingBaseScoreSQL("fi"), decaySQL, freshnessSQL, feedReplyPenaltySQL("fi"), absenceExpr,
+		feedRankingBaseScoreSQL("fi"), feedFreshnessBonusWindowHours, feedSnapshotMaxItems)
 
 	rows, err := db.reader().QueryContext(ctx, query, args...)
 	if err != nil {
@@ -718,18 +702,24 @@ func (db *DB) ListSnapshotPage(snapshotAt int64, afterPos int, limit int) ([]Sna
 	args = append(args, limit)
 
 	rows, err := db.reader().Query(`
+		WITH page AS MATERIALIZED (
+			SELECT s.*
+			FROM feed_rank_snapshot_history s
+			JOIN feed_items fi ON fi.tweet_id = s.tweet_id
+			WHERE s.computed_at = ?
+			  AND s.rank_position > ?
+			  AND `+feedPrimaryItemPredicate("fi")+`
+			  AND `+feedActiveOwnerPredicate("fi")+`
+			  AND `+feedUnseenPredicate("fi")+muteSQL+`
+			ORDER BY s.rank_position ASC
+			LIMIT ?
+		)
 		SELECT s.rank_position, s.final_score, s.base_score,
 		       s.decay_factor, s.freshness_bonus, s.jitter, s.diversity_demoted_by,
 		       `+feedItemSelectSQL("fi")+`
-		FROM feed_rank_snapshot_history s
+		FROM page s
 		JOIN feed_items_resolved fi ON fi.tweet_id = s.tweet_id
-		WHERE s.computed_at = ?
-		  AND s.rank_position > ?
-		  AND `+feedPrimaryItemPredicate("fi")+`
-		  AND `+feedActiveOwnerPredicate("fi")+`
-		  AND `+feedUnseenPredicate("fi")+muteSQL+`
 		ORDER BY s.rank_position ASC
-		LIMIT ?
 	`, args...)
 	if err != nil {
 		return nil, err
@@ -763,7 +753,7 @@ func (db *DB) ListSnapshotPage(snapshotAt int64, afterPos int, limit int) ([]Sna
 			&pubAt, &fetchedAt,
 			&p.Item.ContentHash, &p.Item.CanonicalTweetID,
 			&p.Item.SourceChannelID, &p.Item.ChannelID, &p.Item.QuoteChannelID,
-			&p.Item.ReplyChannelID, &p.Item.ReposterChannelID,
+			&p.Item.ReplyChannelID, &p.Item.ReposterChannelID, &p.Item.AlgoInterestScore,
 		); err != nil {
 			return nil, err
 		}

@@ -296,6 +296,10 @@ func (db *DB) ExportConfig() (ConfigExport, error) {
 	if err != nil {
 		return cfg, fmt.Errorf("export settings: %w", err)
 	}
+	delete(cfg.Settings, StateAccountScoresRefreshedAtSetting)
+	delete(cfg.Settings, "feed_rank_snapshot_reranked_at_ms")
+	delete(cfg.Settings, "downloader_operations_pruned_at_ms")
+	delete(cfg.Settings, "video_retention_maintained_at_ms")
 
 	// Bookmark categories
 	catRows, err := db.reader().Query(

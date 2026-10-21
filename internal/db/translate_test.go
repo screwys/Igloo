@@ -165,6 +165,7 @@ func TestGetReusableTranslationUsesQuotedTweetBody(t *testing.T) {
 
 func TestReusableTranslationQueriesUseIdentityIndexes(t *testing.T) {
 	d := openWritableTestDB(t)
+	seedFeedPlanRows(t, d)
 	tests := []struct {
 		name    string
 		query   string

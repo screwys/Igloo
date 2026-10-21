@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -49,7 +50,8 @@ func (m *Manager) runScheduler(ctx context.Context) {
 
 	log.Printf("[scheduler] platform scheduler started")
 	m.setStatus("scheduler", workerStatus("scheduler", true, "platform scheduler running", ""))
-	nextMaintenance := time.Now()
+	const maintenanceLastRunKey = "video_retention_maintained_at_ms"
+	nextMaintenance := m.nextPeriodicRun(maintenanceLastRunKey, discoveryMaintenanceInterval)
 
 	for {
 		if ctx.Err() != nil {
@@ -57,8 +59,16 @@ func (m *Manager) runScheduler(ctx context.Context) {
 		}
 		now := time.Now()
 		if !now.Before(nextMaintenance) {
-			m.runDiscoveryMaintenance()
-			nextMaintenance = now.Add(discoveryMaintenanceInterval)
+			if err := m.runDiscoveryMaintenance(); err != nil {
+				log.Printf("[scheduler] MaintainVideoRetention: %v", err)
+				nextMaintenance = time.Now().Add(discoveryFallbackWakeDelay)
+			} else {
+				completedAt := time.Now()
+				if err := m.db.SetSetting(maintenanceLastRunKey, strconv.FormatInt(completedAt.UnixMilli(), 10)); err != nil {
+					log.Printf("[scheduler] record retention maintenance: %v", err)
+				}
+				nextMaintenance = completedAt.Add(discoveryMaintenanceInterval)
+			}
 		}
 
 		nextWake := nextMaintenance
@@ -190,12 +200,23 @@ func (m *Manager) TriggerDownloadCycle(force bool) {
 	m.KickDiscovery()
 }
 
-func (m *Manager) runDiscoveryMaintenance() {
-	if n, err := m.db.MaintainVideoRetention(time.Now().UnixMilli()); err != nil {
-		log.Printf("[scheduler] MaintainVideoRetention: %v", err)
-	} else if n > 0 {
+func (m *Manager) runDiscoveryMaintenance() error {
+	n, err := m.db.MaintainVideoRetention(time.Now().UnixMilli())
+	if err != nil {
+		return err
+	}
+	if n > 0 {
 		log.Printf("[scheduler] retired %d expired or unowned videos", n)
 	}
+	const pruneKey = "downloader_operations_pruned_at_ms"
+	if !time.Now().Before(m.nextPeriodicRun(pruneKey, 6*time.Hour)) {
+		if err := m.db.PruneDownloaderOperations(db.DownloaderOperationMaxRows, db.DownloaderOperationMaxAge); err != nil {
+			log.Printf("[scheduler] prune downloader operations: %v", err)
+		} else if err := m.db.SetSetting(pruneKey, strconv.FormatInt(time.Now().UnixMilli(), 10)); err != nil {
+			log.Printf("[scheduler] record downloader operation pruning: %v", err)
+		}
+	}
+	return nil
 }
 
 func (m *Manager) processDiscoveryChannel(ctx context.Context, platform string, channel model.Channel) {

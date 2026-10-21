@@ -666,23 +666,11 @@ func (db *DB) GetLatestFeedMediaPerAuthor(perAuthor int, handles ...string) (map
 			  AND is_retweet = 0
 			  %s
 		)
-		SELECT `+feedItemSelectSQL("f")+`
-		FROM ranked r
-		JOIN feed_items_resolved f ON f.tweet_id = r.tweet_id
-		WHERE r.rn <= ?
-		ORDER BY f.channel_id, f.published_at DESC
+		SELECT tweet_id FROM ranked WHERE rn <= ?
 	`, handleFilter)
 	args = append(args, perAuthor)
 
-	rows, err := db.conn.Query(bind(query), args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	items, err := scanFeedItems(rows)
+	items, err := db.listFeedItems(query, "fi.channel_id, fi.published_at DESC", args...)
 	if err != nil {
 		return nil, err
 	}

@@ -65,8 +65,16 @@ func EnsureSchemaWithOptions(conn *sql.DB, opts EnsureSchemaOptions) error {
 		"CREATE INDEX IF NOT EXISTS idx_feed_items_quote ON feed_items(quote_tweet_id) WHERE quote_tweet_id IS NOT NULL AND quote_tweet_id != ''",
 		"CREATE INDEX IF NOT EXISTS idx_feed_items_content_hash ON feed_items(content_hash) WHERE content_hash IS NOT NULL AND content_hash != ''",
 		"CREATE INDEX IF NOT EXISTS idx_feed_items_canonical_tweet ON feed_items(canonical_tweet_id) WHERE canonical_tweet_id IS NOT NULL AND canonical_tweet_id != ''",
-		"CREATE INDEX IF NOT EXISTS idx_feed_items_seen_cover ON feed_items(tweet_id, quote_tweet_id, canonical_tweet_id, channel_id, source_channel_id, is_ghost)",
+		`CREATE INDEX IF NOT EXISTS idx_feed_items_related_content ON feed_items ((CASE
+			WHEN NULLIF(TRIM(COALESCE(quote_tweet_id, '')), '') IS NOT NULL
+				THEN 'tweet:' || LOWER(TRIM(quote_tweet_id))
+			WHEN NULLIF(TRIM(COALESCE(canonical_tweet_id, '')), '') IS NOT NULL
+				THEN 'tweet:' || LOWER(TRIM(canonical_tweet_id))
+			ELSE 'tweet:' || LOWER(TRIM(tweet_id))
+		END))`,
 		"CREATE INDEX IF NOT EXISTS idx_feed_seen_at ON feed_seen(seen_at, tweet_id)",
+		"CREATE INDEX IF NOT EXISTS idx_feed_seen_channel_at ON feed_seen(channel_id, seen_at DESC) WHERE channel_id IS NOT NULL AND channel_id != ''",
+		"CREATE INDEX IF NOT EXISTS idx_feed_seen_source_channel_at ON feed_seen(source_channel_id, seen_at DESC) WHERE source_channel_id IS NOT NULL AND source_channel_id != ''",
 		"CREATE INDEX IF NOT EXISTS idx_channel_profiles_refresh ON channel_profiles(tombstone, fetched_at) WHERE tombstone = 0",
 		"CREATE INDEX IF NOT EXISTS idx_channel_profiles_platform ON channel_profiles(platform)",
 		"CREATE INDEX IF NOT EXISTS idx_channel_profiles_twitter_handle ON channel_profiles(LOWER(COALESCE(handle, ''))) WHERE platform = 'twitter' AND tombstone = 0",

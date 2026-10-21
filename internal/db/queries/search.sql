@@ -35,8 +35,9 @@ WITH body_matches AS (
  JOIN channel_profiles cp ON cp.channel_id=fi.channel_id AND cp.tombstone=0
  WHERE cp.handle ILIKE sqlc.arg(pattern)::TEXT COLLATE "C" ESCAPE '' OR cp.display_name ILIKE sqlc.arg(pattern)::TEXT COLLATE "C" ESCAPE ''
  ORDER BY fi.published_at DESC,fi.tweet_id DESC LIMIT sqlc.arg(page_limit)::BIGINT
-), matching AS (
- SELECT * FROM body_matches UNION SELECT * FROM author_matches
+), matching AS MATERIALIZED (
+ SELECT * FROM (SELECT * FROM body_matches UNION SELECT * FROM author_matches) matches
+ ORDER BY published_at DESC,tweet_id DESC LIMIT sqlc.arg(page_limit)::BIGINT
 )
 SELECT fi.tweet_id AS tweet_id,
        COALESCE(fi.source_handle,'') AS source_handle,
@@ -79,6 +80,7 @@ SELECT fi.tweet_id AS tweet_id,
        COALESCE(fi.channel_id,'') AS channel_id,
        COALESCE(fi.quote_channel_id,'') AS quote_channel_id,
        COALESCE(fi.reply_channel_id,'') AS reply_channel_id,
-       COALESCE(fi.reposter_channel_id,'') AS reposter_channel_id
+       COALESCE(fi.reposter_channel_id,'') AS reposter_channel_id,
+       COALESCE(fi.algo_interest,0)::DOUBLE PRECISION AS algo_interest
 FROM matching matched JOIN feed_items_resolved fi ON fi.tweet_id=matched.tweet_id
-ORDER BY fi.published_at DESC,fi.tweet_id DESC LIMIT sqlc.arg(page_limit)::BIGINT;
+ORDER BY matched.published_at DESC,matched.tweet_id DESC;

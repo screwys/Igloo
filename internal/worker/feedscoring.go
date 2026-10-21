@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,7 +29,7 @@ func (m *Manager) runFeedScoringLoop(
 		case <-m.feedOrderReady:
 		}
 	}
-	periodic := time.NewTicker(time.Hour)
+	periodic := time.NewTimer(time.Hour)
 	defer periodic.Stop()
 
 	lastRun := time.Time{}
@@ -55,6 +56,13 @@ func (m *Manager) runFeedScoringLoop(
 		stopKickTimer()
 		score(ctx, forceRerank, forceRefill)
 		lastRun = time.Now()
+		if !periodic.Stop() {
+			select {
+			case <-periodic.C:
+			default:
+			}
+		}
+		periodic.Reset(m.feedScoringPeriodicDelay())
 	}
 	scheduleKick := func() {
 		delay := time.Until(lastRun.Add(feedScoringKickMinInterval))
@@ -67,7 +75,7 @@ func (m *Manager) runFeedScoringLoop(
 			kickTimerC = kickTimer.C
 		}
 	}
-	runNow(true, true)
+	runNow(m.db == nil, m.db == nil)
 
 	for {
 		select {
@@ -80,9 +88,25 @@ func (m *Manager) runFeedScoringLoop(
 		case <-kickTimerC:
 			runNow(false, false)
 		case <-periodic.C:
-			runNow(true, true)
+			runNow(false, false)
 		}
 	}
+}
+
+const feedSnapshotRerankedAtSetting = "feed_rank_snapshot_reranked_at_ms"
+
+func (m *Manager) feedScoringPeriodicDelay() time.Duration {
+	if m.db == nil {
+		return time.Hour
+	}
+	nextRun := m.nextPeriodicRun(db.StateAccountScoresRefreshedAtSetting, db.StateAccountScoresRefreshInterval)
+	if rerankAt := m.nextPeriodicRun(feedSnapshotRerankedAtSetting, time.Hour); rerankAt.Before(nextRun) {
+		nextRun = rerankAt
+	}
+	if delay := time.Until(nextRun); delay > 0 {
+		return min(delay, time.Hour)
+	}
+	return feedScoringKickMinInterval
 }
 
 const feedSnapshotBuildTimeout = 30 * time.Second
@@ -97,6 +121,23 @@ const feedReplyResolutionTimeout = 20 * time.Second
 func (m *Manager) scoreFeedItems(ctx context.Context, forceRerank, forceRefill bool) {
 	start := time.Now()
 	m.setStatus("feed_scoring", workerStatus("feed_scoring", true, "scoring", ""))
+
+	refreshed, err := m.db.RefreshStateAccountScores(ctx, start.UnixMilli())
+	if err != nil {
+		log.Printf("[feed_scoring] RefreshStateAccountScores: %v", err)
+	}
+	if refreshed {
+		forceRerank = true
+	}
+	lastRerankRaw, err := m.db.GetSetting(feedSnapshotRerankedAtSetting, "0")
+	if err != nil {
+		log.Printf("[feed_scoring] read last snapshot rerank: %v", err)
+	} else {
+		lastRerankAt, _ := strconv.ParseInt(lastRerankRaw, 10, 64)
+		if lastRerankAt <= 0 || start.UnixMilli()-lastRerankAt >= time.Hour.Milliseconds() {
+			forceRerank, forceRefill = true, true
+		}
+	}
 
 	dirtyTweetIDs, moreDirty := m.runScoringPhase()
 	if moreDirty {
@@ -124,6 +165,11 @@ func (m *Manager) scoreFeedItems(ctx context.Context, forceRerank, forceRefill b
 		}
 	}
 	snap := m.runSnapshotPhaseStats(ctx, dirtyTweetIDs, refillLimit, forceRerank || forceRefill)
+	if snap.succeeded && forceRerank {
+		if err := m.db.SetSetting(feedSnapshotRerankedAtSetting, strconv.FormatInt(time.Now().UnixMilli(), 10)); err != nil {
+			log.Printf("[feed_scoring] record snapshot rerank: %v", err)
+		}
+	}
 
 	totalElapsed := time.Since(start).Round(time.Millisecond)
 	detail := fmt.Sprintf("scored=%d refill=%d candidates=%d replies=%d/%d snap=%d/%s query=%s build=%s write=%s total=%s top=%s",
@@ -149,77 +195,23 @@ func (m *Manager) runScoringPhase() ([]string, bool) {
 		items = items[:feedScoringDirtyBatch]
 	}
 
-	// Collect unique handles and tokens for batch affinity lookup
-	handlesNeeded := make(map[string]bool)
-	tokensNeeded := make(map[string]bool)
-	for _, item := range items {
-		for _, h := range []string{item.SourceHandle, item.AuthorHandle} {
-			if h != "" {
-				handlesNeeded[strings.ToLower(h)] = true
-			}
-		}
-		for _, tok := range feed.ExtractInterestTokens(item.BodyText) {
-			tokensNeeded[tok] = true
-		}
-	}
-
-	handleList := make([]string, 0, len(handlesNeeded))
-	for h := range handlesNeeded {
-		handleList = append(handleList, h)
-	}
-	tokenList := make([]string, 0, len(tokensNeeded))
-	for t := range tokensNeeded {
-		tokenList = append(tokenList, t)
-	}
-
-	accountRows, _ := m.db.GetAccountAffinityScores(handleList)
-	tokenRows, _ := m.db.GetTokenAffinityScores(tokenList)
-	stateScores, _ := m.db.BuildStateAccountScores()
-
-	// Channel flags
-	starredIDs, _ := m.db.GetStarredChannelIDs()
-	channels, _ := m.db.GetSubscribedChannels()
-	starredHandles := make(map[string]bool)
-	followedHandles := make(map[string]bool)
-	for _, ch := range channels {
-		handle := strings.ToLower(ch.ChannelID)
-		// Strip platform prefix (e.g. "twitter_handle" -> "handle")
-		if idx := strings.Index(handle, "_"); idx >= 0 {
-			handle = handle[idx+1:]
-		}
-		followedHandles[handle] = true
-		if starredIDs[ch.ChannelID] {
-			starredHandles[handle] = true
-		}
-	}
-
-	ctx := feed.ScoringContext{
-		StarredHandles:  starredHandles,
-		FollowedHandles: followedHandles,
-		AccountScores:   accountRows,
-		StateScores:     stateScores,
-		TokenScores:     tokenRows,
-		NowMs:           time.Now().UnixMilli(),
-	}
-
-	// Score all items
+	values := feed.ScoreItems(m.db, items)
 	scores := make(map[string]float64, len(items))
-	for _, item := range items {
-		scores[item.TweetID] = feed.ComputeAlgoInterest(item, ctx)
+	ids := make([]string, len(items))
+	for i, item := range items {
+		scores[item.TweetID] = values[i]
+		ids[i] = item.TweetID
 	}
 
 	if err := m.db.UpdateAlgoInterest(scores); err != nil {
 		log.Printf("[feed_scoring] UpdateAlgoInterest: %v", err)
 		return nil, false
 	}
-	ids := make([]string, 0, len(items))
-	for _, item := range items {
-		ids = append(ids, item.TweetID)
-	}
 	return ids, more
 }
 
 type snapshotPhaseStats struct {
+	succeeded     bool
 	candidates    int
 	replyAttempts int
 	replyBlocked  int
@@ -284,6 +276,7 @@ func (m *Manager) runSnapshotPhaseStats(
 	stats.totalDur = time.Since(snapStart).Round(time.Millisecond)
 	stats.count = visibleSnapshotCount(snapshot)
 	stats.top = snapshotTop10(snapshot)
+	stats.succeeded = true
 	return stats
 }
 

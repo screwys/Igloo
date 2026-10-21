@@ -11,11 +11,10 @@ func TestComputeAlgoInterest_StarredChannel(t *testing.T) {
 		TweetID:      "1",
 		AuthorHandle: "testuser",
 		MediaJSON:    `[{"type":"photo"}]`,
+		IsStarred:    true,
+		IsFollowed:   true,
 	}
-	ctx := ScoringContext{
-		StarredHandles:  map[string]bool{"testuser": true},
-		FollowedHandles: map[string]bool{"testuser": true},
-	}
+	ctx := ScoringContext{}
 	score := ComputeAlgoInterest(item, ctx)
 	// Star boost (25) + media bonus (3) = 28
 	if score < 27.9 || score > 28.1 {
@@ -27,10 +26,9 @@ func TestComputeAlgoInterest_FollowedNotStarred(t *testing.T) {
 	item := db.ScoringItem{
 		TweetID:      "2",
 		AuthorHandle: "other",
+		IsFollowed:   true,
 	}
-	ctx := ScoringContext{
-		FollowedHandles: map[string]bool{"other": true},
-	}
+	ctx := ScoringContext{}
 	score := ComputeAlgoInterest(item, ctx)
 	// Followed boost only = 5
 	if score < 4.9 || score > 5.1 {
@@ -43,11 +41,10 @@ func TestComputeAlgoInterest_RetweetPenalty(t *testing.T) {
 		TweetID:      "3",
 		AuthorHandle: "user",
 		IsRetweet:    true,
+		IsStarred:    true,
+		IsFollowed:   true,
 	}
-	ctx := ScoringContext{
-		StarredHandles:  map[string]bool{"user": true},
-		FollowedHandles: map[string]bool{"user": true},
-	}
+	ctx := ScoringContext{}
 	score := ComputeAlgoInterest(item, ctx)
 	// Star (25) + retweet penalty (-4) = 21
 	if score < 20.9 || score > 21.1 {

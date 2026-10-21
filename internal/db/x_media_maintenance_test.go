@@ -12,6 +12,7 @@ import (
 
 func TestCandidateServerXMediaParentPlanUsesIdentityIndexes(t *testing.T) {
 	d := openFreshTestDB(t)
+	seedFeedPlanRows(t, d)
 	query, args := candidateServerXMediaParentsQuery([]string{"sample_owner"})
 	rows, err := d.conn.Query(bind("EXPLAIN "+query), args...)
 	if err != nil {

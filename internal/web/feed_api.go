@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -337,17 +338,28 @@ func (s *Server) handleFeedMedia(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid_tweet_id", "A valid tweet ID is required")
 		return
 	}
-	items, err := s.db.GetThreadChain(tweetID)
+	items, err := s.db.GetFeedContent([]string{tweetID})
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "media_query_failed", err.Error())
 		return
 	}
-	if len(items) == 0 {
+	item, ok := items[tweetID]
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
-	item := feed.EnrichFeedItemsPreserveRows(s.db, items[len(items)-1:])[0]
-	if item.MediaPending {
+	if canonicalID := model.TwitterStatusIDFromURL(item.CanonicalURL); canonicalID != "" && canonicalID != tweetID {
+		original, err := s.db.GetFeedItemByTweetID(canonicalID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "media_query_failed", err.Error())
+			return
+		}
+		if original != nil {
+			item = *original
+		}
+	}
+	item = feed.EnrichFeedMedia(s.db, []model.FeedItem{item})[0]
+	if item.MediaPending && slices.Contains(item.MediaSlideURLs, "") {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

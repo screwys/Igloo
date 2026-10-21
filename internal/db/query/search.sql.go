@@ -75,15 +75,16 @@ func (q *Queries) SearchChannels(ctx context.Context, arg SearchChannelsParams) 
 const searchFeedItems = `-- name: SearchFeedItems :many
 WITH body_matches AS (
  SELECT tweet_id,published_at FROM feed_items
- WHERE body_text ILIKE $2::TEXT COLLATE "C" ESCAPE ''
- ORDER BY published_at DESC,tweet_id DESC LIMIT $1::BIGINT
+ WHERE body_text ILIKE $1::TEXT COLLATE "C" ESCAPE ''
+ ORDER BY published_at DESC,tweet_id DESC LIMIT $2::BIGINT
 ), author_matches AS (
  SELECT fi.tweet_id,fi.published_at FROM feed_items fi
  JOIN channel_profiles cp ON cp.channel_id=fi.channel_id AND cp.tombstone=0
- WHERE cp.handle ILIKE $2::TEXT COLLATE "C" ESCAPE '' OR cp.display_name ILIKE $2::TEXT COLLATE "C" ESCAPE ''
- ORDER BY fi.published_at DESC,fi.tweet_id DESC LIMIT $1::BIGINT
-), matching AS (
- SELECT tweet_id, published_at FROM body_matches UNION SELECT tweet_id, published_at FROM author_matches
+ WHERE cp.handle ILIKE $1::TEXT COLLATE "C" ESCAPE '' OR cp.display_name ILIKE $1::TEXT COLLATE "C" ESCAPE ''
+ ORDER BY fi.published_at DESC,fi.tweet_id DESC LIMIT $2::BIGINT
+), matching AS MATERIALIZED (
+ SELECT tweet_id, published_at FROM (SELECT tweet_id, published_at FROM body_matches UNION SELECT tweet_id, published_at FROM author_matches) matches
+ ORDER BY published_at DESC,tweet_id DESC LIMIT $2::BIGINT
 )
 SELECT fi.tweet_id AS tweet_id,
        COALESCE(fi.source_handle,'') AS source_handle,
@@ -126,14 +127,15 @@ SELECT fi.tweet_id AS tweet_id,
        COALESCE(fi.channel_id,'') AS channel_id,
        COALESCE(fi.quote_channel_id,'') AS quote_channel_id,
        COALESCE(fi.reply_channel_id,'') AS reply_channel_id,
-       COALESCE(fi.reposter_channel_id,'') AS reposter_channel_id
+       COALESCE(fi.reposter_channel_id,'') AS reposter_channel_id,
+       COALESCE(fi.algo_interest,0)::DOUBLE PRECISION AS algo_interest
 FROM matching matched JOIN feed_items_resolved fi ON fi.tweet_id=matched.tweet_id
-ORDER BY fi.published_at DESC,fi.tweet_id DESC LIMIT $1::BIGINT
+ORDER BY matched.published_at DESC,matched.tweet_id DESC
 `
 
 type SearchFeedItemsParams struct {
-	PageLimit int64
 	Pattern   string
+	PageLimit int64
 }
 
 type SearchFeedItemsRow struct {
@@ -179,10 +181,11 @@ type SearchFeedItemsRow struct {
 	QuoteChannelID         string
 	ReplyChannelID         string
 	ReposterChannelID      string
+	AlgoInterest           float64
 }
 
 func (q *Queries) SearchFeedItems(ctx context.Context, arg SearchFeedItemsParams) ([]SearchFeedItemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchFeedItems, arg.PageLimit, arg.Pattern)
+	rows, err := q.db.QueryContext(ctx, searchFeedItems, arg.Pattern, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +236,7 @@ func (q *Queries) SearchFeedItems(ctx context.Context, arg SearchFeedItemsParams
 			&i.QuoteChannelID,
 			&i.ReplyChannelID,
 			&i.ReposterChannelID,
+			&i.AlgoInterest,
 		); err != nil {
 			return nil, err
 		}

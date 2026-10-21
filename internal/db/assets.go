@@ -189,6 +189,7 @@ func ReadyAssetMatchesSource(asset *Asset, sourceURL string) bool {
 // MediaAssetAvailability is the presentation-ready projection of canonical
 // asset state. Operational downloader jobs are deliberately excluded.
 type MediaAssetAvailability struct {
+	ReadyIndexes []int
 	Declared     bool
 	ReadyMedia   bool
 	ReadyVideo   bool
@@ -206,14 +207,17 @@ func (db *DB) GetTweetMediaAssetAvailability(ownerIDs []string) (map[string]Medi
 		if len(chunk) == 0 {
 			continue
 		}
-		args := stringsToAny(chunk)
+		args := append([]any{videoThumbnailObjectKeyPrefix + "%", len(videoThumbnailObjectKeyPrefix) + 1}, stringsToAny(chunk)...)
 		rows, err := db.reader().Query(`
-			SELECT a.owner_id, a.asset_kind,
+			SELECT a.owner_id, a.asset_kind, a.media_index,
 			       CASE WHEN current.published_revision > 0 THEN current.content_type ELSE desired.content_type END,
-			       CASE WHEN a.lifecycle_state = 'pruned' THEN 'pruned' WHEN current.published_revision > 0 AND current.file_path != '' THEN 'ready' ELSE desired.job_state END
+			       CASE WHEN a.lifecycle_state = 'pruned' THEN 'pruned' WHEN current.published_revision > 0 AND current.file_path != '' THEN 'ready' ELSE desired.job_state END,
+			       CASE WHEN desired.object_key LIKE ? AND NOT COALESCE(source.published_revision > 0 AND source.file_path != '', false)
+			            THEN COALESCE(NULLIF(source.job_state, 'ready'), 'server_missing') ELSE '' END
 			FROM assets a
 			JOIN media_objects current ON current.object_id = a.object_id
 			JOIN media_objects desired ON desired.object_id = a.desired_object_id
+			LEFT JOIN media_objects source ON source.object_id = substr(desired.object_key, ?)
 			WHERE a.owner_kind = 'tweet'
 			  AND a.owner_id IN (`+placeholders(len(chunk))+`)
 			  AND a.asset_kind IN ('post_media', 'post_audio', 'video_stream', 'post_thumbnail')
@@ -222,15 +226,25 @@ func (db *DB) GetTweetMediaAssetAvailability(ownerIDs []string) (map[string]Medi
 			return nil, err
 		}
 		for rows.Next() {
-			var ownerID, kind, contentType, state string
-			if err := rows.Scan(&ownerID, &kind, &contentType, &state); err != nil {
+			var ownerID, kind, contentType, state, dependencyState string
+			var index int
+			if err := rows.Scan(&ownerID, &kind, &index, &contentType, &state, &dependencyState); err != nil {
 				_ = rows.Close()
 				return nil, err
+			}
+			if state == AssetStateQueued || state == AssetStateDownloading || state == AssetStateStale {
+				switch dependencyState {
+				case AssetStateFailed, AssetStatePermanentMissing, AssetStateServerMissing, AssetStatePruned:
+					state = dependencyState
+				}
 			}
 			availability := out[ownerID]
 			availability.Declared = true
 			switch state {
 			case AssetStateReady:
+				if kind == "post_media" && index >= 0 {
+					availability.ReadyIndexes = append(availability.ReadyIndexes, index)
+				}
 				if kind == "post_thumbnail" {
 					availability.ReadyPreview = true
 				} else {
@@ -241,7 +255,7 @@ func (db *DB) GetTweetMediaAssetAvailability(ownerIDs []string) (map[string]Medi
 				}
 			case AssetStateQueued, AssetStateDownloading, AssetStateStale:
 				availability.Pending = true
-			case AssetStateFailed, AssetStatePermanentMissing:
+			case AssetStateFailed, AssetStatePermanentMissing, AssetStateServerMissing:
 				availability.Failed = true
 			case AssetStatePruned:
 				availability.Pruned = true

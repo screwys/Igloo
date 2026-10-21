@@ -14,6 +14,7 @@ import {
 import { bindFeedVideoControls, createFeedVideoControls, handleFeedVideoShortcut } from './video-controls.js'
 import { createLiveChatPanel, initBroadcastChat } from '../player/chat.js'
 import { createXLivePlayback } from '../player/x-live.js'
+import { initFeedImages, disposeFeedImages } from './images.js'
 
 // ── Helpers ──
 
@@ -324,6 +325,7 @@ export function closeMediaOverlay() {
     }
     stopLivePlayback(overlayEl)
     restoreInlineVideoPlayback(overlayEl, true)
+    disposeFeedImages(overlayEl)
     if (overlayEl.parentNode) overlayEl.remove()
   }
   overlayEl = null
@@ -803,6 +805,7 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
     renderSidebar(activeSource)
     if (!host) return
     restoreInlineVideoPlayback(overlay, false)
+    disposeFeedImages(host)
     while (host.firstChild) host.removeChild(host.firstChild)
     overlay._overlayVideo = null
     var slideInfo = (media.kind === 'mixed' && media.slides && media.slides[currentIndex]) || null
@@ -823,6 +826,7 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
       img.loading = 'eager'
       img.src = urls[currentIndex] || urls[0] || ''
       host.appendChild(img)
+      initFeedImages(img)
     }
     const total = media.kind === 'video' ? 1 : (media.kind === 'mixed' && media.slides ? media.slides.length : Math.max(1, (media.urls || []).length))
     if (counter) counter.textContent = total > 1 ? (String(currentIndex + 1) + ' / ' + String(total)) : ''

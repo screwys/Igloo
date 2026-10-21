@@ -14,9 +14,8 @@ func EnrichFeedItems(database *db.DB, items []model.FeedItem) []model.FeedItem {
 	if len(items) == 0 {
 		return items
 	}
-	stateAccount, _ := database.BuildStateAccountScores()
-	items = enrichFeedItems(database, items, true, stateAccount)
-	return attachThreadChains(database, items, stateAccount)
+	items = enrichFeedItems(database, items, true)
+	return attachThreadChains(database, items)
 }
 
 // EnrichFeedItemsPreserveRows attaches the same per-row state as EnrichFeedItems
@@ -27,8 +26,7 @@ func EnrichFeedItemsPreserveRows(database *db.DB, items []model.FeedItem) []mode
 	if len(items) == 0 {
 		return items
 	}
-	stateAccount, _ := database.BuildStateAccountScores()
-	return enrichFeedItems(database, items, false, stateAccount)
+	return enrichFeedItems(database, items, false)
 }
 
 // ThreadContextRow is the server-owned Android mirror row for one ancestor in a
@@ -64,7 +62,7 @@ func ThreadContextRows(database *db.DB, item model.FeedItem) []ThreadContextRow 
 }
 
 // enrichFeedItems attaches media status, channel flags, and personalization.
-func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool, stateAccount map[string]float64) []model.FeedItem {
+func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool) []model.FeedItem {
 	if len(items) == 0 {
 		return items
 	}
@@ -79,8 +77,7 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool, 
 	}
 
 	// Batch fetch enrichment data
-	mediaAssets, _ := database.GetTweetMediaAssetAvailability(allIDs)
-	mediaURLs := readyTweetMediaURLs(database, allIDs)
+	items = EnrichFeedMedia(database, items)
 	seen, _ := database.GetSeenTweetIDs(allIDs)
 	liked, _ := database.GetFeedLikesForTweetIDs(allIDs)
 	bookmarkInfo, _ := database.GetBookmarksForVideoIDsRich(allIDs)
@@ -92,13 +89,6 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool, 
 	translateSkipRaw, _ := database.GetSetting("translate_skip_langs", "")
 	translateSkipSet := splitTranslateSkipSet(translateSkipRaw)
 	translations, _ := database.GetTranslationsForTweetIDs(allIDs, translateTarget)
-
-	// Build channel lookup
-	allChannels, _ := database.GetSubscribedChannels()
-	channelMap := make(map[string]model.Channel)
-	for _, ch := range allChannels {
-		channelMap[ch.ChannelID] = ch
-	}
 
 	// Fetched profile metadata owns visible identity. Feed-row names are only a
 	// fallback while that durable profile has not completed yet.
@@ -151,12 +141,32 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool, 
 	}
 	retweetSources, _ := database.GetRetweetSources(contentHashes)
 
+	channelIDs := make(map[string]bool)
+	for _, item := range items {
+		for _, channelID := range []string{item.ChannelID, item.SourceChannelID, item.ReposterChannelID, item.QuoteChannelID} {
+			if channelID != "" {
+				channelIDs[channelID] = true
+			}
+		}
+	}
+	for _, sources := range retweetSources {
+		for _, source := range sources {
+			if source.ChannelID != "" {
+				channelIDs[source.ChannelID] = true
+			}
+		}
+	}
+	channelMap := make(map[string]model.Channel, len(channelIDs))
+	if len(channelIDs) > 0 {
+		channels, _ := database.GetSubscribedChannels(mapKeys(channelIDs)...)
+		for _, channel := range channels {
+			channelMap[channel.ChannelID] = channel
+		}
+	}
+
 	// Enrich each item
 	for i := range items {
 		item := &items[i]
-		enrichMediaStatus(item, mediaAssets)
-		item.MediaPending = mediaAssets[item.TweetID].Pending
-		item.QuoteMediaPending = mediaAssets[item.QuoteTweetID].Pending
 		annotateChannelFlags(item, channelMap)
 
 		item.IsSeen = seen[item.TweetID]
@@ -186,27 +196,6 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool, 
 				item.QuoteCanonicalURL = fmt.Sprintf("https://x.com/%s/status/%s", item.QuoteAuthorHandle, item.QuoteTweetID)
 			}
 		}
-
-		// Every ready X post exposes one server-owned thumbnail route. The route
-		// resolves a generated video frame when present and otherwise an image's
-		// canonical media asset, so renderers never choose a source-specific URL.
-		if availability := mediaAssets[item.TweetID]; availability.ReadyMedia || availability.ReadyPreview {
-			item.MediaPreviewURL = "/api/media/thumbnail/" + item.TweetID + "?owner_kind=tweet"
-			if availability.ReadyVideo {
-				item.MediaStreamURL = "/api/media/stream/" + item.TweetID + "?owner_kind=tweet"
-			}
-		}
-		if item.QuoteTweetID != "" {
-			if availability := mediaAssets[item.QuoteTweetID]; availability.ReadyMedia || availability.ReadyPreview {
-				item.QuoteMediaPreviewURL = "/api/media/thumbnail/" + item.QuoteTweetID + "?owner_kind=tweet"
-				if availability.ReadyVideo {
-					item.QuoteMediaStreamURL = "/api/media/stream/" + item.QuoteTweetID + "?owner_kind=tweet"
-				}
-			}
-		}
-
-		item.MediaSlideURLs = indexedMediaURLs(item.TweetID, item.Media, mediaURLs, item.MediaPending)
-		item.QuoteMediaSlideURLs = indexedMediaURLs(item.QuoteTweetID, item.QuoteMedia, mediaURLs, item.QuoteMediaPending)
 
 		// Retweet grouping
 		if item.ContentHash != "" {
@@ -258,7 +247,7 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool, 
 	}
 
 	// Personalization: compute affinity-based interest scores
-	PersonalizeItems(database, items, stateAccount)
+	PersonalizeItems(database, items)
 
 	if deduplicate {
 		// Collapse retweets sharing the same content into one card for web/feed
@@ -269,45 +258,53 @@ func enrichFeedItems(database *db.DB, items []model.FeedItem, deduplicate bool, 
 	return items
 }
 
-func readyTweetMediaURLs(database *db.DB, ownerIDs []string) map[string]map[int]string {
-	owners := make([]db.AssetOwnerRef, 0, len(ownerIDs))
-	for _, ownerID := range ownerIDs {
-		owners = append(owners, db.AssetOwnerRef{OwnerKind: "tweet", OwnerID: ownerID})
+// EnrichFeedMedia attaches the media state used by cards and media fragments.
+func EnrichFeedMedia(database *db.DB, items []model.FeedItem) []model.FeedItem {
+	if len(items) == 0 {
+		return items
 	}
-	assets, err := database.ListReadyAssetsForOwners(owners, []string{"post_media"})
-	if err != nil {
-		return nil
-	}
-	out := make(map[string]map[int]string)
-	for _, asset := range assets {
-		if asset.OwnerKind != "tweet" || asset.MediaIndex < 0 {
-			continue
+	var allIDs []string
+	for _, item := range items {
+		allIDs = append(allIDs, item.TweetID)
+		if item.QuoteTweetID != "" {
+			allIDs = append(allIDs, item.QuoteTweetID)
 		}
-		if out[asset.OwnerID] == nil {
-			out[asset.OwnerID] = make(map[int]string)
-		}
-		out[asset.OwnerID][asset.MediaIndex] = fmt.Sprintf(
-			"/api/media/slide/%s/%d?owner_kind=tweet",
-			asset.OwnerID,
-			asset.MediaIndex,
-		)
 	}
-	return out
+	mediaAssets, _ := database.GetTweetMediaAssetAvailability(allIDs)
+	for i := range items {
+		item := &items[i]
+		enrichMediaStatus(item, mediaAssets)
+		item.MediaPending = mediaAssets[item.TweetID].Pending
+		item.QuoteMediaPending = mediaAssets[item.QuoteTweetID].Pending
+		if availability := mediaAssets[item.TweetID]; availability.ReadyMedia || availability.ReadyPreview {
+			item.MediaPreviewURL = "/api/media/thumbnail/" + item.TweetID + "?owner_kind=tweet"
+			if availability.ReadyVideo {
+				item.MediaStreamURL = "/api/media/stream/" + item.TweetID + "?owner_kind=tweet"
+			}
+		}
+		if item.QuoteTweetID != "" {
+			if availability := mediaAssets[item.QuoteTweetID]; availability.ReadyMedia || availability.ReadyPreview {
+				item.QuoteMediaPreviewURL = "/api/media/thumbnail/" + item.QuoteTweetID + "?owner_kind=tweet"
+				if availability.ReadyVideo {
+					item.QuoteMediaStreamURL = "/api/media/stream/" + item.QuoteTweetID + "?owner_kind=tweet"
+				}
+			}
+		}
+		item.MediaSlideURLs = indexedMediaURLs(item.TweetID, item.Media, mediaAssets[item.TweetID].ReadyIndexes)
+		item.QuoteMediaSlideURLs = indexedMediaURLs(item.QuoteTweetID, item.QuoteMedia, mediaAssets[item.QuoteTweetID].ReadyIndexes)
+	}
+	return items
 }
 
-func indexedMediaURLs(ownerID string, refs []model.MediaRef, urls map[string]map[int]string, pending bool) []string {
+func indexedMediaURLs(ownerID string, refs []model.MediaRef, readyIndexes []int) []string {
 	if ownerID == "" || len(refs) == 0 {
 		return nil
 	}
 	out := make([]string, len(refs))
-	for index, url := range urls[ownerID] {
+	for _, index := range readyIndexes {
 		if index >= 0 && index < len(refs) {
-			out[index] = url
+			out[index] = fmt.Sprintf("/api/media/slide/%s/%d?owner_kind=tweet", ownerID, index)
 		}
-	}
-	if pending {
-		// The queued download supplies these bytes through the media fragment.
-		return out
 	}
 	for index, ref := range refs {
 		if out[index] == "" && !isVideoMedia(ref) {
@@ -371,7 +368,7 @@ func normalizeTranslationText(text string) string {
 // proper feed cards. We don't recurse into chains for the chain ancestors —
 // only one level of threading is materialized per page, which is enough to
 // reconstruct the conversation in the UI.
-func attachThreadChains(database *db.DB, items []model.FeedItem, stateAccount map[string]float64) []model.FeedItem {
+func attachThreadChains(database *db.DB, items []model.FeedItem) []model.FeedItem {
 	if len(items) == 0 {
 		return items
 	}
@@ -417,7 +414,7 @@ func attachThreadChains(database *db.DB, items []model.FeedItem, stateAccount ma
 
 	// Phase 2: enrich the ancestors so cards render properly. Pass deduplicate=false
 	// — we don't want retweet collapsing to drop chain entries.
-	enrichedAncestors := enrichFeedItems(database, ancestorList, false, stateAccount)
+	enrichedAncestors := enrichFeedItems(database, ancestorList, false)
 	enrichedByID := make(map[string]model.FeedItem, len(enrichedAncestors))
 	for _, a := range enrichedAncestors {
 		enrichedByID[a.TweetID] = a

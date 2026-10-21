@@ -3,18 +3,45 @@ package feed
 import (
 	"math"
 	"strings"
+	"time"
 
 	"github.com/screwys/igloo/internal/db"
 )
 
 // ScoringContext holds pre-fetched data needed to score a batch of items.
 type ScoringContext struct {
-	StarredHandles  map[string]bool           // lowercase handle -> starred
-	FollowedHandles map[string]bool           // lowercase handle -> subscribed
-	AccountScores   map[string]db.AffinityRow // from GetAccountAffinityScores
-	StateScores     map[string]float64        // from BuildStateAccountScores
-	TokenScores     map[string]db.AffinityRow // from GetTokenAffinityScores
-	NowMs           int64                     // current time in ms for decay
+	AccountScores map[string]db.AffinityRow // from GetAccountAffinityScores
+	StateScores   map[string]float64        // from GetStateAccountScores
+	TokenScores   map[string]db.AffinityRow // from GetTokenAffinityScores
+	NowMs         int64                     // current time in ms for decay
+}
+
+// ScoreItems loads the requested cached inputs and scores one batch.
+func ScoreItems(database *db.DB, items []db.ScoringItem) []float64 {
+	if len(items) == 0 {
+		return nil
+	}
+	handles, tokens := make(map[string]bool), make(map[string]bool)
+	for _, item := range items {
+		for _, handle := range []string{item.AuthorHandle, item.SourceHandle} {
+			if handle != "" {
+				handles[strings.ToLower(handle)] = true
+			}
+		}
+		for _, token := range ExtractInterestTokens(item.BodyText) {
+			tokens[token] = true
+		}
+	}
+	handleList := mapKeys(handles)
+	accounts, _ := database.GetAccountAffinityScores(handleList)
+	state, _ := database.GetStateAccountScores(handleList)
+	tokenScores, _ := database.GetTokenAffinityScores(mapKeys(tokens))
+	ctx := ScoringContext{AccountScores: accounts, StateScores: state, TokenScores: tokenScores, NowMs: time.Now().UnixMilli()}
+	scores := make([]float64, len(items))
+	for i, item := range items {
+		scores[i] = ComputeAlgoInterest(item, ctx)
+	}
+	return scores
 }
 
 // ComputeAlgoInterest computes the time-independent affinity score for a single item.
@@ -24,15 +51,12 @@ func ComputeAlgoInterest(item db.ScoringItem, ctx ScoringContext) float64 {
 	sourceHandle := strings.ToLower(item.SourceHandle)
 
 	// Star / followed boost
-	isStarred := ctx.StarredHandles[authorHandle] || ctx.StarredHandles[sourceHandle]
-	isFollowed := ctx.FollowedHandles[authorHandle] || ctx.FollowedHandles[sourceHandle]
-
 	starBoostVal := 0.0
-	if isStarred {
+	if item.IsStarred {
 		starBoostVal = 25.0
 	}
 	followedBoostVal := 0.0
-	if !isStarred && isFollowed {
+	if !item.IsStarred && item.IsFollowed {
 		followedBoostVal = 5.0
 	}
 
@@ -74,7 +98,7 @@ func ComputeAlgoInterest(item db.ScoringItem, ctx ScoringContext) float64 {
 
 	// Media bonus / retweet penalty
 	mediaBonusVal := 0.0
-	if item.MediaJSON != "" && item.MediaJSON != "[]" {
+	if item.HasMedia || item.MediaJSON != "" && item.MediaJSON != "[]" {
 		mediaBonusVal = affinityMediaBoost
 	}
 	rtPenaltyVal := 0.0

@@ -263,6 +263,9 @@ func (db *DB) RestoreLegacyArchive(ctx context.Context, path string) error {
 			return fmt.Errorf("rebuild native search: %w", err)
 		}
 	}
+	if _, err := tx.ExecContext(ctx, "SELECT igloo_rebuild_feed_seen_roles()"); err != nil {
+		return fmt.Errorf("rebuild feed seen roles: %w", err)
+	}
 	if err := resetArchiveSequences(ctx, source, tx); err != nil {
 		return err
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,18 +16,14 @@ import (
 // detect whether a parent already exists in DB before fetching from fxtwitter,
 // and by the thread API.
 func (db *DB) GetFeedItemByTweetID(tweetID string) (*model.FeedItem, error) {
-	f, err := scanFeedItem(db.conn.QueryRow(bind(`
-		SELECT `+feedItemSelectSQL("feed_items")+`
-		FROM feed_items_resolved AS feed_items
-		WHERE tweet_id = ?
-	`), tweetID))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
+	items, err := db.GetFeedItemsForTweetIDs([]string{tweetID})
 	if err != nil {
 		return nil, fmt.Errorf("GetFeedItemByTweetID: %w", err)
 	}
-	return &f, nil
+	if item, ok := items[tweetID]; ok {
+		return &item, nil
+	}
+	return nil, nil
 }
 
 // UpsertGhostFeedItem stores a single feed_items row with is_ghost=1. The row
@@ -55,17 +50,12 @@ func (db *DB) ListThreadQuotes(tweetID string, limit int) ([]model.FeedItem, err
 	if limit <= 0 || limit > 20 {
 		limit = 20
 	}
-	rows, err := db.reader().Query(`
-		SELECT `+feedItemSelectSQL("feed_items")+`
-		FROM feed_items_resolved AS feed_items
+	return db.listFeedItems(`
+		SELECT tweet_id, published_at
+		FROM feed_items
 		WHERE quote_tweet_id = ? AND quote_tweet_id != '' AND tweet_id != ?
 		ORDER BY published_at DESC, tweet_id DESC NULLS LAST
-		LIMIT ?`, tweetID, tweetID, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	return scanFeedItems(rows)
+		LIMIT ?`, "page.published_at DESC, page.tweet_id DESC NULLS LAST", tweetID, tweetID, limit)
 }
 
 // UpdateReplyToStatus sets reply_to_status on an existing feed_items row.
@@ -94,6 +84,63 @@ func (db *DB) GetThreadChain(tweetID string) ([]model.FeedItem, error) {
 		return nil, err
 	}
 	return chains[tweetID], nil
+}
+
+// GetFeedContent returns stored posts or their latest captured quote when the
+// original is absent. Thread and media readers use the same content resolver.
+func (db *DB) GetFeedContent(tweetIDs []string) (map[string]model.FeedItem, error) {
+	itemsByID, err := db.GetFeedItemsForTweetIDs(tweetIDs)
+	if err != nil {
+		return nil, err
+	}
+	var missingIDs []string
+	for _, id := range tweetIDs {
+		if _, ok := itemsByID[id]; !ok {
+			missingIDs = append(missingIDs, id)
+		}
+	}
+	if len(missingIDs) > 0 {
+		encoded, err := json.Marshal(missingIDs)
+		if err != nil {
+			return nil, err
+		}
+		quotes, err := db.listFeedItems(`
+			SELECT captured.tweet_id
+			FROM jsonb_array_elements_text(?::jsonb) missing
+			JOIN LATERAL (
+				SELECT tweet_id FROM feed_items
+				WHERE quote_tweet_id = CAST(missing.value AS TEXT)
+				  -- The quote index excludes empty IDs.
+				  AND quote_tweet_id != ''
+				ORDER BY fetched_at DESC, tweet_id DESC NULLS LAST
+				LIMIT 1
+			) captured ON true
+		`, "", string(encoded))
+		if err != nil {
+			return nil, fmt.Errorf("GetFeedContent quotes: %w", err)
+		}
+		for _, quotedBy := range quotes {
+			id := quotedBy.QuoteTweetID
+			quote := model.FeedItem{
+				TweetID: id, CanonicalTweetID: id,
+				ChannelID:         quotedBy.QuoteChannelID,
+				AuthorHandle:      quotedBy.QuoteAuthorHandle,
+				AuthorDisplayName: quotedBy.QuoteAuthorDisplayName,
+				AuthorAvatarURL:   quotedBy.QuoteAuthorAvatarURL,
+				BodyText:          quotedBy.QuoteBodyText, ArticleTitle: quotedBy.QuoteArticleTitle,
+				PollJSON: quotedBy.QuotePollJSON, CommunityNote: quotedBy.QuoteCommunityNote,
+				Lang: quotedBy.QuoteLang, MediaJSON: quotedBy.QuoteMediaJSON,
+				PublishedAt: quotedBy.QuotePublishedAt, FetchedAt: quotedBy.FetchedAt,
+				IsGhost: true,
+			}
+			if quote.AuthorHandle != "" {
+				quote.CanonicalURL = fmt.Sprintf("https://x.com/%s/status/%s", quote.AuthorHandle, id)
+			}
+			quote.ParseMedia()
+			itemsByID[id] = quote
+		}
+	}
+	return itemsByID, nil
 }
 
 // GetThreadChains walks all seed chains together and hydrates shared ancestors
@@ -186,59 +233,9 @@ func (db *DB) GetThreadChains(tweetIDs []string) (map[string][]model.FeedItem, e
 	if err := chainRows.Close(); err != nil {
 		return nil, err
 	}
-	itemsByID, err := db.GetFeedItemsForTweetIDs(ids)
+	itemsByID, err := db.GetFeedContent(ids)
 	if err != nil {
 		return nil, err
-	}
-	var missingIDs []string
-	for _, id := range ids {
-		if _, ok := itemsByID[id]; !ok {
-			missingIDs = append(missingIDs, id)
-		}
-	}
-	if len(missingIDs) > 0 {
-		encoded, err := json.Marshal(missingIDs)
-		if err != nil {
-			return nil, err
-		}
-		quoteRows, err := db.reader().Query(`
-			SELECT `+feedItemSelectSQL("feed_items")+`
-			FROM jsonb_array_elements_text(?::jsonb) missing
-			JOIN feed_items_resolved AS feed_items ON feed_items.tweet_id = (
-				SELECT tweet_id FROM feed_items
-				WHERE quote_tweet_id = CAST(missing.value AS TEXT)
-				ORDER BY fetched_at DESC, tweet_id DESC NULLS LAST
-				LIMIT 1
-			)
-		`, string(encoded))
-		if err != nil {
-			return nil, fmt.Errorf("GetThreadChains quotes: %w", err)
-		}
-		defer func() { _ = quoteRows.Close() }()
-		quotes, err := scanFeedItems(quoteRows)
-		if err != nil {
-			return nil, err
-		}
-		for _, quotedBy := range quotes {
-			id := quotedBy.QuoteTweetID
-			quote := model.FeedItem{
-				TweetID: id, CanonicalTweetID: id,
-				ChannelID:         quotedBy.QuoteChannelID,
-				AuthorHandle:      quotedBy.QuoteAuthorHandle,
-				AuthorDisplayName: quotedBy.QuoteAuthorDisplayName,
-				AuthorAvatarURL:   quotedBy.QuoteAuthorAvatarURL,
-				BodyText:          quotedBy.QuoteBodyText, ArticleTitle: quotedBy.QuoteArticleTitle,
-				PollJSON: quotedBy.QuotePollJSON, CommunityNote: quotedBy.QuoteCommunityNote,
-				Lang: quotedBy.QuoteLang, MediaJSON: quotedBy.QuoteMediaJSON,
-				PublishedAt: quotedBy.QuotePublishedAt, FetchedAt: quotedBy.FetchedAt,
-				IsGhost: true,
-			}
-			if quote.AuthorHandle != "" {
-				quote.CanonicalURL = fmt.Sprintf("https://x.com/%s/status/%s", quote.AuthorHandle, id)
-			}
-			quote.ParseMedia()
-			itemsByID[id] = quote
-		}
 	}
 	for seedID, chainIDs := range idsBySeed {
 		for _, id := range chainIDs {

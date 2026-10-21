@@ -93,6 +93,7 @@ func (db *DB) SearchFeedItems(search string, limit int) ([]model.FeedItem, error
 			ContentHash: row.ContentHash, CanonicalTweetID: row.CanonicalTweetID,
 			SourceChannelID: row.SourceChannelID, ChannelID: row.ChannelID, QuoteChannelID: row.QuoteChannelID,
 			ReplyChannelID: row.ReplyChannelID, ReposterChannelID: row.ReposterChannelID,
+			AlgoInterestScore: row.AlgoInterest,
 		}
 		if row.FetchedAt != 0 {
 			item.FetchedAt = time.UnixMilli(row.FetchedAt)
