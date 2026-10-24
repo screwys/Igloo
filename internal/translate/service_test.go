@@ -368,6 +368,9 @@ func TestCommentTextTranslatesStoredCommentAndReusesCache(t *testing.T) {
 	defer srv.Close()
 
 	d := openTranslateTestDB(t)
+	if err := d.InsertVideo("sample_video", "youtube_UCsample", "youtube_video", "Sample", "", 60, 1, "", "video", 0, true); err != nil {
+		t.Fatalf("InsertVideo: %v", err)
+	}
 	if _, err := d.AddComments("sample_video", []db.CommentInput{{
 		CommentID: "sample_comment",
 		Text:      "안녕하세요",

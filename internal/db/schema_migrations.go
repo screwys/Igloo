@@ -24,6 +24,14 @@ func schemaMigrationLedgerStatement() string {
 
 var schemaMigrations = []schemaMigration{
 	{
+		// PostgreSQL requires every restored comment to have its video.
+		name: "20261024_drop_orphan_video_comments",
+		apply: func(tx *sql.Tx) error {
+			_, err := tx.Exec(`DELETE FROM video_comments WHERE NOT EXISTS (SELECT 1 FROM videos v WHERE v.video_id = video_comments.video_id)`)
+			return err
+		},
+	},
+	{
 		name: "20261021_update_feed_ranking",
 		apply: func(tx *sql.Tx) error {
 			for _, column := range []string{"channel_id", "source_channel_id"} {

@@ -241,6 +241,7 @@ func (m *Manager) StartAll() {
 	m.launch("x_lives", m.runXBroadcastsLoop)
 	m.launch("feed_order_invalidation", m.runFeedOrderInvalidationLoop)
 	m.launch("unfollow_cleanup", m.runUnfollowCleanup)
+	m.launchDelayed("identity_media", 10*time.Minute, m.runIdentityMediaPrune)
 	m.launch("feed_scoring", m.runFeedScoringWorker)
 	m.launchDelayed("backup", 5*time.Minute, m.runBackupWorker)
 }
