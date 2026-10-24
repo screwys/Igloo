@@ -158,15 +158,11 @@ function platformLabelFallback(platform) {
   return ''
 }
 
-function removeBookmark(itemId, root) {
+function removeBookmark(itemId) {
   if (!itemId) return Promise.resolve(false)
   return apiFetch('/api/bookmark/' + encodeURIComponent(itemId), { method: 'DELETE' })
     .then(function (result) {
       if (!result || !result.success) return false
-      if (root) {
-        setStateBool(root, 'bookmarked', false)
-        root.setAttribute('data-bookmark-category-id', '')
-      }
       return true
     })
     .catch(function () { return false })
@@ -182,11 +178,23 @@ function removeBookmark(itemId, root) {
 //   platform-appropriate default like "X post" / "TikTok post").
 // opts.onStateChange(root, isBookmarked, category): called after bookmark state changes.
 export async function openBookmarkMenu(anchorEl, root, opts) {
-  if (!anchorEl || !root || !opts) return
+  if (!anchorEl || anchorEl.disabled || !root || !opts) return
   var platform = opts.tweetId ? 'twitter' : opts.tiktokId ? 'tiktok' : opts.instagramId ? 'instagram' : opts.youtubeId ? 'youtube' : ''
   var itemId = String(opts.tweetId || opts.tiktokId || opts.instagramId || opts.youtubeId || '').trim()
   if (!itemId || !platform) return
   var onStateChange = opts.onStateChange || function () {}
+  function setBookmarkState(bookmarked, category) {
+    var categoryId = bookmarked && category ? String(category.id || '') : ''
+    var changed = stateBool(root, 'bookmarked') !== bookmarked || root.getAttribute('data-bookmark-category-id') !== categoryId
+    setStateBool(root, 'bookmarked', bookmarked)
+    root.setAttribute('data-bookmark-category-id', categoryId)
+    if (changed) onStateChange(root, bookmarked, category)
+  }
+
+  function currentBookmarkCategory() {
+    var id = root.getAttribute('data-bookmark-category-id') || ''
+    return bookmarkCategories.find(function (category) { return String(category.id) === id }) || { id: id, name: '' }
+  }
   var bodyText = String(opts.bodyText || '')
   var titleFallback = String(opts.titleFallback || platformLabelFallback(platform) || '').trim()
 
@@ -759,6 +767,7 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
     function setStatus(text) { statusDiv.textContent = String(text || '') }
 
     function saveCurrentBookmark() {
+      if (anchorEl.disabled) return Promise.resolve(false)
       setStatus('')
       var selectedPills = body.querySelectorAll('.bookmark-sheet-account-pill[data-selected="1"]')
       var accountHandles = Array.from(selectedPills).map(function (p) { return p.textContent.trim() }).filter(Boolean)
@@ -790,6 +799,9 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
 
       closeBookmarkMenu()
       anchorEl.disabled = true
+      var previouslyBookmarked = stateBool(root, 'bookmarked')
+      var previousCategory = currentBookmarkCategory()
+      setBookmarkState(true, { id: resolvedCategoryId, name: localCategoryName })
       return apiFetch('/api/bookmark/' + encodeURIComponent(itemId), {
         method: 'POST',
         body: JSON.stringify(bookmarkBody)
@@ -797,9 +809,7 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
         var categoryId = result.category_id || resolvedCategoryId
         var categoryName = result.category_name || localCategoryName
         var saved = result.bookmarked !== false
-        setStateBool(root, 'bookmarked', saved)
-        root.setAttribute('data-bookmark-category-id', saved ? String(categoryId || '') : '')
-        onStateChange(root, saved, saved ? { id: categoryId, name: categoryName } : null)
+        setBookmarkState(saved, saved ? { id: categoryId, name: categoryName } : null)
         if (saved) setLastBookmarkCategoryId(categoryId)
         if (channelKey && saved) {
           try {
@@ -811,6 +821,7 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
         showToast(saved ? categoryName ? tf('bookmark_saved_to', 'Bookmarked to %1$s', categoryName) : t('bookmark_saved', 'Bookmarked') : t('bookmark_removed', 'Bookmark removed'))
         return saved
       }).catch(function (error) {
+        setBookmarkState(previouslyBookmarked, previousCategory)
         showToast(error.message || t('bookmark_save_failed', 'Failed to save bookmark'))
         return false
       }).finally(function () { anchorEl.disabled = false })
@@ -886,12 +897,20 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
     var removeBtnEl = body.querySelector('[data-bookmark-remove]')
     if (removeBtnEl) {
       removeBtnEl.addEventListener('click', function () {
-        removeBookmark(itemId, root).then(function (ok) {
-          if (!ok) { setStatus(t('bookmark_remove_failed', 'Failed to remove bookmark.')); return }
-          onStateChange(root, false, null)
-          closeBookmarkMenu()
+        if (anchorEl.disabled) return
+        var previouslyBookmarked = stateBool(root, 'bookmarked')
+        var previousCategory = currentBookmarkCategory()
+        closeBookmarkMenu()
+        anchorEl.disabled = true
+        setBookmarkState(false, null)
+        removeBookmark(itemId).then(function (ok) {
+          if (!ok) {
+            setBookmarkState(previouslyBookmarked, previousCategory)
+            showToast(t('bookmark_remove_failed', 'Failed to remove bookmark.'))
+            return
+          }
           showToast(t('bookmark_removed', 'Bookmark removed'))
-        })
+        }).finally(function () { anchorEl.disabled = false })
       })
     }
 

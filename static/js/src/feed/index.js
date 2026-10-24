@@ -381,7 +381,7 @@ function syncFeedActionUiButtons(root) {
     heartBtn.title = isLiked ? t('action_unlike', 'Unlike') : t('action_like', 'Like')
     heartBtn.setAttribute('aria-label', heartBtn.title)
     var tweetId = root.getAttribute('data-tweet-id')
-    if (tweetId && (heartBtn.hasAttribute('hx-post') || heartBtn.hasAttribute('hx-delete'))) {
+    if (tweetId && !root.hasAttribute('data-feed-like-before') && (heartBtn.hasAttribute('hx-post') || heartBtn.hasAttribute('hx-delete'))) {
       heartBtn.removeAttribute('hx-post')
       heartBtn.removeAttribute('hx-delete')
       if (isLiked) heartBtn.setAttribute('hx-delete', '/api/feed/like/' + tweetId)
@@ -554,6 +554,7 @@ function runFeedAction(root, actionType, form) {
     var method = currentlyLiked ? 'DELETE' : 'POST'
     var heartBtn = getFeedActionUiButton(root, 'heart')
     if (heartBtn) animateFeedActionButton(heartBtn, currentlyLiked)
+    applyLikeState(root, tweetId, !currentlyLiked)
     return apiFetch('/api/feed/like/' + encodeURIComponent(tweetId), {
       method: method,
       body: method === 'POST' ? JSON.stringify({ item: feedItemPayloadFromForm(form, tweetId) }) : undefined
@@ -568,6 +569,9 @@ function runFeedAction(root, actionType, form) {
   if (actionType === 'bookmark') {
     var currentlyBookmarked = stateBool(root, 'bookmarked')
     var bmethod = currentlyBookmarked ? 'DELETE' : 'POST'
+    setStateBool(root, 'bookmarked', !currentlyBookmarked)
+    syncFeedButtons(root)
+    syncSiblingCards(root)
     return apiFetch('/api/bookmark/' + encodeURIComponent(tweetId), {
       method: bmethod,
       body: bmethod === 'POST' ? JSON.stringify({}) : undefined
@@ -576,6 +580,11 @@ function runFeedAction(root, actionType, form) {
       setStateBool(root, 'bookmarked', nextBookmarked)
       syncFeedButtons(root)
       syncSiblingCards(root)
+    }).catch(function (err) {
+      setStateBool(root, 'bookmarked', currentlyBookmarked)
+      syncFeedButtons(root)
+      syncSiblingCards(root)
+      throw err
     })
   }
   return Promise.reject(new Error('unsupported feed action'))
@@ -588,6 +597,7 @@ function findFallbackForm(root, actionType) {
 
 function triggerFeedActionUi(root, actionType, triggerBtn) {
   if (!root) return
+  if (actionType === 'like' && root.hasAttribute('data-feed-like-before')) return
   var form = findFallbackForm(root, actionType)
   if (!(form instanceof HTMLFormElement)) return
   if (pendingForms.has(form)) return
@@ -599,7 +609,7 @@ function triggerFeedActionUi(root, actionType, triggerBtn) {
       if (actionType === 'like') showToast(stateBool(root, 'liked') ? t('toast_liked', 'Liked') : t('toast_unliked', 'Unliked'))
       if (actionType === 'bookmark') showToast(stateBool(root, 'bookmarked') ? t('bookmark_saved', 'Bookmarked') : t('bookmark_removed', 'Bookmark removed'))
     })
-    .catch(function () { form.submit() })
+    .catch(function (error) { showToast(error.message || t('logs_status_failed', 'Failed')) })
     .finally(function () {
       pendingForms.delete(form)
       setFormBusy(form, false)
@@ -614,11 +624,12 @@ function handleFeedActionSubmit(form) {
   var root = itemRootFromNode(form)
   var tweetId = root ? String(root.getAttribute('data-tweet-id') || '').trim() : ''
   if (!root || !tweetId) return
+  if (actionType === 'like' && root.hasAttribute('data-feed-like-before')) return
   if (pendingForms.has(form)) return
   pendingForms.add(form)
   setFormBusy(form, true)
-  runFeedAction(root, actionType, form).catch(function () {
-    form.submit()
+  runFeedAction(root, actionType, form).catch(function (error) {
+    showToast(error.message || t('logs_status_failed', 'Failed'))
   }).finally(function () {
     pendingForms.delete(form)
     setFormBusy(form, false)
@@ -632,6 +643,7 @@ function runQuoteOverlayLike(quoteTweetId, btn) {
   animateFeedActionButton(btn, isLiked)
   var method = isLiked ? 'DELETE' : 'POST'
   btn.disabled = true
+  propagateLikeState(quoteTweetId, !isLiked)
   apiFetch('/api/feed/like/' + encodeURIComponent(quoteTweetId), {
     method: method,
     body: method === 'POST' ? JSON.stringify({ item: { tweet_id: quoteTweetId } }) : undefined
@@ -1614,12 +1626,19 @@ document.body.addEventListener('htmx:beforeSend', function (e) {
   var nextLiked = elt.hasAttribute('hx-post') ? true : elt.hasAttribute('hx-delete') ? false : null
   if (nextLiked === null) return
   card.setAttribute('data-feed-like-before', stateBool(card, 'liked') ? '1' : '0')
+  elt.disabled = true
   animateFeedActionButton(elt, !nextLiked)
+  applyLikeState(card, tid, nextLiked)
 })
 
 document.body.addEventListener('htmx:beforeRequest', function (event) {
   var button = event.detail && event.detail.elt
-  if (button && button.dataset.savePending === '1') event.preventDefault()
+  if (!button) return
+  var card = button.closest('[data-feed-item]')
+  if (button.dataset.savePending === '1' ||
+      (button.getAttribute('data-feed-action') === 'heart' && pendingForms.has(findFallbackForm(card, 'like')))) {
+    event.preventDefault()
+  }
 })
 
 document.body.addEventListener('htmx:beforeSwap', function (event) {
@@ -1636,10 +1655,14 @@ document.body.addEventListener('htmx:beforeSwap', function (event) {
     applyLikeState(card, id, saved.is_liked)
     showToast(saved.is_liked ? t('toast_liked', 'Liked') : t('toast_unliked', 'Unliked'))
   }).catch(function (error) {
+    rollbackHTMXLikeState({ detail: { elt: button } })
     showToast(error.message || t('logs_status_failed', 'Failed'))
   }).finally(function () {
     delete button.dataset.savePending
-    if (card) card.removeAttribute('data-feed-like-before')
+    if (card) {
+      card.removeAttribute('data-feed-like-before')
+      syncFeedButtons(card)
+    }
   })
 })
 
@@ -1657,6 +1680,12 @@ function rollbackHTMXLikeState(e) {
 
 document.body.addEventListener('htmx:responseError', rollbackHTMXLikeState)
 document.body.addEventListener('htmx:sendError', rollbackHTMXLikeState)
+document.body.addEventListener('htmx:sendAbort', rollbackHTMXLikeState)
+document.body.addEventListener('htmx:timeout', rollbackHTMXLikeState)
+document.body.addEventListener('htmx:afterRequest', function (event) {
+  var button = event.detail && event.detail.elt
+  if (button && button.getAttribute('data-feed-action') === 'heart') button.disabled = false
+})
 
 // After like button HTMX swap, propagate state and trigger full flashy animation
 document.body.addEventListener('htmx:afterSwap', function (e) {
@@ -1672,9 +1701,9 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
     if (!card) return
     var tid = card.getAttribute('data-tweet-id')
     var liked = elt.classList.contains('active')
-    propagateLikeState(tid, liked)
     var before = card.getAttribute('data-feed-like-before')
     card.removeAttribute('data-feed-like-before')
+    applyLikeState(card, tid, liked)
     if (liked && before === '0') {
       animateFeedActionButton(elt, false)
     } else if (!liked && before === '1') {
