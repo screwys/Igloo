@@ -684,6 +684,7 @@ func TestUnfollowStopsWorkAndCollectsUnownedYouTubeVideo(t *testing.T) {
 	if err := d.UnfollowChannel(second); err != nil {
 		t.Fatal(err)
 	}
+	drainUnfollowCleanup(t, d)
 	if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = $1`, video); got != 0 {
 		t.Fatal("unfollow retained unowned canonical video")
 	}

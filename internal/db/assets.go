@@ -657,6 +657,10 @@ func (db *DB) RenewAssetDownloadLease(assetID, assetKind, owner string, nowMs in
 // RemoveAssetFileIfUnreferenced deletes a canonical file only after every
 // ready inventory row has stopped referencing its key.
 func (db *DB) RemoveAssetFileIfUnreferenced(key string) (bool, error) {
+	return db.removeAssetFileIfUnreferencedContext(context.Background(), key)
+}
+
+func (db *DB) removeAssetFileIfUnreferencedContext(ctx context.Context, key string) (bool, error) {
 	key = strings.TrimSpace(key)
 	if key == "" {
 		return false, nil
@@ -666,20 +670,20 @@ func (db *DB) RemoveAssetFileIfUnreferenced(key string) (bool, error) {
 		lane = storage.MediaLaneBulkBackground
 	}
 	var removed bool
-	err := db.storage.MediaExecutor().Run(context.Background(), lane, func() error {
+	err := db.storage.MediaExecutor().Run(ctx, lane, func() error {
 		var err error
-		removed, err = db.removeAssetFileIfUnreferenced(key)
+		removed, err = db.removeAssetFileIfUnreferenced(ctx, key)
 		return err
 	})
 	return removed, err
 }
 
-func (db *DB) removeAssetFileIfUnreferenced(key string) (bool, error) {
+func (db *DB) removeAssetFileIfUnreferenced(ctx context.Context, key string) (bool, error) {
 	withdrawn := false
 	nowMs := time.Now().UnixMilli()
-	if err := db.WithWrite(func(tx *sql.Tx) error {
+	if err := db.withWriteContext(ctx, func(tx *sql.Tx) error {
 		var active int
-		if err := tx.QueryRow(bind(`
+		if err := tx.QueryRowContext(ctx, bind(`
 			SELECT COUNT(*) FROM assets a
 			JOIN media_objects live ON live.object_id = a.object_id
 			WHERE a.lifecycle_state = 'active' AND live.published_revision > 0 AND live.file_path = ?
@@ -689,7 +693,7 @@ func (db *DB) removeAssetFileIfUnreferenced(key string) (bool, error) {
 		if active > 0 {
 			return nil
 		}
-		_, err := tx.Exec(bind(`
+		_, err := tx.ExecContext(ctx, bind(`
 			UPDATE media_objects
 			SET published_revision = 0, job_state = 'pruned', updated_at_ms = ?
 			WHERE file_path = ? AND published_revision > 0

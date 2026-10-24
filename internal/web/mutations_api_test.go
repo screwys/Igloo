@@ -248,6 +248,16 @@ func TestMutationUnfollowCollectsUnreferencedContentAndKeepsChannel(t *testing.T
 	if status != http.StatusOK || srv.db.IsChannelFollowed("twitter_sample_author") {
 		t.Fatalf("unfollow status = %d followed = %t", status, srv.db.IsChannelFollowed("twitter_sample_author"))
 	}
+	var pendingContent int
+	if err := srv.db.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id = 'sample_tweet'`).Scan(&pendingContent); err != nil {
+		t.Fatal(err)
+	}
+	if pendingContent != 1 {
+		t.Fatal("unfollow response waited for content deletion")
+	}
+	if _, err := srv.db.ProcessUnfollowCleanup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	var stored int
 	if err := srv.db.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id = 'sample_tweet'`).Scan(&stored); err != nil {
 		t.Fatal(err)

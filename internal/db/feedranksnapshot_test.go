@@ -260,6 +260,11 @@ func TestFeedOwnershipAfterFollowClearKeepsActiveRepostWrapper(t *testing.T) {
 		t.Fatalf("rank candidates after clear = %#v", preIDs)
 	}
 
+	pageBeforeCleanup, err := d.ListSnapshotPage(snapshotAt, 0, 10)
+	if err != nil || len(pageBeforeCleanup) != 0 {
+		t.Fatalf("unfollowed posts remained visible before cleanup: %v, %v", pageBeforeCleanup, err)
+	}
+	drainUnfollowCleanup(t, d)
 	_, err = d.ListSnapshotPage(snapshotAt, 0, 10)
 	if !errors.Is(err, ErrFeedSnapshotExpired) {
 		t.Fatalf("stale snapshot error after clear = %v, want %v", err, ErrFeedSnapshotExpired)

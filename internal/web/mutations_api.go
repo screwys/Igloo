@@ -196,6 +196,7 @@ func (s *Server) handleMutationFollow(w http.ResponseWriter, r *http.Request) {
 	}
 	if result.Applied {
 		s.wakeFeedOrderInvalidation()
+		s.workers.WakeUnfollowCleanup()
 	}
 	writeJSON(w, 200, map[string]any{})
 }

@@ -296,12 +296,16 @@ func (db *DB) QueryRow(query string, args ...any) *sql.Row {
 
 // WithWrite executes a write function inside a transaction with mutex.
 func (db *DB) WithWrite(fn func(tx *sql.Tx) error) error {
+	return db.withWriteContext(context.Background(), fn)
+}
+
+func (db *DB) withWriteContext(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	if db.readTx != nil {
 		return fmt.Errorf("write transaction unavailable inside read snapshot")
 	}
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	tx, err := db.conn.Begin()
+	tx, err := db.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}

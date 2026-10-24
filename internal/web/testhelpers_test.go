@@ -155,6 +155,9 @@ func newTestServer(t *testing.T) *testServer {
 				VALUES (1, replace(gen_random_uuid()::TEXT, '-', ''), 0)`); err != nil {
 				return err
 			}
+			if _, err := tx.Exec(`INSERT INTO unfollow_cleanup_state (id, revision) VALUES (1, 0)`); err != nil {
+				return err
+			}
 			_, err := tx.Exec(`INSERT INTO android_feed_retention (id, feed_days, reconciled_at_ms)
 				VALUES (1, 0, 1)`)
 			return err

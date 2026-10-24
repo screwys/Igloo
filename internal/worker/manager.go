@@ -56,11 +56,12 @@ type Manager struct {
 	feedScoringPriorityKick   chan struct{} // buffered(1): committed action-state refresh
 	feedOrderKick             chan struct{} // buffered(1): coalescing feed-order invalidation
 	feedOrderReady            chan struct{} // closed after persisted invalidations drain at startup
-	ingestPaused              int32         // atomic: 1 = paused
-	ingestRunning             int32         // atomic: 1 = cycle in progress
-	ingestCycleTotal          int32         // atomic: channels to fetch in current cycle
-	ingestCycleDone           int32         // atomic: channels fetched so far in current cycle
-	stopRequested             int32         // atomic: 1 = stop requested
+	unfollowCleanupKick       chan struct{}
+	ingestPaused              int32 // atomic: 1 = paused
+	ingestRunning             int32 // atomic: 1 = cycle in progress
+	ingestCycleTotal          int32 // atomic: channels to fetch in current cycle
+	ingestCycleDone           int32 // atomic: channels fetched so far in current cycle
+	stopRequested             int32 // atomic: 1 = stop requested
 	statuses                  map[string]*atomic.Value
 	statusMu                  sync.RWMutex
 	activity                  *ActivityRing // general server activity (200 items)
@@ -180,6 +181,7 @@ func NewManager(database *db.DB, cfg *config.Config) *Manager {
 		feedScoringPriorityKick:   make(chan struct{}, 1),
 		feedOrderKick:             make(chan struct{}, 1),
 		feedOrderReady:            make(chan struct{}),
+		unfollowCleanupKick:       make(chan struct{}, 1),
 		statuses:                  make(map[string]*atomic.Value),
 		activity:                  NewActivityRing(200),
 		dlActivity:                NewActivityRing(100),
@@ -238,6 +240,7 @@ func (m *Manager) StartAll() {
 	m.launch("tiktok_lives", m.runTikTokLivesLoop)
 	m.launch("x_lives", m.runXBroadcastsLoop)
 	m.launch("feed_order_invalidation", m.runFeedOrderInvalidationLoop)
+	m.launch("unfollow_cleanup", m.runUnfollowCleanup)
 	m.launch("feed_scoring", m.runFeedScoringWorker)
 	m.launchDelayed("backup", 5*time.Minute, m.runBackupWorker)
 }

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"testing"
 
 	"github.com/screwys/igloo/internal/model"
@@ -339,6 +340,7 @@ func TestUnfollowCollectsVideoAndKeepsProfile(t *testing.T) {
 	if err := d.UnfollowChannel("tiktok_sample_reposter"); err != nil {
 		t.Fatalf("UnfollowChannel: %v", err)
 	}
+	drainUnfollowCleanup(t, d)
 	var count int
 	if err := d.QueryRow(`SELECT COUNT(*) FROM video_repost_sources WHERE reposter_channel_id='tiktok_sample_reposter'`).Scan(&count); err != nil {
 		t.Fatalf("count source provenance: %v", err)
@@ -394,7 +396,7 @@ func TestUnfollowCollectsVideoAndKeepsProfile(t *testing.T) {
 	}
 }
 
-func TestUnfollowRollsBackWhenContentCleanupFails(t *testing.T) {
+func TestUnfollowCommitsWhenContentCleanupFails(t *testing.T) {
 	d := openWritableTestDB(t)
 	if err := d.ExecRaw(`
 		INSERT INTO channels (channel_id, name, platform)
@@ -428,21 +430,34 @@ RAISE EXCEPTION 'stop purge';
 		t.Fatalf("create trigger: %v", err)
 	}
 
-	if err := d.UnfollowChannel("twitter_drop_fail"); err == nil {
-		t.Fatal("UnfollowChannel succeeded despite content cleanup failure")
+	if err := d.UnfollowChannel("twitter_drop_fail"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.ProcessUnfollowCleanup(context.Background()); err == nil {
+		t.Fatal("cleanup succeeded despite content deletion failure")
 	}
 	var count int
 	if err := d.QueryRow(`SELECT COUNT(*) FROM channel_follows WHERE channel_id='twitter_drop_fail'`).Scan(&count); err != nil {
 		t.Fatalf("count follow: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("follow changed despite cleanup rollback, count=%d", count)
+	if count != 0 {
+		t.Fatalf("cleanup failure restored follow, count=%d", count)
 	}
 	if err := d.QueryRow(`SELECT COUNT(*) FROM feed_items WHERE tweet_id='tw_drop_fail'`).Scan(&count); err != nil {
 		t.Fatalf("count feed item: %v", err)
 	}
 	if count != 1 {
 		t.Fatalf("cleanup failure changed stored feed content, count=%d", count)
+	}
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM unfollow_cleanup_jobs WHERE channel_id = 'twitter_drop_fail'`); got != 1 {
+		t.Fatalf("cleanup failure lost the persisted job: %d", got)
+	}
+	if err := d.ExecRaw(`DROP TRIGGER fail_drop_fail_delete ON feed_items; DROP FUNCTION fail_drop_fail_delete_fn()`); err != nil {
+		t.Fatal(err)
+	}
+	drainUnfollowCleanup(t, d)
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM feed_items WHERE tweet_id = 'tw_drop_fail'`); got != 0 {
+		t.Fatal("retry did not finish content cleanup")
 	}
 }
 

@@ -124,6 +124,7 @@ func (s *Server) handleRemoveFailingFeedSources(w http.ResponseWriter, r *http.R
 	}
 	if removed > 0 {
 		s.wakeFeedOrderInvalidation()
+		s.workers.WakeUnfollowCleanup()
 		s.workers.Emit("system", fmt.Sprintf("Unsubscribed from %d failing feed sources", removed), "info")
 	}
 

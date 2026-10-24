@@ -161,6 +161,7 @@ func (s *Server) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	}
 	if result.Applied {
 		s.wakeFeedOrderInvalidation()
+		s.workers.WakeUnfollowCleanup()
 	}
 
 	s.workers.Emit("system", fmt.Sprintf("Unsubscribed: %s", channelID), "info")

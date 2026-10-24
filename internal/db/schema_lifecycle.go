@@ -99,6 +99,12 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 // SchemaTableLifecycle returns the lifecycle classification for a schema table.
 // Runtime audits include Goose's ledger alongside the application tables.
 func SchemaTableLifecycle(table string) (string, bool) {
+	switch table {
+	case "unfollow_cleanup_jobs", "unfollow_cleanup_items", "unfollow_cleanup_files":
+		return string(schemaLifecycleQueue), true
+	case "unfollow_cleanup_state":
+		return string(schemaLifecycleMaintainedState), true
+	}
 	if table == "goose_db_version" {
 		return string(schemaLifecycleMaintainedState), true
 	}

@@ -1,9 +1,13 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"errors"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/screwys/igloo/internal/model"
 )
@@ -11,6 +15,22 @@ import (
 func TestUnfollowXContentIndexesCoverIdentityAndThreadQueries(t *testing.T) {
 	d := openFreshTestDB(t)
 	seedFeedPlanRows(t, d)
+	d.mu.Lock()
+	planned := make(chan error, 1)
+	go func() {
+		_, err := d.planUnfollowCleanup(context.Background(), "twitter_sample_profile", 1)
+		planned <- err
+	}()
+	select {
+	case err := <-planned:
+		d.mu.Unlock()
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		d.mu.Unlock()
+		t.Fatal("cleanup planning waited for the global write lock")
+	}
 	planTx, err := d.conn.Begin()
 	if err != nil {
 		t.Fatal(err)
@@ -21,7 +41,7 @@ func TestUnfollowXContentIndexesCoverIdentityAndThreadQueries(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, err := planTx.Query(bind("EXPLAIN "+unreferencedXContentIDsQuery()),
-		"twitter_sample_profile", "twitter_sample_profile", "twitter_sample_profile")
+		"twitter_sample_profile", "twitter_sample_profile", "twitter_sample_profile", "twitter_sample_profile")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,6 +101,8 @@ func TestUnfollowCollectsOnlyUnreferencedXContent(t *testing.T) {
 			tweet_id, source_channel_id, channel_id, body_text, quote_tweet_id,
 			quote_channel_id, published_at, fetched_at, content_hash
 		) VALUES
+			('sample_saved_later', 'twitter_sample_dropped', 'twitter_sample_dropped', 'saved later', 'sample_saved_dependency', '', 9, 9, 'saved-later'),
+			('sample_saved_dependency', 'twitter_sample_dropped', 'twitter_sample_dropped', 'saved dependency', '', '', 8, 8, 'saved-dependency'),
 			('sample_orphan', 'twitter_sample_dropped', 'twitter_sample_dropped', 'orphan', '', '', 10, 10, 'orphan'),
 			('sample_shared_target', 'twitter_sample_dropped', 'twitter_sample_dropped', 'shared target', '', '', 20, 20, 'shared-target'),
 			('sample_shared_reference', 'twitter_sample_kept', 'twitter_sample_kept', 'shared reference', 'sample_shared_target', 'twitter_sample_dropped', 30, 30, 'shared-reference'),
@@ -96,10 +118,11 @@ func TestUnfollowCollectsOnlyUnreferencedXContent(t *testing.T) {
 	}
 	for _, asset := range []Asset{
 		{AssetID: "sample-orphan-media", AssetKind: "post_media", OwnerKind: "tweet", OwnerID: "sample_orphan", FilePath: "media/twitter/sample-orphan.jpg"},
+		{AssetID: "sample-saved-media", AssetKind: "post_media", OwnerKind: "tweet", OwnerID: "sample_saved_dependency", FilePath: "media/twitter/sample-orphan.jpg"},
 		{AssetID: "sample-avatar", AssetKind: "avatar", OwnerKind: "channel", OwnerID: dropped, FilePath: "thumbnails/avatars/sample-dropped.jpg"},
 		{AssetID: "sample-banner", AssetKind: "banner", OwnerKind: "channel", OwnerID: dropped, FilePath: "thumbnails/banners/sample-dropped.jpg"},
 	} {
-		publishAssetMetadataForTest(t, d, asset, 1)
+		storeReadyAssetForTest(t, d, asset, 1)
 	}
 	if err := d.RequestProfileJob(dropped, 90); err != nil {
 		t.Fatal(err)
@@ -107,6 +130,30 @@ func TestUnfollowCollectsOnlyUnreferencedXContent(t *testing.T) {
 
 	if _, err := d.MutateFollow(dropped, "clear", 100); err != nil {
 		t.Fatal(err)
+	}
+	if d.IsChannelFollowed(dropped) || testRowCount(t, d, `SELECT COUNT(*) FROM feed_items WHERE tweet_id = 'sample_orphan'`) != 1 {
+		t.Fatal("unfollow must commit before content cleanup")
+	}
+	plan, err := d.planUnfollowCleanup(context.Background(), dropped, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.MutateBookmark(BookmarkMutation{VideoID: "sample_saved_later", Action: "set", UpdatedAtMs: 101}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.applyUnfollowCleanup(context.Background(), plan); !errors.Is(err, errUnfollowCleanupChanged) {
+		t.Fatalf("stale cleanup plan = %v", err)
+	}
+	drainUnfollowCleanup(t, d)
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM feed_items WHERE tweet_id IN ('sample_saved_later', 'sample_saved_dependency')`); got != 2 {
+		t.Fatalf("save during cleanup lost content or its dependency: %d", got)
+	}
+	savedPath, err := d.storage.Path("media/twitter/sample-orphan.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(savedPath); err != nil {
+		t.Fatalf("cleanup removed media shared with saved content: %v", err)
 	}
 	if got := testRowCount(t, d, `SELECT COUNT(*) FROM feed_items WHERE tweet_id = 'sample_orphan'`); got != 0 {
 		t.Fatalf("orphaned post remained: %d", got)
@@ -142,6 +189,7 @@ func TestUnfollowCollectsOnlyUnreferencedXContent(t *testing.T) {
 	if _, err := d.MutateFollow(kept, "clear", 200); err != nil {
 		t.Fatal(err)
 	}
+	drainUnfollowCleanup(t, d)
 	if got := testRowCount(t, d, `SELECT COUNT(*) FROM feed_items WHERE tweet_id IN ('sample_shared_target','sample_shared_reference')`); got != 0 {
 		t.Fatalf("content retained after its last followed reference was removed: %d", got)
 	}
@@ -203,6 +251,7 @@ func TestUnfollowCollectsOnlyUnreferencedVideoContent(t *testing.T) {
 			if _, err := d.MutateFollow(first, "clear", 100); err != nil {
 				t.Fatal(err)
 			}
+			drainUnfollowCleanup(t, d)
 			if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = 'sample_orphan_video'`); got != 0 {
 				t.Fatalf("orphaned video remained: %d", got)
 			}
@@ -227,6 +276,7 @@ func TestUnfollowCollectsOnlyUnreferencedVideoContent(t *testing.T) {
 			if _, err := d.MutateFollow(second, "clear", 200); err != nil {
 				t.Fatal(err)
 			}
+			drainUnfollowCleanup(t, d)
 			if got := testRowCount(t, d, `SELECT COUNT(*) FROM videos WHERE video_id = 'sample_shared_video'`); got != 0 {
 				t.Fatalf("shared video remained after its last followed source was removed: %d", got)
 			}
@@ -277,5 +327,27 @@ func TestVideoRetentionCollectsContentFromAlreadyUnfollowedVideoSources(t *testi
 				t.Fatalf("stale unreferenced video remained: %d", got)
 			}
 		})
+	}
+}
+
+func drainUnfollowCleanup(t *testing.T, d *DB) {
+	t.Helper()
+	for {
+		processed, err := d.ProcessUnfollowCleanup(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !processed {
+			break
+		}
+	}
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM unfollow_cleanup_jobs`); got != 0 {
+		t.Fatalf("unfinished cleanup jobs = %d", got)
+	}
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM unfollow_cleanup_items`); got != 0 {
+		t.Fatalf("unfinished cleanup items = %d", got)
+	}
+	if got := testRowCount(t, d, `SELECT COUNT(*) FROM unfollow_cleanup_files`); got != 0 {
+		t.Fatalf("unfinished cleanup files = %d", got)
 	}
 }

@@ -3,3 +3,8 @@
 //   sqlc v1.31.1
 
 package query
+
+type UnfollowCleanupJob struct {
+	ChannelID     string
+	RequestedAtMs int64
+}
