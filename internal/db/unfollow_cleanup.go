@@ -119,10 +119,11 @@ func readUnfollowCleanupIDs(rows *sql.Rows) ([]string, error) {
 	return ids, rows.Err()
 }
 
+// The budget bounds the batch's statements, not the wait for the write lock.
 func (db *DB) writeUnfollowCleanup(ctx context.Context, fn func(context.Context, *sql.Tx) error) error {
-	ctx, cancel := context.WithTimeout(ctx, unfollowCleanupWriteTimeout)
-	defer cancel()
 	return db.withWriteContext(ctx, func(tx *sql.Tx) error {
+		ctx, cancel := context.WithTimeout(ctx, unfollowCleanupWriteTimeout)
+		defer cancel()
 		return fn(ctx, tx)
 	})
 }
