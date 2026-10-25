@@ -32,7 +32,8 @@ import java.time.ZoneId
 @Serializable
 data class BookmarkFilter(
     val categoryId: Long? = null,
-    val account: String = "",
+    val postedBy: String = "",
+    val tagged: String = "",
     val label: String? = null,
     val noLabel: Boolean = false,
     val query: String = "",
@@ -40,7 +41,7 @@ data class BookmarkFilter(
     val savedThroughDay: Long? = null,
     val oldestFirst: Boolean = false,
 ) {
-    val active: Boolean get() = categoryId != null || account.isNotEmpty() || label != null || noLabel || query.isNotBlank() || savedFromDay != null || savedThroughDay != null || oldestFirst
+    val active: Boolean get() = categoryId != null || postedBy.isNotEmpty() || tagged.isNotEmpty() || label != null || noLabel || query.isNotBlank() || savedFromDay != null || savedThroughDay != null || oldestFirst
 }
 
 data class BookmarkLabelCount(val label: String?, val count: Int)
@@ -145,10 +146,14 @@ class BookmarksViewModel(
                 initialValue = emptyList(),
             )
 
-    val accounts: StateFlow<List<String>> =
+    val authorHandles: StateFlow<List<String>> =
         allItems.map { items ->
-            items.orEmpty().flatMap(::bookmarkAccountHandles)
-                .map(String::lowercase).distinct().sorted()
+            items.orEmpty().mapNotNull(::bookmarkFilterAuthorHandle).distinct().sorted()
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
+
+    val taggedHandles: StateFlow<List<String>> =
+        allItems.map { items ->
+            items.orEmpty().flatMap(::bookmarkTaggedHandles).distinct().sorted()
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
     val items: StateFlow<List<BookmarkItem>> =
@@ -286,14 +291,19 @@ internal fun bookmarkLabelCounts(items: List<BookmarkItem>): List<BookmarkLabelC
                 .thenBy { it.label.orEmpty().lowercase() }
         )
 
-internal fun bookmarkAccountHandles(item: BookmarkItem): List<String> {
-    val author = listOf(item.feedAuthorHandle, item.resolvedChannelSourceId, item.resolvedChannelId)
+internal fun bookmarkFilterAuthorHandle(item: BookmarkItem): String? =
+    listOf(item.feedAuthorHandle, item.resolvedChannelSourceId, item.resolvedChannelId)
         .firstOrNull { !it.isNullOrBlank() }
-    return (parseStoredHandles(item.bookmark.accountHandles).orEmpty() + listOfNotNull(author))
-        .map { it.trim().removePrefix("@").lowercase() }
+        ?.let(::normalizeBookmarkHandle)
+        ?.takeIf(String::isNotEmpty)
+
+internal fun bookmarkTaggedHandles(item: BookmarkItem): List<String> =
+    parseStoredHandles(item.bookmark.accountHandles).orEmpty()
+        .map(::normalizeBookmarkHandle)
         .filter(String::isNotEmpty)
         .distinct()
-}
+
+private fun normalizeBookmarkHandle(handle: String): String = handle.trim().removePrefix("@").lowercase()
 
 internal fun filterBookmarkItems(
     items: List<BookmarkItem>,
@@ -313,9 +323,8 @@ internal fun filterBookmarkItems(
             (savedBefore == null || item.bookmark.bookmarkedAt < savedBefore) &&
             words.all { text.contains(it, ignoreCase = true) } &&
             (filter.categoryId == null || item.bookmark.categoryId == filter.categoryId) &&
-            (filter.account.isBlank() || bookmarkAccountHandles(item).any {
-                it.equals(filter.account.trim().removePrefix("@"), ignoreCase = true)
-            }) &&
+            (filter.postedBy.isBlank() || bookmarkFilterAuthorHandle(item) == normalizeBookmarkHandle(filter.postedBy)) &&
+            (filter.tagged.isBlank() || normalizeBookmarkHandle(filter.tagged) in bookmarkTaggedHandles(item)) &&
             when {
                 filter.noLabel -> normalizeBookmarkLabel(item.bookmark.customTitle) == null
                 filter.label != null -> normalizeBookmarkLabel(item.bookmark.customTitle) == normalizeBookmarkLabel(filter.label)

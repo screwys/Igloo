@@ -7,6 +7,7 @@
     var plainInputs = Array.from(form.querySelectorAll('[data-bookmark-search-value]'));
     var from = plainInputs.find(function (input) { return input.name === 'saved_from'; });
     var through = plainInputs.find(function (input) { return input.name === 'saved_through'; });
+    var sortInputs = Array.from(form.querySelectorAll('input[name="sort"]'));
     function syncDates() {
       if (from && through) { from.max = through.value; through.min = from.value; }
     }
@@ -116,6 +117,7 @@
     });
     toggle.addEventListener('click', function () {
       plainInputs.forEach(function (input) { input.value = input.defaultValue; });
+      sortInputs.forEach(function (input) { input.checked = input.defaultChecked; });
       syncDates();
       fields.forEach(function (field) { field.restore(); });
       window.MpaSiteBase.openModal(modal);
@@ -123,6 +125,7 @@
     });
     form.querySelector('[data-bookmark-filters-reset]').addEventListener('click', function () {
       plainInputs.forEach(function (input) { input.value = ''; });
+      sortInputs.forEach(function (input) { input.checked = input.value === ''; });
       syncDates();
       fields.forEach(function (field) { field.reset(); });
     });
@@ -130,7 +133,7 @@
       event.preventDefault();
       var values = new FormData(form);
       var params = new URLSearchParams();
-      ['category_id', 'account', 'q', 'sort', 'saved_from', 'saved_through'].forEach(function (key) {
+      ['category_id', 'posted_by', 'tagged', 'q', 'sort', 'saved_from', 'saved_through'].forEach(function (key) {
         var value = values.get(key);
         if (value && value !== '0') params.set(key, value);
       });

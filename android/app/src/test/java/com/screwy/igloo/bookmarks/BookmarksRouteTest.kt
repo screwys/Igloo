@@ -231,11 +231,11 @@ class BookmarksRouteTest {
         )
         assertEquals(
             listOf("cat_one", "unlabelled"),
-            filterBookmarkItems(rows, BookmarkFilter(categoryId = 1L, account = "demo_channel")).map { it.bookmark.videoId },
+            filterBookmarkItems(rows, BookmarkFilter(categoryId = 1L, postedBy = "demo_channel")).map { it.bookmark.videoId },
         )
         assertEquals(
             listOf("cat_two"),
-            filterBookmarkItems(rows, BookmarkFilter(categoryId = 2L, account = "@artist", label = "cinema", query = "video Artist", savedFromDay = day.toEpochDay(), savedThroughDay = day.toEpochDay())).map { it.bookmark.videoId },
+            filterBookmarkItems(rows, BookmarkFilter(categoryId = 2L, tagged = "@artist", label = "cinema", query = "video Artist", savedFromDay = day.toEpochDay(), savedThroughDay = day.toEpochDay())).map { it.bookmark.videoId },
         )
         assertEquals(
             listOf("unlabelled"),
@@ -252,8 +252,8 @@ class BookmarksRouteTest {
             bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter())),
         )
         assertEquals(
-            BookmarkFilter(categoryId = 34L, account = "artist", label = "cinema", query = "sketch", savedFromDay = 20000L, savedThroughDay = 20010L, oldestFirst = true),
-            bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter(categoryId = 34L, account = "artist", label = "cinema", query = "sketch", savedFromDay = 20000L, savedThroughDay = 20010L, oldestFirst = true))),
+            BookmarkFilter(categoryId = 34L, postedBy = "artist", tagged = "friend", label = "cinema", query = "sketch", savedFromDay = 20000L, savedThroughDay = 20010L, oldestFirst = true),
+            bookmarkFilterFromPlaylistId(bookmarkPlaylistId(BookmarkFilter(categoryId = 34L, postedBy = "artist", tagged = "friend", label = "cinema", query = "sketch", savedFromDay = 20000L, savedThroughDay = 20010L, oldestFirst = true))),
         )
         assertEquals(BookmarkFilter(label = "art/studies"), bookmarkFilterFromPlaylistId(labelId))
         assertEquals(

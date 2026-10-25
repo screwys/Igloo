@@ -24,6 +24,7 @@ func TestBookmarksPageRendersFilters(t *testing.T) {
 		categories,
 		labels,
 		[]string{"artist"},
+		[]string{"friend"},
 		BookmarkSelection{Label: "cinema"},
 		model.Pager{Page: 1, PerPage: 200, Total: 15},
 	).Render(context.Background(), &buf)
@@ -38,8 +39,10 @@ func TestBookmarksPageRendersFilters(t *testing.T) {
 		`data-value="empty"`,
 		`data-value="label:cinema"`,
 		`name="category_id"`,
-		`name="account"`,
+		`name="posted_by"`,
+		`name="tagged"`,
 		`data-name="artist"`,
+		`data-name="friend"`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("BookmarksPage missing %s in:\n%s", want, html)
@@ -53,7 +56,7 @@ func TestBookmarksNextURLPreservesActiveFilter(t *testing.T) {
 	if got := bookmarksNextURL(pager, BookmarkSelection{CategoryID: 7}); got != "/bookmarks?category_id=7&page=2" {
 		t.Fatalf("category next URL = %q", got)
 	}
-	if got := bookmarksNextURL(pager, BookmarkSelection{CategoryID: 7, Label: "cinema", Account: "artist", Query: "sketch", OldestFirst: true, SavedFrom: "2026-10-01", SavedThrough: "2026-10-20", TimeZone: "UTC"}); got != "/bookmarks?account=artist&category_id=7&label=cinema&page=2&q=sketch&saved_from=2026-10-01&saved_through=2026-10-20&sort=oldest&tz=UTC" {
+	if got := bookmarksNextURL(pager, BookmarkSelection{CategoryID: 7, Label: "cinema", PostedBy: "artist", Tagged: "friend", Query: "sketch", OldestFirst: true, SavedFrom: "2026-10-01", SavedThrough: "2026-10-20", TimeZone: "UTC"}); got != "/bookmarks?category_id=7&label=cinema&page=2&posted_by=artist&q=sketch&saved_from=2026-10-01&saved_through=2026-10-20&sort=oldest&tagged=friend&tz=UTC" {
 		t.Fatalf("label next URL = %q", got)
 	}
 	if got := bookmarksNextURL(pager, BookmarkSelection{CategoryID: 7, IsNoLabel: true}); got != "/bookmarks?category_id=7&label_empty=1&page=2" {

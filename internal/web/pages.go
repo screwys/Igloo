@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os/exec"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1454,7 +1453,8 @@ func (s *Server) handlePageBookmarks(w http.ResponseWriter, r *http.Request) {
 		TimeZone:     r.URL.Query().Get("tz"),
 		OldestFirst:  r.URL.Query().Get("sort") == "oldest",
 		CategoryID:   categoryID,
-		Account:      strings.TrimPrefix(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("account"))), "@"),
+		PostedBy:     strings.TrimPrefix(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("posted_by"))), "@"),
+		Tagged:       strings.TrimPrefix(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tagged"))), "@"),
 		Label:        strings.TrimSpace(r.URL.Query().Get("label")),
 		IsNoLabel:    r.URL.Query().Get("label_empty") == "1",
 	}
@@ -1468,7 +1468,8 @@ func (s *Server) handlePageBookmarks(w http.ResponseWriter, r *http.Request) {
 
 	opts := db.GetBookmarksOpts{
 		CategoryID: categoryID,
-		Account:    selectedFilter.Account,
+		PostedBy:   selectedFilter.PostedBy,
+		Tagged:     selectedFilter.Tagged,
 		Limit:      perPage,
 	}
 	opts.Query = selectedFilter.Query
@@ -1552,13 +1553,12 @@ func (s *Server) handlePageBookmarks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accounts, err := s.db.GetBookmarkedHandles()
+	postedBy, tagged, err := s.db.GetBookmarkAccountHandles()
 	if err != nil {
-		slog.Error("GetBookmarkedHandles", "err", err)
+		slog.Error("GetBookmarkAccountHandles", "err", err)
 	}
-	slices.Sort(accounts)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = components.BookmarksPage(p, bookmarks, categories, labelCounts, accounts, selectedFilter, pager).Render(r.Context(), w)
+	_ = components.BookmarksPage(p, bookmarks, categories, labelCounts, postedBy, tagged, selectedFilter, pager).Render(r.Context(), w)
 }
 
 func (s *Server) handlePageSearch(w http.ResponseWriter, r *http.Request) {

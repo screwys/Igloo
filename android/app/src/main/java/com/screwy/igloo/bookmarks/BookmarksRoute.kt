@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.window.Dialog
@@ -33,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.SelectableDates
@@ -46,6 +48,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -113,7 +116,8 @@ fun BookmarksRoute(
     val categories by vm.categories.collectAsStateWithLifecycle()
     val bookmarkCategories by vm.bookmarkCategories.collectAsStateWithLifecycle()
     val counts by vm.counts.collectAsStateWithLifecycle()
-    val accounts by vm.accounts.collectAsStateWithLifecycle()
+    val authorHandles by vm.authorHandles.collectAsStateWithLifecycle()
+    val taggedHandles by vm.taggedHandles.collectAsStateWithLifecycle()
     val labelCounts by vm.labelCounts.collectAsStateWithLifecycle()
     val selectedFilter by vm.selectedFilter.collectAsStateWithLifecycle()
     val uiState by vm.uiState.collectAsStateWithLifecycle()
@@ -207,7 +211,8 @@ fun BookmarksRoute(
             if (filtersOpen) {
                 BookmarkFilterPopup(
                     categories = categories,
-                    accounts = accounts,
+                    authorHandles = authorHandles,
+                    taggedHandles = taggedHandles,
                     labels = labelCounts,
                     selected = selectedFilter,
                     onApply = {
@@ -336,14 +341,16 @@ private fun CategoryChip(
 @Composable
 private fun BookmarkFilterPopup(
     categories: List<com.screwy.igloo.data.entity.BookmarkCategoryEntity>,
-    accounts: List<String>,
+    authorHandles: List<String>,
+    taggedHandles: List<String>,
     labels: List<BookmarkLabelCount>,
     selected: BookmarkFilter,
     onApply: (BookmarkFilter) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var categoryId by rememberSaveable { mutableStateOf(selected.categoryId) }
-    var account by rememberSaveable { mutableStateOf(selected.account) }
+    var postedBy by rememberSaveable { mutableStateOf(selected.postedBy) }
+    var tagged by rememberSaveable { mutableStateOf(selected.tagged) }
     var label by rememberSaveable { mutableStateOf(selected.label) }
     var noLabel by rememberSaveable { mutableStateOf(selected.noLabel) }
     var query by rememberSaveable { mutableStateOf(selected.query) }
@@ -354,7 +361,7 @@ private fun BookmarkFilterPopup(
     val noLabelText = stringResource(R.string.bookmark_filter_no_label)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            modifier = Modifier.padding(16.dp).widthIn(max = 720.dp).fillMaxWidth().height(720.dp),
+            modifier = Modifier.padding(16.dp).widthIn(max = 720.dp).fillMaxWidth().heightIn(max = 720.dp),
             color = MaterialTheme.iglooColors.surface,
             shape = RoundedCornerShape(16.dp),
         ) {
@@ -366,30 +373,26 @@ private fun BookmarkFilterPopup(
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close))
                     }
-                    Text(stringResource(R.string.bookmark_advanced_search), style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.bookmark_filters), style = MaterialTheme.typography.titleLarge)
                 }
                 Column(
-                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
+                    modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     OutlinedTextField(
                         value = query,
                         onValueChange = { query = it },
-                        label = { Text(stringResource(R.string.bookmark_search_text)) },
+                        placeholder = { Text(stringResource(R.string.bookmark_search_text)) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    HorizontalDivider(color = MaterialTheme.iglooColors.onSurfaceFaint)
                     BookmarkFilterField(
                         title = stringResource(R.string.bookmark_filter_category),
                         selectedValue = categoryId?.toString().orEmpty(),
                         options = categories.map { it.categoryId.toString() to it.name },
                         onSelect = { categoryId = it.toLongOrNull() },
-                    )
-                    BookmarkFilterField(
-                        title = stringResource(R.string.bookmark_account),
-                        selectedValue = account,
-                        options = accounts.map { it to it },
-                        onSelect = { account = it },
                     )
                     BookmarkFilterField(
                         title = stringResource(R.string.bookmark_label),
@@ -402,13 +405,20 @@ private fun BookmarkFilterPopup(
                             label = if (it.startsWith("label:")) it.removePrefix("label:") else null
                         },
                     )
+                    HorizontalDivider(color = MaterialTheme.iglooColors.onSurfaceFaint)
                     BookmarkFilterField(
-                        title = stringResource(R.string.bookmark_sort),
-                        selectedValue = if (oldestFirst) "oldest" else "",
-                        options = listOf("" to stringResource(R.string.bookmark_sort_newest), "oldest" to stringResource(R.string.bookmark_sort_oldest)),
-                        onSelect = { oldestFirst = it == "oldest" },
-                        searchable = false,
+                        title = stringResource(R.string.bookmark_filter_posted_by),
+                        selectedValue = postedBy,
+                        options = authorHandles.map { it to it },
+                        onSelect = { postedBy = it },
                     )
+                    BookmarkFilterField(
+                        title = stringResource(R.string.bookmark_filter_tagged),
+                        selectedValue = tagged,
+                        options = taggedHandles.map { it to it },
+                        onSelect = { tagged = it },
+                    )
+                    HorizontalDivider(color = MaterialTheme.iglooColors.onSurfaceFaint)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         BookmarkDateField(
                             title = stringResource(R.string.bookmark_saved_from),
@@ -423,18 +433,33 @@ private fun BookmarkFilterPopup(
                             modifier = Modifier.weight(1f),
                         )
                     }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(stringResource(R.string.bookmark_sort), style = MaterialTheme.typography.labelMedium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CategoryChip(
+                                label = stringResource(R.string.bookmark_sort_newest),
+                                selected = !oldestFirst,
+                                onClick = { oldestFirst = false },
+                            )
+                            CategoryChip(
+                                label = stringResource(R.string.bookmark_sort_oldest),
+                                selected = oldestFirst,
+                                onClick = { oldestFirst = true },
+                            )
+                        }
+                    }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
                 ) {
                     OutlinedButton(modifier = Modifier.width(112.dp).height(44.dp), onClick = {
-                        categoryId = null; account = ""; label = null; noLabel = false
+                        categoryId = null; postedBy = ""; tagged = ""; label = null; noLabel = false
                         query = ""; savedFromDay = null; savedThroughDay = null; oldestFirst = false
                     }) {
                         Text(stringResource(R.string.bookmark_filter_reset))
                     }
-                    Button(modifier = Modifier.width(112.dp).height(44.dp), onClick = { onApply(BookmarkFilter(categoryId, account, label, noLabel, query.trim(), savedFromDay, savedThroughDay, oldestFirst)) }) {
+                    Button(modifier = Modifier.width(112.dp).height(44.dp), onClick = { onApply(BookmarkFilter(categoryId, postedBy, tagged, label, noLabel, query.trim(), savedFromDay, savedThroughDay, oldestFirst)) }) {
                         Text(stringResource(R.string.bookmark_filter_apply))
                     }
                 }
@@ -489,7 +514,6 @@ private fun BookmarkFilterField(
     selectedValue: String,
     options: List<Pair<String, String>>,
     onSelect: (String) -> Unit,
-    searchable: Boolean = true,
 ) {
     val selectedName = options.firstOrNull { it.first == selectedValue }?.second.orEmpty()
     var query by remember(selectedName) { mutableStateOf(selectedName) }
@@ -513,22 +537,19 @@ private fun BookmarkFilterField(
                 if (it.isEmpty()) onSelect("")
             },
             label = { Text(title) },
-            readOnly = !searchable,
             placeholder = { Text(stringResource(R.string.moments_label_all)) },
             singleLine = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(if (searchable) ExposedDropdownMenuAnchorType.PrimaryEditable else ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
         )
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false; query = selectedName },
         ) {
-            if (searchable) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.moments_label_all)) },
-                    onClick = { onSelect(""); query = ""; expanded = false },
-                )
-            }
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.moments_label_all)) },
+                onClick = { onSelect(""); query = ""; expanded = false },
+            )
             matches.forEach { (value, name) ->
                 DropdownMenuItem(
                     text = { Text(name) },

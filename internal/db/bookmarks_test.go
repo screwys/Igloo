@@ -154,7 +154,7 @@ func TestBookmarkLabelFiltersAndCounts(t *testing.T) {
 
 	exactOpts := GetBookmarksOpts{
 		CategoryID:      2,
-		Account:         "@artist",
+		Tagged:          "@artist",
 		Query:           "cinema Artist",
 		SavedFromMs:     20,
 		SavedBeforeMs:   30,

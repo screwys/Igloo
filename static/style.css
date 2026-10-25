@@ -2248,24 +2248,41 @@ select.input:focus {
 .bookmark-filter-pill.add { font-weight: 700; width: 30px; text-align: center; padding: 0.32rem 0; }
 .bookmark-filter-toggle { display: inline-flex; align-items: center; gap: 0.35rem; line-height: 1.5; }
 .bookmark-filter-toggle .material-icon { width: 1lh; height: 1lh; }
-.modal-content.bookmark-filters-content { width: min(800px, calc(100vw - 2rem)); height: min(680px, calc(100dvh - 2rem)); max-width: none; max-height: none; padding: 1.5rem; box-sizing: border-box; }
+.modal-content.bookmark-filters-content { width: min(720px, calc(100vw - 2rem)); max-width: none; max-height: calc(100dvh - 2rem); padding: 1.5rem; box-sizing: border-box; }
+.bookmark-filters-content .modal-header { margin-bottom: 1rem; }
 .bookmark-filters-content form { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-.bookmark-filters-content .modal-footer { flex-shrink: 0; }
-.bookmark-filters-content .modal-body { padding: 4px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-content: start; gap: 1rem; }
-.bookmark-search-text { grid-column: 1 / -1; }
+.bookmark-filters-content .modal-body { padding: 4px; display: grid; align-content: start; gap: 1.25rem; }
+.bookmark-filter-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; padding-top: 1.25rem; border-top: 1px solid var(--border-color); }
 @media (max-width: 560px) {
-    .bookmark-filters-content .modal-body { grid-template-columns: minmax(0, 1fr); }
+    .bookmark-filter-row { grid-template-columns: minmax(0, 1fr); }
 }
-.bookmark-filters-content .modal-footer { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-self: flex-end; gap: 0.75rem; padding: 1rem 4px 4px; }
+.bookmark-filters-content .modal-footer { flex-shrink: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-self: flex-end; gap: 0.75rem; padding: 1.25rem 4px 4px; }
 .bookmark-filters-content .modal-footer .btn { margin: 0; min-width: 104px; min-height: 44px; box-sizing: border-box; }
 .bookmark-filters-content .modal-footer .btn:hover { transform: none; }
 .bookmark-filter-field { min-width: 0; position: relative; display: grid; align-content: start; gap: 0.4rem; }
+.bookmark-filter-title { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); }
 .bookmark-filter-input {
     width: 100%; box-sizing: border-box; border: 1px solid var(--border-color);
     border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary);
     font: inherit; padding: 0.7rem 0.85rem;
 }
+.bookmark-filter-input:hover { border-color: var(--accent-primary); }
 .bookmark-filter-input:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.bookmark-search-text, .bookmark-filter-control { position: relative; }
+.bookmark-search-text .material-icon, .bookmark-filter-control .material-icon {
+    position: absolute; top: 50%; width: 20px; height: 20px; transform: translateY(-50%);
+    color: var(--text-muted); pointer-events: none;
+}
+.bookmark-search-text .material-icon { left: 0.8rem; }
+.bookmark-search-text .bookmark-filter-input { padding-left: 2.5rem; font-size: 1rem; }
+.bookmark-filter-control .material-icon { right: 0.6rem; }
+.bookmark-filter-control .bookmark-filter-input { padding-right: 2.2rem; }
+.bookmark-filter-control .bookmark-filter-input::-webkit-search-cancel-button { display: none; }
+.bookmark-filter-sort { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.bookmark-filter-sort .bookmark-filter-pill { padding: 0.42rem 0.95rem; font-size: 0.82rem; }
+.bookmark-filter-sort .bookmark-filter-pill:has(input:checked) { background: rgba(var(--accent-primary-rgb), 0.16); border-color: var(--accent-secondary); color: var(--accent-secondary); }
+.bookmark-filter-sort .bookmark-filter-pill:has(input:focus-visible) { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.bookmark-filter-sort input { position: absolute; opacity: 0; pointer-events: none; }
 .bookmark-filter-options {
     position: fixed; inset: auto; margin: 0; box-sizing: border-box;
     max-height: 220px; overflow-y: auto; padding: 0.35rem; box-shadow: var(--shadow);

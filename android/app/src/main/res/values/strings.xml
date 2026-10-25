@@ -141,7 +141,6 @@
     <string name="auth_signed_out_sign_in_again">Signed out — please sign in again</string>
     <string name="bookmark_account">Account</string>
     <string name="bookmark_add_category">Add category</string>
-    <string name="bookmark_advanced_search">Advanced search</string>
     <string name="bookmark_archive_path_for_category_placeholder">/path/for/%1$s/</string>
     <string name="bookmark_archive_path_optional_placeholder">/archive/path/ (optional)</string>
     <string name="bookmark_category">Category</string>
@@ -160,8 +159,10 @@
     <string name="bookmark_filter_no_label">No label</string>
     <string name="bookmark_filter_no_labels_found">No labels found</string>
     <string name="bookmark_filter_no_matches">No matches</string>
+    <string name="bookmark_filter_posted_by">Posted by</string>
     <string name="bookmark_filter_reset">Reset</string>
     <string name="bookmark_filter_search_labels">Search labels</string>
+    <string name="bookmark_filter_tagged">Tagged</string>
     <string name="bookmark_filters">Filter</string>
     <string name="bookmark_label">Label</string>
     <string name="bookmark_label_deleted">Label deleted</string>

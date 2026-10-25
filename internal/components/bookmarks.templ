@@ -12,7 +12,8 @@ import (
 // BookmarkSelection holds the filters applied to the bookmark grid.
 type BookmarkSelection struct {
 	CategoryID int64
-	Account string
+	PostedBy string
+	Tagged string
 	Label string
 	IsNoLabel bool
 	Query string
@@ -23,7 +24,7 @@ type BookmarkSelection struct {
 }
 
 func (s BookmarkSelection) Active() bool {
-	return s.CategoryID != 0 || s.Account != "" || s.IsNoLabel || s.Label != "" || s.Query != "" || s.SavedFrom != "" || s.SavedThrough != "" || s.OldestFirst
+	return s.CategoryID != 0 || s.PostedBy != "" || s.Tagged != "" || s.IsNoLabel || s.Label != "" || s.Query != "" || s.SavedFrom != "" || s.SavedThrough != "" || s.OldestFirst
 }
 
 type bookmarkFilterOption struct {
@@ -32,7 +33,7 @@ type bookmarkFilterOption struct {
 }
 
 // BookmarksPage renders bookmark filters, cards, and the shorts overlay.
-templ BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.BookmarkCategoryRow, labelCounts []db.BookmarkLabelCountRow, accounts []string, selected BookmarkSelection, pager model.Pager) {
+templ BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.BookmarkCategoryRow, labelCounts []db.BookmarkLabelCountRow, postedBy []string, tagged []string, selected BookmarkSelection, pager model.Pager) {
 	@Base(p) {
 		<div class="bookmarks-filter-bar">
 			<a class={ "bookmark-filter-pill", templ.KV("active", !selected.Active()) } href="/bookmarks">{ L(p, "logs_filter_all", "All") }</a>
@@ -42,7 +43,7 @@ templ BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookma
 					href={ templ.SafeURL(bookmarkCategoryURL(selected, cat.ID)) }
 				>{ cat.Name }</a>
 			}
-			@bookmarkFilters(p, categories, labelCounts, accounts, selected)
+			@bookmarkFilters(p, categories, labelCounts, postedBy, tagged, selected)
 		</div>
 		<div id="shorts-grid-shell">
 			<div id="video-grid" class="video-grid shorts-grid bookmarks-grid">
@@ -77,7 +78,7 @@ templ BookmarksPage(p PageProps, bookmarks []model.Video, categories []db.Bookma
 	}
 }
 
-templ bookmarkFilters(p PageProps, categories []db.BookmarkCategoryRow, labels []db.BookmarkLabelCountRow, accounts []string, selected BookmarkSelection) {
+templ bookmarkFilters(p PageProps, categories []db.BookmarkCategoryRow, labels []db.BookmarkLabelCountRow, postedBy []string, tagged []string, selected BookmarkSelection) {
 	<button class={ "bookmark-filter-pill", "bookmark-filter-toggle", templ.KV("active", selected.Active()) } type="button" aria-haspopup="dialog" aria-controls="bookmark-filters" title={ L(p, "bookmark_filters", "Filter") } aria-label={ L(p, "bookmark_filters", "Filter") } data-bookmark-filters-open>
 		@MaterialIcon("FilterAlt", "")
 	</button>
@@ -85,26 +86,39 @@ templ bookmarkFilters(p PageProps, categories []db.BookmarkCategoryRow, labels [
 		<div class="modal-backdrop"></div>
 		<div class="modal-content bookmark-filters-content">
 			<div class="modal-header">
-				<h3 id="bookmark-filters-title">{ L(p, "bookmark_advanced_search", "Advanced search") }</h3>
+				<h3 id="bookmark-filters-title">{ L(p, "bookmark_filters", "Filter") }</h3>
 				<button class="modal-close" type="button" aria-label={ L(p, "action_close", "Close") }>@MaterialIcon("Close", "")</button>
 			</div>
 			<form action="/bookmarks" method="get" data-bookmark-filters-form>
 				<div class="modal-body">
-					<div class="bookmark-filter-field bookmark-search-text">
-						<label for="bookmark-search-query">{ L(p, "bookmark_search_text", "Search text") }</label>
-						<input id="bookmark-search-query" class="bookmark-filter-input" type="search" name="q" data-bookmark-search-value value={ selected.Query }/>
+					<div class="bookmark-search-text">
+						@MaterialIcon("Search", "")
+						<input id="bookmark-search-query" class="bookmark-filter-input" type="search" name="q" placeholder={ L(p, "bookmark_search_text", "Search text") } aria-label={ L(p, "bookmark_search_text", "Search text") } data-bookmark-search-value value={ selected.Query }/>
 					</div>
-					@bookmarkFilterField(p, "category_id", L(p, "bookmark_filter_category", "Category"), strconv.FormatInt(selected.CategoryID, 10), bookmarkCategoryOptions(categories))
-					@bookmarkFilterField(p, "account", L(p, "bookmark_account", "Account"), selected.Account, bookmarkAccountOptions(accounts))
-					@bookmarkFilterField(p, "label_choice", L(p, "bookmark_label", "Label"), bookmarkLabelValue(selected), bookmarkLabelOptions(p, labels))
-					@bookmarkFilterField(p, "sort", L(p, "bookmark_sort", "Sort"), bookmarkSortValue(selected), []bookmarkFilterOption{{"", L(p, "bookmark_sort_newest", "Newest saved")}, {"oldest", L(p, "bookmark_sort_oldest", "Oldest saved")}})
-					<div class="bookmark-filter-field">
-						<label for="bookmark-saved-from">{ L(p, "bookmark_saved_from", "Saved from") }</label>
-						<input id="bookmark-saved-from" class="bookmark-filter-input" type="date" name="saved_from" data-bookmark-search-value value={ selected.SavedFrom }/>
+					<div class="bookmark-filter-row">
+						@bookmarkFilterField(p, "category_id", L(p, "bookmark_filter_category", "Category"), strconv.FormatInt(selected.CategoryID, 10), bookmarkCategoryOptions(categories))
+						@bookmarkFilterField(p, "label_choice", L(p, "bookmark_label", "Label"), bookmarkLabelValue(selected), bookmarkLabelOptions(p, labels))
 					</div>
-					<div class="bookmark-filter-field">
-						<label for="bookmark-saved-through">{ L(p, "bookmark_saved_through", "Saved through") }</label>
-						<input id="bookmark-saved-through" class="bookmark-filter-input" type="date" name="saved_through" data-bookmark-search-value value={ selected.SavedThrough }/>
+					<div class="bookmark-filter-row">
+						@bookmarkFilterField(p, "posted_by", L(p, "bookmark_filter_posted_by", "Posted by"), selected.PostedBy, bookmarkAccountOptions(postedBy))
+						@bookmarkFilterField(p, "tagged", L(p, "bookmark_filter_tagged", "Tagged"), selected.Tagged, bookmarkAccountOptions(tagged))
+					</div>
+					<div class="bookmark-filter-row">
+						<div class="bookmark-filter-field">
+							<label class="bookmark-filter-title" for="bookmark-saved-from">{ L(p, "bookmark_saved_from", "Saved from") }</label>
+							<input id="bookmark-saved-from" class="bookmark-filter-input" type="date" name="saved_from" data-bookmark-search-value value={ selected.SavedFrom }/>
+						</div>
+						<div class="bookmark-filter-field">
+							<label class="bookmark-filter-title" for="bookmark-saved-through">{ L(p, "bookmark_saved_through", "Saved through") }</label>
+							<input id="bookmark-saved-through" class="bookmark-filter-input" type="date" name="saved_through" data-bookmark-search-value value={ selected.SavedThrough }/>
+						</div>
+					</div>
+					<div class="bookmark-filter-field" role="radiogroup" aria-labelledby="bookmark-sort-title">
+						<span id="bookmark-sort-title" class="bookmark-filter-title">{ L(p, "bookmark_sort", "Sort") }</span>
+						<div class="bookmark-filter-sort">
+							<label class="bookmark-filter-pill"><input type="radio" name="sort" value="" checked?={ !selected.OldestFirst }/>{ L(p, "bookmark_sort_newest", "Newest saved") }</label>
+							<label class="bookmark-filter-pill"><input type="radio" name="sort" value="oldest" checked?={ selected.OldestFirst }/>{ L(p, "bookmark_sort_oldest", "Oldest saved") }</label>
+						</div>
 					</div>
 				</div>
 				<div class="modal-footer">
@@ -118,24 +132,20 @@ templ bookmarkFilters(p PageProps, categories []db.BookmarkCategoryRow, labels [
 
 templ bookmarkFilterField(p PageProps, name string, title string, selected string, options []bookmarkFilterOption) {
 	<div class="bookmark-filter-field" data-bookmark-filter-field>
-		<label for={ "bookmark-filter-" + name }>{ title }</label>
+		<label class="bookmark-filter-title" for={ "bookmark-filter-" + name }>{ title }</label>
 		<input type="hidden" name={ name } value={ selected }/>
-		<input id={ "bookmark-filter-" + name } class="bookmark-filter-input" type="search" value={ bookmarkFilterDisplay(selected, options) } placeholder={ L(p, "logs_filter_all", "All") } autocomplete="off" readonly?={ name == "sort" } role="combobox" aria-autocomplete="list" aria-controls={ "bookmark-filter-options-" + name } aria-expanded="false" data-bookmark-filter-search/>
+		<div class="bookmark-filter-control">
+			<input id={ "bookmark-filter-" + name } class="bookmark-filter-input" type="search" value={ bookmarkFilterDisplay(selected, options) } placeholder={ L(p, "logs_filter_all", "All") } autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls={ "bookmark-filter-options-" + name } aria-expanded="false" data-bookmark-filter-search/>
+			@MaterialIcon("ArrowDropDown", "")
+		</div>
 		<div id={ "bookmark-filter-options-" + name } class="bookmark-filter-options hidden" popover="manual" role="listbox">
-			if name != "sort" {
-				<button type="button" class="bookmark-filter-option" role="option" tabindex="-1" aria-selected="false" data-value="" data-name="">{ L(p, "logs_filter_all", "All") }</button>
-			}
+			<button type="button" class="bookmark-filter-option" role="option" tabindex="-1" aria-selected="false" data-value="" data-name="">{ L(p, "logs_filter_all", "All") }</button>
 			for index, option := range options {
 				<button id={ fmt.Sprintf("bookmark-filter-%s-%d", name, index) } type="button" class="bookmark-filter-option" role="option" tabindex="-1" aria-selected={ strconv.FormatBool(option.Value == selected) } data-value={ option.Value } data-name={ option.Name }>{ option.Name }</button>
 			}
 			<div class="bookmark-filter-empty hidden">{ L(p, "bookmark_filter_no_matches", "No matches") }</div>
 		</div>
 	</div>
-}
-
-func bookmarkSortValue(selected BookmarkSelection) string {
-	if selected.OldestFirst { return "oldest" }
-	return ""
 }
 
 func bookmarkCategoryOptions(categories []db.BookmarkCategoryRow) []bookmarkFilterOption {
@@ -208,7 +218,8 @@ func bookmarkFilterValues(selected BookmarkSelection) url.Values {
 	if selected.SavedThrough != "" { values.Set("saved_through", selected.SavedThrough) }
 	if selected.SavedFrom != "" || selected.SavedThrough != "" { values.Set("tz", selected.TimeZone) }
 	if selected.CategoryID > 0 { values.Set("category_id", strconv.FormatInt(selected.CategoryID, 10)) }
-	if selected.Account != "" { values.Set("account", selected.Account) }
+	if selected.PostedBy != "" { values.Set("posted_by", selected.PostedBy) }
+	if selected.Tagged != "" { values.Set("tagged", selected.Tagged) }
 	if selected.IsNoLabel {
 		values.Set("label_empty", "1")
 	} else if label := strings.TrimSpace(selected.Label); label != "" {

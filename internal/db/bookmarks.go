@@ -87,7 +87,8 @@ const (
 // GetBookmarksOpts holds filter options for bookmark queries.
 type GetBookmarksOpts struct {
 	CategoryID      int64
-	Account         string
+	PostedBy        string
+	Tagged          string
 	Query           string
 	SavedFromMs     int64
 	SavedBeforeMs   int64
@@ -339,8 +340,12 @@ func appendBookmarkFilterWhere(where []string, args []any, opts GetBookmarksOpts
 		where = append(where, prefix+"category_id = ?")
 		args = append(args, opts.CategoryID)
 	}
-	if account := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(opts.Account)), "@"); account != "" {
-		where = append(where, "EXISTS (SELECT 1 FROM ("+bookmarkAccountHandlesSQL(prefix)+") account WHERE LOWER(LTRIM(TRIM(handle), '@')) = ?)")
+	if account := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(opts.PostedBy)), "@"); account != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM ("+bookmarkAuthorHandlesSQL(prefix)+") account WHERE LOWER(LTRIM(TRIM(handle), '@')) = ?)")
+		args = append(args, account)
+	}
+	if account := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(opts.Tagged)), "@"); account != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM ("+bookmarkTaggedHandlesSQL(prefix)+") account WHERE LOWER(LTRIM(TRIM(handle), '@')) = ?)")
 		args = append(args, account)
 	}
 	switch opts.LabelFilterMode {
@@ -478,17 +483,20 @@ func (db *DB) UpdateBookmarkCategory(categoryID int64, name, archivePath string)
 	})
 }
 
-// bookmarkAccountHandlesSQL includes saved account selections and the content author.
+// bookmarkTaggedHandlesSQL returns the accounts selected when saving the bookmark.
 // Web saves JSON arrays; Android also sends comma-separated handles.
-func bookmarkAccountHandlesSQL(prefix string) string {
+func bookmarkTaggedHandlesSQL(prefix string) string {
 	return `SELECT handle FROM jsonb_array_elements_text(
 		CASE WHEN LEFT(LTRIM(COALESCE(` + prefix + `account_handles, '')), 1) = '['
 			THEN ` + prefix + `account_handles::jsonb
 			ELSE to_jsonb(string_to_array(COALESCE(` + prefix + `account_handles, ''), ','))
 		END
-	) saved(handle)
-	UNION ALL
-	SELECT COALESCE(NULLIF(TRIM(cp.handle), ''), NULLIF(TRIM(c.source_id), ''), NULLIF(TRIM(author.channel_id), ''))
+	) saved(handle)`
+}
+
+// bookmarkAuthorHandlesSQL returns the account that posted the bookmarked content.
+func bookmarkAuthorHandlesSQL(prefix string) string {
+	return `SELECT COALESCE(NULLIF(TRIM(cp.handle), ''), NULLIF(TRIM(c.source_id), ''), NULLIF(TRIM(author.channel_id), '')) AS handle
 	FROM (
 		SELECT v.channel_id FROM videos v WHERE v.video_id = ` + prefix + `video_id
 		UNION
@@ -503,28 +511,36 @@ func bookmarkAccountHandlesSQL(prefix string) string {
 	LEFT JOIN channel_profiles cp ON cp.channel_id = author.channel_id`
 }
 
-// GetBookmarkedHandles returns account selections and authors across bookmark platforms.
-func (db *DB) GetBookmarkedHandles() ([]string, error) {
+// GetBookmarkAccountHandles returns the distinct authors and tagged accounts across bookmarks.
+func (db *DB) GetBookmarkAccountHandles() (postedBy, tagged []string, err error) {
 	rows, err := db.conn.Query(`
-		SELECT DISTINCT LOWER(LTRIM(TRIM(account.handle), '@')) AS handle
+		SELECT DISTINCT account.tagged, LOWER(LTRIM(TRIM(account.handle), '@')) AS handle
 		FROM bookmarks b
-		CROSS JOIN LATERAL (` + bookmarkAccountHandlesSQL("b.") + `) account
+		CROSS JOIN LATERAL (
+			SELECT FALSE AS tagged, handle FROM (` + bookmarkAuthorHandlesSQL("b.") + `) author_handle
+			UNION ALL
+			SELECT TRUE, handle FROM (` + bookmarkTaggedHandlesSQL("b.") + `) tagged_handle
+		) account
 		WHERE NULLIF(LTRIM(TRIM(account.handle), '@'), '') IS NOT NULL
 		ORDER BY handle
 	`)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var handles []string
 	for rows.Next() {
+		var isTagged bool
 		var handle string
-		if err := rows.Scan(&handle); err != nil {
-			return nil, err
+		if err := rows.Scan(&isTagged, &handle); err != nil {
+			return nil, nil, err
 		}
-		handles = append(handles, handle)
+		if isTagged {
+			tagged = append(tagged, handle)
+		} else {
+			postedBy = append(postedBy, handle)
+		}
 	}
-	return handles, rows.Err()
+	return postedBy, tagged, rows.Err()
 }
 
 // GetBookmarkLabels returns distinct custom_title values for autocomplete.
