@@ -40,7 +40,7 @@ import {
 
 var feedList = document.getElementById('feed-list')
 var feedPagination = document.getElementById('feed-pagination')
-var pendingForms = new WeakSet()
+var pendingLikes = new WeakSet()
 var feedInitialRankDone = false
 var feedThreadReturnKey = 'igloo.feed.threadReturn'
 var feedThreadHistoryKey = 'iglooFeedThread'
@@ -359,11 +359,6 @@ function isCurrentChannelPath(channelId) {
   return path === '/channels/' + cid || path === '/channels/' + encodeURIComponent(cid)
 }
 
-function getFeedButton(root, actionName) {
-  if (!root) return null
-  return root.querySelector('button[data-feed-action-button="' + actionName + '"]')
-}
-
 function getFeedActionUiButton(root, actionName) {
   if (!root) return null
   return root.querySelector('[data-feed-action="' + actionName + '"]')
@@ -426,12 +421,6 @@ function syncOverlayActionsForRoot(root) {
 
 function syncFeedButtons(root) {
   if (!root) return
-  var likeBtn = getFeedButton(root, 'like')
-  var bookmarkBtn = getFeedButton(root, 'bookmark')
-  var isLiked = stateBool(root, 'liked')
-  var isBookmarked = stateBool(root, 'bookmarked')
-  if (likeBtn) likeBtn.textContent = isLiked ? t('action_unlike', 'Unlike') : t('action_like', 'Like')
-  if (bookmarkBtn) bookmarkBtn.textContent = isBookmarked ? t('action_unbookmark', 'Unbookmark') : t('action_bookmark', 'Bookmark')
   syncFeedActionUiButtons(root)
   syncOverlayActionsForRoot(root)
 }
@@ -527,113 +516,47 @@ function resolveFeedRootForActionNode(node) {
 
 // ── Action handlers (JSON API for keyboard shortcuts + overlay) ──
 
-function setFormBusy(form, busy) {
-  if (!form) return
-  form.querySelectorAll('button').forEach(function (btn) { btn.disabled = !!busy })
-}
-
-function feedItemPayloadFromForm(form, tweetId) {
-  var fd = new FormData(form)
+function feedItemPayload(root, tweetId) {
+  var bodyEl = root.querySelector('.feed-body-text')
   return {
     tweet_id: String(tweetId || ''),
-    link: String(fd.get('link') || ''),
-    canonical_x_link: String(fd.get('canonical_x_link') || ''),
-    source_handle: String(fd.get('source_handle') || ''),
-    author_handle: String(fd.get('author_handle') || ''),
-    title: String(fd.get('title') || ''),
-    body_text: String(fd.get('body_text') || '')
+    source_handle: String(root.getAttribute('data-source-handle') || ''),
+    author_handle: String(root.getAttribute('data-author-handle') || ''),
+    body_text: bodyEl ? bodyEl.textContent.trim() : ''
   }
 }
 
-function runFeedAction(root, actionType, form) {
-  var tweetId = root ? String(root.getAttribute('data-tweet-id') || '').trim() : ''
-  if (!root || !tweetId) return Promise.reject(new Error('missing tweet id'))
-
-  if (actionType === 'like') {
-    var currentlyLiked = stateBool(root, 'liked')
-    var method = currentlyLiked ? 'DELETE' : 'POST'
-    var heartBtn = getFeedActionUiButton(root, 'heart')
-    if (heartBtn) animateFeedActionButton(heartBtn, currentlyLiked)
-    applyLikeState(root, tweetId, !currentlyLiked)
-    return apiFetch('/api/feed/like/' + encodeURIComponent(tweetId), {
-      method: method,
-      body: method === 'POST' ? JSON.stringify({ item: feedItemPayloadFromForm(form, tweetId) }) : undefined
-    }).then(function (payload) { return waitForSavedContent(payload, heartBtn) }).then(function (payload) {
-      var nextLiked = typeof payload.is_liked === 'boolean' ? payload.is_liked : !currentlyLiked
-      applyLikeState(root, tweetId, nextLiked)
-    }).catch(function (err) {
-      applyLikeState(root, tweetId, currentlyLiked)
-      throw err
-    })
-  }
-  if (actionType === 'bookmark') {
-    var currentlyBookmarked = stateBool(root, 'bookmarked')
-    var bmethod = currentlyBookmarked ? 'DELETE' : 'POST'
-    setStateBool(root, 'bookmarked', !currentlyBookmarked)
-    syncFeedButtons(root)
-    syncSiblingCards(root)
-    return apiFetch('/api/bookmark/' + encodeURIComponent(tweetId), {
-      method: bmethod,
-      body: bmethod === 'POST' ? JSON.stringify({}) : undefined
-    }).then(waitForSavedContent).then(function (payload) {
-      var nextBookmarked = typeof payload.bookmarked === 'boolean' ? payload.bookmarked : !currentlyBookmarked
-      setStateBool(root, 'bookmarked', nextBookmarked)
-      syncFeedButtons(root)
-      syncSiblingCards(root)
-    }).catch(function (err) {
-      setStateBool(root, 'bookmarked', currentlyBookmarked)
-      syncFeedButtons(root)
-      syncSiblingCards(root)
-      throw err
-    })
-  }
-  return Promise.reject(new Error('unsupported feed action'))
+function runFeedLike(root, tweetId) {
+  var currentlyLiked = stateBool(root, 'liked')
+  var method = currentlyLiked ? 'DELETE' : 'POST'
+  var heartBtn = getFeedActionUiButton(root, 'heart')
+  if (heartBtn) animateFeedActionButton(heartBtn, currentlyLiked)
+  applyLikeState(root, tweetId, !currentlyLiked)
+  return apiFetch('/api/feed/like/' + encodeURIComponent(tweetId), {
+    method: method,
+    body: method === 'POST' ? JSON.stringify({ item: feedItemPayload(root, tweetId) }) : undefined
+  }).then(function (payload) { return waitForSavedContent(payload, heartBtn) }).then(function (payload) {
+    var nextLiked = typeof payload.is_liked === 'boolean' ? payload.is_liked : !currentlyLiked
+    applyLikeState(root, tweetId, nextLiked)
+  }).catch(function (err) {
+    applyLikeState(root, tweetId, currentlyLiked)
+    throw err
+  })
 }
 
-function findFallbackForm(root, actionType) {
-  if (!root) return null
-  return root.querySelector('form[data-feed-action-form="' + actionType + '"]')
-}
-
-function triggerFeedActionUi(root, actionType, triggerBtn) {
-  if (!root) return
-  if (actionType === 'like' && root.hasAttribute('data-feed-like-before')) return
-  var form = findFallbackForm(root, actionType)
-  if (!(form instanceof HTMLFormElement)) return
-  if (pendingForms.has(form)) return
-  pendingForms.add(form)
-  setFormBusy(form, true)
+function triggerFeedLike(root, triggerBtn) {
+  if (!root || root.hasAttribute('data-feed-like-before') || pendingLikes.has(root)) return
+  var tweetId = String(root.getAttribute('data-tweet-id') || '').trim()
+  if (!tweetId) return
+  pendingLikes.add(root)
   if (triggerBtn) triggerBtn.disabled = true
-  runFeedAction(root, actionType, form)
-    .then(function () {
-      if (actionType === 'like') showToast(stateBool(root, 'liked') ? t('toast_liked', 'Liked') : t('toast_unliked', 'Unliked'))
-      if (actionType === 'bookmark') showToast(stateBool(root, 'bookmarked') ? t('bookmark_saved', 'Bookmarked') : t('bookmark_removed', 'Bookmark removed'))
-    })
+  runFeedLike(root, tweetId)
+    .then(function () { showToast(stateBool(root, 'liked') ? t('toast_liked', 'Liked') : t('toast_unliked', 'Unliked')) })
     .catch(function (error) { showToast(error.message || t('logs_status_failed', 'Failed')) })
     .finally(function () {
-      pendingForms.delete(form)
-      setFormBusy(form, false)
+      pendingLikes.delete(root)
       if (triggerBtn) triggerBtn.disabled = false
     })
-}
-
-function handleFeedActionSubmit(form) {
-  if (!(form instanceof HTMLFormElement)) return
-  var actionType = String(form.getAttribute('data-feed-action-form') || '').trim()
-  if (!actionType) return
-  var root = itemRootFromNode(form)
-  var tweetId = root ? String(root.getAttribute('data-tweet-id') || '').trim() : ''
-  if (!root || !tweetId) return
-  if (actionType === 'like' && root.hasAttribute('data-feed-like-before')) return
-  if (pendingForms.has(form)) return
-  pendingForms.add(form)
-  setFormBusy(form, true)
-  runFeedAction(root, actionType, form).catch(function (error) {
-    showToast(error.message || t('logs_status_failed', 'Failed'))
-  }).finally(function () {
-    pendingForms.delete(form)
-    setFormBusy(form, false)
-  })
 }
 
 // Quote overlay direct API actions
@@ -1000,16 +923,6 @@ function initFeedCards(scope) {
   }
 }
 
-// ── Event delegation: form submit ──
-
-document.addEventListener('submit', function (event) {
-  var form = event.target
-  if (!(form instanceof HTMLFormElement)) return
-  if (!form.hasAttribute('data-feed-action-form')) return
-  event.preventDefault()
-  handleFeedActionSubmit(form)
-})
-
 // ── Event delegation: clicks ──
 
 document.addEventListener('click', function (event) {
@@ -1106,7 +1019,7 @@ document.addEventListener('click', function (event) {
       }
       if (action === 'heart') {
         if (actionBtn.hasAttribute('hx-post') || actionBtn.hasAttribute('hx-delete')) return
-        triggerFeedActionUi(root, 'like', actionBtn)
+        triggerFeedLike(root, actionBtn)
         return
       }
       if (action === 'bookmark') {
@@ -1195,7 +1108,7 @@ document.addEventListener('click', function (event) {
         return
       }
       if (overlayAction === 'heart') {
-        triggerFeedActionUi(oRoot, 'like', overlayActionBtn)
+        triggerFeedLike(oRoot, overlayActionBtn)
         return
       }
       if (overlayAction === 'bookmark') {
@@ -1463,7 +1376,7 @@ document.addEventListener('keydown', function (event) {
     }
   } else if (sc.match('feed.like', event.key)) {
     event.preventDefault(); event.stopPropagation()
-    triggerFeedActionUi(card, 'like', getFeedActionUiButton(card, 'heart'))
+    triggerFeedLike(card, getFeedActionUiButton(card, 'heart'))
   } else if (sc.match('feed.bookmark', event.key)) {
     event.preventDefault(); event.stopPropagation()
     openFeedBookmarkMenu(getFeedActionUiButton(card, 'bookmark'), card)
@@ -1636,7 +1549,7 @@ document.body.addEventListener('htmx:beforeRequest', function (event) {
   if (!button) return
   var card = button.closest('[data-feed-item]')
   if (button.dataset.savePending === '1' ||
-      (button.getAttribute('data-feed-action') === 'heart' && pendingForms.has(findFallbackForm(card, 'like')))) {
+      (button.getAttribute('data-feed-action') === 'heart' && pendingLikes.has(card))) {
     event.preventDefault()
   }
 })

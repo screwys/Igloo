@@ -124,7 +124,6 @@ templ feedThreadCard(p PageProps, item model.FeedItem, collapsed bool, deferMedi
 			@feedTaggedAccounts(p, item)
 		}
 		@feedActions(p, item)
-		@feedFallbackForms(p, item)
 	</article>
 }
 
@@ -187,7 +186,6 @@ templ feedLeafCard(p PageProps, item model.FeedItem, deferMedia bool) {
 			@feedTaggedAccounts(p, item)
 		}
 		@feedActions(p, item)
-		@feedFallbackForms(p, item)
 	</article>
 }
 
@@ -892,32 +890,6 @@ templ feedActions(p PageProps, item model.FeedItem) {
 				@MaterialIcon("OpenInNew", "")
 			</a>
 		}
-	</div>
-}
-
-templ feedFallbackForms(p PageProps, item model.FeedItem) {
-	<div class="feed-action-fallback-forms" style="display:none;">
-		<form method="post" action={ templ.SafeURL("/actions/feed/" + item.TweetID + "/like") } class="action-form" data-feed-action-form="like">
-			<input type="hidden" name="source_handle" value={ item.SourceHandle }/>
-			<input type="hidden" name="author_handle" value={ item.AuthorHandle }/>
-			<input type="hidden" name="body_text" value={ item.BodyText }/>
-			<button type="submit" data-feed-action-button="like">
-				if item.IsLiked {
-					{ L(p, "action_unlike", "Unlike") }
-				} else {
-					{ L(p, "action_like", "Like") }
-				}
-			</button>
-		</form>
-		<form method="post" action={ templ.SafeURL("/actions/feed/" + item.TweetID + "/bookmark") } class="action-form" data-feed-action-form="bookmark">
-			<button type="submit" data-feed-action-button="bookmark">
-				if item.IsBookmarked {
-					{ L(p, "action_unbookmark", "Unbookmark") }
-				} else {
-					{ L(p, "action_bookmark", "Bookmark") }
-				}
-			</button>
-		</form>
 	</div>
 }
 
