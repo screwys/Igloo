@@ -1071,6 +1071,11 @@ document.addEventListener('click', function (event) {
           syntheticRoot.setAttribute('data-source-handle', qAuthor)
           syntheticRoot.setAttribute('data-feed-is-retweet', '0')
           syntheticRoot.setAttribute('data-feed-item', '')
+          var quoteMediaCount = parentRoot
+            ? (parseInt(parentRoot.getAttribute('data-quote-media-count') || '0', 10) || 0)
+            : 0
+          syntheticRoot.setAttribute('data-media-count', String(quoteMediaCount))
+          syntheticRoot.setAttribute('data-quote-media-count', '0')
           var qBodyEl = qCard2 && qCard2.querySelector('.feed-quote-text')
           if (qBodyEl) {
             var synthBody = document.createElement('p')
