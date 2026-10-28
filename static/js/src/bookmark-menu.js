@@ -60,8 +60,6 @@ async function saveBookmarkAliasToApi(original, aliased) {
   } catch (_) {}
 }
 
-var _bmOutsideHandler = null, _bmEscHandler = null
-
 export function closeBookmarkMenu() {
   if (!bookmarkMenu) return
   var menu = bookmarkMenu
@@ -69,8 +67,8 @@ export function closeBookmarkMenu() {
   if (menu._labelSuggestionsCleanup) menu._labelSuggestionsCleanup()
   if (menu._accountPicker && menu._accountPicker.parentNode) menu._accountPicker.remove()
   if (menu.parentNode) menu.remove()
-  if (_bmOutsideHandler) { document.removeEventListener('mousedown', _bmOutsideHandler); _bmOutsideHandler = null }
-  if (_bmEscHandler) { document.removeEventListener('keydown', _bmEscHandler); _bmEscHandler = null }
+  if (menu._outsideHandler) document.removeEventListener('mousedown', menu._outsideHandler)
+  if (menu._escHandler) document.removeEventListener('keydown', menu._escHandler)
 }
 
 export function isBookmarkMenuOpen() {
@@ -347,21 +345,22 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
     if (overflow > 0) window.scrollBy({ top: overflow, behavior: 'smooth' })
   })
 
-  setTimeout(function () {
-    _bmOutsideHandler = function (e) {
-      var picker = popover._accountPicker
-      var pickerToggle = popover._accountPickerToggle
-      if (picker && !picker.classList.contains('hidden') &&
-          !picker.contains(e.target) &&
-          !(pickerToggle && pickerToggle.contains(e.target))) {
-        picker.classList.add('hidden')
-      }
-      if (!popover.contains(e.target) && !(picker && picker.contains(e.target)) && e.target !== anchorEl) closeBookmarkMenu()
+  popover._outsideHandler = function (e) {
+    var picker = popover._accountPicker
+    var pickerToggle = popover._accountPickerToggle
+    if (picker && !picker.classList.contains('hidden') &&
+        !picker.contains(e.target) &&
+        !(pickerToggle && pickerToggle.contains(e.target))) {
+      picker.classList.add('hidden')
     }
-    _bmEscHandler = function (e) { if (e.key === 'Escape') closeBookmarkMenu() }
-    document.addEventListener('mousedown', _bmOutsideHandler)
-    document.addEventListener('keydown', _bmEscHandler)
-  }, 80)
+    if (bookmarkMenu === popover && !popover.contains(e.target) &&
+        !(picker && picker.contains(e.target)) && e.target !== anchorEl) closeBookmarkMenu()
+  }
+  popover._escHandler = function (e) {
+    if (e.key === 'Escape' && bookmarkMenu === popover) closeBookmarkMenu()
+  }
+  document.addEventListener('mousedown', popover._outsideHandler)
+  document.addEventListener('keydown', popover._escHandler)
 
   var body = bodyDiv
   var combineImages = false
