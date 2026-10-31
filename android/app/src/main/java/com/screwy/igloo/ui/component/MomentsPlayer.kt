@@ -10,7 +10,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,6 +48,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -572,9 +572,14 @@ fun MomentsPlayer(
                 Box(modifier = Modifier.fillMaxSize().clipToBounds()) { pageContent(page) }
             }
         } else {
-            BoxWithConstraints(Modifier.fillMaxSize().clipToBounds()) {
+            // Compose the pager in this pass, not a subcomposition, so its page count and keys
+            // always come from the same playlist update.
+            Box(
+                Modifier.fillMaxSize().clipToBounds().onSizeChanged {
+                    endOverscroll.limit = it.height * 0.5f
+                }
+            ) {
                 val density = LocalDensity.current
-                endOverscroll.limit = with(density) { maxHeight.toPx() * 0.5f }
                 if (endOverscroll.distance > 0f) {
                     Box(
                         modifier = Modifier.align(Alignment.BottomCenter)
