@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 interface AccountSessionActions {
+    val serverUrlFlow: StateFlow<String>
+    val localServerUrlFlow: StateFlow<String>
+    fun updateLocalServerUrl(value: String)
     fun updateServerUrl(value: String)
     suspend fun logout(reason: LogoutReason = LogoutReason.UserInitiated)
 }
@@ -66,7 +69,11 @@ class AuthRepo(
 
     val accessTokenFlow: StateFlow<String?> = accessTokenCache.asStateFlow()
     val usernameFlow: StateFlow<String?> = usernameCache.asStateFlow()
-    val serverUrlFlow: StateFlow<String> = serverUrlCache.asStateFlow()
+    override val serverUrlFlow: StateFlow<String> = serverUrlCache.asStateFlow()
+    private val localServerUrlCache = MutableStateFlow(
+        storage.getString(AuthKeys.LOCAL_SERVER_URL)?.let(::normalizeServerUrl).orEmpty(),
+    )
+    override val localServerUrlFlow: StateFlow<String> = localServerUrlCache.asStateFlow()
 
     // ─── Sync accessors (hot-path reads) ─────────────────────────────────────
 
@@ -110,6 +117,7 @@ class AuthRepo(
      */
     suspend fun login(serverUrl: String, username: String, password: String): LoginResult {
         val normalized = normalizeServerUrl(serverUrl)
+        if (normalized != serverUrlSync()) updateLocalServerUrl("")
         persistServerUrl(normalized)
 
         val response = try {
@@ -149,6 +157,7 @@ class AuthRepo(
         stopReconcilersOnLogout()
         storage.clearAll()
         persistServerUrl(retainedServerUrl)
+        updateLocalServerUrl(localServerUrlCache.value)
         accessTokenCache.value = null
         refreshTokenCache.value = null
         usernameCache.value = null
@@ -238,6 +247,12 @@ class AuthRepo(
      */
     override fun updateServerUrl(value: String) {
         persistServerUrl(normalizeServerUrl(value))
+    }
+
+    override fun updateLocalServerUrl(value: String) {
+        val url = normalizeServerUrl(value)
+        storage.edit { putString(AuthKeys.LOCAL_SERVER_URL, url.takeIf { it.isNotBlank() }) }
+        localServerUrlCache.value = url
     }
 
     private fun persistServerUrl(url: String) {

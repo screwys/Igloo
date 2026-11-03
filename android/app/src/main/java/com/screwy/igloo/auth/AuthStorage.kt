@@ -34,6 +34,7 @@ object AuthKeys {
     const val USERNAME = "auth.username"
     const val IS_ADMIN = "auth.is_admin"
     const val SERVER_URL = "auth.server_url"
+    const val LOCAL_SERVER_URL = "auth.local_server_url"
 }
 
 internal enum class AuthStorageValueType(
@@ -68,4 +69,5 @@ internal val authStorageKeySpecs = listOf(
     AuthStorageKeySpec(AuthKeys.USERNAME, AuthStorageValueType.STRING),
     AuthStorageKeySpec(AuthKeys.IS_ADMIN, AuthStorageValueType.BOOLEAN),
     AuthStorageKeySpec(AuthKeys.SERVER_URL, AuthStorageValueType.STRING),
+    AuthStorageKeySpec(AuthKeys.LOCAL_SERVER_URL, AuthStorageValueType.STRING),
 )

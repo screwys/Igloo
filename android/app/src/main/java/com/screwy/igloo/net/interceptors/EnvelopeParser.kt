@@ -46,11 +46,14 @@ object EnvelopeParser {
         nowMsProvider: () -> Long = { System.currentTimeMillis() },
         hostResolver: (() -> String)? = null,
         onReachable: () -> Unit = {},
+        urlMatcher: ((String) -> Boolean)? = null,
     ) {
         config.install(ResponseObserver) {
             onResponse { response ->
                 val iglooHost = hostResolver?.invoke().orEmpty()
-                if (iglooHost.isNotEmpty() && response.call.request.url.host.lowercase() == iglooHost) {
+                val matches = urlMatcher?.invoke(response.call.request.url.toString())
+                    ?: (iglooHost.isNotEmpty() && response.call.request.url.host.lowercase() == iglooHost)
+                if (matches) {
                     onReachable()
                 }
                 if (!response.status.isSuccess()) return@onResponse

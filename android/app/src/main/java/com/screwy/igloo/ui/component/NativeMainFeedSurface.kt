@@ -160,6 +160,7 @@ internal fun NativeFeedSurface(
     val imageLoader: ImageLoader = koinInject()
     val authTokens: AuthTokenProvider = koinInject()
     val iglooHostProvider: IglooHostProvider = koinInject()
+    val httpCallFactory: okhttp3.Call.Factory = koinInject()
     val mediaResolvers: MediaResolvers = koinInject()
     val prefs: PreferencesRepo = koinInject()
     val db: IglooDatabase = koinInject()
@@ -262,6 +263,7 @@ internal fun NativeFeedSurface(
             imageLoader = imageLoader,
             authTokens = authTokens,
             iglooHostProvider = iglooHostProvider,
+            httpCallFactory = httpCallFactory,
             mediaResolvers = mediaResolvers,
             bufferDurations = bufferDurations,
             colors = colors,

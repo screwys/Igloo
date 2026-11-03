@@ -4,13 +4,13 @@ import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.net.auth.AuthTokenProvider
 import com.screwy.igloo.net.interceptors.AuthInterceptor
 import com.screwy.igloo.net.interceptors.EnvelopeParser
-import com.screwy.igloo.net.interceptors.ServerNetworkBindingInterceptor
 import com.screwy.igloo.net.interceptors.UASpoofInterceptor
 import io.ktor.client.HttpClient
+import io.ktor.client.request.HttpRequest
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.HttpClientEngineFactory
-import io.ktor.client.engine.android.Android
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.UserAgent
@@ -23,7 +23,7 @@ import java.io.IOException
  * Shared Igloo HTTP client.
  * Ktor `HttpClient` across the app, installed features applied in the documented order.
  *
- * Production wiring uses the `Android` engine (`buildIglooClient`); tests override via
+ * Production wiring uses the `OkHttp` engine (`buildIglooClient`); tests override via
  * `buildIglooClient(engine = MockEngine { ... })` so every other plugin + interceptor
  * exercises the same code path.
  *
@@ -44,17 +44,15 @@ fun buildIglooClient(
     hostProvider: IglooHostProvider,
     uaOverrides: Map<String, String> = NetDefaults.UA_OVERRIDES,
     nowMsProvider: () -> Long = { System.currentTimeMillis() },
-    beforeIglooRequest: () -> Unit = {},
     onReachable: () -> Unit = {},
-    onTransportFailure: () -> Unit = {},
-): HttpClient = HttpClient(Android) {
+    onTransportFailure: (HttpRequest) -> Unit = {},
+): HttpClient = HttpClient(OkHttp) {
     configureIgloo(
         prefsProvider,
         tokenProvider,
         hostProvider,
         uaOverrides,
         nowMsProvider,
-        beforeIglooRequest,
         onReachable,
         onTransportFailure,
     )
@@ -67,9 +65,8 @@ fun <T : HttpClientEngineConfig> buildIglooClient(
     hostProvider: IglooHostProvider,
     uaOverrides: Map<String, String> = NetDefaults.UA_OVERRIDES,
     nowMsProvider: () -> Long = { System.currentTimeMillis() },
-    beforeIglooRequest: () -> Unit = {},
     onReachable: () -> Unit = {},
-    onTransportFailure: () -> Unit = {},
+    onTransportFailure: (HttpRequest) -> Unit = {},
 ): HttpClient = HttpClient(engineFactory) {
     configureIgloo(
         prefsProvider,
@@ -77,7 +74,6 @@ fun <T : HttpClientEngineConfig> buildIglooClient(
         hostProvider,
         uaOverrides,
         nowMsProvider,
-        beforeIglooRequest,
         onReachable,
         onTransportFailure,
     )
@@ -90,9 +86,8 @@ fun buildIglooClient(
     hostProvider: IglooHostProvider,
     uaOverrides: Map<String, String> = NetDefaults.UA_OVERRIDES,
     nowMsProvider: () -> Long = { System.currentTimeMillis() },
-    beforeIglooRequest: () -> Unit = {},
     onReachable: () -> Unit = {},
-    onTransportFailure: () -> Unit = {},
+    onTransportFailure: (HttpRequest) -> Unit = {},
 ): HttpClient = HttpClient(engine) {
     configureIgloo(
         prefsProvider,
@@ -100,7 +95,6 @@ fun buildIglooClient(
         hostProvider,
         uaOverrides,
         nowMsProvider,
-        beforeIglooRequest,
         onReachable,
         onTransportFailure,
     )
@@ -112,9 +106,8 @@ private fun HttpClientConfig<*>.configureIgloo(
     hostProvider: IglooHostProvider,
     uaOverrides: Map<String, String>,
     nowMsProvider: () -> Long,
-    beforeIglooRequest: () -> Unit,
     onReachable: () -> Unit,
-    onTransportFailure: () -> Unit,
+    onTransportFailure: (HttpRequest) -> Unit,
 ) {
     expectSuccess = false // callers inspect status via IglooError.classify
 
@@ -132,12 +125,8 @@ private fun HttpClientConfig<*>.configureIgloo(
         agent = NetDefaults.USER_AGENT
     }
 
-    install(ServerNetworkBindingInterceptor) {
-        this.hostResolver = hostProvider::hostSync
-        this.beforeServerRequest = beforeIglooRequest
-    }
-
     install(AuthInterceptor) {
+        this.urlMatcher = hostProvider::matches
         this.tokenProvider = tokenProvider
         this.hostResolver = hostProvider::hostSync
     }
@@ -148,9 +137,8 @@ private fun HttpClientConfig<*>.configureIgloo(
 
     HttpResponseValidator {
         handleResponseExceptionWithRequest { cause, request ->
-            val iglooHost = hostProvider.hostSync()
-            if (iglooHost.isEmpty() || request.url.host.lowercase() != iglooHost) return@handleResponseExceptionWithRequest
-            if (cause.isTransportFailure()) onTransportFailure()
+            if (!hostProvider.matches(request.url.toString())) return@handleResponseExceptionWithRequest
+            if (cause.isTransportFailure()) onTransportFailure(request)
         }
     }
 
@@ -160,10 +148,12 @@ private fun HttpClientConfig<*>.configureIgloo(
         nowMsProvider = nowMsProvider,
         hostResolver = hostProvider::hostSync,
         onReachable = onReachable,
+        urlMatcher = hostProvider::matches,
     )
 }
 
 private fun Throwable.isTransportFailure(): Boolean {
+    if (this is kotlinx.coroutines.CancellationException) return false
     generateSequence(this) { it.cause }.forEach { cause ->
         if (cause is IOException) return true
         val simpleName = cause::class.simpleName.orEmpty()

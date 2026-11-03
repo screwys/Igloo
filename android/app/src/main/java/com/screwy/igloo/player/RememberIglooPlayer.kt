@@ -23,11 +23,12 @@ internal fun rememberIglooPlayer(): ExoPlayer? {
     val prefs: PreferencesRepo = koinInject()
     val authTokens: AuthTokenProvider = koinInject()
     val hostProvider: IglooHostProvider = koinInject()
+    val httpCallFactory: okhttp3.Call.Factory = koinInject()
     val buffering by remember(prefs) { prefs.playbackBuffering() }
         .collectAsStateWithLifecycle(initialValue = null)
     val durations = buffering?.durations ?: return null
     var player by remember(context, authTokens, hostProvider) {
-        mutableStateOf(buildIglooPlayer(context, authTokens, hostProvider, durations))
+        mutableStateOf(buildIglooPlayer(context, authTokens, hostProvider, httpCallFactory, durations))
     }
     var appliedDurations by remember(context, authTokens, hostProvider) {
         mutableStateOf(durations)
@@ -36,7 +37,7 @@ internal fun rememberIglooPlayer(): ExoPlayer? {
         if (appliedDurations != durations) {
             val previous = player
             val replacement = buildIglooPlayer(
-                context, authTokens, hostProvider, durations, previous.applicationLooper,
+                context, authTokens, hostProvider, httpCallFactory, durations, previous.applicationLooper,
             )
             copyIglooPlaybackState(previous, replacement)
             player = replacement

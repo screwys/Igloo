@@ -2,6 +2,7 @@ package com.screwy.igloo.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,6 +12,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -18,6 +20,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -26,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.screwy.igloo.R
+import com.screwy.igloo.auth.AuthRepo
 import com.screwy.igloo.data.entity.MutedChannelDisplay
 import com.screwy.igloo.settings.components.SectionHeader
 import com.screwy.igloo.settings.components.SettingsSubScreen
@@ -46,6 +52,7 @@ fun AccountRoute(
     var pendingUnmute by remember { mutableStateOf<MutedChannelDisplay?>(null) }
     var confirmClearMuted by remember { mutableStateOf(false) }
     val serverUrl by vm.serverUrl.collectAsStateWithLifecycle()
+    val localServerUrl by vm.localServerUrl.collectAsStateWithLifecycle()
     var showLogoutConfirmation by remember { mutableStateOf(false) }
 
     SettingsSubScreen(
@@ -53,6 +60,10 @@ fun AccountRoute(
         onBack = { navController.popBackStack() },
         modifier = modifier,
     ) {
+        SectionHeader(stringResource(R.string.settings_section_server))
+        ServerAddressRow(stringResource(R.string.field_server_url), serverUrl, false, vm::setServerUrl)
+        ServerAddressRow(stringResource(R.string.field_local_server_url), localServerUrl, true, vm::setLocalServerUrl)
+
         SectionHeader(stringResource(R.string.settings_section_muted_accounts))
         if (mutedChannels.isEmpty()) {
             Text(
@@ -72,13 +83,6 @@ fun AccountRoute(
             TextActionRow(label = stringResource(R.string.action_clear_muted_accounts)) { confirmClearMuted = true }
         }
 
-        SectionHeader(stringResource(R.string.settings_section_server))
-        Text(
-            text = serverUrl,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.iglooColors.onSurface,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -147,6 +151,53 @@ fun AccountRoute(
                 vm.logout()
             },
             onDismiss = { showLogoutConfirmation = false },
+        )
+    }
+}
+
+@Composable
+private fun ServerAddressRow(label: String, value: String, optional: Boolean, onSave: (String) -> Unit) {
+    var editing by rememberSaveable { mutableStateOf(false) }
+    var draft by rememberSaveable(value) { mutableStateOf(value) }
+    Column(
+        modifier = Modifier.fillMaxWidth().clickable { draft = value; editing = true }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            value.ifBlank { stringResource(R.string.status_not_set) },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.iglooColors.onSurfaceMuted,
+        )
+    }
+    if (editing) {
+        val normalized = AuthRepo.normalizeServerUrl(draft)
+        val valid = (optional && normalized.isEmpty()) || runCatching {
+            val uri = java.net.URI(normalized)
+            uri.scheme in listOf("http", "https") && !uri.host.isNullOrBlank() &&
+                uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null &&
+                (uri.port == -1 || uri.port in 1..65535)
+        }.getOrDefault(false)
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text(label) },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(enabled = valid, onClick = { onSave(normalized); editing = false }) {
+                    Text(stringResource(R.string.action_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editing = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
         )
     }
 }

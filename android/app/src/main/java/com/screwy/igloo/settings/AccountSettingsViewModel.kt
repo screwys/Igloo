@@ -5,10 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.screwy.igloo.auth.AccountSessionActions
 import com.screwy.igloo.auth.LogoutReason
 import com.screwy.igloo.data.PreferencesRepo
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class AccountSettingsViewModel(
@@ -17,7 +14,11 @@ class AccountSettingsViewModel(
 ) : ViewModel() {
 
     val serverUrl: StateFlow<String> =
-        prefs.serverUrl().stateDefault(PreferencesRepo.Defaults.SERVER_URL)
+        authRepo.serverUrlFlow
+
+    val localServerUrl: StateFlow<String> = authRepo.localServerUrlFlow
+
+    fun setLocalServerUrl(value: String) = authRepo.updateLocalServerUrl(value)
 
     fun setServerUrl(value: String) {
         viewModelScope.launch {
@@ -30,6 +31,4 @@ class AccountSettingsViewModel(
         viewModelScope.launch { authRepo.logout(LogoutReason.UserInitiated) }
     }
 
-    private fun <T> Flow<T>.stateDefault(initial: T): StateFlow<T> =
-        stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), initial)
 }

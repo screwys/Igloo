@@ -117,7 +117,11 @@ else
     printf '%s\n' "$install_output"
 fi
 echo "🔄 Relaunching app..."
-adb -s "$adb_serial" shell am force-stop --user 0 com.screwy.igloo
-adb -s "$adb_serial" shell am start --user 0 -n "com.screwy.igloo/.MainActivity" >/dev/null 2>&1 || true
+if [ -n "${IGLOO_ANDROID_DEVICE_COMMAND:-}" ]; then
+    "$IGLOO_ANDROID_DEVICE_COMMAND" open com.screwy.igloo --relaunch
+else
+    adb -s "$adb_serial" shell am force-stop --user 0 com.screwy.igloo
+    adb -s "$adb_serial" shell am start --user 0 -n "com.screwy.igloo/.MainActivity" >/dev/null 2>&1 || true
+fi
 echo ""
 echo "✅ Done! App installed and relaunched."

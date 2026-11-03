@@ -29,6 +29,7 @@ internal class NativeMainFeedController(
     private val imageLoader: ImageLoader,
     private val authTokens: AuthTokenProvider,
     private val iglooHostProvider: IglooHostProvider,
+    private val httpCallFactory: okhttp3.Call.Factory,
     private val mediaResolvers: MediaResolvers,
     bufferDurations: PlaybackBufferDurations,
     private var colors: NativeFeedColors,
@@ -43,7 +44,7 @@ internal class NativeMainFeedController(
     private val layoutManager = LinearLayoutManager(context)
     private val seenTracker = PassedFeedRowsTracker(seenBatcher)
     private var bufferDurations = bufferDurations
-    private var inlinePlayer = buildIglooPlayer(context, authTokens, iglooHostProvider, bufferDurations)
+    private var inlinePlayer = buildIglooPlayer(context, authTokens, iglooHostProvider, httpCallFactory, bufferDurations)
     private val inlineVideoManager =
         NativeInlineVideoManager(player = inlinePlayer)
     private var pendingInitialScrollAnchor: NativeFeedScrollAnchor? =
@@ -114,7 +115,7 @@ internal class NativeMainFeedController(
     ) {
         if (this.bufferDurations != bufferDurations) {
             val replacement = buildIglooPlayer(
-                context, authTokens, iglooHostProvider, bufferDurations, inlinePlayer.applicationLooper,
+                context, authTokens, iglooHostProvider, httpCallFactory, bufferDurations, inlinePlayer.applicationLooper,
             )
             copyIglooPlaybackState(inlinePlayer, replacement)
             inlineVideoManager.replacePlayer(replacement)

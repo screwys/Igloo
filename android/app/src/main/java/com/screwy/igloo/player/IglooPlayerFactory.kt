@@ -9,8 +9,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import okhttp3.Call
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -33,12 +34,15 @@ fun buildIglooPlayer(
     context: Context,
     tokenProvider: AuthTokenProvider,
     hostProvider: IglooHostProvider,
+    httpCallFactory: Call.Factory,
     bufferDurations: PlaybackBufferDurations = PlaybackBufferDurations(),
     applicationLooper: Looper = Looper.getMainLooper(),
 ): ExoPlayer = buildIglooPlayer(
     context = context,
     tokenProvider = tokenProvider,
     iglooHostResolver = hostProvider::hostSync,
+    serverUrlMatcher = hostProvider::matches,
+    httpCallFactory = httpCallFactory,
     bufferDurations = bufferDurations,
     applicationLooper = applicationLooper,
 )
@@ -50,8 +54,10 @@ internal fun buildIglooPlayer(
     iglooHostResolver: () -> String,
     bufferDurations: PlaybackBufferDurations = PlaybackBufferDurations(),
     applicationLooper: Looper = Looper.getMainLooper(),
+    httpCallFactory: Call.Factory = okhttp3.OkHttpClient(),
+    serverUrlMatcher: ((String) -> Boolean)? = null,
 ): ExoPlayer {
-    val dataSourceFactory = buildIglooDataSourceFactory(context, tokenProvider, iglooHostResolver)
+    val dataSourceFactory = buildIglooDataSourceFactory(context, tokenProvider, iglooHostResolver, httpCallFactory, serverUrlMatcher)
     val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMsForLocalPlayback(
             /* minBufferMs = */ 1_500,
@@ -112,11 +118,14 @@ private fun buildIglooDataSourceFactory(
     context: Context,
     tokenProvider: AuthTokenProvider,
     iglooHostResolver: () -> String,
+    httpCallFactory: Call.Factory,
+    serverUrlMatcher: ((String) -> Boolean)? = null,
 ): DataSource.Factory {
-    val httpFactory = DefaultHttpDataSource.Factory()
+    val httpFactory = OkHttpDataSource.Factory(httpCallFactory)
         .setUserAgent(NetDefaults.PUBLIC_BROWSER_USER_AGENT)
     val resolvingHttpFactory = ResolvingDataSource.Factory(httpFactory) { dataSpec ->
         val authHeaders = iglooMediaRequestHeaders(
+            serverUrlMatcher = serverUrlMatcher,
             url = dataSpec.uri.toString(),
             iglooHost = iglooHostResolver(),
             bearerToken = tokenProvider.bearerTokenSync(),
@@ -133,11 +142,12 @@ internal fun buildIglooMediaSession(
     player: Player,
     tokenProvider: AuthTokenProvider,
     hostProvider: IglooHostProvider,
+    httpCallFactory: Call.Factory,
 ): MediaSession =
     MediaSession.Builder(context, player)
         .setBitmapLoader(
             DataSourceBitmapLoader.Builder(context)
-                .setDataSourceFactory(buildIglooDataSourceFactory(context, tokenProvider, hostProvider::hostSync))
+                .setDataSourceFactory(buildIglooDataSourceFactory(context, tokenProvider, hostProvider::hostSync, httpCallFactory, hostProvider::matches))
                 .build()
         )
         .setMediaButtonPreferences(
@@ -171,9 +181,10 @@ internal fun iglooMediaRequestHeaders(
     iglooHost: String,
     bearerToken: String?,
     existingHeaders: Map<String, String> = emptyMap(),
+    serverUrlMatcher: ((String) -> Boolean)? = null,
 ): Map<String, String> {
     val token = bearerToken?.takeIf { it.isNotBlank() } ?: return emptyMap()
-    if (!isIglooServerUrl(url, iglooHost)) return emptyMap()
+    if (!(serverUrlMatcher?.invoke(url) ?: isIglooServerUrl(url, iglooHost))) return emptyMap()
     if (existingHeaders.keys.any { it.equals("Authorization", ignoreCase = true) }) return emptyMap()
     return mapOf("Authorization" to "Bearer $token")
 }

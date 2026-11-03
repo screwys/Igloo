@@ -50,6 +50,7 @@ class AuthInterceptorConfig {
      * server URL is unknown (pre-login, or malformed pref).
      */
     lateinit var hostResolver: () -> String
+    var urlMatcher: ((String) -> Boolean)? = null
 
     /** Shared across all concurrent 401-callers. Swappable for tests. */
     var refreshMutex: Mutex = Mutex()
@@ -69,11 +70,12 @@ val AuthInterceptor = createClientPlugin("IglooAuthInterceptor", ::AuthIntercept
     val tokens = pluginConfig.tokenProvider
     val resolveHost = pluginConfig.hostResolver
     val refreshMutex = pluginConfig.refreshMutex
+    fun matches(url: String, host: String): Boolean = pluginConfig.urlMatcher?.invoke(url)
+        ?: (resolveHost().isNotEmpty() && host == resolveHost())
 
     onRequest { request, _ ->
         val requestHost = request.url.host.lowercase()
-        val iglooHost = resolveHost()
-        if (iglooHost.isEmpty() || requestHost != iglooHost) return@onRequest
+        if (!matches(request.url.toString(), requestHost)) return@onRequest
         val token = tokens.bearerTokenSync() ?: return@onRequest
         request.headers {
             if (!contains(HttpHeaders.Authorization)) {
@@ -87,8 +89,7 @@ val AuthInterceptor = createClientPlugin("IglooAuthInterceptor", ::AuthIntercept
         if (call.response.status.value != 401) return@on call
 
         val requestHost = call.request.url.host.lowercase()
-        val iglooHost = resolveHost()
-        if (iglooHost.isEmpty() || requestHost != iglooHost) return@on call
+        if (!matches(call.request.url.toString(), requestHost)) return@on call
 
         val path = call.request.url.encodedPath
         if (path in SkipAuthPaths) return@on call

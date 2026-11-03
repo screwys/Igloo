@@ -8,8 +8,11 @@ package com.screwy.igloo.net
  * the full auth surface still get a narrow host-only dependency.
  */
 class IglooHostProvider(
+    private val urlMatcher: ((String) -> Boolean)? = null,
     private val hostSource: () -> String,
 ) {
     /** Lowercase host (no port). Empty string if the server URL isn't parseable. */
     fun hostSync(): String = hostSource()
+
+    fun matches(url: String): Boolean = urlMatcher?.invoke(url) ?: isIglooServerUrl(url, hostSync())
 }

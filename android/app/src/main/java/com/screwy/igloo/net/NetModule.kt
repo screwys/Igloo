@@ -32,7 +32,8 @@ val iglooNetModule = module {
 
     single { ReachabilitySignals() }
 
-    single { LanServerNetworkBinder(context = androidContext(), hostProvider = get()) }
+    single { ServerConnections(androidContext(), get(), get(named("applicationScope")), get()) }
+    single<okhttp3.Call.Factory> { get<ServerConnections>().mediaCallFactory() }
     single<ServerDiscovery> { LanServerDiscovery(context = androidContext()) }
 
     // ServerBaseUrlProvider, IglooHostProvider and AuthTokenProvider are declared in
@@ -46,9 +47,12 @@ val iglooNetModule = module {
             prefsProvider = prefsProvider,
             tokenProvider = get(),
             hostProvider = get(),
-            beforeIglooRequest = get<LanServerNetworkBinder>()::bindForCurrentServerIfNeeded,
+            engine = get<ServerConnections>().engine(),
             onReachable = get<ReachabilitySignals>()::markOnline,
-            onTransportFailure = get<ReachabilitySignals>()::downgrade,
+            onTransportFailure = { request ->
+                get<ServerConnections>().transportFailed(request)
+                get<ReachabilitySignals>().downgrade()
+            },
         )
     }
 

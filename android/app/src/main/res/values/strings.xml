@@ -346,6 +346,7 @@
     <string name="feed_x_post">X post</string>
     <string name="field_confirm_new_password">Confirm New Password</string>
     <string name="field_current_password">Current Password</string>
+    <string name="field_local_server_url">Local URL</string>
     <string name="field_new_password">New Password</string>
     <string name="field_new_password_leave_empty_keep">New Password (leave empty to keep)</string>
     <string name="field_password">Password</string>

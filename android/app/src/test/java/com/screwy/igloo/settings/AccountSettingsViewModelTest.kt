@@ -90,11 +90,15 @@ class AccountSettingsViewModelTest {
     }
 
     private class FakeAccountSessionActions : AccountSessionActions {
+        override val serverUrlFlow = kotlinx.coroutines.flow.MutableStateFlow(PreferencesRepo.Defaults.SERVER_URL)
+        override val localServerUrlFlow = kotlinx.coroutines.flow.MutableStateFlow("")
+        override fun updateLocalServerUrl(value: String) { localServerUrlFlow.value = value }
         val updatedServerUrls = mutableListOf<String>()
         val logoutReasons = mutableListOf<LogoutReason>()
 
         override fun updateServerUrl(value: String) {
             updatedServerUrls += value
+            serverUrlFlow.value = value
         }
 
         override suspend fun logout(reason: LogoutReason) {

@@ -66,11 +66,11 @@ class PlaybackService : MediaSessionService() {
         val koin = GlobalContext.get()
         prefs = koin.get()
         playerState = mutableStateOf(
-            buildIglooPlayer(this, koin.get<AuthTokenProvider>(), koin.get<IglooHostProvider>()).apply {
+            buildIglooPlayer(this, koin.get<AuthTokenProvider>(), koin.get<IglooHostProvider>(), koin.get<okhttp3.Call.Factory>()).apply {
                 setWakeMode(C.WAKE_MODE_LOCAL)
             },
         )
-        session = buildIglooMediaSession(this, player, koin.get(), koin.get())
+        session = buildIglooMediaSession(this, player, koin.get(), koin.get(), koin.get())
         addSession(session)
         sponsorBlock = SponsorBlockPlaybackController(
             seekTo = { positionMs -> player.seekTo(positionMs) },
@@ -149,6 +149,7 @@ class PlaybackService : MediaSessionService() {
             this,
             koin.get<AuthTokenProvider>(),
             koin.get<IglooHostProvider>(),
+            koin.get<okhttp3.Call.Factory>(),
             requestedDurations,
             previous.applicationLooper,
         ).apply { setWakeMode(C.WAKE_MODE_LOCAL) }

@@ -4,6 +4,7 @@ import com.screwy.igloo.AppRuntime
 import com.screwy.igloo.data.PreferencesRepo
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.ServerBaseUrlProvider
+import com.screwy.igloo.net.ServerConnections
 import com.screwy.igloo.net.ServerDiscovery
 import com.screwy.igloo.net.auth.AuthTokenProvider
 import com.screwy.igloo.sync.PeriodicSyncScheduler
@@ -52,7 +53,10 @@ val iglooAuthModule = module {
 
     single { ServerBaseUrlProvider(urlSource = { get<AuthRepo>().serverUrlSync() }) }
 
-    single { IglooHostProvider(hostSource = { get<AuthRepo>().serverHostSync() }) }
+    single { IglooHostProvider(
+        hostSource = { get<AuthRepo>().serverHostSync() },
+        urlMatcher = { get<ServerConnections>().matches(it) },
+    ) }
 
     viewModel { (onSuccess: () -> Unit) ->
         LoginViewModel(authRepo = get(), serverDiscovery = get<ServerDiscovery>(), onLoginSuccess = onSuccess)
