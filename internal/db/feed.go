@@ -1333,7 +1333,8 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 			   OR (COALESCE(feed_items.reposter_channel_id, '') = ''
 			       AND feed_items.reposter_channel_id IS DISTINCT FROM excluded.reposter_channel_id)
 			RETURNING tweet_id, COALESCE(body_text, ''), COALESCE(quote_body_text, ''),
-			          COALESCE(media_json, ''), COALESCE(quote_media_json, ''), COALESCE(quote_tweet_id, '')
+			          COALESCE(media_json, ''), COALESCE(quote_media_json, ''), COALESCE(quote_tweet_id, ''),
+			          COALESCE(fetched_at, 0)
 		`))
 		if err != nil {
 			return err
@@ -1343,6 +1344,7 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 		}()
 
 		nowMs := time.Now().UnixMilli()
+		newRetentionItems := make(map[string]struct{})
 		enqueueTranslation := func(tweetID, field, sourceText string) error {
 			if strings.TrimSpace(sourceText) == "" {
 				return nil
@@ -1398,7 +1400,8 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 				nilIfEmpty(item.CanonicalTweetID),
 			)
 			var storedTweetID, finalBodyText, finalQuoteBodyText string
-			err := row.Scan(&storedTweetID, &finalBodyText, &finalQuoteBodyText, &item.MediaJSON, &item.QuoteMediaJSON, &item.QuoteTweetID)
+			var storedFetchedAt int64
+			err := row.Scan(&storedTweetID, &finalBodyText, &finalQuoteBodyText, &item.MediaJSON, &item.QuoteMediaJSON, &item.QuoteTweetID, &storedFetchedAt)
 			if err != nil && err != sql.ErrNoRows {
 				return err
 			}
@@ -1415,6 +1418,9 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 			}
 			if item.QuoteMediaJSON != incomingQuoteMediaJSON {
 				item.QuoteMedia = nil
+			}
+			if storedFetchedAt == nowMs && (len(item.Media) > 0 || item.QuoteTweetID != "") {
+				newRetentionItems[item.TweetID] = struct{}{}
 			}
 			if err == sql.ErrNoRows {
 				continue
@@ -1440,7 +1446,9 @@ func (db *DB) UpsertFeedItemsDetailed(items []model.FeedItem) (FeedUpsertResult,
 			if err != nil {
 				return err
 			}
-			if !changed {
+			// A new quote can retain an existing media owner even if its URL did not change.
+			_, newRetentionItem := newRetentionItems[item.TweetID]
+			if !changed && !newRetentionItem {
 				continue
 			}
 			channelID := xMediaRetentionChannelID(item)

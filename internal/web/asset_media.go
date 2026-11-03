@@ -1,8 +1,11 @@
 package web
 
 import (
+	"log/slog"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/screwys/igloo/internal/db"
 )
@@ -104,6 +107,29 @@ func (s *Server) canonicalAssetFile(asset db.Asset) *canonicalAssetFile {
 	path, err := s.cfg.Storage.Path(asset.FilePath)
 	if err != nil {
 		return nil
+	}
+	if asset.OwnerKind == "tweet" && (asset.AssetKind == "post_media" || asset.AssetKind == "post_audio" || asset.AssetKind == "post_thumbnail") && asset.State == db.AssetStateReady {
+		info, statErr := os.Stat(path)
+		missing := os.IsNotExist(statErr)
+		if statErr == nil {
+			missing = !info.Mode().IsRegular() || info.Size() != asset.SizeBytes ||
+				(asset.FileMtimeNs > 0 && info.ModTime().UnixNano() != asset.FileMtimeNs)
+		}
+		if missing {
+			nowMs := time.Now().UnixMilli()
+			changed, err := s.db.MarkReadyAssetUnavailable(asset, nowMs)
+			if err != nil {
+				slog.Warn("mark missing tweet media unavailable", "owner_id", asset.OwnerID, "asset_kind", asset.AssetKind, "err", err)
+			} else if changed {
+				queued, err := s.db.RequeueXContentAssets([]string{asset.OwnerID}, false, "retention", nowMs)
+				if err != nil {
+					slog.Warn("requeue missing tweet media", "owner_id", asset.OwnerID, "asset_kind", asset.AssetKind, "err", err)
+				} else if queued > 0 && s.workers != nil {
+					s.workers.KickMediaWork()
+				}
+			}
+			return nil
+		}
 	}
 	return &canonicalAssetFile{asset: asset, path: path}
 }
