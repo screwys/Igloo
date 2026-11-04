@@ -72,7 +72,7 @@ function Run-UpdateFixture([bool] $ServiceMode) {
     Assert ($helper.WaitForExit(360000)) 'Update helper did not finish.'
     Assert ($helper.ExitCode -eq 0) 'Update helper could not replace and restart the server.'
     Wait-Healthy
-    Assert ((Get-Content "$app\updates\update.log" -Raw) -match 'Windows update completed') 'Update result was not logged.'
+    Assert (Select-String -LiteralPath "$app\updates\update.log" -Pattern 'Windows update completed' -Quiet) 'Update result was not logged.'
     Assert ($controller.Update('status').supported) 'Tray lost the updater after server replacement.'
 }
 
@@ -107,7 +107,7 @@ try {
     Wait-Healthy
     $serverLog = Join-Path $data 'logs\server\server.log'
     Assert ((Get-Item $serverLog).Length -gt 0) 'GUI server did not write its log file.'
-    Assert ((Get-Content $serverLog -Raw) -match 'database opened') 'Server startup is missing from the log.'
+    Assert (Select-String -LiteralPath $serverLog -Pattern 'database opened' -Quiet) 'Server startup is missing from the log.'
     $updateStatus = $controller.Update('status')
     Assert ($updateStatus.supported -and $updateStatus.current_app) 'Tray could not read the server updater.'
     Assert (-not $tray.HasExited) 'Tray exited after starting the server.'
