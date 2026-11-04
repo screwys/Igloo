@@ -148,7 +148,7 @@ func translateBackendConfigured(database *db.DB, backend string) bool {
 	case settings.TranslateBackendOpenAICompat:
 		model, _ := database.GetSetting("translate_model", "")
 		return strings.TrimSpace(model) != ""
-	case settings.TranslateBackendKagiCLI:
+	case settings.TranslateBackendKagiCLI, settings.TranslateBackendGoogleFree:
 		return true
 	default:
 		return false
@@ -487,6 +487,9 @@ func reuseBackgroundWorkItems(database *db.DB, cfg translateBackgroundConfig, it
 }
 
 func translateBackgroundGroupKey(database *db.DB, backend string, candidate db.TranslationCandidate, targetLang string) (string, int) {
+	if backend == settings.TranslateBackendGoogleFree {
+		return "batch\x00" + targetLang, 0
+	}
 	unique := translateBackgroundCandidateKey(candidate, targetLang)
 	if !providerSupportsBatch(backend) || candidate.Field != "body" || language.IsUnknown(candidate.SourceLang) {
 		return unique, 0

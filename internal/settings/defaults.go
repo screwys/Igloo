@@ -25,6 +25,7 @@ const (
 	TranslateBackendNone         = "none"
 	TranslateBackendKagiCLI      = "kagi_cli"
 	TranslateBackendGoogle       = "google"
+	TranslateBackendGoogleFree   = "google_free"
 	TranslateBackendDeepL        = "deepl"
 	TranslateBackendOpenAICompat = "openai_compat"
 
@@ -38,6 +39,7 @@ var TranslateBackendValues = []string{
 	TranslateBackendNone,
 	TranslateBackendKagiCLI,
 	TranslateBackendGoogle,
+	TranslateBackendGoogleFree,
 	TranslateBackendDeepL,
 	TranslateBackendOpenAICompat,
 }
@@ -46,7 +48,7 @@ var TranslateBackendValues = []string{
 // legacy values are coerced to none so public installs do not assume Kagi.
 func NormalizeTranslateBackend(v string) string {
 	switch v {
-	case TranslateBackendKagiCLI, TranslateBackendGoogle, TranslateBackendDeepL, TranslateBackendOpenAICompat:
+	case TranslateBackendKagiCLI, TranslateBackendGoogle, TranslateBackendGoogleFree, TranslateBackendDeepL, TranslateBackendOpenAICompat:
 		return v
 	default:
 		return TranslateBackendNone

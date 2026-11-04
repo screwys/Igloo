@@ -739,6 +739,7 @@ templ prefsFeedTab(p PageProps, prefs PrefsData) {
 						<label>{ L(p, "settings_translation_backend", "Translation Backend") }</label>
 						<select data-setting-choices id="global-setting-translate-backend" name="translate_backend" class="input">
 							<option value="none" selected?={ prefs.Str("translate_backend", "none") == "none" }>{ L(p, "settings_disabled", "Disabled") }</option>
+							<option value="google_free" selected?={ prefs.Str("translate_backend", "none") == "google_free" }>{ L(p, "settings_translation_backend_google_free", "Google Translate (free)") }</option>
 							<option value="google" selected?={ prefs.Str("translate_backend", "none") == "google" }>{ L(p, "settings_translation_backend_google_cloud", "Google Cloud Translation") }</option>
 							<option value="deepl" selected?={ prefs.Str("translate_backend", "none") == "deepl" }>{ L(p, "settings_translation_backend_deepl_api", "DeepL API") }</option>
 							<option value="kagi_cli" selected?={ prefs.Str("translate_backend", "none") == "kagi_cli" }>{ L(p, "settings_translation_backend_kagi_cli", "Kagi CLI") }</option>

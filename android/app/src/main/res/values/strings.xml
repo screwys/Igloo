@@ -811,6 +811,7 @@
     <string name="settings_translation_backend">Translation Backend</string>
     <string name="settings_translation_backend_deepl_api">DeepL API</string>
     <string name="settings_translation_backend_google_cloud">Google Cloud Translation</string>
+    <string name="settings_translation_backend_google_free">Google Translate (free)</string>
     <string name="settings_translation_backend_kagi_cli">Kagi CLI</string>
     <string name="settings_translation_backend_openai_compat">OpenAI-compatible</string>
     <string name="settings_translation_deepl_api_key">DeepL API key</string>

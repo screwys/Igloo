@@ -444,6 +444,9 @@ func translateTextBatchWithDB(ctx context.Context, database *db.DB, requests []t
 			kagiProviderStartCooldown(time.Now())
 		}
 		return results, backend, err
+	case settings.TranslateBackendGoogleFree:
+		results, err := googleFreeTranslateBatch(ctx, requests, targetLang)
+		return results, backend, err
 	case settings.TranslateBackendGoogle:
 		apiKey, _ := database.GetSetting("translate_api_key", "")
 		apiSite, _ := database.GetSetting("translate_api_site", "")
@@ -490,7 +493,7 @@ func translateTextBatchWithDB(ctx context.Context, database *db.DB, requests []t
 
 func providerSupportsBatch(backend string) bool {
 	switch settings.NormalizeTranslateBackend(backend) {
-	case settings.TranslateBackendKagiCLI, settings.TranslateBackendGoogle:
+	case settings.TranslateBackendKagiCLI, settings.TranslateBackendGoogle, settings.TranslateBackendGoogleFree:
 		return true
 	default:
 		return false
