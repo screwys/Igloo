@@ -316,12 +316,14 @@
     }
     var miniPlayerVideos = form && form.querySelector('[name=mini_player_videos_enabled]');
     var miniPlayerFeed = form && form.querySelector('[name=mini_player_feed_enabled]');
+    var threadFetchOnOpen = form && form.querySelector('[name=x_thread_fetch_on_open]');
     if (form) {
       window.IglooPreferences = Object.assign({}, window.IglooPreferences || {}, {
         shareEmbedFriendlyLinks: !!(shareEmbedFriendly && shareEmbedFriendly.checked),
         shareEmbedHosts: shareEmbedHosts,
         miniPlayerVideosEnabled: !!(miniPlayerVideos && miniPlayerVideos.checked),
-        miniPlayerFeedEnabled: !!(miniPlayerFeed && miniPlayerFeed.checked)
+        miniPlayerFeedEnabled: !!(miniPlayerFeed && miniPlayerFeed.checked),
+        threadFetchOnOpen: threadFetchOnOpen ? threadFetchOnOpen.value !== 'false' : (window.IglooPreferences || {}).threadFetchOnOpen
       });
       try {
         if (window.top !== window && window.top.IglooMiniPlayer) {

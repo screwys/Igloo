@@ -1,12 +1,10 @@
-// Media overlay module — extracted from feed_page.js
-// Opens a fullscreen overlay with image/video media + tweet info sidebar.
+// Media viewer with an optional post panel.
 
 import {
   itemRootFromNode,
   stateBool,
   getFeedActionIconSvg,
   syncFeedActionIcons,
-  formatRelative,
   materialIconMarkup,
   apiFetch,
   t,
@@ -15,6 +13,8 @@ import { bindFeedVideoControls, createFeedVideoControls, handleFeedVideoShortcut
 import { createLiveChatPanel, initBroadcastChat } from '../player/chat.js'
 import { createXLivePlayback } from '../player/x-live.js'
 import { initFeedImages, disposeFeedImages } from './images.js'
+import { formatFullDate } from './dates.js'
+import { initMediaRows } from './media-row.js'
 
 // ── Helpers ──
 
@@ -62,6 +62,14 @@ function updateRetweetMenuLabels(scope) {
 
 let overlayEl = null
 let keyHandler = null
+
+function focusOverlay(overlay, trigger) {
+  overlay._returnFocus = trigger || overlay.ownerDocument.activeElement
+  overlay.setAttribute('role', 'dialog')
+  overlay.setAttribute('aria-modal', 'true')
+  overlay.setAttribute('aria-label', t('feed_post_media', 'Post media'))
+  overlay.querySelector('.feed-media-overlay-close').focus({ preventScroll: true })
+}
 
 function stopLivePlayback(overlay) {
   if (overlay && overlay._livePlayback) return overlay._livePlayback.stop()
@@ -315,7 +323,10 @@ function getMediaSources(card, clickedEl) {
 
 export function closeMediaOverlay() {
   const ownerDocument = overlayEl ? overlayEl.ownerDocument : document
+  const returnFocus = overlayEl && overlayEl._returnFocus
   if (overlayEl) {
+    if (overlayEl._layoutCleanup) overlayEl._layoutCleanup()
+    if (overlayEl._contextAbort) overlayEl._contextAbort.abort()
     if (overlayEl._spaceSurface) overlayEl._spaceSurface.restore()
     if (overlayEl.hasAttribute('data-feed-live')) {
       window.removeEventListener('pagehide', closeMediaOverlay)
@@ -334,6 +345,7 @@ export function closeMediaOverlay() {
     ownerDocument.removeEventListener('keydown', keyHandler)
     keyHandler = null
   }
+  if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true })
 }
 
 // ── Open overlay ──
@@ -378,6 +390,7 @@ function openSpaceOverlay(surface) {
     }
   }
   ownerDocument.addEventListener('keydown', keyHandler)
+  focusOverlay(overlay, surface.row)
 }
 
 export function openMediaOverlay(root, triggerEl, spaceSurface) {
@@ -386,7 +399,6 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
     return
   }
   const liveURL = root && root.getAttribute('data-feed-live-url') || ''
-  if (!liveURL && window.matchMedia && window.matchMedia('(max-width: 768px)').matches) return
   const media = liveURL ? {
     kind: 'video', streamUrl: liveURL, posterUrl: root.getAttribute('data-feed-live-thumbnail') || '', playbackKind: 'live',
   } : getMediaSources(root, triggerEl)
@@ -397,7 +409,6 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
   const link = safeExternalHttpURL(article.getAttribute('data-feed-link'))
   let channelId = String(article.getAttribute('data-channel-id') || '').trim()
   let channelName = String(article.getAttribute('data-channel-name') || '').trim()
-  const channelPlatform = String(article.getAttribute('data-channel-platform') || 'twitter').trim() || 'twitter'
 
   const quoteCardEl = article.querySelector('.feed-quote-card')
   const quoteTweetId = quoteCardEl ? String(quoteCardEl.getAttribute('data-quote-tweet-id') || '').trim() : ''
@@ -406,23 +417,31 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
   let currentIndex = Math.max(0, Number(media.startIndex || 0))
   const overlay = document.createElement('div')
   overlay.className = 'feed-media-overlay'
+  overlay._feedRoot = article
+  if (!liveURL) overlay.classList.add('feed-post-overlay')
   if (liveURL) overlay.setAttribute('data-feed-live', '')
   if (tweetId) overlay.setAttribute('data-feed-overlay-tweet-id', tweetId)
   // Quote overlay attribute is toggled per slide by renderSidebar.
   // Static overlay shell template — no user input
   overlay.innerHTML = '' + // eslint-disable-line no-unsanitized/property
     '<div class="feed-media-overlay-shell">' +
-    '<button class="feed-media-overlay-close" type="button" aria-label="' + t('action_close', 'Close') + '">' + materialIconMarkup('Close') + '</button>' +
     '<div class="feed-media-overlay-main">' +
     '<div class="feed-media-overlay-left">' +
+    '<button class="feed-media-overlay-close" type="button" title="' + t('action_close', 'Close') + '" aria-label="' + t('action_close', 'Close') + '">' + materialIconMarkup('Close') + '</button>' +
+    '<button class="feed-media-overlay-panel-toggle" type="button" aria-controls="feed-media-post-panel"></button>' +
+    '<div class="feed-media-overlay-menu feed-card-menu" data-feed-menu>' +
+    '<button class="feed-card-menu-btn" type="button" data-feed-menu-toggle title="' + t('feed_post_actions', 'Post actions') + '" aria-label="' + t('feed_post_actions', 'Post actions') + '">' + materialIconMarkup('MoreHoriz') + '</button>' +
+    '<div class="feed-card-menu-list"><a class="feed-card-menu-item" data-feed-overlay-view-post>' + t('feed_view_post', 'View post') + '</a></div>' +
+    '</div>' +
     '<button class="feed-media-overlay-nav prev" type="button" aria-label="' + t('action_previous', 'Previous') + '">' + materialIconMarkup('KeyboardArrowLeft') + '</button>' +
     '<div class="feed-media-overlay-media"></div>' +
     '<button class="feed-media-overlay-nav next" type="button" aria-label="' + t('action_next', 'Next') + '">' + materialIconMarkup('KeyboardArrowRight') + '</button>' +
-    '<div class="feed-media-overlay-counter"></div>' +
-    '</div>' +
-    '<div class="feed-media-overlay-right">' +
-    '<div class="feed-media-overlay-top"></div>' +
     '<div class="feed-media-overlay-bottom"></div>' +
+    '</div>' +
+    '<div class="feed-media-overlay-right" id="feed-media-post-panel">' +
+    '<div class="feed-media-overlay-top"></div>' +
+    '<div class="feed-media-overlay-thread-controls thread-fetch-controls" hidden></div>' +
+    '<div class="feed-media-overlay-context"></div>' +
     '</div>' +
     '</div>' +
     '</div>'
@@ -436,21 +455,277 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
 
   const top = overlay.querySelector('.feed-media-overlay-top')
   const host = overlay.querySelector('.feed-media-overlay-media')
-  const counter = overlay.querySelector('.feed-media-overlay-counter')
   const prev = overlay.querySelector('.feed-media-overlay-nav.prev')
   const next = overlay.querySelector('.feed-media-overlay-nav.next')
   const bottom = overlay.querySelector('.feed-media-overlay-bottom')
+  const right = overlay.querySelector('.feed-media-overlay-right')
+  const panelToggle = overlay.querySelector('.feed-media-overlay-panel-toggle')
+  const viewPost = overlay.querySelector('[data-feed-overlay-view-post]')
+  const context = overlay.querySelector('.feed-media-overlay-context')
+  const threadControls = overlay.querySelector('.feed-media-overlay-thread-controls')
+  const fetchThreadButton = document.createElement('button')
+  fetchThreadButton.type = 'button'
+  fetchThreadButton.className = 'feed-text-toggle'
+  fetchThreadButton.textContent = t('feed_thread_fetch', 'Fetch replies and quote-posts')
+  fetchThreadButton.addEventListener('click', function () { refreshThreadContext(currentTweetId()) })
+  const threadStatus = document.createElement('div')
+  threadStatus.className = 'thread-fetch-status'
+  threadStatus.setAttribute('role', 'status')
+  threadStatus.setAttribute('aria-live', 'polite')
+  threadControls.append(fetchThreadButton, threadStatus)
+  const wideLayout = window.matchMedia('(min-width: 1100px)')
+  const smallLayout = window.matchMedia('(max-width: 639px)')
+  let panelExpanded = wideLayout.matches
+  let activeSource = 'parent'
+  let renderedSource = null
+  const threadContexts = new Map()
+  overlay._contextAbort = new AbortController()
+
+  function updatePanel() {
+    const visible = liveURL || (panelExpanded && !smallLayout.matches)
+    overlay.classList.toggle('feed-media-panel-open', !!visible)
+    right.hidden = !visible
+    panelToggle.setAttribute('aria-expanded', String(!!visible))
+    panelToggle.title = visible ? t('feed_hide_post', 'Hide post') : t('feed_view_post', 'View post')
+    panelToggle.setAttribute('aria-label', panelToggle.title)
+    panelToggle.innerHTML = materialIconMarkup(visible ? 'KeyboardDoubleArrowRight' : 'KeyboardDoubleArrowLeft') // eslint-disable-line no-unsanitized/property
+    if (visible && !liveURL) {
+      initMediaRows(context)
+      ensureThreadContext()
+    }
+  }
+  function layoutChanged() {
+    const panelFocused = right.contains(document.activeElement) || document.activeElement === panelToggle
+    panelExpanded = wideLayout.matches
+    updatePanel()
+    if (panelFocused && right.hidden) {
+      const control = smallLayout.matches ? overlay.querySelector('.feed-media-overlay-close') : panelToggle
+      control.focus({ preventScroll: true })
+    }
+  }
+  wideLayout.addEventListener('change', layoutChanged)
+  smallLayout.addEventListener('change', layoutChanged)
+  overlay._layoutCleanup = function () {
+    wideLayout.removeEventListener('change', layoutChanged)
+    smallLayout.removeEventListener('change', layoutChanged)
+  }
+  panelToggle.addEventListener('click', function () {
+    panelExpanded = !panelExpanded
+    updatePanel()
+  })
   let liveChatPanel = liveURL ? createLiveChatPanel() : null
   if (liveChatPanel) {
-    const right = overlay.querySelector('.feed-media-overlay-right')
     right.classList.add('player-sidebar')
     right.replaceChildren(liveChatPanel)
+  }
+
+  function removePostMedia(post) {
+    post.querySelectorAll('[data-media-owner]').forEach(function (node) {
+      if (!node.querySelector('.feed-quote-unavailable')) node.remove()
+    })
+    post.querySelectorAll('[data-feed-media]').forEach(function (node) { node.remove() })
+  }
+
+  function copyPost(source, includeMedia = false) {
+    const post = source.cloneNode(true)
+    post.classList.add('feed-overlay-post')
+    post.classList.remove('feed-card-seen', 'feed-card-muted-retweet', 'feed-thread-leaf')
+    post.style.display = ''
+    if (!includeMedia) removePostMedia(post)
+    post.querySelectorAll('.feed-text-toggle, [data-feed-video-controls]').forEach(function (node) { node.remove() })
+    post.querySelectorAll('[data-feed-text-clamp]').forEach(function (node) {
+      node.classList.remove('feed-text-clamp', 'expanded')
+      node.style.removeProperty('display')
+      node.style.removeProperty('-webkit-box-orient')
+      node.style.removeProperty('-webkit-line-clamp')
+      node.style.removeProperty('line-clamp')
+      node.removeAttribute('data-feed-text-clamp')
+    })
+    post.querySelectorAll('[id]').forEach(function (node) { node.removeAttribute('id') })
+    post.querySelectorAll('.feed-card-header, .feed-quote-head').forEach(function (header) {
+      const author = header.querySelector('.feed-author-wrap, .feed-quote-head-main')
+      const name = author && author.querySelector('.feed-author-trigger, .feed-quote-author')
+      if (!name) return
+      const identity = document.createElement('div')
+      identity.className = 'feed-overlay-identity'
+      identity.appendChild(name)
+      const badge = author.querySelector('.account-details-wrap')
+      if (badge) identity.appendChild(badge)
+      author.prepend(identity)
+
+      const owner = header.parentNode
+      const date = header.querySelector('[data-feed-date-raw]')
+      if (date) {
+        date.setAttribute('data-date-format', 'full')
+        date.removeAttribute('data-date-relative')
+        date.textContent = formatFullDate(date.getAttribute('data-feed-date-raw'))
+        const dateRow = document.createElement('div')
+        dateRow.className = 'feed-overlay-date'
+        dateRow.appendChild(date)
+        owner.insertBefore(dateRow, owner.querySelector(':scope > .feed-actions'))
+      }
+      const translate = header.querySelector('.feed-translate-btn')
+      const handle = author.querySelector('.feed-author-handle')
+      if (handle || translate) {
+        const details = document.createElement('div')
+        details.className = 'feed-overlay-author-details'
+        if (handle) details.appendChild(handle)
+        if (translate) details.appendChild(translate)
+        author.appendChild(details)
+      }
+      header.querySelectorAll('.feed-date-inline, .feed-quote-date').forEach(function (node) { node.remove() })
+    })
+    return post
+  }
+
+  function profilePost() {
+    const post = document.createElement('article')
+    post.className = 'feed-overlay-post channel-row'
+    const headline = document.createElement('a')
+    headline.className = 'feed-overlay-headline'
+    headline.href = channelId ? '/channels/' + encodeURIComponent(channelId) : link
+    const avatar = article.querySelector('.feed-avatar')
+    if (avatar) headline.appendChild(avatar.cloneNode(true))
+    const author = document.createElement('span')
+    author.className = 'feed-overlay-author'
+    author.textContent = textContentTrim(article.querySelector('.feed-author')) || channelName
+    headline.appendChild(author)
+    post.appendChild(headline)
+    const body = article.querySelector('.feed-body-text')
+    if (body) {
+      const text = body.cloneNode(true)
+      text.className = 'feed-overlay-text'
+      post.appendChild(text)
+    }
+    const date = document.createElement('div')
+    const rawDate = article.getAttribute('data-feed-date') || ''
+    date.className = 'feed-overlay-date feed-date-inline'
+    date.setAttribute('data-feed-date-raw', rawDate)
+    date.setAttribute('data-date-format', 'full')
+    date.setAttribute('data-timestamp', rawDate)
+    date.textContent = formatFullDate(rawDate)
+    post.appendChild(date)
+    return post
+  }
+
+  function currentTweetId() {
+    return activeSource === 'quote' ? quoteTweetId : tweetId
+  }
+
+  function contextFor(id) {
+    if (!threadContexts.has(id)) {
+      threadContexts.set(id, { cards: null, request: null, fetchState: '' })
+    }
+    return threadContexts.get(id)
+  }
+
+  function renderThreadControls() {
+    const state = contextFor(currentTweetId()).fetchState
+    const autoFetch = (window.IglooPreferences || {}).threadFetchOnOpen !== false
+    fetchThreadButton.hidden = state === 'loading' || state === 'done' || (autoFetch && state !== 'error')
+    threadStatus.hidden = state !== 'loading' && state !== 'error'
+    threadControls.hidden = !currentTweetId() || (fetchThreadButton.hidden && threadStatus.hidden)
+    threadStatus.setAttribute('data-thread-fetch-state', state)
+    threadStatus.textContent = state === 'loading'
+      ? t('feed_thread_fetching', 'Fetching replies and quote-posts…')
+      : state === 'error' ? t('error_refresh_failed', 'Refresh failed') : ''
+  }
+
+  function renderContext() {
+    const id = currentTweetId()
+    const cards = contextFor(id).cards
+    renderThreadControls()
+    disposeFeedImages(context)
+    context.replaceChildren()
+    if (!Array.isArray(cards)) return
+    const related = cards.filter(function (card) { return card.getAttribute('data-tweet-id') !== id })
+    if (!related.length) return
+    const heading = document.createElement('h2')
+    heading.textContent = t('feed_replies', 'Replies')
+    context.appendChild(heading)
+    related.forEach(function (card) { context.appendChild(card) })
+    updateRetweetMenuLabels(context)
+    syncFeedActionIcons(context)
+    initFeedImages(context)
+    if (!right.hidden) initMediaRows(context)
+    if (window.htmx) window.htmx.process(context)
+  }
+
+  function loadThreadContext(id, refresh = false) {
+    if (!id) return Promise.resolve()
+    const saved = contextFor(id)
+    if (saved.request) return saved.request
+    if (saved.cards && !refresh) return Promise.resolve()
+    saved.request = fetch('/thread/' + encodeURIComponent(id) + '?fmt=partial', { signal: overlay._contextAbort.signal })
+      .then(function (response) {
+        if (!response.ok) throw new Error('Thread unavailable')
+        return response.text()
+      })
+      .then(function (html) {
+        if (overlayEl !== overlay) return
+        const page = new DOMParser().parseFromString(html, 'text/html')
+        saved.cards = Array.from(page.querySelectorAll('[data-thread-page] .feed-card[data-feed-item]'), function (card) {
+          return copyPost(card, true)
+        })
+        if (currentTweetId() !== id) return
+        if (article.hasAttribute('data-x-profile-media')) renderSidebar(activeSource)
+        else renderContext()
+      })
+      .catch(function (error) {
+        if (refresh) throw error
+        // Keep the current post readable if saved context cannot load.
+        if (!saved.cards) saved.cards = []
+      })
+      .finally(function () { saved.request = null })
+    return saved.request
+  }
+
+  function ensureThreadContext() {
+    const id = currentTweetId()
+    if (!id) return
+    const saved = contextFor(id)
+    if ((window.IglooPreferences || {}).threadFetchOnOpen !== false && !saved.fetchState) {
+      refreshThreadContext(id)
+    } else {
+      loadThreadContext(id)
+    }
+  }
+
+  async function refreshThreadContext(id) {
+    const saved = contextFor(id)
+    if (saved.fetchState === 'loading') return
+    saved.fetchState = 'loading'
+    renderThreadControls()
+    try {
+      await loadThreadContext(id)
+      if (overlayEl !== overlay) return
+      let captureError = null
+      try {
+        await apiFetch('/api/thread/' + encodeURIComponent(id) + '/refresh', {
+          method: 'POST', signal: overlay._contextAbort.signal,
+        })
+      } catch (error) {
+        if (!error.payload || !error.payload.fetched) throw error
+        captureError = error
+      }
+      if (overlayEl !== overlay) return
+      await loadThreadContext(id, true)
+      saved.fetchState = captureError ? 'error' : 'done'
+    } catch (_) {
+      saved.fetchState = 'error'
+    } finally {
+      if (overlayEl === overlay && currentTweetId() === id) renderThreadControls()
+    }
   }
 
   function renderSidebar(sourceKind) {
     if (liveURL) return
     const isQuote = sourceKind === 'quote' && !!quoteCardEl
     const sourceCard = isQuote ? quoteCardEl : article
+    activeSource = sourceKind
+    const activeTweetId = isQuote ? quoteTweetId : tweetId
+    viewPost.href = '/thread/' + encodeURIComponent(activeTweetId)
+    viewPost.hidden = !activeTweetId
 
     // ── Ownership attribute — downstream handlers in feed/index.js read this.
     if (isQuote && quoteTweetId) {
@@ -459,186 +734,30 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
       overlay.removeAttribute('data-feed-overlay-quote-tweet-id')
     }
 
-    // ── Top (author / body / date / header actions) ──
     if (top) {
-      while (top.firstChild) top.removeChild(top.firstChild)
-      top.classList.add('channel-row')
-
-      var authorLabel, authorHandleRaw, showAuthorHandle, dateText, dateRaw, bodySourceEl, titleText, summaryText, repostText
-      var overlayChannelId = channelId
-
+      let post
       if (isQuote) {
-        authorLabel = textContentTrim(sourceCard.querySelector('.feed-quote-author')) || t('feed_quoted_post', 'Quoted post')
-        authorHandleRaw = textContentTrim(sourceCard.querySelector('.feed-author-handle')).replace(/^@+/, '')
-        overlayChannelId = 'twitter_' + authorHandleRaw
-        bodySourceEl = sourceCard.querySelector('.feed-quote-text')
-        dateText = ''
-        dateRaw = ''
-        titleText = ''
-        summaryText = ''
-        repostText = ''
+        post = document.createElement('article')
+        post.className = 'feed-overlay-post channel-row'
+        post.setAttribute('data-feed-item', '')
+        post.setAttribute('data-tweet-id', tweetId)
+        post.appendChild(copyPost(sourceCard))
+      } else if (article.classList.contains('feed-card')) {
+        post = copyPost(article)
       } else {
-        authorLabel = textContentTrim(article.querySelector('.feed-author'))
-          || String(article.getAttribute('data-feed-author') || '').trim()
-          || channelName
-          || t('feed_x_post', 'X post')
-        authorHandleRaw = textContentTrim(article.querySelector('.feed-author-handle')).replace(/^@+/, '') || (liveURL ? article.getAttribute('data-author-handle') || '' : '')
-        var dateEl = article.querySelector('.feed-date-inline')
-        dateRaw = String((dateEl && dateEl.getAttribute('data-feed-date-raw')) || article.getAttribute('data-feed-date') || '').trim()
-        dateText = textContentTrim(dateEl).replace(/^·\s*/, '') || formatRelative(dateRaw) || dateRaw
-        bodySourceEl = article.querySelector('.feed-body-text')
-        titleText = textContentTrim(article.querySelector('.feed-text')) || (liveURL ? article.getAttribute('data-feed-live-title') || '' : '')
-        summaryText = textContentTrim(article.querySelector('.feed-summary'))
-        repostText = textContentTrim(article.querySelector('.feed-repost-line'))
+        const stored = contextFor(activeTweetId).cards
+        const fullPost = Array.isArray(stored) && stored.find(function (card) {
+          return card.getAttribute('data-tweet-id') === activeTweetId
+        })
+        post = fullPost || profilePost()
+        if (fullPost) removePostMedia(post)
       }
-      showAuthorHandle = !!(authorHandleRaw && authorLabel.toLowerCase() !== authorHandleRaw.toLowerCase())
-
-      if (overlayChannelId) top.setAttribute('data-channel-id', overlayChannelId)
-      if (channelPlatform) top.setAttribute('data-channel-platform', channelPlatform)
-
-      if (repostText) {
-        const repostEl = document.createElement('div')
-        repostEl.className = 'feed-overlay-repost'
-        repostEl.textContent = repostText
-        top.appendChild(repostEl)
-      }
-
-      var headlineId = isQuote ? overlayChannelId : channelId
-      const headline = document.createElement((headlineId || link) ? 'a' : 'div')
-      headline.className = 'feed-overlay-headline'
-      if (headline.tagName === 'A') {
-        headline.href = headlineId ? ('/channels/' + encodeURIComponent(headlineId)) : link
-        if (!headlineId && link) {
-          headline.target = '_blank'
-          headline.rel = 'noopener noreferrer'
-        }
-      }
-      if (headlineId) headline.setAttribute('data-feed-channel-id', headlineId)
-      var avatarSource = isQuote ? sourceCard.querySelector('.feed-quote-avatar') : article.querySelector('.feed-avatar')
-      var avatarUrl = !avatarSource ? String(article.getAttribute('data-avatar-url') || (sourceCard && sourceCard.getAttribute('data-avatar-url')) || '').trim() : ''
-      if (avatarSource) {
-        var avatarClone = avatarSource.cloneNode(true)
-        avatarClone.className = 'feed-avatar'
-        var cloneImg = avatarClone.querySelector('.feed-avatar-image, img')
-        var cloneFallback = avatarClone.querySelector('.feed-avatar-fallback')
-        if (cloneImg && cloneFallback) {
-          if (cloneImg.complete && cloneImg.naturalWidth > 0) {
-            cloneImg.style.display = ''
-            cloneFallback.style.display = 'none'
-          } else if (cloneImg.complete && cloneImg.naturalWidth === 0 && cloneImg.src) {
-            cloneImg.style.display = 'none'
-            cloneFallback.style.display = 'inline-flex'
-          }
-        }
-        headline.appendChild(avatarClone)
-      } else if (avatarUrl) {
-        const avatarEl = document.createElement('span')
-        avatarEl.className = 'feed-avatar'
-        const fallbackChar = document.createElement('span')
-        fallbackChar.className = 'feed-avatar-fallback'
-        fallbackChar.style.display = 'none'
-        fallbackChar.textContent = (authorLabel.charAt(0) || 'X').toUpperCase()
-        const avatarImg = document.createElement('img')
-        avatarImg.className = 'feed-avatar-image'
-        avatarImg.src = avatarUrl
-        avatarImg.alt = ''
-        avatarImg.onload = function () { if (window.MpaSiteBase) window.MpaSiteBase.avatarLoad(avatarImg) }
-        avatarImg.onerror = function () {
-          if (window.MpaSiteBase && window.MpaSiteBase.avatarError(avatarImg)) return
-          avatarImg.style.display = 'none'
-          fallbackChar.style.display = 'inline-flex'
-        }
-        avatarEl.appendChild(avatarImg)
-        avatarEl.appendChild(fallbackChar)
-        headline.appendChild(avatarEl)
-      } else {
-        const fallbackAvatar = document.createElement('span')
-        fallbackAvatar.className = 'feed-avatar'
-        const fallbackChar = document.createElement('span')
-        fallbackChar.className = 'feed-avatar-fallback'
-        fallbackChar.textContent = (authorLabel.charAt(0) || 'X').toUpperCase()
-        fallbackAvatar.appendChild(fallbackChar)
-        headline.appendChild(fallbackAvatar)
-      }
-      const authorMeta = document.createElement('div')
-      authorMeta.className = 'feed-overlay-author-meta'
-      const authorEl = document.createElement('div')
-      authorEl.className = 'feed-overlay-author'
-      authorEl.textContent = authorLabel
-      authorMeta.appendChild(authorEl)
-      var subLine = document.createElement('div')
-      subLine.className = 'feed-overlay-sub'
-      if (showAuthorHandle) {
-        var handleLink = document.createElement('a')
-        handleLink.className = 'feed-author-handle feed-inline-link'
-        handleLink.href = '/channels/' + encodeURIComponent(overlayChannelId)
-        handleLink.textContent = '@' + authorHandleRaw
-        subLine.appendChild(handleLink)
-      }
-      if (dateText) {
-        if (showAuthorHandle) {
-          subLine.appendChild(document.createTextNode(' \u00b7 '))
-        }
-        var dateSpan = document.createElement('span')
-        dateSpan.className = 'feed-overlay-date'
-        dateSpan.textContent = dateText
-        dateSpan.setAttribute('data-timestamp', dateRaw)
-        subLine.appendChild(dateSpan)
-      }
-      if (subLine.childNodes.length) authorMeta.appendChild(subLine)
-      headline.appendChild(authorMeta)
-
-      if (!isQuote) {
-        var headerActions = article.querySelector('.feed-header-actions')
-        if (headerActions) {
-          var actionsClone = headerActions.cloneNode(true)
-          actionsClone.classList.add('feed-overlay-header-actions')
-          headline.appendChild(actionsClone)
-        }
-      } else {
-        var qFollowBtn = sourceCard ? sourceCard.querySelector('.feed-quote-follow-btn') : null
-        if (qFollowBtn) {
-          var qActionsWrap = document.createElement('div')
-          qActionsWrap.className = 'feed-header-actions feed-overlay-header-actions'
-          qActionsWrap.appendChild(qFollowBtn.cloneNode(true))
-          headline.appendChild(qActionsWrap)
-        }
-      }
-      top.appendChild(headline)
-
-      if (liveURL && article.hasAttribute('data-feed-live-status')) {
-        const liveStatus = document.createElement('span')
-        liveStatus.className = 'feed-overlay-sub'
-        liveStatus.textContent = article.getAttribute('data-feed-live-status') === 'is_live' ? t('broadcast_live', 'Live') : t('broadcast_replay', 'Replay')
-        top.appendChild(liveStatus)
-      }
-
-      if (bodySourceEl && textContentTrim(bodySourceEl)) {
-        const bodyEl = document.createElement('p')
-        bodyEl.className = 'feed-overlay-text'
-        // Clone children to preserve @mention links and other HTML
-        var childNodes = bodySourceEl.childNodes
-        for (var ci = 0; ci < childNodes.length; ci++) {
-          bodyEl.appendChild(childNodes[ci].cloneNode(true))
-        }
-        top.appendChild(bodyEl)
-      } else {
-        if (titleText) {
-          const titleEl = document.createElement('p')
-          titleEl.className = 'feed-overlay-text'
-          titleEl.textContent = titleText
-          top.appendChild(titleEl)
-        }
-        if (summaryText) {
-          const summaryEl = document.createElement('p')
-          summaryEl.className = 'feed-overlay-summary'
-          summaryEl.textContent = summaryText
-          top.appendChild(summaryEl)
-        }
-      }
-
+      top.replaceChildren(post)
       updateRetweetMenuLabels(top)
       syncFeedActionIcons(top)
+      if (window.htmx) window.htmx.process(top)
+      renderContext()
+      ensureThreadContext()
     }
 
     // ── Bottom (share / heart / bookmark / open-on-X) ──
@@ -710,6 +829,12 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
         actionsWrap.appendChild(openExternal)
       }
       bottom.appendChild(actionsWrap)
+      const sidebarPost = top.firstElementChild
+      if (sidebarPost && !sidebarPost.querySelector(':scope > .feed-actions')) {
+        const sidebarActions = actionsWrap.cloneNode(true)
+        sidebarActions.className = 'feed-actions'
+        sidebarPost.appendChild(sidebarActions)
+      }
       syncFeedActionIcons(bottom)
     }
   }
@@ -801,8 +926,11 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
 
   function render() {
     var activeSlide = (media.slides && media.slides[currentIndex]) || null
-    var activeSource = activeSlide ? activeSlide.source : 'parent'
-    renderSidebar(activeSource)
+    var source = activeSlide ? activeSlide.source : 'parent'
+    if (renderedSource !== source) {
+      renderSidebar(source)
+      renderedSource = source
+    }
     if (!host) return
     restoreInlineVideoPlayback(overlay, false)
     disposeFeedImages(host)
@@ -829,7 +957,6 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
       initFeedImages(img)
     }
     const total = media.kind === 'video' ? 1 : (media.kind === 'mixed' && media.slides ? media.slides.length : Math.max(1, (media.urls || []).length))
-    if (counter) counter.textContent = total > 1 ? (String(currentIndex + 1) + ' / ' + String(total)) : ''
     if (prev) prev.style.display = total > 1 ? '' : 'none'
     if (next) next.style.display = total > 1 ? '' : 'none'
   }
@@ -842,7 +969,12 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
   }
 
   overlay.addEventListener('click', function (event) {
-    if (event.target === overlay) closeMediaOverlay()
+    const mediaBackground = event.target.closest('.feed-media-overlay-left') &&
+      event.target.matches('.feed-media-overlay-left, .feed-media-overlay-media, .feed-overlay-video-wrap, [data-fullscreen-content]')
+    if (event.target === overlay || (!liveURL && mediaBackground)) {
+      closeMediaOverlay()
+      return
+    }
     const closeBtn = event.target && event.target.closest ? event.target.closest('.feed-media-overlay-close') : null
     if (closeBtn) {
       event.preventDefault()
@@ -853,11 +985,28 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
     if (prevBtn) { event.preventDefault(); step(-1); return }
     const nextBtn = event.target && event.target.closest ? event.target.closest('.feed-media-overlay-nav.next') : null
     if (nextBtn) { event.preventDefault(); step(1); return }
+    const threadLink = event.target.closest('a[href^="/thread/"]')
+    if (threadLink && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) closeMediaOverlay()
   })
   if (prev) prev.addEventListener('click', function (event) { event.preventDefault(); event.stopPropagation(); step(-1) })
   if (next) next.addEventListener('click', function (event) { event.preventDefault(); event.stopPropagation(); step(1) })
 
   keyHandler = function (event) {
+    if (event.defaultPrevented) return
+    if (event.key === 'Tab' && overlay.contains(event.target)) {
+      const controls = Array.from(overlay.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex="0"]'))
+        .filter(function (node) { return node.getClientRects().length > 0 })
+      const first = controls[0]
+      const last = controls[controls.length - 1]
+      if (event.shiftKey && event.target === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && event.target === last) {
+        event.preventDefault()
+        first.focus()
+      }
+      return
+    }
     var target = event.target || {}
     var tag = String(target.tagName || '').toLowerCase()
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) return
@@ -873,11 +1022,16 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
       event.stopImmediatePropagation()
       return
     }
-    if (event.key === 'ArrowLeft') step(-1)
-    else if (event.key === 'ArrowRight') step(1)
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      step(event.key === 'ArrowLeft' ? -1 : 1)
+    }
   }
   document.addEventListener('keydown', keyHandler)
   render()
+  updatePanel()
+  focusOverlay(overlay, triggerEl)
 }
 
 // ── Global bridge ──

@@ -406,6 +406,9 @@ func normalizeSettingsUpdate(body map[string]string) {
 }
 
 func validateSettingsUpdate(body map[string]string) error {
+	if v, ok := body["x_thread_fetch_on_open"]; ok && v != "true" && v != "false" {
+		return fmt.Errorf("x_thread_fetch_on_open must be true or false")
+	}
 	if v, ok := body["x_thread_fetch_mode"]; ok && v != "never" && v != "starred" && v != "always" {
 		return fmt.Errorf("x_thread_fetch_mode must be never, starred, or always")
 	}
@@ -454,7 +457,7 @@ func (s *Server) settingsFromForm(r *http.Request) map[string]string {
 		"instagram_fetch_delay", "instagram_max_videos", "instagram_repost_max_videos",
 		"moments_default_tab", "stories_window_hours",
 		"media_download_limit_default", "x_profile_history_limit", "x_feed_fetch_delay",
-		"x_thread_fetch_mode", "x_thread_auto_post_limit",
+		"x_thread_fetch_mode", "x_thread_auto_post_limit", "x_thread_fetch_on_open",
 		"translate_target_lang", "translate_backend",
 		"translate_auto_mode", "translate_auto_lookahead",
 		"backup_dir", "backup_keep_count", "starting_page", "sidebar_route_order",

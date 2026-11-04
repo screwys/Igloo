@@ -3,6 +3,9 @@ package components
 // Strings used as arguments to other templ components can be opaque to the
 // i18n extractor, so keep them discoverable here.
 var _ = []string{
+	N("feed_view_post", "View post"),
+	N("feed_hide_post", "Hide post"),
+	N("feed_replies", "Replies"),
 	N("space_more_speakers", "%1$d more speakers"),
 	N("space_collapse", "Collapse"),
 	N("space_leave", "Leave"),

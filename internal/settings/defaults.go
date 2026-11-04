@@ -205,6 +205,7 @@ var Defaults = map[string]any{
 	"x_account_region_enabled":         true,
 	"x_community_notes_enabled":        true,
 	"x_thread_fetch_mode":              "starred",
+	"x_thread_fetch_on_open":           true,
 	"x_thread_auto_post_limit":         3,
 	"moments_default_tab":              "all",
 	"moments_include_reposts_default":  false,

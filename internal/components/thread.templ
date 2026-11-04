@@ -19,7 +19,10 @@ templ threadRoute(p PageProps, items []model.FeedItem, quotes []model.FeedItem, 
 	{{ p.ArticleReader = true }}
 	<div class="thread-page-shell" data-thread-route data-thread-id={ p.ThreadTweetID }>
 		<a class="thread-back-link" href={ templ.SafeURL(returnHref) } data-thread-back-link>{ L(p, "thread_back_to_feed", "<- Feed") }</a>
-		<div class="thread-fetch-status" data-thread-fetch-status role="status" aria-live="polite" hidden></div>
+		<div class="thread-fetch-controls" data-thread-fetch-controls hidden?={ p.ThreadFetchOnOpen }>
+			<button class="feed-text-toggle" type="button" data-thread-fetch hidden?={ p.ThreadFetchOnOpen }>{ L(p, "feed_thread_fetch", "Fetch replies and quote-posts") }</button>
+			<div class="thread-fetch-status" data-thread-fetch-status role="status" aria-live="polite" hidden></div>
+		</div>
 		<div id={ listID } class="feed-list thread-page-feed-list" data-thread-page>
 			if len(items) > 0 {
 				<div class="thread-tree" data-thread-tree data-thread-root-id={ items[0].TweetID }>

@@ -254,6 +254,7 @@ func (s *Server) pageProps(w http.ResponseWriter, r *http.Request) components.Pa
 		SupportedLanguages:      langs,
 		ShareEmbedFriendlyLinks: s.boolSetting("share_embed_friendly_links"),
 		CommunityNotesEnabled:   s.boolSetting("x_community_notes_enabled"),
+		ThreadFetchOnOpen:       s.boolSetting("x_thread_fetch_on_open"),
 		ShareEmbedHosts: map[string]string{
 			"youtube":   s.setting("share_embed_host_youtube", ""),
 			"twitter":   s.setting("share_embed_host_twitter", "fxtwitter.com"),

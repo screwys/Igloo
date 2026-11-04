@@ -196,11 +196,26 @@ function parseThreadRouteHTML(html) {
   return route
 }
 
-function initThreadAutoFetch(route) {
+function initThreadAutoFetch(route, autoFetch = (window.IglooPreferences || {}).threadFetchOnOpen !== false) {
   if (!route || fetchedThreadRoutes.has(route)) return
   var tweetID = route.getAttribute('data-thread-id')
   if (!tweetID) return
+  var controls = route.querySelector('[data-thread-fetch-controls]')
+  var button = route.querySelector('[data-thread-fetch]')
+  if (button) {
+    button.onclick = function () {
+      fetchedThreadRoutes.delete(route)
+      return initThreadAutoFetch(route, true)
+    }
+  }
+  if (!autoFetch) {
+    if (controls) controls.hidden = false
+    if (button) button.hidden = false
+    return
+  }
   fetchedThreadRoutes.add(route)
+  if (controls) controls.hidden = false
+  if (button) button.hidden = true
   var href = window.location.pathname + window.location.search
   var status = route.querySelector('[data-thread-fetch-status]')
   function isCurrent() {
@@ -244,11 +259,13 @@ function initThreadAutoFetch(route) {
       if (window.htmx) window.htmx.process(list)
       if (captureError) throw captureError
       if (status) status.hidden = true
+      if (controls) controls.hidden = true
     })
     .catch(function () {
       if (!isCurrent() || !status) return
       status.setAttribute('data-thread-fetch-state', 'error')
       status.textContent = t('feed_thread_fetch_failed', 'Could not update this thread. Saved posts remain available.')
+      if (button) button.hidden = false
     })
 }
 
@@ -402,20 +419,18 @@ function syncOverlayActionsForRoot(root) {
   if (String(_ov.getAttribute('data-feed-overlay-tweet-id') || '').trim() !== tweetId) return
   var isLiked = stateBool(root, 'liked')
   var isBookmarked = stateBool(root, 'bookmarked')
-  var heartBtn = _ov.querySelector('[data-feed-overlay-action="heart"]')
-  var bookmarkBtn = _ov.querySelector('[data-feed-overlay-action="bookmark"]')
-  if (heartBtn) {
+  _ov.querySelectorAll('[data-feed-overlay-action="heart"]').forEach(function (heartBtn) {
     heartBtn.classList.toggle('active', isLiked)
     setSvgContent(heartBtn, getFeedActionIconSvg('heart', isLiked))
     heartBtn.title = isLiked ? t('action_unlike', 'Unlike') : t('action_like', 'Like')
     heartBtn.setAttribute('aria-label', heartBtn.title)
-  }
-  if (bookmarkBtn) {
+  })
+  _ov.querySelectorAll('[data-feed-overlay-action="bookmark"]').forEach(function (bookmarkBtn) {
     bookmarkBtn.classList.toggle('active', isBookmarked)
     setSvgContent(bookmarkBtn, getFeedActionIconSvg('bookmark', isBookmarked))
     bookmarkBtn.title = isBookmarked ? t('action_unbookmark', 'Unbookmark') : t('action_bookmark', 'Bookmark')
     bookmarkBtn.setAttribute('aria-label', bookmarkBtn.title)
-  }
+  })
   syncFeedActionIcons(_ov)
 }
 
@@ -468,7 +483,7 @@ function propagateLikeState(tweetId, isLiked) {
   }
 
   for (var q = 0; q < allIds.length; q++) {
-    var quoteCards = feedList.querySelectorAll('.feed-quote-card[data-quote-tweet-id="' + cssEscape(allIds[q]) + '"]')
+    var quoteCards = document.querySelectorAll('.feed-quote-card[data-quote-tweet-id="' + cssEscape(allIds[q]) + '"]')
     Array.prototype.forEach.call(quoteCards, function (qc) {
       qc.setAttribute('data-quote-liked', isLiked ? '1' : '0')
     })
@@ -483,13 +498,12 @@ function propagateLikeState(tweetId, isLiked) {
       if (overlayTweetId === allIds[o] || overlayQuoteId === allIds[o]) { overlayMatch = true; break }
     }
     if (overlayMatch) {
-      var overlayHeart = _ov.querySelector('[data-feed-overlay-action="heart"]')
-      if (overlayHeart) {
+      _ov.querySelectorAll('[data-feed-overlay-action="heart"]').forEach(function (overlayHeart) {
         overlayHeart.classList.toggle('active', isLiked)
         setSvgContent(overlayHeart, getFeedActionIconSvg('heart', isLiked))
         overlayHeart.title = isLiked ? t('action_unlike', 'Unlike') : t('action_like', 'Like')
         overlayHeart.setAttribute('aria-label', overlayHeart.title)
-      }
+      })
     }
   }
 }
@@ -504,9 +518,10 @@ function applyLikeState(root, tweetId, isLiked) {
 }
 
 function resolveFeedRootForActionNode(node) {
+  var overlay = node && node.closest ? node.closest('.feed-media-overlay[data-feed-overlay-tweet-id]') : null
+  if (overlay && node.hasAttribute('data-feed-overlay-action') && overlay._feedRoot) return overlay._feedRoot
   var direct = itemRootFromNode(node)
   if (direct) return direct
-  var overlay = node && node.closest ? node.closest('.feed-media-overlay[data-feed-overlay-tweet-id]') : null
   if (!overlay) return null
   var tweetId = String(overlay.getAttribute('data-feed-overlay-tweet-id') || '').trim()
   if (!tweetId) return null
@@ -1044,7 +1059,7 @@ document.addEventListener('click', function (event) {
       if (overlayQuoteTweetId) {
         if (overlayAction === 'share') {
           animateFeedActionButton(overlayActionBtn)
-          var qCard = feedList && feedList.querySelector('.feed-quote-card[data-quote-tweet-id="' + cssEscape(overlayQuoteTweetId) + '"]')
+          var qCard = overlayEl._feedRoot.querySelector('.feed-quote-card')
           var qLink = qCard ? String(qCard.getAttribute('data-quote-link') || '').trim() : ''
           var qShareLink = toFxTwitterUrl(qLink) || qLink
           if (qShareLink) copyText(qShareLink).then(function () {
@@ -1058,7 +1073,7 @@ document.addEventListener('click', function (event) {
           return
         }
         if (overlayAction === 'bookmark') {
-          var qCard2 = feedList && feedList.querySelector('.feed-quote-card[data-quote-tweet-id="' + cssEscape(overlayQuoteTweetId) + '"]')
+          var qCard2 = overlayEl._feedRoot.querySelector('.feed-quote-card')
           var parentRoot = resolveFeedRootForActionNode(overlayActionBtn)
           var syntheticRoot = document.createElement('div')
           syntheticRoot.setAttribute('data-tweet-id', overlayQuoteTweetId)
@@ -1088,10 +1103,12 @@ document.addEventListener('click', function (event) {
           syntheticRoot._onBookmarkChange = function () {
             var nextBm = syntheticRoot.getAttribute('data-bookmarked') === '1'
             if (_qCardRef) _qCardRef.setAttribute('data-quote-bookmarked', nextBm ? '1' : '0')
-            _overlayBtnRef.classList.toggle('active', nextBm)
-            setSvgContent(_overlayBtnRef, getFeedActionIconSvg('bookmark', nextBm))
-            _overlayBtnRef.title = nextBm ? t('action_unbookmark', 'Unbookmark') : t('action_bookmark', 'Bookmark')
-            _overlayBtnRef.setAttribute('aria-label', _overlayBtnRef.title)
+            overlayEl.querySelectorAll('[data-feed-overlay-action="bookmark"]').forEach(function (button) {
+              button.classList.toggle('active', nextBm)
+              setSvgContent(button, getFeedActionIconSvg('bookmark', nextBm))
+              button.title = nextBm ? t('action_unbookmark', 'Unbookmark') : t('action_bookmark', 'Bookmark')
+              button.setAttribute('aria-label', button.title)
+            })
             animateFeedActionButton(_overlayBtnRef, !nextBm)
           }
           openFeedBookmarkMenu(_overlayBtnRef, syntheticRoot)
@@ -1187,9 +1204,13 @@ document.addEventListener('click', function (event) {
 
   var mediaTrigger = event.target && event.target.closest ? event.target.closest('[data-feed-media]') : null
   if (!mediaTrigger) return
-  if (event.target.closest && event.target.closest('.feed-media-overlay')) return
+  if (event.target.closest && event.target.closest('.feed-media-overlay-left')) return
 
   event.preventDefault(); event.stopPropagation()
+  if (mediaTrigger.closest('.feed-media-overlay-context')) {
+    openMediaOverlay(mediaTrigger, mediaTrigger)
+    return
+  }
   if (mediaTrigger.hasAttribute('data-x-profile-media')) {
     openMediaOverlay(mediaTrigger, mediaTrigger)
     return
@@ -1352,6 +1373,10 @@ document.addEventListener('keydown', function (event) {
       event.preventDefault(); event.stopPropagation()
       var ovShare = ov.querySelector('[data-feed-overlay-action="share"]')
       if (ovShare) ovShare.click()
+    } else if (sc.match('feed.translate', event.key)) {
+      event.preventDefault(); event.stopPropagation()
+      var ovTranslate = ov.querySelector('.feed-media-overlay-top .feed-translate-btn')
+      if (ovTranslate) ovTranslate.click()
     }
     return
   }

@@ -298,6 +298,7 @@
     <string name="feed_empty_liked">No liked posts yet</string>
     <string name="feed_empty_posts">No posts yet — pull to refresh</string>
     <string name="feed_empty_title">No posts</string>
+    <string name="feed_hide_post">Hide post</string>
     <string name="feed_mute_confirm_body">This hides their posts from your feed. You can undo it later in Muted accounts.</string>
     <string name="feed_mute_confirm_title">Mute @%1$s?</string>
     <string name="feed_new_posts">New posts</string>
@@ -319,6 +320,7 @@
     <string name="feed_quoted_post_media">Quoted post media</string>
     <string name="feed_quoted_post_media_index">Quoted post media %d</string>
     <string name="feed_refresh_account">Refresh account</string>
+    <string name="feed_replies">Replies</string>
     <string name="feed_replying_to">Replying to @%1$s</string>
     <string name="feed_repost_more">more</string>
     <string name="feed_repost_suffix">reposted</string>
@@ -343,6 +345,7 @@
     <string name="feed_turn_off_retweets">Turn off retweets</string>
     <string name="feed_turn_on_reposts">Turn on reposts</string>
     <string name="feed_turn_on_retweets">Turn on retweets</string>
+    <string name="feed_view_post">View post</string>
     <string name="feed_x_post">X post</string>
     <string name="field_confirm_new_password">Confirm New Password</string>
     <string name="field_current_password">Current Password</string>
@@ -795,6 +798,8 @@
     <string name="settings_theme_flavor">Flavor</string>
     <string name="settings_theme_follow_system">Follow system</string>
     <string name="settings_theme_follow_system_dark_mode">Follow system dark mode</string>
+    <string name="settings_thread_fetch_automatic">Automatic</string>
+    <string name="settings_thread_fetch_on_demand">On demand</string>
     <string name="settings_title">Preferences</string>
     <string name="settings_translate_auto_hint">Translate the feed continuously in the background, even when you are not viewing it.</string>
     <string name="settings_translate_auto_label">Auto</string>
@@ -847,6 +852,7 @@
     <string name="settings_x_thread_fetch_mode">Fetch thread context during account checks</string>
     <string name="settings_x_thread_fetch_mode_hint">Fetch one page of replies and quote-posts for new posts during account checks. Opening a thread always fetches its context.</string>
     <string name="settings_x_thread_fetch_never">Never</string>
+    <string name="settings_x_thread_fetch_on_open">Replies on open</string>
     <string name="settings_x_thread_fetch_starred">Starred only</string>
     <string name="settings_youtube_actions">Opening YouTube videos</string>
     <string name="settings_youtube_check_replays">Also check replays</string>

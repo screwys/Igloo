@@ -50,6 +50,35 @@ function translateLabelForButton(button) {
   return button ? button.querySelector('[data-translate-label]') : null
 }
 
+// A post can appear in the feed, viewer, and thread at the same time.
+function syncTranslationCopies(card, container) {
+  var tweetId = card.getAttribute('data-tweet-id')
+  var field = container.getAttribute('data-translate-field')
+  var sourceText = translateTextElement(container)
+  if (!tweetId || !sourceText) return
+  var sourceButton = translateButtonFor(card, field)
+  document.querySelectorAll('[data-feed-item][data-tweet-id]').forEach(function (copy) {
+    if (copy === card || copy.getAttribute('data-tweet-id') !== tweetId) return
+    copy.querySelectorAll('[data-translate-field]').forEach(function (target) {
+      if (target.getAttribute('data-translate-field') !== field) return
+      var targetText = translateTextElement(target)
+      if (!targetText) return
+      setHtmlContent(targetText, sourceText.innerHTML)
+      ;['data-original-html', 'data-original-text'].forEach(function (name) {
+        if (sourceText.hasAttribute(name)) targetText.setAttribute(name, sourceText.getAttribute(name))
+        else targetText.removeAttribute(name)
+      })
+      target.setAttribute('data-translated', container.getAttribute('data-translated') || '0')
+    })
+    var button = translateButtonFor(copy, field)
+    if (!button || !sourceButton) return
+    button.classList.toggle('active', sourceButton.classList.contains('active'))
+    var label = translateLabelForButton(button)
+    var sourceLabel = translateLabelForButton(sourceButton)
+    if (label && sourceLabel) label.textContent = sourceLabel.textContent
+  })
+}
+
 function translateContainersForAction(card, actionBtn) {
   var containers = card.querySelectorAll('[data-translate-field][data-lang]')
   var field = actionBtn ? String(actionBtn.getAttribute('data-translate-target-field') || '').trim() : ''
@@ -105,6 +134,7 @@ function translateBlock(card, container) {
     var label = translateLabelForButton(tBtn)
     if (label) label.textContent = srcLang
     if (tBtn) tBtn.classList.add('active')
+    syncTranslationCopies(card, container)
     return 'translated'
   }).catch(function () {
     return 'failed'
@@ -217,6 +247,7 @@ export function handleTranslateAction(card, actionBtn) {
     actionBtn.classList.remove('active')
     var label = translateLabelForButton(actionBtn)
     if (label) label.textContent = label.getAttribute('data-translate-default-label') || ''
+    containers.forEach(function (container) { syncTranslationCopies(card, container) })
   } else {
     containers.forEach(function (c) {
       var lang = (c.getAttribute('data-lang') || '').trim()

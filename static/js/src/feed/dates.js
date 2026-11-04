@@ -1,7 +1,15 @@
 // Dates module — extracted from feed_page.js
 // Hydrates relative dates on feed cards.
 
-import { formatRelative } from '../utils.js'
+import { formatRelative, parseAppDate } from '../utils.js'
+
+export function formatFullDate(raw) {
+  const date = parseAppDate(raw)
+  if (!date) return ''
+  const locale = document.documentElement.lang || undefined
+  return date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' }) + ' · ' +
+    date.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
 export function initDates(container) {
   const scope = container || document
@@ -9,9 +17,13 @@ export function initDates(container) {
     if (!el) return
     const raw = String(el.getAttribute('data-feed-date-raw') || '').trim()
     if (!raw) return
-    const rel = formatRelative(raw)
-    el.setAttribute('data-date-relative', rel)
-    el.textContent = rel || raw
+    if (el.getAttribute('data-date-format') === 'full') {
+      el.textContent = formatFullDate(raw) || raw
+    } else {
+      const rel = formatRelative(raw)
+      el.setAttribute('data-date-relative', rel)
+      el.textContent = rel || raw
+    }
   })
 }
 

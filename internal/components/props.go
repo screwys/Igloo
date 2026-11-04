@@ -54,6 +54,7 @@ type PageProps struct {
 	ArticleReader           bool
 	CommunityNotesEnabled   bool
 	ThreadTweetID           string
+	ThreadFetchOnOpen       bool
 	ActiveNav               string
 	PageBadge               string
 	ShortcutConfig          map[string]string
@@ -149,6 +150,7 @@ func (p PageProps) PreferencesConfigJSON() string {
 		"shareEmbedHosts":         p.ShareEmbedHosts,
 		"miniPlayerVideosEnabled": p.MiniPlayerVideosEnabled,
 		"miniPlayerFeedEnabled":   p.MiniPlayerFeedEnabled,
+		"threadFetchOnOpen":       p.ThreadFetchOnOpen,
 	})
 	return "window.IglooPreferences = " + string(b) + ";"
 }
