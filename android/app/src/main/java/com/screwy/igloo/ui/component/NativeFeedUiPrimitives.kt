@@ -158,6 +158,7 @@ internal fun showNativeFeedPopup(
     anchor: View,
     colors: NativeFeedColors,
     items: List<NativeFeedMenuItem>,
+    onDismiss: (View) -> Unit = {},
 ) {
     if (items.isEmpty()) return
     val context = anchor.context
@@ -172,24 +173,40 @@ internal fun showNativeFeedPopup(
         elevation = dp(10).toFloat()
         setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
     }
+    popup.setOnDismissListener { onDismiss(content) }
     items.forEach { item ->
-        content.addView(
-            TextView(context).apply {
-                text = item.label
-                textSize = 15f
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
-                gravity = Gravity.CENTER_VERTICAL
-                setIncludeFontPadding(false)
-                setPadding(dp(10), 0, dp(10), 0)
-                setTextColor(if (item.danger) colors.primary else colors.onSurface)
-                background = roundedFill(Color.TRANSPARENT, dp(8))
-                setOnClickListener {
-                    popup.dismiss()
-                    item.action()
+        val label = TextView(context).apply {
+            text = item.label
+            textSize = 15f
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER_VERTICAL
+            setIncludeFontPadding(false)
+            setTextColor(if (item.danger) colors.primary else colors.onSurface)
+        }
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), 0, dp(10), 0)
+            background = roundedFill(Color.TRANSPARENT, dp(8))
+            item.bindAvatar?.let { bindAvatar ->
+                val avatar = ImageView(context).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    background = roundedFill(colors.surfaceVariant, dp(999))
+                    clipToOutline = true
                 }
-            },
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)),
+                addView(avatar, LinearLayout.LayoutParams(dp(28), dp(28)).apply { marginEnd = dp(10) })
+                bindAvatar(avatar)
+            }
+            addView(label, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            setOnClickListener {
+                popup.dismiss()
+                item.action()
+            }
+        }
+        content.addView(
+            row,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(if (item.bindAvatar != null) 48 else 40)),
         )
     }
     popup.showAsDropDown(anchor, anchor.width - menuWidth, dp(4))

@@ -26,6 +26,23 @@ object IglooMigrations {
         }
     }
 
+    val MIGRATION_52_53 = object : Migration(52, 53) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE `feed_items` ADD COLUMN `tagged_handles` TEXT NOT NULL DEFAULT ''")
+            connection.prepare("SELECT `tweet_id`, `payload_json` FROM `feed_items` WHERE `payload_json` LIKE '%tagged%'").use { rows ->
+                connection.prepare("UPDATE `feed_items` SET `tagged_handles` = ? WHERE `tweet_id` = ?").use { update ->
+                    while (rows.step()) {
+                        val mediaJson = runCatching { ContentPayloads.feed(rows.getText(1)).mediaJson }.getOrNull()
+                        update.bindText(1, feedTaggedHandles(mediaJson))
+                        update.bindText(2, rows.getText(0))
+                        update.step()
+                        update.reset()
+                    }
+                }
+            }
+        }
+    }
+
     val MIGRATION_43_44 = object : Migration(43, 44) {
         override fun migrate(connection: SQLiteConnection) {
             connection.execSQL("ALTER TABLE `android_sync_assets` ADD COLUMN `transfer_required` INTEGER NOT NULL DEFAULT 1")

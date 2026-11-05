@@ -1220,9 +1220,11 @@ internal class NativeFeedViewHolder(
                     accounts.map { account ->
                         NativeFeedMenuItem(
                             label = account.name?.let { "$it @${account.handle}" } ?: "@${account.handle}",
+                            bindAvatar = { loadAvatar(it, "twitter_${account.handle.lowercase()}") },
                             action = { callbacks.onMentionClick(account.handle) },
                         )
                     },
+                    onDismiss = ::cancelAvatarJobsUnder,
                 )
             }
         }

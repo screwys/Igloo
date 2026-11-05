@@ -2,6 +2,7 @@ package com.screwy.igloo.data
 
 import com.screwy.igloo.data.entity.FeedItemEntity
 import com.screwy.igloo.feed.parseFeedMediaDescriptors
+import com.screwy.igloo.feed.parseFeedMediaTaggedAccounts
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -17,6 +18,18 @@ fun feedContentType(mediaJson: String?): String {
         media.size == 1 -> "image"
         else -> "post"
     }
+}
+
+/**
+ * Lowercase handles tagged in the post's photos as ",a,b,", or "" when none,
+ * so profile queries can match one handle with INSTR.
+ */
+fun feedTaggedHandles(mediaJson: String?): String {
+    val handles = parseFeedMediaTaggedAccounts(mediaJson)
+        .map { it.handle.trim().removePrefix("@").lowercase() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+    return if (handles.isEmpty()) "" else handles.joinToString(",", prefix = ",", postfix = ",")
 }
 
 fun isMoment(ownerKind: String, metadataJson: String?, duration: Long?): Boolean {

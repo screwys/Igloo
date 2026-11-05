@@ -99,7 +99,7 @@ import com.screwy.igloo.data.entity.StoredVideo
             AndroidSyncAssetEntity::class,
             OfflineVideoDownloadEntity::class,
         ],
-    version = 52,
+    version = 53,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 40, to = 41, spec = IglooMigrations.DropAssetChecksum::class),
@@ -186,7 +186,7 @@ abstract class IglooDatabase : RoomDatabase() {
             val appCtx = context.applicationContext
             return Room.databaseBuilder(appCtx, IglooDatabase::class.java, DB_FILE_NAME)
                 .setDriver(BundledSQLiteDriver())
-                .addMigrations(IglooMigrations.MIGRATION_43_44, IglooMigrations.MIGRATION_44_45, IglooMigrations.MIGRATION_51_52)
+                .addMigrations(IglooMigrations.MIGRATION_43_44, IglooMigrations.MIGRATION_44_45, IglooMigrations.MIGRATION_51_52, IglooMigrations.MIGRATION_52_53)
                 .build()
         }
     }

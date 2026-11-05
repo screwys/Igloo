@@ -693,18 +693,35 @@ func (db *DB) GetFeedItemsByAuthor(handle string, limit int) ([]model.FeedItem, 
 	return db.GetFeedItemsByAuthorPage(handle, limit, 0)
 }
 
-// CountFeedItemsByAuthor returns the total locally stored feed rows for a handle.
+// xProfilePostsSQL selects one row per post on an X profile: posts the account
+// wrote, posted from its timeline, quoted, or was tagged in. Repost rows of the
+// same post collapse to the account's own repost, else the original, else the
+// newest repost. It takes xProfilePostsArgs.
+const xProfilePostsSQL = `
+	SELECT DISTINCT ON (COALESCE(NULLIF(canonical_tweet_id, ''), tweet_id)) tweet_id, published_at
+	FROM feed_items
+	WHERE channel_id = ? OR source_channel_id = ? OR quote_channel_id = ?
+	   OR (media_json LIKE '%"tagged"%' AND igloo_media_tagged_channels(media_json) @> ARRAY[?]::text[])
+	ORDER BY COALESCE(NULLIF(canonical_tweet_id, ''), tweet_id),
+	         CASE
+		         WHEN COALESCE(is_retweet, 0) = 1 AND source_channel_id = ? THEN 0
+		         WHEN COALESCE(is_retweet, 0) = 0 THEN 1
+		         ELSE 2
+	         END,
+	         published_at DESC, tweet_id DESC`
+
+func xProfilePostsArgs(channelID string) []any {
+	return []any{channelID, channelID, channelID, channelID, channelID}
+}
+
+// CountFeedItemsByAuthor returns the number of posts on a handle's X profile.
 func (db *DB) CountFeedItemsByAuthor(handle string) (int, error) {
 	channelID := model.TwitterChannelIDFromHandle(handle)
 	if channelID == "" {
 		return 0, nil
 	}
 	var count int
-	err := db.reader().QueryRow(`
-		SELECT COUNT(*)
-		FROM feed_items
-		WHERE channel_id = ? OR source_channel_id = ? OR quote_channel_id = ?
-	`, channelID, channelID, channelID).Scan(&count)
+	err := db.reader().QueryRow(`SELECT COUNT(*) FROM (`+xProfilePostsSQL+`) posts`, xProfilePostsArgs(channelID)...).Scan(&count)
 	return count, err
 }
 
@@ -722,13 +739,13 @@ func (db *DB) GetFeedItemsByAuthorPage(handle string, limit int, offset int) ([]
 	if offset < 0 {
 		offset = 0
 	}
+	args := append(xProfilePostsArgs(channelID), limit, offset)
 	return db.listFeedItems(`
 		SELECT tweet_id, published_at
-		FROM feed_items
-		WHERE channel_id = ? OR source_channel_id = ? OR quote_channel_id = ?
-		ORDER BY published_at DESC
+		FROM (`+xProfilePostsSQL+`) posts
+		ORDER BY published_at DESC, tweet_id DESC
 		LIMIT ? OFFSET ?
-	`, "page.published_at DESC", channelID, channelID, channelID, limit, offset)
+	`, "page.published_at DESC, page.tweet_id DESC", args...)
 }
 
 // GetFeedThreadItemsByAuthorPage returns one representative row per conversation
@@ -746,12 +763,11 @@ func (db *DB) GetFeedThreadItemsByAuthorPage(handle string, limit int, offset in
 	if offset < 0 {
 		offset = 0
 	}
+	args := append(xProfilePostsArgs(channelID), limit, offset)
 	return db.listFeedItems(`
 		WITH RECURSIVE
 		matched(tweet_id) AS (
-			SELECT tweet_id
-			FROM feed_items
-			WHERE (channel_id = ? OR source_channel_id = ? OR quote_channel_id = ?)
+			SELECT tweet_id FROM (`+xProfilePostsSQL+`) posts
 		),
 		chain(seed_id, tweet_id, reply_to_status, depth) AS (
 			SELECT m.tweet_id, f.tweet_id, COALESCE(f.reply_to_status, ''), 0
@@ -789,11 +805,12 @@ func (db *DB) GetFeedThreadItemsByAuthorPage(handle string, limit int, offset in
 		WHERE ranked.rn = 1
 		ORDER BY f.published_at DESC, f.tweet_id DESC
 		LIMIT ? OFFSET ?
-	`, "page.published_at DESC, page.tweet_id DESC", channelID, channelID, channelID, limit, offset)
+	`, "page.published_at DESC, page.tweet_id DESC", args...)
 }
 
 // GetFeedMediaItemsByAuthorPage returns posts whose author published their own
-// media. It excludes reposts and quoted-only media, matching X's Media tab.
+// media or tagged the account in a photo. It excludes reposts and quoted-only
+// media.
 func (db *DB) GetFeedMediaItemsByAuthorPage(handle string, limit int, offset int) ([]model.FeedItem, error) {
 	channelID := model.TwitterChannelIDFromHandle(handle)
 	if channelID == "" {
@@ -808,12 +825,12 @@ func (db *DB) GetFeedMediaItemsByAuthorPage(handle string, limit int, offset int
 	return db.listFeedItems(`
 		SELECT tweet_id, published_at
 		FROM feed_items
-		WHERE channel_id = ?
+		WHERE (channel_id = ? OR (media_json LIKE '%"tagged"%' AND igloo_media_tagged_channels(media_json) @> ARRAY[?]::text[]))
 		  AND COALESCE(is_retweet, 0) = 0
 		  AND COALESCE(media_json, '') NOT IN ('', '[]')
 		ORDER BY published_at DESC, tweet_id DESC
 		LIMIT ? OFFSET ?
-	`, "page.published_at DESC, page.tweet_id DESC", channelID, limit, offset)
+	`, "page.published_at DESC, page.tweet_id DESC", channelID, channelID, limit, offset)
 }
 
 // scanFeedItems scans rows into FeedItem structs.

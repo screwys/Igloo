@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 import com.screwy.igloo.data.feedContentType
 import com.screwy.igloo.data.feedHasContent
 import com.screwy.igloo.data.feedHasMedia
+import com.screwy.igloo.data.feedTaggedHandles
 import com.screwy.igloo.data.isMoment
 
 @Entity(
@@ -39,6 +40,7 @@ data class StoredFeedItem(
     @ColumnInfo(name = "has_content") val hasContent: Boolean,
     @ColumnInfo(name = "has_media") val hasMedia: Boolean,
     @ColumnInfo(name = "payload_json") val payloadJson: String,
+    @ColumnInfo(name = "tagged_handles", defaultValue = "''") val taggedHandles: String,
 ) {
     companion object {
         fun from(item: FeedItemEntity, payloadJson: String) = StoredFeedItem(
@@ -46,6 +48,7 @@ data class StoredFeedItem(
             item.reposterChannelId, item.quoteTweetId, item.quoteChannelId, item.canonicalTweetId,
             item.replyChannelId, item.replyToStatus, item.isReply, item.isGhost, item.contentHash,
             item.publishedAt, feedContentType(item.mediaJson), feedHasContent(item), feedHasMedia(item), payloadJson,
+            feedTaggedHandles(item.mediaJson),
         )
     }
 }

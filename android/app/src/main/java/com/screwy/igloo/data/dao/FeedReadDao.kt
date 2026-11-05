@@ -398,7 +398,44 @@ interface FeedReadDao {
     @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     @Query(
         """
-        WITH bookmark_state AS (
+        WITH profile_posts AS (
+            -- One row per post: the account's own repost, else the original,
+            -- else the newest repost row.
+            SELECT
+                f.tweet_id,
+                ROW_NUMBER() OVER (
+                    PARTITION BY COALESCE(NULLIF(f.canonical_tweet_id, ''), f.tweet_id)
+                    ORDER BY
+                        CASE
+                            WHEN f.is_retweet = 1 AND (
+                                f.source_channel_id = :channelId
+                                OR (:channelHandle != '' AND LOWER(LTRIM(COALESCE(sp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@')))
+                            ) THEN 0
+                            WHEN f.is_retweet = 0 THEN 1
+                            ELSE 2
+                        END,
+                        f.published_at DESC,
+                        f.tweet_id DESC
+                ) AS post_rank
+            FROM feed_items f
+            LEFT JOIN channel_profiles cp ON cp.channel_id = f.channel_id
+            LEFT JOIN channel_profiles sp ON sp.channel_id = f.source_channel_id
+            LEFT JOIN channel_profiles qp ON qp.channel_id = f.quote_channel_id
+            WHERE COALESCE(f.is_ghost, 0) = 0
+              AND (
+                :channelId IN (f.channel_id, f.source_channel_id, f.quote_channel_id)
+                OR (
+                    :channelHandle != ''
+                    AND (
+                        LOWER(LTRIM(COALESCE(cp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
+                        OR LOWER(LTRIM(COALESCE(sp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
+                        OR LOWER(LTRIM(COALESCE(qp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
+                        OR INSTR(f.tagged_handles, ',' || LOWER(LTRIM(:channelHandle, '@')) || ',') > 0
+                    )
+                )
+              )
+        ),
+        bookmark_state AS (
             SELECT
                 fi2.tweet_id,
                 b.video_id,
@@ -460,20 +497,7 @@ interface FeedReadDao {
         LEFT JOIN channel_follows cf ON fi.channel_id = cf.channel_id
         LEFT JOIN channel_stars   cs ON fi.channel_id = cs.channel_id
         LEFT JOIN channel_follows qcf ON qcf.channel_id = fi.quote_channel_id
-        WHERE
-            (
-                :channelId IN (fi.channel_id, fi.source_channel_id, fi.reposter_channel_id, fi.quote_channel_id)
-                OR (
-                    :channelHandle != ''
-                    AND (
-                        LOWER(LTRIM(COALESCE(cp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
-                        OR LOWER(LTRIM(COALESCE(sp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
-                        OR LOWER(LTRIM(COALESCE(rp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
-                        OR LOWER(LTRIM(COALESCE(qp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
-                    )
-                )
-            )
-            AND COALESCE(fi.is_ghost, 0) = 0
+        WHERE fi.tweet_id IN (SELECT tweet_id FROM profile_posts WHERE post_rank = 1)
         ORDER BY fi.published_at DESC, fi.tweet_id DESC
         LIMIT :limit OFFSET :offset
         """

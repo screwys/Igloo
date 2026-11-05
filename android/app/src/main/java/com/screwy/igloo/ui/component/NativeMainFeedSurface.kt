@@ -3,6 +3,7 @@
 
 package com.screwy.igloo.ui.component
 
+import android.widget.ImageView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -665,6 +666,8 @@ internal data class NativeTranslationPill(
 internal data class NativeFeedMenuItem(
     val label: String,
     val danger: Boolean = false,
+    /** Loads a leading avatar into the given view; null shows a text-only item. */
+    val bindAvatar: ((ImageView) -> Unit)? = null,
     val action: () -> Unit,
 )
 

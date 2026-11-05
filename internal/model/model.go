@@ -665,10 +665,12 @@ func MediaTaggedAccounts(media []MediaRef) []RetweeterInfo {
 				continue
 			}
 			seen[key] = true
+			channelID := TwitterChannelIDFromHandle(tag.Handle)
 			accounts = append(accounts, RetweeterInfo{
 				Handle:      tag.Handle,
 				DisplayName: tag.Name,
-				ChannelID:   TwitterChannelIDFromHandle(tag.Handle),
+				ChannelID:   channelID,
+				AvatarURL:   "/api/media/avatar/" + channelID,
 				IsTagged:    true,
 			})
 		}
