@@ -227,6 +227,27 @@ internal fun parseFeedMediaDescriptors(rawJson: String?): List<FeedMediaDescript
     return array.mapNotNull(::parseFeedMediaDescriptor)
 }
 
+/** An account tagged in a post photo. */
+data class FeedTaggedAccount(
+    val handle: String,
+    val name: String?,
+)
+
+/** Lists the accounts tagged across the photos in `media_json`, first tag first. */
+internal fun parseFeedMediaTaggedAccounts(rawJson: String?): List<FeedTaggedAccount> {
+    if (rawJson.isNullOrBlank() || !rawJson.contains("\"tagged\"")) return emptyList()
+    val array = runCatching { feedMediaJson.parseToJsonElement(rawJson) }.getOrNull() as? JsonArray
+        ?: return emptyList()
+    return array
+        .flatMap { (it as? JsonObject)?.get("tagged") as? JsonArray ?: emptyList() }
+        .mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val handle = obj.string("handle")?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            FeedTaggedAccount(handle = handle, name = obj.string("name")?.trim()?.takeIf { it.isNotEmpty() })
+        }
+        .distinctBy { it.handle.lowercase() }
+}
+
 private fun parseFeedMediaDescriptor(element: JsonElement): FeedMediaDescriptor? {
     val obj = element as? JsonObject ?: return null
     val streamUrl = obj.string("stream_url")

@@ -583,8 +583,7 @@ type FeedItem struct {
 	AlgoInterestScore float64
 	AlgoFlags         map[string]any
 	// Retweet grouping
-	Retweeters     []RetweeterInfo
-	TaggedAccounts []RetweeterInfo
+	Retweeters []RetweeterInfo
 }
 
 // RetweeterInfo represents a retweeter or tagged account.
@@ -604,6 +603,14 @@ type MediaRef struct {
 	AltText      string `json:"alt_text"`
 	Width        int    `json:"width"`
 	Height       int    `json:"height"`
+	// Tagged lists the accounts tagged in an X photo.
+	Tagged []MediaTag `json:"tagged,omitempty"`
+}
+
+// MediaTag is an account tagged in a photo.
+type MediaTag struct {
+	Handle string `json:"handle"`
+	Name   string `json:"name,omitempty"`
 }
 
 // FeedLike represents a liked post projected from canonical feed content.
@@ -645,6 +652,28 @@ func (f *FeedItem) ParseMedia() {
 	if f.QuoteMediaJSON != "" && f.QuoteMedia == nil {
 		_ = json.Unmarshal([]byte(f.QuoteMediaJSON), &f.QuoteMedia)
 	}
+}
+
+// MediaTaggedAccounts lists the accounts tagged across a post's photos.
+func MediaTaggedAccounts(media []MediaRef) []RetweeterInfo {
+	var accounts []RetweeterInfo
+	seen := make(map[string]bool)
+	for _, ref := range media {
+		for _, tag := range ref.Tagged {
+			key := strings.ToLower(tag.Handle)
+			if key == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			accounts = append(accounts, RetweeterInfo{
+				Handle:      tag.Handle,
+				DisplayName: tag.Name,
+				ChannelID:   TwitterChannelIDFromHandle(tag.Handle),
+				IsTagged:    true,
+			})
+		}
+	}
+	return accounts
 }
 
 // NewPosterAvatar represents one unique new poster surfaced in the

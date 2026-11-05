@@ -551,9 +551,9 @@ func feedItemToJSON(item model.FeedItem, bookmarkInfo map[string]db.BookmarkInfo
 	}
 
 	// Tagged accounts
-	if len(item.TaggedAccounts) > 0 {
+	if tagged := model.MediaTaggedAccounts(item.Media); len(tagged) > 0 {
 		var ta []map[string]any
-		for _, acct := range item.TaggedAccounts {
+		for _, acct := range tagged {
 			ta = append(ta, map[string]any{
 				"retweeter_handle":       acct.Handle,
 				"retweeter_display_name": acct.DisplayName,

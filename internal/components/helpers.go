@@ -134,6 +134,22 @@ func videoWebpageURL(v model.Video) string {
 	return ""
 }
 
+// feedTaggedLabel names the first tagged account and counts the rest.
+func feedTaggedLabel(p PageProps, accounts []model.RetweeterInfo) string {
+	first := accounts[0].DisplayName
+	if first == "" {
+		first = "@" + accounts[0].Handle
+	}
+	switch len(accounts) {
+	case 1:
+		return first
+	case 2:
+		return LF(p, "feed_tagged_one_other", "%1$s and 1 other", first)
+	default:
+		return LF(p, "feed_tagged_many_others", "%1$s and %2$d others", first, len(accounts)-1)
+	}
+}
+
 func videoTaggedAccounts(v model.Video) []model.RetweeterInfo {
 	meta := v.ParseMetadata()
 	if meta == nil || (len(meta.Coauthors) == 0 && len(meta.TaggedUsers) == 0) {

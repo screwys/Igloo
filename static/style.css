@@ -11322,6 +11322,7 @@ body.shorts-mode .sidebar {
 .feed-tagged-row {
     display: inline-flex;
     align-items: center;
+    max-width: 100%;
     gap: 0.25rem;
     background: none;
     border: none;
@@ -11340,8 +11341,15 @@ body.shorts-mode .sidebar {
 .feed-tagged-row:hover {
     color: var(--text-secondary);
 }
-.feed-tagged-sep {
-    opacity: 0.7;
+.feed-tagged-row .material-icon {
+    flex: none;
+    width: 16px;
+    height: 16px;
+}
+.feed-tagged-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .feed-actions {

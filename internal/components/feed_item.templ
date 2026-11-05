@@ -120,9 +120,6 @@ templ feedThreadCard(p PageProps, item model.FeedItem, collapsed bool, deferMedi
 		if item.QuoteTweetID != "" {
 			@feedQuoteCard(p, item, deferMedia)
 		}
-		if len(item.TaggedAccounts) > 0 {
-			@feedTaggedAccounts(p, item)
-		}
 		@feedActions(p, item)
 	</article>
 }
@@ -163,8 +160,8 @@ templ feedLeafCard(p PageProps, item model.FeedItem, deferMedia bool) {
 		data-channel-platform="twitter"
 		data-media-count={ fmt.Sprintf("%d", len(item.Media)) }
 		data-quote-media-count={ fmt.Sprintf("%d", len(item.QuoteMedia)) }
-		if len(item.TaggedAccounts) > 0 {
-			data-tagged-accounts={ toJSONAttr(item.TaggedAccounts) }
+		if len(model.MediaTaggedAccounts(item.Media)) > 0 {
+			data-tagged-accounts={ toJSONAttr(model.MediaTaggedAccounts(item.Media)) }
 		}
 	>
 		{{ repostList := repostEntries(item) }}
@@ -181,9 +178,6 @@ templ feedLeafCard(p PageProps, item model.FeedItem, deferMedia bool) {
 		@feedContext(p, item.PollJSON, item.CommunityNote)
 		if item.QuoteTweetID != "" {
 			@feedQuoteCard(p, item, deferMedia)
-		}
-		if len(item.TaggedAccounts) > 0 {
-			@feedTaggedAccounts(p, item)
 		}
 		@feedActions(p, item)
 	</article>
@@ -610,6 +604,9 @@ templ feedMedia(p PageProps, item model.FeedItem, deferMedia bool, imageAlt stri
 		} else if mediaCount == 1 {
 			@feedPendingMedia(p, item.Media[0])
 		}
+		if tagged := model.MediaTaggedAccounts(item.Media); len(tagged) > 0 {
+			@feedTaggedAccounts(p, tagged)
+		}
 	</div>
 }
 
@@ -832,20 +829,16 @@ templ feedQuoteMedia(p PageProps, item model.FeedItem, qMediaCount int, deferMed
 	}
 }
 
-templ feedTaggedAccounts(p PageProps, item model.FeedItem) {
-	<button class="feed-tagged-row feed-tagged-multi" type="button" data-tagged={ toJSONAttr(item.TaggedAccounts) }>
-		for i, ta := range item.TaggedAccounts {
-			if i > 0 {
-				{ " " }
-				<span class="feed-tagged-sep">{ L(p, "list_sep_and", "and") }</span>
-				{ " " }
-			}
-			if ta.DisplayName != "" {
-				{ ta.DisplayName }
-			} else {
-				{ ta.Handle }
-			}
-		}
+templ feedTaggedAccounts(p PageProps, accounts []model.RetweeterInfo) {
+	<button
+		class="feed-tagged-row feed-tagged-multi"
+		type="button"
+		data-tagged={ toJSONAttr(accounts) }
+		title={ L(p, "feed_tagged_in_this_post", "Tagged in this post") }
+		aria-label={ L(p, "feed_tagged_in_this_post", "Tagged in this post") }
+	>
+		@MaterialIcon("Person", "")
+		<span class="feed-tagged-label">{ feedTaggedLabel(p, accounts) }</span>
 	</button>
 }
 

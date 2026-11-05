@@ -20,7 +20,7 @@ func TestParseDumpForwardQuoteSharedByReposts(t *testing.T) {
 		[2,{"tweet_id":"100","retweet_id":"101","quoted_id":"300","author":{"name":"sample_author"},"content":"First"}],
 		[2,{"tweet_id":"200","retweet_id":"201","quoted_id":"300","author":{"name":"sample_author"},"content":"Second"}],
 		[2,{"tweet_id":"300","quote_id":"100","author":{"name":"quote_author"},"content":"Shared quote"}]
-	]`), "sample_source")
+	]`), "sample_source", nil)
 	if len(parsed.Items) != 2 {
 		t.Fatalf("items = %d", len(parsed.Items))
 	}
@@ -43,7 +43,7 @@ func TestParseDumpArticleTextAndMedia(t *testing.T) {
 		[2,{"tweet_id":"100","author":{"name":"sample_author"},"content":"Preview", "article":{"title":"Long article","html":"<h2>Heading</h2><p>First &amp; second<br>line.</p><p><a href=\"https://example.test/read\">Reference</a></p><script>ignored</script>"}}],
 		[3,"https://pbs.twimg.com/media/cover.jpg",{"tweet_id":"100","type":"article:cover"}],
 		[3,"https://video.twimg.com/ext_tw_video/article.mp4",{"tweet_id":"100","type":"article:video"}]
-	]`), "sample_author")
+	]`), "sample_author", nil)
 	if len(parsed.Items) != 1 {
 		t.Fatalf("items = %d", len(parsed.Items))
 	}
@@ -57,14 +57,14 @@ func TestParseDumpArticleTextAndMedia(t *testing.T) {
 }
 
 func TestArticleMetadataWithoutBodyIsNotFullContent(t *testing.T) {
-	parsed := ParseDump([]byte(`[[2,{"tweet_id":"100","author":{"name":"sample_author"},"content":"Preview","article":{"title":"Long article"}}]]`), "sample_author")
+	parsed := ParseDump([]byte(`[[2,{"tweet_id":"100","author":{"name":"sample_author"},"content":"Preview","article":{"title":"Long article"}}]]`), "sample_author", nil)
 	if len(parsed.Items) != 1 || parsed.Items[0].ArticleTitle != "" || parsed.Items[0].BodyText != "Preview" {
 		t.Fatalf("metadata-only article must remain a preview: %+v", parsed.Items)
 	}
 }
 
 func TestGalleryAndFallbackRetainPollAndNoteContext(t *testing.T) {
-	parsed := ParseDump([]byte(`[[2,{"tweet_id":"100","author":{"name":"sample_author"},"content":"Post","birdwatch":"Source &amp; context"}]]`), "sample_author")
+	parsed := ParseDump([]byte(`[[2,{"tweet_id":"100","author":{"name":"sample_author"},"content":"Post","birdwatch":"Source &amp; context"}]]`), "sample_author", nil)
 	if len(parsed.Items) != 1 || parsed.Items[0].CommunityNote != "Source & context" {
 		t.Fatalf("gallery note = %+v", parsed.Items)
 	}
@@ -93,7 +93,7 @@ func TestParseDumpFoldsParentAndQuoteMedia(t *testing.T) {
 		[3, "https://video.twimg.com/ext_tw_video/quote.mp4", {"tweet_id":"1000000000000000200","type":"video","width":640,"height":360}]
 	]`)
 
-	result := ParseDump(output, "source_user")
+	result := ParseDump(output, "source_user", nil)
 	if len(result.Items) != 1 {
 		t.Fatalf("items = %d, want 1", len(result.Items))
 	}
@@ -129,7 +129,7 @@ func TestParseDumpHidesStructuredReplyMentionPrefix(t *testing.T) {
 		}]
 	]`)
 
-	items := ParseDump(output, "sample_author").Items
+	items := ParseDump(output, "sample_author", nil).Items
 	if len(items) != 1 {
 		t.Fatalf("items = %d, want 1", len(items))
 	}
@@ -153,7 +153,7 @@ func TestParseDumpKeepsLeadingMentionsOnNonReply(t *testing.T) {
 		}]
 	]`)
 
-	items := ParseDump(output, "sample_author").Items
+	items := ParseDump(output, "sample_author", nil).Items
 	if len(items) != 1 || items[0].BodyText != "@tool_account visible root mention" {
 		t.Fatalf("items = %+v", items)
 	}
@@ -187,7 +187,7 @@ func TestParseDumpHidesStructuredReplyMentionPrefixInQuote(t *testing.T) {
 		}]
 	]`)
 
-	items := ParseDump(output, "sample_author").Items
+	items := ParseDump(output, "sample_author", nil).Items
 	if len(items) != 1 {
 		t.Fatalf("items = %+v", items)
 	}
@@ -206,7 +206,7 @@ func TestParseDumpKeepsSourceAuthoredQuoteExpansionAsDirectItem(t *testing.T) {
 		[3, "https://pbs.twimg.com/media/source-photo.jpg?format=jpg&name=orig", {"tweet_id":"9000000000000000200","type":"photo","width":1200,"height":800}]
 	]`)
 
-	result := ParseDump(output, "sample_source")
+	result := ParseDump(output, "sample_source", nil)
 	if len(result.Items) != 2 {
 		t.Fatalf("items = %d, want 2", len(result.Items))
 	}
@@ -238,7 +238,7 @@ func TestParseDumpDoesNotUseRequestedSourceAsQuoteExpansionProvenance(t *testing
 		[2, {"tweet_id":"9000000000000000400","content":"unknown expansion","quote_by":"sample_parent","author":{"name":"unknown","nick":"Unknown"},"quote_id":"9000000000000000300","reply_id":0,"retweet_id":0}]
 	]`)
 
-	result := ParseDump(output, "sample_source")
+	result := ParseDump(output, "sample_source", nil)
 	if len(result.Items) != 1 || result.Items[0].TweetID != "9000000000000000300" {
 		t.Fatalf("items = %#v", result.Items)
 	}
@@ -250,7 +250,7 @@ func TestParseDumpDoesNotTreatRetweetQuoteExpansionAsSourcePost(t *testing.T) {
 		[2, {"tweet_id":"9000000000000000600","content":"RT @sample_source: source post","quote_by":"sample_parent","author":{"name":"sample_source","nick":"Sample Source"},"user":{"name":"sample_reposter","nick":"Sample Reposter"},"quote_id":"9000000000000000500","reply_id":0,"retweet_id":"9000000000000000700"}]
 	]`)
 
-	result := ParseDump(output, "sample_source")
+	result := ParseDump(output, "sample_source", nil)
 	if len(result.Items) != 1 || result.Items[0].TweetID != "9000000000000000500" {
 		t.Fatalf("items = %#v", result.Items)
 	}
@@ -261,7 +261,7 @@ func TestParseDumpRetweetKeepsWrapperAndStripsPrefix(t *testing.T) {
 		[2, {"tweet_id":"1000000000000000300","retweet_id":"1000000000000000200","content":"RT @original_author: original text","date":"2026-05-09 10:00:00","lang":"en","author":{"name":"original_author","nick":"Original Author","profile_image":"https://pbs.twimg.com/profile_images/o_normal.jpg"},"user":{"name":"reposter","nick":"Reposter"},"quote_id":0,"reply_id":0}]
 	]`)
 
-	result := ParseDump(output, "reposter")
+	result := ParseDump(output, "reposter", nil)
 	if len(result.Items) != 1 {
 		t.Fatalf("items = %d, want 1", len(result.Items))
 	}
@@ -282,7 +282,7 @@ func TestParseDumpRequestsMissingQuoteParentStatus(t *testing.T) {
 		[2, {"tweet_id":"1000000000000000200","content":"quoted text","date":"2026-05-09 09:00:00","quote_by":"source_user","quote_id":"1000000000000000100","author":{"name":"quote_author","nick":"Quote Author"},"user":{"name":"source_user","nick":"Source User"},"retweet_id":0}]
 	]`)
 
-	result := ParseDump(output, "source_user")
+	result := ParseDump(output, "source_user", nil)
 	if len(result.Items) != 0 {
 		t.Fatalf("items = %d, want 0", len(result.Items))
 	}
@@ -299,7 +299,7 @@ func TestParseDumpUsesSourceHandleWhenDirectAuthorIsUnknownPlaceholder(t *testin
 		[2, {"tweet_id":"9000000000000000600","content":"direct text","date":"2026-05-09 10:00:00","author":{"name":"unknown","nick":"Direct Author"},"user":{"name":"sample_source","nick":"Sample Source"},"quote_id":0,"reply_id":0,"retweet_id":0}]
 	]`)
 
-	result := ParseDump(output, "")
+	result := ParseDump(output, "", nil)
 	if len(result.Items) != 1 {
 		t.Fatalf("items = %d, want 1", len(result.Items))
 	}
@@ -319,7 +319,7 @@ func TestParseDumpRejectsUntrustedMediaAndInvalidIDs(t *testing.T) {
 		[2, {"tweet_id":"../bad","content":"bad","author":{"name":"safe_author"},"quote_id":0}]
 	]`)
 
-	result := ParseDump(output, "source_user")
+	result := ParseDump(output, "source_user", nil)
 	if len(result.Items) != 1 {
 		t.Fatalf("items = %d, want 1", len(result.Items))
 	}
@@ -347,7 +347,7 @@ func TestMediaRefRejectsOverflowDimensions(t *testing.T) {
 
 func TestClientFetchTimelineRetriesAllCookies(t *testing.T) {
 	var used []string
-	runner := func(_ context.Context, args []string) ([]byte, error) {
+	runner := func(_ context.Context, args []string, _ string) ([]byte, error) {
 		for i, arg := range args {
 			if arg == "--cookies" && i+1 < len(args) {
 				used = append(used, args[i+1])
@@ -389,7 +389,7 @@ func (s *recordingOperationSink) RecordDownloaderOperation(_ context.Context, op
 
 func TestClientFetchTimelineRetriesCookieAfterSemanticAuthorizationError(t *testing.T) {
 	var used []string
-	runner := func(_ context.Context, args []string) ([]byte, error) {
+	runner := func(_ context.Context, args []string, _ string) ([]byte, error) {
 		for i, arg := range args {
 			if arg == "--cookies" && i+1 < len(args) {
 				used = append(used, args[i+1])
@@ -432,7 +432,7 @@ func TestClientFetchTimelineDoesNotRotateCookiesForNotFound(t *testing.T) {
 	var attempts int
 	sink := &recordingOperationSink{}
 	client := &Client{
-		Runner: func(context.Context, []string) ([]byte, error) {
+		Runner: func(context.Context, []string, string) ([]byte, error) {
 			attempts++
 			return []byte(`[-1, {"error":"NotFoundError","message":"Requested user could not be found"}]`), nil
 		},
@@ -457,7 +457,7 @@ func TestClientFetchTimelineDoesNotRotateCookiesForNotFound(t *testing.T) {
 func TestClientFetchTimelineClassifiesSemanticAuthRequired(t *testing.T) {
 	sink := &recordingOperationSink{}
 	client := &Client{
-		Runner: func(context.Context, []string) ([]byte, error) {
+		Runner: func(context.Context, []string, string) ([]byte, error) {
 			return []byte(`[-1, {"error":"AuthRequired","message":"Sign in is required"}]`), nil
 		},
 		OperationSink: sink,
@@ -472,7 +472,7 @@ func TestClientFetchTimelineClassifiesSemanticAuthRequired(t *testing.T) {
 }
 
 func TestClientFetchTimelineEnrichesMissingQuoteParentAndRetweetQuote(t *testing.T) {
-	runner := func(_ context.Context, args []string) ([]byte, error) {
+	runner := func(_ context.Context, args []string, _ string) ([]byte, error) {
 		joined := strings.Join(args, " ")
 		switch {
 		case strings.Contains(joined, "/source_user/with_replies"):
@@ -519,7 +519,7 @@ func TestClientFetchTimelineEnrichesMissingQuoteParentAndRetweetQuote(t *testing
 }
 
 func TestClientFetchTimelineUsesFXTwitterBeforeGalleryDLForMissingQuoteParent(t *testing.T) {
-	runner := func(_ context.Context, args []string) ([]byte, error) {
+	runner := func(_ context.Context, args []string, _ string) ([]byte, error) {
 		joined := strings.Join(args, " ")
 		switch {
 		case strings.Contains(joined, "/sample_source/with_replies"):
@@ -582,7 +582,7 @@ func TestClientFetchTimelineUsesFXTwitterBeforeGalleryDLForMissingQuoteParent(t 
 }
 
 func TestClientFetchTimelineUsesFXTwitterBeforeGalleryDLForRetweetQuote(t *testing.T) {
-	runner := func(_ context.Context, args []string) ([]byte, error) {
+	runner := func(_ context.Context, args []string, _ string) ([]byte, error) {
 		joined := strings.Join(args, " ")
 		switch {
 		case strings.Contains(joined, "/sample_source/with_replies"):
@@ -645,7 +645,7 @@ func TestClientFetchTimelineUsesFXTwitterBeforeGalleryDLForRetweetQuote(t *testi
 }
 
 func TestClientFetchTimelineDefersMissingQuoteParentWhenFXTwitterLacksQuote(t *testing.T) {
-	runner := func(_ context.Context, args []string) ([]byte, error) {
+	runner := func(_ context.Context, args []string, _ string) ([]byte, error) {
 		joined := strings.Join(args, " ")
 		switch {
 		case strings.Contains(joined, "/sample_source/with_replies"):
@@ -692,7 +692,7 @@ func TestClientFetchTimelineDefersMissingQuoteParentWhenFXTwitterLacksQuote(t *t
 }
 
 func TestClientFetchTimelineDefersRetweetQuoteWhenFXTwitterFails(t *testing.T) {
-	runner := func(_ context.Context, args []string) ([]byte, error) {
+	runner := func(_ context.Context, args []string, _ string) ([]byte, error) {
 		joined := strings.Join(args, " ")
 		switch {
 		case strings.Contains(joined, "/sample_source/with_replies"):
@@ -732,7 +732,7 @@ func TestClientFetchTimelineDefersRetweetQuoteWhenFXTwitterFails(t *testing.T) {
 }
 
 func TestClientFetchTimelineDoesNotDeferPlainRetweetAfterFXTwitter(t *testing.T) {
-	runner := func(_ context.Context, args []string) ([]byte, error) {
+	runner := func(_ context.Context, args []string, _ string) ([]byte, error) {
 		joined := strings.Join(args, " ")
 		switch {
 		case strings.Contains(joined, "/sample_source/with_replies"):
@@ -780,7 +780,7 @@ func TestClientFetchTimelineDoesNotDeferPlainRetweetAfterFXTwitter(t *testing.T)
 }
 
 func TestClientFetchTimelineDoesNotRequestPinnedTweets(t *testing.T) {
-	client := &Client{Runner: func(_ context.Context, args []string) ([]byte, error) {
+	client := &Client{Runner: func(_ context.Context, args []string, _ string) ([]byte, error) {
 		for _, arg := range args {
 			if strings.Contains(arg, "twitter.pinned") {
 				t.Fatalf("timeline args request pinned tweets: %v", args)

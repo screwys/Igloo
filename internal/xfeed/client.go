@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -18,8 +19,9 @@ import (
 
 const defaultTimelineLimit = 100
 
-// Runner executes gallery-dl with the provided args and returns stdout/stderr.
-type Runner func(ctx context.Context, args []string) ([]byte, error)
+// Runner executes gallery-dl in workDir with the provided args and returns
+// stdout/stderr.
+type Runner func(ctx context.Context, args []string, workDir string) ([]byte, error)
 
 type TweetFallback interface {
 	FetchTweet(ctx context.Context, handle, tweetID string) (*fxtwitter.Tweet, error)
@@ -66,11 +68,11 @@ func (c *Client) FetchTimeline(ctx context.Context, handle string, limit int) ([
 		limit = defaultTimelineLimit
 	}
 	rawURL := "https://x.com/" + handle + "/with_replies"
-	output, err := c.dump(ctx, rawURL, limit)
+	output, photoTags, err := c.dump(ctx, rawURL, limit)
 	if err != nil {
 		return nil, err
 	}
-	parsed := ParseDump(output, handle)
+	parsed := ParseDump(output, handle, photoTags)
 	if err := c.enrichStatuses(ctx, &parsed); err != nil {
 		return nil, err
 	}
@@ -86,11 +88,11 @@ func (c *Client) FetchSource(ctx context.Context, rawURL string, limit int) ([]F
 	if limit <= 0 {
 		limit = defaultTimelineLimit
 	}
-	output, err := c.dump(ctx, rawURL, limit)
+	output, photoTags, err := c.dump(ctx, rawURL, limit)
 	if err != nil {
 		return nil, err
 	}
-	parsed := ParseDump(output, "")
+	parsed := ParseDump(output, "", photoTags)
 	if err := c.enrichStatuses(ctx, &parsed); err != nil {
 		return nil, err
 	}
@@ -108,11 +110,11 @@ func (c *Client) FetchStatus(ctx context.Context, handle, tweetID string) (Parse
 	if !ValidTweetID(tweetID) {
 		return ParseResult{}, fmt.Errorf("invalid X status id: %q", tweetID)
 	}
-	output, err := c.dump(ctx, "https://x.com/"+handle+"/status/"+tweetID, 5)
+	output, photoTags, err := c.dump(ctx, "https://x.com/"+handle+"/status/"+tweetID, 5)
 	if err != nil {
 		return ParseResult{}, err
 	}
-	parsed := ParseDump(output, handle)
+	parsed := ParseDump(output, handle, photoTags)
 	return parsed, nil
 }
 
@@ -404,15 +406,21 @@ func timePtr(t time.Time) *time.Time {
 	return &tt
 }
 
-func (c *Client) dump(ctx context.Context, rawURL string, limit int) ([]byte, error) {
+// dump runs gallery-dl and returns its JSON output with the photo tags read
+// from the API pages it saved.
+func (c *Client) dump(ctx context.Context, rawURL string, limit int) ([]byte, map[string][]model.MediaTag, error) {
 	started := time.Now()
+	pageDir, err := os.MkdirTemp("", "igloo-x-pages-")
+	if err != nil {
+		return nil, nil, fmt.Errorf("create X page workspace: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(pageDir) }()
 	args := galleryDLArgs(rawURL, limit)
 	cookies := c.cookies()
 	attempts := 0
 	usedArgs := args
 	usedCookie := ""
 	var output []byte
-	var err error
 	defer func() {
 		op := model.DownloaderOperation{
 			Operation:   "x.gallerydl.dump",
@@ -439,31 +447,34 @@ func (c *Client) dump(ctx context.Context, rawURL string, limit int) ([]byte, er
 	}()
 	if len(cookies) == 0 {
 		attempts = 1
-		output, err = c.run(ctx, args)
-		return output, err
+		output, err = c.run(ctx, args, pageDir)
+		if err != nil {
+			return output, nil, err
+		}
+		return output, readPhotoTags(pageDir), nil
 	}
 	for i := 0; i < len(cookies); i++ {
 		usedCookie = cookies[i]
 		usedArgs = append([]string{"--cookies", usedCookie}, args...)
 		attempts++
-		output, err = c.run(ctx, usedArgs)
+		output, err = c.run(ctx, usedArgs, pageDir)
 		if err == nil {
-			return output, nil
+			return output, readPhotoTags(pageDir), nil
 		}
 		kind := download.ClassifyError(err, output)
 		if kind != download.ErrorKindAuth && kind != download.ErrorKindRateLimit {
 			break
 		}
 	}
-	return nil, err
+	return nil, nil, err
 }
 
-func (c *Client) run(ctx context.Context, args []string) ([]byte, error) {
+func (c *Client) run(ctx context.Context, args []string, workDir string) ([]byte, error) {
 	runner := runGalleryDL
 	if c != nil && c.Runner != nil {
 		runner = c.Runner
 	}
-	out, err := runner(ctx, args)
+	out, err := runner(ctx, args, workDir)
 	if err == nil {
 		err = download.GalleryDLSemanticError(out)
 	}
@@ -486,6 +497,7 @@ func galleryDLArgs(rawURL string, limit int) []string {
 		"--dump-json",
 		"--simulate",
 		"--no-input",
+		"--write-pages",
 		"-o", "extractor.twitter.text-tweets=true",
 		"-o", "extractor.twitter.retweets=true",
 		"-o", "extractor.twitter.quoted=true",
@@ -495,8 +507,8 @@ func galleryDLArgs(rawURL string, limit int) []string {
 	}
 }
 
-func runGalleryDL(ctx context.Context, args []string) ([]byte, error) {
-	result := download.CommandRunner{}.Run(ctx, "gallery-dl", args, download.CommandOptions{Timeout: 2 * time.Minute})
+func runGalleryDL(ctx context.Context, args []string, workDir string) ([]byte, error) {
+	result := download.CommandRunner{}.Run(ctx, "gallery-dl", args, download.CommandOptions{Timeout: 2 * time.Minute, WorkingDir: workDir})
 	return result.CombinedOutput(), result.Err
 }
 

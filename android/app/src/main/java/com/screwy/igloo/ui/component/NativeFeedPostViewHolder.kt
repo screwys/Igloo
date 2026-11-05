@@ -39,6 +39,7 @@ import com.screwy.igloo.data.entity.FeedRow
 import com.screwy.igloo.data.entity.ThreadedFeedRow
 import com.screwy.igloo.feed.FeedMediaCellModel
 import com.screwy.igloo.feed.FeedMediaGridModel
+import com.screwy.igloo.feed.FeedTaggedAccount
 import com.screwy.igloo.feed.SocialPostModel
 import com.screwy.igloo.feed.buildSocialPostModel
 import com.screwy.igloo.feed.feedMediaViewerIndex
@@ -1177,6 +1178,53 @@ internal class NativeFeedViewHolder(
                 updateNavigation()
             }
             container.addView(frame, LinearLayout.LayoutParams(gridWidth, rowHeight))
+        }
+        if (grid.taggedAccounts.isNotEmpty()) {
+            container.addView(
+                taggedAccountsRow(container.context, grid.taggedAccounts, colors, callbacks),
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = dp(2)
+                },
+            )
+        }
+    }
+
+    private fun taggedAccountsRow(
+        context: Context,
+        accounts: List<FeedTaggedAccount>,
+        colors: NativeFeedColors,
+        callbacks: NativeFeedCallbacks,
+    ): TextView {
+        val first = accounts.first().let { it.name ?: "@${it.handle}" }
+        val icon =
+            context.getDrawable(R.drawable.ic_feed_person_24)?.mutate()?.apply {
+                setTint(colors.onSurfaceMuted)
+                setBounds(0, 0, dp(16), dp(16))
+            }
+        return smallText(context).apply {
+            text =
+                when (accounts.size) {
+                    1 -> first
+                    2 -> context.getString(R.string.feed_tagged_one_other, first)
+                    else -> context.getString(R.string.feed_tagged_many_others, first, accounts.size - 1)
+                }
+            textSize = 13f
+            contentDescription = context.getString(R.string.feed_tagged_in_this_post) + ": " + text
+            setTextColor(colors.onSurfaceMuted)
+            setCompoundDrawables(icon, null, null, null)
+            compoundDrawablePadding = dp(4)
+            setOnClickListener { anchor ->
+                showNativeFeedPopup(
+                    anchor,
+                    colors,
+                    accounts.map { account ->
+                        NativeFeedMenuItem(
+                            label = account.name?.let { "$it @${account.handle}" } ?: "@${account.handle}",
+                            action = { callbacks.onMentionClick(account.handle) },
+                        )
+                    },
+                )
+            }
         }
     }
 

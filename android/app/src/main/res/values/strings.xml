@@ -331,6 +331,8 @@
     <string name="feed_reposted_someone">Someone reposted</string>
     <string name="feed_show_translation">Show translation</string>
     <string name="feed_tagged_in_this_post">Tagged in this post</string>
+    <string name="feed_tagged_many_others">%1$s and %2$d others</string>
+    <string name="feed_tagged_one_other">%1$s and 1 other</string>
     <string name="feed_thread_capsule">%1$d posts across %2$d people</string>
     <string name="feed_thread_fetch">Fetch replies and quote-posts</string>
     <string name="feed_thread_fetch_failed">Could not update this thread. Saved posts remain available.</string>

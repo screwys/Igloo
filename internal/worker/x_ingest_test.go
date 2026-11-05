@@ -218,7 +218,7 @@ func TestFetchOneChannelQueuesSourceQuoteExpansionMedia(t *testing.T) {
 		downloader: testDownloader(),
 		xFeedFetcher: fakeXFeedFetcher{
 			timeline: func(_ context.Context, handle string, _ int) ([]model.FeedItem, error) {
-				return xfeed.ParseDump(output, handle).Items, nil
+				return xfeed.ParseDump(output, handle, nil).Items, nil
 			},
 			source: func(context.Context, string, int) ([]model.FeedItem, error) {
 				t.Fatal("source fetch should not be called")

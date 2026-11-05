@@ -83,7 +83,9 @@ func ValidTweetID(tweetID string) bool {
 	return tweetIDRe.MatchString(strings.TrimSpace(tweetID))
 }
 
-func ParseDump(output []byte, fallbackSourceHandle string) ParseResult {
+// ParseDump builds feed items from gallery-dl's JSON output. photoTags maps
+// media file IDs to tagged accounts read from the saved API pages.
+func ParseDump(output []byte, fallbackSourceHandle string, photoTags map[string][]model.MediaTag) ParseResult {
 	records := parseRecords(output)
 	sourceHandle := NormalizeHandle(fallbackSourceHandle)
 	metaByID := make(map[string]map[string]any)
@@ -111,6 +113,7 @@ func ParseDump(output []byte, fallbackSourceHandle string) ParseResult {
 				continue
 			}
 			if ref, ok := mediaRef(rec.MediaURL, rec.Sidecar); ok {
+				ref.Tagged = photoTags[twitterMediaKey(rec.MediaURL)]
 				mediaByID[tid] = append(mediaByID[tid], ref)
 			}
 		}
@@ -274,7 +277,7 @@ func feedItemFromMeta(d map[string]any, fallbackSourceHandle string, media []mod
 		CanonicalURL:           "https://x.com/" + author + "/status/" + canonicalTweetID,
 		ReplyToHandle:          replyToHandle,
 		ReplyToStatus:          replyToStatus,
-		MentionHandles:         mentionHandles,
+		MentionHandles:         mergeMentionHandles(mentionHandles, photoTagHandles(media)),
 		Views:                  firstInt64(d, "view_count", "views"),
 		Likes:                  firstInt64(d, "favorite_count", "like_count", "likes"),
 		Retweets:               firstInt64(d, "retweet_count", "retweets"),
@@ -333,7 +336,7 @@ func applyQuote(item *FeedItem, quote map[string]any, media []model.MediaRef) {
 		item.QuotePublishedAt = tweetSnowflakeTime(qid)
 	}
 	item.QuoteMediaJSON = mediaJSON(media)
-	item.MentionHandles = mergeMentionHandles(item.MentionHandles, quoteMentions)
+	item.MentionHandles = mergeMentionHandles(item.MentionHandles, quoteMentions, photoTagHandles(media))
 }
 
 func mergeItem(base, next FeedItem) FeedItem {
