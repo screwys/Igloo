@@ -693,25 +693,20 @@ func (db *DB) GetFeedItemsByAuthor(handle string, limit int) ([]model.FeedItem, 
 	return db.GetFeedItemsByAuthorPage(handle, limit, 0)
 }
 
-// xProfilePostsSQL selects one row per post on an X profile: posts the account
-// wrote, posted from its timeline, quoted, or was tagged in. Repost rows of the
-// same post collapse to the account's own repost, else the original, else the
-// newest repost. It takes xProfilePostsArgs.
+// xProfilePostsSQL selects one row per post on an X profile. Which posts a
+// profile shows and which row of a reposted post represents it come from the
+// igloo_feed_profile_* database functions, which also feed Android sync. It
+// takes xProfilePostsArgs.
 const xProfilePostsSQL = `
 	SELECT DISTINCT ON (COALESCE(NULLIF(canonical_tweet_id, ''), tweet_id)) tweet_id, published_at
 	FROM feed_items
-	WHERE channel_id = ? OR source_channel_id = ? OR quote_channel_id = ?
-	   OR (media_json LIKE '%"tagged"%' AND igloo_media_tagged_channels(media_json) @> ARRAY[?]::text[])
+	WHERE igloo_feed_profile_channels(channel_id, source_channel_id, quote_channel_id, media_json) @> ARRAY[?]::text[]
 	ORDER BY COALESCE(NULLIF(canonical_tweet_id, ''), tweet_id),
-	         CASE
-		         WHEN COALESCE(is_retweet, 0) = 1 AND source_channel_id = ? THEN 0
-		         WHEN COALESCE(is_retweet, 0) = 0 THEN 1
-		         ELSE 2
-	         END,
+	         igloo_feed_profile_rank(is_retweet, source_channel_id, ?),
 	         published_at DESC, tweet_id DESC`
 
 func xProfilePostsArgs(channelID string) []any {
-	return []any{channelID, channelID, channelID, channelID, channelID}
+	return []any{channelID, channelID}
 }
 
 // CountFeedItemsByAuthor returns the number of posts on a handle's X profile.

@@ -522,10 +522,9 @@ func (s *Server) androidSyncFeedChanges(database *db.DB, plan *androidSyncMateri
 		if !ok {
 			continue
 		}
-		change, err := marshalAndroidSyncChange(
-			"feed", id, "feed", recency[id],
-			androidSyncFeedPayload{Item: androidSyncFeedItemFromModel(row.Item)},
-		)
+		item := androidSyncFeedItemFromModel(row.Item)
+		item.Profiles = row.Profiles
+		change, err := marshalAndroidSyncChange("feed", id, "feed", recency[id], androidSyncFeedPayload{Item: item})
 		if err != nil {
 			return nil, err
 		}

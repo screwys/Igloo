@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -11,7 +12,15 @@ import (
 )
 
 type AndroidSyncFeedRow struct {
-	Item model.FeedItem
+	Item     model.FeedItem
+	Profiles []AndroidSyncFeedProfile
+}
+
+// AndroidSyncFeedProfile names a profile that shows the row. Android keeps the
+// lowest-ranked row of each post on that profile.
+type AndroidSyncFeedProfile struct {
+	ChannelID string `json:"channel_id"`
+	Rank      int    `json:"rank"`
 }
 
 type AndroidSyncFeedProjection struct {
@@ -68,7 +77,8 @@ func (db *DB) ListAndroidSyncFeedProjection(tweetIDs []string) (AndroidSyncFeedP
 			       COALESCE(body_translation.translated_text, ''),
 			       COALESCE(body_translation.source_lang, ''),
 			       COALESCE(quote_translation.translated_text, ''),
-			       COALESCE(quote_translation.source_lang, '')
+			       COALESCE(quote_translation.source_lang, ''),
+			       igloo_feed_profile_cards(fi.is_retweet, fi.channel_id, fi.source_channel_id, fi.quote_channel_id, fi.media_json)
 			FROM feed_items fi
 			LEFT JOIN translations body_translation
 			  ON body_translation.tweet_id = fi.tweet_id AND body_translation.field = 'body' AND body_translation.target_lang = ?
@@ -122,6 +132,7 @@ func (db *DB) ListAndroidSyncFeedProjection(tweetIDs []string) (AndroidSyncFeedP
 func scanAndroidSyncFeedRow(row *sql.Rows) (AndroidSyncFeedRow, error) {
 	var out AndroidSyncFeedRow
 	var quotePublishedAt, publishedAt int64
+	var profiles string
 	err := row.Scan(
 		&out.Item.TweetID,
 		&out.Item.BodyText, &out.Item.ArticleTitle, &out.Item.PollJSON, &out.Item.CommunityNote, &out.Item.Lang,
@@ -133,10 +144,13 @@ func scanAndroidSyncFeedRow(row *sql.Rows) (AndroidSyncFeedRow, error) {
 		&out.Item.ContentHash, &out.Item.CanonicalTweetID, &out.Item.ChannelID,
 		&out.Item.QuoteChannelID, &out.Item.SourceChannelID, &out.Item.ReplyChannelID,
 		&out.Item.ReposterChannelID, &out.Item.BodyTranslation, &out.Item.BodySourceLang,
-		&out.Item.QuoteTranslation, &out.Item.QuoteSourceLang,
+		&out.Item.QuoteTranslation, &out.Item.QuoteSourceLang, &profiles,
 	)
 	if err != nil {
 		return out, err
+	}
+	if err := json.Unmarshal([]byte(profiles), &out.Profiles); err != nil {
+		return out, fmt.Errorf("android sync feed profiles for %s: %w", out.Item.TweetID, err)
 	}
 	out.Item.QuotePublishedAt = millisToTimePtr(sql.NullInt64{Int64: quotePublishedAt, Valid: quotePublishedAt > 0})
 	out.Item.PublishedAt = millisToTimePtr(sql.NullInt64{Int64: publishedAt, Valid: publishedAt > 0})

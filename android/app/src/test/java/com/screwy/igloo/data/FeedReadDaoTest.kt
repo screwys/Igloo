@@ -8,6 +8,7 @@ import com.screwy.igloo.data.entity.ChannelEntity
 import com.screwy.igloo.data.entity.ChannelProfileEntity
 import com.screwy.igloo.data.entity.ChannelSettingEntity
 import com.screwy.igloo.data.entity.FeedItemEntity
+import com.screwy.igloo.data.entity.FeedProfileCard
 import com.screwy.igloo.data.entity.FeedLikeEntity
 import com.screwy.igloo.data.entity.MutedChannelEntity
 import com.screwy.igloo.data.entity.RetweetSourceEntity
@@ -201,7 +202,7 @@ class FeedReadDaoTest {
     fun explicitSurfacesKeepMutedRowsAndJoinCurrentProfileValues() = runBlocking {
         seedIdentity("sample_author", "sample_old_handle", "Sample Old")
         db.feedItemDao()
-            .upsertCaptured(FeedItemEntity(tweetId = "item-1", channelId = "sample_author", publishedAt = 1).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
+            .upsertCaptured(FeedItemEntity(tweetId = "item-1", channelId = "sample_author", publishedAt = 1, profiles = listOf(FeedProfileCard("sample_author", 1))).let { item -> StoredFeedItem.from(item, ContentPayloads.feed(item, null)) })
         db.feedLikeDao().upsert(FeedLikeEntity("item-1", 1))
         db.mutedChannelDao().upsert(MutedChannelEntity("sample_author"))
         db.channelProfileDao()
@@ -209,7 +210,7 @@ class FeedReadDaoTest {
 
         val liked = db.feedReadDao().likedFlow().first().single()
         val channel =
-            db.feedReadDao().channelFeedFlow("sample_author", "sample_new_handle").first().single()
+            db.feedReadDao().channelFeedFlow("sample_author").first().single()
 
         assertEquals("sample_new_handle", liked.authorHandle)
         assertEquals("Sample New", liked.authorDisplayName)

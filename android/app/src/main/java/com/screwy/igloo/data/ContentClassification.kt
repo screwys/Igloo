@@ -1,8 +1,8 @@
 package com.screwy.igloo.data
 
 import com.screwy.igloo.data.entity.FeedItemEntity
+import com.screwy.igloo.data.entity.FeedProfileCard
 import com.screwy.igloo.feed.parseFeedMediaDescriptors
-import com.screwy.igloo.feed.parseFeedMediaTaggedAccounts
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -21,16 +21,11 @@ fun feedContentType(mediaJson: String?): String {
 }
 
 /**
- * Lowercase handles tagged in the post's photos as ",a,b,", or "" when none,
- * so profile queries can match one handle with INSTR.
+ * The server's profile cards as ",channel:rank,", or "" when none, so profile
+ * queries can find one channel and its rank with INSTR.
  */
-fun feedTaggedHandles(mediaJson: String?): String {
-    val handles = parseFeedMediaTaggedAccounts(mediaJson)
-        .map { it.handle.trim().removePrefix("@").lowercase() }
-        .filter { it.isNotEmpty() }
-        .distinct()
-    return if (handles.isEmpty()) "" else handles.joinToString(",", prefix = ",", postfix = ",")
-}
+fun feedProfileCards(profiles: List<FeedProfileCard>): String =
+    if (profiles.isEmpty()) "" else profiles.joinToString(",", prefix = ",", postfix = ",") { "${it.channelId}:${it.rank}" }
 
 fun isMoment(ownerKind: String, metadataJson: String?, duration: Long?): Boolean {
     if (ownerKind != "youtube_video") return true

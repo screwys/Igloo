@@ -59,6 +59,14 @@ data class FeedItemEntity(
 
     val publishedAt: Long = 0,
     val channelId: String? = null,
+    val profiles: List<FeedProfileCard> = emptyList(),
+)
+
+/** A profile that shows this row; the server ranks rows of the same post per profile. */
+@Serializable
+data class FeedProfileCard(
+    val channelId: String,
+    val rank: Int,
 )
 
 @Serializable

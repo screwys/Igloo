@@ -63,6 +63,8 @@ type androidSyncFeedItem struct {
 	QuoteTranslation   string `json:"quote_translation"`
 	QuoteSourceLang    string `json:"quote_source_lang"`
 	PublishedAt        int64  `json:"published_at"`
+
+	Profiles []db.AndroidSyncFeedProfile `json:"profiles"`
 }
 
 type androidSyncVideoPayload struct {

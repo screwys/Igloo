@@ -22,6 +22,16 @@
           "likes": 0,
           "media_json": "",
           "poll_json": "",
+          "profiles": [
+            {
+              "channel_id": "twitter_sample_channel",
+              "rank": 1
+            },
+            {
+              "channel_id": "twitter_sample_source",
+              "rank": 1
+            }
+          ],
           "published_at": 1700000001000,
           "quote_article_title": "",
           "quote_body_text": "",

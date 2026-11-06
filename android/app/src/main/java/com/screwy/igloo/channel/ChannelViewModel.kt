@@ -128,23 +128,10 @@ class ChannelViewModel(
             initialValue = ChannelStoryStatus(StoryRingState.None, ""),
         )
 
-    /**
-     * Twitter channel body — posts filtered to this channel.
-     * Older locally cached rows can predate the server-enriched `channel_id`, so
-     * pass the account handle as a secondary key.
-     */
-    val twitterRows: StateFlow<List<ThreadedFeedRow>> = channel
-        .flatMapLatest { display ->
-            db.feedReadDao().channelFeedFlow(
-                channelId = channelId,
-                channelHandle = display.channel.sourceId?.takeIf { it.isNotBlank() }
-                    ?: stripPlatformPrefix(channelId),
-                limit = TWITTER_FEED_LIMIT,
-                offset = 0,
-            ).mapLatest { rows ->
-                attachThreadChains(db.feedReadDao(), rows)
-            }
-        }
+    /** Twitter channel body — the posts the server assigned to this profile. */
+    val twitterRows: StateFlow<List<ThreadedFeedRow>> = db.feedReadDao()
+        .channelFeedFlow(channelId = channelId, limit = TWITTER_FEED_LIMIT, offset = 0)
+        .mapLatest { rows -> attachThreadChains(db.feedReadDao(), rows) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000L),

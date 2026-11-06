@@ -46,8 +46,8 @@ private const val MAIN_FEED_REPOST_VISIBILITY =
  *
  *  - main feed applies visibility filters and `ORDER BY rank_position ASC`
  *  - liked feed requires a bookmark/like side-table row and orders by liked time
- *  - channel feed filters by channel id, falling back to the normalized author
- *    handle for older/local rows, and orders by publish time
+ *  - channel feed shows the rows the server assigned to the profile and orders
+ *    by publish time
  *
  * Room annotation processors can't conditionally rewrite WHERE/ORDER BY inside a single
  * `@Query`, so this DAO exposes one method per surface.
@@ -399,41 +399,19 @@ interface FeedReadDao {
     @Query(
         """
         WITH profile_posts AS (
-            -- One row per post: the account's own repost, else the original,
-            -- else the newest repost row.
+            -- The server names each row's profiles as ",channel:rank,". Keep
+            -- the lowest-ranked row of each post.
             SELECT
                 f.tweet_id,
                 ROW_NUMBER() OVER (
                     PARTITION BY COALESCE(NULLIF(f.canonical_tweet_id, ''), f.tweet_id)
                     ORDER BY
-                        CASE
-                            WHEN f.is_retweet = 1 AND (
-                                f.source_channel_id = :channelId
-                                OR (:channelHandle != '' AND LOWER(LTRIM(COALESCE(sp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@')))
-                            ) THEN 0
-                            WHEN f.is_retweet = 0 THEN 1
-                            ELSE 2
-                        END,
+                        CAST(SUBSTR(f.profile_cards, INSTR(f.profile_cards, ',' || :channelId || ':') + LENGTH(:channelId) + 2) AS INTEGER),
                         f.published_at DESC,
                         f.tweet_id DESC
                 ) AS post_rank
             FROM feed_items f
-            LEFT JOIN channel_profiles cp ON cp.channel_id = f.channel_id
-            LEFT JOIN channel_profiles sp ON sp.channel_id = f.source_channel_id
-            LEFT JOIN channel_profiles qp ON qp.channel_id = f.quote_channel_id
-            WHERE COALESCE(f.is_ghost, 0) = 0
-              AND (
-                :channelId IN (f.channel_id, f.source_channel_id, f.quote_channel_id)
-                OR (
-                    :channelHandle != ''
-                    AND (
-                        LOWER(LTRIM(COALESCE(cp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
-                        OR LOWER(LTRIM(COALESCE(sp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
-                        OR LOWER(LTRIM(COALESCE(qp.handle, ''), '@')) = LOWER(LTRIM(:channelHandle, '@'))
-                        OR INSTR(f.tagged_handles, ',' || LOWER(LTRIM(:channelHandle, '@')) || ',') > 0
-                    )
-                )
-              )
+            WHERE INSTR(f.profile_cards, ',' || :channelId || ':') > 0
         ),
         bookmark_state AS (
             SELECT
@@ -504,7 +482,6 @@ interface FeedReadDao {
     )
     fun channelFeedFlow(
         channelId: String,
-        channelHandle: String = "",
         limit: Int = 40,
         offset: Int = 0,
     ): Flow<List<FeedRow>>

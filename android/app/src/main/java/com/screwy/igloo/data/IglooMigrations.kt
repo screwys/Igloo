@@ -29,17 +29,18 @@ object IglooMigrations {
     val MIGRATION_52_53 = object : Migration(52, 53) {
         override fun migrate(connection: SQLiteConnection) {
             connection.execSQL("ALTER TABLE `feed_items` ADD COLUMN `tagged_handles` TEXT NOT NULL DEFAULT ''")
-            connection.prepare("SELECT `tweet_id`, `payload_json` FROM `feed_items` WHERE `payload_json` LIKE '%tagged%'").use { rows ->
-                connection.prepare("UPDATE `feed_items` SET `tagged_handles` = ? WHERE `tweet_id` = ?").use { update ->
-                    while (rows.step()) {
-                        val mediaJson = runCatching { ContentPayloads.feed(rows.getText(1)).mediaJson }.getOrNull()
-                        update.bindText(1, feedTaggedHandles(mediaJson))
-                        update.bindText(2, rows.getText(0))
-                        update.step()
-                        update.reset()
-                    }
-                }
-            }
+        }
+    }
+
+    /**
+     * Profile membership now comes from the server's feed payloads. Stored
+     * payloads predate it, so replay the sync window to receive it.
+     */
+    val MIGRATION_53_54 = object : Migration(53, 54) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE `feed_items` RENAME COLUMN `tagged_handles` TO `profile_cards`")
+            connection.execSQL("UPDATE `feed_items` SET `profile_cards` = ''")
+            connection.execSQL("UPDATE `android_sync_state` SET `bootstrap_required` = 1")
         }
     }
 
