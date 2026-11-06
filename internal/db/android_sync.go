@@ -150,36 +150,38 @@ func (db *DB) listAndroidSyncDesiredFeed(feedDays int, nowMs int64) (map[string]
 	cte, args := androidEligibleFeedCTE(feedCutoff)
 	start := time.Now()
 	err := db.collectStrings(cte+`,
-		reply_chain(tweet_id, is_ancestor) AS (
-			SELECT tweet_id, 0 FROM eligible_tweet_ids
+		-- Chain rows carry the fields the recursion needs, so each step only
+		-- probes indexes for parents and ghost children. Rows reached through
+		-- the chain are always kept and expand their own children.
+		reply_chain(tweet_id, reply_to_status, keep) AS (
+			SELECT fi.tweet_id, fi.reply_to_status,
+				EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = fi.tweet_id)
+				OR EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = fi.tweet_id)
+				OR (`+retweetFilterClause("fi")+`)
+			FROM eligible_tweet_ids e
+			JOIN feed_items fi ON fi.tweet_id = e.tweet_id
 
 			UNION
 
-			SELECT linked.tweet_id, 1
+			SELECT linked.tweet_id, linked.reply_to_status, TRUE
 			FROM reply_chain rc
-			JOIN feed_items context_root ON context_root.tweet_id = rc.tweet_id
 			CROSS JOIN LATERAL (
-				SELECT context_root.reply_to_status AS tweet_id
-				WHERE COALESCE(context_root.reply_to_status, '') != ''
+				SELECT parent.tweet_id, parent.reply_to_status
+				FROM feed_items parent
+				WHERE parent.tweet_id = rc.reply_to_status
+				  AND rc.reply_to_status != ''
 				UNION
-				SELECT child.tweet_id
+				SELECT child.tweet_id, child.reply_to_status
 				FROM feed_items child
 				WHERE ((child.reply_to_status = rc.tweet_id AND child.reply_to_status != '')
 				    OR (child.quote_tweet_id = rc.tweet_id AND child.quote_tweet_id != ''))
 				  AND child.is_ghost = 1
-				  AND (rc.is_ancestor = 1
-				    OR EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = context_root.tweet_id)
-				    OR EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = context_root.tweet_id)
-				    OR (`+retweetFilterClause("context_root")+`))
+				  AND rc.keep
 			) linked
 		)
-		SELECT DISTINCT fi.tweet_id
-		FROM reply_chain rc
-		JOIN feed_items fi ON fi.tweet_id = rc.tweet_id
-		WHERE rc.is_ancestor = 1
-		   OR EXISTS (SELECT 1 FROM feed_likes fl WHERE fl.tweet_id = fi.tweet_id)
-		   OR EXISTS (SELECT 1 FROM bookmarks b WHERE b.video_id = fi.tweet_id)
-		   OR (`+retweetFilterClause("fi")+`)
+		SELECT DISTINCT tweet_id
+		FROM reply_chain
+		WHERE keep
 	`, args, tweets)
 	androidSyncLogDesiredSetQuery("feed", len(tweets), len(tweets), start, err)
 	if err != nil {
