@@ -521,7 +521,10 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
 
   function removePostMedia(post) {
     post.querySelectorAll('[data-media-owner]').forEach(function (node) {
-      if (!node.querySelector('.feed-quote-unavailable')) node.remove()
+      if (node.querySelector('.feed-quote-unavailable')) return
+      const tagged = node.querySelector(':scope > .feed-tagged-row')
+      if (tagged) node.replaceWith(tagged)
+      else node.remove()
     })
     post.querySelectorAll('[data-feed-media]').forEach(function (node) { node.remove() })
   }
@@ -993,6 +996,8 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
 
   keyHandler = function (event) {
     if (event.defaultPrevented) return
+    // Dialogs opened from the overlay, such as tagged accounts, handle their own keys.
+    if (event.target.closest && event.target.closest('dialog[open]')) return
     if (event.key === 'Tab' && overlay.contains(event.target)) {
       const controls = Array.from(overlay.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex="0"]'))
         .filter(function (node) { return node.getClientRects().length > 0 })

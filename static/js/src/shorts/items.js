@@ -810,6 +810,29 @@ export function parseCardData(card) {
   }
 }
 
+// Same row as feed cards; the shared tagged-accounts dialog handles clicks.
+function taggedAccountsRow(doc, raw) {
+  var accounts = null
+  try { accounts = JSON.parse(String(raw || '')) } catch (_) { accounts = null }
+  if (!Array.isArray(accounts) || accounts.length === 0) return null
+  var first = String(accounts[0].display_name || '').trim() || '@' + String(accounts[0].handle || '')
+  var label = first
+  if (accounts.length === 2) label = tf('feed_tagged_one_other', '%1$s and 1 other', first)
+  else if (accounts.length > 2) label = tf('feed_tagged_many_others', '%1$s and %2$d others', first, accounts.length - 1)
+  var row = doc.createElement('button')
+  row.type = 'button'
+  row.className = 'feed-tagged-row feed-tagged-multi'
+  row.setAttribute('data-tagged', JSON.stringify(accounts))
+  row.title = t('feed_tagged_in_this_post', 'Tagged in this post')
+  row.setAttribute('aria-label', row.title)
+  safeSetMarkup(row, materialIconMarkup('Person'))
+  var text = doc.createElement('span')
+  text.className = 'feed-tagged-label'
+  text.textContent = label
+  row.appendChild(text)
+  return row
+}
+
 function parseMediaTypesAttr(raw) {
   if (!raw) return []
   var parsed = null
@@ -1247,6 +1270,9 @@ export function makeShortItem(entryData, existingEl) {
     info.appendChild(slideControls)
   }
   if (repost) info.appendChild(repost)
+  // X photo tags; Instagram co-authors stay in the bookmark menu only.
+  var tagged = entryData.platform === 'twitter' ? taggedAccountsRow(doc, entryData.taggedAccountsRaw) : null
+  if (tagged) info.appendChild(tagged)
   info.appendChild(ts)
   var author = entryData.channelId ? doc.createElement('a') : doc.createElement('div')
   author.className = 'shorts-author-name'
@@ -1541,7 +1567,7 @@ export function makeShortItem(entryData, existingEl) {
   refs.volumeSlider.addEventListener('pointercancel', function () { refs.volumeSlider.blur() })
 
   wrapper.addEventListener('click', function (e) {
-    var clickOnControl = e.target && e.target.closest && e.target.closest('.shorts-actions, .shorts-player-controls, .shorts-header-overlay, .shorts-story-chrome, .val-progress-container, .shorts-slide-controls, .moment-actions-overlay, .shorts-live-chat')
+    var clickOnControl = e.target && e.target.closest && e.target.closest('.shorts-actions, .shorts-player-controls, .shorts-header-overlay, .shorts-story-chrome, .val-progress-container, .shorts-slide-controls, .moment-actions-overlay, .shorts-live-chat, .feed-tagged-row')
     if (clickOnControl) return
     if (navigateStoryFromClick(entryObj, e)) return
     toggleShortPlayback(entryObj)

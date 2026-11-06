@@ -151,6 +151,9 @@ func feedTaggedLabel(p PageProps, accounts []model.RetweeterInfo) string {
 }
 
 func videoTaggedAccounts(v model.Video) []model.RetweeterInfo {
+	if v.OwnerKind == "tweet" {
+		return v.TaggedAccounts
+	}
 	meta := v.ParseMetadata()
 	if meta == nil || (len(meta.Coauthors) == 0 && len(meta.TaggedUsers) == 0) {
 		return nil

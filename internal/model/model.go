@@ -155,11 +155,12 @@ type Video struct {
 	IsShortForm        bool
 	MediaKind          string // video|image|slideshow
 	MediaSlideCount    int
-	MediaTypes         []string // image|video per slide for mixed local media
-	SourceKind         string   // ""|story
-	LiveStatus         string   `json:"-"`
-	LiveRoomID         string   `json:"-"`
-	LiveViewerCount    int64    `json:"-"`
+	MediaTypes         []string        // image|video per slide for mixed local media
+	TaggedAccounts     []RetweeterInfo // accounts tagged in an X post's shown photos
+	SourceKind         string          // ""|story
+	LiveStatus         string          `json:"-"`
+	LiveRoomID         string          `json:"-"`
+	LiveViewerCount    int64           `json:"-"`
 	PlaybackPosition   float64
 	EagerLoad          bool // skip loading="lazy" for above-the-fold images
 	NextInLine         bool `json:"-"` // badge next-in-line indicator for player sidebar
@@ -652,6 +653,18 @@ func (f *FeedItem) ParseMedia() {
 	if f.QuoteMediaJSON != "" && f.QuoteMedia == nil {
 		_ = json.Unmarshal([]byte(f.QuoteMediaJSON), &f.QuoteMedia)
 	}
+}
+
+// MediaJSONTaggedAccounts lists the accounts tagged in stored media JSON.
+func MediaJSONTaggedAccounts(mediaJSON string) []RetweeterInfo {
+	if !strings.Contains(mediaJSON, `"tagged"`) {
+		return nil
+	}
+	var media []MediaRef
+	if json.Unmarshal([]byte(mediaJSON), &media) != nil {
+		return nil
+	}
+	return MediaTaggedAccounts(media)
 }
 
 // MediaTaggedAccounts lists the accounts tagged across a post's photos.

@@ -178,6 +178,7 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 		       CASE WHEN cf.channel_id IS NOT NULL THEN 1 ELSE 0 END,
 		       bp.category_id, COALESCE(fi.quote_tweet_id,''),
 		       COALESCE(NULLIF(fi.tweet_id, ''), v.video_id),
+		       COALESCE(fi.media_json,''), COALESCE(fi.quote_media_json,''),
 		       COALESCE((
 		           SELECT STRING_AGG(media_type, ',')
 		           FROM (
@@ -253,6 +254,7 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 		var pubAt, dlAt sql.NullInt64
 		var catID int64
 		var actionMediaTypes, directMediaTypes, quoteMediaTypes, quoteTweetID, contentOwnerID string
+		var mediaJSON, quoteMediaJSON string
 		err := rows.Scan(
 			&v.VideoID, &v.ChannelID, &v.OwnerKind, &v.Title, &v.Description,
 			&v.Duration, &pubAt, &dlAt,
@@ -260,6 +262,7 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 			&v.MetadataJSON,
 			&v.ChannelName, &v.Platform, &v.IsSubscribed,
 			&catID, &quoteTweetID, &contentOwnerID,
+			&mediaJSON, &quoteMediaJSON,
 			&actionMediaTypes, &directMediaTypes, &quoteMediaTypes,
 		)
 		if err != nil {
@@ -286,6 +289,10 @@ func (db *DB) GetBookmarks(opts GetBookmarksOpts) ([]model.Video, error) {
 		if v.OwnerKind == "tweet" {
 			v.MediaOwnerID = mediaOwnerID
 			v.MediaOwnerKind = "tweet"
+			if mediaOwnerID == quoteTweetID {
+				mediaJSON = quoteMediaJSON
+			}
+			v.TaggedAccounts = model.MediaJSONTaggedAccounts(mediaJSON)
 		}
 		v.EnrichForCard()
 

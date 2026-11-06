@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -50,6 +52,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -70,6 +73,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import com.screwy.igloo.R
+import com.screwy.igloo.feed.FeedTaggedAccount
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.moments.TikTokLives
 import com.screwy.igloo.ui.theme.IglooColors
@@ -364,6 +368,7 @@ internal fun CollapsedDescription(
                 item = item,
                 onReposterChannelClick = onReposterChannelClick,
             )
+            MomentTaggedAccounts(accounts = item.taggedAccounts, onChannelClick = onChannelClick)
             val timestamp = localizedRelativeTime(item.publishedAt)
             if (item.publishedAt > 0L && timestamp.isNotEmpty()) {
                 Text(
@@ -408,6 +413,67 @@ internal fun CollapsedDescription(
                         if (!expanded) descriptionCanExpand = layout.hasVisualOverflow
                     },
                     modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+/** Same tagged-accounts row and account list as feed posts. */
+@Composable
+private fun MomentTaggedAccounts(
+    accounts: List<FeedTaggedAccount>,
+    onChannelClick: (String) -> Unit,
+) {
+    if (accounts.isEmpty()) return
+    var open by remember(accounts) { mutableStateOf(false) }
+    val first = accounts.first().let { account -> account.name?.takeIf { it.isNotBlank() } ?: "@${account.handle}" }
+    val label =
+        when (accounts.size) {
+            1 -> first
+            2 -> stringResource(R.string.feed_tagged_one_other, first)
+            else -> stringResource(R.string.feed_tagged_many_others, first, accounts.size - 1)
+        }
+    val description = stringResource(R.string.feed_tagged_in_this_post)
+    val color = Color.White.copy(alpha = 0.85f)
+    Box {
+        Row(
+            modifier =
+                Modifier.clickable(role = Role.Button) { open = true }
+                    .semantics { contentDescription = description },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_feed_person_24),
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(shadow = CaptionShadow),
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            accounts.forEach { account ->
+                val channelId = "twitter_${account.handle.lowercase()}"
+                DropdownMenuItem(
+                    leadingIcon = { Avatar(channelId = channelId, size = 28.dp, showPendingBadge = false) },
+                    text = {
+                        Text(
+                            text = listOfNotNull(account.name?.takeIf { it.isNotBlank() }, "@${account.handle}").joinToString(" "),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    onClick = {
+                        open = false
+                        onChannelClick(channelId)
+                    },
                 )
             }
         }

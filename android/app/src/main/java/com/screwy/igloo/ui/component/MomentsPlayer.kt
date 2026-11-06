@@ -1,5 +1,6 @@
 package com.screwy.igloo.ui.component
 
+import com.screwy.igloo.feed.FeedTaggedAccount
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -114,6 +115,8 @@ data class MomentItem(
      * overlay. `0L` → hide the timestamp (unknown publish time).
      */
     val publishedAt: Long = 0L,
+    /** X accounts tagged in the photos this page shows. */
+    val taggedAccounts: List<FeedTaggedAccount> = emptyList(),
 ) {
     val isLive: Boolean get() = liveStreamUrl.isNotBlank()
 }

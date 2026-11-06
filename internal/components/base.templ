@@ -74,6 +74,9 @@ templ Base(p PageProps) {
 		<script type="module" src={ p.StaticV("js/profile-hover.js") }></script>
 		<script type="module" src={ p.StaticV("js/profile-image-overlay.js") }></script>
 		<script type="module" src={ p.StaticV("js/account-details.js") }></script>
+		if p.ESBundle == "js/dist/shorts.js" {
+			@RetweetersDialog(p)
+		}
 		for _, script := range p.PageScripts {
 			<script src={ p.StaticV(script) }></script>
 		}

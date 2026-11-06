@@ -41,8 +41,10 @@ import {
 } from './cursor.js'
 import { initShortsDebug } from './debug.js'
 import { readStoredVolume } from '../volume.js'
+import { initRetweetersDialog } from '../feed/retweeters.js'
 
 var doc = document
+initRetweetersDialog()
 var layout = doc.getElementById('shorts-layout')
 if (layout) {
   ;(function () {
@@ -1574,6 +1576,8 @@ if (layout) {
 
     function onLayoutKeydown(event) {
       if (!state.overlayOpen) return
+      // Dialogs opened from the player, such as tagged accounts, handle their own keys.
+      if (event.target && event.target.closest && event.target.closest('dialog[open]')) return
       if (event.key === 'Escape') {
         if (doc.querySelector('.moment-actions-open')) { event.preventDefault(); closeMomentActions(); return }
         if (state.bookmarkMenu) { event.preventDefault(); closeBookmarkMenu(); return }

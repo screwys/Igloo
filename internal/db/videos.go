@@ -150,7 +150,8 @@ func (db *DB) resolveTweetVideoPresentation(v *model.Video) error {
 		SELECT fi.tweet_id, COALESCE(fi.channel_id, ''), COALESCE(fi.body_text, ''),
 		       COALESCE(fi.quote_tweet_id, ''), COALESCE(fi.quote_body_text, ''),
 		       COALESCE(fi.published_at, 0), COALESCE(cp.display_name, ''),
-		       COALESCE(c.platform, 'twitter'), CASE WHEN cf.channel_id IS NOT NULL THEN 1 ELSE 0 END
+		       COALESCE(c.platform, 'twitter'), CASE WHEN cf.channel_id IS NOT NULL THEN 1 ELSE 0 END,
+		       COALESCE(fi.media_json, ''), COALESCE(fi.quote_media_json, '')
 		FROM feed_items fi
 		LEFT JOIN channels c ON c.channel_id = fi.channel_id
 		LEFT JOIN channel_profiles cp ON cp.channel_id = fi.channel_id
@@ -171,10 +172,10 @@ func (db *DB) resolveTweetVideoPresentation(v *model.Video) error {
 		END, COALESCE(fi.is_retweet, 0), fi.fetched_at, fi.tweet_id
 		LIMIT 1
 	`, v.VideoID, v.VideoID, v.VideoID)
-	var contentID, channelID, body, quoteID, quoteBody, channelName, platform string
+	var contentID, channelID, body, quoteID, quoteBody, channelName, platform, mediaJSON, quoteMediaJSON string
 	var publishedAt int64
 	var followed bool
-	if err := row.Scan(&contentID, &channelID, &body, &quoteID, &quoteBody, &publishedAt, &channelName, &platform, &followed); err != nil {
+	if err := row.Scan(&contentID, &channelID, &body, &quoteID, &quoteBody, &publishedAt, &channelName, &platform, &followed, &mediaJSON, &quoteMediaJSON); err != nil {
 		if err == sql.ErrNoRows {
 			return nil
 		}
@@ -221,6 +222,10 @@ func (db *DB) resolveTweetVideoPresentation(v *model.Video) error {
 		}
 	}
 	applyVideoMediaTypes(v, mediaTypes)
+	if v.MediaOwnerID == quoteID {
+		mediaJSON = quoteMediaJSON
+	}
+	v.TaggedAccounts = model.MediaJSONTaggedAccounts(mediaJSON)
 	return nil
 }
 

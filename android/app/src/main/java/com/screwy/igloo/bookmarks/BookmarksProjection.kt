@@ -4,7 +4,9 @@ import com.screwy.igloo.data.entity.BookmarkItem
 import com.screwy.igloo.data.entity.FeedItemEntity
 import com.screwy.igloo.data.entity.VideoEntity
 import com.screwy.igloo.data.stripPlatformPrefix
+import com.screwy.igloo.feed.FeedTaggedAccount
 import com.screwy.igloo.feed.parseFeedMediaDescriptors
+import com.screwy.igloo.feed.parseFeedMediaTaggedAccounts
 import com.screwy.igloo.media.OwnerKind
 import com.screwy.igloo.media.ownerKindFromAssetOwnerKind
 import com.screwy.igloo.ui.component.MomentItem
@@ -104,7 +106,16 @@ internal fun toBookmarkMomentItem(item: BookmarkItem): MomentItem {
         publishedAt = bookmarkPublishedAt(item),
 		ownerKind = requireNotNull(bookmarkOwnerKind(item)),
         isAuthorFollowed = item.resolvedChannelIsFollowed == 1,
+        taggedAccounts = bookmarkTaggedAccounts(item),
     )
+}
+
+/** Accounts tagged in the X photos the player shows: the post's own, else its quote's. */
+internal fun bookmarkTaggedAccounts(item: BookmarkItem): List<FeedTaggedAccount> {
+    val feedItem = item.feedItem ?: return emptyList()
+    val quoteTweetId = feedItem.quoteTweetId?.trim().orEmpty()
+    val showsQuoteMedia = quoteTweetId.isNotBlank() && bookmarkMediaOwnerId(item) == quoteTweetId
+    return parseFeedMediaTaggedAccounts(if (showsQuoteMedia) feedItem.quoteMediaJson else feedItem.mediaJson)
 }
 
 internal fun bookmarkOwnerKind(item: BookmarkItem): OwnerKind? {
