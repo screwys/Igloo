@@ -128,7 +128,7 @@ func filterReadyXFeedSources(sources []model.FeedSource, interval time.Duration,
 // runIngestCycle fetches subscribed Twitter channels sequentially with a fixed delay
 // between fetches. The delay is configurable via x_feed_fetch_delay (seconds).
 // On restart, recently-fetched accounts are skipped and the remaining handles are
-// sorted by staleness (oldest first), so the cycle resumes from where it left off.
+// sorted by last attempt, so the cycle resumes from where it left off.
 func (m *Manager) runIngestCycle(ctx context.Context) {
 	fetchDelay := m.xFeedFetchDelay()
 
@@ -386,7 +386,7 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 			} else {
 				m.EmitFeed(xIngestActivitySource, fmt.Sprintf("@%s — fetch failed: %s", handle, fetchErr), "error")
 			}
-			_ = m.db.RecordIngestFailure(ch.ChannelID, fetchErr.Error(), 500)
+			m.recordXIngestFailure(ch.ChannelID, fetchErr)
 			cycleFailures[ch.ChannelID] = fetchErr.Error()
 			continue
 		}
@@ -479,6 +479,21 @@ func (m *Manager) fetchXTimeline(ctx context.Context, handle string, limit int) 
 	return m.xFeedClient().FetchTimeline(ctx, handle, limit)
 }
 
+func (m *Manager) recordXIngestFailure(channelID string, cause error) {
+	status := 500
+	switch download.ClassifyError(cause, nil) {
+	case download.ErrorKindNotFound:
+		status = 404
+	case download.ErrorKindAuth:
+		status = 401
+	case download.ErrorKindRateLimit:
+		status = 429
+	}
+	if err := m.db.RecordIngestFailure(channelID, cause.Error(), status); err != nil {
+		log.Printf("[x_ingest] record failure %s: %v", channelID, err)
+	}
+}
+
 func xFeedTimelineLimit(settings *db.ChannelSettings) int {
 	if settings != nil && settings.MediaDownloadLimit > 0 {
 		return settings.MediaDownloadLimit
@@ -558,7 +573,7 @@ func (m *Manager) FetchOneChannel(ctx context.Context, channelID string) (int, e
 		if m.ReportExternalResult(err) {
 			return 0, err
 		}
-		_ = m.db.RecordIngestFailure(channelID, err.Error(), 0)
+		m.recordXIngestFailure(channelID, err)
 		return 0, err
 	}
 	m.ReportExternalResult(nil)

@@ -71,7 +71,8 @@ func (db *DB) RecordIngestSuccess(handle string, successAt float64, latencyMs fl
 // RecordIngestFailure upserts an ingest failure with backoff:
 //   - All errors: increment fail_count
 //   - HTTP 429 only: exponential backoff min(120 * 2^max(0, fail_count-1), 1800)
-//   - All other errors (5xx, timeouts, parse failures): flat 60s retry
+//   - Unavailable or protected accounts: retry daily
+//   - Other errors (5xx, timeouts, parse failures): flat 60s retry
 func (db *DB) RecordIngestFailure(handle string, lastError string, httpStatus int) error {
 	return db.recordIngestFailureClassified(handle, lastError, httpStatus)
 }
@@ -90,15 +91,16 @@ func (db *DB) recordIngestFailureClassified(handle string, lastError string, htt
 			return err
 		}
 
-		// All errors increment fail_count.
-		// 429 only → exponential backoff; everything else → flat 60s.
 		failCount++
 		var nextRetry float64
-		if httpStatus == 429 {
+		switch httpStatus {
+		case 401, 403, 404, 410:
+			nextRetry = nowUnix + (24 * time.Hour).Seconds()
+		case 429:
 			exp := math.Max(0, float64(failCount-1))
 			backoffSecs := math.Min(120*math.Pow(2, exp), 1800)
 			nextRetry = nowUnix + backoffSecs
-		} else {
+		default:
 			nextRetry = nowUnix + 60
 		}
 
@@ -220,13 +222,11 @@ func (db *DB) FilterReadyHandles(handles []string, intervalSec float64) (ready [
 		}
 	}
 
-	// Sort ready handles by staleness (oldest last_success_at first, never-fetched first).
-	// This ensures the cycle resumes from where it left off after a restart
-	// instead of always starting from A alphabetically.
+	// Give accounts that have not had a turn priority over recent failures.
 	if len(ready) > 1 {
 		staleness := make(map[string]float64, len(ready))
 		staleRows, staleErr := db.conn.Query(
-			bind(`SELECT handle, COALESCE(last_success_at, 0) FROM ingest_state
+			bind(`SELECT handle, COALESCE(NULLIF(last_attempt_at, 0), last_success_at, 0) FROM ingest_state
 			 WHERE handle IN (`+placeholders(len(ready))+`)`),
 			stringsToAny(ready)...)
 		if staleErr == nil {
@@ -245,6 +245,9 @@ func (db *DB) FilterReadyHandles(handles []string, intervalSec float64) (ready [
 			}
 		}
 		sort.Slice(ready, func(i, j int) bool {
+			if staleness[ready[i]] == staleness[ready[j]] {
+				return ready[i] < ready[j]
+			}
 			return staleness[ready[i]] < staleness[ready[j]]
 		})
 	}

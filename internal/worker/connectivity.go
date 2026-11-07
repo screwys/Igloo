@@ -114,9 +114,9 @@ func (m *Manager) externalRetryDelay(now time.Time) time.Duration {
 	return m.externalNetwork.retryDelay(now)
 }
 
-// ReportExternalResult updates connectivity and pauses YouTube after a bot challenge. The
-// return value tells the caller that this was a transport failure and should
-// not be charged to the individual channel or job.
+// ReportExternalResult updates connectivity and pauses YouTube after a bot challenge.
+// It returns true when work is paused for a network failure. Otherwise the
+// caller handles the result through its normal job or source retry policy.
 func (m *Manager) ReportExternalResult(err error) bool {
 	if errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 		return false
@@ -130,7 +130,7 @@ func (m *Manager) ReportExternalResult(err error) bool {
 	transport, opened, recovered, retryAt := m.externalNetwork.finish(time.Now(), err)
 	if opened {
 		message := fmt.Sprintf("Internet unavailable; external work paused until %s", retryAt.Format(time.RFC3339))
-		log.Printf("[network] %s", message)
+		log.Printf("[network] %s: %s", message, download.RedactText(err.Error()))
 		if m.activity != nil {
 			m.Emit("network", message, "warning")
 		}

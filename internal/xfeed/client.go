@@ -498,6 +498,7 @@ func galleryDLArgs(rawURL string, limit int) []string {
 		"--simulate",
 		"--no-input",
 		"--write-pages",
+		"-o", "extractor.twitter.ratelimit=abort",
 		"-o", "extractor.twitter.text-tweets=true",
 		"-o", "extractor.twitter.retweets=true",
 		"-o", "extractor.twitter.quoted=true",

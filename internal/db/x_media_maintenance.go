@@ -291,6 +291,17 @@ func (db *DB) xRetainedMediaOwnerSetForFeedDays(nowMs int64, followedOverride in
 			retained[ownerID] = struct{}{}
 		}
 	}
+	feedOwners, err := db.feedSnapshotMediaOwners()
+	if err != nil {
+		return nil, err
+	}
+	for _, ownerID := range feedOwners {
+		if len(candidateSet) == 0 {
+			retained[ownerID] = struct{}{}
+		} else if _, ok := candidateSet[ownerID]; ok {
+			retained[ownerID] = struct{}{}
+		}
+	}
 	if len(candidateSet) > 0 {
 		if err := db.addCandidateServerXMediaOwners(retained, candidateSet, followedOverride); err != nil {
 			return nil, err
@@ -400,6 +411,43 @@ func (db *DB) xRetainedMediaOwnerSetForFeedDays(nowMs int64, followedOverride in
 		retained[ownerID] = struct{}{}
 	}
 	return retained, rows.Err()
+}
+
+// Keep media for ranked cards, including their inline ancestors and quotes.
+func (db *DB) feedSnapshotMediaOwners() ([]string, error) {
+	rows, err := db.reader().Query(`
+		WITH RECURSIVE owners(tweet_id) AS (
+			SELECT tweet_id FROM feed_rank_snapshot
+			UNION
+			SELECT related.tweet_id
+			FROM owners o
+			JOIN feed_items fi ON fi.tweet_id = o.tweet_id
+			CROSS JOIN LATERAL (VALUES (fi.reply_to_status), (fi.quote_tweet_id)) related(tweet_id)
+			WHERE related.tweet_id IS NOT NULL AND related.tweet_id != ''
+		)
+		SELECT tweet_id FROM owners
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var owners []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		owners = append(owners, id)
+	}
+	return owners, rows.Err()
+}
+
+func (db *DB) RestoreXMediaForFeedSnapshot(nowMs int64) (int, error) {
+	owners, err := db.feedSnapshotMediaOwners()
+	if err != nil {
+		return 0, err
+	}
+	return db.restorePrunedXMediaOwners(owners, DownloadLaneCurrent, nowMs)
 }
 
 func (db *DB) addCandidateServerXMediaOwners(retained, candidates map[string]struct{}, followedOverride int) error {

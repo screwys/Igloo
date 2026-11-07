@@ -548,7 +548,7 @@ func buildSnapshotExhaustiveForTest(in []db.PreDiversitySnapshotRow, now time.Ti
 
 	cands := make([]cand, len(in))
 	for i, r := range in {
-		j := jitterFor(r.TweetID, hourSalt)
+		j := jitterFor(r.TweetID, hourSalt) * r.DecayFactor
 		score := r.BaseScore*r.DecayFactor + r.FreshnessBonus - r.ReplyPenalty
 		if score < 0 {
 			score = 0

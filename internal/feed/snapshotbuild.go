@@ -57,7 +57,7 @@ func BuildSnapshotWithRelatedAnchors(
 	cands := make([]cand, len(in))
 	order := make([]int, len(in))
 	for i, r := range in {
-		j := jitterFor(r.TweetID, hourSalt)
+		j := jitterFor(r.TweetID, hourSalt) * r.DecayFactor
 		score := r.BaseScore*r.DecayFactor + r.FreshnessBonus - r.ReplyPenalty
 		if score < 0 {
 			score = 0

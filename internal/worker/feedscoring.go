@@ -266,11 +266,18 @@ func (m *Manager) runSnapshotPhaseStats(
 	stats.buildDur = time.Since(buildStart).Round(time.Millisecond)
 
 	writeStart := time.Now()
+	m.xRetentionMu.Lock()
+	defer m.xRetentionMu.Unlock()
 	if err := m.db.ReplaceFeedRankSnapshot(snapshot); err != nil {
 		log.Printf("[feed_scoring] ReplaceFeedRankSnapshot: %v", err)
 		stats.writeDur = time.Since(writeStart).Round(time.Millisecond)
 		stats.totalDur = time.Since(snapStart).Round(time.Millisecond)
 		return stats
+	}
+	if restored, err := m.db.RestoreXMediaForFeedSnapshot(now.UnixMilli()); err != nil {
+		log.Printf("[feed_scoring] RestoreXMediaForFeedSnapshot: %v", err)
+	} else if restored > 0 {
+		m.KickMediaWork()
 	}
 	stats.writeDur = time.Since(writeStart).Round(time.Millisecond)
 	stats.totalDur = time.Since(snapStart).Round(time.Millisecond)

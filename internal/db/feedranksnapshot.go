@@ -142,7 +142,7 @@ func feedDecaySQL() string {
 		           WHEN age_h <  24 THEN 0.45 - 0.25 * (age_h - 6.0) / 18.0
 		           WHEN age_h <  72 THEN 0.20 - 0.12 * (age_h - 24.0) / 48.0
 		           WHEN age_h < 720 THEN 0.08 - 0.06 * (age_h - 72.0) / 648.0
-		           ELSE 0.02
+		           ELSE 0.02 * 720.0 / age_h
 		       END)`
 }
 
