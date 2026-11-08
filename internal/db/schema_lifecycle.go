@@ -100,7 +100,7 @@ var schemaTableLifecycles = map[string]schemaTableLifecycle{
 // Runtime audits include Goose's ledger alongside the application tables.
 func SchemaTableLifecycle(table string) (string, bool) {
 	switch table {
-	case "unfollow_cleanup_jobs", "unfollow_cleanup_items", "unfollow_cleanup_files":
+	case "unfollow_cleanup_jobs", "unfollow_cleanup_items", "unfollow_cleanup_files", "x_cookie_state":
 		return string(schemaLifecycleQueue), true
 	case "unfollow_cleanup_state":
 		return string(schemaLifecycleMaintainedState), true

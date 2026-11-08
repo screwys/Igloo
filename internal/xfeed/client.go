@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/screwys/igloo/internal/download"
@@ -49,11 +48,12 @@ type Client struct {
 	OperationSink        download.OperationSink
 }
 
-// NewClient returns a gallery-dl backed X feed client.
-func NewClient(cookiesDir string) *Client {
+// NewClient returns a gallery-dl backed X feed client. cookieStore keeps the
+// rest state of cookie files across restarts.
+func NewClient(cookiesDir string, cookieStore CookieStateStore) *Client {
 	return &Client{
 		Runner:        runGalleryDL,
-		CookiePool:    NewCookiePool(cookiesDir),
+		CookiePool:    NewCookiePool(cookiesDir, cookieStore),
 		TweetFallback: fxtwitter.NewClient(),
 	}
 }
@@ -416,12 +416,19 @@ func (c *Client) dump(ctx context.Context, rawURL string, limit int) ([]byte, ma
 	}
 	defer func() { _ = os.RemoveAll(pageDir) }()
 	args := galleryDLArgs(rawURL, limit)
-	cookies := c.cookies()
+	var pool *CookiePool
+	if c != nil {
+		pool = c.CookiePool
+	}
+	cookies := pool.NextBatch(time.Now())
 	attempts := 0
 	usedArgs := args
 	usedCookie := ""
 	var output []byte
 	defer func() {
+		if attempts == 0 {
+			return
+		}
 		op := model.DownloaderOperation{
 			Operation:   "x.gallerydl.dump",
 			Platform:    "twitter",
@@ -445,7 +452,7 @@ func (c *Client) dump(ctx context.Context, rawURL string, limit int) ([]byte, ma
 			_ = c.OperationSink.RecordDownloaderOperation(ctx, op)
 		}
 	}()
-	if len(cookies) == 0 {
+	if pool.Len() == 0 {
 		attempts = 1
 		output, err = c.run(ctx, args, pageDir)
 		if err != nil {
@@ -453,19 +460,36 @@ func (c *Client) dump(ctx context.Context, rawURL string, limit int) ([]byte, ma
 		}
 		return output, readPhotoTags(pageDir), nil
 	}
-	for i := 0; i < len(cookies); i++ {
-		usedCookie = cookies[i]
+	// Rate limits and rejected sessions rest the cookie file and move on to the
+	// next one. Only a failure that another cookie cannot change is the
+	// account's or source's.
+	var accessErr error
+	for _, cookie := range cookies {
+		usedCookie = cookie
 		usedArgs = append([]string{"--cookies", usedCookie}, args...)
 		attempts++
 		output, err = c.run(ctx, usedArgs, pageDir)
 		if err == nil {
+			pool.Succeeded(cookie)
 			return output, readPhotoTags(pageDir), nil
 		}
-		kind := download.ClassifyError(err, output)
-		if kind != download.ErrorKindAuth && kind != download.ErrorKindRateLimit {
-			break
+		failure, reason := classifyCookieFailure(err, output)
+		switch failure {
+		case cookieRateLimited:
+			pool.RateLimited(cookie, time.Now(), reason)
+		case cookieSessionFailed:
+			pool.SessionFailed(cookie, time.Now(), reason)
+		case cookieAccessDenied:
+			accessErr = err
+		default:
+			return nil, nil, err
 		}
 	}
+	if accessErr != nil {
+		err = accessErr
+		return nil, nil, err
+	}
+	err = &CookiesUnavailableError{RetryAt: pool.ReadyAt(time.Now())}
 	return nil, nil, err
 }
 
@@ -511,42 +535,4 @@ func galleryDLArgs(rawURL string, limit int) []string {
 func runGalleryDL(ctx context.Context, args []string, workDir string) ([]byte, error) {
 	result := download.CommandRunner{}.Run(ctx, "gallery-dl", args, download.CommandOptions{Timeout: 2 * time.Minute, WorkingDir: workDir})
 	return result.CombinedOutput(), result.Err
-}
-
-func (c *Client) cookies() []string {
-	if c == nil || c.CookiePool == nil {
-		return nil
-	}
-	return c.CookiePool.NextBatch()
-}
-
-// CookiePool rotates gallery-dl cookie files across requests.
-type CookiePool struct {
-	paths []string
-	next  atomic.Uint64
-}
-
-func NewCookiePool(cookiesDir string) *CookiePool {
-	return &CookiePool{paths: DiscoverCookieFiles(cookiesDir)}
-}
-
-func (p *CookiePool) NextBatch() []string {
-	if p == nil || len(p.paths) == 0 {
-		return nil
-	}
-	start := int(p.next.Add(1)-1) % len(p.paths)
-	out := make([]string, 0, len(p.paths))
-	for i := 0; i < len(p.paths); i++ {
-		out = append(out, p.paths[(start+i)%len(p.paths)])
-	}
-	return out
-}
-
-func DiscoverCookieFiles(cookiesDir string) []string {
-	candidates := download.DiscoverCookieFiles(strings.TrimSpace(cookiesDir), "twitter")
-	out := make([]string, 0, len(candidates))
-	for _, candidate := range candidates {
-		out = append(out, candidate.Path)
-	}
-	return out
 }

@@ -111,12 +111,12 @@ func (s *Server) handleXProbe(w http.ResponseWriter, r *http.Request) {
 	if s.cfg != nil {
 		cookiesDir = s.cfg.CookiesDir
 	}
-	client := xfeed.NewClient(cookiesDir)
+	client := xfeed.NewClient(cookiesDir, s.db)
 	client.OperationSink = s.db
 	items, err := client.FetchTimeline(ctx, handle, 1)
 	if err != nil {
 		channelID := "twitter_" + handle
-		if s.workers == nil || !s.workers.ReportExternalResult(err) {
+		if !xfeed.FetchUnavailable(err) && (s.workers == nil || !s.workers.ReportExternalResult(err)) {
 			_ = s.db.RecordIngestFailure(channelID, err.Error(), 0)
 		}
 		writeJSON(w, 200, map[string]any{"success": false, "error": err.Error()})

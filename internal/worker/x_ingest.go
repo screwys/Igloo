@@ -79,7 +79,7 @@ func (m *Manager) xFeedClient() xFeedFetcher {
 	if m.cfg != nil {
 		cookiesDir = m.cfg.CookiesDir
 	}
-	client := xfeed.NewClient(cookiesDir)
+	client := xfeed.NewClient(cookiesDir, m.db)
 	client.OperationSink = m.db
 	client.StatusEnrichmentSink = m.RequestXStatusEnrichment
 	m.xFeedFetcher = client
@@ -130,6 +130,9 @@ func filterReadyXFeedSources(sources []model.FeedSource, interval time.Duration,
 // On restart, recently-fetched accounts are skipped and the remaining handles are
 // sorted by last attempt, so the cycle resumes from where it left off.
 func (m *Manager) runIngestCycle(ctx context.Context) {
+	if time.Now().Before(m.xIngestHeldUntil) {
+		return
+	}
 	fetchDelay := m.xFeedFetchDelay()
 
 	start := time.Now()
@@ -375,6 +378,10 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 			if errors.Is(fetchErr, context.Canceled) {
 				break
 			}
+			if xfeed.FetchUnavailable(fetchErr) {
+				m.holdXIngest(fetchErr)
+				break
+			}
 			log.Printf("[x_ingest] fetch %s: %v", ch.ChannelID, fetchErr)
 			if m.ReportExternalResult(fetchErr) {
 				networkPaused = true
@@ -432,6 +439,10 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 		_, err := m.FetchOneFeedSource(ctx, source.SourceID)
 		atomic.AddInt32(&m.ingestCycleDone, 1)
 		if err != nil {
+			if xfeed.FetchUnavailable(err) {
+				m.holdXIngest(err)
+				break
+			}
 			log.Printf("[x_ingest] feed source %s: %v", source.SourceID, err)
 			if m.ReportExternalResult(err) {
 				networkPaused = true
@@ -477,6 +488,22 @@ func (m *Manager) upsertFeedItemsBatch(items []model.FeedItem) (db.FeedUpsertRes
 func (m *Manager) fetchXTimeline(ctx context.Context, handle string, limit int) ([]model.FeedItem, error) {
 	handle = strings.TrimPrefix(handle, "twitter_")
 	return m.xFeedClient().FetchTimeline(ctx, handle, limit)
+}
+
+// holdXIngest stops ingest cycles while no X cookie file is usable or
+// gallery-dl is missing. Accounts keep their place and failure counts.
+func (m *Manager) holdXIngest(cause error) {
+	until := time.Now().Add(xIngestPollInterval)
+	var cookies *xfeed.CookiesUnavailableError
+	if errors.As(cause, &cookies) {
+		until = cookies.RetryAt
+		if until.IsZero() {
+			until = time.Now().Add(xIngestCycleInterval)
+		}
+	}
+	m.xIngestHeldUntil = until
+	log.Printf("[x_ingest] ingest held until %s: %v", until.Format(time.RFC3339), cause)
+	m.EmitFeed(xIngestActivitySource, "X fetching waits: "+cause.Error(), "warning")
 }
 
 func (m *Manager) recordXIngestFailure(channelID string, cause error) {
@@ -570,7 +597,7 @@ func (m *Manager) FetchOneChannel(ctx context.Context, channelID string) (int, e
 	settings, _ := m.db.GetChannelSettings(channelID)
 	items, err := m.fetchXTimeline(ctx, channelID, m.xProfileHistoryLimit())
 	if err != nil {
-		if m.ReportExternalResult(err) {
+		if xfeed.FetchUnavailable(err) || m.ReportExternalResult(err) {
 			return 0, err
 		}
 		m.recordXIngestFailure(channelID, err)
@@ -661,7 +688,7 @@ func (m *Manager) FetchOneFeedSource(ctx context.Context, sourceID string) (int,
 	limit := m.xMediaDownloadLimit()
 	items, err := m.xFeedClient().FetchSource(ctx, source.URL, limit)
 	if err != nil {
-		if m.ReportExternalResult(err) {
+		if xfeed.FetchUnavailable(err) || m.ReportExternalResult(err) {
 			return 0, err
 		}
 		_ = m.db.RecordFeedSourceFailure(sourceID, err.Error())

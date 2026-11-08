@@ -134,6 +134,7 @@ func TestIsTransportFailureSeparatesConnectivityFromSourceFailures(t *testing.T)
 	}{
 		{"dns", errors.New("Temporary failure in name resolution"), true},
 		{"route", errors.New("network is unreachable"), true},
+		{"missing_host", errors.New("resolve download host: lookup gone.example.com: no such host"), false},
 		{"deadline", context.DeadlineExceeded, false},
 		{"endpoint_refused", errors.New("dial tcp: connection refused"), false},
 		{"endpoint_reset", errors.New("connection reset by peer"), false},

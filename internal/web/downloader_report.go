@@ -306,7 +306,7 @@ func (s *Server) addXReportRows(ctx context.Context, report *downloaderReport) {
 	if s.cfg != nil {
 		cookiesDir = s.cfg.CookiesDir
 	}
-	client := xfeed.NewClient(cookiesDir)
+	client := xfeed.NewClient(cookiesDir, s.db)
 	client.OperationSink = s.db
 	report.Rows = append(report.Rows, s.runReportCheck(ctx, "x timeline/status", "twitter", "x.gallerydl.dump", func(ctx context.Context) (map[string]any, error) {
 		items, err := client.FetchTimeline(ctx, handle, 10)

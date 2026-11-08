@@ -52,6 +52,7 @@ type Manager struct {
 	xStatusEnrich             chan xfeed.StatusEnrichmentRequest
 	ingestKick                chan struct{} // buffered(1): trigger immediate ingest
 	xPresenceNextCheck        time.Time
+	xIngestHeldUntil          time.Time     // ingest waits for a usable X cookie file or gallery-dl
 	feedScoringKick           chan struct{} // buffered(1): rate-limited feed refresh
 	feedScoringPriorityKick   chan struct{} // buffered(1): committed action-state refresh
 	feedOrderKick             chan struct{} // buffered(1): coalescing feed-order invalidation

@@ -64,6 +64,8 @@ func ClassifyError(err error, output []byte) string {
 	switch {
 	case errors.Is(err, context.Canceled):
 		return ErrorKindCanceled
+	case ExecutableNotFound(err):
+		return ErrorKindTemporary
 	}
 	var httpErr *HTTPStatusError
 	if errors.As(err, &httpErr) {
@@ -138,14 +140,17 @@ func IsTransportFailure(err error, output []byte) bool {
 		return false
 	}
 	text := strings.ToLower(err.Error() + "\n" + string(output))
+	// The resolver answered that the name does not exist, so the network
+	// works and only this host is gone.
+	if containsAny(text, "no such host", "name or service not known") {
+		return false
+	}
 	return containsAny(text,
 		"network is unreachable",
 		"network unreachable",
 		"network is down",
 		"no route to host",
 		"temporary failure in name resolution",
-		"name or service not known",
-		"no such host",
 		"could not resolve host",
 		"failed to resolve",
 	)

@@ -58,7 +58,7 @@ func (r CommandRunner) Run(ctx context.Context, tool string, args []string, opts
 
 	var stdout, stderr bytes.Buffer
 	err := runCommand(runCtx, tool, args, &stdout, &stderr, opts.WorkingDir)
-	if executableNotFound(err) {
+	if ExecutableNotFound(err) {
 		toolenv.ApplyCommonToolPaths()
 		stdout.Reset()
 		stderr.Reset()
@@ -134,7 +134,8 @@ func runCommand(ctx context.Context, tool string, args []string, stdout, stderr 
 	return cmd.Run()
 }
 
-func executableNotFound(err error) bool {
+// ExecutableNotFound reports that a tool is missing from this machine.
+func ExecutableNotFound(err error) bool {
 	if err == nil {
 		return false
 	}
