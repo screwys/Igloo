@@ -46,6 +46,9 @@ type Client struct {
 	TweetFallback        TweetFallback
 	StatusEnrichmentSink func(StatusEnrichmentRequest)
 	OperationSink        download.OperationSink
+	// StoredItems returns the stored copies of tweetIDs. Stored posts were
+	// enriched when first seen, so later polls skip their fallback lookups.
+	StoredItems func(tweetIDs []string) (map[string]model.FeedItem, error)
 }
 
 // NewClient returns a gallery-dl backed X feed client. cookieStore keeps the
@@ -58,8 +61,19 @@ func NewClient(cookiesDir string, cookieStore CookieStateStore) *Client {
 	}
 }
 
-// FetchTimeline fetches one account timeline, including replies.
+// FetchTimeline fetches one account's posts, replies and reposts. X keeps them
+// in separate profile timelines, so one gallery-dl run reads all three.
 func (c *Client) FetchTimeline(ctx context.Context, handle string, limit int) ([]FeedItem, error) {
+	return c.fetchProfile(ctx, handle, limit, "tweets", "with_replies", "reposts")
+}
+
+// FetchPosts fetches only one account's own posts. X allows several times more
+// requests to that timeline than to the replies and reposts timelines.
+func (c *Client) FetchPosts(ctx context.Context, handle string, limit int) ([]FeedItem, error) {
+	return c.fetchProfile(ctx, handle, limit, "tweets")
+}
+
+func (c *Client) fetchProfile(ctx context.Context, handle string, limit int, timelines ...string) ([]FeedItem, error) {
 	handle = NormalizeHandle(handle)
 	if !ValidHandle(handle) {
 		return nil, fmt.Errorf("invalid X handle: %q", handle)
@@ -67,8 +81,11 @@ func (c *Client) FetchTimeline(ctx context.Context, handle string, limit int) ([
 	if limit <= 0 {
 		limit = defaultTimelineLimit
 	}
-	rawURL := "https://x.com/" + handle + "/with_replies"
-	output, photoTags, err := c.dump(ctx, rawURL, limit)
+	urls := make([]string, 0, len(timelines))
+	for _, timeline := range timelines {
+		urls = append(urls, "https://x.com/"+handle+"/"+timeline)
+	}
+	output, photoTags, err := c.dump(ctx, limit, urls...)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +105,7 @@ func (c *Client) FetchSource(ctx context.Context, rawURL string, limit int) ([]F
 	if limit <= 0 {
 		limit = defaultTimelineLimit
 	}
-	output, photoTags, err := c.dump(ctx, rawURL, limit)
+	output, photoTags, err := c.dump(ctx, limit, rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +127,7 @@ func (c *Client) FetchStatus(ctx context.Context, handle, tweetID string) (Parse
 	if !ValidTweetID(tweetID) {
 		return ParseResult{}, fmt.Errorf("invalid X status id: %q", tweetID)
 	}
-	output, photoTags, err := c.dump(ctx, "https://x.com/"+handle+"/status/"+tweetID, 5)
+	output, photoTags, err := c.dump(ctx, 5, "https://x.com/"+handle+"/status/"+tweetID)
 	if err != nil {
 		return ParseResult{}, err
 	}
@@ -161,10 +178,14 @@ func (c *Client) enrichStatuses(ctx context.Context, parsed *ParseResult) error 
 		c.deferStatusEnrichment(req)
 	}
 
+	stored := c.storedItems(parsed.Items)
 	for i := range parsed.Items {
 		item := &parsed.Items[i]
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if _, ok := stored[item.TweetID]; ok {
+			continue
 		}
 		if item.IsReply && (item.ReplyToStatus == "" || item.ReplyToHandle == "") {
 			if fallback, ok := c.fallbackFeedItem(ctx, item.AuthorHandle, item.TweetID); ok {
@@ -212,6 +233,23 @@ func (c *Client) enrichStatuses(ctx context.Context, parsed *ParseResult) error 
 		c.deferStatusEnrichment(req)
 	}
 	return nil
+}
+
+// storedItems returns the items that are already stored. Without a store, or
+// when it fails, every item is enriched.
+func (c *Client) storedItems(items []FeedItem) map[string]model.FeedItem {
+	if c.StoredItems == nil || len(items) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.TweetID)
+	}
+	stored, err := c.StoredItems(ids)
+	if err != nil {
+		return nil
+	}
+	return stored
 }
 
 func (c *Client) deferStatusEnrichment(req StatusEnrichmentRequest) {
@@ -406,16 +444,16 @@ func timePtr(t time.Time) *time.Time {
 	return &tt
 }
 
-// dump runs gallery-dl and returns its JSON output with the photo tags read
-// from the API pages it saved.
-func (c *Client) dump(ctx context.Context, rawURL string, limit int) ([]byte, map[string][]model.MediaTag, error) {
+// dump runs gallery-dl on rawURLs and returns its JSON output with the photo
+// tags read from the API pages it saved.
+func (c *Client) dump(ctx context.Context, limit int, rawURLs ...string) ([]byte, map[string][]model.MediaTag, error) {
 	started := time.Now()
 	pageDir, err := os.MkdirTemp("", "igloo-x-pages-")
 	if err != nil {
 		return nil, nil, fmt.Errorf("create X page workspace: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(pageDir) }()
-	args := galleryDLArgs(rawURL, limit)
+	args := galleryDLArgs(limit, rawURLs...)
 	var pool *CookiePool
 	if c != nil {
 		pool = c.CookiePool
@@ -432,7 +470,7 @@ func (c *Client) dump(ctx context.Context, rawURL string, limit int) ([]byte, ma
 		op := model.DownloaderOperation{
 			Operation:   "x.gallerydl.dump",
 			Platform:    "twitter",
-			Subject:     rawURL,
+			Subject:     strings.Join(rawURLs, " "),
 			Tool:        "gallery-dl",
 			StartedAtMs: started.UnixMilli(),
 			EndedAtMs:   time.Now().UnixMilli(),
@@ -513,11 +551,14 @@ func mustJSON(v any) string {
 	return string(data)
 }
 
-func galleryDLArgs(rawURL string, limit int) []string {
+func galleryDLArgs(limit int, rawURLs ...string) []string {
 	if limit <= 0 {
 		limit = defaultTimelineLimit
 	}
-	return []string{
+	// --range counts media files, so a timeline of text posts would page
+	// back for months; --post-range also stops each timeline at its newest
+	// posts.
+	args := []string{
 		"--dump-json",
 		"--simulate",
 		"--no-input",
@@ -528,8 +569,9 @@ func galleryDLArgs(rawURL string, limit int) []string {
 		"-o", "extractor.twitter.quoted=true",
 		"-o", "extractor.twitter.articles=meta,html,cover,media",
 		"--range", "1-" + strconv.Itoa(limit),
-		rawURL,
+		"--post-range", "1-" + strconv.Itoa(limit),
 	}
+	return append(args, rawURLs...)
 }
 
 func runGalleryDL(ctx context.Context, args []string, workDir string) ([]byte, error) {

@@ -48,12 +48,15 @@ func seedXBroadcastSourcesTx(tx *sql.Tx, item model.FeedItem) error {
 }
 
 // XBroadcastSources returns saved links that still need live status checks.
+// An unresolved link waits two hours after a failed check, doubling with each
+// failure in a row up to about five days.
 func (db *DB) XBroadcastSources(active bool) ([]string, error) {
 	rows, err := db.reader().Query(`SELECT s.url FROM x_broadcast_sources s
 		LEFT JOIN x_broadcasts b ON b.broadcast_id=s.broadcast_id
 		WHERE (($1 AND b.live_status IN ('is_live','is_upcoming'))
 			OR (NOT $1 AND (b.broadcast_id IS NULL OR b.live_status='')
-				AND s.checked_at_ms < (extract(epoch FROM now())*1000)::bigint-3600000))
+				AND s.checked_at_ms < (extract(epoch FROM now())*1000)::bigint
+					- (3600000::bigint << LEAST(s.check_failures, 7))))
 		AND (EXISTS (SELECT 1 FROM channel_follows cf
 			WHERE cf.channel_id=s.channel_id OR cf.channel_id=b.channel_id)
 			OR EXISTS (SELECT 1 FROM x_space_presence p JOIN channel_follows cf ON cf.channel_id=p.channel_id
@@ -125,7 +128,9 @@ func (db *DB) ReplaceXSpacePresence(accounts []model.XLiveAccount, presence []mo
 					VALUES ($1,$2,$3) ON CONFLICT (url) DO UPDATE SET
 					channel_id=excluded.channel_id,published_at_ms=excluded.published_at_ms,
 					checked_at_ms=CASE WHEN x_broadcast_sources.broadcast_id IS NULL THEN 0
-						ELSE x_broadcast_sources.checked_at_ms END`,
+						ELSE x_broadcast_sources.checked_at_ms END,
+					check_failures=CASE WHEN x_broadcast_sources.broadcast_id IS NULL THEN 0
+						ELSE x_broadcast_sources.check_failures END`,
 					"https://x.com/i/spaces/"+room.SpaceID, channelID, observedAtMs); err != nil {
 					return err
 				}
@@ -135,9 +140,11 @@ func (db *DB) ReplaceXSpacePresence(accounts []model.XLiveAccount, presence []mo
 	})
 }
 
+// RecordXBroadcastCheck records a failed live status check of a saved link.
 func (db *DB) RecordXBroadcastCheck(rawURL string, checkedAtMs int64) error {
 	return db.WithWrite(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`UPDATE x_broadcast_sources SET checked_at_ms=$2 WHERE url=$1`, rawURL, checkedAtMs)
+		_, err := tx.Exec(`UPDATE x_broadcast_sources SET checked_at_ms=$2, check_failures=check_failures+1
+			WHERE url=$1`, rawURL, checkedAtMs)
 		return err
 	})
 }
@@ -194,7 +201,7 @@ func (db *DB) ObserveXBroadcast(sourceURL string, broadcast model.XBroadcast) er
 		}
 		_, err := tx.Exec(`INSERT INTO x_broadcast_sources (url,channel_id,broadcast_id,checked_at_ms)
 			VALUES ($1,$2,$3,$4) ON CONFLICT (url) DO UPDATE SET
-			broadcast_id=excluded.broadcast_id,checked_at_ms=excluded.checked_at_ms`,
+			broadcast_id=excluded.broadcast_id,checked_at_ms=excluded.checked_at_ms,check_failures=0`,
 			sourceURL, broadcast.ChannelID, broadcast.BroadcastID, broadcast.ObservedAtMs)
 		return err
 	})

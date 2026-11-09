@@ -42,6 +42,30 @@ func (db *DB) GetIngestState(handle string) (model.IngestState, error) {
 	return s, nil
 }
 
+// XFullTimelineFetchedAt returns when ingest last read an X account's replies
+// and reposts timelines, or zero when it never has.
+func (db *DB) XFullTimelineFetchedAt(handle string) (time.Time, error) {
+	var at float64
+	err := db.reader().QueryRow(`SELECT full_fetch_at FROM ingest_state WHERE handle = $1`, handle).Scan(&at)
+	if err == sql.ErrNoRows || at == 0 {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(0, int64(at*float64(time.Second))), nil
+}
+
+// RecordXFullTimelineFetch records that ingest read an X account's replies and
+// reposts timelines. The account's ingest success must be recorded first.
+func (db *DB) RecordXFullTimelineFetch(handle string, at time.Time) error {
+	return db.WithWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`UPDATE ingest_state SET full_fetch_at = $2 WHERE handle = $1`,
+			handle, float64(at.UnixMilli())/1000)
+		return err
+	})
+}
+
 // RecordIngestSuccess upserts an ingest success: resets fail_count, records timing.
 func (db *DB) RecordIngestSuccess(handle string, successAt float64, latencyMs float64) error {
 	return db.WithWrite(func(tx *sql.Tx) error {

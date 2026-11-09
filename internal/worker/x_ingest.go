@@ -22,10 +22,14 @@ const (
 	xIngestActivitySource = "x_ingest"
 	xIngestCycleInterval  = 10 * time.Minute
 	xIngestPollInterval   = 30 * time.Second
+	// X allows a fifth of the posts timeline's requests to the replies and
+	// reposts timelines, so ingest reads those only every few passes.
+	xFullTimelineInterval = 12 * time.Hour
 )
 
 type xFeedFetcher interface {
 	FetchTimeline(ctx context.Context, handle string, limit int) ([]model.FeedItem, error)
+	FetchPosts(ctx context.Context, handle string, limit int) ([]model.FeedItem, error)
 	FetchSource(ctx context.Context, rawURL string, limit int) ([]model.FeedItem, error)
 	FetchStatus(ctx context.Context, handle, tweetID string) (xfeed.ParseResult, error)
 }
@@ -82,6 +86,7 @@ func (m *Manager) xFeedClient() xFeedFetcher {
 	client := xfeed.NewClient(cookiesDir, m.db)
 	client.OperationSink = m.db
 	client.StatusEnrichmentSink = m.RequestXStatusEnrichment
+	client.StoredItems = m.db.GetFeedItemsForTweetIDs
 	m.xFeedFetcher = client
 	return m.xFeedFetcher
 }
@@ -369,7 +374,8 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 		}
 		m.EmitFeed(xIngestActivitySource, fmt.Sprintf("Fetching @%s", handle), "info")
 		fetchStart := time.Now()
-		items, fetchErr := m.fetchXTimeline(ctx, ch.ChannelID, xFeedTimelineLimit(settings))
+		full := m.xFullTimelineDue(ch.ChannelID, fetchStart)
+		items, fetchErr := m.fetchXTimeline(ctx, ch.ChannelID, xFeedTimelineLimit(settings), full)
 		latencyMs := float64(time.Since(fetchStart).Milliseconds())
 
 		atomic.AddInt32(&m.ingestCycleDone, 1)
@@ -400,6 +406,9 @@ func (m *Manager) runIngestCycle(ctx context.Context) {
 
 		m.ReportExternalResult(nil)
 		_ = m.db.RecordIngestSuccess(ch.ChannelID, float64(time.Now().Unix()), latencyMs)
+		if full {
+			m.recordXFullTimelineFetch(ch.ChannelID, fetchStart)
+		}
 
 		m.enrichExistingGhostQuotes(ctx, items)
 		items = filterTimelineItemsForSource(handle, items)
@@ -485,9 +494,30 @@ func (m *Manager) upsertFeedItemsBatch(items []model.FeedItem) (db.FeedUpsertRes
 	return result, nil
 }
 
-func (m *Manager) fetchXTimeline(ctx context.Context, handle string, limit int) ([]model.FeedItem, error) {
+// fetchXTimeline reads an account's posts, plus its replies and reposts when
+// full is set.
+func (m *Manager) fetchXTimeline(ctx context.Context, handle string, limit int, full bool) ([]model.FeedItem, error) {
 	handle = strings.TrimPrefix(handle, "twitter_")
-	return m.xFeedClient().FetchTimeline(ctx, handle, limit)
+	if full {
+		return m.xFeedClient().FetchTimeline(ctx, handle, limit)
+	}
+	return m.xFeedClient().FetchPosts(ctx, handle, limit)
+}
+
+// xFullTimelineDue reports whether an account's replies and reposts are due.
+func (m *Manager) xFullTimelineDue(channelID string, now time.Time) bool {
+	fetchedAt, err := m.db.XFullTimelineFetchedAt(channelID)
+	if err != nil {
+		log.Printf("[x_ingest] read full fetch time %s: %v", channelID, err)
+		return true
+	}
+	return now.Sub(fetchedAt) >= xFullTimelineInterval
+}
+
+func (m *Manager) recordXFullTimelineFetch(channelID string, at time.Time) {
+	if err := m.db.RecordXFullTimelineFetch(channelID, at); err != nil {
+		log.Printf("[x_ingest] record full fetch %s: %v", channelID, err)
+	}
 }
 
 // holdXIngest stops ingest cycles while no X cookie file is usable or
@@ -595,7 +625,8 @@ func (m *Manager) FetchOneChannel(ctx context.Context, channelID string) (int, e
 	}
 
 	settings, _ := m.db.GetChannelSettings(channelID)
-	items, err := m.fetchXTimeline(ctx, channelID, m.xProfileHistoryLimit())
+	fetchStart := time.Now()
+	items, err := m.fetchXTimeline(ctx, channelID, m.xProfileHistoryLimit(), true)
 	if err != nil {
 		if xfeed.FetchUnavailable(err) || m.ReportExternalResult(err) {
 			return 0, err
@@ -605,6 +636,7 @@ func (m *Manager) FetchOneChannel(ctx context.Context, channelID string) (int, e
 	}
 	m.ReportExternalResult(nil)
 	_ = m.db.RecordIngestSuccess(channelID, float64(time.Now().Unix()), 0)
+	m.recordXFullTimelineFetch(channelID, fetchStart)
 
 	m.enrichExistingGhostQuotes(ctx, items)
 	items = filterTimelineItemsForSource(strings.TrimPrefix(channelID, "twitter_"), items)

@@ -76,6 +76,10 @@ func (f fakeXFeedFetcher) FetchTimeline(ctx context.Context, handle string, limi
 	return f.timeline(ctx, handle, limit)
 }
 
+func (f fakeXFeedFetcher) FetchPosts(ctx context.Context, handle string, limit int) ([]model.FeedItem, error) {
+	return f.timeline(ctx, handle, limit)
+}
+
 func (f fakeXFeedFetcher) FetchSource(ctx context.Context, rawURL string, limit int) ([]model.FeedItem, error) {
 	return f.source(ctx, rawURL, limit)
 }
