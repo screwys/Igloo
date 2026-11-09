@@ -1534,19 +1534,6 @@ document.body.addEventListener('channelRefreshComplete', function (e) {
   if (isCurrentChannelPath(channelId)) window.location.reload()
 })
 
-// After star toggle via HX-Trigger, sync all star buttons
-document.body.addEventListener('starChanged', function (e) {
-  var channelId = e.detail && e.detail.channelId
-  var starred = !!(e.detail && e.detail.starred)
-  if (!channelId) return
-  document.querySelectorAll('.feed-star-btn[data-id="' + CSS.escape(channelId) + '"]').forEach(function (btn) {
-    btn.classList.toggle('active', starred)
-    btn.textContent = starred ? '\u2605' : '\u2606'
-    btn.title = starred ? t('action_unfavourite_account', 'Unfavourite account') : t('action_favourite_account', 'Favourite account')
-    animateFeedActionButton(btn, !starred)
-  })
-})
-
 // After follow via HX-Trigger, update buttons in place (do not remove —
 // hero + feed items both need to keep their button and flip to "Following").
 document.body.addEventListener('followChanged', function (e) {
@@ -1557,10 +1544,6 @@ document.body.addEventListener('followChanged', function (e) {
 
 document.body.addEventListener('htmx:beforeSend', function (e) {
   var elt = e.detail && e.detail.elt
-  if (elt && elt.classList && elt.classList.contains('feed-star-btn')) {
-    animateFeedActionButton(elt, elt.classList.contains('active'))
-    return
-  }
   if (!elt || elt.getAttribute('data-feed-action') !== 'heart') return
   var card = elt.closest('[data-feed-item]')
   if (!card) return

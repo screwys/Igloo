@@ -95,8 +95,6 @@ func (s *Server) handleChannelStar(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("HX-Trigger", fmt.Sprintf(`{"starChanged":{"channelId":%q,"starred":%t}}`, channelID, isStarred))
 		switch r.URL.Query().Get("ctx") {
-		case "feed":
-			_ = components.FeedStarButton(p, channelID, isStarred).Render(r.Context(), w)
 		case "profile":
 			_ = components.ProfileCardStarButton(p, channelID, isStarred).Render(r.Context(), w)
 		case "sidebar":

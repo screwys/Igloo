@@ -104,14 +104,19 @@ internal enum class NativeFeedPrimaryAction {
     Like,
     Bookmark,
     External,
+    More,
 }
 
-internal val NativeFeedPrimaryActions = listOf(
-    NativeFeedPrimaryAction.Share,
+internal val NativeFeedLeadingActions = listOf(
+    NativeFeedPrimaryAction.Reply,
     NativeFeedPrimaryAction.Like,
     NativeFeedPrimaryAction.Bookmark,
-    NativeFeedPrimaryAction.Reply,
+)
+
+internal val NativeFeedTrailingActions = listOf(
+    NativeFeedPrimaryAction.Share,
     NativeFeedPrimaryAction.External,
+    NativeFeedPrimaryAction.More,
 )
 
 internal const val NativeFeedBodyCollapsedLines = 15

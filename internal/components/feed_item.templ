@@ -361,12 +361,6 @@ templ feedHeaderActions(p PageProps, item model.FeedItem, authorLabel string, pu
 		if item.ChannelID != "" && !item.FollowTargetFollowed {
 			@FollowButton(p, item.ChannelID, feedFollowHandle(item), authorLabel, false)
 		}
-		if item.ChannelID != "" {
-			if item.FollowTargetFollowed {
-				@FeedStarButton(p, item.ChannelID, item.ChannelIsStarred)
-			}
-			@feedCardMenu(p, item, authorLabel)
-		}
 	</div>
 }
 
@@ -391,7 +385,7 @@ templ feedTranslateControl(p PageProps, item model.FeedItem) {
 
 templ feedCardMenu(p PageProps, item model.FeedItem, authorLabel string) {
 	<div class="feed-card-menu" data-feed-menu>
-		<button class="feed-card-menu-btn" type="button" data-feed-menu-toggle title={ L(p, "feed_post_actions", "Post actions") } aria-label={ L(p, "feed_post_actions", "Post actions") }>@MaterialIcon("MoreHoriz", "")</button>
+		<button class="feed-action-btn" type="button" data-feed-menu-toggle title={ L(p, "feed_post_actions", "Post actions") } aria-label={ L(p, "feed_post_actions", "Post actions") }>@MaterialIcon("MoreHoriz", "")</button>
 		<div class="feed-card-menu-list">
 			<button
 				class="feed-card-menu-item"
@@ -845,44 +839,51 @@ templ feedTaggedAccounts(p PageProps, accounts []model.RetweeterInfo) {
 templ feedActions(p PageProps, item model.FeedItem) {
 	{{ externalURL := feedExternalURL(item) }}
 	<div class="feed-actions" data-feed-index="0">
-		<button class="feed-action-btn" type="button" data-feed-action="share" title={ L(p, "action_share", "Share") } aria-label={ L(p, "action_share", "Share") }>
-			@MaterialIcon("Share", "")
-		</button>
-		@LikeButton(p, item.TweetID, item.IsLiked)
-		<button
-			class={ "feed-action-btn", templ.KV("active", item.IsBookmarked) }
-			type="button"
-			data-feed-action="bookmark"
-			if item.IsBookmarked {
-				title={ L(p, "action_unbookmark", "Unbookmark") }
-				aria-label={ L(p, "action_unbookmark", "Unbookmark") }
-			} else {
-				title={ L(p, "action_bookmark", "Bookmark") }
-				aria-label={ L(p, "action_bookmark", "Bookmark") }
-			}
-		>
-			if item.IsBookmarked {
-				@MaterialIcon("Bookmark", "")
-			} else {
-				@MaterialIcon("BookmarkBorder", "")
-			}
-		</button>
-		<a class="feed-action-btn feed-reply-btn" href={ templ.SafeURL("/thread/" + item.TweetID) } data-feed-thread-open data-thread-tweet-id={ item.TweetID } title={ L(p, "feed_open_thread", "Open thread") } aria-label={ L(p, "feed_open_thread", "Open thread") }>
-			@MaterialIcon("Reply", "")
-		</a>
-		if externalURL != "" {
-			<a
-				class="feed-action-btn"
-				data-feed-action="open"
-				href={ templ.SafeURL(externalURL) }
-				target="_blank"
-				rel="noopener noreferrer"
-				title={ L(p, "action_open_on_x", "Open on X") }
-				aria-label={ L(p, "action_open_on_x", "Open on X") }
-			>
-				@MaterialIcon("OpenInNew", "")
+		<div class="feed-actions-primary">
+			<a class="feed-action-btn feed-reply-btn" href={ templ.SafeURL("/thread/" + item.TweetID) } data-feed-thread-open data-thread-tweet-id={ item.TweetID } title={ L(p, "feed_open_thread", "Open thread") } aria-label={ L(p, "feed_open_thread", "Open thread") }>
+				@MaterialIcon("Reply", "")
 			</a>
-		}
+			@LikeButton(p, item.TweetID, item.IsLiked)
+			<button
+				class={ "feed-action-btn", templ.KV("active", item.IsBookmarked) }
+				type="button"
+				data-feed-action="bookmark"
+				if item.IsBookmarked {
+					title={ L(p, "action_unbookmark", "Unbookmark") }
+					aria-label={ L(p, "action_unbookmark", "Unbookmark") }
+				} else {
+					title={ L(p, "action_bookmark", "Bookmark") }
+					aria-label={ L(p, "action_bookmark", "Bookmark") }
+				}
+			>
+				if item.IsBookmarked {
+					@MaterialIcon("Bookmark", "")
+				} else {
+					@MaterialIcon("BookmarkBorder", "")
+				}
+			</button>
+		</div>
+		<div class="feed-actions-secondary">
+			<button class="feed-action-btn" type="button" data-feed-action="share" title={ L(p, "action_share", "Share") } aria-label={ L(p, "action_share", "Share") }>
+				@MaterialIcon("Share", "")
+			</button>
+			if externalURL != "" {
+				<a
+					class="feed-action-btn"
+					data-feed-action="open"
+					href={ templ.SafeURL(externalURL) }
+					target="_blank"
+					rel="noopener noreferrer"
+					title={ L(p, "action_open_on_x", "Open on X") }
+					aria-label={ L(p, "action_open_on_x", "Open on X") }
+				>
+					@MaterialIcon("OpenInNew", "")
+				</a>
+			}
+			if item.ChannelID != "" {
+				@feedCardMenu(p, item, feedAuthorLabel(item))
+			}
+		</div>
 	</div>
 }
 

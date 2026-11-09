@@ -37,14 +37,14 @@ func TestAccountDetailsPreserveUnknownLocationAccuracy(t *testing.T) {
 	}
 }
 
-func TestFeedActionsShareLikeBookmarkThreadOpenOrder(t *testing.T) {
+func TestFeedActionsReplyLikeBookmarkThenShareOpenMenuOrder(t *testing.T) {
 	var buf bytes.Buffer
-	if err := feedActions(newTestPageProps(), model.FeedItem{TweetID: "123", AuthorHandle: "sample", CanonicalURL: "https://x.com/sample/status/123"}).Render(context.Background(), &buf); err != nil {
+	if err := feedActions(newTestPageProps(), model.FeedItem{TweetID: "123", ChannelID: "twitter_sample", AuthorHandle: "sample", CanonicalURL: "https://x.com/sample/status/123"}).Render(context.Background(), &buf); err != nil {
 		t.Fatal(err)
 	}
 	html := buf.String()
 	previous := -1
-	for _, marker := range []string{`data-feed-action="share"`, `data-feed-action="heart"`, `data-feed-action="bookmark"`, `data-feed-thread-open`, `data-feed-action="open"`} {
+	for _, marker := range []string{`data-feed-thread-open`, `data-feed-action="heart"`, `data-feed-action="bookmark"`, `feed-actions-secondary`, `data-feed-action="share"`, `data-feed-action="open"`, `data-feed-menu-toggle`} {
 		at := strings.Index(html, marker)
 		if at <= previous {
 			t.Fatalf("missing or misplaced %s: %s", marker, html)

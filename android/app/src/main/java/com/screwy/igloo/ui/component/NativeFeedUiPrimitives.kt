@@ -142,6 +142,7 @@ internal fun NativeFeedPrimaryAction.iconRes(selected: Boolean): Int = when (thi
     NativeFeedPrimaryAction.Share -> R.drawable.ic_feed_share_24
     NativeFeedPrimaryAction.Like -> if (selected) R.drawable.ic_feed_favorite_24 else R.drawable.ic_feed_favorite_border_24
     NativeFeedPrimaryAction.Bookmark -> if (selected) R.drawable.ic_feed_bookmark_24 else R.drawable.ic_feed_bookmark_border_24
+    NativeFeedPrimaryAction.More -> R.drawable.ic_channel_more_horiz_24
 }
 
 internal fun NativeFeedPrimaryAction.contentDescription(context: Context, post: SocialPostModel): String = when (this) {
@@ -152,6 +153,7 @@ internal fun NativeFeedPrimaryAction.contentDescription(context: Context, post: 
     NativeFeedPrimaryAction.Bookmark -> context.getString(
         if (post.actions.isBookmarked) R.string.action_remove_bookmark else R.string.action_bookmark,
     )
+    NativeFeedPrimaryAction.More -> context.getString(R.string.action_more)
 }
 
 internal fun showNativeFeedPopup(

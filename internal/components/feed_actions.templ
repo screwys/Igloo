@@ -25,29 +25,6 @@ templ FollowButton(p PageProps, channelID string, handle string, label string, i
 	</button>
 }
 
-// FeedStarButton renders the star/unstar button for HTMX swap in feed cards.
-templ FeedStarButton(p PageProps, channelID string, isStarred bool) {
-	<button
-		class={ "feed-star-btn channel-action-btn", templ.KV("active", isStarred) }
-		type="button"
-		data-action="star"
-		data-id={ channelID }
-		hx-post={ "/api/channels/" + channelID + "/star?ctx=feed" }
-		hx-swap="outerHTML"
-		if isStarred {
-			title={ L(p, "action_unfavourite_account", "Unfavourite account") }
-		} else {
-			title={ L(p, "action_favourite_account", "Favourite account") }
-		}
-	>
-		if isStarred {
-			@MaterialIcon("Star", "")
-		} else {
-			@MaterialIcon("StarBorder", "")
-		}
-	</button>
-}
-
 // LikeButton renders the like/unlike heart button for HTMX swap.
 templ LikeButton(p PageProps, tweetID string, isLiked bool) {
 	<button
