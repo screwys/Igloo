@@ -36,12 +36,12 @@ class NativeMainFeedSurfaceTest {
                 NativeFeedPrimaryAction.Reply,
                 NativeFeedPrimaryAction.Like,
                 NativeFeedPrimaryAction.Bookmark,
+                NativeFeedPrimaryAction.Share,
             ),
             NativeFeedLeadingActions,
         )
         assertEquals(
             listOf(
-                NativeFeedPrimaryAction.Share,
                 NativeFeedPrimaryAction.External,
                 NativeFeedPrimaryAction.More,
             ),

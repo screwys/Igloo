@@ -111,10 +111,10 @@ internal val NativeFeedLeadingActions = listOf(
     NativeFeedPrimaryAction.Reply,
     NativeFeedPrimaryAction.Like,
     NativeFeedPrimaryAction.Bookmark,
+    NativeFeedPrimaryAction.Share,
 )
 
 internal val NativeFeedTrailingActions = listOf(
-    NativeFeedPrimaryAction.Share,
     NativeFeedPrimaryAction.External,
     NativeFeedPrimaryAction.More,
 )

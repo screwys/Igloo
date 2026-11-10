@@ -862,11 +862,11 @@ templ feedActions(p PageProps, item model.FeedItem) {
 					@MaterialIcon("BookmarkBorder", "")
 				}
 			</button>
-		</div>
-		<div class="feed-actions-secondary">
 			<button class="feed-action-btn" type="button" data-feed-action="share" title={ L(p, "action_share", "Share") } aria-label={ L(p, "action_share", "Share") }>
 				@MaterialIcon("Share", "")
 			</button>
+		</div>
+		<div class="feed-actions-secondary">
 			if externalURL != "" {
 				<a
 					class="feed-action-btn"

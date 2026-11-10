@@ -11324,14 +11324,14 @@ body.shorts-mode .sidebar {
     margin-top: 0.1rem;
 }
 
-/* Reply, like and bookmark sit in the left slots; share, open and the post
+/* Reply, like, bookmark and share sit in the left slots; open and the post
    menu group on the right. Both edges pull out so icons line up with text. */
 .feed-actions-primary {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     justify-items: start;
     flex: 1 1 auto;
-    max-width: 20rem;
+    max-width: 26.75rem;
     margin-left: -7px;
 }
 

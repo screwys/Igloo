@@ -796,7 +796,7 @@ internal class NativeFeedViewHolder(
     ) {
         val canOpenExternal = shareUrl.isNotBlank()
         container.removeAllViews()
-        // Reply, like and bookmark lead; share, open and the post menu trail.
+        // Reply, like, bookmark and share lead; open and the post menu trail.
         // The outer buttons pull into the card padding so icons line up with text.
         NativeFeedLeadingActions.forEachIndexed { index, action ->
             val slot = FrameLayout(views.root.context)
