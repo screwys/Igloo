@@ -14,15 +14,15 @@
       ];
 
       forAllSystems = nixpkgs.lib.genAttrs systems;
-      goVersion = "1.26.10";
+      goVersion = "1.26.11";
       goBinaryArchives = {
         x86_64-linux = {
           arch = "amd64";
-          hash = "sha256-zP566CLSwvQfT+fJVhmZZ6Tawi0O4NKyv9tECqs7IMU=";
+          hash = "sha256-mEn04E7jUwNxTjT7w6yKtE6j5EipWqGC+R47m3nHEOw=";
         };
         aarch64-linux = {
           arch = "arm64";
-          hash = "sha256-P0InznsgalE+eU8Tk620c6B7RulNGL0V0caEu7cxl5c=";
+          hash = "sha256-bC8ptFi1rdCDXxi3dvaciIGm2IQo8UhKbaVXVeYgdX4=";
         };
       };
       goFor =
