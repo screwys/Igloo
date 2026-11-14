@@ -31,7 +31,7 @@ var accountRegionCodes = func() map[string]string {
 	codes := make(map[string]string)
 	for _, region := range language.Supported.Regions() {
 		if region.IsCountry() {
-			code := region.String()
+			code := region.Canonicalize().String()
 			if name := display.English.Regions().Name(region); name != "" {
 				codes[strings.ToLower(code)] = code
 				codes[strings.ToLower(name)] = code
