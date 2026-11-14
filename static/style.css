@@ -9497,12 +9497,13 @@ body.shorts-mode .sidebar {
     object-fit: contain;
     opacity: 0;
     transition: opacity 0.3s ease;
+    /* Hidden slides stay stacked on top; only the visible one takes pointer input. */
     pointer-events: none;
-    /* Let clicks pass through to wrapper */
 }
 
 .slide-image.active {
     opacity: 1;
+    pointer-events: auto;
 }
 
 .shorts-media-stage.is-fullscreen video,
