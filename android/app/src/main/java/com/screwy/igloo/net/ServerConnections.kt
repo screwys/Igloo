@@ -52,10 +52,9 @@ class ServerConnections(
         val revision: Long,
         val main: HttpUrl,
         val local: HttpUrl?,
+        val url: HttpUrl,
         val network: Network?,
-    ) {
-        val url: HttpUrl get() = if (network != null) local ?: main else main
-    }
+    )
 
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) { revision.incrementAndGet() }
@@ -64,9 +63,6 @@ class ServerConnections(
             synchronized(networkEngines) { networkEngines.remove(network)?.close() }
         }
         override fun onLinkPropertiesChanged(network: Network, properties: android.net.LinkProperties) {
-            revision.incrementAndGet()
-        }
-        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
             revision.incrementAndGet()
         }
     }
@@ -100,21 +96,42 @@ class ServerConnections(
             selected?.takeIf {
                 it.revision == version && it.main == main && it.local == local
             }?.let { return@withLock it }
-            val preferred = local ?: main
-            val network = withContext(Dispatchers.IO) {
-                val lanAddress = local != null || runCatching {
-                    java.net.InetAddress.getAllByName(main.host).any {
-                        it.isSiteLocalAddress || it.isLinkLocalAddress || it.isLoopbackAddress || it.isAnyLocalAddress
-                    }
-                }.getOrDefault(false)
-                if (lanAddress) localNetworks().firstOrNull { probe(preferred, it) } else null
+            result = withContext(Dispatchers.IO) {
+                val failures = mutableListOf<String>()
+                val route = if (local != null) {
+                    // A VPN can forbid binding to Wi-Fi while still routing to the LAN itself.
+                    val candidates = localNetworks() + null
+                    val index = candidates.indexOfFirst { probe(local, it, failures) }
+                    if (index >= 0) Selection(version, main, local, local, candidates[index]) else null
+                } else if (isLanHost(main)) {
+                    localNetworks().firstOrNull { probe(main, it, failures) }
+                        ?.let { Selection(version, main, null, main, it) }
+                } else {
+                    null
+                }
+                val summary = if (route == null) failures.joinToString("; ") else ""
+                if (summary.isNotEmpty() && summary != lastProbeFailures) {
+                    android.util.Log.w("Igloo/Net", "server_local_probe_failed $summary")
+                }
+                lastProbeFailures = summary
+                route ?: Selection(version, main, local, main, null)
             }
-            result = Selection(version, main, local, network)
         } while (result.revision != revision.get())
         selected = result
-        android.util.Log.i("Igloo/Net", "server_route=" + if (result.network == null) "main" else "local")
+        android.util.Log.i(
+            "Igloo/Net",
+            "server_route=" + (if (result.url == result.local) "local" else "main") + " bound=" + (result.network != null),
+        )
         result
     }
+
+    private var lastProbeFailures = ""
+
+    private fun isLanHost(url: HttpUrl): Boolean = runCatching {
+        java.net.InetAddress.getAllByName(url.host).any {
+            it.isSiteLocalAddress || it.isLinkLocalAddress || it.isLoopbackAddress || it.isAnyLocalAddress
+        }
+    }.getOrDefault(false)
 
     @Suppress("DEPRECATION")
     private fun localNetworks(): List<Network> = connectivity.allNetworks.filter { network ->
@@ -124,25 +141,28 @@ class ServerConnections(
                 caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
     }
 
-    private fun probe(base: HttpUrl, network: Network): Boolean {
-        val url = base.newBuilder().addPathSegments("api/health/live").build()
-        val connection = try {
-            network.openConnection(URL(url.toString())) as HttpURLConnection
-        } catch (_: IOException) {
-            return false
-        }
-        return try {
+    /** A null network probes over the app's default route. */
+    private fun probe(base: HttpUrl, network: Network?, failures: MutableList<String>): Boolean {
+        val url = URL(base.newBuilder().addPathSegments("api/health/live").build().toString())
+        var connection: HttpURLConnection? = null
+        val failure = try {
+            connection = (network?.openConnection(url) ?: url.openConnection()) as HttpURLConnection
             connection.connectTimeout = 750
             connection.readTimeout = 750
             connection.instanceFollowRedirects = false
-            connection.responseCode == 200 && connection.inputStream.bufferedReader().use {
-                isIglooHealthBody(it.readText())
+            val status = connection.responseCode
+            if (status == 200 && connection.inputStream.bufferedReader().use { isIglooHealthBody(it.readText()) }) {
+                null
+            } else {
+                "status=$status"
             }
-        } catch (_: IOException) {
-            false
+        } catch (error: IOException) {
+            error.toString()
         } finally {
-            connection.disconnect()
+            connection?.disconnect()
         }
+        if (failure != null) failures += (if (network == null) "default: " else "bound: ") + failure
+        return failure == null
     }
 
     private val direct = OkHttpClient()
@@ -176,8 +196,8 @@ class ServerConnections(
     }
 
     private fun transportFailed(route: Selection) {
-        if (selected != route || route.network == null) return
-        selected = route.copy(network = null)
+        if (selected != route || (route.url == route.main && route.network == null)) return
+        selected = route.copy(url = route.main, network = null)
     }
 
     /** Ktor keeps ownership of request cancellation, timeouts, and response streaming. */
