@@ -35,22 +35,26 @@ func (m *Manager) refreshXBroadcasts(ctx context.Context) {
 	}
 	checkCtx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	failed := 0
 	for _, rawURL := range sources {
 		if checkCtx.Err() != nil || !m.externalWorkAllowed(time.Now()) {
 			break
 		}
 		if _, _, err := m.ResolveXPlayback(checkCtx, rawURL); err != nil {
-			failed++
-			if ctx.Err() == nil {
-				if err := m.db.RecordXBroadcastCheck(rawURL, time.Now().UnixMilli()); err != nil {
-					log.Printf("[x-live] record broadcast check: %v", err)
+			if ctx.Err() != nil {
+				break
+			}
+			// X answers not found once a broadcast without a replay ends.
+			if download.ClassifyFailure(err, nil, 0).Kind == download.ErrorKindNotFound {
+				if err := m.db.EndXBroadcast(rawURL); err != nil {
+					log.Printf("[x-live] end broadcast: %v", err)
 				}
+				continue
+			}
+			log.Printf("[x-live] broadcast check: %v", err)
+			if err := m.db.RecordXBroadcastCheck(rawURL, time.Now().UnixMilli()); err != nil {
+				log.Printf("[x-live] record broadcast check: %v", err)
 			}
 		}
-	}
-	if failed > 0 && ctx.Err() == nil {
-		log.Printf("[x-live] %d broadcast checks failed", failed)
 	}
 }
 

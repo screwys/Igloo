@@ -149,6 +149,15 @@ func (db *DB) RecordXBroadcastCheck(rawURL string, checkedAtMs int64) error {
 	})
 }
 
+// EndXBroadcast marks the broadcast behind a saved link as over.
+func (db *DB) EndXBroadcast(rawURL string) error {
+	return db.WithWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`UPDATE x_broadcasts b SET live_status='was_live' FROM x_broadcast_sources s
+			WHERE s.url=$1 AND b.broadcast_id=s.broadcast_id`, rawURL)
+		return err
+	})
+}
+
 func (db *DB) ObserveXSpaceParticipants(participants []model.XSpaceParticipant) error {
 	channels := make([]model.Channel, 0, len(participants))
 	for _, participant := range participants {

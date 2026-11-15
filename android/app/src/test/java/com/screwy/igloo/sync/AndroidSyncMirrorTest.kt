@@ -632,7 +632,9 @@ class AndroidSyncMirrorTest {
             }.exceptionOrNull()
 
         assertTrue(failure is AndroidSyncAssetChangedException)
-        assertEquals(64, requested.size)
+        // The unavailable server ends the pass before the rest of the batch is tried.
+        assertTrue("sample_changed_asset_000" in requested)
+        assertTrue(requested.size < 64)
         assertTrue("sample_changed_asset_064" !in requested)
     }
 
