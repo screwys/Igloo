@@ -614,7 +614,12 @@ func (s *Server) archiveBookmarkCombined(ctx context.Context, tweetID, archivePa
 	}
 	safeName := sanitizeArchiveName(account + " " + label)
 
-	err := s.cfg.Storage.MediaExecutor().Run(ctx, storage.MediaLaneBulkForeground, func() error {
+	// Archive copies are short local copies, so they skip the media disk slot
+	// that downloads hold for their whole network transfer. The lock keeps
+	// concurrent bookmarks from choosing the same file number.
+	err := func() error {
+		s.bookmarkArchiveMu.Lock()
+		defer s.bookmarkArchiveMu.Unlock()
 		if err := ensureArchivePath(archivePath); err != nil {
 			return fmt.Errorf("prepare archive path: %w", err)
 		}
@@ -672,7 +677,7 @@ func (s *Server) archiveBookmarkCombined(ctx context.Context, tweetID, archivePa
 			return fmt.Errorf("archived %d of %d slides: %w", copied, len(allSlides), copyErr)
 		}
 		return nil
-	})
+	}()
 	if err != nil {
 		return err
 	}

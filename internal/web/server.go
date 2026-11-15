@@ -63,6 +63,8 @@ type Server struct {
 	androidSyncAssetServeSemaphore chan struct{}
 	youtubeStreamsMu               sync.Mutex
 	youtubeStreams                 map[string]*youtubeStreamSession
+
+	bookmarkArchiveMu sync.Mutex
 }
 
 func NewServer(database *db.DB, cfg *config.Config, workers *worker.Manager, staticV func(string) string) http.Handler {
