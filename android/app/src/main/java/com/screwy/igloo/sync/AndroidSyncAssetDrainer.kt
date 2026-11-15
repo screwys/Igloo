@@ -32,6 +32,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import io.ktor.http.ContentType
@@ -62,10 +63,11 @@ internal class AndroidSyncAssetDrainer(
         var verifiedExisting = 0
         var deferred = 0
         var stale = false
+        val serverUnavailable = AtomicBoolean(false)
         var promoted = false
         val claimableBeforeMs = nowMsProvider()
         try {
-            while (!stale) {
+            while (!stale && !serverUnavailable.get()) {
                 val assets =
                     dao.claimableAssets(
                         nowMs = claimableBeforeMs,
@@ -90,13 +92,23 @@ internal class AndroidSyncAssetDrainer(
                     val packWorker =
                         launch(Dispatchers.IO) {
                             for (batch in packAssets.boundedPackBatches()) {
-                                downloadPack(batch).forEach { results.send(it) }
+                                if (serverUnavailable.get()) break
+                                downloadPack(batch).forEach {
+                                    if (it == DrainResult.ServerUnavailable) serverUnavailable.set(true)
+                                    results.send(it)
+                                }
                             }
                         }
                     val workers =
                         List(ASSET_WORKER_COUNT) {
                             launch(Dispatchers.IO) {
-                                for (asset in work) results.send(downloadOrVerify(asset))
+                                for (asset in work) {
+                                    // The rest would fail the same way; they stay claimable.
+                                    if (serverUnavailable.get()) continue
+                                    val result = downloadOrVerify(asset)
+                                    if (result == DrainResult.ServerUnavailable) serverUnavailable.set(true)
+                                    results.send(result)
+                                }
                             }
                         }
                     val closer = launch {
@@ -109,7 +121,7 @@ internal class AndroidSyncAssetDrainer(
                         when (result) {
                             DrainResult.Downloaded -> downloaded++
                             DrainResult.VerifiedExisting -> verifiedExisting++
-                            DrainResult.Deferred -> deferred++
+                            DrainResult.Deferred, DrainResult.ServerUnavailable -> deferred++
                             DrainResult.AssetChanged -> stale = true
                         }
                     }
@@ -219,14 +231,12 @@ internal class AndroidSyncAssetDrainer(
                             )
                             defer(asset, changed = error.isAssetChanged)
                         }
-                        408,
-                        429 -> defer(asset)
                         416 -> {
                             partFile.delete()
                             defer(asset)
                         }
-                        in 500..599 -> defer(asset)
-                        !in 200..299 -> defer(asset)
+                        500 -> defer(asset)
+                        !in 200..299 -> defer(asset, serverUnavailable = true)
                         else -> {
                             if (status == 206) {
                                 val contentRange = response.headers[HttpHeaders.ContentRange].orEmpty()
@@ -265,8 +275,9 @@ internal class AndroidSyncAssetDrainer(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (e is IOException || e.isLikelyTransportFailure()) reachability.downgrade()
-            return defer(asset)
+            val transport = e is IOException || e.isLikelyTransportFailure()
+            if (transport) reachability.downgrade()
+            return defer(asset, serverUnavailable = transport)
         }
     }
 
@@ -311,7 +322,9 @@ internal class AndroidSyncAssetDrainer(
                                 statusCode = status,
                                 body = response.bodyAsText(),
                             ).isAssetChanged
-                    for (asset in incomplete) results += defer(asset, changed)
+                    for (asset in incomplete) {
+                        results += defer(asset, changed, serverUnavailable = status != 409 && status != 500)
+                    }
                     return@execute
                 }
                 val channel = response.bodyAsChannel()
@@ -354,8 +367,11 @@ internal class AndroidSyncAssetDrainer(
             throw e
         } catch (e: Exception) {
             incomplete.forEach { partFileFor(it).delete() }
-            if (e is IOException || e.isLikelyTransportFailure()) reachability.downgrade()
-            for (asset in incomplete) results += defer(asset, changed = e is IllegalArgumentException)
+            val transport = e is IOException || e.isLikelyTransportFailure()
+            if (transport) reachability.downgrade()
+            for (asset in incomplete) {
+                results += defer(asset, changed = e is IllegalArgumentException, serverUnavailable = transport)
+            }
         }
         return results
     }
@@ -394,9 +410,17 @@ internal class AndroidSyncAssetDrainer(
         }
     }
 
-    private suspend fun defer(asset: AndroidSyncAssetEntity, changed: Boolean = false): DrainResult {
+    private suspend fun defer(
+        asset: AndroidSyncAssetEntity,
+        changed: Boolean = false,
+        serverUnavailable: Boolean = false,
+    ): DrainResult {
         dao.deferAsset(asset.assetId, asset.revision, nowMsProvider() + ASSET_RETRY_MS)
-        return if (changed) DrainResult.AssetChanged else DrainResult.Deferred
+        return when {
+            changed -> DrainResult.AssetChanged
+            serverUnavailable -> DrainResult.ServerUnavailable
+            else -> DrainResult.Deferred
+        }
     }
 
     private suspend fun copyAssetBodyToFile(
@@ -445,6 +469,9 @@ internal class AndroidSyncAssetDrainer(
         data object Downloaded : DrainResult
 
         data object Deferred : DrainResult
+
+        /** The failure is not about this asset, so the pass stops instead of trying the rest. */
+        data object ServerUnavailable : DrainResult
 
         data object AssetChanged : DrainResult
     }
