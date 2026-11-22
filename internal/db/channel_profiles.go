@@ -12,6 +12,8 @@ import (
 
 // UpsertChannelProfile stores profile metadata only. Normal fetched identity
 // completion, including avatar/banner publication, is owned by profile_jobs.
+// fxtwitter intermittently omits about_account, so a fetch without a region
+// keeps the stored region and the account details read alongside it.
 func (db *DB) UpsertChannelProfile(profile model.ChannelProfile) error {
 	if strings.TrimSpace(profile.ChannelID) == "" {
 		return fmt.Errorf("UpsertChannelProfile: empty channel_id")
@@ -48,8 +50,9 @@ func upsertChannelProfileTx(tx *sql.Tx, profile model.ChannelProfile) error {
 			verified = excluded.verified,
 			verified_type = excluded.verified_type,
 			protected = excluded.protected,
-			account_region = excluded.account_region,
-			account_details_json = excluded.account_details_json,
+			account_region = COALESCE(excluded.account_region, channel_profiles.account_region),
+			account_details_json = CASE WHEN excluded.account_region IS NULL AND channel_profiles.account_region IS NOT NULL
+				THEN channel_profiles.account_details_json ELSE excluded.account_details_json END,
 			observed_at_ms = GREATEST(channel_profiles.observed_at_ms, excluded.observed_at_ms),
 			fetched_at = GREATEST(channel_profiles.fetched_at, excluded.fetched_at),
 			tombstone = excluded.tombstone
