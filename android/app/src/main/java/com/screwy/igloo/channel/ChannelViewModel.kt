@@ -49,6 +49,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import io.ktor.client.HttpClient
+import io.ktor.client.request.post
+import io.ktor.http.encodeURLPathPart
 
 /**
  * Channel page state holder.
@@ -70,7 +74,8 @@ class ChannelViewModel(
     private val scheduler: SyncCoordinator,
     private val uiEffects: UiEffects,
     private val reachability: Reachability,
-    baseUrlProvider: ServerBaseUrlProvider,
+    private val baseUrlProvider: ServerBaseUrlProvider,
+    private val client: HttpClient,
 ) : ViewModel() {
 
     data class ChannelStoryStatus(
@@ -225,6 +230,15 @@ class ChannelViewModel(
         viewModelScope.launch {
             if (db.channelDao().getById(channelId) == null) {
                 scheduler.triggerAll()
+            }
+        }
+        viewModelScope.launch {
+            // Opening a profile refreshes it on the server once it is stale.
+            try {
+                client.post(baseUrlProvider.baseUrl() +
+                    "/api/profiles/${channelId.encodeURLPathPart()}/opened")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
             }
         }
     }

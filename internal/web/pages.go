@@ -725,6 +725,9 @@ func (s *Server) handlePageChannel(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	section := normalizeChannelVideoSection(r.URL.Query().Get("section"))
 	perPage := 40
+	if channelIDRe.MatchString(channelID) {
+		s.observeOpenedProfile(channelID)
+	}
 
 	channel, err := s.db.GetChannel(channelID)
 	var profile *model.ChannelProfile

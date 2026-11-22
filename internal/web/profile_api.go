@@ -1,6 +1,7 @@
 package web
 
 import (
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -13,6 +14,28 @@ var channelIDRe = regexp.MustCompile(`^(twitter|youtube|tiktok|instagram)_[A-Za-
 
 func (s *Server) registerProfileAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/profile-card/{channelID}", s.handleProfileCard)
+	mux.HandleFunc("POST /api/profiles/{channelID}/opened", s.handleProfileOpened)
+}
+
+func (s *Server) handleProfileOpened(w http.ResponseWriter, r *http.Request) {
+	channelID := canonicalProfileChannelID(r.PathValue("channelID"))
+	if !channelIDRe.MatchString(channelID) {
+		http.Error(w, "invalid channel_id", http.StatusBadRequest)
+		return
+	}
+	s.observeOpenedProfile(channelID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// observeOpenedProfile refreshes a stale profile the user opened.
+func (s *Server) observeOpenedProfile(channelID string) {
+	if err := s.db.ObserveOpenedProfile(channelID); err != nil {
+		slog.Warn("ObserveOpenedProfile", "channel", channelID, "err", err)
+		return
+	}
+	if s.workers != nil {
+		s.workers.KickProfileJobs()
+	}
 }
 
 // Profile discovery and refresh belong to the durable job queue, never hover.

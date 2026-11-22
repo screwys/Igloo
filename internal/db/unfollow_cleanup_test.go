@@ -177,13 +177,13 @@ func TestUnfollowCollectsOnlyUnreferencedXContent(t *testing.T) {
 	}
 	if err := d.WithWrite(func(tx *sql.Tx) error {
 		return observeProfileTx(tx, profileObservation{
-			channelID: dropped, platform: "twitter", handle: "sample_dropped", observedAt: 101,
+			channelID: dropped, platform: "twitter", handle: "sample_dropped", opened: true, observedAt: 101,
 		})
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if got := testRowCount(t, d, `SELECT COUNT(*) FROM profile_jobs WHERE channel_id = $1 AND requested_revision > completed_revision`, dropped); got != 1 {
-		t.Fatalf("later identity observation pending work = %d, want 1", got)
+		t.Fatalf("opened profile pending work = %d, want 1", got)
 	}
 
 	if _, err := d.MutateFollow(kept, "clear", 200); err != nil {

@@ -44,6 +44,7 @@ type profileObservation struct {
 	verified        bool
 	profileMetadata bool
 	identityOnly    bool
+	opened          bool
 	avatarURL       string
 	observedAt      int64
 }
@@ -57,6 +58,7 @@ type profileObservationState struct {
 	fetchedAt   int64
 	failedAt    int64
 	tombstone   bool
+	followed    bool
 	requested   int64
 	completed   int64
 	hasJob      bool
@@ -65,6 +67,17 @@ type profileObservationState struct {
 func observeChannelProfileTx(tx *sql.Tx, channel model.Channel, observedAt int64, identityOnly bool) error {
 	applyChannelIDDefaults(&channel)
 	channel.Platform = detectPlatform(channel.Platform, channel.URL)
+	return observeProfileTx(tx, profileObservation{
+		channelID:    channel.ChannelID,
+		platform:     channel.Platform,
+		handle:       channelObservationHandle(channel),
+		displayName:  strings.TrimSpace(channel.DisplayName),
+		observedAt:   observedAt,
+		identityOnly: identityOnly,
+	})
+}
+
+func channelObservationHandle(channel model.Channel) string {
 	handle := strings.TrimSpace(channel.Handle)
 	if handle == "" {
 		switch channel.Platform {
@@ -80,13 +93,25 @@ func observeChannelProfileTx(tx *sql.Tx, channel model.Channel, observedAt int64
 			}
 		}
 	}
-	return observeProfileTx(tx, profileObservation{
-		channelID:    channel.ChannelID,
-		platform:     channel.Platform,
-		handle:       handle,
-		displayName:  strings.TrimSpace(channel.DisplayName),
-		observedAt:   observedAt,
-		identityOnly: identityOnly,
+	return handle
+}
+
+// ObserveOpenedProfile records that the user opened a profile, which refreshes
+// it once its last check is stale even when the account is not followed.
+func (db *DB) ObserveOpenedProfile(channelID string) error {
+	if db == nil {
+		return nil
+	}
+	channel := model.Channel{ChannelID: strings.TrimSpace(channelID)}
+	applyChannelIDDefaults(&channel)
+	return db.WithWrite(func(tx *sql.Tx) error {
+		return observeProfileTx(tx, profileObservation{
+			channelID:  channel.ChannelID,
+			platform:   channel.Platform,
+			handle:     channelObservationHandle(channel),
+			opened:     true,
+			observedAt: time.Now().UnixMilli(),
+		})
 	})
 }
 
@@ -292,9 +317,12 @@ func profileObservationDecision(state profileObservationState, observation profi
 		return currentObservation, true
 	}
 
+	// Passing sightings in timelines refresh only followed accounts; others
+	// refresh when opened or when their visible identity changes.
 	pending := state.requested > state.completed
 	checkedAt := max(state.fetchedAt, state.failedAt)
-	stale := checkedAt == 0 || observation.observedAt-checkedAt >= profileObservationRefreshInterval.Milliseconds()
+	stale := (state.followed || observation.opened) &&
+		(checkedAt == 0 || observation.observedAt-checkedAt >= profileObservationRefreshInterval.Milliseconds())
 	return currentObservation, !pending && (visibleChanged || stale)
 }
 
@@ -309,7 +337,8 @@ func readProfileObservationStateTx(tx *sql.Tx, channelID string) (profileObserva
 		       CASE WHEN pj.requested_revision = pj.completed_revision AND pj.last_error != ''
 		            THEN pj.updated_at_ms ELSE 0 END,
 		       COALESCE(pj.requested_revision, 0), COALESCE(pj.completed_revision, 0),
-		       CASE WHEN pj.channel_id IS NULL THEN 0 ELSE 1 END
+		       CASE WHEN pj.channel_id IS NULL THEN 0 ELSE 1 END,
+		       EXISTS (SELECT 1 FROM channel_follows cf WHERE cf.channel_id = cp.channel_id)
 		FROM channel_profiles cp
 		LEFT JOIN profile_jobs pj ON pj.channel_id = cp.channel_id
 		LEFT JOIN assets a
@@ -322,7 +351,7 @@ func readProfileObservationStateTx(tx *sql.Tx, channelID string) (profileObserva
 	`, channelID).Scan(
 		&state.handle, &state.displayName, &state.avatarURL,
 		&state.identityAt, &state.fetchedAt, &tombstone, &state.failedAt,
-		&state.requested, &state.completed, &state.hasJob,
+		&state.requested, &state.completed, &state.hasJob, &state.followed,
 	)
 	if err == sql.ErrNoRows {
 		return state, nil

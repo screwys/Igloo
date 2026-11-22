@@ -109,6 +109,7 @@ val iglooFeatureModule = module {
             uiEffects = get(),
             reachability = get(),
             baseUrlProvider = get(),
+            client = get(),
         )
     }
     viewModel { (videoId: String) ->
