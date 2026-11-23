@@ -436,6 +436,8 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
     '<button class="feed-media-overlay-nav prev" type="button" aria-label="' + t('action_previous', 'Previous') + '">' + materialIconMarkup('KeyboardArrowLeft') + '</button>' +
     '<div class="feed-media-overlay-media"></div>' +
     '<button class="feed-media-overlay-nav next" type="button" aria-label="' + t('action_next', 'Next') + '">' + materialIconMarkup('KeyboardArrowRight') + '</button>' +
+    '<div class="feed-media-overlay-counter" hidden></div>' +
+    '<div class="feed-media-overlay-picker" hidden></div>' +
     '<div class="feed-media-overlay-bottom"></div>' +
     '</div>' +
     '<div class="feed-media-overlay-right" id="feed-media-post-panel">' +
@@ -458,6 +460,8 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
   const prev = overlay.querySelector('.feed-media-overlay-nav.prev')
   const next = overlay.querySelector('.feed-media-overlay-nav.next')
   const bottom = overlay.querySelector('.feed-media-overlay-bottom')
+  const counter = overlay.querySelector('.feed-media-overlay-counter')
+  const picker = overlay.querySelector('.feed-media-overlay-picker')
   const right = overlay.querySelector('.feed-media-overlay-right')
   const panelToggle = overlay.querySelector('.feed-media-overlay-panel-toggle')
   const viewPost = overlay.querySelector('[data-feed-overlay-view-post]')
@@ -962,7 +966,35 @@ export function openMediaOverlay(root, triggerEl, spaceSurface) {
     const total = media.kind === 'video' ? 1 : (media.kind === 'mixed' && media.slides ? media.slides.length : Math.max(1, (media.urls || []).length))
     if (prev) prev.style.display = total > 1 ? '' : 'none'
     if (next) next.style.display = total > 1 ? '' : 'none'
+    if (!picker.hidden) {
+      counter.textContent = (currentIndex + 1) + ' / ' + picker.children.length
+      Array.from(picker.children).forEach(function (thumb, index) {
+        if (index === currentIndex) thumb.setAttribute('aria-current', 'true')
+        else thumb.removeAttribute('aria-current')
+      })
+      picker.children[currentIndex].scrollIntoView({ block: 'nearest', inline: 'center' })
+    }
   }
+
+  // Multi-image posts can hold up to 20 images; thumbnails jump straight to one.
+  const pickerSlides = media.kind === 'mixed' && media.slides ? media.slides : []
+  counter.hidden = picker.hidden = pickerSlides.length < 2
+  pickerSlides.forEach(function (slide, index) {
+    const thumb = document.createElement('button')
+    thumb.type = 'button'
+    thumb.className = 'feed-media-overlay-thumb'
+    thumb.setAttribute('aria-label', t('feed_post_media_index', 'Post media %d').replace('%d', String(index + 1)))
+    const img = document.createElement('img')
+    img.alt = ''
+    img.src = slide.posterUrl || slide.url
+    thumb.appendChild(img)
+    thumb.addEventListener('click', function () {
+      currentIndex = index
+      render()
+    })
+    picker.appendChild(thumb)
+  })
+  initFeedImages(picker)
 
   function step(dir) {
     const total = media.kind === 'mixed' && media.slides ? media.slides.length : Math.max(1, (media.urls || []).length)

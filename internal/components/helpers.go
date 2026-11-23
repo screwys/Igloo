@@ -209,6 +209,22 @@ func feedSingleMediaStyle(media model.MediaRef) string {
 		media.Width, media.Width, media.Height, media.Width, media.Height)
 }
 
+// feedMediaSliced reports photos cut from one picture: they share a height and
+// are on average much narrower than tall, so they read best stitched side by side.
+func feedMediaSliced(media []model.MediaRef) bool {
+	if len(media) < 2 {
+		return false
+	}
+	minHeight, maxHeight, width := media[0].Height, media[0].Height, 0
+	for _, m := range media {
+		if m.Type != "photo" || m.Width <= 0 || m.Height <= 0 {
+			return false
+		}
+		minHeight, maxHeight, width = min(minHeight, m.Height), max(maxHeight, m.Height), width+m.Width
+	}
+	return maxHeight-minHeight <= 1 && float64(width) < 0.4*float64(len(media)*maxHeight)
+}
+
 // Adding media extends the row; it must not shrink the other items to fit.
 func feedMediaRowStyle(media []model.MediaRef) string {
 	if len(media) < 2 {
@@ -233,7 +249,7 @@ func feedMediaRowStyle(media []model.MediaRef) string {
 		return ""
 	}
 	var style strings.Builder
-	style.WriteString("grid-template-columns:")
+	style.WriteString("--feed-row-columns:")
 	// Grid weights below a total of 1 leave part of the row unused.
 	for _, ratio := range ratios {
 		fmt.Fprintf(&style, " minmax(0, %.6ffr)", ratio/min(totalRatio, 1))

@@ -586,7 +586,7 @@ templ feedMedia(p PageProps, item model.FeedItem, deferMedia bool, imageAlt stri
 				/>
 			</div>
 		} else if mediaCount > 1 {
-			@feedMediaGrid(p, mediaCount, feedMediaRowStyle(item.Media)) {
+			@feedMediaGrid(p, mediaCount, feedMediaRowStyle(item.Media), feedMediaSliced(item.Media)) {
 					for i, m := range item.Media {
 						if feedMediaURLAt(item.MediaSlideURLs, i) != "" {
 							@feedMediaTile(p, i, m, mediaCount, item.MediaStreamURL, item.MediaPreviewURL, feedMediaURLAt(item.MediaSlideURLs, i), deferMedia, imageIndexAlt)
@@ -616,8 +616,13 @@ templ feedPendingMediaTile(p PageProps) {
 	</div>
 }
 
-templ feedMediaGrid(p PageProps, count int, rowStyle string) {
-	<div class="feed-media-row-container">
+templ feedMediaGrid(p PageProps, count int, rowStyle string, sliced bool) {
+	<div
+		class="feed-media-row-container"
+		if sliced {
+			data-feed-media-fitted
+		}
+	>
 		<div class="feed-media-wrap feed-media-wrap-grid" data-feed-media-scroll>
 			<div class={ fmt.Sprintf("feed-media-grid count-%d", count), templ.KV("feed-media-row", rowStyle != "") } style={ rowStyle }>
 				{ children... }
@@ -625,6 +630,8 @@ templ feedMediaGrid(p PageProps, count int, rowStyle string) {
 		</div>
 		<button type="button" class="feed-media-nav feed-media-nav-prev" data-feed-media-step="-1" aria-label={ L(p, "action_previous", "Previous") } hidden>‹</button>
 		<button type="button" class="feed-media-nav feed-media-nav-next" data-feed-media-step="1" aria-label={ L(p, "action_next", "Next") } hidden>›</button>
+		<span class="feed-media-counter" data-feed-media-counter hidden></span>
+		<button type="button" class="feed-media-fit" data-feed-media-fit-toggle hidden></button>
 	</div>
 }
 

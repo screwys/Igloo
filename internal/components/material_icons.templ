@@ -64,6 +64,10 @@ templ MaterialIcon(name string, className string) {
 				<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path>
 			case "FavoriteBorder":
 				<path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z"></path>
+			case "ZoomInMap":
+				<path d="M9 9V3H7v2.59L3.91 2.5 2.5 3.91 5.59 7H3v2zm12 0V7h-2.59l3.09-3.09-1.41-1.41L17 5.59V3h-2v6zM3 15v2h2.59L2.5 20.09l1.41 1.41L7 18.41V21h2v-6zm12 0v6h2v-2.59l3.09 3.09 1.41-1.41L18.41 17H21v-2z"></path>
+			case "ZoomOutMap":
+				<path d="M15 3l2.3 2.3-2.89 2.87 1.42 1.42L18.7 6.7 21 9V3zM3 9l2.3-2.3 2.87 2.89 1.42-1.42L6.7 5.3 9 3H3zm6 12l-2.3-2.3 2.89-2.87-1.42-1.42L5.3 17.3 3 15v6zm12-6l-2.3 2.3-2.87-2.89-1.42 1.42 2.89 2.87L15 21h6z"></path>
 			case "FitScreen":
 				<path d="M17 4h3c1.1 0 2 .9 2 2v2h-2V6h-3V4zM4 8V6h3V4H4c-1.1 0-2 .9-2 2v2h2zm16 8v2h-3v2h3c1.1 0 2-.9 2-2v-2h-2zM7 18H4v-2H2v2c0 1.1.9 2 2 2h3v-2zM18 8H6v8h12V8z"></path>
 			case "CinemaExpand":
@@ -176,7 +180,7 @@ templ MaterialIconPalette() {
 	<div id="material-icon-palette" class="material-icon-palette" aria-hidden="true">
 		for _, name := range []string{
 			"PhotoLibrary", "Panorama", "Reply", "Smartphone", "Info", "Warning",
-			"Add", "ArrowBack", "ArrowDropDown", "ArrowUpward", "Bookmark", "BookmarkBorder", "ChatBubble", "Check", "Close", "ClosedCaption", "Delete", "Download", "DynamicFeed", "Explore", "Favorite", "FavoriteBorder", "FilterAlt", "FitScreen", "Forward10", "Fullscreen", "FullscreenExit", "GridView", "KeyboardArrowDown", "KeyboardArrowLeft", "KeyboardArrowRight", "KeyboardArrowUp", "KeyboardDoubleArrowLeft", "KeyboardDoubleArrowRight", "Language", "Link", "Menu", "MoreHoriz", "MoreVert", "OpenInFull", "OpenInNew", "Pause", "People", "Person", "PersonRemove", "PictureInPictureAlt", "PlayArrow", "PlayCircle", "PlayCircleOutline", "PushPin", "Refresh", "Remove", "Repeat", "Replay10", "Search", "Settings", "Share", "Speed", "Star", "StarBorder", "Subject", "ThumbUp", "Translate", "Tune", "VerticalSplit", "VideoLibrary", "Visibility", "VolumeDown", "VolumeOff", "VolumeUp", "WebStories",
+			"Add", "ArrowBack", "ArrowDropDown", "ArrowUpward", "Bookmark", "BookmarkBorder", "ChatBubble", "Check", "Close", "ClosedCaption", "Delete", "Download", "DynamicFeed", "Explore", "Favorite", "FavoriteBorder", "FilterAlt", "FitScreen", "Forward10", "Fullscreen", "FullscreenExit", "GridView", "KeyboardArrowDown", "KeyboardArrowLeft", "KeyboardArrowRight", "KeyboardArrowUp", "KeyboardDoubleArrowLeft", "KeyboardDoubleArrowRight", "Language", "Link", "Menu", "MoreHoriz", "MoreVert", "OpenInFull", "OpenInNew", "Pause", "People", "Person", "PersonRemove", "PictureInPictureAlt", "PlayArrow", "PlayCircle", "PlayCircleOutline", "PushPin", "Refresh", "Remove", "Repeat", "Replay10", "Search", "Settings", "Share", "Speed", "Star", "StarBorder", "Subject", "ThumbUp", "Translate", "Tune", "VerticalSplit", "VideoLibrary", "Visibility", "VolumeDown", "VolumeOff", "VolumeUp", "WebStories", "ZoomInMap", "ZoomOutMap",
 		} {
 			@MaterialIcon(name, "")
 		}
