@@ -555,9 +555,8 @@ func galleryDLArgs(limit int, rawURLs ...string) []string {
 	if limit <= 0 {
 		limit = defaultTimelineLimit
 	}
-	// --range counts media files, so a timeline of text posts would page
-	// back for months; --post-range also stops each timeline at its newest
-	// posts.
+	// --post-range counts posts. --range would count media files across the
+	// run and cut the last post's remaining images.
 	args := []string{
 		"--dump-json",
 		"--simulate",
@@ -568,7 +567,6 @@ func galleryDLArgs(limit int, rawURLs ...string) []string {
 		"-o", "extractor.twitter.retweets=true",
 		"-o", "extractor.twitter.quoted=true",
 		"-o", "extractor.twitter.articles=meta,html,cover,media",
-		"--range", "1-" + strconv.Itoa(limit),
 		"--post-range", "1-" + strconv.Itoa(limit),
 	}
 	return append(args, rawURLs...)
