@@ -273,7 +273,7 @@ func instagramDumpArgs(limit int, cookiesFile, rawURL string, detailedProfile bo
 	args := []string{
 		"--dump-json",
 		"--simulate",
-		"--range", "1-" + strconv.Itoa(limit),
+		"--post-range", "1-" + strconv.Itoa(limit),
 	}
 	strategy := "search,web"
 	if detailedProfile {

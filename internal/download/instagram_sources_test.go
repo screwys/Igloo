@@ -280,8 +280,8 @@ func TestParseInstagramTaggedDumpRejectsInvalidOwnerHandle(t *testing.T) {
 
 func TestInstagramTaggedArgsUseConfiguredLimit(t *testing.T) {
 	args := instagramTaggedArgs(30, "/tmp/cookies.txt", "https://www.instagram.com/followed.one/tagged/")
-	if !containsString(args, "--range") || !containsString(args, "1-30") {
-		t.Fatalf("args should use configured generic range: %#v", args)
+	if !containsString(args, "--post-range") || !containsString(args, "1-30") || containsString(args, "--range") {
+		t.Fatalf("args should limit posts, not files: %#v", args)
 	}
 	if !containsString(args, "--cookies") || !containsString(args, "/tmp/cookies.txt") {
 		t.Fatalf("args should preserve cookies: %#v", args)
