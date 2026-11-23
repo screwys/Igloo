@@ -3,8 +3,9 @@
 
 package com.screwy.igloo.ui.component
 
+import android.annotation.SuppressLint
 import android.content.Context
-import android.animation.ObjectAnimator
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -14,7 +15,6 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.dp
+import androidx.core.view.doOnLayout
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -47,6 +48,8 @@ import com.screwy.igloo.media.MediaResolvers
 import com.screwy.igloo.media.MediaUri
 import com.screwy.igloo.net.IglooHostProvider
 import com.screwy.igloo.net.auth.AuthTokenProvider
+import kotlin.math.abs
+import kotlin.math.sign
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
@@ -1079,6 +1082,20 @@ internal class NativeFeedViewHolder(
                     heightPx = rowHeight,
                 )
             }
+            val rowWidth = dimensions.sumOf { it.widthPx } + gap * (displayCells.size - 1)
+            // Rows wider than the post show one image at a time with the next peeking in.
+            val carousel = rowWidth > gridWidth
+            val slotWidth = (gridWidth - dp(48)).coerceAtLeast(1)
+            val carouselHeight =
+                minOf(dp(NativeSingleMediaMaxHeightDp), (slotWidth / widestAspectRatio).toInt()).coerceAtLeast(1)
+            val imageDimensions = if (carousel) {
+                cellAspectRatios.map { ratio ->
+                    NativeMediaDimensions(
+                        widthPx = minOf(slotWidth, (carouselHeight * ratio).toInt()).coerceAtLeast(1),
+                        heightPx = carouselHeight,
+                    )
+                }
+            } else dimensions
             fun frameFor(
                 index: Int,
                 cell: FeedMediaCellModel,
@@ -1105,38 +1122,40 @@ internal class NativeFeedViewHolder(
                 return frame
             }
 
-            val rowWidth = dimensions.sumOf { it.widthPx } + gap * (displayCells.size - 1)
-            val slideStarts = buildList(dimensions.size) {
-                var start = 0
-                dimensions.forEachIndexed { index, dimension ->
-                    add(start)
-                    start += dimension.widthPx + if (index < dimensions.lastIndex) gap else 0
-                }
-            }
             val rowLayout = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
             displayCells.forEachIndexed { index, cell ->
                 rowLayout.addView(
-                    frameFor(index, cell, dimensions[index]),
+                    frameFor(index, cell, imageDimensions[index]),
                     LinearLayout.LayoutParams(dimensions[index].widthPx, rowHeight)
                         .apply { if (index > 0) marginStart = gap },
                 )
             }
-            val scroller = HorizontalScrollView(context).apply {
+            val scroller = MediaRowScrollView(context).apply {
                 isHorizontalScrollBarEnabled = false
                 layoutDirection = View.LAYOUT_DIRECTION_LTR
                 addView(rowLayout, ViewGroup.LayoutParams(rowWidth, rowHeight))
             }
             val frame = FrameLayout(context)
             frame.addView(scroller, FrameLayout.LayoutParams(gridWidth, rowHeight))
-            if (rowWidth > gridWidth) {
-                var scrollAnimation: ObjectAnimator? = null
+            val frameParams = LinearLayout.LayoutParams(gridWidth, rowHeight)
+            if (carousel) {
+                // Repeated steps continue from the pending destination, not a midway position.
                 var scrollTarget: Int? = null
+                var fitted = grid.sliced
+                var contentWidth = rowWidth
+                val tiles = (0 until rowLayout.childCount).map(rowLayout::getChildAt)
                 scroller.setOnTouchListener { _, event ->
-                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                        scrollAnimation?.cancel()
-                        scrollTarget = null
-                    }
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) scrollTarget = null
                     false
+                }
+                // Each step focuses the neighbouring image at the left edge. Going back
+                // from a partly scrolled image first realigns that image.
+                fun stepTarget(from: Int, direction: Int): Int {
+                    val end = (contentWidth - gridWidth).coerceAtLeast(0)
+                    val current = tiles.indexOfLast { it.left <= from + 1 }.coerceAtLeast(0)
+                    val index =
+                        if (direction < 0 && from > tiles[current].left + 1) current else current + direction
+                    return minOf(end, tiles.getOrNull(index.coerceAtLeast(0))?.left ?: end)
                 }
                 fun navigationButton(direction: Int): TextView = TextView(context).apply {
                     text = if (direction < 0) "‹" else "›"
@@ -1149,40 +1168,94 @@ internal class NativeFeedViewHolder(
                     )
                     isFocusable = true
                     setOnClickListener {
-                        val distance = rowWidth - gridWidth
-                        val currentPosition = scrollTarget ?: scroller.scrollX
-                        val nextPosition = if (direction > 0) {
-                            slideStarts.firstOrNull { it > currentPosition } ?: distance
-                        } else {
-                            slideStarts.lastOrNull { it < currentPosition } ?: 0
-                        }
-                        val position = nextPosition.coerceIn(0, distance)
+                        val position = stepTarget(scrollTarget ?: scroller.scrollX, direction)
                         scrollTarget = position
-                        scrollAnimation?.cancel()
-                        scrollAnimation = ObjectAnimator.ofInt(scroller, "scrollX", position).apply {
-                            duration = 320
-                            interpolator = DecelerateInterpolator()
-                            start()
-                        }
+                        scroller.smoothScrollTo(position, 0)
                     }
                 }
                 val previous = navigationButton(-1)
                 val next = navigationButton(1)
+                val counter = TextView(context).apply {
+                    textSize = 12f
+                    setTextColor(Color.WHITE)
+                    background = roundedFill(Color.argb(165, 20, 20, 20), dp(999))
+                    setPadding(dp(8), dp(2), dp(8), dp(2))
+                }
+                val fit = ImageView(context).apply {
+                    scaleType = ImageView.ScaleType.CENTER
+                    imageTintList = ColorStateList.valueOf(Color.WHITE)
+                    background = roundedFill(Color.argb(165, 20, 20, 20), dp(16))
+                    isFocusable = true
+                }
                 frame.addView(previous, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.START or Gravity.CENTER_VERTICAL))
                 frame.addView(next, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.END or Gravity.CENTER_VERTICAL))
+                frame.addView(
+                    counter,
+                    FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END)
+                        .apply { setMargins(dp(6), dp(6), dp(6), dp(6)) },
+                )
+                frame.addView(
+                    fit,
+                    FrameLayout.LayoutParams(dp(32), dp(32), Gravity.BOTTOM or Gravity.END)
+                        .apply { setMargins(dp(6), dp(6), dp(6), dp(6)) },
+                )
                 fun updateNavigation() {
                     previous.isEnabled = scroller.scrollX > 0
-                    next.isEnabled = scroller.scrollX < rowWidth - gridWidth
+                    next.isEnabled = scroller.scrollX < contentWidth - gridWidth
                     previous.alpha = if (previous.isEnabled) 1f else 0.4f
                     next.alpha = if (next.isEnabled) 1f else 0.4f
+                    val index = tiles.indexOfFirst { (it.left + it.right) / 2 > scroller.scrollX }
+                    counter.text = "${if (index < 0) tiles.size else index + 1} / ${tiles.size}"
                 }
-                scroller.setOnScrollChangeListener { _, _, _, _, _ ->
+                // Fitting shrinks the whole row to the post width so sliced pictures read as one image.
+                fun applyFit() {
+                    val height = if (fitted) {
+                        ((gridWidth - gap * (tiles.size - 1)) / cellAspectRatios.sum()).toInt().coerceAtLeast(1)
+                    } else carouselHeight
+                    tiles.forEachIndexed { index, tile ->
+                        tile.layoutParams = (tile.layoutParams as LinearLayout.LayoutParams).apply {
+                            width = if (fitted) (height * cellAspectRatios[index]).toInt().coerceAtLeast(1) else slotWidth
+                            this.height = height
+                        }
+                    }
+                    contentWidth = if (fitted) gridWidth else slotWidth * tiles.size + gap * (tiles.size - 1)
+                    rowLayout.layoutParams = rowLayout.layoutParams.apply {
+                        width = contentWidth
+                        this.height = height
+                    }
+                    scroller.layoutParams = scroller.layoutParams.apply { this.height = height }
+                    frame.layoutParams = frameParams.apply { this.height = height }
+                    scrollTarget = null
+                    scroller.scrollTo(0, 0)
+                    listOf(previous, next, counter).forEach { it.visibility = if (fitted) View.GONE else View.VISIBLE }
+                    fit.setImageResource(if (fitted) R.drawable.ic_feed_zoom_out_map_24 else R.drawable.ic_feed_zoom_in_map_24)
+                    fit.contentDescription = context.getString(
+                        if (fitted) R.string.feed_media_show_one else R.string.feed_media_show_all,
+                    )
+                    fit.tooltipText = fit.contentDescription
+                    updateNavigation()
+                }
+                fit.setOnClickListener {
+                    fitted = !fitted
+                    applyFit()
+                }
+                scroller.setOnScrollChangeListener { _, scrollX, _, _, _ ->
+                    if (scrollX == scrollTarget) scrollTarget = null
                     updateNavigation()
                     (itemView.parent as? RecyclerView)?.let(inlineVideoManager::selectFrom)
                 }
-                updateNavigation()
+                scroller.snapTarget = { from, direction ->
+                    if (direction != 0) {
+                        stepTarget(from, direction)
+                    } else {
+                        val end = (contentWidth - gridWidth).coerceAtLeast(0)
+                        tiles.map { minOf(it.left, end) }.minBy { abs(it - from) }
+                    }
+                }
+                scroller.doOnLayout { updateNavigation() }
+                applyFit()
             }
-            container.addView(frame, LinearLayout.LayoutParams(gridWidth, rowHeight))
+            container.addView(frame, frameParams)
         }
         if (grid.taggedAccounts.isNotEmpty()) {
             container.addView(
@@ -1389,5 +1462,27 @@ internal class NativeFeedViewHolder(
             imageView.setImageDrawable(null)
             imageView.setBackgroundColor(getColors().surfaceVariant)
         }
+    }
+}
+
+/** Settles drags and flings on an image boundary so the row behaves like a pager. */
+private class MediaRowScrollView(context: Context) : HorizontalScrollView(context) {
+    var snapTarget: ((from: Int, direction: Int) -> Int)? = null
+    private var flung = false
+
+    override fun fling(velocityX: Int) {
+        val snap = snapTarget ?: return super.fling(velocityX)
+        flung = true
+        smoothScrollTo(snap(scrollX, velocityX.sign), 0)
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) flung = false
+        val handled = super.onTouchEvent(event)
+        val snap = snapTarget
+        val released = event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL
+        if (snap != null && released && !flung) smoothScrollTo(snap(scrollX, 0), 0)
+        return handled
     }
 }

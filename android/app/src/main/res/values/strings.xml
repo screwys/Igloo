@@ -299,6 +299,8 @@
     <string name="feed_empty_posts">No posts yet — pull to refresh</string>
     <string name="feed_empty_title">No posts</string>
     <string name="feed_hide_post">Hide post</string>
+    <string name="feed_media_show_all">Show all side by side</string>
+    <string name="feed_media_show_one">Show one at a time</string>
     <string name="feed_mute_confirm_body">This hides their posts from your feed. You can undo it later in Muted accounts.</string>
     <string name="feed_mute_confirm_title">Mute @%1$s?</string>
     <string name="feed_new_posts">New posts</string>

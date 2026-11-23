@@ -66,6 +66,15 @@ internal fun describeFeedMediaCells(rawJson: String?): List<FeedMediaCellDescrip
 
 internal const val FeedUnknownMediaAspectRatio: Float = 1f
 
+/** Photos cut from one picture share a height and are on average much narrower than tall. */
+internal fun feedMediaSliced(rawJson: String?): Boolean {
+    val media = parseFeedMediaDescriptors(rawJson)
+    if (media.size < 2 || media.any { it.type.lowercase() != "photo" }) return false
+    val widths = media.map { it.width?.takeIf { w -> w > 0 } ?: return false }
+    val heights = media.map { it.height?.takeIf { h -> h > 0 } ?: return false }
+    return heights.max() - heights.min() <= 1 && widths.sum() < 0.4f * media.size * heights.max()
+}
+
 internal fun buildFeedMediaSet(
     row: FeedRow,
     assetRows: List<AndroidSyncAssetEntity>,

@@ -13,6 +13,7 @@ data class FeedMediaGridModel(
     val cells: List<FeedMediaCellModel>,
     val inventoryLoaded: Boolean,
     val taggedAccounts: List<FeedTaggedAccount> = emptyList(),
+    val sliced: Boolean = false,
 ) {
     val mediaCount: Int
         get() = cells.size
@@ -40,6 +41,7 @@ internal fun buildFeedMediaGridModel(
         ownerId = ownerId,
         inventoryLoaded = true,
         taggedAccounts = parseFeedMediaTaggedAccounts(rawJson),
+        sliced = feedMediaSliced(rawJson),
         cells = descriptors.mapIndexed { index, descriptor ->
             val previewItem = previewItemsByIndex[index]
             FeedMediaCellModel(
@@ -71,6 +73,7 @@ internal fun fallbackFeedMediaGridModel(
         ownerId = ownerId,
         inventoryLoaded = false,
         taggedAccounts = parseFeedMediaTaggedAccounts(rawJson),
+        sliced = feedMediaSliced(rawJson),
         cells = describeFeedMediaCells(rawJson).map { descriptor ->
             FeedMediaCellModel(
                 descriptor = descriptor,

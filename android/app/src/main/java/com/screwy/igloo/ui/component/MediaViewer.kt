@@ -2,6 +2,7 @@ package com.screwy.igloo.ui.component
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.calculatePan
@@ -9,17 +10,29 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -27,10 +40,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -40,6 +55,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.MediaItem as Media3Item
@@ -47,10 +65,11 @@ import androidx.media3.common.Player
 import coil3.compose.AsyncImage
 import com.screwy.igloo.R
 import com.screwy.igloo.media.MediaUri
-import com.screwy.igloo.player.rememberIglooPlayer
 import com.screwy.igloo.player.PlayerOverlay
+import com.screwy.igloo.player.rememberIglooPlayer
 import com.screwy.igloo.ui.theme.iglooColors
 import kotlin.math.abs
+import kotlinx.coroutines.launch
 
 /** Shape for one media viewer page. */
 sealed class MediaItem {
@@ -103,6 +122,7 @@ fun MediaViewer(
     val initialPage = initialIndex.coerceIn(0, media.items.lastIndex)
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { media.items.size })
     var dragY by remember { mutableFloatStateOf(0f) }
+    val scope = rememberCoroutineScope()
 
     BackHandler(onBack = onDismiss)
 
@@ -127,32 +147,126 @@ fun MediaViewer(
                     )
                 },
     ) {
-        HorizontalPager(
-            state = pagerState,
-            beyondViewportPageCount = 1,
-            modifier = Modifier.fillMaxSize(),
-        ) { page ->
-            val item = media.items[page]
-            val active = pagerState.currentPage == page
-            when (item) {
-                is MediaItem.Image -> MediaImagePage(item)
-                is MediaItem.Video ->
-                    MediaVideoPage(
-                        streamUri = item.streamUri,
-                        posterUri = item.thumbnailUri,
-                        active = active,
-                        muted = false,
-                        loop = true,
-                        onDismiss = onDismiss,
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                HorizontalPager(
+                    state = pagerState,
+                    beyondViewportPageCount = 1,
+                    modifier = Modifier.fillMaxSize(),
+                ) { page ->
+                    val item = media.items[page]
+                    val active = pagerState.currentPage == page
+                    when (item) {
+                        is MediaItem.Image -> MediaImagePage(item)
+                        is MediaItem.Video ->
+                            MediaVideoPage(
+                                streamUri = item.streamUri,
+                                posterUri = item.thumbnailUri,
+                                active = active,
+                                muted = false,
+                                loop = true,
+                                onDismiss = onDismiss,
+                            )
+                        is MediaItem.Gif ->
+                            MediaVideoPage(
+                                streamUri = item.streamUri,
+                                posterUri = MediaUri.Missing,
+                                active = active,
+                                muted = true,
+                                loop = true,
+                            )
+                    }
+                }
+                if (media.items.size > 1) {
+                    Text(
+                        text = "${pagerState.currentPage + 1} / ${media.items.size}",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier =
+                            Modifier.align(Alignment.TopCenter)
+                                .statusBarsPadding()
+                                .padding(top = 8.dp)
+                                .background(Color.Black.copy(alpha = 0.65f), CircleShape)
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
                     )
-                is MediaItem.Gif ->
-                    MediaVideoPage(
-                        streamUri = item.streamUri,
-                        posterUri = MediaUri.Missing,
-                        active = active,
-                        muted = true,
-                        loop = true,
-                    )
+                }
+            }
+            if (media.items.size > 1) {
+                MediaThumbnailStrip(
+                    items = media.items,
+                    current = pagerState.currentPage,
+                    onSelect = { page -> scope.launch { pagerState.animateScrollToPage(page) } },
+                )
+            }
+        }
+    }
+}
+
+/** Posts can hold up to 20 images; thumbnails jump straight to one. */
+@Composable
+private fun MediaThumbnailStrip(
+    items: List<MediaItem>,
+    current: Int,
+    onSelect: (Int) -> Unit,
+) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(current) {
+        val layout = listState.layoutInfo
+        val shown = layout.visibleItemsInfo.any {
+            it.index == current && it.offset >= 0 && it.offset + it.size <= layout.viewportEndOffset
+        }
+        if (!shown) listState.animateScrollToItem((current - 2).coerceAtLeast(0))
+    }
+    val shape = RoundedCornerShape(6.dp)
+    val selectedColor = MaterialTheme.iglooColors.primary
+    LazyRow(
+        state = listState,
+        modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+        contentPadding = PaddingValues(horizontal = 12.dp),
+    ) {
+        itemsIndexed(items) { index, item ->
+            val isCurrent = index == current
+            val label = stringResource(R.string.feed_post_media_index, index + 1)
+            Box(
+                modifier =
+                    Modifier.size(48.dp)
+                        .clip(shape)
+                        .border(2.dp, if (isCurrent) selectedColor else Color.Transparent, shape)
+                        .alpha(if (isCurrent) 1f else 0.6f)
+                        .clickable { onSelect(index) }
+                        .semantics {
+                            contentDescription = label
+                            selected = isCurrent
+                        },
+                contentAlignment = Alignment.Center,
+            ) {
+                val uri = when (item) {
+                    is MediaItem.Image -> item.uri
+                    is MediaItem.Video -> item.thumbnailUri
+                    is MediaItem.Gif -> MediaUri.Missing
+                }
+                when (uri) {
+                    is MediaUri.Local,
+                    is MediaUri.Remote ->
+                        AsyncImage(
+                            model =
+                                rememberMediaImageModel(
+                                    uri = uri,
+                                    memoryCacheKey = mediaImageMemoryCacheKey(uri),
+                                    placeholderMemoryCacheKey = mediaImageMemoryCacheKey(uri),
+                                ),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    is MediaUri.Missing ->
+                        Icon(
+                            imageVector = if (item is MediaItem.Image) Icons.Default.BrokenImage else Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = MaterialTheme.iglooColors.onSurfaceFaint,
+                        )
+                }
             }
         }
     }
