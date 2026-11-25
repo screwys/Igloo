@@ -108,7 +108,7 @@ COPY requirements-runtime.txt /tmp/requirements-runtime.txt
 RUN python3 -m venv /opt/igloo-py \
     && /opt/igloo-py/bin/pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" \
     && grep -v ' @ ' /tmp/requirements-runtime.txt > /tmp/requirements-extra.txt \
-    && /opt/igloo-py/bin/pip install --no-cache-dir /tmp/yt-dlp.tar.gz /tmp/gallery-dl.tar.gz -r /tmp/requirements-extra.txt \
+    && /opt/igloo-py/bin/pip install --no-cache-dir "/tmp/yt-dlp.tar.gz[default,deno]" /tmp/gallery-dl.tar.gz -r /tmp/requirements-extra.txt \
     && /opt/igloo-py/bin/pip uninstall -y pip
 
 FROM runtime-base

@@ -15,5 +15,5 @@ test("runtime downloaders follow upstream HEAD", () => {
   for (const [name, url] of Object.entries(sources)) {
     assert.ok(dockerfile.includes(`ADD ${url} /tmp/${name}.tar.gz`));
   }
-  assert.ok(dockerfile.includes("pip install --no-cache-dir /tmp/yt-dlp.tar.gz /tmp/gallery-dl.tar.gz"));
+  assert.ok(dockerfile.includes('pip install --no-cache-dir "/tmp/yt-dlp.tar.gz[default,deno]" /tmp/gallery-dl.tar.gz'));
 });
