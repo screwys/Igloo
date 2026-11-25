@@ -5,15 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go/build/constraint"
-	"go/parser"
-	"go/token"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 )
 
@@ -26,16 +22,11 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: changed-go packages FILE... | nix-inputs BASE HEAD")
+		return fmt.Errorf("usage: changed-go packages FILES")
 	}
 	switch args[0] {
 	case "packages":
 		return packages(args[1:])
-	case "nix-inputs":
-		if len(args) != 3 {
-			return fmt.Errorf("nix-inputs requires base and head revisions")
-		}
-		return nixInputs(args[1], args[2])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -113,93 +104,4 @@ func packages(paths []string) error {
 		fmt.Println(pkg)
 	}
 	return nil
-}
-
-func nixInputs(base, head string) error {
-	module, err := command("go", "list", "-m", "-f", "{{.Path}}")
-	if err != nil {
-		return err
-	}
-	modulePath := strings.TrimSpace(string(module))
-	diff, err := command("git", "diff", "--name-status", "--no-renames", "-z", "--diff-filter=ACDM", base, head, "--", "*.go")
-	if err != nil {
-		return err
-	}
-	fields := strings.Split(strings.TrimSuffix(string(diff), "\x00"), "\x00")
-	oldImports, newImports := make(map[string]bool), make(map[string]bool)
-	for i := 0; i+1 < len(fields); i += 2 {
-		status, path := fields[i], fields[i+1]
-		var oldSource, newSource []byte
-		if status != "A" {
-			oldSource, err = command("git", "show", base+":"+path)
-			if err != nil {
-				return err
-			}
-		}
-		if status != "D" {
-			newSource, err = command("git", "show", head+":"+path)
-			if err != nil {
-				return err
-			}
-		}
-		oldTags, err := sourceInputs(path, oldSource, modulePath, oldImports)
-		if err != nil {
-			return err
-		}
-		newTags, err := sourceInputs(path, newSource, modulePath, newImports)
-		if err != nil {
-			return err
-		}
-		if !slices.Equal(oldTags, newTags) {
-			fmt.Println("yes")
-			return nil
-		}
-	}
-	if len(oldImports) != len(newImports) {
-		fmt.Println("yes")
-		return nil
-	}
-	for path := range oldImports {
-		if !newImports[path] {
-			fmt.Println("yes")
-			return nil
-		}
-	}
-	fmt.Println("no")
-	return nil
-}
-
-func sourceInputs(path string, source []byte, modulePath string, imports map[string]bool) ([]string, error) {
-	if source == nil {
-		return nil, nil
-	}
-	file, err := parser.ParseFile(token.NewFileSet(), path, source, parser.ImportsOnly|parser.ParseComments)
-	if err != nil {
-		return nil, err
-	}
-	for _, spec := range file.Imports {
-		path, err := strconv.Unquote(spec.Path.Value)
-		if err != nil {
-			return nil, err
-		}
-		first, _, _ := strings.Cut(path, "/")
-		if strings.Contains(first, ".") && path != modulePath && !strings.HasPrefix(path, modulePath+"/") {
-			imports[path] = true
-		}
-	}
-	var tags []string
-	for _, group := range file.Comments {
-		for _, comment := range group.List {
-			if comment.Pos() >= file.Package || (!constraint.IsGoBuild(comment.Text) && !constraint.IsPlusBuild(comment.Text)) {
-				continue
-			}
-			expression, err := constraint.Parse(comment.Text)
-			if err != nil {
-				return nil, err
-			}
-			tags = append(tags, expression.String())
-		}
-	}
-	slices.Sort(tags)
-	return tags, nil
 }

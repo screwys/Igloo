@@ -7,7 +7,6 @@
     "gradle",
     "github-actions",
     "dockerfile",
-    "nix",
     "custom.regex"
   ],
   "dependencyDashboard": false,
@@ -20,10 +19,10 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Update pip pinned in Dockerfile.",
+      "description": "Update versions pinned in Dockerfile.",
       "managerFilePatterns": ["/(^|/)Dockerfile$/"],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>[a-z-]+) packageName=(?<packageName>[^\\s]+) versioning=(?<versioning>[a-z0-9-]+)\\s+ARG [A-Z0-9_]+_VERSION=(?<currentValue>[^\\s]+)"
+        "# renovate: datasource=(?<datasource>[a-z-]+) packageName=(?<packageName>[^\\s]+) versioning=(?<versioning>[^\\s]+)\\s+ARG [A-Z0-9_]+_VERSION=(?<currentValue>[^\\s]+)"
       ]
     },
     {
@@ -59,7 +58,6 @@
       "description": "Keep Docker and runtime tool updates together.",
       "matchManagers": [
         "dockerfile",
-        "nix",
         "pip_requirements",
         "custom.regex"
       ],

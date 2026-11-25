@@ -153,7 +153,7 @@ for arg in "$@"; do
     esac
 done
 
-if [ "$CHECK_ONLY" = false ] && { [ -n "$POSTGRES_BIN" ] || command -v nix >/dev/null 2>&1; }; then
+if [ "$CHECK_ONLY" = false ] && [ -n "$POSTGRES_BIN" ]; then
     . "$REPO_DIR/scripts/dev/postgres-tools.sh"
     IGLOO_POSTGRES_BIN="$POSTGRES_BIN"
     igloo_prepare_postgres "$REPO_DIR"

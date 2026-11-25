@@ -111,10 +111,6 @@ if [[ "${IGLOO_TEST_SELECTION_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 
-if [[ "$go_changed" -eq 1 || "$web_changed" -eq 1 ]] && [[ -z "${IGLOO_POSTGRES_BIN:-}" ]] && ! command -v initdb >/dev/null 2>&1 && command -v nix >/dev/null 2>&1; then
-  exec nix shell --impure .#postgresql --command bash "$0" "$@"
-fi
-
 if [[ "${#shell_files[@]}" -gt 0 ]]; then
   echo "[shell] checking changed scripts"
   for path in "${shell_files[@]}"; do

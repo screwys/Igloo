@@ -162,21 +162,7 @@ test("container release keeps latest on main HEAD and signs release images", () 
   assert.match(workflow, /run: \.github\/scripts\/verify-signed-release-tag\.sh/);
   assert.doesNotMatch(workflow, /BEGIN PGP SIGNATURE/);
   assert.match(workflow, /\n        id: build\n/);
-  assert.match(workflow, shaPinnedAction("DeterminateSystems/determinate-nix-action", "v3"));
-  assert.match(workflow, shaPinnedAction("DeterminateSystems/magic-nix-cache-action", "main"));
-  assert.match(workflow, /use-flakehub: false/);
-  assert.match(workflow, shaPinnedAction("cachix/cachix-action", "v17"));
-  assert.match(workflow, /name: Check Cachix auth token/);
-  assert.match(workflow, /\n        id: cachix\n/);
-  assert.match(workflow, /CACHIX_AUTH_TOKEN: \$\{\{ secrets\.CACHIX_AUTH_TOKEN \}\}/);
-  assert.match(workflow, /echo "enabled=true" >> "\$GITHUB_OUTPUT"/);
-  assert.match(workflow, /if: \$\{\{ vars\.CACHIX_CACHE_NAME != '' && steps\.cachix\.outputs\.enabled == 'true' \}\}/);
-  assert.match(workflow, /name: \$\{\{ vars\.CACHIX_CACHE_NAME \}\}/);
-  assert.match(workflow, /authToken: \$\{\{ secrets\.CACHIX_AUTH_TOKEN \}\}/);
-  assert.match(workflow, /useDaemon: true/);
-  assert.match(workflow, /pushFilter: "\(-source\$\|\\\\\.tar\\\\\.gz\$\)"/);
-  assert.match(workflow, /nix build --impure --refresh \.#container --print-build-logs/);
-  assert.match(workflow, /docker load < result/);
+  assert.match(workflow, /docker build --pull -t ghcr\.io\/screwys\/igloo:latest \./);
   assert.match(workflow, /type=ref,event=tag/);
   assert.match(
     workflow,
@@ -213,7 +199,7 @@ test("container release keeps latest on main HEAD and signs release images", () 
   assert.doesNotMatch(workflow, /go install "github\.com\/sigstore\/cosign\/v3\/cmd\/cosign/);
   assert.ok(
     workflow.indexOf("name: Verify release tag") <
-      workflow.indexOf("name: Build Nix container image"),
+      workflow.indexOf("name: Build container image"),
     "container release tag verification should run before building",
   );
   assert.ok(
@@ -221,24 +207,6 @@ test("container release keeps latest on main HEAD and signs release images", () 
       workflow.indexOf("name: Push container image"),
     "container release tag verification should run before publishing",
   );
-});
-
-test("Nix container runtime stays on cacheable nixpkgs packages", () => {
-  const flake = readFileSync(new URL("../../flake.nix", import.meta.url), "utf8");
-
-  assert.match(flake, /goBinaryArchives/);
-  assert.match(flake, /https:\/\/dl\.google\.com\/go\/go\$\{goVersion\}\.linux-\$\{goArchive\.arch\}\.tar\.gz/);
-  assert.match(flake, /if \(upstreamGo\.version or ""\) == goVersion then/);
-  assert.match(flake, /CGO_ENABLED = upstreamGo\.CGO_ENABLED or 1;/);
-  assert.match(flake, /GOOS = upstreamGo\.GOOS or "linux";/);
-  assert.match(flake, /GOARCH = upstreamGo\.GOARCH or goArchive\.arch;/);
-  assert.match(flake, /pkgs\.ffmpeg-headless/);
-  assert.match(flake, /pkgs\.cacert/);
-  assert.doesNotMatch(flake, /patchedRuntimeOverlay|runtimePkgs/);
-  assert.doesNotMatch(flake, /go\$\{[^}]+\}\.src\.tar\.gz/);
-  assert.doesNotMatch(flake, /ffmpeg\.org\/releases\/ffmpeg-/);
-  assert.doesNotMatch(flake, /openssl\/releases\/download\/openssl-/);
-  assert.doesNotMatch(flake, /openssl_3_6\.overrideAttrs|ffmpeg_8.*override/);
 });
 
 test("CI Go analysis tools are pinned and Renovate-managed", () => {
@@ -302,15 +270,11 @@ test("release tag verifier pins the release public key", () => {
 
 test("container images run as non-root by default", () => {
   const dockerfile = readFileSync(new URL("../../Dockerfile", import.meta.url), "utf8");
-  const flake = readFileSync(new URL("../../flake.nix", import.meta.url), "utf8");
   const compose = readFileSync(new URL("../../compose.yaml", import.meta.url), "utf8");
 
   assert.match(dockerfile, /^USER 10001:10001$/m);
   assert.match(dockerfile, /HOME=\/tmp/);
-  assert.match(dockerfile, /chown -R 10001:10001 \/igloo/);
-  assert.match(flake, /User = "10001:10001";/);
-  assert.match(flake, /"HOME=\/tmp"/);
-  assert.match(flake, /chown -R 10001:10001 igloo/);
+  assert.match(dockerfile, /--chown=10001:10001 \/state\/igloo \/igloo/);
   assert.doesNotMatch(compose, /^\s+user:/m);
   assert.match(compose, /- igloo-state:\/igloo/);
   assert.match(compose, /name: "\$\{IGLOO_STATE_VOLUME:-igloo-state\}"/);
@@ -433,7 +397,7 @@ test("CodeQL runs on published releases and manual dispatch only", () => {
   assert.doesNotMatch(workflow, /cron:/);
 });
 
-test("CI covers pull requests and pushes to main with static, Go, runtime, and Android jobs", () => {
+test("CI covers pull requests and pushes to main with static, Go, and Android jobs", () => {
   const workflow = readFileSync(
     new URL("../../.github/workflows/ci.yml", import.meta.url),
     "utf8",
@@ -449,16 +413,9 @@ test("CI covers pull requests and pushes to main with static, Go, runtime, and A
   );
   assert.match(workflow, /\n  static:\n/);
   assert.match(workflow, /\n  go:\n/);
-  assert.match(workflow, /\n  runtime:\n/);
   assert.match(workflow, /\n  android:\n/);
   assert.match(workflow, /run: go test -timeout 30m \.\/\.\.\./);
   assert.match(workflow, /run: scripts\/dev\/web-test\.sh/);
-  assert.match(workflow, /DeterminateSystems\/determinate-nix-action@[0-9a-f]{40}/);
-  assert.match(workflow, /DeterminateSystems\/magic-nix-cache-action@[0-9a-f]{40}/);
-  assert.match(
-    workflow,
-    /run: nix build --impure --refresh \.#igloo \.#yt-dlp \.#gallery-dl --no-link --print-build-logs/,
-  );
   assert.match(workflow, /run: \.\/test\.sh/);
   assert.doesNotMatch(workflow, /workflow-pin-check\.sh/);
   assert.match(workflow, /No Android-relevant changes/);

@@ -62,7 +62,6 @@ test-go:
     #!/usr/bin/env bash
     set -euo pipefail
     export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
-    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just test-go; fi
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test -timeout 30m ./...
 
 # Run the Go test suite with the race detector.
@@ -70,7 +69,6 @@ test-go-race:
     #!/usr/bin/env bash
     set -euo pipefail
     export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
-    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just test-go-race; fi
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test -race -timeout 30m ./...
 
 # Run the pinned Go linters and formatting checks.
@@ -86,7 +84,6 @@ test-go-package package filter="":
     #!/usr/bin/env bash
     set -euo pipefail
     export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
-    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just test-go-package {{ quote(package) }} {{ quote(filter) }}; fi
     if [ -n {{ quote(filter) }} ]; then GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test -timeout 30m {{ quote(package) }} -run {{ quote(filter) }} -count=1; else GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test -timeout 30m {{ quote(package) }}; fi
 
 # Run Android JVM tests, optionally for one class: just test-android com.example.Test
@@ -120,27 +117,17 @@ test-web:
     #!/usr/bin/env bash
     set -euo pipefail
     export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
-    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just test-web; fi
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/web-test.sh
 
 # Regenerate sqlc bindings, templ, and bundled assets.
 check-drift:
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/drift-check.sh --write
 
-# Verify the Nix dependency hash for a commit (defaults to HEAD).
-check-nix-deps revision="":
-    bash scripts/dev/check-nix-deps.sh {{ quote(revision) }}
-
-# Build both downloader tools from current upstream HEAD.
-build-downloaders:
-    nix build --impure --refresh .#yt-dlp .#gallery-dl --no-link --print-out-paths
-
 # Validate the native schema, legacy archive, and Android Room contracts.
 check-schema:
     #!/usr/bin/env bash
     set -euo pipefail
     export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
-    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just check-schema; fi
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" scripts/dev/schema-check.sh
 
 # Regenerate the server schema snapshot.
@@ -148,7 +135,6 @@ update-schema-snapshot:
     #!/usr/bin/env bash
     set -euo pipefail
     export IGLOO_POSTGRES_BIN={{ quote(postgres_bin) }}
-    if [ -z "$IGLOO_POSTGRES_BIN" ] && command -v nix >/dev/null 2>&1; then exec nix shell --impure .#postgresql --command just update-schema-snapshot; fi
     GOCACHE="${GOCACHE:-$PWD/.local/go-cache}" go test ./internal/db -run TestSchemaSnapshot -update -count=1
 
 # Build an image and exercise its basic container runtime contract.

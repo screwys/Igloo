@@ -18,8 +18,6 @@ scripts/dev/hooks
 backfill_ghost_media
 igloo
 containers
-result
-result-*
 *.db
 *.db-*
 *.log

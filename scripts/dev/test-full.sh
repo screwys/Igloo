@@ -3,9 +3,6 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" || exit 1
 cd "$ROOT" || exit 1
-if [[ -z "${IGLOO_POSTGRES_BIN:-}" ]] && ! command -v initdb >/dev/null 2>&1 && command -v nix >/dev/null 2>&1; then
-  exec nix shell --impure .#postgresql --command bash "$0" "$@"
-fi
 . scripts/dev/go-tool-versions.sh
 
 tmp="$(mktemp -d)" || exit 1
