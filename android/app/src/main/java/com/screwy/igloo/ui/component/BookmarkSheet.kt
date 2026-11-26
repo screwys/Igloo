@@ -846,7 +846,7 @@ internal fun loadBookmarkedHandleSet(selections: List<String>): Set<String> =
         .toSet()
 
 internal fun bookmarkChannelKey(target: BookmarkTarget): String? =
-    normalizeHandle(target.sourceHandle.takeIf { !it.isNullOrBlank() } ?: target.authorHandle)
+    normalizeHandle(target.authorHandle.takeIf { it.isNotBlank() } ?: target.sourceHandle)
         .takeIf { it.isNotBlank() }
 
 internal fun buildBookmarkAccountOptions(target: BookmarkTarget): List<String> {
