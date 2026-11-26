@@ -90,15 +90,15 @@ fi
 
 echo "📱 Installing APK..."
 
-# Find wireless device (192.168.1.10x); short retry for adb startup.
+# First online device; short retry for adb startup.
 adb_serial=""
 for attempt in 1 2 3 4 5; do
-    adb_serial="$(adb devices | awk '$2=="device" && $1 ~ /^192\.168\.1\.10/ {print $1; exit}')"
+    adb_serial="$(adb devices | awk -F'\t' 'NR>1 && $2=="device" {print $1; exit}')"
     [ -n "$adb_serial" ] && break
     sleep 1
 done
 if [ -z "$adb_serial" ]; then
-    echo "❌ No 192.168.1.10x device found. Aborting install."
+    echo "❌ No online adb device found. Aborting install."
     exit 1
 fi
 echo "   Device: $adb_serial"
