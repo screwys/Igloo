@@ -251,8 +251,10 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
     }
   }
 
-  // Tagged accounts/collaborators: add and auto-select
+  // Instagram collaborators and tags are auto-selected. X photo tags only
+  // join the options, so the post's own account keeps the default.
   var hasTagged = false
+  var selectTagged = platform !== 'twitter'
   try {
     var taggedRaw = root.getAttribute('data-tagged-accounts')
     if (taggedRaw) {
@@ -261,10 +263,10 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
         var taggedAccount = tagged[ti] || {}
         var th = String(taggedAccount.retweeter_handle || taggedAccount.handle || taggedAccount.username || '').trim()
         if (th && !existingHandles.has(normalizeAccountKey(th))) {
-          accounts.push({ handle: th, selected: true })
+          accounts.push({ handle: th, selected: selectTagged })
           existingHandles.add(normalizeAccountKey(th))
-          hasTagged = true
-        } else if (th) {
+          hasTagged = selectTagged
+        } else if (th && selectTagged) {
           var existing = accounts.find(function (a) { return normalizeAccountKey(a.handle) === normalizeAccountKey(th) })
           if (existing) { existing.selected = true; hasTagged = true }
         }
@@ -287,7 +289,7 @@ export async function openBookmarkMenu(anchorEl, root, opts) {
   })
 
   // Smart pre-selection
-  var channelKey = (sourceHandle || authorHandle || '').toLowerCase()
+  var channelKey = (authorHandle || sourceHandle || '').toLowerCase()
   var preSelected = hasTagged || hasStoredAccountHandles
   if (!preSelected) {
     try {
