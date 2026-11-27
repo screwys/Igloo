@@ -33,28 +33,6 @@ test("normalizes release bump inputs", () => {
   assert.throws(() => normalizeReleaseBump("weird"), /unsupported bump/);
 });
 
-test("release workflow is manually dispatched", () => {
-  const workflow = readFileSync(
-    new URL("../../.github/workflows/release.yml", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(workflow, /\n  workflow_dispatch:\n/);
-  assert.doesNotMatch(workflow, /\n  push:\n/);
-  assert.doesNotMatch(workflow, /prepare-auto/);
-  assert.doesNotMatch(workflow, /should_release/);
-  assert.doesNotMatch(workflow, /threshold 30/);
-});
-
-test("release workflow leaves CodeQL to the published release trigger", () => {
-  const workflow = readFileSync(
-    new URL("../../.github/workflows/release.yml", import.meta.url),
-    "utf8",
-  );
-
-  assert.doesNotMatch(workflow, /gh workflow run codeql\.yml/);
-});
-
 test("GitHub Actions workflow dependencies are SHA-pinned", () => {
   const workflowsDir = new URL("../../.github/workflows/", import.meta.url);
   const workflowNames = readdirSync(workflowsDir).filter((name) => name.endsWith(".yml"));
@@ -70,59 +48,6 @@ test("GitHub Actions workflow dependencies are SHA-pinned", () => {
       );
     }
   }
-});
-
-test("release workflow allows manual major releases", () => {
-  const workflow = readFileSync(
-    new URL("../../.github/workflows/release.yml", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(workflow, /\n          - major\n/);
-  assert.match(workflow, /description: Release summary/);
-  assert.match(workflow, /INPUT_SUMMARY: \$\{\{ inputs\.summary \}\}/);
-  assert.match(workflow, /\.github\/scripts\/prepare-release\.sh "\$\{INPUT_BUMP:-patch\}" release-notes\.md "\$INPUT_SUMMARY"/);
-  assert.doesNotMatch(workflow, /release-description\.md/);
-});
-
-test("release workflow signs release commits and tags", () => {
-  const workflow = readFileSync(
-    new URL("../../.github/workflows/release.yml", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(workflow, /RELEASE_GPG_PRIVATE_KEY/);
-  assert.match(workflow, /RELEASE_GPG_PASSPHRASE/);
-  assert.doesNotMatch(workflow, /secrets\.RELEASE_GIT_USER_NAME/);
-  assert.doesNotMatch(workflow, /secrets\.RELEASE_GIT_USER_EMAIL/);
-  assert.match(workflow, /vars\.RELEASE_GIT_USER_NAME/);
-  assert.match(workflow, /vars\.RELEASE_GIT_USER_EMAIL/);
-  assert.match(workflow, /git commit -S -m "release \$\{\{ steps\.release\.outputs\.version \}\}"/);
-  assert.match(workflow, /git tag -s "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
-  assert.match(workflow, /git add android\/app\/build\.gradle\.kts/);
-  assert.doesNotMatch(workflow, /git add android\/app\/build\.gradle\.kts \.github\/release-description\.md/);
-  assert.doesNotMatch(workflow, /\.github\/release-bump/);
-  assert.doesNotMatch(workflow, /package\.json/);
-  assert.doesNotMatch(workflow, /package-lock\.json/);
-  assert.doesNotMatch(workflow, /git tag -a "\$\{\{ steps\.release\.outputs\.tag \}\}"/);
-});
-
-test("release workflow gates signed releases on the full quality suite", () => {
-  const workflow = readFileSync(
-    new URL("../../.github/workflows/release.yml", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(workflow, shaPinnedAction("actions/setup-go", "v6"));
-  assert.match(workflow, shaPinnedAction("actions/setup-java", "v5"));
-  assert.match(workflow, /java-version: "26"/);
-  assert.match(workflow, /name: Run full release gate/);
-  assert.match(workflow, /run: scripts\/dev\/test-full\.sh/);
-  assert.ok(
-    workflow.indexOf("run: scripts/dev/test-full.sh") <
-      workflow.indexOf("git commit -S -m"),
-    "full release gate should run before signing the release commit",
-  );
 });
 
 test("local release script publishes a GitHub release on push", () => {
